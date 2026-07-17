@@ -44,19 +44,6 @@ export type CloudWorkspaceExecutionTargetKind =
   | "managed_cloud"
   | "ssh"
   | "self_hosted";
-export type CloudWorkspaceMaterializationState =
-  | "hydrated"
-  | "dehydrated"
-  | "hydrating"
-  | "unknown"
-  | "inconsistent";
-export type CloudWorkspaceCleanupStatus =
-  | "idle"
-  | "pruning"
-  | "blocked"
-  | "failed"
-  | "skipped"
-  | "completed";
 export type CloudWorkspaceCloudAccessState =
   | "disabled"
   | "enabled"
@@ -70,19 +57,18 @@ export interface CloudWorkspaceExecutionTargetSummary {
   online?: boolean | null;
 }
 
-export interface CloudWorkspaceMaterializationSummary {
-  id: string;
-  targetId?: string | null;
-  anyharnessWorkspaceId?: string | null;
-  worktreePath?: string | null;
-  state: CloudWorkspaceMaterializationState;
-  desiredState: "hydrated" | "dehydrated";
-  cleanupStatus: CloudWorkspaceCleanupStatus;
-  cleanupLastError?: string | null;
-  blockers?: string[];
-  generation: number;
-  storageBytes?: number | null;
-}
+// Derived from the generated OpenAPI schema — the wire contract is the source of
+// truth. Do not hand-copy fields here.
+export type CloudWorkspaceMaterializationSummary = Schema<"WorkspaceMaterializationSummary">;
+export type CloudWorkspaceMaterializationState =
+  CloudWorkspaceMaterializationSummary["state"];
+export type CloudWorkspaceMaterializationTargetKind =
+  CloudWorkspaceMaterializationSummary["targetKind"];
+export type CreateMaterializationIntentRequest =
+  Schema<"CreateMaterializationIntentRequest">;
+export type MaterializationIntentResponse = Schema<"MaterializationIntentResponse">;
+export type MaterializationIntentSource = Schema<"MaterializationIntentSource">;
+export type ReportMaterializationRequest = Schema<"ReportMaterializationRequest">;
 
 export interface CloudWorkspaceCloudAccessSummary {
   state: CloudWorkspaceCloudAccessState;
@@ -208,56 +194,74 @@ export interface TeamCheckoutIntentResponse {
 export interface CurrentTeamCheckoutResponse {
   intent?: TeamCheckoutIntentResponse | null;
 }
-export interface CloudWorkspaceSummary {
-  id: string;
-  targetId?: string | null;
-  workspaceKind?: CloudWorkspaceBackingKind;
-  repoEnvironmentId?: string | null;
-  displayName: string | null;
-  repo: RepoRef | null;
-  status: CloudWorkspaceStatus;
-  workspaceStatus: CloudWorkspaceStatus;
-  productLifecycle?: CloudWorkspaceProductLifecycle;
-  runtime?: CloudWorkspaceRuntimeSummary;
-  executionTarget?: CloudWorkspaceExecutionTargetSummary;
-  selectedMaterializationId?: string | null;
-  primaryMaterialization?: CloudWorkspaceMaterializationSummary | null;
-  cloudAccess?: CloudWorkspaceCloudAccessSummary;
-  statusDetail: string | null;
-  lastError: string | null;
-  templateVersion: string | null;
-  updatedAt: string | null;
-  createdAt: string | null;
-  readyAt: string | null;
-  actionBlockKind?: string | null;
-  actionBlockReason?: string | null;
-  postReadyPhase: string;
-  postReadyFilesTotal: number;
-  postReadyFilesApplied: number;
-  postReadyStartedAt: string | null;
-  postReadyCompletedAt: string | null;
+// App-carried extras that this branch's server ``WorkspaceSummary`` does NOT
+// emit on the wire. These are populated by app/aggregation code and other
+// product surfaces (mobile last-session projection, billing, exposure/claim
+// projections, origin/creator context threaded from #1245-era needs) — the
+// cloud-workspace wire contract on this branch carries none of them. They are
+// the only genuinely hand-maintained members of ``CloudWorkspaceSummary``;
+// everything the wire carries is derived from ``Schema<"WorkspaceSummary">``
+// below. If the server model starts emitting one of these, move it out of this
+// overlay and let it derive from the regenerated schema.
+interface CloudWorkspaceSummaryAppExtras {
   repoFilesLastFailedPath?: string | null;
   origin?: CloudOriginContext | null;
   creatorContext?: CloudWorkspaceCreatorContext | null;
   directTargetContext?: CloudWorkspaceDirectTargetContext | null;
-  visibility: CloudWorkspaceVisibility;
   exposure?: CloudWorkspaceExposureSummary | null;
-  exposureState?: CloudWorkspaceExposureState;
-  sandboxType?: CloudWorkspaceSandboxType;
-  lastActivityAt?: string | null;
   lastSessionSummary?: CloudWorkspaceLastSessionSummary | null;
   claimedByUserId?: string | null;
   claimId?: string | null;
   claimedAt?: string | null;
   claimSourceKind?: string | null;
   billing?: Schema<"WorkspaceBillingSummary"> | null;
-  allowedAgentKinds: string[];
-  readyAgentKinds: string[];
-  anyharnessWorkspaceId?: string | null;
 }
-export interface CloudWorkspaceDetail extends CloudWorkspaceSummary {
+
+// Derived from the generated OpenAPI ``WorkspaceSummary`` — the wire contract is
+// the source of truth. We override only the SDK's normalized display fields,
+// which product surfaces consume as their full domain unions rather than the
+// narrow subset this one server emits: the two status enums (SDK client
+// normalizes into ``CloudWorkspaceStatus`` — adds ``needs_rematerialization``/
+// ``pending``), and ``visibility``/``sandboxType``/``exposureState`` (workspaces
+// arrive from multiple scopes — exposed/org-all/claimable — so the client treats
+// these as the richer product unions). This is exactly the "existing normalized
+// status fields" overlay the PR spec's conformance section permits; no unrelated
+// wire field (materializations, runtime, cloudAccess, executionTarget, …) is
+// duplicated here.
+// ``Required<>`` over the wire base: the generated schema marks most fields
+// optional because they carry Pydantic defaults, but the server always
+// serializes them, and product consumers rely on their present-but-nullable
+// shape (matching the prior hand-written mirror). Off-wire app extras stay
+// optional via the separate intersection below.
+export type CloudWorkspaceSummary = Required<
+  Omit<
+    Schema<"WorkspaceSummary">,
+    | "status"
+    | "workspaceStatus"
+    | "visibility"
+    | "sandboxType"
+    | "exposureState"
+    | "runtime"
+    | "executionTarget"
+  >
+> & {
+  status: CloudWorkspaceStatus;
+  workspaceStatus: CloudWorkspaceStatus;
+  visibility: CloudWorkspaceVisibility;
+  sandboxType?: CloudWorkspaceSandboxType;
+  exposureState?: CloudWorkspaceExposureState;
+  // Runtime status is the SDK's normalized ``CloudRuntimeStatus`` (adds
+  // ``provisioning``), the same normalized-status overlay as ``status``.
+  runtime?: CloudWorkspaceRuntimeSummary;
+  // executionTarget.kind is the full target-kind union the product consumes
+  // (local_desktop | managed_cloud | ssh | self_hosted); this one server only
+  // ever emits the managed_cloud constant, so keep the richer SDK shape.
+  executionTarget?: CloudWorkspaceExecutionTargetSummary;
+} & CloudWorkspaceSummaryAppExtras;
+
+export type CloudWorkspaceDetail = CloudWorkspaceSummary & {
   [key: string]: unknown;
-}
+};
 export type CloudWorkspaceRuntimeStatusResponse =
   Schema<"CloudWorkspaceRuntimeStatusResponse">;
 export type ClaimWorkspaceRequest = Schema<"ClaimWorkspaceRequest">;
@@ -621,6 +625,8 @@ export type CloudWorktreeRetentionPolicyRequest =
   Schema<"CloudWorktreeRetentionPolicyRequest">;
 export type CloudWorktreeRetentionPolicyResponse =
   Schema<"CloudWorktreeRetentionPolicyResponse">;
+export type CreateCloudWorkspaceSourceMaterialization =
+  Schema<"CreateCloudWorkspaceSourceMaterialization">;
 export interface CreateCloudWorkspaceRequest {
   gitProvider: "github";
   gitOwner: string;
@@ -630,6 +636,12 @@ export interface CreateCloudWorkspaceRequest {
   displayName?: string | null;
   generatedName?: boolean | null;
   source?: "desktop" | "web" | "mobile" | null;
+  // Exact-ref creation from a clean, published local workspace (PR 5). When
+  // set, the server materializes the Cloud copy at this exact commit of the
+  // already-published branch after independently re-verifying the authorized
+  // GitHub head. Old requests (both absent) keep the branch-name fork path.
+  expectedHeadSha?: string | null;
+  sourceMaterialization?: CreateCloudWorkspaceSourceMaterialization | null;
 }
 export type GenerateSessionTitleRequest = Schema<"GenerateSessionTitleRequest">;
 export type GenerateSessionTitleResponse = Schema<"GenerateSessionTitleResponse">;

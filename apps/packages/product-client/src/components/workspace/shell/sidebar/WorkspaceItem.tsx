@@ -23,6 +23,10 @@ import type {
   SidebarStatusIndicator,
   SidebarWorkspaceVariant,
 } from "#product/lib/domain/workspaces/sidebar/sidebar-indicators";
+import type {
+  WorkspaceAvailabilityCommand,
+  WorkspaceAvailabilityCommandKind,
+} from "#product/lib/domain/workspaces/cloud/workspace-availability-commands";
 import {
   prStatusViewFromGitStatus,
   sidebarGitGlyphForStatus,
@@ -88,6 +92,10 @@ interface WorkspaceItemProps {
   onArchive?: () => void;
   onUnarchive?: () => void;
   onMarkDone?: () => void;
+  /** Workspace-copy availability commands (PR 5), rendered in both the DOM and
+   * native `…` menus. */
+  availabilityCommands?: WorkspaceAvailabilityCommand[];
+  onAvailabilityCommand?: (kind: WorkspaceAvailabilityCommandKind) => void;
   onIndicatorAction?: (action: SidebarIndicatorAction) => void;
   onHover?: () => void;
   /**
@@ -120,6 +128,8 @@ export function WorkspaceItem({
   onArchive,
   onUnarchive,
   onMarkDone,
+  availabilityCommands = [],
+  onAvailabilityCommand,
   onIndicatorAction,
   onHover,
   workspaceLocationCopyLabel,
@@ -188,6 +198,8 @@ export function WorkspaceItem({
     onArchive: handleArchiveCommand,
     onUnarchive: handleUnarchiveCommand,
     onMarkDone: handleMarkDoneCommand,
+    availabilityCommands,
+    onAvailabilityCommand,
   });
   const hasMenuActions = hasArchiveAction
     || !!onRename
@@ -195,7 +207,8 @@ export function WorkspaceItem({
     || !!onCopyBranchName
     || !!onMarkDone
     || !!branchName
-    || !!handleOpenPullRequestCommand;
+    || !!handleOpenPullRequestCommand
+    || availabilityCommands.length > 0;
 
   const workspaceMenu = hasMenuActions ? (
     <WorkspaceItemMenu
@@ -213,6 +226,8 @@ export function WorkspaceItem({
       }
       onCopyBranchName={onCopyBranchName ? handleCopyBranchNameCommand : undefined}
       onMarkDone={onMarkDone ? handleMarkDoneCommand : undefined}
+      availabilityCommands={availabilityCommands}
+      onAvailabilityCommand={onAvailabilityCommand}
     />
   ) : null;
 
@@ -382,6 +397,18 @@ export function WorkspaceItem({
                   onClick={() => { close(); handleUnarchiveCommand(); }}
                 />
               )}
+              {availabilityCommands.map((command) => (
+                <PopoverMenuItem
+                  key={command.kind}
+                  icon={<GitBranchIcon className="size-3.5 shrink-0 text-muted-foreground" />}
+                  label={command.blocker ? `${command.label} — ${command.blocker}` : command.label}
+                  variant="sidebar"
+                  onClick={() => {
+                    close();
+                    onAvailabilityCommand?.(command.kind);
+                  }}
+                />
+              ))}
             </>
           )}
         </>

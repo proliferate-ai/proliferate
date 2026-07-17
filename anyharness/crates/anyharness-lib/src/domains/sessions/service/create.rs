@@ -21,6 +21,10 @@ impl SessionService {
         &self,
         workspace_id: &str,
         agent_kind: &str,
+        // Ruling 2b-1: a caller-preselected canonical UUID, so workflow
+        // creation can reserve the session's mutation gate before this row
+        // becomes visible. `None` mints here — the single minting path.
+        preselected_session_id: Option<&str>,
         model_id: Option<&str>,
         mode_id: Option<&str>,
         mcp_bindings_ciphertext: Option<String>,
@@ -139,9 +143,25 @@ impl SessionService {
             "[workspace-latency] session.create.model_resolved"
         );
 
+        let session_id = match preselected_session_id {
+            Some(id) => {
+                let parsed = Uuid::parse_str(id).map_err(|_| {
+                    CreateSessionError::Internal(anyhow::anyhow!(
+                        "preselected session id must be a canonical UUID"
+                    ))
+                })?;
+                if parsed.get_version_num() != 4 || id != parsed.hyphenated().to_string() {
+                    return Err(CreateSessionError::Internal(anyhow::anyhow!(
+                        "preselected session id must be a canonical lowercase v4 UUID"
+                    )));
+                }
+                id.to_string()
+            }
+            None => Uuid::new_v4().to_string(),
+        };
         let now = chrono::Utc::now().to_rfc3339();
         let record = SessionRecord {
-            id: Uuid::new_v4().to_string(),
+            id: session_id,
             workspace_id: workspace_id.to_string(),
             agent_kind: agent_kind.to_string(),
             native_session_id: None,

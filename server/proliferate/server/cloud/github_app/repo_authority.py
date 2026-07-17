@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import timedelta
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.config import settings
 from proliferate.db.store import github_app as github_app_store
 from proliferate.integrations.github import (
     GitHubAppInstallationInfo,
@@ -18,7 +21,9 @@ from proliferate.integrations.github import (
     refresh_github_app_user_authorization,
     verify_github_app_user_repo_access,
 )
+from proliferate.integrations.redis_lock import RedisLeaseError, redis_lease
 from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.github_app import transactions as github_app_transactions
 from proliferate.server.cloud.github_app.errors import GitHubAppReauthorizationRequired
 from proliferate.utils.time import utcnow
 
@@ -88,63 +93,156 @@ def _github_app_authorization_is_current(
     )
 
 
+@asynccontextmanager
+async def _authorization_refresh_lock(user_id: UUID) -> AsyncIterator[None]:
+    async with redis_lease(
+        redis_url=settings.redbeat_redis_url,
+        key=f"{settings.redbeat_key_prefix}github-app-authorization-refresh:{user_id}",
+        ttl_seconds=120,
+        wait_timeout_seconds=60,
+    ):
+        yield
+
+
 async def _refresh_github_app_authorization(
     db: AsyncSession,
     *,
     user_id: UUID,
 ) -> github_app_store.GitHubAppAuthorizationValue:
-    authorization = await github_app_store.get_github_app_authorization_for_user(
-        db,
-        user_id=user_id,
-        lock_row=True,
-    )
-    if authorization is None:
-        raise CloudApiError(
-            "github_app_authorization_required",
-            "Connect the Proliferate GitHub App before using GitHub Cloud repos.",
-            status_code=409,
-        )
-    if authorization.status == "needs_reauth":
-        raise CloudApiError(
-            "github_app_authorization_expired",
-            "Reconnect the Proliferate GitHub App before using GitHub Cloud repos.",
-            status_code=409,
-        )
-    if authorization.status != "ready":
-        raise CloudApiError(
-            "github_app_authorization_required",
-            "Connect the Proliferate GitHub App before using GitHub Cloud repos.",
-            status_code=409,
-        )
-    if _github_app_authorization_is_current(authorization):
-        return authorization
-    if authorization.refresh_token is None:
-        await github_app_store.mark_github_app_authorization_needs_reauth(
-            db,
-            authorization.id,
-        )
-        raise GitHubAppReauthorizationRequired(authorization.id)
+    # The caller's expiry read must not retain a PostgreSQL transaction while
+    # waiting for the cross-process refresh lease.
+    await github_app_transactions.release_github_app_transaction(db)
     try:
-        refreshed = await refresh_github_app_user_authorization(
-            refresh_token=authorization.refresh_token,
-        )
-    except GitHubAppInvalidGrant as exc:
-        await github_app_store.mark_github_app_authorization_needs_reauth(
-            db,
-            authorization.id,
-        )
-        raise GitHubAppReauthorizationRequired(authorization.id) from exc
-    except GitHubIntegrationError as exc:
+        async with _authorization_refresh_lock(user_id):
+            authorization = await github_app_store.get_github_app_authorization_for_user(
+                db,
+                user_id=user_id,
+                refresh=True,
+            )
+            if authorization is None:
+                raise CloudApiError(
+                    "github_app_authorization_required",
+                    "Connect the Proliferate GitHub App before using GitHub Cloud repos.",
+                    status_code=409,
+                )
+            if authorization.status == "needs_reauth":
+                raise CloudApiError(
+                    "github_app_authorization_expired",
+                    "Reconnect the Proliferate GitHub App before using GitHub Cloud repos.",
+                    status_code=409,
+                )
+            if authorization.status != "ready":
+                raise CloudApiError(
+                    "github_app_authorization_required",
+                    "Connect the Proliferate GitHub App before using GitHub Cloud repos.",
+                    status_code=409,
+                )
+            if _github_app_authorization_is_current(authorization):
+                await github_app_transactions.release_github_app_transaction(db)
+                return authorization
+
+            authorization_id = authorization.id
+            expected_updated_at = authorization.updated_at
+            refresh_token = authorization.refresh_token
+            if refresh_token is None:
+                changed = (
+                    await github_app_store.mark_github_app_authorization_needs_reauth_if_unchanged(
+                        db,
+                        authorization_id=authorization_id,
+                        expected_updated_at=expected_updated_at,
+                    )
+                )
+                await github_app_transactions.release_github_app_transaction(db)
+                if changed:
+                    raise GitHubAppReauthorizationRequired(authorization_id)
+                raise CloudApiError(
+                    "github_app_refresh_unavailable",
+                    "GitHub App authorization changed while it was being refreshed.",
+                    status_code=503,
+                )
+
+            # End the version read before the remote rotating-token exchange.
+            await github_app_transactions.release_github_app_transaction(db)
+            try:
+                refreshed = await refresh_github_app_user_authorization(
+                    refresh_token=refresh_token,
+                )
+            except GitHubAppInvalidGrant as exc:
+                changed = (
+                    await github_app_store.mark_github_app_authorization_needs_reauth_if_unchanged(
+                        db,
+                        authorization_id=authorization_id,
+                        expected_updated_at=expected_updated_at,
+                    )
+                )
+                await github_app_transactions.release_github_app_transaction(db)
+                if changed:
+                    raise GitHubAppReauthorizationRequired(authorization_id) from exc
+                current = await github_app_store.get_github_app_authorization_for_user(
+                    db,
+                    user_id=user_id,
+                    refresh=True,
+                )
+                await github_app_transactions.release_github_app_transaction(db)
+                if current is not None and _github_app_authorization_is_current(current):
+                    return current
+                raise CloudApiError(
+                    "github_app_refresh_unavailable",
+                    "GitHub App authorization changed while it was being refreshed.",
+                    status_code=503,
+                ) from exc
+            except GitHubIntegrationError as exc:
+                raise CloudApiError(
+                    "github_app_refresh_failed",
+                    "Could not refresh GitHub App authorization.",
+                    status_code=502,
+                ) from exc
+
+            replaced = await github_app_store.replace_github_app_authorization_if_unchanged(
+                db,
+                authorization_id=authorization_id,
+                expected_updated_at=expected_updated_at,
+                authorization=refreshed,
+            )
+            await github_app_transactions.release_github_app_transaction(db)
+            if replaced is not None:
+                return replaced
+            current = await github_app_store.get_github_app_authorization_for_user(
+                db,
+                user_id=user_id,
+                refresh=True,
+            )
+            await github_app_transactions.release_github_app_transaction(db)
+            if current is not None and _github_app_authorization_is_current(current):
+                return current
+            raise CloudApiError(
+                "github_app_refresh_unavailable",
+                "GitHub App authorization changed while it was being refreshed.",
+                status_code=503,
+            )
+    except RedisLeaseError as exc:
         raise CloudApiError(
-            "github_app_refresh_failed",
-            "Could not refresh GitHub App authorization.",
-            status_code=502,
+            "github_app_refresh_unavailable",
+            "GitHub App authorization refresh is temporarily unavailable.",
+            status_code=503,
         ) from exc
-    return await github_app_store.upsert_github_app_authorization(
-        db,
-        user_id=user_id,
-        authorization=refreshed,
-    )
+
+
+def require_github_app_runtime_configured() -> None:
+    """Fail closed when the operator's GitHub App config is incomplete.
+
+    Checked before any user-state lookup so an unconfigured or partially
+    configured deployment reports an operator problem instead of sending the
+    user to an authorization flow that cannot work — even when a cached user
+    authorization exists from before the config regressed.
+    """
+    if not settings.github_app_configured:
+        raise CloudApiError(
+            "github_app_not_configured",
+            "The GitHub App is not fully configured for this deployment. "
+            "An operator must complete the GitHub App configuration.",
+            status_code=503,
+        )
 
 
 async def require_github_cloud_repo_authority(
@@ -154,12 +252,14 @@ async def require_github_cloud_repo_authority(
     git_owner: str,
     git_repo_name: str,
 ) -> GitHubCloudRepoAuthority:
+    require_github_app_runtime_configured()
     authorization = await ensure_fresh_github_app_authorization(db, user_id=user_id)
     installations = await github_app_store.list_active_github_app_installations_for_owner(
         db,
         owner=git_owner,
     )
     if not installations:
+        await db.commit()
         await _refresh_installation_cache(db)
         installations = await github_app_store.list_active_github_app_installations_for_owner(
             db,
@@ -191,6 +291,7 @@ async def require_github_cloud_repo_authority(
             break
 
         try:
+            await db.commit()
             coverage = await fetch_installation_repo_coverage_from_github(
                 user_access_token=authorization.access_token,
                 installation_id=installation.github_installation_id,
@@ -223,6 +324,7 @@ async def require_github_cloud_repo_authority(
         )
 
     try:
+        await db.commit()
         actor_has_access = await verify_github_app_user_repo_access(
             user_access_token=authorization.access_token,
             git_owner=git_owner,

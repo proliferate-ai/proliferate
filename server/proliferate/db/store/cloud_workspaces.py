@@ -147,6 +147,56 @@ async def get_cloud_workspace_by_id(
     return cloud_workspace_value(row) if row is not None else None
 
 
+async def get_cloud_workspace_for_runtime_identity(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    anyharness_workspace_id: str,
+) -> CloudWorkspaceValue | None:
+    """Load the durable product alias even after archive."""
+
+    row = (
+        (
+            await db.execute(
+                select(CloudWorkspace)
+                .where(
+                    CloudWorkspace.owner_user_id == user_id,
+                    CloudWorkspace.anyharness_workspace_id == anyharness_workspace_id,
+                )
+                .order_by(CloudWorkspace.created_at.asc())
+            )
+        )
+        .scalars()
+        .first()
+    )
+    return cloud_workspace_value(row) if row is not None else None
+
+
+async def get_repository_workspace_for_branch(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    repo_environment_id: UUID,
+    git_branch: str,
+) -> CloudWorkspaceValue | None:
+    row = (
+        (
+            await db.execute(
+                select(CloudWorkspace)
+                .where(
+                    CloudWorkspace.owner_user_id == user_id,
+                    CloudWorkspace.repo_environment_id == repo_environment_id,
+                    CloudWorkspace.git_branch == git_branch,
+                )
+                .order_by(CloudWorkspace.created_at.asc())
+            )
+        )
+        .scalars()
+        .first()
+    )
+    return cloud_workspace_value(row) if row is not None else None
+
+
 async def create_cloud_workspace(
     db: AsyncSession,
     *,
@@ -188,7 +238,7 @@ async def create_scratch_cloud_workspace(
     user_id: UUID,
     display_name: str,
     anyharness_workspace_id: str | None = None,
-) -> CloudWorkspaceValue:
+) -> CloudWorkspaceValue | None:
     """Create a scratch (repository-less) workspace row for a managed run.
 
     Scratch workspaces forbid a ``repo_environment_id`` and always use the
@@ -207,8 +257,12 @@ async def create_scratch_cloud_workspace(
         created_at=now,
         updated_at=now,
     )
-    db.add(workspace)
-    await db.flush()
+    try:
+        async with db.begin_nested():
+            db.add(workspace)
+            await db.flush()
+    except IntegrityError:
+        return None
     return cloud_workspace_value(workspace)
 
 

@@ -109,6 +109,13 @@ pub enum WorkspaceCreatorContext {
         #[serde(skip_serializing_if = "Option::is_none")]
         label: Option<String>,
     },
+    /// An isolated workspace materialized for one Workflow run (spec
+    /// `workflow-workspace-placement`). Machine provenance that both names the
+    /// owning run and excludes the workspace from generic worktree retention.
+    Workflow {
+        #[serde(rename = "runId")]
+        run_id: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

@@ -90,6 +90,12 @@ CREATE TABLE cowork_threads (
     created_at TEXT NOT NULL
 , workspace_delegation_enabled INTEGER NOT NULL DEFAULT 1);
 
+-- table: execution_store_identity
+CREATE TABLE execution_store_identity (
+    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+    execution_store_id TEXT NOT NULL UNIQUE
+);
+
 -- table: feed_bindings
 CREATE TABLE feed_bindings (
     feed_id TEXT PRIMARY KEY,
@@ -131,6 +137,25 @@ CREATE TABLE goals (
     pending_op TEXT,
     revision INTEGER NOT NULL,
     native_state_json TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+-- table: local_materialization_operation
+CREATE TABLE local_materialization_operation (
+    operation_id TEXT PRIMARY KEY,
+    kind TEXT NOT NULL CHECK (kind IN ('repo_root', 'workspace')),
+    request_hash TEXT NOT NULL,
+    state TEXT NOT NULL CHECK (state IN ('running', 'completed', 'failed')),
+    -- Recorded when the clone path is chosen (repo-root acquisition), so a
+    -- crash between clone and registration recovers as a `managed` root rather
+    -- than being downgraded to `external` adoption. NULL for adoption/workspace.
+    intended_kind TEXT CHECK (intended_kind IN ('managed', 'external')),
+    repo_root_id TEXT,
+    workspace_id TEXT,
+    destination_path TEXT,
+    observed_head_sha TEXT,
+    failure_code TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
@@ -616,6 +641,22 @@ CREATE TABLE workflow_runs (
             CHECK ((status = 'interrupted') = (interruption_code IS NOT NULL))
         );
 
+-- table: workflow_workspace_materializations
+CREATE TABLE workflow_workspace_materializations (
+    run_id                  TEXT PRIMARY KEY,
+    schema_version          INTEGER NOT NULL CHECK (schema_version = 1),
+    request_json            TEXT NOT NULL,
+    resolved_placement_json TEXT,
+    status                  TEXT NOT NULL
+                            CHECK (status IN ('accepted', 'materializing', 'ready', 'failed')),
+    workspace_id            TEXT,
+    failure_code            TEXT,
+    failure_message         TEXT,
+    created_at              TEXT NOT NULL,
+    updated_at              TEXT NOT NULL,
+    finished_at             TEXT
+);
+
 -- table: workspace_access_modes
 CREATE TABLE workspace_access_modes (
     workspace_id TEXT PRIMARY KEY REFERENCES workspaces(id) ON DELETE CASCADE,
@@ -863,6 +904,16 @@ CREATE INDEX idx_terminal_command_runs_workspace_activity
 -- index: idx_terminal_command_runs_workspace_created
 CREATE INDEX idx_terminal_command_runs_workspace_created
     ON terminal_command_runs(workspace_id, created_at DESC);
+
+-- index: idx_workflow_runs_active_session_controller
+CREATE UNIQUE INDEX idx_workflow_runs_active_session_controller
+         ON workflow_runs(session_id)
+         WHERE session_id IS NOT NULL
+           AND status NOT IN ('completed', 'failed', 'cancelled', 'interrupted');
+
+-- index: idx_workflow_workspace_materializations_workspace_id
+CREATE INDEX idx_workflow_workspace_materializations_workspace_id
+    ON workflow_workspace_materializations(workspace_id);
 
 -- index: idx_workspaces_path
 CREATE INDEX idx_workspaces_path ON workspaces(path);

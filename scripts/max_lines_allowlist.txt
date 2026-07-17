@@ -9,36 +9,44 @@
 
 anyharness/crates/anyharness-contract/src/v1/events.rs 1092 existing AnyHarness contract oversized file
 anyharness/crates/anyharness-contract/src/v1/sessions.rs 767 existing AnyHarness contract oversized file
-anyharness/crates/anyharness-lib/src/api/openapi.rs 656 existing AnyHarness oversized file (+hosting schema registration, +agent-auth state response, +gateway catalog endpoints) + enriched gateway-models schema fields (model-table §1) + workflow-runs paths/schemas
+anyharness/crates/anyharness-lib/src/api/openapi.rs 678 existing AnyHarness oversized file (+hosting schema registration, +agent-auth state response, +gateway catalog endpoints) + enriched gateway-models schema fields (model-table §1) + workflow-runs + local materialization operations + workflow-run-workspaces paths/schemas (central OpenAPI registry; per-route path/schema registration only)
 anyharness/crates/anyharness-lib/src/api/router_tests.rs 1364 existing AnyHarness oversized test file (+hosting PR-status route tests, +catalog version + enrichment tests)
+anyharness/crates/anyharness-lib/src/domains/materialization/service.rs 625 local materialization domain service (exact-ref workspace materialization + repo-root acquisition orchestration, in-process keyed operation-lock admission, idempotent replay/failure recording; blocking git mechanics split into acquire.rs) — split into service/ on next growth per guides/domains.md
 anyharness/crates/anyharness-lib/src/domains/workflows/service.rs 664 workflow durable rules (+run-control cancel-intent use case and helpers); split into service/ on next growth per guides/domains.md
-anyharness/crates/anyharness-lib/src/domains/workflows/service_tests.rs 1307 workflow-runs merge-gated domain suite (+run-control stateVersion progression, four-outcome cancel intent at every boundary, first-terminal-wins, interrupted fencing)
-anyharness/crates/anyharness-lib/src/api/workflow_runs_tests.rs 1819 workflow-runs HTTP + runtime/extension crossing suite (+run-control cancel matrix, wire pinning, dropped-cancel handoff, cancel/execution race, interrupted fencing, PROOF-01 battery: effort-window cancel, deterministic dispatch-vs-cancel orders, missing-actor recovery, post-commit read-failure intent)
+anyharness/crates/anyharness-lib/src/domains/workflows/service_tests.rs 1320 workflow-runs merge-gated domain suite (+2b partial-uniqueness contract on nonterminal session binding)
+anyharness/crates/anyharness-lib/src/api/workflow_runs_tests.rs 2790 workflow-runs HTTP + runtime/extension crossing suite (run-control PROOF-01 battery + 2b admission races: reservation/create/bind window, terminal release, PR1227-WORKSPACE-FENCE-01 purge/retire destruction-vs-late-bind proofs, and FENCE-02 bind->terminalize->destruction race proofs over the real executor)
 anyharness/crates/anyharness-lib/src/api/http/agent_gateway_catalog.rs 632 gateway model enrichment (own vs foreign match) + catalog version endpoint
+anyharness/crates/anyharness-lib/src/api/http/workspaces_lifecycle.rs 645 workspace retire lifecycle handlers (+PR1227-WORKSPACE-FENCE-01/02 under-exclusive-lease workflow-control re-check with admitted-set fail-closed membership + test-only proof seam module)
+anyharness/crates/anyharness-lib/src/api/http/workspaces_purge.rs 665 workspace purge handlers (+2b fail-closed all-session admission, PR1227-WORKSPACE-FENCE-01/02 admitted-set carry + under-exclusive-lease re-check, test-only purge proof seam module)
+anyharness/crates/anyharness-lib/src/domains/workspaces/retention.rs 823 worktree retention sweep (+PR1227-RETENTION-FENCE-01 permit/lease fencing + test proof seam, +Workflow creator-context exclusion until an explicit cleanup policy exists)
+anyharness/crates/anyharness-lib/src/api/session_admission_tests.rs 667 2b admission conflict-matrix + fail-closed purge/retire/mobility-export/destroy-source proofs + LOCK-01 permit-before-lease deadlock/source-order guards
 anyharness/crates/anyharness-lib/src/domains/agents/catalog/gateway_resolver.rs 704 provider filtering + family normalizer (bedrock/date/version forms) with tests
 anyharness/crates/anyharness-lib/src/domains/agents/catalog/validation.rs 605 defaultAgentKind must name a declared agent (was already at 598)
 anyharness/crates/anyharness-lib/src/domains/agents/auth/context_tests.rs 645 classifier tests incl. gateway route activation + bedrock flag-only detection
-anyharness/crates/anyharness-lib/src/domains/cowork/runtime.rs 1911 existing AnyHarness oversized file
+anyharness/crates/anyharness-lib/src/domains/cowork/runtime.rs 1913 existing AnyHarness oversized file (+preselected-id passthrough at two creation call sites)
 anyharness/crates/anyharness-lib/src/domains/mobility/service.rs 1520 existing AnyHarness oversized file
 anyharness/crates/anyharness-lib/src/domains/plans/service.rs 628 existing AnyHarness oversized file
 anyharness/crates/anyharness-lib/src/domains/goals/service_tests.rs 682 goal service regression tests for pending_op idempotency
 anyharness/crates/anyharness-lib/src/domains/reviews/service/service_tests.rs 1510 existing AnyHarness oversized test file
-anyharness/crates/anyharness-lib/src/domains/sessions/runtime/tests.rs 897 existing AnyHarness oversized test file
+anyharness/crates/anyharness-lib/src/domains/sessions/runtime/tests.rs 898 existing AnyHarness oversized test file (+preselected_session_id integration at one create call site)
 anyharness/crates/anyharness-lib/src/domains/workspaces/inventory.rs 653 runtime pressure worktree inventory joins and tests
 anyharness/crates/anyharness-lib/src/domains/workspaces/retire_preflight.rs 613 existing AnyHarness oversized file
 anyharness/crates/anyharness-lib/src/live/sessions/probe.rs 613 catalog probe with per-harness model-source fallbacks
-anyharness/crates/anyharness-lib/src/persistence/custom_migrations.rs 1107 custom migration with legacy schema coverage
+anyharness/crates/anyharness-lib/src/persistence/custom_migrations.rs 1126 custom migration with legacy schema coverage (+0063 partial unique controller index, ordered after the 0062 rebuild)
 anyharness/sdk-react/src/hooks/sessions.ts 723 existing SDK React oversized file
-cloud/sdk/src/types/generated.ts 784 existing generated cloud SDK type surface (+workspaceKind identity migration (5a))
+cloud/sdk/src/types/generated.ts 796 existing generated cloud SDK type surface (+workspaceKind, git numstat fields, OpenAPI-derived materialization types, app-extra overlay, and PR 5 exact-ref create request fields)
 anyharness/sdk/src/reducer/__tests__/transcript.test.ts 1817 existing SDK oversized test file
 anyharness/sdk/src/reducer/transcript.ts 1542 existing SDK oversized file
 apps/desktop/src-tauri/src/commands/ssh_tunnel.rs 729 existing desktop native oversized file
 server/proliferate/auth/identity/store.py 686 managed sandbox GitHub grant read path extends existing identity store
+server/proliferate/config.py 618 managed Cloud, GitHub App, and Workflow flags extend the centralized deployment settings surface; split pending
 server/proliferate/db/models/cloud/agent_gateway.py 504 agent_auth_harness_settings model added for catalog-driven per-harness settings
 server/proliferate/server/cloud/agent_gateway/api.py 405 harness-settings GET/PUT routes added for catalog-driven per-harness settings
 server/proliferate/server/cloud/secrets/api.py 416 existing cloud secrets API pending route split
+server/proliferate/server/cloud/workspaces/service.py 1088 workspace materialization ledger service (intent/report/unlink write-path + primary selection + recorded-sandbox reconciliation + scratch/repo-less read guards) + PR 5 exact-ref managed-Cloud creation and association path; split on next growth per guides/domains.md
 server/tests/integration/test_agent_gateway_api.py 654 P1 auth rebuild rewrote keys/selections/state coverage for titled-key + selection model
-server/tests/integration/test_auth_flow.py 2220 existing server oversized integration test plus session-token-revocation coverage + /users/me password rejection test + single-org current_product_user bypass coverage
+server/tests/integration/test_cloud_workspace_materialization_service.py 1173 durable materialization ledger service suite (intent/report/unlink transitions, redaction, primary selection, recorded-sandbox reconciliation, repo-less workspace, install-id redaction, generation replay/crash-retry/terminal-reintent) + PR 5 exact-ref create coverage; new fail-closed source cases split to test_cloud_workspace_exact_ref_source.py
+server/tests/integration/test_auth_flow.py 2214 existing server oversized integration test plus session-token-revocation coverage + /users/me password rejection test + single-org current_product_user bypass coverage
 server/tests/integration/test_billing_accounting.py 872 existing server oversized integration test
 server/tests/integration/test_billing_api.py 1918 existing server oversized integration test
 server/tests/integration/test_stripe_webhooks.py 1456 existing server oversized integration test
@@ -50,12 +58,12 @@ apps/packages/ui/src/icons/core.tsx 413 existing consolidated icon barrel pendin
 # that fell under the 600 general cap at the deeper path (SplitDiffViewer 540,
 # HomeNextScreen.test 530 — desktop component cap was 500) are dropped, not moved.
 apps/packages/product-client/src/components/settings/panes/agents/harness/HarnessPane.test.tsx 932 P3 runtime catalog extends All-Models coverage + add-key modal flow + credential refresh + switch disambiguation + surface store mock + ProductHost test-host wiring + authenticated-without-cloud-compute BYOK gating cases
-apps/packages/product-client/src/lib/domain/workspaces/cloud/logical-workspaces.test.ts 690 managed sandbox cloud workspace indicators extend existing oversized test file
+apps/packages/product-client/src/lib/domain/workspaces/cloud/logical-workspaces.test.ts 840 managed sandbox cloud workspace indicators + PR 5 explicit-materialization attachment cases extend existing oversized test file
 apps/packages/product-client/src/lib/domain/workspaces/sidebar/sidebar.test.ts 691 workspace git-status threading extends existing oversized test file
 apps/packages/product-client/src/lib/domain/workspaces/sidebar/sidebar-indicators.test.ts 648 existing desktop oversized test file
 apps/packages/product-client/src/lib/infra/measurement/measurement-port.ts 734 product-owned measurement port barrel (R1 ruling) mirroring the retained measurement surface through a swappable no-op sink; split deferred
-anyharness/crates/anyharness-lib/src/api/router.rs 613 AnyHarness router (+goals/loops/activity/feed routes, +gateway catalog version route, +workflow-runs route, +workflow-run cancel route)
-anyharness/crates/anyharness-lib/src/app/mod.rs 625 AnyHarness app wiring (+goal/loop/activity/feed services, +two-phase workflow-run wiring calls into app/workflows.rs)
-anyharness/crates/anyharness-lib/src/domains/loops/runtime.rs 861 loops runtime — native write path + emulated Codex scheduler
+anyharness/crates/anyharness-lib/src/api/router.rs 628 AnyHarness router (+goals/loops/activity/feed routes, +gateway catalog version route, +workflow-runs/cancel + local materialization operations + workflow-run-workspaces routes)
+anyharness/crates/anyharness-lib/src/app/mod.rs 647 AnyHarness app wiring (+session mutation admission purge/retention wiring, +goal/loop/activity/feed services, +two-phase workflow-run and workflow-workspace wiring, +local materialization service wiring)
+anyharness/crates/anyharness-lib/src/domains/loops/runtime.rs 867 loops runtime — native write path + emulated Codex scheduler (+2b derived-safe classification comment at the fire seam)
 anyharness/crates/anyharness-lib/src/live/sessions/actor/startup.rs 686 session startup (+goal/loop capability parsing, roster reconcile-on-attach)
 server/tests/integration/test_organizations_api.py 624 added admin-only coverage for GET .../invitations

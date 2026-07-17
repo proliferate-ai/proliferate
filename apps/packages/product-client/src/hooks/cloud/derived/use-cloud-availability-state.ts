@@ -1,29 +1,40 @@
 import { useEffect, useMemo } from "react";
-import { useGitHubDesktopAuthAvailability } from "#product/hooks/access/cloud/auth/use-github-auth-availability";
 import { useAppCapabilities } from "#product/hooks/capabilities/derived/use-app-capabilities";
 import { logStartupDebug } from "#product/lib/infra/measurement/measurement-port";
 import { useProductAuthStatus } from "#product/hooks/auth/facade/use-product-auth";
 
+/**
+ * App-wide Cloud availability, derived from the product session — NOT from
+ * GitHub OAuth (PR2-AUTH-02).
+ *
+ * Sign-in availability is a property of the reachable product control plane:
+ * ANY product session (Google / password / SSO / GitHub) unlocks the product,
+ * so `cloudSignInAvailable` no longer depends on GitHub Desktop OAuth being
+ * configured. GitHub App authority gates repository operations only, and is
+ * resolved per-repo by the readiness resolver (`resolveRepositoryReadiness`) —
+ * never here. Surfaces that specifically offer GitHub OAuth sign-in/linking
+ * (the Account pane's Connect/Reconnect GitHub buttons) read the GitHub OAuth
+ * availability probe directly instead of these flags.
+ */
 export function useCloudAvailabilityState() {
   const authStatus = useProductAuthStatus();
   const { cloudEnabled, cloudComputeEnabled } = useAppCapabilities();
-  const {
-    data: githubDesktopAuthAvailable,
-    isPending: githubDesktopAuthAvailabilityPending,
-  } = useGitHubDesktopAuthAvailability();
   const cloudUnavailable = !cloudEnabled;
-  const cloudSignInChecking = cloudEnabled && githubDesktopAuthAvailabilityPending;
-  const cloudSignInAvailable = cloudEnabled && githubDesktopAuthAvailable?.enabled === true;
-  const cloudAuthUnavailable = cloudEnabled && !cloudSignInChecking && !cloudSignInAvailable;
+  // "Checking" means the product session itself is still resolving, not a
+  // GitHub OAuth probe.
+  const cloudSignInChecking = cloudEnabled && authStatus === "loading";
+  // A reachable control plane always offers product sign-in.
+  const cloudSignInAvailable = cloudEnabled;
+  // The GitHub-OAuth-gated "sign-in unavailable" state is gone: a reachable
+  // control plane always has a product sign-in path, so this is never true.
+  const cloudAuthUnavailable = false;
   const cloudActive = cloudComputeEnabled && authStatus === "authenticated";
-  const cloudRequiresSignIn = cloudSignInAvailable && authStatus === "anonymous";
+  const cloudRequiresSignIn = cloudEnabled && authStatus === "anonymous";
 
   useEffect(() => {
     logStartupDebug("cloud.availability.derived_state", {
       authStatus,
       cloudEnabled,
-      githubDesktopAuthAvailable: githubDesktopAuthAvailable?.enabled ?? null,
-      githubDesktopAuthAvailabilityPending,
       cloudUnavailable,
       cloudSignInChecking,
       cloudSignInAvailable,
@@ -33,12 +44,11 @@ export function useCloudAvailabilityState() {
   }, [
     authStatus,
     cloudActive,
+    cloudComputeEnabled,
     cloudEnabled,
     cloudSignInAvailable,
     cloudSignInChecking,
     cloudUnavailable,
-    githubDesktopAuthAvailabilityPending,
-    githubDesktopAuthAvailable,
   ]);
 
   return useMemo(() => {

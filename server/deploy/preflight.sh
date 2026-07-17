@@ -79,6 +79,35 @@ else
   ok "SITE_ADDRESS resolved."
 fi
 
+# Self-hosted Web is served by this same FastAPI image and resolves API calls
+# from window.location.origin. SITE_ADDRESS is therefore the one public
+# authority: callback URLs and server-generated workspace configuration must
+# not advertise a second origin that the browser is not using.
+site_origin_from_address() {
+  local address="${1%/}"
+  if [[ "$address" == http://* || "$address" == https://* ]]; then
+    printf '%s' "$address"
+  else
+    printf 'https://%s' "$address"
+  fi
+}
+
+if [[ -n "$SITE_ADDRESS" ]]; then
+  EXPECTED_ORIGIN="$(site_origin_from_address "$SITE_ADDRESS")"
+  ORIGIN_ERRORS_BEFORE="$ERRORS"
+  API_BASE_URL_VAL="$(get API_BASE_URL)"
+  FRONTEND_BASE_URL_VAL="$(get FRONTEND_BASE_URL)"
+  if [[ -n "$API_BASE_URL_VAL" && "${API_BASE_URL_VAL%/}" != "$EXPECTED_ORIGIN" ]]; then
+    err "API_BASE_URL must equal the SITE_ADDRESS origin ($EXPECTED_ORIGIN) for same-origin self-hosted Web; got $API_BASE_URL_VAL."
+  fi
+  if [[ -n "$FRONTEND_BASE_URL_VAL" && "${FRONTEND_BASE_URL_VAL%/}" != "$EXPECTED_ORIGIN" ]]; then
+    err "FRONTEND_BASE_URL must equal the SITE_ADDRESS origin ($EXPECTED_ORIGIN) for same-origin self-hosted Web; got $FRONTEND_BASE_URL_VAL."
+  fi
+  if [[ "$ERRORS" -eq "$ORIGIN_ERRORS_BEFORE" && -n "$API_BASE_URL_VAL" && -n "$FRONTEND_BASE_URL_VAL" ]]; then
+    ok "SITE_ADDRESS, API_BASE_URL, and FRONTEND_BASE_URL share one public origin."
+  fi
+fi
+
 # --- 2. E2B pairing (the whole-instance crash-loop guard) --------------------
 #
 # server/proliferate/main.py::_validate_e2b_template_configuration() raises at
@@ -92,9 +121,9 @@ E2B_TEMPLATE_NAME="$(get E2B_TEMPLATE_NAME)"
 if [[ -n "$E2B_API_KEY" && -z "$E2B_TEMPLATE_NAME" ]]; then
   err "E2B_API_KEY is set but E2B_TEMPLATE_NAME is empty. The API validates this pair at startup and will refuse to boot (restart-looping the whole control plane). Set E2B_TEMPLATE_NAME (e.g. your-team/proliferate-runtime-cloud:production) or clear E2B_API_KEY to run without cloud workspaces."
 elif [[ -z "$E2B_API_KEY" && -n "$E2B_TEMPLATE_NAME" ]]; then
-  warn "E2B_TEMPLATE_NAME is set but E2B_API_KEY is empty. Cloud workspaces stay disabled until both are set."
+  warn "E2B_TEMPLATE_NAME is set but E2B_API_KEY is empty. The server reports operator_configuration_required and cloud workspaces stay unavailable until both are set."
 elif [[ -n "$E2B_API_KEY" && -n "$E2B_TEMPLATE_NAME" ]]; then
-  ok "E2B cloud-workspace config is a complete pair."
+  ok "E2B provisioning config is a complete pair. GitHub-backed cloud workspaces additionally require a complete GitHub App config (checked in section 7)."
 fi
 
 # --- 3. Agent gateway pairing ------------------------------------------------
@@ -205,25 +234,41 @@ fi
 # --- 7. GitHub App (cloud repo access) partial config -------------------------
 #
 # Distinct credential set from GitHub OAuth sign-in above. Not required for
-# the base install or for cloud workspaces themselves (E2B is what gates
-# workspace creation); flagged here only so a half-entered App config does not
-# silently fail to authorize repos later.
+# the base install, but REQUIRED for GitHub-backed managed-cloud workspaces:
+# workspace creation and repo-environment saves enforce GitHub App repo
+# authority server-side, so E2B alone does not enable cloud workspaces. A
+# half-entered App config is an operator error the capability contract
+# reports as operator_configuration_required.
 
+# Mirrors Settings.github_app_configured / github_app_partially_configured:
+# six requirement groups (app id, app slug, client id, client secret, webhook
+# secret, private key in exactly one form). Any set without all set is a
+# partial config the /meta contract reports as operator_configuration_required.
 GITHUB_APP_ID_VAL="$(get GITHUB_APP_ID)"
-if [[ -n "$GITHUB_APP_ID_VAL" ]]; then
-  GITHUB_APP_CLIENT_ID_VAL="$(get GITHUB_APP_CLIENT_ID)"
-  GITHUB_APP_CLIENT_SECRET_VAL="$(get GITHUB_APP_CLIENT_SECRET)"
-  GITHUB_APP_WEBHOOK_SECRET_VAL="$(get GITHUB_APP_WEBHOOK_SECRET)"
-  GITHUB_APP_KEY_INLINE="$(get GITHUB_APP_PRIVATE_KEY)"
-  GITHUB_APP_KEY_PATH="$(get GITHUB_APP_PRIVATE_KEY_PATH)"
-  if [[ -z "$GITHUB_APP_CLIENT_ID_VAL" || -z "$GITHUB_APP_CLIENT_SECRET_VAL" || -z "$GITHUB_APP_WEBHOOK_SECRET_VAL" ]]; then
-    warn "GITHUB_APP_ID is set but one of GITHUB_APP_CLIENT_ID / GITHUB_APP_CLIENT_SECRET / GITHUB_APP_WEBHOOK_SECRET is empty. Set all of them together to use the GitHub App."
-  fi
-  if [[ -z "$GITHUB_APP_KEY_INLINE" && -z "$GITHUB_APP_KEY_PATH" ]]; then
-    warn "GITHUB_APP_ID is set but neither GITHUB_APP_PRIVATE_KEY nor GITHUB_APP_PRIVATE_KEY_PATH is set. The App needs its private key to authenticate."
-  elif [[ -n "$GITHUB_APP_KEY_INLINE" && -n "$GITHUB_APP_KEY_PATH" ]]; then
-    warn "Both GITHUB_APP_PRIVATE_KEY and GITHUB_APP_PRIVATE_KEY_PATH are set; only one form is needed (inline takes precedence)."
-  fi
+GITHUB_APP_SLUG_VAL="$(get GITHUB_APP_SLUG)"
+GITHUB_APP_CLIENT_ID_VAL="$(get GITHUB_APP_CLIENT_ID)"
+GITHUB_APP_CLIENT_SECRET_VAL="$(get GITHUB_APP_CLIENT_SECRET)"
+GITHUB_APP_WEBHOOK_SECRET_VAL="$(get GITHUB_APP_WEBHOOK_SECRET)"
+GITHUB_APP_KEY_INLINE="$(get GITHUB_APP_PRIVATE_KEY)"
+GITHUB_APP_KEY_PATH="$(get GITHUB_APP_PRIVATE_KEY_PATH)"
+GITHUB_APP_KEY_PRESENT=""
+[[ -n "$GITHUB_APP_KEY_INLINE" || -n "$GITHUB_APP_KEY_PATH" ]] && GITHUB_APP_KEY_PRESENT=1
+
+GITHUB_APP_PRESENT_COUNT=0
+for v in "$GITHUB_APP_ID_VAL" "$GITHUB_APP_SLUG_VAL" "$GITHUB_APP_CLIENT_ID_VAL" "$GITHUB_APP_CLIENT_SECRET_VAL" "$GITHUB_APP_WEBHOOK_SECRET_VAL" "$GITHUB_APP_KEY_PRESENT"; do
+  [[ -n "$v" ]] && GITHUB_APP_PRESENT_COUNT=$((GITHUB_APP_PRESENT_COUNT + 1))
+done
+
+if [[ "$GITHUB_APP_PRESENT_COUNT" -gt 0 && "$GITHUB_APP_PRESENT_COUNT" -lt 6 ]]; then
+  warn "GitHub App config is partial: set GITHUB_APP_ID, GITHUB_APP_SLUG, GITHUB_APP_CLIENT_ID, GITHUB_APP_CLIENT_SECRET, GITHUB_APP_WEBHOOK_SECRET, and one of GITHUB_APP_PRIVATE_KEY / GITHUB_APP_PRIVATE_KEY_PATH together. Until then the server reports operator_configuration_required and GitHub-backed cloud workspaces stay unavailable."
+elif [[ "$GITHUB_APP_PRESENT_COUNT" -eq 6 ]]; then
+  ok "GitHub App config is complete."
+fi
+if [[ -n "$GITHUB_APP_KEY_INLINE" && -n "$GITHUB_APP_KEY_PATH" ]]; then
+  warn "Both GITHUB_APP_PRIVATE_KEY and GITHUB_APP_PRIVATE_KEY_PATH are set; only one form is needed (inline takes precedence)."
+fi
+if [[ -n "$E2B_API_KEY" && -n "$E2B_TEMPLATE_NAME" && "$GITHUB_APP_PRESENT_COUNT" -lt 6 ]]; then
+  warn "E2B is fully configured but the GitHub App is not. Cloud workspace creation enforces GitHub App repo authority, so cloud workspaces stay unavailable (operator_configuration_required) until the App config is complete."
 fi
 
 # --- 8. Runtime binaries for cloud workspaces --------------------------------
@@ -257,6 +302,8 @@ trap 'rm -f "$known_keys_file"' EXIT
   cat <<'MANAGED'
 DATABASE_URL
 API_BASE_URL
+FRONTEND_BASE_URL
+WEB_DIST_DIR
 PROLIFERATE_USE_SSLIP_FALLBACK
 LITELLM_POSTGRES_DB
 LITELLM_POSTGRES_USER

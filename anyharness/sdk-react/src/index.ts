@@ -110,6 +110,8 @@ export {
   useRepoRootGitBranchesQuery,
   useDetectRepoRootSetupQuery,
   usePrepareRepoRootMobilityDestinationMutation,
+  useMaterializeRepoRootMutation,
+  useMaterializeWorkspaceAtRefMutation,
 } from "./hooks/repo-roots.js";
 export {
   useWorkspaceMobilityPreflightQuery,

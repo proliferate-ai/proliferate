@@ -8,21 +8,31 @@ stores the returned workspace id.
 from __future__ import annotations
 
 import re
+from dataclasses import replace
 from typing import Literal, Protocol
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.store import cloud_sandboxes as cloud_sandbox_store
+from proliferate.db.store import cloud_workspace_materializations as materialization_store
 from proliferate.db.store import cloud_workspaces as cloud_workspace_store
 from proliferate.db.store import repositories as repositories_store
+from proliferate.db.store import runtime_workers as runtime_workers_store
 from proliferate.db.store.cloud_sandboxes import CloudSandboxValue
+from proliferate.db.store.cloud_workspace_materializations import (
+    CloudWorkspaceMaterializationValue,
+)
 from proliferate.db.store.cloud_workspaces import CloudWorkspaceValue
 from proliferate.db.store.repositories import RepoEnvironmentValue
 from proliferate.integrations.anyharness.errors import CloudRuntimeReconnectError
-from proliferate.integrations.anyharness.models import ResolvedRemoteWorkspace
+from proliferate.integrations.anyharness.models import (
+    MaterializedRemoteWorkspaceAtRef,
+    ResolvedRemoteWorkspace,
+)
 from proliferate.integrations.anyharness.workspaces import (
     create_remote_worktree_workspace,
+    materialize_workspace_at_ref,
     resolve_runtime_workspace,
 )
 from proliferate.lib.product.workspace_naming import resolve_generated_branch_name
@@ -38,12 +48,20 @@ from proliferate.server.cloud.materialization.materialize.repo_environment impor
 from proliferate.server.cloud.repos.domain.github_credentials import CloudRepoGitHubCredentials
 from proliferate.server.cloud.repos.service import get_repo_branches_for_credentials
 from proliferate.server.cloud.workspaces.domain.origin import resolve_workspace_origin_entrypoint
+from proliferate.server.cloud.workspaces.materializations.service import (
+    validate_cloud_copy_local_source,
+)
+from proliferate.server.cloud.workspaces.materializations.summaries import (
+    materialization_summary,
+    select_primary,
+)
 from proliferate.server.cloud.workspaces.models import (
     CloudRuntimeStatus,
     CloudWorkspaceBackingKind,
     CloudWorkspaceRuntimeStatusResponse,
     CloudWorkspaceStatus,
     CreateCloudWorkspaceRequest,
+    CreateCloudWorkspaceSourceMaterialization,
     RepoRef,
     WorkspaceDetail,
     WorkspaceRuntimeSummary,
@@ -94,14 +112,20 @@ async def list_cloud_workspaces_for_user(
     user_id: UUID,
     *,
     lifecycle: Literal["active", "archived", "all"] = "active",
+    desktop_install_id: str | None = None,
 ) -> list[WorkspaceSummary]:
     workspaces = await cloud_workspace_store.list_cloud_workspaces(
         db,
         user_id,
         lifecycle=lifecycle,
     )
+    resolved_install_id = await _resolve_owned_install(
+        db,
+        user_id=user_id,
+        desktop_install_id=desktop_install_id,
+    )
     return [
-        await _workspace_payload(db, workspace)
+        await _workspace_payload(db, workspace, requesting_install_id=resolved_install_id)
         for workspace in workspaces
         if workspace is not None
     ]
@@ -111,9 +135,46 @@ async def get_cloud_workspace_detail(
     db: AsyncSession,
     user_id: UUID,
     workspace_id: UUID,
+    *,
+    desktop_install_id: str | None = None,
 ) -> WorkspaceDetail:
     workspace = await _load_user_workspace(db, user_id=user_id, workspace_id=workspace_id)
-    return await _workspace_payload(db, workspace, detail=True)
+    resolved_install_id = await _resolve_owned_install(
+        db,
+        user_id=user_id,
+        desktop_install_id=desktop_install_id,
+    )
+    return await _workspace_payload(
+        db,
+        workspace,
+        detail=True,
+        requesting_install_id=resolved_install_id,
+    )
+
+
+async def _resolve_owned_install(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    desktop_install_id: str | None,
+) -> str | None:
+    """Return the install id only when it is owned by the caller.
+
+    Selection preference and un-redaction apply solely to an install the caller
+    actually owns; an unowned or unknown install id is ignored (treated as no
+    install), so it can never un-redact another device's local materialization.
+    """
+    if desktop_install_id is None:
+        return None
+    cleaned = desktop_install_id.strip()
+    if not cleaned:
+        return None
+    worker = await runtime_workers_store.get_active_desktop_worker_for_user(
+        db,
+        owner_user_id=user_id,
+        desktop_install_id=cleaned,
+    )
+    return cleaned if worker is not None else None
 
 
 async def create_cloud_workspace_for_user(
@@ -178,6 +239,28 @@ async def create_cloud_workspace_for_user(
             "github_branch_not_found",
             f"The base branch '{base_branch}' was not found on GitHub.",
             status_code=400,
+        )
+
+    # Exact-ref creation (PR 5, "Add Cloud copy from local"): the branch is an
+    # already-published GitHub branch and the Cloud copy is materialized at that
+    # exact commit, not forked from base. Server independently re-verifies the
+    # authorized GitHub head equals the expected SHA — the client descriptor is
+    # never trusted for the ref.
+    expected_head_sha = (body.expected_head_sha or "").strip()
+    if expected_head_sha:
+        return await _create_cloud_workspace_at_exact_ref(
+            db,
+            user=user,
+            repo_environment=repo_environment,
+            git_owner=git_owner,
+            git_repo_name=git_repo_name,
+            branch_name=branch_name,
+            base_branch=base_branch,
+            expected_head_sha=expected_head_sha,
+            repo_branches=repo_branches,
+            display_name=body.display_name,
+            source=body.source or "desktop",
+            source_materialization=body.source_materialization,
         )
 
     active_workspace_branches = (
@@ -291,12 +374,223 @@ async def create_cloud_workspace_for_user(
         setup_script=repo_environment.setup_script,
         source=body.source or "desktop",
     )
+    # Dual-write: the legacy top-level id and the managed-Cloud materialization
+    # are written together, after AnyHarness returns. A failure before this point
+    # fabricates nothing. The sandbox link is the owner's active personal sandbox
+    # (implicit workspace<->sandbox linkage today); NULL when none resolves.
+    sandbox = await cloud_sandbox_store.load_personal_cloud_sandbox(db, user.id)
     workspace = await cloud_workspace_store.update_workspace_anyharness_workspace_id(
         db,
         anyharness_workspace_id=anyharness_workspace.workspace_id,
         workspace=workspace,
     )
+    await materialization_store.insert_managed_cloud_materialization(
+        db,
+        cloud_workspace_id=workspace.id,
+        cloud_sandbox_id=sandbox.id if sandbox is not None else None,
+        anyharness_workspace_id=anyharness_workspace.workspace_id,
+        state="hydrated",
+    )
     return await _workspace_payload(db, workspace, detail=True)
+
+
+async def _create_cloud_workspace_at_exact_ref(
+    db: AsyncSession,
+    *,
+    user: _UserWithId,
+    repo_environment: RepoEnvironmentValue,
+    git_owner: str,
+    git_repo_name: str,
+    branch_name: str,
+    base_branch: str,
+    expected_head_sha: str,
+    repo_branches: object,
+    display_name: str | None,
+    source: str,
+    source_materialization: CreateCloudWorkspaceSourceMaterialization | None,
+) -> WorkspaceDetail:
+    """Create managed Cloud and optional owned-local rows at one verified ref."""
+    branches = getattr(repo_branches, "branches", [])
+    branch_heads = getattr(repo_branches, "branch_heads_by_name", {}) or {}
+    if branch_name not in branches:
+        raise CloudApiError(
+            "github_branch_not_found",
+            f"The branch '{branch_name}' was not found on GitHub.",
+            status_code=400,
+        )
+    github_head = branch_heads.get(branch_name)
+    if github_head is None:
+        raise CloudApiError(
+            "materialization_source_blocked",
+            f"The branch '{branch_name}' is not published on GitHub.",
+            status_code=409,
+        )
+    if github_head != expected_head_sha:
+        raise CloudApiError(
+            "materialization_source_blocked",
+            "The local workspace has commits that are not published on GitHub.",
+            status_code=409,
+        )
+
+    local_source = (
+        await validate_cloud_copy_local_source(
+            db,
+            user_id=user.id,
+            source=source_materialization,
+            expected_head_sha=expected_head_sha,
+        )
+        if source_materialization is not None
+        else None
+    )
+
+    active_workspace_branches = (
+        await cloud_workspace_store.list_active_workspace_branches_for_repo_environment(
+            db,
+            repo_environment_id=repo_environment.id,
+        )
+    )
+    if branch_name in active_workspace_branches:
+        raise CloudApiError(
+            "cloud_branch_already_exists",
+            f"A cloud workspace already exists for branch '{branch_name}'.",
+            status_code=409,
+        )
+
+    display_name_value = (display_name or branch_name).strip() or branch_name
+    if len(display_name_value) > MAX_CLOUD_WORKSPACE_DISPLAY_NAME_CHARS:
+        raise CloudApiError(
+            "invalid_display_name",
+            (
+                "Workspace display name cannot exceed "
+                f"{MAX_CLOUD_WORKSPACE_DISPLAY_NAME_CHARS} characters."
+            ),
+            status_code=400,
+        )
+
+    try:
+        await materialization_service.materialize_repo_environment(
+            db,
+            repo_environment_id=repo_environment.id,
+        )
+    except CloudRuntimeReconnectError as exc:
+        raise CloudApiError(
+            "cloud_sandbox_reconnect_failed",
+            "The cloud sandbox runtime could not be reached. Please retry in a moment.",
+            status_code=502,
+        ) from exc
+    except CloudRepoCheckoutError as exc:
+        raise CloudApiError(
+            "cloud_repo_checkout_conflict",
+            _CHECKOUT_CONFLICT_MESSAGES.get(
+                exc.reason,
+                "The cloud checkout for this repository could not be prepared. "
+                "Resolve outstanding changes in the cloud sandbox and retry.",
+            ),
+            status_code=409,
+        ) from exc
+    except CloudMaterializationLockTimeout as exc:
+        raise CloudApiError(
+            "cloud_materialization_busy",
+            "The cloud sandbox is busy preparing another workspace. Please retry in a moment.",
+            status_code=503,
+        ) from exc
+
+    workspace = await cloud_workspace_store.create_cloud_workspace(
+        db,
+        user_id=user.id,
+        repo_environment_id=repo_environment.id,
+        display_name=display_name_value,
+        git_branch=branch_name,
+        git_base_branch=base_branch,
+    )
+    if workspace is None:
+        raise CloudApiError(
+            "cloud_branch_already_exists",
+            f"A cloud workspace already exists for branch '{branch_name}'.",
+            status_code=409,
+        )
+
+    # Reserve the local association before remote materialization. This makes a
+    # uniqueness conflict fail closed instead of returning a misleading Cloud
+    # success after the managed checkout was created (PR5-CLOUD-16).
+    if local_source is not None:
+        install_id, local_workspace_id, worktree_path = local_source
+        local_row = await materialization_store.insert_hydrated_local_desktop_materialization(
+            db,
+            cloud_workspace_id=workspace.id,
+            desktop_install_id=install_id,
+            anyharness_workspace_id=local_workspace_id,
+            worktree_path=worktree_path,
+            expected_head_sha=expected_head_sha,
+            observed_head_sha=expected_head_sha,
+            observed_branch=branch_name,
+        )
+        if local_row is None:
+            raise CloudApiError(
+                "local_materialization_already_linked",
+                "This local workspace is already linked to another Cloud workspace.",
+                status_code=409,
+            )
+
+    runtime_url, runtime_token, _data_key = await _load_ready_runtime_access(db, user_id=user.id)
+    repo_path = materialization_paths.repo_path(repo_environment)
+    repo_root = await _resolve_repo_root(runtime_url, runtime_token, repo_path=repo_path)
+    materialized = await _materialize_managed_at_exact_ref(
+        runtime_url,
+        runtime_token,
+        repo_root_id=repo_root.repo_root_id,
+        workspace_id=workspace.id,
+        branch_name=branch_name,
+        head_sha=expected_head_sha,
+    )
+
+    sandbox = await cloud_sandbox_store.load_personal_cloud_sandbox(db, user.id)
+    workspace = await cloud_workspace_store.update_workspace_anyharness_workspace_id(
+        db,
+        anyharness_workspace_id=materialized.workspace_id,
+        workspace=workspace,
+    )
+    await materialization_store.insert_managed_cloud_materialization(
+        db,
+        cloud_workspace_id=workspace.id,
+        cloud_sandbox_id=sandbox.id if sandbox is not None else None,
+        anyharness_workspace_id=materialized.workspace_id,
+        state="hydrated",
+        expected_head_sha=expected_head_sha,
+        observed_head_sha=materialized.observed_head_sha,
+        observed_branch=branch_name,
+    )
+
+    return await _workspace_payload(db, workspace, detail=True)
+
+
+async def _materialize_managed_at_exact_ref(
+    runtime_url: str,
+    runtime_token: str,
+    *,
+    repo_root_id: str,
+    workspace_id: UUID,
+    branch_name: str,
+    head_sha: str,
+) -> MaterializedRemoteWorkspaceAtRef:
+    # Reuse the workspace id as the runtime operation id so a retry of the same
+    # create (same workspace row) reuses the runtime ledger result instead of
+    # cutting a second worktree.
+    try:
+        return await materialize_workspace_at_ref(
+            runtime_url,
+            runtime_token,
+            repo_root_id=repo_root_id,
+            operation_id=str(workspace_id),
+            branch_name=branch_name,
+            head_sha=head_sha,
+        )
+    except CloudRuntimeReconnectError as exc:
+        raise CloudApiError(
+            "cloud_workspace_create_failed",
+            str(exc),
+            status_code=502,
+        ) from exc
 
 
 async def sync_cloud_workspace_display_name(
@@ -543,8 +837,8 @@ async def _load_repo_environment(
     if repo_environment_id is None:
         raise CloudApiError(
             "cloud_repo_environment_not_found",
-            "Cloud repo environment not found.",
-            status_code=404,
+            "This workspace has no repository backing.",
+            status_code=409,
         )
     repo_environment = await repositories_store.get_repo_environment_by_id(
         db,
@@ -570,6 +864,7 @@ async def _workspace_payload(
     workspace: CloudWorkspaceValue,
     *,
     detail: bool = False,
+    requesting_install_id: str | None = None,
 ) -> WorkspaceSummary:
     sandbox = await cloud_sandbox_store.load_personal_cloud_sandbox(
         db,
@@ -583,7 +878,7 @@ async def _workspace_payload(
     # Scratch workspaces have no repository backing: repo and repoEnvironmentId
     # are null (never fabricated) and no repo environment is loaded onto the
     # runtime.
-    if workspace.workspace_kind == "scratch":
+    if workspace.workspace_kind == "scratch" or workspace.repo_environment_id is None:
         repo_environment_id = None
         repo = None
         runtime_environment_id = None
@@ -601,6 +896,31 @@ async def _workspace_payload(
         runtime_environment_id = str(repo_environment.id)
         workspace_kind = "repositoryWorktree"
 
+    active_materializations = (
+        await materialization_store.list_active_materializations_for_workspace(
+            db,
+            cloud_workspace_id=workspace.id,
+        )
+    )
+    active_materializations = _apply_legacy_managed_fallback(
+        active_materializations,
+        workspace,
+        sandbox,
+    )
+    active_materializations = await _reconcile_managed_cloud_state(db, active_materializations)
+    primary = select_primary(
+        active_materializations,
+        requesting_desktop_install_id=requesting_install_id,
+    )
+    materialization_payloads = [
+        materialization_summary(value, requesting_desktop_install_id=requesting_install_id)
+        for value in active_materializations
+    ]
+    primary_payload = (
+        materialization_summary(primary, requesting_desktop_install_id=requesting_install_id)
+        if primary is not None
+        else None
+    )
     return payload_type(
         id=str(workspace.id),
         target_id=None,
@@ -618,12 +938,96 @@ async def _workspace_payload(
             status=runtime_status,
             generation=sandbox.runtime_generation if sandbox is not None else 0,
         ),
+        selected_materialization_id=str(primary.id) if primary is not None else None,
+        primary_materialization=primary_payload,
+        materializations=materialization_payloads,
         updated_at=workspace.updated_at.isoformat() if workspace.updated_at else None,
         created_at=workspace.created_at.isoformat() if workspace.created_at else None,
         ready_at=workspace.created_at.isoformat() if workspace.created_at else None,
         visibility="archived" if workspace.archived_at is not None else "private",
         anyharness_workspace_id=workspace.anyharness_workspace_id,
     )
+
+
+def _apply_legacy_managed_fallback(
+    materializations: list[CloudWorkspaceMaterializationValue],
+    workspace: CloudWorkspaceValue,
+    sandbox: CloudSandboxValue | None,
+) -> list[CloudWorkspaceMaterializationValue]:
+    """Synthesize a managed-Cloud materialization from the legacy top-level id.
+
+    Reads prefer the ledger row and fall back to the legacy
+    ``anyharness_workspace_id`` only when no active managed row exists — e.g. a
+    workspace created before this PR whose backfill row was somehow absent, or a
+    pre-migration transient. Null-id and scratch/repo-less workspaces get no
+    synthetic row (they keep ``materializations = []`` and the age-based stall
+    semantics).
+    """
+    if workspace.workspace_kind == "scratch" or workspace.repo_environment_id is None:
+        return materializations
+    if workspace.anyharness_workspace_id is None:
+        return materializations
+    if any(m.target_kind == "managed_cloud" for m in materializations):
+        return materializations
+    now = workspace.updated_at
+    synthetic = CloudWorkspaceMaterializationValue(
+        id=workspace.id,
+        cloud_workspace_id=workspace.id,
+        target_kind="managed_cloud",
+        cloud_sandbox_id=sandbox.id if sandbox is not None else None,
+        desktop_install_id=None,
+        anyharness_workspace_id=workspace.anyharness_workspace_id,
+        worktree_path=None,
+        state="hydrated",
+        generation=1,
+        expected_head_sha=None,
+        observed_head_sha=None,
+        observed_branch=None,
+        failure_code=None,
+        failure_detail=None,
+        last_reported_at=None,
+        unlinked_at=None,
+        created_at=workspace.created_at,
+        updated_at=now,
+    )
+    return [synthetic, *materializations]
+
+
+async def _reconcile_managed_cloud_state(
+    db: AsyncSession,
+    materializations: list[CloudWorkspaceMaterializationValue],
+) -> list[CloudWorkspaceMaterializationValue]:
+    """Present managed-Cloud state as ``missing`` when its recorded sandbox is gone.
+
+    Health is reconciled against the EXACT sandbox recorded on each managed row
+    (``cloud_sandbox_id``), never the caller's current personal sandbox. A
+    managed row whose recorded sandbox is missing/destroyed (or unrecorded) is
+    ``missing``: after sandbox S1 is destroyed and replaced by S2, an S1-scoped
+    materialization must not present as hydrated just because the owner now has a
+    live S2. This is a presentation-only overlay — the persisted row is untouched
+    here. See PR4-TARGET-03.
+    """
+    reconciled: list[CloudWorkspaceMaterializationValue] = []
+    sandbox_cache: dict[UUID, CloudSandboxValue | None] = {}
+    for value in materializations:
+        if value.target_kind != "managed_cloud" or value.state != "hydrated":
+            reconciled.append(value)
+            continue
+        recorded = None
+        if value.cloud_sandbox_id is not None:
+            if value.cloud_sandbox_id not in sandbox_cache:
+                sandbox_cache[
+                    value.cloud_sandbox_id
+                ] = await cloud_sandbox_store.load_cloud_sandbox_by_id(
+                    db,
+                    value.cloud_sandbox_id,
+                )
+            recorded = sandbox_cache[value.cloud_sandbox_id]
+        if recorded is None or recorded.status == "destroyed":
+            reconciled.append(replace(value, state="missing"))
+        else:
+            reconciled.append(value)
+    return reconciled
 
 
 def _materialization_is_stalled(workspace: CloudWorkspaceValue) -> bool:

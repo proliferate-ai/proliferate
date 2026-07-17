@@ -63,6 +63,12 @@ async fn deliver_subagent_completion(
         created_at: now.clone(),
         updated_at: now,
     };
+    // Spec 2b classification (admission:derived-safe): workflow-controlled
+    // sessions are created InternalOnly with subagents DISABLED, so no
+    // session link can exist whose parent is controlled; this wake path
+    // cannot target a controlled session and takes no admission permit
+    // (threading one here would also wait on the actor callback context,
+    // which the spec forbids).
     let prompt = wake_prompt_text(
         link.label.as_deref(),
         link.public_id.as_deref(),

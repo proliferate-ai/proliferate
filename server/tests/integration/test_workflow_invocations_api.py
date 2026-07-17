@@ -144,7 +144,29 @@ async def test_invocation_snapshot_replay_conflict_get_and_owner_isolation(
         headers=_headers(owner),
     )
     assert loaded.status_code == 200
-    assert loaded.json() == frozen
+    immutable_loaded = {
+        key: value for key, value in loaded.json().items() if key != "managedExecution"
+    }
+    assert immutable_loaded == frozen
+    assert loaded.json()["managedExecution"] == {
+        "deliveryStatus": "prepared",
+        "deliveryCheckpoint": "none",
+        "desiredState": "active",
+        "execution": None,
+        "freshness": {"status": "pending", "latestObservedAt": None},
+        "correlations": {
+            "cloudWorkspaceId": None,
+            "anyharnessWorkspaceId": None,
+            "sessionId": None,
+            "promptId": None,
+            "turnId": None,
+        },
+        "openTarget": None,
+        "deliveryErrorCode": None,
+        "observationErrorCode": None,
+        "acceptedAt": None,
+        "updatedAt": loaded.json()["managedExecution"]["updatedAt"],
+    }
 
     mismatch = deepcopy(request)
     mismatch["arguments"] = {"ticket": "OTHER"}
@@ -167,6 +189,47 @@ async def test_invocation_snapshot_replay_conflict_get_and_owner_isolation(
         json=request,
     )
     assert hidden_put.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_invocation_request_rejects_snake_case_wire_fields_without_creating_a_row(
+    client: AsyncClient,
+) -> None:
+    owner = await register_and_login(client, "invocation-snake-case-owner@example.com")
+    definition_response = await client.post(
+        "/v1/workflows",
+        headers=_headers(owner),
+        json=_definition_payload(),
+    )
+    assert definition_response.status_code == 201
+    canonical = _invocation_body(definition_response.json()["id"], "PROL-123")
+
+    for canonical_key, snake_case_key in (
+        ("schemaVersion", "schema_version"),
+        ("workflowDefinitionId", "workflow_definition_id"),
+        ("expectedRevision", "expected_revision"),
+    ):
+        invocation_id = str(uuid4())
+        body = deepcopy(canonical)
+        body[snake_case_key] = body.pop(canonical_key)
+
+        rejected = await client.put(
+            f"/v1/workflow-invocations/{invocation_id}",
+            headers=_headers(owner),
+            json=body,
+        )
+
+        assert rejected.status_code == 422
+        assert any(
+            tuple(error["loc"]) == ("body", snake_case_key) and error["type"] == "extra_forbidden"
+            for error in rejected.json()["detail"]
+        )
+        assert (
+            await client.get(
+                f"/v1/workflow-invocations/{invocation_id}",
+                headers=_headers(owner),
+            )
+        ).status_code == 404
 
 
 @pytest.mark.asyncio

@@ -1,13 +1,12 @@
 /**
  * Tier-2-on-runner mechanism: shared interfaces (PR 4, BRIEF §1/§4).
  *
- * A Tier-2 domain is a single `MatrixScenarioDefinition` on `runtime_lane:
- * "local"` (no new lane). Its `runCells` boots one `BootedStack` (real Server +
- * Postgres + Redis + real Stripe test mode; AnyHarness/runtime skipped), runs
- * each authoritative manifest case against that one stack, and returns exactly
- * one `ScenarioCellOutcome` per assigned cell — green outcomes carry
- * `tier2_billing` evidence. The generic wiring is `makeTier2MatrixScenario`
- * (`./harness.ts`); a domain supplies only `Tier2ScenarioConfig`.
+ * The current Tier-2 matrix harness is billing-specific: it boots one
+ * `BootedStack` (real Server + Postgres + Redis + real Stripe test mode;
+ * AnyHarness/runtime skipped), runs authoritative T2-BILL cases, and returns
+ * exactly one `ScenarioCellOutcome` per assigned cell. Green outcomes carry
+ * truthful `tier2_billing` evidence. Non-billing rows must use a future
+ * domain-specific evidence collector and remain deferred until one exists.
  *
  * These modules import the ONE shared stack/billing implementation directly
  * from `tests/intent` (BRIEF §0 — cross-package relative import, no relocation).
@@ -62,7 +61,7 @@ export interface Tier2CaseResult {
 export type Tier2CellHandler = (ctx: Tier2CellContext) => Promise<Tier2CaseResult>;
 
 export interface Tier2ScenarioConfig {
-  /** Scenario id, also the green-evidence gate key: "T2-BILL" | "T2-AUTH-ORG". */
+  /** Scenario id, also the green-evidence gate key (currently "T2-BILL"). */
   id: string;
   title: string;
   registryFlowRef: string;
@@ -76,8 +75,8 @@ export interface Tier2ScenarioConfig {
    * grant, LLM exhaustion / auto-top-up, the real `run_usage_import`, and the
    * enrollment/virtual-key path all read `settings.agent_gateway_enabled=true`
    * and talk to the LiteLLM admin plane. The fake is closed at teardown and the
-   * published gateway env cleared. Default false (T2-AUTH-ORG boots plain). */
+   * published gateway env cleared. */
   gatewayFake?: boolean;
-  /** Authoritative manifest case id -> handler (e.g. "T2-BILL-2" -> fn). */
+  /** Authoritative billing manifest case id -> handler (e.g. "T2-BILL-2" -> fn). */
   cases: Record<string, Tier2CellHandler>;
 }

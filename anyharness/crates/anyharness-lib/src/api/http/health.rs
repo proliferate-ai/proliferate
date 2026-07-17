@@ -26,6 +26,7 @@ pub async fn get_health(
         status: "ok".into(),
         version: env!("PROLIFERATE_STAMPED_VERSION").into(),
         runtime_home: state.runtime_home.display().to_string(),
+        execution_store_id: state.db.execution_store_id().to_owned(),
         capabilities: RuntimeCapabilities {
             replay: crate::domains::sessions::replay::replay_enabled(),
         },

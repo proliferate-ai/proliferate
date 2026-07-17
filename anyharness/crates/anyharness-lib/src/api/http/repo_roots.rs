@@ -1,9 +1,12 @@
 use std::time::Instant;
 
 use anyharness_contract::v1::{
-    DetectProjectSetupResponse, GitBranchRef, PrepareRepoRootMobilityDestinationRequest,
+    DetectProjectSetupResponse, GitBranchRef, MaterializeRepoRootRequest,
+    MaterializeRepoRootResponse, MaterializeWorkspaceAtRefRequest,
+    MaterializeWorkspaceAtRefResponse, PrepareRepoRootMobilityDestinationRequest,
     PrepareRepoRootMobilityDestinationResponse, ReadWorkspaceFileResponse, RepoRoot, RepoRootKind,
-    ResolveRepoRootFromPathRequest,
+    RepoRootMaterializationOutcome, ResolveRepoRootFromPathRequest,
+    WorkspaceMaterializationOutcome,
 };
 use axum::{
     extract::{Path, Query, State},
@@ -288,6 +291,127 @@ pub async fn prepare_repo_root_mobility_destination(
     }))
 }
 
+#[utoipa::path(
+    post,
+    path = "/v1/repo-roots/materializations",
+    request_body = MaterializeRepoRootRequest,
+    responses(
+        (status = 200, description = "Acquired repo root", body = MaterializeRepoRootResponse),
+        (status = 400, description = "Invalid request or acquisition failure", body = anyharness_contract::v1::ProblemDetails),
+        (status = 409, description = "Destination/operation conflict", body = anyharness_contract::v1::ProblemDetails),
+    ),
+    tag = "repo-roots"
+)]
+pub async fn materialize_repo_root(
+    State(state): State<AppState>,
+    Json(req): Json<MaterializeRepoRootRequest>,
+) -> Result<Json<MaterializeRepoRootResponse>, ApiError> {
+    // Reject credential-bearing clone URLs before any work; the response must
+    // never echo userinfo and we do not accept Cloud installation tokens here.
+    let safe_clone_url =
+        crate::domains::materialization::service::response_safe_url(&req.repository.clone_url)
+            .ok_or_else(|| {
+                ApiError::bad_request(
+                    "clone URL must not embed credentials",
+                    "REPOSITORY_AUTH_REQUIRED",
+                )
+            })?;
+
+    let result = state
+        .materialization_service
+        .acquire_repo_root(
+            &req.operation_id,
+            "github",
+            &req.repository.owner,
+            &req.repository.name,
+            &safe_clone_url,
+            &req.destination_path,
+        )
+        .await
+        .map_err(map_materialization_error)?;
+
+    Ok(Json(MaterializeRepoRootResponse {
+        operation_id: req.operation_id,
+        repo_root: repo_root_to_contract(result.repo_root),
+        outcome: match result.outcome {
+            crate::domains::materialization::model::AcquireOutcome::Cloned => {
+                RepoRootMaterializationOutcome::Cloned
+            }
+            crate::domains::materialization::model::AcquireOutcome::Adopted => {
+                RepoRootMaterializationOutcome::Adopted
+            }
+            crate::domains::materialization::model::AcquireOutcome::Reused => {
+                RepoRootMaterializationOutcome::Reused
+            }
+        },
+    }))
+}
+
+#[utoipa::path(
+    post,
+    path = "/v1/repo-roots/{repo_root_id}/workspace-materializations",
+    params(("repo_root_id" = String, Path, description = "Repo root ID")),
+    request_body = MaterializeWorkspaceAtRefRequest,
+    responses(
+        (status = 200, description = "Materialized workspace at exact ref", body = MaterializeWorkspaceAtRefResponse),
+        (status = 400, description = "Invalid request or ref failure", body = anyharness_contract::v1::ProblemDetails),
+        (status = 409, description = "Branch/head/dirty/busy/operation conflict", body = anyharness_contract::v1::ProblemDetails),
+        (status = 404, description = "Repo root not found", body = anyharness_contract::v1::ProblemDetails),
+    ),
+    tag = "repo-roots"
+)]
+pub async fn materialize_workspace_at_ref(
+    State(state): State<AppState>,
+    Path(repo_root_id): Path<String>,
+    Json(req): Json<MaterializeWorkspaceAtRefRequest>,
+) -> Result<Json<MaterializeWorkspaceAtRefResponse>, ApiError> {
+    load_repo_root(&state, repo_root_id.clone()).await?;
+
+    let result = state
+        .materialization_service
+        .materialize_workspace_at_ref(
+            &repo_root_id,
+            &req.operation_id,
+            &req.branch_name,
+            &req.head_sha,
+            req.destination_id.as_deref(),
+            req.preferred_workspace_name.as_deref(),
+        )
+        .await
+        .map_err(map_materialization_error)?;
+
+    let outcome = match result.outcome {
+        crate::domains::workspaces::runtime::ExactRefOutcome::Created => {
+            WorkspaceMaterializationOutcome::Created
+        }
+        crate::domains::workspaces::runtime::ExactRefOutcome::Adopted => {
+            WorkspaceMaterializationOutcome::Adopted
+        }
+        crate::domains::workspaces::runtime::ExactRefOutcome::Reused => {
+            WorkspaceMaterializationOutcome::Reused
+        }
+    };
+    Ok(Json(MaterializeWorkspaceAtRefResponse {
+        operation_id: req.operation_id,
+        workspace: workspace_to_contract(&state, result.workspace).await?,
+        observed_head_sha: result.observed_head_sha,
+        outcome,
+    }))
+}
+
+fn map_materialization_error(
+    error: crate::domains::materialization::model::MaterializationError,
+) -> ApiError {
+    use crate::domains::materialization::model::MaterializationError as E;
+    let code = error.code();
+    let detail = error.to_string();
+    match &error {
+        E::Failed(_) => ApiError::bad_request(detail, code),
+        other if other.is_conflict() => ApiError::conflict(detail, code),
+        _ => ApiError::bad_request(detail, code),
+    }
+}
+
 fn repo_root_to_contract(record: RepoRootRecord) -> RepoRoot {
     RepoRoot {
         id: record.id,
@@ -301,9 +425,49 @@ fn repo_root_to_contract(record: RepoRootRecord) -> RepoRoot {
         remote_provider: record.remote_provider,
         remote_owner: record.remote_owner,
         remote_repo_name: record.remote_repo_name,
-        remote_url: record.remote_url,
+        // All list/get/materialize responses share this mapper. An adopted
+        // checkout may already have a credential-bearing origin; omit it at
+        // the public boundary rather than echoing embedded userinfo.
+        remote_url: record.remote_url.and_then(|url| {
+            crate::domains::materialization::identity::response_safe_clone_url(&url)
+        }),
         created_at: record.created_at,
         updated_at: record.updated_at,
+    }
+}
+
+#[cfg(test)]
+mod response_tests {
+    use super::*;
+
+    fn record(remote_url: &str) -> RepoRootRecord {
+        RepoRootRecord {
+            id: "root-1".into(),
+            kind: "managed".into(),
+            path: "/tmp/root-1".into(),
+            display_name: None,
+            default_branch: Some("main".into()),
+            remote_provider: Some("github".into()),
+            remote_owner: Some("acme".into()),
+            remote_repo_name: Some("rocket".into()),
+            remote_url: Some(remote_url.into()),
+            created_at: "now".into(),
+            updated_at: "now".into(),
+        }
+    }
+
+    #[test]
+    fn shared_repo_root_mapper_omits_adopted_remote_credentials() {
+        let mapped = repo_root_to_contract(record(
+            "https://alice:secret-token@github.com/acme/rocket.git",
+        ));
+        assert_eq!(mapped.remote_url, None);
+
+        let safe = "https://github.com/acme/rocket.git";
+        assert_eq!(
+            repo_root_to_contract(record(safe)).remote_url.as_deref(),
+            Some(safe)
+        );
     }
 }
 

@@ -1,4 +1,5 @@
 pub mod branches;
+pub mod clone;
 pub mod commit;
 pub mod commit_all;
 pub mod diff;
@@ -7,6 +8,7 @@ pub mod diff_files;
 mod diff_support;
 pub mod push;
 pub mod revert_patches;
+pub mod scratch;
 pub mod staging;
 pub mod status;
 mod status_operation;

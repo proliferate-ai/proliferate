@@ -117,6 +117,18 @@ vi.mock("#product/hooks/cloud/derived/use-cloud-availability-state", () => ({
   useCloudAvailabilityState: () => ({ cloudActive: false, cloudUnavailable: false }),
 }));
 
+vi.mock("#product/hooks/capabilities/derived/use-app-capabilities", () => ({
+  useAppCapabilities: () => ({ managedCloudStatus: "disabled" }),
+}));
+
+vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
+  useProductHost: () => ({ desktop: null }),
+}));
+
+vi.mock("#product/hooks/workspaces/workflows/use-add-repo", () => ({
+  useAddRepo: () => ({ addRepoFromPath: vi.fn(), isAddingRepo: false }),
+}));
+
 vi.mock("#product/hooks/cloud/facade/use-cloud-billing", () => ({
   useCloudBilling: () => ({ data: null }),
 }));

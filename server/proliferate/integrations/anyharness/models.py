@@ -6,6 +6,21 @@ from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
+class RuntimeExecutionStoreIdentity:
+    execution_store_id: str
+
+
+@dataclass(frozen=True)
+class WorkflowWorkspaceAcceptance:
+    workspace_id: str
+
+
+@dataclass(frozen=True)
+class WorkflowRunProjection:
+    value: dict[str, object]
+
+
+@dataclass(frozen=True)
 class RuntimeHealthProbe:
     is_success: bool
     status_code: int
@@ -41,6 +56,15 @@ class ResolvedRemoteWorkspace:
 
 
 @dataclass(frozen=True)
+class MaterializedRemoteWorkspaceAtRef:
+    """The result of an exact-ref workspace materialization (PR 3 endpoint)."""
+
+    workspace_id: str
+    observed_head_sha: str
+    outcome: str
+
+
+@dataclass(frozen=True)
 class RemoteSession:
     session_id: str
 
@@ -73,3 +97,28 @@ class RemoteTerminalCommandRun:
 class RemoteWorkspaceSummary:
     workspace_id: str | None
     live_session_count: int
+
+
+@dataclass(frozen=True)
+class RemoteGitStatusSnapshot:
+    """Typed server-side view of the AnyHarness ``GitStatusSnapshot`` contract.
+
+    Field names mirror the runtime wire contract exactly (``currentBranch`` —
+    not ``branch``). Required fields that are missing or malformed raise a
+    ``CloudRuntimeReconnectError`` in the parser; a status read can never be
+    interpreted as a clean source on failure.
+    """
+
+    workspace_id: str
+    workspace_path: str
+    repo_root_path: str
+    current_branch: str | None
+    head_oid: str
+    detached: bool
+    upstream_branch: str | None
+    suggested_base_branch: str | None
+    ahead: int
+    behind: int
+    operation: str
+    conflicted: bool
+    clean: bool

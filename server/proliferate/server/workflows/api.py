@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Response, status
 from fastapi.responses import JSONResponse
@@ -14,6 +15,19 @@ from proliferate.db.models.auth import User
 from proliferate.server.workflows.access import (
     WorkflowDefinitionDependency,
     WorkflowInvocationDependency,
+)
+from proliferate.server.workflows.managed import (
+    cancel_managed_workflow,
+    deliver_managed_workflow,
+    list_managed_workflow_history,
+    read_managed_workflow,
+)
+from proliferate.server.workflows.managed_models import (
+    ManagedWorkflowHistoryResponse,
+    ManagedWorkflowInvocationResponse,
+    managed_workflow_invocation_payload,
+    managed_workflow_invocation_response,
+    workflow_history_item_response,
 )
 from proliferate.server.workflows.models import (
     WorkflowDefinitionCreateRequest,
@@ -160,11 +174,78 @@ async def put_workflow_invocation_endpoint(
 
 
 @invocations_router.get(
+    "",
+    response_model=ManagedWorkflowHistoryResponse,
+)
+async def list_workflow_invocation_history_endpoint(
+    workflow_definition_id: Annotated[UUID, Query(alias="workflowDefinitionId")],
+    cursor: str | None = Query(default=None),
+    db: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_product_user),
+) -> ManagedWorkflowHistoryResponse:
+    values, next_cursor = await list_managed_workflow_history(
+        db,
+        user_id=user.id,
+        workflow_definition_id=workflow_definition_id,
+        cursor_text=cursor,
+    )
+    return ManagedWorkflowHistoryResponse(
+        items=[
+            workflow_history_item_response(item, freshness=freshness) for item, freshness in values
+        ],
+        next_cursor=next_cursor,
+    )
+
+
+@invocations_router.get(
     "/{invocation_id}",
-    response_model=WorkflowInvocationResponse,
-    response_model_exclude_none=True,
+    response_model=ManagedWorkflowInvocationResponse,
 )
 async def get_workflow_invocation_endpoint(
     invocation: WorkflowInvocationDependency,
-) -> WorkflowInvocationResponse:
-    return workflow_invocation_response(invocation)
+    db: AsyncSession = Depends(get_async_session),
+) -> JSONResponse:
+    value = await read_managed_workflow(db, invocation=invocation)
+    response = managed_workflow_invocation_response(
+        value.invocation,
+        value.managed,
+        freshness=value.freshness,
+        open_target_available=value.open_target_available,
+    )
+    return JSONResponse(content=managed_workflow_invocation_payload(response))
+
+
+@invocations_router.post(
+    "/{invocation_id}/deliver",
+    response_model=ManagedWorkflowInvocationResponse,
+)
+async def deliver_workflow_invocation_endpoint(
+    invocation: WorkflowInvocationDependency,
+    db: AsyncSession = Depends(get_async_session),
+) -> JSONResponse:
+    value = await deliver_managed_workflow(db, invocation=invocation)
+    response = managed_workflow_invocation_response(
+        value.invocation,
+        value.managed,
+        freshness=value.freshness,
+        open_target_available=value.open_target_available,
+    )
+    return JSONResponse(content=managed_workflow_invocation_payload(response))
+
+
+@invocations_router.post(
+    "/{invocation_id}/cancel",
+    response_model=ManagedWorkflowInvocationResponse,
+)
+async def cancel_workflow_invocation_endpoint(
+    invocation: WorkflowInvocationDependency,
+    db: AsyncSession = Depends(get_async_session),
+) -> JSONResponse:
+    value = await cancel_managed_workflow(db, invocation=invocation)
+    response = managed_workflow_invocation_response(
+        value.invocation,
+        value.managed,
+        freshness=value.freshness,
+        open_target_available=value.open_target_available,
+    )
+    return JSONResponse(content=managed_workflow_invocation_payload(response))

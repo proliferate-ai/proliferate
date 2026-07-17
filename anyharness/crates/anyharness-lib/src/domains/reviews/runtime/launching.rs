@@ -103,6 +103,7 @@ impl ReviewRuntime {
         let child = match self.session_runtime.create_durable_session(
             &run.workspace_id,
             &assignment.agent_kind,
+            None,
             assignment.model_id.as_deref(),
             assignment.requested_mode_id.as_deref(),
             Some(vec![reviewer_system_prompt_append()]),

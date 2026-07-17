@@ -24,7 +24,10 @@ from proliferate.integrations.sandbox.base import (
     ProviderSandboxState,
     RuntimeEndpoint,
     SandboxHandle,
+    SandboxProviderConfigurationError,
     SandboxProviderKind,
+    SandboxProviderTargetUnavailableError,
+    SandboxProviderUnavailableError,
     SandboxRuntimeContext,
 )
 from proliferate.utils.time import utcnow
@@ -37,8 +40,67 @@ _E2B_API_BASE_URL = "https://api.e2b.app"
 _LIST_SANDBOXES_MAX_PAGES = 50
 
 
-class E2BRuntimeError(RuntimeError):
-    pass
+class E2BRuntimeError(SandboxProviderConfigurationError):
+    """Local E2B configuration or SDK-contract failure."""
+
+
+class E2BUnavailableError(SandboxProviderUnavailableError):
+    """A configured E2B provider is temporarily unavailable."""
+
+
+class E2BTargetUnavailableError(SandboxProviderTargetUnavailableError):
+    """The exact E2B sandbox no longer exists."""
+
+
+def _translate_e2b_exception(error: Exception, *, operation: str) -> Exception | None:
+    if isinstance(error, (httpx.TransportError, TimeoutError, ConnectionError, OSError)):
+        return E2BUnavailableError(f"E2B {operation} is unavailable")
+    try:
+        from e2b import exceptions as e2b_exceptions  # type: ignore[import-untyped]
+    except ImportError:
+        return None
+    if isinstance(error, e2b_exceptions.SandboxNotFoundException):
+        return E2BTargetUnavailableError(f"E2B {operation} target is unavailable")
+    if isinstance(
+        error,
+        (
+            e2b_exceptions.AuthenticationException,
+            e2b_exceptions.BuildException,
+            e2b_exceptions.InvalidArgumentException,
+            e2b_exceptions.TemplateException,
+        ),
+    ):
+        return E2BRuntimeError(f"E2B {operation} configuration is invalid")
+    if isinstance(
+        error,
+        (e2b_exceptions.RateLimitException, e2b_exceptions.TimeoutException),
+    ):
+        return E2BUnavailableError(f"E2B {operation} is unavailable")
+    if isinstance(
+        error,
+        (
+            e2b_exceptions.FileNotFoundException,
+            e2b_exceptions.GitUpstreamException,
+            e2b_exceptions.NotEnoughSpaceException,
+            e2b_exceptions.NotFoundException,
+            e2b_exceptions.SandboxException,
+            e2b_exceptions.VolumeException,
+        ),
+    ):
+        return E2BUnavailableError(f"E2B {operation} is unavailable")
+    return None
+
+
+async def _run_e2b_call(operation: str, fn: Any, *args: Any) -> Any:
+    try:
+        return await asyncio.to_thread(fn, *args)
+    except (E2BRuntimeError, E2BUnavailableError, E2BTargetUnavailableError):
+        raise
+    except Exception as error:
+        translated = _translate_e2b_exception(error, operation=operation)
+        if translated is None:
+            raise
+        raise translated from error
 
 
 def _load_sdk() -> type[Any]:
@@ -170,7 +232,7 @@ class E2BSandboxProvider:
         return E2B_RUNTIME_PORT
 
     async def create_sandbox(self, *, metadata: dict[str, str] | None = None) -> SandboxHandle:
-        return await asyncio.to_thread(self._create_sandbox, metadata)
+        return await _run_e2b_call("sandbox create", self._create_sandbox, metadata)
 
     async def connect_running_sandbox(
         self,
@@ -178,7 +240,12 @@ class E2BSandboxProvider:
         *,
         timeout_seconds: int | None = None,
     ) -> Any:
-        return await asyncio.to_thread(self._connect, sandbox_id, timeout_seconds)
+        return await _run_e2b_call(
+            "sandbox connect",
+            self._connect,
+            sandbox_id,
+            timeout_seconds,
+        )
 
     async def resume_sandbox(
         self,
@@ -186,10 +253,15 @@ class E2BSandboxProvider:
         *,
         timeout_seconds: int | None = None,
     ) -> Any:
-        return await asyncio.to_thread(self._connect, sandbox_id, timeout_seconds)
+        return await _run_e2b_call(
+            "sandbox resume",
+            self._connect,
+            sandbox_id,
+            timeout_seconds,
+        )
 
     async def get_sandbox_state(self, sandbox_id: str) -> ProviderSandboxState | None:
-        return await asyncio.to_thread(self._get_sandbox_state, sandbox_id)
+        return await _run_e2b_call("sandbox state", self._get_sandbox_state, sandbox_id)
 
     async def list_sandbox_states(self) -> list[ProviderSandboxState]:
         # Mirror the E2B SDK's list: GET /v2/sandboxes with an explicit
@@ -236,16 +308,16 @@ class E2BSandboxProvider:
         return states
 
     async def resolve_runtime_endpoint(self, sandbox: Any) -> RuntimeEndpoint:
-        return await asyncio.to_thread(self._resolve_runtime_endpoint, sandbox)
+        return await _run_e2b_call("runtime endpoint", self._resolve_runtime_endpoint, sandbox)
 
     async def resolve_runtime_context(self, sandbox: Any) -> SandboxRuntimeContext:
-        return await asyncio.to_thread(self._resolve_runtime_context, sandbox)
+        return await _run_e2b_call("runtime context", self._resolve_runtime_context, sandbox)
 
     async def pause_sandbox(self, sandbox_id: str) -> None:
-        await asyncio.to_thread(self._pause_sandbox, sandbox_id)
+        await _run_e2b_call("sandbox pause", self._pause_sandbox, sandbox_id)
 
     async def destroy_sandbox(self, sandbox_id: str) -> None:
-        await asyncio.to_thread(self._destroy_sandbox, sandbox_id)
+        await _run_e2b_call("sandbox destroy", self._destroy_sandbox, sandbox_id)
 
     async def run_command(
         self,
@@ -258,7 +330,8 @@ class E2BSandboxProvider:
         background: bool = False,
         timeout_seconds: int | None = None,
     ) -> Any:
-        return await asyncio.to_thread(
+        return await _run_e2b_call(
+            "command",
             self._run_command,
             sandbox,
             command,
@@ -270,7 +343,7 @@ class E2BSandboxProvider:
         )
 
     async def write_file(self, sandbox: Any, path: str, content: bytes | str) -> None:
-        await asyncio.to_thread(self._write_file, sandbox, path, content)
+        await _run_e2b_call("file write", self._write_file, sandbox, path, content)
 
     def _require_api_key(self) -> str:
         if not settings.e2b_api_key:

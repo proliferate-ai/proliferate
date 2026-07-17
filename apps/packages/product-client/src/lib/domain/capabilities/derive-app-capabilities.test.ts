@@ -23,6 +23,9 @@ function contract(
     webApp: { available: false, baseUrl: null },
     support: { kind: "none", email: null, url: null },
     pricing: { available: false, url: null },
+    githubRepositoryAccess: { status: "disabled", provider: null, displayName: null },
+    managedCloud: { status: "disabled", repositoryAuthority: null, source: "legacy" },
+    workflowManagedRuns: false,
     ...overrides,
   };
 }
@@ -116,6 +119,21 @@ describe("deriveAppCapabilities", () => {
     expect(caps.webApp.available).toBe(false);
     expect(caps.support.kind).toBe("none");
     expect(caps.pricing.available).toBe(false);
+  });
+
+  it("surfaces the split GitHub-access and managed-Cloud statuses", () => {
+    const caps = deriveAppCapabilities({
+      reachable: true,
+      connectedServerHost: "acme.example.com",
+      contract: contract({
+        githubRepositoryAccess: { status: "ready", provider: "github_app", displayName: "acme-app" },
+        managedCloud: { status: "operator_configuration_required", repositoryAuthority: "github_app", source: "v2" },
+      }),
+    });
+
+    expect(caps.githubRepositoryAccessStatus).toBe("ready");
+    expect(caps.githubRepositoryAccessDisplayName).toBe("acme-app");
+    expect(caps.managedCloudStatus).toBe("operator_configuration_required");
   });
 
   it("gates capabilities on reachability", () => {

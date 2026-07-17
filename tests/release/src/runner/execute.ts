@@ -112,7 +112,15 @@ export async function executeSelectedCells(options: ExecuteOptions): Promise<Tes
   // results: it becomes a runner error, pending cells finalize as missing,
   // and the report is still produced for persistence.
   try {
-    const neededEnvNames = [...new Set(cells.flatMap((cell) => cell.required_env))];
+    // Resolve BOTH required and optional env into ctx.env: optional vars are
+    // read via ctx.env.get by fail-closed cells (founder-gated live inputs) and
+    // must be present in ctx.env when supplied, but they do NOT gate planning —
+    // `missingRequiredForLane` below checks only `required_env`, so an absent
+    // optional var yields a fail-closed cell red, never a blocked cell
+    // (PR7-CONTROL-004).
+    const neededEnvNames = [
+      ...new Set(cells.flatMap((cell) => [...cell.required_env, ...(cell.optional_env ?? [])])),
+    ];
     const resolveNeeded = options.resolveNeededEnv ?? ((names: readonly string[]) => resolveEnv(names));
     const neededEnv = resolveNeeded(neededEnvNames);
 

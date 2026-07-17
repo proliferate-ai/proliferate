@@ -22,6 +22,10 @@ pub(crate) struct InternalSessionCreateInput {
     pub model_id: Option<String>,
     pub mode_id: Option<String>,
     pub origin: OriginContext,
+    /// Ruling 2b-1: the workflow executor preselects the id so it can reserve
+    /// the session's mutation gate before this row exists. `None` keeps the
+    /// ordinary mint-at-create behavior.
+    pub preselected_session_id: Option<String>,
 }
 
 /// Typed failure for the internal creation seam. Access-gate refusals stay
@@ -71,6 +75,7 @@ impl SessionRuntime {
         let mut record = self.create_durable_session(
             workspace_id,
             agent_kind,
+            None,
             model_id,
             mode_id,
             system_prompt_append,
@@ -102,6 +107,7 @@ impl SessionRuntime {
         &self,
         workspace_id: &str,
         agent_kind: &str,
+        preselected_session_id: Option<&str>,
         model_id: Option<&str>,
         mode_id: Option<&str>,
         system_prompt_append: Option<Vec<String>>,
@@ -121,6 +127,7 @@ impl SessionRuntime {
             .create_session(
                 workspace_id,
                 agent_kind,
+                preselected_session_id,
                 model_id,
                 mode_id,
                 mcp_bindings_ciphertext,
@@ -207,6 +214,7 @@ impl SessionRuntime {
         self.create_durable_session(
             &input.workspace_id,
             &input.agent_kind,
+            input.preselected_session_id.as_deref(),
             input.model_id.as_deref(),
             input.mode_id.as_deref(),
             None,   // no system-prompt append

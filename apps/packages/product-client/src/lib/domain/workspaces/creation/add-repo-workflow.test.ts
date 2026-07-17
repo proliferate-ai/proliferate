@@ -1,6 +1,9 @@
 import type { RepoRoot } from "@anyharness/sdk";
 import { describe, expect, it, vi } from "vitest";
-import { runAddRepoWorkflow } from "#product/lib/domain/workspaces/creation/add-repo-workflow";
+import {
+  AddRepoIdentityMismatchError,
+  runAddRepoWorkflow,
+} from "#product/lib/domain/workspaces/creation/add-repo-workflow";
 
 function makeRepoRoot(overrides: Partial<RepoRoot> = {}): RepoRoot {
   return {
@@ -86,5 +89,71 @@ describe("runAddRepoWorkflow", () => {
       sourceRoot: "/tmp/existing-repo",
       repoName: "existing-repo",
     });
+  });
+
+  it("registers when the resolved folder matches the expected identity (case-insensitively)", async () => {
+    const ensureRuntimeReady = vi.fn().mockResolvedValue("http://localhost:7007");
+    const resolveRepoRootFromPath = vi.fn().mockResolvedValue(
+      makeRepoRoot({ remoteOwner: "Proliferate-AI", remoteRepoName: "Proliferate" }),
+    );
+    const upsertRepoRootInWorkspaceCollections = vi.fn();
+    const invalidateWorkspaceCollections = vi.fn().mockResolvedValue(undefined);
+    const unhideRepoRoot = vi.fn();
+    const openRepoSetupModal = vi.fn();
+
+    await runAddRepoWorkflow({
+      path: "/tmp/proliferate",
+      ensureRuntimeReady,
+      resolveRepoRootFromPath,
+      expectedRepoIdentity: {
+        gitProvider: "github",
+        gitOwner: "proliferate-ai",
+        gitRepoName: "proliferate",
+      },
+      upsertRepoRootInWorkspaceCollections,
+      invalidateWorkspaceCollections,
+      unhideRepoRoot,
+      openRepoSetupModal,
+    });
+
+    expect(upsertRepoRootInWorkspaceCollections).toHaveBeenCalledTimes(1);
+    expect(openRepoSetupModal).toHaveBeenCalledTimes(1);
+  });
+
+  it("fails before any mutation when the folder is a different repository", async () => {
+    const ensureRuntimeReady = vi.fn().mockResolvedValue("http://localhost:7007");
+    const resolveRepoRootFromPath = vi.fn().mockResolvedValue(
+      makeRepoRoot({ remoteOwner: "acme", remoteRepoName: "other" }),
+    );
+    const upsertRepoRootInWorkspaceCollections = vi.fn();
+    const invalidateWorkspaceCollections = vi.fn().mockResolvedValue(undefined);
+    const saveLocalRepoEnvironment = vi.fn();
+    const unhideRepoRoot = vi.fn();
+    const openRepoSetupModal = vi.fn();
+
+    await expect(
+      runAddRepoWorkflow({
+        path: "/tmp/other",
+        ensureRuntimeReady,
+        resolveRepoRootFromPath,
+        expectedRepoIdentity: {
+          gitProvider: "github",
+          gitOwner: "proliferate-ai",
+          gitRepoName: "proliferate",
+        },
+        upsertRepoRootInWorkspaceCollections,
+        invalidateWorkspaceCollections,
+        saveLocalRepoEnvironment,
+        unhideRepoRoot,
+        openRepoSetupModal,
+      }),
+    ).rejects.toBeInstanceOf(AddRepoIdentityMismatchError);
+
+    // No mutation callback runs on mismatch.
+    expect(upsertRepoRootInWorkspaceCollections).not.toHaveBeenCalled();
+    expect(invalidateWorkspaceCollections).not.toHaveBeenCalled();
+    expect(saveLocalRepoEnvironment).not.toHaveBeenCalled();
+    expect(unhideRepoRoot).not.toHaveBeenCalled();
+    expect(openRepoSetupModal).not.toHaveBeenCalled();
   });
 });

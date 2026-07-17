@@ -1,3 +1,7 @@
+use std::collections::BTreeSet;
+
+use crate::api::http::access::admit_session_mutation;
+use crate::domains::sessions::admission::{SessionMutationKind, SessionMutationPermit};
 use anyharness_contract::v1::{
     WorkspacePurgeOutcome, WorkspacePurgePreflightResponse, WorkspacePurgeResponse,
 };
@@ -32,11 +36,57 @@ pub async fn purge_workspace_preflight(
     Ok(Json(build_purge_preflight(&state, &workspace_id).await?))
 }
 
+/// The result of the up-front workspace-destruction admission snapshot: the
+/// held permits (dropped at end of the destructive operation) PLUS the SET of
+/// session ids that snapshot covered (PR1227-WORKSPACE-FENCE-02). The
+/// destructive owner carries the id set into its under-lease re-check so a
+/// session bound AFTER the snapshot — whose controlling workflow may already
+/// have terminalized — fails closed even though no permit is held for it.
+pub(super) struct AdmittedWorkspaceSessions {
+    /// Held for the lifetime of the destructive operation; never inspected.
+    pub(super) permits: Vec<SessionMutationPermit>,
+    /// The exact session ids admitted (and permit-held) up front.
+    pub(super) session_ids: BTreeSet<String>,
+}
+
+/// Spec 2b fail-closed rule: purge (and mobility removal) never overrides an
+/// active workflow controller. Every session of the workspace is admitted —
+/// in sorted id order so concurrent multi-session holders cannot deadlock —
+/// and ALL permits are held across the destructive operation. The admitted id
+/// set is returned alongside the permits for the FENCE-02 under-lease
+/// set-membership re-check.
+pub(super) async fn admit_all_workspace_sessions(
+    state: &AppState,
+    workspace_id: &str,
+    kind: SessionMutationKind,
+) -> Result<AdmittedWorkspaceSessions, ApiError> {
+    let mut sessions = state
+        .session_service
+        .store()
+        .list_with_dismissed_by_workspace(workspace_id)
+        .map_err(|error| {
+            tracing::error!(workspace_id = %workspace_id, error = %error, "session list failed");
+            ApiError::internal("session list failed")
+        })?;
+    sessions.sort_by(|a, b| a.id.cmp(&b.id));
+    let mut permits = Vec::with_capacity(sessions.len());
+    let mut session_ids = BTreeSet::new();
+    for session in &sessions {
+        permits.push(admit_session_mutation(state, &session.id, kind).await?);
+        session_ids.insert(session.id.clone());
+    }
+    Ok(AdmittedWorkspaceSessions {
+        permits,
+        session_ids,
+    })
+}
+
 #[utoipa::path(
     delete,
     path = "/v1/workspaces/{workspace_id}",
     params(("workspace_id" = String, Path, description = "Workspace ID")),
     responses(
+        (status = 409, description = "Session execution is controlled by an active workflow run", body = anyharness_contract::v1::ProblemDetails),
         (status = 200, description = "Purge workspace result", body = WorkspacePurgeResponse),
     ),
     tag = "workspaces"
@@ -45,17 +95,90 @@ pub async fn purge_workspace(
     State(state): State<AppState>,
     Path(workspace_id): Path<String>,
 ) -> Result<Json<WorkspacePurgeResponse>, ApiError> {
+    let admission =
+        admit_all_workspace_sessions(&state, &workspace_id, SessionMutationKind::WorkspacePurge)
+            .await?;
+    // PR1227-WORKSPACE-FENCE-02: carry the admitted id set into the destructive
+    // owner so a session bound after this snapshot fails the under-lease
+    // set-membership re-check even if its workflow already terminalized. The
+    // permits are held until this scope ends.
+    let admitted_session_ids = admission.session_ids.clone();
+    let _admission_permits = admission.permits;
+
+    // PR1227-WORKSPACE-FENCE-01 proof seam (test-only, no-op in production):
+    // park between the up-front admission snapshot (now fully complete) and the
+    // exclusive workspace lease taken inside `.purge(...)`, so a proof can bind a
+    // workflow-controlled session in exactly the gap the under-lease fence
+    // guards. Keyed by workspace id; absent keys change nothing.
+    #[cfg(test)]
+    purge_barriers::at_pre_exclusive(&workspace_id).await;
+
     purge_response_from_service_outcome(
         &state,
         None,
         state
             .workspace_purge_service
-            .purge(&workspace_id, false)
+            .purge_with_admitted_session_ids(&workspace_id, false, Some(admitted_session_ids))
             .await
             .map_err(|error| ApiError::internal(error.to_string()))?,
     )
     .await
     .map(Json)
+}
+
+/// PR1227-WORKSPACE-FENCE-01 proof seam. A keyed, test-only barrier that parks
+/// `purge_workspace` between the up-front `admit_all_workspace_sessions`
+/// snapshot and the exclusive workspace lease taken inside the purge service,
+/// so a deterministic proof can bind a workflow-controlled session in exactly
+/// the window the under-lease fence exists to catch. Absent keys cost one mutex
+/// lookup and change nothing. Test-only by construction.
+#[cfg(test)]
+pub(crate) mod purge_barriers {
+    use std::collections::HashMap;
+    use std::sync::Mutex as StdMutex;
+
+    use tokio::sync::oneshot;
+
+    #[derive(Default)]
+    pub(crate) struct PurgeBarrier {
+        /// Fired when `purge_workspace` reaches the pre-exclusive-lease point.
+        pub(crate) reached_tx: Option<oneshot::Sender<()>>,
+        /// Awaited before proceeding to the exclusive lease when present.
+        pub(crate) resume_rx: Option<oneshot::Receiver<()>>,
+    }
+
+    static BARRIERS: StdMutex<Option<HashMap<String, PurgeBarrier>>> = StdMutex::new(None);
+
+    pub(crate) fn install(workspace_id: &str, barrier: PurgeBarrier) {
+        BARRIERS
+            .lock()
+            .expect("purge barrier lock")
+            .get_or_insert_with(HashMap::new)
+            .insert(workspace_id.to_string(), barrier);
+    }
+
+    pub(crate) fn clear(workspace_id: &str) {
+        if let Some(map) = BARRIERS.lock().expect("purge barrier lock").as_mut() {
+            map.remove(workspace_id);
+        }
+    }
+
+    pub(super) async fn at_pre_exclusive(workspace_id: &str) {
+        let barrier = BARRIERS
+            .lock()
+            .expect("purge barrier lock")
+            .as_mut()
+            .and_then(|map| map.remove(workspace_id));
+        let Some(mut barrier) = barrier else {
+            return;
+        };
+        if let Some(tx) = barrier.reached_tx.take() {
+            let _ = tx.send(());
+        }
+        if let Some(rx) = barrier.resume_rx.take() {
+            let _ = rx.await;
+        }
+    }
 }
 
 #[utoipa::path(
@@ -154,6 +277,24 @@ async fn purge_response_from_service_outcome(
                 cleanup_succeeded: false,
                 cleanup_message: Some(message),
             })
+        }
+        // PR1227-WORKSPACE-FENCE-01: the under-lease re-check observed a
+        // workflow-controlled session created after up-front admission. Fail
+        // closed with the same stable 409 as the up-front fence.
+        WorkspacePurgeServiceOutcome::ControlledByWorkflow { .. } => Err(ApiError::conflict(
+            "session execution is controlled by an active workflow run",
+            "SESSION_CONTROLLED_BY_WORKFLOW",
+        )),
+        // PR1227-WORKSPACE-FENCE-02: the under-lease re-enumeration observed a
+        // session id absent from the up-front admitted set (bound after the
+        // snapshot, possibly already terminalized). Fail closed with the same
+        // stable 409 code; the detail names the unadmitted session id only —
+        // no raw internal state, nothing persisted.
+        WorkspacePurgeServiceOutcome::SessionAppearedAfterAdmission { session_id } => {
+            Err(ApiError::conflict(
+                format!("session {session_id} appeared after destruction admission"),
+                "SESSION_CONTROLLED_BY_WORKFLOW",
+            ))
         }
     }
 }

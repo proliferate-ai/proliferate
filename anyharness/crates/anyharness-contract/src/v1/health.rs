@@ -9,6 +9,7 @@ pub struct HealthResponse {
     pub status: String,
     pub version: String,
     pub runtime_home: String,
+    pub execution_store_id: String,
     pub capabilities: RuntimeCapabilities,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub resource_pressure: Option<RuntimeResourcePressure>,

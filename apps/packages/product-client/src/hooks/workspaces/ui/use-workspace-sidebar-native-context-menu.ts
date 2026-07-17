@@ -2,6 +2,10 @@ import { SHORTCUTS } from "#product/config/shortcuts/registry";
 import { useNativeContextMenu } from "#product/hooks/ui/native/use-native-context-menu";
 import type { NativeMenuItem } from "@proliferate/product-client/host/desktop-bridge";
 import { getShortcutNativeAccelerator } from "#product/lib/domain/shortcuts/native-accelerators";
+import type {
+  WorkspaceAvailabilityCommand,
+  WorkspaceAvailabilityCommandKind,
+} from "#product/lib/domain/workspaces/cloud/workspace-availability-commands";
 
 export function useWorkspaceSidebarNativeContextMenu({
   canRename,
@@ -22,6 +26,8 @@ export function useWorkspaceSidebarNativeContextMenu({
   onArchive,
   onUnarchive,
   onMarkDone,
+  availabilityCommands,
+  onAvailabilityCommand,
 }: {
   canRename: boolean;
   canCopyWorkspaceLocation: boolean;
@@ -41,6 +47,8 @@ export function useWorkspaceSidebarNativeContextMenu({
   onArchive: () => void;
   onUnarchive: () => void;
   onMarkDone: () => void;
+  availabilityCommands?: WorkspaceAvailabilityCommand[];
+  onAvailabilityCommand?: (kind: WorkspaceAvailabilityCommandKind) => void;
 }) {
   return useNativeContextMenu(() =>
     buildWorkspaceSidebarNativeContextMenuItems({
@@ -62,6 +70,8 @@ export function useWorkspaceSidebarNativeContextMenu({
       onArchive,
       onUnarchive,
       onMarkDone,
+      availabilityCommands,
+      onAvailabilityCommand,
     })
   );
 }
@@ -85,6 +95,8 @@ export function buildWorkspaceSidebarNativeContextMenuItems({
   onArchive,
   onUnarchive,
   onMarkDone,
+  availabilityCommands,
+  onAvailabilityCommand,
 }: {
   canRename: boolean;
   canCopyWorkspaceLocation: boolean;
@@ -104,6 +116,8 @@ export function buildWorkspaceSidebarNativeContextMenuItems({
   onArchive: () => void;
   onUnarchive: () => void;
   onMarkDone: () => void;
+  availabilityCommands?: WorkspaceAvailabilityCommand[];
+  onAvailabilityCommand?: (kind: WorkspaceAvailabilityCommandKind) => void;
 }): NativeMenuItem[] {
   const items: NativeMenuItem[] = [];
   if (canRename) {
@@ -180,6 +194,25 @@ export function buildWorkspaceSidebarNativeContextMenuItems({
       label: "Delete workspace...",
       onSelect: onMarkDone,
     });
+  }
+
+  const availability = availabilityCommands ?? [];
+  if (availability.length > 0) {
+    if (items.length > 0) {
+      items.push({ kind: "separator" });
+    }
+    for (const command of availability) {
+      // PR 6: reconcile-git-state (and every other) is actionable; the note is
+      // appended as context.
+      items.push({
+        id: `availability-${command.kind}`,
+        label: command.blocker ? `${command.label} — ${command.blocker}` : command.label,
+        enabled: true,
+        onSelect: () => {
+          onAvailabilityCommand?.(command.kind);
+        },
+      });
+    }
   }
 
   return items;

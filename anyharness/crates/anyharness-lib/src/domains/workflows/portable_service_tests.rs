@@ -15,14 +15,22 @@ use super::service::{
     WorkflowRunValidationError,
 };
 use super::store::WorkflowRunStore;
+use super::workspace_materialization::{MaterializationStore, WorkflowWorkspaceService};
+use crate::domains::workspaces::workflow_placement::WorkflowPlacementRequest;
 use crate::persistence::Db;
 
 const WORKSPACE: &str = "20000000-0000-4000-8000-000000000002";
 
 fn service() -> WorkflowRunService {
-    WorkflowRunService::new(WorkflowRunStore::new(
-        Db::open_in_memory().expect("in-memory db"),
-    ))
+    service_with_db(Db::open_in_memory().expect("in-memory db"))
+}
+
+fn service_with_db(db: Db) -> WorkflowRunService {
+    WorkflowRunService::new(WorkflowRunStore::new(db))
+}
+
+fn workspace_service_with_db(db: Db) -> WorkflowWorkspaceService {
+    WorkflowWorkspaceService::new(MaterializationStore::new(db))
 }
 
 fn new_run_id() -> String {
@@ -220,6 +228,9 @@ fn concurrent_acceptance_has_one_winner_and_one_stored_plan() {
             }
             AcceptV2Outcome::ExactReplay(view) => model_ids.push(view.resolved_plan.model_id),
             AcceptV2Outcome::Conflict => panic!("same canonical source must replay"),
+            AcceptV2Outcome::WorkspaceNotReady | AcceptV2Outcome::WorkspaceMismatch => {
+                panic!("no materialization exists in this test")
+            }
         }
     }
     assert_eq!(created, 1);
@@ -230,4 +241,193 @@ fn concurrent_acceptance_has_one_winner_and_one_stored_plan() {
             .len(),
         1
     );
+}
+
+#[test]
+fn run_acceptance_transaction_rechecks_materialization_after_stale_preguard() {
+    let db = Db::open_in_memory().expect("in-memory db");
+    let run_service = service_with_db(db.clone());
+    let workspace_service = workspace_service_with_db(db.clone());
+    let run_id = new_run_id();
+
+    // The early preflight observes no materialization. It is intentionally not
+    // authoritative: placement wins before the run's durable insert.
+    assert_eq!(
+        workspace_service
+            .guard_run_acceptance(&run_id, WORKSPACE)
+            .expect("preguard"),
+        super::workspace_materialization::RunAcceptanceGuard::NoMaterialization
+    );
+    let request = workspace_service
+        .validate_request(
+            &run_id,
+            WorkflowPlacementRequest::Scratch {
+                run_id: run_id.clone(),
+            },
+        )
+        .expect("placement request");
+    assert!(matches!(
+        workspace_service
+            .accept(&request)
+            .expect("accept placement"),
+        super::workspace_materialization::store::StoreAcceptOutcome::Created(_)
+    ));
+    assert!(workspace_service
+        .persist_resolved_and_begin(&run_id, r#"{"kind":"scratch"}"#)
+        .expect("resolve"));
+    assert!(workspace_service
+        .bind_workspace(&run_id, "different-workspace")
+        .expect("bind"));
+    assert!(workspace_service.mark_ready(&run_id).expect("ready"));
+
+    let prepared = run_service
+        .prepare_v2(&run_id, valid_input(json!(1)))
+        .expect("prepare");
+    let rendered = run_service.render_v2(&prepared).expect("render");
+    assert!(matches!(
+        run_service
+            .accept_v2(prepared, resolved_plan(&run_id, &rendered))
+            .expect("transactional accept"),
+        AcceptV2Outcome::WorkspaceMismatch
+    ));
+
+    // The rejecting run transaction created neither half of the run and the
+    // already-accepted placement remains exactly replayable.
+    assert_eq!(table_count(&db, "workflow_runs"), 0);
+    assert_eq!(table_count(&db, "workflow_run_steps"), 0);
+    assert_eq!(table_count(&db, "workflow_workspace_materializations"), 1);
+    assert!(matches!(
+        workspace_service
+            .accept(&request)
+            .expect("placement replay"),
+        super::workspace_materialization::store::StoreAcceptOutcome::ExactReplay(_)
+    ));
+}
+
+#[test]
+fn placement_acceptance_transaction_rejects_an_already_accepted_run() {
+    let db = Db::open_in_memory().expect("in-memory db");
+    let run_service = service_with_db(db.clone());
+    let workspace_service = workspace_service_with_db(db.clone());
+    let run_id = new_run_id();
+    let prepared = run_service
+        .prepare_v2(&run_id, valid_input(json!(1)))
+        .expect("prepare");
+    let rendered = run_service.render_v2(&prepared).expect("render");
+    assert!(matches!(
+        run_service
+            .accept_v2(prepared, resolved_plan(&run_id, &rendered))
+            .expect("accept run"),
+        AcceptV2Outcome::Created { .. }
+    ));
+
+    let request = workspace_service
+        .validate_request(
+            &run_id,
+            WorkflowPlacementRequest::Scratch {
+                run_id: run_id.clone(),
+            },
+        )
+        .expect("placement request");
+    for _ in 0..2 {
+        assert!(matches!(
+            workspace_service
+                .accept(&request)
+                .expect("reject placement"),
+            super::workspace_materialization::store::StoreAcceptOutcome::RunAlreadyAccepted
+        ));
+    }
+    assert_eq!(table_count(&db, "workflow_runs"), 1);
+    assert_eq!(table_count(&db, "workflow_run_steps"), 1);
+    assert_eq!(table_count(&db, "workflow_workspace_materializations"), 0);
+    assert_eq!(table_count(&db, "workspaces"), 0);
+}
+
+#[test]
+fn concurrent_run_and_placement_acceptance_commit_only_one_claim() {
+    #[derive(Debug)]
+    enum Winner {
+        Run,
+        Placement,
+    }
+
+    let db = Db::open_in_memory().expect("in-memory db");
+    for _ in 0..16 {
+        let run_id = new_run_id();
+        let run_service = service_with_db(db.clone());
+        let workspace_service = workspace_service_with_db(db.clone());
+        let prepared = run_service
+            .prepare_v2(&run_id, valid_input(json!(1)))
+            .expect("prepare");
+        let rendered = run_service.render_v2(&prepared).expect("render");
+        let plan = resolved_plan(&run_id, &rendered);
+        let request = workspace_service
+            .validate_request(
+                &run_id,
+                WorkflowPlacementRequest::Scratch {
+                    run_id: run_id.clone(),
+                },
+            )
+            .expect("placement request");
+        let barrier = Arc::new(Barrier::new(2));
+
+        let run_barrier = barrier.clone();
+        let run_thread = std::thread::spawn(move || {
+            run_barrier.wait();
+            run_service.accept_v2(prepared, plan).expect("run accept")
+        });
+        let placement_thread = std::thread::spawn(move || {
+            barrier.wait();
+            workspace_service
+                .accept(&request)
+                .expect("placement accept")
+        });
+
+        let run_outcome = run_thread.join().expect("run thread");
+        let placement_outcome = placement_thread.join().expect("placement thread");
+        let winner = match (run_outcome, placement_outcome) {
+            (
+                AcceptV2Outcome::Created { .. },
+                super::workspace_materialization::store::StoreAcceptOutcome::RunAlreadyAccepted,
+            ) => Winner::Run,
+            (
+                AcceptV2Outcome::WorkspaceNotReady,
+                super::workspace_materialization::store::StoreAcceptOutcome::Created(_),
+            ) => Winner::Placement,
+            other => panic!("acceptance transactions disagreed: {other:?}"),
+        };
+
+        let run_count = row_count(&db, "workflow_runs", &run_id);
+        let step_count = row_count(&db, "workflow_run_steps", &run_id);
+        let placement_count = row_count(&db, "workflow_workspace_materializations", &run_id);
+        match winner {
+            Winner::Run => assert_eq!((run_count, step_count, placement_count), (1, 1, 0)),
+            Winner::Placement => assert_eq!((run_count, step_count, placement_count), (0, 0, 1)),
+        }
+    }
+}
+
+fn table_count(db: &Db, table: &str) -> i64 {
+    db.with_conn(|conn| {
+        conn.query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| {
+            row.get(0)
+        })
+    })
+    .expect("table count")
+}
+
+fn row_count(db: &Db, table: &str, run_id: &str) -> i64 {
+    let key = if table == "workflow_runs" {
+        "id"
+    } else {
+        "run_id"
+    };
+    db.with_conn(|conn| {
+        conn.query_row(
+            &format!("SELECT COUNT(*) FROM {table} WHERE {key} = ?1"),
+            [run_id],
+            |row| row.get(0),
+        )
+    })
+    .expect("row count")
 }

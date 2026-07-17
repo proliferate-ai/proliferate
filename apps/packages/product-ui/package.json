@@ -359,6 +359,10 @@
       "types": "./dist/repos/CloudRepoPicker.d.ts",
       "import": "./dist/repos/CloudRepoPicker.js"
     },
+    "./repos/CloudRepoPickerBlocker": {
+      "types": "./dist/repos/CloudRepoPickerBlocker.d.ts",
+      "import": "./dist/repos/CloudRepoPickerBlocker.js"
+    },
     "./environments/CloudEnvironmentList": {
       "types": "./dist/environments/CloudEnvironmentList.d.ts",
       "import": "./dist/environments/CloudEnvironmentList.js"
@@ -374,6 +378,10 @@
     "./workspaces/WorkspaceRow": {
       "types": "./dist/workspaces/WorkspaceRow.d.ts",
       "import": "./dist/workspaces/WorkspaceRow.js"
+    },
+    "./workspaces/WorkspaceReconciliationBody": {
+      "types": "./dist/workspaces/WorkspaceReconciliationBody.d.ts",
+      "import": "./dist/workspaces/WorkspaceReconciliationBody.js"
     },
     "./workspaces/RecentWorkStatusDot": {
       "types": "./dist/workspaces/RecentWorkStatusDot.d.ts",

@@ -44,6 +44,8 @@ pub mod terminals;
 pub mod workflow_runs;
 mod workflow_runs_contract;
 mod workflow_runs_errors;
+pub mod workflow_workspaces;
+mod workflow_workspaces_contract;
 pub mod workspaces;
 pub(crate) mod workspaces_contract;
 pub mod workspaces_lifecycle;

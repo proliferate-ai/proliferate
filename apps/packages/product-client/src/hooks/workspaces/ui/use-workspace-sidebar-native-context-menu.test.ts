@@ -115,4 +115,48 @@ describe("buildWorkspaceSidebarNativeContextMenuItems", () => {
       { id: "copy-branch-name", label: "Copy branch name" },
     ]);
   });
+
+  it("appends workspace-copy availability commands and dispatches by kind (right-click parity)", () => {
+    let dispatched: string | null = null;
+    const items = buildWorkspaceSidebarNativeContextMenuItems({
+      canRename: false,
+      canCopyWorkspaceLocation: false,
+      copyWorkspaceLocationLabel: "Copy workspace path",
+      canCopyBranchName: false,
+      branchName: null,
+      canOpenPullRequest: false,
+      pullRequestNumber: null,
+      archived: false,
+      canArchive: false,
+      canUnarchive: false,
+      canMarkDone: false,
+      onRename: () => {},
+      onCopyWorkspaceLocation: () => {},
+      onCopyBranchName: () => {},
+      onOpenPullRequest: () => {},
+      onArchive: () => {},
+      onUnarchive: () => {},
+      onMarkDone: () => {},
+      availabilityCommands: [
+        { kind: "unlink-this-mac", label: "Unlink this Mac…" },
+        {
+          kind: "reconcile-git-state",
+          label: "Reconcile Git state…",
+          blocker: "This workspace has uncommitted changes.",
+        },
+      ],
+      onAvailabilityCommand: (kind) => { dispatched = kind; },
+    });
+
+    const unlink = items.find((i) => "id" in i && i.id === "availability-unlink-this-mac");
+    const reconcile = items.find((i) => "id" in i && i.id === "availability-reconcile-git-state");
+    expect(unlink).toBeDefined();
+    expect(reconcile).toBeDefined();
+    // PR 6: reconcile-git-state is actionable and dispatches.
+    if (reconcile && "enabled" in reconcile) expect(reconcile.enabled).toBe(true);
+    if (unlink && "onSelect" in unlink) unlink.onSelect?.();
+    expect(dispatched).toBe("unlink-this-mac");
+    if (reconcile && "onSelect" in reconcile) reconcile.onSelect?.();
+    expect(dispatched).toBe("reconcile-git-state");
+  });
 });

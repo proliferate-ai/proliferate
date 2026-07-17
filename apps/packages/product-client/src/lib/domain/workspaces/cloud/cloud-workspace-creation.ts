@@ -6,6 +6,7 @@ import {
 import type { GitHubRepoAuthorityResponse, RepoConfigResponse } from "@proliferate/cloud-sdk";
 import type { AuthUser } from "#product/lib/domain/auth/auth-user";
 import type { BranchPrefixType } from "#product/lib/domain/preferences/user/model";
+import type { RepositoryReadiness } from "@proliferate/product-domain/repos/repo-readiness";
 import { generateWorkspaceSlug } from "#product/lib/domain/workspaces/creation/workspace-slug";
 import {
   buildBranchName,
@@ -38,6 +39,39 @@ export type CloudRepoActionState =
       | "error";
   }
   | { kind: "create"; label: "New cloud workspace"; accessState?: "ready" };
+
+/** Project the shared ordered readiness result into the existing workspace UI model. */
+export function cloudRepoActionStateFromReadiness(
+  readiness: RepositoryReadiness,
+): CloudRepoActionState {
+  if (readiness.gate === 10) {
+    return { kind: "create", label: "New cloud workspace", accessState: "ready" };
+  }
+  if (readiness.gate === 4 && readiness.action === "none") {
+    return { kind: "loading", label: "Checking repository access...", accessState: "loading" };
+  }
+
+  switch (readiness.action) {
+    case "sign_in":
+      return { kind: "configure", label: "Sign in for Cloud", accessState: "disconnected" };
+    case "authorize_user":
+      return { kind: "configure", label: "Connect GitHub App", accessState: "github_app_missing" };
+    case "reauthorize_user":
+      return { kind: "configure", label: "Reconnect GitHub App", accessState: "github_app_expired" };
+    case "install_app":
+    case "copy_admin_request":
+      return { kind: "configure", label: "Install Proliferate GitHub App", accessState: "github_app_not_installed" };
+    case "grant_repo_access":
+      return { kind: "configure", label: "Grant repository access", accessState: "repository_not_granted" };
+    case "retry":
+      return { kind: "configure", label: "Check GitHub access", accessState: "error" };
+    case "set_up_cloud":
+      return { kind: "configure", label: "Configure cloud", accessState: "repository_not_configured" };
+    case "none":
+    default:
+      return { kind: "configure", label: "Review Cloud access", accessState: "error" };
+  }
+}
 
 interface CloudRepoActionRepository {
   sourceRoot: string;

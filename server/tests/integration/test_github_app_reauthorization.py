@@ -14,7 +14,7 @@ from proliferate.integrations.github.app_user_tokens import GitHubAppUserAuthori
 from proliferate.server.cloud.github_app import repo_authority
 from proliferate.server.cloud.materialization import runner as materialization_runner
 from proliferate.server.cloud.materialization.materialize import github_credentials
-from tests.integration.cloud_api_helpers import register_and_login
+from tests.integration.cloud_api_helpers import configure_github_app, register_and_login
 
 
 async def _seed_expired_authorization(
@@ -39,6 +39,66 @@ async def _seed_expired_authorization(
     await db_session.commit()
 
 
+async def _seed_current_authorization(
+    db_session: AsyncSession,
+    *,
+    user_id: UUID,
+) -> None:
+    await github_app_store.upsert_github_app_authorization(
+        db_session,
+        user_id=user_id,
+        authorization=GitHubAppUserAuthorization(
+            access_token="current-github-app-token",
+            refresh_token="current-refresh-token",
+            expires_at=datetime.now(UTC) + timedelta(hours=8),
+            refresh_token_expires_at=datetime.now(UTC) + timedelta(days=30),
+            github_user_id="12345",
+            github_login="cloud-tester",
+            permissions={},
+        ),
+    )
+    await db_session.commit()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "endpoint",
+    [
+        "/v1/cloud/repos",
+        "/v1/cloud/github-app/accessible-repos",
+    ],
+)
+async def test_repo_discovery_fails_closed_when_operator_config_is_incomplete(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+    endpoint: str,
+) -> None:
+    for field in (
+        "github_app_id",
+        "github_app_slug",
+        "github_app_client_id",
+        "github_app_client_secret",
+        "github_app_webhook_secret",
+        "github_app_private_key",
+        "github_app_private_key_path",
+    ):
+        monkeypatch.setattr(repo_authority.settings, field, "")
+    session = await register_and_login(
+        client,
+        f"github-operator-config-{uuid4().hex[:8]}@example.com",
+    )
+    await _seed_current_authorization(db_session, user_id=UUID(session["user_id"]))
+
+    response = await client.get(
+        endpoint,
+        headers={"Authorization": f"Bearer {session['access_token']}"},
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"]["code"] == "github_app_not_configured"
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize("failure_mode", ["bad_refresh_token", "missing_refresh_token"])
 @pytest.mark.parametrize(
@@ -55,6 +115,7 @@ async def test_permanent_refresh_failure_returns_409_and_persists_reauth(
     failure_mode: str,
     endpoint: str,
 ) -> None:
+    configure_github_app(monkeypatch)
     session = await register_and_login(
         client,
         f"github-reauth-{failure_mode}-{uuid4().hex[:8]}@example.com",
@@ -108,6 +169,7 @@ async def test_authority_endpoint_returns_actionable_response_and_persists_reaut
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    configure_github_app(monkeypatch)
     session = await register_and_login(
         client,
         f"github-authority-reauth-{uuid4().hex[:8]}@example.com",
@@ -155,6 +217,7 @@ async def test_background_materialization_runner_persists_reauth(
     test_engine: AsyncEngine,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    configure_github_app(monkeypatch)
     session = await register_and_login(
         client,
         f"github-background-reauth-{uuid4().hex[:8]}@example.com",

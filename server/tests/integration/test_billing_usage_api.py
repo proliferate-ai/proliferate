@@ -152,6 +152,7 @@ async def test_usage_timeseries_zero_fills_missing_buckets(
     user_id = uuid.UUID(session["user_id"])
     subject = await ensure_personal_billing_subject(db_session, user_id)
     now = datetime.now(UTC)
+    segment_start = now - timedelta(minutes=30)
 
     db_session.add(
         UsageSegment(
@@ -160,7 +161,7 @@ async def test_usage_timeseries_zero_fills_missing_buckets(
             workspace_id=uuid.uuid4(),
             sandbox_id=uuid.uuid4(),
             external_sandbox_id=f"sandbox-{uuid.uuid4().hex[:8]}",
-            started_at=now - timedelta(minutes=30),
+            started_at=segment_start,
             ended_at=now - timedelta(minutes=10),
             is_billable=True,
             opened_by="provision",
@@ -180,10 +181,12 @@ async def test_usage_timeseries_zero_fills_missing_buckets(
     assert len(buckets) >= 7
     starts = [b["bucketStart"] for b in buckets]
     assert starts == sorted(starts)
-    today_bucket = buckets[-1]
-    assert today_bucket["computeSeconds"] == 1200.0
-    assert today_bucket["llmCostUsd"] == 0.0
-    assert sum(b["computeSeconds"] for b in buckets[:-1]) == 0.0
+    expected_bucket_start = segment_start.replace(hour=0, minute=0, second=0, microsecond=0)
+    usage_by_start = {datetime.fromisoformat(bucket["bucketStart"]): bucket for bucket in buckets}
+    segment_bucket = usage_by_start[expected_bucket_start]
+    assert segment_bucket["computeSeconds"] == 1200.0
+    assert segment_bucket["llmCostUsd"] == 0.0
+    assert sum(b["computeSeconds"] for b in buckets) == 1200.0
 
 
 @pytest.mark.asyncio

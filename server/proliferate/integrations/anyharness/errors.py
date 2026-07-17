@@ -17,3 +17,21 @@ class CloudRuntimePromptDeliveryUncertainError(CloudRuntimeReconnectError):
 
 class CloudRuntimeOperationError(RuntimeError):
     """Raised when a runtime-backed file or setup operation fails."""
+
+
+class WorkflowRuntimeError(RuntimeError):
+    """Closed, secret-safe failure from a managed Workflow runtime request."""
+
+    def __init__(
+        self,
+        code: str,
+        *,
+        retryable: bool = False,
+        authentication: bool = False,
+        not_found: bool = False,
+    ) -> None:
+        super().__init__("Managed Workflow runtime operation failed.")
+        self.code = code[:128]
+        self.retryable = retryable
+        self.authentication = authentication
+        self.not_found = not_found

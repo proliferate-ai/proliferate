@@ -56,8 +56,8 @@ describe("cloud workspace creation helpers", () => {
       },
     ]);
 
-    expect(keys.has("acme::rocket")).toBe(true);
-    expect(keys.has("acme::draft")).toBe(false);
+    expect(keys.has("github:acme:rocket")).toBe(true);
+    expect(keys.has("github:acme:draft")).toBe(false);
   });
 
   it("resolves loading, configure, and create repo actions", () => {
@@ -85,7 +85,7 @@ describe("cloud workspace creation helpers", () => {
 
     expect(resolveCloudRepoActionState({
       repoTarget: { gitOwner: "acme", gitRepoName: "rocket" },
-      configuredRepoKeys: new Set(["acme::rocket"]),
+      configuredRepoKeys: new Set(["github:acme:rocket"]),
       isInitialConfigLoad: false,
     })).toEqual({ kind: "create", label: "New cloud workspace", accessState: "ready" });
   });
@@ -98,7 +98,7 @@ describe("cloud workspace creation helpers", () => {
   ] as const)("gates configured repositories for %s", (status, label, accessState) => {
     expect(resolveCloudRepoActionState({
       repoTarget: { gitOwner: "acme", gitRepoName: "rocket" },
-      configuredRepoKeys: new Set(["acme::rocket"]),
+      configuredRepoKeys: new Set(["github:acme:rocket"]),
       isInitialConfigLoad: false,
       repoAuthority: { authorized: false, status, action: null, message: null },
     })).toEqual({ kind: "configure", label, accessState });
@@ -107,7 +107,7 @@ describe("cloud workspace creation helpers", () => {
   it("does not offer creation while repository authority is loading or failed", () => {
     const base = {
       repoTarget: { gitOwner: "acme", gitRepoName: "rocket" },
-      configuredRepoKeys: new Set(["acme::rocket"]),
+      configuredRepoKeys: new Set(["github:acme:rocket"]),
       isInitialConfigLoad: false,
     };
     expect(resolveCloudRepoActionState({
@@ -140,7 +140,7 @@ describe("cloud workspace creation helpers", () => {
         },
       ],
       cloudActive: true,
-      configuredRepoKeys: new Set(["acme::rocket"]),
+      configuredRepoKeys: new Set(["github:acme:rocket"]),
       isInitialConfigLoad: false,
     });
 

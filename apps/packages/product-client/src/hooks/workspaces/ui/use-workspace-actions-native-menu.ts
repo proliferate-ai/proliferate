@@ -2,6 +2,10 @@ import { SHORTCUTS } from "#product/config/shortcuts/registry";
 import { useNativeMenu } from "#product/hooks/ui/native/use-native-context-menu";
 import type { NativeMenuItem } from "@proliferate/product-client/host/desktop-bridge";
 import { getShortcutNativeAccelerator } from "#product/lib/domain/shortcuts/native-accelerators";
+import type {
+  WorkspaceAvailabilityCommand,
+  WorkspaceAvailabilityCommandKind,
+} from "#product/lib/domain/workspaces/cloud/workspace-availability-commands";
 
 export interface WorkspaceActionsNativeMenuInput {
   canRename: boolean;
@@ -10,6 +14,11 @@ export interface WorkspaceActionsNativeMenuInput {
   onRename: () => void;
   onFork: () => void;
   onDismiss: () => void;
+  /** Workspace-copy availability commands (PR 5), resolved from the shared
+   * availability command model — the same source the DOM menu renders, so the
+   * two menus stay in manual parity. */
+  availabilityCommands?: WorkspaceAvailabilityCommand[];
+  onAvailabilityCommand?: (kind: WorkspaceAvailabilityCommandKind) => void;
 }
 
 export function useWorkspaceActionsNativeMenu(input: WorkspaceActionsNativeMenuInput) {
@@ -19,7 +28,7 @@ export function useWorkspaceActionsNativeMenu(input: WorkspaceActionsNativeMenuI
 export function buildWorkspaceActionsNativeMenuItems(
   input: WorkspaceActionsNativeMenuInput,
 ): NativeMenuItem[] {
-  return [
+  const items: NativeMenuItem[] = [
     {
       id: "rename-chat",
       label: "Rename chat",
@@ -41,4 +50,23 @@ export function buildWorkspaceActionsNativeMenuItems(
       onSelect: input.onDismiss,
     },
   ];
+
+  const availabilityCommands = input.availabilityCommands ?? [];
+  if (availabilityCommands.length > 0) {
+    items.push({ kind: "separator" });
+    for (const command of availabilityCommands) {
+      // PR 6: every availability command (incl. reconcile-git-state) is
+      // actionable; the note is appended as context.
+      items.push({
+        id: `availability-${command.kind}`,
+        label: command.blocker ? `${command.label} — ${command.blocker}` : command.label,
+        enabled: true,
+        onSelect: () => {
+          input.onAvailabilityCommand?.(command.kind);
+        },
+      });
+    }
+  }
+
+  return items;
 }

@@ -10,6 +10,7 @@ use std::sync::Arc;
 
 use tokio::runtime::Handle;
 
+use crate::domains::sessions::admission::SessionMutationAdmission;
 use crate::domains::sessions::runtime::SessionRuntime;
 use crate::domains::workflows::control::{
     cancel_workflow_run, WorkflowCancelError, WorkflowRunGates,
@@ -23,6 +24,9 @@ use crate::domains::workflows::service::{
     AcceptOutcome, AcceptV2Outcome, InspectV2Outcome, VersionedWorkflowRunView,
     WorkflowAcceptError, WorkflowExecutionPlan, WorkflowRunService, WorkflowRunValidationError,
     WorkflowServiceError,
+};
+use crate::domains::workflows::workspace_materialization::{
+    RunAcceptanceGuard, WorkflowWorkspaceService,
 };
 use crate::domains::workspaces::access_gate::{WorkspaceAccessError, WorkspaceAccessGate};
 use crate::domains::workspaces::operation_gate::{WorkspaceOperationGate, WorkspaceOperationKind};
@@ -46,6 +50,12 @@ pub enum WorkflowPutError {
     Store(WorkflowServiceError),
     /// Blocking-pool join failure (task panic/cancel).
     Internal(anyhow::Error),
+    /// A same-ID Workflow workspace materialization exists but is not ready
+    /// (spec `workflow-workspace-placement`): 409, no run row/effect.
+    WorkspaceNotReady,
+    /// A ready materialization's workspace differs from the request: 409, no
+    /// run row/effect.
+    WorkspaceMismatch,
 }
 
 /// The GET failure arm.
@@ -63,16 +73,21 @@ pub struct WorkflowRunRuntime {
     operation_gate: Arc<WorkspaceOperationGate>,
     access_gate: Arc<WorkspaceAccessGate>,
     gates: Arc<WorkflowRunGates>,
+    admission: Arc<SessionMutationAdmission>,
+    workspace_materialization: Arc<WorkflowWorkspaceService>,
     main_handle: Handle,
 }
 
 impl WorkflowRunRuntime {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         service: Arc<WorkflowRunService>,
         session_runtime: Arc<SessionRuntime>,
         operation_gate: Arc<WorkspaceOperationGate>,
         access_gate: Arc<WorkspaceAccessGate>,
         gates: Arc<WorkflowRunGates>,
+        admission: Arc<SessionMutationAdmission>,
+        workspace_materialization: Arc<WorkflowWorkspaceService>,
         main_handle: Handle,
     ) -> Self {
         Self {
@@ -81,6 +96,8 @@ impl WorkflowRunRuntime {
             operation_gate,
             access_gate,
             gates,
+            admission,
+            workspace_materialization,
             main_handle,
         }
     }
@@ -112,6 +129,8 @@ impl WorkflowRunRuntime {
         let operation_gate = self.operation_gate.clone();
         let access_gate = self.access_gate.clone();
         let gates = self.gates.clone();
+        let admission = self.admission.clone();
+        let workspace_materialization = self.workspace_materialization.clone();
         let execution_handle = self.main_handle.clone();
 
         let handoff = self.main_handle.spawn(async move {
@@ -130,12 +149,14 @@ impl WorkflowRunRuntime {
                     match outcome {
                         Ok(AcceptOutcome::Created { plan, view }) => {
                             let gates_for_execute = gates.clone();
+                            let admission_for_execute = admission.clone();
                             execution_handle.spawn(async move {
                                 execute(
                                     service,
                                     session_runtime,
                                     operation_gate,
                                     gates_for_execute,
+                                    admission_for_execute,
                                     plan,
                                 )
                                 .await;
@@ -194,6 +215,31 @@ impl WorkflowRunRuntime {
                     };
 
                     let workspace_id = prepared.source.workspace_id.clone();
+
+                    // Schema-v2 run-acceptance guard (spec
+                    // `workflow-workspace-placement`): existing-run replay/
+                    // conflict was authoritative above; this guard only binds a
+                    // NEW run's shared UUID to its ready materialization. It
+                    // reads only, creating zero run rows/effects on 409.
+                    let guard_service = workspace_materialization.clone();
+                    let guard_run_id = run_id.clone();
+                    let guard_workspace_id = workspace_id.clone();
+                    let guard = tokio::task::spawn_blocking(move || {
+                        guard_service.guard_run_acceptance(&guard_run_id, &guard_workspace_id)
+                    })
+                    .await
+                    .map_err(|error| WorkflowPutError::Internal(error.into()))?
+                    .map_err(WorkflowPutError::Internal)?;
+                    match guard {
+                        RunAcceptanceGuard::NoMaterialization | RunAcceptanceGuard::Ready => {}
+                        RunAcceptanceGuard::NotReady => {
+                            return Err(WorkflowPutError::WorkspaceNotReady);
+                        }
+                        RunAcceptanceGuard::Mismatch => {
+                            return Err(WorkflowPutError::WorkspaceMismatch);
+                        }
+                    }
+
                     let harness = prepared.source.definition.stages[0].harness_config.clone();
                     let access_workspace_id = workspace_id.clone();
                     tokio::task::spawn_blocking(move || {
@@ -256,12 +302,14 @@ impl WorkflowRunRuntime {
                                 prompt_id: plan.prompt_id.clone(),
                             };
                             let gates_for_execute = gates.clone();
+                            let admission_for_execute = admission.clone();
                             execution_handle.spawn(async move {
                                 execute(
                                     service,
                                     session_runtime,
                                     operation_gate,
                                     gates_for_execute,
+                                    admission_for_execute,
                                     execution_plan,
                                 )
                                 .await;
@@ -274,6 +322,12 @@ impl WorkflowRunRuntime {
                             VersionedWorkflowRunView::V2(view),
                         )),
                         AcceptV2Outcome::Conflict => Err(WorkflowPutError::Conflict),
+                        AcceptV2Outcome::WorkspaceNotReady => {
+                            Err(WorkflowPutError::WorkspaceNotReady)
+                        }
+                        AcceptV2Outcome::WorkspaceMismatch => {
+                            Err(WorkflowPutError::WorkspaceMismatch)
+                        }
                     }
                 }
             }
@@ -313,8 +367,9 @@ impl WorkflowRunRuntime {
         let service = self.service.clone();
         let session_runtime = self.session_runtime.clone();
         let gates = self.gates.clone();
+        let admission = self.admission.clone();
         let handoff = self.main_handle.spawn(async move {
-            cancel_workflow_run(service, session_runtime, gates, run_id).await
+            cancel_workflow_run(service, session_runtime, gates, admission, run_id).await
         });
         handoff
             .await

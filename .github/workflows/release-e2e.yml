@@ -64,6 +64,29 @@ on:
         options:
           - diagnostic
           - strict
+      selfhost_scenarios:
+        description: Comma-separated self-host scenario ids for the selfhost job (validated against the bounded set).
+        default: SELFHOST-INSTALL-1
+        required: false
+        type: string
+      selfhost_cells:
+        description: Optional comma-separated matrix-cell filter for the selfhost job (e.g. SH-GATEWAY); validated against the known cell names.
+        default: ""
+        required: false
+        type: string
+      selfhost_candidate_platform:
+        description: Candidate build platform for the selfhost job.
+        default: linux/amd64
+        required: false
+        type: choice
+        options:
+          - linux/amd64
+          - linux/arm64
+      selfhost_api_base_url:
+        description: Fixed serial-lane API base URL for the selfhost job (leave blank for a run-scoped subdomain).
+        default: ""
+        required: false
+        type: string
   schedule:
     # Nightly, offset after the release train (which runs at 09:00 UTC) so it
     # exercises the freshly cut artifacts. README: "Nightly — Tier 3 lanes
@@ -500,7 +523,7 @@ jobs:
             | sudo tee /etc/apt/sources.list.d/stripe.list
           sudo apt-get update && sudo apt-get install -y stripe
 
-      - name: Run T2-BILL + T2-AUTH-ORG (strict)
+      - name: Run T2-BILL (strict)
         env:
           # The boot fixture allocates the t2billing profile itself; on the
           # runner the Docker services above stand in for the local stack
@@ -675,7 +698,7 @@ jobs:
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build the self-host candidate and run SELFHOST-INSTALL-1 (strict)
+      - name: Build the self-host candidate and run the selected self-host scenarios (strict)
         env:
           # Mapped directly from the protected `Qualification` environment.
           # Arbitrary PR code never runs this job or sees these.
@@ -687,20 +710,128 @@ jobs:
           # evidence (only safe id hashes leave the fixtures).
           RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY: ${{ secrets.RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY }}
           RELEASE_E2E_BYOK_ANTHROPIC_B_API_KEY: ${{ secrets.RELEASE_E2E_BYOK_ANTHROPIC_B_API_KEY }}
+          # SH-GITHUB-AUTH (SELFHOST-QUAL-1): the fixed-origin OAuth app + the two
+          # GitHub identities' rotating browser-session seeds + verified emails.
+          RELEASE_E2E_SELFHOST_GITHUB_OAUTH_CLIENT_ID: ${{ vars.RELEASE_E2E_SELFHOST_GITHUB_OAUTH_CLIENT_ID }}
+          RELEASE_E2E_SELFHOST_GITHUB_OAUTH_SECRET: ${{ secrets.RELEASE_E2E_SELFHOST_GITHUB_OAUTH_SECRET }}
+          RELEASE_E2E_SELFHOST_GITHUB_IDENTITY_A_STATE: ${{ secrets.RELEASE_E2E_SELFHOST_GITHUB_IDENTITY_A_STATE }}
+          RELEASE_E2E_SELFHOST_GITHUB_IDENTITY_B_STATE: ${{ secrets.RELEASE_E2E_SELFHOST_GITHUB_IDENTITY_B_STATE }}
+          RELEASE_E2E_SELFHOST_GITHUB_IDENTITY_A_EMAIL: ${{ vars.RELEASE_E2E_SELFHOST_GITHUB_IDENTITY_A_EMAIL }}
+          RELEASE_E2E_SELFHOST_GITHUB_IDENTITY_B_EMAIL: ${{ vars.RELEASE_E2E_SELFHOST_GITHUB_IDENTITY_B_EMAIL }}
+          # SH-GATEWAY (SELFHOST-QUAL-1): the immutable LiteLLM image tag to pin.
+          RELEASE_E2E_SELFHOST_LITELLM_IMAGE_TAG: ${{ vars.RELEASE_E2E_SELFHOST_LITELLM_IMAGE_TAG }}
+          # SH-CLOUD-ADDON (SELFHOST-QUAL-1): the instance's own E2B account +
+          # self-built template + cloud add-on GitHub App (distinct from the
+          # managed-cloud RELEASE_E2E_CLOUD_GITHUB_APP_* set).
+          RELEASE_E2E_SELFHOST_CLOUD_E2B_API_KEY: ${{ secrets.RELEASE_E2E_SELFHOST_CLOUD_E2B_API_KEY }}
+          RELEASE_E2E_SELFHOST_CLOUD_E2B_TEMPLATE_NAME: ${{ vars.RELEASE_E2E_SELFHOST_CLOUD_E2B_TEMPLATE_NAME }}
+          RELEASE_E2E_SELFHOST_CLOUD_GITHUB_APP_ID: ${{ vars.RELEASE_E2E_SELFHOST_CLOUD_GITHUB_APP_ID }}
+          RELEASE_E2E_SELFHOST_CLOUD_GITHUB_APP_CLIENT_ID: ${{ vars.RELEASE_E2E_SELFHOST_CLOUD_GITHUB_APP_CLIENT_ID }}
+          RELEASE_E2E_SELFHOST_CLOUD_GITHUB_APP_CLIENT_SECRET: ${{ secrets.RELEASE_E2E_SELFHOST_CLOUD_GITHUB_APP_CLIENT_SECRET }}
+          RELEASE_E2E_SELFHOST_CLOUD_GITHUB_APP_PRIVATE_KEY: ${{ secrets.RELEASE_E2E_SELFHOST_CLOUD_GITHUB_APP_PRIVATE_KEY }}
+          # SH-CFN-WRAPPER (SELFHOST-CFN-1): run-scoped bundle bucket + candidate
+          # image repo.
+          RELEASE_E2E_SELFHOST_CFN_BUCKET: ${{ vars.RELEASE_E2E_SELFHOST_CFN_BUCKET }}
+          RELEASE_E2E_SELFHOST_CFN_IMAGE_REPO: ${{ vars.RELEASE_E2E_SELFHOST_CFN_IMAGE_REPO }}
+          # The requested scenario list + optional matrix-cell filter + candidate
+          # platform, mapped through env (NOT interpolated into the script) so a
+          # crafted workflow_dispatch value cannot inject shell into this
+          # secret-bearing job (PR7-CONTROL-002).
+          SELFHOST_SCENARIOS_INPUT: ${{ inputs.selfhost_scenarios }}
+          SELFHOST_CELLS_INPUT: ${{ inputs.selfhost_cells }}
+          SELFHOST_CANDIDATE_PLATFORM_INPUT: ${{ inputs.selfhost_candidate_platform }}
+          SELFHOST_API_BASE_URL_INPUT: ${{ inputs.selfhost_api_base_url }}
         run: |
           set -euo pipefail
+          # Validate the requested scenarios against the bounded self-host set
+          # BEFORE they reach Make. The value arrives via env (never interpolated),
+          # is split on commas, and every entry must be a known self-host scenario
+          # id — otherwise fail closed. This makes shell metacharacters inert
+          # (they simply fail the allowlist) and rejects unknown ids.
+          allowed="SELFHOST-INSTALL-1 SELFHOST-QUAL-1 SELFHOST-ISOLATION-1 SELFHOST-CFN-1"
+          requested="${SELFHOST_SCENARIOS_INPUT:-SELFHOST-INSTALL-1}"
+          IFS=',' read -ra parts <<< "$requested"
+          clean=""
+          for raw in "${parts[@]}"; do
+            id="$(printf '%s' "$raw" | tr -d '[:space:]')"
+            [ -z "$id" ] && continue
+            case " $allowed " in
+              *" $id "*) clean="${clean:+$clean,}$id" ;;
+              *) echo "::error title=Invalid self-host scenario::'$id' is not in the bounded set: $allowed"; exit 2 ;;
+            esac
+          done
+          [ -n "$clean" ] || { echo "::error::no valid self-host scenario requested"; exit 2; }
+          # --cells is optional and, if present, must be one of the known cell
+          # names; validate the same way so it too cannot inject.
+          allowed_cells="SH-INSTALL-CLAIM SH-DESKTOP-OWNER SH-BASE-TURN SH-INVITEE SH-GITHUB-AUTH SH-GATEWAY SH-CLOUD-ADDON SH-SWITCH-ISOLATION SH-CFN-WRAPPER"
+          cells_arg=""
+          if [ -n "${SELFHOST_CELLS_INPUT:-}" ]; then
+            IFS=',' read -ra cparts <<< "$SELFHOST_CELLS_INPUT"
+            cclean=""
+            for raw in "${cparts[@]}"; do
+              c="$(printf '%s' "$raw" | tr -d '[:space:]')"
+              [ -z "$c" ] && continue
+              case " $allowed_cells " in
+                *" $c "*) cclean="${cclean:+$cclean,}$c" ;;
+                *) echo "::error title=Invalid self-host cell::'$c' is not a known cell"; exit 2 ;;
+              esac
+            done
+            # An EXPLICITLY nonempty cell selector that normalizes to empty (only
+            # commas/whitespace) must FAIL CLOSED (PR7-CONTROL-005), not silently
+            # fall through to "no filter" (which would run every cell).
+            [ -n "$cclean" ] || { echo "::error title=Empty self-host cell selector::selfhost_cells was provided but normalized to empty"; exit 2; }
+            cells_arg="$cclean"
+          fi
+          # Candidate platform: only the two supported docker platforms.
+          platform="${SELFHOST_CANDIDATE_PLATFORM_INPUT:-linux/amd64}"
+          case "$platform" in
+            linux/amd64|linux/arm64) ;;
+            *) echo "::error title=Invalid platform::'$platform' must be linux/amd64 or linux/arm64"; exit 2 ;;
+          esac
+          # API base URL: optional, but when present it must be EXACTLY the fixed
+          # serial-lane origin (the only origin the SH-GITHUB-AUTH OAuth callback
+          # is registered against). Validate to that literal so a crafted value
+          # cannot reach Make (PR7-CONTROL-002); an unexpected value fails closed.
+          api_base_url="${SELFHOST_API_BASE_URL_INPUT:-}"
+          if [ -n "$api_base_url" ] && \
+             [ "$api_base_url" != "https://selfhost-fixed.qualification.proliferate.com" ]; then
+            echo "::error title=Invalid API base URL::selfhost_api_base_url, when set, must be exactly https://selfhost-fixed.qualification.proliferate.com"
+            exit 2
+          fi
+          # SELFHOST_SCENARIOS / SELFHOST_CELLS / SELFHOST_CANDIDATE_PLATFORM are
+          # passed to Make as quoted, already-validated values. SELFHOST_API_BASE_URL
+          # is exported into Make's environment (the recipe reads it as a shell env
+          # var, never a Make expansion) so the value stays inert data.
+          export SELFHOST_API_BASE_URL="$api_base_url"
           make qualification-selfhost \
             PROFILE="ci-${{ github.run_id }}-${{ github.run_attempt }}" \
-            BEHAVIOR=strict
+            BEHAVIOR=strict \
+            SELFHOST_SCENARIOS="$clean" \
+            SELFHOST_CELLS="$cells_arg" \
+            SELFHOST_CANDIDATE_PLATFORM="$platform"
 
       - name: Upload V4 report and bounded diagnostic logs
+        # Actions-durable (SHR-006): `if: always()` already runs this step on an
+        # interrupted/failed job, not just a green one; the ledger glob below is
+        # what makes the run's cleanup-ledger.json land in that upload — without
+        # it the ledger (written directly under the run dir, one level above
+        # `evidence/`/`logs/`) never reached CI artifacts even though the step
+        # itself always ran. See `cleanup-ledger-artifact-upload.test.ts` for the
+        # unit proof that the ledger's on-disk path matches this glob.
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: selfhost-install-1-evidence
+          name: selfhost-evidence
+          # SHR-006 / PR7-CONTROL-008: upload EVERY run's cleanup ledger, not just
+          # the top-level install one. The nested worlds write their ledgers one
+          # level deeper — SELFHOST-CFN-1 under `.../cfn/`, and SELFHOST-ISOLATION-1's
+          # two boxes under `.../server-a/` and `.../server-b/` — so the two-level
+          # glob missed them. The `**` globs make every ledger (and its evidence +
+          # logs) Actions-durable on an interrupted/failed run.
           path: |
-            tests/release/.output/selfhost-world/*/*/evidence/
-            tests/release/.output/selfhost-world/*/*/logs/
+            tests/release/.output/selfhost-world/**/evidence/
+            tests/release/.output/selfhost-world/**/logs/
+            tests/release/.output/selfhost-world/**/cleanup-ledger.json
           retention-days: 7
           if-no-files-found: ignore
 

@@ -87,6 +87,12 @@
   description: Soft Celery task execution limit in seconds
   tags: [local-dev, self-hosted, production]
 
+- name: CELERY_BROKER_CONFIRM_TIMEOUT_SECONDS
+  secret: false
+  default: "10.0"
+  description: Bounded wait (seconds) for RabbitMQ publisher confirms; the relay publishes under confirm mode so a nack, confirm timeout, or connection ambiguity raises and the outbox row stays retryable instead of being marked published on an unconfirmed write
+  tags: [local-dev, self-hosted, production]
+
 - name: REDBEAT_REDIS_URL
   secret: true
   default: "redis://127.0.0.1:6379/0"
@@ -97,6 +103,60 @@
   secret: false
   default: "redbeat:proliferate:"
   description: Redis key prefix for redbeat scheduler metadata
+  tags: [local-dev, self-hosted, production]
+
+- name: BACKGROUND_RELAY_INTERVAL_SECONDS
+  secret: false
+  default: "1.0"
+  description: Beat interval for the background.relay outbox-drain task
+  tags: [local-dev, self-hosted, production]
+
+- name: BACKGROUND_RELAY_BATCH_SIZE
+  secret: false
+  default: "50"
+  description: Maximum outbox rows claimed per relay tick
+  tags: [local-dev, self-hosted, production]
+
+- name: BACKGROUND_RELAY_LEASE_SECONDS
+  secret: false
+  default: "60.0"
+  description: Publishing lease duration for a claimed outbox row before another relay may reclaim it
+  tags: [local-dev, self-hosted, production]
+
+- name: BACKGROUND_RELAY_RETRY_BASE_SECONDS
+  secret: false
+  default: "2.0"
+  description: Base delay for capped exponential backoff on supported-task broker publish failures
+  tags: [local-dev, self-hosted, production]
+
+- name: BACKGROUND_RELAY_RETRY_CAP_SECONDS
+  secret: false
+  default: "300.0"
+  description: Maximum backoff delay between relay republication attempts
+  tags: [local-dev, self-hosted, production]
+
+- name: BACKGROUND_RELAY_RETRY_JITTER_SECONDS
+  secret: false
+  default: "5.0"
+  description: Upper bound of additive random jitter on relay retry delay
+  tags: [local-dev, self-hosted, production]
+
+- name: BACKGROUND_RELAY_OLDEST_DUE_SLO_SECONDS
+  secret: false
+  default: "300.0"
+  description: Alarm threshold for the oldest due-but-unpublished outbox row age (background-plane SLO)
+  tags: [self-hosted, production]
+
+- name: WORKFLOW_MANAGED_RUNS_ENABLED
+  secret: false
+  default: "false"
+  description: Admit new managed Cloud Workflow deliveries; existing reads, observation, and cancellation remain active when disabled
+  tags: [local-dev, self-hosted, production]
+
+- name: WORKFLOW_MANAGED_FRESHNESS_STALE_SECONDS
+  secret: false
+  default: "60.0"
+  description: Server-owned age after which a live nonterminal managed Workflow projection is presented as stale
   tags: [local-dev, self-hosted, production]
 
 - name: CORS_ALLOW_ORIGINS

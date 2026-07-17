@@ -1,10 +1,7 @@
 from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-ENV_FILES = (
-    ".env",
-    ".env.local",
-)
+ENV_FILES = (".env", ".env.local")
 
 
 class Settings(BaseSettings):
@@ -20,6 +17,16 @@ class Settings(BaseSettings):
     proliferate_dev: bool = Field(default=False, validation_alias="PROLIFERATE_DEV")
     api_base_url: str = ""
     api_path_prefix: str = ""
+    # Compiled ProductClient Web distribution served from this image. Empty (the
+    # default) keeps the API-only behavior: no static serving, no SPA fallback.
+    # When set to a directory containing index.html, the API serves that Web
+    # application at the same origin as the API (self-hosted Web). A configured
+    # directory missing index.html fails startup. See
+    # proliferate.server.web_app for the mount and fail-closed routing.
+    web_dist_dir: str = Field(
+        default="",
+        validation_alias=AliasChoices("WEB_DIST_DIR", "PROLIFERATE_WEB_DIST_DIR"),
+    )
     telemetry_mode: str = Field(
         default="local_dev",
         validation_alias=AliasChoices("PROLIFERATE_TELEMETRY_MODE", "TELEMETRY_MODE"),
@@ -91,8 +98,28 @@ class Settings(BaseSettings):
     celery_task_always_eager: bool = False
     celery_task_time_limit_seconds: int = 3600
     celery_task_soft_time_limit_seconds: int = 3300
+    workflow_managed_runs_enabled: bool = False
+    workflow_managed_freshness_stale_seconds: float = 60.0
+    # Publisher-confirm timeout (seconds) for broker publishes. With confirm mode
+    # enabled the relay waits up to this long for RabbitMQ to durably ack a
+    # publish; a nack, a confirm timeout, or connection ambiguity raises so the
+    # outbox row stays retryable instead of being marked published on an
+    # unconfirmed socket write. Bounded so a wedged broker cannot hang a tick.
+    celery_broker_confirm_timeout_seconds: float = 10.0
     redbeat_redis_url: str = "redis://127.0.0.1:6379/0"
     redbeat_key_prefix: str = "redbeat:proliferate:"
+    # Outbox relay: Beat fires the thin ``background.relay`` task on this
+    # interval; each tick drains one bounded batch and exits (no in-process
+    # loop). Supported broker failures retry indefinitely with capped
+    # exponential backoff. ``oldest_due_slo_seconds`` is the alarm threshold on
+    # the oldest due-but-unpublished outbox row (5-minute reviewable default).
+    background_relay_interval_seconds: float = 1.0
+    background_relay_batch_size: int = 50
+    background_relay_lease_seconds: float = 60.0
+    background_relay_retry_base_seconds: float = 2.0
+    background_relay_retry_cap_seconds: float = 300.0
+    background_relay_retry_jitter_seconds: float = 5.0
+    background_relay_oldest_due_slo_seconds: float = 300.0
 
     # Auth
     jwt_secret: str = "CHANGE-ME-IN-PRODUCTION"
@@ -488,6 +515,63 @@ class Settings(BaseSettings):
                 "deployment to enable cloud workspaces."
             )
         return None
+
+    @property
+    def github_app_runtime_fields_present(self) -> tuple[bool, ...]:
+        """Presence of each GitHub App runtime requirement, order-stable.
+
+        One entry per field group the App runtime path needs: App id (JWT
+        signing subject), App slug (installation URL construction), OAuth
+        client id + secret (user authorization and token exchange), webhook
+        secret (webhook validation), and a private key in exactly one of its
+        two forms (App JWT signing). Internal helper for the aggregate
+        predicates below; never expose per-field presence publicly.
+        """
+        return (
+            bool(self.github_app_id.strip()),
+            bool(self.github_app_slug.strip()),
+            bool(self.github_app_client_id.strip()),
+            bool(self.github_app_client_secret.strip()),
+            bool(self.github_app_webhook_secret.strip()),
+            bool(self.github_app_private_key.strip() or self.github_app_private_key_path.strip()),
+        )
+
+    @property
+    def github_app_configured(self) -> bool:
+        """True when every GitHub App runtime requirement is configured.
+
+        This is the single completeness predicate shared by the ``/meta``
+        capability contract, startup/preflight expectations, and tests. It
+        gates whether GitHub repository authority (user authorization,
+        installation, repo coverage) can work at runtime.
+        """
+        return all(self.github_app_runtime_fields_present)
+
+    @property
+    def github_app_partially_configured(self) -> bool:
+        """True when some but not all GitHub App runtime fields are set.
+
+        A partial App config is an operator error: repo authorization will
+        fail at runtime even though the deployment looks intentional. The
+        capability contract reports it as operator configuration required
+        rather than disabled.
+        """
+        present = self.github_app_runtime_fields_present
+        return any(present) and not all(present)
+
+    @property
+    def cloud_provisioning_partially_configured(self) -> bool:
+        """True when E2B config is started but incomplete (non-debug only).
+
+        Either half alone (API key without template, or template without API
+        key) is an operator error the capability contract reports as
+        operator configuration required rather than disabled.
+        """
+        if self.debug:
+            return False
+        key_present = bool(self.e2b_api_key.strip())
+        template_present = bool(self.e2b_template_name.strip())
+        return key_present != template_present
 
     @property
     def single_org_mode(self) -> bool:

@@ -11,6 +11,7 @@ import {
 import { useMobileWorkInventory } from "../../hooks/work/derived/use-mobile-work-inventory";
 import { useMobileWorkFilters } from "../../hooks/work/ui/use-mobile-work-filters";
 import { useMobileWorkClaimActions } from "../../hooks/work/workflows/use-mobile-work-claim-actions";
+import { useMobileServerCapabilities } from "../../hooks/access/cloud/capabilities/use-mobile-server-capabilities";
 import {
   MOBILE_WORK_STATUS_OPTIONS,
   MOBILE_WORK_TYPE_OPTIONS,
@@ -44,6 +45,16 @@ export function MobileWorkspacesScreen({
   const filterState = useMobileWorkFilters(allInventory.items);
   const inventory = useMobileWorkInventory(filterState.filters);
   const claimActions = useMobileWorkClaimActions();
+  // Access-loss (PR 7): when managed-Cloud capability is no longer ready, keep
+  // existing Cloud workspace records visible but locked and explained. Only
+  // treat an explicit non-ready capability as loss — an in-flight/unknown read
+  // must not lock records (fail closed on gating, not on presentation).
+  const capabilities = useMobileServerCapabilities();
+  const cloudAccessLost = capabilities.data?.managedCloud === "disabled"
+    || capabilities.data?.managedCloud === "operator_configuration_required";
+  const accessLossReason = cloudAccessLost
+    ? "Cloud access is no longer available on this deployment. This workspace is read-only until access is restored."
+    : null;
 
   return (
     <MobileScreen
@@ -155,6 +166,7 @@ export function MobileWorkspacesScreen({
                     key={item.view.id}
                     item={item}
                     claiming={claimActions.claimingWorkspaceId === item.workspace.id}
+                    accessLossReason={accessLossReason}
                     onPress={() => onOpenChat(item.chat)}
                     onClaim={() => {
                       void claimActions.claimListWorkspace(item);

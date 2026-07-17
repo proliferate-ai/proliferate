@@ -1,5 +1,6 @@
 import httpx
 import pytest
+from e2b import exceptions as e2b_exceptions
 
 from proliferate.integrations.sandbox import e2b as e2b_runtime
 
@@ -9,6 +10,24 @@ class _FakeSandboxInstance:
 
     def get_host(self, port: int) -> str:
         return f"sandbox.example:{port}"
+
+
+@pytest.mark.parametrize(
+    ("error", "expected_type"),
+    [
+        (OSError("network down"), e2b_runtime.E2BUnavailableError),
+        (e2b_exceptions.RateLimitException(), e2b_runtime.E2BUnavailableError),
+        (e2b_exceptions.SandboxNotFoundException(), e2b_runtime.E2BTargetUnavailableError),
+        (e2b_exceptions.AuthenticationException(), e2b_runtime.E2BRuntimeError),
+    ],
+)
+def test_translate_e2b_exception_classifies_provider_failures(
+    error: Exception,
+    expected_type: type[Exception],
+) -> None:
+    translated = e2b_runtime._translate_e2b_exception(error, operation="sandbox connect")
+
+    assert isinstance(translated, expected_type)
 
 
 def test_create_sandbox_prefers_timeout_ms(monkeypatch) -> None:
@@ -378,3 +397,46 @@ def test_resolve_runtime_context_uses_static_e2b_paths() -> None:
     assert context.runtime_workdir == e2b_runtime.E2B_RUNTIME_WORKDIR
     assert context.runtime_binary_path == e2b_runtime.E2B_RUNTIME_BINARY_PATH
     assert context.base_env == {"HOME": e2b_runtime.E2B_USER_HOME}
+
+
+@pytest.mark.parametrize(
+    "failure,expected_type",
+    [
+        (
+            e2b_exceptions.AuthenticationException("secret auth detail"),
+            e2b_runtime.E2BRuntimeError,
+        ),
+        (
+            e2b_exceptions.RateLimitException("secret rate detail"),
+            e2b_runtime.E2BUnavailableError,
+        ),
+        (
+            e2b_exceptions.SandboxNotFoundException("secret target detail"),
+            e2b_runtime.E2BTargetUnavailableError,
+        ),
+        (
+            e2b_exceptions.SandboxException("secret provider detail"),
+            e2b_runtime.E2BUnavailableError,
+        ),
+        (
+            httpx.ConnectError("secret network detail"),
+            e2b_runtime.E2BUnavailableError,
+        ),
+    ],
+)
+@pytest.mark.asyncio
+async def test_public_provider_boundary_translates_closed_secret_safe_errors(
+    monkeypatch: pytest.MonkeyPatch,
+    failure: Exception,
+    expected_type: type[Exception],
+) -> None:
+    def fail(*_args: object) -> None:
+        raise failure
+
+    provider = e2b_runtime.E2BSandboxProvider()
+    monkeypatch.setattr(provider, "_connect", fail)
+
+    with pytest.raises(expected_type) as exc_info:
+        await provider.resume_sandbox("sandbox-a")
+
+    assert "secret" not in str(exc_info.value)

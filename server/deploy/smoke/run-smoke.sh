@@ -458,6 +458,109 @@ phase_journey() {
   assert_active_member "$SMOKE_INVITEE_EMAIL"
 }
 
+# --- Phase 3: self-hosted Web served same-origin from the server image --------
+# The image bakes the compiled ProductClient Web distribution (WEB_DIST_DIR),
+# so the production proxy path must serve the real Web application at the same
+# public URL as the API, without ever shadowing an API/auth/setup route.
+
+# assert_header <label> <url> <header-substring>: GET url and assert a response
+# header line contains the substring (case-insensitive).
+assert_header() {
+  local label="$1" url="$2" needle="$3"
+  local headers
+  headers="$(curl -sS -D - -o /dev/null "$url" || true)"
+  if printf '%s' "$headers" | grep -iq "$needle"; then
+    log "PASS  $label: $needle"
+  else
+    fail "$label: expected a response header matching '$needle' from $url; headers: $headers"
+  fi
+}
+
+phase_web() {
+  local base_url="http://localhost:${HTTP_PORT}"
+
+  # (1) / and /login return the Web application (the HTML shell with #root).
+  assert_http_200 "GET / (Web shell)" "$base_url/"
+  if [[ "$LAST_RESPONSE_BODY" != *'id="root"'* ]]; then
+    fail "GET / did not return the Web application shell: $LAST_RESPONSE_BODY"
+  fi
+  assert_http_200 "GET /login (Web shell)" "$base_url/login"
+  if [[ "$LAST_RESPONSE_BODY" != *'id="root"'* ]]; then
+    fail "GET /login did not return the Web application shell: $LAST_RESPONSE_BODY"
+  fi
+
+  # (2) A real browser executes the bundled JS, renders the login-ready marker,
+  # loads hashed CSS/JS, and refreshes a deep client route. Requires Node +
+  # Playwright chromium on the runner.
+  if command -v node >/dev/null 2>&1; then
+    log "running the browser Web smoke (Playwright)"
+    # Run the in-repo copy (not the staged temp copy) so `import("playwright")`
+    # resolves node_modules from the repo root where CI installs it.
+    ( cd "$REPO_ROOT" && node "$REPO_ROOT/server/deploy/smoke/web-smoke.mjs" "$base_url" ) \
+      || fail "browser Web smoke failed"
+    log "PASS  browser executed the bundled Web application"
+  else
+    fail "node is required for the browser Web smoke"
+  fi
+
+  # (3) Hashed assets exist and load; discover one from the served index.html.
+  local asset_path
+  asset_path="$(printf '%s' "$LAST_RESPONSE_BODY" | grep -oE '/assets/[^"]+\.js' | head -1 || true)"
+  if [[ -z "$asset_path" ]]; then
+    # /login body is in LAST_RESPONSE_BODY from above; re-fetch / for the asset ref.
+    http_call GET "$base_url/"
+    asset_path="$(printf '%s' "$LAST_RESPONSE_BODY" | grep -oE '/assets/[^"]+\.js' | head -1 || true)"
+  fi
+  if [[ -n "$asset_path" ]]; then
+    assert_http_200 "GET a real hashed asset" "$base_url$asset_path"
+    assert_header "hashed asset is immutably cached" "$base_url$asset_path" "cache-control: public, max-age=31536000, immutable"
+  else
+    log "note: no /assets/*.js reference found inline (module preloads may be dynamic); the browser smoke already proved assets load"
+  fi
+
+  # (4) index.html is served no-cache so a new deploy is picked up immediately.
+  assert_header "index.html is no-cache" "$base_url/login" "cache-control: no-cache"
+
+  # (5) A nonexistent asset stays a 404, never the SPA shell.
+  http_call GET "$base_url/assets/definitely-missing-asset.js"
+  assert_status "GET missing asset" 404
+  if [[ "$LAST_RESPONSE_BODY" == *'id="root"'* ]]; then
+    fail "a missing asset fell back to the Web shell; it must stay a 404"
+  fi
+  http_call GET "$base_url/definitely-missing.ico"
+  assert_status "GET missing root asset" 404
+  if [[ "$LAST_RESPONSE_BODY" == *'id="root"'* ]]; then
+    fail "a missing root asset fell back to the Web shell; it must stay a 404"
+  fi
+
+  # (6) ProductClient's exact auth callback/error routes receive the shell,
+  # while unknown /v1 and /auth siblings remain API failures.
+  for client_auth_path in /auth/callback /auth/error; do
+    assert_http_200 "GET $client_auth_path (Web shell)" "$base_url$client_auth_path"
+    if [[ "$LAST_RESPONSE_BODY" != *'id="root"'* ]]; then
+      fail "GET $client_auth_path did not return the Web application shell"
+    fi
+  done
+  http_call GET "$base_url/v1/definitely-not-a-route"
+  if [[ "$LAST_RESPONSE_STATUS" == "200" || "$LAST_RESPONSE_BODY" == *'id="root"'* ]]; then
+    fail "unknown /v1 path returned the Web shell / 200 (status=$LAST_RESPONSE_STATUS)"
+  fi
+  log "PASS  unknown /v1 path stays a non-200 API failure ($LAST_RESPONSE_STATUS)"
+  http_call GET "$base_url/auth/definitely-not-a-route"
+  if [[ "$LAST_RESPONSE_STATUS" == "200" || "$LAST_RESPONSE_BODY" == *'id="root"'* ]]; then
+    fail "unknown /auth path returned the Web shell / 200 (status=$LAST_RESPONSE_STATUS)"
+  fi
+  log "PASS  unknown /auth path stays a non-200 API failure ($LAST_RESPONSE_STATUS)"
+
+  # (7) /health, /meta, and the desktop auth-methods probe still win over the SPA.
+  assert_http_200 "GET /health still wins" "$base_url/health"
+  if [[ "$LAST_RESPONSE_BODY" != *'"status":"ok"'* ]]; then
+    fail "GET /health returned the wrong body under Web serving: $LAST_RESPONSE_BODY"
+  fi
+  http_call GET "$base_url/auth/desktop/methods"
+  assert_status "GET /auth/desktop/methods still wins" 200
+}
+
 phase_health
 
 if [[ "$SMOKE_PHASE" == "1" ]]; then
@@ -467,5 +570,6 @@ if [[ "$SMOKE_PHASE" == "1" ]]; then
 fi
 
 phase_journey
+phase_web
 
-log "SMOKE OK: boot, migrate, health, /meta, claim, login, invite, register, and membership checks all passed."
+log "SMOKE OK: boot, migrate, health, /meta, claim, login, invite, register, membership, and self-hosted Web checks all passed."

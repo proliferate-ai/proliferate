@@ -36,6 +36,7 @@ from proliferate.server.cloud.github_app.models import (
 )
 from proliferate.server.cloud.github_app.repo_authority import (
     ensure_fresh_github_app_authorization,
+    require_github_app_runtime_configured,
     require_github_cloud_repo_authority,
 )
 from proliferate.server.cloud.materialization import service as materialization_service
@@ -583,7 +584,13 @@ def _repo_authority_status_for_error(
     if code == "github_app_repo_not_covered":
         return "repo_not_covered", "grant_repo_access"
     if code == "github_repo_access_required":
-        return "missing_user_repo_access", "authorize_user"
+        # The user's own GitHub account lacks access to the repository.
+        # Reauthorizing the App cannot repair that, so no action is offered.
+        return "missing_user_repo_access", None
+    if code == "github_app_not_configured":
+        # Deployment-level App misconfiguration; only the operator can
+        # repair it, so no user action is offered.
+        return "operator_configuration_required", None
     return "error", None
 
 
@@ -597,6 +604,7 @@ async def list_github_app_accessible_repositories(
     affiliation: str = DEFAULT_REPO_AFFILIATION,
     visibility: str = DEFAULT_REPO_VISIBILITY,
 ) -> CloudGitRepositoriesPageRecord:
+    require_github_app_runtime_configured()
     authorization = await ensure_fresh_github_app_authorization(db, user_id=user.id)
     credentials = CloudRepoGitHubCredentials(
         user_id=user.id,

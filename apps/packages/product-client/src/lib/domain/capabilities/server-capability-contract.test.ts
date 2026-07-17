@@ -31,6 +31,17 @@ describe("parseServerCapabilities", () => {
     expect(parsed?.agentGateway).toBe(true);
     expect(parsed?.support.kind).toBe("operator");
     expect(parsed?.support.email).toBe("it@acme.example.com");
+    expect(parsed?.workflowManagedRuns).toBe(false);
+  });
+
+  it("reads the v3 managed Workflow presentation gate and defaults absent false", () => {
+    const enabled = validRaw();
+    enabled.contractVersion = 3;
+    enabled.workflowManagedRuns = true;
+    expect(parseServerCapabilities(enabled)?.workflowManagedRuns).toBe(true);
+
+    const older = validRaw();
+    expect(parseServerCapabilities(older)?.workflowManagedRuns).toBe(false);
   });
 
   it("returns null when the block is absent or not an object", () => {
@@ -97,5 +108,93 @@ describe("parseServerCapabilities", () => {
     };
     const parsed = parseServerCapabilities(raw);
     expect(parsed?.support.url).toBe("mailto:help@acme.example.com");
+  });
+
+  describe("version-aware capability matrix", () => {
+    it("projects v1 + cloudWorkspaces=true to legacy-ready on both capabilities", () => {
+      const raw = validRaw();
+      raw.contractVersion = 1;
+      raw.cloudWorkspaces = true;
+      const parsed = parseServerCapabilities(raw);
+
+      expect(parsed?.githubRepositoryAccess).toEqual({
+        status: "ready",
+        provider: "github_app",
+        displayName: null,
+      });
+      expect(parsed?.managedCloud).toEqual({
+        status: "ready",
+        repositoryAuthority: "github_app",
+        source: "legacy",
+      });
+    });
+
+    it("projects v1 + cloudWorkspaces=false to disabled on both capabilities", () => {
+      const raw = validRaw();
+      raw.contractVersion = 1;
+      raw.cloudWorkspaces = false;
+      const parsed = parseServerCapabilities(raw);
+
+      expect(parsed?.githubRepositoryAccess.status).toBe("disabled");
+      expect(parsed?.managedCloud).toEqual({
+        status: "disabled",
+        repositoryAuthority: null,
+        source: "legacy",
+      });
+    });
+
+    it("consumes v2 capability objects exactly", () => {
+      const raw = validRaw();
+      raw.contractVersion = 2;
+      raw.cloudWorkspaces = false;
+      raw.githubRepositoryAccess = { status: "ready", provider: "github_app", displayName: "acme-app" };
+      raw.managedCloud = { status: "operator_configuration_required", repositoryAuthority: "github_app" };
+      const parsed = parseServerCapabilities(raw);
+
+      expect(parsed?.githubRepositoryAccess).toEqual({
+        status: "ready",
+        provider: "github_app",
+        displayName: "acme-app",
+      });
+      expect(parsed?.managedCloud).toEqual({
+        status: "operator_configuration_required",
+        repositoryAuthority: "github_app",
+        source: "v2",
+      });
+    });
+
+    it("consumes known v2 fields on a future version and ignores unknown ones", () => {
+      const raw = validRaw();
+      raw.contractVersion = 99;
+      raw.githubRepositoryAccess = { status: "ready", provider: "github_app", displayName: "app", futureField: 1 };
+      raw.managedCloud = { status: "ready", repositoryAuthority: "github_app", nextThing: true };
+      const parsed = parseServerCapabilities(raw);
+
+      expect(parsed?.githubRepositoryAccess.status).toBe("ready");
+      expect(parsed?.managedCloud.status).toBe("ready");
+      expect(parsed?.managedCloud.source).toBe("v2");
+    });
+
+    it("fails closed to disabled when a v2 object is malformed", () => {
+      const raw = validRaw();
+      raw.contractVersion = 2;
+      raw.cloudWorkspaces = true;
+      raw.githubRepositoryAccess = { status: "bogus" };
+      raw.managedCloud = "nope";
+      const parsed = parseServerCapabilities(raw);
+
+      expect(parsed?.githubRepositoryAccess.status).toBe("disabled");
+      expect(parsed?.managedCloud.status).toBe("disabled");
+    });
+
+    it("fails closed to disabled when v2 objects are absent", () => {
+      const raw = validRaw();
+      raw.contractVersion = 2;
+      raw.cloudWorkspaces = true;
+      const parsed = parseServerCapabilities(raw);
+
+      expect(parsed?.githubRepositoryAccess.status).toBe("disabled");
+      expect(parsed?.managedCloud.status).toBe("disabled");
+    });
   });
 });

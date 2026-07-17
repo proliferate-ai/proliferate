@@ -216,6 +216,7 @@ async def test_user_usage_timeseries_admin_scoped_to_one_user(
     )
     subject = await ensure_organization_billing_subject(db_session, organization.id)
     now = datetime.now(UTC)
+    segment_start = now - timedelta(minutes=20)
     db_session.add_all(
         [
             UsageSegment(
@@ -224,7 +225,7 @@ async def test_user_usage_timeseries_admin_scoped_to_one_user(
                 workspace_id=uuid.uuid4(),
                 sandbox_id=uuid.uuid4(),
                 external_sandbox_id=f"sandbox-{uuid.uuid4().hex[:8]}",
-                started_at=now - timedelta(minutes=20),
+                started_at=segment_start,
                 ended_at=now - timedelta(minutes=10),
                 is_billable=True,
                 opened_by="provision",
@@ -236,7 +237,7 @@ async def test_user_usage_timeseries_admin_scoped_to_one_user(
                 workspace_id=uuid.uuid4(),
                 sandbox_id=uuid.uuid4(),
                 external_sandbox_id=f"sandbox-{uuid.uuid4().hex[:8]}",
-                started_at=now - timedelta(minutes=20),
+                started_at=segment_start,
                 ended_at=now - timedelta(minutes=10),
                 is_billable=True,
                 opened_by="provision",
@@ -254,7 +255,9 @@ async def test_user_usage_timeseries_admin_scoped_to_one_user(
 
     assert response.status_code == 200
     buckets = response.json()["buckets"]
-    assert buckets[-1]["computeSeconds"] == 600.0
+    expected_bucket_start = segment_start.replace(hour=0, minute=0, second=0, microsecond=0)
+    usage_by_start = {datetime.fromisoformat(bucket["bucketStart"]): bucket for bucket in buckets}
+    assert usage_by_start[expected_bucket_start]["computeSeconds"] == 600.0
     # Only the member's segment counts, not the owner's identical one.
     assert sum(b["computeSeconds"] for b in buckets) == 600.0
 

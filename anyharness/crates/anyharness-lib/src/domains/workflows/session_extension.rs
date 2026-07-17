@@ -11,6 +11,9 @@ use std::sync::Arc;
 
 use tokio::runtime::Handle;
 
+use crate::domains::sessions::admission::{
+    SessionMutationAdmission, SessionMutationKind, SessionMutationSource,
+};
 use crate::domains::sessions::extensions::{
     SessionExtension, SessionTurnFinishedContext, SessionTurnOutcome,
 };
@@ -21,6 +24,7 @@ use crate::domains::workflows::service::WorkflowRunService;
 pub struct WorkflowRunSessionExtension {
     service: Arc<WorkflowRunService>,
     gates: Arc<WorkflowRunGates>,
+    admission: Arc<SessionMutationAdmission>,
     main_handle: Handle,
 }
 
@@ -28,11 +32,13 @@ impl WorkflowRunSessionExtension {
     pub fn new(
         service: Arc<WorkflowRunService>,
         gates: Arc<WorkflowRunGates>,
+        admission: Arc<SessionMutationAdmission>,
         main_handle: Handle,
     ) -> Self {
         Self {
             service,
             gates,
+            admission,
             main_handle,
         }
     }
@@ -65,8 +71,10 @@ impl SessionExtension for WorkflowRunSessionExtension {
 
         let service = self.service.clone();
         let gates = self.gates.clone();
+        let admission = self.admission.clone();
         // Return immediately on the per-session actor runtime; durable work
-        // rides the main runtime.
+        // rides the main runtime — the session permit below is awaited HERE,
+        // never on the actor thread (spec 2b nonblocking rule).
         self.main_handle.spawn(async move {
             // Opaque run key via exact session+prompt lookup.
             let key_service = service.clone();
@@ -103,6 +111,28 @@ impl SessionExtension for WorkflowRunSessionExtension {
                 }
             };
             let _guard = gate.lock_owned().await;
+
+            // Spec 2b: the terminal CAS holds the controlled session's
+            // mutation permit under the run gate (canonical order). The
+            // extension's callback session IS the bound session.
+            let _permit = match admission
+                .acquire(
+                    &session_id,
+                    SessionMutationKind::WorkflowTerminal,
+                    &SessionMutationSource::workflow_run(&run_key),
+                )
+                .await
+            {
+                Ok(permit) => Some(permit),
+                Err(_conflict) => {
+                    tracing::error!(
+                        run_id = %run_key,
+                        session_id = %session_id,
+                        "session permit unavailable for workflow completion; proceeding under run gate alone"
+                    );
+                    None
+                }
+            };
 
             let finish_session_id = session_id.clone();
             let finish_prompt_id = prompt_id.clone();

@@ -152,3 +152,36 @@ pub async fn assert_terminal_mutable(state: &AppState, terminal_id: &str) -> Res
         .await
         .map_err(map_access_error)
 }
+
+/// Session mutation admission at the HTTP boundary (spec 2b): every
+/// execution-affecting route acquires the session's mutation permit with the
+/// External source BEFORE its first side effect, and holds the returned
+/// permit across the mutation. A session controlled by a nonterminal workflow
+/// answers the stable conflict; policy infrastructure failure surfaces as the
+/// generic storage error, never a fabricated admission. Cosmetic store-only
+/// routes (title) deliberately do not call this (ruling 2b-2).
+pub async fn admit_session_mutation(
+    state: &AppState,
+    session_id: &str,
+    kind: crate::domains::sessions::admission::SessionMutationKind,
+) -> Result<crate::domains::sessions::admission::SessionMutationPermit, ApiError> {
+    use crate::domains::sessions::admission::{SessionMutationConflict, SessionMutationSource};
+    state
+        .session_admission
+        .acquire(session_id, kind, &SessionMutationSource::external())
+        .await
+        .map_err(|conflict| match conflict {
+            SessionMutationConflict::ControlledByWorkflow { .. } => ApiError::conflict(
+                "session execution is controlled by an active workflow run",
+                "SESSION_CONTROLLED_BY_WORKFLOW",
+            ),
+            SessionMutationConflict::Internal(error) => {
+                tracing::error!(
+                    session_id = %session_id,
+                    error = %error,
+                    "session mutation admission lookup failed"
+                );
+                ApiError::internal("session admission unavailable")
+            }
+        })
+}

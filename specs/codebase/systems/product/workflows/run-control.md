@@ -1,4 +1,4 @@
-# Truthful Workflow Cancellation and Versioning (Run Control)
+# Truthful Workflow Cancellation, Versioning, and Session Admission
 
 Owner: AnyHarness workflow run control.
 
@@ -34,11 +34,13 @@ correlated cancelled turn     -> cancelled
 runtime restart ambiguity     -> interrupted/runtime_restarted
 ```
 
-This contract covers truthful lifecycle and versioning only. It does not
-claim exclusive control over the created session (see Workflow
-Session Mutation Admission). Cancellation is durable requested state, not a
-guarantee that it beats an already accepted or queued turn; a later correlated
-completion or failure remains truthful and may win.
+While a run is nonterminal, it exclusively controls execution mutation of the
+normal session it creates. Foreign execution mutation fails with
+`409 SESSION_CONTROLLED_BY_WORKFLOW` before any persistence, projection,
+queue, actor command, or file effect. Reads and cosmetic title updates remain
+available. Cancellation is durable requested state, not a guarantee that it
+beats an already accepted or queued turn; a later correlated completion or
+failure remains truthful and may win.
 
 ## 2. Boundary
 
@@ -52,13 +54,17 @@ completion or failure remains truthful and may win.
 - one narrow crate-private exact-active-turn live-cancel session seam;
 - `WorkflowRunGates`: per-run serialization across acceptance, execution CAS
   boundaries, completion terminal CAS, and cancellation;
+- workflow-owned session mutation admission with stable
+  `409 SESSION_CONTROLLED_BY_WORKFLOW`;
+- preselected session-ID reservation, active-controller uniqueness, and
+  permit-serialized terminal release;
+- trusted internal workflow prompt/cancel mutation sources plus static HTTP
+  and non-HTTP owner ratchets;
 - custom foreign-key migration `0062` with strict legacy pair validation; and
 - restart fencing to `interrupted/runtime_restarted`.
 
 ### 2.2 Explicit non-goals
 
-- session mutation admission or `SESSION_CONTROLLED_BY_WORKFLOW`;
-- active-session uniqueness or creation reservation;
 - existing-session takeover or workspace locking;
 - Cloud/Desktop/UI projection;
 - retry, resume, recovery, grants, MCP, credentials, goals, multiple steps;
@@ -156,9 +162,9 @@ family and otherwise unchanged.
   `interruptionCode`.
 - `completed` or `failed` may retain `cancelRequestedAt` when that truthful
   terminal outcome wins after cancellation intent.
-- `cancelled` does not require `cancelRequestedAt`: migrated rows and, until
-  session mutation admission lands, the existing direct session-cancel path may
-  provide truthful cancelled-turn evidence without workflow API intent.
+- `cancelled` does not require `cancelRequestedAt`: migrated rows and exact
+  correlated provider cancellation may provide truthful cancelled-turn
+  evidence without workflow API intent.
 - Terminal rows remain immutable; first truthful terminal evidence wins.
 - JSON, OpenAPI, and generated TypeScript tests pin required `stateVersion`
   and optional-omitted control fields for both v1 and v2.
@@ -200,24 +206,25 @@ request_live_turn_cancel(sessionId, expectedTurnId)
   -> Requested | NotActive | NotLive | ActorUnavailable
 ```
 
-This crate-private mechanism targets the already-bound live session and does
-not re-run ordinary caller/workspace mutation admission; the workflow route
-has already established authority from its durable run. It changes no session
-row. The actor serially compares `expectedTurnId` with its current active turn
-before forwarding ACP cancellation. `Requested` proves only that the
-matching-turn cancel command was accepted, not provider cancellation;
-`NotActive` covers idle or a different active turn. No seam result
-terminalizes the workflow; only the exact correlated callback can.
+This crate-private mechanism targets the already-bound live session under the
+owning workflow's trusted mutation source; the public session-cancel path is
+fenced above it. It changes no session row. The actor serially compares
+`expectedTurnId` with its current active turn before forwarding ACP
+cancellation. `Requested` proves only that the matching-turn cancel command
+was accepted, not provider cancellation; `NotActive` covers idle or a
+different active turn. No seam result terminalizes the workflow; only the
+exact correlated callback can.
 
 ### 5.3 Queued and null-turn prompts
 
-The predecessor's `Queued` prompt behavior remains unchanged. Until session
-admission lands, a workflow prompt queued behind foreign work has no
-workflow-specific queue-removal path; cancellation remains requested and only
-its exact correlated terminal outcome (or restart fencing) terminalizes the
-run. A stale stored workflow turn ID must never cancel a newer foreign turn:
-the actor's exact-active-turn comparison returns `NotActive` and forwards
-nothing.
+The predecessor's `Queued` prompt behavior remains unchanged. Session
+admission prevents new foreign execution mutation after the workflow binds
+the session, but it does not turn a queued or acknowledgement-lost dispatch
+into terminal evidence. There is no workflow-specific queue-removal path;
+cancellation remains requested and only its exact correlated terminal outcome
+(or restart fencing) terminalizes the run. A stale stored workflow turn ID
+must never cancel a different active turn: the actor's exact-active-turn
+comparison returns `NotActive` and forwards nothing.
 
 ### 5.4 Cancelling a lost-acknowledgement step
 
@@ -304,6 +311,41 @@ sites.
   -> final-snapshot sequence. A process failure still leaves durable intent
   for a repeated request or startup fencing.
 
+### 6.3 Workflow-owned session mutation admission
+
+The existing nonterminal `workflow_runs.session_id` binding is the durable
+controller record. A partial unique index permits at most one nonterminal run
+to control a non-null session ID; terminal history may reuse a session.
+
+Creation closes the writable gap:
+
+1. the workflow preselects the normal session ID;
+2. it reserves that session's transient mutation gate before the session row
+   exists;
+3. under the run gate and held mutation permit, it creates the session and
+   durably binds `workflow_runs.session_id`; and
+4. it releases the permit only after the binding commits.
+
+Every external execution-affecting session owner acquires admission before its
+first effect. An active controller returns stable
+`409 SESSION_CONTROLLED_BY_WORKFLOW`; ordinary sessions keep their existing
+behavior. The workflow's crate-private prompt and exact-turn cancel seams use
+an unforgeable trusted `WorkflowRun(runId)` source. HTTP input cannot select
+that source.
+
+Terminal completion, failure, and cancellation acquire the same session
+permit before the terminal workflow CAS. Foreign mutation therefore either
+observes active control and conflicts or proceeds after terminal release.
+Startup `runtime_restarted` fencing is the narrow exception: it runs before
+session runtime construction or HTTP service, when no live mutation can race.
+
+When an owner also needs a workspace operation lease, lock order is mutation
+permit before workspace lease. Workspace purge, retirement, retention, and
+mobility destruction acquire permits for affected sessions, take the
+exclusive lease, and recheck the durable controller set before destructive
+effects. Lookup or recheck failure is fail-closed. Read APIs, transcript/SSE,
+and store-only cosmetic title changes remain admitted.
+
 ## 7. Persistence and migration
 
 Extend AnyHarness SQLite only:
@@ -364,6 +406,7 @@ each run's `stateVersion` exactly once.
 This spec supersedes only these [`runs.md`](runs.md)
 clauses:
 
+- the §2.2 non-goal excluding workflow mutation locking;
 - the §2.2 non-goals lines excluding cancellation APIs and cancellation
   recovery;
 - the §5.1 run/step status enumerations (now widened per
@@ -404,6 +447,12 @@ anyharness-lib/src/domains/workflows/
 anyharness-lib/src/domains/sessions/runtime/lifecycle.rs
   narrow internal exact-active-turn cancel request only
 
+anyharness-lib/src/domains/sessions/admission.rs
+  generic keyed mutation gate, source, kind, permit, and policy port
+
+anyharness-lib/src/domains/workflows/session_admission.rs
+  durable active-controller lookup and workflow policy implementation
+
 anyharness-lib/src/live/sessions/
   handle.rs
   actor/command.rs
@@ -412,18 +461,23 @@ anyharness-lib/src/live/sessions/
   narrow conditional-cancel command/result only
 
 anyharness-lib/src/api/http/workflow_runs*.rs
+anyharness-lib/src/api/http/access.rs
 anyharness-lib/src/api/router.rs
 anyharness-lib/src/persistence/workflow_run_control_migration.rs
 anyharness-lib/src/persistence/workflow_run_control_migration_tests.rs
 anyharness-lib/src/persistence/custom_migrations.rs
 anyharness/sdk generated artifacts
+scripts/check_session_mutation_admission.py
+scripts/session_mutation_admission*.txt
 ```
 
-Workflows owns cancellation policy and run serialization. Sessions owns the
-generic live-cancel mechanism. HTTP remains thin. Contract types stay at the
-API boundary; SQLite row types stay in the store. The new conditional live
-command is crate-private and leaves the existing public session-cancel route
-and `SessionCommand::Cancel` behavior unchanged.
+Workflows owns cancellation policy, run serialization, and the durable
+controller lookup. Sessions owns the generic mutation gate/policy port and
+live-cancel mechanism; `app/` injects the workflow policy without a Sessions
+dependency on Workflows. HTTP remains thin. Contract types stay at the API
+boundary; SQLite row types stay in the store. The conditional live command is
+crate-private, trusted only for its owning workflow, and the existing public
+session-cancel route is fenced above it.
 
 ## 11. Required proof
 

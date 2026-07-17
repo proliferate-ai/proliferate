@@ -320,7 +320,7 @@ async def compute_usage_seconds_timeseries(
     Buckets are attributed by ``started_at`` (see ``_clipped_segment_seconds``).
     Missing buckets are not zero-filled here — the caller fills gaps.
     """
-    bucket = func.date_trunc(granularity, UsageSegment.started_at)
+    bucket = func.date_trunc(granularity, UsageSegment.started_at, "UTC")
     window_start = coerce_utc(start) or start
     window_end = coerce_utc(end) or end
     conditions = [

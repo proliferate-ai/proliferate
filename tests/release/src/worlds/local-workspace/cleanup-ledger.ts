@@ -74,7 +74,12 @@ export type CleanupResourceKind =
   | "callback_relay_spool"
   | "callback_relay_process"
   | "stripe_test_clock"
-  | "stripe_customer";
+  | "stripe_customer"
+  // Self-host world (PR 7 — append-only). CloudFormation-wrapper posture
+  // resource kinds the PR 7 workstream registers/releases the same way.
+  | "cloudformation_stack"
+  | "s3_object"
+  | "ghcr_package_version";
 
 export type CleanupPhase = "intent" | "acquired" | "reconciled";
 

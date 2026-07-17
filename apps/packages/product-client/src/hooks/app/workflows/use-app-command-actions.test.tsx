@@ -47,6 +47,14 @@ vi.mock("#product/hooks/cloud/derived/use-cloud-availability-state", () => ({
   useCloudAvailabilityState: () => ({ cloudActive: true }),
 }));
 
+vi.mock("#product/hooks/cloud/derived/use-cloud-repo-action-state", () => ({
+  useCloudRepoActionState: () => ({
+    kind: "create",
+    label: "New cloud workspace",
+    accessState: "ready",
+  }),
+}));
+
 vi.mock("#product/hooks/cloud/facade/use-cloud-billing", () => ({
   useCloudBilling: () => ({ data: null }),
 }));

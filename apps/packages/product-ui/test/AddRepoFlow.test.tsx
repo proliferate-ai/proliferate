@@ -25,6 +25,7 @@ function renderFlow(overrides: Partial<AddRepoFlowProps> = {}) {
   const props: AddRepoFlowProps = {
     open: true,
     step: { kind: "entry" },
+    options: ["add-existing-folder", "clone-from-github", "cloud"],
     onPickOption: vi.fn(),
     onBack: vi.fn(),
     onClose: vi.fn(),
@@ -37,15 +38,60 @@ function renderFlow(overrides: Partial<AddRepoFlowProps> = {}) {
 describe("AddRepoFlow", () => {
   afterEach(cleanup);
 
-  it("offers the three entry options and reports the cloud pick", () => {
+  it("offers the Desktop host choices and reports the cloud pick", () => {
     const { onPickOption } = renderFlow();
 
     expect(screen.getByText("Add a repository")).toBeTruthy();
-    expect(screen.getByText("Link a local repo")).toBeTruthy();
-    expect(screen.getByText("Add a local repo")).toBeTruthy();
-    fireEvent.click(screen.getByText("Add a cloud repo"));
+    expect(screen.getByText("Add an existing folder")).toBeTruthy();
+    expect(screen.getByText("Clone from GitHub")).toBeTruthy();
+    expect(screen.getByText("Set up in Cloud")).toBeTruthy();
+    fireEvent.click(screen.getByText("Set up in Cloud"));
 
     expect(onPickOption).toHaveBeenCalledWith("cloud");
+  });
+
+  it("reports the clone-from-github pick", () => {
+    const { onPickOption } = renderFlow();
+
+    fireEvent.click(screen.getByText("Clone from GitHub"));
+
+    expect(onPickOption).toHaveBeenCalledWith("clone-from-github");
+  });
+
+  it("runs the clone step in the same dialog with the repo picker", () => {
+    const onAddRepository = vi.fn();
+    renderFlow({
+      step: { kind: "clone" },
+      clonePicker: buildCloudPicker({
+        repositories: [{
+          id: "acme/rocket",
+          fullName: "acme/rocket",
+          defaultBranch: "main",
+          private: true,
+          fork: false,
+          archived: false,
+          disabled: false,
+          permission: "admin",
+          configured: false,
+          repoConfigState: "missing",
+        }],
+        onAddRepository,
+      }),
+    });
+
+    expect(screen.getByText("Clone from GitHub")).toBeTruthy();
+    expect(screen.getByLabelText("Search GitHub repositories")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Add acme/rocket" }));
+    expect(onAddRepository).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "acme/rocket" }),
+    );
+  });
+
+  it("offers only Set up in Cloud on Web (no local folder option)", () => {
+    renderFlow({ options: ["cloud"] });
+
+    expect(screen.getByText("Set up in Cloud")).toBeTruthy();
+    expect(screen.queryByText("Add an existing folder")).toBeNull();
   });
 
   it("runs the cloud step in the same dialog with the repo picker", () => {

@@ -10,6 +10,7 @@ import {
 
 import { useMobileHomeLaunchModel } from "../../hooks/home/derived/use-mobile-home-launch-model";
 import { useMobileHomeLaunchActions } from "../../hooks/home/workflows/use-mobile-home-launch-actions";
+import { useMobileCloudRepoReadiness } from "../../hooks/access/cloud/repositories/use-mobile-cloud-repo-readiness";
 import { useVisualViewportKeyboardInset } from "../../hooks/ui/keyboard/use-visual-viewport-keyboard-inset";
 import { useMobileWorkInventory } from "../../hooks/work/derived/use-mobile-work-inventory";
 import { summarizeMobileHomeLaunchConfig } from "../../lib/domain/home/mobile-home-config-summary";
@@ -43,6 +44,26 @@ export function MobileHomeScreen({
   const launchModel = useMobileHomeLaunchModel();
   const recentInventory = useMobileWorkInventory();
   const recentItems = recentInventory.recentItems.slice(0, 2);
+  // Gate workspace creation on the same managed-Cloud / GitHub App readiness
+  // the Add Repository modal uses, resolved for the selected repo.
+  const cloudRepoReadiness = useMobileCloudRepoReadiness({
+    enabled: Boolean(launchModel.selectedRepo),
+    repo: launchModel.selectedRepo
+      ? {
+          gitOwner: launchModel.selectedRepo.gitOwner,
+          gitRepoName: launchModel.selectedRepo.gitRepoName,
+        }
+      : null,
+  });
+  // Skip surfacing a blocked reason while readiness is still resolving —
+  // otherwise a fully-configured deployment briefly shows the operator
+  // "not configured" copy (the readiness gate fail-closes to "disabled"
+  // before /meta resolves).
+  const readinessBlockedReason = launchModel.selectedRepo
+      && !cloudRepoReadiness.checking
+      && cloudRepoReadiness.blocker
+    ? cloudRepoReadiness.blocker.description
+    : null;
   const launchActions = useMobileHomeLaunchActions({
     ownerUserId,
     catalog: launchModel.agentCatalog.data,
@@ -53,6 +74,7 @@ export function MobileHomeScreen({
     selection: launchModel.resolvedLaunchSelection,
     onOpenChat,
     onSubmitted: () => setDraft(""),
+    readinessBlockedReason,
   });
   const launchConfigSummary = summarizeMobileHomeLaunchConfig(
     launchModel.launchComposerControls,
@@ -63,6 +85,7 @@ export function MobileHomeScreen({
     && Boolean(launchModel.selectedRepo)
     && Boolean(launchModel.selectedRuntime)
     && canStartCloudHarness
+    && !readinessBlockedReason
     && !launchActions.submitting;
 
   function closeSheet() {
@@ -99,9 +122,9 @@ export function MobileHomeScreen({
 
       <View style={styles.spacer} />
 
-      {launchActions.status || launchActions.error || (!canStartCloudHarness && launchModel.harnessAvailability.message) ? (
+      {launchActions.status || launchActions.error || readinessBlockedReason || (!canStartCloudHarness && launchModel.harnessAvailability.message) ? (
         <Text style={[styles.launchNote, launchActions.error && styles.launchError]}>
-          {launchActions.error ?? launchActions.status ?? launchModel.harnessAvailability.message}
+          {launchActions.error ?? launchActions.status ?? readinessBlockedReason ?? launchModel.harnessAvailability.message}
         </Text>
       ) : null}
       <MobileHomeComposer

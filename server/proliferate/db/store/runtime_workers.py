@@ -350,6 +350,30 @@ async def get_worker(
     return _worker_value(row) if row is not None else None
 
 
+async def get_active_desktop_worker_for_user(
+    db: AsyncSession,
+    *,
+    owner_user_id: UUID,
+    desktop_install_id: str,
+) -> RuntimeWorkerValue | None:
+    """Load the caller's non-revoked desktop worker for an install, if any.
+
+    Used to confirm that a ``desktopInstallId`` supplied on a materialization
+    request is owned by the caller before selecting/redacting local rows.
+    """
+    row = (
+        await db.execute(
+            select(CloudRuntimeWorker).where(
+                CloudRuntimeWorker.owner_user_id == owner_user_id,
+                CloudRuntimeWorker.desktop_install_id == desktop_install_id,
+                CloudRuntimeWorker.runtime_kind == "desktop",
+                CloudRuntimeWorker.status != "revoked",
+            )
+        )
+    ).scalar_one_or_none()
+    return _worker_value(row) if row is not None else None
+
+
 async def touch_worker_heartbeat(
     db: AsyncSession,
     *,

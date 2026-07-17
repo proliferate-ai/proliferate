@@ -41,8 +41,16 @@ invitees register in a browser via the invitation's registration token.
 
 What already exists: `self-host-smoke.yml` (required merge check) boots the
 real compose stack http-only and walks health → `/meta` → claim → password
-login → invite → register → membership at the **API** level. Everything below
-is coverage that does not exist yet.
+login → invite → register → membership at the **API** level, then proves
+self-hosted Web served from the exact production image: `/` and `/login` return
+the ProductClient shell, a headless-Chromium browser executes the bundled JS to
+the `[data-auth-screen="auth"]` marker, hashed CSS/JS load, a deep client route
+refreshes, cache headers distinguish `index.html` from immutable assets, and
+unknown `/v1`/`/auth` paths plus missing assets stay non-200 (never the shell).
+The smoke's change detector runs the heavy image build when any Web-bundle
+input changes (`apps/web/**`, `apps/packages/**`, the Cloud/AnyHarness SDKs,
+root manifests/lockfile) in addition to the server-image inputs. Everything
+below is coverage that does not exist yet.
 
 ## 2. Flow registry rows
 

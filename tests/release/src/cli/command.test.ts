@@ -279,6 +279,127 @@ test("an invalid cell expansion exits 2 before any setup side effect and writes 
   assert.deepEqual(calls, ["identity", "select"]);
 });
 
+function twoCellMatrix(): ScenarioDefinition {
+  return {
+    id: "T3-TWO",
+    title: "two-cell matrix",
+    registryFlowRef: "specs#T3-TWO",
+    lanes: ["local"],
+    requiredEnv: [],
+    kind: "matrix",
+    expandCells: () => [
+      { dimensions: { cell: "CELL-A" } },
+      { dimensions: { cell: "CELL-B" } },
+    ],
+    planCell: () => [],
+    runCells: async () => [],
+  } as unknown as ScenarioDefinition;
+}
+
+/**
+ * A faithful model of SELFHOST-INSTALL-1: a `kind:"matrix"` scenario whose four
+ * baseline cells EACH carry a `cell` dimension (SH-INSTALL-CLAIM / SH-DESKTOP-OWNER
+ * / SH-BASE-TURN / SH-INVITEE). Using this (not a dimensionless leaf) is what
+ * PR7-CONTROL-005 requires — the drop bug only reproduces with real cell dims.
+ */
+function selfhostInstallLike(): ScenarioDefinition {
+  return {
+    id: "SELFHOST-INSTALL-1",
+    title: "selfhost install (four baseline cells)",
+    registryFlowRef: "specs#SELFHOST-INSTALL-1",
+    // `local` lane here only so this filter unit test plans under the default
+    // `--lane local`; the --cells filter itself is lane-agnostic (the real
+    // scenarios are lanes:["selfhost"], exercised by plan.test).
+    lanes: ["local"],
+    requiredEnv: [],
+    kind: "matrix",
+    expandCells: () => [
+      { dimensions: { cell: "SH-INSTALL-CLAIM", harness: "claude" } },
+      { dimensions: { cell: "SH-DESKTOP-OWNER", harness: "claude" } },
+      { dimensions: { cell: "SH-BASE-TURN", harness: "claude" } },
+      { dimensions: { cell: "SH-INVITEE", harness: "claude" } },
+    ],
+    planCell: () => [],
+    runCells: async () => [],
+  } as unknown as ScenarioDefinition;
+}
+
+/** A faithful model of SELFHOST-QUAL-1's staged cells (each carries a `cell` dimension). */
+function selfhostQualLike(): ScenarioDefinition {
+  return {
+    id: "SELFHOST-QUAL-1",
+    title: "selfhost qual (staged cells)",
+    registryFlowRef: "specs#SELFHOST-QUAL-1",
+    lanes: ["local"],
+    requiredEnv: [],
+    kind: "matrix",
+    expandCells: () => [
+      { dimensions: { cell: "SH-GITHUB-AUTH", harness: "claude" } },
+      { dimensions: { cell: "SH-GATEWAY", harness: "claude" } },
+      { dimensions: { cell: "SH-CLOUD-ADDON", harness: "claude" } },
+    ],
+    planCell: () => [],
+    runCells: async () => [],
+  } as unknown as ScenarioDefinition;
+}
+
+test("--cells keeps only the selected matrix cell and threads it to execute", async () => {
+  let executedCells: Array<Record<string, string>> = [];
+  const { deps } = makeDeps();
+  deps.selectScenarios = () => [twoCellMatrix()];
+  deps.execute = async (options) => {
+    executedCells = options.cells.map((c) => c.dimensions);
+    return fakeReport(options.candidateBuild ?? null);
+  };
+  const exit = await runReleaseCommand(
+    ["--behavior", "diagnostic", "--cells", "CELL-B"],
+    deps,
+  );
+  assert.equal(exit, 0);
+  assert.deepEqual(executedCells, [{ cell: "CELL-B" }]);
+});
+
+test("--cells preserves SELFHOST-INSTALL-1's four baseline cells while narrowing SELFHOST-QUAL-1 (PR7-CONTROL-005)", async () => {
+  // The exact scenario CONTROL flagged: SELFHOST-INSTALL-1 is a MATRIX with a
+  // `cell` dimension on every cell, so it must be preserved by SCENARIO
+  // OWNERSHIP (it owns none of the wanted cells), NOT by absence of a dimension.
+  let executed: Array<Record<string, string>> = [];
+  const { deps } = makeDeps();
+  deps.selectScenarios = () => [selfhostInstallLike(), selfhostQualLike()];
+  deps.execute = async (options) => {
+    executed = options.cells.map((c) => c.dimensions);
+    return fakeReport(options.candidateBuild ?? null);
+  };
+  const exit = await runReleaseCommand(["--behavior", "diagnostic", "--cells", "SH-GATEWAY"], deps);
+  assert.equal(exit, 0);
+  const cellNames = executed.map((d) => d.cell).sort();
+  // All four install baseline cells survive; only SH-GATEWAY of QUAL-1 remains.
+  assert.deepEqual(cellNames, [
+    "SH-BASE-TURN",
+    "SH-DESKTOP-OWNER",
+    "SH-GATEWAY",
+    "SH-INSTALL-CLAIM",
+    "SH-INVITEE",
+  ]);
+  // The other QUAL-1 cells are dropped (narrowed within the owning scenario).
+  assert.ok(!executed.some((d) => d.cell === "SH-GITHUB-AUTH"), "SH-GITHUB-AUTH must be dropped");
+  assert.ok(!executed.some((d) => d.cell === "SH-CLOUD-ADDON"), "SH-CLOUD-ADDON must be dropped");
+});
+
+test("--cells matching no planned cell exits 2 before setup", async () => {
+  const { deps, calls } = makeDeps();
+  deps.selectScenarios = () => {
+    calls.push("select");
+    return [twoCellMatrix()];
+  };
+  const exit = await runReleaseCommand(
+    ["--behavior", "diagnostic", "--cells", "CELL-Z"],
+    deps,
+  );
+  assert.equal(exit, 2);
+  assert.deepEqual(calls, ["identity", "select"]);
+});
+
 test("the validated path-bearing candidate build map reaches execute (not just its evidence)", async () => {
   let seenMap: unknown = "unset";
   const { deps } = makeDeps();

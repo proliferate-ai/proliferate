@@ -17,6 +17,7 @@ USE_EXISTING_REDIS ?= 0
 STRIPE_FORWARD_TO ?= http://127.0.0.1:8000/v1/billing/webhooks/stripe
 STRIPE_SNAPSHOT_EVENTS ?= checkout.session.completed,customer.subscription.created,customer.subscription.updated,customer.subscription.deleted,invoice.paid,invoice.payment_failed
 AGENT_GATEWAY ?= 0
+BACKGROUND ?= 0
 LOCAL_LITELLM_BASE_URL ?= http://127.0.0.1:14000
 LOCAL_LITELLM_MASTER_KEY ?= sk-proliferate-local-dev
 CLOUD_WORKER_TUNNEL ?= 0
@@ -108,6 +109,7 @@ endif
 
 .PHONY: catalog-view catalog-pin catalog-update setup run dev dev-init dev-list dev-local dev-desktop dev-runtime dev-server dev-mobile-auth dev-mobile-tunnel dev-web-auth seed-sso server-db-up server-db-wait \
         server-db-down server-db-ready server-redis-up server-redis-wait server-redis-down server-redis-ready \
+        server-background-up server-background-logs server-background-down \
         server-litellm-up server-litellm-wait server-litellm-down db db-local db-ah server-migrate serve install \
         check check-max-lines check-server-boundaries test test-server fmt clippy \
         dev-automation-worker \
@@ -272,6 +274,28 @@ run: dev-artifacts-ready
 		exit 1; \
 	fi; \
 	(cd server && DATABASE_URL="$$DATABASE_URL" .venv/bin/alembic upgrade head); \
+	background_mode="$(BACKGROUND)"; \
+	if [ "$$background_mode" = "1" ] || [ "$$background_mode" = "celery" ]; then \
+		if [ "$$use_profile_db" != "1" ]; then \
+			echo "ERROR: BACKGROUND=$$background_mode requires the profile database (do not set DATABASE_URL). The compose worker/beat reach the SAME host Postgres/profile DB the API uses." >&2; \
+			exit 1; \
+		fi; \
+		: "$${PROLIFERATE_RABBITMQ_HOST_PORT:?background port not allocated; run make setup PROFILE=$(PROFILE)}"; \
+		: "$${PROLIFERATE_RABBITMQ_MGMT_HOST_PORT:?background port not allocated; run make setup PROFILE=$(PROFILE)}"; \
+		: "$${PROLIFERATE_REDIS_HOST_PORT:?background port not allocated; run make setup PROFILE=$(PROFILE)}"; \
+		export PROLIFERATE_RABBITMQ_HOST_PORT PROLIFERATE_RABBITMQ_MGMT_HOST_PORT PROLIFERATE_REDIS_HOST_PORT; \
+		export PROLIFERATE_DB_HOST_PORT="$${PROLIFERATE_DB_HOST_PORT:-$(LOCAL_PGPORT)}"; \
+		: "$${DATABASE_URL:?}"; \
+		background_db_url="$$(node scripts/dev.mjs background-db-url --database-url "$$DATABASE_URL")"; \
+		if printf '%s' "$$background_db_url" | grep -Eq '@(127\.0\.0\.1|localhost|\[?::1\]?):'; then \
+			echo "ERROR: could not rewrite DATABASE_URL host to host.docker.internal for the background plane (got $$background_db_url)." >&2; \
+			exit 1; \
+		fi; \
+		export COMPOSE_PROJECT_NAME="proliferate_bg_$$(printf '%s' "$$PROLIFERATE_DEV_PROFILE" | tr '-' '_')"; \
+		export BACKGROUND_DATABASE_URL="$$background_db_url"; \
+		echo "Starting background plane (worker + beat) via compose project $$COMPOSE_PROJECT_NAME against $$background_db_url (broker :$$PROLIFERATE_RABBITMQ_HOST_PORT, store :$$PROLIFERATE_REDIS_HOST_PORT)"; \
+		docker compose -f server/docker-compose.yml --profile background up -d --no-deps --build rabbitmq redis worker beat; \
+	fi; \
 	stripe_listener_ready=0; \
 	if [ "$(STRIPE)" = "1" ]; then \
 		if command -v stripe >/dev/null 2>&1; then \
@@ -464,6 +488,30 @@ server-redis-wait:
 
 server-redis-down:
 	@docker compose -f server/docker-compose.yml stop redis
+
+# Self-contained local background plane: Postgres, RabbitMQ, Redis, migrations,
+# Celery worker, and Celery Beat, all on the same compose image. This is the
+# merge-gated same-image outbox->worker smoke vehicle. Set a per-worktree
+# COMPOSE_PROJECT_NAME plus PROLIFERATE_*_HOST_PORT overrides to run isolated
+# stacks side by side without default-port collisions.
+server-background-up:
+	@command -v docker >/dev/null 2>&1 || { \
+		echo "Docker is required for the local background plane. Install or start Docker and retry."; \
+		exit 1; \
+	}
+	@docker info >/dev/null 2>&1 || { \
+		echo "Docker is not running. Start Docker Desktop and retry."; \
+		exit 1; \
+	}
+	@docker compose -f server/docker-compose.yml --profile background up -d --build \
+		db rabbitmq redis migrate worker beat
+	@echo "Background plane up (worker + beat). Logs: make server-background-logs"
+
+server-background-logs:
+	@docker compose -f server/docker-compose.yml --profile background logs -f worker beat
+
+server-background-down:
+	@docker compose -f server/docker-compose.yml --profile background down
 
 server-litellm-up:
 	@command -v docker >/dev/null 2>&1 || { \
@@ -919,10 +967,12 @@ qualification-local-workspace:
 		--run-id "$$run_id" --shard-id "$$shard_id" \
 		--output-dir "$$run_dir/evidence"
 
-# Tier-2 strict billing/auth qualification (PR 4). Boots the shared BootedStack
+# Tier-2 strict billing qualification (PR 4). Boots the shared BootedStack
 # (real Server + Postgres + Redis + real Stripe test mode; AnyHarness runtime
-# skipped) ONCE and runs the authoritative T2-BILL-1..15 + representative
-# T2-AUTH-ORG cells through the SAME tests/release aggregate command as tier 3.
+# skipped) and runs the authoritative T2-BILL-1..15 cells through the SAME
+# tests/release aggregate command as tier 3. PR-8 non-billing rows remain
+# manifest-deferred until one collector proves each complete guarantee with
+# truthful domain evidence.
 # No candidate build (Tier-2 boots from source) — `--source-candidate`
 # synthesizes the Server identity for the strict report. Selected financial
 # cells require a Stripe `sk_test_` key (env or `stripe config`); a missing key
@@ -944,7 +994,7 @@ qualification-tier2:
 		--lane local \
 		--desktop web \
 		--agents claude \
-		--scenarios T2-BILL,T2-AUTH-ORG \
+		--scenarios T2-BILL \
 		--source-candidate \
 		--run-id "$$run_id" --shard-id "$$shard_id" \
 		--output-dir "$$run_dir/evidence"
@@ -1085,6 +1135,21 @@ qualification-local-functional:
 #                         PROFILE for two concurrent invocations (each run owns
 #                         its EC2 instance, SG, key pair, and DNS record).
 # BEHAVIOR=diagnostic|strict
+# SELFHOST_SCENARIOS=<comma-separated scenario ids>   Defaults to
+#                         SELFHOST-INSTALL-1 (current behavior). Passed
+#                         verbatim to `run.ts --scenarios`.
+# SELFHOST_API_BASE_URL=<https://...>   Optional. When set, replaces the
+#                         computed `print-selfhost-run-api-base-url.ts` value
+#                         baked into the candidate renderer — for postures
+#                         that need a fixed baked origin (e.g. the fixed-origin
+#                         serial lane at https://selfhost-fixed.qualification.
+#                         proliferate.com) instead of this run's own computed
+#                         subdomain. Run-scoped scenarios leave this unset and
+#                         get the computed value, unchanged. Example:
+#                           make qualification-selfhost PROFILE=$$(whoami)-1 \
+#                             BEHAVIOR=diagnostic \
+#                             SELFHOST_SCENARIOS=SELFHOST-INSTALL-1 \
+#                             SELFHOST_API_BASE_URL=https://selfhost-fixed.qualification.proliferate.com
 #
 # Locally, AWS/SSH/BYOK inputs come from the ignored, mode-0600 qualification
 # env file (never committed, never printed): RELEASE_E2E_SELFHOST_REGION,
@@ -1095,6 +1160,24 @@ qualification-local-functional:
 # environment and configured AWS credentials; this target does not read the
 # local file there.
 QUALIFICATION_SELFHOST_BASE_DIR ?= $(CURDIR)/tests/release/.output/selfhost-world
+SELFHOST_SCENARIOS ?= SELFHOST-INSTALL-1
+SELFHOST_API_BASE_URL ?=
+# Exported so the recipe reads it as a SHELL env var (`$$SELFHOST_API_BASE_URL`)
+# rather than a Make expansion (`$(...)`). A Make expansion would textually inline
+# the value into the recipe before the shell runs, so a value containing a quote
+# plus shell syntax would be reparsed in this secret-bearing/AWS-authorized job
+# (PR7-CONTROL-002). Reading it from the environment keeps the value inert data.
+export SELFHOST_API_BASE_URL
+# The candidate box platform. Defaults to linux/amd64 (t3.small-based scenarios:
+# INSTALL-1/QUAL-1/ISOLATION-1). SELFHOST-CFN-1's CloudFormation template
+# defaults to a Graviton (arm64) t4g instance, so run it with
+# SELFHOST_CANDIDATE_PLATFORM=linux/arm64 so the docker-load candidate image
+# matches the box arch.
+SELFHOST_CANDIDATE_PLATFORM ?= linux/amd64
+# Optional matrix-cell filter passed verbatim to run.ts --cells (e.g. SH-GATEWAY
+# to run SELFHOST-QUAL-1's gateway cell alone on a run-scoped origin). Empty =
+# every planned cell.
+SELFHOST_CELLS ?=
 qualification-selfhost:
 	@test -n "$(PROFILE)" || { \
 		echo "PROFILE=<unique-name> is required, e.g. make qualification-selfhost PROFILE=$$(whoami)-1 BEHAVIOR=diagnostic"; \
@@ -1139,18 +1222,25 @@ qualification-selfhost:
 	shard_id="1"; \
 	run_dir="$(QUALIFICATION_SELFHOST_BASE_DIR)/$$run_id/$$shard_id"; \
 	mkdir -p "$$run_dir"; \
-	api_base_url=$$(cd tests/release && pnpm exec tsx src/cli/print-selfhost-run-api-base-url.ts "$$run_id" "$$shard_id") || exit $$?; \
+	api_base_url="$${SELFHOST_API_BASE_URL:-}"; \
+	if [ -z "$$api_base_url" ]; then \
+		api_base_url=$$(cd tests/release && pnpm exec tsx src/cli/print-selfhost-run-api-base-url.ts "$$run_id" "$$shard_id") || exit $$?; \
+	fi; \
 	build_summary=$$(node scripts/ci-cd/build-selfhost-qualification-candidates.mjs \
 		--run-id "$$run_id" --shard-id "$$shard_id" --run-dir "$$run_dir" \
+		--platform "$(SELFHOST_CANDIDATE_PLATFORM)" \
 		--api-base-url "$$api_base_url") || exit $$?; \
 	echo "$$build_summary"; \
 	candidate_map=$$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).candidate_build_map)' "$$build_summary"); \
+	cells_flag=""; \
+	if [ -n "$(SELFHOST_CELLS)" ]; then cells_flag="--cells $(SELFHOST_CELLS)"; fi; \
 	cd tests/release && pnpm exec tsx src/cli/run.ts \
 		--behavior $(BEHAVIOR) \
-		--lane local \
+		--lane selfhost \
 		--desktop web \
 		--agents claude \
-		--scenarios SELFHOST-INSTALL-1 \
+		--scenarios $(SELFHOST_SCENARIOS) \
+		$$cells_flag \
 		--candidate-build-map "$$candidate_map" \
 		--run-id "$$run_id" --shard-id "$$shard_id" \
 		--output-dir "$$run_dir/evidence"
@@ -1288,6 +1378,7 @@ check:
 
 check-max-lines:
 	python3 scripts/check_max_lines.py
+	python3 scripts/check_session_mutation_admission.py
 
 check-server-boundaries:
 	cd server && uv run python ../scripts/check_server_boundaries.py

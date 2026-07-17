@@ -4,6 +4,8 @@ import type {
   WorkflowDefinitionResponse,
   WorkflowDefinitionUpdateRequest,
   WorkflowInvocationCreateRequest,
+  ManagedWorkflowHistoryResponse,
+  ManagedWorkflowInvocationResponse,
   WorkflowInvocationResponse,
   WorkflowRunEligibilityResponse,
 } from "../types/index.js";
@@ -56,11 +58,48 @@ export async function putWorkflowInvocation(
 export async function getWorkflowInvocation(
   invocationId: string,
   client: ProliferateCloudClient = getProliferateClient(),
-): Promise<WorkflowInvocationResponse> {
-  return client.requestJson<WorkflowInvocationResponse>({
+): Promise<ManagedWorkflowInvocationResponse> {
+  return client.requestJson<ManagedWorkflowInvocationResponse>({
     method: "GET",
     path: "/v1/workflow-invocations/{invocation_id}",
     pathParams: { invocation_id: invocationId },
+  });
+}
+
+export async function deliverWorkflowInvocation(
+  invocationId: string,
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<ManagedWorkflowInvocationResponse> {
+  return client.requestJson<ManagedWorkflowInvocationResponse>({
+    method: "POST",
+    path: "/v1/workflow-invocations/{invocation_id}/deliver",
+    pathParams: { invocation_id: invocationId },
+  });
+}
+
+export async function cancelWorkflowInvocation(
+  invocationId: string,
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<ManagedWorkflowInvocationResponse> {
+  return client.requestJson<ManagedWorkflowInvocationResponse>({
+    method: "POST",
+    path: "/v1/workflow-invocations/{invocation_id}/cancel",
+    pathParams: { invocation_id: invocationId },
+  });
+}
+
+export async function listWorkflowInvocationHistory(
+  workflowDefinitionId: string,
+  cursor?: string,
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<ManagedWorkflowHistoryResponse> {
+  return client.requestJson<ManagedWorkflowHistoryResponse>({
+    method: "GET",
+    path: "/v1/workflow-invocations",
+    query: {
+      workflowDefinitionId,
+      ...(cursor === undefined ? {} : { cursor }),
+    },
   });
 }
 
