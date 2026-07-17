@@ -668,6 +668,32 @@ export function loadRetainedReleaseIndex(
       `Retained-release index is not readable: ${error instanceof Error ? error.message : String(error)}`,
     );
   }
+  return parseRetainedReleaseIndex(raw);
+}
+
+/**
+ * Like `loadRetainedReleaseIndex`, but a genuinely ABSENT index file (ENOENT
+ * — the supported first-seal initialization) yields an empty index. Every
+ * other failure — unreadable file, invalid JSON, unsupported schema, unsafe
+ * entries — still throws: converting those into an empty index would
+ * silently discard retention roots.
+ */
+export function loadRetainedReleaseIndexOrInit(indexPath: string): RetainedReleaseIndexV1 {
+  let raw: string;
+  try {
+    raw = readFileSync(indexPath, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return { schema_version: 1, kind: "proliferate.retained-release-index", receipts: [] };
+    }
+    throw new RetainedReleaseError(
+      `Retained-release index is not readable: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  return parseRetainedReleaseIndex(raw);
+}
+
+function parseRetainedReleaseIndex(raw: string): RetainedReleaseIndexV1 {
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
@@ -682,6 +708,7 @@ export function loadRetainedReleaseIndex(
   if (!Array.isArray(root.receipts)) {
     throw new RetainedReleaseError("Retained-release index receipts must be an array.");
   }
+  const seenIds = new Set<string>();
   const receipts = root.receipts.map((entry, index) => {
     const record = requireObject(entry, `index.receipts[${index}]`);
     rejectUnknownKeys(
@@ -693,19 +720,100 @@ export function loadRetainedReleaseIndex(
     if (state !== "bootstrap_unqualified" && state !== "qualified") {
       throw new RetainedReleaseError(`index.receipts[${index}].qualification_state is unknown.`);
     }
+    const releaseId = requireString(
+      record.release_id,
+      `index.receipts[${index}].release_id`,
+      RELEASE_ID_PATTERN,
+    );
+    // Duplicate ids would make bootstrap policy (qualifiedReceiptExists) and
+    // receipt selection ambiguous; reject rather than pick one.
+    if (seenIds.has(releaseId)) {
+      throw new RetainedReleaseError(`Retained-release index has duplicate release_id "${releaseId}".`);
+    }
+    seenIds.add(releaseId);
+    const receiptPath = requireString(record.receipt_path, `index.receipts[${index}].receipt_path`);
+    // Receipt paths are index-relative plain filenames: an absolute path or a
+    // traversal segment could resolve outside the retained-release directory.
+    if (
+      path.isAbsolute(receiptPath) ||
+      receiptPath.split(/[\\/]/).some((segment) => segment === ".." || segment === "")
+    ) {
+      throw new RetainedReleaseError(
+        `index.receipts[${index}].receipt_path must stay inside the retained-release directory.`,
+      );
+    }
     return {
-      release_id: requireString(record.release_id, `index.receipts[${index}].release_id`, RELEASE_ID_PATTERN),
+      release_id: releaseId,
       source_sha: requireString(record.source_sha, `index.receipts[${index}].source_sha`, FULL_SHA_PATTERN),
       qualification_state: state as RetainedQualificationState,
-      receipt_path: requireString(record.receipt_path, `index.receipts[${index}].receipt_path`),
+      receipt_path: receiptPath,
       receipt_sha256: requireString(record.receipt_sha256, `index.receipts[${index}].receipt_sha256`, SHA256_PATTERN),
     };
   });
   return { schema_version: 1, kind: "proliferate.retained-release-index", receipts };
 }
 
+/**
+ * Loads one indexed receipt with the full entry↔receipt binding: the receipt
+ * file's bytes must hash to the indexed hash AND the entry's identity fields
+ * (release_id, source_sha, qualification_state) must equal the loaded
+ * receipt's own. Policy (bootstrap one-time rule via qualifiedReceiptExists)
+ * must only ever be derived from an index whose entries are bound this way —
+ * a mislabeled entry could otherwise hide an existing qualified receipt and
+ * improperly keep the bootstrap exception alive.
+ */
+export function loadIndexedRetainedReceipt(
+  index: RetainedReleaseIndexV1,
+  indexPath: string,
+  releaseId: string,
+): { receipt: RetainedReleaseReceiptV1; receiptSha256: string } {
+  const entry = index.receipts.find((receipt) => receipt.release_id === releaseId);
+  if (!entry) {
+    throw new RetainedReleaseError(
+      `Retained release "${releaseId}" is not in the retained-release index; ` +
+        `known releases: ${index.receipts.map((receipt) => receipt.release_id).join(", ") || "(none)"}.`,
+    );
+  }
+  const receiptPath = path.join(path.dirname(indexPath), entry.receipt_path);
+  const { receipt, receiptSha256 } = loadRetainedReleaseReceipt(receiptPath);
+  if (receiptSha256 !== entry.receipt_sha256) {
+    throw new RetainedReleaseError(
+      `Retained receipt bytes for ${releaseId} do not match the index ` +
+        `(index ${entry.receipt_sha256}, file ${receiptSha256}).`,
+    );
+  }
+  if (
+    receipt.release.release_id !== entry.release_id ||
+    receipt.release.source_sha !== entry.source_sha ||
+    receipt.release.qualification_state !== entry.qualification_state
+  ) {
+    throw new RetainedReleaseError(
+      `Retained-release index entry for ${releaseId} does not match the receipt it points at ` +
+        `(index ${entry.release_id}/${entry.source_sha.slice(0, 12)}/${entry.qualification_state}, ` +
+        `receipt ${receipt.release.release_id}/${receipt.release.source_sha.slice(0, 12)}/` +
+        `${receipt.release.qualification_state}).`,
+    );
+  }
+  return { receipt, receiptSha256 };
+}
+
 export function qualifiedReceiptExists(index: RetainedReleaseIndexV1): boolean {
   return index.receipts.some((entry) => entry.qualification_state === "qualified");
+}
+
+/**
+ * Proves every index entry is bound to its receipt (bytes + identity/state)
+ * by loading each one. Required before deriving bootstrap policy from index
+ * metadata: `qualifiedReceiptExists` reads entry states without loading
+ * receipts, so an entry mislabeled `bootstrap_unqualified` could otherwise
+ * hide an existing qualified receipt and keep the one-time bootstrap
+ * exception alive. The retained set is small by design (current + previous
+ * qualified), so loading every receipt is cheap.
+ */
+export function assertIndexReceiptsBound(index: RetainedReleaseIndexV1, indexPath: string): void {
+  for (const entry of index.receipts) {
+    loadIndexedRetainedReceipt(index, indexPath, entry.release_id);
+  }
 }
 
 /** Optional live drift checks against provider metadata (read-only hooks). */

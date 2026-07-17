@@ -7,8 +7,11 @@ import { test } from "node:test";
 
 import {
   assertImmutableLocator,
+  assertIndexReceiptsBound,
   computeArtifactSetDigest,
+  loadIndexedRetainedReceipt,
   loadRetainedReleaseIndex,
+  loadRetainedReleaseIndexOrInit,
   loadRetainedReleaseReceipt,
   qualifiedReceiptExists,
   RetainedReleaseError,
@@ -360,6 +363,107 @@ test("evidence projection is bounded to identities and hashes", () => {
   const serialized = JSON.stringify(evidence);
   assert.ok(!serialized.includes("https://"), "evidence must not carry raw locators");
   assert.ok(!serialized.includes("updater_pubkey"), "evidence must not embed receipt bodies");
+});
+
+test("RR-CONTROL-002: a malformed index fails closed, never an empty init", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "retained-index-corrupt-"));
+  const indexPath = path.join(dir, "index.json");
+  writeFileSync(indexPath, "not json {");
+  assert.throws(() => loadRetainedReleaseIndex(indexPath), /not valid JSON/);
+  assert.throws(() => loadRetainedReleaseIndexOrInit(indexPath), /not valid JSON/);
+  writeFileSync(indexPath, JSON.stringify({ schema_version: 99, kind: "proliferate.retained-release-index", receipts: [] }));
+  assert.throws(() => loadRetainedReleaseIndexOrInit(indexPath), /Unsupported/);
+  // Only a genuinely ABSENT file initializes empty.
+  const absent = loadRetainedReleaseIndexOrInit(path.join(dir, "does-not-exist.json"));
+  assert.deepEqual(absent.receipts, []);
+});
+
+test("RR-CONTROL-005: duplicate release ids and traversal paths reject at index load", () => {
+  const entry = {
+    release_id: "v0.3.38",
+    source_sha: SHA,
+    qualification_state: "bootstrap_unqualified",
+    receipt_path: "v0.3.38.json",
+    receipt_sha256: HEX64("bytes"),
+  };
+  const dir = mkdtempSync(path.join(os.tmpdir(), "retained-index-dup-"));
+  const indexPath = path.join(dir, "index.json");
+  writeFileSync(
+    indexPath,
+    JSON.stringify({ schema_version: 1, kind: "proliferate.retained-release-index", receipts: [entry, entry] }),
+  );
+  assert.throws(() => loadRetainedReleaseIndex(indexPath), /duplicate release_id/);
+  writeFileSync(
+    indexPath,
+    JSON.stringify({
+      schema_version: 1,
+      kind: "proliferate.retained-release-index",
+      receipts: [{ ...entry, receipt_path: "../escape/v0.3.38.json" }],
+    }),
+  );
+  assert.throws(() => loadRetainedReleaseIndex(indexPath), /must stay inside/);
+  writeFileSync(
+    indexPath,
+    JSON.stringify({
+      schema_version: 1,
+      kind: "proliferate.retained-release-index",
+      receipts: [{ ...entry, receipt_path: "/abs/v0.3.38.json" }],
+    }),
+  );
+  assert.throws(() => loadRetainedReleaseIndex(indexPath), /must stay inside/);
+});
+
+test("RR-CONTROL-005: index entry identity/state must match the loaded receipt", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "retained-index-bind-"));
+  const indexPath = path.join(dir, "index.json");
+  const receipt = seal(validBody());
+  const receiptText = `${JSON.stringify(receipt, null, 2)}\n`;
+  writeFileSync(path.join(dir, "v0.3.38.json"), receiptText);
+  const receiptSha = createHash("sha256").update(receiptText, "utf8").digest("hex");
+  // Correct bytes, lying source_sha in the entry.
+  writeFileSync(
+    indexPath,
+    JSON.stringify({
+      schema_version: 1,
+      kind: "proliferate.retained-release-index",
+      receipts: [
+        {
+          release_id: "v0.3.38",
+          source_sha: "b".repeat(40),
+          qualification_state: "bootstrap_unqualified",
+          receipt_path: "v0.3.38.json",
+          receipt_sha256: receiptSha,
+        },
+      ],
+    }),
+  );
+  const lyingIndex = loadRetainedReleaseIndex(indexPath);
+  assert.throws(
+    () => loadIndexedRetainedReceipt(lyingIndex, indexPath, "v0.3.38"),
+    /does not match the receipt it points at/,
+  );
+  assert.throws(() => assertIndexReceiptsBound(lyingIndex, indexPath), /does not match the receipt/);
+  // Honest entry binds cleanly.
+  writeFileSync(
+    indexPath,
+    JSON.stringify({
+      schema_version: 1,
+      kind: "proliferate.retained-release-index",
+      receipts: [
+        {
+          release_id: "v0.3.38",
+          source_sha: SHA,
+          qualification_state: "bootstrap_unqualified",
+          receipt_path: "v0.3.38.json",
+          receipt_sha256: receiptSha,
+        },
+      ],
+    }),
+  );
+  const honest = loadRetainedReleaseIndex(indexPath);
+  assertIndexReceiptsBound(honest, indexPath);
+  const loaded = loadIndexedRetainedReceipt(honest, indexPath, "v0.3.38");
+  assert.equal(loaded.receipt.release.release_id, "v0.3.38");
 });
 
 test("index loads, round-trips, and drives qualifiedReceiptExists", () => {

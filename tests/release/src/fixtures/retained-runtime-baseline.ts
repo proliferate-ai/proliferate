@@ -1,9 +1,8 @@
-import path from "node:path";
-
 import type { EnvResolution } from "../config/env-resolution.js";
 import {
+  assertIndexReceiptsBound,
+  loadIndexedRetainedReceipt,
   loadRetainedReleaseIndex,
-  loadRetainedReleaseReceipt,
   qualifiedReceiptExists,
   RETAINED_RELEASE_INDEX_PATH,
   RetainedReleaseError,
@@ -57,7 +56,11 @@ export const RETAINED_ANYHARNESS_REPORTED_VERSION_ENV =
 /** Injectable index root and policy inputs so tests never depend on committed data. */
 export interface RetainedBaselineSource {
   indexPath?: string;
-  /** The candidate N source SHA for the N-1 != N policy check, when known. */
+  /**
+   * The candidate N source SHA for the N-1 != N policy check. Required
+   * whenever a release id is selected: a receipt-backed baseline without a
+   * known candidate identity fails closed (RR-CONTROL-003).
+   */
   currentCandidateSourceSha?: string;
 }
 
@@ -86,26 +89,27 @@ export function resolveRetainedRuntimeBaseline(
     return null;
   }
 
+  // A real update proof must know the candidate N it updates TO: without the
+  // candidate source SHA the N-1 != N invariant cannot be enforced, so a
+  // receipt-backed baseline fails closed rather than silently skipping it.
+  const candidateSha = source.currentCandidateSourceSha?.trim() ?? "";
+  if (candidateSha.length === 0) {
+    throw new RetainedReleaseError(
+      `Retained release "${releaseId}" was selected but no candidate source SHA was supplied; ` +
+        `the N-1 != N invariant cannot be enforced without it.`,
+    );
+  }
+
   const indexPath = source.indexPath ?? RETAINED_RELEASE_INDEX_PATH;
   const index = loadRetainedReleaseIndex(indexPath);
-  const entry = index.receipts.find((receipt) => receipt.release_id === releaseId);
-  if (!entry) {
-    throw new RetainedReleaseError(
-      `Retained release "${releaseId}" is not in the retained-release index; ` +
-        `known releases: ${index.receipts.map((receipt) => receipt.release_id).join(", ") || "(none)"}.`,
-    );
-  }
-  const receiptPath = path.join(path.dirname(indexPath), entry.receipt_path);
-  const { receipt, receiptSha256 } = loadRetainedReleaseReceipt(receiptPath);
-  if (receiptSha256 !== entry.receipt_sha256) {
-    throw new RetainedReleaseError(
-      `Retained receipt bytes for ${releaseId} do not match the index ` +
-        `(index ${entry.receipt_sha256}, file ${receiptSha256}).`,
-    );
-  }
+  // Bind EVERY entry (bytes + identity/state) before deriving bootstrap
+  // policy from index metadata: a mislabeled sibling entry could otherwise
+  // hide an existing qualified receipt (RR-CONTROL-005).
+  assertIndexReceiptsBound(index, indexPath);
+  const { receipt, receiptSha256 } = loadIndexedRetainedReceipt(index, indexPath, releaseId);
   validateRetainedRelease(receipt, {
     requiredTargets: ["managed-runtime"],
-    currentCandidateSourceSha: source.currentCandidateSourceSha,
+    currentCandidateSourceSha: candidateSha,
     qualifiedReceiptExists: qualifiedReceiptExists(index),
   });
 

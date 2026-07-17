@@ -128,9 +128,22 @@ async function runReal(ctx: ScenarioRunContext): Promise<void> {
   // NOT ctx.env: it is intentionally absent from requiredEnv, so ctx.env would
   // never surface it. It is handed to the resolver explicitly.
   const reportedVersionOverride = process.env[RETAINED_ANYHARNESS_REPORTED_VERSION_ENV];
+  // The runner's run identity carries the authoritative candidate N source
+  // SHA. The resolver enforces retained N-1 != candidate N and fails closed
+  // when the SHA cannot be established — a real T4 run must know what it
+  // updates TO (RR-CONTROL-003).
+  const candidateSourceSha = ctx.runIdentity?.source_sha?.trim() ?? "";
+  if (candidateSourceSha.length === 0 && (ctx.env.get(RETAINED_RELEASE_ID_ENV)?.trim() ?? "").length > 0) {
+    throw new ScenarioBlockedError(
+      "T4-RUNTIME-1: a retained release was selected but this run has no resolved candidate source SHA " +
+        "(run identity is absent), so the retained N-1 != candidate N invariant cannot be enforced. " +
+        "Run through the qualification runner so the run identity carries the candidate SHA.",
+    );
+  }
   const retained: RetainedRuntimeBaseline | null = resolveRetainedRuntimeBaseline(
     ctx.env,
     reportedVersionOverride,
+    { currentCandidateSourceSha: candidateSourceSha },
   );
   if (!retained) {
     throw new ScenarioBlockedError(

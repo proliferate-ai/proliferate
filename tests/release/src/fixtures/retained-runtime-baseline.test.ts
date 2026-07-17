@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -25,58 +25,60 @@ function fakeEnv(values: Record<string, string>): EnvResolution {
 
 function sealedReceipt(
   state: "bootstrap_unqualified" | "qualified" = "bootstrap_unqualified",
+  version = "0.3.38",
+  sourceSha = SHA,
 ): RetainedReleaseReceiptV1 {
   const body: Omit<RetainedReleaseReceiptV1, "artifact_set_digest"> = {
     schema_version: 1,
     kind: "proliferate.retained-release",
     release: {
-      release_id: "v0.3.38",
-      release_tag: "proliferate-v0.3.38",
-      source_sha: SHA,
+      release_id: `v${version}`,
+      release_tag: `proliferate-v${version}`,
+      source_sha: sourceSha,
       published_at: "2026-07-17T01:07:21.493Z",
       qualification_state: state,
       qualification_evidence:
         state === "qualified"
           ? {
               report_sha256: sha("report"),
-              immutable_locator: `https://qualification.example.com/evidence/v0.3.38/${sha("report")}.json`,
+              immutable_locator: `https://qualification.example.com/evidence/v${version}/${sha("report")}.json`,
             }
           : null,
     },
     desktop: {
-      version: "0.3.38",
+      version,
       packages: [
         {
           platform: "darwin-aarch64",
           immutable_locator:
-            "https://downloads.proliferate.com/desktop/stable/Proliferate_0.3.38_aarch64.app.tar.gz",
+            `https://downloads.proliferate.com/desktop/stable/Proliferate_${version}_aarch64.app.tar.gz`,
           sha256: sha("a"),
           signature_locator:
-            "https://downloads.proliferate.com/desktop/stable/Proliferate_0.3.38_aarch64.app.tar.gz.sig",
+            `https://downloads.proliferate.com/desktop/stable/Proliferate_${version}_aarch64.app.tar.gz.sig`,
           sha256_signature: sha("b"),
         },
         {
           platform: "darwin-x86_64",
           immutable_locator:
-            "https://downloads.proliferate.com/desktop/stable/Proliferate_0.3.38_x64.app.tar.gz",
+            `https://downloads.proliferate.com/desktop/stable/Proliferate_${version}_x64.app.tar.gz`,
           sha256: sha("c"),
           signature_locator:
-            "https://downloads.proliferate.com/desktop/stable/Proliferate_0.3.38_x64.app.tar.gz.sig",
+            `https://downloads.proliferate.com/desktop/stable/Proliferate_${version}_x64.app.tar.gz.sig`,
           sha256_signature: sha("d"),
         },
       ],
       updater_pubkey: "dW50cnVzdGVk",
-      embedded_anyharness_version: "0.3.38",
+      embedded_anyharness_version: version,
     },
     managed_runtime: {
       template_family: "pablo-5391/proliferate-runtime-cloud",
       immutable_template_id: "y7dakz4fs16tbz8vb9zo",
       template_build_id: "661a9621-78db-4c55-84d1-281c21fb72dc",
-      source_tag: "sha-e61afc274593",
+      source_tag: `sha-${sourceSha.slice(0, 12)}`,
       input_hash: state === "qualified" ? sha("input") : null,
-      anyharness_version: "0.3.38",
-      worker_version: "0.3.38",
-      supervisor_version: "0.3.38",
+      anyharness_version: version,
+      worker_version: version,
+      supervisor_version: version,
       harness_catalog_digest: sha("catalog"),
       harness_registry_digest: sha("registry"),
     },
@@ -117,12 +119,25 @@ test("returns null when no baseline input names anything (honest block)", () => 
   assert.equal(resolveRetainedRuntimeBaseline(fakeEnv({})), null);
 });
 
+const CANDIDATE_SHA = "f".repeat(40);
+
+test("a selected receipt without a candidate SHA fails closed (N-1 != N unenforceable)", () => {
+  const indexPath = writeIndexDir([sealedReceipt()]);
+  assert.throws(
+    () =>
+      resolveRetainedRuntimeBaseline(fakeEnv({ [RETAINED_RELEASE_ID_ENV]: "v0.3.38" }), undefined, {
+        indexPath,
+      }),
+    /no candidate source SHA/,
+  );
+});
+
 test("resolves a committed receipt by release id with full validation", () => {
   const indexPath = writeIndexDir([sealedReceipt()]);
   const baseline = resolveRetainedRuntimeBaseline(
     fakeEnv({ [RETAINED_RELEASE_ID_ENV]: "v0.3.38" }),
     undefined,
-    { indexPath },
+    { indexPath, currentCandidateSourceSha: CANDIDATE_SHA },
   );
   assert.ok(baseline);
   assert.equal(baseline.templateId, "y7dakz4fs16tbz8vb9zo");
@@ -140,6 +155,7 @@ test("a named release id that is not indexed is an error, never a silent block",
     () =>
       resolveRetainedRuntimeBaseline(fakeEnv({ [RETAINED_RELEASE_ID_ENV]: "v9.9.9" }), undefined, {
         indexPath,
+        currentCandidateSourceSha: CANDIDATE_SHA,
       }),
     RetainedReleaseError,
   );
@@ -157,57 +173,69 @@ test("receipt bytes that do not match the index reject", () => {
     () =>
       resolveRetainedRuntimeBaseline(fakeEnv({ [RETAINED_RELEASE_ID_ENV]: "v0.3.38" }), undefined, {
         indexPath,
+        currentCandidateSourceSha: CANDIDATE_SHA,
       }),
     /do not match the index/,
   );
 });
 
 test("bootstrap receipt fails closed once any qualified receipt is indexed", () => {
-  const qualified = sealedReceipt("qualified");
-  qualified.release.release_id = "v0.4.0";
-  qualified.release.release_tag = "proliferate-v0.4.0";
-  const resealBody = { ...qualified } as Record<string, unknown>;
-  delete resealBody.artifact_set_digest;
-  qualified.artifact_set_digest = computeArtifactSetDigest(
-    resealBody as unknown as Omit<RetainedReleaseReceiptV1, "artifact_set_digest">,
-  );
-  // Its desktop version no longer matches v0.4.0, but the index-level policy
-  // check fires on the SELECTED receipt before its file is even loaded when
-  // selecting the bootstrap entry, so shape validity of the sibling does not
-  // matter for this assertion — keep the sibling only in the index.
+  // Both receipts are fully valid and BOUND (bytes + identity/state) — the
+  // rejection must come from the bootstrap policy itself, not a binding error.
   const bootstrap = sealedReceipt();
-  const dir = mkdtempSync(path.join(os.tmpdir(), "retained-baseline-mixed-"));
-  const bootstrapText = `${JSON.stringify(bootstrap, null, 2)}\n`;
-  writeFileSync(path.join(dir, "v0.3.38.json"), bootstrapText);
-  writeFileSync(
-    path.join(dir, "index.json"),
-    JSON.stringify({
-      schema_version: 1,
-      kind: "proliferate.retained-release-index",
-      receipts: [
-        {
-          release_id: "v0.3.38",
-          source_sha: bootstrap.release.source_sha,
-          qualification_state: "bootstrap_unqualified",
-          receipt_path: "v0.3.38.json",
-          receipt_sha256: sha(bootstrapText),
-        },
-        {
-          release_id: "v0.4.0",
-          source_sha: "f".repeat(40),
-          qualification_state: "qualified",
-          receipt_path: "v0.4.0.json",
-          receipt_sha256: sha("placeholder"),
-        },
-      ],
-    }),
-  );
+  const qualified = sealedReceipt("qualified", "0.4.0", "a".repeat(40));
+  const indexPath = writeIndexDir([bootstrap, qualified]);
   assert.throws(
     () =>
       resolveRetainedRuntimeBaseline(fakeEnv({ [RETAINED_RELEASE_ID_ENV]: "v0.3.38" }), undefined, {
-        indexPath: path.join(dir, "index.json"),
+        indexPath,
+        currentCandidateSourceSha: CANDIDATE_SHA,
       }),
     /bootstrap exception no longer applies/,
+  );
+  // The qualified receipt itself remains selectable.
+  const baseline = resolveRetainedRuntimeBaseline(
+    fakeEnv({ [RETAINED_RELEASE_ID_ENV]: "v0.4.0" }),
+    undefined,
+    { indexPath, currentCandidateSourceSha: CANDIDATE_SHA },
+  );
+  assert.equal(baseline?.receipt.release.qualification_state, "qualified");
+});
+
+test("RR-CONTROL-005: an index entry mislabeled bootstrap cannot hide a qualified receipt", () => {
+  // The v0.4.0 receipt IS qualified, but its index entry lies and says
+  // bootstrap_unqualified — which would keep the one-time bootstrap exception
+  // alive if policy were derived from unbound index metadata. Binding must
+  // reject before any policy decision.
+  const bootstrap = sealedReceipt();
+  const qualified = sealedReceipt("qualified", "0.4.0", "a".repeat(40));
+  const indexPath = writeIndexDir([bootstrap, qualified]);
+  const indexRaw = JSON.parse(readFileSync(indexPath, "utf8")) as {
+    receipts: Array<{ release_id: string; qualification_state: string }>;
+  };
+  const lied = indexRaw.receipts.map((entry) =>
+    entry.release_id === "v0.4.0" ? { ...entry, qualification_state: "bootstrap_unqualified" } : entry,
+  );
+  writeFileSync(indexPath, JSON.stringify({ ...indexRaw, receipts: lied }));
+  assert.throws(
+    () =>
+      resolveRetainedRuntimeBaseline(fakeEnv({ [RETAINED_RELEASE_ID_ENV]: "v0.3.38" }), undefined, {
+        indexPath,
+        currentCandidateSourceSha: CANDIDATE_SHA,
+      }),
+    /does not match the receipt it points at/,
+  );
+});
+
+test("RR-CONTROL-003: retained N-1 equal to candidate N fails closed on the real resolver path", () => {
+  const indexPath = writeIndexDir([sealedReceipt()]);
+  assert.throws(
+    () =>
+      resolveRetainedRuntimeBaseline(fakeEnv({ [RETAINED_RELEASE_ID_ENV]: "v0.3.38" }), undefined, {
+        indexPath,
+        currentCandidateSourceSha: SHA,
+      }),
+    /same source SHA as candidate N/,
   );
 });
 
@@ -220,13 +248,13 @@ test("honors the reported-version override for unstamped binaries (issue #1089)"
   const overridden = resolveRetainedRuntimeBaseline(
     fakeEnv({ [RETAINED_RELEASE_ID_ENV]: "v0.3.38" }),
     "0.1.0",
-    { indexPath },
+    { indexPath, currentCandidateSourceSha: CANDIDATE_SHA },
   );
   assert.equal(overridden?.anyharnessReportedVersion, "0.1.0");
   const blank = resolveRetainedRuntimeBaseline(
     fakeEnv({ [RETAINED_RELEASE_ID_ENV]: "v0.3.38" }),
     "   ",
-    { indexPath },
+    { indexPath, currentCandidateSourceSha: CANDIDATE_SHA },
   );
   assert.equal(blank?.anyharnessReportedVersion, "0.3.38");
 });

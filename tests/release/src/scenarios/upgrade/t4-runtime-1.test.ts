@@ -24,12 +24,12 @@ const EXEC_IDENTITY: RunIdentityV1 = {
 // cell's result. This is the T4R-CONTROL-001 regression surface: it proves
 // supplied retained inputs actually reach the scenario, which a hand-built
 // EnvResolution injected straight into run() cannot prove.
-async function runViaRunner(source: Record<string, string>) {
+async function runViaRunner(source: Record<string, string>, identity: RunIdentityV1 = EXEC_IDENTITY) {
   const cells = await buildPlannedCells([t4Runtime1], { desktop: "web", agents: ["all"] });
   const report = await executeSelectedCells({
     behavior: "diagnostic",
     execution: "real",
-    identity: EXEC_IDENTITY,
+    identity,
     inputs: { targetLane: "cloud", desktop: "web", agents: "all", scenarios: "all" },
     scenarios: [t4Runtime1],
     cells,
@@ -165,7 +165,7 @@ test("supervisor-owned runtime not confirmed blocks even with a retained receipt
   // Flag absent from ctx.env (not declared "1"): the confirmation gate fires.
   const env = fakeEnv({ RELEASE_E2E_RETAINED_RELEASE_ID: "v0.3.38" });
   await assert.rejects(
-    () => leaf().run(fakeCtx({ env })),
+    () => leaf().run(fakeCtx({ env, runIdentity: EXEC_IDENTITY })),
     (error: unknown) =>
       error instanceof ScenarioBlockedError &&
       /supervisor-owned runtime topology must be active/.test((error as Error).message),
@@ -175,9 +175,19 @@ test("supervisor-owned runtime not confirmed blocks even with a retained receipt
 test("retained receipt + flag on: live body not yet wired, blocks honestly (never a false green)", async () => {
   const env = envWithFlag({ RELEASE_E2E_RETAINED_RELEASE_ID: "v0.3.38" });
   await assert.rejects(
-    () => leaf().run(fakeCtx({ env })),
+    () => leaf().run(fakeCtx({ env, runIdentity: EXEC_IDENTITY })),
     (error: unknown) =>
       error instanceof ScenarioBlockedError && /live-proof body is not yet wired/.test((error as Error).message),
+  );
+});
+
+test("RR-CONTROL-003: a retained receipt without a run identity blocks (N-1 != N unenforceable)", async () => {
+  const env = envWithFlag({ RELEASE_E2E_RETAINED_RELEASE_ID: "v0.3.38" });
+  await assert.rejects(
+    () => leaf().run(fakeCtx({ env, runIdentity: null })),
+    (error: unknown) =>
+      error instanceof ScenarioBlockedError &&
+      /no resolved candidate source SHA/.test((error as Error).message),
   );
 });
 
@@ -194,8 +204,11 @@ test("resolver resolves the COMMITTED bootstrap receipt (the real repo data path
   // No injected index: this exercises the exact committed
   // tests/release/retained-releases/ data the runner will use, proving the
   // real v0.3.38 receipt validates end to end from a stock checkout.
+  const source = { currentCandidateSourceSha: "e".repeat(40) };
   const baseline = resolveRetainedRuntimeBaseline(
     fakeEnv({ RELEASE_E2E_RETAINED_RELEASE_ID: "v0.3.38" }),
+    undefined,
+    source,
   );
   assert.ok(baseline);
   assert.equal(baseline?.receipt.release.qualification_state, "bootstrap_unqualified");
@@ -204,6 +217,7 @@ test("resolver resolves the COMMITTED bootstrap receipt (the real repo data path
   const overridden = resolveRetainedRuntimeBaseline(
     fakeEnv({ RELEASE_E2E_RETAINED_RELEASE_ID: "v0.3.38" }),
     "0.1.0",
+    source,
   );
   assert.equal(overridden?.anyharnessReportedVersion, "0.1.0");
 });
@@ -214,6 +228,18 @@ test("resolver resolves the COMMITTED bootstrap receipt (the real repo data path
 // retained inputs actually reach ctx.env. No E2B, no flag activation, no
 // fabricated N-1 — every case still terminates blocked.
 // ---------------------------------------------------------------------------
+
+test("REGRESSION RR-CONTROL-003: retained N-1 == candidate N fails the cell through the real planner/runner path", async () => {
+  // Run identity whose source SHA equals the committed v0.3.38 receipt's
+  // source SHA: the resolver must fail closed (a red cell, never blocked as
+  // missing-input and never a fabricated proof from a release to itself).
+  const result = await runViaRunner(RETAINED_SOURCE, {
+    ...EXEC_IDENTITY,
+    source_sha: "e61afc274593085e51870b24269f718a543b88b4",
+  });
+  assert.equal(result.status, "failed");
+  assert.match(result.reason?.message ?? "", /same source SHA as candidate N/);
+});
 
 test("REGRESSION T4R-CONTROL-001: supplied retained inputs reach the scenario and advance to the terminal honest block", async () => {
   const result = await runViaRunner(RETAINED_SOURCE);
