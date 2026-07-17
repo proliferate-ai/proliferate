@@ -210,17 +210,23 @@ For a new v2 run before acceptance:
 3. Read workspace `resolved_workspace_launch_options`.
 4. Require the agent and an exact model, or require target `default_model_id`
    to yield one concrete model.
-5. In `domains/workflows/resolution.rs`, map `workflowDefault`:
-   Claude -> `bypassPermissions`; Codex -> `full-access`.
-6. Require that mode in the selected model's mode list; other agents reject.
+5. In `domains/workflows/resolution.rs`, resolve `workflowDefault` from the
+   selected launch agent's active-catalog `unattendedModeId`; reject when the
+   selected target declares no vetted unattended mode.
+6. When the selected model has an explicit mode list, require that it contains
+   the unattended mode. A missing model-local list inherits the catalog's
+   already-validated agent-level mode vocabulary.
 7. For effort, require the selected exact model's `effort` or
    `reasoning_effort` value and same-key active session control
    `mapping.liveConfigId`; persist `{configId,value}`.
 8. Render, validate, and persist source + resolved plan before effects.
 
-Workflow owns the policy. Do not import/edit Cowork. One narrow generic
-session/catalog read seam may expose `liveConfigId`; do not move Workflow policy
-into sessions/agents or broaden raw launch options.
+Workflow owns the decision to require an unattended mode. The active agent
+catalog owns which opaque mode value is vetted for the selected target; do not
+reintroduce family-specific mappings in Workflow. Do not import/edit Cowork.
+One narrow generic session/catalog read seam may expose `liveConfigId`; do not
+move Workflow execution policy into sessions/agents or broaden raw launch
+options.
 
 Resolved plan is exactly:
 

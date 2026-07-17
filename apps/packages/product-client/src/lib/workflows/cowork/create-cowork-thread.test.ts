@@ -10,6 +10,60 @@ import {
 import type { PendingWorkspaceEntry } from "#product/lib/domain/workspaces/creation/pending-entry";
 
 describe("createCoworkThreadWorkflow", () => {
+  it("uses the selected catalog default for an unattended thread", async () => {
+    const deps = resolvedWorkflowDeps();
+
+    await createCoworkThreadWorkflow({
+      agentKind: "codex",
+      modelId: "gpt-5.6-codex",
+      unattendedModeId: "full-access",
+      coworkWorkspaceDelegationEnabled: false,
+      runtimeUrl: "http://127.0.0.1:4317",
+    }, deps);
+
+    expect(deps.createCoworkThread).toHaveBeenCalledWith(expect.objectContaining({
+      modeId: "full-access",
+    }));
+    expect(deps.beginPendingWorkspace).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        initialSession: expect.objectContaining({ modeId: "full-access" }),
+      }),
+    );
+  });
+
+  it("keeps an explicit mode ahead of the catalog default", async () => {
+    const deps = resolvedWorkflowDeps();
+
+    await createCoworkThreadWorkflow({
+      agentKind: "codex",
+      modelId: "gpt-5.6-codex",
+      modeId: "read-only",
+      unattendedModeId: "full-access",
+      coworkWorkspaceDelegationEnabled: false,
+      runtimeUrl: "http://127.0.0.1:4317",
+    }, deps);
+
+    expect(deps.createCoworkThread).toHaveBeenCalledWith(expect.objectContaining({
+      modeId: "read-only",
+    }));
+  });
+
+  it("omits mode when the selected agent declares no unattended default", async () => {
+    const deps = resolvedWorkflowDeps();
+
+    await createCoworkThreadWorkflow({
+      agentKind: "grok",
+      modelId: "grok-4",
+      unattendedModeId: null,
+      coworkWorkspaceDelegationEnabled: false,
+      runtimeUrl: "http://127.0.0.1:4317",
+    }, deps);
+
+    expect(deps.createCoworkThread).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(deps.createCoworkThread).mock.calls[0]?.[0]).not.toHaveProperty("modeId");
+  });
+
   it("keeps one Untitled chat identity while the real workspace materializes", async () => {
     const response = coworkThreadResponse();
     const launchDefaults = deferred<Session>();
@@ -78,6 +132,40 @@ describe("createCoworkThreadWorkflow", () => {
     expect(setPendingWorkspaceEntry).toHaveBeenLastCalledWith(null);
   });
 });
+
+function resolvedWorkflowDeps(): CreateCoworkThreadWorkflowDeps {
+  const response = coworkThreadResponse();
+  return {
+    createPendingWorkspaceAttemptId: vi.fn(() => "attempt-1"),
+    nowMs: vi.fn(() => 100),
+    nowIso: vi.fn(() => "2026-07-15T12:00:00Z"),
+    startLatencyTimer: vi.fn(() => 0),
+    elapsedMs: vi.fn(() => 10),
+    elapsedSince: vi.fn(() => 10),
+    logLatency: vi.fn(),
+    getSelectedWorkspaceId: vi.fn(() => null),
+    getPendingWorkspaceEntry: vi.fn(() => null),
+    isAttemptCurrent: vi.fn(() => true),
+    setThreadsCollapsed: vi.fn(),
+    beginPendingWorkspace: vi.fn(() => "projected-session"),
+    navigateToWorkspaceShell: vi.fn(),
+    createCoworkThread: vi.fn(async () => response),
+    applyLaunchDefaults: vi.fn(async () => response.session),
+    upsertLocalWorkspace: vi.fn(),
+    upsertWorkspaceSessionRecord: vi.fn(),
+    recordCreatedSession: vi.fn(),
+    setDraftText: vi.fn(),
+    clearDraft: vi.fn(),
+    setPendingWorkspaceEntry: vi.fn(),
+    activateWorkspace: vi.fn(),
+    rememberLastViewedSession: vi.fn(),
+    trackWorkspaceInteraction: vi.fn(),
+    markWorkspaceViewed: vi.fn(),
+    markWorkspaceBootstrappedInSession: vi.fn(),
+    initWorkspace: vi.fn(async () => undefined),
+    showToast: vi.fn(),
+  };
+}
 
 function coworkThreadResponse(): CreateCoworkThreadResponse {
   const createdAt = "2026-07-15T12:00:00Z";

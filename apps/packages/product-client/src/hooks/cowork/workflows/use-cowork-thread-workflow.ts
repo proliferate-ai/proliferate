@@ -22,13 +22,17 @@ import { useWorkspaceFileActions } from "#product/hooks/workspaces/facade/files/
 import { useWorkspaceEntryFlow } from "#product/hooks/workspaces/workflows/use-workspace-entry-flow";
 import { useWorkspaceSessionCache } from "#product/hooks/access/anyharness/sessions/use-workspace-session-cache";
 import { useAgentCatalog } from "#product/hooks/agents/derived/use-agent-catalog";
-import { useCloudLaunchModelRegistries } from "#product/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
-import { mergeRuntimeLaunchOptionsIntoModelRegistries } from "#product/lib/domain/settings/model-registries";
+import { useCloudAgentCatalog } from "#product/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
+import {
+  buildDesktopLaunchModelRegistries,
+  mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents,
+  type DesktopAgentLaunchAgent,
+} from "#product/lib/domain/agents/cloud-launch-catalog";
+import { resolveUnattendedModeId } from "#product/lib/domain/agents/unattended-mode";
 import {
   isStoredDefaultModelStale,
   withClearedDefaultModelIdByAgentKind,
 } from "#product/lib/domain/agents/model-options";
-import type { DesktopLaunchModelRegistry as ModelRegistry } from "#product/lib/domain/agents/cloud-launch-catalog";
 import { applySessionLaunchDefaults } from "#product/lib/workflows/sessions/session-launch-defaults";
 import { mergeLiveDefaultLaunchControls } from "#product/lib/domain/sessions/creation/launch-controls";
 import { createSessionLaunchDefaultsClient } from "#product/lib/access/anyharness/session-launch-defaults-client";
@@ -46,7 +50,7 @@ import { useToastStore } from "#product/stores/toast/toast-store";
 import { markWorkspaceBootstrappedInSession } from "#product/hooks/workspaces/lifecycle/workspace-bootstrap-memory";
 import { recordCreatedCoworkSession } from "#product/hooks/cowork/workflows/cowork-thread-session-record";
 
-const EMPTY_MODEL_REGISTRIES: ModelRegistry[] = [];
+const EMPTY_LAUNCH_AGENTS: DesktopAgentLaunchAgent[] = [];
 
 export function useCoworkThreadWorkflow() {
   const location = useLocation();
@@ -60,7 +64,7 @@ export function useCoworkThreadWorkflow() {
   const activateWorkspace = useSessionSelectionStore((state) => state.activateWorkspace);
   const { beginPendingWorkspace } = useWorkspaceEntryFlow();
   const { agents } = useAgentCatalog();
-  const { data: cloudModelRegistries = EMPTY_MODEL_REGISTRIES } = useCloudLaunchModelRegistries();
+  const cloudCatalogQuery = useCloudAgentCatalog();
   // Gate the new-thread model set to the runtime's active auth context. The cloud
   // catalog lists every model across all contexts (incl. bedrock us.anthropic.*),
   // so resolving a stored default against it alone can pick a model that is not
@@ -68,12 +72,16 @@ export function useCoworkThreadWorkflow() {
   // visible + available for the classified context; merging them (runtime wins)
   // yields the same context-valid set the composer/model-selector already uses.
   const runtimeLaunchOptions = useAgentLaunchOptionsQuery();
-  const modelRegistries = useMemo(
-    () => mergeRuntimeLaunchOptionsIntoModelRegistries(
-      cloudModelRegistries,
+  const launchAgents = useMemo(
+    () => mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents(
+      cloudCatalogQuery.data?.agents ?? EMPTY_LAUNCH_AGENTS,
       runtimeLaunchOptions.data?.agents ?? null,
     ),
-    [cloudModelRegistries, runtimeLaunchOptions.data?.agents],
+    [cloudCatalogQuery.data?.agents, runtimeLaunchOptions.data?.agents],
+  );
+  const modelRegistries = useMemo(
+    () => buildDesktopLaunchModelRegistries(launchAgents),
+    [launchAgents],
   );
   const preferences = useUserPreferencesStore(useShallow((state) => ({
     defaultChatAgentKind: state.defaultChatAgentKind,
@@ -101,12 +109,21 @@ export function useCoworkThreadWorkflow() {
     agentKind: string;
     modelId: string;
     modeId?: string | null;
+    launchAgent?: DesktopAgentLaunchAgent | null;
     launchControlValues?: Record<string, string>;
     draftText?: string | null;
     sourceWorkspaceId?: string | null;
   }) => {
+    const { launchAgent: inputLaunchAgent, ...workflowInput } = input;
+    const launchAgent = inputLaunchAgent
+      ?? launchAgents.find((candidate) => candidate.kind === input.agentKind)
+      ?? null;
     return createCoworkThreadWorkflow({
-      ...input,
+      ...workflowInput,
+      unattendedModeId: resolveUnattendedModeId({
+        agent: launchAgent,
+        modelId: input.modelId,
+      }),
       coworkWorkspaceDelegationEnabled: preferences.coworkWorkspaceDelegationEnabled,
       runtimeUrl,
     }, {
@@ -162,6 +179,7 @@ export function useCoworkThreadWorkflow() {
     clearDraft,
     createCoworkThreadMutation,
     initForWorkspace,
+    launchAgents,
     modelRegistries,
     navigateToWorkspaceShell,
     preferences.coworkWorkspaceDelegationEnabled,
@@ -185,10 +203,11 @@ export function useCoworkThreadWorkflow() {
     if (!runtimeAgents && runtimeUrl) {
       runtimeAgents = (await runtimeLaunchOptions.refetch()).data?.agents ?? null;
     }
-    const gatedRegistries = mergeRuntimeLaunchOptionsIntoModelRegistries(
-      cloudModelRegistries,
+    const gatedLaunchAgents = mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents(
+      cloudCatalogQuery.data?.agents ?? EMPTY_LAUNCH_AGENTS,
       runtimeAgents,
     );
+    const gatedRegistries = buildDesktopLaunchModelRegistries(gatedLaunchAgents);
     const defaults = resolveEffectiveChatDefaults(
       gatedRegistries,
       agents,
@@ -233,10 +252,13 @@ export function useCoworkThreadWorkflow() {
     return createThreadWithResolvedConfig({
       agentKind: defaults.agentKind,
       modelId: defaults.modelId,
+      launchAgent: gatedLaunchAgents.find(
+        (candidate) => candidate.kind === defaults.agentKind,
+      ) ?? null,
     });
   }, [
     agents,
-    cloudModelRegistries,
+    cloudCatalogQuery.data?.agents,
     createThreadWithResolvedConfig,
     preferences,
     runtimeLaunchOptions,

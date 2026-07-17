@@ -6,7 +6,7 @@ describe("resolveSessionCreationModeId", () => {
     expect(resolveSessionCreationModeId({
       explicitModeId: "bypassPermissions",
       workspaceSurface: "coding",
-      agentKind: "claude",
+      unattendedModeId: "acceptEdits",
       preferredModeId: "plan",
     })).toBe("bypassPermissions");
   });
@@ -15,23 +15,31 @@ describe("resolveSessionCreationModeId", () => {
     expect(resolveSessionCreationModeId({
       explicitModeId: "default",
       workspaceSurface: "cowork",
-      agentKind: "claude",
+      unattendedModeId: "bypassPermissions",
       preferredModeId: "plan",
     })).toBe("default");
   });
 
-  it("falls back to the cowork default when no explicit mode is provided", () => {
+  it("uses the selected catalog default for cowork when no explicit mode is provided", () => {
     expect(resolveSessionCreationModeId({
       workspaceSurface: "cowork",
-      agentKind: "codex",
+      unattendedModeId: "full-access",
       preferredModeId: "read-only",
     })).toBe("full-access");
+  });
+
+  it("omits cowork mode when the selected agent declares no unattended default", () => {
+    expect(resolveSessionCreationModeId({
+      workspaceSurface: "cowork",
+      unattendedModeId: null,
+      preferredModeId: "read-only",
+    })).toBeUndefined();
   });
 
   it("falls back to the stored user default outside cowork", () => {
     expect(resolveSessionCreationModeId({
       workspaceSurface: "coding",
-      agentKind: "codex",
+      unattendedModeId: "full-access",
       preferredModeId: "auto",
     })).toBe("auto");
   });

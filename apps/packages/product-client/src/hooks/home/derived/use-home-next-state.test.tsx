@@ -218,7 +218,10 @@ describe("useHomeNextState", () => {
       destination: "repository",
       repoLaunchKind: "cloud",
     });
-    expect(stateMocks.modeArgs).toMatchObject({ destination: "repository" });
+    expect(stateMocks.modeArgs).toMatchObject({
+      destination: "repository",
+      repoLaunchKind: "cloud",
+    });
     expect(stateMocks.computeTargetArgs).toEqual({ enabled: false });
     expect(web.result.current.sshTargetOptions).toEqual([]);
     expect(web.result.current.sshTargetsLoading).toBe(false);

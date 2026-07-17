@@ -226,6 +226,12 @@ impl ActiveCatalog {
             .unwrap_or(false)
     }
 
+    /// Curated mode for surfaces that deliberately run this agent unattended.
+    /// `None` means no unattended mode has been vetted for the agent.
+    pub fn unattended_mode_id(&self, kind: &str) -> Option<&str> {
+        self.agent(kind)?.session.unattended_mode_id.as_deref()
+    }
+
     /// Models available under the active contexts: `availability.anyOf`
     /// intersected with the active ids (`"baseline"` counts when active).
     pub fn models(&self, kind: &str, contexts: &ActiveAuthContexts) -> Vec<&AgentCatalogModel> {

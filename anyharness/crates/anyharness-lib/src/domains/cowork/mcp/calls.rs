@@ -4,6 +4,7 @@ use super::calls_helpers::{
     coding_session_workspace_id, cowork_agent_search_response_json,
     cowork_agent_turns_response_json, initial_config_string, launch_agents_to_json,
     mode_options_to_json, prompt_outcome_label, recommended_modes_by_agent_kind_json,
+    unattended_mode_for_agent,
 };
 use super::context::CoworkMcpContext;
 use super::tools::{
@@ -19,7 +20,7 @@ use crate::domains::cowork::delegation::model::{
     CreateCodingSessionInput, CreateCodingWorkspaceInput, SendCodingMessageInput,
     MAX_CODING_SESSIONS_PER_MANAGED_WORKSPACE, MAX_MANAGED_WORKSPACES_PER_COWORK_SESSION,
 };
-use crate::domains::cowork::runtime::{default_cowork_coding_mode_for_agent, CoworkRuntime};
+use crate::domains::cowork::runtime::CoworkRuntime;
 use crate::domains::workspaces::model::WorkspaceRecord;
 use crate::integrations::mcp::json_rpc::deserialize_args;
 
@@ -297,12 +298,9 @@ fn get_coding_session_launch_options(
         .current_model_id
         .clone()
         .or(parent.requested_model_id.clone());
-    let default_mode_id = default_cowork_coding_mode_for_agent(&default_agent_kind)
-        .map(str::to_string)
-        .or(parent.current_mode_id.clone())
-        .or(parent.requested_mode_id.clone())
-        .or_else(|| live_mode_control.and_then(|control| control.current_value.clone()));
     let catalog = cowork_runtime.resolved_workspace_launch_options(&managed.workspace_id)?;
+    let default_mode_id = unattended_mode_for_agent(&catalog, &default_agent_kind);
+    let recommended_modes_by_agent_kind = recommended_modes_by_agent_kind_json(&catalog);
     Ok(json!({
         "parentSessionId": parent_session_id,
         "coworkWorkspaceId": managed.public_id,
@@ -311,13 +309,13 @@ fn get_coding_session_launch_options(
             "agentKind": default_agent_kind,
             "modelId": default_model_id,
             "modeId": default_mode_id,
-            "source": "cowork_parent_session_with_fast_coding_mode_fallback"
+            "source": "cowork_parent_session_with_catalog_unattended_fallback"
         },
         "agents": launch_agents_to_json(catalog),
         "mode": {
             "recommendedModeId": default_mode_id,
-            "recommendedModeByAgentKind": recommended_modes_by_agent_kind_json(),
-            "recommendedModeSource": "runtime fast coding defaults; explicit modeId overrides this",
+            "recommendedModeByAgentKind": recommended_modes_by_agent_kind,
+            "recommendedModeSource": "active catalog unattended modes; explicit modeId overrides this",
             "acceptedModeIdSource": "modeId is stored as a launch hint on the coding session and applied by the child agent when supported",
             "options": mode_options_to_json(live_mode_control),
         },

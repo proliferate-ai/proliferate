@@ -13,6 +13,7 @@ import {
   type WorkspaceShellTab,
 } from "#product/lib/domain/workspaces/tabs/shell-tabs";
 import { resolveAvailableLaunchSelection } from "#product/lib/domain/chat/models/launch-selection-defaults";
+import { resolveUnattendedModeId } from "#product/lib/domain/agents/unattended-mode";
 import { resolveStoredWorkspaceShellTab } from "#product/lib/domain/workspaces/tabs/active-shell-tab";
 import type {
   HeaderWorkspaceShellStripRow,
@@ -150,6 +151,12 @@ export function useWorkspaceTabActions(headerTabs: WorkspaceTabActionsContext) {
     void createEmptySessionWithResolvedConfig({
       agentKind: selection.kind,
       modelId: selection.modelId,
+      unattendedModeId: resolveUnattendedModeId({
+        agent: configuredLaunch.launchCatalog.launchAgents.find(
+          (candidate) => candidate.kind === selection.kind,
+        ),
+        modelId: selection.modelId,
+      }),
       latencyFlowId,
       reuseInFlightEmptySession: false,
     }).catch((error) => {

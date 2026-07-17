@@ -4,8 +4,6 @@ import type {
   StartCodeReviewRequest,
   StartPlanReviewRequest,
 } from "@anyharness/sdk";
-import { REVIEW_DEFAULT_MODE_ID_BY_AGENT_KIND } from "#product/config/review-session-mode-defaults";
-import { listConfiguredSessionControlValues } from "#product/lib/domain/chat/session-controls/session-mode-control";
 import {
   findReviewPersonaTemplateForReviewer,
   isBuiltInReviewPersonaId,
@@ -52,6 +50,7 @@ export interface ReviewSessionDefaults {
   agentKind: string;
   modelId: string | null;
   modeId: string | null;
+  unattendedModeId?: string | null;
 }
 
 export function createStoredReviewKindDefaults(): StoredReviewKindDefaults {
@@ -88,7 +87,8 @@ export function createReviewSetupReviewerDraft(args: {
     modelId: args.sessionDefaults.modelId ?? "",
     modeId: resolveReviewExecutionModeIdForAgent(
       args.sessionDefaults.agentKind,
-      args.sessionDefaults.modeId,
+      null,
+      args.sessionDefaults.unattendedModeId,
     ),
   };
 }
@@ -132,7 +132,7 @@ export function createReviewSetupDraft(args: {
   );
   const defaultAgentKind = stored?.agentKind || args.sessionDefaults.agentKind;
   const defaultModelId = stored?.modelId || args.sessionDefaults.modelId || "";
-  const defaultModeId = stored?.modeId || args.sessionDefaults.modeId || null;
+  const explicitDefaultModeId = stored?.modeId || null;
 
   return {
     kind: args.kind,
@@ -151,7 +151,10 @@ export function createReviewSetupDraft(args: {
           modelId: reviewer.modelId || defaultModelId,
           modeId: resolveReviewExecutionModeIdForAgent(
             reviewerAgentKind,
-            reviewer.modeId || defaultModeId,
+            reviewer.modeId || explicitDefaultModeId,
+            reviewerAgentKind === args.sessionDefaults.agentKind
+              ? args.sessionDefaults.unattendedModeId
+              : null,
           ),
         };
       }),
@@ -240,16 +243,15 @@ function resolveStoredReviewers(
 
 export function resolveReviewExecutionModeIdForAgent(
   agentKind: string,
-  preferredModeId: string | null | undefined,
+  explicitModeId: string | null | undefined,
+  unattendedModeId: string | null | undefined,
 ): string {
-  const values = listConfiguredSessionControlValues(agentKind, "mode");
-  const configuredDefault = REVIEW_DEFAULT_MODE_ID_BY_AGENT_KIND[agentKind];
-  return values.find((value) => value.value === configuredDefault)?.value
-    ?? values.find((value) => value.value === preferredModeId)?.value
-    ?? values.find((value) => value.value !== "plan")?.value
-    ?? values.find((value) => value.isDefault)?.value
-    ?? values[0]?.value
-    ?? "";
+  if (!agentKind.trim()) {
+    return "";
+  }
+  return explicitModeId?.trim()
+    || unattendedModeId?.trim()
+    || "";
 }
 
 export function buildReviewRequest(
@@ -277,7 +279,7 @@ export function buildReviewRequest(
     if (!label || !prompt) {
       return { request: null, error: "Every reviewer needs a label and prompt." };
     }
-    if (!agentKind || !modelId || !modeId) {
+    if (!agentKind || !modelId) {
       return {
         request: null,
         error: "Every reviewer needs a resolved agent and model.",
@@ -289,7 +291,7 @@ export function buildReviewRequest(
       prompt,
       agentKind,
       modelId,
-      modeId,
+      ...(modeId ? { modeId } : {}),
     });
   }
 

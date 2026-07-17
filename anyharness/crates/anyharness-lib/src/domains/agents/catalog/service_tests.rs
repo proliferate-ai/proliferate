@@ -44,6 +44,31 @@ fn bundled_catalog_declares_goal_support_for_claude_and_codex_only() {
 }
 
 #[test]
+fn active_catalog_surfaces_only_declared_unattended_modes() {
+    let mut raw: serde_json::Value =
+        serde_json::from_str(draft_catalog_json()).expect("draft must parse");
+    raw["agents"][0]["session"]["unattendedModeId"] =
+        serde_json::Value::String("bypassPermissions".to_string());
+    raw["agents"][1]["session"]["unattendedModeId"] =
+        serde_json::Value::String("full-access".to_string());
+    raw["agents"][2]["session"]
+        .as_object_mut()
+        .expect("cursor session")
+        .remove("unattendedModeId");
+    let document = parse_agent_catalog_json(&serde_json::to_string(&raw).expect("serialize"))
+        .expect("curated catalog must load");
+    let catalog = ActiveCatalog::new(Arc::new(document));
+
+    assert_eq!(
+        catalog.unattended_mode_id("claude"),
+        Some("bypassPermissions")
+    );
+    assert_eq!(catalog.unattended_mode_id("codex"), Some("full-access"));
+    assert_eq!(catalog.unattended_mode_id("cursor"), None);
+    assert_eq!(catalog.unattended_mode_id("unknown"), None);
+}
+
+#[test]
 fn pins_surface_catalog_harness_versions() {
     let catalog = draft_catalog();
 

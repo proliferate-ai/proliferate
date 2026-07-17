@@ -9,6 +9,7 @@ import { hasHiddenDismissedWorkspaceSessions } from "#product/lib/domain/workspa
 import {
   mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents,
 } from "#product/lib/domain/agents/cloud-launch-catalog";
+import { resolveUnattendedModeId } from "#product/lib/domain/agents/unattended-mode";
 import { getAgentLaunchOptions } from "#product/lib/access/anyharness/agents";
 import {
   elapsedMs,
@@ -173,6 +174,10 @@ export async function handleEmptyWorkspaceBootstrap(
       workspaceId: input.workspaceId,
       agentKind: defaultLaunch.kind,
       modelId: defaultLaunch.modelId,
+      unattendedModeId: resolveUnattendedModeId({
+        agent: launchAgents.find((candidate) => candidate.kind === defaultLaunch.kind),
+        modelId: defaultLaunch.modelId,
+      }),
       latencyFlowId: input.latencyFlowId,
       reuseInFlightEmptySession: true,
     });

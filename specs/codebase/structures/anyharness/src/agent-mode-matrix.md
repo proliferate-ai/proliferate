@@ -1,226 +1,128 @@
 # Agent Session Mode Matrix
 
-This doc exists to answer one question: "for a given agent kind, what
-`mode_id` / `collaboration_mode` values can cowork actually send, and which
-one is the most permissive?"
+This document defines how a session `mode_id` is selected before launch, with a
+focus on product flows that intentionally run unattended. It does not define
+the live mode of an already-running session; that remains ACP-reported state.
 
-## How modes flow through the stack
+## Sources Of Truth
 
-The runtime does not hardcode per-agent mode values, but create-session mode
-values are now validated against the bundled AnyHarness agent catalog:
+The active AnyHarness agent catalog owns two related pieces of static data:
 
-- The HTTP create-session request takes an opaque `mode_id` string
-  (`anyharness/crates/anyharness-contract/src/v1/sessions.rs`).
-- Session creation resolves the agent's bundled catalog row and validates an
-  explicit `mode_id` against the catalog's create-session `mode` control before
-  launch.
-- After validation, the runtime passes the mode through to the ACP binary
-  (`anyharness/crates/anyharness-lib/src/domains/sessions/runtime/creation.rs`,
-  `anyharness/crates/anyharness-lib/src/domains/sessions/runtime/startup.rs`).
-- At session start the ACP binary returns its own `SessionModeState`, which
-  the live-session actor config path stores as `LegacyModeState`
-  (`anyharness/crates/anyharness-lib/src/live/sessions/actor/config/**`).
-- `build_live_config_snapshot` normalizes whatever the agent exposed into the
-  common `NormalizedSessionControls` buckets (`model`, `collaboration_mode`,
-  `mode`, `reasoning`, `effort`, `fast_mode`, plus `extras`)
-  (`anyharness/crates/anyharness-lib/src/domains/sessions/live_config/**`).
-- The contract shape with the six normalized buckets is declared at
-  `anyharness/crates/anyharness-contract/src/v1/session_config.rs`.
+- `session.controls[key = "mode"].values` is the agent-level create-session
+  mode vocabulary.
+- optional `session.unattendedModeId` is the mode an unattended product flow
+  may select when the caller did not explicitly choose one.
 
-Consequence: the pre-launch legal set is the bundled AnyHarness catalog's
-create-session `mode` control for that agent. Once the process is live, the
-actual session controls are whatever the ACP binary advertises at
-live-session time.
+The field is curation, not a universal default. It must not change ordinary
+interactive session creation, stored user preferences, or the mode chosen by an
+agent process when `mode_id` is omitted.
 
-The *desktop-advertised* set of mode values is frozen in a presentation
-table at `apps/desktop/src/lib/domain/chat/session-controls/presentation.ts`. This table
-is what defines which values the UI renders as selectable, with labels,
-tones, icons, and a per-agent `isDefault`. The `ConfiguredSessionControlKey`
-type only recognises `mode` and `collaboration_mode`
-(`apps/desktop/src/lib/domain/chat/session-controls/presentation.ts`).
+The runtime may start from the bundled `catalogs/agents/catalog.json` document
+or activate a newer validated catalog through control-plane sync. The active
+document is projected into the target's resolved launch options. ProductClient
+combines those target-local options with cloud display metadata, but the
+selected local, cloud, or SSH runtime owns the effective unattended default.
 
-Desktop keeps a user preference `defaultSessionModeByAgentKind`
-(`apps/desktop/src/lib/domain/preferences/user/model.ts`) as an
-unvalidated `Record<string, string>` — it is sanitized for shape only
-(`apps/desktop/src/lib/domain/preferences/user/session-defaults.ts`), not against
-the presentation table.
+Current launch-option responses carry `unattendedModeId` as a nullable property:
 
-Cowork uses that preference verbatim when creating threads
-(`apps/desktop/src/hooks/cowork/workflows/use-cowork-thread-workflow.ts`), and
-session creation reads the same preference directly from the store
-(`apps/desktop/src/hooks/sessions/workflows/use-session-creation-actions.ts`).
+- a string means the selected target curates that unattended mode
+- `null` means the selected target intentionally has no unattended default
+- an absent property identifies an older response shape; only then may the
+  product fall back to the cloud catalog value for compatibility
 
-Registered agent kinds come from
-`anyharness/crates/anyharness-lib/src/domains/agents/model.rs`: `claude`,
-`codex`, `gemini`, `cursor`, `opencode`. All five are declared in
-`catalogs/agents/v1/catalog.json` and projected into runtime descriptors by
-`anyharness/crates/anyharness-lib/src/domains/agents/registry/mod.rs`.
+That property-presence rule prevents a newer cloud catalog from overriding an
+older or differently curated target by accident.
 
-## Per-agent matrix
+## Selection Precedence
 
-For each family, "Exposed in desktop" means the value appears in
-`apps/desktop/src/lib/domain/chat/session-controls/presentation.ts` and therefore renders
-as a first-class selector in the UI. Values not in the table still travel
-through the runtime unchanged, but the desktop UI will only see them if the
-ACP binary surfaces them in live config and then uses fallback
-icon/tone rendering
-(`apps/desktop/src/lib/domain/chat/session-controls/session-mode-control.ts`).
+An unattended product flow resolves `mode_id` in this order:
 
-### Claude (`claude`)
+1. a non-blank explicit caller or user selection
+2. the selected target's `unattendedModeId`, if the selected agent and model
+   support it
+3. omission of `mode_id`
 
-Control key: `mode` — source:
-`apps/desktop/src/lib/domain/chat/session-controls/presentation.ts`.
+An explicit selection wins even when it differs from the unattended curation;
+AnyHarness still applies normal create-session validation and rejects an
+unsupported explicit value rather than silently replacing it.
 
-| Value               | Label         | Meaning (from desktop copy)  | Default | Tone         |
-| ------------------- | ------------- | ---------------------------- | ------- | ------------ |
-| `default`           | Default       | Ask before each action.      | yes     | info         |
-| `acceptEdits`       | Accept Edits  | Auto-approve file edits.     |         | success      |
-| `plan`              | Plan          | Plan without execution.      |         | accent       |
-| `dontAsk`           | Don't Ask     | Auto-approve most actions.   |         | warning      |
-| `bypassPermissions` | Bypass        | Skip permission checks.      |         | destructive  |
+The catalog default is safe to use when the selected model either has no
+model-specific mode vocabulary or explicitly includes the curated value. The
+product omits it when the target agent cannot be resolved, the selected model
+cannot be resolved, or the model advertises a mode list that excludes it.
+Omission is the conservative fallback: the agent process keeps its own normal
+default.
 
-All five values are exposed in desktop config. No `collaboration_mode` is
-configured for Claude.
+Standard interactive chat does not consult `unattendedModeId`. Cowork,
+workflow, plan handoff, and review execution may opt into the resolver because
+those launches are explicitly unattended. Their independent product behavior
+does not justify separate per-agent fallback maps.
 
-- Most permissive: **`bypassPermissions`**.
-- Unambiguous? Yes on the desktop copy ("Skip permission checks"), which is
-  stricter than `dontAsk` ("Auto-approve most actions"). Runtime cannot
-  verify this independently — these strings are forwarded to the Claude ACP
-  binary selected by the bundled agent catalog, which owns the actual
-  enforcement semantics.
+## Catalog Validation
 
-### Codex (`codex`)
+An active catalog may contain `session.unattendedModeId` only when all of these
+invariants hold:
 
-Control keys: **both** `mode` and `collaboration_mode` — source:
-`apps/desktop/src/lib/domain/chat/session-controls/presentation.ts`.
+- the value is non-blank
+- the agent-level `session.controls` contains a `mode` entry whose values
+  include it
+- every model that declares its own `controls.mode` vocabulary includes it
 
-`mode` values:
+A model without a model-specific mode vocabulary inherits the validated
+agent-level set. Catalog build and runtime activation both enforce these
+invariants so an invalid synced document never becomes launch truth.
 
-| Value         | Label       | Meaning                           | Default | Tone        |
-| ------------- | ----------- | --------------------------------- | ------- | ----------- |
-| `read-only`   | Read Only   | Inspect and plan without editing. | yes     | info        |
-| `auto`        | Auto        | Auto-approve standard edits.      |         | success     |
-| `full-access` | Full Access | Allow unrestricted changes.       |         | destructive |
+## Current Curation
 
-`collaboration_mode` values:
+Only agent families with a repo-supported, unambiguous unattended permission
+mode receive a value:
 
-| Value     | Label   | Meaning                           | Default | Tone    |
-| --------- | ------- | --------------------------------- | ------- | ------- |
-| `default` | Default | Standard collaboration behavior.  | yes     | info    |
-| `plan`    | Plan    | Plan before applying changes.     |         | accent  |
+| Agent | Agent-level mode vocabulary | `unattendedModeId` | Rationale |
+| --- | --- | --- | --- |
+| Claude | `auto`, `default`, `acceptEdits`, `plan`, `dontAsk`, `bypassPermissions` | `bypassPermissions` | Catalog and product presentation identify it as bypassing permission checks. |
+| Codex | `read-only`, `auto`, `full-access` | `full-access` | Catalog and product presentation identify it as unrestricted access. |
+| Cursor | `agent`, `plan`, `ask` | unset | `agent` describes capability, but the repo does not establish equivalent unattended permission semantics. |
+| Grok | no create-session `mode` control | unset | There is no catalog mode vocabulary to validate. |
+| OpenCode | `build`, `plan` | unset | `build` is not proven to bypass permission prompts. |
 
-Both keys are exposed in desktop config. Codex is the only family where the
-normalizer expects two distinct controls — see the `collaboration_mode`
-detection branch at
-`anyharness/crates/anyharness-lib/src/domains/sessions/live_config/controls.rs`; the
-tests under `domains/sessions/live_config/**` assert that the two controls keep
-distinct values.
+Unset values are deliberate. Do not infer a permissive mode from ordering, a
+presentation `isDefault` flag, a mode name such as `agent` or `build`, or a
+provider-specific hardcoded table.
 
-- Most permissive: **`mode = full-access`**.
-- Caveat: the desktop UI lets the user set `collaboration_mode` independently,
-  and its `plan` value *can* coexist with `mode = full-access` at the product
-  layer — the runtime will not reject that combination. "Most permissive" is
-  unambiguous only if you also leave `collaboration_mode` at `default`.
-- Caveat 2: cowork's `defaultSessionModeByAgentKind` is a single string per
-  agent kind (`apps/desktop/src/lib/domain/preferences/user/model.ts`) and the
-  create-session path only carries `mode_id`
-  (`anyharness/crates/anyharness-contract/src/v1/sessions.rs`). There is
-  no parallel `collaboration_mode_id` on session creation — collaboration
-  mode is only mutable at live-config time via
-  `SetSessionConfigOptionRequest`
-  (`anyharness/crates/anyharness-contract/src/v1/session_config.rs`). A
-  cowork thread created from the default will therefore start with whatever
-  `collaboration_mode` the codex ACP binary picks as its own default.
+## Controls Through The Stack
 
-### Gemini (`gemini`)
+Before launch:
 
-Control key: `mode` — source:
-`apps/desktop/src/lib/domain/chat/session-controls/presentation.ts`.
+1. ProductClient resolves the selected target's merged launch agent and model.
+2. An unattended workflow applies the precedence above.
+3. The HTTP create-session request carries the resulting opaque `mode_id`, if
+   any (`anyharness-contract/src/v1/sessions.rs`).
+4. AnyHarness validates it against the active catalog and selected model before
+   launching the resolved agent process.
 
-| Value      | Label     | Meaning                    | Default | Tone        |
-| ---------- | --------- | -------------------------- | ------- | ----------- |
-| `default`  | Default   | Ask before each action.    | yes     | info        |
-| `autoEdit` | Auto Edit | Auto-approve edits.        |         | success     |
-| `yolo`     | YOLO      | Skip permission checks.    |         | destructive |
-| `plan`     | Plan      | Plan without execution.    |         | accent      |
+After launch, the ACP binary reports its own `SessionModeState`. The live
+session actor stores that state and normalizes the reported controls into the
+common session-config buckets. Live ACP config is authoritative from that point
+forward; static catalog curation is not active-session truth.
 
-All four values are exposed in desktop config. No `collaboration_mode`.
+`collaboration_mode` remains a separate live control. In particular, Codex may
+report both `mode` and `collaboration_mode`, but create-session `mode_id` does
+not set collaboration mode. Choosing `full-access` for an unattended launch
+does not authorize the product to invent a collaboration-mode override.
 
-- Most permissive: **`yolo`**.
-- Unambiguous? Yes on desktop copy (`yolo` = "Skip permission checks" vs
-  `autoEdit` = "Auto-approve edits"). As with Claude, actual enforcement
-  lives in the Gemini ACP binary selected by the bundled agent catalog; the
-  desktop labels reflect intent, not a runtime-side whitelist.
+Product labels, descriptions, icons, and safe interactive defaults live in
+`apps/packages/product-domain/src/chats/session-controls/presentation.ts`.
+Presentation enriches catalog values for UI; it does not own unattended launch
+policy.
 
-### Cursor (`cursor`)
+## Required Test Cases
 
-Registered in the runtime
-through `catalogs/agents/v1/catalog.json` and
-`anyharness/crates/anyharness-lib/src/domains/agents/registry/mod.rs` via
-`cursor-acp` (fallback `cursor-agent acp`).
+Changes to this contract must cover:
 
-**No entry in `apps/desktop/src/lib/domain/chat/session-controls/presentation.ts`.**
-Because `SESSION_CONTROL_PRESENTATIONS` has no `cursor` key,
-`listConfiguredSessionControlValues("cursor", ...)` returns the empty array
-(`apps/desktop/src/lib/domain/chat/session-controls/session-mode-control.ts`), so
-the desktop UI has no first-class mode selector for Cursor.
-
-- Most permissive: **unknown from the repo.** The runtime will forward any
-  `mode_id` string the client sends through to cursor-acp, and the normalized
-  controls will reflect whatever cursor-acp advertises in its
-  `SessionModeState`. There is no repo-local list of supported values to
-  anchor a "most permissive" claim.
-- Ambiguous on purpose: any recommendation here would be guesswork.
-
-### OpenCode (`opencode`)
-
-Registered in the runtime
-through `catalogs/agents/v1/catalog.json` and
-`anyharness/crates/anyharness-lib/src/domains/agents/registry/mod.rs` via the
-`opencode` ACP registry id (fallback npm package `opencode-ai`).
-
-**No entry in `apps/desktop/src/lib/domain/chat/session-controls/presentation.ts`.** Same
-situation as Cursor: the desktop UI shows no mode selector, but the runtime
-will pass `mode_id` through verbatim.
-
-- Most permissive: **unknown from the repo.** Not defined in either the
-  presentation table or anywhere runtime-side.
-
-## Divergence between desktop labels and runtime behaviour
-
-- The desktop presentation table is descriptive. Session creation enforces the
-  bundled AnyHarness catalog's create-session `mode` values, and live controls
-  then come from the ACP binary.
-- Claude `dontAsk` and `bypassPermissions` are both in desktop config; they
-  are distinct only by copy tone ("Auto-approve most actions" vs "Skip
-  permission checks"). If the upstream Claude ACP binary no longer
-  distinguishes them, the UI will still show both.
-- Codex's `plan` appears in both `mode` and `collaboration_mode` as distinct
-  options. The UI treats them as independent controls; the runtime
-  normalizer explicitly keeps them separate
-  (`anyharness/crates/anyharness-lib/src/domains/sessions/live_config/controls.rs`).
-- Cursor and OpenCode have zero desktop mode metadata. A cowork thread
-  created against one of these families today will send `mode_id = undefined`
-  (since `defaultSessionModeByAgentKind` has no entry for them unless the
-  user typed one in by hand) and inherit whatever default the ACP binary
-  picks.
-
-## Recommended cowork default by agent family
-
-Only families with a repo-supported "most permissive" value get a
-recommendation. For the rest, explicitly: unknown — do not ship a default.
-
-| Agent    | Control             | Recommended permissive value | Confidence                                       |
-| -------- | ------------------- | ---------------------------- | ------------------------------------------------ |
-| claude   | `mode`              | `bypassPermissions`          | High. Unambiguous in desktop config.             |
-| codex    | `mode`              | `full-access`                | High for `mode`. `collaboration_mode` unset (see caveats above). |
-| gemini   | `mode`              | `yolo`                       | High. Unambiguous in desktop config.             |
-| cursor   | `mode`              | *unknown*                    | None. No repo-local source of truth.             |
-| opencode | `mode`              | *unknown*                    | None. No repo-local source of truth.             |
-
-If cowork needs a permissive default for cursor / opencode, the next
-step is to either (a) query the live `SessionLiveConfigSnapshot` after the
-first session starts and pick the most permissive value from the
-`normalized_controls.mode` bucket heuristically, or (b) extend the
-desktop presentation table with vetted entries from each ACP binary. This
-doc does not choose between those.
+- catalog validation of valid and invalid unattended values
+- default selection for a supported agent and model
+- explicit caller selection taking precedence
+- unset/unknown/unsupported agent and model fallback to omission
+- parity between local and remote launch-option projection
+- current-response explicit `null` versus older-response missing-property
+  compatibility behavior

@@ -31,6 +31,7 @@ import type {
   ModelSelectorSelection,
 } from "#product/lib/domain/chat/models/model-selector-types";
 import { resolveModelDisplayName } from "#product/lib/domain/chat/models/model-display";
+import { resolveUnattendedModeId } from "#product/lib/domain/agents/unattended-mode";
 import { getSessionClientAndWorkspace } from "#product/lib/access/anyharness/session-runtime";
 import type { CloudSandboxGatewayUrlSource } from "#product/lib/access/cloud/cloud-sandbox-gateway";
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
@@ -114,13 +115,21 @@ export function usePlanHandoffWorkflow({
     resolvedConnectionState,
   ]);
 
-  const modeOptions = useMemo(
-    () => listPlanHandoffModeOptions(effectiveSelection?.kind),
-    [effectiveSelection?.kind],
-  );
   const defaultModeId = useMemo(
-    () => resolvePlanHandoffModeId(effectiveSelection?.kind),
-    [effectiveSelection?.kind],
+    () => resolvePlanHandoffModeId(
+      effectiveSelection?.kind,
+      resolveUnattendedModeId({
+        agent: launchCatalog.launchAgents.find(
+          (candidate) => candidate.kind === effectiveSelection?.kind,
+        ),
+        modelId: effectiveSelection?.modelId,
+      }),
+    ),
+    [effectiveSelection, launchCatalog.launchAgents],
+  );
+  const modeOptions = useMemo(
+    () => listPlanHandoffModeOptions(effectiveSelection?.kind, defaultModeId),
+    [defaultModeId, effectiveSelection?.kind],
   );
   const selectedModeId = modeOptions.some((option) => option.value === modeOverrideId)
     ? modeOverrideId

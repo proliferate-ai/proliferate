@@ -7,7 +7,6 @@ import {
   buildReviewRequest,
   createReviewSetupDraft,
   DEFAULT_REVIEW_MAX_ROUNDS,
-  resolveReviewExecutionModeIdForAgent,
   type StoredReviewDefaultsByKind,
 } from "#product/lib/domain/reviews/review-config";
 import {
@@ -25,6 +24,7 @@ export function resolveOneClickReviewRequest(args: {
   kind: ReviewKind;
   parentSessionId: string;
   parentSlot: ReviewLaunchSessionSlot;
+  unattendedModeId?: string | null;
   reviewDefaultsByKind: StoredReviewDefaultsByKind;
   reviewPersonalitiesByKind: StoredReviewPersonalitiesByKind;
 }): {
@@ -35,7 +35,8 @@ export function resolveOneClickReviewRequest(args: {
   const sessionDefaults = {
     agentKind: parentAgentKind,
     modelId: args.parentSlot.modelId,
-    modeId: resolveReviewExecutionModeIdForAgent(parentAgentKind, args.parentSlot.modeId),
+    modeId: args.parentSlot.modeId,
+    unattendedModeId: args.unattendedModeId,
   };
   const personalityTemplates = resolveReviewPersonaTemplates(
     args.kind,
