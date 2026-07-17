@@ -94,9 +94,13 @@ across worlds. Compilation caches may accelerate the build, but a cache entry is
 not qualification evidence. Downstream jobs download the prepared artifact and
 verify its digest against the candidate manifest.
 
-Tier 4 additionally resolves the retained manifest for the last qualified
-production release, N-1. N-1 is not inferred by decrementing a patch version or
-rebuilding current source with an older version string.
+Tier 4 additionally resolves the retained-release receipt for the last
+qualified production release, N-1 — implemented as `RetainedReleaseReceiptV1`
+(`tests/release/src/artifacts/retained-release-set.ts`) with committed
+receipts under `tests/release/retained-releases/` (see that directory's
+README for the N-1 identity rules, the one-time v0.3.38 bootstrap exception,
+and the retention roots). N-1 is not inferred by decrementing a patch version
+or rebuilding current source with an older version string.
 
 Both manifests are versioned machine contracts. Each available artifact slot
 contains an immutable locator plus the digest/checksum needed to verify the

@@ -45,8 +45,8 @@ async function runViaRunner(source: Record<string, string>) {
 
 const RETAINED_SOURCE = {
   RELEASE_E2E_SERVER_URL: "https://qualification.example/api",
-  RELEASE_E2E_RETAINED_TEMPLATE_ID: "tmpl_retained_n1",
-  RELEASE_E2E_RETAINED_MANIFEST: JSON.stringify({ anyharness: { version: "0.3.11" } }),
+  // The committed bootstrap receipt: the real repo data path, end to end.
+  RELEASE_E2E_RETAINED_RELEASE_ID: "v0.3.38",
   RELEASE_E2E_SUPERVISOR_OWNED_RUNTIME: "1",
 } as const;
 
@@ -119,8 +119,7 @@ test("declares its gating inputs in requiredEnv so the runner surfaces them in c
   assert.deepEqual(
     [...t4Runtime1.requiredEnv].sort(),
     [
-      "RELEASE_E2E_RETAINED_MANIFEST",
-      "RELEASE_E2E_RETAINED_TEMPLATE_ID",
+      "RELEASE_E2E_RETAINED_RELEASE_ID",
       "RELEASE_E2E_SERVER_URL",
       "RELEASE_E2E_SUPERVISOR_OWNED_RUNTIME",
     ],
@@ -157,17 +156,14 @@ test("absent retained N-1 inputs block rather than fabricate an N-1", async () =
     () => leaf().run(fakeCtx({ env: envWithFlag() })),
     (error: unknown) =>
       error instanceof ScenarioBlockedError &&
-      /no retained-production N-1 template/.test((error as Error).message) &&
+      /no retained-production N-1 baseline selected/.test((error as Error).message) &&
       /Refusing to fabricate an N-1/.test((error as Error).message),
   );
 });
 
-test("supervisor-owned runtime not confirmed blocks even with retained inputs", async () => {
+test("supervisor-owned runtime not confirmed blocks even with a retained receipt", async () => {
   // Flag absent from ctx.env (not declared "1"): the confirmation gate fires.
-  const env = fakeEnv({
-    RELEASE_E2E_RETAINED_TEMPLATE_ID: "tmpl_retained_n1",
-    RELEASE_E2E_RETAINED_MANIFEST: JSON.stringify({ anyharness: { version: "0.3.11" } }),
-  });
+  const env = fakeEnv({ RELEASE_E2E_RETAINED_RELEASE_ID: "v0.3.38" });
   await assert.rejects(
     () => leaf().run(fakeCtx({ env })),
     (error: unknown) =>
@@ -176,11 +172,8 @@ test("supervisor-owned runtime not confirmed blocks even with retained inputs", 
   );
 });
 
-test("retained inputs + flag on: live body not yet wired, blocks honestly (never a false green)", async () => {
-  const env = envWithFlag({
-    RELEASE_E2E_RETAINED_TEMPLATE_ID: "tmpl_retained_n1",
-    RELEASE_E2E_RETAINED_MANIFEST: JSON.stringify({ anyharness: { version: "0.3.11" } }),
-  });
+test("retained receipt + flag on: live body not yet wired, blocks honestly (never a false green)", async () => {
+  const env = envWithFlag({ RELEASE_E2E_RETAINED_RELEASE_ID: "v0.3.38" });
   await assert.rejects(
     () => leaf().run(fakeCtx({ env })),
     (error: unknown) =>
@@ -188,79 +181,31 @@ test("retained inputs + flag on: live body not yet wired, blocks honestly (never
   );
 });
 
-test("resolver returns null when either retained input is missing", () => {
+test("resolver returns null when no release id is supplied", () => {
   assert.equal(resolveRetainedRuntimeBaseline(fakeEnv()), null);
-  assert.equal(
-    resolveRetainedRuntimeBaseline(fakeEnv({ RELEASE_E2E_RETAINED_TEMPLATE_ID: "tmpl_only" })),
-    null,
-  );
-  assert.equal(
-    resolveRetainedRuntimeBaseline(fakeEnv({ RELEASE_E2E_RETAINED_MANIFEST: "{}" })),
-    null,
-  );
   // Whitespace-only counts as absent.
   assert.equal(
-    resolveRetainedRuntimeBaseline(
-      fakeEnv({ RELEASE_E2E_RETAINED_TEMPLATE_ID: "   ", RELEASE_E2E_RETAINED_MANIFEST: "{}" }),
-    ),
+    resolveRetainedRuntimeBaseline(fakeEnv({ RELEASE_E2E_RETAINED_RELEASE_ID: "   " })),
     null,
   );
 });
 
-test("resolver derives the reported version from the manifest, override wins", () => {
-  const derived = resolveRetainedRuntimeBaseline(
-    fakeEnv({
-      RELEASE_E2E_RETAINED_TEMPLATE_ID: "tmpl_retained_n1",
-      RELEASE_E2E_RETAINED_MANIFEST: JSON.stringify({ anyharness: { version: "0.3.11" } }),
-    }),
+test("resolver resolves the COMMITTED bootstrap receipt (the real repo data path)", () => {
+  // No injected index: this exercises the exact committed
+  // tests/release/retained-releases/ data the runner will use, proving the
+  // real v0.3.38 receipt validates end to end from a stock checkout.
+  const baseline = resolveRetainedRuntimeBaseline(
+    fakeEnv({ RELEASE_E2E_RETAINED_RELEASE_ID: "v0.3.38" }),
   );
-  assert.ok(derived);
-  assert.equal(derived?.templateId, "tmpl_retained_n1");
-  assert.equal(derived?.anyharnessReportedVersion, "0.3.11");
-
+  assert.ok(baseline);
+  assert.equal(baseline?.receipt.release.qualification_state, "bootstrap_unqualified");
+  assert.equal(baseline?.templateId, baseline?.receipt.managed_runtime.immutable_template_id);
+  // Override wins over the receipt's version (issue #1089 unstamped-binary case).
   const overridden = resolveRetainedRuntimeBaseline(
-    fakeEnv({
-      RELEASE_E2E_RETAINED_TEMPLATE_ID: "tmpl_retained_n1",
-      RELEASE_E2E_RETAINED_MANIFEST: JSON.stringify({ anyharness: { version: "0.3.11" } }),
-    }),
-    // The override is now an explicit argument, not an env read: it is optional
-    // (not a requiredEnv gate), so the scenario reads it via the optional-var
-    // idiom and hands it here (T4R-CONTROL-001).
+    fakeEnv({ RELEASE_E2E_RETAINED_RELEASE_ID: "v0.3.38" }),
     "0.1.0",
   );
-  // The unstamped-binary case (issue #1089): reported truth differs from tag.
   assert.equal(overridden?.anyharnessReportedVersion, "0.1.0");
-
-  // A blank/whitespace override falls back to the manifest-derived version.
-  const blankOverride = resolveRetainedRuntimeBaseline(
-    fakeEnv({
-      RELEASE_E2E_RETAINED_TEMPLATE_ID: "tmpl_retained_n1",
-      RELEASE_E2E_RETAINED_MANIFEST: JSON.stringify({ anyharness: { version: "0.3.11" } }),
-    }),
-    "   ",
-  );
-  assert.equal(blankOverride?.anyharnessReportedVersion, "0.3.11");
-});
-
-test("resolver tolerates a flat anyharnessVersion field and an unparseable manifest", () => {
-  const flat = resolveRetainedRuntimeBaseline(
-    fakeEnv({
-      RELEASE_E2E_RETAINED_TEMPLATE_ID: "tmpl_retained_n1",
-      RELEASE_E2E_RETAINED_MANIFEST: JSON.stringify({ anyharnessVersion: "0.3.10" }),
-    }),
-  );
-  assert.equal(flat?.anyharnessReportedVersion, "0.3.10");
-
-  const garbage = resolveRetainedRuntimeBaseline(
-    fakeEnv({
-      RELEASE_E2E_RETAINED_TEMPLATE_ID: "tmpl_retained_n1",
-      RELEASE_E2E_RETAINED_MANIFEST: "not json {",
-    }),
-  );
-  // Non-null (both inputs present) but empty reported version, which the
-  // scenario asserts against so a malformed baseline blocks rather than guesses.
-  assert.ok(garbage);
-  assert.equal(garbage?.anyharnessReportedVersion, "");
 });
 
 // ---------------------------------------------------------------------------
@@ -291,17 +236,15 @@ test("REGRESSION T4R-CONTROL-001: absent retained inputs are surfaced as a missi
   });
   assert.equal(result.status, "blocked");
   assert.equal(result.reason?.code, "missing_requirement");
-  assert.match(result.reason!.message, /RELEASE_E2E_RETAINED_TEMPLATE_ID/);
-  assert.match(result.reason!.message, /RELEASE_E2E_RETAINED_MANIFEST/);
+  assert.match(result.reason!.message, /RELEASE_E2E_RETAINED_RELEASE_ID/);
 });
 
-test("REGRESSION T4R-CONTROL-001: retained inputs present but flag unset blocks as a missing requirement", async () => {
+test("REGRESSION T4R-CONTROL-001: retained receipt selected but flag unset blocks as a missing requirement", async () => {
   // The supervisor flag is now a declared requiredEnv gate too, so an absent flag
   // blocks at preflight rather than through a divergent process.env read.
   const result = await runViaRunner({
     RELEASE_E2E_SERVER_URL: "https://qualification.example/api",
-    RELEASE_E2E_RETAINED_TEMPLATE_ID: "tmpl_retained_n1",
-    RELEASE_E2E_RETAINED_MANIFEST: JSON.stringify({ anyharness: { version: "0.3.11" } }),
+    RELEASE_E2E_RETAINED_RELEASE_ID: "v0.3.38",
   });
   assert.equal(result.status, "blocked");
   assert.equal(result.reason?.code, "missing_requirement");

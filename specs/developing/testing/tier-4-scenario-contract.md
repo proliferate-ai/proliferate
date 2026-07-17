@@ -55,8 +55,24 @@ upgrade world.
 
 ### N-1 means the last qualified production release
 
-N-1 is resolved from the retained manifest for the last production release
-qualified before N. It is never:
+N-1 is resolved from the retained-release receipt of the last production
+release qualified before N. Receipts are committed under
+`tests/release/retained-releases/` (append-only index + one immutable receipt
+per release; schema and validation in
+`tests/release/src/artifacts/retained-release-set.ts`), selected via
+`RELEASE_E2E_RETAINED_RELEASE_ID`, validated (shape, immutable/non-expiring
+locators, artifact-set digest recomputation, bootstrap policy) before any
+world side effect, and materialized with byte-hash verification on every use
+(`materialize-retained-release.ts`; `make qualification-retained-release`).
+
+One-time bootstrap exception (founder ruling 2026-07-16): production v0.3.38
+is retained as `bootstrap_unqualified` — explicitly not claiming historical
+qualification; evidence displays that state; the receipt's E2B `input_hash`
+is a disclosed-null historical gap; and its self-host target truthfully
+records `server-v0.3.35` (v0.3.38 shipped no server surface). Once any
+`qualified` receipt exists, selecting a bootstrap receipt fails closed.
+
+N-1 is never:
 
 - inferred by subtracting one patch version;
 - rebuilt from candidate source with an older version string;

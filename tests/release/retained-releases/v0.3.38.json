@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "kind": "proliferate.retained-release",
+  "release": {
+    "release_id": "v0.3.38",
+    "release_tag": "proliferate-v0.3.38",
+    "source_sha": "e61afc274593085e51870b24269f718a543b88b4",
+    "published_at": "2026-07-17T01:07:21.493Z",
+    "qualification_state": "bootstrap_unqualified",
+    "qualification_evidence": null
+  },
+  "desktop": {
+    "version": "0.3.38",
+    "packages": [
+      {
+        "platform": "darwin-aarch64",
+        "immutable_locator": "https://downloads.proliferate.com/desktop/stable/Proliferate_0.3.38_aarch64.app.tar.gz",
+        "sha256": "bae2e0519ea75f2e88a5bead8007af4386d1952b9c26536ea2a9c140e6bc1bd5",
+        "signature_locator": "https://downloads.proliferate.com/desktop/stable/Proliferate_0.3.38_aarch64.app.tar.gz.sig",
+        "sha256_signature": "9861f020f3580d4ea474b8a3383e7be92f27ea313933fd2476542d91adfb9793"
+      },
+      {
+        "platform": "darwin-x86_64",
+        "immutable_locator": "https://downloads.proliferate.com/desktop/stable/Proliferate_0.3.38_x64.app.tar.gz",
+        "sha256": "84b1b073298d36ac1432083c52dae24984a3524e269aead9cb981989a8e9c307",
+        "signature_locator": "https://downloads.proliferate.com/desktop/stable/Proliferate_0.3.38_x64.app.tar.gz.sig",
+        "sha256_signature": "abd1eebdb37ac2a57e98e03541091f2e556d1ab0a238fee031b923721c47542a"
+      }
+    ],
+    "updater_pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDZEMkRFQkU1RDRENDI4MkUKUldRdUtOVFU1ZXN0YlFBN2ZWUjZzcXpkMWpvL1VUdWpnNmF3Q1g4U0hHYnd4MVFmUTdvaERmY04K",
+    "embedded_anyharness_version": "0.3.38"
+  },
+  "managed_runtime": {
+    "template_family": "pablo-5391/proliferate-runtime-cloud",
+    "immutable_template_id": "y7dakz4fs16tbz8vb9zo",
+    "template_build_id": "661a9621-78db-4c55-84d1-281c21fb72dc",
+    "source_tag": "sha-e61afc274593",
+    "input_hash": null,
+    "anyharness_version": "0.3.38",
+    "worker_version": "0.3.38",
+    "supervisor_version": "0.3.38",
+    "harness_catalog_digest": "4720c40366a3f183688077442513f4167eaefdc3e934e16f1673e0d8377df0df",
+    "harness_registry_digest": "6a67fe6266294fb3d9589645a213cec971f4a3ff33e1c64415b72bc2c1884ca0"
+  },
+  "self_host": {
+    "version": "0.3.35",
+    "release_tag": "server-v0.3.35",
+    "deploy_bundle_locator": "https://github.com/proliferate-ai/proliferate/releases/download/server-v0.3.35/proliferate-deploy.tar.gz",
+    "deploy_bundle_sha256": "e8fc82e980cd0e71ab306cf3b8eba319f7e33f6c59e7aa48a5f22ba3cde83f8a",
+    "server_image_digest": "ghcr.io/proliferate-ai/proliferate-server@sha256:284a51aa3bdcab74b221fdc04f4d93ee757fe52c5ed2f9979a4477127955617d"
+  },
+  "artifact_set_digest": "b8aad5853c70f127664ed9a4828e3d3ae0dc2d207579b5574add13e808347a88"
+}
