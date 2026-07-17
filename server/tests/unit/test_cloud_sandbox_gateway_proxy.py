@@ -1,23 +1,27 @@
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from typing import cast
 
 import httpx
 import pytest
 from fastapi import Request, WebSocket
 from starlette.datastructures import QueryParams
+from starlette.requests import ClientDisconnect
+from starlette.responses import StreamingResponse
+from starlette.types import Message, Scope
 
 from proliferate.server.cloud.gateway import proxy
 
 
-def _request(body: bytes = b"payload") -> Request:
+def _request(body: bytes = b"payload", *, method: str = "POST") -> Request:
     async def receive() -> dict[str, object]:
         return {"type": "http.request", "body": body, "more_body": False}
 
     return Request(
         {
             "type": "http",
-            "method": "POST",
+            "method": method,
             "path": "/v1/gateway/cloud-sandbox/anyharness/v1/sessions/ws%2Fencoded",
             "raw_path": b"/v1/gateway/cloud-sandbox/anyharness/v1/sessions/ws%2Fencoded",
             "query_string": b"cursor=abc&access_token=product-token&repeat=1&repeat=2",
@@ -32,6 +36,29 @@ def _request(body: bytes = b"payload") -> Request:
         },
         receive,
     )
+
+
+async def _response_body(
+    response: StreamingResponse,
+    *,
+    disconnect_after_first_chunk: bool = False,
+) -> bytes:
+    body = bytearray()
+
+    async def receive() -> Message:
+        return {"type": "http.disconnect"}
+
+    async def send(message: Message) -> None:
+        if message["type"] != "http.response.body":
+            return
+        chunk = message.get("body", b"")
+        if disconnect_after_first_chunk and chunk:
+            raise OSError("downstream disconnected")
+        body.extend(chunk)
+
+    scope = cast(Scope, {"type": "http", "asgi": {"spec_version": "2.4"}})
+    await response(scope, receive, send)
+    return bytes(body)
 
 
 @pytest.mark.asyncio
@@ -84,17 +111,18 @@ async def test_http_proxy_preserves_path_query_and_injects_sandbox_auth(
         async def aclose(self) -> None:
             self.closed = True
 
-    monkeypatch.setattr(proxy.httpx, "AsyncClient", _FakeAsyncClient)
+    monkeypatch.setattr(httpx, "AsyncClient", _FakeAsyncClient)
 
-    response = await proxy.proxy_http_to_anyharness(
-        _request(),
-        upstream_base_url="https://sandbox.example.test",
-        upstream_token="sandbox-token",
-        path="v1/sessions/ws/encoded",
+    response = cast(
+        StreamingResponse,
+        await proxy.proxy_http_to_anyharness(
+            _request(),
+            upstream_base_url="https://sandbox.example.test",
+            upstream_token="sandbox-token",
+            path="v1/sessions/ws/encoded",
+        ),
     )
-    body = b"".join([chunk async for chunk in response.body_iterator])
-    if response.background is not None:
-        await response.background()
+    body = await _response_body(response)
 
     client = created["client"]
     assert client.sent_request is not None
@@ -116,7 +144,169 @@ async def test_http_proxy_preserves_path_query_and_injects_sandbox_auth(
     assert response.headers["x-upstream"] == "kept"
     assert "transfer-encoding" not in response.headers
     assert body == b"event: one\n\n"
+    assert response.background is None
     assert client.closed is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("content_type", "error_message", "expect_error"),
+    [
+        (
+            "text/event-stream; charset=utf-8",
+            "peer closed connection without sending complete message body "
+            "(incomplete chunked read)",
+            False,
+        ),
+        ("text/event-stream", "malformed chunked encoding", True),
+        (
+            "application/json",
+            "peer closed connection without sending complete message body "
+            "(incomplete chunked read)",
+            True,
+        ),
+    ],
+)
+async def test_http_proxy_handles_incomplete_chunk_close_only_for_sse(
+    monkeypatch: pytest.MonkeyPatch,
+    content_type: str,
+    error_message: str,
+    expect_error: bool,
+) -> None:
+    client_closed = False
+
+    class _InterruptedStream(httpx.AsyncByteStream):
+        async def __aiter__(self) -> AsyncIterator[bytes]:
+            yield b"event: one\ndata: {}\n\n"
+            raise httpx.RemoteProtocolError(error_message)
+
+    class _FakeAsyncClient:
+        def __init__(self, *_args: object, **_kwargs: object) -> None:
+            pass
+
+        def build_request(
+            self,
+            method: str,
+            url: str,
+            *,
+            headers: dict[str, str],
+            content: bytes,
+        ) -> httpx.Request:
+            return httpx.Request(method, url, headers=headers, content=content)
+
+        async def send(
+            self,
+            request: httpx.Request,
+            *,
+            stream: bool,
+        ) -> httpx.Response:
+            assert stream is True
+            return httpx.Response(
+                200,
+                headers={"content-type": content_type},
+                stream=_InterruptedStream(),
+                request=request,
+            )
+
+        async def aclose(self) -> None:
+            nonlocal client_closed
+            client_closed = True
+
+    monkeypatch.setattr(httpx, "AsyncClient", _FakeAsyncClient)
+
+    response = cast(
+        StreamingResponse,
+        await proxy.proxy_http_to_anyharness(
+            _request(b"", method="GET"),
+            upstream_base_url="https://sandbox.example.test",
+            upstream_token="sandbox-token",
+            path="v1/sessions/session-id/stream",
+        ),
+    )
+
+    if expect_error:
+        with pytest.raises(httpx.RemoteProtocolError) as caught:
+            await _response_body(response)
+        assert str(caught.value) == error_message
+    else:
+        body = await _response_body(response)
+        assert body == b"event: one\ndata: {}\n\n"
+
+    assert client_closed is True
+
+
+@pytest.mark.asyncio
+async def test_http_proxy_closes_upstream_when_downstream_disconnects(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client_closed = False
+    upstream_response: httpx.Response | None = None
+
+    class _TwoChunkStream(httpx.AsyncByteStream):
+        closed = False
+
+        async def __aiter__(self) -> AsyncIterator[bytes]:
+            yield b"event: one\ndata: {}\n\n"
+            yield b"event: two\ndata: {}\n\n"
+
+        async def aclose(self) -> None:
+            self.closed = True
+
+    upstream_stream = _TwoChunkStream()
+
+    class _FakeAsyncClient:
+        def __init__(self, *_args: object, **_kwargs: object) -> None:
+            pass
+
+        def build_request(
+            self,
+            method: str,
+            url: str,
+            *,
+            headers: dict[str, str],
+            content: bytes,
+        ) -> httpx.Request:
+            return httpx.Request(method, url, headers=headers, content=content)
+
+        async def send(
+            self,
+            request: httpx.Request,
+            *,
+            stream: bool,
+        ) -> httpx.Response:
+            nonlocal upstream_response
+            assert stream is True
+            upstream_response = httpx.Response(
+                200,
+                headers={"content-type": "text/event-stream"},
+                stream=upstream_stream,
+                request=request,
+            )
+            return upstream_response
+
+        async def aclose(self) -> None:
+            nonlocal client_closed
+            client_closed = True
+
+    monkeypatch.setattr(httpx, "AsyncClient", _FakeAsyncClient)
+
+    response = cast(
+        StreamingResponse,
+        await proxy.proxy_http_to_anyharness(
+            _request(b"", method="GET"),
+            upstream_base_url="https://sandbox.example.test",
+            upstream_token="sandbox-token",
+            path="v1/sessions/session-id/stream",
+        ),
+    )
+
+    with pytest.raises(ClientDisconnect):
+        await _response_body(response, disconnect_after_first_chunk=True)
+
+    assert upstream_response is not None
+    assert upstream_response.is_closed is True
+    assert upstream_stream.closed is True
+    assert client_closed is True
 
 
 def test_websocket_headers_strip_product_protocol_auth() -> None:
@@ -153,7 +343,7 @@ async def test_http_proxy_returns_499_when_client_disconnects_before_forwarding(
         def __init__(self, *_args: object, **_kwargs: object) -> None:
             raise AssertionError("upstream client should not be created")
 
-    monkeypatch.setattr(proxy.httpx, "AsyncClient", _UnexpectedAsyncClient)
+    monkeypatch.setattr(httpx, "AsyncClient", _UnexpectedAsyncClient)
 
     response = await proxy.proxy_http_to_anyharness(
         request,

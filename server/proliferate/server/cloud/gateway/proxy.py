@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Mapping
+from collections.abc import AsyncIterator, Mapping
 from contextlib import suppress
 from urllib.parse import parse_qsl, urlencode
 
@@ -13,6 +13,7 @@ from fastapi import Request, WebSocket
 from starlette.background import BackgroundTask
 from starlette.requests import ClientDisconnect
 from starlette.responses import Response, StreamingResponse
+from starlette.types import Receive, Scope, Send
 from starlette.websockets import WebSocketDisconnect
 from websockets.exceptions import ConnectionClosed
 
@@ -20,6 +21,9 @@ from proliferate.server.cloud.errors import CloudApiError
 
 _ANYHARNESS_MARKER = "/cloud-sandbox/anyharness"
 _HTTP_TIMEOUT = httpx.Timeout(connect=10.0, read=None, write=30.0, pool=10.0)
+_INCOMPLETE_CHUNKED_READ = (
+    "peer closed connection without sending complete message body (incomplete chunked read)"
+)
 _STRIP_REQUEST_HEADERS = {
     "authorization",
     "cookie",
@@ -113,8 +117,41 @@ async def _close_http_upstream(
     response: httpx.Response,
     client: httpx.AsyncClient,
 ) -> None:
-    await response.aclose()
-    await client.aclose()
+    try:
+        await response.aclose()
+    finally:
+        await client.aclose()
+
+
+class _CleanupStreamingResponse(StreamingResponse):
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        cleanup = self.background
+        self.background = None
+        try:
+            await super().__call__(scope, receive, send)
+        finally:
+            if cleanup is not None:
+                await cleanup()
+
+
+def _is_event_stream(response: httpx.Response) -> bool:
+    content_type = str(response.headers.get("content-type", "")).partition(";")[0]
+    return content_type.strip().lower() == "text/event-stream"
+
+
+async def _stream_http_upstream(
+    response: httpx.Response,
+) -> AsyncIterator[bytes]:
+    try:
+        async for chunk in response.aiter_raw():
+            yield chunk
+    except httpx.RemoteProtocolError as exc:
+        # The session SSE client reconnects from its last durable `after_seq`.
+        # Retrying inside this already-started response could replay bytes, so
+        # treat only the observed incomplete peer close as the end of an SSE
+        # stream and let the downstream client resume it.
+        if not (_is_event_stream(response) and str(exc) == _INCOMPLETE_CHUNKED_READ):
+            raise
 
 
 async def proxy_http_to_anyharness(
@@ -148,8 +185,8 @@ async def proxy_http_to_anyharness(
             status_code=502,
         ) from exc
 
-    return StreamingResponse(
-        upstream_response.aiter_raw(),
+    return _CleanupStreamingResponse(
+        _stream_http_upstream(upstream_response),
         status_code=upstream_response.status_code,
         headers=_response_headers(upstream_response.headers),
         background=BackgroundTask(_close_http_upstream, upstream_response, client),
