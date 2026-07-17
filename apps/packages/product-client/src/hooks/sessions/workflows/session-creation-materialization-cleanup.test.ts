@@ -561,6 +561,9 @@ function injectReplacementAfterFinalCheckpoint(onCheckpoint: () => void): void {
       sessionId,
     );
     checkCount += 1;
+    // The new-runtime path checks after target resolution, creation, and launch
+    // defaults. This third call is the final awaited checkpoint immediately
+    // before atomic publication, reproducing #1333's stale-false window.
     if (checkCount === 3) {
       onCheckpoint();
     }
