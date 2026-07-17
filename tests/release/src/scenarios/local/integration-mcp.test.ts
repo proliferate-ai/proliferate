@@ -141,7 +141,11 @@ function greenDriver(closedCount: { value: number }): LocalMcpDriver {
       toolName: "web_search",
       auditCorrelation: auditCorrelation(harness),
     }),
-    assertAuditRow: async (_world, _actor, _namespace, _toolName) => ({ auditEventId: "audit-1" }),
+    assertAuditRow: async (_world, actor, _namespace, _toolName, correlation) => {
+      const harness = actor.userId.replace(/^user-/, "");
+      assert.deepEqual(correlation, auditCorrelation(harness));
+      return { auditEventId: "audit-1" };
+    },
     closeWorld: async (world) => {
       closedCount.value += 1;
       return world.close();

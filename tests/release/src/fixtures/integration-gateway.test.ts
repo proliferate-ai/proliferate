@@ -161,6 +161,13 @@ test("integration audit probe propagates a real query failure instead of returni
   );
 });
 
+test("integration audit probe reports a signal-killed child unambiguously", () => {
+  assert.throws(
+    () => parseIntegrationAuditProbeResult(null, "", "terminated", "SIGTERM"),
+    /integration_audit_probe\.py was killed by SIGTERM: terminated/,
+  );
+});
+
 test("audit correlation returns no evidence when the tool call left no row", () => {
   assert.equal(
     findCorrelatedToolCallEvent([], { namespace: "exa", toolName: "web_search", correlation }),
@@ -183,6 +190,7 @@ test("stale and incorrectly correlated visible tool calls cannot satisfy LOCAL-7
     toolCallEvent({ id: "wrong-provider", namespace: "github" }),
     toolCallEvent({ id: "wrong-tool", toolName: "get_contents" }),
     toolCallEvent({ id: "failed-call", ok: false, errorCode: "tool_error" }),
+    toolCallEvent({ id: "ok-but-errored", errorCode: "partial_error" }),
   ];
 
   assert.equal(

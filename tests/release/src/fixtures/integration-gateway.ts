@@ -276,9 +276,12 @@ export function parseIntegrationAuditProbeResult(
   code: number | null,
   stdout: string,
   stderr: string,
+  signal: NodeJS.Signals | null = null,
 ): { userId: string; events: ToolCallEvent[]; error?: string } {
   if (code !== 0) {
-    throw new Error(`integration_audit_probe.py exited ${code}: ${stderr || stdout}`);
+    const exitDescription =
+      code === null ? `was killed by ${signal ?? "an unknown signal"}` : `exited ${code}`;
+    throw new Error(`integration_audit_probe.py ${exitDescription}: ${stderr || stdout}`);
   }
   try {
     const lastLine = stdout.trim().split("\n").pop() ?? "{}";
@@ -380,9 +383,9 @@ export async function runIntegrationAuditProbe(
       stderr += String(chunk);
     });
     child.on("error", reject);
-    child.on("exit", (code) => {
+    child.on("exit", (code, signal) => {
       try {
-        resolve(parseIntegrationAuditProbeResult(code, stdout, stderr));
+        resolve(parseIntegrationAuditProbeResult(code, stdout, stderr, signal));
       } catch (error) {
         reject(error);
       }
