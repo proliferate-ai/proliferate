@@ -267,6 +267,7 @@ test("the independent workflow runs after Release E2E completion from default-br
   const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
   const workflow = readFileSync(path.join(repoRoot, ".github/workflows/release-e2e-hard-cancel-cleanup.yml"), "utf8");
   assert.match(workflow, /workflow_run:\s*\n\s*workflows: \["Release E2E \(tier 3\)"\]\s*\n\s*types: \[completed\]/);
+  assert.doesNotMatch(workflow, /workflow_dispatch|inputs\.workflow_run/);
   assert.equal(
     workflow.match(/ref: \$\{\{ github\.event\.repository\.default_branch \}\}/g)?.length,
     3,

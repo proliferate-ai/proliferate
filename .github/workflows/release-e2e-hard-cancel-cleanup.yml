@@ -9,16 +9,6 @@ on:
   workflow_run:
     workflows: ["Release E2E (tier 3)"]
     types: [completed]
-  workflow_dispatch:
-    inputs:
-      workflow_run_id:
-        description: Completed Release E2E workflow run id to reconcile.
-        required: true
-        type: string
-      workflow_run_attempt:
-        description: Exact attempt number of that completed workflow run.
-        required: true
-        type: string
 
 permissions:
   actions: read
@@ -27,8 +17,8 @@ permissions:
 concurrency:
   group: >-
     release-e2e-managed-cloud-cleanup-${{
-      github.event.workflow_run.id || inputs.workflow_run_id
-    }}-${{ github.event.workflow_run.run_attempt || inputs.workflow_run_attempt }}
+      github.event.workflow_run.id
+    }}-${{ github.event.workflow_run.run_attempt }}
   cancel-in-progress: false
 
 jobs:
@@ -37,8 +27,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      TARGET_WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id || inputs.workflow_run_id }}
-      TARGET_WORKFLOW_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.workflow_run_attempt }}
+      TARGET_WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id }}
+      TARGET_WORKFLOW_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
       GH_TOKEN: ${{ github.token }}
     outputs:
       source_sha: ${{ steps.classify.outputs.source_sha }}
@@ -96,8 +86,8 @@ jobs:
     timeout-minutes: 20
     environment: Qualification
     env:
-      TARGET_WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id || inputs.workflow_run_id }}
-      TARGET_WORKFLOW_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.workflow_run_attempt }}
+      TARGET_WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id }}
+      TARGET_WORKFLOW_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
       RELEASE_E2E_CLOUD_AWS_REGION: ${{ vars.RELEASE_E2E_CLOUD_AWS_REGION }}
       RELEASE_E2E_CLOUD_ROUTE53_ZONE_ID: ${{ vars.RELEASE_E2E_CLOUD_ROUTE53_ZONE_ID }}
       AWS_ACCESS_KEY_ID: ${{ secrets.RELEASE_E2E_CLOUD_AWS_ACCESS_KEY_ID }}
@@ -140,8 +130,8 @@ jobs:
     timeout-minutes: 30
     environment: Qualification
     env:
-      TARGET_WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id || inputs.workflow_run_id }}
-      TARGET_WORKFLOW_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.workflow_run_attempt }}
+      TARGET_WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id }}
+      TARGET_WORKFLOW_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
       RELEASE_E2E_E2B_API_KEY: ${{ secrets.RELEASE_E2E_E2B_API_KEY }}
       RELEASE_E2E_E2B_TEAM_ID: ${{ vars.RELEASE_E2E_E2B_TEAM_ID }}
       STRIPE_TEST_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
