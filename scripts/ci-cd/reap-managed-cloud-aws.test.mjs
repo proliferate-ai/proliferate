@@ -373,6 +373,7 @@ test("fails closed when a delete call returns but the exact resource remains", a
 test("the independent workflow runs after Release E2E completion from default-branch code", () => {
   const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
   const workflow = readFileSync(path.join(repoRoot, ".github/workflows/release-e2e-hard-cancel-cleanup.yml"), "utf8");
+  const sourceWorkflow = readFileSync(path.join(repoRoot, ".github/workflows/release-e2e.yml"), "utf8");
   const classifier = workflow.slice(
     workflow.indexOf("  classify-source:"),
     workflow.indexOf("  managed-cloud-aws:"),
@@ -383,6 +384,7 @@ test("the independent workflow runs after Release E2E completion from default-br
   );
   const providers = workflow.slice(workflow.indexOf("  managed-cloud-providers:"));
   assert.match(workflow, /workflow_run:\s*\n\s*workflows: \["Release E2E \(tier 3\)"\]\s*\n\s*types: \[completed\]/);
+  assert.equal(sourceWorkflow.match(/name: cloud-provision-1 \(manual, strict\)/g)?.length, 1);
   assert.doesNotMatch(workflow, /workflow_dispatch|inputs\.workflow_run/);
   assert.equal(workflow.match(/ref: \$\{\{ github\.sha \}\}/g)?.length, 1);
   assert.equal(workflow.match(/ref: \$\{\{ needs\.classify-source\.outputs\.cleanup_sha \}\}/g)?.length, 2);
@@ -390,7 +392,9 @@ test("the independent workflow runs after Release E2E completion from default-br
   assert.doesNotMatch(workflow, /ref: .*github\.ref/);
   assert.equal(workflow.match(/persist-credentials: false/g)?.length, 3);
   assert.equal(workflow.match(/git rev-parse HEAD/g)?.length, 3);
-  assert.match(classifier, /cleanup_sha: \$\{\{ steps\.custody\.outputs\.cleanup_sha \}\}/);
+  assert.match(classifier, /cleanup_sha: \$\{\{ steps\.policy\.outputs\.cleanup_sha \}\}/);
+  assert.match(classifier, /row\.source_sha !== process\.env\.TARGET_SOURCE_SHA/);
+  assert.match(classifier, /row\?\.source_sha === process\.env\.TARGET_SOURCE_SHA/);
   assert.equal(workflow.match(/--cleanup-sha /g)?.length, 3);
   assert.match(workflow, /environment: Qualification/);
   assert.match(workflow, /reap-managed-cloud-aws\.mjs/);
@@ -401,10 +405,16 @@ test("the independent workflow runs after Release E2E completion from default-br
   assert.match(workflow, /STRIPE_TEST_SECRET_KEY/);
   assert.match(workflow, /AGENT_GATEWAY_LITELLM_MASTER_KEY/);
   assert.match(workflow, /classify-release-e2e-managed-cloud\.mjs/);
-  assert.match(workflow, /if: needs\.classify-source\.outputs\.managed_cloud_started == 'true'/);
+  assert.match(workflow, /cleanup_required: \$\{\{ steps\.classify\.outputs\.cleanup_required \|\| steps\.policy\.outputs\.cleanup_required \}\}/);
+  assert.match(classifier, /echo "cleanup_required=true" >> "\$\{GITHUB_OUTPUT\}"/);
+  assert.match(classifier, /`cleanup_required=\$\{row\.managed_cloud_started\}\\njob_conclusion=/);
   assert.doesNotMatch(workflow, /managed_cloud_started=.*event === "workflow_dispatch"/);
   assert.match(workflow, /pnpm\/action-setup@b0f76dfb45f55f8421693e4803ac7bb65143bd34/);
-  assert.match(workflow, /npm install -g @e2b\/cli@2\.13\.3/);
+  assert.match(workflow, /timeout --kill-after=30s 5m pnpm install --frozen-lockfile/);
+  assert.match(workflow, /timeout --kill-after=30s 2m npm install -g @e2b\/cli@2\.13\.3/);
+  assert.match(workflow, /timeout --kill-after=30s 5m node scripts\/ci-cd\/classify-release-e2e-managed-cloud\.mjs/);
+  assert.match(workflow, /timeout --kill-after=30s 15m node scripts\/ci-cd\/reap-managed-cloud-aws\.mjs/);
+  assert.match(workflow, /timeout --kill-after=30s 20m pnpm exec tsx src\/cli\/reap-managed-cloud-providers\.ts/);
   assert.equal(workflow.match(/Initialize bounded failed /g)?.length, 3);
   assert.equal(workflow.match(/Finalize bounded /g)?.length, 3);
   assert.equal(workflow.match(/if-no-files-found: error/g)?.length, 3);
@@ -433,6 +443,12 @@ test("the independent workflow runs after Release E2E completion from default-br
   }
   assert.equal(workflow.split("GH_TOKEN:").length - 1, 1);
   assert.ok(classifier.indexOf("GH_TOKEN:") > classifier.indexOf("Inspect the exact attempt"));
+  for (const downstream of [aws, providers]) {
+    assert.match(downstream, /if: >-\s*\n\s*always\(\) &&/);
+    assert.match(downstream, /needs\.classify-source\.outputs\.cleanup_required == 'true'/);
+    assert.match(downstream, /needs\.classify-source\.outputs\.cleanup_sha != ''/);
+  }
+  assert.match(providers, /needs\.classify-source\.outputs\.source_sha != ''/);
   assert.doesNotMatch(workflow, /pnpm\/action-setup@v/);
   assert.doesNotMatch(workflow, /setup-uv|setup-python/);
   for (const match of workflow.matchAll(/uses:\s+([^\s#]+)/g)) {
@@ -441,5 +457,5 @@ test("the independent workflow runs after Release E2E completion from default-br
   // `workflow_run: completed` fires for success, failure, timeout, and
   // cancellation. A conclusion filter would reintroduce the hard-cancel gap.
   assert.doesNotMatch(workflow, /workflow_run\.conclusion/);
-  assert.doesNotMatch(workflow, /github\.event\.workflow_run\.head_sha/);
+  assert.equal(workflow.match(/github\.event\.workflow_run\.head_sha/g)?.length, 1);
 });

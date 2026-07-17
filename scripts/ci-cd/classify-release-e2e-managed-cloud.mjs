@@ -53,6 +53,7 @@ export function classifyManagedCloudAttempt(runValue, jobsValue, expected) {
     run.name !== WORKFLOW_NAME ||
     run.status !== "completed" ||
     run.run_attempt !== expected.attempt ||
+    run.head_sha !== expected.sourceSha ||
     run.repository?.full_name !== expected.repository ||
     typeof run.head_sha !== "string" ||
     !/^[0-9a-f]{40}$/.test(run.head_sha)
@@ -184,6 +185,7 @@ export function parseClassificationArgs(argv, env = process.env) {
     runId: safePositiveInteger(values.get("--workflow-run-id"), "workflow run id"),
     attempt: safePositiveInteger(values.get("--workflow-run-attempt"), "workflow run attempt"),
     cleanupSha: safeCommitSha(values.get("--cleanup-sha"), "cleanup sha"),
+    sourceSha: safeCommitSha(env.TARGET_SOURCE_SHA, "target source sha"),
   };
 }
 

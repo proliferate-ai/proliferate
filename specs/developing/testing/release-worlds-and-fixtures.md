@@ -767,7 +767,11 @@ unattested candidate remains explicitly non-green rather than treating an
 empty metadata sweep as proof. The exact completed attempt's job inventory is the
 world-start gate: if `cloud-provision-1 (manual, strict)` is absent or skipped,
 the protected provider jobs do not start; any other terminal conclusion is
-cleaned conservatively. No provider cleanup uses aliases, random product UUIDs,
+cleaned conservatively. Inventory/API/receipt-upload failure stays red and also
+defaults to cleanup-required; only an exhaustive exact absent/skipped result
+suppresses the reapers. Provider calls, CLIs, dependency installs, and each
+reaper command carry internal time budgets below their job timeout so evidence
+finalization retains execution headroom. No provider cleanup uses aliases, random product UUIDs,
 prefix matching, or account-wide sweeps. The ephemeral Actions runner itself
 owns its local browser and renderer processes. The secret-bearing cleanup has
 no manual-dispatch surface: GitHub starts the default-branch workflow only from

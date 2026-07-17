@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import type { FetchLike } from "../../services/qualification-litellm.js";
-import { cleanupQualificationLiteLlmRun } from "./hard-cancel-litellm.js";
+import { cleanupQualificationLiteLlmRun, hardCancelFetchInit } from "./hard-cancel-litellm.js";
 
 const RUN_ID = "qlc-ci-123-1";
 const SHARD_ID = "1";
@@ -90,6 +90,20 @@ function mixedState(): ProviderState {
     ],
   };
 }
+
+test("the real LiteLLM transport always carries a bounded abort signal", async () => {
+  const init = hardCancelFetchInit({ method: "GET" }, 1);
+  assert.equal(init.method, "GET");
+  assert.ok(init.signal instanceof AbortSignal);
+  await new Promise<void>((resolve, reject) => {
+    const guard = setTimeout(() => reject(new Error("timeout signal did not abort")), 100);
+    init.signal!.addEventListener("abort", () => {
+      clearTimeout(guard);
+      resolve();
+    }, { once: true });
+  });
+  assert.equal(init.signal!.aborted, true);
+});
 
 test("deletes only the exact run+shard LiteLLM graph and proves absence", async () => {
   const fake = provider(mixedState());

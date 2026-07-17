@@ -5,6 +5,7 @@ const MAX_PAGES = 100;
 const ABSENCE_ATTEMPTS = 3;
 const RUN_KEY = "proliferate_qualification_run_id";
 const SHARD_KEY = "proliferate_qualification_shard_id";
+const PROVIDER_REQUEST_TIMEOUT_MS = 60_000;
 
 interface KeyRow {
   token: string;
@@ -264,8 +265,15 @@ export async function cleanupQualificationLiteLlmRun(
   throw new Error("LiteLLM still reports exact run-owned resources after accepted deletes.");
 }
 
+export function hardCancelFetchInit(
+  init: Parameters<FetchLike>[1],
+  timeoutMs = PROVIDER_REQUEST_TIMEOUT_MS,
+): RequestInit {
+  return { ...init, signal: AbortSignal.timeout(timeoutMs) };
+}
+
 const defaultFetch: FetchLike = async (url, init) => {
-  const response = await fetch(url, init);
+  const response = await fetch(url, hardCancelFetchInit(init));
   return {
     ok: response.ok,
     status: response.status,

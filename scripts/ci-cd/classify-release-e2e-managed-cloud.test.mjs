@@ -12,6 +12,7 @@ import {
 const EXPECTED = {
   repository: "proliferate-ai/proliferate",
   attempt: 2,
+  sourceSha: "a".repeat(40),
 };
 const RUN = {
   name: "Release E2E (tier 3)",
@@ -84,6 +85,10 @@ test("nonterminal jobs and mismatched run custody fail closed", () => {
     () => classifyManagedCloudAttempt({ ...RUN, run_attempt: 3 }, jobs("success"), EXPECTED),
     /exact completed Release E2E/,
   );
+  assert.throws(
+    () => classifyManagedCloudAttempt({ ...RUN, head_sha: "b".repeat(40) }, jobs("success"), EXPECTED),
+    /exact completed Release E2E/,
+  );
 });
 
 test("reads immutable attempt metadata so a later rerun cannot suppress cleanup", async () => {
@@ -154,7 +159,7 @@ test("classification receipt is bound to the required cleanup revision", () => {
     "--workflow-run-id", "42",
     "--workflow-run-attempt", "2",
     "--cleanup-sha", cleanupSha,
-  ], { GITHUB_REPOSITORY: EXPECTED.repository });
+  ], { GITHUB_REPOSITORY: EXPECTED.repository, TARGET_SOURCE_SHA: EXPECTED.sourceSha });
   const receipt = classificationReceipt({
     sourceSha: RUN.head_sha,
     managedCloudStarted: true,
@@ -166,7 +171,7 @@ test("classification receipt is bound to the required cleanup revision", () => {
     () => parseClassificationArgs([
       "--workflow-run-id", "42",
       "--workflow-run-attempt", "2",
-    ], { GITHUB_REPOSITORY: EXPECTED.repository }),
+    ], { GITHUB_REPOSITORY: EXPECTED.repository, TARGET_SOURCE_SHA: EXPECTED.sourceSha }),
     /cleanup sha is malformed/,
   );
 });

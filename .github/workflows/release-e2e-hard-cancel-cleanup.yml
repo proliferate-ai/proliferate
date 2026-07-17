@@ -30,18 +30,30 @@ jobs:
     env:
       TARGET_WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id }}
       TARGET_WORKFLOW_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+      TARGET_SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
     outputs:
-      cleanup_sha: ${{ steps.custody.outputs.cleanup_sha }}
-      source_sha: ${{ steps.classify.outputs.source_sha }}
+      cleanup_sha: ${{ steps.policy.outputs.cleanup_sha }}
+      source_sha: ${{ steps.policy.outputs.source_sha }}
+      cleanup_required: ${{ steps.classify.outputs.cleanup_required || steps.policy.outputs.cleanup_required }}
       managed_cloud_started: ${{ steps.classify.outputs.managed_cloud_started }}
       job_conclusion: ${{ steps.classify.outputs.job_conclusion }}
     steps:
       - name: Initialize bounded failed source-classification receipt
+        id: policy
         shell: bash
         env:
           CLEANUP_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
+          if [[ ! "${CLEANUP_SHA}" =~ ^[0-9a-f]{40}$ ]] || [[ ! "${TARGET_SOURCE_SHA}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Workflow source custody is malformed." >&2
+            exit 2
+          fi
+          # Conservative default: only an exhaustive absent/skipped classification
+          # may override this to false. API/setup/upload failure still reaps.
+          echo "cleanup_sha=${CLEANUP_SHA}" >> "${GITHUB_OUTPUT}"
+          echo "source_sha=${TARGET_SOURCE_SHA}" >> "${GITHUB_OUTPUT}"
+          echo "cleanup_required=true" >> "${GITHUB_OUTPUT}"
           node <<'NODE'
           const fs = require("node:fs");
           const path = require("node:path");
@@ -52,6 +64,7 @@ jobs:
             workflow_run_id: process.env.TARGET_WORKFLOW_RUN_ID,
             workflow_run_attempt: Number(process.env.TARGET_WORKFLOW_RUN_ATTEMPT),
             cleanup_sha: process.env.CLEANUP_SHA,
+            source_sha: process.env.TARGET_SOURCE_SHA,
             status: "failed",
             reason: "Source classification did not complete.",
           })}\n`, { mode: 0o600 });
@@ -93,7 +106,7 @@ jobs:
         run: |
           set -euo pipefail
           receipt="${RUNNER_TEMP}/managed-cloud-source-classification.json"
-          node scripts/ci-cd/classify-release-e2e-managed-cloud.mjs \
+          timeout --kill-after=30s 5m node scripts/ci-cd/classify-release-e2e-managed-cloud.mjs \
             --workflow-run-id "${TARGET_WORKFLOW_RUN_ID}" \
             --workflow-run-attempt "${TARGET_WORKFLOW_RUN_ATTEMPT}" \
             --cleanup-sha "${CLEANUP_SHA}" \
@@ -108,8 +121,7 @@ jobs:
             row.workflow_run_attempt !== Number(process.env.TARGET_WORKFLOW_RUN_ATTEMPT) ||
             row.cleanup_sha !== process.env.CLEANUP_SHA ||
             row.status !== "classified" ||
-            typeof row.source_sha !== "string" ||
-            !/^[0-9a-f]{40}$/.test(row.source_sha) ||
+            row.source_sha !== process.env.TARGET_SOURCE_SHA ||
             typeof row.managed_cloud_started !== "boolean" ||
             typeof row.job_conclusion !== "string"
           ) {
@@ -118,7 +130,7 @@ jobs:
           fs.appendFileSync(
             process.env.GITHUB_OUTPUT,
             `source_sha=${row.source_sha}\nmanaged_cloud_started=${row.managed_cloud_started}\n` +
-              `job_conclusion=${row.job_conclusion}\n`,
+              `cleanup_required=${row.managed_cloud_started}\njob_conclusion=${row.job_conclusion}\n`,
           );
           NODE
 
@@ -138,6 +150,7 @@ jobs:
             workflow_run_id: process.env.TARGET_WORKFLOW_RUN_ID,
             workflow_run_attempt: Number(process.env.TARGET_WORKFLOW_RUN_ATTEMPT),
             cleanup_sha: process.env.CLEANUP_SHA,
+            source_sha: process.env.TARGET_SOURCE_SHA,
             status: "failed",
             reason,
           });
@@ -152,12 +165,11 @@ jobs:
             row?.schema_version === 1 &&
             row?.workflow_run_id === process.env.TARGET_WORKFLOW_RUN_ID &&
             row?.workflow_run_attempt === Number(process.env.TARGET_WORKFLOW_RUN_ATTEMPT) &&
-            row?.cleanup_sha === process.env.CLEANUP_SHA;
+            row?.cleanup_sha === process.env.CLEANUP_SHA &&
+            row?.source_sha === process.env.TARGET_SOURCE_SHA;
           const success =
             common &&
             row.status === "classified" &&
-            typeof row.source_sha === "string" &&
-            /^[0-9a-f]{40}$/.test(row.source_sha) &&
             typeof row.managed_cloud_started === "boolean" &&
             typeof row.job_conclusion === "string" &&
             row.job_conclusion.length > 0 &&
@@ -187,7 +199,10 @@ jobs:
   managed-cloud-aws:
     name: Reconcile exact run-owned managed-cloud AWS resources
     needs: classify-source
-    if: needs.classify-source.outputs.managed_cloud_started == 'true'
+    if: >-
+      always() &&
+      needs.classify-source.outputs.cleanup_required == 'true' &&
+      needs.classify-source.outputs.cleanup_sha != ''
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: Qualification
@@ -248,7 +263,7 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.RELEASE_E2E_CLOUD_AWS_SECRET_ACCESS_KEY }}
         run: |
           set -euo pipefail
-          node scripts/ci-cd/reap-managed-cloud-aws.mjs \
+          timeout --kill-after=30s 15m node scripts/ci-cd/reap-managed-cloud-aws.mjs \
             --workflow-run-id "${TARGET_WORKFLOW_RUN_ID}" \
             --workflow-run-attempt "${TARGET_WORKFLOW_RUN_ATTEMPT}" \
             --cleanup-sha "${CLEANUP_SHA}" \
@@ -316,7 +331,11 @@ jobs:
   managed-cloud-providers:
     name: Reconcile exact run-owned E2B, Stripe, and LiteLLM resources
     needs: classify-source
-    if: needs.classify-source.outputs.managed_cloud_started == 'true'
+    if: >-
+      always() &&
+      needs.classify-source.outputs.cleanup_required == 'true' &&
+      needs.classify-source.outputs.cleanup_sha != '' &&
+      needs.classify-source.outputs.source_sha != ''
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: Qualification
@@ -387,8 +406,8 @@ jobs:
       - name: Install provider cleanup dependencies
         run: |
           set -euo pipefail
-          pnpm install --frozen-lockfile
-          npm install -g @e2b/cli@2.13.3
+          timeout --kill-after=30s 5m pnpm install --frozen-lockfile
+          timeout --kill-after=30s 2m npm install -g @e2b/cli@2.13.3
 
       - name: Reconcile exact run-owned provider resources
         shell: bash
@@ -402,7 +421,7 @@ jobs:
         run: |
           set -euo pipefail
           cd tests/release
-          pnpm exec tsx src/cli/reap-managed-cloud-providers.ts \
+          timeout --kill-after=30s 20m pnpm exec tsx src/cli/reap-managed-cloud-providers.ts \
             --workflow-run-id "${TARGET_WORKFLOW_RUN_ID}" \
             --workflow-run-attempt "${TARGET_WORKFLOW_RUN_ATTEMPT}" \
             --cleanup-sha "${CLEANUP_SHA}" \
