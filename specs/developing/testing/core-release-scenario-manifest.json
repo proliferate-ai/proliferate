@@ -1544,14 +1544,6 @@
       "implementation": { "status": "planned" }
     },
     {
-      "id": "MANAGED-CLOUD-FIXTURE-SMOKE-1",
-      "tier": 3,
-      "world": "managed-cloud",
-      "requiredHosts": ["desktop-renderer"],
-      "targetScenarioRefs": ["T3-PROV-1", "T3-BILL-4", "T3-BILL-10"],
-      "implementation": { "status": "planned" }
-    },
-    {
       "id": "CLOUD-FREE-COMPUTE-GATE-1",
       "tier": 3,
       "world": "managed-cloud",
