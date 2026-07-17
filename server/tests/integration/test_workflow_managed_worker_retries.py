@@ -203,36 +203,54 @@ async def test_deterministic_target_failures_terminalize_without_successor(
     assert successor is None
 
 
+@pytest.mark.parametrize(
+    "failure,expected_code",
+    [
+        (
+            CloudMaterializationCommandError("provider temporarily unavailable"),
+            "workflow_target_unreachable",
+        ),
+        (
+            SandboxProviderUnavailableError("provider temporarily unavailable"),
+            "workflow_target_unreachable",
+        ),
+        (
+            CloudMaterializationLockUnavailable("redis is unavailable"),
+            "workflow_materialization_unavailable",
+        ),
+    ],
+)
 @pytest.mark.asyncio
 async def test_transient_target_failure_queues_one_successor(
     client: AsyncClient,
     db_session: AsyncSession,
     test_engine: AsyncEngine,
     monkeypatch: pytest.MonkeyPatch,
+    failure: BaseException,
+    expected_code: str,
 ) -> None:
     monkeypatch.setattr(settings, "workflow_managed_runs_enabled", True)
-    owner = await register_and_login(client, "managed-transient-target@example.com")
+    owner = await register_and_login(
+        client,
+        f"managed-transient-{type(failure).__name__}@example.com",
+    )
     invocation_id, _sandbox_id = await _seed_target_plan(client, db_session, owner)
     factory = async_sessionmaker(test_engine, expire_on_commit=False)
 
-    transient_failures = iter(
-        (
-            CloudMaterializationCommandError("provider temporarily unavailable"),
-            SandboxProviderUnavailableError("provider temporarily unavailable"),
-            CloudMaterializationLockUnavailable("redis is unavailable"),
-        )
-    )
-
     async def unavailable(*_args: object, **_kwargs: object) -> None:
-        raise next(transient_failures)
+        raise failure
 
     monkeypatch.setattr(delivery, "runtime_access", unavailable)
-    for generation in (2, 3, 4):
-        await delivery.run_delivery_task(
-            factory,
-            invocation_id=invocation_id,
-            generation=generation,
-        )
+    await delivery.run_delivery_task(
+        factory,
+        invocation_id=invocation_id,
+        generation=2,
+    )
+    await delivery.run_delivery_task(
+        factory,
+        invocation_id=invocation_id,
+        generation=2,
+    )
 
     async with factory() as db:
         settled = await managed_store.get_managed_execution(
@@ -241,11 +259,22 @@ async def test_transient_target_failure_queues_one_successor(
         )
         successor = await db.scalar(
             select(BackgroundOutboxTask).where(
-                BackgroundOutboxTask.idempotency_key == f"workflow:deliver:{invocation_id}:5"
+                BackgroundOutboxTask.idempotency_key == f"workflow:deliver:{invocation_id}:3"
             )
+        )
+        successor_count = len(
+            (
+                await db.scalars(
+                    select(BackgroundOutboxTask).where(
+                        BackgroundOutboxTask.idempotency_key
+                        == f"workflow:deliver:{invocation_id}:3"
+                    )
+                )
+            ).all()
         )
     assert settled is not None
     assert settled.delivery_status == "queued"
-    assert settled.delivery_generation == 5
-    assert settled.last_delivery_error_code == "workflow_materialization_unavailable"
+    assert settled.delivery_generation == 3
+    assert settled.last_delivery_error_code == expected_code
     assert successor is not None
+    assert successor_count == 1

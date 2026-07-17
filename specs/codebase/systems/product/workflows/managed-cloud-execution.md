@@ -47,6 +47,13 @@ the existing per-sandbox Cloud materialization lock. Duplicate task claims can
 therefore replay workspace/run PUTs, but cannot establish competing provider or
 runtime custody.
 
+The locked Workflow runtime concern ends each PostgreSQL read/write phase
+through the Cloud sandbox transaction owner before provider or AnyHarness I/O.
+It does not call `AsyncSession.commit()` directly. The server-boundary checker
+classifies this named concern as service orchestration even though it lives
+under `materialization/materialize/`, so moving it out of a generic
+`service.py` cannot weaken that transaction rule.
+
 `run_put_started` is the response-ambiguity boundary. Cancellation before it
 invalidates delivery and creates no run. Cancellation at or after it reconciles
 the exact idempotent run PUT, then calls the Workflow cancel endpoint. Cloud

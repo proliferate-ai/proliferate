@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.store import cloud_sandboxes as cloud_sandboxes_store
 from proliferate.server.cloud.cloud_sandboxes import service as cloud_sandboxes_service
+from proliferate.server.cloud.cloud_sandboxes import transactions as cloud_sandbox_transactions
 from proliferate.server.cloud.materialization import operation
 from proliferate.server.cloud.materialization.materialize import agent_auth
 
@@ -25,7 +26,7 @@ async def run_managed_workflow_runtime_operation[T](
     sandbox = await cloud_sandboxes_store.load_cloud_sandbox_by_id(db, sandbox_id)
     if sandbox is None or sandbox.destroyed_at is not None or sandbox.status == "destroyed":
         raise operation.CloudMaterializationTargetUnavailable()
-    await db.commit()
+    await cloud_sandbox_transactions.commit_cloud_sandbox_session(db)
 
     async def _refresh_locked() -> cloud_sandboxes_store.CloudSandboxValue:
         refreshed = await cloud_sandboxes_store.load_cloud_sandbox_by_id(
@@ -39,7 +40,7 @@ async def run_managed_workflow_runtime_operation[T](
             or refreshed.status == "destroyed"
         ):
             raise operation.CloudMaterializationTargetUnavailable()
-        await db.commit()
+        await cloud_sandbox_transactions.commit_cloud_sandbox_session(db)
         return refreshed
 
     async def _run_locked(ctx: operation.MaterializationContext) -> T:
@@ -65,7 +66,7 @@ async def run_managed_workflow_runtime_operation[T](
             access_token,
             _data_key,
         ) = await cloud_sandboxes_service.load_cloud_sandbox_runtime_access(refreshed)
-        await db.commit()
+        await cloud_sandbox_transactions.commit_cloud_sandbox_session(db)
         return await run(runtime_url, access_token)
 
     return await operation.run_cloud_sandbox_operation(
