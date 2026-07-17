@@ -292,6 +292,7 @@ SEED_DEFINITIONS: tuple[SeedDefinition, ...] = (
                 "search:read.users",
             ),
             oauth_scopes_required=True,
+            oauth_scope_policy="exact",
             headers=(_oauth_bearer_header(),),
         ),
     ),

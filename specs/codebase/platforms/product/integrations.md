@@ -54,6 +54,34 @@ Raw OAuth and MCP protocol clients live under
 [`server/proliferate/integrations/`](../../../../server/proliferate/integrations/)
 and do not own product persistence.
 
+### OAuth scope integrity
+
+Definition config chooses either the default provider-directed OAuth scope
+behavior or an exact scope policy. Slack uses the exact policy with this
+read/search-only ceiling:
+
+```text
+search:read.public
+search:read.private
+search:read.im
+search:read.mpim
+search:read.files
+search:read.users
+```
+
+For an exact policy, an authorization challenge may omit scopes or name a
+subset, but it cannot add a scope; Cloud always requests the canonical
+configured set. The callback must report that same set before credentials can
+become ready. Token parsing accepts standard top-level scope metadata and
+Slack's nested user-token scope metadata with comma or whitespace separators.
+
+A refresh response that omits scope metadata preserves the stored value. An
+explicit non-empty refresh grant may be a subset but cannot exceed the ceiling;
+an explicit empty grant or known stored scope outside the ceiling requires
+reauthentication. Legacy Slack bundles with empty scope metadata remain usable
+for existing search behavior. This scope ceiling does not authorize outbound
+Slack tools; gateway tool authorization is a separate boundary.
+
 ## Runtime Worker Identity
 
 [`db/models/cloud/runtime_workers.py`](../../../../server/proliferate/db/models/cloud/runtime_workers.py)
@@ -214,6 +242,9 @@ and [`runtime_workers/api.py`](../../../../server/proliferate/server/cloud/runti
 - OAuth refresh and provider access errors are product errors owned by the
   integrations service; tool-level provider errors are returned to the agent
   without leaking credentials.
+- An exact-policy challenge cannot exceed the ceiling, a callback grant must
+  equal the requested set, and an explicit refresh grant must be non-empty and
+  remain within the ceiling; failures store no replacement credentials.
 
 ## Verification
 
