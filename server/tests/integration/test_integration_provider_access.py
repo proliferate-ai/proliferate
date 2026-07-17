@@ -371,7 +371,7 @@ async def test_slack_refresh_translates_2xx_error_without_persisting(
         "refreshToken": "slack-refresh-token",
         "expiresAt": (datetime.now(UTC) - timedelta(minutes=5)).isoformat(),
         "scopes": list(SLACK_SCOPES),
-        "tokenEndpoint": "https://slack.com/api/oauth.v2.user.access",
+        "tokenEndpoint": "https://slack.com/api/oauth.v3.user.access",
         "redirectUri": "https://api.example.com/v1/cloud/integrations/oauth/callback",
     }
     definition, account = await _account_for(

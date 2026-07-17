@@ -38,6 +38,8 @@ async def _start_slack_flow(
     client: AsyncClient,
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
+    *,
+    token_endpoint: str = "https://slack.com/api/oauth.v2.user.access",
 ) -> tuple[AuthSession, dict[str, object], str]:
     prefix = f"oauth-scope-{uuid.uuid4().hex}"
     auth = await create_user_and_login(client, db_session, email_prefix=prefix)
@@ -75,7 +77,7 @@ async def _start_slack_flow(
         return AuthorizationServerMetadata(
             issuer=issuer,
             authorization_endpoint="https://slack.com/oauth/v2_user/authorize",
-            token_endpoint="https://slack.com/api/oauth.v2.user.access",
+            token_endpoint=token_endpoint,
             registration_endpoint=None,
             token_endpoint_auth_methods_supported=("client_secret_post",),
         )
@@ -187,7 +189,12 @@ async def test_slack_http_callback_translates_2xx_error_without_persisting(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    auth, started, state = await _start_slack_flow(client, db_session, monkeypatch)
+    auth, started, state = await _start_slack_flow(
+        client,
+        db_session,
+        monkeypatch,
+        token_endpoint="https://slack.com/api/oauth.v3.user.access",
+    )
     async_client = httpx.AsyncClient
     transport = httpx.MockTransport(
         lambda _request: httpx.Response(

@@ -101,3 +101,76 @@ async def test_slack_refresh_translates_http_2xx_invalid_refresh_token(
     assert exc_info.value.code == "invalid_grant"
     assert "invalid_refresh_token" not in str(exc_info.value)
     assert "must-not-leak" not in str(exc_info.value)
+
+
+@pytest.mark.parametrize(
+    ("token_endpoint", "provider_namespace"),
+    [
+        ("https://slack.com/api/oauth.v2.user.access/", None),
+        ("HTTPS://SLACK.COM/api/oauth.v2.user.access", None),
+        ("https://slack.com:443/api/oauth.v2.user.access", None),
+        ("https://slack.com/api/oauth.v3.user.access", "slack"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_slack_exchange_translates_2xx_error_for_endpoint_variants(
+    monkeypatch: pytest.MonkeyPatch,
+    token_endpoint: str,
+    provider_namespace: str | None,
+) -> None:
+    _install_token_response(
+        monkeypatch,
+        {"ok": False, "error": "invalid_code", "private": "must-not-leak"},
+    )
+
+    with pytest.raises(IntegrationOAuthProviderError) as exc_info:
+        await exchange_token(
+            token_endpoint=token_endpoint,
+            client_id="client",
+            code="code",
+            code_verifier="verifier",
+            redirect_uri="https://api.example.com/callback",
+            resource="https://mcp.slack.com/mcp",
+            provider_namespace=provider_namespace,
+        )
+
+    assert exc_info.value.code == "invalid_grant"
+    assert "invalid_code" not in str(exc_info.value)
+    assert "must-not-leak" not in str(exc_info.value)
+
+
+@pytest.mark.parametrize(
+    ("token_endpoint", "provider_namespace"),
+    [
+        ("https://slack.com/api/oauth.v2.user.access", "linear"),
+        ("https://slack.com.evil.example/api/oauth.v2.user.access", None),
+        ("http://slack.com/api/oauth.v2.user.access", None),
+        ("https://slack.com:444/api/oauth.v2.user.access", None),
+        ("https://user:secret@slack.com/api/oauth.v2.user.access", None),
+        ("https://slack.com/api/oauth.v2.user.access?variant=true", None),
+        ("https://slack.com/api/oauth.v2.user.access#fragment", None),
+        ("https://slack.com/api/oauth.v3.user.access", None),
+    ],
+)
+@pytest.mark.asyncio
+async def test_other_provider_identity_and_noncanonical_urls_preserve_behavior(
+    monkeypatch: pytest.MonkeyPatch,
+    token_endpoint: str,
+    provider_namespace: str | None,
+) -> None:
+    _install_token_response(
+        monkeypatch,
+        {"ok": False, "access_token": "other-provider-token"},
+    )
+
+    token = await exchange_token(
+        token_endpoint=token_endpoint,
+        client_id="client",
+        code="code",
+        code_verifier="verifier",
+        redirect_uri="https://api.example.com/callback",
+        resource="https://mcp.example.com/mcp",
+        provider_namespace=provider_namespace,
+    )
+
+    assert token.access_token == "other-provider-token"

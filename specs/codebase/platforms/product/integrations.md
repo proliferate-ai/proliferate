@@ -78,6 +78,10 @@ Slack's token endpoint can also return an HTTP-success response whose JSON body
 has `ok: false`. Cloud translates that envelope into a typed provider error
 before reading or persisting token fields; callback and refresh surfaces expose
 only fixed product-safe codes and messages, never the raw provider payload.
+Hosted callback and refresh paths identify Slack from the trusted definition
+namespace. Generic protocol callers fall back only to a narrowly validated
+equivalent of the canonical Slack token URL; a non-Slack namespace overrides a
+Slack-looking URL so other providers retain their existing response semantics.
 
 A refresh response that omits scope metadata preserves the stored value. An
 explicit non-empty refresh grant may be a subset but cannot exceed the ceiling;

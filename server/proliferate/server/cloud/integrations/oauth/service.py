@@ -491,6 +491,7 @@ async def complete_oauth_callback(
             token_endpoint_auth_method=(
                 oauth_client.token_endpoint_auth_method if oauth_client else None
             ),
+            provider_namespace=definition.namespace,
         )
     except IntegrationOAuthProviderError as exc:
         if _should_drop_cached_oauth_client_on_token_error(exc.code) and oauth_client is not None:
