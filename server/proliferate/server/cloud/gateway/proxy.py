@@ -150,6 +150,10 @@ async def _stream_http_upstream(
         # Retrying inside this already-started response could replay bytes, so
         # treat only the observed incomplete peer close as the end of an SSE
         # stream and let the downstream client resume it.
+        # h11 0.16.0 ChunkedReader.read_eof emits this text; httpcore 1.0.9 and
+        # httpx 0.28.1 preserve it while mapping RemoteProtocolError. That stack
+        # is pinned in pyproject.toml, and the transport regression test makes
+        # dependency or message drift fail closed instead of broadening this guard.
         if not (_is_event_stream(response) and str(exc) == _INCOMPLETE_CHUNKED_READ):
             raise
 

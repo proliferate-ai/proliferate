@@ -11,7 +11,11 @@ dependencies = [
     "alembic>=1.18.5",
     "fastapi-users[sqlalchemy,oauth]>=15.0.5",
     "httpx-oauth>=0.17.0",
-    "httpx>=0.28.0",
+    # proxy.py relies on this exact HTTP/1.1 parser stack for one narrow SSE
+    # incomplete-chunk close; its transport regression makes upgrades explicit.
+    "h11==0.16.0",
+    "httpcore==1.0.9",
+    "httpx==0.28.1",
     "websockets>=15.0.0",
     "pydantic>=2.13.4",
     "pydantic-settings>=2.14.2",
@@ -34,7 +38,7 @@ dependencies = [
 dev = [
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
-    "httpx>=0.28.0",
+    "httpx==0.28.1",
     "mypy>=1.20.2",
     "ruff>=0.15.21",
     "sqlalchemy[mypy]>=2.0.0",

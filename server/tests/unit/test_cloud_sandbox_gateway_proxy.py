@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator
+from importlib.metadata import version as package_version
 from typing import cast
 
 import httpx
@@ -146,6 +148,56 @@ async def test_http_proxy_preserves_path_query_and_injects_sandbox_auth(
     assert body == b"event: one\n\n"
     assert response.background is None
     assert client.closed is True
+
+
+@pytest.mark.asyncio
+async def test_incomplete_chunk_message_matches_pinned_http_stack() -> None:
+    # Keep dependency upgrades coupled to re-verifying the exact parser message
+    # that the SSE-only production guard recognizes.
+    assert (
+        package_version("httpx"),
+        package_version("httpcore"),
+        package_version("h11"),
+    ) == ("0.28.1", "1.0.9", "0.16.0")
+
+    async def close_incomplete_chunk(
+        reader: asyncio.StreamReader,
+        writer: asyncio.StreamWriter,
+    ) -> None:
+        try:
+            await reader.readuntil(b"\r\n\r\n")
+            writer.write(
+                b"HTTP/1.1 200 OK\r\n"
+                b"Content-Type: text/event-stream\r\n"
+                b"Transfer-Encoding: chunked\r\n"
+                b"Connection: close\r\n\r\n"
+                b"20\r\n"
+                b"event: one\ndata: {}\n\n"
+            )
+            await writer.drain()
+        finally:
+            writer.close()
+            await writer.wait_closed()
+
+    server = await asyncio.start_server(close_incomplete_chunk, "127.0.0.1", 0)
+    try:
+        sockets = server.sockets
+        assert sockets
+        _host, port = cast(tuple[str, int], sockets[0].getsockname())
+
+        async with (
+            httpx.AsyncClient(trust_env=False) as client,
+            client.stream("GET", f"http://127.0.0.1:{port}/") as response,
+        ):
+            assert response.headers["content-type"] == "text/event-stream"
+            with pytest.raises(httpx.RemoteProtocolError) as caught:
+                async for _chunk in response.aiter_raw():
+                    pass
+    finally:
+        server.close()
+        await server.wait_closed()
+
+    assert str(caught.value) == proxy._INCOMPLETE_CHUNKED_READ
 
 
 @pytest.mark.asyncio
