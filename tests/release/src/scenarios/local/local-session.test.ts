@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { resolveLocalWorkspaceIdOnce, resolveLocalWorkspaceSessionId } from "./local-session.js";
+import {
+  resolveLocalWorkspaceIdOnce,
+  resolveLocalWorkspaceSessionAfter,
+  resolveLocalWorkspaceSessionId,
+  snapshotLocalWorkspaceSessionIds,
+} from "./local-session.js";
 import type { ReadyLocalWorld } from "../../worlds/local-workspace/world.js";
 
 /**
@@ -76,4 +81,69 @@ test("resolveLocalWorkspaceSessionId times out with a bounded, path-scoped reaso
     () => resolveLocalWorkspaceSessionId(world, REPO_PATH, 50),
     /no AnyHarness session for the local workspace at ".*repro-local-abc123"/,
   );
+});
+
+test("post-send resolution excludes the pre-send route session and binds the one new exact session", async () => {
+  const world = fakeWorld(
+    [{ id: RAW_WORKSPACE_ID, kind: "local", path: REPO_PATH }],
+    [
+      { id: "session-user-key", workspaceId: RAW_WORKSPACE_ID },
+      { id: "session-gateway", workspaceId: RAW_WORKSPACE_ID },
+    ],
+  );
+
+  assert.equal(
+    await resolveLocalWorkspaceSessionAfter(world, REPO_PATH, 2_000, {
+      existingSessionIds: new Set(["session-user-key"]),
+      activeSessionAlias: "client-session:claude:route-change",
+    }),
+    "session-gateway",
+  );
+});
+
+test("post-send resolution never returns the stale last session when no new runtime session exists", async () => {
+  const world = fakeWorld(
+    [{ id: RAW_WORKSPACE_ID, kind: "local", path: REPO_PATH }],
+    [{ id: "session-user-key", workspaceId: RAW_WORKSPACE_ID }],
+  );
+
+  await assert.rejects(
+    () =>
+      resolveLocalWorkspaceSessionAfter(world, REPO_PATH, 1, {
+        existingSessionIds: new Set(["session-user-key"]),
+        activeSessionAlias: "session-user-key",
+      }),
+    /no unambiguous new AnyHarness session/,
+  );
+});
+
+test("post-send resolution uses an exact active id to disambiguate multiple new runtime sessions", async () => {
+  const world = fakeWorld(
+    [{ id: RAW_WORKSPACE_ID, kind: "local", path: REPO_PATH }],
+    [
+      { id: "session-old", workspaceId: RAW_WORKSPACE_ID },
+      { id: "session-new-a", workspaceId: RAW_WORKSPACE_ID },
+      { id: "session-new-b", workspaceId: RAW_WORKSPACE_ID },
+    ],
+  );
+
+  assert.equal(
+    await resolveLocalWorkspaceSessionAfter(world, REPO_PATH, 2_000, {
+      existingSessionIds: new Set(["session-old"]),
+      activeSessionAlias: "session-new-b",
+    }),
+    "session-new-b",
+  );
+});
+
+test("pre-send snapshot is scoped to the concrete local workspace", async () => {
+  const world = fakeWorld(
+    [{ id: RAW_WORKSPACE_ID, kind: "local", path: REPO_PATH }],
+    [
+      { id: "session-local", workspaceId: RAW_WORKSPACE_ID },
+      { id: "session-other", workspaceId: "other-workspace" },
+    ],
+  );
+
+  assert.deepEqual(await snapshotLocalWorkspaceSessionIds(world, REPO_PATH), new Set(["session-local"]));
 });

@@ -17,7 +17,11 @@ import {
 } from "../local-world-smoke-1.js";
 import { bootLocalFunctionalWorld, isWorldBackedRun, resolveLocalFunctionalWorldInputs } from "./world-boot.js";
 import { captureLocalDriverFailure } from "./debug-capture.js";
-import { resolveLocalWorkspaceSessionId } from "./local-session.js";
+import {
+  resolveLocalWorkspaceSessionAfter,
+  resolveLocalWorkspaceSessionId,
+  snapshotLocalWorkspaceSessionIds,
+} from "./local-session.js";
 import type {
   LocalCleanupV1,
   LocalHarnessKind,
@@ -351,6 +355,11 @@ export const defaultLocalRouteDriver: LocalRouteDriver = {
   selectModelInUi: (page, modelId) => defaultLocalWorldSmokeDriver.selectModelInUi(page, modelId),
   async sendBoundedTurn(world, page, _expectedRoute, repoPath) {
     const p = page.page;
+    // Snapshot before Send. LOCAL-6 uses the same concrete workspace for both
+    // routes; resolving the "latest" session after the click can otherwise
+    // bind the gateway leg to the already-completed user-key session while the
+    // new process is still reconciling.
+    const preSendSessionIds = await snapshotLocalWorkspaceSessionIds(world, repoPath);
     const editor = p.locator("[data-home-composer-editor]").first();
     await editor.waitFor({ state: "visible", timeout: 15_000 });
     await editor.fill(DETERMINISTIC_PROMPT);
@@ -365,9 +374,22 @@ export const defaultLocalRouteDriver: LocalRouteDriver = {
     // `data-workspace-ui-key` is the LOGICAL workspace id (repo-remote keyed);
     // the AnyHarness session keys off the CONCRETE runtime workspace at the repo
     // clone path (see local-session.ts). Keep the ui-key for shell selectors, but
-    // resolve the session from the runtime's own local workspace.
+    // resolve only a session created after the pre-send snapshot from the
+    // runtime's own local workspace. The shell may briefly expose a
+    // `client-session:*` alias; one new runtime id is its unambiguous target.
     const workspaceId = await readWorkspaceUiKey(p);
-    const sessionId = await resolveLocalWorkspaceSessionId(world, repoPath, WORKSPACE_SETTLE_TIMEOUT_MS);
+    const activeSessionAlias =
+      (await p
+        .locator("[data-workspace-shell]")
+        .first()
+        .getAttribute("data-workspace-session-id")
+        .catch(() => null)) || null;
+    const sessionId = await resolveLocalWorkspaceSessionAfter(
+      world,
+      repoPath,
+      WORKSPACE_SETTLE_TIMEOUT_MS,
+      { existingSessionIds: preSendSessionIds, activeSessionAlias },
+    );
     const completion = await waitForTurnCompletion(world, sessionId, TURN_TIMEOUT_MS);
     if (completion.error) {
       throw new Error(`sendBoundedTurn: assistant turn errored: ${completion.error}`);
