@@ -1,5 +1,12 @@
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
+import { SegmentedControl } from "@proliferate/ui/primitives/SegmentedControl";
+import { Laptop, Server } from "lucide-react";
+import {
+  useAnyHarnessRuntimeContext,
+  useAnyHarnessWorkspaceContext,
+} from "@anyharness/sdk-react";
+import { useEffect, useState } from "react";
 import { CloudGuard } from "#product/components/cloud/CloudGuard";
 import { useAgentCatalog } from "#product/hooks/agents/derived/use-agent-catalog";
 import { getProviderDisplayName } from "#product/lib/domain/agents/provider-display";
@@ -12,6 +19,8 @@ import { HarnessConfigIssueBanner } from "#product/components/settings/panes/age
 import { HarnessSettingsSection } from "#product/components/settings/panes/agents/harness/HarnessSettingsSection";
 import { useHarnessAuthEditor } from "#product/hooks/agents/workflows/use-harness-auth-editor";
 import { useHarnessInstallAction } from "#product/hooks/agents/workflows/use-harness-install-action";
+import { HarnessUpdateProgress } from "#product/components/settings/panes/agents/harness/HarnessUpdateProgress";
+import { useWorkspaceAgentCatalog } from "#product/hooks/agents/derived/use-workspace-agent-catalog";
 
 interface HarnessPaneProps {
   harnessKind: string;
@@ -19,18 +28,85 @@ interface HarnessPaneProps {
 
 export function HarnessPane({ harnessKind }: HarnessPaneProps) {
   const surface = useAgentSurfaceStore((state) => state.surface);
-  const { agentsByKind, agentsNeedingSetup } = useAgentCatalog();
+  const { workspaceId } = useAnyHarnessWorkspaceContext();
+  const { runtimeUrl } = useAnyHarnessRuntimeContext();
+  const hasLocalRuntime = (runtimeUrl?.trim().length ?? 0) > 0;
+  const [installTarget, setInstallTarget] = useState<"runtime" | "workspace">(
+    () => hasLocalRuntime || !workspaceId ? "runtime" : "workspace",
+  );
+  useEffect(() => {
+    if (!hasLocalRuntime && workspaceId && installTarget === "runtime") {
+      setInstallTarget("workspace");
+    } else if (!workspaceId && hasLocalRuntime && installTarget === "workspace") {
+      setInstallTarget("runtime");
+    }
+  }, [hasLocalRuntime, installTarget, workspaceId]);
+  const localCatalog = useAgentCatalog();
+  const workspaceCatalog = useWorkspaceAgentCatalog({
+    enabled: installTarget === "workspace" && !!workspaceId,
+  });
+  const runtimeCatalog = installTarget === "workspace" ? workspaceCatalog : localCatalog;
+  const {
+    agentsByKind,
+    agentsNeedingSetup,
+    isReconciling,
+    reconcileSnapshot,
+  } = runtimeCatalog;
 
   const displayName =
     agentsByKind.get(harnessKind)?.displayName ?? getProviderDisplayName(harnessKind);
   const issueAgent = agentsNeedingSetup.find((agent) => agent.kind === harnessKind);
-  const installAction = useHarnessInstallAction(issueAgent ?? null);
+  const installAction = useHarnessInstallAction(
+    issueAgent ?? null,
+    installTarget,
+  );
+  const updateComponents = isReconciling
+    ? reconcileSnapshot?.progress?.components.filter(
+      (component) => component.agent === harnessKind,
+    ) ?? []
+    : [];
 
   return (
     <section className="space-y-6">
       <SettingsPageHeader title={displayName} />
 
-      {issueAgent ? (
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-foreground/[0.02] p-3">
+        <div>
+          <p className="text-ui-sm font-medium text-foreground">Harness update target</p>
+          <p className="text-ui-xs text-muted-foreground">
+            Choose the runtime whose CLI and ACP adapter are installed on disk.
+          </p>
+        </div>
+        <SegmentedControl
+          ariaLabel="Harness update target"
+          value={installTarget}
+          items={[
+            {
+              id: "runtime",
+              label: "Local runtime",
+              icon: <Laptop />,
+              disabled: !hasLocalRuntime,
+            },
+            {
+              id: "workspace",
+              label: "Selected workspace",
+              icon: <Server />,
+              disabled: !workspaceId,
+            },
+          ]}
+          onChange={setInstallTarget}
+        />
+      </div>
+
+      {updateComponents.length > 0 ? (
+        <HarnessUpdateProgress
+          components={updateComponents}
+          displayName={displayName}
+          targetLabel={installTarget === "workspace" ? "Selected workspace runtime" : "Local runtime"}
+        />
+      ) : null}
+
+      {issueAgent && updateComponents.length === 0 ? (
         <HarnessConfigIssueBanner agent={issueAgent} installAction={installAction} />
       ) : null}
 

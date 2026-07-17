@@ -6,6 +6,7 @@ use axum::http::StatusCode;
 
 use super::error::ApiError;
 use crate::domains::agents::auth::login::AgentLoginError;
+use crate::domains::agents::installer::reconcile::execution::AgentReconcileStartError;
 use crate::domains::agents::installer::InstallError;
 use crate::domains::agents::runtime::AgentRuntimeError;
 
@@ -18,6 +19,20 @@ impl From<AgentRuntimeError> for ApiError {
                 Some(format!("No built-in agent with kind: {kind}")),
                 Some("AGENT_NOT_FOUND"),
             ),
+            AgentRuntimeError::InvalidReconcileAgentKind(kind) => ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "Invalid reconcile agent kind",
+                Some(format!("No built-in agent with kind: {kind}")),
+                Some("INVALID_RECONCILE_AGENT_KIND"),
+            ),
+            AgentRuntimeError::ReconcileStart(AgentReconcileStartError::Busy(job_id)) => {
+                ApiError::new(
+                    StatusCode::CONFLICT,
+                    "Agent reconcile already active",
+                    Some(format!("Agent reconcile job {job_id} is already active")),
+                    Some("AGENT_RECONCILE_BUSY"),
+                )
+            }
             AgentRuntimeError::Login(AgentLoginError::NotSupported(kind)) => ApiError::new(
                 StatusCode::BAD_REQUEST,
                 "Login not supported",

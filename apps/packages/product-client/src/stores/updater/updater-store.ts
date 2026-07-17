@@ -1,5 +1,8 @@
 import { create } from "zustand";
-import type { DesktopUpdate } from "@proliferate/product-client/host/desktop-bridge";
+import type {
+  DesktopUpdate,
+  DesktopUpdateDownloadProgress,
+} from "@proliferate/product-client/host/desktop-bridge";
 
 export type UpdaterPhase =
   | "idle"
@@ -21,6 +24,8 @@ interface UpdaterState {
   errorMessage: string | null;
   errorSource: UpdaterErrorSource | null;
   downloadProgress: number | null;
+  downloadReceivedBytes: number | null;
+  downloadTotalBytes: number | null;
   restartPromptOpen: boolean;
   restartWhenIdle: boolean;
   // One-shot signal: a user-initiated check completed and found no update. Background
@@ -33,7 +38,7 @@ interface UpdaterState {
     update: DesktopUpdate,
     title?: string | null,
   ) => void;
-  setDownloadProgress: (progress: number) => void;
+  setDownloadProgress: (progress: DesktopUpdateDownloadProgress) => void;
   setReady: () => void;
   setError: (message: string, source: UpdaterErrorSource) => void;
   setChecked: (timestamp: string) => void;
@@ -52,6 +57,8 @@ export const useUpdaterStore = create<UpdaterState>((set) => ({
   errorMessage: null,
   errorSource: null,
   downloadProgress: null,
+  downloadReceivedBytes: null,
+  downloadTotalBytes: null,
   restartPromptOpen: false,
   restartWhenIdle: false,
   manualCheckCompletedAt: null,
@@ -68,15 +75,33 @@ export const useUpdaterStore = create<UpdaterState>((set) => ({
       _update: update,
       errorMessage: null,
       errorSource: null,
+      downloadProgress: null,
+      downloadReceivedBytes: null,
+      downloadTotalBytes: null,
       restartPromptOpen: false,
       restartWhenIdle: false,
     }),
 
-  setDownloadProgress: (progress) => set({ downloadProgress: progress }),
+  setDownloadProgress: ({ receivedBytes, totalBytes }) =>
+    set({
+      downloadProgress:
+        totalBytes !== null && totalBytes > 0
+          ? Math.min(100, Math.round((receivedBytes / totalBytes) * 100))
+          : null,
+      downloadReceivedBytes: receivedBytes,
+      downloadTotalBytes: totalBytes,
+    }),
 
   // Download finished; the new version is installed on disk. We do NOT auto-open the
   // restart confirm — the pill + toast prompt, and the confirm opens on explicit click.
-  setReady: () => set({ phase: "ready", downloadProgress: null, restartPromptOpen: false }),
+  setReady: () =>
+    set({
+      phase: "ready",
+      downloadProgress: null,
+      downloadReceivedBytes: null,
+      downloadTotalBytes: null,
+      restartPromptOpen: false,
+    }),
 
   setError: (message, source) =>
     set({
@@ -84,6 +109,8 @@ export const useUpdaterStore = create<UpdaterState>((set) => ({
       errorMessage: message,
       errorSource: source,
       downloadProgress: null,
+      downloadReceivedBytes: null,
+      downloadTotalBytes: null,
       restartPromptOpen: false,
     }),
 
@@ -105,6 +132,8 @@ export const useUpdaterStore = create<UpdaterState>((set) => ({
       errorMessage: null,
       errorSource: null,
       downloadProgress: null,
+      downloadReceivedBytes: null,
+      downloadTotalBytes: null,
       restartPromptOpen: false,
       restartWhenIdle: false,
       manualCheckCompletedAt: null,

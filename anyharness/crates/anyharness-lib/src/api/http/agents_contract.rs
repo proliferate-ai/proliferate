@@ -2,19 +2,21 @@
 //! no IO. The only file that sees both vocabularies for the agents family.
 
 use anyharness_contract::v1::{
-    AgentCliAuthState, AgentCredentialState, AgentInstallState, AgentLaunchModelOption,
-    AgentLaunchOption, AgentLaunchOptionsResponse, AgentLoginTerminalRecord,
-    AgentLoginTerminalStatus, AgentReadinessState, AgentReconcileSummary, AgentSummary,
-    ArtifactStatus, InstallAgentRequest, ModelCatalogStatus, ModelEffort, ReconcileAgentResult,
-    ReconcileAgentsResponse, ReconcileJobStatus, ReconcileOutcome,
+    AgentCliAuthState, AgentCredentialState, AgentInstallProgress, AgentInstallProgressComponent,
+    AgentInstallProgressPhase, AgentInstallState, AgentLaunchModelOption, AgentLaunchOption,
+    AgentLaunchOptionsResponse, AgentLoginTerminalRecord, AgentLoginTerminalStatus,
+    AgentReadinessState, AgentReconcileSummary, AgentSummary, ArtifactStatus, InstallAgentRequest,
+    ModelCatalogStatus, ModelEffort, ReconcileAgentResult, ReconcileAgentsResponse,
+    ReconcileJobStatus, ReconcileOutcome,
 };
 
 use crate::domains::agents::auth::login_terminal::{
     AgentLoginTerminalRecord as InternalAgentLoginTerminalRecord,
     AgentLoginTerminalStatus as InternalAgentLoginTerminalStatus,
 };
+use crate::domains::agents::installer::progress::InstallProgressPhase;
 use crate::domains::agents::installer::reconcile::execution::{
-    AgentReconcileJobSnapshot, AgentReconcileJobStatus,
+    AgentInstallComponentProgress, AgentReconcileJobSnapshot, AgentReconcileJobStatus,
 };
 use crate::domains::agents::installer::reconcile::{
     AgentReconcileOutcome, AgentReconcileResult as InternalAgentReconcileResult,
@@ -44,6 +46,12 @@ pub(super) fn reconcile_snapshot_to_contract(
         },
         job_id: snapshot.job_id.clone(),
         reinstall: snapshot.reinstall,
+        installed_only: Some(snapshot.installed_only),
+        current_agent: snapshot
+            .current_agent
+            .as_ref()
+            .map(|kind| kind.as_str().to_string()),
+        progress: reconcile_progress_to_contract(&snapshot.components),
         results: snapshot
             .results
             .iter()
@@ -52,6 +60,69 @@ pub(super) fn reconcile_snapshot_to_contract(
         started_at: snapshot.started_at.clone(),
         finished_at: snapshot.finished_at.clone(),
         message: snapshot.message.clone(),
+    }
+}
+
+fn reconcile_progress_to_contract(
+    components: &[AgentInstallComponentProgress],
+) -> Option<AgentInstallProgress> {
+    if components.is_empty() {
+        return None;
+    }
+    let downloaded_bytes = components
+        .iter()
+        .map(|component| component.downloaded_bytes)
+        .sum();
+    let download_size_bytes = components
+        .iter()
+        .map(|component| component.download_size_bytes)
+        .collect::<Option<Vec<_>>>()
+        .map(|sizes| sizes.into_iter().sum());
+    let completed_components = components
+        .iter()
+        .filter(|component| {
+            matches!(
+                component.phase,
+                InstallProgressPhase::Completed
+                    | InstallProgressPhase::Skipped
+                    | InstallProgressPhase::Failed
+            )
+        })
+        .count() as u32;
+    Some(AgentInstallProgress {
+        downloaded_bytes,
+        download_size_bytes,
+        completed_components,
+        total_components: components.len() as u32,
+        components: components
+            .iter()
+            .map(install_component_progress_to_contract)
+            .collect(),
+    })
+}
+
+fn install_component_progress_to_contract(
+    component: &AgentInstallComponentProgress,
+) -> AgentInstallProgressComponent {
+    AgentInstallProgressComponent {
+        agent: component.agent.as_str().to_string(),
+        role: match component.role {
+            ArtifactRole::NativeCli => "native_cli".into(),
+            ArtifactRole::AgentProcess => "agent_process".into(),
+        },
+        phase: match component.phase {
+            InstallProgressPhase::Queued => AgentInstallProgressPhase::Queued,
+            InstallProgressPhase::Downloading => AgentInstallProgressPhase::Downloading,
+            InstallProgressPhase::Verifying => AgentInstallProgressPhase::Verifying,
+            InstallProgressPhase::Extracting => AgentInstallProgressPhase::Extracting,
+            InstallProgressPhase::Installing => AgentInstallProgressPhase::Installing,
+            InstallProgressPhase::Finalizing => AgentInstallProgressPhase::Finalizing,
+            InstallProgressPhase::Completed => AgentInstallProgressPhase::Completed,
+            InstallProgressPhase::Skipped => AgentInstallProgressPhase::Skipped,
+            InstallProgressPhase::Failed => AgentInstallProgressPhase::Failed,
+        },
+        downloaded_bytes: component.downloaded_bytes,
+        download_size_bytes: component.download_size_bytes,
     }
 }
 
@@ -322,5 +393,58 @@ pub(super) fn launch_options_response(
                     .collect(),
             })
             .collect(),
+    }
+}
+
+#[cfg(test)]
+mod progress_tests {
+    use super::*;
+    use crate::domains::agents::installer::progress::InstallProgressPhase;
+    use crate::domains::agents::installer::reconcile::execution::AgentInstallComponentProgress;
+
+    #[test]
+    fn reconcile_progress_maps_roles_bytes_and_unknown_aggregate() {
+        let snapshot = AgentReconcileJobSnapshot {
+            status: AgentReconcileJobStatus::Running,
+            job_id: Some("job-1".into()),
+            reinstall: true,
+            installed_only: false,
+            current_agent: Some(AgentKind::Codex),
+            agent_kinds: vec![AgentKind::Codex],
+            components: vec![
+                AgentInstallComponentProgress {
+                    agent: AgentKind::Codex,
+                    role: ArtifactRole::NativeCli,
+                    phase: InstallProgressPhase::Downloading,
+                    downloaded_bytes: 42,
+                    download_size_bytes: Some(100),
+                },
+                AgentInstallComponentProgress {
+                    agent: AgentKind::Codex,
+                    role: ArtifactRole::AgentProcess,
+                    phase: InstallProgressPhase::Installing,
+                    downloaded_bytes: 0,
+                    download_size_bytes: None,
+                },
+            ],
+            results: Vec::new(),
+            started_at: None,
+            finished_at: None,
+            message: None,
+        };
+
+        let response = reconcile_snapshot_to_contract(&snapshot);
+        let progress = response.progress.expect("progress");
+        assert_eq!(response.current_agent.as_deref(), Some("codex"));
+        assert_eq!(progress.downloaded_bytes, 42);
+        assert_eq!(progress.download_size_bytes, None);
+        assert_eq!(progress.total_components, 2);
+        assert_eq!(progress.components[0].role, "native_cli");
+        assert_eq!(
+            progress.components[0].phase,
+            AgentInstallProgressPhase::Downloading
+        );
+        assert_eq!(progress.components[1].role, "agent_process");
+        assert_eq!(progress.components[1].download_size_bytes, None);
     }
 }

@@ -137,6 +137,10 @@ pub struct AgentCatalogPinTarget {
     /// Keyed in `targets` by the registry platform key (`macos_arm64`, …).
     pub url: String,
     pub sha256: String,
+    /// Exact compressed transfer size when the catalog producer can establish
+    /// it. Older catalogs omit this; the installer also reads Content-Length.
+    #[serde(default)]
+    pub download_size_bytes: Option<u64>,
     /// For `Archive`: the binary name inside the extracted tree.
     #[serde(default)]
     pub expected_binary: Option<String>,

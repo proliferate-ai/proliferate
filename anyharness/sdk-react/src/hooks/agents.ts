@@ -10,8 +10,13 @@ import type {
 import {
   resolveRuntimeCacheScopeKey,
   resolveRuntimeConnection,
+  useAnyHarnessCacheScopeKey,
   useAnyHarnessRuntimeContext,
 } from "../context/AnyHarnessRuntime.js";
+import {
+  resolveWorkspaceConnectionFromContext,
+  useAnyHarnessWorkspaceContext,
+} from "../context/AnyHarnessWorkspace.js";
 import { getAnyHarnessClient } from "../lib/client-cache.js";
 import { requestOptionsWithSignal } from "../lib/request-options.js";
 import {
@@ -19,11 +24,33 @@ import {
   anyHarnessAgentLaunchOptionsKey,
   anyHarnessAgentLaunchOptionsPrefixKey,
   anyHarnessAgentsKey,
+  anyHarnessWorkspaceAgentsKey,
+  anyHarnessWorkspaceAgentReconcileStatusKey,
   anyHarnessReconcileAgentsMutationKey,
 } from "../lib/query-keys.js";
 
 interface RuntimeQueryOptions {
   enabled?: boolean;
+}
+
+interface WorkspaceAgentQueryOptions extends RuntimeQueryOptions {
+  workspaceId?: string | null;
+}
+
+export function useWorkspaceAgentsQuery(options?: WorkspaceAgentQueryOptions) {
+  const workspace = useAnyHarnessWorkspaceContext();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
+  const workspaceId = options?.workspaceId ?? workspace.workspaceId;
+
+  return useQuery({
+    queryKey: anyHarnessWorkspaceAgentsKey(cacheScopeKey, workspaceId),
+    enabled: (options?.enabled ?? true) && !!workspaceId,
+    queryFn: async ({ signal }) => {
+      const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
+      const client = getAnyHarnessClient(resolved.connection);
+      return client.agents.list(requestOptionsWithSignal(undefined, signal));
+    },
+  });
 }
 
 export function useAgentsQuery(options?: RuntimeQueryOptions) {
@@ -76,6 +103,28 @@ export function useInstallAgentMutation() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({
         queryKey: anyHarnessAgentsKey(runtimeUrl, cacheScopeKey),
+      });
+    },
+  });
+}
+
+export function useWorkspaceInstallAgentMutation(options?: {
+  workspaceId?: string | null;
+}) {
+  const workspace = useAnyHarnessWorkspaceContext();
+  const queryClient = useQueryClient();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
+  const workspaceId = options?.workspaceId ?? workspace.workspaceId;
+
+  return useMutation({
+    mutationFn: async (input: { kind: string; request?: InstallAgentRequest }) => {
+      const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
+      const client = getAnyHarnessClient(resolved.connection);
+      return client.agents.install(input.kind, input.request ?? {});
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: anyHarnessWorkspaceAgentsKey(cacheScopeKey, workspaceId),
       });
     },
   });
@@ -148,9 +197,40 @@ export function useAgentReconcileStatusQuery(
       if (!refetchWhileActive) return false;
       const status = query.state.data?.status;
       if (status === "queued" || status === "running") {
-        return 2000;
+        const isDownloading = query.state.data?.progress?.components.some(
+          (component) => component.phase === "downloading",
+        );
+        return isDownloading ? 750 : 1500;
       }
       return false;
+    },
+  });
+}
+
+export function useWorkspaceAgentReconcileStatusQuery(
+  options?: AgentReconcileStatusQueryOptions & { workspaceId?: string | null },
+) {
+  const workspace = useAnyHarnessWorkspaceContext();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
+  const workspaceId = options?.workspaceId ?? workspace.workspaceId;
+  const refetchWhileActive = options?.refetchWhileActive ?? true;
+
+  return useQuery({
+    queryKey: anyHarnessWorkspaceAgentReconcileStatusKey(cacheScopeKey, workspaceId),
+    enabled: (options?.enabled ?? true) && !!workspaceId,
+    queryFn: async ({ signal }) => {
+      const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
+      const client = getAnyHarnessClient(resolved.connection);
+      return client.agents.getReconcileStatus(requestOptionsWithSignal(undefined, signal));
+    },
+    refetchInterval: (query) => {
+      if (!refetchWhileActive) return false;
+      const status = query.state.data?.status;
+      if (status !== "queued" && status !== "running") return false;
+      const isDownloading = query.state.data?.progress?.components.some(
+        (component) => component.phase === "downloading",
+      );
+      return isDownloading ? 750 : 1500;
     },
   });
 }
@@ -174,6 +254,32 @@ export function useReconcileAgentsMutation() {
       );
       await queryClient.invalidateQueries({
         queryKey: anyHarnessAgentsKey(runtimeUrl, cacheScopeKey),
+      });
+    },
+  });
+}
+
+export function useWorkspaceReconcileAgentsMutation(options?: {
+  workspaceId?: string | null;
+}) {
+  const workspace = useAnyHarnessWorkspaceContext();
+  const queryClient = useQueryClient();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
+  const workspaceId = options?.workspaceId ?? workspace.workspaceId;
+
+  return useMutation({
+    mutationFn: async (request?: ReconcileAgentsRequest) => {
+      const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
+      const client = getAnyHarnessClient(resolved.connection);
+      return client.agents.reconcile(request ?? {});
+    },
+    onSuccess: async (response) => {
+      queryClient.setQueryData(
+        anyHarnessWorkspaceAgentReconcileStatusKey(cacheScopeKey, workspaceId),
+        response,
+      );
+      await queryClient.invalidateQueries({
+        queryKey: anyHarnessWorkspaceAgentsKey(cacheScopeKey, workspaceId),
       });
     },
   });

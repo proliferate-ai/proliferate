@@ -31,6 +31,8 @@ export {
   anyHarnessWorkspaceKey,
   anyHarnessRuntimeHealthKey,
   anyHarnessAgentsKey,
+  anyHarnessWorkspaceAgentsKey,
+  anyHarnessWorkspaceAgentReconcileStatusKey,
   anyHarnessAgentLaunchOptionsKey,
   anyHarnessAgentLaunchOptionsPrefixKey,
   anyHarnessAgentReconcileStatusKey,
@@ -90,13 +92,17 @@ export {
 } from "./hooks/runtime.js";
 export {
   useAgentsQuery,
+  useWorkspaceAgentsQuery,
   useAgentLaunchOptionsQuery,
   useAgentReconcileStatusQuery,
+  useWorkspaceAgentReconcileStatusQuery,
   useInstallAgentMutation,
+  useWorkspaceInstallAgentMutation,
   useStartAgentLoginMutation,
   useStartAgentLoginTerminalMutation,
   useCloseAgentLoginTerminalMutation,
   useReconcileAgentsMutation,
+  useWorkspaceReconcileAgentsMutation,
 } from "./hooks/agents.js";
 export {
   useAgentGatewayModelsQuery,

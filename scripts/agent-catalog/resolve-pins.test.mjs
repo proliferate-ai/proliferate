@@ -24,7 +24,7 @@ test("direct binaries use a matching versioned checksum manifest", async () => {
       response.setHeader("content-type", "application/json");
       response.end(JSON.stringify({
         version: "9.9.9",
-        platforms: { "darwin-arm64": { checksum } },
+        platforms: { "darwin-arm64": { checksum, size: 123_456_789 } },
       }));
       return;
     }
@@ -81,6 +81,10 @@ test("direct binaries use a matching versioned checksum manifest", async () => {
       catalog.agents[0].harness.native.source.targets.macos_arm64.sha256,
       checksum,
     );
+    assert.equal(
+      catalog.agents[0].harness.native.source.targets.macos_arm64.downloadSizeBytes,
+      123_456_789,
+    );
     assert.deepEqual(requests, ["/latest", "/9.9.9/manifest.json"]);
   } finally {
     server.close();
@@ -107,6 +111,7 @@ test("registry-backed archives use the registry's published checksum", async () 
                 cmd: "./opencode",
                 args: ["acp"],
                 sha256: checksum,
+                size: 4_200_000,
               },
             },
           },
@@ -146,6 +151,10 @@ test("registry-backed archives use the registry's published checksum", async () 
     assert.equal(
       catalog.agents[0].harness.agentProcess.source.targets.macos_arm64.sha256,
       checksum,
+    );
+    assert.equal(
+      catalog.agents[0].harness.agentProcess.source.targets.macos_arm64.downloadSizeBytes,
+      4_200_000,
     );
     assert.deepEqual(requests, ["/registry.json"]);
   } finally {

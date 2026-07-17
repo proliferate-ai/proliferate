@@ -1,0 +1,130 @@
+import { useEffect, useRef } from "react";
+import type { ReconcileAgentsResponse } from "@anyharness/sdk";
+import { useAnyHarnessWorkspaceContext } from "@anyharness/sdk-react";
+import { toast } from "@proliferate/ui/kit/Sonner";
+import { Badge } from "@proliferate/ui/primitives/Badge";
+import { ProgressBar } from "@proliferate/ui/primitives/ProgressBar";
+import { useAgentCatalog } from "#product/hooks/agents/derived/use-agent-catalog";
+import { useWorkspaceAgentCatalog } from "#product/hooks/agents/derived/use-workspace-agent-catalog";
+import {
+  byteProgressPercent,
+  formatByteProgress,
+} from "#product/lib/domain/updates/byte-progress";
+import { getProviderDisplayName } from "#product/lib/domain/agents/provider-display";
+
+export const HARNESS_UPDATE_TOAST_ID = "harness-update:local";
+
+interface HarnessProgressToastOptions {
+  snapshot: ReconcileAgentsResponse | null;
+  targetLabel: string;
+  toastId: string;
+}
+
+function useHarnessProgressToast({
+  snapshot,
+  targetLabel,
+  toastId,
+}: HarnessProgressToastOptions) {
+  const activeJobId = useRef<string | null>(null);
+  const progress = snapshot?.progress ?? null;
+  const isActive = snapshot?.status === "queued" || snapshot?.status === "running";
+
+  useEffect(() => () => {
+    toast.dismiss(toastId);
+  }, [toastId]);
+
+  useEffect(() => {
+    if (!isActive || !progress) {
+      if (activeJobId.current) {
+        const sameJob = snapshot?.jobId === activeJobId.current;
+        const isTerminal = snapshot?.status === "completed" || snapshot?.status === "failed";
+        if (sameJob && isTerminal) {
+          const failed = snapshot.status === "failed"
+            || progress?.components.some((component) => component.phase === "failed")
+            || false;
+          toast(failed ? "Some agent tools could not update" : "Agent tools updated", {
+            id: toastId,
+            description: failed
+              ? `${targetLabel}: open the harness settings for details and retry.`
+              : `${targetLabel}: the installed harnesses and ACP adapters are ready.`,
+            duration: 4000,
+            closeButton: true,
+            action: undefined,
+            cancel: undefined,
+          });
+        } else {
+          toast.dismiss(toastId);
+        }
+      }
+      activeJobId.current = null;
+      return;
+    }
+
+    activeJobId.current = snapshot?.jobId ?? toastId;
+    const current = progress.components.find((component) =>
+      !["completed", "skipped", "failed"].includes(component.phase)
+    );
+    const currentAgent = current?.agent ?? snapshot?.currentAgent ?? null;
+    const currentAgentLabel = currentAgent
+      ? getProviderDisplayName(currentAgent)
+      : "agent tools";
+    const totalBytes = progress.downloadSizeBytes ?? null;
+    const byteLabel = progress.downloadedBytes > 0 || totalBytes !== null
+      ? formatByteProgress(progress.downloadedBytes, totalBytes)
+      : `${progress.completedComponents} of ${progress.totalComponents} components`;
+    const percent = byteProgressPercent(progress.downloadedBytes, totalBytes);
+
+    toast(
+      <span className="flex min-w-0 flex-col items-start gap-1.5">
+        <Badge className="shrink-0">AGENTS</Badge>
+        <span>Updating {currentAgentLabel}</span>
+      </span>,
+      {
+        id: toastId,
+        description: (
+          <span className="block">
+            <span className="block text-xs tabular-nums text-muted-foreground">
+              {targetLabel} · {byteLabel}
+            </span>
+            {percent !== null ? (
+              <ProgressBar
+                aria-label={`${targetLabel} agent tools download progress`}
+                aria-valuetext={byteLabel}
+                value={percent}
+                className="mt-1.5 h-0.5 w-full overflow-hidden rounded-full bg-accent"
+                indicatorClassName="h-full rounded-full bg-special transition-[width] duration-300"
+              />
+            ) : null}
+          </span>
+        ),
+        duration: Infinity,
+        closeButton: true,
+        action: undefined,
+        cancel: undefined,
+      },
+    );
+  }, [isActive, progress, snapshot, targetLabel, toastId]);
+}
+
+export function HarnessUpdateToastPresenter() {
+  const { workspaceId } = useAnyHarnessWorkspaceContext();
+  const localCatalog = useAgentCatalog();
+  const workspaceCatalog = useWorkspaceAgentCatalog({ enabled: !!workspaceId });
+  const workspaceSnapshot = workspaceCatalog.reconcileSnapshot?.jobId
+      && workspaceCatalog.reconcileSnapshot.jobId === localCatalog.reconcileSnapshot?.jobId
+    ? null
+    : workspaceCatalog.reconcileSnapshot;
+
+  useHarnessProgressToast({
+    snapshot: localCatalog.reconcileSnapshot,
+    targetLabel: "Local runtime",
+    toastId: HARNESS_UPDATE_TOAST_ID,
+  });
+  useHarnessProgressToast({
+    snapshot: workspaceSnapshot,
+    targetLabel: "Selected workspace runtime",
+    toastId: `harness-update:workspace:${workspaceId ?? "none"}`,
+  });
+
+  return null;
+}

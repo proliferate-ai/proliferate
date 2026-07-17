@@ -340,7 +340,7 @@ describe("updater", () => {
     await expect(desktopBridge.updater.check()).rejects.toThrow("network down");
   });
 
-  it("accumulates chunk lengths into a bounded 0..1 fraction", async () => {
+  it("accumulates chunk lengths while preserving the reported total bytes", async () => {
     // updater.ts adapts the real Started/Progress DownloadEvent union into
     // these (chunkLength, contentLength) tuples: Started(100) captures the
     // total, then each Progress forwards its own chunk length.
@@ -350,18 +350,22 @@ describe("updater", () => {
       cb?.(10, 100); // overshoot -> clamped to 1
     });
 
-    const fractions: number[] = [];
+    const progress: Array<{ receivedBytes: number; totalBytes: number | null }> = [];
     await desktopBridge.updater.downloadAndInstall(
       { version: "0.4.0", title: null, handle: { id: 1 } },
-      (fraction) => fractions.push(fraction),
+      (snapshot) => progress.push(snapshot),
     );
 
     expect(mocks.downloadAndInstall).toHaveBeenCalledTimes(1);
     expect(mocks.downloadAndInstall.mock.calls[0][0]).toEqual({ id: 1 });
-    expect(fractions).toEqual([0.4, 1, 1]);
+    expect(progress).toEqual([
+      { receivedBytes: 40, totalBytes: 100 },
+      { receivedBytes: 100, totalBytes: 100 },
+      { receivedBytes: 110, totalBytes: 100 },
+    ]);
   });
 
-  it("does not call onProgress while total length is unknown or zero", async () => {
+  it("reports received bytes while total length is unknown or zero", async () => {
     mocks.downloadAndInstall.mockImplementation(async (_handle, cb) => {
       cb?.(50, undefined);
       cb?.(50, 0);
@@ -373,7 +377,14 @@ describe("updater", () => {
       onProgress,
     );
 
-    expect(onProgress).not.toHaveBeenCalled();
+    expect(onProgress).toHaveBeenNthCalledWith(1, {
+      receivedBytes: 50,
+      totalBytes: null,
+    });
+    expect(onProgress).toHaveBeenNthCalledWith(2, {
+      receivedBytes: 100,
+      totalBytes: 0,
+    });
   });
 
   it("delegates getVersion and relaunch", async () => {

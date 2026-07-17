@@ -151,17 +151,21 @@ describe("useUpdater", () => {
     expect(result.current.errorSource).toBe("download");
   });
 
-  it("passes the exact checked update back to the bridge and maps progress", async () => {
+  it("passes the checked update back and preserves byte-accurate progress", async () => {
     const update = {
       version: "0.2.0",
       title: "Introducing Grok",
       handle: { native: "opaque" },
     };
     let observedProgress: number | null = null;
+    let observedReceivedBytes: number | null = null;
+    let observedTotalBytes: number | null = null;
     updaterMocks.check.mockResolvedValue(update);
     updaterMocks.downloadAndInstall.mockImplementation(async (_update, onProgress) => {
-      onProgress?.(0.42);
+      onProgress?.({ receivedBytes: 42_000_000, totalBytes: 100_000_000 });
       observedProgress = useUpdaterStore.getState().downloadProgress;
+      observedReceivedBytes = useUpdaterStore.getState().downloadReceivedBytes;
+      observedTotalBytes = useUpdaterStore.getState().downloadTotalBytes;
     });
 
     const { result } = renderHook(() => useUpdater());
@@ -175,7 +179,11 @@ describe("useUpdater", () => {
       expect.any(Function),
     );
     expect(observedProgress).toBe(42);
+    expect(observedReceivedBytes).toBe(42_000_000);
+    expect(observedTotalBytes).toBe(100_000_000);
     expect(useUpdaterStore.getState().downloadProgress).toBeNull();
+    expect(useUpdaterStore.getState().downloadReceivedBytes).toBeNull();
+    expect(useUpdaterStore.getState().downloadTotalBytes).toBeNull();
     expect(useUpdaterStore.getState().phase).toBe("ready");
   });
 

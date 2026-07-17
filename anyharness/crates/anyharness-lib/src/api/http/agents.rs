@@ -218,21 +218,23 @@ pub async fn get_reconcile_status(State(state): State<AppState>) -> Json<Reconci
     request_body = ReconcileAgentsRequest,
     responses(
         (status = 202, description = "Agent reconcile started or reused", body = ReconcileAgentsResponse),
+        (status = 400, description = "Unknown agent kind", body = ProblemDetails),
+        (status = 409, description = "An incompatible reconcile job is already active", body = ProblemDetails),
     ),
     tag = "agents"
 )]
 pub async fn reconcile_agents(
     State(state): State<AppState>,
     Json(req): Json<ReconcileAgentsRequest>,
-) -> (StatusCode, Json<ReconcileAgentsResponse>) {
+) -> Result<(StatusCode, Json<ReconcileAgentsResponse>), ApiError> {
     let snapshot = state
         .agent_runtime
-        .start_reconcile(req.reinstall, req.installed_only)
-        .await;
-    (
+        .start_reconcile(req.reinstall, req.installed_only, req.agent_kinds)
+        .await?;
+    Ok((
         StatusCode::ACCEPTED,
         Json(reconcile_snapshot_to_contract(&snapshot)),
-    )
+    ))
 }
 
 #[derive(Debug, serde::Deserialize)]

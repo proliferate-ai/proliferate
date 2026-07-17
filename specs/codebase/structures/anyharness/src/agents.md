@@ -199,6 +199,16 @@ The flow is:
 4. return installed artifact results
 5. resolve the agent again so the API returns fresh readiness state
 
+Every reconcile-owned install also reports an in-memory component snapshot for
+the `native_cli` and `agent_process` roles. Binary and archive transfers are
+streamed by AnyHarness itself, so the snapshot carries monotonic
+`downloadedBytes` and an exact `downloadSizeBytes` from the catalog or response
+`Content-Length`. The same snapshot advances through verification, extraction,
+package installation, and launcher finalization. npm and Git installs report
+their phase but keep `downloadSizeBytes=null`: their package-manager subprocess
+may fetch a dependency closure whose transfer size is not owned or known by
+AnyHarness, and installed directory size is not presented as download size.
+
 Important install cases:
 
 - every install materializes the agent's resolved **catalog pin**: a
@@ -222,6 +232,15 @@ Important install cases:
 - installer mutations are serialized by runtime-home file locks under
   `agents/<kind>/.install.lock` so desktop, CLI, and seed hydration do not
   write the same agent at the same time
+- a native binary downloads to `.<kind>.downloading`, verifies SHA-256, becomes
+  executable, and is renamed into place; a native archive downloads below
+  `_staging`, verifies, extracts, moves the selected executable, and removes
+  staging; an archive ACP adapter downloads and extracts its complete sibling
+  tree into a sibling staging directory, then swaps it into
+  `agent_process/registry_binary`; a durable activation marker keeps the tree
+  and managed launcher in one recoverable transaction, so an error or process
+  interruption restores both previous artifacts; the install manifest is
+  atomically replaced only after role work completes
 
 Public HTTP routes include:
 
@@ -304,6 +323,32 @@ Reconcile runs in two scopes, selected by the `installed_only` flag:
   missing agent is `skipped` (it installs on demand at session start). This is the scope
   used by the runtime startup pass and the desktop "update local installs" button.
 
+`POST /v1/agents/reconcile` also accepts an optional `agentKinds` list. Empty
+keeps the all-agent behavior; a single kind is the asynchronous manual
+install/update path used by harness settings. Unknown kinds are rejected. An
+active job is reused only when its install mode and agent scope cover the new
+request; an incompatible request receives `409 AGENT_RECONCILE_BUSY` so the
+running download remains the single observable disk writer. Internal startup
+and catalog-applied installed-only pokes wait for that active job and retry, so
+a foreground scoped update cannot cause a pin-refresh pass to be dropped.
+
+`GET /v1/agents/reconcile` returns the job's `currentAgent`, `installedOnly`,
+and optional progress object. Progress contains aggregate transferred/total
+bytes, completed/total component counts, and the per-agent/per-role rows. The
+aggregate total is nullable and remains null if any planned role has an unknown
+transfer size; clients must render such jobs as indeterminate instead of
+inventing a percentage. This detailed state is process-local and ephemeral;
+`/health.agentReconcile` intentionally remains coarse.
+
+Local and cloud clients consume this same contract. Local clients call the
+runtime directly. A selected cloud or SSH workspace resolves its AnyHarness
+connection and calls the same route; the cloud sandbox gateway already proxies
+the request and response unchanged. Worker heartbeat remains desired-version
+and liveness state and does not receive per-download byte ticks. The settings
+UI chooses this disk target explicitly (`Local runtime` or `Selected workspace`);
+the independent Cloud/Local authentication surface toggle never selects a
+runtime mutation target.
+
 The runtime drives reconcile itself at startup — `AgentRuntime::spawn_startup_pass`
 (kicked from `app/` wiring, runs on the desktop sidecar AND cloud workers): hydrate the
 bundled seed if pending, then run an installed-only reconcile. It is non-blocking (the
@@ -382,8 +427,11 @@ settles (`AgentRuntime::spawn_startup_pass` awaits hydration, then reconciles), 
 already-installed agents track the catalog pins on both the desktop sidecar and cloud
 workers. The desktop frontend no longer triggers reconcile — it polls the reconcile
 snapshot (`GET /v1/agents/reconcile`) to display per-agent status and refreshes the agent
-list as the job transitions. Missing non-seeded agents are not auto-installed at startup;
-they install on demand at session start or via an explicit per-agent install.
+list as the job transitions. While a transfer is active it polls more quickly and renders
+the runtime target, aggregate bytes, and separate CLI/ACP rows. Missing non-seeded agents
+are not auto-installed at startup; they install on demand at session start or through a
+selected-agent reconcile from harness settings. The synchronous per-agent install endpoint
+remains available for compatibility.
 
 Seed hydration verifies the archive `.sha256`, validates the manifest target and
 schema, rejects unsafe tar entries, extracts into a staging directory under the

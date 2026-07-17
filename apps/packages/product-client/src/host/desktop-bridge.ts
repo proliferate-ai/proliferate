@@ -229,15 +229,21 @@ export interface DesktopUpdate {
   handle: unknown;
 }
 
+/** Byte-accurate progress reported by the native desktop updater. */
+export interface DesktopUpdateDownloadProgress {
+  receivedBytes: number;
+  totalBytes: number | null;
+}
+
 export interface DesktopUpdaterBridge {
   /** False in unpackaged Desktop builds unless the development updater is active. */
   isSupported(): boolean;
   getVersion(): Promise<string>;
   check(): Promise<DesktopUpdate | null>;
-  /** `onProgress` receives download completion as a 0..1 fraction. */
+  /** `onProgress` receives cumulative downloaded bytes and the total when known. */
   downloadAndInstall(
     update: DesktopUpdate,
-    onProgress?: (fraction: number) => void,
+    onProgress?: (progress: DesktopUpdateDownloadProgress) => void,
   ): Promise<void>;
   relaunch(): Promise<void>;
 }

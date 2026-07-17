@@ -26,6 +26,7 @@ const PREVIEW_VERSION = "0.1.42";
 const PREVIEW_TITLE = "Introducing Grok";
 const CHECK_ERROR_MESSAGE = "Couldn't reach the update server.";
 const DOWNLOAD_ERROR_MESSAGE = "Couldn't finish downloading the update.";
+const PREVIEW_DOWNLOAD_TOTAL_BYTES = 125_000_000;
 const PRODUCTION_SURFACE_PREVIEWS: {
   id: ProductionSurfacePreview;
   label: string;
@@ -58,6 +59,8 @@ function buildProductionSurfaceMock(preview: ProductionSurfacePreview): DevUpdat
     version: PREVIEW_VERSION,
     title: PREVIEW_TITLE,
     downloadProgress: null,
+    downloadReceivedBytes: null,
+    downloadTotalBytes: null,
     restartPromptOpen: false,
     restartWhenIdle: false,
     lastCheckedAt: new Date().toISOString(),
@@ -71,6 +74,8 @@ function buildProductionSurfaceMock(preview: ProductionSurfacePreview): DevUpdat
       ...baseState,
       phase: "downloading",
       downloadProgress: 68,
+      downloadReceivedBytes: 85_000_000,
+      downloadTotalBytes: PREVIEW_DOWNLOAD_TOTAL_BYTES,
     };
   }
 
@@ -276,7 +281,14 @@ export function UpdateUiPlaygroundControls() {
               const next = Number(event.currentTarget.value);
               updateDevUpdaterMock((current) =>
                 current && current.phase === "downloading"
-                  ? { ...current, downloadProgress: next }
+                  ? {
+                      ...current,
+                      downloadProgress: next,
+                      downloadReceivedBytes: Math.round(
+                        (PREVIEW_DOWNLOAD_TOTAL_BYTES * next) / 100,
+                      ),
+                      downloadTotalBytes: PREVIEW_DOWNLOAD_TOTAL_BYTES,
+                    }
                   : current,
               );
             }}

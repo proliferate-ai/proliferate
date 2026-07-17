@@ -11,11 +11,12 @@ use std::path::Path;
 
 use super::agent_process::{launcher_path_prefixes, managed_launcher_env};
 use super::downloads::{
-    curl_download_binary_verified, download_and_extract_archive_tree_verified,
-    download_and_extract_archive_verified,
+    download_and_extract_archive_tree_verified, download_and_extract_archive_verified,
+    download_binary_verified,
 };
 use super::install_policy::{ResolvedPinSource, ResolvedPinTarget};
 use super::npm::install_managed_npm_package;
+use super::progress::{InstallProgressPhase, InstallProgressReporter};
 use super::{InstallError, InstalledArtifactResult};
 use crate::domains::agents::model::{AgentKind, ArtifactRole, Platform};
 use crate::domains::agents::readiness::paths::artifact_root;
@@ -32,6 +33,7 @@ pub(super) fn install_binary_or_archive_from_pin(
     kind: &AgentKind,
     role: &ArtifactRole,
     runtime_home: &Path,
+    reporter: Option<&InstallProgressReporter>,
 ) -> Result<InstalledArtifactResult, InstallError> {
     let managed_dir = artifact_root(runtime_home, kind, role);
     std::fs::create_dir_all(&managed_dir)?;
@@ -41,7 +43,14 @@ pub(super) fn install_binary_or_archive_from_pin(
         ResolvedPinSource::Binary { targets } => {
             let target = pick_target(targets)?;
             let temp_path = managed_dir.join(format!(".{}.downloading", kind.as_str()));
-            curl_download_binary_verified(&target.url, &temp_path, &target.sha256)?;
+            download_binary_verified(
+                &target.url,
+                &temp_path,
+                &target.sha256,
+                target.download_size_bytes,
+                reporter,
+                role,
+            )?;
             make_executable(&temp_path)?;
             std::fs::rename(&temp_path, &target_path)?;
             Ok(InstalledArtifactResult {
@@ -63,6 +72,9 @@ pub(super) fn install_binary_or_archive_from_pin(
                 &managed_dir,
                 &target_path,
                 &target.sha256,
+                target.download_size_bytes,
+                reporter,
+                role,
             )?;
             make_executable(&target_path)?;
             Ok(InstalledArtifactResult {
@@ -95,6 +107,7 @@ pub(super) fn install_agent_process_from_pin(
     executable_name: &str,
     runtime_home: &Path,
     reinstall: bool,
+    reporter: Option<&InstallProgressReporter>,
 ) -> Result<Option<InstalledArtifactResult>, InstallError> {
     let managed_dir = artifact_root(runtime_home, kind, &ArtifactRole::AgentProcess);
     let launcher_path = managed_dir.join(format!("{}-launcher", kind.as_str()));
@@ -110,6 +123,14 @@ pub(super) fn install_agent_process_from_pin(
             package_subdir,
             executable_relpath,
         } => {
+            reporter.map(|reporter| {
+                reporter.report(
+                    &ArtifactRole::AgentProcess,
+                    InstallProgressPhase::Installing,
+                    0,
+                    None,
+                )
+            });
             let package = format!("git+{repo}#{git_ref}");
             install_managed_npm_package(
                 &package,
@@ -127,6 +148,14 @@ pub(super) fn install_agent_process_from_pin(
             )
         }
         ResolvedPinSource::Npm { package, args, .. } => {
+            reporter.map(|reporter| {
+                reporter.report(
+                    &ArtifactRole::AgentProcess,
+                    InstallProgressPhase::Installing,
+                    0,
+                    None,
+                )
+            });
             let executable_relpath = format!("node_modules/.bin/{executable_name}");
             install_managed_npm_package(
                 package,
@@ -152,7 +181,15 @@ pub(super) fn install_agent_process_from_pin(
             // so we extract into a managed dir and point the launcher inside it.
             let target = pick_target(targets)?;
             let storage = managed_dir.join("registry_binary");
-            download_and_extract_archive_tree_verified(&target.url, &storage, &target.sha256)?;
+            let mut activation = download_and_extract_archive_tree_verified(
+                &target.url,
+                &storage,
+                &target.sha256,
+                target.download_size_bytes,
+                reporter,
+                &ArtifactRole::AgentProcess,
+                Some(&launcher_path),
+            )?;
             let expected = target
                 .expected_binary
                 .clone()
@@ -164,13 +201,26 @@ pub(super) fn install_agent_process_from_pin(
                 return Err(InstallError::MissingManagedArtifact(exec_path));
             }
             make_executable(&exec_path)?;
+            let downloaded = target.download_size_bytes.unwrap_or(0);
+            reporter.map(|reporter| {
+                reporter.report(
+                    &ArtifactRole::AgentProcess,
+                    InstallProgressPhase::Finalizing,
+                    downloaded,
+                    target.download_size_bytes,
+                )
+            });
+            let staged_launcher = managed_dir.join(format!(".{}-launcher.next", kind.as_str()));
+            let _ = std::fs::remove_file(&staged_launcher);
             generate_launcher_script(
-                &launcher_path,
+                &staged_launcher,
                 &exec_path,
                 args,
                 &launcher_env,
                 &path_prefixes,
             )?;
+            activation.activate_launcher(&staged_launcher)?;
+            activation.commit()?;
             Ok(Some(InstalledArtifactResult {
                 role: ArtifactRole::AgentProcess,
                 path: launcher_path,
@@ -220,6 +270,7 @@ mod tests {
             ResolvedPinTarget {
                 url: url.to_string(),
                 sha256: sha256.to_string(),
+                download_size_bytes: None,
                 expected_binary: None,
             },
         );
@@ -241,6 +292,7 @@ mod tests {
             &AgentKind::Claude,
             &ArtifactRole::NativeCli,
             &home,
+            None,
         )
         .expect("pinned install");
 
@@ -264,6 +316,7 @@ mod tests {
             &AgentKind::Claude,
             &ArtifactRole::NativeCli,
             &home,
+            None,
         )
         .expect_err("checksum mismatch must fail");
 
@@ -306,6 +359,7 @@ mod tests {
             "fake-acp-agent",
             &home,
             true,
+            None,
         )
         .expect("adapter install")
         .expect("installed launcher");
@@ -354,6 +408,7 @@ mod tests {
             ResolvedPinTarget {
                 url: format!("file://{}", archive.display()),
                 sha256: sha,
+                download_size_bytes: None,
                 expected_binary: Some("pkg/agent".to_string()),
             },
         );
@@ -370,6 +425,7 @@ mod tests {
             "cursor-agent",
             &home,
             true,
+            None,
         )
         .expect("adapter install")
         .expect("installed launcher");
@@ -388,6 +444,70 @@ mod tests {
         assert!(
             launcher.contains("acp"),
             "ACP arg must be baked: {launcher}"
+        );
+        let _ = std::fs::remove_dir_all(&scratch);
+    }
+
+    #[test]
+    fn unusable_archive_adapter_restores_previous_tree() {
+        let scratch = temp_dir("archive-adapter-rollback");
+        let payload = scratch.join("payload");
+        std::fs::create_dir_all(payload.join("pkg")).expect("payload dirs");
+        std::fs::write(payload.join("pkg/helper"), b"replacement without entry")
+            .expect("replacement helper");
+
+        let archive = scratch.join("bundle.tar.gz");
+        let status = std::process::Command::new("tar")
+            .arg("czf")
+            .arg(&archive)
+            .arg("-C")
+            .arg(&payload)
+            .arg("pkg")
+            .status()
+            .expect("tar");
+        assert!(status.success(), "tar must succeed");
+        let sha = sha256_hex(&std::fs::read(&archive).expect("read archive"));
+
+        let mut targets = BTreeMap::new();
+        targets.insert(
+            Platform::detect()
+                .expect("platform")
+                .registry_key()
+                .to_string(),
+            ResolvedPinTarget {
+                url: format!("file://{}", archive.display()),
+                sha256: sha,
+                download_size_bytes: None,
+                expected_binary: Some("pkg/agent".to_string()),
+            },
+        );
+        let source = ResolvedPinSource::Archive {
+            targets,
+            args: vec!["acp".to_string()],
+        };
+
+        let home = scratch.join("home");
+        let storage = artifact_root(&home, &AgentKind::Cursor, &ArtifactRole::AgentProcess)
+            .join("registry_binary");
+        std::fs::create_dir_all(&storage).expect("previous tree");
+        std::fs::write(storage.join("agent"), b"previous working adapter")
+            .expect("previous adapter");
+
+        let error = install_agent_process_from_pin(
+            &source,
+            Some("2.0.0"),
+            &AgentKind::Cursor,
+            "cursor-agent",
+            &home,
+            true,
+            None,
+        )
+        .expect_err("archive without its expected entry must fail");
+
+        assert!(matches!(error, InstallError::MissingManagedArtifact(_)));
+        assert_eq!(
+            std::fs::read(storage.join("agent")).expect("restored adapter"),
+            b"previous working adapter"
         );
         let _ = std::fs::remove_dir_all(&scratch);
     }

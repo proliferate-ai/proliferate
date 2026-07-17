@@ -1,5 +1,6 @@
 use anyharness_contract::v1::{
-    AdvanceReplaySessionResponse, AgentCliAuthState, AgentCredentialState, AgentInstallState,
+    AdvanceReplaySessionResponse, AgentCliAuthState, AgentCredentialState, AgentInstallProgress,
+    AgentInstallProgressComponent, AgentInstallProgressPhase, AgentInstallState,
     AgentLaunchModelOption, AgentLaunchOption, AgentLaunchOptionsResponse,
     AgentLoginTerminalRecord, AgentLoginTerminalStatus, AgentReadinessState, AgentSeedFailureKind,
     AgentSeedHealth, AgentSeedLastAction, AgentSeedOwnership, AgentSeedSource, AgentSeedStatus,
@@ -589,6 +590,9 @@ use utoipa::OpenApi;
         StopReason,
         ReconcileOutcome,
         ReconcileJobStatus,
+        AgentInstallProgressPhase,
+        AgentInstallProgressComponent,
+        AgentInstallProgress,
         ReconcileAgentsRequest,
         ReconcileAgentResult,
         ReconcileAgentsResponse,

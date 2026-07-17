@@ -137,14 +137,12 @@ async function runDownloadAndPrepareRestart(
   }
 
   store.setPhase("downloading");
-  store.setDownloadProgress(0);
+  store.setDownloadProgress({ receivedBytes: 0, totalBytes: null });
   deps.track("app_update_download_started", { version });
 
   try {
-    await updater.downloadAndInstall(update, (fraction) => {
-      useUpdaterStore.getState().setDownloadProgress(
-        Math.min(100, Math.round(fraction * 100)),
-      );
+    await updater.downloadAndInstall(update, (progress) => {
+      useUpdaterStore.getState().setDownloadProgress(progress);
     });
 
     useUpdaterStore.getState().setReady();
@@ -231,6 +229,8 @@ export function useUpdater() {
   const storeErrorMessage = useUpdaterStore((s) => s.errorMessage);
   const storeErrorSource = useUpdaterStore((s) => s.errorSource);
   const storeDownloadProgress = useUpdaterStore((s) => s.downloadProgress);
+  const storeDownloadReceivedBytes = useUpdaterStore((s) => s.downloadReceivedBytes);
+  const storeDownloadTotalBytes = useUpdaterStore((s) => s.downloadTotalBytes);
   const storeRestartPromptOpen = useUpdaterStore((s) => s.restartPromptOpen);
   const storeRestartWhenIdle = useUpdaterStore((s) => s.restartWhenIdle);
   const storeManualCheckCompletedAt = useUpdaterStore((s) => s.manualCheckCompletedAt);
@@ -245,7 +245,15 @@ export function useUpdater() {
   const lastCheckedAt = devMock?.lastCheckedAt ?? storeLastCheckedAt;
   const errorMessage = devMock?.errorMessage ?? storeErrorMessage;
   const errorSource = devMock ? devMock.errorSource : storeErrorSource;
-  const downloadProgress = devMock?.downloadProgress ?? storeDownloadProgress;
+  const downloadProgress = devMock
+    ? devMock.downloadProgress
+    : storeDownloadProgress;
+  const downloadReceivedBytes = devMock
+    ? devMock.downloadReceivedBytes
+    : storeDownloadReceivedBytes;
+  const downloadTotalBytes = devMock
+    ? devMock.downloadTotalBytes
+    : storeDownloadTotalBytes;
   const restartPromptOpen = devMock?.restartPromptOpen ?? storeRestartPromptOpen;
   const restartWhenIdle = devMock ? devMock.restartWhenIdle : storeRestartWhenIdle;
   const manualCheckCompletedAt = devMock
@@ -393,6 +401,8 @@ export function useUpdater() {
     errorMessage,
     errorSource,
     downloadProgress,
+    downloadReceivedBytes,
+    downloadTotalBytes,
     restartPromptOpen,
     restartWhenIdle,
     manualCheckCompletedAt,

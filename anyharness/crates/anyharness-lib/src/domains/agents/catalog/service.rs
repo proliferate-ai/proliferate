@@ -103,6 +103,7 @@ fn project_source(pin: &AgentCatalogArtifactPin) -> Option<ResolvedPinSource> {
                     ResolvedPinTarget {
                         url: target.url.clone(),
                         sha256: target.sha256.clone(),
+                        download_size_bytes: target.download_size_bytes,
                         expected_binary: target.expected_binary.clone(),
                     },
                 )

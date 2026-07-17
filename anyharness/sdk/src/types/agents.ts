@@ -17,6 +17,11 @@ export type StartAgentLoginTerminalResponse =
   components["schemas"]["StartAgentLoginTerminalResponse"];
 export type ReconcileOutcome = components["schemas"]["ReconcileOutcome"];
 export type ReconcileJobStatus = components["schemas"]["ReconcileJobStatus"];
+export type AgentInstallProgressPhase =
+  components["schemas"]["AgentInstallProgressPhase"];
+export type AgentInstallProgressComponent =
+  components["schemas"]["AgentInstallProgressComponent"];
+export type AgentInstallProgress = components["schemas"]["AgentInstallProgress"];
 export type ReconcileAgentsRequest = components["schemas"]["ReconcileAgentsRequest"];
 export type ReconcileAgentResult = components["schemas"]["ReconcileAgentResult"];
 export type ReconcileAgentsResponse = components["schemas"]["ReconcileAgentsResponse"];

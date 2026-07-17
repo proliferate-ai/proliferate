@@ -6,7 +6,9 @@ use std::sync::Arc;
 
 use super::auth::login::{self, AgentLoginError};
 pub use super::auth::login::{AgentLoginCommand, ResolvedAgentLoginCommand};
-use super::installer::reconcile::execution::{AgentReconcileJobSnapshot, AgentReconcileService};
+use super::installer::reconcile::execution::{
+    AgentReconcileJobSnapshot, AgentReconcileService, AgentReconcileStartError,
+};
 use super::installer::seed::AgentSeedStore;
 use super::installer::{self, InstallError, InstallOptions, InstalledArtifactResult};
 use super::model::*;
@@ -63,6 +65,10 @@ pub struct AgentLoginStart {
 pub enum AgentRuntimeError {
     #[error("No built-in agent with kind: {0}")]
     NotFound(String),
+    #[error("Invalid reconcile agent kind: {0}")]
+    InvalidReconcileAgentKind(String),
+    #[error(transparent)]
+    ReconcileStart(#[from] AgentReconcileStartError),
     #[error(transparent)]
     Login(#[from] AgentLoginError),
     #[error("Agent login terminal not found: {0}")]
@@ -214,17 +220,55 @@ impl AgentRuntime {
         &self,
         reinstall: bool,
         installed_only: bool,
-    ) -> AgentReconcileJobSnapshot {
-        self.reconcile_service
+        agent_kinds: Vec<String>,
+    ) -> Result<AgentReconcileJobSnapshot, AgentRuntimeError> {
+        let mut requested_agent_kinds = Vec::with_capacity(agent_kinds.len());
+        for kind in &agent_kinds {
+            let parsed = AgentKind::parse(kind)
+                .ok_or_else(|| AgentRuntimeError::InvalidReconcileAgentKind(kind.clone()))?;
+            if !requested_agent_kinds.contains(&parsed) {
+                requested_agent_kinds.push(parsed);
+            }
+        }
+        let mut registry = built_in_registry();
+        if !agent_kinds.is_empty() {
+            registry.retain(|descriptor| requested_agent_kinds.contains(&descriptor.kind));
+        }
+        Ok(self
+            .reconcile_service
             .start_or_get(
-                built_in_registry(),
+                registry,
                 self.runtime_home.clone(),
                 reinstall,
                 installed_only,
+                requested_agent_kinds,
                 Some(self.seed_store.clone()),
                 Some(self.catalog_service.clone()),
             )
-            .await
+            .await?)
+    }
+
+    /// Internal startup/catalog pokes must not disappear merely because a
+    /// foreground scoped update owns the one observable reconcile slot. Wait
+    /// for that job to settle, then coalesce onto or start the installed-only
+    /// pass. HTTP callers intentionally continue to receive `409` instead.
+    pub async fn reconcile_installed_when_idle(&self) {
+        loop {
+            match self.start_reconcile(false, true, Vec::new()).await {
+                Ok(_) => return,
+                Err(AgentRuntimeError::ReconcileStart(AgentReconcileStartError::Busy(job_id))) => {
+                    tracing::debug!(
+                        active_job_id = %job_id,
+                        "installed-only reconcile poke waiting for active job"
+                    );
+                    tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+                }
+                Err(error) => {
+                    tracing::warn!(error = %error, "installed-only reconcile poke failed");
+                    return;
+                }
+            }
+        }
     }
 
     /// Runtime startup pass (desktop sidecar AND cloud workers): hydrate the
@@ -244,7 +288,7 @@ impl AgentRuntime {
                 })
                 .await;
             }
-            self.start_reconcile(false, true).await;
+            self.reconcile_installed_when_idle().await;
         });
     }
 }
