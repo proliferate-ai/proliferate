@@ -19,6 +19,8 @@ from proliferate.db.models.organizations import Organization, OrganizationMember
 from tests.e2e.cloud.helpers.auth import create_user_and_login
 from tests.e2e.cloud.helpers.github import seed_linked_github_account
 
+GATEWAY_URL = "/v1/cloud/integration-gateway/mcp"
+
 
 @pytest.fixture(autouse=True)
 def _worker_cloud_base_url(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -77,6 +79,7 @@ async def _desktop_enrollment_token(
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["expiresAt"]
+    assert body["pendingTicketPolicy"] == "newest_wins"
     return body["enrollmentToken"]
 
 
@@ -176,11 +179,13 @@ class TestRuntimeWorkerEnrollment:
         token1 = await _desktop_enrollment_token(client, auth, install_id="install-d")
         first = await client.post("/v1/cloud/worker/enroll", json={"enrollmentToken": token1})
         first_token = first.json()["workerToken"]
+        first_gateway = first.json()["integrationGateway"]["authorization"]
 
         # A second enrollment for the same install rotates the worker identity.
         token2 = await _desktop_enrollment_token(client, auth, install_id="install-d")
         second = await client.post("/v1/cloud/worker/enroll", json={"enrollmentToken": token2})
         second_token = second.json()["workerToken"]
+        second_gateway = second.json()["integrationGateway"]["authorization"]
         assert first_token != second_token
 
         # Old worker token is now revoked; new one still works.
@@ -196,6 +201,21 @@ class TestRuntimeWorkerEnrollment:
             json={},
         )
         assert fresh.status_code == 200
+
+        # The old Worker cannot retain integration authority or rewrite a
+        # usable shared gateway credential after the replacement enrolls.
+        stale_gateway = await client.post(
+            GATEWAY_URL,
+            headers={"Authorization": first_gateway},
+            json={"jsonrpc": "2.0", "id": 1, "method": "initialize"},
+        )
+        assert stale_gateway.status_code == 401
+        fresh_gateway = await client.post(
+            GATEWAY_URL,
+            headers={"Authorization": second_gateway},
+            json={"jsonrpc": "2.0", "id": 2, "method": "initialize"},
+        )
+        assert fresh_gateway.status_code == 200, fresh_gateway.text
 
     @pytest.mark.asyncio
     async def test_cross_user_enrollment_revokes_prior_users_worker(

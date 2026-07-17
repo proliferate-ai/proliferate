@@ -46,13 +46,21 @@ export function ensureDesktopWorker(
   return enqueueWorkerLifecycleTask(async () => {
     try {
       const desktopInstallId = await worker.getInstallId();
-      const { enrollmentToken } = await enrollDesktopWorker(
+      const enrollment = await enrollDesktopWorker(
         desktopInstallId,
         organizationId,
       );
+      // A Desktop release can become available before its matching server
+      // deploy. Do not enter the v2 native namespace until the ticket issuer
+      // proves it fenced every older pending ticket for this physical install.
+      // Returning false uses the enrollment guard's bounded retry without
+      // reporting this expected rollout state as a production exception.
+      if (enrollment.pendingTicketPolicy !== "newest_wins") {
+        return false;
+      }
       await worker.ensure({
         targetId: desktopInstallId,
-        enrollmentToken,
+        enrollmentToken: enrollment.enrollmentToken,
       });
       return true;
     } catch (error) {

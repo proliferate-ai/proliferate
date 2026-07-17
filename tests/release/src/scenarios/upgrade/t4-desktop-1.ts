@@ -12,9 +12,8 @@ import { ScenarioBlockedError } from "../types.js";
  * Builds a test-flavor N-1 desktop `.app` pointed at a local update feed, an N
  * `.app` signed with the same key, stages N + latest.json behind
  * `tests/release/scripts/serve-updater-feed.mjs`, then drives the REAL
- * `tauri_plugin_updater` (`check()` + `download_and_install()`, the code the JS
- * wrappers in `apps/desktop/src/lib/access/tauri/updater.ts` call through) via
- * a headless Rust driver (`tests/release/upgrade/updater-driver`). The
+ * `tauri_plugin_updater` (`check()` + `download()` + `install(bytes)`) via a
+ * headless Rust driver (`tests/release/upgrade/updater-driver`). The
  * signature of the N artifact is verified at download time against the pubkey
  * the N-1 build trusts, and the on-disk N-1 bundle is swapped in place; the
  * scenario asserts the installed bundle's version went N-1 -> N (the
@@ -23,11 +22,11 @@ import { ScenarioBlockedError } from "../types.js";
  *
  * Why the GUI is not clicked: the update UX is user-gated inside a release
  * webview (Settings -> "Desktop updates" -> check -> download -> restart), and
- * webview automation is far more brittle headlessly than invoking the same
- * updater API directly. The Rust driver is the "call the wrappers directly"
- * path from the testing README, exercising the parts that actually break
- * (manifest fetch, semver compare, minisign signature verification, real
- * macOS `.app` swap).
+ * webview automation is far more brittle headlessly than invoking the updater
+ * engine directly. The Rust driver exercises manifest fetch, semver compare,
+ * minisign signature verification, an explicit pre-install boundary, and the
+ * real macOS `.app` swap. It does not call the product JS wrapper or qualify
+ * the Windows-native Worker cleanup command; that coverage gap stays explicit.
  *
  * This scenario is **local-macOS-aarch64-only** and gated behind an explicit
  * opt-in (`RELEASE_E2E_DESKTOP_T4=1`) because it runs two full `tauri build`s
@@ -63,7 +62,7 @@ export const t4Desktop1: ScenarioDefinition = {
     {
       description:
         "run the headless updater driver: real tauri_plugin_updater check() (assert available == N) + " +
-        "download_and_install() (verify N artifact signature against the N-1-trusted pubkey; swap the bundle)",
+        "download() + pre-install boundary + install(bytes) (verify signature; swap the bundle)",
     },
     { description: "assert the installed bundle version is now N (== getVersion() after relaunch)" },
   ],

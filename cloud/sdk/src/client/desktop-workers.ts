@@ -1,9 +1,8 @@
 import { getProliferateClient, type ProliferateCloudClient } from "./core.js";
+import type { components } from "../generated/openapi.js";
 
-export interface DesktopWorkerEnrollmentResponse {
-  enrollmentToken: string;
-  expiresAt: string;
-}
+export type DesktopWorkerEnrollmentResponse =
+  components["schemas"]["DesktopWorkerEnrollmentResponse"];
 
 export async function enrollDesktopWorker(
   desktopInstallId: string,
