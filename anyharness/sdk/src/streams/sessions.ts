@@ -26,7 +26,7 @@ export interface SessionStreamOptions {
 }
 
 export interface SessionStreamHandle {
-  close: () => void;
+  close: (reason?: unknown) => void;
 }
 
 export function streamSession(options: SessionStreamOptions): SessionStreamHandle {
@@ -199,7 +199,7 @@ export function streamSession(options: SessionStreamOptions): SessionStreamHandl
   })();
 
   return {
-    close: () => controller.abort(),
+    close: (reason?: unknown) => controller.abort(reason),
   };
 }
 
