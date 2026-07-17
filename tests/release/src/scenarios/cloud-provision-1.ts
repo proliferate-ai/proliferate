@@ -2099,6 +2099,16 @@ function cssAttr(value: string): string {
 }
 
 /**
+ * The exact home Project-menu row selector for the covered cloud-only repo. The
+ * row carries `data-repo-source-root="<sourceRoot>"` (HomeProjectMenu.tsx); a
+ * cloud-only repo's sourceRoot is `cloud:<owner>/<repo>` (repositories.ts). Used
+ * for a deterministic click instead of a fuzzy getByText fallback.
+ */
+export function coveredRepoSourceRootSelector(): string {
+  return `[data-repo-source-root="${cssAttr(`cloud:${COVERED_REPO_OWNER}/${COVERED_REPO_NAME}`)}"]`;
+}
+
+/**
  * Brings the browser to a state where the composer can dispatch a turn into
  * the actor's cloud sandbox. Two observed states are valid:
  *
@@ -2141,7 +2151,48 @@ async function ensureCloudLaunchTargetSelected(page: ProductPage): Promise<void>
   }
 
   await clickByRole(p, "button", /^Project:/, "home Project picker trigger");
-  await clickMenuItemByText(p, COVERED_REPO_NAME, "covered repository row");
+  // Deterministic covered-repo selection: the home Project menu renders each row
+  // with `data-repo-source-root="<sourceRoot>"` (HomeProjectMenu.tsx), where a
+  // cloud-only repo's sourceRoot is `cloud:<owner>/<repo>` (repositories.ts).
+  // Click that exact row — NOT a fuzzy getByText, which can no-op / mis-click for
+  // the cloud-only repo and leave destination on "cowork" so the Runtime button
+  // (rendered only when destination === "repository") never mounts (the observed
+  // regression red).
+  const coveredRepoRow = p.locator(coveredRepoSourceRootSelector()).first();
+  try {
+    await coveredRepoRow.waitFor({ state: "visible", timeout: 20_000 });
+  } catch {
+    throw new Error(
+      `ensureCloudLaunchTargetSelected: the covered cloud-only repo row ` +
+        `(${coveredRepoSourceRootSelector()}) never appeared in the home Project menu within 20000ms — the ` +
+        "covered cloud-only repo is not listed for this actor (cloudActive gating or a repo_environment listing " +
+        "gap; see use-cloud-availability-state.ts). The Runtime picker is downstream of this selection, so this " +
+        "names the true failing layer rather than a Runtime-row timeout.",
+    );
+  }
+  await coveredRepoRow.click();
+  // Assert the Project selection settled (destination flipped to "repository")
+  // BEFORE touching Runtime: the Project row's aria-label becomes
+  // "Project: <repo>" (homeTargetProjectAriaLabel) and the Runtime button mounts
+  // only in that state. Without this wait the next clickByRole(/^Runtime:/) can
+  // race a not-yet-mounted button.
+  try {
+    await p
+      .getByRole("button", { name: new RegExp(`^Project: ${COVERED_REPO_NAME}`) })
+      .first()
+      .waitFor({ state: "visible", timeout: 15_000 });
+  } catch {
+    const observed = await p
+      .getByRole("button", { name: /^Project:/ })
+      .first()
+      .getAttribute("aria-label")
+      .catch(() => null);
+    throw new Error(
+      `ensureCloudLaunchTargetSelected: the home Project row did not settle on "Project: ${COVERED_REPO_NAME}" ` +
+        `(observed: ${observed ?? "no Project row"}) — destination never flipped to "repository", so the Runtime ` +
+        "picker (rendered only for a repository destination) would not mount.",
+    );
+  }
   await clickByRole(p, "button", /^Runtime:/, "home Runtime picker trigger");
   await clickMenuItemByText(p, "Cloud", '"Cloud" runtime option');
   // Postcondition: the runtime row must settle on exactly "Runtime: Cloud"

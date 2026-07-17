@@ -9,6 +9,7 @@ import {
   DETERMINISTIC_PROMPT,
   REPRESENTATIVE_HARNESS,
   SANDBOX_RUNTIME_PORT,
+  coveredRepoSourceRootSelector,
   createCloudProvision1Driver,
   resolveBotSeedForAutomation,
   resolveWorldConstructionInputs,
@@ -326,6 +327,17 @@ test("resolveWorldConstructionInputs fails cleanly when the candidate build map 
 test("resolveWorldConstructionInputs fails cleanly when a required cloud env var is missing", () => {
   const result = resolveWorldConstructionInputs(fakeCtx({ env: fakeEnv({ RELEASE_E2E_CLOUD_AWS_REGION: undefined }) }));
   assert.equal(result.ok, false);
+});
+
+test("coveredRepoSourceRootSelector targets the exact cloud-only repo row (deterministic home-picker selection)", () => {
+  // The home Project menu row carries data-repo-source-root="cloud:<owner>/<repo>"
+  // for a cloud-only repo (HomeProjectMenu.tsx / repositories.ts). A deterministic
+  // attribute click replaces the fuzzy getByText that could leave destination on
+  // "cowork" so the Runtime button never mounts (attempt-2 regression red).
+  assert.equal(
+    coveredRepoSourceRootSelector(),
+    '[data-repo-source-root="cloud:proliferate-e2e/e2e-fixture"]',
+  );
 });
 
 test("buildWorld writes GITHUB_APP_WEBHOOK_SECRET into the github-app env file (#1318 base-world repair)", async () => {
