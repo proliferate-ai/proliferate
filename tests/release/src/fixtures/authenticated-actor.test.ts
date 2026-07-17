@@ -185,6 +185,30 @@ test("authenticatedActor durably hands off synced enrollment custody before any 
   assert.ok(!calls.some((call) => call.startsWith("putGatewaySelection")));
 });
 
+test("authenticatedActor persists enrollment intent before claim and binds before selection", async () => {
+  const world = fakeWorld();
+  const { transport, calls } = fakeTransport({
+    getEnrollment: async () => ({
+      id: "enrollment-1", subjectKind: "user", litellmTeamId: "team-1",
+      syncStatus: "synced", lastErrorCode: null,
+      createdAt: "2026-01-01T00:00:00Z", updatedAt: "2026-01-01T00:00:00Z",
+    }),
+  });
+  await authenticatedActor(world, "owner", {
+    beginActorEnrollmentCustody: async ({ email }) => {
+      calls.push(`beginCustody:${email}`);
+      return {
+        resolveAndTrack: async (identity) => {
+          calls.push(`bindCustody:${identity.userId}:${identity.enrollmentId}`);
+          return world.gateway.resolveActorKey(identity);
+        },
+      };
+    },
+  }, transport);
+  assert.ok(calls.indexOf("beginCustody:qual-owner-local-run-1-local-0@example.com") < calls.findIndex((c) => c.startsWith("claimSetup:")));
+  assert.ok(calls.indexOf("bindCustody:user-1:enrollment-1") < calls.findIndex((c) => c.startsWith("putGatewaySelection:")));
+});
+
 test("authenticatedActor rejects non-owner roles", async () => {
   const world = fakeWorld();
   const { transport } = fakeTransport();

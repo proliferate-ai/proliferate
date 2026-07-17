@@ -4,7 +4,12 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
-import { encodeE2bSandboxCleanupIdentity } from "../fixtures/managed-cloud-fixture-replay.js";
+import {
+  decodeE2bSandboxCleanupIdentity,
+  encodeE2bSandboxCleanupIdentity,
+  managedCloudFixtureReplayHandlers,
+  replayManagedCloudFixtureEntries,
+} from "../fixtures/managed-cloud-fixture-replay.js";
 import type { StripeHttp } from "../fixtures/stripe-test-clock.js";
 import {
   loadCleanupLedger,
@@ -13,6 +18,7 @@ import {
   type CleanupResourceKind,
 } from "../worlds/local-workspace/cleanup-ledger.js";
 import type { AwsCliExec } from "../worlds/managed-cloud/ec2.js";
+import type { BoxExec } from "../worlds/managed-cloud/box-exec.js";
 import type { SshExec } from "../worlds/managed-cloud/ingress.js";
 import {
   discoverRunningManagedCloudIngress,
@@ -25,6 +31,14 @@ const RUN_ID = "run-1";
 const SHARD_ID = "shard-1";
 const REGION = "us-west-2";
 const PUBLIC_IP = "203.0.113.9";
+
+const UNUSED_BOX: BoxExec = {
+  async exec() { throw new Error("unused box exec"); },
+  async putSecretFile() { throw new Error("unused box secret write"); },
+  async readRemoteFile() { throw new Error("unused box read"); },
+  async removeRemoteFile() { throw new Error("unused box remove"); },
+  async serverPython() { throw new Error("unused box python"); },
+};
 
 function awsPayload(count = 1, overrides: Record<string, unknown> = {}): string {
   return JSON.stringify({
@@ -441,7 +455,7 @@ test("an unavailable ingress does not prevent independent Stripe and E2B cleanup
   }
 });
 
-test("intent-only E2B cleanup requires exhaustive repeated absence plus the grace window", async () => {
+test("encoded intent-only E2B cleanup preserves custody after repeated provider absence", async () => {
   const runDir = await mkdtemp(path.join(os.tmpdir(), "fixture-replay-e2b-intent-"));
   try {
     const ledger = await openCleanupLedger({ runDir, runId: RUN_ID, shardId: SHARD_ID });
@@ -451,9 +465,8 @@ test("intent-only E2B cleanup requires exhaustive repeated absence plus the grac
       "sandbox-intent",
       encodeE2bSandboxCleanupIdentity({ cloudSandboxId: "cloud-intent-1", providerSandboxId: null }),
     );
-    const createdAt = Date.parse(ledger.entries()[0]!.createdAt);
     let observations = 0;
-    const replay = (nowMs: number, count = 0) => replayManagedCloudFixtures(
+    const replay = (count = 0) => replayManagedCloudFixtures(
       { runDir, runId: RUN_ID, shardId: SHARD_ID },
       { RELEASE_E2E_E2B_API_KEY: "e2b_test_key" },
       {
@@ -464,7 +477,7 @@ test("intent-only E2B cleanup requires exhaustive repeated absence plus the grac
         },
         stripeHttp: { async request() { throw new Error("E2B-only replay must not use Stripe"); } },
         providers: {
-          now: () => new Date(nowMs),
+          now: () => new Date(),
           async sleep() {},
           async findSandbox() {
             observations += 1;
@@ -474,14 +487,133 @@ test("intent-only E2B cleanup requires exhaustive repeated absence plus the grac
         },
       },
     );
-    await assert.rejects(() => replay(createdAt + 1_000), /not visible yet.*preserving cleanup custody/i);
+    await assert.rejects(() => replay(), /no authoritative provider binding.*preserving cleanup custody/i);
     assert.equal(observations, 3);
     assert.equal((await loadCleanupLedger(runDir)).entries()[0]?.phase, "acquired");
 
+    // Time cannot turn eventual-consistency observations into authoritative
+    // absence while the candidate materialization producer remains alive.
     observations = 0;
-    const report = await replay(createdAt + 31_000);
+    await assert.rejects(() => replay(), /no authoritative provider binding.*preserving cleanup custody/i);
+    assert.equal(observations, 3);
+    assert.equal((await loadCleanupLedger(runDir)).entries()[0]?.phase, "acquired");
+  } finally {
+    await rm(runDir, { recursive: true, force: true });
+  }
+});
+
+test("E2B cleanup persists discovered provider ids before delete and survives reconcile failure", async () => {
+  const runDir = await mkdtemp(path.join(os.tmpdir(), "fixture-replay-e2b-crash-"));
+  try {
+    const ledger = await openCleanupLedger({ runDir, runId: RUN_ID, shardId: SHARD_ID });
+    await acquire(
+      ledger,
+      "e2b_sandbox",
+      "sandbox-crash",
+      encodeE2bSandboxCleanupIdentity({ cloudSandboxId: "cloud-crash-1", providerSandboxId: null }),
+    );
+    let providerVisible = true;
+    const killed: string[] = [];
+    const providers = {
+      now: () => new Date(),
+      async sleep() {},
+      async findSandbox() {
+        return providerVisible
+          ? {
+              providerSandboxId: "e2b-crash-1",
+              state: "running" as const,
+              matches: [{
+                providerSandboxId: "e2b-crash-1", state: "running" as const,
+                templateId: "tpl-1", startedAt: null,
+              }],
+              count: 1,
+            }
+          : { providerSandboxId: null, state: null, matches: [], count: 0 };
+      },
+      async killSandbox(providerSandboxId: string) {
+        killed.push(providerSandboxId);
+        providerVisible = false;
+        return { killed: true };
+      },
+    };
+    const handlers = managedCloudFixtureReplayHandlers({
+      box: UNUSED_BOX,
+      runTag: `${RUN_ID}:${SHARD_ID}`,
+      stripeSecretKey: "unused",
+      stripeHttp: { async request() { throw new Error("unused Stripe"); } },
+      ledgerEntries: ledger.entries(),
+      ledger,
+      providers,
+    });
+    const crashingLedger: CleanupLedger = {
+      ledgerId: ledger.ledgerId,
+      registerIntent: (kind, entryId) => ledger.registerIntent(kind, entryId),
+      markAcquired: (entryId, providerId) => ledger.markAcquired(entryId, providerId),
+      async markReconciled() { throw new Error("simulated crash before reconciliation persistence"); },
+      entries: () => ledger.entries(),
+      unreconciled: () => ledger.unreconciled(),
+    };
+    await assert.rejects(
+      () => replayManagedCloudFixtureEntries(
+        crashingLedger, handlers, new Set<CleanupResourceKind>(["e2b_sandbox"]),
+      ),
+      /simulated crash before reconciliation persistence/,
+    );
+    assert.deepEqual(killed, ["e2b-crash-1"]);
+
+    const persisted = await loadCleanupLedger(runDir);
+    const entry = persisted.entries().find((row) => row.entryId === "sandbox-crash");
+    assert.equal(entry?.phase, "acquired");
+    assert.deepEqual(decodeE2bSandboxCleanupIdentity(entry?.providerId ?? ""), {
+      cloudSandboxId: "cloud-crash-1", providerSandboxId: "e2b-crash-1",
+    });
+
+    const retryHandlers = managedCloudFixtureReplayHandlers({
+      box: UNUSED_BOX,
+      runTag: `${RUN_ID}:${SHARD_ID}`,
+      stripeSecretKey: "unused",
+      stripeHttp: { async request() { throw new Error("unused Stripe"); } },
+      ledgerEntries: persisted.entries(),
+      ledger: persisted,
+      providers,
+    });
+    const retry = await replayManagedCloudFixtureEntries(
+      persisted, retryHandlers, new Set<CleanupResourceKind>(["e2b_sandbox"]),
+    );
+    assert.equal(retry.reconciled, 1);
+    assert.deepEqual(killed, ["e2b-crash-1", "e2b-crash-1"]);
+    assert.equal((await loadCleanupLedger(runDir)).entries()[0]?.phase, "reconciled");
+  } finally {
+    await rm(runDir, { recursive: true, force: true });
+  }
+});
+
+test("null pre-return E2B intent reconciles without provider discovery or destruction", async () => {
+  const runDir = await mkdtemp(path.join(os.tmpdir(), "fixture-replay-e2b-null-"));
+  try {
+    const ledger = await openCleanupLedger({ runDir, runId: RUN_ID, shardId: SHARD_ID });
+    await ledger.registerIntent("e2b_sandbox", "sandbox-null");
+    let providerCalls = 0;
+    const report = await replayManagedCloudFixtures(
+      { runDir, runId: RUN_ID, shardId: SHARD_ID },
+      { RELEASE_E2E_E2B_API_KEY: "e2b_test_key" },
+      {
+        awsExec: fakeAws([], awsPayload(0)),
+        ssh: {
+          async run() { throw new Error("unused"); },
+          async copyFile() { throw new Error("unused"); },
+        },
+        stripeHttp: { async request() { throw new Error("unused"); } },
+        providers: {
+          now: () => new Date(),
+          async findSandbox() { providerCalls += 1; throw new Error("must not list E2B"); },
+          async killSandbox() { providerCalls += 1; throw new Error("must not destroy E2B"); },
+        },
+      },
+    );
     assert.equal(report.status, "reconciled");
-    assert.equal(observations, 4); // three bounded absence observations + final post-cleanup proof.
+    assert.equal(providerCalls, 0);
+    assert.equal((await loadCleanupLedger(runDir)).entries()[0]?.phase, "reconciled");
   } finally {
     await rm(runDir, { recursive: true, force: true });
   }

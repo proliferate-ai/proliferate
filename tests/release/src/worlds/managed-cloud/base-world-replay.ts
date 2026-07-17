@@ -11,7 +11,20 @@ import {
   type CleanupResourceKind,
 } from "../local-workspace/cleanup-ledger.js";
 import type { AwsCliExec } from "./ec2.js";
-import { deleteLiteLlmSubject } from "./base-world-litellm-replay.js";
+import {
+  deleteActorEnrollmentSubjects,
+  deleteLiteLlmSubject,
+  resolveActorEnrollmentProviderBinding,
+} from "./base-world-litellm-replay.js";
+import {
+  decodeActorEnrollmentCustody,
+  encodeActorEnrollmentCustody,
+  resolveActorEnrollmentOnBox,
+  type ActorEnrollmentIntentV1,
+  type ActorEnrollmentLookup,
+} from "./actor-enrollment-custody.js";
+import { createBoxExec } from "./box-exec.js";
+import { defaultSshExec, type SshExec } from "./ingress.js";
 import {
   decodeHostProcessCustody,
   RENDERER_PROCESS_INTENT_PREFIX,
@@ -31,6 +44,7 @@ export const BASE_WORLD_REPLAY_KINDS: ReadonlySet<CleanupResourceKind> = new Set
   "litellm_virtual_key",
   "litellm_user",
   "litellm_team",
+  "litellm_actor_enrollment",
   "renderer_process",
   "browser",
   "browser_context",
@@ -56,6 +70,8 @@ export interface BaseWorldReplayDeps {
   awsExec: AwsCliExec;
   fetch: FetchLike;
   process?: HostProcessCustodyDeps;
+  ssh?: SshExec;
+  resolveActorEnrollment?(intent: ActorEnrollmentIntentV1): Promise<ActorEnrollmentLookup>;
   sleep?: (ms: number) => Promise<void>;
 }
 
@@ -80,6 +96,7 @@ const REPLAY_ORDER: Readonly<Partial<Record<CleanupResourceKind, number>>> = {
   litellm_virtual_key: 20,
   litellm_user: 21,
   litellm_team: 22,
+  litellm_actor_enrollment: 23,
   route53_record: 30,
   e2b_template: 40,
   ec2_instance: 50,
@@ -88,6 +105,9 @@ const REPLAY_ORDER: Readonly<Partial<Record<CleanupResourceKind, number>>> = {
   secret_env_file: 80,
   port_registration: 90,
 };
+const ACTOR_RECOVERY_SUBSTRATE_KINDS = new Set<CleanupResourceKind>([
+  "ec2_instance", "security_group", "key_pair", "secret_env_file", "run_directory",
+]);
 
 function record(value: unknown, where: string): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -283,7 +303,11 @@ function localPath(entry: CleanupLedgerEntry, runDir: string, leaf: string): str
   return expected;
 }
 
-function handlers(inputs: BaseWorldReplayInputs, deps: BaseWorldReplayDeps): Partial<Record<CleanupResourceKind, CleanupHandler>> {
+function handlers(
+  inputs: BaseWorldReplayInputs,
+  deps: BaseWorldReplayDeps,
+  ledger: CleanupLedger,
+): Partial<Record<CleanupResourceKind, CleanupHandler>> {
   const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
   return {
     route53_record: (entry) => cleanupRoute53(entry, inputs, deps.awsExec),
@@ -293,6 +317,35 @@ function handlers(inputs: BaseWorldReplayInputs, deps: BaseWorldReplayDeps): Par
     litellm_virtual_key: (entry) => deleteLiteLlmSubject(entry, inputs, deps.fetch, sleep),
     litellm_user: (entry) => deleteLiteLlmSubject(entry, inputs, deps.fetch, sleep),
     litellm_team: (entry) => deleteLiteLlmSubject(entry, inputs, deps.fetch, sleep),
+    litellm_actor_enrollment: async (entry) => {
+      if (entry.providerId === null) {
+        // The helper writes this intent before it can return to /setup or
+        // invite registration. A null provider id therefore proves the actor
+        // creation path never started and is an authoritative cleanup no-op.
+        return;
+      }
+      const custody = decodeActorEnrollmentCustody(entry.providerId, {
+        runId: inputs.runId,
+        shardId: inputs.shardId,
+      });
+      const intent: ActorEnrollmentIntentV1 = {
+        state: "intent", runId: custody.runId, shardId: custody.shardId, email: custody.email,
+      };
+      const resolved = custody.state === "recovered"
+        ? { status: "recovered" as const, binding: custody }
+        : await (deps.resolveActorEnrollment?.(intent) ?? resolveActorEnrollmentFromRunBox(inputs, deps, intent));
+      if (resolved.status !== "recovered") {
+        throw new Error(
+          `LiteLLM actor enrollment producer is not quiescent (${resolved.status}); preserving candidate recovery substrate.`,
+        );
+      }
+      const recovered = resolved.binding;
+      const bound = await resolveActorEnrollmentProviderBinding(recovered, inputs, deps.fetch);
+      if (custody.state !== "recovered") {
+        await ledger.markAcquired(entry.entryId, encodeActorEnrollmentCustody(bound));
+      }
+      await deleteActorEnrollmentSubjects(bound, inputs, deps.fetch, sleep);
+    },
     renderer_process: async (entry) => {
       const expectedMarker = path.join(inputs.runDir, "renderer");
       const decoded = decodeHostProcessCustody(entry.providerId ?? "");
@@ -329,10 +382,56 @@ function handlers(inputs: BaseWorldReplayInputs, deps: BaseWorldReplayDeps): Par
   };
 }
 
+async function resolveActorEnrollmentFromRunBox(
+  inputs: BaseWorldReplayInputs,
+  deps: BaseWorldReplayDeps,
+  intent: ActorEnrollmentIntentV1,
+): Promise<ActorEnrollmentLookup> {
+  const region = requiredValue(inputs.region, "RELEASE_E2E_CLOUD_AWS_REGION");
+  const payload = await jsonExec(deps.awsExec, [
+    "ec2", "describe-instances", "--region", region,
+    ...awsFilters(inputs.runId, inputs.shardId), "--output", "json",
+  ]);
+  const live: Array<{ id: string; ip: string }> = [];
+  for (const rawReservation of arrayField(payload, "Reservations", "describe-instances")) {
+    for (const rawInstance of arrayField(rawReservation, "Instances", "describe-instances reservation")) {
+      const instance = record(rawInstance, "EC2 instance");
+      exactTags(instance, inputs.runId, inputs.shardId);
+      const id = instance.InstanceId;
+      const ip = instance.PublicIpAddress;
+      const state = record(instance.State, "EC2 instance state").Name;
+      if (
+        typeof id !== "string" || !/^i-[A-Za-z0-9]+$/.test(id) ||
+        typeof state !== "string" ||
+        (ip !== undefined && typeof ip !== "string")
+      ) {
+        throw new Error("describe-instances returned malformed candidate-box identity.");
+      }
+      if (!TERMINAL_INSTANCE_STATES.has(state)) {
+        if (typeof ip !== "string" || !/^\d{1,3}(?:\.\d{1,3}){3}$/.test(ip)) {
+          throw new Error("run-owned candidate box has no public address for enrollment recovery.");
+        }
+        live.push({ id, ip });
+      }
+    }
+  }
+  if (live.length !== 1) {
+    throw new Error(`actor enrollment recovery found ${live.length} live run-owned candidate boxes.`);
+  }
+  const box = createBoxExec({
+    ssh: deps.ssh ?? defaultSshExec,
+    destination: `ubuntu@${live[0]!.ip}`,
+    keyPath: path.join(inputs.runDir, "secrets", "ingress-key.pem"),
+    secretsDir: path.join(inputs.runDir, "secrets"),
+  });
+  return resolveActorEnrollmentOnBox(box, intent);
+}
+
 async function replaySelected(
   ledger: CleanupLedger,
   selected: CleanupLedgerEntry[],
   ownedHandlers: Partial<Record<CleanupResourceKind, CleanupHandler>>,
+  inputs: BaseWorldReplayInputs,
 ): Promise<{ reconciled: number; failures: string[] }> {
   let reconciled = 0;
   const failures: string[] = [];
@@ -341,10 +440,18 @@ async function replaySelected(
     .sort((left, right) => {
       const leftRank = REPLAY_ORDER[left.entry.kind] ?? Number.MAX_SAFE_INTEGER;
       const rightRank = REPLAY_ORDER[right.entry.kind] ?? Number.MAX_SAFE_INTEGER;
-      return leftRank - rightRank || right.index - left.index;
+      // CleanupLedger.unreconciled() is already newest-first (LIFO). Preserve
+      // that order for equal-rank resources; reversing the selected index here
+      // would silently restore registration order and clean actor A before the
+      // later actor B.
+      return leftRank - rightRank || left.index - right.index;
     })
     .map(({ entry }) => entry);
   for (const entry of ordered) {
+    if (ACTOR_RECOVERY_SUBSTRATE_KINDS.has(entry.kind) && hasUnboundActorIntent(ledger, inputs)) {
+      failures.push(`${entry.kind}: preserved because LiteLLM actor enrollment still depends on candidate-box recovery`);
+      continue;
+    }
     const handler = ownedHandlers[entry.kind];
     if (!handler) {
       failures.push(`${entry.kind}: no base-world replay handler`);
@@ -359,6 +466,21 @@ async function replaySelected(
     }
   }
   return { reconciled, failures };
+}
+
+function hasUnboundActorIntent(ledger: CleanupLedger, inputs: BaseWorldReplayInputs): boolean {
+  return ledger.unreconciled().some((entry) => {
+    if (entry.kind !== "litellm_actor_enrollment") return false;
+    try {
+      return decodeActorEnrollmentCustody(entry.providerId, {
+        runId: inputs.runId,
+        shardId: inputs.shardId,
+      }).state !== "recovered";
+    } catch {
+      // Malformed custody is even less safe to tear the recovery substrate down.
+      return true;
+    }
+  });
 }
 
 interface RunDirectoryJournalV1 {
@@ -474,7 +596,8 @@ export async function replayManagedCloudBaseWorld(
     };
   }
   const replayable = selected.filter((entry) => entry.kind !== "run_directory");
-  const replay = await replaySelected(ledger, replayable, handlers({ ...inputs, runDir }, deps));
+  const replayInputs = { ...inputs, runDir };
+  const replay = await replaySelected(ledger, replayable, handlers(replayInputs, deps, ledger), replayInputs);
   const directory = selected.find((entry) => entry.kind === "run_directory");
   let removedRunDirectory = false;
   if (directory && replay.failures.length === 0) {

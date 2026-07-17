@@ -13,6 +13,7 @@ import {
   assertDuplicateDeliveryByteIdentity,
   assertRepresentativeFixtureReplay,
   allCleanupBooleansTrue,
+  armRuntimeReadinessFailureWatcher,
   buildDuplicatePostScript,
   createFixtureSmokeDriver,
   createCellACustomerWithCustody,
@@ -28,14 +29,16 @@ import {
   PRODUCT_LLM_CREDIT_DENIAL_CODE,
   procCmdlineContainsScript,
   reconcileWebhookIntentFile,
+  registerFailureInjectionSandboxIntent,
   resolveSmokeSecretKey,
   runBillingThresholdCellLive,
   runFailureInjectionCellLive,
   runFixtureSmokeCells,
+  waitForPersonalMaterializationReady,
   type BillingThresholdCellDeps,
   type FixtureSmokeCellResult,
   type FixtureSmokeDriver,
-  type ProviderCreateRecoveryOps,
+  type RuntimeReadinessRecoveryOps,
   type StripePreparation,
 } from "./managed-cloud-fixture-smoke-1.js";
 import type { StripeHttp } from "../fixtures/stripe-test-clock.js";
@@ -818,29 +821,59 @@ test("Cell C never leaks the raw virtual key into the observed transition", asyn
   assert.ok(!result.externalIds.some((id) => id.includes("sk-raw-virtual-key")));
 });
 
-// ── Cell D provider-create failure/recovery (normal product path) ───────
+// ── Cell D runtime-readiness failure/recovery (normal product path) ─────
 
-function fakeProviderRecoveryOps(
+function fakeRuntimeRecoveryOps(
   options: {
     injected?: boolean;
     boundary?: FailureInjectionHandle["boundary"];
-    lastError?: string | null;
+    observedStatus?: string;
+    observedProviderId?: string | null;
+    observedReadyAt?: string | null;
   } = {},
 ): {
-  ops: ProviderCreateRecoveryOps;
+  ops: RuntimeReadinessRecoveryOps;
   calls: string[];
 } {
   const calls: string[] = [];
-  const providers = ["e2b-old", "e2b-new", "e2b-new"];
-  const ops: ProviderCreateRecoveryOps = {
+  const providers = ["e2b-first", "e2b-first"];
+  const ops: RuntimeReadinessRecoveryOps = {
     prepareActor: async () => { calls.push("prepare"); },
     controlProductAction: async () => { calls.push("control"); return true; },
     ensureSandbox: async () => { calls.push("ensure-row"); return { id: "cloud-1" }; },
     registerSandboxIntent: async (_world, id) => {
       calls.push(`intent:${id}`);
+      calls.push(`acquired:logical:${id}`);
       return {
         entryId: "cleanup-1",
         markAcquired: async (providerId) => { calls.push(`acquired:${providerId}`); },
+      };
+    },
+    armRuntimeReadinessFailure: async (_world, params) => {
+      calls.push(`arm:${params.operationId}`);
+      const handle: FailureInjectionHandle = {
+        boundary: options.boundary ?? "runtime_readiness",
+        injected: options.injected ?? true,
+        disarm: async () => { calls.push("injection-disarm"); },
+      };
+      return {
+        operationId: params.operationId,
+        waitForInjection: async () => {
+          calls.push("watch-fired");
+          return {
+            providerSandboxId: "e2b-first",
+            handle,
+            observation: {
+              cloudSandboxId: "cloud-1",
+              providerSandboxId: options.observedProviderId === undefined
+                ? "e2b-first"
+                : options.observedProviderId,
+              status: options.observedStatus ?? "creating",
+              readyAt: options.observedReadyAt ?? null,
+            },
+          };
+        },
+        disarm: async () => { calls.push("disarm"); await handle.disarm(); },
       };
     },
     startProductMaterialization: async () => { calls.push("materialize"); },
@@ -850,44 +883,277 @@ function fakeProviderRecoveryOps(
       if (!next) throw new Error("provider sequence exhausted");
       return next;
     },
-    injectProviderCreate: async () => {
-      calls.push("inject");
-      return {
-        boundary: options.boundary ?? "provider_create",
-        injected: options.injected ?? true,
-        disarm: async () => { calls.push("disarm"); },
-      };
-    },
-    waitForProductError: async () => {
-      calls.push("wait-error");
-      return {
-        status: "error",
-        lastError: options.lastError === undefined
-          ? "E2B provider sandbox e2b-old was not found after termination"
-          : options.lastError,
-      };
-    },
     recoverSandbox: async () => { calls.push("recover"); },
+    waitForMaterializationReady: async () => { calls.push("materialization-ready"); },
     relayManifestReadable: async () => { calls.push("relay-control"); return true; },
   };
   return { ops, calls };
 }
 
-test("Cell D persists recovery identity before product materialization, kills the first provider, and proves idempotent replacement", async () => {
-  const { ops, calls } = fakeProviderRecoveryOps();
+test("Cell D arms before materialization, kills AnyHarness before ready, and recovers on the same provider", async () => {
+  const { ops, calls } = fakeRuntimeRecoveryOps();
   const result = await runFailureInjectionCellLive(
     fakeWorld(),
     CELL_C_STATE,
     fakeCellCActor(),
     ops,
   );
-  assert.match(result.observedTransition, /provider_killed.*normal_path_recovery.*replacement_ready/);
-  assert.deepEqual(result.externalIds, ["cloud-1", "e2b-old", "e2b-new"]);
+  assert.match(
+    result.observedTransition,
+    /anyharness_killed.*normal_path_recovery.*same_provider_ready.*secret_materialization_ready/,
+  );
+  assert.deepEqual(result.externalIds, ["cloud-1", "e2b-first"]);
   assert.ok(calls.indexOf("intent:cloud-1") < calls.indexOf("materialize"));
-  assert.ok(calls.indexOf("acquired:e2b-old") < calls.indexOf("inject"));
+  assert.ok(calls.indexOf("acquired:logical:cloud-1") < calls.indexOf("materialize"));
+  assert.ok(calls.findIndex((call) => call.startsWith("arm:runtime-readiness:")) < calls.indexOf("materialize"));
+  assert.ok(calls.indexOf("watch-fired") > calls.indexOf("materialize"));
+  assert.ok(calls.indexOf("watch-fired") < calls.indexOf("acquired:e2b-first"));
+  assert.ok(calls.indexOf("injection-disarm") < calls.indexOf("recover"));
   assert.equal(calls.filter((call) => call === "materialize").length, 2, "initial + post-recovery control");
-  assert.equal(calls.filter((call) => call === "wait-provider").length, 3, "old + replacement + control");
-  assert.ok(calls.includes("acquired:e2b-new"));
+  assert.equal(calls.filter((call) => call === "wait-provider").length, 2, "recovery + control");
+  assert.ok(calls.lastIndexOf("materialize") < calls.indexOf("materialization-ready"));
+  assert.ok(calls.lastIndexOf("wait-provider") < calls.indexOf("materialization-ready"));
+  assert.ok(calls.indexOf("materialization-ready") < calls.lastIndexOf("control"));
+});
+
+test("Cell D materialization poll requires the exact ready state", async () => {
+  const states = ["pending", "running", "ready"];
+  const paths: string[] = [];
+  await waitForPersonalMaterializationReady({
+    async get(path) {
+      paths.push(path);
+      return { materialization: { status: states.shift(), lastError: null } };
+    },
+  }, { sleep: async () => undefined, timeoutMs: 1_000 });
+  assert.deepEqual(paths, [
+    "/v1/cloud/secrets/personal",
+    "/v1/cloud/secrets/personal",
+    "/v1/cloud/secrets/personal",
+  ]);
+});
+
+test("Cell D materialization poll fails immediately on an error state", async () => {
+  let sleeps = 0;
+  await assert.rejects(
+    () => waitForPersonalMaterializationReady({
+      async get() {
+        return { materialization: { status: "error", lastError: "worker failed" } };
+      },
+    }, { sleep: async () => { sleeps += 1; }, timeoutMs: 1_000 }),
+    /materialization failed: worker failed/,
+  );
+  assert.equal(sleeps, 0);
+});
+
+test("Cell D materialization poll fails closed at its bounded deadline", async () => {
+  let now = 0;
+  await assert.rejects(
+    () => waitForPersonalMaterializationReady({
+      async get() { return { materialization: { status: "pending", lastError: null } }; },
+    }, {
+      sleep: async () => { now = 101; },
+      now: () => now,
+      timeoutMs: 100,
+      pollMs: 1,
+    }),
+    /did not reach ready within the bounded wait/,
+  );
+});
+
+test("Cell D in-memory cleanup preserves a logical-only intent with no provider binding", async () => {
+  const world = fakeWorld();
+  let release!: () => Promise<void>;
+  world.registerCleanupIntent = async (_kind, providerId, handler) => {
+    assert.deepEqual(decodeE2bSandboxCleanupIdentity(providerId), {
+      cloudSandboxId: "cloud-1", providerSandboxId: null,
+    });
+    release = handler;
+    return { entryId: "sandbox-1", markAcquired: async () => undefined };
+  };
+  const cleanup = await registerFailureInjectionSandboxIntent(world, "cloud-1", {
+    find: async () => ({ providerSandboxId: null, state: null, matches: [], count: 0 }),
+    kill: async () => { throw new Error("logical-only custody must not kill an unrelated sandbox"); },
+  });
+  assert.equal(cleanup.entryId, "sandbox-1");
+  await assert.rejects(release, /no authoritative provider binding.*preserving cleanup custody/);
+});
+
+test("Cell D in-memory cleanup treats pre-return registration failure as no-provider", async () => {
+  const world = fakeWorld();
+  world.registerCleanupIntent = async (_kind, _providerId, handler) => {
+    await handler();
+    throw new Error("simulated registration persistence failure");
+  };
+  await assert.rejects(
+    () => registerFailureInjectionSandboxIntent(world, "cloud-1", {
+      find: async () => ({ providerSandboxId: null, state: null, matches: [], count: 0 }),
+      kill: async () => { throw new Error("pre-return cleanup must not kill a provider"); },
+    }),
+    /simulated registration persistence failure/,
+  );
+});
+
+test("Cell D in-memory cleanup retains the known provider across fresh-replay deletion", async () => {
+  const world = fakeWorld();
+  let release!: () => Promise<void>;
+  const promoted: string[] = [];
+  world.registerCleanupIntent = async (_kind, _providerId, handler) => {
+    release = handler;
+    return {
+      entryId: "sandbox-1",
+      markAcquired: async (providerId) => { promoted.push(providerId); },
+    };
+  };
+  const killed: string[] = [];
+  const cleanup = await registerFailureInjectionSandboxIntent(world, "cloud-1", {
+    find: async () => ({ providerSandboxId: null, state: null, matches: [], count: 0 }),
+    kill: async (providerId) => { killed.push(providerId); return { killed: true }; },
+  });
+  await cleanup.markAcquired("e2b-1");
+  await release();
+  assert.deepEqual(promoted.map(decodeE2bSandboxCleanupIdentity), [
+    { cloudSandboxId: "cloud-1", providerSandboxId: "e2b-1" },
+    { cloudSandboxId: "cloud-1", providerSandboxId: "e2b-1" },
+  ]);
+  assert.deepEqual(killed, ["e2b-1"]);
+});
+
+test("Cell D in-memory cleanup persists every discovered provider before deleting any", async () => {
+  const world = fakeWorld();
+  let release!: () => Promise<void>;
+  const promoted: string[] = [];
+  world.registerCleanupIntent = async (_kind, _providerId, handler) => {
+    release = handler;
+    return {
+      entryId: "sandbox-1",
+      markAcquired: async (providerId) => { promoted.push(providerId); },
+    };
+  };
+  let inventory = 0;
+  const killed: string[] = [];
+  await registerFailureInjectionSandboxIntent(world, "cloud-1", {
+    find: async () => {
+      inventory += 1;
+      return inventory === 1
+        ? {
+            providerSandboxId: "e2b-1",
+            state: "running",
+            matches: [
+              { providerSandboxId: "e2b-1", state: "running", templateId: "tpl", startedAt: null },
+              { providerSandboxId: "e2b-2", state: "paused", templateId: "tpl", startedAt: null },
+            ],
+            count: 2,
+          }
+        : { providerSandboxId: null, state: null, matches: [], count: 0 };
+    },
+    kill: async (providerId) => { killed.push(providerId); return { killed: true }; },
+  });
+  await release();
+  assert.deepEqual(decodeE2bSandboxCleanupIdentity(promoted[0] ?? ""), {
+    cloudSandboxId: "cloud-1",
+    providerSandboxId: "e2b-1",
+    providerSandboxIds: ["e2b-1", "e2b-2"],
+  });
+  assert.deepEqual(killed.sort(), ["e2b-1", "e2b-2"]);
+});
+
+test("Cell D watcher starts while armed and injects only after the product creates a non-ready runtime", async () => {
+  const calls: string[] = [];
+  let poll = 0;
+  let productStarted = false;
+  let releaseProduct!: () => void;
+  const productGate = new Promise<void>((resolve) => { releaseProduct = resolve; });
+  const armed = await armRuntimeReadinessFailureWatcher(fakeWorld(), {
+    cloudSandboxId: "cloud-1",
+    operationId: "runtime-readiness:smoke-run-1:smoke-0:cloud-1",
+  }, {
+    find: async (logicalId) => {
+      calls.push(`find:${logicalId}:${poll}`);
+      poll += 1;
+      return poll === 1 || !productStarted ? { providerSandboxId: null, matches: [] } : {
+        providerSandboxId: "e2b-first", matches: [{ providerSandboxId: "e2b-first" }],
+      };
+    },
+    observeProduct: async () => ({
+      cloudSandboxId: "cloud-1", providerSandboxId: "e2b-first", status: "creating", readyAt: null,
+    }),
+    processPresent: async (providerId) => { calls.push(`process:${providerId}`); return true; },
+    inject: async (_world, providerId) => {
+      calls.push(`inject:${providerId}`);
+      return {
+        boundary: "runtime_readiness",
+        injected: true,
+        disarm: async () => { calls.push("injection-disarm"); },
+      };
+    },
+    sleep: async () => { if (!productStarted) await productGate; },
+    timeoutMs: 1_000,
+    postKillQuietChecks: 2,
+  });
+  await Promise.resolve();
+  calls.push("product-action");
+  productStarted = true;
+  releaseProduct();
+  const fired = await armed.waitForInjection();
+  await armed.disarm();
+  assert.equal(fired.providerSandboxId, "e2b-first");
+  assert.equal(calls[0], "find:cloud-1:0");
+  assert.ok(calls.indexOf("find:cloud-1:1") < calls.indexOf("product-action"), "watcher starts while armed");
+  assert.ok(calls.indexOf("product-action") < calls.indexOf("inject:e2b-first"));
+  assert.ok(calls.includes("injection-disarm"));
+});
+
+test("Cell D watcher rejects stale providers and ambiguous first attempts without injecting", async () => {
+  let injected = 0;
+  await assert.rejects(() => armRuntimeReadinessFailureWatcher(fakeWorld(), {
+    cloudSandboxId: "cloud-1",
+    operationId: "runtime-readiness:smoke-run-1:smoke-0:cloud-1",
+  }, {
+    find: async () => ({ providerSandboxId: "stale", matches: [{ providerSandboxId: "stale" }] }),
+    inject: async () => { injected += 1; throw new Error("must not inject"); },
+  }), /pre-existing/);
+  assert.equal(injected, 0);
+
+  let poll = 0;
+  const armed = await armRuntimeReadinessFailureWatcher(fakeWorld(), {
+    cloudSandboxId: "cloud-1",
+    operationId: "runtime-readiness:smoke-run-1:smoke-0:cloud-1",
+  }, {
+    find: async () => (++poll === 1 ? { providerSandboxId: null, matches: [] } : {
+      providerSandboxId: null,
+      matches: [{ providerSandboxId: "first" }, { providerSandboxId: "second" }],
+    }),
+    inject: async () => { injected += 1; throw new Error("must not inject"); },
+    sleep: async () => undefined,
+    timeoutMs: 1_000,
+  });
+  await assert.rejects(armed.waitForInjection(), /ambiguous/);
+  await armed.disarm();
+  assert.equal(injected, 0);
+});
+
+test("Cell D watcher refuses unrelated product states before process injection", async () => {
+  let poll = 0;
+  let injected = 0;
+  const armed = await armRuntimeReadinessFailureWatcher(fakeWorld(), {
+    cloudSandboxId: "cloud-1",
+    operationId: "runtime-readiness:smoke-run-1:smoke-0:cloud-1",
+  }, {
+    find: async () => (++poll === 1 ? { providerSandboxId: null, matches: [] } : {
+      providerSandboxId: "e2b-first", matches: [{ providerSandboxId: "e2b-first" }],
+    }),
+    observeProduct: async () => ({
+      cloudSandboxId: "cloud-1", providerSandboxId: "e2b-first", status: "paused",
+      readyAt: null,
+    }),
+    processPresent: async () => true,
+    inject: async () => { injected += 1; throw new Error("must not inject"); },
+    sleep: async () => undefined,
+    timeoutMs: 1_000,
+  });
+  await assert.rejects(armed.waitForInjection(), /expected exact status=creating.*observed paused/);
+  await armed.disarm();
+  assert.equal(injected, 0);
 });
 
 test("E2B cleanup identity retains the logical sandbox across provider replacement", () => {
@@ -904,30 +1170,40 @@ test("E2B cleanup identity retains the logical sandbox across provider replaceme
     cloudSandboxId: "cloud-1",
     providerSandboxId: "e2b-new",
   });
+  const duplicates = encodeE2bSandboxCleanupIdentity({
+    cloudSandboxId: "cloud-1",
+    providerSandboxId: "e2b-a",
+    providerSandboxIds: ["e2b-b", "e2b-a"],
+  });
+  assert.deepEqual(decodeE2bSandboxCleanupIdentity(duplicates), {
+    cloudSandboxId: "cloud-1",
+    providerSandboxId: "e2b-a",
+    providerSandboxIds: ["e2b-a", "e2b-b"],
+  });
   assert.equal(decodeE2bSandboxCleanupIdentity("e2b-new"), null);
 });
 
-test("Cell D fails closed when the provider kill was not positively observed", async () => {
-  const { ops } = fakeProviderRecoveryOps({ injected: false });
+test("Cell D fails closed when the AnyHarness kill was not positively observed", async () => {
+  const { ops } = fakeRuntimeRecoveryOps({ injected: false });
   await assert.rejects(
     () => runFailureInjectionCellLive(fakeWorld(), CELL_C_STATE, fakeCellCActor(), ops),
-    /did not positively kill/,
+    /did not prove exact AnyHarness present→absent/,
   );
 });
 
-test("Cell D rejects an unrelated status=error after provider_create injection", async () => {
-  const { ops } = fakeProviderRecoveryOps({ lastError: "GitHub authorization expired" });
+test("Cell D rejects an unrelated non-ready product state", async () => {
+  const { ops } = fakeRuntimeRecoveryOps({ observedStatus: "paused" });
   await assert.rejects(
     () => runFailureInjectionCellLive(fakeWorld(), CELL_C_STATE, fakeCellCActor(), ops),
-    /did not attribute status=error to the exact killed provider_create sandbox/,
+    /did not prove exact AnyHarness present→absent before product readiness/,
   );
 });
 
 test("Cell D rejects an injected failure from a different boundary", async () => {
-  const { ops } = fakeProviderRecoveryOps({ boundary: "runtime_readiness" });
+  const { ops } = fakeRuntimeRecoveryOps({ boundary: "provider_create" });
   await assert.rejects(
     () => runFailureInjectionCellLive(fakeWorld(), CELL_C_STATE, fakeCellCActor(), ops),
-    /provider_create injection did not positively kill/,
+    /did not prove exact AnyHarness present→absent/,
   );
 });
 

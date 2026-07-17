@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import { hashLedgerId, type CleanupLedger, type CleanupResourceKind } from "../local-workspace/cleanup-ledger.js";
+import { decodeActorEnrollmentCustody } from "./actor-enrollment-custody.js";
 
 /**
  * The managed-cloud world's cleanup surface (spec "close() tears down in
@@ -37,6 +38,7 @@ export const MANAGED_CLOUD_CLEANUP_KINDS = [
   "litellm_virtual_key",
   "litellm_user",
   "litellm_team",
+  "litellm_actor_enrollment",
   "renderer_process",
   "browser",
   "browser_context",
@@ -111,8 +113,8 @@ export const MANAGED_CLOUD_EVIDENCE_CATEGORIES = {
   ec2Terminated: ["ec2_instance"],
   securityGroupDeleted: ["security_group"],
   keyPairDeleted: ["key_pair"],
-  virtualKeyDeleted: ["litellm_virtual_key"],
-  litellmSubjectsDeleted: ["litellm_user", "litellm_team"],
+  virtualKeyDeleted: ["litellm_virtual_key", "litellm_actor_enrollment"],
+  litellmSubjectsDeleted: ["litellm_user", "litellm_team", "litellm_actor_enrollment"],
   localPathsRemoved: ["secret_env_file", "run_directory", "port_registration"],
   // ── Appended for PR 6 (shared fixture layer). ──────────────────────────────
   billingFixtureCleared: ["billing_fixture_adjustment"],
@@ -181,6 +183,14 @@ export class ManagedCloudCleanupStack {
     const succeeded = new Set<string>();
     let failed = 0;
     for (const registration of [...this.registrations].reverse()) {
+      if (ACTOR_RECOVERY_SUBSTRATE_KINDS.has(registration.kind) && this.hasUnboundActorIntent()) {
+        failed += 1;
+        this.log(
+          `cleanup releaser for ${registration.kind} withheld: unresolved LiteLLM actor enrollment ` +
+            "still depends on the candidate box and SSH key",
+        );
+        continue;
+      }
       // The `run_directory` releaser deletes the run directory — which holds
       // this very ledger — so it must never run while any earlier (reverse
       // order) releaser this pass has failed. Deleting the directory anyway
@@ -237,6 +247,19 @@ export class ManagedCloudCleanupStack {
     };
   }
 
+  private hasUnboundActorIntent(): boolean {
+    return this.ledger.unreconciled().some((entry) => {
+      if (entry.kind !== "litellm_actor_enrollment") return false;
+      try {
+        const [runId, shardId] = this.ledger.ledgerId.split(":", 2);
+        if (!runId || !shardId) return true;
+        return decodeActorEnrollmentCustody(entry.providerId, { runId, shardId }).state !== "recovered";
+      } catch {
+        return true;
+      }
+    });
+  }
+
   private categoryClean(
     category: keyof typeof MANAGED_CLOUD_EVIDENCE_CATEGORIES,
     succeeded: ReadonlySet<string>,
@@ -252,3 +275,7 @@ export class ManagedCloudCleanupStack {
     return inCategory.every((registration) => succeeded.has(registration.entryId));
   }
 }
+
+const ACTOR_RECOVERY_SUBSTRATE_KINDS = new Set<ManagedCloudCleanupKind>([
+  "ec2_instance", "security_group", "key_pair", "secret_env_file", "run_directory",
+]);

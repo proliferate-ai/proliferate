@@ -25,7 +25,10 @@ import {
   billingThresholdReceiptFile,
   restoreBillingFixtureAdjustment,
 } from "../fixtures/billing-threshold.js";
-import { injectFailureAt } from "../fixtures/failure-injection.js";
+import {
+  injectFailureAt,
+  providerProcessWithExactExecutablePresent,
+} from "../fixtures/failure-injection.js";
 import type { FailureInjectionHandle } from "../fixtures/failure-injection.js";
 import {
   findProviderSandbox,
@@ -33,7 +36,6 @@ import {
 } from "../fixtures/e2b-verify.js";
 import {
   ensureCloudSandboxRow,
-  pollCloudSandboxStatus,
   warmPersonalCloudSandbox,
 } from "../fixtures/cloud-sandbox.js";
 import {
@@ -119,8 +121,8 @@ import type { ReadyLocalWorld } from "../worlds/local-workspace/world.js";
  *   billing-threshold — position the LLM ledger below one request's cost; one
  *                       real gateway request crosses it; observe the product
  *                       gate; restore + reload proves restoration.
- *   failure-injection — provider_create boundary (kill the first real provider
- *                       sandbox); observe the product error then recover by the
+ *   failure-injection — runtime_readiness boundary (kill AnyHarness before the
+ *                       first ready transition); recover in place through the
  *                       normal product materialization path;
  *                       control action + relay spool unaffected.
  *   cleanup-replay    — fresh executor replays the ledger with no in-memory
@@ -998,11 +1000,11 @@ export function createFixtureSmokeDriver(deps: Partial<FixtureSmokeRuntimeDeps> 
     async createActor(world) {
       return authenticatedActor(asAuthenticatedActorWorld(world), "owner", {
         gatewaySurface: "cloud",
-        resolveAndTrackActorSubjects: (params) => {
-          if (!world.resolveAndTrackActorSubjects) {
-            throw new Error("managed-cloud world exposes no enrollment-boundary LiteLLM cleanup custody.");
+        beginActorEnrollmentCustody: (params) => {
+          if (!world.beginActorEnrollmentCustody) {
+            throw new Error("managed-cloud world exposes no pre-creation LiteLLM enrollment custody.");
           }
-          return world.resolveAndTrackActorSubjects(params);
+          return world.beginActorEnrollmentCustody(params);
         },
       });
     },
@@ -2037,53 +2039,241 @@ export async function runBillingThresholdCellLive(
   };
 }
 
-export interface ProviderCreateRecoveryOps {
+const PROVIDER_BINDING_OBSERVATION_SCRIPT = `import asyncio, json, os, uuid
+from sqlalchemy import select
+from proliferate.db.engine import async_session_factory
+from proliferate.db.models.cloud.sandboxes import CloudSandbox
+
+async def main():
+    sandbox_id = uuid.UUID(os.environ["CLOUD_SANDBOX_ID"])
+    async with async_session_factory() as db:
+        row = (await db.execute(select(CloudSandbox).where(CloudSandbox.id == sandbox_id))).scalar_one_or_none()
+        if row is None:
+            print(json.dumps({"status": "absent"}))
+            return
+        product_status = row.status.value if hasattr(row.status, "value") else str(row.status)
+        print(json.dumps({
+            "status": "found",
+            "cloud_sandbox_id": str(row.id),
+            "provider_sandbox_id": row.provider_sandbox_id,
+            "product_status": product_status,
+            "ready_at": row.ready_at.isoformat() if row.ready_at else None,
+        }))
+
+asyncio.run(main())
+`;
+
+export interface RuntimeReadinessFailureObservation {
+  cloudSandboxId: string;
+  providerSandboxId: string | null;
+  status: string;
+  readyAt: string | null;
+}
+
+async function observeProviderBindingOnBox(
+  world: ManagedCloudWorld,
+  cloudSandboxId: string,
+): Promise<RuntimeReadinessFailureObservation | null> {
+  if (!world.box) {
+    throw new Error("failure-injection: the world exposes no candidate-box observation seam.");
+  }
+  const result = await world.box.serverPython(PROVIDER_BINDING_OBSERVATION_SCRIPT, {
+    env: { CLOUD_SANDBOX_ID: cloudSandboxId },
+    scriptName: "observe-provider-binding.py",
+  });
+  const parsed = parseLastJsonLine(result.stdout) as Record<string, unknown>;
+  if (parsed.status === "absent") return null;
+  if (
+    parsed.status !== "found" ||
+    parsed.cloud_sandbox_id !== cloudSandboxId ||
+    typeof parsed.product_status !== "string" ||
+    (typeof parsed.provider_sandbox_id !== "string" && parsed.provider_sandbox_id !== null) ||
+    (typeof parsed.ready_at !== "string" && parsed.ready_at !== null)
+  ) {
+    throw new Error("failure-injection: candidate provider-binding observation was malformed.");
+  }
+  return {
+    cloudSandboxId,
+    providerSandboxId: parsed.provider_sandbox_id,
+    status: parsed.product_status,
+    readyAt: parsed.ready_at,
+  };
+}
+
+export interface RuntimeReadinessRecoveryOps {
   prepareActor(world: ManagedCloudWorld, actor: AuthenticatedActor): Promise<void>;
   controlProductAction(actor: AuthenticatedActor): Promise<boolean>;
   ensureSandbox(actor: AuthenticatedActor): Promise<{ id: string }>;
   registerSandboxIntent(world: ManagedCloudWorld, cloudSandboxId: string): Promise<CleanupIntentHandle>;
+  armRuntimeReadinessFailure(
+    world: ManagedCloudWorld,
+    params: { cloudSandboxId: string; operationId: string },
+  ): Promise<{
+    operationId: string;
+    waitForInjection(): Promise<{
+      providerSandboxId: string;
+      handle: FailureInjectionHandle;
+      observation: RuntimeReadinessFailureObservation;
+    }>;
+    disarm(): Promise<void>;
+  }>;
   startProductMaterialization(actor: AuthenticatedActor): Promise<void>;
   waitForProvider(cloudSandboxId: string): Promise<string>;
-  injectProviderCreate(world: ManagedCloudWorld, providerSandboxId: string): Promise<FailureInjectionHandle>;
-  waitForProductError(
-    actor: AuthenticatedActor,
-    expectedProviderId: string,
-  ): Promise<ProviderCreateFailureObservation | null>;
   recoverSandbox(actor: AuthenticatedActor): Promise<void>;
+  waitForMaterializationReady(actor: AuthenticatedActor): Promise<void>;
   relayManifestReadable(world: ManagedCloudWorld): Promise<boolean>;
 }
 
-export interface ProviderCreateFailureObservation {
-  status: string;
-  lastError: string | null;
+interface JsonGetClient {
+  get(path: string): Promise<unknown>;
 }
 
-/**
- * A generic status=error is not proof that our injected provider-create
- * boundary fired. Bind the product observation to the exact killed provider id
- * and a provider-loss classification carried by lastError.
- */
-export function isInjectedProviderCreateFailure(
-  observation: ProviderCreateFailureObservation | null,
-  expectedProviderId: string,
-): boolean {
-  if (observation?.status !== "error" || !observation.lastError) {
-    return false;
+/** Waits for the server's exact current personal-secret materialization result. */
+export async function waitForPersonalMaterializationReady(
+  client: JsonGetClient,
+  options: {
+    timeoutMs?: number;
+    pollMs?: number;
+    sleep?: (ms: number) => Promise<void>;
+    now?: () => number;
+  } = {},
+): Promise<void> {
+  const timeoutMs = options.timeoutMs ?? FAILURE_RECOVERY_TIMEOUT_MS;
+  const pollMs = options.pollMs ?? 2_000;
+  const wait = options.sleep ?? sleep;
+  const now = options.now ?? Date.now;
+  const deadline = now() + timeoutMs;
+  while (true) {
+    const payload = await client.get("/v1/cloud/secrets/personal");
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+      throw new Error("failure-injection: personal-secret materialization returned a malformed response.");
+    }
+    const materialization = (payload as Record<string, unknown>).materialization;
+    if (materialization !== null && materialization !== undefined) {
+      if (typeof materialization !== "object" || Array.isArray(materialization)) {
+        throw new Error("failure-injection: personal-secret materialization returned a malformed state.");
+      }
+      const state = materialization as Record<string, unknown>;
+      if (state.status === "ready") return;
+      if (state.status === "error") {
+        const detail = typeof state.lastError === "string" && state.lastError
+          ? `: ${state.lastError}`
+          : "";
+        throw new Error(`failure-injection: personal-secret materialization failed${detail}`);
+      }
+      if (state.status !== "pending" && state.status !== "running") {
+        throw new Error("failure-injection: personal-secret materialization returned an unknown status.");
+      }
+    }
+    if (now() >= deadline) {
+      throw new Error("failure-injection: personal-secret materialization did not reach ready within the bounded wait.");
+    }
+    await wait(pollMs);
   }
-  const message = observation.lastError;
+}
+
+/** Registers Cell D sandbox custody and mirrors fresh-executor cleanup truth. */
+export async function registerFailureInjectionSandboxIntent(
+  world: ManagedCloudWorld,
+  cloudSandboxId: string,
+  deps: {
+    find?: typeof findProviderSandbox;
+    kill?: typeof killProviderSandbox;
+  } = {},
+): Promise<CleanupIntentHandle> {
+  if (!world.registerCleanupIntent) {
+    throw new Error(
+      "failure-injection: the managed-cloud world exposes no durable sandbox cleanup-intent seam.",
+    );
+  }
+  const find = deps.find ?? findProviderSandbox;
+  const kill = deps.kill ?? killProviderSandbox;
+  const knownProviderIds = new Set<string>();
+  let custodyPublished = false;
+  const handle = await world.registerCleanupIntent(
+    "e2b_sandbox",
+    encodeE2bSandboxCleanupIdentity({ cloudSandboxId, providerSandboxId: null }),
+    async () => {
+      const found = await find(cloudSandboxId);
+      if (!Array.isArray(found.matches) || !Number.isSafeInteger(found.count) || found.count !== found.matches.length) {
+        throw new Error("failure-injection: E2B cleanup inventory is not exhaustive.");
+      }
+      const matches = found.matches;
+      if (matches.length === 0 && !custodyPublished) {
+        // registerCleanupIntent has not returned, so its caller cannot start
+        // the provider-creating product action. This is the only authoritative
+        // in-memory no-provider crash window.
+        return;
+      }
+      if (matches.length === 0 && knownProviderIds.size === 0) {
+        throw new Error(
+          "failure-injection: E2B sandbox intent has no authoritative provider binding; preserving cleanup custody.",
+        );
+      }
+      const providerIds = new Set([
+        ...knownProviderIds,
+        ...matches.map((match) => match.providerSandboxId),
+      ]);
+      const sortedProviderIds = [...providerIds].sort();
+      await handle.markAcquired(encodeE2bSandboxCleanupIdentity({
+        cloudSandboxId,
+        providerSandboxId: sortedProviderIds[0] ?? null,
+        providerSandboxIds: sortedProviderIds.length > 1 ? sortedProviderIds : undefined,
+      }));
+      knownProviderIds.clear();
+      for (const providerId of sortedProviderIds) knownProviderIds.add(providerId);
+      for (const providerId of providerIds) {
+        const killed = await kill(providerId);
+        if (killed.killed !== true) {
+          throw new Error(
+            `failure-injection: E2B did not positively affirm cleanup of sandbox ${providerId}.`,
+          );
+        }
+      }
+      const remaining = await find(cloudSandboxId);
+      if (
+        !Array.isArray(remaining.matches) ||
+        !Number.isSafeInteger(remaining.count) ||
+        remaining.count !== remaining.matches.length
+      ) {
+        throw new Error("failure-injection: post-cleanup E2B inventory is not exhaustive.");
+      }
+      if (remaining.matches.length !== 0) {
+        throw new Error(
+          `failure-injection: E2B cleanup left ${remaining.matches.length} run-owned provider sandbox(es).`,
+        );
+      }
+    },
+  );
+  custodyPublished = true;
+  return {
+    entryId: handle.entryId,
+    async markAcquired(providerSandboxId) {
+      await handle.markAcquired(encodeE2bSandboxCleanupIdentity({ cloudSandboxId, providerSandboxId }));
+      knownProviderIds.add(providerSandboxId);
+    },
+  };
+}
+
+export function isInjectedRuntimeReadinessFailure(
+  observation: RuntimeReadinessFailureObservation | null,
+  expectedCloudSandboxId: string,
+  expectedProviderId: string,
+): observation is RuntimeReadinessFailureObservation {
   return (
-    message.includes(expectedProviderId) &&
-    /(?:e2b|provider|sandbox)/i.test(message) &&
-    /(?:not found|does not exist|no longer exists|killed|terminated|stopped|404|unavailable)/i.test(message)
+    observation?.cloudSandboxId === expectedCloudSandboxId &&
+    observation.providerSandboxId === expectedProviderId &&
+    observation.status === "creating" &&
+    observation.readyAt === null
   );
 }
 
-/** Cell D — exact provider_create failure and normal-product recovery (spec Cell D). */
+/** Cell D — exact runtime-readiness failure and normal-product recovery. */
 export async function runFailureInjectionCellLive(
   world: ManagedCloudWorld,
   _state: SmokeState,
   actor: AuthenticatedActor,
-  ops: ProviderCreateRecoveryOps = defaultProviderCreateRecoveryOps,
+  ops: RuntimeReadinessRecoveryOps = defaultRuntimeReadinessRecoveryOps,
 ): Promise<FixtureSmokeCellResult> {
   await ops.prepareActor(world, actor);
   if (!(await ops.controlProductAction(actor))) {
@@ -2092,50 +2282,61 @@ export async function runFailureInjectionCellLive(
 
   const first = await ops.ensureSandbox(actor);
   const cleanup = await ops.registerSandboxIntent(world, first.id);
+  const operationId = `runtime-readiness:${world.run.run_id}:${world.run.shard_id}:${first.id}`;
+  // Arm and prove a zero-provider baseline before the normal product action.
+  // The watcher is scoped to this exact logical sandbox id + run operation, so
+  // a pre-existing or later unrelated provider loss cannot satisfy the cell.
+  const armed = await ops.armRuntimeReadinessFailure(world, { cloudSandboxId: first.id, operationId });
   // Trigger the real product materialization path only after durable recovery
-  // identity exists. The PUT schedules provider creation; it is not a provider
-  // backdoor and does not wait for readiness.
+  // identity AND the bounded provider watcher exist. The PUT schedules provider
+  // creation; it is not a provider backdoor and does not wait for readiness.
   const firstAction = ops.startProductMaterialization(actor).catch(() => {
     // Attach the rejection handler immediately: provider failure is expected
     // during this cell, and waiting to attach `.catch()` until after the E2B
     // poll can otherwise surface a transient unhandled rejection.
   });
-  const firstProviderId = await ops.waitForProvider(first.id);
-  await cleanup.markAcquired(firstProviderId);
-  const injection = await ops.injectProviderCreate(world, firstProviderId);
+  let fired: {
+    providerSandboxId: string;
+    handle: FailureInjectionHandle;
+    observation: RuntimeReadinessFailureObservation;
+  };
   try {
-    if (injection.boundary !== "provider_create" || !injection.injected) {
-      throw new Error("failure-injection: provider_create injection did not positively kill the first sandbox.");
+    fired = await armed.waitForInjection();
+    if (
+      armed.operationId !== operationId ||
+      fired.handle.boundary !== "runtime_readiness" ||
+      !fired.handle.injected ||
+      !isInjectedRuntimeReadinessFailure(fired.observation, first.id, fired.providerSandboxId)
+    ) {
+      throw new Error(
+        "failure-injection: runtime_readiness did not prove exact AnyHarness present→absent before product readiness.",
+      );
     }
   } finally {
-    await injection.disarm();
+    await armed.disarm();
   }
-  // The scheduling request may resolve before the async provider failure or may
-  // itself surface it. Either is acceptable only if product state below records
-  // the exact failed first attempt.
+  const firstProviderId = fired.providerSandboxId;
+  await cleanup.markAcquired(firstProviderId);
+  // The scheduling request may resolve before the asynchronous process kill or
+  // surface it itself. The watcher already proved exact process loss while the
+  // product row remained non-ready.
   await firstAction;
-  const productFailure = await ops.waitForProductError(actor, firstProviderId);
-  if (!isInjectedProviderCreateFailure(productFailure, firstProviderId)) {
-    throw new Error(
-      "failure-injection: the product did not attribute status=error to the exact killed provider_create sandbox; " +
-        "refusing an unrelated-error false green.",
-    );
-  }
 
   await ops.recoverSandbox(actor);
-  const replacementProviderId = await ops.waitForProvider(first.id);
-  if (replacementProviderId === firstProviderId) {
-    throw new Error("failure-injection: normal-path recovery did not create a replacement provider sandbox.");
+  const recoveredProviderId = await ops.waitForProvider(first.id);
+  if (recoveredProviderId !== firstProviderId) {
+    throw new Error("failure-injection: runtime recovery replaced the provider instead of relaunching AnyHarness in place.");
   }
-  await cleanup.markAcquired(replacementProviderId);
+  await cleanup.markAcquired(recoveredProviderId);
 
   // Re-run the same normal product action as an idempotency/control check. It
-  // must converge on the replacement rather than create a third sandbox.
+  // must stay on the recovered provider and prove the failure rule is disarmed.
   await ops.startProductMaterialization(actor);
   const controlProviderId = await ops.waitForProvider(first.id);
-  if (controlProviderId !== replacementProviderId) {
+  if (controlProviderId !== recoveredProviderId) {
     throw new Error("failure-injection: the post-recovery control action changed provider identity.");
   }
+  await ops.waitForMaterializationReady(actor);
 
   const controlAfter = await ops.controlProductAction(actor);
   const manifestReadable = await ops.relayManifestReadable(world);
@@ -2146,13 +2347,15 @@ export async function runFailureInjectionCellLive(
   }
 
   return {
-    externalIds: [first.id, firstProviderId, replacementProviderId],
-    observedTransition: "control_ok→provider_created→provider_killed→product_error→normal_path_recovery→replacement_ready→controls_ok",
+    externalIds: [first.id, firstProviderId],
+    observedTransition:
+      "control_ok→provider_created→anyharness_present→anyharness_killed→product_stayed_non_ready→" +
+      "normal_path_recovery→same_provider_ready→secret_materialization_ready→failure_rule_disarmed→controls_ok",
     cleanupEntries: ["e2b_sandbox"],
   };
 }
 
-const defaultProviderCreateRecoveryOps: ProviderCreateRecoveryOps = {
+const defaultRuntimeReadinessRecoveryOps: RuntimeReadinessRecoveryOps = {
   async prepareActor(world, actor) {
     if (!world.box) {
       throw new Error("failure-injection: the world exposes no candidate-box seam for qualification setup.");
@@ -2171,6 +2374,9 @@ const defaultProviderCreateRecoveryOps: ProviderCreateRecoveryOps = {
       coveredRepoOwner: COVERED_REPO_OWNER,
       coveredRepoName: COVERED_REPO_NAME,
       coveredRepoDefaultBranch: COVERED_REPO_DEFAULT_BRANCH,
+      // Cell D must make its normal product action the first provider-creating
+      // operation, after durable cleanup intent + watcher arming.
+      materializeSandbox: false,
       persistRotatedRefreshToken: (next) =>
         persistRotatedBotSeedDurable(
           {
@@ -2188,31 +2394,9 @@ const defaultProviderCreateRecoveryOps: ProviderCreateRecoveryOps = {
   },
   controlProductAction: (actor) => actor.api.get("/v1/organizations").then(() => true).catch(() => false),
   ensureSandbox: (actor) => ensureCloudSandboxRow(actor.api),
-  async registerSandboxIntent(world, cloudSandboxId) {
-    if (!world.registerCleanupIntent) {
-      throw new Error(
-        "failure-injection: the managed-cloud world exposes no durable cleanup-intent seam for provider create.",
-      );
-    }
-    const handle = await world.registerCleanupIntent(
-      "e2b_sandbox",
-      encodeE2bSandboxCleanupIdentity({ cloudSandboxId, providerSandboxId: null }),
-      async () => {
-        const found = await findProviderSandbox(cloudSandboxId);
-        const matches = found.matches ?? (found.providerSandboxId
-          ? [{ providerSandboxId: found.providerSandboxId }]
-          : []);
-        for (const match of matches) {
-          await killProviderSandbox(match.providerSandboxId);
-        }
-      },
-    );
-    return {
-      entryId: handle.entryId,
-      markAcquired: (providerSandboxId) =>
-        handle.markAcquired(encodeE2bSandboxCleanupIdentity({ cloudSandboxId, providerSandboxId })),
-    };
-  },
+  registerSandboxIntent: (world, cloudSandboxId) =>
+    registerFailureInjectionSandboxIntent(world, cloudSandboxId),
+  armRuntimeReadinessFailure: (world, params) => armRuntimeReadinessFailureWatcher(world, params),
   startProductMaterialization: async (actor) => {
     await actor.api.put("/v1/cloud/secrets/personal/env-vars/T3_FAILURE_INJECTION", {
       value: `${Date.now()}`,
@@ -2233,24 +2417,132 @@ const defaultProviderCreateRecoveryOps: ProviderCreateRecoveryOps = {
     }
     throw new Error("failure-injection: no provider sandbox appeared within the bounded wait.");
   },
-  injectProviderCreate: (world, providerSandboxId) =>
-    injectFailureAt(world, "provider_create", { providerSandboxId }),
-  async waitForProductError(actor, expectedProviderId) {
-    const observed = await pollCloudSandboxStatus(
-      actor.api,
-      (status) => isInjectedProviderCreateFailure(
-        status ? { status: status.status, lastError: status.lastError } : null,
-        expectedProviderId,
-      ),
-      { timeoutMs: FAILURE_RECOVERY_TIMEOUT_MS, pollMs: 2_000 },
-    );
-    return observed ? { status: observed.status, lastError: observed.lastError } : null;
-  },
   recoverSandbox: async (actor) => {
     await warmPersonalCloudSandbox(actor.api, { timeoutMs: FAILURE_RECOVERY_TIMEOUT_MS });
   },
+  waitForMaterializationReady: (actor) => waitForPersonalMaterializationReady(actor.api),
   relayManifestReadable: (world) => callbackRelay(world).manifest("stripe").then(() => true).catch(() => false),
 };
+
+interface RuntimeProviderDiscovery {
+  providerSandboxId: string | null;
+  matches?: Array<{ providerSandboxId: string }>;
+}
+
+type RuntimeProviderFinder = (cloudSandboxId: string) => Promise<RuntimeProviderDiscovery>;
+
+export async function armRuntimeReadinessFailureWatcher(
+  world: ManagedCloudWorld,
+  params: { cloudSandboxId: string; operationId: string },
+  deps: {
+    find?: RuntimeProviderFinder;
+    inject?: (world: ManagedCloudWorld, providerSandboxId: string) => Promise<FailureInjectionHandle>;
+    processPresent?: (providerSandboxId: string) => Promise<boolean>;
+    observeProduct?: typeof observeProviderBindingOnBox;
+    sleep?: (ms: number) => Promise<void>;
+    timeoutMs?: number;
+    postKillQuietChecks?: number;
+  } = {},
+): Promise<{
+  operationId: string;
+  waitForInjection(): Promise<{
+    providerSandboxId: string;
+    handle: FailureInjectionHandle;
+    observation: RuntimeReadinessFailureObservation;
+  }>;
+  disarm(): Promise<void>;
+}> {
+  const expectedOperation = `runtime-readiness:${world.run.run_id}:${world.run.shard_id}:${params.cloudSandboxId}`;
+  if (params.operationId !== expectedOperation) {
+    throw new Error("failure-injection: runtime-readiness watcher operation is outside the exact run boundary.");
+  }
+  const find = deps.find ?? findProviderSandbox;
+  const inject = deps.inject ?? ((targetWorld, providerId) =>
+    injectFailureAt(targetWorld, "runtime_readiness", { providerSandboxId: providerId }));
+  const processPresent = deps.processPresent ?? ((providerId) =>
+    providerProcessWithExactExecutablePresent(providerId, "anyharness"));
+  const observeProduct = deps.observeProduct ?? observeProviderBindingOnBox;
+  const wait = deps.sleep ?? sleep;
+  const baseline = await find(params.cloudSandboxId);
+  const baselineMatches = baseline.matches ?? (baseline.providerSandboxId
+    ? [{ providerSandboxId: baseline.providerSandboxId }]
+    : []);
+  if (baselineMatches.length !== 0) {
+    throw new Error("failure-injection: runtime-readiness watcher found a pre-existing provider sandbox before arming.");
+  }
+  let disarmed = false;
+  const deadline = Date.now() + (deps.timeoutMs ?? FAILURE_RECOVERY_TIMEOUT_MS);
+  let injectedHandle: FailureInjectionHandle | undefined;
+  // Start the bounded watcher NOW, before returning the armed handle. The
+  // product action happens only after this function resolves; polling an empty
+  // provider set until then is expected.
+  const fired = (async () => {
+    while (!disarmed && Date.now() < deadline) {
+      const observed = await find(params.cloudSandboxId);
+      const matches = observed.matches ?? (observed.providerSandboxId
+        ? [{ providerSandboxId: observed.providerSandboxId }]
+        : []);
+      if (matches.length > 1) {
+        throw new Error("failure-injection: runtime-readiness watcher observed ambiguous provider sandboxes.");
+      }
+      const providerSandboxId = matches[0]?.providerSandboxId;
+      if (providerSandboxId) {
+        const before = await observeProduct(world, params.cloudSandboxId);
+        if (!before || before.providerSandboxId === null) {
+          await wait(250);
+          continue;
+        }
+        if (before.providerSandboxId !== providerSandboxId) {
+          throw new Error(
+            "failure-injection: provider metadata did not match the product row's exact provider binding.",
+          );
+        }
+        if (before.status !== "creating" || before.readyAt !== null) {
+          throw new Error(
+            `failure-injection: expected exact status=creating before runtime injection; observed ${before.status}.`,
+          );
+        }
+        if (!(await processPresent(providerSandboxId))) {
+          await wait(250);
+          continue;
+        }
+        const handle = await inject(world, providerSandboxId);
+        injectedHandle = handle;
+        if (handle.boundary !== "runtime_readiness" || !handle.injected) {
+          throw new Error("failure-injection: runtime-readiness injection did not prove AnyHarness present→absent.");
+        }
+        const quietChecks = deps.postKillQuietChecks ?? 3;
+        if (!Number.isInteger(quietChecks) || quietChecks < 1 || quietChecks > 10) {
+          throw new Error("failure-injection: invalid post-kill worker quiet-check count.");
+        }
+        let after = before;
+        for (let check = 0; check < quietChecks; check += 1) {
+          await wait(250);
+          const observedAfter = await observeProduct(world, params.cloudSandboxId);
+          if (!isInjectedRuntimeReadinessFailure(observedAfter, params.cloudSandboxId, providerSandboxId)) {
+            throw new Error(
+              "failure-injection: product reached ready or changed provider after the AnyHarness kill.",
+            );
+          }
+          after = observedAfter;
+        }
+        return { providerSandboxId, handle, observation: after };
+      }
+      await wait(250);
+    }
+    throw new Error("failure-injection: runtime-readiness watcher did not observe the exact first attempt.");
+  })();
+  void fired.catch(() => undefined);
+  return {
+    operationId: params.operationId,
+    waitForInjection: () => fired,
+    async disarm() {
+      disarmed = true;
+      await fired.catch(() => null);
+      await injectedHandle?.disarm();
+    },
+  };
+}
 
 /**
  * Every required deletion boolean true (mirrors CLOUD-PROVISION-1's

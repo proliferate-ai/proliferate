@@ -272,8 +272,9 @@ async def main():
         # preclones the configured cloud repo_environment above.
         await ensure_personal_cloud_sandbox_exists(db, user_id=user_id)
         await db.commit()
-        await materialize_sandbox(db, user_id=user_id)
-        await db.commit()
+        if payload.get("materialize_sandbox", True):
+            await materialize_sandbox(db, user_id=user_id)
+            await db.commit()
     print(json.dumps({"github_login": authorization.github_login, "github_user_id": authorization.github_user_id}))
 
 asyncio.run(main())
@@ -305,6 +306,11 @@ export interface SeedGithubAuthorizationOptions {
    * composer send stays disabled at "Choose a base branch".
    */
   coveredRepoDefaultBranch: string;
+  /**
+   * Defaults true to mirror the callback tail. Cell D sets false so it can
+   * durably register + arm runtime_readiness before the first materialization.
+   */
+  materializeSandbox?: boolean;
   /**
    * Persists the ROTATED refresh token (+ resolved identity) back to the seed
    * source. Called with the new token BEFORE the box upsert, so a crash after
@@ -355,6 +361,7 @@ export async function seedGithubAuthorizationOnBox(
     repo_owner: options.coveredRepoOwner,
     repo_name: options.coveredRepoName,
     repo_default_branch: options.coveredRepoDefaultBranch,
+    materialize_sandbox: options.materializeSandbox !== false,
   });
   const authFilePath = await options.box.putSecretFile("github-user-auth.json", authFileContents);
   try {

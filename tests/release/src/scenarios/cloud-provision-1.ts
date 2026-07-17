@@ -938,11 +938,11 @@ export function createCloudProvision1Driver(
   createActor: (world) =>
     authenticatedActor(asAuthenticatedActorWorld(world), "owner", {
       gatewaySurface: "cloud",
-      resolveAndTrackActorSubjects: (params) => {
-        if (!world.resolveAndTrackActorSubjects) {
-          throw new Error("managed-cloud world exposes no enrollment-boundary LiteLLM cleanup custody.");
+      beginActorEnrollmentCustody: (params) => {
+        if (!world.beginActorEnrollmentCustody) {
+          throw new Error("managed-cloud world exposes no pre-creation LiteLLM enrollment custody.");
         }
-        return world.resolveAndTrackActorSubjects(params);
+        return world.beginActorEnrollmentCustody(params);
       },
     }),
   // Actor B is a REAL invited second user (MCW-001): actor A mints an org
@@ -954,11 +954,11 @@ export function createCloudProvision1Driver(
       inviter: actorA,
       gatewaySurface: "cloud",
       email: `qual-actor-b-${world.run.run_id}-${world.run.shard_id}@example.com`,
-      resolveAndTrackActorSubjects: (params) => {
-        if (!world.resolveAndTrackActorSubjects) {
-          throw new Error("managed-cloud world exposes no enrollment-boundary LiteLLM cleanup custody.");
+      beginActorEnrollmentCustody: (params) => {
+        if (!world.beginActorEnrollmentCustody) {
+          throw new Error("managed-cloud world exposes no pre-creation LiteLLM enrollment custody.");
         }
-        return world.resolveAndTrackActorSubjects(params);
+        return world.beginActorEnrollmentCustody(params);
       },
     }),
   fundCore: (world, actor) =>

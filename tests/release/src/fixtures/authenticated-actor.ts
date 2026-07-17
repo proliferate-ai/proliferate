@@ -125,6 +125,15 @@ export interface AuthenticatedActorOptions {
    */
   gatewaySurface?: "local" | "cloud";
   /**
+   * Managed-cloud crash custody. Called with the exact run-owned email BEFORE
+   * `/setup` creates the actor (and therefore before async LiteLLM enrollment
+   * can create provider subjects). The returned binder promotes that same
+   * durable intent after the exact enrollment resolves.
+   */
+  beginActorEnrollmentCustody?(params: { email: string }): Promise<{
+    resolveAndTrack(params: { userId: string; enrollmentId: string }): Promise<ActorKeyIdentity>;
+  }>;
+  /**
    * Managed-cloud custody seam. Once the synced enrollment exposes the exact
    * product user + enrollment ids, resolve the provider subjects and durably
    * register their cleanup before this fixture performs any later selection or
@@ -275,6 +284,7 @@ export async function authenticatedActor(
   const email = options.email ?? `qual-owner-${world.run.run_id}-${world.run.shard_id}@example.com`;
   const password = randomBytes(24).toString("hex");
   const organizationName = options.organizationName ?? `local-world-smoke-${world.run.run_id}`;
+  const enrollmentCustody = await options.beginActorEnrollmentCustody?.({ email });
 
   await transport.claimSetup({ apiBaseUrl: world.api.baseUrl, email, password, setupToken, organizationName });
 
@@ -305,7 +315,7 @@ export async function authenticatedActor(
     pollMs: options.enrollmentPollMs ?? 2_000,
   });
 
-  const gatewayKey = await (options.resolveAndTrackActorSubjects ?? ((params) => world.gateway.resolveActorKey(params)))({
+  const gatewayKey = await (enrollmentCustody?.resolveAndTrack ?? options.resolveAndTrackActorSubjects ?? ((params) => world.gateway.resolveActorKey(params)))({
     userId: session.user_id,
     enrollmentId: enrollment.id,
   });

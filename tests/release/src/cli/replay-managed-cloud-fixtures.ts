@@ -427,6 +427,7 @@ export async function replayManagedCloudFixtures(
       stripeSecretKey: "unused",
       stripeHttp: deps.stripeHttp,
       ledgerEntries: before,
+      ledger,
       env,
       providers: deps.providers,
     });
@@ -442,6 +443,7 @@ export async function replayManagedCloudFixtures(
       stripeSecretKey,
       stripeHttp: deps.stripeHttp,
       ledgerEntries: before,
+      ledger,
       env,
       providers: deps.providers,
     });
@@ -454,6 +456,7 @@ export async function replayManagedCloudFixtures(
       stripeSecretKey: "unused",
       stripeHttp: deps.stripeHttp,
       ledgerEntries: before,
+      ledger,
       env,
       providers: deps.providers,
     });

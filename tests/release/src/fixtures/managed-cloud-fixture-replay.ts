@@ -44,17 +44,31 @@ export const FIXTURE_REPLAY_KINDS: ReadonlySet<CleanupResourceKind> = new Set([
 ]);
 
 const E2B_SANDBOX_CLEANUP_PREFIX = "e2b-sandbox:";
+const MAX_E2B_CLEANUP_PROVIDER_IDS = 32;
+const SAFE_E2B_PROVIDER_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,299}$/;
 
 export interface E2bSandboxCleanupIdentity {
   cloudSandboxId: string;
   providerSandboxId: string | null;
+  /** Present only when one logical sandbox resolved to multiple exact provider rows. */
+  providerSandboxIds?: string[];
 }
 
 /** Keeps the product logical id durable even after provider-id replacement. */
 export function encodeE2bSandboxCleanupIdentity(identity: E2bSandboxCleanupIdentity): string {
   const params = new URLSearchParams({ cloud: identity.cloudSandboxId });
-  if (identity.providerSandboxId) {
-    params.set("provider", identity.providerSandboxId);
+  const providerIds = identity.providerSandboxIds ?? (identity.providerSandboxId ? [identity.providerSandboxId] : []);
+  const distinct = [...new Set(providerIds)].sort();
+  if (
+    distinct.length !== providerIds.length ||
+    distinct.length > MAX_E2B_CLEANUP_PROVIDER_IDS ||
+    distinct.some((providerId) => !SAFE_E2B_PROVIDER_ID.test(providerId)) ||
+    (identity.providerSandboxId !== null && !distinct.includes(identity.providerSandboxId))
+  ) {
+    throw new Error("E2B sandbox cleanup provider identity is malformed or exceeds its bound.");
+  }
+  for (const providerId of distinct) {
+    params.append("provider", providerId);
   }
   return `${E2B_SANDBOX_CLEANUP_PREFIX}${params.toString()}`;
 }
@@ -65,11 +79,25 @@ export function decodeE2bSandboxCleanupIdentity(value: string): E2bSandboxCleanu
   }
   const params = new URLSearchParams(value.slice(E2B_SANDBOX_CLEANUP_PREFIX.length));
   const cloudSandboxId = params.get("cloud");
-  const providerSandboxId = params.get("provider");
   if (!cloudSandboxId) {
     return null;
   }
-  return { cloudSandboxId, providerSandboxId: providerSandboxId || null };
+  const providerIds = params.getAll("provider");
+  if (
+    providerIds.length > MAX_E2B_CLEANUP_PROVIDER_IDS ||
+    new Set(providerIds).size !== providerIds.length ||
+    providerIds.some((providerId) => !SAFE_E2B_PROVIDER_ID.test(providerId))
+  ) {
+    return null;
+  }
+  const providerSandboxId = providerIds[0] ?? null;
+  return providerIds.length > 1
+    ? { cloudSandboxId, providerSandboxId, providerSandboxIds: [...providerIds].sort() }
+    : { cloudSandboxId, providerSandboxId };
+}
+
+function providerIdsFromIdentity(identity: E2bSandboxCleanupIdentity): string[] {
+  return identity.providerSandboxIds ?? (identity.providerSandboxId ? [identity.providerSandboxId] : []);
 }
 
 export interface FixtureReplayProviderDeps {
@@ -88,7 +116,6 @@ const DEFAULT_PROVIDER_DEPS: FixtureReplayProviderDeps = {
 
 const E2B_INTENT_OBSERVATIONS = 3;
 const E2B_INTENT_OBSERVATION_INTERVAL_MS = 2_000;
-const E2B_INTENT_RECOVERY_GRACE_MS = 30_000;
 
 function exactE2bMatches(result: E2BFindResult): NonNullable<E2BFindResult["matches"]> {
   if (!Array.isArray(result.matches) || !Number.isSafeInteger(result.count) || result.count! < 0) {
@@ -112,6 +139,7 @@ export interface ManagedCloudFixtureReplayInputs {
   stripeSecretKey: string;
   stripeHttp: StripeHttp;
   ledgerEntries: readonly CleanupLedgerEntry[];
+  ledger: CleanupLedger;
   env?: NodeJS.ProcessEnv;
   providers?: FixtureReplayProviderDeps;
 }
@@ -210,16 +238,24 @@ export function managedCloudFixtureReplayHandlers(
       await inputs.box.exec(`rm -rf ${shellSingleQuote(relayDirOnBox())}`);
     },
     e2b_sandbox: async (entry) => {
+      if (entry.providerId === null) {
+        // registerSandboxIntent has not returned, so the provider-creating
+        // product action cannot have started. This is the authoritative
+        // pre-return/no-provider crash window.
+        return;
+      }
       const identity = decodeE2bSandboxCleanupIdentity(entry.providerId ?? "");
       if (!identity) {
         throw new Error("E2B sandbox cleanup identity is malformed.");
       }
       let discovered = await providers.findSandbox(identity.cloudSandboxId, env);
       let matches = exactE2bMatches(discovered);
-      // An intent-only ledger identity means the process may have died between
-      // provider acceptance and durable provider-id promotion. One empty read
-      // is not proof of absence under eventual consistency: observe a bounded
-      // series, then preserve custody until the grace window has elapsed.
+      // An encoded intent-only identity means provider creation may already be
+      // in flight in the candidate materializer. Even repeated empty provider
+      // inventory is not authoritative absence while that producer can still
+      // accept the request, so preserve custody until an exact provider id can
+      // be promoted. Only the raw providerId=null pre-return entry above proves
+      // that the product action could not have started.
       if (!identity.providerSandboxId && matches.length === 0) {
         for (let attempt = 1; attempt < E2B_INTENT_OBSERVATIONS; attempt += 1) {
           await (providers.sleep ?? DEFAULT_PROVIDER_DEPS.sleep!)(E2B_INTENT_OBSERVATION_INTERVAL_MS);
@@ -227,17 +263,30 @@ export function managedCloudFixtureReplayHandlers(
           matches = exactE2bMatches(discovered);
           if (matches.length > 0) break;
         }
-        const createdAt = Date.parse(entry.createdAt);
-        if (!Number.isFinite(createdAt)) {
-          throw new Error("E2B sandbox cleanup intent has a malformed createdAt timestamp.");
-        }
-        if (matches.length === 0 && providers.now().getTime() - createdAt < E2B_INTENT_RECOVERY_GRACE_MS) {
-          throw new Error("E2B sandbox intent is not visible yet; preserving cleanup custody for retry.");
+        if (matches.length === 0) {
+          throw new Error(
+            "E2B sandbox intent has no authoritative provider binding; preserving cleanup custody for retry.",
+          );
         }
       }
-      const providerIds = new Set(matches.map((match) => match.providerSandboxId));
-      if (identity.providerSandboxId) {
-        providerIds.add(identity.providerSandboxId);
+      const providerIds = new Set([
+        ...providerIdsFromIdentity(identity),
+        ...matches.map((match) => match.providerSandboxId),
+      ]);
+      if (providerIds.size > MAX_E2B_CLEANUP_PROVIDER_IDS) {
+        throw new Error("E2B sandbox cleanup inventory exceeds its bounded provider-id custody.");
+      }
+      const promoted = encodeE2bSandboxCleanupIdentity({
+        cloudSandboxId: identity.cloudSandboxId,
+        providerSandboxId: [...providerIds].sort()[0] ?? null,
+        providerSandboxIds: providerIds.size > 1 ? [...providerIds].sort() : undefined,
+      });
+      if (promoted !== entry.providerId) {
+        // Persist the complete exact provider set BEFORE the first destructive
+        // call. A crash after provider deletion but before reconciliation can
+        // then retry idempotently from durable identities rather than falling
+        // back to an ambiguous logical-only intent.
+        await inputs.ledger.markAcquired(entry.entryId, promoted);
       }
       for (const providerSandboxId of providerIds) {
         const result = await providers.killSandbox(providerSandboxId, env);

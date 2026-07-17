@@ -18,6 +18,11 @@ import {
   sharedTemplateCustodyPath,
 } from "../worlds/managed-cloud/shared-template-custody.js";
 import type { E2bTemplateReceipt } from "../worlds/managed-cloud/template.js";
+import {
+  actorEnrollmentIntent,
+  decodeActorEnrollmentCustody,
+  encodeActorEnrollmentCustody,
+} from "../worlds/managed-cloud/actor-enrollment-custody.js";
 import { parseReplayManagedCloudBaseArgs } from "./replay-managed-cloud-base.js";
 
 const RUN = "run-1";
@@ -185,6 +190,177 @@ test("an independent domain failure leaves its ledger entry non-green while late
     const persisted = JSON.parse(await readFile(path.join(runDir, "cleanup-ledger.json"), "utf8"));
     assert.equal(persisted.entries.find((row: { entryId: string }) => row.entryId === "team").phase, "acquired");
     assert.equal(persisted.entries.find((row: { entryId: string }) => row.entryId === "port").phase, "reconciled");
+  } finally {
+    await rm(parent, { recursive: true, force: true });
+  }
+});
+
+test("a rolled-back enrollment row stays non-green and preserves the candidate recovery substrate", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "base-replay-actor-intent-"));
+  const runDir = path.join(parent, "fixture-smoke");
+  await mkdir(path.join(runDir, "secrets"), { recursive: true });
+  await writeFile(path.join(runDir, "secrets", "ingress-key.pem"), "owned-key", { mode: 0o600 });
+  try {
+    const ledger = await openCleanupLedger({ runDir, runId: RUN, shardId: SHARD });
+    const acquire = async (kind: Parameters<typeof ledger.registerIntent>[0], id: string, providerId: string) => {
+      await ledger.registerIntent(kind, id);
+      await ledger.markAcquired(id, providerId);
+    };
+    await acquire("run_directory", "dir", runDir);
+    await acquire("secret_env_file", "secrets", path.join(runDir, "secrets"));
+    await acquire("key_pair", "key", "mcq-run-1-shard-1-key");
+    await acquire("security_group", "sg", "sg-1");
+    await acquire("ec2_instance", "instance", "i-1");
+    const intent = actorEnrollmentIntent({
+      run_id: RUN, shard_id: SHARD, attempt: 1, source_sha: "a".repeat(40),
+      origin: { kind: "local", github_run_id: null, github_job: null },
+    }, "qual-owner-run-1-shard-1@example.com");
+    await acquire("litellm_actor_enrollment", "actor", encodeActorEnrollmentCustody(intent));
+    const awsCalls: string[][] = [];
+    let providerCalls = 0;
+    await assert.rejects(() => replayManagedCloudBaseWorld({
+      runDir, runId: RUN, shardId: SHARD, region: REGION, hostedZoneId: ZONE,
+      litellmBaseUrl: "https://litellm.example", litellmMasterKey: "master",
+    }, {
+      async resolveActorEnrollment() { return { status: "user_only", userId: "u1" }; },
+      async awsExec(_file, args) { awsCalls.push([...args]); return { stdout: "{}", stderr: "" }; },
+      fetch: async () => { providerCalls += 1; return response(200); },
+    }), /producer is not quiescent \(user_only\)/);
+    assert.equal(providerCalls, 0, "a live producer is never cleaned from one provider snapshot");
+    await assert.rejects(() => replayManagedCloudBaseWorld({
+      runDir, runId: RUN, shardId: SHARD, region: REGION, hostedZoneId: ZONE,
+      litellmBaseUrl: "https://litellm.example", litellmMasterKey: "master",
+    }, {
+      async resolveActorEnrollment() { return { status: "absent" }; },
+      async awsExec(_file, args) { awsCalls.push([...args]); return { stdout: "{}", stderr: "" }; },
+      fetch: async () => { providerCalls += 1; return response(200); },
+    }), /producer is not quiescent \(absent\)/);
+    assert.equal(providerCalls, 0, "a one-shot absent snapshot cannot race an in-flight actor transaction");
+    assert.ok(!awsCalls.some((args) => ["terminate-instances", "delete-security-group", "delete-key-pair"].some((op) => args.includes(op))));
+    assert.equal(await readFile(path.join(runDir, "secrets", "ingress-key.pem"), "utf8"), "owned-key");
+    const persisted = JSON.parse(await readFile(path.join(runDir, "cleanup-ledger.json"), "utf8"));
+    assert.equal(persisted.entries.find((row: { entryId: string }) => row.entryId === "actor").phase, "acquired");
+    assert.equal(decodeActorEnrollmentCustody(
+      persisted.entries.find((row: { entryId: string }) => row.entryId === "actor").providerId,
+      { runId: RUN, shardId: SHARD },
+    ).state, "intent");
+  } finally {
+    await rm(parent, { recursive: true, force: true });
+  }
+});
+
+test("fresh replay reconciles a null pre-return actor intent without provider access", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "base-replay-actor-null-"));
+  const runDir = path.join(parent, "fixture-smoke");
+  await mkdir(runDir, { recursive: true });
+  try {
+    const ledger = await openCleanupLedger({ runDir, runId: RUN, shardId: SHARD });
+    await ledger.registerIntent("run_directory", "dir");
+    await ledger.markAcquired("dir", runDir);
+    await ledger.registerIntent("litellm_actor_enrollment", "actor");
+    let providerCalls = 0;
+    const report = await replayManagedCloudBaseWorld({
+      runDir, runId: RUN, shardId: SHARD, region: REGION, hostedZoneId: ZONE,
+      litellmBaseUrl: "https://litellm.example", litellmMasterKey: "master",
+    }, {
+      async resolveActorEnrollment() { throw new Error("null intent must not query the candidate DB"); },
+      async awsExec() { throw new Error("AWS is not needed for this exact replay"); },
+      fetch: async () => { providerCalls += 1; throw new Error("provider deletion must remain a no-op"); },
+    });
+    assert.equal(report.status, "reconciled");
+    assert.equal(report.removed_run_directory, true);
+    assert.equal(providerCalls, 0);
+    await assert.rejects(readFile(path.join(runDir, "cleanup-ledger.json")), /ENOENT/);
+  } finally {
+    await rm(parent, { recursive: true, force: true });
+  }
+});
+
+test("fresh replay preserves LIFO cleanup across two actor-enrollment intents", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "base-replay-two-actors-"));
+  const runDir = path.join(parent, "fixture-smoke");
+  await mkdir(runDir, { recursive: true });
+  try {
+    const ledger = await openCleanupLedger({ runDir, runId: RUN, shardId: SHARD });
+    const runIdentity = {
+      run_id: RUN, shard_id: SHARD, attempt: 1, source_sha: "a".repeat(40),
+      origin: { kind: "local" as const, github_run_id: null, github_job: null },
+    };
+    for (const [entryId, email] of [
+      ["owner", "qual-owner-run-1-shard-1@example.com"],
+      ["invitee", "qual-actor-b-run-1-shard-1@example.com"],
+    ] as const) {
+      await ledger.registerIntent("litellm_actor_enrollment", entryId);
+      await ledger.markAcquired(entryId, encodeActorEnrollmentCustody(actorEnrollmentIntent(runIdentity, email)));
+    }
+    const resolvedEmails: string[] = [];
+    await assert.rejects(() => replayManagedCloudBaseWorld({
+      runDir, runId: RUN, shardId: SHARD, region: REGION, hostedZoneId: ZONE,
+      litellmBaseUrl: "https://litellm.example", litellmMasterKey: "master",
+    }, {
+      async resolveActorEnrollment(intent) { resolvedEmails.push(intent.email); return { status: "absent" }; },
+      async awsExec() { throw new Error("AWS is not needed"); },
+      fetch: async () => { throw new Error("LiteLLM is not needed"); },
+    }), /litellm_actor_enrollment/);
+    assert.deepEqual(resolvedEmails, [
+      "qual-actor-b-run-1-shard-1@example.com",
+      "qual-owner-run-1-shard-1@example.com",
+    ]);
+  } finally {
+    await rm(parent, { recursive: true, force: true });
+  }
+});
+
+test("actor intent promotes to the complete recovered provider set before deletion", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "base-replay-actor-bound-"));
+  const runDir = path.join(parent, "fixture-smoke");
+  await mkdir(runDir, { recursive: true });
+  try {
+    const ledger = await openCleanupLedger({ runDir, runId: RUN, shardId: SHARD });
+    await ledger.registerIntent("ec2_instance", "instance");
+    await ledger.markAcquired("instance", "i-1");
+    const intent = actorEnrollmentIntent({
+      run_id: RUN, shard_id: SHARD, attempt: 1, source_sha: "a".repeat(40),
+      origin: { kind: "local", github_run_id: null, github_job: null },
+    }, "qual-owner-run-1-shard-1@example.com");
+    await ledger.registerIntent("litellm_actor_enrollment", "actor");
+    await ledger.markAcquired("actor", encodeActorEnrollmentCustody(intent));
+    const awsCalls: string[][] = [];
+    await assert.rejects(() => replayManagedCloudBaseWorld({
+      runDir, runId: RUN, shardId: SHARD, region: REGION, hostedZoneId: ZONE,
+      litellmBaseUrl: "https://litellm.example", litellmMasterKey: "master",
+    }, {
+      async resolveActorEnrollment() {
+        return { status: "recovered", binding: {
+          ...intent, state: "recovered", userId: "u1", organizationIds: [],
+          keyAliases: ["vk-user-u1-enroll01"], litellmUserId: "user-u1",
+          teamIds: ["team-1"], teamAliases: ["user-u1"],
+        } };
+      },
+      async awsExec(_file, args) {
+        awsCalls.push([...args]);
+        if (args.includes("describe-instances")) {
+          return { stdout: JSON.stringify({ Reservations: [{ Instances: [tagged({
+            InstanceId: "i-1", PublicIpAddress: "192.0.2.1", State: { Name: "running" },
+          })] }] }), stderr: "" };
+        }
+        return { stdout: "{}", stderr: "" };
+      },
+      async sleep() {},
+      fetch: async (url) => {
+        if (url.includes("/team/list")) return response(200, [{ team_alias: "user-u1", team_id: "team-1" }]);
+        if (url.includes("/key/list")) return response(200, { keys: [{
+          key_alias: "vk-user-u1-enroll01", token: "tok-1", team_id: "team-1",
+          user_id: "user-u1", metadata: { proliferate_user_id: "u1" },
+        }] });
+        if (url.endsWith("/key/delete")) return response(500);
+        return response(200);
+      },
+    }), /key delete failed/);
+    assert.ok(awsCalls.some((args) => args.includes("terminate-instances")), "bound custody no longer needs the box");
+    const persisted = JSON.parse(await readFile(path.join(runDir, "cleanup-ledger.json"), "utf8"));
+    const actor = persisted.entries.find((row: { entryId: string }) => row.entryId === "actor");
+    assert.equal(decodeActorEnrollmentCustody(actor.providerId, { runId: RUN, shardId: SHARD }).state, "recovered");
   } finally {
     await rm(parent, { recursive: true, force: true });
   }

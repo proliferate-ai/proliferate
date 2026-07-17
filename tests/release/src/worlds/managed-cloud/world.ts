@@ -22,6 +22,10 @@ import {
   type FetchLike,
   type QualificationLiteLlmConfig,
 } from "../../services/qualification-litellm.js";
+import {
+  deleteActorEnrollmentSubjects,
+  resolveActorEnrollmentProviderBinding,
+} from "./base-world-litellm-replay.js";
 import { openCleanupLedger, type CleanupLedgerMirror } from "../local-workspace/cleanup-ledger.js";
 import type { Exec } from "../local-workspace/docker.js";
 import type { ReadinessFetch, SpawnLike } from "../local-workspace/processes.js";
@@ -49,6 +53,14 @@ import {
   type Ec2ResourceTags,
 } from "./ec2.js";
 import { createBoxExec, type BoxExec } from "./box-exec.js";
+import {
+  actorEnrollmentIntent,
+  bindActorEnrollment,
+  encodeActorEnrollmentCustody,
+  resolveActorEnrollmentOnBox,
+  type ActorEnrollmentLookup,
+  type RecoveredActorEnrollmentV1,
+} from "./actor-enrollment-custody.js";
 import {
   deployCandidateApi,
   defaultSshExec,
@@ -222,6 +234,11 @@ export interface ManagedCloudWorld {
     enrollmentId: string;
   }): Promise<ActorKeyIdentity>;
 
+  /** Persists one composite enrollment cleanup intent before actor creation. */
+  beginActorEnrollmentCustody?(params: { email: string }): Promise<{
+    resolveAndTrack(params: { userId: string; enrollmentId: string }): Promise<ActorKeyIdentity>;
+  }>;
+
   close(): Promise<ManagedCloudCleanupEvidence>;
 }
 
@@ -344,7 +361,9 @@ export async function constructManagedCloudWorld(
   // provisions no AWS box, template, renderer, or browser.
   const candidateSet = resolveCloudCandidateSet(options.map);
 
-  const gateway = new QualificationLiteLlmController(options.litellm, { fetch: deps.litellmFetch });
+  const litellmFetch: FetchLike = deps.litellmFetch ?? ((url, init) =>
+    fetch(url, init as RequestInit) as unknown as ReturnType<FetchLike>);
+  const gateway = new QualificationLiteLlmController(options.litellm, { fetch: litellmFetch });
   // Fail fast on unreachable/ineligible gateway access with zero world side
   // effects (spec: no world on invalid shared-service access).
   await gateway.preflight();
@@ -502,6 +521,13 @@ export async function constructManagedCloudWorld(
       timeoutMs,
       log,
     });
+    const candidateBox = createBoxExec({
+      ssh,
+      destination: box.sshDestination,
+      keyPath: box.keyPath,
+      secretsDir,
+      log,
+    });
 
     // Build/publish (normal/producer) or consume (second proof) the immutable
     // E2B template. Shared producer custody is durable before provider create;
@@ -622,13 +648,7 @@ export async function constructManagedCloudWorld(
       renderer: { baseUrl: served.baseUrl, browser },
       gateway,
       sandbox: { e2bTeamId: options.e2b.teamId },
-      box: createBoxExec({
-        ssh,
-        destination: box.sshDestination,
-        keyPath: box.keyPath,
-        secretsDir,
-        log,
-      }),
+      box: candidateBox,
       paths: { runDir, secretsDir },
       registerCleanup: register,
       registerCleanupIntent,
@@ -638,6 +658,16 @@ export async function constructManagedCloudWorld(
         await trackResolvedActor(actor);
         return actor;
       },
+      beginActorEnrollmentCustody: (params) => beginActorEnrollmentCustody(
+        stack,
+        gateway,
+        candidateBox,
+        options.litellm,
+        litellmFetch,
+        options.run,
+        params.email,
+        trackedActors,
+      ),
       close: async () => {
         const cleanup = await stack.runAll();
         if (templateCustody.mode === "shared_producer") {
@@ -674,6 +704,94 @@ export async function constructManagedCloudWorld(
     }
     throw error;
   }
+}
+
+async function beginActorEnrollmentCustody(
+  stack: ManagedCloudCleanupStack,
+  gateway: QualificationLiteLlmController,
+  box: BoxExec,
+  litellm: QualificationLiteLlmConfig,
+  litellmFetch: FetchLike,
+  run: RunIdentityV1,
+  email: string,
+  tracked: Map<string, { fingerprint: string; promise: Promise<void> }>,
+): Promise<{
+  resolveAndTrack(params: { userId: string; enrollmentId: string }): Promise<ActorKeyIdentity>;
+}> {
+  const replayInputs = {
+    litellmBaseUrl: litellm.adminBaseUrl,
+    litellmMasterKey: litellm.masterKey,
+  };
+  const intent = actorEnrollmentIntent(run, email);
+  let binding: RecoveredActorEnrollmentV1 | undefined;
+  let custodyPublished = false;
+  const entryId = await stack.register("litellm_actor_enrollment", async () => {
+    if (!custodyPublished) {
+      // beginActorEnrollmentCustody has not returned, so its caller cannot
+      // have started /setup or invite registration. This is the sole
+      // authoritative no-actor crash window in the live stack.
+      return;
+    }
+    let recovered;
+    if (binding) {
+      recovered = binding;
+    } else {
+      const resolved = await resolveActorEnrollmentOnBox(box, intent);
+      if (resolved.status !== "recovered") {
+        throw new Error(
+          `LiteLLM actor enrollment producer is not quiescent (${resolved.status}); preserving candidate recovery substrate.`,
+        );
+      }
+      recovered = resolved.binding;
+    }
+    const exact = await resolveActorEnrollmentProviderBinding(recovered, replayInputs, litellmFetch);
+    binding = exact;
+    // Make the recovery substrate dispensable BEFORE any provider delete. If
+    // a later LiteLLM call fails, fresh replay has all personal + organization
+    // actor keys/teams and may safely tear down the candidate box.
+    await stack.acquired(entryId, encodeActorEnrollmentCustody(exact));
+    await deleteActorEnrollmentSubjects(
+      exact,
+      replayInputs,
+      litellmFetch,
+      (ms) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
+    );
+  });
+  await stack.acquired(entryId, encodeActorEnrollmentCustody(intent));
+  custodyPublished = true;
+
+  return {
+    async resolveAndTrack(params) {
+      const resolved = await gateway.resolveActorKey(params);
+      bindActorEnrollment(intent, resolved); // validates the public personal enrollment response
+      const deadline = Date.now() + 60_000;
+      let actorSet: ActorEnrollmentLookup;
+      do {
+        actorSet = await resolveActorEnrollmentOnBox(box, intent);
+        if (actorSet.status === "recovered") break;
+        await new Promise<void>((resolve) => setTimeout(resolve, 1_000));
+      } while (Date.now() < deadline);
+      if (actorSet.status !== "recovered") {
+        throw new Error(
+          `LiteLLM actor enrollment set did not quiesce before custody handoff (${actorSet.status}).`,
+        );
+      }
+      binding = await resolveActorEnrollmentProviderBinding(actorSet.binding, replayInputs, litellmFetch);
+      // Promote only after BOTH personal and organization enrollment sets are
+      // synced and all current/retry-orphan provider keys are durably named.
+      await stack.acquired(entryId, encodeActorEnrollmentCustody(binding));
+      const fingerprint = [
+        resolved.userId, resolved.enrollmentId, resolved.litellmUserId,
+        resolved.teamId, resolved.tokenIdHash,
+      ].join("\u0000");
+      const existing = tracked.get(resolved.keyAlias);
+      if (existing && existing.fingerprint !== fingerprint) {
+        throw new Error(`LiteLLM cleanup alias "${resolved.keyAlias}" resolved to conflicting actor identities.`);
+      }
+      tracked.set(resolved.keyAlias, { fingerprint, promise: Promise.resolve() });
+      return resolved;
+    },
+  };
 }
 
 async function materialize(

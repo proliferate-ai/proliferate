@@ -10,6 +10,7 @@ import {
   type CleanupLedgerEntry,
 } from "../local-workspace/cleanup-ledger.js";
 import { ManagedCloudCleanupStack, type ManagedCloudCleanupKind } from "./cleanup-kinds.js";
+import { encodeActorEnrollmentCustody } from "./actor-enrollment-custody.js";
 
 async function stackInTemp(): Promise<{ stack: ManagedCloudCleanupStack; runDir: string }> {
   const runDir = await mkdtemp(path.join(os.tmpdir(), "mc-cleanup-"));
@@ -130,6 +131,63 @@ test("a failed releaser preserves the run directory (and its ledger) instead of 
     const instanceEntry = persisted.entries.find((entry) => entry.kind === "ec2_instance");
     assert.ok(instanceEntry);
     assert.notEqual(instanceEntry!.phase, "reconciled");
+  } finally {
+    await rm(runDir, { recursive: true, force: true });
+  }
+});
+
+test("an unbound actor intent withholds the candidate box and SSH-key substrate", async () => {
+  const { stack, runDir } = await stackInTemp();
+  try {
+    const order: string[] = [];
+    for (const kind of ["run_directory", "secret_env_file", "key_pair", "security_group", "ec2_instance"] as const) {
+      const id = await stack.register(kind, async () => { order.push(kind); });
+      await stack.acquired(id, `${kind}-id`);
+    }
+    const actor = await stack.register("litellm_actor_enrollment", async () => {
+      order.push("actor");
+      throw new Error("candidate DB unavailable");
+    });
+    await stack.acquired(actor, encodeActorEnrollmentCustody({
+      state: "intent", runId: "run-1", shardId: "shard-0",
+      email: "qual-owner-run-1-shard-0@example.com",
+    }));
+    const evidence = await stack.runAll();
+    assert.deepEqual(order, ["actor"]);
+    assert.ok(evidence.failed >= 6);
+    assert.equal(evidence.ec2Terminated, false);
+    assert.equal(evidence.keyPairDeleted, false);
+    assert.equal(evidence.localPathsRemoved, false);
+  } finally {
+    await rm(runDir, { recursive: true, force: true });
+  }
+});
+
+test("a recovered full actor set permits box teardown after a later LiteLLM failure", async () => {
+  const { stack, runDir } = await stackInTemp();
+  try {
+    const order: string[] = [];
+    for (const kind of ["run_directory", "secret_env_file", "key_pair", "security_group", "ec2_instance"] as const) {
+      const id = await stack.register(kind, async () => { order.push(kind); });
+      await stack.acquired(id, `${kind}-id`);
+    }
+    const actor = await stack.register("litellm_actor_enrollment", async () => {
+      order.push("actor");
+      throw new Error("LiteLLM delete unavailable");
+    });
+    await stack.acquired(actor, encodeActorEnrollmentCustody({
+      state: "recovered", runId: "run-1", shardId: "shard-0",
+      email: "qual-owner-run-1-shard-0@example.com", userId: "u1", organizationIds: [],
+      keyAliases: ["vk-user-u1-enroll01"], litellmUserId: "user-u1",
+      teamIds: ["team-1"], teamAliases: ["user-u1"],
+    }));
+    const evidence = await stack.runAll();
+    assert.ok(order.includes("ec2_instance"));
+    assert.ok(order.includes("security_group"));
+    assert.ok(order.includes("key_pair"));
+    assert.ok(order.includes("secret_env_file"));
+    assert.ok(!order.includes("run_directory"), "ledger remains for provider cleanup replay");
+    assert.equal(evidence.ec2Terminated, true);
   } finally {
     await rm(runDir, { recursive: true, force: true });
   }

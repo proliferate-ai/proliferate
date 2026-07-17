@@ -30,6 +30,12 @@ export type CleanupResourceKind =
   | "litellm_virtual_key"
   | "litellm_user"
   | "litellm_team"
+  // Managed-cloud actor creation can start the asynchronous product enrollment
+  // before the exact provider ids exist. This composite custody entry is
+  // persisted before claim/register and promoted in place once the enrollment
+  // resolves; fresh replay can recover it from the candidate DB + deterministic
+  // LiteLLM aliases without touching unrelated subjects.
+  | "litellm_actor_enrollment"
   | "browser_context"
   | "browser"
   | "renderer_process"
