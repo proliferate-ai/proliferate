@@ -1302,9 +1302,11 @@ export interface BillingThresholdCellDeps {
   listGatewayModels(world: ManagedCloudWorld): Promise<{ allowlist: string[]; live: string[] }>;
   /**
    * ONE real chat-completion against the PUBLIC gateway URL with the raw key.
-   * Returns the HTTP status + the request's cost (USD) if the response carries it
-   * (else null — cost is then read from the ledger delta). The key never appears
-   * in a thrown error/log.
+   * Returns the HTTP status, the completion-token count (to prove the request
+   * actually produced output — a 2xx with zero completion tokens is a failed
+   * turn), and the request's cost (USD) if the response carries it (else null —
+   * cost is then read from the ledger delta). The key never appears in a thrown
+   * error/log.
    */
   gatewayChatCompletion(params: {
     world: ManagedCloudWorld;
@@ -1312,9 +1314,19 @@ export interface BillingThresholdCellDeps {
     modelId: string;
     maxTokens: number;
     prompt: string;
-  }): Promise<{ status: number; costUsd: number | null }>;
+  }): Promise<{ status: number; completionTokens: number; costUsd: number | null }>;
   /** Runs the product's accounting + reconcile passes on the candidate box. */
   runReconcilePasses(world: ManagedCloudWorld): Promise<void>;
+  /**
+   * Runs the product's LiteLLM spend-log IMPORTER on the candidate box
+   * (`run_usage_import` — the debit-side ingest that writes agent_llm_usage_event
+   * rows). run_billing_accounting_pass does NOT call this, so without it the real
+   * gateway spend never reaches get_remaining_credit_usd and the ledger never
+   * moves (the observed "total observed cost 0" red). Returns the imported-row
+   * count for the bounded poll. LiteLLM spend logs lag a few seconds, so the
+   * caller polls import+read.
+   */
+  runUsageImport(world: ManagedCloudWorld): Promise<{ imported: number }>;
   /** Reads the enrollment's budget_status on the candidate box. */
   readBudgetStatus(world: ManagedCloudWorld, enrollmentId: string): Promise<string>;
   /** Runs the durable restore-and-reload releaser NOW (world-close is then a no-op). */
@@ -1380,6 +1392,23 @@ async def main():
     await run_billing_accounting_pass()
     await run_billing_reconcile_pass()
     print(json.dumps({"ran": True}))
+
+asyncio.run(main())
+`;
+
+/**
+ * Runs the product's LiteLLM spend-log importer (the debit-side ingest that
+ * writes agent_llm_usage_event rows the credit balance subtracts). This is the
+ * step run_billing_accounting_pass does NOT do — without it real gateway spend
+ * never reaches get_remaining_credit_usd. Uses the same worker entry the
+ * background loop calls (run_usage_import over its own transaction).
+ */
+const RUN_USAGE_IMPORT_PY = `import asyncio, json
+from proliferate.server.cloud.agent_gateway.worker import run_usage_import_once
+
+async def main():
+    result = await run_usage_import_once()
+    print(json.dumps({"imported": int(result.imported)}))
 
 asyncio.run(main())
 `;
@@ -1469,12 +1498,24 @@ const productionBillingThresholdCellDeps: BillingThresholdCellDeps = {
       throw new Error("billing-threshold: the gateway chat-completion request failed at the transport layer.");
     }
     let costUsd: number | null = null;
-    const body = (await response.json().catch(() => ({}))) as { usage?: { cost?: unknown; total_cost?: unknown } };
+    const body = (await response.json().catch(() => ({}))) as {
+      usage?: { cost?: unknown; total_cost?: unknown; completion_tokens?: unknown };
+    };
     const cost = body.usage?.cost ?? body.usage?.total_cost;
     if (typeof cost === "number") {
       costUsd = cost;
     }
-    return { status: response.status, costUsd };
+    const completionTokens =
+      typeof body.usage?.completion_tokens === "number" ? body.usage.completion_tokens : 0;
+    return { status: response.status, completionTokens, costUsd };
+  },
+  async runUsageImport(world) {
+    if (!world.box) {
+      throw new Error("billing-threshold: no box-exec seam to run the usage importer.");
+    }
+    const result = await world.box.serverPython(RUN_USAGE_IMPORT_PY, { scriptName: "run-usage-import.py" });
+    const parsed = parseLastJsonLine(result.stdout) as { imported?: unknown };
+    return { imported: typeof parsed.imported === "number" ? parsed.imported : 0 };
   },
   async runReconcilePasses(world) {
     if (!world.box) {
@@ -1512,6 +1553,9 @@ const BILLING_REMAINDER_EPSILON = 1e-6;
 const BILLING_POSITION_BALANCE = 0.0001;
 /** Max identical bounded requests to issue while trying to cross the threshold. */
 const BILLING_MAX_CROSSING_REQUESTS = 10;
+/** Bounded import+reconcile+read poll per request — LiteLLM spend logs lag a few seconds. */
+const BILLING_USAGE_IMPORT_POLL_TIMEOUT_MS = 60_000;
+const BILLING_USAGE_IMPORT_POLL_INTERVAL_MS = 3_000;
 
 /**
  * Cell C — billing threshold (frozen spec Cell C, all six obligations):
@@ -1530,6 +1574,12 @@ export async function runBillingThresholdCellLive(
   state: SmokeState,
   actor: AuthenticatedActor,
   deps: BillingThresholdCellDeps = productionBillingThresholdCellDeps,
+  // Bounded import+read poll timing; overridable so offline tests do not wait out
+  // the production window.
+  pollTiming: { timeoutMs: number; intervalMs: number } = {
+    timeoutMs: BILLING_USAGE_IMPORT_POLL_TIMEOUT_MS,
+    intervalMs: BILLING_USAGE_IMPORT_POLL_INTERVAL_MS,
+  },
 ): Promise<FixtureSmokeCellResult> {
   // (a) Read the ORIGINAL remaining credit BEFORE positioning, so restoration can
   // be checked against it. The billing subject is the actor's deterministic
@@ -1558,6 +1608,13 @@ export async function runBillingThresholdCellLive(
   // (d) Observe the product consequence: after the crossing, require (1) remaining
   // credit ≤ 0 AND (2) at least one gate signal — a SECOND request rejected
   // non-2xx, OR budget_status flipped to exhausted.
+  //
+  // The spend does NOT reach the credit ledger by itself: run_billing_accounting_pass
+  // does not import LiteLLM spend logs. The importer is run_usage_import (the
+  // debit-side ingest that writes agent_llm_usage_event rows). So after each real
+  // request we run the importer + the reconcile passes and BOUNDED-poll the
+  // remaining credit (LiteLLM spend logs lag a few seconds), mirroring how
+  // CLOUD-PROVISION-1 polls LiteLLM spend for correlation.
   let totalObservedCost = 0;
   let requestsIssued = 0;
   let crossedRemaining = positioned.effectiveRemainder;
@@ -1576,9 +1633,31 @@ export async function runBillingThresholdCellLive(
       // remaining-credit + gate-signal checks below interpret it.
       break;
     }
-    await deps.runReconcilePasses(world);
+    // A 2xx with zero completion tokens is a FAILED turn (no real product usage),
+    // not a success — fail loudly rather than looping against a no-op request.
+    if (request.completionTokens <= 0) {
+      throw new Error(
+        `billing-threshold: gateway request #${requestsIssued} returned ${request.status} but zero completion ` +
+          "tokens — the request produced no real usage (a silently-failing turn), so it cannot cross the threshold.",
+      );
+    }
     const beforeRead = crossedRemaining;
-    crossedRemaining = await deps.readRemainingCreditUsd(world, billingSubjectId);
+    // Import the LiteLLM spend → ledger, then reconcile; BOUNDED-poll because the
+    // spend log lags a few seconds. Exit the poll as soon as THIS request's spend
+    // has landed (remaining dropped below beforeRead) OR the ledger crossed — the
+    // outer loop then decides whether another request is needed. (Polling for a
+    // crossing alone would spin the full timeout on a request whose cost is fully
+    // imported but not yet enough to cross.)
+    crossedRemaining = await pollUntil(
+      async () => {
+        await deps.runUsageImport(world);
+        await deps.runReconcilePasses(world);
+        return deps.readRemainingCreditUsd(world, billingSubjectId);
+      },
+      (remaining) => remaining <= 0 || remaining < beforeRead,
+      pollTiming.timeoutMs,
+      pollTiming.intervalMs,
+    );
     if (typeof request.costUsd === "number") {
       totalObservedCost += request.costUsd;
     } else {
@@ -1592,8 +1671,9 @@ export async function runBillingThresholdCellLive(
   if (crossedRemaining > 0) {
     throw new Error(
       `billing-threshold: remaining credit did not cross to <= 0 after ${requestsIssued} real request(s) ` +
-        `(observed remaining ${crossedRemaining}, total observed cost ${totalObservedCost}). Each request's cost is ` +
-        "below the positioned balance; widen BILLING_MAX_CROSSING_REQUESTS or lower the positioned balance.",
+        `(observed remaining ${crossedRemaining}, total observed cost ${totalObservedCost}). If the requests ` +
+        "succeeded (2xx, nonzero completion tokens) but the ledger never moved, the LiteLLM usage import (" +
+        "run_usage_import) is not landing spend rows; otherwise widen BILLING_MAX_CROSSING_REQUESTS.",
     );
   }
   const observedRequestCost = totalObservedCost;

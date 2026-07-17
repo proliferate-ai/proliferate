@@ -613,6 +613,32 @@ export function createDefaultStripeTestClockTransport(http: StripeHttp = default
       if (!customerId) {
         throw new Error("stripeTestClockActor: Stripe did not return a customer id.");
       }
+      // A subscription with the default `charge_automatically` collection needs a
+      // default payment method, else Stripe rejects POST /subscriptions with
+      // "This customer has no attached payment source or default payment method"
+      // (observed live). Attach the canonical test card + set it as the customer's
+      // invoice default: create a PaymentMethod from the `tok_visa` test token,
+      // attach it to the customer, then set invoice_settings[default_payment_method].
+      // (test-clock customers accept a real attached test PM.)
+      const paymentMethod = await http.request(secretKey, {
+        method: "POST",
+        path: "/payment_methods",
+        form: { type: "card", "card[token]": "tok_visa" },
+      });
+      const paymentMethodId = typeof paymentMethod.id === "string" ? paymentMethod.id : "";
+      if (!paymentMethodId) {
+        throw new Error("stripeTestClockActor: Stripe did not return a payment method id.");
+      }
+      await http.request(secretKey, {
+        method: "POST",
+        path: `/payment_methods/${paymentMethodId}/attach`,
+        form: { customer: customerId },
+      });
+      await http.request(secretKey, {
+        method: "POST",
+        path: `/customers/${customerId}`,
+        form: { "invoice_settings[default_payment_method]": paymentMethodId },
+      });
       const subscription = await http.request(secretKey, {
         method: "POST",
         path: "/subscriptions",

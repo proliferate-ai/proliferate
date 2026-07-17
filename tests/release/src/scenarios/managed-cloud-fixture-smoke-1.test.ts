@@ -562,13 +562,17 @@ function fakeCellCActor(): AuthenticatedActor {
  * LOOP), total cost 0.0001, restored grants → 5.0 - 0.0001.
  */
 function fakeCellCDeps(
-  opts: { perRequestCost?: number; gateSecondStatus?: number; budgetStatus?: string } = {},
+  opts: { perRequestCost?: number; gateSecondStatus?: number; budgetStatus?: string; completionTokens?: number } = {},
   overrides: Partial<BillingThresholdCellDeps> = {},
 ): { deps: BillingThresholdCellDeps; calls: string[] } {
   const calls: string[] = [];
-  const perRequestCost = opts.perRequestCost ?? 0.00005;
+  const perRequestCost = opts.perRequestCost ?? 0.00006;
   let remaining = 5.0;
   let positioned = false;
+  // Cost incurred by requests but not yet imported into the ledger. The importer
+  // flushes it — so a request's cost lands exactly once regardless of how many
+  // times the bounded poll runs the importer.
+  let pendingCost = 0;
   const deps: BillingThresholdCellDeps = {
     resolveBillingSubjectId: async () => {
       calls.push("resolveSubject");
@@ -594,15 +598,23 @@ function fakeCellCDeps(
       // After crossing, the cell issues one MORE request for the gate signal.
       if (positioned && remaining <= 0) {
         calls.push("gateRequest");
-        return { status: opts.gateSecondStatus ?? 429, costUsd: null };
+        return { status: opts.gateSecondStatus ?? 429, completionTokens: 0, costUsd: null };
       }
       calls.push("crossRequest");
-      return { status: 200, costUsd: perRequestCost };
+      pendingCost = Number((pendingCost + perRequestCost).toFixed(8));
+      return { status: 200, completionTokens: opts.completionTokens ?? 8, costUsd: perRequestCost };
+    },
+    runUsageImport: async () => {
+      calls.push("usageImport");
+      // The importer is what debits the ledger (writes agent_llm_usage_event): it
+      // flushes the pending (un-imported) request cost exactly once.
+      const flushed = pendingCost;
+      pendingCost = 0;
+      remaining = Number((remaining - flushed).toFixed(8));
+      return { imported: flushed > 0 ? 1 : 0 };
     },
     runReconcilePasses: async () => {
       calls.push("reconcile");
-      // Each reconcile after a crossing request debits the request's cost.
-      remaining = Number((remaining - perRequestCost).toFixed(8));
     },
     readBudgetStatus: async () => opts.budgetStatus ?? "exhausted",
     restoreAdjustment: async () => {
@@ -621,36 +633,48 @@ function crossingTotalCost(calls: readonly string[], perRequestCost: number): nu
 }
 
 const CELL_C_STATE = { runTag: "r:s", secretKey: "sk_test_x", prep: fakePrep(), aws: { region: "us-east-1", hostedZoneId: "Z1" } };
+/** Near-instant import+read poll so offline tests never wait the production window. */
+const FAST_POLL = { timeoutMs: 50, intervalMs: 1 };
 
 test("Cell C runs the full arc across a multi-request crossing loop (original→positioned→crossed→gated→restored)", async () => {
   const { deps, calls } = fakeCellCDeps();
-  const result = await runBillingThresholdCellLive(fakeWorld(), CELL_C_STATE, fakeCellCActor(), deps);
+  const result = await runBillingThresholdCellLive(fakeWorld(), CELL_C_STATE, fakeCellCActor(), deps, FAST_POLL);
   assert.match(result.observedTransition, /original=5/);
   assert.match(result.observedTransition, /gated:/);
-  assert.match(result.observedTransition, /restored=4.9999/);
+  assert.match(result.observedTransition, /restored=4.9998/);
   // The crossing took MORE than one request (loop exercised), each cost < balance.
   assert.equal(calls.filter((c) => c === "crossRequest").length, 2);
+  // The usage IMPORTER ran (the step that debits the ledger) — not just reconcile.
+  assert.ok(calls.includes("usageImport"));
   // Arc order: original read BEFORE positioning; restore AFTER the crossing.
   assert.ok(calls.indexOf("read:5") < calls.indexOf("position"));
   assert.ok(calls.indexOf("crossRequest") < calls.indexOf("restore"));
+  assert.ok(calls.indexOf("usageImport") < calls.indexOf("restore"));
 });
 
 test("Cell C fails when the ledger never crosses within the request-loop budget", async () => {
   const { deps } = fakeCellCDeps({}, {
-    runReconcilePasses: async () => {
-      /* never debits → remaining stays positive → loop exhausts */
-    },
+    // Importer never lands spend → remaining never moves → loop exhausts.
+    runUsageImport: async () => ({ imported: 0 }),
   });
   await assert.rejects(
-    () => runBillingThresholdCellLive(fakeWorld(), CELL_C_STATE, fakeCellCActor(), deps),
+    () => runBillingThresholdCellLive(fakeWorld(), CELL_C_STATE, fakeCellCActor(), deps, FAST_POLL),
     /did not cross to <= 0/,
+  );
+});
+
+test("Cell C fails loudly when a gateway request returns 2xx but zero completion tokens (silent no-op turn)", async () => {
+  const { deps } = fakeCellCDeps({ completionTokens: 0 });
+  await assert.rejects(
+    () => runBillingThresholdCellLive(fakeWorld(), CELL_C_STATE, fakeCellCActor(), deps, FAST_POLL),
+    /zero completion\s*\n?\s*tokens|zero completion tokens/,
   );
 });
 
 test("Cell C fails when no product-side gate signal is observed", async () => {
   const { deps } = fakeCellCDeps({ gateSecondStatus: 200, budgetStatus: "ok" });
   await assert.rejects(
-    () => runBillingThresholdCellLive(fakeWorld(), CELL_C_STATE, fakeCellCActor(), deps),
+    () => runBillingThresholdCellLive(fakeWorld(), CELL_C_STATE, fakeCellCActor(), deps, FAST_POLL),
     /NO product-side gate signal/,
   );
 });
@@ -662,14 +686,14 @@ test("Cell C fails when the restored remainder != originalRemaining - totalCost"
     },
   });
   await assert.rejects(
-    () => runBillingThresholdCellLive(fakeWorld(), CELL_C_STATE, fakeCellCActor(), deps),
+    () => runBillingThresholdCellLive(fakeWorld(), CELL_C_STATE, fakeCellCActor(), deps, FAST_POLL),
     /restored remaining/,
   );
 });
 
 test("Cell C never leaks the raw virtual key into the observed transition", async () => {
   const { deps } = fakeCellCDeps();
-  const result = await runBillingThresholdCellLive(fakeWorld(), CELL_C_STATE, fakeCellCActor(), deps);
+  const result = await runBillingThresholdCellLive(fakeWorld(), CELL_C_STATE, fakeCellCActor(), deps, FAST_POLL);
   assert.ok(!result.observedTransition.includes("sk-raw-virtual-key"));
   assert.ok(!result.externalIds.some((id) => id.includes("sk-raw-virtual-key")));
 });

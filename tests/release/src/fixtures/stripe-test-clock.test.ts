@@ -316,6 +316,7 @@ function recordingHttp(): { http: StripeHttp; reqs: Array<{ method: string; path
       reqs.push({ method: req.method, path: req.path });
       if (req.path === "/test_helpers/test_clocks") return { id: "tc_9" };
       if (req.path === "/customers") return { id: "cus_9" };
+      if (req.path === "/payment_methods") return { id: "pm_9" };
       if (req.path === "/subscriptions") return { id: "sub_9" };
       return {};
     },
@@ -346,9 +347,35 @@ test("HTTP contract: createClock/createCustomerOnClock/advance use POST on their
   assert.deepEqual(reqs, [
     { method: "POST", path: "/test_helpers/test_clocks" },
     { method: "POST", path: "/customers" },
+    // A default payment method is attached before subscribing (Stripe rejects a
+    // charge_automatically subscription on a customer with no default PM).
+    { method: "POST", path: "/payment_methods" },
+    { method: "POST", path: "/payment_methods/pm_9/attach" },
+    { method: "POST", path: "/customers/cus_9" },
     { method: "POST", path: "/subscriptions" },
     { method: "POST", path: "/test_helpers/test_clocks/tc_9/advance" },
   ]);
+});
+
+test("HTTP contract: createCustomerOnClock attaches tok_visa as the default payment method", async () => {
+  const forms: Array<{ path: string; form?: Record<string, string> }> = [];
+  const http: StripeHttp = {
+    async request(_k, req) {
+      forms.push({ path: req.path, form: req.form });
+      if (req.path === "/customers") return { id: "cus_9" };
+      if (req.path === "/payment_methods") return { id: "pm_9" };
+      if (req.path === "/subscriptions") return { id: "sub_9" };
+      return {};
+    },
+  };
+  const transport = createDefaultStripeTestClockTransport(http);
+  await transport.createCustomerOnClock({ secretKey: "sk_test_x", testClockId: "tc_9", priceId: "price_1", metadata: {} });
+  const pm = forms.find((f) => f.path === "/payment_methods");
+  assert.deepEqual(pm?.form, { type: "card", "card[token]": "tok_visa" });
+  const attach = forms.find((f) => f.path === "/payment_methods/pm_9/attach");
+  assert.deepEqual(attach?.form, { customer: "cus_9" });
+  const setDefault = forms.find((f) => f.path === "/customers/cus_9");
+  assert.deepEqual(setDefault?.form, { "invoice_settings[default_payment_method]": "pm_9" });
 });
 
 test("HTTP contract: deleteClock/deleteCustomer swallow resource_missing (idempotent cleanup)", async () => {
