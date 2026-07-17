@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-import asyncio
 from collections.abc import AsyncIterator
+from functools import partial
 from importlib.metadata import version as package_version
 from typing import cast
 
+import h11
+import httpcore
 import httpx
 import pytest
 from fastapi import Request, WebSocket
@@ -151,7 +153,9 @@ async def test_http_proxy_preserves_path_query_and_injects_sandbox_auth(
 
 
 @pytest.mark.asyncio
-async def test_incomplete_chunk_message_matches_pinned_http_stack() -> None:
+async def test_incomplete_chunk_message_matches_pinned_http_stack(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     # Keep dependency upgrades coupled to re-verifying the exact parser message
     # that the SSE-only production guard recognizes.
     assert (
@@ -160,44 +164,38 @@ async def test_incomplete_chunk_message_matches_pinned_http_stack() -> None:
         package_version("h11"),
     ) == ("0.28.1", "1.0.9", "0.16.0")
 
-    async def close_incomplete_chunk(
-        reader: asyncio.StreamReader,
-        writer: asyncio.StreamWriter,
-    ) -> None:
-        try:
-            await reader.readuntil(b"\r\n\r\n")
-            writer.write(
-                b"HTTP/1.1 200 OK\r\n"
-                b"Content-Type: text/event-stream\r\n"
-                b"Transfer-Encoding: chunked\r\n"
-                b"Connection: close\r\n\r\n"
-                b"20\r\n"
-                b"event: one\ndata: {}\n\n"
-            )
-            await writer.drain()
-        finally:
-            writer.close()
-            await writer.wait_closed()
+    incomplete_response = (
+        b"HTTP/1.1 200 OK\r\n"
+        b"Content-Type: text/event-stream\r\n"
+        b"Transfer-Encoding: chunked\r\n"
+        b"Connection: close\r\n\r\n"
+        b"20\r\n"
+        b"event: one\ndata: {}\n\n"
+    )
+    backend = httpcore.AsyncMockBackend([incomplete_response])
+    # Inject an AsyncNetworkBackend/AsyncNetworkStream without opening a socket;
+    # HTTPX still owns the real connection pool and exception mapping.
+    with monkeypatch.context() as patch:
+        patch.setattr(
+            httpcore,
+            "AsyncConnectionPool",
+            partial(httpcore.AsyncConnectionPool, network_backend=backend),
+        )
+        transport = httpx.AsyncHTTPTransport(trust_env=False)
 
-    server = await asyncio.start_server(close_incomplete_chunk, "127.0.0.1", 0)
-    try:
-        sockets = server.sockets
-        assert sockets
-        _host, port = cast(tuple[str, int], sockets[0].getsockname())
-
-        async with (
-            httpx.AsyncClient(trust_env=False) as client,
-            client.stream("GET", f"http://127.0.0.1:{port}/") as response,
-        ):
-            assert response.headers["content-type"] == "text/event-stream"
-            with pytest.raises(httpx.RemoteProtocolError) as caught:
-                async for _chunk in response.aiter_raw():
-                    pass
-    finally:
-        server.close()
-        await server.wait_closed()
+    async with (
+        httpx.AsyncClient(transport=transport) as client,
+        client.stream("GET", "http://in-memory.test/") as response,
+    ):
+        assert response.headers["content-type"] == "text/event-stream"
+        with pytest.raises(httpx.RemoteProtocolError) as caught:
+            async for _chunk in response.aiter_raw():
+                pass
 
     assert str(caught.value) == proxy._INCOMPLETE_CHUNKED_READ
+    core_error = caught.value.__cause__
+    assert isinstance(core_error, httpcore.RemoteProtocolError)
+    assert isinstance(core_error.args[0], h11.RemoteProtocolError)
 
 
 @pytest.mark.asyncio
