@@ -50,6 +50,7 @@ import { resolveDesktopRuntimeUrlForWorkspace } from "#product/hooks/sessions/wo
 import { annotateLatencyFlow } from "#product/lib/infra/measurement/measurement-port";
 import { logLatency } from "#product/lib/infra/measurement/measurement-port";
 import {
+  publishSessionCreationIfCurrent,
   shouldDiscardSupersededSessionCreation,
 } from "#product/hooks/sessions/workflows/session-creation-supersession";
 import { filterReplacedSessionTombstones } from "#product/hooks/sessions/workflows/session-replacement-tombstones";
@@ -184,17 +185,24 @@ async function runSessionCreationMaterialization({
       if (await discardIfSuperseded(pendingSessionId, lifecycle)) {
         return pendingSessionId;
       }
-      return materializeExistingSession({
-        existingProjectedRecord,
-        existingSession,
-        fallbackModelId: options.modelId,
-        latencyFlowId: options.latencyFlowId,
-        pendingSessionId,
-        resolvedModeId,
-        upsertWorkspaceSessionRecord,
-        workspaceId,
-        launchIntentId: options.launchIntentId,
+      await publishSessionCreationIfCurrent({
+        sessionId: pendingSessionId,
+        onSuperseded: () => discardIfSuperseded(pendingSessionId, lifecycle),
+        publish: () => {
+          materializeExistingSession({
+            existingProjectedRecord,
+            existingSession,
+            fallbackModelId: options.modelId,
+            latencyFlowId: options.latencyFlowId,
+            pendingSessionId,
+            resolvedModeId,
+            upsertWorkspaceSessionRecord,
+            workspaceId,
+            launchIntentId: options.launchIntentId,
+          });
+        },
       });
+      return pendingSessionId;
     }
   }
 
@@ -331,46 +339,55 @@ async function runSessionCreationMaterialization({
     transcriptHydrated: true,
   };
 
-  materializeSessionRecord(pendingSessionId, launchedSession.id, realRecord);
-  useSessionIntentStore.getState().bindMaterializedSession(
-    pendingSessionId,
-    launchedSession.id,
-  );
-  requeuePromptIntentsBlockedOnMaterialization({
-    clientSessionId: pendingSessionId,
-    materializedSessionId: launchedSession.id,
-    workspaceId,
-  });
-  logLatency("session.create.materialized", {
-    clientSessionId: pendingSessionId,
-    materializedSessionId: launchedSession.id,
-    workspaceId,
-    agentKind: options.agentKind,
-    modelId: launchedSession.modelId ?? options.modelId,
-    modeId: launchedSession.modeId ?? resolvedModeId,
-    status: realRecord.status,
-    executionPhase: launchedSession.executionSummary?.phase ?? null,
-    pendingInteractionCount: launchedSession.executionSummary?.pendingInteractions?.length ?? 0,
-    activeSessionId: useSessionSelectionStore.getState().activeSessionId,
-  });
-  if (useSessionSelectionStore.getState().activeSessionId === pendingSessionId) {
-    rememberLastViewedSession(workspaceId, launchedSession.id);
-  }
-  upsertWorkspaceSessionRecord(workspaceId, launchedSession);
-  trackProductEvent("chat_session_created", {
-    workspace_kind: cloudWorkspaceId ? "cloud" : "local",
-    agent_kind: options.agentKind,
-  });
-
-  if (options.launchIntentId) {
-    useChatLaunchIntentStore.getState().markMaterializedIfActive(
-      options.launchIntentId,
-      {
+  const published = await publishSessionCreationIfCurrent({
+    sessionId: pendingSessionId,
+    onSuperseded: () => discardIfSuperseded(pendingSessionId, lifecycle),
+    publish: () => {
+      materializeSessionRecord(pendingSessionId, launchedSession.id, realRecord);
+      useSessionIntentStore.getState().bindMaterializedSession(
+        pendingSessionId,
+        launchedSession.id,
+      );
+      requeuePromptIntentsBlockedOnMaterialization({
         clientSessionId: pendingSessionId,
+        materializedSessionId: launchedSession.id,
         workspaceId,
-        sessionId: launchedSession.id,
-      },
-    );
+      });
+      logLatency("session.create.materialized", {
+        clientSessionId: pendingSessionId,
+        materializedSessionId: launchedSession.id,
+        workspaceId,
+        agentKind: options.agentKind,
+        modelId: launchedSession.modelId ?? options.modelId,
+        modeId: launchedSession.modeId ?? resolvedModeId,
+        status: realRecord.status,
+        executionPhase: launchedSession.executionSummary?.phase ?? null,
+        pendingInteractionCount: launchedSession.executionSummary?.pendingInteractions?.length ?? 0,
+        activeSessionId: useSessionSelectionStore.getState().activeSessionId,
+      });
+      if (useSessionSelectionStore.getState().activeSessionId === pendingSessionId) {
+        rememberLastViewedSession(workspaceId, launchedSession.id);
+      }
+      upsertWorkspaceSessionRecord(workspaceId, launchedSession);
+      trackProductEvent("chat_session_created", {
+        workspace_kind: cloudWorkspaceId ? "cloud" : "local",
+        agent_kind: options.agentKind,
+      });
+
+      if (options.launchIntentId) {
+        useChatLaunchIntentStore.getState().markMaterializedIfActive(
+          options.launchIntentId,
+          {
+            clientSessionId: pendingSessionId,
+            workspaceId,
+            sessionId: launchedSession.id,
+          },
+        );
+      }
+    },
+  });
+  if (!published) {
+    return pendingSessionId;
   }
 
   lifecycle.discardCreatedSession = null;
