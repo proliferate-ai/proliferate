@@ -1,5 +1,6 @@
 import { isSessionEmptyWithIntents } from "#product/lib/domain/sessions/session-emptiness";
 import {
+  createSessionRecordFromSummary,
   getSessionRecord,
   putSessionRecord,
   removeSessionRecord,
@@ -27,11 +28,17 @@ import {
 import {
   runTrackedReplacementDismissal,
 } from "#product/hooks/sessions/workflows/session-replacement-dismissals";
+import type {
+  WorkspaceSessionCacheSnapshot,
+} from "#product/hooks/access/anyharness/sessions/use-workspace-session-cache";
 
 const DISMISS_RETRY_DELAYS_MS = [0, 100, 500] as const;
 
 export interface EmptySessionReplacementDeps {
   closeSessionSlotStream: (sessionId: string) => void;
+  getWorkspaceSessionCacheSnapshot?: (
+    workspaceId: string,
+  ) => WorkspaceSessionCacheSnapshot;
   removeWorkspaceSessionRecord: (workspaceId: string, sessionId: string) => void;
   dismissSessionMutation: ReturnType<typeof useDismissSessionMutation>;
   /**
@@ -58,7 +65,8 @@ export function beginEmptySessionReplacement(
   workspaceId: string | null | undefined,
   deps: EmptySessionReplacementDeps,
 ): EmptySessionReplacementTransaction | null {
-  const record = getSessionRecord(sessionId);
+  const record = getSessionRecord(sessionId)
+    ?? resolveAuthoritativeReplacementRecord(sessionId, workspaceId, deps);
   if (!record) {
     return null;
   }
@@ -193,6 +201,30 @@ export function beginEmptySessionReplacement(
       restoreCapturedSession();
     },
   };
+}
+
+function resolveAuthoritativeReplacementRecord(
+  sessionId: string,
+  workspaceId: string | null | undefined,
+  deps: EmptySessionReplacementDeps,
+) {
+  if (!workspaceId || !deps.getWorkspaceSessionCacheSnapshot) {
+    return null;
+  }
+  const snapshot = deps.getWorkspaceSessionCacheSnapshot(workspaceId);
+  if (!snapshot.dataUpdatedAt || snapshot.isInvalidated) {
+    return null;
+  }
+  const session = snapshot.sessions?.find((candidate) =>
+    candidate.id === sessionId
+    && candidate.workspaceId === workspaceId
+    && !candidate.dismissedAt
+  );
+  return session
+    ? createSessionRecordFromSummary(session, workspaceId, {
+      sessionRelationship: { kind: "root" },
+    })
+    : null;
 }
 
 async function dismissMaterializedSession(

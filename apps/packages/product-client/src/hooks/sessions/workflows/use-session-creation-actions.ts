@@ -73,11 +73,10 @@ export function useSessionCreationActions() {
   const { promptSession } = useSessionPromptWorkflow();
   const { activateSession, closeSessionSlotStream } = useSessionRuntimeActions();
   const { ensureCloudAgentCatalog } = useCloudAgentCatalogCache();
-  const { upsertWorkspaceSessionRecord, removeWorkspaceSessionRecord } = useWorkspaceSessionCache();
+  const { getWorkspaceSessionCacheSnapshot, removeWorkspaceSessionRecord, upsertWorkspaceSessionRecord } = useWorkspaceSessionCache();
   const dismissSessionMutation = useDismissSessionMutation();
   const showToast = useToastStore((state) => state.show);
   const telemetry = useProductTelemetry();
-
   const createSessionWithResolvedConfig = useCallback(async function createWithResolvedConfig(
     options: CreateSessionWithResolvedConfigOptions,
   ): Promise<string> {
@@ -94,7 +93,6 @@ export function useSessionCreationActions() {
     if (blockedError) {
       throw blockedError;
     }
-
     const hasPrompt = hasPromptContent(options.text, options.blocks)
       || (options.attachmentSnapshots?.length ?? 0) > 0;
     const promptId = hasPrompt ? options.promptId ?? createPromptId() : options.promptId ?? null;
@@ -258,6 +256,7 @@ export function useSessionCreationActions() {
         workspaceId,
         {
           closeSessionSlotStream,
+          getWorkspaceSessionCacheSnapshot,
           removeWorkspaceSessionRecord,
           dismissSessionMutation,
           captureException: telemetry.captureException,
@@ -386,6 +385,7 @@ export function useSessionCreationActions() {
     closeSessionSlotStream,
     dismissSessionMutation,
     ensureCloudAgentCatalog,
+    getWorkspaceSessionCacheSnapshot,
     getWorkspaceRuntimeBlockError,
     invalidateWorkspaceCollectionsForRuntime,
     runtimeUrl,
