@@ -1292,18 +1292,20 @@ qualification-selfhost:
 # credentials themselves stay ambient (the `aws` CLI), never a manifest var.
 QUALIFICATION_MANAGED_CLOUD_BASE_DIR ?= $(CURDIR)/tests/release/.output/managed-cloud-world
 # Managed-cloud scenario selection. Defaults to CLOUD-PROVISION-1 alone so
-# today's behaviour is byte-identical; override to add the fixture smoke, e.g.
-# CLOUD_SCENARIOS="MANAGED-CLOUD-FIXTURE-SMOKE-1,CLOUD-PROVISION-1".
-# ORDERING MATTERS when running both: the runner executes scenarios in the
-# --scenarios selection order (selectScenarios preserves it; execute.ts does not
-# re-sort), sequentially, one world fully closed before the next opens. Put the
-# fixture smoke FIRST — its world lives in a SCOPED subdir (<runDir>/fixture-smoke)
-# so its run_directory cleanup removes only that subdir. CLOUD-PROVISION-1 (last)
-# still finds the builder's candidate artifacts under the parent runDir and, as
-# the final scenario, may delete the parent runDir as it always has. Both worlds
-# reuse the same mcq-<run>-<shard> resource names + template alias, but never
-# overlap in time (sequential), so there is no collision; a failed smoke cleanup
-# makes CP-1's provisioning fail loudly (acceptable, fail-closed).
+# today's behaviour is byte-identical; set it to run a DIFFERENT single scenario,
+# e.g. CLOUD_SCENARIOS="MANAGED-CLOUD-FIXTURE-SMOKE-1".
+#
+# DO NOT put BOTH managed-cloud scenarios in one CLOUD_SCENARIOS invocation.
+# --scenarios selection order does NOT control execution order: the runner sorts
+# ALL planned cells lexicographically by cell_id (tests/release/src/runner/plan.ts
+# — "sorted by cell_id regardless of declaration or selector order", a deliberate
+# contract). "CLOUD-PROVISION-1/..." sorts before "MANAGED-CLOUD-FIXTURE-SMOKE-1/
+# ...", so CP-1 always runs first and its run_directory cleanup (rm -rf the shared
+# parent runDir) deletes the builder's candidate artifacts the smoke's world then
+# copies from (live-proven ENOENT on artifacts/server.tar). Run each scenario as
+# its OWN invocation with its OWN run dir (distinct PROFILE → distinct run
+# identity → disjoint run dir + mcq-<runId>-* names + ledger) — see the two
+# sequential steps in .github/workflows/release-e2e.yml's managed-cloud job.
 CLOUD_SCENARIOS ?= CLOUD-PROVISION-1
 
 qualification-managed-cloud:

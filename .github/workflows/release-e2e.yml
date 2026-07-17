@@ -859,6 +859,35 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     environment: Qualification
+    # Shared across BOTH runner invocations below (fixture smoke + CP-1). Mapped
+    # directly from the protected `Qualification` environment; arbitrary PR code
+    # never runs this job or sees these.
+    env:
+      AGENT_GATEWAY_LITELLM_BASE_URL: ${{ vars.AGENT_GATEWAY_LITELLM_BASE_URL }}
+      AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL: ${{ vars.AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL }}
+      AGENT_GATEWAY_LITELLM_MASTER_KEY: ${{ secrets.AGENT_GATEWAY_LITELLM_MASTER_KEY }}
+      RELEASE_E2E_E2B_API_KEY: ${{ secrets.RELEASE_E2E_E2B_API_KEY }}
+      RELEASE_E2E_E2B_TEAM_ID: ${{ vars.RELEASE_E2E_E2B_TEAM_ID }}
+      RELEASE_E2E_CLOUD_AWS_REGION: ${{ vars.RELEASE_E2E_CLOUD_AWS_REGION }}
+      RELEASE_E2E_CLOUD_ROUTE53_ZONE_ID: ${{ vars.RELEASE_E2E_CLOUD_ROUTE53_ZONE_ID }}
+      RELEASE_E2E_CLOUD_GITHUB_APP_ID: ${{ vars.RELEASE_E2E_CLOUD_GITHUB_APP_ID }}
+      RELEASE_E2E_CLOUD_GITHUB_APP_CLIENT_ID: ${{ vars.RELEASE_E2E_CLOUD_GITHUB_APP_CLIENT_ID }}
+      RELEASE_E2E_CLOUD_GITHUB_APP_INSTALLATION_ID: ${{ vars.RELEASE_E2E_CLOUD_GITHUB_APP_INSTALLATION_ID }}
+      RELEASE_E2E_CLOUD_GITHUB_APP_PRIVATE_KEY: ${{ secrets.RELEASE_E2E_CLOUD_GITHUB_APP_PRIVATE_KEY }}
+      RELEASE_E2E_CLOUD_GITHUB_APP_CLIENT_SECRET: ${{ secrets.RELEASE_E2E_CLOUD_GITHUB_APP_CLIENT_SECRET }}
+      # MANAGED-CLOUD-FIXTURE-SMOKE-1: the Stripe TEST-mode key the fixture smoke
+      # runs one bounded real test-mode op against (same secret the Tier-2 billing
+      # job maps). A live key fails the smoke closed. (Unused by the CP-1 step.)
+      STRIPE_TEST_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
+      # MCW-004: optional override of the SSM parameter NAME holding the durable D2
+      # bot refresh-token seed (not a credential; value read/written via ambient
+      # AWS creds). Empty is fine — resolver falls back to the default parameter.
+      RELEASE_E2E_CLOUD_GITHUB_BOT_SEED_SSM_PARAMETER: ${{ vars.RELEASE_E2E_CLOUD_GITHUB_BOT_SEED_SSM_PARAMETER }}
+      # AWS credentials stay ambient (the `aws` CLI reads them directly), never a
+      # manifest var — matching the self-host precedent. The same credentials this
+      # job uses for EC2/Route53 are what the SSM bot-seed fallback shells out with.
+      AWS_ACCESS_KEY_ID: ${{ secrets.RELEASE_E2E_CLOUD_AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.RELEASE_E2E_CLOUD_AWS_SECRET_ACCESS_KEY }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -900,52 +929,46 @@ jobs:
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build the six exact candidates and run MANAGED-CLOUD-FIXTURE-SMOKE-1 + CLOUD-PROVISION-1 (strict)
+      # The two scenarios run as SEPARATE runner invocations with SEPARATE run
+      # dirs (distinct PROFILE → distinct run identity → distinct run dir, mcq-
+      # <runId>-* provider names, ledger, and world). This is REQUIRED, not a
+      # convenience: the runner sorts ALL planned cells lexicographically by
+      # cell_id (tests/release/src/runner/plan.ts — a deliberate contract), so
+      # --scenarios selection order does NOT control execution order. A single
+      # invocation of both scenarios would run "CLOUD-PROVISION-1/..." before
+      # "MANAGED-CLOUD-FIXTURE-SMOKE-1/..." and CP-1's run_directory cleanup
+      # (rm -rf the shared parent runDir) would delete the builder's candidate
+      # artifacts the smoke's world construction then copies from (live-proven
+      # ENOENT on artifacts/server.tar). Separate invocations keep the run dirs
+      # disjoint. The steps are sequential so only ONE live cloud world exists at
+      # a time. Each invocation builds its own candidates (accepted double-build
+      # cost; the dedicated Actions split PR owns collapsing that).
+      - name: Build candidates and run MANAGED-CLOUD-FIXTURE-SMOKE-1 (strict)
         env:
-          # Mapped directly from the protected `Qualification` environment,
-          # same LiteLLM inputs as local-world-smoke-1 plus the cloud-only
-          # inputs (tests/release/src/config/env-manifest.ts). Arbitrary PR
-          # code never runs this job or sees these.
-          AGENT_GATEWAY_LITELLM_BASE_URL: ${{ vars.AGENT_GATEWAY_LITELLM_BASE_URL }}
-          AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL: ${{ vars.AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL }}
-          AGENT_GATEWAY_LITELLM_MASTER_KEY: ${{ secrets.AGENT_GATEWAY_LITELLM_MASTER_KEY }}
-          RELEASE_E2E_E2B_API_KEY: ${{ secrets.RELEASE_E2E_E2B_API_KEY }}
-          RELEASE_E2E_E2B_TEAM_ID: ${{ vars.RELEASE_E2E_E2B_TEAM_ID }}
-          RELEASE_E2E_CLOUD_AWS_REGION: ${{ vars.RELEASE_E2E_CLOUD_AWS_REGION }}
-          RELEASE_E2E_CLOUD_ROUTE53_ZONE_ID: ${{ vars.RELEASE_E2E_CLOUD_ROUTE53_ZONE_ID }}
-          RELEASE_E2E_CLOUD_GITHUB_APP_ID: ${{ vars.RELEASE_E2E_CLOUD_GITHUB_APP_ID }}
-          RELEASE_E2E_CLOUD_GITHUB_APP_CLIENT_ID: ${{ vars.RELEASE_E2E_CLOUD_GITHUB_APP_CLIENT_ID }}
-          RELEASE_E2E_CLOUD_GITHUB_APP_INSTALLATION_ID: ${{ vars.RELEASE_E2E_CLOUD_GITHUB_APP_INSTALLATION_ID }}
-          RELEASE_E2E_CLOUD_GITHUB_APP_PRIVATE_KEY: ${{ secrets.RELEASE_E2E_CLOUD_GITHUB_APP_PRIVATE_KEY }}
-          RELEASE_E2E_CLOUD_GITHUB_APP_CLIENT_SECRET: ${{ secrets.RELEASE_E2E_CLOUD_GITHUB_APP_CLIENT_SECRET }}
-          # MANAGED-CLOUD-FIXTURE-SMOKE-1: the Stripe TEST-mode key the fixture
-          # smoke runs one bounded real test-mode op against (same secret the
-          # Tier-2 billing job maps). A live key fails the smoke closed.
-          STRIPE_TEST_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
-          # MCW-004: optional override of the SSM parameter NAME holding the
-          # durable D2 bot refresh-token seed (not a credential itself — the
-          # value is read/written via the ambient AWS creds below). Empty is
-          # fine; the resolver falls back to DEFAULT_BOT_SEED_SSM_PARAMETER.
-          RELEASE_E2E_CLOUD_GITHUB_BOT_SEED_SSM_PARAMETER: ${{ vars.RELEASE_E2E_CLOUD_GITHUB_BOT_SEED_SSM_PARAMETER }}
-          # AWS credentials stay ambient (the `aws` CLI reads them directly),
-          # never a manifest var — matching the self-host precedent. The same
-          # credentials this job already uses for EC2/Route53 are what the
-          # SSM bot-seed fallback (box-seeds.ts) shells out with.
-          AWS_ACCESS_KEY_ID: ${{ secrets.RELEASE_E2E_CLOUD_AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.RELEASE_E2E_CLOUD_AWS_SECRET_ACCESS_KEY }}
-          # Same bounded, secret-free diagnostics convention as local-world-smoke-1.
+          # Distinct per-step debug dir (suffix -smoke) so the two invocations do
+          # not clobber each other's diagnostics.
+          MANAGED_CLOUD_SMOKE_DEBUG_DIR: ${{ github.workspace }}/tests/release/.output/managed-cloud-world/qlc-ci-${{ github.run_id }}-${{ github.run_attempt }}-smoke/debug/logs
+        run: |
+          set -euo pipefail
+          make qualification-managed-cloud \
+            PROFILE="ci-${{ github.run_id }}-${{ github.run_attempt }}-smoke" \
+            BEHAVIOR=strict \
+            CLOUD_SCENARIOS="MANAGED-CLOUD-FIXTURE-SMOKE-1"
+
+      - name: Build candidates and run CLOUD-PROVISION-1 (strict)
+        # `always()` so a red fixture smoke still yields the CP-1 regression
+        # signal. A FAILED earlier step already fails the job even though this one
+        # runs (GitHub sets job conclusion to failure), so both must be green for
+        # the job to pass — no extra guard step needed.
+        if: always()
+        env:
           MANAGED_CLOUD_SMOKE_DEBUG_DIR: ${{ github.workspace }}/tests/release/.output/managed-cloud-world/qlc-ci-${{ github.run_id }}-${{ github.run_attempt }}/debug/logs
         run: |
           set -euo pipefail
-          # Fixture smoke FIRST: its world lives in a SCOPED runDir subdir so its
-          # cleanup never deletes the shared builder artifacts; CLOUD-PROVISION-1
-          # runs last and (as the final scenario) may delete the parent runDir as
-          # it always has. Order is honored by the runner (selection order,
-          # sequential, no re-sort). See the qualification-managed-cloud comment.
+          # Default CLOUD_SCENARIOS (CLOUD-PROVISION-1 alone).
           make qualification-managed-cloud \
             PROFILE="ci-${{ github.run_id }}-${{ github.run_attempt }}" \
-            BEHAVIOR=strict \
-            CLOUD_SCENARIOS="MANAGED-CLOUD-FIXTURE-SMOKE-1,CLOUD-PROVISION-1"
+            BEHAVIOR=strict
 
       - name: Upload V4 report and bounded diagnostic logs
         if: always()
