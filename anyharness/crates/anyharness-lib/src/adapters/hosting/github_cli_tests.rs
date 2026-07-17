@@ -249,6 +249,12 @@ fn reduces_pr_view_check_rollup_contexts() {
 
 #[test]
 fn classifies_gh_failures() {
+    let missing_remote = classify_gh_failure("no git remotes found".into());
+    assert!(matches!(
+        missing_remote,
+        GhError::UnsupportedRemote(message)
+            if message == "repository has no git remotes configured"
+    ));
     assert!(matches!(
         classify_gh_failure("To get started with GitHub CLI, please run: gh auth login".into()),
         GhError::AuthRequired(_)
