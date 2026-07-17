@@ -51,6 +51,11 @@ export const MANAGED_CLOUD_CLEANUP_KINDS = [
   "callback_relay_process",
   "stripe_test_clock",
   "stripe_customer",
+  // ── Appended for MANAGED-CLOUD-FIXTURE-SMOKE-1 (shared fixture live smoke).
+  // Only registered when that scenario runs; folded into the
+  // `stripeFixturesDeleted` evidence category below. ──────────────────────────
+  "stripe_webhook_endpoint",
+  "stripe_product_price",
 ] as const satisfies readonly CleanupResourceKind[];
 
 export type ManagedCloudCleanupKind = (typeof MANAGED_CLOUD_CLEANUP_KINDS)[number];
@@ -110,7 +115,16 @@ export const MANAGED_CLOUD_EVIDENCE_CATEGORIES = {
   // ── Appended for PR 6 (shared fixture layer). ──────────────────────────────
   billingFixtureCleared: ["billing_fixture_adjustment"],
   relayStopped: ["callback_relay_spool", "callback_relay_process"],
-  stripeFixturesDeleted: ["stripe_test_clock", "stripe_customer"],
+  // MANAGED-CLOUD-FIXTURE-SMOKE-1 folds its run-scoped Stripe webhook endpoint
+  // and product+price into the same stripeFixturesDeleted category as the test
+  // clock + customer, so one boolean covers "every run-owned Stripe resource
+  // deleted/deactivated".
+  stripeFixturesDeleted: [
+    "stripe_test_clock",
+    "stripe_customer",
+    "stripe_webhook_endpoint",
+    "stripe_product_price",
+  ],
 } satisfies Record<string, CleanupResourceKind[]>;
 
 /** One registered releaser plus the ledger entry that shadows it durably. */

@@ -75,6 +75,20 @@ export type CleanupResourceKind =
   | "callback_relay_process"
   | "stripe_test_clock"
   | "stripe_customer"
+  // ── Appended for MANAGED-CLOUD-FIXTURE-SMOKE-1 (shared fixture live smoke).
+  // Registered-before-create, reverse-order-reconcile; released by the same
+  // cloud cleanup stack (worlds/managed-cloud/cleanup-kinds.ts) and folded into
+  // the `stripeFixturesDeleted` evidence category. None fire unless the fixture
+  // smoke scenario runs, so a run that omits it registers none of them. ────────
+  //   - stripe_webhook_endpoint: the run-scoped Stripe TEST-mode webhook endpoint
+  //     (we_…) the smoke creates so a real test-mode op fires a signed delivery;
+  //     released by DELETE /v1/webhook_endpoints/{id}.
+  //   - stripe_product_price: the run-scoped Stripe TEST-mode product+price the
+  //     test-clock cell subscribes to; released by DEACTIVATING both (Stripe
+  //     cannot delete a price — POST /prices/{id} active=false + archive the
+  //     product), a bounded deactivation of run-owned resources.
+  | "stripe_webhook_endpoint"
+  | "stripe_product_price"
   // Self-host world (PR 7 — append-only). CloudFormation-wrapper posture
   // resource kinds the PR 7 workstream registers/releases the same way.
   | "cloudformation_stack"
