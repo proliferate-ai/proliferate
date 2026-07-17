@@ -978,5 +978,6 @@ jobs:
           path: |
             tests/release/.output/managed-cloud-world/*/*/evidence/
             tests/release/.output/managed-cloud-world/*/*/logs/
+            tests/release/.output/managed-cloud-world/*/debug/logs/
           retention-days: 7
           if-no-files-found: ignore

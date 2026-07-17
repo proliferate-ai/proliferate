@@ -24,7 +24,8 @@ import {
   killProviderSandbox,
 } from "../fixtures/e2b-verify.js";
 import { githubAuthorization, type GithubAuthorizationBoundary } from "../fixtures/github-authorization.js";
-import { productPage, type ProductPage } from "../fixtures/product-page.js";
+import { productPage, resolveDiagnosticsDir, type ProductPage } from "../fixtures/product-page.js";
+import { scrubSecretText } from "../fixtures/redact-diagnostics.js";
 import type { BoxExec } from "../worlds/managed-cloud/box-exec.js";
 import {
   DEFAULT_BOT_SEED_SSM_PARAMETER,
@@ -1561,6 +1562,14 @@ export function createCloudProvision1Driver(
       }
       const reply = await readAssistantReplyFromPage(page.page, 20_000);
       return { reply };
+    } catch (uiError) {
+      // Env-gated cloud browser-turn diagnostics: dump the DOM/screenshot, the
+      // console+network sinks, and the exact cloud-repo-list gate inputs (/meta
+      // capability contract + /v1/cloud/repositories) so a "no Project row" /
+      // composer break names its true layer without a live browser. Never on
+      // the green path; best-effort so it never masks the real error.
+      await captureCloudTurnFailure(page, actor, "cloud-turn-ui-failure");
+      throw uiError;
     } finally {
       await page.close().catch(() => undefined);
     }
@@ -2106,6 +2115,66 @@ function cssAttr(value: string): string {
  */
 export function coveredRepoSourceRootSelector(): string {
   return `[data-repo-source-root="${cssAttr(`cloud:${COVERED_REPO_OWNER}/${COVERED_REPO_NAME}`)}"]`;
+}
+
+/**
+ * Env-gated (`MANAGED_CLOUD_SMOKE_DEBUG_DIR`) failure capture for the cloud
+ * browser turn — the managed-cloud analogue of `local-world-smoke-1`'s
+ * `captureUiFailure`. CLOUD-PROVISION-1's browser step previously threw only its
+ * error text, so a "no Project row" / composer break could not be root-caused
+ * without a live browser (attempts 2–3 blind spot). This dumps, best-effort:
+ *
+ *   - the live rendered DOM + a full-page screenshot at the failure point;
+ *   - the browser console + non-2xx/failed network log (now populated in the
+ *     cloud lane because `productPage` honours this lane's debug dir); and
+ *   - the two exact inputs to the home cloud-repo list gate: the server's public
+ *     `/meta` capability contract (`cloudWorkspaces` / `managedCloud.status` /
+ *     `githubRepositoryAccess.status` — the client's `cloudActive` factor) and
+ *     the actor's own `/v1/cloud/repositories` listing (the rows the menu is
+ *     built from). Together these disambiguate a server gate (cloudWorkspaces
+ *     false) from a client readiness/selector issue (gate true, row present).
+ *
+ * A no-op off the debug dir, so it never touches the green path; every written
+ * string is scrubbed of secret shapes. It never throws — diagnostics must not
+ * mask the real failure.
+ */
+async function captureCloudTurnFailure(page: ProductPage, actor: AuthenticatedActor, label: string): Promise<void> {
+  const dir = resolveDiagnosticsDir();
+  if (!dir) {
+    return;
+  }
+  try {
+    const { mkdirSync, writeFileSync } = await import("node:fs");
+    const nodePath = await import("node:path");
+    mkdirSync(dir, { recursive: true });
+    const stamp = `${label.replace(/[^A-Za-z0-9._-]+/g, "-")}-${Date.now()}`;
+    writeFileSync(
+      nodePath.join(dir, `${stamp}.html`),
+      scrubSecretText(await page.page.content().catch(() => "<no content>")),
+    );
+    await page.page
+      .screenshot({ path: nodePath.join(dir, `${stamp}.png`), fullPage: true })
+      .catch(() => undefined);
+    writeFileSync(nodePath.join(dir, `${stamp}.console.txt`), scrubSecretText(page.debug.console.join("\n")));
+    writeFileSync(nodePath.join(dir, `${stamp}.network.txt`), scrubSecretText(page.debug.network.join("\n")));
+    // The exact cloud-repo-list gate inputs. `/meta` is the public capability
+    // contract (unauthenticated); `/v1/cloud/repositories` needs the actor
+    // bearer. Capture both outcomes (value or error) so the layer names itself.
+    const meta = await actor.api
+      .get<unknown>("/meta")
+      .then((value) => ({ ok: true, value }))
+      .catch((error: unknown) => ({ ok: false, error: describe(error) }));
+    const repos = await actor.api
+      .get<unknown>("/v1/cloud/repositories")
+      .then((value) => ({ ok: true, value }))
+      .catch((error: unknown) => ({ ok: false, error: describe(error) }));
+    writeFileSync(
+      nodePath.join(dir, `${stamp}.gate.json`),
+      scrubSecretText(JSON.stringify({ meta, cloud_repositories: repos }, null, 2)),
+    );
+  } catch {
+    // Diagnostics are best-effort; never let a capture failure mask the error.
+  }
 }
 
 /**
