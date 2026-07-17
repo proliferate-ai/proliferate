@@ -58,6 +58,7 @@ _WEB_RETURN_PATHS = frozenset(
     {
         "/settings",
         "/settings/account",
+        "/settings/environments",
         "/settings/organization",
         "/settings/organizations",
     }
