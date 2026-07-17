@@ -68,6 +68,13 @@ describe("ensureDesktopWorker", () => {
     await expect(ensureDesktopWorker(null, worker, { onFailure, captureException })).resolves.toBe(false);
 
     expect(tauriMocks.ensureDesktopDispatchWorker).not.toHaveBeenCalled();
+    expect(captureException).toHaveBeenCalledWith(error, {
+      tags: {
+        action: "ensure-desktop-worker",
+        domain: "cloud",
+      },
+      fingerprint: ["{{ default }}", "ensure-desktop-worker"],
+    });
     expect(onFailure).toHaveBeenCalledWith(error);
   });
 

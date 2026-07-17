@@ -145,6 +145,7 @@ export function useCloudBillingQuery(
             domain: "cloud_billing",
             route: "settings",
           },
+          fingerprint: ["{{ default }}", "fetch_billing_plan"],
         });
         throw error;
       }

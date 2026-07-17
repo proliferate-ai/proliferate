@@ -61,6 +61,7 @@ export function ensureDesktopWorker(
           action: "ensure-desktop-worker",
           domain: "cloud",
         },
+        fingerprint: ["{{ default }}", "ensure-desktop-worker"],
       });
       try {
         deps.onFailure(error);

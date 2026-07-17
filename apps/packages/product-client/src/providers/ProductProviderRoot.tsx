@@ -44,6 +44,8 @@ function WorkspaceProviders({ children }: { children: ReactNode }) {
     authStatus === "loading" ? "bootstrapping" : authStatus;
   const location = useLocation();
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
+  const runtimeConnectionState = useHarnessConnectionStore((state) => state.connectionState);
+  const readyRuntimeUrl = runtimeConnectionState === "healthy" ? runtimeUrl : "";
   const cacheScopeKey = useMemo(() => buildAnyHarnessCacheScopeKey({
     apiBaseUrl,
     authStatus: cacheAuthStatus,
@@ -67,7 +69,7 @@ function WorkspaceProviders({ children }: { children: ReactNode }) {
   });
 
   return (
-    <AnyHarnessRuntime runtimeUrl={runtimeUrl || null} cacheScopeKey={cacheScopeKey}>
+    <AnyHarnessRuntime runtimeUrl={readyRuntimeUrl || null} cacheScopeKey={cacheScopeKey}>
       <CloudWorkspaceMaterializationCacheBoundary>
         <AnyHarnessWorkspace
           workspaceId={providerWorkspaceId}
