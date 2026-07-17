@@ -610,6 +610,15 @@ function defaultSshFactory(box: Ec2Box, keyPath: string): SshTransport {
     "UserKnownHostsFile=/dev/null",
     "-o",
     "ConnectTimeout=15",
+    // Keepalive so a long *silent* remote command (e.g. the gateway bootstrap,
+    // which redirects all output to a file and blocks on `up -d --wait`) does
+    // not get its idle TCP connection dropped by NAT — a dropped connection
+    // SIGHUPs the foreground remote process and kills it mid-bootstrap
+    // (observed as `client_loop: send disconnect: Broken pipe`).
+    "-o",
+    "ServerAliveInterval=15",
+    "-o",
+    "ServerAliveCountMax=8",
   ];
   return {
     async run(command, runOptions) {
