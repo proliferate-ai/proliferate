@@ -27,11 +27,15 @@ For full-stack local development, use named profiles:
 
 ```bash
 make server-install
-make setup PROFILE=main
+make setup PROFILE=<name>
 make build # first clean worktree, or after generated/Rust/frontend artifacts change
 make dev-list
-make run PROFILE=main
+make run PROFILE=<name>
 ```
+
+Give every worktree its own profile name. To reuse an existing Postgres or
+Redis service, or to develop from Windows through WSL2, follow the
+[local-development procedure](./specs/developing/local/README.md).
 
 ## Pull Requests
 

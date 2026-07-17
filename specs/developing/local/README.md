@@ -45,6 +45,71 @@ It reserves a Mobile Web port but does not start Expo. It also does not start
 Celery workers or the optional Stripe, LiteLLM, tunnel, native-Mobile, or SSO
 flows unless their focused command or flag is used.
 
+## Existing Postgres And Redis
+
+By default, `setup` starts or reuses the repository's Docker Postgres service,
+and `run` starts or reuses the Docker Postgres and Redis services. To use
+services already running on the same host instead, select the existing-service
+paths on every command that touches them:
+
+```bash
+make setup PROFILE=<name> USE_EXISTING_POSTGRES=1
+make build # if this worktree needs artifacts
+make run PROFILE=<name> USE_EXISTING_POSTGRES=1 USE_EXISTING_REDIS=1
+```
+
+The existing-Postgres path requires `psql` on `PATH`. Its default login role is
+`proliferate`. Create that dedicated local role once from a PostgreSQL
+administrator account, choosing a local password at the prompt:
+
+```bash
+createuser --createdb --pwprompt proliferate
+```
+
+On Ubuntu and WSL, the administrator invocation is commonly
+`sudo -u postgres createuser --createdb --pwprompt proliferate`. The role needs
+`LOGIN`, `CREATEDB`, and normal `CONNECT` access to the `postgres` maintenance
+database; it does not need `SUPERUSER`, `CREATEROLE`, or `BYPASSRLS`. The
+repository's local-only password default is `localdev`. If you choose another
+password or role, provide `LOCAL_PGPASSWORD` and `LOCAL_PGUSER` in the
+environment for both `setup` and `run`, and do not commit them.
+
+Let `setup` create `proliferate_dev_<normalized_name>` so the login role owns
+the database. If that database already exists, the login role must own the
+database and its migration-managed objects; setup checks existence but does
+not repair ownership.
+
+The default endpoints are local Postgres on port `5432` and local Redis on port
+`6379`. Override a nondefault Postgres endpoint with the `LOCAL_PG*` Make
+variables. For a nondefault Redis endpoint, keep `LOCAL_REDIS_HOST` and
+`LOCAL_REDIS_PORT` aligned with the server's `REDBEAT_REDIS_URL`; the readiness
+checks only prove that the configured TCP ports accept connections.
+
+## Windows And WSL2
+
+On Windows, run the Linux development workflow inside WSL2 and keep the
+checkout in the WSL filesystem, such as `~/proliferate`, rather than under
+`/mnt/c`. If you use the existing-service path above, the documented defaults
+assume Postgres and Redis run inside the same WSL distribution. Windows-hosted
+services may need endpoint overrides under NAT networking; mirrored networking
+can make Windows-host loopback reachable instead. Either path needs separate
+endpoint, authentication, and firewall verification, which this procedure does
+not qualify.
+
+WSL normally makes services bound to WSL loopback reachable from Windows
+through `localhost`. That depends on the active WSL networking configuration,
+VPN or enterprise policy, and the corresponding Windows-side ports being free.
+Use `make dev-list` inside WSL to identify the profile's allocated ports, then
+verify `http://localhost:<allocated-port>` from Windows for the service you
+need.
+
+Normal host-only development should not require `netsh portproxy`, Windows
+Firewall, or Hyper-V firewall exceptions. Only consider those for intentional
+LAN access after following
+[Microsoft's WSL networking guidance](https://learn.microsoft.com/en-us/windows/wsl/networking).
+The standard Proliferate launcher binds services to `127.0.0.1`; LAN exposure
+is not qualified by this procedure.
+
 ## Profile State And Environment
 
 The important profile-owned paths are:
