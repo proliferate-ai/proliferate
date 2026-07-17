@@ -1,5 +1,3 @@
-"""Deterministic recovery proofs for managed CloudSandbox materialization."""
-
 from __future__ import annotations
 
 import asyncio
@@ -172,9 +170,6 @@ async def test_failure_after_provider_binding_is_durable_and_retry_clears_it(
     with pytest.raises(RuntimeError, match="secret runtime token"):
         await connect_module.connect_ready_sandbox(db_session, sandbox=initial)
 
-    # The background attempt's transaction is gone; prove the receipt is
-    # visible from a wholly separate read transaction rather than an identity
-    # map or uncommitted writer state.
     await db_session.rollback()
     async with factory() as read_db:
         failed = await _value(read_db, row.id)
@@ -600,7 +595,6 @@ async def test_post_connect_callback_failure_leaves_sandbox_ready(
             operation_key="post-connect-failure",
             run=_fail_after_connect,
         )
-
     ready = await _value(db_session, row.id)
     assert ready.status == "ready"
     assert ready.last_error is None

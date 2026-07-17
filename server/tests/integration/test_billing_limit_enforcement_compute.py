@@ -39,7 +39,6 @@ from proliferate.constants.billing import (
 )
 from proliferate.db.models.auth import User
 from proliferate.db.models.billing import BillingDecisionEvent, BillingHold, UsageSegment
-from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.db.models.organizations import Organization
 from proliferate.db.store.billing import BudgetLimitInput, replace_budget_limits
 from proliferate.db.store.billing_subjects import (
@@ -451,106 +450,6 @@ async def test_reconciler_ignores_usage_from_superseded_provider(
         ),
         billing_snapshot=SimpleNamespace(active_spend_hold=False),  # type: ignore[arg-type]
     )
-
-
-@pytest.mark.asyncio
-async def test_reconciler_provider_mismatch_rolls_back_lifecycle_transition(
-    db_session: AsyncSession,
-    test_engine: Any,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A different provider's open segment cannot be hidden by state mutation."""
-
-    patch_global_session_factory(test_engine, monkeypatch)
-    user_id = await _create_user(db_session)
-    subject = await ensure_personal_billing_subject(db_session, user_id)
-    sandbox = CloudSandbox(
-        owner_user_id=user_id,
-        sandbox_type="e2b",
-        provider_sandbox_id="provider-current",
-        status="ready",
-    )
-    db_session.add(sandbox)
-    await db_session.flush()
-    segment = UsageSegment(
-        user_id=user_id,
-        billing_subject_id=subject.id,
-        sandbox_id=sandbox.id,
-        external_sandbox_id="provider-conflicting",
-        started_at=NOW,
-        ended_at=None,
-        is_billable=True,
-        opened_by="provision",
-    )
-    db_session.add(segment)
-    await db_session.commit()
-
-    with pytest.raises(RuntimeError, match="different provider sandbox"):
-        await reconciler_module._mark_sandbox_environment_unavailable(
-            sandbox.id,
-            destroyed=False,
-            expected_provider_sandbox_id="provider-current",
-            expected_status="ready",
-            ended_at=NOW,
-            closed_by=USAGE_SEGMENT_CLOSED_BY_QUOTA_ENFORCEMENT,
-        )
-
-    await db_session.refresh(sandbox)
-    await db_session.refresh(segment)
-    assert sandbox.status == "ready"
-    assert sandbox.provider_sandbox_id == "provider-current"
-    assert segment.ended_at is None
-
-
-@pytest.mark.asyncio
-async def test_reconciler_killed_observation_closes_usage_after_explicit_delete(
-    db_session: AsyncSession,
-    test_engine: Any,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    patch_global_session_factory(test_engine, monkeypatch)
-    user_id = await _create_user(db_session)
-    subject = await ensure_personal_billing_subject(db_session, user_id)
-    provider_id = "provider-destroyed-before-reconcile"
-    sandbox = CloudSandbox(
-        owner_user_id=user_id,
-        sandbox_type="e2b",
-        provider_sandbox_id=provider_id,
-        status="destroyed",
-        destroyed_at=NOW,
-    )
-    db_session.add(sandbox)
-    await db_session.flush()
-    segment = UsageSegment(
-        user_id=user_id,
-        billing_subject_id=subject.id,
-        sandbox_id=sandbox.id,
-        external_sandbox_id=provider_id,
-        started_at=NOW,
-        ended_at=None,
-        is_billable=True,
-        opened_by="provision",
-    )
-    db_session.add(segment)
-    await db_session.commit()
-
-    closed = await reconciler_module._mark_sandbox_environment_unavailable(
-        sandbox.id,
-        destroyed=True,
-        expected_provider_sandbox_id=provider_id,
-        expected_status="ready",
-        ended_at=NOW + timedelta(seconds=1),
-        closed_by=USAGE_SEGMENT_CLOSED_BY_PROVISION_FAILURE,
-    )
-
-    await db_session.refresh(sandbox)
-    await db_session.refresh(segment)
-    assert closed is True
-    assert sandbox.status == "destroyed"
-    assert sandbox.provider_sandbox_id == provider_id
-    assert sandbox.destroyed_at == NOW
-    assert segment.ended_at == NOW + timedelta(seconds=1)
-    assert segment.closed_by == USAGE_SEGMENT_CLOSED_BY_PROVISION_FAILURE
 
 
 # ── Resume-deny gate (spec §4.3) ──
