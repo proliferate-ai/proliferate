@@ -3,12 +3,14 @@ from __future__ import annotations
 import uuid
 from urllib.parse import parse_qs, urlsplit
 
+import httpx
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.store.integrations import accounts as accounts_store
 from proliferate.db.store.integrations import definitions as definitions_store
+from proliferate.integrations.integration_oauth import tokens as oauth_tokens
 from proliferate.integrations.integration_oauth.models import (
     AuthorizationServerMetadata,
     ProtectedResourceMetadata,
@@ -36,6 +38,8 @@ async def _start_slack_flow(
     client: AsyncClient,
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
+    *,
+    token_endpoint: str = "https://slack.com/api/oauth.v2.user.access",
 ) -> tuple[AuthSession, dict[str, object], str]:
     prefix = f"oauth-scope-{uuid.uuid4().hex}"
     auth = await create_user_and_login(client, db_session, email_prefix=prefix)
@@ -73,7 +77,7 @@ async def _start_slack_flow(
         return AuthorizationServerMetadata(
             issuer=issuer,
             authorization_endpoint="https://slack.com/oauth/v2_user/authorize",
-            token_endpoint="https://slack.com/api/oauth.v2.user.access",
+            token_endpoint=token_endpoint,
             registration_endpoint=None,
             token_endpoint_auth_methods_supported=("client_secret_post",),
         )
@@ -169,6 +173,60 @@ async def test_slack_http_callback_rejects_invalid_scope_grant(
     assert flow.status_code == 200
     assert flow.json()["status"] == "failed"
     assert flow.json()["failureCode"] == "oauth_scope_mismatch"
+
+    await db_session.rollback()
+    account = await accounts_store.get_account(
+        db_session, uuid.UUID(str(started["account"]["accountId"]))
+    )
+    assert account is not None
+    assert account.status == "setup_required"
+    assert account.credential_ciphertext is None
+
+
+@pytest.mark.asyncio
+async def test_slack_http_callback_translates_2xx_error_without_persisting(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    auth, started, state = await _start_slack_flow(
+        client,
+        db_session,
+        monkeypatch,
+        token_endpoint="https://slack.com/api/oauth.v3.user.access",
+    )
+    async_client = httpx.AsyncClient
+    transport = httpx.MockTransport(
+        lambda _request: httpx.Response(
+            200,
+            json={
+                "ok": False,
+                "error": "invalid_code",
+                "private": "must-not-leak",
+            },
+        )
+    )
+    monkeypatch.setattr(
+        oauth_tokens.httpx,
+        "AsyncClient",
+        lambda **kwargs: async_client(transport=transport, **kwargs),
+    )
+
+    callback = await client.get(
+        "/v1/cloud/integrations/oauth/callback",
+        params={"state": state, "code": "authorization-code"},
+    )
+
+    assert callback.status_code == 200
+    assert "invalid_code" not in callback.text
+    assert "must-not-leak" not in callback.text
+    flow = await client.get(
+        f"/v1/cloud/integrations/oauth/flows/{started['oauthFlowId']}",
+        headers=auth.headers,
+    )
+    assert flow.status_code == 200
+    assert flow.json()["status"] == "failed"
+    assert flow.json()["failureCode"] == "invalid_grant"
 
     await db_session.rollback()
     account = await accounts_store.get_account(

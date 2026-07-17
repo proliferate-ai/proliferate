@@ -230,6 +230,7 @@ async def _refresh_oauth_bundle(
     account: IntegrationAccountRecord,
     bundle: dict[str, Any],
     cfg: IntegrationConfig,
+    provider_namespace: str,
 ) -> tuple[str, datetime | None]:
     """Refresh the access token in ``bundle`` and persist the new credential.
 
@@ -276,6 +277,7 @@ async def _refresh_oauth_bundle(
             resource=str(bundle.get("resource") or ""),
             client_secret=client_secret,
             token_endpoint_auth_method=token_endpoint_auth_method,
+            provider_namespace=provider_namespace,
         )
     except CloudApiError:
         raise
@@ -364,7 +366,12 @@ async def ensure_provider_access(
         return _api_key_access(cfg, account_record, settings)
 
     if auth_kind == "oauth2":
-        return await _oauth_access(cfg, account_record, settings)
+        return await _oauth_access(
+            cfg,
+            account_record,
+            settings,
+            provider_namespace=definition_record.namespace,
+        )
 
     raise CloudApiError(
         "integration_auth_kind_unsupported",
@@ -392,6 +399,8 @@ async def _oauth_access(
     cfg: IntegrationConfig,
     account: IntegrationAccountRecord,
     settings: dict[str, Any],
+    *,
+    provider_namespace: str,
 ) -> ProviderAccess:
     bundle = _decode_bundle(account)
     try:
@@ -411,7 +420,10 @@ async def _oauth_access(
         resolved_expiry = expires_at
     else:
         resolved_token, resolved_expiry = await _refresh_oauth_bundle(
-            account=account, bundle=bundle, cfg=cfg
+            account=account,
+            bundle=bundle,
+            cfg=cfg,
+            provider_namespace=provider_namespace,
         )
 
     # Expose bundle string fields (plus the resolved access token) as secrets so

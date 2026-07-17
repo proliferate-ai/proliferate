@@ -3,6 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime, timedelta
 
+import httpx
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,6 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.db.models.auth import User
 from proliferate.db.store.integrations import accounts as accounts_store
 from proliferate.db.store.integrations import definitions as definitions_store
+from proliferate.integrations.integration_oauth import tokens as oauth_tokens
+from proliferate.integrations.integration_oauth.errors import IntegrationOAuthProviderError
 from proliferate.integrations.integration_oauth.models import TokenResponse
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.integrations import access as integration_access
@@ -347,6 +350,68 @@ async def test_slack_refresh_rejects_reported_scope_above_ceiling_without_persis
         )
 
     assert exc_info.value.code == "integration_reauth_required"
+    await db_session.rollback()
+    unchanged = await accounts_store.get_account(db_session, account.id)
+    assert unchanged is not None
+    assert unchanged.credential_ciphertext == original_ciphertext
+    assert unchanged.auth_version == original_auth_version
+
+
+@pytest.mark.asyncio
+async def test_slack_refresh_translates_2xx_error_without_persisting(
+    db_session: AsyncSession,
+    client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    bundle = {
+        "issuer": "https://slack.com",
+        "resource": "https://mcp.slack.com/mcp",
+        "clientId": "slack-client",
+        "accessToken": "expired-access-token",
+        "refreshToken": "slack-refresh-token",
+        "expiresAt": (datetime.now(UTC) - timedelta(minutes=5)).isoformat(),
+        "scopes": list(SLACK_SCOPES),
+        "tokenEndpoint": "https://slack.com/api/oauth.v3.user.access",
+        "redirectUri": "https://api.example.com/v1/cloud/integrations/oauth/callback",
+    }
+    definition, account = await _account_for(
+        db_session,
+        namespace="slack",
+        auth_kind="oauth2",
+        credential_ciphertext=encrypt_json(bundle),
+        credential_format="oauth-bundle-v1",
+    )
+    original_ciphertext = account.credential_ciphertext
+    original_auth_version = account.auth_version
+    async_client = httpx.AsyncClient
+    transport = httpx.MockTransport(
+        lambda _request: httpx.Response(
+            200,
+            json={
+                "ok": False,
+                "error": "invalid_refresh_token",
+                "private": "must-not-leak",
+            },
+        )
+    )
+    monkeypatch.setattr(
+        oauth_tokens.httpx,
+        "AsyncClient",
+        lambda **kwargs: async_client(transport=transport, **kwargs),
+    )
+
+    with pytest.raises(CloudApiError) as exc_info:
+        await ensure_provider_access(
+            db_session, account_record=account, definition_record=definition
+        )
+
+    assert exc_info.value.code == "integration_reauth_required"
+    assert str(exc_info.value) == "Integration requires re-authentication."
+    provider_error = exc_info.value.__cause__
+    assert isinstance(provider_error, IntegrationOAuthProviderError)
+    assert provider_error.code == "invalid_grant"
+    assert "invalid_refresh_token" not in str(provider_error)
+    assert "must-not-leak" not in str(provider_error)
     await db_session.rollback()
     unchanged = await accounts_store.get_account(db_session, account.id)
     assert unchanged is not None

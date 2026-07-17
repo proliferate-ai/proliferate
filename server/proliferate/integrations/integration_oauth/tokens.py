@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from datetime import UTC, datetime, timedelta
 from typing import Any
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -10,6 +11,19 @@ from proliferate.integrations.integration_oauth.errors import IntegrationOAuthPr
 from proliferate.integrations.integration_oauth.models import TokenResponse
 
 _SCOPE_SEPARATOR_RE = re.compile(r"[\s,]+")
+_SLACK_PROVIDER_NAMESPACE = "slack"
+_SLACK_TOKEN_HOST = "slack.com"
+_SLACK_TOKEN_PATH = "/api/oauth.v2.user.access"
+_SLACK_INVALID_CLIENT_ERRORS = frozenset({"bad_client_secret", "invalid_client_id"})
+_SLACK_INVALID_GRANT_ERRORS = frozenset(
+    {
+        "bad_redirect_uri",
+        "invalid_code",
+        "invalid_refresh_token",
+        "token_expired",
+        "token_revoked",
+    }
+)
 
 
 def _granted_scopes(payload: dict[str, Any]) -> tuple[str, ...] | None:
@@ -32,6 +46,57 @@ def _granted_scopes(payload: dict[str, Any]) -> tuple[str, ...] | None:
     return tuple(normalized)
 
 
+def _is_slack_token_endpoint(
+    token_endpoint: str,
+    *,
+    provider_namespace: str | None,
+) -> bool:
+    """Identify Slack by trusted namespace, then a narrow canonical URL fallback."""
+    if provider_namespace is not None:
+        return provider_namespace == _SLACK_PROVIDER_NAMESPACE
+    try:
+        parsed = urlsplit(token_endpoint)
+        port = parsed.port
+    except ValueError:
+        return False
+    return (
+        parsed.scheme.lower() == "https"
+        and parsed.hostname == _SLACK_TOKEN_HOST
+        and port in {None, 443}
+        and parsed.username is None
+        and parsed.password is None
+        and parsed.path in {_SLACK_TOKEN_PATH, f"{_SLACK_TOKEN_PATH}/"}
+        and not parsed.query
+        and not parsed.fragment
+    )
+
+
+def _raise_for_slack_token_error(
+    token_endpoint: str,
+    payload: dict[str, Any],
+    *,
+    provider_namespace: str | None,
+) -> None:
+    """Translate Slack's HTTP-2xx error envelope without exposing its payload."""
+    if (
+        not _is_slack_token_endpoint(
+            token_endpoint,
+            provider_namespace=provider_namespace,
+        )
+        or payload.get("ok") is not False
+    ):
+        return
+    provider_error = payload.get("error")
+    if isinstance(provider_error, str) and provider_error in _SLACK_INVALID_CLIENT_ERRORS:
+        raise IntegrationOAuthProviderError("invalid_client", "OAuth provider rejected client.")
+    if isinstance(provider_error, str) and provider_error in _SLACK_INVALID_GRANT_ERRORS:
+        raise IntegrationOAuthProviderError("invalid_grant", "OAuth grant is no longer valid.")
+    raise IntegrationOAuthProviderError(
+        "token_request_failed",
+        "OAuth provider rejected the token request.",
+    )
+
+
 async def exchange_token(
     *,
     token_endpoint: str,
@@ -42,6 +107,7 @@ async def exchange_token(
     resource: str,
     client_secret: str | None = None,
     token_endpoint_auth_method: str | None = None,
+    provider_namespace: str | None = None,
 ) -> TokenResponse:
     return await _token_request(
         token_endpoint,
@@ -55,6 +121,7 @@ async def exchange_token(
         },
         client_secret=client_secret,
         token_endpoint_auth_method=token_endpoint_auth_method,
+        provider_namespace=provider_namespace,
     )
 
 
@@ -66,6 +133,7 @@ async def refresh_token(
     resource: str,
     client_secret: str | None = None,
     token_endpoint_auth_method: str | None = None,
+    provider_namespace: str | None = None,
 ) -> TokenResponse:
     return await _token_request(
         token_endpoint,
@@ -77,6 +145,7 @@ async def refresh_token(
         },
         client_secret=client_secret,
         token_endpoint_auth_method=token_endpoint_auth_method,
+        provider_namespace=provider_namespace,
     )
 
 
@@ -107,6 +176,7 @@ async def _token_request(
     *,
     client_secret: str | None,
     token_endpoint_auth_method: str | None,
+    provider_namespace: str | None,
 ) -> TokenResponse:
     request_data, auth = _token_request_auth_options(
         data,
@@ -130,6 +200,11 @@ async def _token_request(
                 "OAuth provider rejected the token request.",
             ) from exc
         payload = response.json()
+        _raise_for_slack_token_error(
+            token_endpoint,
+            payload,
+            provider_namespace=provider_namespace,
+        )
     expires_in = payload.get("expires_in")
     expires_at = (
         datetime.now(UTC) + timedelta(seconds=int(expires_in))
