@@ -307,7 +307,15 @@ For each supported harness, connect the deterministic real integration through
 the product UI, create a fresh session so startup MCP injection is exercised,
 and use the cheapest eligible model to make one real call through the
 Proliferate integrations MCP. Assert the expected provider/tool operation and
-product audit correlation.
+product audit correlation. The audit row must be new relative to a successful
+pre-turn snapshot and match the actor, organization, exact enrolled runtime
+worker, integration namespace, tool, and successful outcome; a historical or
+otherwise visible tool call cannot satisfy the cell. The read-only DB probe
+uses the exact world's database URL and an explicit local-development,
+debug-enabled, background-workers-disabled Settings posture scoped only to its
+qualification subprocess. Probe configuration or query failures are red and
+never become absent/empty evidence; production Settings validation remains
+fail-closed.
 
 This case proves positive per-harness Product MCP translation. It does not
 assert hidden server credential state or a disconnect/failure matrix.

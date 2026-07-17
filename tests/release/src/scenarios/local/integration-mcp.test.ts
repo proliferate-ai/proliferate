@@ -117,6 +117,14 @@ function fakeRepo(): PreparedRepository {
   return { path: "/tmp/repo", repoUrl: "https://github.com/x/y.git", commit: "c".repeat(40), repoRootId: "root-1" };
 }
 
+function auditCorrelation(harness: string) {
+  return {
+    baselineEventIds: [`audit-old-${harness}`],
+    runtimeWorkerId: `worker-${harness}`,
+    organizationId: `org-${harness}`,
+  };
+}
+
 /** A driver whose every step succeeds deterministically for a fixed harness set. */
 function greenDriver(closedCount: { value: number }): LocalMcpDriver {
   return {
@@ -131,6 +139,7 @@ function greenDriver(closedCount: { value: number }): LocalMcpDriver {
       sessionId: `sess-${harness}`,
       modelId: "us.anthropic.claude-haiku-4-6",
       toolName: "web_search",
+      auditCorrelation: auditCorrelation(harness),
     }),
     assertAuditRow: async (_world, _actor, _namespace, _toolName) => ({ auditEventId: "audit-1" }),
     closeWorld: async (world) => {
@@ -168,7 +177,13 @@ test("runLocal7McpCellsAgainstWorld: a per-cell failure does not affect its sibl
       if (harness === "cursor") {
         throw new Error("cursor turn errored");
       }
-      return { workspaceId: `ws-${harness}`, sessionId: `sess-${harness}`, modelId: "m", toolName: "web_search" };
+      return {
+        workspaceId: `ws-${harness}`,
+        sessionId: `sess-${harness}`,
+        modelId: "m",
+        toolName: "web_search",
+        auditCorrelation: auditCorrelation(harness),
+      };
     },
   };
   const cells = [fakeCell("claude"), fakeCell("cursor")];
@@ -178,6 +193,23 @@ test("runLocal7McpCellsAgainstWorld: a per-cell failure does not affect its sibl
   assert.equal(outcomes[0]!.status, "green");
   assert.equal(outcomes[1]!.status, "failed");
   assert.match(outcomes[1]!.reason!.message, /cursor turn errored/);
+});
+
+test("runLocal7McpCellsAgainstWorld: a real audit query failure stays failed", async () => {
+  const world = fakeWorld();
+  const base = greenDriver({ value: 0 });
+  const driver: LocalMcpDriver = {
+    ...base,
+    assertAuditRow: async () => {
+      throw new Error("database query failed: connection refused");
+    },
+  };
+
+  const outcomes = await runLocal7McpCellsAgainstWorld(world, [fakeCell("claude")], driver);
+
+  assert.equal(outcomes[0]!.status, "failed");
+  assert.match(outcomes[0]!.reason!.message, /database query failed: connection refused/);
+  assert.equal(outcomes[0]!.evidence, undefined);
 });
 
 test("runLocal7McpCellsAgainstWorld: no eligible model maps to a typed blocked cell, not failed", async () => {

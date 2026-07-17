@@ -19,11 +19,14 @@ import { productPage, type ProductPage } from "../../fixtures/product-page.js";
 import { resolveIntegrationNamespace } from "../../fixtures/integrations.js";
 import {
   enrollGatewayWorker,
+  findCorrelatedToolCallEvent,
   gatewayListTools,
   pickSearchTool,
+  requireIntegrationAuditProbeEvents,
   runIntegrationAuditProbe,
   writeGatewayDotfile,
   type GatewayGrant,
+  type ToolCallAuditCorrelation,
 } from "../../fixtures/integration-gateway.js";
 import { findErrorEvent, findTurnEndedEvent } from "../../fixtures/local-runtime.js";
 import { selectCheapestEligibleClaudeModel } from "../../services/qualification-litellm.js";
@@ -71,13 +74,25 @@ export interface LocalMcpDriver {
   /** Create a FRESH session (so startup MCP injection runs) and drive one agent
    * turn on the cheapest eligible model, prompted to call an integration tool
    * through the `proliferate_integrations` MCP. Returns the ids + tool name. */
-  runIntegrationTurn(world: ReadyLocalWorld, page: ProductPage, harness: LocalHarnessKind, namespace: string, repoPath: string): Promise<{ workspaceId: string; sessionId: string; modelId: string; toolName: string }>;
+  runIntegrationTurn(world: ReadyLocalWorld, page: ProductPage, harness: LocalHarnessKind, namespace: string, repoPath: string): Promise<{
+    workspaceId: string;
+    sessionId: string;
+    modelId: string;
+    toolName: string;
+    auditCorrelation: ToolCallAuditCorrelation;
+  }>;
 
   /** Read back the `cloud_integration_tool_call_event` audit row via the reused
    * DB probe seam and assert ok=true for this namespace/tool. Reads THIS world's
    * own run-scoped Postgres (`world.db.databaseUrl`), the database the turn wrote
    * to — never an ambient static DB. Returns its id. */
-  assertAuditRow(world: ReadyLocalWorld, actor: AuthenticatedActor, namespace: string, toolName: string): Promise<{ auditEventId: string }>;
+  assertAuditRow(
+    world: ReadyLocalWorld,
+    actor: AuthenticatedActor,
+    namespace: string,
+    toolName: string,
+    correlation: ToolCallAuditCorrelation,
+  ): Promise<{ auditEventId: string }>;
 
   closeWorld(world: ReadyLocalWorld): ReturnType<ReadyLocalWorld["close"]>;
 }
@@ -232,6 +247,21 @@ export const defaultLocalMcpDriver: LocalMcpDriver = {
     }
     await selectModelInUi(page, modelId);
 
+    // A successful historical or sibling call must not satisfy this cell. Take
+    // a fail-closed baseline immediately before Send and bind the later audit
+    // row to this cell's exact worker grant + organization.
+    const baseline = await runIntegrationAuditProbe(actor.session.email, {
+      namespace,
+      sinceSeconds: 3600,
+      databaseUrl: world.db.databaseUrl,
+    });
+    const baselineEvents = requireIntegrationAuditProbeEvents(baseline, actor.userId);
+    const auditCorrelation: ToolCallAuditCorrelation = {
+      baselineEventIds: baselineEvents.map((event) => event.id),
+      runtimeWorkerId: grant.workerId,
+      organizationId: actor.organizationId,
+    };
+
     const prompt =
       `You have an MCP server named "proliferate_integrations" that proxies external integrations. ` +
       `Call the tool "${picked.tool}" through it with the "${namespace}" provider — use ` +
@@ -264,9 +294,9 @@ export const defaultLocalMcpDriver: LocalMcpDriver = {
       throw new Error(`runIntegrationTurn: assistant turn did not end within ${TURN_TIMEOUT_MS}ms.`);
     }
 
-    return { workspaceId, sessionId, modelId, toolName: picked.tool };
+    return { workspaceId, sessionId, modelId, toolName: picked.tool, auditCorrelation };
   },
-  async assertAuditRow(world, actor, namespace, toolName) {
+  async assertAuditRow(world, actor, namespace, toolName, correlation) {
     const deadline = Date.now() + 15_000;
     for (;;) {
       const probe = await runIntegrationAuditProbe(actor.session.email, {
@@ -274,14 +304,15 @@ export const defaultLocalMcpDriver: LocalMcpDriver = {
         sinceSeconds: 3600,
         databaseUrl: world.db.databaseUrl,
       });
-      const row = probe.events.find((event) => event.ok && event.toolName === toolName);
+      const events = requireIntegrationAuditProbeEvents(probe, actor.userId);
+      const row = findCorrelatedToolCallEvent(events, { namespace, toolName, correlation });
       if (row) {
         return { auditEventId: row.id };
       }
       if (Date.now() >= deadline) {
         throw new Error(
-          `assertAuditRow: no ok=true cloud_integration_tool_call_event for "${namespace}.${toolName}" ` +
-            `was found for ${actor.session.email}.`,
+          `assertAuditRow: no new ok=true cloud_integration_tool_call_event for "${namespace}.${toolName}" ` +
+            `matched worker ${correlation.runtimeWorkerId} and organization ${correlation.organizationId}.`,
         );
       }
       await sleep(2_000);
@@ -349,7 +380,13 @@ export async function runLocal7McpCellsAgainstWorld(
         await driver.connectIntegration(page, namespace);
         await driver.selectRepoAndWorkLocally(page, repo);
         const turn = await driver.runIntegrationTurn(world, page, harness, namespace, repo.path);
-        const audit = await driver.assertAuditRow(world, actor, namespace, turn.toolName);
+        const audit = await driver.assertAuditRow(
+          world,
+          actor,
+          namespace,
+          turn.toolName,
+          turn.auditCorrelation,
+        );
         entries.push({
           cell,
           ok: true,
