@@ -40,6 +40,12 @@ export interface PlanInputs {
    * Tier-2 or Tier-4 world. Omitted → no lane filter.
    */
   targetLane?: TargetLane;
+  /**
+   * When the CLI selector names scenarios explicitly, every named scenario
+   * must contribute at least one compatible cell. Broad `all` selections may
+   * omit scenarios that do not belong to the selected world.
+   */
+  requireEveryScenario?: boolean;
 }
 
 /**
@@ -99,12 +105,19 @@ export async function buildPlannedCells(
     }
     seenScenarioIds.add(scenario.id);
 
-    for (const runtimeLane of scenario.lanes) {
+    const compatibleLanes = scenario.lanes.filter((runtimeLane) =>
+      laneAllowed(scenario.id, runtimeLane, inputs.targetLane),
+    );
+    if (inputs.requireEveryScenario && compatibleLanes.length === 0) {
+      throw new SelectionError(
+        `Explicitly selected scenario "${scenario.id}" has no compatible cells for target lane ` +
+          `"${inputs.targetLane ?? "unfiltered"}".`,
+      );
+    }
+
+    for (const runtimeLane of compatibleLanes) {
       // Compatibility is decided before expansion, so staging cannot execute
       // a controller-local or non-Tier-3 scenario body by accident.
-      if (!laneAllowed(scenario.id, runtimeLane, inputs.targetLane)) {
-        continue;
-      }
       if (!isMatrixScenario(scenario)) {
         addCell(cells, seenCellIds, {
           cell_id: `${scenario.id}/${runtimeLane}`,

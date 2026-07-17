@@ -406,11 +406,11 @@ export const ENV_MANIFEST: readonly EnvVarSpec[] = [
   {
     name: "RELEASE_E2E_RELEASE_DESKTOP_VERSION",
     description:
-      "Legacy fallback desktop version for T4-SH-2 when its dedicated artifact-chain workflow has no " +
-      "candidate build map. When a validated candidate receipt is supplied, its desktop-renderer/browser " +
-      "version is authoritative and this value is ignored. Without either, the dedicated legacy workflow " +
-      "falls back to the checked-out repo VERSION.",
-    whereItLives: "The legacy release workflow input; exact-candidate qualification uses the build receipt.",
+      "The desktop version the release under test ships, used by T4-SH-2 (artifact chain) as the " +
+      "ground-truth version the CDN manifest, versioned manifest, artifacts, and desktop-v<version> " +
+      "tag must all agree on. Defaults to the repo VERSION file (the version of the checked-out ref, " +
+      "which IS the release under test in the release gate). Override to check a specific release.",
+    whereItLives: "The release pipeline sets it to the release being cut; otherwise the repo VERSION file.",
     secret: false,
   },
   {
