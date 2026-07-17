@@ -77,16 +77,17 @@ describe("ProductProviderRoot", () => {
       </ProductProviderRoot>,
     );
 
-    expect(mocks.runtimeProps.at(-1)?.runtimeUrl).toBeNull();
+    expect(mocks.runtimeProps[mocks.runtimeProps.length - 1]?.runtimeUrl).toBeNull();
 
     act(() => {
       useHarnessConnectionStore.setState({ connectionState: "healthy" });
     });
-    expect(mocks.runtimeProps.at(-1)?.runtimeUrl).toBe("http://127.0.0.1:9001");
+    expect(mocks.runtimeProps[mocks.runtimeProps.length - 1]?.runtimeUrl)
+      .toBe("http://127.0.0.1:9001");
 
     act(() => {
       useHarnessConnectionStore.setState({ connectionState: "failed" });
     });
-    expect(mocks.runtimeProps.at(-1)?.runtimeUrl).toBeNull();
+    expect(mocks.runtimeProps[mocks.runtimeProps.length - 1]?.runtimeUrl).toBeNull();
   });
 });
