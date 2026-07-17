@@ -72,6 +72,30 @@ describe("TranscriptPendingPromptRow", () => {
     expect(actions.retryPrompt).toHaveBeenCalledWith("prompt-1");
   });
 
+  it("shows an actionable retry when projected session launch requires login", () => {
+    const actions = {
+      retryPrompt: vi.fn(),
+      dismissPrompt: vi.fn(),
+    };
+    render(
+      <TranscriptPendingPromptRow
+        activeSessionId="client-session:claude:1"
+        rowIndex={0}
+        prompt={createOptimisticPendingPrompt("Run after login", "prompt-1", NOW)}
+        outboxEntry={failedOutboxEntry(
+          "agent 'claude' is not ready (status: LoginRequired)",
+        )}
+        optimisticTrailingStatus={null}
+        outboxActions={actions}
+      />,
+    );
+
+    expect(screen.getByText(/LoginRequired/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+
+    expect(actions.retryPrompt).toHaveBeenCalledWith("prompt-1");
+  });
+
   it("shows the delivery error and retry for unconfirmed dispatches", () => {
     const actions = {
       retryPrompt: vi.fn(),
