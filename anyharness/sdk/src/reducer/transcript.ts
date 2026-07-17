@@ -11,33 +11,31 @@ import type {
   TranscriptItemPayload,
 } from "../types/events.js";
 import type {
-  AssistantProseItem,
   ErrorItem,
   PendingMcpElicitationInteraction,
   PendingInteraction,
   PendingApproval,
   PendingUserInputInteraction,
-  PlanItem,
-  ProposedPlanItem,
-  ThoughtItem,
   ToolCallSemanticKind,
   ToolCallItem,
   TranscriptItem,
   TranscriptState,
   TurnRecord,
   UnknownItem,
-  UserMessageItem,
 } from "../types/reducer.js";
 import { reducePendingPrompts } from "./pending-prompts.js";
+import {
+  ensureMutableContextItem as ensureMutableKnownItem,
+  ensureMutableContextTurn,
+  reduceTranscriptEventBatch,
+  setContextItem as setItem,
+  setContextTurn as setTurn,
+  type KnownTranscriptItem,
+  type ReduceOptions,
+  type TranscriptReductionContext,
+} from "./transcript-reduction-context.js";
 
-type KnownTranscriptItem =
-  | UserMessageItem
-  | AssistantProseItem
-  | ThoughtItem
-  | ToolCallItem
-  | PlanItem
-  | ProposedPlanItem
-  | ErrorItem;
+export type { ReduceOptions } from "./transcript-reduction-context.js";
 
 export function createTranscriptState(sessionId: string): TranscriptState {
   return {
@@ -100,28 +98,36 @@ export function normalizeAvailableSessionCommands(
   return normalized;
 }
 
-export interface ReduceOptions {
-  replayMode?: boolean;
-}
-
 export function reduceEvents(
   events: SessionEventEnvelope[],
   sessionId: string,
   options?: ReduceOptions,
 ): TranscriptState {
-  let state = createTranscriptState(sessionId);
-  for (const env of events) {
-    state = reduceEvent(state, env, options);
-  }
-  return state;
+  return reduceEventBatch(createTranscriptState(sessionId), events, options);
 }
 
 export function reduceEvent(
   state: TranscriptState,
   envelope: SessionEventEnvelope,
-  _options?: ReduceOptions,
+  options?: ReduceOptions,
 ): TranscriptState {
-  const s = { ...state };
+  return reduceEventBatch(state, [envelope], options);
+}
+
+export function reduceEventBatch(
+  state: TranscriptState,
+  envelopes: readonly SessionEventEnvelope[],
+  options?: ReduceOptions,
+): TranscriptState {
+  return reduceTranscriptEventBatch(state, envelopes, options, applyEvent);
+}
+
+function applyEvent(
+  context: TranscriptReductionContext,
+  envelope: SessionEventEnvelope,
+  _options?: ReduceOptions,
+): void {
+  const s = context.state;
   s.lastSeq = Math.max(s.lastSeq, envelope.seq);
 
   const evt = envelope.event;
@@ -139,19 +145,19 @@ export function reduceEvent(
       break;
 
     case "session_ended":
-      clearPendingInteractions(s, "none");
+      clearPendingInteractions(context, "none");
       s.isStreaming = false;
       break;
 
     case "turn_started": {
-      ensureTurn(s, turnId, ts);
+      ensureTurn(context, turnId, ts);
       s.isStreaming = true;
       break;
     }
 
     case "turn_ended": {
-      const turn = ensureMutableTurn(s, turnId, ts);
-      closeStreamingItems(s);
+      const turn = ensureMutableTurn(context, turnId, ts);
+      closeStreamingItems(context);
       turn.completedAt = ts;
       turn.stopReason = evt.stopReason;
       turn.fileBadges = collectFileBadges(s, turnId);
@@ -161,9 +167,9 @@ export function reduceEvent(
 
     case "item_started": {
       const item = createItemFromPayload(itemId, turnId, evt.item, ts, envelope.seq);
-      setItem(s, itemId, item);
-      addItemToTurn(s, turnId, itemId, ts);
-      openStreamingItem(s, itemId, item);
+      setItem(context, itemId, item);
+      addItemToTurn(context, turnId, itemId, ts);
+      openStreamingItem(context, itemId, item);
       s.isStreaming = s.isStreaming || item.status === "in_progress";
       break;
     }
@@ -171,12 +177,11 @@ export function reduceEvent(
     case "item_delta": {
       const existing = s.itemsById[itemId];
       if (!existing || existing.kind === "unknown") {
-        recordUnknown(s, envelope, itemId, ts, turnId);
+        recordUnknown(context, envelope, itemId, ts, turnId);
         break;
       }
-      const updated = cloneKnownTranscriptItem(existing);
+      const updated = ensureMutableKnownItem(context, itemId, existing);
       applyItemDelta(updated, evt, ts, envelope.seq);
-      setItem(s, itemId, updated);
       syncStreamingPointers(s, itemId, updated);
       break;
     }
@@ -184,11 +189,16 @@ export function reduceEvent(
     case "item_completed": {
       const existing = s.itemsById[itemId];
       const item = existing && existing.kind !== "unknown"
-        ? applyCompletion(cloneKnownTranscriptItem(existing), evt, ts, envelope.seq)
+        ? applyCompletion(
+          ensureMutableKnownItem(context, itemId, existing),
+          evt,
+          ts,
+          envelope.seq,
+        )
         : createCompletedItem(itemId, turnId, evt, ts, envelope.seq);
-      setItem(s, itemId, item);
-      addItemToTurn(s, turnId, itemId, ts);
-      closeStreamingPointer(s, itemId);
+      setItem(context, itemId, item);
+      addItemToTurn(context, turnId, itemId, ts);
+      closeStreamingPointer(context, itemId);
       break;
     }
 
@@ -284,16 +294,16 @@ export function reduceEvent(
       break;
 
     case "interaction_requested":
-      applyInteractionRequested(s, evt);
+      applyInteractionRequested(context, evt);
       break;
 
     case "interaction_resolved":
-      applyInteractionResolved(s, evt.requestId, evt.outcome);
+      applyInteractionResolved(context, evt.requestId, evt.outcome);
       break;
 
     case "error": {
-      closeStreamingItems(s);
-      clearPendingInteractions(s, "none");
+      closeStreamingItems(context);
+      clearPendingInteractions(context, "none");
       const item: ErrorItem = {
         kind: "error",
         itemId,
@@ -316,18 +326,16 @@ export function reduceEvent(
         code: evt.code ?? null,
         details: evt.details ?? null,
       };
-      setItem(s, itemId, item);
-      addItemToTurn(s, turnId, itemId, ts);
+      setItem(context, itemId, item);
+      addItemToTurn(context, turnId, itemId, ts);
       s.isStreaming = false;
       break;
     }
 
     default:
-      recordUnknown(s, envelope, itemId, ts, envelope.turnId ?? null);
+      recordUnknown(context, envelope, itemId, ts, envelope.turnId ?? null);
       break;
   }
-
-  return s;
 }
 
 function createCompletedItem(
@@ -623,7 +631,11 @@ export function selectPrimaryPendingInteraction(
   ) ?? null;
 }
 
-function applyInteractionRequested(s: TranscriptState, evt: InteractionRequestedEvent): void {
+function applyInteractionRequested(
+  context: TranscriptReductionContext,
+  evt: InteractionRequestedEvent,
+): void {
+  const s = context.state;
   const toolCallId = evt.source.toolCallId ?? null;
   const basePendingInteraction = {
     requestId: evt.requestId,
@@ -638,7 +650,7 @@ function applyInteractionRequested(s: TranscriptState, evt: InteractionRequested
   let pendingInteraction: PendingInteraction;
   if (evt.kind === "permission" && evt.payload.type === "permission") {
     if (toolCallId) {
-      const item = findMutableToolItemByToolCallId(s, toolCallId);
+      const item = findMutableToolItemByToolCallId(context, toolCallId);
       if (item) item.approvalState = "pending";
     }
     pendingInteraction = {
@@ -673,24 +685,30 @@ function applyInteractionRequested(s: TranscriptState, evt: InteractionRequested
 }
 
 function applyInteractionResolved(
-  s: TranscriptState,
+  context: TranscriptReductionContext,
   requestId: string,
   outcome: InteractionOutcome,
 ): void {
+  const s = context.state;
   const pendingInteraction = s.pendingInteractions.find((entry) => entry.requestId === requestId);
   if (!pendingInteraction) return;
 
-  clearPendingInteraction(s, requestId, approvalStateForOutcome(pendingInteraction, outcome));
+  clearPendingInteraction(
+    context,
+    requestId,
+    approvalStateForOutcome(pendingInteraction, outcome),
+  );
 }
 
 function clearPendingInteraction(
-  s: TranscriptState,
+  context: TranscriptReductionContext,
   requestId: string,
   toolApprovalState: ToolCallItem["approvalState"],
 ): void {
+  const s = context.state;
   const pendingInteraction = s.pendingInteractions.find((entry) => entry.requestId === requestId);
   if (pendingInteraction?.toolCallId) {
-    const item = findMutableToolItemByToolCallId(s, pendingInteraction.toolCallId);
+    const item = findMutableToolItemByToolCallId(context, pendingInteraction.toolCallId);
     if (item) {
       item.approvalState = toolApprovalState;
     }
@@ -699,12 +717,13 @@ function clearPendingInteraction(
 }
 
 function clearPendingInteractions(
-  s: TranscriptState,
+  context: TranscriptReductionContext,
   toolApprovalState: ToolCallItem["approvalState"],
 ): void {
+  const s = context.state;
   for (const pendingInteraction of s.pendingInteractions) {
     if (pendingInteraction.toolCallId) {
-      const item = findMutableToolItemByToolCallId(s, pendingInteraction.toolCallId);
+      const item = findMutableToolItemByToolCallId(context, pendingInteraction.toolCallId);
       if (item) {
         item.approvalState = toolApprovalState;
       }
@@ -737,20 +756,24 @@ function approvalStateForOutcome(
 }
 
 function findMutableToolItemByToolCallId(
-  s: TranscriptState,
+  context: TranscriptReductionContext,
   toolCallId: string,
 ): ToolCallItem | null {
+  const s = context.state;
   for (const [itemId, item] of Object.entries(s.itemsById)) {
     if (item.kind === "tool_call" && item.toolCallId === toolCallId) {
-      const nextItem = cloneKnownTranscriptItem(item);
-      setItem(s, itemId, nextItem);
-      return nextItem;
+      return ensureMutableKnownItem(context, itemId, item);
     }
   }
   return null;
 }
 
-function ensureTurn(s: TranscriptState, turnId: string, ts: string): TurnRecord {
+function ensureTurn(
+  context: TranscriptReductionContext,
+  turnId: string,
+  ts: string,
+): TurnRecord {
+  const s = context.state;
   const existing = s.turnsById[turnId];
   if (!existing) {
     const turn: TurnRecord = {
@@ -761,42 +784,49 @@ function ensureTurn(s: TranscriptState, turnId: string, ts: string): TurnRecord 
       stopReason: null,
       fileBadges: [],
     };
-    setTurn(s, turnId, turn);
+    setTurn(context, turnId, turn);
     s.turnOrder = [...s.turnOrder, turnId];
     return turn;
   }
   return existing;
 }
 
-function ensureMutableTurn(s: TranscriptState, turnId: string, ts: string): TurnRecord {
-  const turn = cloneTurn(ensureTurn(s, turnId, ts));
-  setTurn(s, turnId, turn);
-  return turn;
+function ensureMutableTurn(
+  context: TranscriptReductionContext,
+  turnId: string,
+  ts: string,
+): TurnRecord {
+  const existing = ensureTurn(context, turnId, ts);
+  return ensureMutableContextTurn(context, turnId, existing);
 }
 
 function addItemToTurn(
-  s: TranscriptState,
+  context: TranscriptReductionContext,
   turnId: string,
   itemId: string,
   ts: string,
 ): void {
-  const existing = ensureTurn(s, turnId, ts);
+  const existing = ensureTurn(context, turnId, ts);
   if (existing.itemOrder.includes(itemId)) {
     return;
   }
 
-  const turn = cloneTurn(existing);
-  setTurn(s, turnId, turn);
-  turn.itemOrder = [...turn.itemOrder, itemId];
+  const turn = ensureMutableTurn(context, turnId, ts);
+  turn.itemOrder.push(itemId);
 }
 
-function openStreamingItem(s: TranscriptState, itemId: string, item: TranscriptItem): void {
+function openStreamingItem(
+  context: TranscriptReductionContext,
+  itemId: string,
+  item: TranscriptItem,
+): void {
+  const s = context.state;
   if (item.kind === "assistant_prose" && item.isStreaming) {
-    closeAssistantPointer(s);
+    closeAssistantPointer(context);
     s.openAssistantItemId = itemId;
   }
   if (item.kind === "thought" && item.isStreaming) {
-    closeThoughtPointer(s);
+    closeThoughtPointer(context);
     s.openThoughtItemId = itemId;
   }
 }
@@ -812,54 +842,58 @@ function syncStreamingPointers(s: TranscriptState, itemId: string, item: Transcr
   }
 }
 
-function closeStreamingPointer(s: TranscriptState, itemId: string): void {
+function closeStreamingPointer(
+  context: TranscriptReductionContext,
+  itemId: string,
+): void {
+  const s = context.state;
   if (s.openAssistantItemId === itemId) s.openAssistantItemId = null;
   if (s.openThoughtItemId === itemId) s.openThoughtItemId = null;
   const item = s.itemsById[itemId];
   if (!item) return;
   if (item.kind === "user_message" || item.kind === "assistant_prose" || item.kind === "thought") {
-    const nextItem = cloneKnownTranscriptItem(item);
+    const nextItem = ensureMutableKnownItem(context, itemId, item);
     nextItem.isStreaming = false;
-    setItem(s, itemId, nextItem);
   }
 }
 
-function closeStreamingItems(s: TranscriptState): void {
-  closeAssistantPointer(s);
-  closeThoughtPointer(s);
+function closeStreamingItems(context: TranscriptReductionContext): void {
+  closeAssistantPointer(context);
+  closeThoughtPointer(context);
 }
 
-function closeAssistantPointer(s: TranscriptState): void {
+function closeAssistantPointer(context: TranscriptReductionContext): void {
+  const s = context.state;
   if (!s.openAssistantItemId) return;
   const itemId = s.openAssistantItemId;
   const item = s.itemsById[itemId];
   if (item?.kind === "assistant_prose") {
-    const nextItem = cloneKnownTranscriptItem(item);
+    const nextItem = ensureMutableKnownItem(context, itemId, item);
     nextItem.isStreaming = false;
-    setItem(s, itemId, nextItem);
   }
   s.openAssistantItemId = null;
 }
 
-function closeThoughtPointer(s: TranscriptState): void {
+function closeThoughtPointer(context: TranscriptReductionContext): void {
+  const s = context.state;
   if (!s.openThoughtItemId) return;
   const itemId = s.openThoughtItemId;
   const item = s.itemsById[itemId];
   if (item?.kind === "thought") {
-    const nextItem = cloneKnownTranscriptItem(item);
+    const nextItem = ensureMutableKnownItem(context, itemId, item);
     nextItem.isStreaming = false;
-    setItem(s, itemId, nextItem);
   }
   s.openThoughtItemId = null;
 }
 
 function recordUnknown(
-  s: TranscriptState,
+  context: TranscriptReductionContext,
   envelope: SessionEventEnvelope,
   itemId: string,
   ts: string,
   turnId: string | null,
 ): void {
+  const s = context.state;
   const item: UnknownItem = {
     kind: "unknown",
     itemId,
@@ -869,59 +903,11 @@ function recordUnknown(
     timestamp: ts,
     startedSeq: envelope.seq,
   };
-  setItem(s, itemId, item);
+  setItem(context, itemId, item);
   if (turnId) {
-    addItemToTurn(s, turnId, itemId, ts);
+    addItemToTurn(context, turnId, itemId, ts);
   }
   s.unknownEvents = [...s.unknownEvents, envelope];
-}
-
-function setItem(
-  s: TranscriptState,
-  itemId: string,
-  item: TranscriptItem,
-): void {
-  s.itemsById = {
-    ...s.itemsById,
-    [itemId]: item,
-  };
-}
-
-function setTurn(
-  s: TranscriptState,
-  turnId: string,
-  turn: TurnRecord,
-): void {
-  s.turnsById = {
-    ...s.turnsById,
-    [turnId]: turn,
-  };
-}
-
-function cloneTurn(turn: TurnRecord): TurnRecord {
-  return {
-    ...turn,
-    itemOrder: [...turn.itemOrder],
-    fileBadges: [...turn.fileBadges],
-  };
-}
-
-function cloneKnownTranscriptItem<T extends KnownTranscriptItem>(item: T): T {
-  const cloned = {
-    ...item,
-    contentParts: item.contentParts.map(cloneContentPart),
-  };
-  if (item.kind === "plan") {
-    return {
-      ...cloned,
-      entries: [...item.entries],
-    } as T;
-  }
-  return cloned as T;
-}
-
-function cloneContentPart(part: ContentPart): ContentPart {
-  return { ...part } as ContentPart;
 }
 
 function extractText(parts: ContentPart[]): string {
