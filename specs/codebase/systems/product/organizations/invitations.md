@@ -2,7 +2,7 @@
 
 Date: 2026-06-24.
 
-Last reconciled: 2026-07-15.
+Last reconciled: 2026-07-17.
 
 Scope:
 
@@ -10,10 +10,13 @@ Scope:
 - `server/proliferate/db/store/organization_invitations.py`
 - `server/proliferate/server/organizations/**`
 - `cloud/sdk/src/client/organizations.ts`
-- `apps/web/src/pages/OrganizationJoinPage.tsx`
-- `apps/desktop/src/components/settings/panes/OrganizationMembersPane.tsx`
-- `apps/desktop/src/components/app/sidebar/SidebarAccountFooter.tsx`
-- `apps/desktop/src/lib/domain/auth/desktop-navigation.ts`
+- `apps/web/src/browser/links/OrganizationJoinRoute.tsx`
+- `apps/packages/product-client/src/hooks/organizations/lifecycle/use-organization-join-auth-launch.ts`
+- `apps/packages/product-client/src/hooks/organizations/workflows/use-organization-join-invitation-flow.ts`
+- `apps/packages/product-client/src/components/settings/panes/AccountPane.tsx`
+- `apps/packages/product-client/src/components/settings/panes/OrganizationMembersPane.tsx`
+- `apps/packages/product-client/src/components/app/sidebar/SidebarAccountFooter.tsx`
+- `apps/packages/product-client/src/lib/domain/auth/desktop-navigation.ts`
 
 ## Model
 
@@ -50,29 +53,40 @@ The browser URL is the universal entrypoint:
 Email / copied link -> https://.../join/{organizationId}
 ```
 
-The join page first discovers SSO by organization id. When the organization has
-an enabled connection, Web starts that SSO flow; JIT membership or invitation
-acceptance remains a server callback decision. When usable SSO is unavailable or
-cannot be started, the page falls back to opening Desktop with:
+The narrow Web host route first discovers and starts SSO by organization id.
+When that succeeds, the browser redirects to the provider; JIT membership or
+invitation acceptance remains a server callback decision. Any discovery or
+start failure falls back to opening Desktop with:
 
 ```text
 proliferate://join/{organizationId}
 ```
 
-If Desktop does not open, the page presents a retry action and install-oriented
-copy. Hosted web product sessions remain beta-gated, so the fallback path must
-not require web product authentication before attempting the Desktop handoff.
+The current route renders only an announced progress message and assigns the
+deep link (`proliferate-local://` on loopback); it does not render product UI or
+a retry/install surface. Hosted web product sessions remain beta-gated, and the
+host route does not require web product authentication before attempting SSO or
+the Desktop handoff.
 
-Desktop maps the deep link to:
+ProductClient's shared Desktop navigation maps the deep link to the non-admin
+Account surface:
 
 ```text
-/settings?section=organization-members&joinOrganizationId={organizationId}
+/settings?section=account&joinOrganizationId={organizationId}
 ```
 
-If the Desktop user is signed in, Desktop preserves the join target and shows an
-explicit accept-invitation action for the matching pending invitation. If the
-Desktop user is signed out, Desktop starts the normal sign-in path and preserves
-the join target so the same explicit accept flow resumes after authentication.
+Before the authenticated tree mounts, ProductClient persists the organization
+target and attempts organization SSO. For the known not-configured/not-available
+SSO outcomes it falls back to standard GitHub sign-in; other errors remain
+visible for retry rather than silently changing methods. On successful
+organization SSO, server user resolution may accept a matching pending
+invitation and create the active membership during the callback; that path does
+not wait for an `AccountPane` action. If the invitation remains pending, as in a
+standard GitHub fallback, the shared workflow resumes the persisted target after
+authentication, handles explicit cross-server trust when needed, and navigates
+to Account. `AccountPane` then shows the matching pending invitation and requires
+explicit acceptance. That ProductClient acceptance activates the joined
+organization, clears the target, and refreshes invitation and membership state.
 
 ## Permissions
 
@@ -81,8 +95,9 @@ list (`GET /organizations/{organization_id}/invitations`) — require the caller
 to hold the `admin` or `owner` role on the target organization
 (`current_path_org_admin`). Plain members can see the organization's active
 memberships (`/members`) but not pending invitation emails or roles. This
-mirrors the Desktop UI, which treats the whole `organization-members` section
-as admin-only (see `settings-admin-ia.md`).
+mirrors the shared ProductClient UI, which treats the whole
+`organization-members` section as admin-only (see `settings-admin-ia.md`) while
+placing an invitee's own acceptance on the non-admin Account surface.
 
 ## Admin UX
 

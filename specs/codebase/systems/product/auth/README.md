@@ -4,22 +4,29 @@ Scope:
 
 - `server/proliferate/auth/**`
 - `server/proliferate/server/organizations/sso/**`
-- `apps/web/src/components/auth/**`
+- `apps/web/src/browser/auth/**`
+- `apps/web/src/browser/links/OrganizationJoinRoute.tsx`
+- `apps/web/src/lib/access/cloud/auth/**`
+- `apps/web/src/web-host.ts`
 - `apps/mobile/src/components/auth/**`
 - `apps/desktop/src/lib/integrations/auth/**`
-- `apps/desktop/src/providers/*product-host*`
+- `apps/desktop/src/providers/DesktopProductHostProvider.tsx`
+- `apps/desktop/src/providers/desktop-product-host.ts`
 - `apps/packages/product-client/src/components/auth/**`
+- `apps/packages/product-client/src/hooks/auth/**`
 - `apps/packages/product-client/src/components/settings/panes/AccountPane.tsx`
 - `apps/packages/product-domain/src/auth/**`
 - `apps/packages/product-ui/src/auth/**`
 - `cloud/sdk/src/client/auth.ts`
 
-Target architecture:
+Proposal under review:
 
-- [Desktop and Web authentication method contract](method-set-target.md) defines
-  the approved GitHub, Google, and customer-domain SSO end state plus the trust,
-  account-binding, and session-scope prerequisites. The current behavior in this
-  document remains authoritative until each target rollout checkpoint lands.
+- [Proposed hosted Desktop and Web authentication method contract](method-set-target.md)
+  is a draft GitHub, Google, and customer-domain SSO destination plus its trust,
+  account-binding, and session-scope prerequisites. It is not accepted
+  architecture or implementation authority. This document remains the current
+  contract until founder and security owners explicitly accept and promote that
+  proposal.
 
 ## Model
 
@@ -139,31 +146,31 @@ CIDRs listed in `PASSWORD_AUTH_TRUSTED_PROXY_HOSTS`.
 ## Organization SSO Sign-In
 
 The org-SSO backend includes the connection model, discovery/start endpoints,
-OIDC callback, and JIT membership. Web exposes explicit organization entry
-through a slug link and invitation flow. ProductClient has a slug-capable
-`/login` page for Desktop, but the default anonymous Desktop gate does not
-currently expose a route to it. Email-only discovery still resolves deployment
-SSO rather than an organization connection. The target method contract replaces
-these divergent entries with one verified customer-domain flow.
+OIDC callback, and JIT membership. ProductClient owns the shared auth shell and
+the slug-capable `/login` page; Web and Desktop retain only their browser/native
+transport. The default shell probes SSO without organization, slug, or email
+context, so it discovers deployment SSO rather than an organization connection.
+The proposed method contract would replace these divergent entries with one
+verified customer-domain flow if it is accepted.
 
 Current entry points:
 
-- Web auth screen shows an email SSO form and a quiet `Sign in with SSO` link
-  when the deployment is not itself SSO-gated. Email-only discovery currently
-  reaches deployment SSO only. The link opens `/login`, a page with a single
-  field for the organization's workspace slug.
-- `/login/<slug>` prefills that field. This is the URL an admin pastes into their
-  onboarding docs (for example `app.proliferate.ai/login/acme`).
-- The slug resolves to an `organizationId`, then the page calls the existing
-  `startSsoAuth` start flow with that org (and connection) id. No new SSO
-  machinery.
-- Desktop's `/login` page can reveal a slug field and drive the existing native
-  SSO machinery (system browser + `proliferate://auth/callback` deep link), but
-  the default anonymous gate does not currently expose that page.
-- Web `/join/:orgId` signs the user in on the web when the org has SSO enabled
-  (it discovers by org id and starts the SSO flow; JIT membership and invite
-  acceptance happen in the SSO callback). It only falls back to the Desktop
-  handoff when the org has no usable SSO.
+- The shared default `AuthShell` offers a deployment-SSO button when the
+  no-input SSO probe succeeds. It does not render a customer email form.
+- ProductClient's separate `/login` page includes a quiet organization-SSO
+  affordance that reveals a workspace-slug field and calls
+  `host.auth.startLogin({kind: "sso", slug})`.
+- Web `/login/<slug>` is a narrow host decoder that redirects to `/login` and
+  seeds the slug in router state. ProductClient does not currently consume that
+  state, so the slug field is not prefilled.
+- On Desktop, the shared `/login` page drives the native SSO transport (system
+  browser plus `proliferate://auth/callback`). The default anonymous shell does
+  not link to the slug affordance.
+- Web `/join/:orgId` is owned by
+  `apps/web/src/browser/links/OrganizationJoinRoute.tsx`. It discovers and starts
+  organization SSO by organization id; JIT membership or invitation acceptance
+  remains a callback/server decision. Any discovery or start failure falls back
+  to the Desktop handoff.
 
 Slug resolution:
 
@@ -191,15 +198,23 @@ admin shared") for every non-enabled outcome.
 
 Web signed out:
 
-- Shows `Continue with GitHub` as the primary provider action.
-- Shows `Continue with Google` as the secondary visible provider action.
-- Shows web beta copy before sign-in.
-- Shows a `Sign in with SSO` link to the org-slug login page (see Organization
-  SSO Sign-In), except when the deployment is itself SSO-gated.
-- Does not currently show Apple or email/password sign-in on the web auth page.
-- If readiness is missing, the existing Connect GitHub gate is shown.
-- If web beta access is denied, shows a beta-only rejection state with Desktop
-  app handoff and alternate-account actions.
+- The thin Web host publishes GitHub, Google, and SSO in anonymous host state,
+  and its transport can start all three.
+- ProductClient does not currently consume that method list. Its shared default
+  shell renders GitHub, an optional deployment-SSO button, or the operational
+  password fallback when GitHub is unavailable. It has no Google login action or
+  customer-domain email action.
+- The separate shared `/login` page exposes the organization-slug affordance.
+- Apple is not shown. Password is normally hidden on hosted Web; the Web
+  transport rejects it if invoked.
+- When viewer readiness resolves without GitHub, the Web host publishes
+  `action_required/connect_github`; server product endpoints also enforce
+  current GitHub readiness. ProductClient does not currently render the removed
+  pre-unification Connect-GitHub screen from that host state.
+- If web beta access is denied, the Web host publishes an `access_denied` issue.
+  ProductClient's current `AuthShell` does not consume that issue, so the removed
+  pre-unification beta rejection screen and Desktop handoff are not currently
+  rendered from this state.
 
 Mobile signed out:
 
@@ -210,7 +225,10 @@ Mobile signed out:
 
 Desktop:
 
-- Keeps GitHub as the primary sign-in path.
+- Uses the same ProductClient default shell: GitHub primary, optional deployment
+  SSO, and operational password fallback when GitHub is unavailable.
+- Does not offer Google login. Desktop accepts Google only for an explicit
+  authenticated account-link purpose.
 - The `/login` route supports organization-slug SSO, but the default cold-login
   gate does not currently link to it.
 - Account settings expose `Set password` / `Change password` for authenticated
