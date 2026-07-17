@@ -12,6 +12,9 @@ import { hasWorkspaceBootstrappedInSession } from "#product/hooks/workspaces/lif
 import type { SelectedCloudRuntimeState } from "#product/hooks/workspaces/facade/use-selected-cloud-runtime-state";
 import { withFreshCloudSandboxGatewayAccessToken } from "#product/lib/access/cloud/cloud-sandbox-gateway";
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
+import {
+  isProjectedSessionMaterializationCandidate,
+} from "#product/lib/domain/sessions/creation/projected-session-materialization";
 
 export function useSelectedCloudRuntimeRehydration(
   selectedCloudRuntime: SelectedCloudRuntimeState,
@@ -34,9 +37,7 @@ export function useSelectedCloudRuntimeRehydration(
     return (state.sessionIdsByWorkspaceId[workspaceId] ?? [])
       .filter((sessionId) => {
         const entry = state.entriesById[sessionId];
-        return !!entry
-          && !entry.materializedSessionId
-          && entry.sessionRelationship.kind === "pending";
+        return entry ? isProjectedSessionMaterializationCandidate(entry) : false;
       })
       .join("|");
   });
@@ -81,7 +82,12 @@ export function useSelectedCloudRuntimeRehydration(
       return;
     }
 
-    if (!shouldRehydrateOnReadyRef.current && isBootstrapped && !hasAwaitingPendingWorkspaceEntry) {
+    if (
+      !shouldRehydrateOnReadyRef.current
+      && isBootstrapped
+      && !hasAwaitingPendingWorkspaceEntry
+      && !hasUnmaterializedProjectedSessions
+    ) {
       return;
     }
 

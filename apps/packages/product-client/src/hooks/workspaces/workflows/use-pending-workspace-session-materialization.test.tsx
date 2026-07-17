@@ -88,6 +88,7 @@ describe("usePendingWorkspaceSessionMaterialization", () => {
       modelId: "opus",
       modeId: "default",
       hasAttemptedPrompt: true,
+      sessionRelationship: { kind: "root" },
     }));
 
     const materializeReadyWorkspaceProjectedSessions =

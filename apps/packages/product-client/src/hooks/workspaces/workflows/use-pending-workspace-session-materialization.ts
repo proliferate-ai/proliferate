@@ -13,6 +13,9 @@ import type {
   CreateEmptySessionWithResolvedConfigOptions,
 } from "#product/hooks/sessions/workflows/session-creation-types";
 import { logLatency } from "#product/lib/infra/measurement/measurement-port";
+import {
+  isProjectedSessionMaterializationCandidate,
+} from "#product/lib/domain/sessions/creation/projected-session-materialization";
 
 interface PendingWorkspaceSessionMaterializationOptions {
   eventPrefix?: string;
@@ -157,10 +160,7 @@ export function useReadyWorkspaceProjectedSessionMaterialization() {
   ): PendingWorkspaceSessionMaterializationResult => {
     const eventPrefix = options?.eventPrefix ?? "workspace.ready_projected_session";
     const projectedSessions = Object.values(getWorkspaceSessionRecords(workspaceId))
-      .filter((session) =>
-        !session.materializedSessionId
-        && session.sessionRelationship.kind === "pending"
-      );
+      .filter(isProjectedSessionMaterializationCandidate);
     const projectedSessionIds = projectedSessions.map((session) => session.sessionId);
 
     let materializationStartCount = 0;
