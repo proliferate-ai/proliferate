@@ -333,8 +333,9 @@ install/update path used by harness settings. Unknown kinds are rejected. An
 active job is reused only when its install mode and agent scope cover the new
 request; an incompatible request receives `409 AGENT_RECONCILE_BUSY` so the
 running download remains the single observable disk writer. Internal startup
-and catalog-applied installed-only pokes wait for that active job and retry, so
-a foreground scoped update cannot cause a pin-refresh pass to be dropped.
+and catalog-applied installed-only pokes reject compatible reuse, wait for any
+active job to finish, and atomically admit a fresh pass against one latest-catalog
+snapshot, so a foreground update cannot drop or partially mix a pin refresh.
 
 `GET /v1/agents/reconcile` returns the job's `currentAgent`, `installedOnly`,
 and optional progress object. Progress contains aggregate transferred/total

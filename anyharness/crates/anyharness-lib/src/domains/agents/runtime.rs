@@ -7,7 +7,8 @@ use std::sync::Arc;
 use super::auth::login::{self, AgentLoginError};
 pub use super::auth::login::{AgentLoginCommand, ResolvedAgentLoginCommand};
 use super::installer::reconcile::execution::{
-    AgentReconcileJobSnapshot, AgentReconcileService, AgentReconcileStartError,
+    AgentReconcileAdmission, AgentReconcileJobSnapshot, AgentReconcileService,
+    AgentReconcileStartError,
 };
 use super::installer::seed::AgentSeedStore;
 use super::installer::{self, InstallError, InstallOptions, InstalledArtifactResult};
@@ -236,7 +237,7 @@ impl AgentRuntime {
         }
         Ok(self
             .reconcile_service
-            .start_or_get(
+            .start_with_admission(
                 registry,
                 self.runtime_home.clone(),
                 reinstall,
@@ -244,28 +245,38 @@ impl AgentRuntime {
                 requested_agent_kinds,
                 Some(self.seed_store.clone()),
                 Some(self.catalog_service.clone()),
+                AgentReconcileAdmission::ReuseCompatible,
             )
             .await?)
     }
 
     /// Internal startup/catalog pokes must not disappear merely because a
     /// foreground scoped update owns the one observable reconcile slot. Wait
-    /// for that job to settle, then coalesce onto or start the installed-only
-    /// pass. HTTP callers intentionally continue to receive `409` instead.
+    /// for that job to settle, then atomically admit a fresh installed-only
+    /// pass against the latest catalog. HTTP callers retain compatible reuse.
     pub async fn reconcile_installed_when_idle(&self) {
         loop {
-            match self.start_reconcile(false, true, Vec::new()).await {
+            let result = self
+                .reconcile_service
+                .start_with_admission(
+                    built_in_registry(),
+                    self.runtime_home.clone(),
+                    false,
+                    true,
+                    Vec::new(),
+                    Some(self.seed_store.clone()),
+                    Some(self.catalog_service.clone()),
+                    AgentReconcileAdmission::RequireIdle,
+                )
+                .await;
+            match result {
                 Ok(_) => return,
-                Err(AgentRuntimeError::ReconcileStart(AgentReconcileStartError::Busy(job_id))) => {
+                Err(AgentReconcileStartError::Busy(job_id)) => {
                     tracing::debug!(
                         active_job_id = %job_id,
                         "installed-only reconcile poke waiting for active job"
                     );
                     tokio::time::sleep(std::time::Duration::from_millis(250)).await;
-                }
-                Err(error) => {
-                    tracing::warn!(error = %error, "installed-only reconcile poke failed");
-                    return;
                 }
             }
         }

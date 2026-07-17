@@ -545,8 +545,9 @@ flag: full (install missing too) or installed-only (only update agents already o
 disk; skip missing ones). The runtime drives an installed-only reconcile at
 startup (`AgentRuntime::spawn_startup_pass`, after seed hydration) so installed
 agents track the catalog pins on desktop and cloud workers — non-blocking,
-best-effort, idempotent. Activating a validated synced catalog also starts an
-installed-only reconcile so already-managed artifacts converge to its pins.
+best-effort, idempotent. Activating a validated synced catalog also starts a
+fresh installed-only reconcile after any active job finishes, using one snapshot
+of the newly active catalog so already-managed artifacts converge to its pins.
 An existing executable is not proof of convergence: when a catalog pin exists
 but the durable install manifest has no comparable version, reconcile forces a
 reinstall. Binary/archive roles compare the declared version; git roles compare

@@ -18,7 +18,7 @@ async fn snapshot_defaults_to_idle() {
 }
 
 #[tokio::test]
-async fn start_or_get_reuses_active_job() {
+async fn compatible_admission_reuses_active_job() {
     let service = AgentReconcileService::new();
     {
         let mut job = service.job.lock().await;
@@ -34,11 +34,12 @@ async fn start_or_get_reuses_active_job() {
             started_at: Some(chrono::Utc::now().to_rfc3339()),
             finished_at: None,
             message: None,
+            catalog: None,
         });
     }
 
     let snapshot = service
-        .start_or_get(
+        .start_with_admission(
             Vec::new(),
             PathBuf::from("/tmp/anyharness-test"),
             false,
@@ -46,6 +47,7 @@ async fn start_or_get_reuses_active_job() {
             Vec::new(),
             None,
             None,
+            AgentReconcileAdmission::ReuseCompatible,
         )
         .await
         .expect("covered request reuses active job");
@@ -73,11 +75,12 @@ async fn reinstall_request_is_rejected_while_non_reinstall_job_runs() {
             started_at: Some(chrono::Utc::now().to_rfc3339()),
             finished_at: None,
             message: None,
+            catalog: None,
         });
     }
 
     let error = service
-        .start_or_get(
+        .start_with_admission(
             Vec::new(),
             PathBuf::from("/tmp/anyharness-reinstall-supersede"),
             true,
@@ -85,6 +88,7 @@ async fn reinstall_request_is_rejected_while_non_reinstall_job_runs() {
             vec![AgentKind::Codex],
             None,
             None,
+            AgentReconcileAdmission::ReuseCompatible,
         )
         .await
         .expect_err("incompatible reinstall must not hide the active job");
@@ -145,7 +149,7 @@ async fn empty_registry_job_completes() {
     let service = AgentReconcileService::new();
 
     let snapshot = service
-        .start_or_get(
+        .start_with_admission(
             Vec::new(),
             PathBuf::from("/tmp/anyharness-empty"),
             true,
@@ -153,6 +157,7 @@ async fn empty_registry_job_completes() {
             Vec::new(),
             None,
             None,
+            AgentReconcileAdmission::ReuseCompatible,
         )
         .await
         .expect("start empty reconcile");
@@ -181,7 +186,7 @@ async fn reconcile_job_remains_queued_while_another_disk_writer_runs() {
     let writer = service.execution_lock.clone().lock_owned().await;
 
     service
-        .start_or_get(
+        .start_with_admission(
             Vec::new(),
             PathBuf::from("/tmp/anyharness-serialized"),
             true,
@@ -189,6 +194,7 @@ async fn reconcile_job_remains_queued_while_another_disk_writer_runs() {
             vec![AgentKind::Codex],
             None,
             None,
+            AgentReconcileAdmission::ReuseCompatible,
         )
         .await
         .expect("queue serialized reconcile");
@@ -224,7 +230,16 @@ async fn installed_only_skips_uninstalled_agents() {
     assert!(!registry.is_empty(), "built-in registry must have agents");
 
     service
-        .start_or_get(registry, home.clone(), false, true, Vec::new(), None, None)
+        .start_with_admission(
+            registry,
+            home.clone(),
+            false,
+            true,
+            Vec::new(),
+            None,
+            None,
+            AgentReconcileAdmission::ReuseCompatible,
+        )
         .await
         .expect("start installed-only reconcile");
 
@@ -272,11 +287,12 @@ async fn full_reconcile_is_rejected_while_installed_only_job_runs() {
             started_at: Some(chrono::Utc::now().to_rfc3339()),
             finished_at: None,
             message: None,
+            catalog: None,
         });
     }
 
     let error = service
-        .start_or_get(
+        .start_with_admission(
             Vec::new(),
             PathBuf::from("/tmp/anyharness-supersede"),
             false,
@@ -284,6 +300,7 @@ async fn full_reconcile_is_rejected_while_installed_only_job_runs() {
             Vec::new(),
             None,
             None,
+            AgentReconcileAdmission::ReuseCompatible,
         )
         .await
         .expect_err("incompatible full request must not hide startup progress");
@@ -317,11 +334,12 @@ async fn installed_only_reuses_in_flight_installed_only_job() {
             started_at: Some(chrono::Utc::now().to_rfc3339()),
             finished_at: None,
             message: None,
+            catalog: None,
         });
     }
 
     let snapshot = service
-        .start_or_get(
+        .start_with_admission(
             Vec::new(),
             PathBuf::from("/tmp/anyharness-reuse"),
             false,
@@ -329,9 +347,123 @@ async fn installed_only_reuses_in_flight_installed_only_job() {
             Vec::new(),
             None,
             None,
+            AgentReconcileAdmission::ReuseCompatible,
         )
         .await
         .expect("covered installed-only request reuses active job");
 
     assert_eq!(snapshot.job_id.as_deref(), Some("running-installed-only"));
+}
+
+#[tokio::test]
+async fn catalog_poke_waits_for_compatible_job_then_uses_latest_pins() {
+    use crate::domains::agents::catalog::bundled::bundled_agent_catalog_document;
+    use crate::domains::agents::catalog::schema::AgentCatalogArtifactSource;
+    use crate::domains::agents::catalog::service::AgentCatalogService;
+    use crate::domains::agents::catalog::sync::CatalogSyncService;
+    use crate::domains::agents::installer::seed::AgentSeedStore;
+    use crate::domains::agents::runtime::AgentRuntime;
+
+    let service = Arc::new(AgentReconcileService::new());
+    let writer = service.execution_lock.clone().lock_owned().await;
+    let home = std::env::temp_dir().join(format!("catalog-poke-{}", Uuid::new_v4()));
+    let sync = Arc::new(CatalogSyncService::from_bundled());
+    let catalog = AgentCatalogService::new(sync.clone());
+    let runtime = Arc::new(AgentRuntime::new(
+        home.clone(),
+        service.clone(),
+        AgentSeedStore::not_configured_dev(),
+        catalog.clone(),
+    ));
+    let old_pin = catalog
+        .pin_overrides("codex")
+        .and_then(|pins| pins.agent_process)
+        .expect("bundled codex pin");
+
+    let first = runtime
+        .start_reconcile(false, true, Vec::new())
+        .await
+        .expect("queue compatible installed-only job");
+    let first_id = first.job_id.expect("first job id");
+    {
+        let job = service.job.lock().await;
+        let admitted = job.as_ref().expect("queued job catalog snapshot");
+        let admitted_pin = admitted
+            .catalog
+            .as_ref()
+            .and_then(|catalog| catalog.pin_overrides("codex"))
+            .and_then(|pins| pins.agent_process);
+        assert_eq!(admitted_pin.as_deref(), Some(old_pin.as_str()));
+    }
+
+    let latest_ref = "1111111111111111111111111111111111111111";
+    let mut latest = bundled_agent_catalog_document().clone();
+    latest.catalog_version = "2099-01-01.catalog-poke".into();
+    let codex = latest
+        .agents
+        .iter_mut()
+        .find(|agent| agent.kind == "codex")
+        .expect("codex catalog row");
+    codex.harness.agent_process.version = "catalog-poke-latest".into();
+    match codex.harness.agent_process.source.as_mut() {
+        Some(AgentCatalogArtifactSource::Git { git_ref, .. }) => {
+            *git_ref = latest_ref.into();
+        }
+        _ => panic!("codex adapter must use a git pin"),
+    }
+    sync.apply_fetched(
+        &serde_json::to_vec(&latest).expect("serialize latest catalog"),
+        None,
+    )
+    .expect("apply latest catalog");
+
+    let busy = service
+        .start_with_admission(
+            crate::domains::agents::registry::built_in_registry(),
+            home.clone(),
+            false,
+            true,
+            Vec::new(),
+            None,
+            Some(catalog.clone()),
+            AgentReconcileAdmission::RequireIdle,
+        )
+        .await
+        .expect_err("fresh internal admission must reject a compatible active job");
+    assert!(matches!(busy, AgentReconcileStartError::Busy(job_id) if job_id == first_id));
+
+    let poke = tokio::spawn({
+        let runtime = runtime.clone();
+        async move { runtime.reconcile_installed_when_idle().await }
+    });
+
+    drop(writer);
+    timeout(Duration::from_secs(3), poke)
+        .await
+        .expect("poke should admit a post-terminal pass")
+        .expect("poke task should complete");
+
+    let fresh = timeout(Duration::from_secs(3), async {
+        loop {
+            let snapshot = service.snapshot().await;
+            if snapshot.status == AgentReconcileJobStatus::Completed {
+                return snapshot;
+            }
+            sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("fresh latest-catalog pass should complete");
+    assert_ne!(fresh.job_id.as_deref(), Some(first_id.as_str()));
+    assert!(fresh.installed_only);
+    assert!(fresh.agent_kinds.is_empty());
+    let job = service.job.lock().await;
+    let used_pin = job
+        .as_ref()
+        .and_then(|job| job.catalog.as_ref())
+        .and_then(|catalog| catalog.pin_overrides("codex"))
+        .and_then(|pins| pins.agent_process);
+    assert_eq!(used_pin.as_deref(), Some(latest_ref));
+
+    let _ = std::fs::remove_dir_all(home);
 }

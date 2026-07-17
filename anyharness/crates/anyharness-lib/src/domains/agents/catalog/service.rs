@@ -44,19 +44,7 @@ impl AgentCatalogService {
     /// unknown to the active catalog). Carries both the version (drift) and
     /// the resolved, fenced install source (materialization) per role.
     pub fn pin_overrides(&self, kind: &str) -> Option<PinOverrides> {
-        let active = self.active_catalog();
-        let pins = active.pins(kind)?;
-        let agent_process_source = project_source(&pins.agent_process);
-        let native_source = pins.native.as_ref().and_then(project_source);
-        Some(PinOverrides {
-            agent_process: pin_identity(&pins.agent_process.version, agent_process_source.as_ref()),
-            native: pins
-                .native
-                .as_ref()
-                .and_then(|pin| pin_identity(&pin.version, native_source.as_ref())),
-            agent_process_source,
-            native_source,
-        })
+        self.active_catalog().pin_overrides(kind)
     }
 
     pub fn active_catalog(&self) -> ActiveCatalog {
@@ -198,6 +186,21 @@ impl ActiveCatalog {
     /// Harness version pins for the kind (installer + readiness drift).
     pub fn pins(&self, kind: &str) -> Option<&AgentCatalogHarnessPins> {
         self.agent(kind).map(|agent| &agent.harness)
+    }
+
+    pub(crate) fn pin_overrides(&self, kind: &str) -> Option<PinOverrides> {
+        let pins = self.pins(kind)?;
+        let agent_process_source = project_source(&pins.agent_process);
+        let native_source = pins.native.as_ref().and_then(project_source);
+        Some(PinOverrides {
+            agent_process: pin_identity(&pins.agent_process.version, agent_process_source.as_ref()),
+            native: pins
+                .native
+                .as_ref()
+                .and_then(|pin| pin_identity(&pin.version, native_source.as_ref())),
+            agent_process_source,
+            native_source,
+        })
     }
 
     /// The agent's ordered auth-context signatures (classifier input).

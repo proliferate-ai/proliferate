@@ -6,6 +6,7 @@ use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use super::{reconcile_agent_with_progress, AgentReconcileOutcome, AgentReconcileResult};
+use crate::domains::agents::catalog::service::{ActiveCatalog, AgentCatalogService};
 use crate::domains::agents::installer::progress::{
     InstallProgressPhase, InstallProgressReporter, InstallProgressUpdate,
 };
@@ -27,6 +28,12 @@ pub enum AgentReconcileJobStatus {
 pub enum AgentReconcileStartError {
     #[error("agent reconcile job {0} is already active")]
     Busy(String),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum AgentReconcileAdmission {
+    ReuseCompatible,
+    RequireIdle,
 }
 
 #[derive(Debug, Clone)]
@@ -66,6 +73,7 @@ struct AgentReconcileJob {
     started_at: Option<String>,
     finished_at: Option<String>,
     message: Option<String>,
+    catalog: Option<ActiveCatalog>,
 }
 
 impl AgentReconcileJob {
@@ -110,7 +118,7 @@ impl AgentReconcileService {
             .unwrap_or_else(AgentReconcileJobSnapshot::idle)
     }
 
-    pub async fn start_or_get(
+    pub(crate) async fn start_with_admission(
         &self,
         registry: Vec<AgentDescriptor>,
         runtime_home: PathBuf,
@@ -118,7 +126,8 @@ impl AgentReconcileService {
         installed_only: bool,
         requested_agent_kinds: Vec<AgentKind>,
         agent_seed_store: Option<AgentSeedStore>,
-        catalog: Option<crate::domains::agents::catalog::service::AgentCatalogService>,
+        catalog: Option<AgentCatalogService>,
+        admission: AgentReconcileAdmission,
     ) -> Result<AgentReconcileJobSnapshot, AgentReconcileStartError> {
         let (snapshot, progress) = {
             let mut current = self.job.lock().await;
@@ -127,11 +136,7 @@ impl AgentReconcileService {
                     existing.status,
                     AgentReconcileJobStatus::Queued | AgentReconcileJobStatus::Running
                 ) {
-                    // Reuse the in-flight job only if its scope COVERS this request.
-                    // A full job (installed_only=false) covers everything; an
-                    // installed-only job does NOT cover a full request — so a full
-                    // reconcile must supersede an in-flight installed-only pass,
-                    // otherwise missing agents would be silently skipped.
+                    // Public callers reuse covering jobs; internal admission requires idle.
                     let covers_install_mode = existing.reinstall || !reinstall;
                     let covers_installed_scope = !existing.installed_only || installed_only;
                     let covers_agent_scope = existing.agent_kinds.is_empty()
@@ -141,7 +146,7 @@ impl AgentReconcileService {
                                 .all(|kind| existing.agent_kinds.contains(kind)));
                     let covers_request =
                         covers_install_mode && covers_installed_scope && covers_agent_scope;
-                    if covers_request {
+                    if admission == AgentReconcileAdmission::ReuseCompatible && covers_request {
                         tracing::info!(
                             job_id = %existing.job_id,
                             requested_reinstall = reinstall,
@@ -156,12 +161,13 @@ impl AgentReconcileService {
                         active_job_id = %existing.job_id,
                         job_installed_only = existing.installed_only,
                         requested_installed_only = installed_only,
-                        "agent reconcile request rejected while incompatible job is active"
+                        "agent reconcile request rejected while a job is active"
                     );
                     return Err(AgentReconcileStartError::Busy(existing.job_id.clone()));
                 }
             }
 
+            let catalog = catalog.map(|service| service.active_catalog());
             let job_id = Uuid::new_v4().to_string();
             let components = Arc::new(std::sync::Mutex::new(progress_components(&registry)));
             let next_job = AgentReconcileJob {
@@ -176,6 +182,7 @@ impl AgentReconcileService {
                 started_at: Some(chrono::Utc::now().to_rfc3339()),
                 finished_at: None,
                 message: None,
+                catalog,
             };
             let snapshot = next_job.snapshot();
             *current = Some(next_job);
@@ -204,7 +211,6 @@ impl AgentReconcileService {
                 installed_only,
                 progress,
                 agent_seed_store,
-                catalog,
             )
             .await;
         });
@@ -241,17 +247,20 @@ async fn run_reconcile_job(
     installed_only: bool,
     progress: Arc<std::sync::Mutex<Vec<AgentInstallComponentProgress>>>,
     agent_seed_store: Option<AgentSeedStore>,
-    catalog: Option<crate::domains::agents::catalog::service::AgentCatalogService>,
 ) {
     // Defense in depth around the single visible job slot: even if future
     // callers change admission policy, blocking installers never mutate the
     // managed artifact tree concurrently.
     let _execution_guard = execution_lock.lock_owned().await;
     let started = Instant::now();
-    let _ = update_job(&jobs, &job_id, |job| {
+    let Some(catalog) = update_job(&jobs, &job_id, |job| {
         job.status = AgentReconcileJobStatus::Running;
+        job.catalog.clone()
     })
-    .await;
+    .await
+    else {
+        return;
+    };
 
     tracing::info!(
         job_id = %job_id,
