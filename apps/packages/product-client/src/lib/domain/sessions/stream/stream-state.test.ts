@@ -117,6 +117,59 @@ describe("session-stream-state", () => {
     expect(result.state.transcript.lastSeq).toBe(4);
   });
 
+  it("applies a high-volume reasoning frame as one transcript reduction batch", () => {
+    const state = replaySessionHistory("session-1", [
+      turnStarted(1),
+      reasoningStarted(2, "reasoning-1", "seed:"),
+    ]);
+    const beforeItem = state.transcript.itemsById["reasoning-1"];
+    const chunks = Array.from({ length: 200 }, (_, index) => `chunk-${index}|`);
+    const instrumented = instrumentReasoningCopies(state, "reasoning-1");
+
+    const result = applyStreamEnvelopeBatch(
+      instrumented.state,
+      chunks.map((chunk, index) => reasoningDelta(index + 3, "reasoning-1", chunk)),
+    );
+    const afterItem = result.state.transcript.itemsById["reasoning-1"];
+
+    expect(result.gapEnvelope).toBeNull();
+    expect(result.appliedEnvelopes).toHaveLength(200);
+    expect(result.state.events).toHaveLength(202);
+    expect(result.state.transcript.lastSeq).toBe(202);
+    expect(instrumented.copyCounts).toEqual({ itemMap: 1, reasoningItem: 1 });
+    expect(state.transcript.itemsById["reasoning-1"]).toBe(beforeItem);
+    expect(afterItem).not.toBe(beforeItem);
+    expect(afterItem.kind).toBe("thought");
+    if (afterItem.kind !== "thought") {
+      throw new Error("expected reasoning item");
+    }
+    expect(afterItem.text).toBe(`seed:${chunks.join("")}`);
+  });
+
+  it("applies a high-volume reasoning history tail as one transcript batch", () => {
+    const state = replaySessionHistory("session-1", [
+      turnStarted(1),
+      reasoningStarted(2, "reasoning-1", "seed:"),
+    ]);
+    const instrumented = instrumentReasoningCopies(state, "reasoning-1");
+    const chunks = Array.from({ length: 200 }, (_, index) => `tail-${index}|`);
+
+    const result = appendHistoryTail(
+      instrumented.state,
+      chunks.map((chunk, index) => reasoningDelta(index + 3, "reasoning-1", chunk)),
+    );
+
+    expect(result.applied).toBe(true);
+    expect(result.state.transcript.lastSeq).toBe(202);
+    expect(instrumented.copyCounts).toEqual({ itemMap: 1, reasoningItem: 1 });
+    const afterItem = result.state.transcript.itemsById["reasoning-1"];
+    expect(afterItem.kind).toBe("thought");
+    if (afterItem.kind !== "thought") {
+      throw new Error("expected reasoning item");
+    }
+    expect(afterItem.text).toBe(`seed:${chunks.join("")}`);
+  });
+
   it("sorts stream batches by sequence before detecting gaps", () => {
     const state = replaySessionHistory("session-1", [turnStarted(1)]);
 
@@ -166,6 +219,37 @@ describe("session-stream-state", () => {
   });
 });
 
+function instrumentReasoningCopies(
+  state: ReturnType<typeof replaySessionHistory>,
+  itemId: string,
+) {
+  const item = state.transcript.itemsById[itemId];
+  const copyCounts = { itemMap: 0, reasoningItem: 0 };
+  return {
+    copyCounts,
+    state: {
+      ...state,
+      transcript: {
+        ...state.transcript,
+        itemsById: new Proxy({
+          ...state.transcript.itemsById,
+          [itemId]: new Proxy(item, {
+            ownKeys(target) {
+              copyCounts.reasoningItem += 1;
+              return Reflect.ownKeys(target);
+            },
+          }),
+        }, {
+          ownKeys(target) {
+            copyCounts.itemMap += 1;
+            return Reflect.ownKeys(target);
+          },
+        }),
+      },
+    },
+  };
+}
+
 function turnStarted(seq: number): SessionEventEnvelope {
   return {
     sessionId: "session-1",
@@ -195,6 +279,47 @@ function assistantStarted(
         sourceAgentKind: "claude",
         contentParts: [{ type: "text", text }],
       },
+    },
+  };
+}
+
+function reasoningStarted(
+  seq: number,
+  itemId: string,
+  text: string,
+): SessionEventEnvelope {
+  return {
+    sessionId: "session-1",
+    seq,
+    timestamp: `2026-04-04T00:00:${String(seq).padStart(2, "0")}Z`,
+    turnId: "turn-1",
+    itemId,
+    event: {
+      type: "item_started",
+      item: {
+        kind: "reasoning",
+        status: "in_progress",
+        sourceAgentKind: "codex",
+        contentParts: [{ type: "reasoning", text, visibility: "private" }],
+      },
+    },
+  };
+}
+
+function reasoningDelta(
+  seq: number,
+  itemId: string,
+  appendReasoning: string,
+): SessionEventEnvelope {
+  return {
+    sessionId: "session-1",
+    seq,
+    timestamp: `2026-04-04T00:00:${String(seq).padStart(2, "0")}Z`,
+    turnId: "turn-1",
+    itemId,
+    event: {
+      type: "item_delta",
+      delta: { appendReasoning },
     },
   };
 }

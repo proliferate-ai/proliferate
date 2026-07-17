@@ -77,6 +77,22 @@ function validateCatalog(catalog) {
       fail(`${kind}: session.supportsGoals must be boolean when present`);
     }
 
+    const unattendedModeId = agent.session?.unattendedModeId;
+    if (unattendedModeId !== undefined) {
+      if (typeof unattendedModeId !== "string" || !unattendedModeId.trim()) {
+        fail(`${kind}: session.unattendedModeId must be a non-empty string when present`);
+      } else {
+        const modeControl = (agent.session?.controls ?? []).find(
+          (control) => control.key === "mode",
+        );
+        if (!Array.isArray(modeControl?.values) || !modeControl.values.includes(unattendedModeId)) {
+          fail(
+            `${kind}: session.unattendedModeId '${unattendedModeId}' is not in the session mode vocabulary`,
+          );
+        }
+      }
+    }
+
     const models = agent.session?.models;
     if (!Array.isArray(models) || models.length === 0) {
       fail(`${kind}: session.models must be a non-empty array`);
@@ -105,6 +121,20 @@ function validateCatalog(catalog) {
       }
       if (typeof model.defaultVisible !== "boolean") {
         fail(`${kind}.${id}: defaultVisible must be boolean`);
+      }
+      const modelModeControl = model.controls?.mode;
+      if (
+        typeof unattendedModeId === "string"
+        && unattendedModeId.trim()
+        && modelModeControl !== undefined
+        && (
+          !Array.isArray(modelModeControl.values)
+          || !modelModeControl.values.includes(unattendedModeId)
+        )
+      ) {
+        fail(
+          `${kind}.${id}: session.unattendedModeId '${unattendedModeId}' is not in the model mode vocabulary`,
+        );
       }
       const anyOf = model.availability?.anyOf;
       if (!Array.isArray(anyOf) || anyOf.length === 0) {

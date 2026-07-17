@@ -73,11 +73,10 @@ export function useSessionCreationActions() {
   const { promptSession } = useSessionPromptWorkflow();
   const { activateSession, closeSessionSlotStream } = useSessionRuntimeActions();
   const { ensureCloudAgentCatalog } = useCloudAgentCatalogCache();
-  const { upsertWorkspaceSessionRecord, removeWorkspaceSessionRecord } = useWorkspaceSessionCache();
+  const { getWorkspaceSessionCacheSnapshot, removeWorkspaceSessionRecord, upsertWorkspaceSessionRecord } = useWorkspaceSessionCache();
   const dismissSessionMutation = useDismissSessionMutation();
   const showToast = useToastStore((state) => state.show);
   const telemetry = useProductTelemetry();
-
   const createSessionWithResolvedConfig = useCallback(async function createWithResolvedConfig(
     options: CreateSessionWithResolvedConfigOptions,
   ): Promise<string> {
@@ -94,7 +93,6 @@ export function useSessionCreationActions() {
     if (blockedError) {
       throw blockedError;
     }
-
     const hasPrompt = hasPromptContent(options.text, options.blocks)
       || (options.attachmentSnapshots?.length ?? 0) > 0;
     const promptId = hasPrompt ? options.promptId ?? createPromptId() : options.promptId ?? null;
@@ -170,12 +168,11 @@ export function useSessionCreationActions() {
     }
     const workspaceSurface = getWorkspaceSurface(workspaceId);
     const resolvedModeId = resolveSessionCreationModeId({
-      explicitModeId:
-        options.modeId
+      explicitModeId: options.modeId
         ?? options.launchControlValues?.mode
         ?? options.launchControlValues?.access_mode,
       workspaceSurface,
-      agentKind: options.agentKind,
+      unattendedModeId: options.unattendedModeId,
       preferredModeId,
     });
     const pendingSessionId = options.clientSessionId ?? createPendingSessionId(options.agentKind);
@@ -259,6 +256,7 @@ export function useSessionCreationActions() {
         workspaceId,
         {
           closeSessionSlotStream,
+          getWorkspaceSessionCacheSnapshot,
           removeWorkspaceSessionRecord,
           dismissSessionMutation,
           captureException: telemetry.captureException,
@@ -387,6 +385,7 @@ export function useSessionCreationActions() {
     closeSessionSlotStream,
     dismissSessionMutation,
     ensureCloudAgentCatalog,
+    getWorkspaceSessionCacheSnapshot,
     getWorkspaceRuntimeBlockError,
     invalidateWorkspaceCollectionsForRuntime,
     runtimeUrl,
@@ -409,6 +408,7 @@ export function useSessionCreationActions() {
       agentKind: options.agentKind,
       modelId: options.modelId,
       modeId: options.modeId,
+      unattendedModeId: options.unattendedModeId,
       launchControlValues: options.launchControlValues,
       workspaceId: options.workspaceId,
       latencyFlowId: options.latencyFlowId,

@@ -9,6 +9,7 @@ import {
   buildAgentInstallCommand,
   computeBakedInputDigests,
   computeManagedCloudTemplateHash,
+  deleteE2bTemplateWithExec,
   MANAGED_CLOUD_ANYHARNESS_RUNTIME_HOME,
   resolveOrBuildManagedCloudTemplate,
   type E2bBuildConfig,
@@ -62,6 +63,29 @@ test("computeBakedInputDigests returns the four binaries in fixed bake order, re
       digests.map((digest) => digest.sha256),
       ["a".repeat(64), "b".repeat(64), "c".repeat(64), "d".repeat(64)],
     );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("E2B template deletion bounds CLI runtime and output without putting the key in argv", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "managed-cloud-template-delete-"));
+  try {
+    const keyPath = path.join(dir, "e2b.env");
+    await writeFile(keyPath, "E2B_API_KEY=e2b-test-secret\n", { mode: 0o600 });
+    const calls: unknown[][] = [];
+    await deleteE2bTemplateWithExec("tpl_exact", fakeConfig({ secretsEnvFilePath: keyPath }), async (...args) => {
+      calls.push(args);
+    });
+    assert.equal(calls.length, 1);
+    const [file, argv, options] = calls[0]!;
+    assert.equal(file, "e2b");
+    assert.deepEqual(argv, ["template", "delete", "tpl_exact", "--yes"]);
+    assert.equal(JSON.stringify(argv).includes("e2b-test-secret"), false);
+    assert.equal((options as { timeout: number }).timeout, 120_000);
+    assert.equal((options as { maxBuffer: number }).maxBuffer, 1024 * 1024);
+    assert.equal((options as { killSignal: string }).killSignal, "SIGKILL");
+    assert.equal((options as { env: NodeJS.ProcessEnv }).env.E2B_API_KEY, "e2b-test-secret");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

@@ -96,6 +96,7 @@ describe("projectCloudAgentCatalogToDesktopLaunchCatalog", () => {
         kind: "opencode",
         displayName: "OpenCode",
         defaultModelId: "opencode/big-pickle",
+        unattendedModeId: null,
       }],
     });
     // The menu: defaultVisible && status === "active" only.
@@ -170,6 +171,93 @@ describe("projectCloudAgentCatalogToDesktopLaunchCatalog", () => {
 });
 
 describe("mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents", () => {
+  it("keeps local/runtime and cloud unattended defaults in parity", () => {
+    const base = cloudCatalog();
+    const baseAgent = base.agents[0]!;
+    const projected = projectCloudAgentCatalogToDesktopLaunchCatalog({
+      ...base,
+      agents: [{
+        ...baseAgent,
+        session: {
+          ...baseAgent.session,
+          unattendedModeId: "build",
+        },
+      }],
+    });
+
+    expect(projected.agents[0]?.unattendedModeId).toBe("build");
+
+    const runtimeAgent = {
+      kind: "opencode",
+      displayName: "OpenCode",
+      defaultModelId: "opencode/big-pickle",
+      unattendedModeId: "build",
+      models: [{
+        id: "opencode/big-pickle",
+        displayName: "OpenCode Zen/Big Pickle",
+        isDefault: true,
+        modes: ["build"],
+      }],
+    };
+    const merged = mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents(
+      projected.agents,
+      [runtimeAgent],
+    );
+    expect(merged[0]?.unattendedModeId).toBe("build");
+    expect(merged[0]?.models[0]?.modeValues).toEqual(["build"]);
+
+    const presentNull = mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents(
+      projected.agents,
+      [{ ...runtimeAgent, unattendedModeId: null }],
+    );
+    expect(presentNull[0]?.unattendedModeId).toBeNull();
+
+    const { unattendedModeId: _omitted, ...legacyRuntimeAgent } = runtimeAgent;
+    const compatibilityFallback = mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents(
+      projected.agents,
+      [legacyRuntimeAgent],
+    );
+    expect(compatibilityFallback[0]?.unattendedModeId).toBe("build");
+  });
+
+  it("does not treat missing or empty target data as a cloud permission default", () => {
+    const source = cloudCatalog();
+    source.agents[0]!.session.unattendedModeId = "build";
+    const projected = projectCloudAgentCatalogToDesktopLaunchCatalog(source);
+
+    expect(mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents(
+      projected.agents,
+      null,
+    )[0]?.unattendedModeId).toBeNull();
+    expect(mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents(
+      projected.agents,
+      [],
+    )[0]?.unattendedModeId).toBeNull();
+  });
+
+  it("keeps a newer target default authoritative over stale cloud mode metadata", () => {
+    const projected = projectCloudAgentCatalogToDesktopLaunchCatalog(cloudCatalog());
+    const merged = mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents(
+      projected.agents,
+      [{
+        kind: "opencode",
+        displayName: "OpenCode",
+        defaultModelId: "opencode/big-pickle",
+        unattendedModeId: "target-unattended",
+        models: [{
+          id: "opencode/big-pickle",
+          displayName: "OpenCode Zen/Big Pickle",
+          isDefault: true,
+          modes: ["build", "target-unattended"],
+        }],
+      }],
+    );
+
+    expect(merged[0]?.unattendedModeId).toBe("target-unattended");
+    expect(merged[0]?.launchControls.find((control) => control.key === "mode")?.values)
+      .toContainEqual(expect.objectContaining({ value: "target-unattended" }));
+  });
+
   it("preserves curated catalog metadata when runtime ids match catalog aliases", () => {
     const base = cloudCatalog();
     const baseAgent = base.agents[0]!;

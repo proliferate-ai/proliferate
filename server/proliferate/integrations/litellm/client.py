@@ -141,7 +141,11 @@ def _validate[ModelT: BaseModel](model: type[ModelT], payload: Any, *, context: 
 
 
 async def ensure_team(
-    *, alias: str, team_id: str | None = None, max_budget: float | None = None
+    *,
+    alias: str,
+    team_id: str | None = None,
+    max_budget: float | None = None,
+    metadata: dict[str, Any] | None = None,
 ) -> str:
     """Return the team id for ``alias``, creating the team if it does not exist.
 
@@ -162,10 +166,15 @@ async def ensure_team(
             if isinstance(team, dict) and team.get("team_alias") == alias:
                 team_id = team.get("team_id")
                 if isinstance(team_id, str) and team_id:
+                    _require_matching_metadata(
+                        team.get("metadata"), metadata, context="existing LiteLLM team"
+                    )
                     return team_id
     body: dict[str, Any] = {"team_alias": alias}
     if max_budget is not None:
         body["max_budget"] = max_budget
+    if metadata is not None:
+        body["metadata"] = metadata
     created = _require_dict(
         await _admin_request("POST", "/team/new", json_body=body), context="/team/new"
     )
@@ -177,18 +186,45 @@ async def ensure_team(
     return team_id
 
 
-async def ensure_user(*, user_id: str) -> str:
+async def ensure_user(*, user_id: str, metadata: dict[str, Any] | None = None) -> str:
     """Create the LiteLLM user if missing; a 409 means it already exists."""
+    body: dict[str, Any] = {"user_id": user_id, "auto_create_key": False}
+    if metadata is not None:
+        body["metadata"] = metadata
     try:
         await _admin_request(
             "POST",
             "/user/new",
-            json_body={"user_id": user_id, "auto_create_key": False},
+            json_body=body,
         )
     except LiteLLMIntegrationError as exc:
         if exc.status_code != 409:
             raise
+        if metadata is not None:
+            existing = _require_dict(
+                await _admin_request("GET", "/user/info", params={"user_id": user_id}),
+                context="/user/info",
+            )
+            user_info = _require_dict(existing.get("user_info"), context="/user/info user_info")
+            _require_matching_metadata(
+                user_info.get("metadata"), metadata, context="existing LiteLLM user"
+            )
     return user_id
+
+
+def _require_matching_metadata(
+    observed: Any, expected: dict[str, Any] | None, *, context: str
+) -> None:
+    """Require every caller-owned metadata field on a reused provider row."""
+    if expected is None:
+        return
+    if not isinstance(observed, dict) or any(
+        observed.get(key) != value for key, value in expected.items()
+    ):
+        raise LiteLLMIntegrationError(
+            "litellm_ownership_conflict",
+            f"{context} does not carry the requested ownership metadata.",
+        )
 
 
 async def mint_virtual_key(

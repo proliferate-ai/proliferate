@@ -221,6 +221,12 @@ pub struct AgentCatalogSession {
     /// initialize `_meta.anyharness.goals` advertisement.
     #[serde(default)]
     pub supports_goals: bool,
+    /// Curation-owned mode for product surfaces that deliberately run the
+    /// harness unattended (for example cowork delegation and workflows).
+    /// Absent means no unattended mode has been vetted for this agent, so
+    /// consumers must omit `mode_id` rather than infer one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unattended_mode_id: Option<String>,
     /// The control universe: every key/value any model of this harness might
     /// support. Per-model matrices are subsets of this.
     #[serde(default)]

@@ -1,8 +1,14 @@
 import { useMemo } from "react";
+import { useAgentLaunchOptionsQuery } from "@anyharness/sdk-react";
 import { useShallow } from "zustand/react/shallow";
 import { useCloudAgentCatalog } from "#product/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
-import { resolveCoworkDefaultSessionModeId } from "#product/lib/domain/cowork/session-mode-defaults";
 import {
+  mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents,
+  type DesktopAgentLaunchAgent,
+} from "#product/lib/domain/agents/cloud-launch-catalog";
+import { resolveUnattendedModeId } from "#product/lib/domain/agents/unattended-mode";
+import {
+  inferSessionControlPresentation,
   launchControlToConfiguredSessionControlValues,
   listConfiguredSessionControlValues,
 } from "#product/lib/domain/chat/session-controls/session-mode-control";
@@ -12,6 +18,7 @@ import type {
 import type {
   HomeNextDestination,
   HomeNextModelSelection,
+  HomeNextRepoLaunchKind,
 } from "#product/lib/domain/home/home-next-launch";
 import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 
@@ -19,22 +26,44 @@ interface UseHomeNextModeSelectionArgs {
   destination: HomeNextDestination;
   modelSelection: HomeNextModelSelection | null;
   modeOverrideId: string | null;
+  repoLaunchKind: HomeNextRepoLaunchKind;
 }
+
+const EMPTY_AGENTS: DesktopAgentLaunchAgent[] = [];
 
 export function useHomeNextModeSelection({
   destination,
   modelSelection,
   modeOverrideId,
+  repoLaunchKind,
 }: UseHomeNextModeSelectionArgs) {
   const defaultSessionModeByAgentKind = useUserPreferencesStore(
     useShallow((state) => state.defaultSessionModeByAgentKind),
   );
   const agentKind = modelSelection?.kind ?? null;
   const catalogQuery = useCloudAgentCatalog(Boolean(agentKind));
+  const runtimeLaunchOptions = useAgentLaunchOptionsQuery();
+  const usesLocalRuntime = destination === "cowork" || repoLaunchKind !== "cloud";
+  const launchAgents = useMemo(
+    () => usesLocalRuntime
+      ? mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents(
+        catalogQuery.data?.agents ?? EMPTY_AGENTS,
+        runtimeLaunchOptions.data?.agents ?? null,
+      )
+      : catalogQuery.data?.agents ?? EMPTY_AGENTS,
+    [catalogQuery.data?.agents, runtimeLaunchOptions.data?.agents, usesLocalRuntime],
+  );
 
   const modelId = modelSelection?.modelId ?? null;
+  const unattendedModeId = useMemo(
+    () => resolveUnattendedModeId({
+      agent: launchAgents.find((candidate) => candidate.kind === agentKind),
+      modelId,
+    }),
+    [agentKind, launchAgents, modelId],
+  );
   const catalogModeOptions = useMemo(() => {
-    const agent = catalogQuery.data?.agents.find((candidate) => candidate.kind === agentKind);
+    const agent = launchAgents.find((candidate) => candidate.kind === agentKind);
     const control = agent?.launchControls?.find((candidate) => candidate.key === "mode") ?? null;
     const options = launchControlToConfiguredSessionControlValues(agentKind, control);
     // Scope to the modes the SELECTED model actually supports. The agent-level
@@ -50,13 +79,16 @@ export function useHomeNextModeSelection({
     }
     const supported = options.filter((option) => modeValues.includes(option.value));
     return supported.length > 0 ? supported : options;
-  }, [agentKind, catalogQuery.data?.agents, modelId]);
+  }, [agentKind, launchAgents, modelId]);
 
   const modeOptions = useMemo(
-    () => catalogModeOptions.length > 0
+    () => withUnattendedModeOption(
+      catalogModeOptions.length > 0
       ? catalogModeOptions
       : listConfiguredSessionControlValues(agentKind, "mode"),
-    [agentKind, catalogModeOptions],
+      destination === "cowork" ? unattendedModeId : undefined,
+    ),
+    [agentKind, catalogModeOptions, destination, unattendedModeId],
   );
   const effectiveMode = useMemo<ConfiguredSessionControlValue | null>(() => {
     if (modeOptions.length === 0 || !agentKind) {
@@ -69,8 +101,12 @@ export function useHomeNextModeSelection({
     }
 
     const preferredModeId = destination === "cowork"
-      ? resolveCoworkDefaultSessionModeId(agentKind)
+      ? unattendedModeId
       : defaultSessionModeByAgentKind[agentKind] ?? null;
+
+    if (destination === "cowork" && !preferredModeId) {
+      return null;
+    }
 
     return resolveModeOption(modeOptions, preferredModeId)
       ?? modeOptions.find((option) => option.isDefault)
@@ -82,6 +118,7 @@ export function useHomeNextModeSelection({
     destination,
     modeOptions,
     modeOverrideId,
+    unattendedModeId,
   ]);
 
   return {
@@ -89,6 +126,39 @@ export function useHomeNextModeSelection({
     effectiveMode,
     effectiveModeId: effectiveMode?.value ?? null,
   };
+}
+
+function withUnattendedModeOption(
+  options: ConfiguredSessionControlValue[],
+  unattendedModeId: string | undefined,
+): ConfiguredSessionControlValue[] {
+  if (
+    !unattendedModeId
+    || options.some((option) => option.value === unattendedModeId)
+  ) {
+    return options;
+  }
+  const label = humanizeModeId(unattendedModeId);
+  return [
+    ...options,
+    {
+      value: unattendedModeId,
+      label,
+      shortLabel: label,
+      description: null,
+      icon: inferSessionControlPresentation(unattendedModeId).icon,
+    },
+  ];
+}
+
+function humanizeModeId(value: string): string {
+  return value
+    .replace(/[-_]+/g, " ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .split(" ")
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
 }
 
 function resolveModeOption(

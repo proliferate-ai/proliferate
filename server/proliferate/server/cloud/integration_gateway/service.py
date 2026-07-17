@@ -25,6 +25,17 @@ from proliferate.server.cloud.integration_gateway.domain.tool_args import (
     parse_call_tool_args,
     parse_list_tools_args,
 )
+from proliferate.server.cloud.integration_gateway.domain.tool_policy import (
+    ToolCallAllowed,
+    ToolCallDenied,
+    ToolCallRequiresApproval,
+    decide_tool_call,
+)
+from proliferate.server.cloud.integration_gateway.errors import (
+    IntegrationToolApprovalRequired,
+    IntegrationToolNotAllowed,
+    IntegrationToolPolicyError,
+)
 from proliferate.server.cloud.integration_gateway.models import GatewayProviderAccount
 from proliferate.server.cloud.integrations.access import resolve_launch
 from proliferate.server.cloud.integrations.tools import get_or_refresh_tool_cache
@@ -140,6 +151,13 @@ async def call_provider_tool(
     ok = False
     error_code: str | None = None
     try:
+        decision = decide_tool_call(provider=provider, tool=tool)
+        if isinstance(decision, ToolCallRequiresApproval):
+            raise IntegrationToolApprovalRequired(provider=provider, tool=tool)
+        if isinstance(decision, ToolCallDenied):
+            raise IntegrationToolNotAllowed(provider=provider, tool=tool)
+        if not isinstance(decision, ToolCallAllowed):
+            raise IntegrationToolNotAllowed(provider=provider, tool=tool)
         pair = await account_for_provider(db, grant=grant, provider=provider)
         url, headers, query = await resolve_launch(db, pair.account, pair.definition)
         result = await mcp_remote.call_tool(
@@ -265,6 +283,15 @@ async def handle_integration_gateway_json_rpc(
         params = params if isinstance(params, dict) else {}
         try:
             result = await _handle_tools_call(db, grant=grant, params=params)
+        except IntegrationToolPolicyError as error:
+            return json_rpc.json_rpc_result(
+                request_id=request_id,
+                result={
+                    "content": [{"type": "text", "text": error.message}],
+                    "structuredContent": {"error": error.structured_error()},
+                    "isError": True,
+                },
+            )
         except (CloudApiError, McpRemoteError) as error:
             # Surface tool-level failures (bad provider, or an upstream MCP that
             # is down/timing out) as an MCP error result, not a transport error,

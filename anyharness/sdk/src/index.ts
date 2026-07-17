@@ -433,6 +433,7 @@ export type {
 export {
   createTranscriptState,
   reduceEvent,
+  reduceEventBatch,
   reduceEvents,
   selectPendingApprovalInteraction,
   selectPendingMcpElicitationInteraction,

@@ -311,6 +311,8 @@ jobs:
   # non-rotating bootstrap, or persisting the rotated state between runs) is
   # still needed before this authenticates for real — until then the preflight
   # skips cleanly (::notice::), the same pattern the local lane uses.
+  # The runner constrains this broad selector to Tier-3 sandbox-runtime cells;
+  # it never runs Tier-2, controller-local, self-host, or Tier-4 bodies here.
   release-e2e-staging:
     name: tier-3 staging lane (provisional)
     runs-on: ubuntu-latest
@@ -603,16 +605,18 @@ jobs:
           AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL: ${{ vars.AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL }}
           AGENT_GATEWAY_LITELLM_MASTER_KEY: ${{ secrets.AGENT_GATEWAY_LITELLM_MASTER_KEY }}
           # BYOK provider keys for the LOCAL-3 user-key route + LOCAL-6 route
-          # change (env-manifest.ts). Absent -> those cells report blocked,
-          # never fail the run (cursor has no BYOK var by design — no account
-          # key here, per BRIEF §5).
-          # The env var NAMES the runner reads are the provisioned _API_KEY-suffixed
-          # names (env-manifest.ts / BYOK_ENV_BY_HARNESS); the GitHub secret names
-          # on the right are unchanged.
-          RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY: ${{ secrets.RELEASE_E2E_BYOK_ANTHROPIC_A }}
-          RELEASE_E2E_BYOK_ANTHROPIC_B_API_KEY: ${{ secrets.RELEASE_E2E_BYOK_ANTHROPIC_B }}
-          RELEASE_E2E_BYOK_OPENAI_API_KEY: ${{ secrets.RELEASE_E2E_BYOK_OPENAI }}
-          RELEASE_E2E_BYOK_XAI_API_KEY: ${{ secrets.RELEASE_E2E_BYOK_XAI }}
+          # change (env-manifest.ts). In strict mode an absent required key
+          # blocks its selected cells, cancels otherwise-runnable cells, and
+          # makes the aggregate non-qualifying. Cursor has no BYOK var by
+          # design — no account key here, per BRIEF §5.
+          # Both the runner env names and the protected Qualification secret
+          # names use the provisioned `_API_KEY` suffix. A mismatched right-hand
+          # name expands to an empty value and strict preflight blocks the whole
+          # local-functional matrix before a scenario can run.
+          RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY: ${{ secrets.RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY }}
+          RELEASE_E2E_BYOK_ANTHROPIC_B_API_KEY: ${{ secrets.RELEASE_E2E_BYOK_ANTHROPIC_B_API_KEY }}
+          RELEASE_E2E_BYOK_OPENAI_API_KEY: ${{ secrets.RELEASE_E2E_BYOK_OPENAI_API_KEY }}
+          RELEASE_E2E_BYOK_XAI_API_KEY: ${{ secrets.RELEASE_E2E_BYOK_XAI_API_KEY }}
           # LOCAL-7 MCP integration connect + audit-row assertion. The audit
           # probe reads back `cloud_integration_tool_call_event` from THIS run's
           # own ephemeral local-world Postgres, derived at runtime from the booted

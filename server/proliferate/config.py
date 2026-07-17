@@ -1,7 +1,7 @@
 from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-ENV_FILES = (".env", ".env.local")
+from proliferate.config_defaults import DEFAULT_CORS_ALLOW_ORIGINS, ENV_FILES, SAFE_IDENTITY_CHARS
 
 
 class Settings(BaseSettings):
@@ -69,24 +69,7 @@ class Settings(BaseSettings):
             "PROLIFERATE_ALLOWED_EMAIL_DOMAINS",
         ),
     )
-    cors_allow_origins: str = (
-        "http://localhost:1420,"
-        "http://127.0.0.1:1420,"
-        "http://localhost:5174,"
-        "http://127.0.0.1:5174,"
-        "http://localhost:5175,"
-        "http://127.0.0.1:5175,"
-        "http://localhost:5176,"
-        "http://127.0.0.1:5176,"
-        "http://localhost:8081,"
-        "http://127.0.0.1:8081,"
-        "http://localhost:3000,"
-        "http://127.0.0.1:3000,"
-        "http://localhost:5174,"
-        "http://127.0.0.1:5174,"
-        "http://tauri.localhost,"
-        "tauri://localhost"
-    )
+    cors_allow_origins: str = DEFAULT_CORS_ALLOW_ORIGINS
 
     # Database
     database_url: str = "postgresql+asyncpg://proliferate:localdev@127.0.0.1:5432/proliferate"
@@ -430,6 +413,9 @@ class Settings(BaseSettings):
     agent_gateway_litellm_public_base_url: str = ""
     agent_gateway_litellm_master_key: str = ""
     agent_gateway_litellm_timeout_seconds: float = 30.0
+    # Qualification-only exact external-cleanup identity; ordinary deployments leave both empty.
+    agent_gateway_qualification_run_id: str = ""
+    agent_gateway_qualification_shard_id: str = ""
     agent_gateway_default_user_budget_usd: str = "5"
     agent_gateway_default_org_budget_usd: str = "0"
     agent_gateway_backfill_interval_seconds: float = 300.0
@@ -608,6 +594,20 @@ class Settings(BaseSettings):
                 raise ValueError("jwt_secret must be set in production (debug=False)")
             if self.cloud_secret_key == "CHANGE-ME-IN-PRODUCTION-CLOUD-SECRET":
                 raise ValueError("cloud_secret_key must be set in production (debug=False)")
+        qualification_run = self.agent_gateway_qualification_run_id.strip()
+        qualification_shard = self.agent_gateway_qualification_shard_id.strip()
+        if bool(qualification_run) != bool(qualification_shard):
+            raise ValueError("agent gateway qualification run and shard ids must be set together")
+        for label, value in (
+            ("qualification run id", qualification_run),
+            ("qualification shard id", qualification_shard),
+        ):
+            if value and (
+                len(value) > 128
+                or not value[0].isalnum()
+                or any(character not in SAFE_IDENTITY_CHARS for character in value)
+            ):
+                raise ValueError(f"agent gateway {label} is malformed")
         return self
 
 

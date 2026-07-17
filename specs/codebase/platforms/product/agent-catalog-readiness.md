@@ -37,8 +37,9 @@ Cloud product catalog
 
 AnyHarness agent catalog + registry
   Target-runtime support manifests. The catalog says which model/mode/control
-  options are statically known. The registry says what this runtime knows how
-  to install, discover, authenticate, materialize, and launch.
+  options are statically known and may declare the default mode for unattended
+  launches. The registry says what this runtime knows how to install, discover,
+  authenticate, materialize, and launch.
 
 AnyHarness dynamic model registry snapshot
   Target-local, runtime-refreshed model list for provider-agnostic harnesses
@@ -55,6 +56,11 @@ Consequences:
 
 - Desktop may render optimistically from cloud/catalog product data.
 - AnyHarness must still validate and resolve what the target can actually run.
+- For a selected local, cloud, or SSH target, the active AnyHarness catalog is
+  authoritative for the unattended session-mode default. The cloud product
+  catalog is only a compatibility fallback when an older target response omits
+  that launch-option property; an explicit `null` from a current target means
+  that the target has no unattended default.
 - Dynamic model registry snapshots may refine target model availability but
   must not mutate the bundled catalog or influence trusted executable behavior.
 - A live session's active model/config truth comes from ACP live config, not
@@ -159,7 +165,16 @@ The catalog document describes optimistic/static session choices:
 
 - agent kind and display name
 - fallback session model/control metadata
+- optional `session.unattendedModeId` curation for product flows that explicitly
+  launch unattended sessions
 - compatibility/status metadata needed to display choices
+
+`session.unattendedModeId` is not the interactive session default. When set, it
+must be a non-blank value in the agent-level `session.controls` entry whose key
+is `mode`. Every model that declares its own `controls.mode` values must also
+include it; models without a model-specific mode list inherit the agent-level
+vocabulary. Catalog validation rejects an invalid value before the document can
+become active.
 
 The registry document describes trusted runtime behavior:
 
@@ -643,6 +658,19 @@ SessionRuntime
   -> live ACP config becomes active-session truth
 ```
 
+Unattended product flows resolve the create-session `mode_id` with this
+precedence:
+
+1. a non-blank mode explicitly selected by the user or caller
+2. the selected target's catalog-projected `unattendedModeId`, when the selected
+   model supports that mode
+3. no `mode_id`, so the agent process keeps its own safe/default behavior
+
+Ordinary interactive session creation does not opt into the unattended default.
+An agent without curated unattended semantics, an unknown model, or a selected
+model whose mode vocabulary does not contain the curated value follows step 3.
+There is no product hardcoded per-agent fallback map.
+
 ### Model/config display
 
 ```text
@@ -672,6 +700,12 @@ filtering.
 That internal projection should be named as resolved launch options, not as a
 public catalog response, and should carry only the fields those internal flows
 need.
+
+The user-facing launch-options response projects the same active-catalog
+`unattendedModeId` for the selected runtime connection. Local and remote targets
+therefore use one contract. Product clients may enrich that target response with
+cloud display metadata, but must preserve target ownership of the unattended
+default and its explicit unset state.
 
 ## Banned Shapes
 
@@ -706,6 +740,9 @@ The catalog/readiness structure is complete when:
 - old split catalog structs/functions/env vars are gone.
 - all launch/model metadata AnyHarness still uses is projected from
   `AgentCatalogDocument` or `AgentRegistryDocument`, according to ownership.
+- unattended session-mode defaults are optional catalog curation, validated
+  against agent/model mode vocabularies, and projected from the active target
+  catalog without per-agent runtime or product fallback maps.
 - executable/process/auth descriptor projection is sourced only from trusted
   registry data.
 - install, credential detection, readiness, reconcile, seed, and portability

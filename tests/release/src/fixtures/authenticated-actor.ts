@@ -105,6 +105,10 @@ export interface AuthenticatedActorOptions {
   email?: string;
   /** Path to the plaintext setup-token file; defaults to `<runDir>/setup-token`. */
   setupTokenPath?: string;
+  /** Bounded wait for the setup claim to be visible on a fresh connection. */
+  setupCommitTimeoutMs?: number;
+  /** Poll interval while waiting for setup-claim visibility. */
+  setupCommitPollMs?: number;
   /** Bounded wait for enrollment sync (default 60s). */
   enrollmentTimeoutMs?: number;
   /** Poll interval while waiting for enrollment sync (default 2s). */
@@ -191,6 +195,8 @@ export interface AuthenticatedActorTransport {
     setupToken: string;
     organizationName: string;
   }): Promise<void>;
+  /** Proves the first-run claim is committed/visible before password login. */
+  waitForSetupCommitted(apiBaseUrl: string, timeoutMs: number, pollMs: number): Promise<void>;
   loginWithPassword(apiBaseUrl: string, email: string, password: string): Promise<DesktopTokenResponse>;
   listOrganizations(api: ApiClient): Promise<OrganizationsListResponse>;
   getEnrollment(api: ApiClient): Promise<EnrollmentResponse>;
@@ -216,6 +222,27 @@ export const defaultAuthenticatedActorTransport: AuthenticatedActorTransport = {
     if (!response.ok) {
       const text = await response.text();
       throw new Error(`POST /setup -> ${response.status}: ${text.slice(0, 2000)}`);
+    }
+  },
+  async waitForSetupCommitted(apiBaseUrl, timeoutMs, pollMs) {
+    const deadline = Date.now() + timeoutMs;
+    let lastStatus = 0;
+    let setupStillOpen = true;
+    for (;;) {
+      const response = await fetch(`${apiBaseUrl}/setup`, { method: "GET" });
+      const body = await response.text().catch(() => "");
+      lastStatus = response.status;
+      setupStillOpen = /name="setup_token"/.test(body);
+      if (response.status === 404 && !setupStillOpen) {
+        return;
+      }
+      if (Date.now() >= deadline) {
+        throw new Error(
+          `authenticatedActor: setup claim did not become committed/visible within ${timeoutMs}ms ` +
+            `(GET /setup status=${lastStatus}, setupStillOpen=${setupStillOpen}).`,
+        );
+      }
+      await sleep(pollMs);
     }
   },
   async loginWithPassword(apiBaseUrl, email, password) {
@@ -287,6 +314,14 @@ export async function authenticatedActor(
   const enrollmentCustody = await options.beginActorEnrollmentCustody?.({ email });
 
   await transport.claimSetup({ apiBaseUrl: world.api.baseUrl, email, password, setupToken, organizationName });
+  // The setup POST can return before a second connection observes the committed
+  // owner row. Prove visibility explicitly, then make exactly one password-login
+  // attempt. A 401 remains a real red product failure; this is not a retry loop.
+  await transport.waitForSetupCommitted(
+    world.api.baseUrl,
+    options.setupCommitTimeoutMs ?? 10_000,
+    options.setupCommitPollMs ?? 250,
+  );
 
   let tokenResponse: DesktopTokenResponse;
   try {
@@ -415,7 +450,12 @@ async function captureAuthFailureDiagnostics(apiBaseUrl: string, email: string):
 
   try {
     const methods = await fetch(`${apiBaseUrl}/auth/desktop/methods`, { method: "GET" });
-    diag.authMethods = { status: methods.status, body: await methods.json().catch(() => null) };
+    const payload = (await methods.json().catch(() => null)) as Record<string, unknown> | null;
+    diag.authMethods = {
+      status: methods.status,
+      passwordLogin: typeof payload?.password_login === "boolean" ? payload.password_login : null,
+      github: typeof payload?.github === "boolean" ? payload.github : null,
+    };
   } catch (error) {
     diag.authMethods = `err: ${error instanceof Error ? error.message : String(error)}`;
   }

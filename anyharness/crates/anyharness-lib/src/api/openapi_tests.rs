@@ -279,3 +279,19 @@ fn pending_prompt_reorder_schema_requires_compare_and_swap_orders() {
     assert!(required.iter().any(|value| value == "desiredSeqs"));
     assert!(schema["properties"].get("seqs").is_none());
 }
+
+#[test]
+fn launch_option_schema_exposes_optional_unattended_mode() {
+    let spec: Value = serde_json::from_str(&openapi_json()).expect("parse OpenAPI JSON");
+    let schema = &spec["components"]["schemas"]["AgentLaunchOption"];
+    assert!(
+        schema["properties"].get("unattendedModeId").is_some(),
+        "launch options must expose the runtime catalog's unattended mode"
+    );
+    assert!(
+        schema["required"]
+            .as_array()
+            .is_none_or(|required| !required.iter().any(|value| value == "unattendedModeId")),
+        "older runtime responses may omit unattendedModeId"
+    );
+}

@@ -10,6 +10,7 @@ export interface CreateSessionWithResolvedConfigOptions {
   agentKind: string;
   modelId: string;
   modeId?: string;
+  unattendedModeId?: string | null;
   launchControlValues?: Record<string, string>;
   workspaceId?: string;
   latencyFlowId?: string | null;
@@ -35,6 +36,7 @@ export interface CreateEmptySessionWithResolvedConfigOptions {
   agentKind: string;
   modelId: string;
   modeId?: string;
+  unattendedModeId?: string | null;
   launchControlValues?: Record<string, string>;
   workspaceId?: string;
   latencyFlowId?: string | null;

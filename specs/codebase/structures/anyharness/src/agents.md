@@ -103,6 +103,7 @@ There are two supported AnyHarness runtime agent inputs:
   - supported agent families
   - resolved, sha-pinned install `source` per harness role
   - model/control metadata + static session-display metadata
+  - optional `session.unattendedModeId` for catalog-curated unattended launches
 - `catalogs/agents/registry.json`
   - supported agent families
   - install method/launch metadata (probe-time discovery config)
@@ -132,6 +133,13 @@ runtime binary ships. In cloud sandboxes the binary itself can be swapped in
 place by the Worker (see
 `specs/codebase/structures/proliferate-worker/guides/lifecycle.md`); Desktop
 gets a new binary only via the app bundle.
+
+The unattended mode is part of the active catalog rather than the trusted
+registry recipe. Catalog validation requires a non-blank value that exists in
+the agent's `mode` control and in every model-specific mode vocabulary where one
+is declared. The resolved launch-options projection carries the active value to
+both local and remote product clients. An absent catalog value is intentional:
+the runtime and product must not invent a permissive fallback for that agent.
 
 ### Resolution Flow
 
@@ -482,7 +490,13 @@ These are different:
 - the agent registry answers “how does this agent install, authenticate, and
   launch?”
 - the provider catalog answers “what model IDs can the session domain validate
-  and default?”
+  and default, and which optional mode may unattended product flows select?”
+
+For a product flow explicitly marked unattended, a caller-selected mode wins.
+Otherwise the product may use the selected target's projected
+`unattendedModeId` when the selected model supports it. If either the curation or
+support is absent, session creation omits `mode_id` and leaves the agent's normal
+default intact. This does not change ordinary interactive session creation.
 
 ### Native CLI vs Agent Process
 

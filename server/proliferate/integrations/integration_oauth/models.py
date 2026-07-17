@@ -35,4 +35,6 @@ class TokenResponse:
     access_token: str
     refresh_token: str | None
     expires_at: datetime | None
-    scopes: tuple[str, ...]
+    # ``None`` means the provider omitted scope metadata. An explicit empty
+    # value remains ``()`` so exact policies can distinguish the two cases.
+    scopes: tuple[str, ...] | None

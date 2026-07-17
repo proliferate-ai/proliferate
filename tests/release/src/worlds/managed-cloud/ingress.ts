@@ -161,6 +161,8 @@ export interface DeployCandidateApiOptions {
   litellm: QualificationLiteLlmConfig;
   github: CandidateGithubAppConfig;
   e2b: CandidateE2bConfig;
+  /** Exact qualification ownership stamped onto external LiteLLM resources. */
+  qualificationRun: { runId: string; shardId: string };
   /**
    * PR 6 (append-only): Stripe TEST-mode config for the candidate Server. Absent
    * (the default) preserves today's no-Stripe 503 checkout posture exactly.
@@ -416,6 +418,8 @@ export async function deployCandidateApi(options: DeployCandidateApiOptions): Pr
 
 /** Builds the mode-0600 Server env-file body (spec step 3). */
 function buildServerEnv(options: DeployCandidateApiOptions): string {
+  const runId = requireQualificationIdentity(options.qualificationRun.runId, "run id");
+  const shardId = requireQualificationIdentity(options.qualificationRun.shardId, "shard id");
   const lines = [
     "SINGLE_ORG_MODE=true",
     "AGENT_GATEWAY_ENABLED=true",
@@ -423,6 +427,8 @@ function buildServerEnv(options: DeployCandidateApiOptions): string {
     `AGENT_GATEWAY_LITELLM_BASE_URL=${options.litellm.adminBaseUrl}`,
     `AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL=${options.litellm.publicBaseUrl}`,
     `AGENT_GATEWAY_LITELLM_MASTER_KEY=${options.litellm.masterKey}`,
+    `AGENT_GATEWAY_QUALIFICATION_RUN_ID=${runId}`,
+    `AGENT_GATEWAY_QUALIFICATION_SHARD_ID=${shardId}`,
     // Production posture (debug=False) requires non-default instance secrets;
     // fresh run-scoped random values match production rather than flipping DEBUG.
     `JWT_SECRET=${randomBytes(32).toString("hex")}`,
@@ -464,6 +470,13 @@ function buildServerEnv(options: DeployCandidateApiOptions): string {
     );
   }
   return `${lines.join("\n")}\n`;
+}
+
+function requireQualificationIdentity(value: string, label: string): string {
+  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value)) {
+    throw new Error(`managed-cloud qualification ${label} is malformed.`);
+  }
+  return value;
 }
 
 /**

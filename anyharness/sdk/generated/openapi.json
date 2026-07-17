@@ -7619,6 +7619,13 @@
             "items": {
               "$ref": "#/components/schemas/AgentLaunchModelOption"
             }
+          },
+          "unattendedModeId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Curated unattended mode from the selected runtime's active catalog.\nThis field intentionally serializes as `null` when no mode is vetted,\nallowing clients to distinguish that declaration from an older runtime\nthat omitted the field entirely."
           }
         }
       },

@@ -240,6 +240,14 @@ const AGENT_SUPPORTS_GOALS = {
   codex: true,
 };
 
+// Create-time permission mode used by unattended product surfaces. Only
+// curate a value when the harness exposes a proven bypass-capable mode across
+// its advertised model matrix. Interactive launches keep their own defaults.
+const AGENT_UNATTENDED_MODE_IDS = {
+  claude: "bypassPermissions",
+  codex: "full-access",
+};
+
 // Display-name curation: probe snapshots carry pretty names for some models
 // and raw ids for others. When a display name has no uppercase at all we
 // title-case it with a brand-aware token map (matching the existing
@@ -845,6 +853,9 @@ for (const [kind, runs] of byAgent) {
       })),
     session: {
       supportsGoals: AGENT_SUPPORTS_GOALS[kind] ?? false,
+      ...(AGENT_UNATTENDED_MODE_IDS[kind]
+        ? { unattendedModeId: AGENT_UNATTENDED_MODE_IDS[kind] }
+        : {}),
       controls,
       models,
       defaults: AGENT_SESSION_DEFAULTS[kind] ?? {},

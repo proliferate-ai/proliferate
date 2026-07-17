@@ -114,6 +114,18 @@ test("complete probe builds use the exact resolved candidate pins", () => {
       assert.deepEqual(agent.harness, candidateHarnesses[agent.kind]);
       assert.ok(agent.harness.agentProcess.source);
     }
+    assert.equal(
+      draft.agents.find((agent) => agent.kind === "claude").session.unattendedModeId,
+      "bypassPermissions",
+    );
+    assert.equal(
+      draft.agents.find((agent) => agent.kind === "codex").session.unattendedModeId,
+      "full-access",
+    );
+    assert.equal(
+      draft.agents.find((agent) => agent.kind === "cursor").session.unattendedModeId,
+      undefined,
+    );
     assert.deepEqual(
       draft.agents.find((agent) => agent.kind === "cursor"),
       candidate.agents.find((agent) => agent.kind === "cursor"),

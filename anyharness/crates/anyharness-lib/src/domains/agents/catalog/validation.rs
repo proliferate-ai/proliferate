@@ -14,6 +14,9 @@ use super::schema::{
 };
 use crate::domains::agents::model::AgentKind;
 
+mod unattended_mode;
+use unattended_mode::validate_unattended_mode;
+
 /// Reserved auth-context id meaning "no credentials at all".
 pub const BASELINE_AUTH_CONTEXT_ID: &str = "baseline";
 
@@ -88,6 +91,7 @@ fn validate_agent(
     for model in &agent.session.models {
         validate_model(&agent.kind, model, &context_ids, &mut seen_models)?;
     }
+    validate_unattended_mode(agent)?;
 
     validate_gateway_seed_models(agent)?;
     validate_settings(&agent.kind, &agent.settings)?;

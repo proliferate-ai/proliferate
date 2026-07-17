@@ -10,6 +10,7 @@ import type {
   ProjectCloudAgentCatalogOptions,
   RuntimeAgentLaunchOptions,
 } from "#product/lib/domain/agents/cloud-launch-catalog-types";
+import { withRuntimeUnattendedMode } from "#product/lib/domain/agents/runtime-unattended-mode-control";
 import {
   projectCloudControl,
   projectModelTuningControlValues,
@@ -89,6 +90,7 @@ export function mergeRuntimeLaunchOptionsIntoDesktopLaunchModelRegistries(
         displayName: registry.displayName,
         description: null,
         defaultModelId: registry.defaultModelId ?? null,
+        unattendedModeId: null,
         models: registry.models.map((model) => ({
           ...model,
           aliases: model.aliases ?? [],
@@ -117,7 +119,14 @@ export function mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents(
 ): DesktopAgentLaunchAgent[] {
   const activeContexts = options.activeAuthContextIds ?? null;
   if (!runtimeAgents || runtimeAgents.length === 0) {
-    return cloudAgents.map((agent) => dropGatedCatalogModels(agent, activeContexts));
+    return cloudAgents.map((agent) => ({
+      ...dropGatedCatalogModels(agent, activeContexts),
+      // No matching target response means there is no target-owned default to
+      // apply. Keep cloud metadata for optimistic menus, but never turn query
+      // absence or an authoritative empty target response into permission
+      // policy.
+      unattendedModeId: null,
+    }));
   }
 
   const cloudByKind = new Map(cloudAgents.map((agent) => [agent.kind, agent]));
@@ -127,12 +136,16 @@ export function mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents(
     const cloud = cloudByKind.get(agent.kind);
     const cloudModelsByIdOrAlias = buildCloudModelLookup(cloud);
     const defaultModelId = agent.defaultModelId ?? cloud?.defaultModelId ?? null;
+    const unattendedModeId = hasOwn(agent, "unattendedModeId")
+      ? agent.unattendedModeId ?? null
+      : cloud?.unattendedModeId ?? null;
 
     return {
       kind: agent.kind,
       displayName: cloud?.displayName ?? agent.displayName,
       description: cloud?.description ?? null,
       defaultModelId,
+      unattendedModeId,
       models: agent.models.map((model) => {
         const modelIdCandidates = runtimeModelCatalogLookupCandidates(
           agent.kind,
@@ -151,11 +164,16 @@ export function mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents(
           isDefault: model.isDefault || modelIdCandidates.includes(defaultModelId ?? ""),
           availability: cloudModel?.availability ?? null,
           sessionDefaultControls: cloudModel?.sessionDefaultControls ?? [],
-          modeValues: cloudModel?.modeValues ?? null,
+          modeValues: hasOwn(model, "modes")
+            ? model.modes ?? null
+            : cloudModel?.modeValues ?? null,
           tuningControlValues: cloudModel?.tuningControlValues ?? null,
         };
       }),
-      launchControls: cloud?.launchControls ?? [],
+      launchControls: withRuntimeUnattendedMode(
+        cloud?.launchControls ?? [],
+        unattendedModeId,
+      ),
     };
   });
 
@@ -167,7 +185,10 @@ export function mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents(
     ...mergedAgents,
     ...cloudAgents
       .filter((agent) => !runtimeKinds.has(agent.kind))
-      .map((agent) => dropGatedCatalogModels(agent, activeContexts)),
+      .map((agent) => ({
+        ...dropGatedCatalogModels(agent, activeContexts),
+        unattendedModeId: null,
+      })),
   ];
 }
 
@@ -232,6 +253,13 @@ function isRawRuntimeModelDisplayName(displayName: string, modelId: string): boo
     && /[-/:[\]=]/.test(displayName);
 }
 
+function hasOwn<T extends object, K extends PropertyKey>(
+  value: T,
+  key: K,
+): value is T & Record<K, unknown> {
+  return Object.prototype.hasOwnProperty.call(value, key);
+}
+
 function buildCloudModelLookup(
   cloud: DesktopAgentLaunchAgent | undefined,
 ): Map<string, DesktopAgentLaunchModel> {
@@ -285,6 +313,7 @@ function projectCloudAgent(agent: CloudAgentCatalogAgentInput): DesktopAgentLaun
     displayName: agent.displayName,
     description: agent.description ?? null,
     defaultModelId,
+    unattendedModeId: agent.session.unattendedModeId ?? null,
     models,
     launchControls,
   };

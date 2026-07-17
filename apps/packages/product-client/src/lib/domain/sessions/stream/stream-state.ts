@@ -1,6 +1,7 @@
 import {
   createTranscriptState,
   reduceEvent,
+  reduceEventBatch,
   reduceEvents,
 } from "@anyharness/sdk";
 import type {
@@ -46,23 +47,23 @@ export function appendHistoryTail(
 ): { applied: boolean; state: SessionStreamState } {
   const sortedEvents = [...events].sort((a, b) => a.seq - b.seq);
   let nextEvents: SessionEventEnvelope[] | null = null;
-  let nextTranscript = state.transcript;
-  let applied = false;
+  const appliedEnvelopes: SessionEventEnvelope[] = [];
+  let lastSeq = state.transcript.lastSeq;
 
   for (const envelope of sortedEvents) {
-    if (envelope.seq <= nextTranscript.lastSeq) {
+    if (envelope.seq <= lastSeq) {
       continue;
     }
-    if (envelope.seq > nextTranscript.lastSeq + 1) {
+    if (envelope.seq > lastSeq + 1) {
       break;
     }
-    applied = true;
+    lastSeq = envelope.seq;
     nextEvents ??= [...state.events];
     nextEvents.push(envelope);
-    nextTranscript = reduceEvent(nextTranscript, envelope);
+    appliedEnvelopes.push(envelope);
   }
 
-  if (!applied || !nextEvents) {
+  if (appliedEnvelopes.length === 0 || !nextEvents) {
     return { applied: false, state };
   }
 
@@ -70,7 +71,7 @@ export function appendHistoryTail(
     applied: true,
     state: {
       events: nextEvents,
-      transcript: nextTranscript,
+      transcript: reduceEventBatch(state.transcript, appliedEnvelopes),
     },
   };
 }
@@ -102,7 +103,7 @@ export function applyStreamEnvelopeBatch(
 ): StreamEnvelopeBatchApplyResult {
   const sortedEnvelopes = [...envelopes].sort((a, b) => a.seq - b.seq);
   let nextEvents: SessionEventEnvelope[] | null = null;
-  let nextTranscript = state.transcript;
+  let lastSeq = state.transcript.lastSeq;
   const appliedEnvelopes: SessionEventEnvelope[] = [];
   const duplicateEnvelopes: SessionEventEnvelope[] = [];
   let gapEnvelope: SessionEventEnvelope | null = null;
@@ -110,7 +111,6 @@ export function applyStreamEnvelopeBatch(
 
   for (let index = 0; index < sortedEnvelopes.length; index += 1) {
     const envelope = sortedEnvelopes[index];
-    const lastSeq = nextTranscript.lastSeq;
     if (envelope.seq <= lastSeq) {
       duplicateEnvelopes.push(envelope);
       continue;
@@ -123,7 +123,7 @@ export function applyStreamEnvelopeBatch(
 
     nextEvents ??= [...state.events];
     nextEvents.push(envelope);
-    nextTranscript = reduceEvent(nextTranscript, envelope);
+    lastSeq = envelope.seq;
     appliedEnvelopes.push(envelope);
   }
 
@@ -131,7 +131,7 @@ export function applyStreamEnvelopeBatch(
     state: nextEvents
       ? {
         events: nextEvents,
-        transcript: nextTranscript,
+        transcript: reduceEventBatch(state.transcript, appliedEnvelopes),
       }
       : state,
     appliedEnvelopes,

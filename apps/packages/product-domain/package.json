@@ -243,6 +243,10 @@
       "types": "./dist/telemetry/control-plane-probe-timeout.d.ts",
       "import": "./dist/telemetry/control-plane-probe-timeout.js"
     },
+    "./telemetry/session-stream-stale-close": {
+      "types": "./dist/telemetry/session-stream-stale-close.d.ts",
+      "import": "./dist/telemetry/session-stream-stale-close.js"
+    },
     "./repos/repo-id": {
       "types": "./dist/repos/repo-id.d.ts",
       "import": "./dist/repos/repo-id.js"

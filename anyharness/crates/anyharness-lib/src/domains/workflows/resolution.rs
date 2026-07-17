@@ -46,15 +46,17 @@ pub fn resolve_workflow_target(
         .find(|candidate| candidate.id == model_id)
         .ok_or(WorkflowResolutionError::ModelUnavailable)?;
 
-    let mode_id = match harness.agent_kind.as_str() {
-        "claude" => "bypassPermissions",
-        "codex" => "full-access",
-        _ => return Err(WorkflowResolutionError::ModeUnavailable),
-    };
-    if !model
+    // Workflow runs execute unattended. The selected runtime's active catalog
+    // owns that policy; an agent without a vetted default cannot run a
+    // workflow rather than receiving a guessed family-specific mode.
+    let mode_id = agent
+        .unattended_mode_id
+        .as_deref()
+        .ok_or(WorkflowResolutionError::ModeUnavailable)?;
+    if model
         .modes
         .as_ref()
-        .is_some_and(|modes| modes.iter().any(|mode| mode == mode_id))
+        .is_some_and(|modes| !modes.iter().any(|mode| mode == mode_id))
     {
         return Err(WorkflowResolutionError::ModeUnavailable);
     }
@@ -142,6 +144,7 @@ mod tests {
                     kind: "claude".to_string(),
                     display_name: "Claude".to_string(),
                     default_model_id: Some("sonnet".to_string()),
+                    unattended_mode_id: Some("bypassPermissions".to_string()),
                     models: vec![model(
                         "sonnet",
                         &["bypassPermissions"],
@@ -152,6 +155,7 @@ mod tests {
                     kind: "codex".to_string(),
                     display_name: "Codex".to_string(),
                     default_model_id: Some("gpt".to_string()),
+                    unattended_mode_id: Some("full-access".to_string()),
                     models: vec![model("gpt", &["full-access"], None)],
                 },
             ],
@@ -288,6 +292,28 @@ mod tests {
                 &harness("claude", WorkflowModelSelection::TargetDefault)
             ),
             Err(WorkflowResolutionError::ModeUnavailable)
+        );
+
+        let mut no_curated_default = options();
+        no_curated_default.agents[0].unattended_mode_id = None;
+        assert_eq!(
+            resolve_workflow_target(
+                &no_curated_default,
+                &harness("claude", WorkflowModelSelection::TargetDefault)
+            ),
+            Err(WorkflowResolutionError::ModeUnavailable)
+        );
+
+        let mut inherited_agent_modes = options();
+        inherited_agent_modes.agents[0].models[0].modes = None;
+        assert_eq!(
+            resolve_workflow_target(
+                &inherited_agent_modes,
+                &harness("claude", WorkflowModelSelection::TargetDefault)
+            )
+            .expect("missing model matrix inherits the validated agent vocabulary")
+            .mode_id,
+            "bypassPermissions"
         );
     }
 }

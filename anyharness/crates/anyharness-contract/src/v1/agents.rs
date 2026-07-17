@@ -139,6 +139,11 @@ pub struct AgentLaunchOption {
     pub display_name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub default_model_id: Option<String>,
+    /// Curated unattended mode from the selected runtime's active catalog.
+    /// This field intentionally serializes as `null` when no mode is vetted,
+    /// allowing clients to distinguish that declaration from an older runtime
+    /// that omitted the field entirely.
+    pub unattended_mode_id: Option<String>,
     pub models: Vec<AgentLaunchModelOption>,
 }
 
@@ -350,4 +355,27 @@ pub struct AgentReconcileSummary {
     pub already_installed: u32,
     pub skipped: u32,
     pub failed: u32,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::AgentLaunchOption;
+
+    #[test]
+    fn launch_option_keeps_an_explicit_null_unattended_mode() {
+        let value = serde_json::to_value(AgentLaunchOption {
+            kind: "grok".to_string(),
+            display_name: "Grok".to_string(),
+            default_model_id: None,
+            unattended_mode_id: None,
+            models: Vec::new(),
+        })
+        .expect("launch option serializes");
+
+        assert!(value.get("defaultModelId").is_none());
+        assert_eq!(
+            value.get("unattendedModeId"),
+            Some(&serde_json::Value::Null)
+        );
+    }
 }

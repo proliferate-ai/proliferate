@@ -54,6 +54,42 @@ Raw OAuth and MCP protocol clients live under
 [`server/proliferate/integrations/`](../../../../server/proliferate/integrations/)
 and do not own product persistence.
 
+### OAuth scope integrity
+
+Definition config chooses either the default provider-directed OAuth scope
+behavior or an exact scope policy. Slack uses the exact policy with this
+read/search-only ceiling:
+
+```text
+search:read.public
+search:read.private
+search:read.im
+search:read.mpim
+search:read.files
+search:read.users
+```
+
+For an exact policy, an authorization challenge may omit scopes or name a
+subset, but it cannot add a scope; Cloud always requests the canonical
+configured set. The callback must report that same set before credentials can
+become ready. Token parsing accepts standard top-level scope metadata and
+Slack's nested user-token scope metadata with comma or whitespace separators.
+Slack's token endpoint can also return an HTTP-success response whose JSON body
+has `ok: false`. Cloud translates that envelope into a typed provider error
+before reading or persisting token fields; callback and refresh surfaces expose
+only fixed product-safe codes and messages, never the raw provider payload.
+Hosted callback and refresh paths identify Slack from the trusted definition
+namespace. Generic protocol callers fall back only to a narrowly validated
+equivalent of the canonical Slack token URL; a non-Slack namespace overrides a
+Slack-looking URL so other providers retain their existing response semantics.
+
+A refresh response that omits scope metadata preserves the stored value. An
+explicit non-empty refresh grant may be a subset but cannot exceed the ceiling;
+an explicit empty grant or known stored scope outside the ceiling requires
+reauthentication. Legacy Slack bundles with empty scope metadata remain usable
+for existing search behavior. This scope ceiling does not authorize outbound
+Slack tools; gateway tool authorization is a separate boundary.
+
 ## Runtime Worker Identity
 
 [`db/models/cloud/runtime_workers.py`](../../../../server/proliferate/db/models/cloud/runtime_workers.py)
@@ -157,6 +193,68 @@ Cloud, invokes the remote provider, and records a
 `cloud_integration_tool_call_event` on success or failure. Provider credentials
 and rendered auth headers never cross the Cloud boundary.
 
+### Slack tool-call policy
+
+The gateway classifies Slack by the exact canonical `(provider, tool)` pair
+before account resolution, credential rendering, or an upstream MCP call. The
+provider identity must be exactly `slack`; other providers preserve the generic
+gateway behavior.
+
+These known read/search tools execute directly:
+
+```text
+slack_get_reactions
+slack_list_channel_members
+slack_list_starred_items
+slack_list_user_conversations
+slack_list_user_groups
+slack_list_workspaces
+slack_read_canvas
+slack_read_channel
+slack_read_file
+slack_read_thread
+slack_read_user_profile
+slack_search_channels
+slack_search_emojis
+slack_search_public
+slack_search_public_and_private
+slack_search_users
+```
+
+These known external-action tools require approval and are currently rejected
+as unsupported until a durable approval has been consumed:
+
+```text
+slack_add_reaction
+slack_complete_file_upload
+slack_create_canvas
+slack_create_conversation
+slack_create_reminder
+slack_delete_message
+slack_edit_message
+slack_get_file_upload_url
+slack_invite_to_conversation
+slack_join_conversation
+slack_leave_conversation
+slack_schedule_message
+slack_send_message
+slack_send_message_draft
+slack_update_canvas
+slack_update_user_profile
+```
+
+Every other Slack tool name fails closed. Matching is case-sensitive and does
+not normalize whitespace or infer behavior from prefixes. A mutation returns
+the typed code `integration_tool_approval_required` with approval status
+`unsupported`; an unknown Slack tool returns `integration_tool_not_allowed`.
+Both are MCP tool errors and audit as failed calls.
+
+The pure policy verdict is the seam for the durable one-time external-action
+approval state machine. Until that state exists, neither a Worker token, a
+valid gateway bearer, nor approval-like fields in agent-supplied tool arguments
+can authorize a Slack mutation. There is no process-local or prompt-based
+approval fallback.
+
 ## Mounted Routes
 
 Worker and public artifact routes:
@@ -214,6 +312,15 @@ and [`runtime_workers/api.py`](../../../../server/proliferate/server/cloud/runti
 - OAuth refresh and provider access errors are product errors owned by the
   integrations service; tool-level provider errors are returned to the agent
   without leaking credentials.
+- Slack HTTP-success token error envelopes become typed OAuth provider errors
+  before token indexing or persistence, and raw provider payloads do not cross
+  callback or refresh failure surfaces.
+- An exact-policy challenge cannot exceed the ceiling, a callback grant must
+  equal the requested set, and an explicit refresh grant must be non-empty and
+  remain within the ceiling; failures store no replacement credentials.
+- Slack gateway calls use an exact read allowlist, a typed approval-required
+  result for known external actions, and a deny-by-default result for unknown
+  tools. Agent arguments do not participate in the authorization decision.
 
 ## Verification
 
@@ -222,10 +329,14 @@ Focused server tests include:
 - `server/tests/integration/test_cloud_runtime_workers_api.py`
 - `server/tests/integration/test_cloud_runtime_worker_versions_api.py`
 - `server/tests/integration/test_cloud_integration_gateway_api.py`
+- `server/tests/integration/test_cloud_integration_gateway_tool_policy_api.py`
 - `server/tests/integration/test_cloud_integrations_api.py`
 - `server/tests/integration/test_cloud_integration_catalog_api.py`
 - `server/tests/integration/test_cloud_integration_health_api.py`
 - `server/tests/integration/test_integration_provider_access.py`
+- `server/tests/integration/test_integration_oauth_scope_policy.py`
+- `server/tests/unit/test_cloud_integration_gateway_tool_policy.py`
+- `server/tests/unit/test_integration_oauth_tokens.py`
 
 Worker behavior is covered by `cargo test -p proliferate-worker`. For an
 enrollment incident, use

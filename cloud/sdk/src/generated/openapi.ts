@@ -3356,6 +3356,8 @@ export interface components {
              * @default false
              */
             supportsGoals: boolean;
+            /** Unattendedmodeid */
+            unattendedModeId?: string | null;
             /**
              * Controls
              * @default []
