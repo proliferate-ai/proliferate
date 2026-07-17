@@ -1,7 +1,5 @@
 """Integration tests for the auth flow: GitHub OAuth → desktop PKCE exchange."""
 
-import base64
-import hashlib
 import time
 from datetime import UTC, datetime
 from unittest.mock import Mock
@@ -25,28 +23,8 @@ from proliferate.constants.auth import DESKTOP_GITHUB_CSRF_COOKIE, REFRESH_TOKEN
 from proliferate.db.models.auth import AuthIdentity, ProviderGrant, User
 from proliferate.integrations.github import GitHubUserProfile
 from proliferate.utils.crypto import encrypt_text
-
-
-def _configure_github_app(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Make point-of-use auth tests exercise a ready operator deployment."""
-
-    for field, value in {
-        "github_app_id": "12345",
-        "github_app_slug": "test-cloud",
-        "github_app_client_id": "Iv1.test-client",
-        "github_app_client_secret": "test-client-secret",
-        "github_app_webhook_secret": "test-webhook-secret",
-        "github_app_private_key": "-----BEGIN RSA PRIVATE KEY-----",
-        "github_app_private_key_path": "",
-    }.items():
-        monkeypatch.setattr(settings, field, value)
-
-
-def _make_pkce_pair() -> tuple[str, str]:
-    verifier = "test-code-verifier-that-is-long-enough-for-pkce"
-    digest = hashlib.sha256(verifier.encode("ascii")).digest()
-    challenge = base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
-    return verifier, challenge
+from tests.helpers.desktop_auth import make_pkce_pair as _make_pkce_pair
+from tests.integration.cloud_api_helpers import configure_github_app
 
 
 async def _create_user_via_manager(
@@ -619,7 +597,7 @@ class TestSingleOrgProductUserBypass:
         """
         monkeypatch.setattr(settings, "password_auth_enabled", True)
         monkeypatch.setattr(settings, "single_org_mode_override", True)
-        _configure_github_app(monkeypatch)
+        configure_github_app(monkeypatch)
         await _create_password_user("single-org-no-github@example.com", self.password)
 
         login = await client.post(
