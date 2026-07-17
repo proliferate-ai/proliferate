@@ -172,11 +172,12 @@ describe("useWorkspaceActions local workspace creation", () => {
   });
 
   it("propagates create errors without resolving an existing workspace", async () => {
+    const sensitiveWorkspacePath = "/synthetic/telemetry/private-workspace";
     const error = new AnyHarnessError({
       type: "about:blank",
       title: "Bad request",
       status: 400,
-      detail: "a workspace record already exists for path: /Users/pablo/proliferate",
+      detail: `a workspace record already exists for path: ${sensitiveWorkspacePath}`,
       code: "WORKSPACE_CREATE_FAILED",
     });
     mocks.create.mockRejectedValueOnce(error);
@@ -185,14 +186,14 @@ describe("useWorkspaceActions local workspace creation", () => {
     let thrown: unknown = null;
     await act(async () => {
       try {
-        await result.current.createLocalWorkspace("/Users/pablo/proliferate");
+        await result.current.createLocalWorkspace(sensitiveWorkspacePath);
       } catch (caught) {
         thrown = caught;
       }
     });
 
     expect(thrown).toBe(error);
-    expect(error.message).toContain("/Users/pablo/proliferate");
+    expect(error.message).toContain(sensitiveWorkspacePath);
     expect(mocks.resolveFromPath).not.toHaveBeenCalled();
     expect(mocks.trackProductEvent).not.toHaveBeenCalled();
     expect(mocks.captureTelemetryException).toHaveBeenCalledTimes(1);
@@ -204,7 +205,7 @@ describe("useWorkspaceActions local workspace creation", () => {
     );
     expect("problem" in capturedError).toBe(false);
     expect("cause" in capturedError).toBe(false);
-    expect(capturedError.stack).not.toContain("/Users/pablo/proliferate");
+    expect(capturedError.stack).not.toContain(sensitiveWorkspacePath);
     expect(context).toEqual({
       tags: {
         action: "create_local_workspace",
