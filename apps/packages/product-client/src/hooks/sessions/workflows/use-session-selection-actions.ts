@@ -265,6 +265,9 @@ export function useSessionSelectionWorkflowActions({
       ...options,
       measurementOperationId,
     });
+    if (guard && !isSessionActivationCurrent(guard)) {
+      return staleSelection("intent-replaced");
+    }
     recordMeasurementWorkflowStep({
       operationId: measurementOperationId,
       step: "session.select.ensure_sessions",

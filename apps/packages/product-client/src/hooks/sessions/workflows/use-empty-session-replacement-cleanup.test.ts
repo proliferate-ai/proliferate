@@ -6,8 +6,12 @@ import {
 import {
   createEmptySessionRecord,
   getSessionRecord,
+  getWorkspaceSessionRecords,
   putSessionRecord,
 } from "#product/stores/sessions/session-records";
+import type {
+  WorkspaceSession,
+} from "#product/hooks/access/anyharness/sessions/use-workspace-session-cache";
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
 import { useSessionIntentStore } from "#product/stores/sessions/session-intent-store";
@@ -33,10 +37,15 @@ vi.mock("#product/lib/access/persistence/session-replacement-tombstones-storage"
   writeSessionReplacementTombstones: storageMocks.writeTombstones,
 }));
 
-function createDeps() {
+function createDeps(authoritativeSessions: WorkspaceSession[] = []) {
   const mutateAsync = vi.fn(async () => undefined);
   const deps: EmptySessionReplacementDeps = {
     closeSessionSlotStream: vi.fn(),
+    getWorkspaceSessionCacheSnapshot: vi.fn(() => ({
+      sessions: authoritativeSessions,
+      dataUpdatedAt: authoritativeSessions.length > 0 ? 1 : 0,
+      isInvalidated: false,
+    })),
     removeWorkspaceSessionRecord: vi.fn(),
     dismissSessionMutation: { mutateAsync } as never,
     captureException: vi.fn(),
@@ -198,6 +207,120 @@ describe("empty session replacement transaction", () => {
         sessionId: "runtime-old",
       });
     });
+  });
+
+  it("rapidly replaces a rehydrated authoritative empty tab after reload", async () => {
+    const workspaceId = "workspace-1";
+    const oldRuntimeSessionId = "runtime-reloaded-codex";
+    const replacementSessionId = "client-session:claude:rapid-switch";
+    const authoritativeSession = {
+      id: oldRuntimeSessionId,
+      workspaceId,
+      agentKind: "codex",
+      modelId: "gpt-5",
+      status: "idle",
+      lastPromptAt: null,
+    } as WorkspaceSession;
+
+    // Release E2E run 29602686092 exposed this ordering: reload reconstructed
+    // an empty runtime-owned Codex tab from the fresh authoritative query, but
+    // its deferred activation had not installed a local record before the
+    // immediate Claude switch staged a transient shell.
+    expect(getSessionRecord(oldRuntimeSessionId)).toBeNull();
+
+    // Session creation activates its optimistic shell before hiding the old
+    // one. The replacement must still collapse back to one visible record and
+    // retire the authoritative runtime id rather than opening a third tab.
+    putSessionRecord(createEmptySessionRecord(replacementSessionId, "claude", {
+      workspaceId,
+      materializedSessionId: null,
+      modelId: "claude-sonnet-4-5",
+    }));
+    const { deps, mutateAsync } = createDeps([authoritativeSession]);
+    const transaction = beginEmptySessionReplacement(
+      oldRuntimeSessionId,
+      workspaceId,
+      deps,
+    );
+
+    expect(transaction).not.toBeNull();
+    expect(Object.keys(getWorkspaceSessionRecords(workspaceId)))
+      .toEqual([replacementSessionId]);
+    expect(isReplacedSessionTombstoned(workspaceId, oldRuntimeSessionId))
+      .toBe(true);
+
+    await expect(transaction?.commit()).resolves.toBe("retired");
+
+    expect(deps.removeWorkspaceSessionRecord)
+      .toHaveBeenCalledWith(workspaceId, oldRuntimeSessionId);
+    await vi.waitFor(() => {
+      expect(mutateAsync).toHaveBeenCalledWith({
+        workspaceId,
+        sessionId: oldRuntimeSessionId,
+      });
+    });
+    expect(Object.keys(getWorkspaceSessionRecords(workspaceId)))
+      .toEqual([replacementSessionId]);
+    expect(filterReplacedSessionTombstones(workspaceId, [
+      authoritativeSession,
+      { ...authoritativeSession, id: "runtime-replacement", agentKind: "claude" },
+    ])).toEqual([
+      expect.objectContaining({ id: "runtime-replacement" }),
+    ]);
+  });
+
+  it("restores a query-only authoritative empty tab when replacement rolls back", () => {
+    const authoritativeSession = {
+      id: "runtime-reloaded-codex",
+      workspaceId: "workspace-1",
+      agentKind: "codex",
+      modelId: "gpt-5",
+      status: "idle",
+      lastPromptAt: null,
+    } as WorkspaceSession;
+    const { deps } = createDeps([authoritativeSession]);
+
+    const transaction = beginEmptySessionReplacement(
+      authoritativeSession.id,
+      authoritativeSession.workspaceId,
+      deps,
+    );
+    transaction?.rollback();
+
+    expect(getSessionRecord(authoritativeSession.id)).toMatchObject({
+      agentKind: "codex",
+      materializedSessionId: authoritativeSession.id,
+      workspaceId: authoritativeSession.workspaceId,
+    });
+    expect(isReplacedSessionTombstoned(
+      authoritativeSession.workspaceId,
+      authoritativeSession.id,
+    )).toBe(false);
+  });
+
+  it("preserves a query-only authoritative session that has user work", () => {
+    const authoritativeSession = {
+      id: "runtime-reloaded-nonempty",
+      workspaceId: "workspace-1",
+      agentKind: "codex",
+      modelId: "gpt-5",
+      status: "idle",
+      lastPromptAt: "2026-07-17T18:40:00.000Z",
+    } as WorkspaceSession;
+    const { deps } = createDeps([authoritativeSession]);
+
+    const transaction = beginEmptySessionReplacement(
+      authoritativeSession.id,
+      authoritativeSession.workspaceId,
+      deps,
+    );
+
+    expect(transaction).toBeNull();
+    expect(deps.closeSessionSlotStream).not.toHaveBeenCalled();
+    expect(isReplacedSessionTombstoned(
+      authoritativeSession.workspaceId,
+      authoritativeSession.id,
+    )).toBe(false);
   });
 
   it("retries a transient dismissal and retains the tombstone until authoritative refresh", async () => {

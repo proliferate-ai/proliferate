@@ -1,6 +1,7 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   commitSupersededSessionCreation,
+  publishSessionCreationIfCurrent,
   registerSessionCreation,
   resetSessionCreationSupersessionForTests,
   rollbackSupersededSessionCreation,
@@ -40,6 +41,76 @@ describe("session creation supersession", () => {
     rollbackSupersededSessionCreation("old-session");
 
     await expect(disposition).resolves.toBe(false);
+    unregister();
+  });
+
+  it("blocks publication when replacement starts after a stale async checkpoint", async () => {
+    const unregister = registerSessionCreation("old-session");
+    const staleCheckpoint = shouldDiscardSupersededSessionCreation("old-session");
+    supersedeInFlightSessionCreation("old-session");
+    await expect(staleCheckpoint).resolves.toBe(false);
+    const publish = vi.fn();
+
+    const publication = publishSessionCreationIfCurrent({
+      sessionId: "old-session",
+      onSuperseded: () => shouldDiscardSupersededSessionCreation("old-session"),
+      publish,
+    });
+    await Promise.resolve();
+    expect(publish).not.toHaveBeenCalled();
+
+    commitSupersededSessionCreation("old-session");
+    await expect(publication).resolves.toBe(false);
+    expect(publish).not.toHaveBeenCalled();
+    unregister();
+  });
+
+  it("publishes after a tail-racing replacement rolls back", async () => {
+    const unregister = registerSessionCreation("old-session");
+    const staleCheckpoint = shouldDiscardSupersededSessionCreation("old-session");
+    supersedeInFlightSessionCreation("old-session");
+    await expect(staleCheckpoint).resolves.toBe(false);
+    const publish = vi.fn();
+
+    const publication = publishSessionCreationIfCurrent({
+      sessionId: "old-session",
+      onSuperseded: () => shouldDiscardSupersededSessionCreation("old-session"),
+      publish,
+    });
+    rollbackSupersededSessionCreation("old-session");
+
+    await expect(publication).resolves.toBe(true);
+    expect(publish).toHaveBeenCalledTimes(1);
+    unregister();
+  });
+
+  it("rechecks ownership when rollback is immediately followed by another replacement", async () => {
+    const unregister = registerSessionCreation("old-session");
+    supersedeInFlightSessionCreation("old-session");
+    const publish = vi.fn();
+    let replacementCount = 1;
+    const publication = publishSessionCreationIfCurrent({
+      sessionId: "old-session",
+      onSuperseded: async () => {
+        const shouldDiscard = await shouldDiscardSupersededSessionCreation(
+          "old-session",
+        );
+        if (!shouldDiscard && replacementCount === 1) {
+          replacementCount += 1;
+          supersedeInFlightSessionCreation("old-session");
+        }
+        return shouldDiscard;
+      },
+      publish,
+    });
+
+    rollbackSupersededSessionCreation("old-session");
+    await vi.waitFor(() => expect(replacementCount).toBe(2));
+    expect(publish).not.toHaveBeenCalled();
+    commitSupersededSessionCreation("old-session");
+
+    await expect(publication).resolves.toBe(false);
+    expect(publish).not.toHaveBeenCalled();
     unregister();
   });
 
