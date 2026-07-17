@@ -179,7 +179,7 @@ async def create_usage_segment(
             raise RuntimeError("Usage segment disappeared after creation.")
         return segment
 
-    existing = await get_open_usage_segment(db, sandbox_id)
+    existing = await get_open_usage_segment(db, sandbox_id, lock_row=True)
     if existing is None:
         raise RuntimeError("Usage segment insert conflicted but no open segment was found.")
     if external_sandbox_id is not None and existing.external_sandbox_id != external_sandbox_id:

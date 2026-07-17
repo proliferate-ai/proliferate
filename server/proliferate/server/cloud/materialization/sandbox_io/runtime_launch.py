@@ -1,4 +1,4 @@
-"""Launch and persist AnyHarness runtime topology inside a provider sandbox."""
+"""Launch AnyHarness runtime topology inside a provider sandbox."""
 
 from __future__ import annotations
 
@@ -8,7 +8,6 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
-from proliferate.db.store import cloud_sandboxes as cloud_sandboxes_store
 from proliferate.db.store import organizations as organizations_store
 from proliferate.db.store.cloud_sandboxes import CloudSandboxValue
 from proliferate.integrations.sandbox import (
@@ -41,7 +40,6 @@ from proliferate.server.cloud.runtime.sandbox_exec import (
     runtime_launcher_path,
 )
 from proliferate.server.cloud.runtime_workers.service import worker_cloud_base_url
-from proliferate.utils.crypto import encrypt_text
 
 
 async def _resolve_owner_organization_id(
@@ -76,7 +74,7 @@ async def launch_anyharness_runtime(
     runtime_token: str,
     anyharness_data_key: str,
 ) -> None:
-    """Launch the configured runtime topology and persist exact-attempt access."""
+    """Launch the configured topology; the caller persists exact-attempt access."""
 
     if settings.supervisor_owned_runtime:
         await _launch_supervisor_owned_runtime(
@@ -164,17 +162,6 @@ async def launch_anyharness_runtime(
         runtime_context=runtime_context,
         runtime_bearer_token=runtime_token,
     )
-    await cloud_sandboxes_store.mark_cloud_sandbox_ready(
-        db,
-        sandbox_record.id,
-        e2b_sandbox_id=provider_sandbox_id,
-        e2b_template_ref=provider.template_version,
-        anyharness_base_url=endpoint.runtime_url,
-        anyharness_bearer_token_ciphertext=encrypt_text(runtime_token),
-        anyharness_data_key_ciphertext=encrypt_text(anyharness_data_key),
-        expected_materialization_attempt=sandbox_record.materialization_attempt,
-    )
-    await db.commit()
 
 
 async def _launch_supervisor_owned_runtime(
@@ -282,14 +269,3 @@ async def _launch_supervisor_owned_runtime(
         runtime_token,
         workspace_id=sandbox_record.id,
     )
-    await cloud_sandboxes_store.mark_cloud_sandbox_ready(
-        db,
-        sandbox_record.id,
-        e2b_sandbox_id=provider_sandbox_id,
-        e2b_template_ref=provider.template_version,
-        anyharness_base_url=endpoint.runtime_url,
-        anyharness_bearer_token_ciphertext=encrypt_text(runtime_token),
-        anyharness_data_key_ciphertext=encrypt_text(anyharness_data_key),
-        expected_materialization_attempt=sandbox_record.materialization_attempt,
-    )
-    await db.commit()
