@@ -182,7 +182,6 @@ function applyEvent(
       }
       const updated = ensureMutableKnownItem(context, itemId, existing);
       applyItemDelta(updated, evt, ts, envelope.seq);
-      setItem(context, itemId, updated);
       syncStreamingPointers(s, itemId, updated);
       break;
     }
