@@ -329,7 +329,7 @@
       "tier": 2,
       "implementation": {
         "status": "deferred",
-        "reason": "the removed partial probe could not launch workflows because the run engine is not merged"
+        "reason": "superseded by the merged managed one-prompt Workflow engine (#1303): Tier 2 is composed as T2-WFDEF-1 (definition create/edit/revision/delete) plus T2-WF-RUN (scalar launch, one-UUID duplicate-click, durable queued state, reload/deep-link, pre-execution cancel, persisted history), exercised in tests/intent (workflow-definitions.spec.ts + workflow-runs.spec.ts), not by a release-runner collector, so this row stays deferred here. The stale 'run engine is not merged' reason no longer holds"
       }
     },
     {

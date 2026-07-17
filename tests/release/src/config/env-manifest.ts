@@ -902,6 +902,25 @@ export const ENV_MANIFEST: readonly EnvVarSpec[] = [
     secret: true,
     lanes: ["sandbox"],
   },
+  {
+    name: "RELEASE_E2E_WORKFLOW_MANAGED_PLANE",
+    description:
+      "Attests that the live staging managed-Workflow BACKGROUND PLANE is provisioned and its server gate is on: " +
+      "RabbitMQ + Valkey/RedBeat bound through the gated background definitions, the Celery worker + Beat services " +
+      "created with ECS_WORKER_SERVICE/ECS_BEAT_SERVICE + broker/store identifiers set, API/worker/Beat deployed " +
+      "from one immutable image digest with the relay-heartbeat + exact-ID candidate execution proof passing, and " +
+      "WORKFLOW_MANAGED_RUNS_ENABLED=true in staging only (production unset/false). This is the frozen spec's " +
+      "\"External hosted prerequisite\" (owned OUTSIDE this test/evidence harness lane), NOT something inferable " +
+      "from checked-in Terraform. Absent → the managed-Workflow qualification cells fail closed (blocked on missing " +
+      "requirement); even when present, this release-tail's production driver still fails closed until the live " +
+      "provisioning + founder sign-off exist, because provisioning is explicitly not owned here.",
+    whereItLives:
+      "Set by the operator who performed the external staging background-plane provisioning + smoke (frozen " +
+      "\"Main qualification sequence\" prerequisite). Local: `~/.proliferate-local/dev/qualification-infra.env` " +
+      "(mode 0600). CI: the `Qualification` environment variable, set only after the prerequisite proof.",
+    secret: false,
+    lanes: ["sandbox"],
+  },
 ] as const;
 
 export const DEFAULT_LOCAL_RUNTIME_URL = "http://127.0.0.1:8542";
