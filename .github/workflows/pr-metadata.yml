@@ -26,12 +26,12 @@ jobs:
       # pull_request_target runs with write-capable secrets, so only trusted
       # base-revision code is checked out and executed. The untrusted PR head is
       # never checked out; changed paths come from the GitHub API instead.
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ github.event.pull_request.base.sha }}
           persist-credentials: false
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22"
 

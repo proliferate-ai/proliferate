@@ -28,14 +28,14 @@ jobs:
       ANYHARNESS_TEST_FIXTURE_REPO_URL: ${{ vars.ANYHARNESS_TEST_FIXTURE_REPO_URL }}
       ANYHARNESS_TEST_FIXTURE_REPO_REF: ${{ vars.ANYHARNESS_TEST_FIXTURE_REPO_REF }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Install system build dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y pkg-config libcap-dev
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22"
 
