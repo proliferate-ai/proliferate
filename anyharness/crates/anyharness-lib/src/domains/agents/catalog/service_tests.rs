@@ -556,6 +556,13 @@ fn validate_launch_rejects_mode_selection_without_mode_vocabulary() {
     let mut raw: serde_json::Value =
         serde_json::from_str(draft_catalog_json()).expect("draft must parse");
     let codex = &mut raw["agents"][1];
+    // A curated unattended default without a mode vocabulary is rejected at
+    // load time. Remove that default so this test can independently exercise
+    // service-level validation of an explicit launch selection.
+    codex["session"]
+        .as_object_mut()
+        .expect("session object")
+        .remove("unattendedModeId");
     let controls = codex["session"]["controls"]
         .as_array_mut()
         .expect("controls array");
