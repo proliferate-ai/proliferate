@@ -736,9 +736,9 @@ steps on the cancelled runner, including `if: always()` cleanup and artifact
 upload, are not guaranteed to execute. Managed-cloud AWS ingress resources
 therefore carry exact `Purpose`/`RunId`/`ShardId` provider tags and an
 independent `workflow_run` cleanup executes trusted default-branch code after
-the source workflow completes. It derives only the current and retained
-historical run identities from the immutable Actions run id/attempt, validates
-the exact tags plus deterministic SG/key/DNS names, cleans those resources in
+the source workflow completes. It derives the single run identity shared by
+the managed-cloud invocations from the immutable Actions run id/attempt,
+validates the exact tags plus deterministic SG/key/DNS names, cleans those resources in
 dependency order, and proves a zero post-sweep. It never checks out the source
 run's branch and never performs account-wide prefix cleanup.
 
