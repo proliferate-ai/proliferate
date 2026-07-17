@@ -239,18 +239,34 @@ const INTEGRATION_AUDIT_PROBE_SETTINGS_POSTURE = Object.freeze({
   AGENT_GATEWAY_QUALIFICATION_SHARD_ID: "",
 });
 
+const INTEGRATION_AUDIT_PROBE_OWNED_ENV_KEYS = new Set([
+  "DATABASE_URL",
+  "DEBUG",
+  "PROLIFERATE_TELEMETRY_MODE",
+  "TELEMETRY_MODE",
+  "RUN_BACKGROUND_WORKERS",
+  "AGENT_GATEWAY_QUALIFICATION_RUN_ID",
+  "AGENT_GATEWAY_QUALIFICATION_SHARD_ID",
+]);
+
 /**
  * Pins the read-only probe to an explicit qualification-only Settings posture.
  * The server's production defaults intentionally fail closed when real secrets
- * are absent; this override is scoped to the child process that only imports
- * the DB engine/models and executes the audit query.
+ * are absent. Case-insensitive collisions are removed because BaseSettings
+ * treats env keys case-insensitively; the resulting override is scoped to the
+ * child process that only imports the DB engine/models and executes the query.
  */
 export function buildIntegrationAuditProbeEnv(
   databaseUrl: string,
   ambient: NodeJS.ProcessEnv = process.env,
 ): NodeJS.ProcessEnv {
+  const inherited = Object.fromEntries(
+    Object.entries(ambient).filter(
+      ([key]) => !INTEGRATION_AUDIT_PROBE_OWNED_ENV_KEYS.has(key.toUpperCase()),
+    ),
+  );
   return {
-    ...ambient,
+    ...inherited,
     ...INTEGRATION_AUDIT_PROBE_SETTINGS_POSTURE,
     DATABASE_URL: databaseUrl,
   };

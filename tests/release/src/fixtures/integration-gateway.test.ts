@@ -111,10 +111,14 @@ test("integration audit probe adds the Settings posture missing from the legacy 
 
 test("integration audit probe posture overrides unsafe ambient production settings only in its child env", () => {
   const ambient: NodeJS.ProcessEnv = {
-    DEBUG: "false",
-    PROLIFERATE_TELEMETRY_MODE: "hosted_product",
-    RUN_BACKGROUND_WORKERS: "true",
-    AGENT_GATEWAY_QUALIFICATION_RUN_ID: "incomplete-parent-identity",
+    debug: "false",
+    proliferate_telemetry_mode: "hosted_product",
+    telemetry_mode: "self_managed",
+    run_background_workers: "true",
+    agent_gateway_qualification_run_id: "incomplete-parent-identity",
+    agent_gateway_qualification_shard_id: "bad shard with spaces",
+    database_url: "postgresql+asyncpg://wrong-database",
+    UNRELATED_ENV: "preserved",
   };
   const env = buildIntegrationAuditProbeEnv("postgresql+asyncpg://probe", ambient);
 
@@ -123,7 +127,31 @@ test("integration audit probe posture overrides unsafe ambient production settin
   assert.equal(env.RUN_BACKGROUND_WORKERS, "false");
   assert.equal(env.AGENT_GATEWAY_QUALIFICATION_RUN_ID, "");
   assert.equal(env.AGENT_GATEWAY_QUALIFICATION_SHARD_ID, "");
-  assert.equal(ambient.DEBUG, "false", "the parent/production environment must not be mutated");
+  assert.equal(env.DATABASE_URL, "postgresql+asyncpg://probe");
+  assert.equal(env.UNRELATED_ENV, "preserved");
+  for (const ownedKey of [
+    "DATABASE_URL",
+    "DEBUG",
+    "PROLIFERATE_TELEMETRY_MODE",
+    "TELEMETRY_MODE",
+    "RUN_BACKGROUND_WORKERS",
+    "AGENT_GATEWAY_QUALIFICATION_RUN_ID",
+    "AGENT_GATEWAY_QUALIFICATION_SHARD_ID",
+  ]) {
+    const matchingKeys = Object.keys(env).filter(
+      (key) => key.toUpperCase() === ownedKey,
+    );
+    assert.equal(
+      matchingKeys.length,
+      ownedKey === "TELEMETRY_MODE" ? 0 : 1,
+      `${ownedKey} must not retain a case-insensitive ambient collision`,
+    );
+  }
+  assert.equal(
+    ambient.debug,
+    "false",
+    "the parent/production environment must not be mutated",
+  );
 });
 
 test("integration audit probe propagates a real query failure instead of returning empty evidence", () => {
