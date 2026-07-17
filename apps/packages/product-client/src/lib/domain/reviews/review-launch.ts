@@ -3,6 +3,7 @@ import type {
   StartCodeReviewRequest,
   StartPlanReviewRequest,
 } from "@anyharness/sdk";
+import type { DesktopAgentLaunchAgent } from "#product/lib/domain/agents/cloud-launch-catalog";
 import {
   buildReviewRequest,
   createReviewSetupDraft,
@@ -17,14 +18,13 @@ import {
 export interface ReviewLaunchSessionSlot {
   agentKind: string;
   modelId: string | null;
-  modeId: string | null;
 }
 
 export function resolveOneClickReviewRequest(args: {
   kind: ReviewKind;
   parentSessionId: string;
   parentSlot: ReviewLaunchSessionSlot;
-  unattendedModeId?: string | null;
+  launchAgents: readonly DesktopAgentLaunchAgent[];
   reviewDefaultsByKind: StoredReviewDefaultsByKind;
   reviewPersonalitiesByKind: StoredReviewPersonalitiesByKind;
 }): {
@@ -35,8 +35,7 @@ export function resolveOneClickReviewRequest(args: {
   const sessionDefaults = {
     agentKind: parentAgentKind,
     modelId: args.parentSlot.modelId,
-    modeId: args.parentSlot.modeId,
-    unattendedModeId: args.unattendedModeId,
+    launchAgents: args.launchAgents,
   };
   const personalityTemplates = resolveReviewPersonaTemplates(
     args.kind,

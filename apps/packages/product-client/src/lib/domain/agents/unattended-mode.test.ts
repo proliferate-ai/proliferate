@@ -63,6 +63,27 @@ describe("resolveUnattendedModeId", () => {
       modelId: "missing",
     })).toBeUndefined();
   });
+
+  it("distinguishes an empty mode list from null inheritance", () => {
+    expect(resolveUnattendedModeId({
+      agent: launchAgent({
+        models: [{
+          ...launchAgent().models[0],
+          modeValues: [],
+        }],
+      }),
+      modelId: "sonnet",
+    })).toBeUndefined();
+    expect(resolveUnattendedModeId({
+      agent: launchAgent({
+        models: [{
+          ...launchAgent().models[0],
+          modeValues: null,
+        }],
+      }),
+      modelId: "sonnet",
+    })).toBe("bypassPermissions");
+  });
 });
 
 function launchAgent(

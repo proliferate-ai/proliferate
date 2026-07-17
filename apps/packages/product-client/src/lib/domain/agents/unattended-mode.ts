@@ -32,10 +32,7 @@ export function resolveUnattendedModeId({
   if (selectedModelId && !selectedModel) {
     return undefined;
   }
-  if (
-    selectedModel?.modeValues?.length
-    && !selectedModel.modeValues.includes(unattended)
-  ) {
+  if (selectedModel?.modeValues && !selectedModel.modeValues.includes(unattended)) {
     return undefined;
   }
 
