@@ -21,7 +21,6 @@ dependencies = [
     "pydantic-settings>=2.14.2",
     "python-jose[cryptography]>=3.3.0",
     "cryptography>=49.0.0",
-    "passlib[bcrypt]>=1.7.0",
     "python-multipart>=0.0.32",
     "python-dateutil>=2.9.0",
     "rfc8785>=0.1.4",
