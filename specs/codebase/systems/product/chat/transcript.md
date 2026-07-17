@@ -144,18 +144,16 @@ Rules:
   call cluster.
 - Do not group creation with send, wake, status, read, search, close, or
   generic tool calls.
-- A single collapsed creation label is `Created subagent`.
-- Multiple adjacent creation receipts collapse as `Created N subagents`.
+- A single completed creation receipt collapses as `Subagent finished`.
+- Multiple adjacent completed creation receipts collapse as
+  `N subagents finished`.
 - Collapsed creation labels use the same muted, backgroundless collapsed-action
   trigger treatment as normal transcript tool summaries such as
   `Explored 1 listing`.
-- Expanded rows use
-  `Created subagent GeneratedName (title ID) with prompt "..."`.
-- Expanded creation rows stay on one truncating line. The row uses one text
-  treatment except for the generated identity, which keeps the colored robot
-  affordance and opens the child session when a valid target exists.
-- Hovering the generated identity shows the delegated-agent card. When a valid
-  child target exists, that card is clickable and opens the same child session.
+- Expanded group rows use `GeneratedName — done` (or `— failed`) and stay on
+  one truncating line. Expanding a row shows only the clean structured result
+  summary, plus an `Open subagent session` action when a valid target exists;
+  raw orchestration receipts remain hidden.
 
 Communication receipts:
 
@@ -167,6 +165,26 @@ Communication receipts:
   `linkCompletionsByCompletionId`.
 - When a valid child target exists, the whole wake/completion receipt chip and
   not a separate visible action or hover card, opens the child session.
+
+Native harness subagents use the same durable item stream as the parent turn:
+
+- The native `Agent`/`Task` spawn operation is one stable tool item from start
+  through completion or failure. It remains visible while running and after
+  replay.
+- Child events carry `parentToolCallId = <native spawn tool id>` and render
+  inside that parent in runtime sequence order. Claude currently supplies child
+  prose, reasoning, and tools; Codex currently supplies collaboration lifecycle
+  and activity tools, not the child thread's full prose/reasoning stream.
+- Provider adapters emit `_meta.anyharness.parentToolCallId`. The sink accepts
+  Claude's older `_meta.claudeCode.parentToolUseId` only as a compatibility
+  fallback, after the provider-neutral field.
+- Session activity roster upserts are summary state, not transcript content.
+  They must never synthesize a second copy of native subagent work.
+- Live stream application deduplicates by durable sequence and orders batches
+  before reduction. Persisted replay consumes the same normalized item events,
+  so identity, nesting, ordering, and terminal status must match.
+- Missing or ambiguous parent identity is not inferred. Such events stay at the
+  root rather than being attached to a guessed child group.
 
 ## Layout Invariants
 

@@ -1,0 +1,452 @@
+{
+  "provider": "claude",
+  "sessionId": "session-1",
+  "turnId": "turn-1",
+  "parentId": "claude-task-1",
+  "parentTerminalBeforeTurnEnd": true,
+  "childIds": [
+    "claude-message-1",
+    "claude-thought-1",
+    "claude-read-1"
+  ],
+  "acpNotifications": [
+    {
+      "sessionId": "native-claude-session",
+      "update": {
+        "sessionUpdate": "tool_call",
+        "toolCallId": "claude-task-1",
+        "title": "Inspect the repository",
+        "kind": "think",
+        "status": "in_progress",
+        "rawInput": {
+          "prompt": "Inspect the transcript pipeline"
+        },
+        "_meta": {
+          "anyharness": {
+            "nativeToolName": "Task",
+            "toolKind": "subagent"
+          },
+          "claudeCode": {
+            "toolName": "Task"
+          }
+        }
+      }
+    },
+    {
+      "sessionId": "native-claude-session",
+      "update": {
+        "sessionUpdate": "agent_message_chunk",
+        "content": {
+          "type": "text",
+          "text": "Inspecting the transcript pipeline."
+        },
+        "messageId": "claude-message-1",
+        "_meta": {
+          "anyharness": {
+            "parentToolCallId": "claude-task-1",
+            "futureChildState": {
+              "phase": "working"
+            }
+          },
+          "claudeCode": {
+            "parentToolUseId": "wrong-legacy-parent"
+          }
+        }
+      }
+    },
+    {
+      "sessionId": "native-claude-session",
+      "update": {
+        "sessionUpdate": "agent_thought_chunk",
+        "content": {
+          "type": "text",
+          "text": "Checking reducer ordering."
+        },
+        "messageId": "claude-thought-1",
+        "_meta": {
+          "claudeCode": {
+            "parentToolUseId": "claude-task-1"
+          }
+        }
+      }
+    },
+    {
+      "sessionId": "native-claude-session",
+      "update": {
+        "sessionUpdate": "tool_call",
+        "toolCallId": "claude-read-1",
+        "title": "Read transcript reducer",
+        "kind": "read",
+        "status": "in_progress",
+        "rawInput": {
+          "file_path": "anyharness/sdk/src/reducer/transcript.ts"
+        },
+        "_meta": {
+          "anyharness": {
+            "nativeToolName": "Read",
+            "toolKind": "read",
+            "parentToolCallId": "claude-task-1",
+            "futureToolState": [
+              "safe",
+              "ignored"
+            ]
+          },
+          "claudeCode": {
+            "toolName": "Read",
+            "parentToolUseId": "wrong-legacy-parent"
+          }
+        }
+      }
+    },
+    {
+      "sessionId": "native-claude-session",
+      "update": {
+        "sessionUpdate": "tool_call_update",
+        "toolCallId": "claude-read-1",
+        "status": "completed"
+      }
+    },
+    {
+      "sessionId": "native-claude-session",
+      "update": {
+        "sessionUpdate": "tool_call_update",
+        "toolCallId": "claude-task-1",
+        "status": "completed",
+        "rawOutput": {
+          "summary": "Transcript pipeline inspected."
+        }
+      }
+    }
+  ],
+  "events": [
+    {
+      "sessionId": "session-1",
+      "seq": 1,
+      "timestamp": "2026-07-17T00:00:01Z",
+      "turnId": "turn-1",
+      "event": {
+        "type": "turn_started"
+      }
+    },
+    {
+      "sessionId": "session-1",
+      "seq": 2,
+      "timestamp": "2026-07-17T00:00:02Z",
+      "turnId": "turn-1",
+      "itemId": "claude-task-1",
+      "event": {
+        "type": "item_started",
+        "item": {
+          "kind": "tool_invocation",
+          "status": "in_progress",
+          "sourceAgentKind": "claude",
+          "title": "Inspect the repository",
+          "toolCallId": "claude-task-1",
+          "nativeToolName": "Task",
+          "rawInput": {
+            "prompt": "Inspect the transcript pipeline"
+          },
+          "contentParts": [
+            {
+              "type": "tool_call",
+              "toolCallId": "claude-task-1",
+              "title": "Inspect the repository",
+              "toolKind": "subagent",
+              "nativeToolName": "Task"
+            },
+            {
+              "type": "tool_input_text",
+              "text": "Inspect the transcript pipeline"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "sessionId": "session-1",
+      "seq": 3,
+      "timestamp": "2026-07-17T00:00:03Z",
+      "turnId": "turn-1",
+      "itemId": "claude-message-1",
+      "event": {
+        "type": "item_started",
+        "item": {
+          "kind": "assistant_message",
+          "status": "in_progress",
+          "sourceAgentKind": "claude",
+          "messageId": "claude-message-1",
+          "parentToolCallId": "claude-task-1",
+          "contentParts": [
+            {
+              "type": "text",
+              "text": "Inspecting the transcript pipeline."
+            }
+          ]
+        }
+      }
+    },
+    {
+      "sessionId": "session-1",
+      "seq": 4,
+      "timestamp": "2026-07-17T00:00:04Z",
+      "turnId": "turn-1",
+      "itemId": "claude-thought-1",
+      "event": {
+        "type": "item_started",
+        "item": {
+          "kind": "reasoning",
+          "status": "in_progress",
+          "sourceAgentKind": "claude",
+          "messageId": "claude-thought-1",
+          "parentToolCallId": "claude-task-1",
+          "contentParts": [
+            {
+              "type": "reasoning",
+              "text": "Checking reducer ordering.",
+              "visibility": "private"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "sessionId": "session-1",
+      "seq": 5,
+      "timestamp": "2026-07-17T00:00:05Z",
+      "turnId": "turn-1",
+      "itemId": "claude-message-1",
+      "event": {
+        "type": "item_completed",
+        "item": {
+          "kind": "assistant_message",
+          "status": "completed",
+          "sourceAgentKind": "claude",
+          "messageId": "claude-message-1",
+          "parentToolCallId": "claude-task-1",
+          "contentParts": [
+            {
+              "type": "text",
+              "text": "Inspecting the transcript pipeline."
+            }
+          ]
+        }
+      }
+    },
+    {
+      "sessionId": "session-1",
+      "seq": 6,
+      "timestamp": "2026-07-17T00:00:06Z",
+      "turnId": "turn-1",
+      "itemId": "claude-thought-1",
+      "event": {
+        "type": "item_completed",
+        "item": {
+          "kind": "reasoning",
+          "status": "completed",
+          "sourceAgentKind": "claude",
+          "messageId": "claude-thought-1",
+          "parentToolCallId": "claude-task-1",
+          "contentParts": [
+            {
+              "type": "reasoning",
+              "text": "Checking reducer ordering.",
+              "visibility": "private"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "sessionId": "session-1",
+      "seq": 7,
+      "timestamp": "2026-07-17T00:00:07Z",
+      "turnId": "turn-1",
+      "itemId": "claude-read-1",
+      "event": {
+        "type": "item_started",
+        "item": {
+          "kind": "tool_invocation",
+          "status": "in_progress",
+          "sourceAgentKind": "claude",
+          "title": "Read transcript reducer",
+          "toolCallId": "claude-read-1",
+          "nativeToolName": "Read",
+          "parentToolCallId": "claude-task-1",
+          "rawInput": {
+            "file_path": "anyharness/sdk/src/reducer/transcript.ts"
+          },
+          "contentParts": [
+            {
+              "type": "tool_call",
+              "toolCallId": "claude-read-1",
+              "title": "Read transcript reducer",
+              "toolKind": "read",
+              "nativeToolName": "Read"
+            },
+            {
+              "type": "file_read",
+              "path": "anyharness/sdk/src/reducer/transcript.ts",
+              "workspacePath": "anyharness/sdk/src/reducer/transcript.ts",
+              "basename": "transcript.ts",
+              "scope": "full"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "sessionId": "session-1",
+      "seq": 8,
+      "timestamp": "2026-07-17T00:00:08Z",
+      "turnId": "turn-1",
+      "itemId": "claude-read-1",
+      "event": {
+        "type": "item_delta",
+        "delta": {
+          "status": "completed",
+          "title": "Read transcript reducer",
+          "nativeToolName": "Read",
+          "parentToolCallId": "claude-task-1",
+          "rawInput": {
+            "file_path": "anyharness/sdk/src/reducer/transcript.ts"
+          },
+          "replaceContentParts": [
+            {
+              "type": "tool_call",
+              "toolCallId": "claude-read-1",
+              "title": "Read transcript reducer",
+              "toolKind": "read",
+              "nativeToolName": "Read"
+            },
+            {
+              "type": "file_read",
+              "path": "anyharness/sdk/src/reducer/transcript.ts",
+              "workspacePath": "anyharness/sdk/src/reducer/transcript.ts",
+              "basename": "transcript.ts",
+              "scope": "full"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "sessionId": "session-1",
+      "seq": 9,
+      "timestamp": "2026-07-17T00:00:09Z",
+      "turnId": "turn-1",
+      "itemId": "claude-read-1",
+      "event": {
+        "type": "item_completed",
+        "item": {
+          "kind": "tool_invocation",
+          "status": "completed",
+          "sourceAgentKind": "claude",
+          "title": "Read transcript reducer",
+          "toolCallId": "claude-read-1",
+          "nativeToolName": "Read",
+          "parentToolCallId": "claude-task-1",
+          "rawInput": {
+            "file_path": "anyharness/sdk/src/reducer/transcript.ts"
+          },
+          "contentParts": [
+            {
+              "type": "tool_call",
+              "toolCallId": "claude-read-1",
+              "title": "Read transcript reducer",
+              "toolKind": "read",
+              "nativeToolName": "Read"
+            },
+            {
+              "type": "file_read",
+              "path": "anyharness/sdk/src/reducer/transcript.ts",
+              "workspacePath": "anyharness/sdk/src/reducer/transcript.ts",
+              "basename": "transcript.ts",
+              "scope": "full"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "sessionId": "session-1",
+      "seq": 10,
+      "timestamp": "2026-07-17T00:00:10Z",
+      "turnId": "turn-1",
+      "itemId": "claude-task-1",
+      "event": {
+        "type": "item_delta",
+        "delta": {
+          "status": "completed",
+          "title": "Inspect the repository",
+          "nativeToolName": "Task",
+          "rawInput": {
+            "prompt": "Inspect the transcript pipeline"
+          },
+          "rawOutput": {
+            "summary": "Transcript pipeline inspected."
+          },
+          "replaceContentParts": [
+            {
+              "type": "tool_call",
+              "toolCallId": "claude-task-1",
+              "title": "Inspect the repository",
+              "toolKind": "subagent",
+              "nativeToolName": "Task"
+            },
+            {
+              "type": "tool_input_text",
+              "text": "Inspect the transcript pipeline"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "sessionId": "session-1",
+      "seq": 11,
+      "timestamp": "2026-07-17T00:00:11Z",
+      "turnId": "turn-1",
+      "itemId": "claude-task-1",
+      "event": {
+        "type": "item_completed",
+        "item": {
+          "kind": "tool_invocation",
+          "status": "completed",
+          "sourceAgentKind": "claude",
+          "title": "Inspect the repository",
+          "toolCallId": "claude-task-1",
+          "nativeToolName": "Task",
+          "rawInput": {
+            "prompt": "Inspect the transcript pipeline"
+          },
+          "rawOutput": {
+            "summary": "Transcript pipeline inspected."
+          },
+          "contentParts": [
+            {
+              "type": "tool_call",
+              "toolCallId": "claude-task-1",
+              "title": "Inspect the repository",
+              "toolKind": "subagent",
+              "nativeToolName": "Task"
+            },
+            {
+              "type": "tool_input_text",
+              "text": "Inspect the transcript pipeline"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "sessionId": "session-1",
+      "seq": 12,
+      "timestamp": "2026-07-17T00:00:12Z",
+      "turnId": "turn-1",
+      "event": {
+        "type": "turn_ended",
+        "stopReason": "end_turn"
+      }
+    }
+  ]
+}

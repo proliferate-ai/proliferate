@@ -18,6 +18,17 @@ override supplies a local adapter executable.
   assistant transcript item.
 - Transient progress uses the AnyHarness `transient_status` marker and is
   converted at the ACP boundary into typed normalized state.
+- Native `Agent`/`Task` child prose, reasoning, and tools use
+  `_meta.anyharness.parentToolCallId`. The adapter keeps the legacy
+  `_meta.claudeCode.parentToolUseId` alongside it for compatibility, uses each
+  Anthropic message id as stable live/replay identity, and deduplicates
+  assembled blocks already delivered as deltas.
+
+The maintained fork is installed directly from the immutable root Git source;
+its `prepare` script builds the adapter. This path does not depend on a
+published Claude fork package. The registry owns the manually curated Git ref;
+the generated catalog locks that ref together with the installed version and
+successful probe attestations.
 
 ## Extension Capabilities
 

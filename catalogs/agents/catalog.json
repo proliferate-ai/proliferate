@@ -1,10 +1,10 @@
 {
   "schemaVersion": 2,
-  "catalogVersion": "2026-07-17.5",
+  "catalogVersion": "2026-07-17.6",
   "probedAgainst": {
-    "registryVersion": "2026-07-17.1"
+    "registryVersion": "2026-07-17.2"
   },
-  "generatedAt": "2026-07-17T17:36:08.000Z",
+  "generatedAt": "2026-07-17T20:49:47.861Z",
   "defaultAgentKind": "claude",
   "agents": [
     {
@@ -16,7 +16,7 @@
           "source": {
             "kind": "git",
             "repo": "https://github.com/proliferate-ai/claude-agent-acp.git",
-            "gitRef": "6addb0f1694cff90cd64b7cf99ddab6f129aaeb2",
+            "gitRef": "26f9ee7a0049507bff5476ce390695515ce92840",
             "executableRelpath": "node_modules/.bin/claude-agent-acp"
           }
         },
@@ -1208,9 +1208,9 @@
         }
       ],
       "provenance": {
-        "probedAt": "2026-07-17T05:34:23.802840+00:00",
+        "probedAt": "2026-07-17T20:48:49.740807+00:00",
         "attestation": {
-          "name": "@agentclientprotocol/claude-agent-acp",
+          "name": "@proliferate/claude-agent-acp",
           "version": "0.59.0-proliferate.1",
           "title": "Claude Agent"
         },
@@ -1235,13 +1235,11 @@
       "displayName": "Codex",
       "harness": {
         "agentProcess": {
-          "version": "0.18.2-proliferate.1",
+          "version": "0.18.3-proliferate.1",
           "source": {
-            "kind": "git",
-            "repo": "https://github.com/proliferate-ai/codex-acp.git",
-            "gitRef": "8a6ce248c07417b0b5b84056164996ad7080d03f",
-            "packageSubdir": "npm",
-            "executableRelpath": "node_modules/.bin/codex-acp"
+            "kind": "npm",
+            "package": "@proliferate-ai/codex-acp@0.18.3-proliferate.1",
+            "sha256": "sha512-xBxL9ixgX0uYPtXRe4/P4KEx7K3CyxEarjECgszrK1St7amcx9ChAiYm6Qe91V4lykRyM+PCpaa2QM0GrWmOKA=="
           }
         },
         "native": {
@@ -1252,17 +1250,20 @@
               "macos_arm64": {
                 "url": "https://github.com/openai/codex/releases/download/rust-v0.144.5/codex-aarch64-apple-darwin.tar.gz",
                 "sha256": "a5b77d2fb393f201777809425ab28d9beb65ee0c0b2bf792f09eaf8ef1151592",
-                "expectedBinary": "codex-aarch64-apple-darwin"
+                "expectedBinary": "codex-aarch64-apple-darwin",
+                "downloadSizeBytes": 98292704
               },
               "macos_x64": {
                 "url": "https://github.com/openai/codex/releases/download/rust-v0.144.5/codex-x86_64-apple-darwin.tar.gz",
                 "sha256": "ff5c894a9ffa6d97c225c8d3c869c7ef7573dcbd0cf9b762ecfb9fa96dbb7d88",
-                "expectedBinary": "codex-x86_64-apple-darwin"
+                "expectedBinary": "codex-x86_64-apple-darwin",
+                "downloadSizeBytes": 107348115
               },
               "linux_x64": {
                 "url": "https://github.com/openai/codex/releases/download/rust-v0.144.5/codex-x86_64-unknown-linux-musl.tar.gz",
                 "sha256": "b6bea13bedf493232f6717714c45e783788c695cedcf37c344f73afc97b1ec9f",
-                "expectedBinary": "codex-x86_64-unknown-linux-musl"
+                "expectedBinary": "codex-x86_64-unknown-linux-musl",
+                "downloadSizeBytes": 109365651
               }
             },
             "args": []
@@ -2165,10 +2166,10 @@
         }
       },
       "provenance": {
-        "probedAt": "2026-07-17T05:35:01.459582+00:00",
+        "probedAt": "2026-07-17T20:49:47.676715+00:00",
         "attestation": {
           "name": "codex-acp",
-          "version": "0.18.2-proliferate.1",
+          "version": "0.18.3-proliferate.1",
           "title": "Codex"
         },
         "runs": [
