@@ -82,15 +82,6 @@ export function useSelectedCloudRuntimeRehydration(
       return;
     }
 
-    if (
-      !shouldRehydrateOnReadyRef.current
-      && isBootstrapped
-      && !hasAwaitingPendingWorkspaceEntry
-      && !hasUnmaterializedProjectedSessions
-    ) {
-      return;
-    }
-
     shouldRehydrateOnReadyRef.current = false;
 
     let cancelled = false;

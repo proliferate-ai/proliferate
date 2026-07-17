@@ -120,10 +120,6 @@ describe("resolveChatInputAvailability", () => {
       selectedCloudRuntimePhase: "ready",
       selectedCloudRuntimeActionBlockReason: null,
       activeSessionId: "client-session:claude:1",
-      ...{
-        activeSessionLaunchDisabledReason:
-          "Claude isn't ready on this target. Open a new chat with a ready agent.",
-      },
       isConfiguredLaunchLoading: false,
       hasReadyConfiguredLaunch: false,
       configuredLaunchDisabledReason: "agent 'claude' is not ready (status: LoginRequired)",
