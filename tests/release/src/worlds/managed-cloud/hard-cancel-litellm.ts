@@ -53,7 +53,13 @@ function ownership(
   const shard = metadata[SHARD_KEY];
   if (run === undefined && shard === undefined) return "foreign";
   if (run === runId && shard === shardId) return "owned";
-  throw new Error(`${label} carries partial or conflicting qualification ownership metadata.`);
+  // The proxy is shared across qualification runs. A complete identity for a
+  // different run is foreign and must neither be deleted nor block cleanup of
+  // this target. Only metadata that could claim the target while failing its
+  // exact run+shard pair is ambiguous enough to make target cleanup red.
+  if (run !== runId && shard !== shardId) return "foreign";
+  if (typeof run === "string" && run.length > 0 && run !== runId) return "foreign";
+  throw new Error(`${label} carries partial or conflicting target qualification ownership metadata.`);
 }
 
 function adminHeaders(masterKey: string): Record<string, string> {

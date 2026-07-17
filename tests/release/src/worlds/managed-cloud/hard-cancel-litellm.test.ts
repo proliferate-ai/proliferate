@@ -197,9 +197,38 @@ test("partial or conflicting ownership metadata fails before mutation", async ()
     () => cleanupQualificationLiteLlmRun({
       baseUrl: "https://litellm.example", masterKey: "master", runId: RUN_ID, shardId: SHARD_ID,
     }, { fetch: fake.fetch }),
-    /partial or conflicting qualification ownership metadata/,
+    /partial or conflicting target qualification ownership metadata/,
   );
   assert.equal(fake.calls.some((call) => call.path.endsWith("/delete")), false);
+});
+
+test("a complete different qualification run remains foreign and does not block target cleanup", async () => {
+  const state = mixedState();
+  const other = {
+    proliferate_qualification_run_id: "qlc-ci-other-run",
+    proliferate_qualification_shard_id: SHARD_ID,
+  };
+  state.keys[1] = {
+    token: "tok-other-run",
+    user_id: "user-other-run",
+    team_id: "team-other-run",
+    metadata: other,
+  };
+  state.users[1] = { user_id: "user-other-run", metadata: other };
+  state.teams[1] = { team_id: "team-other-run", metadata: other };
+  const fake = provider(state);
+
+  const result = await cleanupQualificationLiteLlmRun({
+    baseUrl: "https://litellm.example",
+    masterKey: "master",
+    runId: RUN_ID,
+    shardId: SHARD_ID,
+  }, { fetch: fake.fetch, sleep: async () => undefined });
+
+  assert.deepEqual(result, { deletedKeys: 1, deletedUsers: 1, deletedTeams: 1 });
+  assert.deepEqual(fake.state.keys.map((row) => row.token), ["tok-other-run"]);
+  assert.deepEqual(fake.state.users.map((row) => row.user_id), ["user-other-run"]);
+  assert.deepEqual(fake.state.teams.map((row) => row.team_id), ["team-other-run"]);
 });
 
 test("a foreign key attached to an owned subject blocks every delete", async () => {
