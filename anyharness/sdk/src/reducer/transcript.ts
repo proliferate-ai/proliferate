@@ -11,33 +11,31 @@ import type {
   TranscriptItemPayload,
 } from "../types/events.js";
 import type {
-  AssistantProseItem,
   ErrorItem,
   PendingMcpElicitationInteraction,
   PendingInteraction,
   PendingApproval,
   PendingUserInputInteraction,
-  PlanItem,
-  ProposedPlanItem,
-  ThoughtItem,
   ToolCallSemanticKind,
   ToolCallItem,
   TranscriptItem,
   TranscriptState,
   TurnRecord,
   UnknownItem,
-  UserMessageItem,
 } from "../types/reducer.js";
 import { reducePendingPrompts } from "./pending-prompts.js";
+import {
+  ensureMutableContextItem as ensureMutableKnownItem,
+  ensureMutableContextTurn,
+  reduceTranscriptEventBatch,
+  setContextItem as setItem,
+  setContextTurn as setTurn,
+  type KnownTranscriptItem,
+  type ReduceOptions,
+  type TranscriptReductionContext,
+} from "./transcript-reduction-context.js";
 
-type KnownTranscriptItem =
-  | UserMessageItem
-  | AssistantProseItem
-  | ThoughtItem
-  | ToolCallItem
-  | PlanItem
-  | ProposedPlanItem
-  | ErrorItem;
+export type { ReduceOptions } from "./transcript-reduction-context.js";
 
 export function createTranscriptState(sessionId: string): TranscriptState {
   return {
@@ -100,18 +98,6 @@ export function normalizeAvailableSessionCommands(
   return normalized;
 }
 
-export interface ReduceOptions {
-  replayMode?: boolean;
-}
-
-interface TranscriptReductionContext {
-  state: TranscriptState;
-  copiedItemsById: boolean;
-  copiedTurnsById: boolean;
-  mutableItemIds: Set<string>;
-  mutableTurnIds: Set<string>;
-}
-
 export function reduceEvents(
   events: SessionEventEnvelope[],
   sessionId: string,
@@ -128,34 +114,12 @@ export function reduceEvent(
   return reduceEventBatch(state, [envelope], options);
 }
 
-/**
- * Reduces one delivery batch with copy-on-write transcript collections.
- *
- * Stream consumers already flush envelopes once per animation frame. Keeping
- * one reduction context for that frame avoids cloning the full item and turn
- * maps (and the same growing streaming item) for every delta while preserving
- * the immutable public reducer contract.
- */
 export function reduceEventBatch(
   state: TranscriptState,
   envelopes: readonly SessionEventEnvelope[],
   options?: ReduceOptions,
 ): TranscriptState {
-  if (envelopes.length === 0) {
-    return state;
-  }
-
-  const context: TranscriptReductionContext = {
-    state: { ...state },
-    copiedItemsById: false,
-    copiedTurnsById: false,
-    mutableItemIds: new Set(),
-    mutableTurnIds: new Set(),
-  };
-  for (const envelope of envelopes) {
-    applyEvent(context, envelope, options);
-  }
-  return context.state;
+  return reduceTranscriptEventBatch(state, envelopes, options, applyEvent);
 }
 
 function applyEvent(
@@ -834,12 +798,7 @@ function ensureMutableTurn(
   ts: string,
 ): TurnRecord {
   const existing = ensureTurn(context, turnId, ts);
-  if (context.mutableTurnIds.has(turnId)) {
-    return existing;
-  }
-  const turn = cloneTurn(existing);
-  setTurn(context, turnId, turn);
-  return turn;
+  return ensureMutableContextTurn(context, turnId, existing);
 }
 
 function addItemToTurn(
@@ -950,73 +909,6 @@ function recordUnknown(
     addItemToTurn(context, turnId, itemId, ts);
   }
   s.unknownEvents = [...s.unknownEvents, envelope];
-}
-
-function setItem(
-  context: TranscriptReductionContext,
-  itemId: string,
-  item: TranscriptItem,
-): void {
-  const s = context.state;
-  if (!context.copiedItemsById) {
-    s.itemsById = { ...s.itemsById };
-    context.copiedItemsById = true;
-  }
-  s.itemsById[itemId] = item;
-  context.mutableItemIds.add(itemId);
-}
-
-function setTurn(
-  context: TranscriptReductionContext,
-  turnId: string,
-  turn: TurnRecord,
-): void {
-  const s = context.state;
-  if (!context.copiedTurnsById) {
-    s.turnsById = { ...s.turnsById };
-    context.copiedTurnsById = true;
-  }
-  s.turnsById[turnId] = turn;
-  context.mutableTurnIds.add(turnId);
-}
-
-function ensureMutableKnownItem<T extends KnownTranscriptItem>(
-  context: TranscriptReductionContext,
-  itemId: string,
-  item: T,
-): T {
-  if (context.mutableItemIds.has(itemId)) {
-    return item;
-  }
-  const nextItem = cloneKnownTranscriptItem(item);
-  setItem(context, itemId, nextItem);
-  return nextItem;
-}
-
-function cloneTurn(turn: TurnRecord): TurnRecord {
-  return {
-    ...turn,
-    itemOrder: [...turn.itemOrder],
-    fileBadges: [...turn.fileBadges],
-  };
-}
-
-function cloneKnownTranscriptItem<T extends KnownTranscriptItem>(item: T): T {
-  const cloned = {
-    ...item,
-    contentParts: item.contentParts.map(cloneContentPart),
-  };
-  if (item.kind === "plan") {
-    return {
-      ...cloned,
-      entries: [...item.entries],
-    } as T;
-  }
-  return cloned as T;
-}
-
-function cloneContentPart(part: ContentPart): ContentPart {
-  return { ...part } as ContentPart;
 }
 
 function extractText(parts: ContentPart[]): string {
