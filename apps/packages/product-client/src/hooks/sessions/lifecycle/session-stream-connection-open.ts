@@ -26,7 +26,10 @@ import {
   isCurrentStreamHandle,
   shouldReconnectStream,
 } from "#product/hooks/sessions/lifecycle/session-runtime-helpers";
-import { createFlushAwareSessionStreamHandle } from "#product/hooks/sessions/lifecycle/session-stream-handle";
+import {
+  closeStaleSessionStreamHandle,
+  createFlushAwareSessionStreamHandle,
+} from "#product/hooks/sessions/lifecycle/session-stream-handle";
 import { createSessionStreamRefreshController } from "#product/hooks/sessions/lifecycle/session-stream-connection-refresh";
 import { scheduleSessionStreamReconnect } from "#product/hooks/sessions/lifecycle/session-stream-connection-reconnect";
 import type {
@@ -155,7 +158,7 @@ export async function openSessionStreamConnection({
     onHandle: (nextHandle) => {
       if (!isStillCurrent()) {
         logDevSessionRuntimeEvent(sessionId, "stream_handle_ignored_not_current", {});
-        nextHandle.close();
+        closeStaleSessionStreamHandle(nextHandle);
         return;
       }
       const flushAwareHandle = createFlushAwareSessionStreamHandle(

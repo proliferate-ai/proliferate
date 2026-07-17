@@ -3,6 +3,10 @@ import {
   EXPECTED_CONTROL_PLANE_PROBE_TIMEOUT_ERROR_NAME,
   isExpectedControlPlaneProbeTimeoutError,
 } from "@proliferate/product-domain/telemetry/control-plane-probe-timeout";
+import {
+  EXPECTED_SESSION_STREAM_STALE_CLOSE_ERROR_NAME,
+  isExpectedSessionStreamStaleCloseError,
+} from "@proliferate/product-domain/telemetry/session-stream-stale-close";
 
 const UNHANDLED_REJECTION_MECHANISM =
   "auto.browser.global_handlers.onunhandledrejection";
@@ -21,23 +25,90 @@ function frameMatchesMethod(frame: StackFrame, method: string): boolean {
   if (!functionName) {
     return false;
   }
-  if (method === "cancel") {
-    return functionName.endsWith("[as cancel]");
-  }
   return functionName === method || functionName.endsWith(`.${method}`);
 }
 
-function findMethodAfter(
-  frames: StackFrame[],
-  method: string,
-  startIndex: number,
-): number {
-  return frames.findIndex((frame, index) => (
-    index >= startIndex && frameMatchesMethod(frame, method)
-  ));
+function frameMatchesRetryerCancel(frame: StackFrame): boolean {
+  return frame.function?.endsWith("[as cancel]") ?? false;
 }
 
-function hasExpectedTanStackObserverCancellation(
+type FramePredicate = (frame: StackFrame) => boolean;
+
+function hasOrderedFrameChain(
+  frames: StackFrame[],
+  predicates: FramePredicate[],
+): boolean {
+  let predicateIndex = 0;
+  for (const frame of frames) {
+    if (predicates[predicateIndex]?.(frame)) {
+      predicateIndex += 1;
+    }
+  }
+  return predicateIndex === predicates.length;
+}
+
+function hasExactFrameTail(
+  frames: StackFrame[],
+  predicates: FramePredicate[],
+): boolean {
+  if (frames.length < predicates.length) {
+    return false;
+  }
+  const tail = frames.slice(-predicates.length);
+  return predicates.every((predicate, index) => predicate(tail[index]));
+}
+
+const method = (name: string): FramePredicate =>
+  (frame) => frameMatchesMethod(frame, name);
+
+function hasExpectedQueriesObserverDestroyCancellation(
+  frames: StackFrame[],
+): boolean {
+  return hasOrderedFrameChain(frames, [method("setQueries"), method("batch")])
+    && hasExactFrameTail(frames, [
+      method("destroy"),
+      method("removeObserver"),
+      frameMatchesRetryerCancel,
+      method("onCancel"),
+    ]);
+}
+
+function hasExpectedObserverSetOptionsCancellation(
+  frames: StackFrame[],
+): boolean {
+  return hasOrderedFrameChain(frames, [method("setOptions"), method("removeObserver")])
+    && hasExactFrameTail(frames, [
+      method("removeObserver"),
+      frameMatchesRetryerCancel,
+      method("onCancel"),
+    ]);
+}
+
+function hasExpectedObserverRefetchCancellation(
+  frames: StackFrame[],
+): boolean {
+  return hasOrderedFrameChain(frames, [method("refetch"), method("fetch")])
+    && hasExactFrameTail(frames, [
+      method("cancel"),
+      frameMatchesRetryerCancel,
+      method("onCancel"),
+    ]);
+}
+
+function hasExpectedInvalidationRefetchCancellation(
+  frames: StackFrame[],
+): boolean {
+  return hasOrderedFrameChain(frames, [
+    method("invalidateQueries"),
+    method("refetchQueries"),
+  ]) && hasExactFrameTail(frames, [
+    method("cancel"),
+    frameMatchesRetryerCancel,
+    method("onCancel"),
+  ]);
+}
+
+function hasExpectedTanStackCancellation(
   exception: ExceptionWithRawStacktrace,
 ): boolean {
   if (
@@ -48,25 +119,15 @@ function hasExpectedTanStackObserverCancellation(
   }
 
   const frames = exception.raw_stacktrace?.frames ?? exception.stacktrace?.frames ?? [];
-  if (frames.length < 6) {
-    return false;
-  }
-
-  const setQueriesIndex = findMethodAfter(frames, "setQueries", 0);
-  const batchIndex = findMethodAfter(frames, "batch", setQueriesIndex + 1);
-  const tail = frames.slice(-4);
-
-  return setQueriesIndex >= 0
-    && batchIndex > setQueriesIndex
-    && frameMatchesMethod(tail[0], "destroy")
-    && frameMatchesMethod(tail[1], "removeObserver")
-    && frameMatchesMethod(tail[2], "cancel")
-    && frameMatchesMethod(tail[3], "onCancel");
+  return hasExpectedQueriesObserverDestroyCancellation(frames)
+    || hasExpectedObserverSetOptionsCancellation(frames)
+    || hasExpectedObserverRefetchCancellation(frames)
+    || hasExpectedInvalidationRefetchCancellation(frames);
 }
 
 /**
- * Drops only source-marked control-plane timeouts and the exact TanStack
- * observer teardown seen in hosted Web. Generic AbortErrors stay actionable.
+ * Drops only source-marked lifecycle cancellations and exact TanStack
+ * cancellation chains seen in hosted Web. Generic AbortErrors stay actionable.
  */
 export function shouldDropExpectedWebSentryEvent(
   event: ErrorEvent,
@@ -85,6 +146,11 @@ export function shouldDropExpectedWebSentryEvent(
   const isMarkedProbeTimeout =
     exception.type === EXPECTED_CONTROL_PLANE_PROBE_TIMEOUT_ERROR_NAME
     || isExpectedControlPlaneProbeTimeoutError(hint.originalException);
+  const isMarkedStaleSessionStreamClose =
+    exception.type === EXPECTED_SESSION_STREAM_STALE_CLOSE_ERROR_NAME
+    || isExpectedSessionStreamStaleCloseError(hint.originalException);
 
-  return isMarkedProbeTimeout || hasExpectedTanStackObserverCancellation(exception);
+  return isMarkedProbeTimeout
+    || isMarkedStaleSessionStreamClose
+    || hasExpectedTanStackCancellation(exception);
 }
