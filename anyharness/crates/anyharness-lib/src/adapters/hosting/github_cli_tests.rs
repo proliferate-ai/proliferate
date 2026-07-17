@@ -268,3 +268,27 @@ fn classifies_gh_failures() {
         GhError::CommandFailed(_)
     ));
 }
+
+#[test]
+fn maps_create_pr_command_failures_through_shared_classifier() {
+    assert!(validate_create_pr_output(true, b"ignored stderr").is_ok());
+
+    let missing_remote = validate_create_pr_output(false, b"no git remotes found")
+        .expect_err("missing remote should fail");
+    assert!(matches!(
+        missing_remote,
+        GhError::UnsupportedRemote(message)
+            if message == "repository has no git remotes configured"
+    ));
+
+    let logged_out = validate_create_pr_output(false, b"not logged into any GitHub hosts")
+        .expect_err("logged-out CLI should fail");
+    assert!(matches!(logged_out, GhError::AuthRequired(_)));
+
+    let generic = validate_create_pr_output(false, b"GraphQL: rate limited")
+        .expect_err("generic CLI failure should fail");
+    assert!(matches!(
+        generic,
+        GhError::CommandFailed(message) if message == "GraphQL: rate limited"
+    ));
+}

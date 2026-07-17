@@ -318,6 +318,16 @@ fn classify_gh_failure(stderr: String) -> GhError {
     }
 }
 
+fn validate_create_pr_output(success: bool, stderr: &[u8]) -> Result<(), GhError> {
+    if success {
+        Ok(())
+    } else {
+        Err(classify_gh_failure(
+            String::from_utf8_lossy(stderr).into_owned(),
+        ))
+    }
+}
+
 pub fn get_current_pr(cwd: &Path) -> Result<Option<PullRequestSummary>, GhError> {
     check_gh_installed()?;
 
@@ -410,13 +420,7 @@ pub fn create_pr(
         .output()
         .map_err(|_| GhError::NotInstalled)?;
 
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-        if stderr.contains("auth") || stderr.contains("login") {
-            return Err(GhError::AuthRequired(stderr));
-        }
-        return Err(GhError::CommandFailed(stderr));
-    }
+    validate_create_pr_output(output.status.success(), &output.stderr)?;
 
     match get_current_pr(cwd)? {
         Some(pr) => Ok(pr),
