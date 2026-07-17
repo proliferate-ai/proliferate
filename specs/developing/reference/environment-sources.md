@@ -71,16 +71,56 @@ launch-stack wrapper.
 
 ## Hosted Server
 
-Terraform provisions the baseline ECS task definition. The hosted deploy
-workflow then reads the live service definition, renders the next revision's
-runtime environment, and registers that revision. Most current sensitive
-inputs are written as ordinary task-definition environment entries. Only
-values explicitly configured in the ECS `secrets` collection are resolved from
-SSM. Do not infer universal secret-manager storage from a variable's secret
-classification.
+The reusable hosted deploy workflow reads the live ECS service definition,
+renders the next revision's runtime environment, and registers that revision.
+GitHub Environment variables remain inputs for the surfaces documented by the
+workflow, and the live service supplies the prior task shape. The workflow
+explicitly overwrites its owned runtime fields. `server/infra/main.tf` is a
+bootstrap definition whose resource identities are not the current
+staging/production service identities; do not infer current hosted state from
+that module without an explicit import/reconciliation.
+
+Most current sensitive inputs are written as ordinary task-definition
+environment entries. Only values explicitly configured in the ECS `secrets`
+collection are resolved by ECS from their named SSM Parameter Store or Secrets
+Manager source. Do not infer universal secret-manager storage from a variable's
+secret classification.
 
 Hosted workflow inputs and deployment procedures are owned by
 [`../deploying/hosted.md`](../deploying/hosted.md).
+
+The hosted API consumes Redis for Cloud materialization and GitHub-refresh
+leases even when the optional worker/Beat plane is disabled. The durable owner
+for this binding is the isolated `server/infra/hosted-redis/`
+Terraform root, not the bootstrap root or a manually entered GitHub variable.
+Both the root and the deploy workflow consume
+`server/deploy/hosted-redis-contract.json`, the single machine-readable owner
+for the AWS account, region, workflow aliases, stable secret names, and existing
+role names. The one-time adoption imported the two existing deploy child
+policies and created the two missing execution child policies only after a
+saved plan showed exactly that non-destructive shape. The root does not own the
+roles, secrets, ECS services, secret values, or other pre-existing role
+policies.
+
+Each environment entry also selects the only direct background Redis reference
+service and name that the optional worker/Beat re-image path accepts. The
+workflow verifies the rendered task's exact contract execution role and an
+account-, region-, service-, and name-bound `REDBEAT_REDIS_URL` reference before
+registration. A future external endpoint rebind must first update this
+checked-in identity in the same reviewed change; a GitHub Environment variable
+cannot override it.
+
+After selecting one exact workflow alias from that contract and assuming its
+role, the deploy verifies the live task definition's exact execution role,
+resolves and masks the generated base ARN after every third-party action's main
+phase, and passes it only to the first-party render step. Because those actions'
+post-job hooks run later, the API render and background re-image transactions
+keep identifier-bearing task JSON in private temporary directories and delete it
+on every exit before the hooks execute. The deploy verifies the ARN's
+account/region/environment identity, parses the JSON `REDBEAT_REDIS_URL` without
+logging it, rejects literal and DNS-resolved loopback or unspecified addresses,
+authors the exact ECS field projection, and removes inherited plaintext or stale
+references. The server's loopback default is not a hosted source.
 
 ## Frontend, Mobile, and Desktop Native Builds
 

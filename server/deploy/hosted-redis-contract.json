@@ -1,0 +1,22 @@
+{
+  "aws_account_id": "157466816238",
+  "aws_region": "us-east-1",
+  "environments": {
+    "staging": {
+      "workflow_names": ["staging", "Staging"],
+      "secret_name": "proliferate/staging/server-app",
+      "background_redis_reference_service": "secretsmanager",
+      "background_redis_reference_name": "proliferate/staging/background/redbeat-redis-url",
+      "deploy_role_name": "proliferate-staging-github-actions-deploy",
+      "execution_role_name": "proliferate-staging-ecs-execution"
+    },
+    "production": {
+      "workflow_names": ["production", "Production"],
+      "secret_name": "proliferate/prod/server-app",
+      "background_redis_reference_service": "secretsmanager",
+      "background_redis_reference_name": "proliferate/production/background/redbeat-redis-url",
+      "deploy_role_name": "proliferate-prod-github-actions-deploy",
+      "execution_role_name": "proliferate-prod-ecs-execution"
+    }
+  }
+}
