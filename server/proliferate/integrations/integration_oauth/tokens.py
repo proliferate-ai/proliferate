@@ -1,11 +1,35 @@
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import httpx
 
 from proliferate.integrations.integration_oauth.errors import IntegrationOAuthProviderError
 from proliferate.integrations.integration_oauth.models import TokenResponse
+
+_SCOPE_SEPARATOR_RE = re.compile(r"[\s,]+")
+
+
+def _granted_scopes(payload: dict[str, Any]) -> tuple[str, ...] | None:
+    """Read standard or Slack user-token scope metadata from a token payload."""
+    raw_scope: object | None = payload.get("scope") if "scope" in payload else None
+    if "scope" not in payload:
+        authed_user = payload.get("authed_user")
+        if isinstance(authed_user, dict) and "scope" in authed_user:
+            raw_scope = authed_user.get("scope")
+        else:
+            return None
+    if not isinstance(raw_scope, str):
+        return ()
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for scope in _SCOPE_SEPARATOR_RE.split(raw_scope.strip()):
+        if scope and scope not in seen:
+            normalized.append(scope)
+            seen.add(scope)
+    return tuple(normalized)
 
 
 async def exchange_token(
@@ -112,10 +136,9 @@ async def _token_request(
         if isinstance(expires_in, int)
         else None
     )
-    scope = payload.get("scope")
     return TokenResponse(
         access_token=str(payload["access_token"]),
         refresh_token=payload.get("refresh_token"),
         expires_at=expires_at,
-        scopes=tuple(str(scope).split()) if scope else (),
+        scopes=_granted_scopes(payload),
     )

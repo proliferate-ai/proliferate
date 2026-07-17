@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 from typing import Any, Literal, cast, get_args
 
 Transport = Literal["http", "stdio"]
+OAuthScopePolicy = Literal["provider", "exact"]
 SettingKind = Literal["string", "boolean", "select", "url"]
 ArgKind = Literal["static", "workspace_path", "secret", "setting"]
 EnvKind = Literal["static", "secret", "setting"]
@@ -136,6 +137,7 @@ class IntegrationConfig:
     display_url: str = ""
     oauth_scopes: tuple[str, ...] = ()
     oauth_scopes_required: bool = False
+    oauth_scope_policy: OAuthScopePolicy = "provider"
     headers: tuple[HeaderTemplate, ...] = ()
     query: tuple[QueryTemplate, ...] = ()
     secret_fields: tuple[SecretField, ...] = ()
@@ -212,6 +214,7 @@ def serialize_definition_config(cfg: IntegrationConfig) -> str:
         "displayUrl": cfg.display_url,
         "oauthScopes": list(cfg.oauth_scopes),
         "oauthScopesRequired": cfg.oauth_scopes_required,
+        "oauthScopePolicy": cfg.oauth_scope_policy,
         "headers": [_header_to_json(h) for h in cfg.headers],
         "query": [_query_to_json(q) for q in cfg.query],
         "secretFields": [_secret_field_to_json(f) for f in cfg.secret_fields],
@@ -296,6 +299,13 @@ def _env_kind_from_json(raw: object) -> EnvKind:
     return cast(EnvKind, kind)
 
 
+def _oauth_scope_policy_from_json(raw: object) -> OAuthScopePolicy:
+    policy = str(raw)
+    if policy not in get_args(OAuthScopePolicy):
+        raise IntegrationConfigError(f"unsupported OAuth scope policy: {policy!r}")
+    return cast(OAuthScopePolicy, policy)
+
+
 def _setting_field_from_json(raw: dict[str, Any]) -> SettingField:
     options = tuple(
         SettingOption(value=str(o["value"]), label=str(o["label"])) for o in raw.get("options", ())
@@ -346,6 +356,7 @@ def parse_definition_config(config_json_str: str) -> IntegrationConfig:
         display_url=str(raw.get("displayUrl", "")),
         oauth_scopes=tuple(str(scope) for scope in raw.get("oauthScopes", ())),
         oauth_scopes_required=bool(raw.get("oauthScopesRequired", False)),
+        oauth_scope_policy=_oauth_scope_policy_from_json(raw.get("oauthScopePolicy", "provider")),
         headers=tuple(_header_from_json(h) for h in raw.get("headers", ())),
         query=tuple(_query_from_json(q) for q in raw.get("query", ())),
         secret_fields=tuple(_secret_field_from_json(f) for f in raw.get("secretFields", ())),

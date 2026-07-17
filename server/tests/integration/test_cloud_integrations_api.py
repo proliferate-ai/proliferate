@@ -347,6 +347,36 @@ class TestAuthenticateIntegration:
         assert persisted_flow is not None
         assert json.loads(persisted_flow.requested_scopes) == list(expected_scopes)
 
+    @pytest.mark.asyncio
+    async def test_authenticate_slack_rejects_scope_challenge_above_ceiling(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        auth = await _authed_user(client, db_session, prefix="int-oauth-slack-escalation")
+        await _seed_definitions(db_session)
+        definition_id = await _definition_id(db_session, "slack")
+
+        async def _fake_protected(server_url: str) -> ProtectedResourceMetadata:
+            assert server_url == "https://mcp.slack.com/mcp"
+            return ProtectedResourceMetadata(
+                authorization_servers=("https://auth.example.com",),
+                resource="https://mcp.slack.com/mcp",
+                challenged_scope="search:read.public chat:write",
+            )
+
+        monkeypatch.setattr(oauth_service, "discover_protected_resource_metadata", _fake_protected)
+
+        response = await client.post(
+            "/v1/cloud/integrations/authentications",
+            headers=auth.headers,
+            json={"definitionId": definition_id, "authKind": "oauth2"},
+        )
+
+        assert response.status_code == 400
+        assert response.json()["detail"]["code"] == "oauth_scope_escalation"
+
 
 class TestRemoveAccount:
     @pytest.mark.asyncio

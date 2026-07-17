@@ -34,6 +34,12 @@ from proliferate.server.cloud.integrations.config import (
     parse_definition_config,
     render_mcp_url,
 )
+from proliferate.server.cloud.integrations.oauth.scope_policy import (
+    OAuthScopePolicyError,
+    normalize_oauth_scopes,
+    resolve_refreshed_oauth_scopes,
+    validate_stored_oauth_scopes,
+)
 from proliferate.utils.crypto import decrypt_json, decrypt_text, encrypt_json
 from proliferate.utils.time import utcnow
 
@@ -199,6 +205,21 @@ def _parse_expires_at(raw: object) -> datetime | None:
     return value
 
 
+def _bundle_scopes(bundle: dict[str, Any]) -> tuple[str, ...]:
+    raw = bundle.get("scopes")
+    if isinstance(raw, str | list | tuple):
+        return normalize_oauth_scopes(raw)
+    return ()
+
+
+def _scope_policy_reauth() -> CloudApiError:
+    return CloudApiError(
+        "integration_reauth_required",
+        "Integration requires re-authentication.",
+        status_code=401,
+    )
+
+
 # --------------------------------------------------------------------------- #
 # OAuth token refresh
 # --------------------------------------------------------------------------- #
@@ -208,6 +229,7 @@ async def _refresh_oauth_bundle(
     *,
     account: IntegrationAccountRecord,
     bundle: dict[str, Any],
+    cfg: IntegrationConfig,
 ) -> tuple[str, datetime | None]:
     """Refresh the access token in ``bundle`` and persist the new credential.
 
@@ -273,7 +295,15 @@ async def _refresh_oauth_bundle(
         )
     new_refresh = token.refresh_token or refresh_value
     expires_at = _parse_expires_at(token.expires_at)
-    scopes = token.scopes or bundle.get("scopes", [])
+    try:
+        scopes = resolve_refreshed_oauth_scopes(
+            reported_scopes=token.scopes,
+            stored_scopes=_bundle_scopes(bundle),
+            configured_scopes=cfg.oauth_scopes,
+            scope_policy=cfg.oauth_scope_policy,
+        )
+    except OAuthScopePolicyError as exc:
+        raise _scope_policy_reauth() from exc
 
     new_bundle = {
         **bundle,
@@ -364,6 +394,14 @@ async def _oauth_access(
     settings: dict[str, Any],
 ) -> ProviderAccess:
     bundle = _decode_bundle(account)
+    try:
+        validate_stored_oauth_scopes(
+            stored_scopes=_bundle_scopes(bundle),
+            configured_scopes=cfg.oauth_scopes,
+            scope_policy=cfg.oauth_scope_policy,
+        )
+    except OAuthScopePolicyError as exc:
+        raise _scope_policy_reauth() from exc
     access_token = bundle.get("accessToken")
     expires_at = _parse_expires_at(bundle.get("expiresAt"))
     now = utcnow()
@@ -373,7 +411,7 @@ async def _oauth_access(
         resolved_expiry = expires_at
     else:
         resolved_token, resolved_expiry = await _refresh_oauth_bundle(
-            account=account, bundle=bundle
+            account=account, bundle=bundle, cfg=cfg
         )
 
     # Expose bundle string fields (plus the resolved access token) as secrets so
