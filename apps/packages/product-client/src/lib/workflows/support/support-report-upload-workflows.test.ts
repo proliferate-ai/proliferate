@@ -231,6 +231,27 @@ describe("buildSupportReportPackage", () => {
     expect(payload.collectionErrors).toEqual([]);
   });
 
+  it("derives message presence and length from one trimmed value", async () => {
+    const dependencies: SupportReportUploadDependencies = {
+      now: () => now,
+      collectDiagnostics: vi.fn(async () => null),
+      resolveWorkspace: vi.fn(async () => {
+        throw new Error("not used");
+      }),
+      getClient: vi.fn(() => {
+        throw new Error("not used");
+      }),
+    };
+    const job = makeJob();
+    job.message = " \n report message secret \t ";
+    job.scope = { kind: "app_only", workspaceIds: [] };
+
+    const payload = await buildSupportReportPackage(job, dependencies);
+
+    expect(payload.report.messagePresent).toBe(true);
+    expect(payload.report.messageLength).toBe("report message secret".length);
+  });
+
   it("uses a fixed collection error when native diagnostics collection throws", async () => {
     const dependencies: SupportReportUploadDependencies = {
       now: () => now,

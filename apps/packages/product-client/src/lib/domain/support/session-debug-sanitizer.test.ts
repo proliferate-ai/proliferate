@@ -224,6 +224,40 @@ describe("sanitizeSessionDebugContentParts", () => {
     expect(JSON.stringify(sanitized)).not.toContain("cycle private sentinel");
   });
 
+  it("sanitizes a shared object independently at each non-cyclic path", () => {
+    const shared = {
+      type: "text",
+      text: "shared private sentinel",
+    };
+    const part = {
+      type: "text",
+      text: "root private sentinel",
+      event: shared,
+      details: shared,
+    } as unknown as ContentPart;
+
+    const sanitized = sanitizeSessionDebugContentParts([part]);
+    const sanitizedPart = sanitized[0] as unknown as {
+      details: unknown;
+      event: unknown;
+    };
+
+    expect(sanitized[0]).toEqual({
+      type: "text",
+      text: "[redacted:21]",
+      event: {
+        type: "text",
+        text: "[redacted:23]",
+      },
+      details: {
+        type: "text",
+        text: "[redacted:23]",
+      },
+    });
+    expect(sanitizedPart.event).not.toBe(sanitizedPart.details);
+    expect(JSON.stringify(sanitized)).not.toContain("private sentinel");
+  });
+
   it("fails closed when a content array proxy is revoked", () => {
     const revoked = Proxy.revocable(
       [{ type: "text", text: "revoked private sentinel" }] as ContentPart[],

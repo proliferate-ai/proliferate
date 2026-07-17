@@ -20,7 +20,7 @@ const MAX_CONTAINER_ITEMS = 256;
 const MAX_SANITIZED_VALUES = 10_000;
 interface SanitizerContext {
   remainingValues: number;
-  seen: WeakSet<object>;
+  activeContainers: WeakSet<object>;
 }
 
 export function sanitizeSessionDebugExportedSession(
@@ -82,15 +82,19 @@ function sanitizeSessionDebugValue(
   if (isRedactedObjectKey(keyHint)) {
     return redactedMarker();
   }
-  if (depth >= MAX_SANITIZER_DEPTH || context.seen.has(value)) {
+  if (depth >= MAX_SANITIZER_DEPTH || context.activeContainers.has(value)) {
     return redactedMarker();
   }
-  context.seen.add(value);
-  if (isArraySafely(value)) {
-    return sanitizeArray(value, schemaNode, context, depth);
-  }
+  context.activeContainers.add(value);
+  try {
+    if (isArraySafely(value)) {
+      return sanitizeArray(value, schemaNode, context, depth);
+    }
 
-  return sanitizeObject(value, schemaNode, context, depth);
+    return sanitizeObject(value, schemaNode, context, depth);
+  } finally {
+    context.activeContainers.delete(value);
+  }
 }
 
 function sanitizeArray(
@@ -208,7 +212,7 @@ function sanitizeObject(
 function createContext(): SanitizerContext {
   return {
     remainingValues: MAX_SANITIZED_VALUES,
-    seen: new WeakSet<object>(),
+    activeContainers: new WeakSet<object>(),
   };
 }
 

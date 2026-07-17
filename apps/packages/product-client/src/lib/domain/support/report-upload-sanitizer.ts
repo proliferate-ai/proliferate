@@ -6,6 +6,7 @@ const LONG_TOKEN_PATTERN =
 const SIGNED_URL_PATTERN =
   /([?&](?:x-amz-signature|x-amz-credential|x-amz-security-token|signature|sig|token|key|secret)=)[^&#\s]+/gi;
 const MAX_LOG_TEXT_CHARS = 2 * 1024 * 1024;
+const OMITTED_INCOMPLETE_LOG_TAIL = "[truncated log tail omitted]";
 
 export function sanitizeSupportLogText(value: unknown): string {
   if (typeof value !== "string") {
@@ -25,5 +26,7 @@ function boundedLogTail(value: string): string {
   }
   const tail = String.prototype.slice.call(value, -MAX_LOG_TEXT_CHARS) as string;
   const firstLineEnd = tail.indexOf("\n");
-  return firstLineEnd >= 0 ? tail.slice(firstLineEnd + 1) : "";
+  return firstLineEnd >= 0
+    ? tail.slice(firstLineEnd + 1)
+    : OMITTED_INCOMPLETE_LOG_TAIL;
 }

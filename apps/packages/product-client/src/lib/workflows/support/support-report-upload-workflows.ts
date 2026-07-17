@@ -98,6 +98,7 @@ export async function buildSupportReportPackage<
   );
   const snapshot = readOwnData(job, "snapshot");
   const message = stringOrEmpty(readOwnData(job, "message"));
+  const trimmedMessage = message.trim();
 
   return {
     schemaVersion: 2,
@@ -106,8 +107,8 @@ export async function buildSupportReportPackage<
     report: {
       jobId: redactString(readOwnData(job, "jobId")),
       createdAt: projectIsoTimestamp(readOwnData(job, "createdAt")),
-      messagePresent: message.trim().length > 0,
-      messageLength: message.trim().length,
+      messagePresent: trimmedMessage.length > 0,
+      messageLength: trimmedMessage.length,
       scope: projectedScope,
       context: projectContext(readOwnData(snapshot, "context")),
       openedAt: projectIsoTimestamp(readOwnData(snapshot, "openedAt")),
