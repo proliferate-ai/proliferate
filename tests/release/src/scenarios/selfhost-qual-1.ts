@@ -1225,7 +1225,22 @@ export function describeSelfHostSetupFailure(
   phase: "install" | "owner_claim",
   error: unknown,
 ): string {
-  return `SELFHOST-QUAL-1 prerequisite phase=${phase}; ${describe(error)}`;
+  return `SELFHOST-QUAL-1 prerequisite phase=${phase}; ${evidenceSafeSetupError(error)}`;
+}
+
+function evidenceSafeSetupError(error: unknown): string {
+  if (error instanceof SyntaxError) {
+    return "SyntaxError: invalid JSON response (payload withheld from evidence)";
+  }
+  if (error instanceof Error && ("stdout" in error || "stderr" in error)) {
+    return `${error.name}: external command failed (output withheld from evidence)`;
+  }
+  const status = error instanceof Error ? (error as { status?: unknown }).status : undefined;
+  if (error instanceof Error && typeof status === "number" && "body" in error) {
+    const prefix = /^(.*?->\s*\d+)/.exec(error.message)?.[1] ?? `request failed with status ${status}`;
+    return `${error.name}: ${prefix} (response body withheld from evidence)`;
+  }
+  return describe(error);
 }
 
 function failedOutcome(cellId: string, message: string): ScenarioCellOutcome {

@@ -64,11 +64,15 @@ import {
 } from "../evidence/schema.js";
 
 test("self-host setup diagnostics preserve the phase while withholding external payloads", () => {
+  const commandError = Object.assign(
+    new Error("Command failed: ssh qualification-box sudo install\nsecret remote stderr"),
+    { stdout: "secret remote stdout", stderr: "secret remote stderr" },
+  );
   const install = redactExternalPayloads(
-    describeSelfHostSetupFailure("install", new Error("ssh command failed: secret installer output")),
+    describeSelfHostSetupFailure("install", commandError),
   );
   assert.match(install, /phase=install/);
-  assert.doesNotMatch(install, /secret installer output/);
+  assert.doesNotMatch(install, /qualification-box|secret remote/);
   assert.match(install, /output withheld from evidence/);
 
   const claim = redactExternalPayloads(
