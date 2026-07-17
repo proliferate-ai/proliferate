@@ -191,6 +191,34 @@ test("complete probes reject missing agent-process attestation versions", () => 
   });
 });
 
+test("complete probes accept a missing process attestation for an immutable archive pin", () => {
+  withFixture((root) => {
+    alignProbeVersions(root);
+    writeCompleteState(root, ["opencode"]);
+    const generated = join(root, "scripts", "agent-catalog", "generated");
+    for (const name of readdirSync(generated).filter((name) => name.startsWith("opencode."))) {
+      const snapshotPath = join(generated, name);
+      const snapshot = JSON.parse(readFileSync(snapshotPath, "utf8"));
+      snapshot.attestation = null;
+      writeFileSync(snapshotPath, `${JSON.stringify(snapshot, null, 2)}\n`);
+    }
+
+    const script = join(root, "scripts", "agent-catalog", "build-catalog.mjs");
+    execFileSync(process.execPath, [script, "--require-complete-probe"]);
+
+    const candidate = JSON.parse(
+      readFileSync(join(root, "catalogs", "agents", "catalog.json"), "utf8"),
+    );
+    const draft = JSON.parse(
+      readFileSync(join(root, "scripts", "agent-catalog", "catalog.draft.json"), "utf8"),
+    );
+    assert.equal(
+      draft.agents.find((agent) => agent.kind === "opencode").harness.agentProcess.version,
+      candidate.agents.find((agent) => agent.kind === "opencode").harness.agentProcess.version,
+    );
+  });
+});
+
 test("complete probes reject missing native CLI versions for native pins", () => {
   withFixture((root) => {
     alignProbeVersions(root);

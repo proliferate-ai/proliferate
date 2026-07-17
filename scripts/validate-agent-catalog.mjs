@@ -251,6 +251,79 @@ function validateRegistryPairing(catalog, registry) {
   }
 }
 
+function versionCore(value) {
+  return typeof value === "string"
+    ? value.match(/\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?/)?.[0]
+    : undefined;
+}
+
+function validateSnapshotEvidence(catalog) {
+  for (const agent of catalog.agents ?? []) {
+    const processVersion = agent.harness?.agentProcess?.version;
+    const processSourceKind = agent.harness?.agentProcess?.source?.kind;
+    const immutableUnattestedSource = processSourceKind === "archive" || processSourceKind === "npm";
+    const nativeVersion = versionCore(agent.harness?.native?.version);
+    const runs = agent.provenance?.runs;
+
+    if (!Array.isArray(runs) || runs.length === 0) {
+      fail(`${agent.kind}: provenance.runs must contain committed probe evidence`);
+      continue;
+    }
+
+    for (const run of runs) {
+      const snapshotPath = run?.snapshotPath;
+      if (typeof snapshotPath !== "string" || !snapshotPath.trim()) {
+        fail(`${agent.kind}: provenance run '${run?.id}' has no snapshotPath`);
+        continue;
+      }
+      const absoluteSnapshotPath = path.resolve("scripts/agent-catalog", snapshotPath);
+      if (!fs.existsSync(absoluteSnapshotPath)) {
+        fail(`${agent.kind}: probe snapshot '${snapshotPath}' does not exist`);
+        continue;
+      }
+
+      let snapshot;
+      try {
+        snapshot = JSON.parse(fs.readFileSync(absoluteSnapshotPath, "utf8"));
+      } catch (error) {
+        fail(`${agent.kind}: probe snapshot '${snapshotPath}' is invalid JSON: ${error.message}`);
+        continue;
+      }
+
+      if (snapshot.agentKind !== agent.kind) {
+        fail(
+          `${agent.kind}: probe snapshot '${snapshotPath}' declares agentKind '${snapshot.agentKind}'`,
+        );
+      }
+
+      const attestedVersion = snapshot.attestation?.version;
+      if (typeof attestedVersion === "string" && attestedVersion.trim()) {
+        if (attestedVersion !== processVersion) {
+          fail(
+            `${agent.kind}: probe snapshot '${snapshotPath}' attests process version ` +
+            `'${attestedVersion}', expected '${processVersion}'`,
+          );
+        }
+      } else if (!immutableUnattestedSource) {
+        fail(
+          `${agent.kind}: probe snapshot '${snapshotPath}' lacks process attestation for ` +
+          `${processSourceKind ?? "unknown"} source`,
+        );
+      }
+
+      if (nativeVersion) {
+        const observedNativeVersion = versionCore(snapshot.nativeCli?.version);
+        if (observedNativeVersion !== nativeVersion) {
+          fail(
+            `${agent.kind}: probe snapshot '${snapshotPath}' reports native version ` +
+            `'${snapshot.nativeCli?.version ?? "missing"}', expected '${agent.harness.native.version}'`,
+          );
+        }
+      }
+    }
+  }
+}
+
 const catalogRaw = fs.readFileSync(CATALOG_PATH, "utf8");
 const draftRaw = fs.readFileSync(DRAFT_PATH, "utf8");
 if (catalogRaw !== draftRaw) {
@@ -260,6 +333,7 @@ const catalog = JSON.parse(catalogRaw);
 const registry = JSON.parse(fs.readFileSync(REGISTRY_PATH, "utf8"));
 validateCatalog(catalog);
 validateRegistryPairing(catalog, registry);
+validateSnapshotEvidence(catalog);
 
 if (errors.length > 0) {
   for (const message of errors) console.error(`agent catalog validation failed: ${message}`);

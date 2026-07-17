@@ -1,17 +1,14 @@
 {
-  "probedAt": "2026-06-18T02:52:35.899018+00:00",
+  "probedAt": "2026-07-17T05:35:02.847962+00:00",
   "agentKind": "opencode",
   "authContext": "baseline",
   "attestation": {
     "name": "OpenCode",
-    "version": "1.17.7",
+    "version": "1.18.3",
     "title": null
   },
   "modelSource": "modelConfigOption",
-  "nativeCli": {
-    "path": "/Users/pablohansen/.proliferate/anyharness/agents/claude/native/claude",
-    "version": "2.1.177 (Claude Code)"
-  },
+  "nativeCli": null,
   "trials": [],
   "currentModelId": null,
   "currentModeId": null,
@@ -30,6 +27,10 @@
         {
           "name": "OpenCode Zen/DeepSeek V4 Flash Free",
           "value": "opencode/deepseek-v4-flash-free"
+        },
+        {
+          "name": "OpenCode Zen/Hy3 Free",
+          "value": "opencode/hy3-free"
         },
         {
           "name": "OpenCode Zen/MiMo V2.5 Free",
@@ -118,19 +119,11 @@
         },
         {
           "category": "thought_level",
-          "currentValue": "low",
+          "currentValue": "high",
           "description": "Available effort levels for this model",
           "id": "effort",
           "name": "Effort",
           "options": [
-            {
-              "name": "Low",
-              "value": "low"
-            },
-            {
-              "name": "Medium",
-              "value": "medium"
-            },
             {
               "name": "High",
               "value": "high"
@@ -141,6 +134,41 @@
             }
           ],
           "type": "select"
+        },
+        {
+          "category": "mode",
+          "currentValue": "build",
+          "id": "mode",
+          "name": "Session Mode",
+          "options": [
+            {
+              "description": "The default agent. Executes tools based on configured permissions.",
+              "name": "build",
+              "value": "build"
+            },
+            {
+              "description": "Plan mode. Disallows all edit tools.",
+              "name": "plan",
+              "value": "plan"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "opencode/hy3-free",
+      "name": "OpenCode Zen/Hy3 Free",
+      "description": null,
+      "configOptions": [
+        {
+          "category": "model",
+          "currentValue": "opencode/hy3-free",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
         },
         {
           "category": "mode",
@@ -178,28 +206,6 @@
           "valuesElided": true
         },
         {
-          "category": "thought_level",
-          "currentValue": "low",
-          "description": "Available effort levels for this model",
-          "id": "effort",
-          "name": "Effort",
-          "options": [
-            {
-              "name": "Low",
-              "value": "low"
-            },
-            {
-              "name": "Medium",
-              "value": "medium"
-            },
-            {
-              "name": "High",
-              "value": "high"
-            }
-          ],
-          "type": "select"
-        },
-        {
           "category": "mode",
           "currentValue": "build",
           "id": "mode",
@@ -233,28 +239,6 @@
           "options": [],
           "type": "select",
           "valuesElided": true
-        },
-        {
-          "category": "thought_level",
-          "currentValue": "low",
-          "description": "Available effort levels for this model",
-          "id": "effort",
-          "name": "Effort",
-          "options": [
-            {
-              "name": "Low",
-              "value": "low"
-            },
-            {
-              "name": "Medium",
-              "value": "medium"
-            },
-            {
-              "name": "High",
-              "value": "high"
-            }
-          ],
-          "type": "select"
         },
         {
           "category": "mode",

@@ -157,6 +157,9 @@ need_env() { [ -n "${!1:-}" ]; }
 codex_oauth_path() {
   printf '%s' "${PROBE_CODEX_OAUTH_AUTH_JSON:-$HOME/.codex/auth.json}"
 }
+grok_auth_path() {
+  printf '%s' "${PROBE_GROK_AUTH_JSON:-$HOME/.grok/auth.json}"
+}
 context_available() {
   case "$1" in
     claude.anthropic-api|opencode.anthropic-api) need_env ANTHROPIC_API_KEY ;;
@@ -167,7 +170,7 @@ context_available() {
     opencode.baseline) return 0 ;;
     opencode.gemini-api) need_env GEMINI_API_KEY ;;
     opencode.opencode-zen) need_env OPENCODE_API_KEY ;;
-    grok.xai-api) need_env XAI_API_KEY ;;
+    grok.xai-api) need_env XAI_API_KEY || need_env GROK_API_KEY || [ -f "$(grok_auth_path)" ] ;;
     cursor.cursor-login) return 0 ;;
     *) return 1 ;;
   esac
@@ -181,7 +184,7 @@ context_requirement() {
     codex.openai-oauth) echo "PROBE_CODEX_OAUTH_AUTH_JSON (a readable codex auth.json)" ;;
     opencode.gemini-api) echo "GEMINI_API_KEY" ;;
     opencode.opencode-zen) echo "OPENCODE_API_KEY" ;;
-    grok.xai-api) echo "XAI_API_KEY" ;;
+    grok.xai-api) echo "XAI_API_KEY, GROK_API_KEY, or PROBE_GROK_AUTH_JSON (a readable Grok auth.json)" ;;
     cursor.cursor-login) echo "a working machine-local cursor-agent login" ;;
     *) echo "no credential" ;;
   esac
@@ -260,6 +263,7 @@ pids=()
 labels=()
 logs=()
 ids=()
+failures=0
 
 probe() { # probe <agent> <context> [extra args...]
   local agent="$1" context="$2" timeout log snapshot; shift 2
@@ -283,6 +287,32 @@ skip() {
   printf 'skipped=%s\n' "$1" >> "$STATE"
 }
 
+wait_for_probes() {
+  local i code
+  [ "${#pids[@]}" -gt 0 ] || return
+  echo "── waiting on ${#pids[@]} probes"
+  for i in "${!pids[@]}"; do
+    if wait "${pids[$i]}"; then
+      echo "✓ ${labels[$i]}"
+      printf 'passed=%s\n' "${ids[$i]}" >> "$STATE"
+    else
+      code=$?
+      if [ "$code" -eq 124 ]; then
+        echo "✗ ${labels[$i]} TIMED OUT"
+      else
+        echo "✗ ${labels[$i]} FAILED — $(tail -1 "${logs[$i]}" 2>/dev/null | cut -c1-160)"
+      fi
+      echo "  log: ${logs[$i]}"
+      printf 'failed=%s\n' "${ids[$i]}" >> "$STATE"
+      failures=$((failures + 1))
+    fi
+  done
+  pids=()
+  labels=()
+  logs=()
+  ids=()
+}
+
 CLAUDE_TRIALS=(--trial-model claude-fable-5 --trial-model claude-opus-4-8)
 BEDROCK_TRIALS=(--trial-model global.anthropic.claude-fable-5 --trial-model us.anthropic.claude-opus-4-8)
 
@@ -302,20 +332,24 @@ if agent_selected claude; then
   else
     skip claude.bedrock "$(context_requirement claude.bedrock)"
   fi
+  wait_for_probes
 fi
 if agent_selected codex; then
   if context_available codex.openai-api; then
     probe codex openai-api
+    wait_for_probes
   else
     skip codex.openai-api "$(context_requirement codex.openai-api)"
   fi
   if context_available codex.openai-oauth; then
     probe codex openai-oauth
+    wait_for_probes
   else
     skip codex.openai-oauth "$(context_requirement codex.openai-oauth)"
   fi
   if context_available codex.bedrock; then
     probe codex bedrock
+    wait_for_probes
   else
     skip codex.bedrock "$(context_requirement codex.bedrock)"
   fi
@@ -342,6 +376,7 @@ if agent_selected opencode; then
   else
     skip opencode.opencode-zen "$(context_requirement opencode.opencode-zen)"
   fi
+  wait_for_probes
 fi
 if agent_selected grok; then
   if context_available grok.xai-api; then
@@ -349,29 +384,12 @@ if agent_selected grok; then
   else
     skip grok.xai-api "$(context_requirement grok.xai-api)"
   fi
+  wait_for_probes
 fi
 if agent_selected cursor; then
   probe cursor cursor-login --model-switch-timeout-secs 5
+  wait_for_probes
 fi
-
-echo "── waiting on ${#pids[@]} probes"
-failures=0
-for i in "${!pids[@]}"; do
-  if wait "${pids[$i]}"; then
-    echo "✓ ${labels[$i]}"
-    printf 'passed=%s\n' "${ids[$i]}" >> "$STATE"
-  else
-    code=$?
-    if [ "$code" -eq 124 ]; then
-      echo "✗ ${labels[$i]} TIMED OUT"
-    else
-      echo "✗ ${labels[$i]} FAILED — $(tail -1 "${logs[$i]}" 2>/dev/null | cut -c1-160)"
-    fi
-    echo "  log: ${logs[$i]}"
-    printf 'failed=%s\n' "${ids[$i]}" >> "$STATE"
-    failures=$((failures + 1))
-  fi
-done
 
 if [ "$failures" -eq 0 ] && [ "${#missing[@]}" -eq 0 ]; then
   printf 'complete=true\n' >> "$STATE"

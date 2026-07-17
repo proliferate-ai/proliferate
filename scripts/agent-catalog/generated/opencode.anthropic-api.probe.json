@@ -1,17 +1,14 @@
 {
-  "probedAt": "2026-06-18T02:52:36.413747+00:00",
+  "probedAt": "2026-07-17T05:35:02.859027+00:00",
   "agentKind": "opencode",
   "authContext": "anthropic-api",
   "attestation": {
     "name": "OpenCode",
-    "version": "1.17.7",
+    "version": "1.18.3",
     "title": null
   },
   "modelSource": "modelConfigOption",
-  "nativeCli": {
-    "path": "/Users/pablohansen/.proliferate/anyharness/agents/claude/native/claude",
-    "version": "2.1.177 (Claude Code)"
-  },
+  "nativeCli": null,
   "trials": [],
   "currentModelId": null,
   "currentModeId": null,
@@ -28,32 +25,12 @@
           "value": "anthropic/claude-fable-5"
         },
         {
-          "name": "Anthropic/Claude Haiku 3.5 (latest)",
-          "value": "anthropic/claude-3-5-haiku-latest"
-        },
-        {
           "name": "Anthropic/Claude Haiku 4.5",
           "value": "anthropic/claude-haiku-4-5-20251001"
         },
         {
           "name": "Anthropic/Claude Haiku 4.5 (latest)",
           "value": "anthropic/claude-haiku-4-5"
-        },
-        {
-          "name": "Anthropic/Claude Opus 4",
-          "value": "anthropic/claude-opus-4-20250514"
-        },
-        {
-          "name": "Anthropic/Claude Opus 4 (latest)",
-          "value": "anthropic/claude-opus-4-0"
-        },
-        {
-          "name": "Anthropic/Claude Opus 4.1",
-          "value": "anthropic/claude-opus-4-1-20250805"
-        },
-        {
-          "name": "Anthropic/Claude Opus 4.1 (latest)",
-          "value": "anthropic/claude-opus-4-1"
         },
         {
           "name": "Anthropic/Claude Opus 4.5",
@@ -88,14 +65,6 @@
           "value": "anthropic/claude-opus-4-8-fast"
         },
         {
-          "name": "Anthropic/Claude Sonnet 4",
-          "value": "anthropic/claude-sonnet-4-20250514"
-        },
-        {
-          "name": "Anthropic/Claude Sonnet 4 (latest)",
-          "value": "anthropic/claude-sonnet-4-0"
-        },
-        {
           "name": "Anthropic/Claude Sonnet 4.5",
           "value": "anthropic/claude-sonnet-4-5-20250929"
         },
@@ -108,12 +77,20 @@
           "value": "anthropic/claude-sonnet-4-6"
         },
         {
+          "name": "Anthropic/Claude Sonnet 5",
+          "value": "anthropic/claude-sonnet-5"
+        },
+        {
           "name": "OpenCode Zen/Big Pickle",
           "value": "opencode/big-pickle"
         },
         {
           "name": "OpenCode Zen/DeepSeek V4 Flash Free",
           "value": "opencode/deepseek-v4-flash-free"
+        },
+        {
+          "name": "OpenCode Zen/Hy3 Free",
+          "value": "opencode/hy3-free"
         },
         {
           "name": "OpenCode Zen/MiMo V2.5 Free",
@@ -217,41 +194,6 @@
       ]
     },
     {
-      "modelId": "anthropic/claude-3-5-haiku-latest",
-      "name": "Anthropic/Claude Haiku 3.5 (latest)",
-      "description": null,
-      "configOptions": [
-        {
-          "category": "model",
-          "currentValue": "anthropic/claude-3-5-haiku-latest",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        },
-        {
-          "category": "mode",
-          "currentValue": "build",
-          "id": "mode",
-          "name": "Session Mode",
-          "options": [
-            {
-              "description": "The default agent. Executes tools based on configured permissions.",
-              "name": "build",
-              "value": "build"
-            },
-            {
-              "description": "Plan mode. Disallows all edit tools.",
-              "name": "plan",
-              "value": "plan"
-            }
-          ],
-          "type": "select"
-        }
-      ]
-    },
-    {
       "modelId": "anthropic/claude-haiku-4-5-20251001",
       "name": "Anthropic/Claude Haiku 4.5",
       "description": null,
@@ -312,230 +254,6 @@
         {
           "category": "model",
           "currentValue": "anthropic/claude-haiku-4-5",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        },
-        {
-          "category": "thought_level",
-          "currentValue": "high",
-          "description": "Available effort levels for this model",
-          "id": "effort",
-          "name": "Effort",
-          "options": [
-            {
-              "name": "High",
-              "value": "high"
-            },
-            {
-              "name": "Max",
-              "value": "max"
-            }
-          ],
-          "type": "select"
-        },
-        {
-          "category": "mode",
-          "currentValue": "build",
-          "id": "mode",
-          "name": "Session Mode",
-          "options": [
-            {
-              "description": "The default agent. Executes tools based on configured permissions.",
-              "name": "build",
-              "value": "build"
-            },
-            {
-              "description": "Plan mode. Disallows all edit tools.",
-              "name": "plan",
-              "value": "plan"
-            }
-          ],
-          "type": "select"
-        }
-      ]
-    },
-    {
-      "modelId": "anthropic/claude-opus-4-20250514",
-      "name": "Anthropic/Claude Opus 4",
-      "description": null,
-      "configOptions": [
-        {
-          "category": "model",
-          "currentValue": "anthropic/claude-opus-4-20250514",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        },
-        {
-          "category": "thought_level",
-          "currentValue": "low",
-          "description": "Available effort levels for this model",
-          "id": "effort",
-          "name": "Effort",
-          "options": [
-            {
-              "name": "Low",
-              "value": "low"
-            },
-            {
-              "name": "Medium",
-              "value": "medium"
-            },
-            {
-              "name": "High",
-              "value": "high"
-            },
-            {
-              "name": "Xhigh",
-              "value": "xhigh"
-            },
-            {
-              "name": "Max",
-              "value": "max"
-            }
-          ],
-          "type": "select"
-        },
-        {
-          "category": "mode",
-          "currentValue": "build",
-          "id": "mode",
-          "name": "Session Mode",
-          "options": [
-            {
-              "description": "The default agent. Executes tools based on configured permissions.",
-              "name": "build",
-              "value": "build"
-            },
-            {
-              "description": "Plan mode. Disallows all edit tools.",
-              "name": "plan",
-              "value": "plan"
-            }
-          ],
-          "type": "select"
-        }
-      ]
-    },
-    {
-      "modelId": "anthropic/claude-opus-4-0",
-      "name": "Anthropic/Claude Opus 4 (latest)",
-      "description": null,
-      "configOptions": [
-        {
-          "category": "model",
-          "currentValue": "anthropic/claude-opus-4-0",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        },
-        {
-          "category": "thought_level",
-          "currentValue": "high",
-          "description": "Available effort levels for this model",
-          "id": "effort",
-          "name": "Effort",
-          "options": [
-            {
-              "name": "High",
-              "value": "high"
-            },
-            {
-              "name": "Max",
-              "value": "max"
-            }
-          ],
-          "type": "select"
-        },
-        {
-          "category": "mode",
-          "currentValue": "build",
-          "id": "mode",
-          "name": "Session Mode",
-          "options": [
-            {
-              "description": "The default agent. Executes tools based on configured permissions.",
-              "name": "build",
-              "value": "build"
-            },
-            {
-              "description": "Plan mode. Disallows all edit tools.",
-              "name": "plan",
-              "value": "plan"
-            }
-          ],
-          "type": "select"
-        }
-      ]
-    },
-    {
-      "modelId": "anthropic/claude-opus-4-1-20250805",
-      "name": "Anthropic/Claude Opus 4.1",
-      "description": null,
-      "configOptions": [
-        {
-          "category": "model",
-          "currentValue": "anthropic/claude-opus-4-1-20250805",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        },
-        {
-          "category": "thought_level",
-          "currentValue": "high",
-          "description": "Available effort levels for this model",
-          "id": "effort",
-          "name": "Effort",
-          "options": [
-            {
-              "name": "High",
-              "value": "high"
-            },
-            {
-              "name": "Max",
-              "value": "max"
-            }
-          ],
-          "type": "select"
-        },
-        {
-          "category": "mode",
-          "currentValue": "build",
-          "id": "mode",
-          "name": "Session Mode",
-          "options": [
-            {
-              "description": "The default agent. Executes tools based on configured permissions.",
-              "name": "build",
-              "value": "build"
-            },
-            {
-              "description": "Plan mode. Disallows all edit tools.",
-              "name": "plan",
-              "value": "plan"
-            }
-          ],
-          "type": "select"
-        }
-      ]
-    },
-    {
-      "modelId": "anthropic/claude-opus-4-1",
-      "name": "Anthropic/Claude Opus 4.1 (latest)",
-      "description": null,
-      "configOptions": [
-        {
-          "category": "model",
-          "currentValue": "anthropic/claude-opus-4-1",
           "id": "model",
           "name": "Model",
           "options": [],
@@ -1078,112 +796,6 @@
       ]
     },
     {
-      "modelId": "anthropic/claude-sonnet-4-20250514",
-      "name": "Anthropic/Claude Sonnet 4",
-      "description": null,
-      "configOptions": [
-        {
-          "category": "model",
-          "currentValue": "anthropic/claude-sonnet-4-20250514",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        },
-        {
-          "category": "thought_level",
-          "currentValue": "high",
-          "description": "Available effort levels for this model",
-          "id": "effort",
-          "name": "Effort",
-          "options": [
-            {
-              "name": "High",
-              "value": "high"
-            },
-            {
-              "name": "Max",
-              "value": "max"
-            }
-          ],
-          "type": "select"
-        },
-        {
-          "category": "mode",
-          "currentValue": "build",
-          "id": "mode",
-          "name": "Session Mode",
-          "options": [
-            {
-              "description": "The default agent. Executes tools based on configured permissions.",
-              "name": "build",
-              "value": "build"
-            },
-            {
-              "description": "Plan mode. Disallows all edit tools.",
-              "name": "plan",
-              "value": "plan"
-            }
-          ],
-          "type": "select"
-        }
-      ]
-    },
-    {
-      "modelId": "anthropic/claude-sonnet-4-0",
-      "name": "Anthropic/Claude Sonnet 4 (latest)",
-      "description": null,
-      "configOptions": [
-        {
-          "category": "model",
-          "currentValue": "anthropic/claude-sonnet-4-0",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        },
-        {
-          "category": "thought_level",
-          "currentValue": "high",
-          "description": "Available effort levels for this model",
-          "id": "effort",
-          "name": "Effort",
-          "options": [
-            {
-              "name": "High",
-              "value": "high"
-            },
-            {
-              "name": "Max",
-              "value": "max"
-            }
-          ],
-          "type": "select"
-        },
-        {
-          "category": "mode",
-          "currentValue": "build",
-          "id": "mode",
-          "name": "Session Mode",
-          "options": [
-            {
-              "description": "The default agent. Executes tools based on configured permissions.",
-              "name": "build",
-              "value": "build"
-            },
-            {
-              "description": "Plan mode. Disallows all edit tools.",
-              "name": "plan",
-              "value": "plan"
-            }
-          ],
-          "type": "select"
-        }
-      ]
-    },
-    {
       "modelId": "anthropic/claude-sonnet-4-5-20250929",
       "name": "Anthropic/Claude Sonnet 4.5",
       "description": null,
@@ -1351,6 +963,71 @@
       ]
     },
     {
+      "modelId": "anthropic/claude-sonnet-5",
+      "name": "Anthropic/Claude Sonnet 5",
+      "description": null,
+      "configOptions": [
+        {
+          "category": "model",
+          "currentValue": "anthropic/claude-sonnet-5",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "low",
+          "description": "Available effort levels for this model",
+          "id": "effort",
+          "name": "Effort",
+          "options": [
+            {
+              "name": "Low",
+              "value": "low"
+            },
+            {
+              "name": "Medium",
+              "value": "medium"
+            },
+            {
+              "name": "High",
+              "value": "high"
+            },
+            {
+              "name": "Xhigh",
+              "value": "xhigh"
+            },
+            {
+              "name": "Max",
+              "value": "max"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "mode",
+          "currentValue": "build",
+          "id": "mode",
+          "name": "Session Mode",
+          "options": [
+            {
+              "description": "The default agent. Executes tools based on configured permissions.",
+              "name": "build",
+              "value": "build"
+            },
+            {
+              "description": "Plan mode. Disallows all edit tools.",
+              "name": "plan",
+              "value": "plan"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
       "modelId": "opencode/big-pickle",
       "name": "OpenCode Zen/Big Pickle",
       "description": null,
@@ -1401,19 +1078,11 @@
         },
         {
           "category": "thought_level",
-          "currentValue": "low",
+          "currentValue": "high",
           "description": "Available effort levels for this model",
           "id": "effort",
           "name": "Effort",
           "options": [
-            {
-              "name": "Low",
-              "value": "low"
-            },
-            {
-              "name": "Medium",
-              "value": "medium"
-            },
             {
               "name": "High",
               "value": "high"
@@ -1424,6 +1093,41 @@
             }
           ],
           "type": "select"
+        },
+        {
+          "category": "mode",
+          "currentValue": "build",
+          "id": "mode",
+          "name": "Session Mode",
+          "options": [
+            {
+              "description": "The default agent. Executes tools based on configured permissions.",
+              "name": "build",
+              "value": "build"
+            },
+            {
+              "description": "Plan mode. Disallows all edit tools.",
+              "name": "plan",
+              "value": "plan"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "opencode/hy3-free",
+      "name": "OpenCode Zen/Hy3 Free",
+      "description": null,
+      "configOptions": [
+        {
+          "category": "model",
+          "currentValue": "opencode/hy3-free",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
         },
         {
           "category": "mode",
@@ -1461,28 +1165,6 @@
           "valuesElided": true
         },
         {
-          "category": "thought_level",
-          "currentValue": "low",
-          "description": "Available effort levels for this model",
-          "id": "effort",
-          "name": "Effort",
-          "options": [
-            {
-              "name": "Low",
-              "value": "low"
-            },
-            {
-              "name": "Medium",
-              "value": "medium"
-            },
-            {
-              "name": "High",
-              "value": "high"
-            }
-          ],
-          "type": "select"
-        },
-        {
           "category": "mode",
           "currentValue": "build",
           "id": "mode",
@@ -1516,28 +1198,6 @@
           "options": [],
           "type": "select",
           "valuesElided": true
-        },
-        {
-          "category": "thought_level",
-          "currentValue": "low",
-          "description": "Available effort levels for this model",
-          "id": "effort",
-          "name": "Effort",
-          "options": [
-            {
-              "name": "Low",
-              "value": "low"
-            },
-            {
-              "name": "Medium",
-              "value": "medium"
-            },
-            {
-              "name": "High",
-              "value": "high"
-            }
-          ],
-          "type": "select"
         },
         {
           "category": "mode",

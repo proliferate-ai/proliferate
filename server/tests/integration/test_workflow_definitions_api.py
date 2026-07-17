@@ -333,7 +333,7 @@ async def test_optional_nested_fields_remain_omitted_and_blank_description_norma
             "workflow_catalog_selection_unavailable",
         ),
         (
-            {"agentKind": "claude", "modelId": "sonnet", "effort": "xhigh"},
+            {"agentKind": "claude", "modelId": "sonnet", "effort": "ultra"},
             None,
             "stages.0.harnessConfig.effort",
             "workflow_catalog_selection_unavailable",

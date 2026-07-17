@@ -1,5 +1,5 @@
 {
-  "probedAt": "2026-06-16T06:46:29.757670+00:00",
+  "probedAt": "2026-07-17T05:35:08.879897+00:00",
   "agentKind": "grok",
   "authContext": "xai-api",
   "attestation": null,
@@ -36,6 +36,12 @@
       "configOptions": null
     },
     {
+      "modelId": "grok-4.5",
+      "name": "grok-4.5",
+      "description": null,
+      "configOptions": null
+    },
+    {
       "modelId": "grok-build-0.1",
       "name": "grok-build-0.1",
       "description": null,
@@ -60,8 +66,8 @@
       "configOptions": null
     },
     {
-      "modelId": "grok-imagine-video-1.5-preview",
-      "name": "grok-imagine-video-1.5-preview",
+      "modelId": "grok-imagine-video-1.5",
+      "name": "grok-imagine-video-1.5",
       "description": null,
       "configOptions": null
     }
