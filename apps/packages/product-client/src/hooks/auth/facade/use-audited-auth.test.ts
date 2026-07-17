@@ -2,7 +2,10 @@
 
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { AuthRequestError } from "#product/lib/access/cloud/auth-transport";
+import {
+  AuthRequestError,
+  InteractiveAuthTimeoutError,
+} from "#product/lib/access/cloud/auth-transport";
 import {
   makeTestProductHost,
   productHostWrapper,
@@ -43,7 +46,7 @@ function harness(error: Error) {
 
 describe("useAuditedAuth", () => {
   it("tracks an interactive timeout without capturing it as an exception", async () => {
-    const error = new AuthRequestError("Sign-in timed out.", 408);
+    const error = new InteractiveAuthTimeoutError("Sign-in timed out.");
     const { result, captureException, track } = harness(error);
 
     await act(async () => {
@@ -59,6 +62,21 @@ describe("useAuditedAuth", () => {
         failure_kind: "configuration_error",
         provider: "github",
       },
+    });
+  });
+
+  it("captures an unbranded HTTP 408 response", async () => {
+    const error = new AuthRequestError("Upstream request timed out.", 408);
+    const { result, captureException } = harness(error);
+
+    await act(async () => {
+      await expect(
+        result.current.startLogin({ kind: "github" }),
+      ).rejects.toBe(error);
+    });
+
+    expect(captureException).toHaveBeenCalledWith(error, {
+      tags: { action: "sign_in", domain: "auth", provider: "github" },
     });
   });
 

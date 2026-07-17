@@ -22,6 +22,16 @@ export class AuthRequestError extends Error {
   }
 }
 
+/** The local interactive poll reached its deadline without a provider callback.
+ * Unlike an HTTP 408 returned by the server or a proxy, this is an expected
+ * rendered control state and is intentionally excluded from exception capture. */
+export class InteractiveAuthTimeoutError extends AuthRequestError {
+  constructor(message: string) {
+    super(message, 408);
+    this.name = "InteractiveAuthTimeoutError";
+  }
+}
+
 // True only when the server definitively rejected the credentials. Network
 // failures are normalized to AuthRequestError(503) by normalizeTransportError,
 // so an instanceof check alone would treat offline launches as sign-outs.

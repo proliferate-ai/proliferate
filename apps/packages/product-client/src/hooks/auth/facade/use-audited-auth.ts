@@ -16,7 +16,7 @@ import {
   isTelemetryHandled,
 } from "#product/lib/domain/telemetry/errors";
 import {
-  AuthRequestError,
+  InteractiveAuthTimeoutError,
   isAbortError,
 } from "#product/lib/access/cloud/auth-transport";
 
@@ -41,7 +41,7 @@ function captureActionForRequest(request: LoginRequest): string {
 }
 
 function isExpectedAuthControlState(error: unknown): boolean {
-  return error instanceof AuthRequestError && error.status === 408;
+  return error instanceof InteractiveAuthTimeoutError;
 }
 
 export interface AuditedAuth {
