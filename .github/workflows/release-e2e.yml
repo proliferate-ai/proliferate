@@ -713,6 +713,13 @@ jobs:
         with:
           role-to-assume: ${{ vars.RELEASE_E2E_SELFHOST_AWS_ROLE_ARN }}
           aws-region: ${{ vars.RELEASE_E2E_SELFHOST_REGION }}
+          # Request the role's full 2h MaxSessionDuration. The default assumed
+          # session is only 1h, but the SELFHOST-CFN-1 arm64 candidate build runs
+          # under QEMU emulation and can take ~70min *before* the CFN world makes
+          # its first AWS call — with the 1h default the token had already expired
+          # by validate-template (observed: ExpiredToken on run 29598841582). 2h
+          # comfortably covers build + full CREATE/verify/DELETE stack lifecycle.
+          role-duration-seconds: 7200
 
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
