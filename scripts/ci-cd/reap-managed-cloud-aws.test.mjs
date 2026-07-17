@@ -73,6 +73,15 @@ function runIdFromFilters(args) {
   return value?.split("=").at(-1) ?? "";
 }
 
+function qualificationRunPrefix(startName) {
+  const labels = startName.replace(/\.$/, "").split(".");
+  if (labels.length !== 4) return null;
+  const [runLabel, ...zoneLabels] = labels;
+  if (zoneLabels.join(".") !== "qualification.proliferate.com") return null;
+  if (!runLabel.endsWith("-0000")) return null;
+  return runLabel.slice(0, -"0000".length);
+}
+
 function fakeAws(initialStates, options = {}) {
   const states = new Map(initialStates.map((state) => [state.runId, structuredClone(state)]));
   const calls = [];
@@ -125,13 +134,15 @@ function fakeAws(initialStates, options = {}) {
         };
       }
       const start = request.StartRecordName.replace(/\.$/, "");
-      const lowerBoundSuffix = `-0000.qualification.proliferate.com`;
-      const prefix = start.endsWith(lowerBoundSuffix)
-        ? `${start.slice(0, -lowerBoundSuffix.length)}-`
-        : null;
+      const prefix = qualificationRunPrefix(start);
       const matching = candidates.filter((record) => {
         const name = record.Name.replace(/\.$/, "");
-        if (prefix !== null) return name.startsWith(prefix);
+        if (prefix !== null) {
+          const labels = name.split(".");
+          return labels.length === 4 &&
+            labels.slice(1).join(".") === "qualification.proliferate.com" &&
+            labels[0].startsWith(prefix);
+        }
         return name === start;
       });
       if (options.paginateDns && matching.length > 0 && request.StartRecordType === undefined) {
@@ -368,6 +379,27 @@ test("does not delete unrelated DNS records returned beside the exact run record
     .filter((args) => args[0] === "route53" && args[1] === "change-resource-record-sets")
     .map((args) => JSON.parse(args[args.indexOf("--change-batch") + 1]).Changes[0].ResourceRecordSet.Name);
   assert.deepEqual(deletes, [`${CURRENT_RUN}-f85c.qualification.proliferate.com.`]);
+});
+
+test("the Route53 fake rejects an extra hostname label before the qualification run label", async () => {
+  const leaked = leakedCurrentState();
+  leaked.dnsRecords = [{
+    ...leaked.dnsRecords[0],
+    Name: `extra.${CURRENT_RUN}-f85c.qualification.proliferate.com.`,
+  }];
+  const fake = fakeAws([leaked]);
+  const result = await fake.exec("aws", [
+    "route53", "list-resource-record-sets",
+    "--cli-input-json", JSON.stringify({
+      HostedZoneId: ZONE,
+      StartRecordName: `extra.${CURRENT_RUN}-0000.qualification.proliferate.com`,
+      MaxItems: "100",
+    }),
+    "--no-paginate",
+    "--output", "json",
+  ]);
+
+  assert.deepEqual(JSON.parse(result.stdout).ResourceRecordSets, []);
 });
 
 test("retries dependency-bound security-group deletion and proves the post-sweep", async () => {
