@@ -169,23 +169,229 @@ describe("sanitizeSessionDebugContentParts", () => {
       scope: privateContent,
       source: privateContent,
       status: privateContent,
+      futureNumber: 73,
+      futureBoolean: false,
       [privateContent]: true,
     } as unknown as ContentPart;
 
     const sanitized = sanitizeSessionDebugContentParts([...parts, futurePart]);
+    const sanitizedFuturePart = sanitized[sanitized.length - 1] as unknown as Record<
+      string,
+      unknown
+    >;
+    const redactedFutureEntries = Object.entries(sanitizedFuturePart).filter(([key]) => (
+      key.startsWith("[redacted-key:")
+    ));
+    const sanitizedFuturePrimitives = sanitizeSessionDebugContentParts([{
+      type: "text",
+      futureNumber: 73,
+      futureBoolean: false,
+      size: 91,
+      required: true,
+    } as unknown as ContentPart])[0] as unknown as Record<string, unknown>;
 
     expect(JSON.stringify(sanitized)).not.toContain(privateContent);
-    expect(Object.keys(sanitized.at(-1) as object).some((key) => (
-      key.startsWith("[redacted-key:16:")
-    ))).toBe(true);
+    expect(redactedFutureEntries.length).toBeGreaterThanOrEqual(5);
+    for (const [, value] of redactedFutureEntries) {
+      expect(value).toEqual({ redacted: true });
+    }
+    expect(sanitizedFuturePrimitives).toEqual({
+      type: "text",
+      "[redacted-key:12:0]": { redacted: true },
+      "[redacted-key:13:1]": { redacted: true },
+      size: { redacted: true },
+      required: { redacted: true },
+    });
     expect(sanitized.map((part) => part.type)).toEqual([
       ...parts.map((part) => part.type),
       "[redacted:14]",
     ]);
   });
+
+  it("terminates cycles through audited fields with a fixed marker", () => {
+    const cyclic = {
+      type: "text",
+      text: "cycle private sentinel",
+      event: null,
+    } as unknown as ContentPart & { event: unknown };
+    cyclic.event = cyclic;
+
+    const sanitized = sanitizeSessionDebugContentParts([cyclic]);
+    const sanitizedCycle = sanitized[0] as unknown as { event: unknown };
+
+    expect(sanitizedCycle.event).toEqual({ redacted: true });
+    expect(() => JSON.stringify(sanitized)).not.toThrow();
+    expect(JSON.stringify(sanitized)).not.toContain("cycle private sentinel");
+  });
+
+  it("caps recursive depth through audited fields", () => {
+    const root: Record<string, unknown> = { type: "text", text: "depth private sentinel" };
+    let cursor = root;
+    for (let index = 0; index < 64; index += 1) {
+      const child: Record<string, unknown> = {
+        type: "text",
+        text: "depth private sentinel",
+      };
+      cursor.event = child;
+      cursor = child;
+    }
+
+    const sanitized = sanitizeSessionDebugContentParts([root as unknown as ContentPart]);
+    let sanitizedCursor = sanitized[0] as unknown as Record<string, unknown>;
+    let followedEdges = 0;
+    while (
+      sanitizedCursor.event
+      && !isRedactedMarker(sanitizedCursor.event)
+      && followedEdges < 64
+    ) {
+      sanitizedCursor = sanitizedCursor.event as Record<string, unknown>;
+      followedEdges += 1;
+    }
+
+    expect(sanitizedCursor.event).toEqual({ redacted: true });
+    expect(followedEdges).toBeLessThan(64);
+    expect(JSON.stringify(sanitized)).not.toContain("depth private sentinel");
+  });
+
+  it("bounds object width without reading unknown values", () => {
+    let unknownGetterReads = 0;
+    const wide: Record<string, unknown> = { type: "text", text: "width private sentinel" };
+    Object.defineProperty(wide, "futureGetter", {
+      enumerable: true,
+      get: () => {
+        unknownGetterReads += 1;
+        return "getter private sentinel";
+      },
+    });
+    for (let index = 0; index < 1_000; index += 1) {
+      wide[`futureField${index}`] = index;
+    }
+
+    const sanitized = sanitizeSessionDebugContentParts([wide as unknown as ContentPart]);
+    const sanitizedWide = sanitized[0] as unknown as Record<string, unknown>;
+
+    expect(Object.keys(sanitizedWide).length).toBeLessThanOrEqual(256);
+    expect(unknownGetterReads).toBe(0);
+    expect(JSON.stringify(sanitized)).not.toContain("getter private sentinel");
+    for (const [key, value] of Object.entries(sanitizedWide)) {
+      if (key.startsWith("[redacted-key:")) {
+        expect(value).toEqual({ redacted: true });
+      }
+    }
+  });
+
+  it("redacts opaque fields without invoking their getters", () => {
+    let opaqueGetterReads = 0;
+    const part: Record<string, unknown> = { type: "text" };
+    Object.defineProperty(part, "rawInput", {
+      enumerable: true,
+      get: () => {
+        opaqueGetterReads += 1;
+        part.seq = 999;
+        return "opaque private sentinel";
+      },
+    });
+    part.seq = 7;
+
+    const sanitized = sanitizeSessionDebugContentParts([part as unknown as ContentPart]);
+
+    expect(opaqueGetterReads).toBe(0);
+    expect(sanitized[0]).toEqual({
+      type: "text",
+      rawInput: { redacted: true },
+      seq: { redacted: true },
+    });
+    expect(JSON.stringify(sanitized)).not.toContain("opaque private sentinel");
+  });
+
+  it("bounds array width and the total sanitized value budget", () => {
+    const wideParts = Array.from({ length: 1_000 }, (_, index) => ({
+      type: "text" as const,
+      text: `array private sentinel ${index}`,
+    }));
+    const budgetParts = Array.from({ length: 256 }, (_, partIndex) => {
+      const part: Record<string, unknown> = {
+        type: "text",
+        text: `budget private sentinel ${partIndex}`,
+      };
+      for (let fieldIndex = 0; fieldIndex < 255; fieldIndex += 1) {
+        part[`futureField${fieldIndex}`] = fieldIndex;
+      }
+      return part as unknown as ContentPart;
+    });
+
+    const widthSanitized = sanitizeSessionDebugContentParts(wideParts);
+    const budgetSanitized = sanitizeSessionDebugContentParts(budgetParts);
+
+    expect(widthSanitized).toHaveLength(256);
+    expect(budgetSanitized.length).toBeLessThan(256);
+    expect(JSON.stringify(widthSanitized)).not.toContain("array private sentinel");
+    expect(JSON.stringify(budgetSanitized)).not.toContain("budget private sentinel");
+  });
 });
 
 describe("sanitizeSessionDebugExportedSession", () => {
+  it("preserves audited numeric and boolean protocol metadata", () => {
+    const sanitized = sanitizeSessionDebugExportedSession({
+      session: makeSession({
+        actionCapabilities: {
+          fork: true,
+          loopsNative: true,
+          supportsGoals: true,
+          supportsLoops: false,
+          targetedFork: false,
+        },
+        executionSummary: {
+          hasLiveHandle: true,
+          phase: "running",
+          updatedAt: "2026-04-16T18:20:00.000Z",
+        },
+      }),
+      normalizedEvents: [],
+      rawNotifications: [],
+      liveConfig: {
+        liveConfig: {
+          normalizedControls: {
+            extras: [],
+            model: {
+              currentValue: "gpt-5.4",
+              key: "model",
+              label: "Model",
+              rawConfigId: "model",
+              settable: true,
+              values: [],
+            },
+          },
+          promptCapabilities: {
+            audio: false,
+            embeddedContext: true,
+            image: true,
+          },
+          rawConfigOptions: [],
+          sourceSeq: 42,
+          updatedAt: "2026-04-16T18:20:00.000Z",
+        },
+      },
+      errors: [],
+    });
+
+    expect(sanitized.session?.actionCapabilities).toEqual({
+      fork: true,
+      loopsNative: true,
+      supportsGoals: true,
+      supportsLoops: false,
+      targetedFork: false,
+    });
+    expect(sanitized.session?.executionSummary?.hasLiveHandle).toBe(true);
+    expect(sanitized.liveConfig?.liveConfig?.normalizedControls.model?.settable).toBe(true);
+    expect(sanitized.liveConfig?.liveConfig?.promptCapabilities).toEqual({
+      audio: false,
+      embeddedContext: true,
+      image: true,
+    });
+    expect(sanitized.liveConfig?.liveConfig?.sourceSeq).toBe(42);
+  });
+
   it("redacts pending prompts, transcript content, raw metadata, and notifications", () => {
     const rawNotification: SessionRawNotificationEnvelope = {
       sessionId: "session-12345678",
@@ -303,4 +509,10 @@ function eventEnvelope(
     itemId: null,
     event,
   };
+}
+
+function isRedactedMarker(value: unknown): value is { redacted: true } {
+  return typeof value === "object"
+    && value !== null
+    && (value as { redacted?: unknown }).redacted === true;
 }
