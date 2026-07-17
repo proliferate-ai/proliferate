@@ -1,9 +1,18 @@
-use std::{env, fs, time::Duration};
+use std::{env, ffi::OsString, fs, process::Stdio, sync::Arc, thread, time::Duration};
+
+use tokio::process::Command;
+use tokio::time::{sleep, Instant};
+
+use crate::agent_seed_env::current_target_triple;
 
 use super::{
-    read_worker_log_tail, startup_watch_window, worker_startup_failure_message,
-    write_worker_config, WORKER_LOG_TAIL_MAX_BYTES,
+    acquire_worker_database_lock, process_matches_worker_config, read_worker_log_tail,
+    startup_watch_window, stop_tracked_desktop_dispatch_worker, worker_database_lock_is_held,
+    worker_startup_failure_message, write_worker_config, CloudWorkerProcess, CloudWorkerState,
+    WORKER_LOG_TAIL_MAX_BYTES,
 };
+
+const TEST_WORKER_LOCK_PATH_ENV: &str = "PROLIFERATE_TEST_WORKER_LOCK_PATH";
 
 #[test]
 fn worker_config_uses_the_desktop_sidecar_url() {
@@ -28,6 +37,100 @@ fn worker_config_uses_the_desktop_sidecar_url() {
     let contents = fs::read_to_string(config_path).expect("read worker config");
     assert!(contents.contains("runtime_base_url = \"http://127.0.0.1:50746\""));
     fs::remove_dir_all(root).expect("remove temporary worker config root");
+}
+
+#[tokio::test]
+async fn app_exit_stops_worker_and_releases_its_database_lock() {
+    let root = env::temp_dir().join(format!(
+        "proliferate-worker-exit-lock-{}",
+        uuid::Uuid::new_v4()
+    ));
+    fs::create_dir_all(&root).expect("create temporary worker root");
+    let database_path = root.join("worker.sqlite3");
+    let config_path = root.join("config.toml");
+
+    let mut child = Command::new(env::current_exe().expect("resolve test executable"))
+        .arg("worker_database_lock_holder_fixture")
+        .arg("--ignored")
+        .env(TEST_WORKER_LOCK_PATH_ENV, &database_path)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .kill_on_drop(true)
+        .spawn()
+        .expect("spawn lock-holding worker stand-in");
+
+    let lock_deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        if worker_database_lock_is_held(&database_path).expect("inspect worker lock") {
+            break;
+        }
+        if let Some(status) = child.try_wait().expect("inspect lock holder") {
+            panic!("lock holder exited before acquiring the lock: {status}");
+        }
+        assert!(Instant::now() < lock_deadline, "lock holder did not start");
+        sleep(Duration::from_millis(20)).await;
+    }
+
+    let state = Arc::new(CloudWorkerState::default());
+    *state.process.lock().await = Some(CloudWorkerProcess {
+        target_id: "desktop-install".to_string(),
+        child,
+        config_path,
+    });
+
+    assert!(stop_tracked_desktop_dispatch_worker(&state)
+        .await
+        .expect("stop tracked worker"));
+    assert!(!worker_database_lock_is_held(&database_path).expect("inspect released worker lock"));
+    assert!(state.process.lock().await.is_none());
+
+    fs::remove_dir_all(root).expect("remove temporary worker root");
+}
+
+#[test]
+#[ignore = "subprocess fixture for app_exit_stops_worker_and_releases_its_database_lock"]
+fn worker_database_lock_holder_fixture() {
+    let Some(database_path) = env::var_os(TEST_WORKER_LOCK_PATH_ENV) else {
+        return;
+    };
+    let database_path = std::path::PathBuf::from(database_path);
+    let _lock = acquire_worker_database_lock(&database_path).expect("acquire fixture lock");
+    thread::sleep(Duration::from_secs(60));
+}
+
+#[test]
+fn orphan_takeover_matches_only_the_exact_worker_config() {
+    let expected_config = std::path::Path::new("/private/target/config.toml");
+    let worker_executable = std::path::PathBuf::from(format!(
+        "/app/proliferate-worker-{}",
+        current_target_triple()
+    ));
+    let matching_command = vec![
+        OsString::from("proliferate-worker"),
+        OsString::from("--config"),
+        expected_config.as_os_str().to_owned(),
+    ];
+
+    assert!(process_matches_worker_config(
+        Some(&worker_executable),
+        &matching_command,
+        expected_config,
+    ));
+    assert!(!process_matches_worker_config(
+        Some(std::path::Path::new("/app/unrelated-worker")),
+        &matching_command,
+        expected_config,
+    ));
+    assert!(!process_matches_worker_config(
+        Some(&worker_executable),
+        &matching_command,
+        std::path::Path::new("/private/other/config.toml"),
+    ));
+    assert!(!process_matches_worker_config(
+        Some(std::path::Path::new("/app/proliferate-worker-helper")),
+        &matching_command,
+        expected_config,
+    ));
 }
 
 #[test]

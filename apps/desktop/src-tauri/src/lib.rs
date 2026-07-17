@@ -320,6 +320,14 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while running tauri application")
         .run(|_app_handle, _event| {
+            if matches!(_event, tauri::RunEvent::Exit) {
+                let worker_state = _app_handle.state::<cloud_worker::SharedCloudWorkerState>();
+                if let Err(error) = tauri::async_runtime::block_on(
+                    cloud_worker::stop_tracked_desktop_dispatch_worker(&worker_state),
+                ) {
+                    tracing::warn!(%error, "failed to stop Proliferate Worker during app exit");
+                }
+            }
             #[cfg(target_os = "macos")]
             {
                 if matches!(_event, RunEvent::Ready) {

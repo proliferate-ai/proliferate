@@ -1,4 +1,5 @@
 use std::{
+    ffi::{OsStr, OsString},
     fs::OpenOptions,
     io::{self, Read, Seek, SeekFrom},
     path::{Path, PathBuf},
@@ -15,6 +16,7 @@ use tokio::{
 };
 
 use crate::{
+    agent_seed_env::current_target_triple,
     app_config,
     diagnostics::scrub_diagnostic_text,
     sidecar::{resolve_shell_path, SharedSidecar},
@@ -25,6 +27,10 @@ mod launcher;
 use launcher::find_proliferate_worker_launcher;
 
 const WORKER_LOG_TAIL_MAX_BYTES: u64 = 64 * 1024;
+const WORKER_CREDENTIALS_LOCKED_ERROR: &str =
+    "Cannot replace worker credentials while a Proliferate Worker is still running.";
+const WORKER_TAKEOVER_WAIT: Duration = Duration::from_secs(3);
+const WORKER_TAKEOVER_POLL: Duration = Duration::from_millis(50);
 
 #[derive(Default)]
 pub struct CloudWorkerState {
@@ -123,7 +129,7 @@ pub async fn ensure_desktop_dispatch_worker(
     let paths = worker_paths(&target_id)?;
     let mut mutation_lock = None;
     if enrollment_token.is_some() {
-        mutation_lock = Some(acquire_worker_database_lock(&paths.database)?);
+        mutation_lock = Some(acquire_worker_database_lock_for_rotation(&paths).await?);
     } else {
         if worker_database_lock_is_held(&paths.database)? {
             return Ok(EnsureDesktopDispatchWorkerResult {
@@ -234,28 +240,55 @@ pub async fn ensure_desktop_dispatch_worker(
 pub async fn stop_desktop_dispatch_worker(
     state: State<'_, SharedCloudWorkerState>,
 ) -> Result<StopDesktopDispatchWorkerResult, String> {
-    let mut guard = state.process.lock().await;
-    let mut stopped = false;
-    if let Some(process) = guard.as_mut() {
-        let _ = process.child.start_kill();
-        let _ = process.child.wait().await;
-        stopped = true;
-    }
-    *guard = None;
-    drop(guard);
+    let stop_result = stop_tracked_desktop_dispatch_worker(&state).await;
 
     let dotfile = app_config::anyharness_runtime_home_path()?.join("integration-gateway.json");
-    match std::fs::remove_file(&dotfile) {
-        Ok(()) => {}
-        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
-        Err(error) => {
-            return Err(format!(
-                "Failed to remove integration gateway credentials at {}: {error}",
-                dotfile.display()
-            ));
+    let credential_cleanup_result = match std::fs::remove_file(&dotfile) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(format!(
+            "Failed to remove integration gateway credentials at {}: {error}",
+            dotfile.display()
+        )),
+    };
+    match (stop_result, credential_cleanup_result) {
+        (Ok(stopped), Ok(())) => Ok(StopDesktopDispatchWorkerResult { stopped }),
+        (Err(stop_error), Ok(())) => Err(stop_error),
+        (Ok(_), Err(cleanup_error)) => Err(cleanup_error),
+        (Err(stop_error), Err(cleanup_error)) => {
+            Err(format!("{stop_error}; additionally, {cleanup_error}"))
         }
     }
-    Ok(StopDesktopDispatchWorkerResult { stopped })
+}
+
+/// Stops and reaps the tracked Worker launcher before Desktop exits.
+///
+/// Tauri's desktop event loop terminates with `std::process::exit`, which skips
+/// Rust destructors. `CloudWorkerProcess::drop` remains a best-effort fallback
+/// for ordinary state replacement, but app shutdown must call this explicitly
+/// or the Worker survives and keeps its database lock into the next launch.
+pub(crate) async fn stop_tracked_desktop_dispatch_worker(
+    state: &SharedCloudWorkerState,
+) -> Result<bool, String> {
+    let mut guard = state.process.lock().await;
+    let Some(process) = guard.as_mut() else {
+        return Ok(false);
+    };
+
+    let stop_result = match process.child.try_wait() {
+        Ok(Some(_)) => Ok(()),
+        Ok(None) => process
+            .child
+            .kill()
+            .await
+            .map_err(|error| format!("Failed to stop Proliferate Worker: {error}")),
+        Err(error) => Err(format!(
+            "Failed to inspect Proliferate Worker shutdown: {error}"
+        )),
+    };
+    *guard = None;
+    stop_result?;
+    Ok(true)
 }
 
 fn non_empty(name: &str, value: String) -> Result<String, String> {
@@ -333,9 +366,90 @@ fn worker_identity_exists(path: &Path) -> Result<bool, String> {
 fn worker_database_lock_is_held(database_path: &Path) -> Result<bool, String> {
     match acquire_worker_database_lock(database_path) {
         Ok(_lock) => Ok(false),
-        Err(error) if error.contains("still running") => Ok(true),
+        Err(error) if error == WORKER_CREDENTIALS_LOCKED_ERROR => Ok(true),
         Err(error) => Err(error),
     }
+}
+
+async fn acquire_worker_database_lock_for_rotation(
+    paths: &WorkerPaths,
+) -> Result<WorkerDatabaseLock, String> {
+    match acquire_worker_database_lock(&paths.database) {
+        Ok(lock) => return Ok(lock),
+        Err(error) if error == WORKER_CREDENTIALS_LOCKED_ERROR => {}
+        Err(error) => return Err(error),
+    }
+
+    // An older Desktop process can leave its Worker alive because Tauri exits
+    // without running Rust destructors. A fresh token is an explicit rotation
+    // request, so take over only when the conflicting process proves it is a
+    // Proliferate Worker launched with this exact target's private config.
+    if !request_untracked_worker_stop(&paths.config).await? {
+        // The untracked Worker may have exited between the first lock attempt
+        // and the process snapshot. Avoid reporting a stale conflict, while
+        // preserving the guard if another process still owns the lock.
+        return acquire_worker_database_lock(&paths.database);
+    }
+
+    let deadline = Instant::now() + WORKER_TAKEOVER_WAIT;
+    loop {
+        match acquire_worker_database_lock(&paths.database) {
+            Ok(lock) => {
+                tracing::info!("Stopped untracked Proliferate Worker before credential rotation");
+                return Ok(lock);
+            }
+            Err(error) if error == WORKER_CREDENTIALS_LOCKED_ERROR && Instant::now() < deadline => {
+                sleep(WORKER_TAKEOVER_POLL).await;
+            }
+            Err(error) => return Err(error),
+        }
+    }
+}
+
+async fn request_untracked_worker_stop(config_path: &Path) -> Result<bool, String> {
+    let config_path = canonical_path(config_path);
+    tokio::task::spawn_blocking(move || {
+        let mut system = sysinfo::System::new();
+        system.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
+        let current_pid = sysinfo::get_current_pid().ok();
+        let mut stop_requested = false;
+        for (pid, process) in system.processes() {
+            if current_pid == Some(*pid)
+                || !process_matches_worker_config(process.exe(), process.cmd(), &config_path)
+            {
+                continue;
+            }
+            stop_requested |= process.kill();
+        }
+        stop_requested
+    })
+    .await
+    .map_err(|error| format!("Failed to inspect running Proliferate Workers: {error}"))
+}
+
+fn process_matches_worker_config(
+    executable: Option<&Path>,
+    command: &[OsString],
+    config_path: &Path,
+) -> bool {
+    let Some(executable_name) = executable.and_then(Path::file_name) else {
+        return false;
+    };
+    let target_executable_name = format!("proliferate-worker-{}", current_target_triple());
+    let target_executable_name_exe = format!("{target_executable_name}.exe");
+    if executable_name != OsStr::new("proliferate-worker")
+        && executable_name != OsStr::new("proliferate-worker.exe")
+        && executable_name != OsStr::new(&target_executable_name)
+        && executable_name != OsStr::new(&target_executable_name_exe)
+    {
+        return false;
+    }
+
+    let config_path = canonical_path(config_path);
+    command.windows(2).any(|arguments| {
+        arguments[0] == OsStr::new("--config")
+            && canonical_path(Path::new(&arguments[1])) == config_path
+    })
 }
 
 fn acquire_worker_database_lock(database_path: &Path) -> Result<WorkerDatabaseLock, String> {
@@ -357,10 +471,9 @@ fn acquire_worker_database_lock(database_path: &Path) -> Result<WorkerDatabaseLo
         })?;
     match file.try_lock_exclusive() {
         Ok(()) => Ok(WorkerDatabaseLock { file }),
-        Err(error) if error.kind() == io::ErrorKind::WouldBlock => Err(
-            "Cannot replace worker credentials while a Proliferate Worker is still running."
-                .to_string(),
-        ),
+        Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
+            Err(WORKER_CREDENTIALS_LOCKED_ERROR.to_string())
+        }
         Err(error) => Err(format!(
             "Failed to inspect worker lock at {}: {error}",
             lock_path.display()
@@ -369,7 +482,7 @@ fn acquire_worker_database_lock(database_path: &Path) -> Result<WorkerDatabaseLo
 }
 
 fn worker_lock_path(database_path: &Path) -> PathBuf {
-    let database_path = canonical_database_path(database_path);
+    let database_path = canonical_path(database_path);
     let extension = database_path
         .extension()
         .and_then(|value| value.to_str())
@@ -378,19 +491,19 @@ fn worker_lock_path(database_path: &Path) -> PathBuf {
     database_path.with_extension(extension)
 }
 
-fn canonical_database_path(database_path: &Path) -> PathBuf {
-    if let Ok(path) = database_path.canonicalize() {
+fn canonical_path(path: &Path) -> PathBuf {
+    if let Ok(path) = path.canonicalize() {
         return path;
     }
-    let Some(parent) = database_path.parent() else {
-        return database_path.to_path_buf();
+    let Some(parent) = path.parent() else {
+        return path.to_path_buf();
     };
     let Ok(parent) = parent.canonicalize() else {
-        return database_path.to_path_buf();
+        return path.to_path_buf();
     };
-    match database_path.file_name() {
+    match path.file_name() {
         Some(file_name) => parent.join(file_name),
-        None => database_path.to_path_buf(),
+        None => path.to_path_buf(),
     }
 }
 
