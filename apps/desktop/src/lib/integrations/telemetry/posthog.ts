@@ -1,5 +1,4 @@
 import posthog from "posthog-js";
-import type { PostHogInterface } from "posthog-js/lib/src/types";
 import type { DesktopTelemetryConfig } from "./config";
 import type { DesktopProductEventMap } from "@proliferate/product-client/internal/lib/domain/telemetry/events";
 import { scrubPostHogPayload, scrubTelemetryData } from "./scrub";
@@ -37,7 +36,7 @@ export function initializeDesktopPostHog(config: DesktopPostHogInitConfig): void
       }
       : undefined,
     loaded: config.posthog.sessionRecordingEnabled
-      ? (client: PostHogInterface) => {
+      ? (client) => {
         client.startSessionRecording();
       }
       : undefined,
