@@ -556,9 +556,7 @@ fn validate_launch_rejects_mode_selection_without_mode_vocabulary() {
     let mut raw: serde_json::Value =
         serde_json::from_str(draft_catalog_json()).expect("draft must parse");
     let codex = &mut raw["agents"][1];
-    // A curated unattended default without a mode vocabulary is rejected at
-    // load time. Remove that default so this test can independently exercise
-    // service-level validation of an explicit launch selection.
+    // Remove the curated default so the no-vocabulary fixture remains loader-valid.
     codex["session"]
         .as_object_mut()
         .expect("session object")
