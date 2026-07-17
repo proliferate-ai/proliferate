@@ -25,11 +25,11 @@ use crate::live::sessions::driver::native_session::{
 };
 use crate::live::sessions::driver::process::spawn_agent_process;
 use crate::live::sessions::driver::session_lifecycle::initialize_connection;
-use crate::live::sessions::driver::stderr::AgentStderrTail;
 use crate::live::sessions::driver::types::NativeSessionStartupDisposition;
 use crate::live::sessions::handle::LiveSessionHandle;
 use crate::live::sessions::model::SessionStateDurable;
 use crate::live::sessions::sink::SessionEventSink;
+use crate::observability::AGENT_STDERR_TRACING_TARGET;
 
 impl SessionActor {
     /// Spawns the agent process, establishes the ACP connection, starts the
@@ -169,17 +169,22 @@ impl SessionActor {
                     )
                     .await;
                 }
-                let error = agent_exited_during_startup_error(exit_status, &stderr_tail);
+                let error = stderr_tail.startup_exit_error(exit_status);
                 tracing::warn!(
+                    target: AGENT_STDERR_TRACING_TARGET,
                     session_id = %session_id,
                     workspace_id = %workspace_id,
                     agent_kind = %source_agent_kind,
-                    error = %error.to_string().replace('\n', " | "),
+                    error = %error.caller_detail().replace('\n', " | "),
                     elapsed_ms = startup_started.elapsed().as_millis(),
                     "[workspace-latency] session.actor.process_exited_during_startup"
                 );
-                let _ = ready_tx.send(Err(anyhow::anyhow!("{error}")));
-                return Err(error);
+                // Ordinary Display/Debug formatting is status-only, so generic
+                // actor and API logging cannot retransmit raw child output.
+                // The initiating authenticated API mapper can still opt into
+                // the bounded caller detail carried by this typed error.
+                let _ = ready_tx.send(Err(anyhow::Error::new(error.clone())));
+                return Err(anyhow::Error::new(error));
             }
         };
         let supports_native_close = init_response
@@ -385,25 +390,6 @@ impl SessionActor {
     }
 }
 
-fn agent_exited_during_startup_error(
-    exit_status: std::io::Result<std::process::ExitStatus>,
-    stderr_tail: &AgentStderrTail,
-) -> anyhow::Error {
-    let status = match exit_status {
-        Ok(status) => status.to_string(),
-        Err(error) => format!("wait failed: {error}"),
-    };
-    let tail = stderr_tail.snapshot();
-    if tail.is_empty() {
-        anyhow::anyhow!("agent process exited during ACP startup ({status})")
-    } else {
-        anyhow::anyhow!(
-            "agent process exited during ACP startup ({status}). Agent stderr:\n{}",
-            tail.join("\n")
-        )
-    }
-}
-
 pub(in crate::live::sessions::actor) fn persist_session_action_capabilities(
     store: &dyn SessionStateDurable,
     session_id: &str,
@@ -530,30 +516,6 @@ fn loops_capability_from_init_meta(meta: Option<&acp::schema::Meta>) -> (bool, b
 #[cfg(all(test, unix))]
 mod tests {
     use super::*;
-    use std::os::unix::process::ExitStatusExt;
-
-    #[test]
-    fn agent_exit_error_reports_status_without_stderr() {
-        let tail = AgentStderrTail::default();
-        let exit_status = std::process::ExitStatus::from_raw(0x100); // exit code 1
-
-        let error = agent_exited_during_startup_error(Ok(exit_status), &tail);
-        let message = error.to_string();
-        assert!(message.contains("exited during ACP startup"));
-        assert!(!message.contains("Agent stderr"));
-    }
-
-    #[test]
-    fn agent_exit_error_includes_stderr_tail() {
-        let tail = AgentStderrTail::default();
-        tail.push("Failed to locate codex-acp binary");
-        let exit_status = std::process::ExitStatus::from_raw(0x100);
-
-        let error = agent_exited_during_startup_error(Ok(exit_status), &tail);
-        assert!(error
-            .to_string()
-            .contains("Failed to locate codex-acp binary"));
-    }
 
     fn init_meta(value: serde_json::Value) -> acp::schema::Meta {
         let serde_json::Value::Object(map) = value else {

@@ -2,12 +2,35 @@ use super::access::map_access_error;
 use super::error::ApiError;
 use crate::domains::agents::route_auth::RouteAuthError;
 use crate::domains::sessions::mcp_bindings::crypto::SessionMcpBindingsError;
+use crate::domains::sessions::model::AgentStartupExitError;
 use crate::domains::sessions::runtime::{
     CreateAndStartSessionError, EnsureLiveSessionError, ForkSessionError,
     PendingPromptMutationError, PendingPromptQueueError, ResolveInteractionError, SendPromptError,
     SessionLifecycleError, SetSessionConfigOptionError,
 };
 use crate::domains::sessions::service::{GetLiveConfigSnapshotError, UpdateSessionTitleError};
+
+fn map_internal_anyhow_error(
+    error: anyhow::Error,
+    telemetry_safe_detail: String,
+    caller_prefix: &str,
+) -> ApiError {
+    let startup_error = error.downcast_ref::<AgentStartupExitError>();
+    let caller_detail = startup_error
+        .map(|error| format!("{caller_prefix}{}", error.caller_detail()))
+        .unwrap_or_else(|| telemetry_safe_detail.clone());
+
+    ApiError::internal_with_safe_log_and_code(
+        caller_detail,
+        telemetry_safe_detail,
+        startup_error.map(|_| AgentStartupExitError::CODE),
+    )
+}
+
+pub(super) fn map_acp_session_start_error(error: anyhow::Error) -> ApiError {
+    let telemetry_safe_detail = format!("ACP session start failed: {error}");
+    map_internal_anyhow_error(error, telemetry_safe_detail, "ACP session start failed: ")
+}
 
 pub(super) fn map_resolve_interaction_error(error: ResolveInteractionError) -> ApiError {
     match error {
@@ -116,10 +139,11 @@ pub(super) fn map_create_session_error(error: CreateAndStartSessionError) -> Api
             ApiError::internal(SessionMcpBindingsError::missing_data_key_detail())
         }
         CreateAndStartSessionError::RouteAuth(error) => map_route_auth_error(&error),
-        CreateAndStartSessionError::StartFailed(error) => {
-            ApiError::internal(format!("ACP session start failed: {error}"))
+        CreateAndStartSessionError::StartFailed(error) => map_acp_session_start_error(error),
+        CreateAndStartSessionError::Internal(error) => {
+            let telemetry_safe_detail = error.to_string();
+            map_internal_anyhow_error(error, telemetry_safe_detail, "")
         }
-        CreateAndStartSessionError::Internal(error) => ApiError::internal(error.to_string()),
     }
 }
 
@@ -168,7 +192,8 @@ pub(super) fn map_ensure_live_session_error(error: EnsureLiveSessionError) -> Ap
         }
         EnsureLiveSessionError::RouteAuth(error) => map_route_auth_error(&error),
         EnsureLiveSessionError::Internal(error) => {
-            ApiError::internal(format!("resume failed: {error}"))
+            let telemetry_safe_detail = format!("resume failed: {error}");
+            map_internal_anyhow_error(error, telemetry_safe_detail, "resume failed: ")
         }
     }
 }
@@ -186,7 +211,10 @@ pub(super) fn map_set_session_config_option_error(error: SetSessionConfigOptionE
             format!("workspace directory is missing: {path}"),
             "WORKSPACE_DIRECTORY_MISSING",
         ),
-        SetSessionConfigOptionError::Internal(error) => ApiError::internal(error.to_string()),
+        SetSessionConfigOptionError::Internal(error) => {
+            let telemetry_safe_detail = error.to_string();
+            map_internal_anyhow_error(error, telemetry_safe_detail, "")
+        }
     }
 }
 
@@ -204,7 +232,10 @@ pub(super) fn map_send_prompt_error(error: SendPromptError) -> ApiError {
         ),
         SendPromptError::InvalidPrompt(error) => ApiError::bad_request(error.detail, error.code),
         // {error:#} keeps the anyhow cause chain; to_string() would drop it.
-        SendPromptError::Internal(error) => ApiError::internal(format!("{error:#}")),
+        SendPromptError::Internal(error) => {
+            let telemetry_safe_detail = format!("{error:#}");
+            map_internal_anyhow_error(error, telemetry_safe_detail, "")
+        }
     }
 }
 
@@ -231,9 +262,13 @@ pub(super) fn map_fork_session_error(error: ForkSessionError) -> ApiError {
             ApiError::internal(SessionMcpBindingsError::missing_data_key_detail())
         }
         ForkSessionError::StartFailed { error, .. } => {
-            ApiError::internal(format!("fork child start failed: {error}"))
+            let telemetry_safe_detail = format!("fork child start failed: {error}");
+            map_internal_anyhow_error(error, telemetry_safe_detail, "fork child start failed: ")
         }
-        ForkSessionError::Internal(error) => ApiError::internal(error.to_string()),
+        ForkSessionError::Internal(error) => {
+            let telemetry_safe_detail = error.to_string();
+            map_internal_anyhow_error(error, telemetry_safe_detail, "")
+        }
     }
 }
 
@@ -317,6 +352,7 @@ mod tests {
     use axum::http::StatusCode;
     use axum::response::IntoResponse;
 
+    use crate::domains::sessions::model::AgentStartupExitError;
     use crate::domains::sessions::runtime::{CreateAndStartSessionError, ResolveInteractionError};
     use crate::domains::workspaces::access_gate::WorkspaceAccessError;
 
@@ -362,6 +398,50 @@ mod tests {
         .into_response();
 
         assert_eq!(response.status(), StatusCode::CONFLICT);
+    }
+
+    #[test]
+    fn startup_stderr_detail_reaches_caller_through_safe_typed_error() {
+        let error = AgentStartupExitError::new(
+            "agent process exited during ACP startup (exit status: 1)".to_string(),
+            "agent process exited during ACP startup (exit status: 1). Agent stderr:\nmissing binary"
+                .to_string(),
+        );
+
+        let mapped = super::map_create_session_error(CreateAndStartSessionError::StartFailed(
+            anyhow::Error::new(error),
+        ));
+
+        assert_eq!(
+            mapped.detail(),
+            Some(
+                "ACP session start failed: agent process exited during ACP startup (exit status: 1). Agent stderr:\nmissing binary"
+            )
+        );
+        assert_eq!(mapped.code(), Some("AGENT_STARTUP_FAILED"));
+    }
+
+    #[test]
+    fn resume_startup_stderr_detail_reaches_caller_through_safe_typed_error() {
+        use crate::domains::sessions::runtime::EnsureLiveSessionError;
+
+        let error = AgentStartupExitError::new(
+            "agent process exited during ACP startup (exit status: 1)".to_string(),
+            "agent process exited during ACP startup (exit status: 1). Agent stderr:\nmissing binary"
+                .to_string(),
+        );
+
+        let mapped = super::map_ensure_live_session_error(EnsureLiveSessionError::Internal(
+            anyhow::Error::new(error),
+        ));
+
+        assert_eq!(
+            mapped.detail(),
+            Some(
+                "resume failed: agent process exited during ACP startup (exit status: 1). Agent stderr:\nmissing binary"
+            )
+        );
+        assert_eq!(mapped.code(), Some("AGENT_STARTUP_FAILED"));
     }
 
     #[test]

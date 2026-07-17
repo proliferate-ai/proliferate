@@ -74,6 +74,21 @@ authorization headers, tokens, secrets, environment values, or provider
 responses. Correlation identifiers are diagnostic metadata, not permission to
 copy user content into Sentry.
 
+AnyHarness marks direct child-agent stderr events with a dedicated tracing
+target that the Sentry layer ignores while console/file logging remains
+available locally. The exclusion applies to Sentry events, breadcrumbs, and
+structured logs. A startup failure retains at most eight lines and 1,024 UTF-8
+bytes per line, writes that bounded tail to the excluded local diagnostic, and
+carries it in a domain-owned typed error for the initiating authenticated API
+response. Ordinary error formatting and API telemetry use a status-only
+summary. The response also carries the stable `AGENT_STARTUP_FAILED` code;
+`@anyharness/sdk` uses that structured problem to create a detached telemetry
+error whose message and metadata derive only from a validated code and HTTP
+status, with no original problem or cause chain. ProductClient applies that
+projection both at its explicit exception facade and its global React Query
+capture boundary while preserving the original detail for UI.
+Raw provider output is not a safe Sentry grouping key or exception message.
+
 Two exact, bounded fields are deliberately preserved through the scrubbers
 because they are deployment identity, not a raw process-environment map:
 
