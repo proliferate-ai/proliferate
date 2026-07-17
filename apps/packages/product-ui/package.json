@@ -147,6 +147,18 @@
       "types": "./dist/workflows/WorkflowDefinitionList.d.ts",
       "import": "./dist/workflows/WorkflowDefinitionList.js"
     },
+    "./workflows/WorkflowRunForm": {
+      "types": "./dist/workflows/WorkflowRunForm.d.ts",
+      "import": "./dist/workflows/WorkflowRunForm.js"
+    },
+    "./workflows/WorkflowRunList": {
+      "types": "./dist/workflows/WorkflowRunList.d.ts",
+      "import": "./dist/workflows/WorkflowRunList.js"
+    },
+    "./workflows/WorkflowRunDetail": {
+      "types": "./dist/workflows/WorkflowRunDetail.d.ts",
+      "import": "./dist/workflows/WorkflowRunDetail.js"
+    },
     "./billing/BillingSettingsPane": {
       "types": "./dist/billing/BillingSettingsPane.d.ts",
       "import": "./dist/billing/BillingSettingsPane.js"

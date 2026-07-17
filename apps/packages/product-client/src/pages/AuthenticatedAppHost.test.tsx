@@ -119,4 +119,15 @@ describe("AuthenticatedAppHost", () => {
     });
     expect(screen.getByTestId("workflows")).toBeTruthy();
   });
+
+  it("keeps a managed Workflow run deep link on the Workflow route", () => {
+    render(
+      <MemoryRouter initialEntries={["/workflows/workflow-1/runs/run-1"]}>
+        <AuthenticatedAppHost MainComponent={TestMain} SettingsComponent={TestSettings} />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByTestId("workflows")).toBeTruthy();
+    expect(screen.getByTestId("workspace").dataset.visible).toBe("false");
+  });
 });

@@ -13,5 +13,6 @@
   run-state versioning, interruption vocabulary, and exclusive execution
   mutation admission for workflow-owned sessions.
 - [Managed Cloud Execution](managed-cloud-execution.md) — feature-gated durable
-  delivery, exact target custody, monotonic observation, history, and
-  cancellation without Desktop presence.
+  delivery, exact target custody, monotonic observation, Cloud product
+  experience, history, cancellation, and exact-session opening without Desktop
+  presence.

@@ -60,6 +60,7 @@ export function AuthenticatedAppHost({
           <Route path="setup" element={<Navigate to={APP_ROUTES.home} replace />} />
           <Route path="workflows" element={<WorkflowsPage />} />
           <Route path="workflows/:workflowId" element={<WorkflowsPage />} />
+          <Route path="workflows/:workflowId/runs/:runId" element={<WorkflowsPage />} />
           <Route path="automations" element={<LegacyRouteRedirect to={APP_ROUTES.workflows} />} />
           <Route path="automations/:workflowId" element={<LegacyRouteRedirect to={APP_ROUTES.workflows} />} />
           <Route path="workspaces" element={<WorkspacesPage />} />

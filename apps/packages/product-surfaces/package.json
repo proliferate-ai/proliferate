@@ -42,6 +42,10 @@
     "./workflows/WorkflowDefinitionsSurface": {
       "types": "./dist/workflows/WorkflowDefinitionsSurface.d.ts",
       "import": "./dist/workflows/WorkflowDefinitionsSurface.js"
+    },
+    "./workflows/WorkflowRunsSurface": {
+      "types": "./dist/workflows/WorkflowRunsSurface.d.ts",
+      "import": "./dist/workflows/WorkflowRunsSurface.js"
     }
   },
   "scripts": {

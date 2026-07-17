@@ -1,9 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { APP_ROUTES, LEGACY_APP_ROUTES } from "#product/config/app-routes";
+import { APP_ROUTES, LEGACY_APP_ROUTES, workflowRunRoute } from "#product/config/app-routes";
 
 describe("app routes", () => {
   it("registers workflows as a top-level route", () => {
     expect(APP_ROUTES.workflows).toBe("/workflows");
+  });
+
+  it("builds the canonical definition-scoped run route", () => {
+    expect(workflowRunRoute("definition/one", "run two"))
+      .toBe("/workflows/definition%2Fone/runs/run%20two");
   });
 
   it("does not keep named constants for merged plugin, integration and automation routes", () => {

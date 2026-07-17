@@ -13,6 +13,7 @@ import { WorkflowsPage } from "#product/pages/WorkflowsPage";
 import { useAuthStore } from "#product/test/auth-store-double";
 
 const workflowSurface = vi.hoisted(() => vi.fn());
+const runSurface = vi.hoisted(() => vi.fn());
 const authMode = vi.hoisted(() => ({ devBypassed: false }));
 
 class TestIntersectionObserver {
@@ -45,10 +46,30 @@ vi.mock("@proliferate/product-surfaces/workflows/WorkflowDefinitionsSurface", ()
   WorkflowDefinitionsSurface: (props: {
     authCacheScope: string;
     selectedWorkflowId: string | null;
+    managedRunsEnabled: boolean;
   }) => {
     workflowSurface(props);
     return <section data-testid="workflow-definitions" />;
   },
+}));
+
+vi.mock("@proliferate/product-surfaces/workflows/WorkflowRunsSurface", () => ({
+  WorkflowRunsSurface: (props: {
+    authCacheScope: string;
+    workflowDefinitionId: string;
+    runId: string;
+  }) => {
+    runSurface(props);
+    return <section data-testid="workflow-run" />;
+  },
+}));
+
+vi.mock("#product/hooks/capabilities/derived/use-app-capabilities", () => ({
+  useAppCapabilities: () => ({ workflowManagedRunsEnabled: true }),
+}));
+
+vi.mock("#product/hooks/workflows/workflows/use-workflow-run-open-actions", () => ({
+  useWorkflowRunOpenActions: () => ({ openWorkflowRunSession: vi.fn() }),
 }));
 
 vi.mock("#product/components/workspace/shell/screen/MainSidebarPageShell", () => ({
@@ -69,6 +90,7 @@ function renderWorkflows(path = "/workflows") {
       <Routes>
         <Route path="/workflows" element={<WorkflowsPage />} />
         <Route path="/workflows/:workflowId" element={<WorkflowsPage />} />
+        <Route path="/workflows/:workflowId/runs/:runId" element={<WorkflowsPage />} />
         <Route path="/login" element={<LoginProbe />} />
       </Routes>
     </MemoryRouter>,
@@ -89,6 +111,7 @@ describe("WorkflowsPage authentication boundary", () => {
   afterEach(() => {
     cleanup();
     workflowSurface.mockClear();
+    runSurface.mockClear();
   });
 
   it("shows a sign-in gate without mounting cloud workflow queries", () => {
@@ -150,6 +173,30 @@ describe("WorkflowsPage authentication boundary", () => {
     expect(workflowSurface).toHaveBeenCalledWith(expect.objectContaining({
       authCacheScope: "user-1",
       selectedWorkflowId: "workflow-1",
+      managedRunsEnabled: true,
     }));
+  });
+
+  it("mounts the definition-scoped run deep link with the authenticated scope", () => {
+    useAuthStore.setState({
+      status: "authenticated",
+      session: null,
+      user: {
+        id: "user-1",
+        email: "user@example.com",
+        display_name: "Test User",
+      },
+      error: null,
+    });
+
+    renderWorkflows("/workflows/workflow-1/runs/run-1");
+
+    expect(screen.getByTestId("workflow-run")).toBeTruthy();
+    expect(runSurface).toHaveBeenCalledWith(expect.objectContaining({
+      authCacheScope: "user-1",
+      workflowDefinitionId: "workflow-1",
+      runId: "run-1",
+    }));
+    expect(workflowSurface).not.toHaveBeenCalled();
   });
 });
