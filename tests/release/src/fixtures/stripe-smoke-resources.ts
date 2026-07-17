@@ -361,7 +361,10 @@ export async function getTestClockStatus(
     return { status: typeof clock.status === "string" ? clock.status : "unknown" };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    if (/No such test clock|resource_missing/i.test(message)) {
+    // A gone test clock reports "No such billingclock" (internal object name),
+    // not "No such test clock" — match on the structured `resource_missing`
+    // code (appended by the shared HTTP seam) or either phrasing.
+    if (/resource_missing|No such (test clock|billingclock)/i.test(message)) {
       return { missing: true };
     }
     throw error;

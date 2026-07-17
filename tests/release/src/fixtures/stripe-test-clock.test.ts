@@ -4,6 +4,7 @@ import { test } from "node:test";
 import {
   clockNameForRun,
   createDefaultStripeTestClockTransport,
+  defaultStripeHttp,
   isLiveModeSecretKey,
   resolveTestModeSecretKey,
   stripeCleanupReplayHandlers,
@@ -379,9 +380,14 @@ test("HTTP contract: createCustomerOnClock attaches tok_visa as the default paym
 });
 
 test("HTTP contract: deleteClock/deleteCustomer swallow resource_missing (idempotent cleanup)", async () => {
+  // The message wording for a deleted test clock is "No such billingclock"
+  // (Stripe's internal object name), NOT "No such test clock" — a live run
+  // threw this from the world-close releaser after the cell's own delete. The
+  // tolerance must match Stripe's structured `resource_missing` code / the real
+  // wording, not the assumed human string.
   const missingHttp: StripeHttp = {
     async request(_k, req) {
-      if (req.method === "DELETE") throw new Error("stripeTestClockActor: No such test clock: resource_missing");
+      if (req.method === "DELETE") throw new Error("stripeTestClockActor: No such billingclock: 'clock_x' (resource_missing)");
       return {};
     },
   };
@@ -397,6 +403,27 @@ test("HTTP contract: deleteClock/deleteCustomer swallow resource_missing (idempo
     secretKey: "sk_test_x",
     customerId: "cus_gone",
   }); // must not throw
+});
+
+test("defaultStripeHttp appends Stripe's error code so idempotent-delete tolerance can key on resource_missing", async () => {
+  // The real seam: a deleted test clock returns 404 with
+  // { error: { message: "No such billingclock: ...", code: "resource_missing" } }.
+  // Assert the thrown Error carries the code so downstream `resource_missing`
+  // matching is wording-independent.
+  const savedFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify({ error: { message: "No such billingclock: 'clock_x'", code: "resource_missing" } }), {
+        status: 404,
+        headers: { "content-type": "application/json" },
+      })) as typeof fetch;
+    await assert.rejects(
+      () => defaultStripeHttp.request("sk_test_x", { method: "DELETE", path: "/test_helpers/test_clocks/clock_x" }),
+      /No such billingclock.*\(resource_missing\)/,
+    );
+  } finally {
+    globalThis.fetch = savedFetch;
+  }
 });
 
 // --- Durability of the intent→acquired handoff across RUNNER LOSS (PR6-CONTROL-002 r4).

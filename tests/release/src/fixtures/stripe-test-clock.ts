@@ -573,12 +573,15 @@ export const defaultStripeHttp: StripeHttp = {
     const response = await fetch(`${STRIPE_API_BASE}${path}`, init);
     const payload = (await response.json().catch(() => ({}))) as Record<string, unknown>;
     if (!response.ok) {
-      const message =
-        typeof (payload.error as { message?: unknown } | undefined)?.message === "string"
-          ? (payload.error as { message: string }).message
-          : `Stripe ${method} ${path} -> ${response.status}`;
-      // Never echo the request body: only Stripe's own bounded error message.
-      throw new Error(`stripeTestClockActor: ${message}`);
+      const error = payload.error as { message?: unknown; code?: unknown } | undefined;
+      const message = typeof error?.message === "string" ? error.message : `Stripe ${method} ${path} -> ${response.status}`;
+      // Append Stripe's structured error CODE when present so idempotent-delete
+      // tolerance can match on `resource_missing` regardless of the human
+      // message wording (a deleted test clock reports "No such billingclock",
+      // NOT "No such test clock" — the object's internal name differs). Never
+      // echo the request body: only Stripe's own bounded message + code.
+      const code = typeof error?.code === "string" ? ` (${error.code})` : "";
+      throw new Error(`stripeTestClockActor: ${message}${code}`);
     }
     return payload;
   },
@@ -670,7 +673,11 @@ export function createDefaultStripeTestClockTransport(http: StripeHttp = default
         await http.request(secretKey, { method: "DELETE", path: `/test_helpers/test_clocks/${testClockId}` });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        if (!/No such test clock|resource_missing/i.test(message)) {
+        // Tolerate already-deleted: match Stripe's structured `resource_missing`
+        // code (now appended by the HTTP seam) OR either human phrasing — a gone
+        // test clock reports "No such billingclock" (the object's internal name),
+        // NOT "No such test clock".
+        if (!/resource_missing|No such (test clock|billingclock)/i.test(message)) {
           throw error;
         }
       }
