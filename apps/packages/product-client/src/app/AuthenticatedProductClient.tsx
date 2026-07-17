@@ -6,6 +6,7 @@ import { MaterializationHealthPassHost } from "#product/components/workspace/rep
 import { RepoSetupModalHost } from "#product/components/workspace/repo-setup/RepoSetupModalHost"
 import { WorkspaceAvailabilityActionHost } from "#product/components/workspace/repo-setup/WorkspaceAvailabilityActionHost"
 import { AuthenticatedAppHost } from "#product/pages/AuthenticatedAppHost"
+import { CoworkThreadLaunchProvider } from "#product/providers/CoworkThreadLaunchProvider"
 
 /**
  * Internal, lazy-loaded authenticated product root.
@@ -18,13 +19,13 @@ import { AuthenticatedAppHost } from "#product/pages/AuthenticatedAppHost"
  */
 export default function AuthenticatedProductClient(): ReactElement {
   return (
-    <>
+    <CoworkThreadLaunchProvider>
       <AuthenticatedAppHost />
       <RepoSetupModalHost />
       <AddRepoFlowHost />
       <CloudRepoActionDialogHost />
       <WorkspaceAvailabilityActionHost />
       <MaterializationHealthPassHost />
-    </>
+    </CoworkThreadLaunchProvider>
   )
 }

@@ -37,7 +37,7 @@ import {
 import { HomeProjectMenu } from "#product/components/home/screen/HomeProjectMenu";
 
 interface HomeTargetPickerProps {
-  coworkAvailable: boolean;
+  desktopTargetsAvailable: boolean;
   destination: HomeNextDestination;
   repoLaunchKind: HomeNextRepoLaunchKind;
   repositories: SettingsRepositoryEntry[];
@@ -58,7 +58,7 @@ interface HomeTargetPickerProps {
 }
 
 export function HomeTargetPicker({
-  coworkAvailable,
+  desktopTargetsAvailable,
   destination,
   repoLaunchKind,
   repositories,
@@ -86,23 +86,28 @@ export function HomeTargetPicker({
   const selectedRepositoryCloudAction: CloudRepoActionState = selectedRepository
     ? cloudActionBySourceRoot[selectedRepository.sourceRoot] ?? { kind: "hidden", label: null }
     : { kind: "hidden", label: null };
-  const selectedSshTarget =
-    sshTargetOptions.find((target) => target.id === selectedSshTargetId) ?? null;
+  const effectiveRepoLaunchKind = desktopTargetsAvailable ? repoLaunchKind : "cloud";
+  const runtimeLaunchKinds: readonly HomeNextRepoLaunchKind[] = desktopTargetsAvailable
+    ? ["local", "worktree", "cloud"]
+    : ["cloud"];
+  const selectedSshTarget = desktopTargetsAvailable
+    ? sshTargetOptions.find((target) => target.id === selectedSshTargetId) ?? null
+    : null;
   const filteredSshTargetOptions = sshTargetOptions;
   const clearSearch = () => {
     setRuntimeSearchValue("");
   };
-  const runtimeLabel = repoLaunchKind === "ssh"
-    ? selectedSshTarget?.label ?? homeRepoLaunchKindLabel(repoLaunchKind)
-    : repoLaunchKind === "cloud"
+  const runtimeLabel = effectiveRepoLaunchKind === "ssh"
+    ? selectedSshTarget?.label ?? homeRepoLaunchKindLabel(effectiveRepoLaunchKind)
+    : effectiveRepoLaunchKind === "cloud"
     ? homeTargetRuntimeOptionLabel({
-      launchKind: repoLaunchKind,
+      launchKind: effectiveRepoLaunchKind,
       cloudAction: selectedRepositoryCloudAction,
     })
-    : homeRepoLaunchKindLabel(repoLaunchKind);
+    : homeRepoLaunchKindLabel(effectiveRepoLaunchKind);
   const runtimeButton = (
     <HomeTargetRowItem
-      icon={homeTargetLaunchKindIcon(repoLaunchKind, selectedSshTarget)}
+      icon={homeTargetLaunchKindIcon(effectiveRepoLaunchKind, selectedSshTarget)}
       value={destination === "cowork" ? "No repository" : runtimeLabel}
       disabled={!selectedRepository || destination === "cowork"}
       disclosure={!!selectedRepository && destination === "repository"}
@@ -125,7 +130,7 @@ export function HomeTargetPicker({
             aria-label={homeTargetProjectAriaLabel({ destination, selectedRepository })}
           />
         )}
-        coworkAvailable={coworkAvailable}
+        coworkAvailable={desktopTargetsAvailable}
         destination={destination}
         repositories={repositories}
         selectedRepository={selectedRepository}
@@ -145,8 +150,8 @@ export function HomeTargetPicker({
               className="max-h-[min(20rem,calc(100vh-1rem))]"
               bodyClassName="py-0"
             >
-              {(["local", "worktree", "cloud"] as const).map((launchKind) => {
-                const isSelected = repoLaunchKind === launchKind;
+              {runtimeLaunchKinds.map((launchKind) => {
+                const isSelected = effectiveRepoLaunchKind === launchKind;
                 const cloudConfigure =
                   launchKind === "cloud" && selectedRepositoryCloudAction.kind === "configure";
                 const cloudLoading =
@@ -177,14 +182,17 @@ export function HomeTargetPicker({
                   />
                 );
               })}
-              {sshTargetsLoading || filteredSshTargetOptions.length > 0 ? (
+              {desktopTargetsAvailable
+                && (sshTargetsLoading || filteredSshTargetOptions.length > 0) ? (
                 <div className={TARGET_PICKER_DIVIDER_CLASS} />
               ) : null}
-              {sshTargetsLoading ? (
+              {desktopTargetsAvailable && sshTargetsLoading ? (
                 <PickerEmptyRow label="Loading targets" />
-              ) : filteredSshTargetOptions.length > 0 ? (
+              ) : desktopTargetsAvailable && filteredSshTargetOptions.length > 0 ? (
                 filteredSshTargetOptions.map((target) => {
-                  const isSelected = repoLaunchKind === "ssh" && selectedSshTargetId === target.id;
+                  const isSelected =
+                    effectiveRepoLaunchKind === "ssh"
+                    && selectedSshTargetId === target.id;
                   return (
                     <TargetPickerMenuItem
                       key={`ssh:${target.id}`}
