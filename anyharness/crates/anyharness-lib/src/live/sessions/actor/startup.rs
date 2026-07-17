@@ -25,12 +25,10 @@ use crate::live::sessions::driver::native_session::{
 };
 use crate::live::sessions::driver::process::spawn_agent_process;
 use crate::live::sessions::driver::session_lifecycle::initialize_connection;
-use crate::live::sessions::driver::stderr::AgentStderrTail;
 use crate::live::sessions::driver::types::NativeSessionStartupDisposition;
 use crate::live::sessions::handle::LiveSessionHandle;
 use crate::live::sessions::model::SessionStateDurable;
 use crate::live::sessions::sink::SessionEventSink;
-use crate::live::sessions::AgentStartupExitError;
 use crate::observability::AGENT_STDERR_TRACING_TARGET;
 
 impl SessionActor {
@@ -171,7 +169,7 @@ impl SessionActor {
                     )
                     .await;
                 }
-                let error = agent_exited_during_startup_error(exit_status, &stderr_tail);
+                let error = stderr_tail.startup_exit_error(exit_status);
                 tracing::warn!(
                     target: AGENT_STDERR_TRACING_TARGET,
                     session_id = %session_id,
@@ -392,27 +390,6 @@ impl SessionActor {
     }
 }
 
-fn agent_exited_during_startup_error(
-    exit_status: std::io::Result<std::process::ExitStatus>,
-    stderr_tail: &AgentStderrTail,
-) -> AgentStartupExitError {
-    let status = match exit_status {
-        Ok(status) => status.to_string(),
-        Err(error) => format!("wait failed: {error}"),
-    };
-    let tail = stderr_tail.snapshot();
-    let telemetry_safe_detail = format!("agent process exited during ACP startup ({status})");
-    let caller_detail = if tail.is_empty() {
-        telemetry_safe_detail.clone()
-    } else {
-        format!(
-            "agent process exited during ACP startup ({status}). Agent stderr:\n{}",
-            tail.join("\n")
-        )
-    };
-    AgentStartupExitError::new(telemetry_safe_detail, caller_detail)
-}
-
 pub(in crate::live::sessions::actor) fn persist_session_action_capabilities(
     store: &dyn SessionStateDurable,
     session_id: &str,
@@ -539,36 +516,6 @@ fn loops_capability_from_init_meta(meta: Option<&acp::schema::Meta>) -> (bool, b
 #[cfg(all(test, unix))]
 mod tests {
     use super::*;
-    use std::os::unix::process::ExitStatusExt;
-
-    #[test]
-    fn agent_exit_error_reports_status_without_stderr() {
-        let tail = AgentStderrTail::default();
-        let exit_status = std::process::ExitStatus::from_raw(0x100); // exit code 1
-
-        let error = agent_exited_during_startup_error(Ok(exit_status), &tail);
-        let message = error.to_string();
-        assert!(message.contains("exited during ACP startup"));
-        assert!(!message.contains("Agent stderr"));
-        assert_eq!(message, error.caller_detail());
-    }
-
-    #[test]
-    fn agent_exit_error_includes_stderr_tail() {
-        let tail = AgentStderrTail::default();
-        tail.push("Failed to locate codex-acp binary");
-        let exit_status = std::process::ExitStatus::from_raw(0x100);
-
-        let error = agent_exited_during_startup_error(Ok(exit_status), &tail);
-        assert!(error
-            .caller_detail()
-            .contains("Failed to locate codex-acp binary"));
-        assert!(!error
-            .to_string()
-            .contains("Failed to locate codex-acp binary"));
-        assert!(error.caller_detail().contains("Agent stderr:"));
-        assert!(!format!("{error:?}").contains("Failed to locate codex-acp binary"));
-    }
 
     fn init_meta(value: serde_json::Value) -> acp::schema::Meta {
         let serde_json::Value::Object(map) = value else {

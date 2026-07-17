@@ -3,6 +3,7 @@ use std::sync::{Arc, Mutex};
 
 use tokio::process::ChildStderr;
 
+use crate::live::sessions::AgentStartupExitError;
 use crate::observability::AGENT_STDERR_TRACING_TARGET;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -32,8 +33,29 @@ impl AgentStderrTail {
         lines.push_back(line.to_string());
     }
 
-    pub(in crate::live::sessions) fn snapshot(&self) -> Vec<String> {
+    fn snapshot(&self) -> Vec<String> {
         self.lock_lines().iter().cloned().collect()
+    }
+
+    pub(in crate::live::sessions) fn startup_exit_error(
+        &self,
+        exit_status: std::io::Result<std::process::ExitStatus>,
+    ) -> AgentStartupExitError {
+        let status = match exit_status {
+            Ok(status) => status.to_string(),
+            Err(error) => format!("wait failed: {error}"),
+        };
+        let tail = self.snapshot();
+        let telemetry_safe_detail = format!("agent process exited during ACP startup ({status})");
+        let caller_detail = if tail.is_empty() {
+            telemetry_safe_detail.clone()
+        } else {
+            format!(
+                "agent process exited during ACP startup ({status}). Agent stderr:\n{}",
+                tail.join("\n")
+            )
+        };
+        AgentStartupExitError::new(telemetry_safe_detail, caller_detail)
     }
 
     fn lock_lines(&self) -> std::sync::MutexGuard<'_, VecDeque<String>> {
@@ -150,6 +172,8 @@ pub(in crate::live::sessions) fn spawn_agent_stderr_logger(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(unix)]
+    use std::os::unix::process::ExitStatusExt;
 
     #[test]
     fn sanitize_agent_stderr_line_strips_ansi_sequences() {
@@ -202,5 +226,36 @@ mod tests {
         assert_eq!(snapshot.len(), AgentStderrTail::MAX_LINES);
         assert_eq!(snapshot.first(), Some(&format!("line {evicted}")));
         assert_eq!(snapshot.last(), Some(&format!("line {}", total - 1)));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn startup_exit_error_reports_status_without_stderr() {
+        let tail = AgentStderrTail::default();
+        let exit_status = std::process::ExitStatus::from_raw(0x100); // exit code 1
+
+        let error = tail.startup_exit_error(Ok(exit_status));
+        let message = error.to_string();
+        assert!(message.contains("exited during ACP startup"));
+        assert!(!message.contains("Agent stderr"));
+        assert_eq!(message, error.caller_detail());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn startup_exit_error_includes_stderr_tail_only_for_caller() {
+        let tail = AgentStderrTail::default();
+        tail.push("Failed to locate codex-acp binary");
+        let exit_status = std::process::ExitStatus::from_raw(0x100);
+
+        let error = tail.startup_exit_error(Ok(exit_status));
+        assert!(error
+            .caller_detail()
+            .contains("Failed to locate codex-acp binary"));
+        assert!(!error
+            .to_string()
+            .contains("Failed to locate codex-acp binary"));
+        assert!(error.caller_detail().contains("Agent stderr:"));
+        assert!(!format!("{error:?}").contains("Failed to locate codex-acp binary"));
     }
 }
