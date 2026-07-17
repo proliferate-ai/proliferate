@@ -4,8 +4,8 @@ import type {
   StartCodeReviewRequest,
   StartPlanReviewRequest,
 } from "@anyharness/sdk";
-import { REVIEW_DEFAULT_MODE_ID_BY_AGENT_KIND } from "#product/config/review-session-mode-defaults";
-import { listConfiguredSessionControlValues } from "#product/lib/domain/chat/session-controls/session-mode-control";
+import type { DesktopAgentLaunchAgent } from "#product/lib/domain/agents/cloud-launch-catalog";
+import { resolveUnattendedModeId } from "#product/lib/domain/agents/unattended-mode";
 import {
   findReviewPersonaTemplateForReviewer,
   isBuiltInReviewPersonaId,
@@ -51,7 +51,7 @@ export type StoredReviewDefaultsByKind = Record<ReviewKind, StoredReviewKindDefa
 export interface ReviewSessionDefaults {
   agentKind: string;
   modelId: string | null;
-  modeId: string | null;
+  launchAgents: readonly DesktopAgentLaunchAgent[];
 }
 
 export function createStoredReviewKindDefaults(): StoredReviewKindDefaults {
@@ -88,7 +88,12 @@ export function createReviewSetupReviewerDraft(args: {
     modelId: args.sessionDefaults.modelId ?? "",
     modeId: resolveReviewExecutionModeIdForAgent(
       args.sessionDefaults.agentKind,
-      args.sessionDefaults.modeId,
+      null,
+      resolveReviewerUnattendedModeId(
+        args.sessionDefaults,
+        args.sessionDefaults.agentKind,
+        args.sessionDefaults.modelId,
+      ),
     ),
   };
 }
@@ -132,7 +137,9 @@ export function createReviewSetupDraft(args: {
   );
   const defaultAgentKind = stored?.agentKind || args.sessionDefaults.agentKind;
   const defaultModelId = stored?.modelId || args.sessionDefaults.modelId || "";
-  const defaultModeId = stored?.modeId || args.sessionDefaults.modeId || null;
+  const explicitDefaultModeId = stored?.reviewers.mode === "custom"
+    ? null
+    : stored?.modeId || null;
 
   return {
     kind: args.kind,
@@ -143,15 +150,21 @@ export function createReviewSetupDraft(args: {
       .map((reviewer) => {
         const template = findReviewPersonaTemplateForReviewer(templates, reviewer.id);
         const reviewerAgentKind = reviewer.agentKind || defaultAgentKind;
+        const reviewerModelId = reviewer.modelId || defaultModelId;
         return {
           ...reviewer,
           label: template?.label ?? reviewer.label,
           prompt: template?.prompt ?? reviewer.prompt,
           agentKind: reviewerAgentKind,
-          modelId: reviewer.modelId || defaultModelId,
+          modelId: reviewerModelId,
           modeId: resolveReviewExecutionModeIdForAgent(
             reviewerAgentKind,
-            reviewer.modeId || defaultModeId,
+            reviewer.modeId || explicitDefaultModeId,
+            resolveReviewerUnattendedModeId(
+              args.sessionDefaults,
+              reviewerAgentKind,
+              reviewerModelId,
+            ),
           ),
         };
       }),
@@ -240,16 +253,27 @@ function resolveStoredReviewers(
 
 export function resolveReviewExecutionModeIdForAgent(
   agentKind: string,
-  preferredModeId: string | null | undefined,
+  explicitModeId: string | null | undefined,
+  unattendedModeId: string | null | undefined,
 ): string {
-  const values = listConfiguredSessionControlValues(agentKind, "mode");
-  const configuredDefault = REVIEW_DEFAULT_MODE_ID_BY_AGENT_KIND[agentKind];
-  return values.find((value) => value.value === configuredDefault)?.value
-    ?? values.find((value) => value.value === preferredModeId)?.value
-    ?? values.find((value) => value.value !== "plan")?.value
-    ?? values.find((value) => value.isDefault)?.value
-    ?? values[0]?.value
-    ?? "";
+  if (!agentKind.trim()) {
+    return "";
+  }
+  return explicitModeId?.trim()
+    || unattendedModeId?.trim()
+    || "";
+}
+
+function resolveReviewerUnattendedModeId(
+  sessionDefaults: ReviewSessionDefaults,
+  agentKind: string,
+  modelId: string | null | undefined,
+): string | undefined {
+  const normalizedAgentKind = agentKind.trim();
+  const agent = sessionDefaults.launchAgents.find(
+    (candidate) => candidate.kind === normalizedAgentKind,
+  );
+  return resolveUnattendedModeId({ agent, modelId });
 }
 
 export function buildReviewRequest(
@@ -277,7 +301,7 @@ export function buildReviewRequest(
     if (!label || !prompt) {
       return { request: null, error: "Every reviewer needs a label and prompt." };
     }
-    if (!agentKind || !modelId || !modeId) {
+    if (!agentKind || !modelId) {
       return {
         request: null,
         error: "Every reviewer needs a resolved agent and model.",
@@ -289,7 +313,7 @@ export function buildReviewRequest(
       prompt,
       agentKind,
       modelId,
-      modeId,
+      ...(modeId ? { modeId } : {}),
     });
   }
 

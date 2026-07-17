@@ -3,7 +3,6 @@ import type {
   CreateCoworkThreadResponse,
   Session,
 } from "@anyharness/sdk";
-import { resolveCoworkDefaultSessionModeId } from "#product/lib/domain/cowork/session-mode-defaults";
 import { UNTITLED_COWORK_THREAD_TITLE } from "#product/lib/domain/cowork/threads";
 import { workspaceFileTreeStateKey } from "#product/lib/domain/workspaces/cloud/collections";
 import {
@@ -16,6 +15,7 @@ export interface CreateCoworkThreadWorkflowInput {
   agentKind: string;
   modelId: string;
   modeId?: string | null;
+  unattendedModeId?: string | null;
   launchControlValues?: Record<string, string>;
   draftText?: string | null;
   sourceWorkspaceId?: string | null;
@@ -106,7 +106,7 @@ export async function createCoworkThreadWorkflow(
   deps: CreateCoworkThreadWorkflowDeps,
 ): Promise<CreateCoworkThreadWorkflowResult | null> {
   const totalStartedAt = deps.startLatencyTimer();
-  const modeId = input.modeId?.trim() || resolveCoworkDefaultSessionModeId(input.agentKind);
+  const modeId = input.modeId?.trim() || input.unattendedModeId?.trim() || undefined;
   const pendingRequest: PendingCoworkRequestInput = {
     agentKind: input.agentKind,
     modelId: input.modelId,

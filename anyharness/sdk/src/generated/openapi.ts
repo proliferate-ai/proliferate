@@ -2087,6 +2087,13 @@ export interface components {
             displayName: string;
             kind: string;
             models: components["schemas"]["AgentLaunchModelOption"][];
+            /**
+             * @description Curated unattended mode from the selected runtime's active catalog.
+             *     This field intentionally serializes as `null` when no mode is vetted,
+             *     allowing clients to distinguish that declaration from an older runtime
+             *     that omitted the field entirely.
+             */
+            unattendedModeId?: string | null;
         };
         AgentLaunchOptionsResponse: {
             agents: components["schemas"]["AgentLaunchOption"][];

@@ -371,6 +371,7 @@ pub(super) fn launch_options_response(
                 kind: agent.kind,
                 display_name: agent.display_name,
                 default_model_id: agent.default_model_id,
+                unattended_mode_id: agent.unattended_mode_id,
                 models: agent
                     .models
                     .into_iter()

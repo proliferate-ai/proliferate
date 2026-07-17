@@ -170,12 +170,11 @@ export function useSessionCreationActions() {
     }
     const workspaceSurface = getWorkspaceSurface(workspaceId);
     const resolvedModeId = resolveSessionCreationModeId({
-      explicitModeId:
-        options.modeId
+      explicitModeId: options.modeId
         ?? options.launchControlValues?.mode
         ?? options.launchControlValues?.access_mode,
       workspaceSurface,
-      agentKind: options.agentKind,
+      unattendedModeId: options.unattendedModeId,
       preferredModeId,
     });
     const pendingSessionId = options.clientSessionId ?? createPendingSessionId(options.agentKind);
@@ -409,6 +408,7 @@ export function useSessionCreationActions() {
       agentKind: options.agentKind,
       modelId: options.modelId,
       modeId: options.modeId,
+      unattendedModeId: options.unattendedModeId,
       launchControlValues: options.launchControlValues,
       workspaceId: options.workspaceId,
       latencyFlowId: options.latencyFlowId,

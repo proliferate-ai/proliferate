@@ -46,6 +46,9 @@ pub struct ResolvedLaunchAgentOption {
     pub kind: String,
     pub display_name: String,
     pub default_model_id: Option<String>,
+    /// Curated unattended mode from the active catalog. `None` is an
+    /// authoritative declaration that this agent has no vetted default.
+    pub unattended_mode_id: Option<String>,
     pub models: Vec<ResolvedLaunchModelOption>,
 }
 

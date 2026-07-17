@@ -1,7 +1,9 @@
 import type { NormalizedSessionControl } from "@anyharness/sdk";
-import { PLAN_HANDOFF_DEFAULT_MODE_ID_BY_AGENT_KIND } from "#product/config/plan-handoff-session-mode-defaults";
 import type { ConfiguredSessionControlValue } from "#product/lib/domain/chat/session-controls/presentation";
-import { listConfiguredSessionControlValues } from "#product/lib/domain/chat/session-controls/session-mode-control";
+import {
+  inferSessionControlPresentation,
+  listConfiguredSessionControlValues,
+} from "#product/lib/domain/chat/session-controls/session-mode-control";
 
 export interface PlanHandoffPrePromptConfigChange {
   rawConfigId: string;
@@ -13,23 +15,39 @@ const DEFAULT_COLLABORATION_MODE_VALUE = "default";
 
 export function listPlanHandoffModeOptions(
   agentKind: string | null | undefined,
+  unattendedModeId?: string | null,
 ): ConfiguredSessionControlValue[] {
-  return listConfiguredSessionControlValues(agentKind, "mode").filter(
+  const options = listConfiguredSessionControlValues(agentKind, "mode").filter(
     (value) => value.value !== PLAN_MODE_VALUE,
   );
+  const unattended = unattendedModeId?.trim() || undefined;
+  if (!unattended || options.some((option) => option.value === unattended)) {
+    return options;
+  }
+  const label = humanizeModeId(unattended);
+  return [
+    ...options,
+    {
+      value: unattended,
+      label,
+      shortLabel: label,
+      description: null,
+      icon: inferSessionControlPresentation(unattended).icon,
+    },
+  ];
 }
 
 export function resolvePlanHandoffModeId(
   agentKind: string | null | undefined,
+  unattendedModeId: string | null | undefined,
 ): string | undefined {
   const trimmedAgentKind = agentKind?.trim() ?? "";
   if (!trimmedAgentKind) {
     return undefined;
   }
 
-  const options = listPlanHandoffModeOptions(trimmedAgentKind);
-  const configuredDefault = PLAN_HANDOFF_DEFAULT_MODE_ID_BY_AGENT_KIND[trimmedAgentKind];
-  return resolvePlanHandoffModeIdFromOptions(configuredDefault, options);
+  const unattended = unattendedModeId?.trim() || undefined;
+  return unattended === PLAN_MODE_VALUE ? undefined : unattended;
 }
 
 export function resolvePlanHandoffModeIdFromOptions(
@@ -41,7 +59,17 @@ export function resolvePlanHandoffModeIdFromOptions(
     return trimmedDefault;
   }
 
-  return options[0]?.value;
+  return undefined;
+}
+
+function humanizeModeId(value: string): string {
+  return value
+    .replace(/[-_]+/g, " ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .split(" ")
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
 }
 
 export function resolvePlanHandoffPrePromptConfigChanges(

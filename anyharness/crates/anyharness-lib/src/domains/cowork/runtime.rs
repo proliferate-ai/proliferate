@@ -1375,8 +1375,12 @@ impl CoworkRuntime {
     ) -> Result<SessionRecord, CreateAndStartSessionError> {
         let resolved_agent_kind =
             normalize_optional_ref(agent_kind).unwrap_or(parent_thread.agent_kind.as_str());
+        // Cowork owns the access policy for delegated coding sessions. An
+        // explicit caller choice wins; otherwise use the active catalog's
+        // vetted unattended mode and omit the mode when none is declared.
         let resolved_mode_id = normalize_optional_ref(mode_id)
-            .or_else(|| default_cowork_coding_mode_for_agent(resolved_agent_kind));
+            .map(str::to_string)
+            .or_else(|| self.session_service.unattended_mode_id(resolved_agent_kind));
 
         // Same pre-durable-create checkout admission as the interactive create
         // path: a delegated coding session against a deleted managed checkout
@@ -1394,7 +1398,7 @@ impl CoworkRuntime {
             resolved_agent_kind,
             None,
             normalize_optional_ref(model_id).or(parent_thread.requested_model_id.as_deref()),
-            resolved_mode_id,
+            resolved_mode_id.as_deref(),
             None,
             Vec::new(),
             None,
@@ -1600,17 +1604,6 @@ fn trim_snippet(text: &str, max_chars: usize) -> String {
         format!("{trimmed}...")
     } else {
         trimmed
-    }
-}
-
-pub(crate) fn default_cowork_coding_mode_for_agent(agent_kind: &str) -> Option<&'static str> {
-    match agent_kind.trim().to_ascii_lowercase().as_str() {
-        "claude" => Some("bypassPermissions"),
-        "codex" => Some("full-access"),
-        // Grok advertises no ACP modes (probe: modes=null) and its catalog has
-        // no `mode` control, so a non-empty mode_id is rejected at
-        // create-session. Send none — Grok runs with its own default.
-        _ => None,
     }
 }
 
@@ -1835,22 +1828,9 @@ fn git_branch_exists(repo_root_path: &str, branch_name: &str) -> bool {
 mod tests {
     use super::{
         coding_workspace_label, coding_workspace_name_from_branch, coding_workspace_slug,
-        cowork_transcript_search_text, default_cowork_coding_mode_for_agent,
-        workspace_name_with_suffix,
+        cowork_transcript_search_text, workspace_name_with_suffix,
     };
     use crate::domains::sessions::model::SessionEventRecord;
-
-    #[test]
-    fn cowork_sends_no_mode_for_grok() {
-        // Grok has no catalog `mode` control (ACP modes=null); a non-empty
-        // default would be rejected at create-session, so cowork must send none.
-        assert_eq!(default_cowork_coding_mode_for_agent("grok"), None);
-        // Sanity: agents with a mode control still get their default.
-        assert_eq!(
-            default_cowork_coding_mode_for_agent("claude"),
-            Some("bypassPermissions")
-        );
-    }
 
     #[test]
     fn normalizes_coding_workspace_names() {

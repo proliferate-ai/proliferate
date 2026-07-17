@@ -48,6 +48,7 @@ export function useHomeNextState({
     destination: effectiveDestination,
     modelSelection: model.effectiveModelSelection,
     modeOverrideId,
+    repoLaunchKind: effectiveRepoLaunchKind,
   });
   const computeTargets = useComputeTargetOptions({
     enabled: desktopTargetsAvailable && effectiveDestination === "repository",
