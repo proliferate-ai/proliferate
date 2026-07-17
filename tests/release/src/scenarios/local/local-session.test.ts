@@ -147,3 +147,63 @@ test("pre-send snapshot is scoped to the concrete local workspace", async () => 
 
   assert.deepEqual(await snapshotLocalWorkspaceSessionIds(world, REPO_PATH), new Set(["session-local"]));
 });
+
+test("pre-send snapshot preserves a successful empty workspace state", async () => {
+  const world = fakeWorld(
+    [{ id: RAW_WORKSPACE_ID, kind: "local", path: REPO_PATH }],
+    [],
+  );
+
+  assert.deepEqual(await snapshotLocalWorkspaceSessionIds(world, REPO_PATH), new Set());
+});
+
+test("pre-send snapshot failure cannot expose the stale session as new", async () => {
+  let listSessionsCalls = 0;
+  let resolvedSession: string | undefined;
+  const world = {
+    runtime: {
+      client: {
+        listWorkspaces: async () => [
+          { id: RAW_WORKSPACE_ID, kind: "local", path: REPO_PATH },
+        ],
+        listSessions: async () => {
+          listSessionsCalls += 1;
+          if (listSessionsCalls === 1) {
+            throw new Error("snapshot query failed");
+          }
+          return [{ id: "stale-session", workspaceId: RAW_WORKSPACE_ID }];
+        },
+      },
+    },
+  } as unknown as ReadyLocalWorld;
+
+  await assert.rejects(
+    async () => {
+      const existingSessionIds = await snapshotLocalWorkspaceSessionIds(world, REPO_PATH);
+      resolvedSession = await resolveLocalWorkspaceSessionAfter(world, REPO_PATH, 2_000, {
+        existingSessionIds,
+        activeSessionAlias: null,
+      });
+    },
+    /snapshot query failed/,
+  );
+  assert.equal(resolvedSession, undefined);
+  assert.equal(listSessionsCalls, 1, "post-send resolution must not run after a failed snapshot");
+});
+
+test("pre-send snapshot propagates a workspace query failure", async () => {
+  const world = {
+    runtime: {
+      client: {
+        listWorkspaces: async () => {
+          throw new Error("workspace snapshot failed");
+        },
+      },
+    },
+  } as unknown as ReadyLocalWorld;
+
+  await assert.rejects(
+    () => snapshotLocalWorkspaceSessionIds(world, REPO_PATH),
+    /workspace snapshot failed/,
+  );
+});

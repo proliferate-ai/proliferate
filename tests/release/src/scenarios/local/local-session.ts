@@ -59,11 +59,14 @@ export async function snapshotLocalWorkspaceSessionIds(
   world: ReadyLocalWorld,
   repoPath: string,
 ): Promise<ReadonlySet<string>> {
-  const workspaceId = await resolveLocalWorkspaceIdOnce(world, repoPath).catch(() => null);
+  // This is a one-time correctness boundary, not a poll. A query failure must
+  // abort the send path; treating it like a legitimately empty snapshot would
+  // let the next poll misclassify a pre-existing session as newly created.
+  const workspaceId = await resolveLocalWorkspaceIdOnce(world, repoPath);
   if (!workspaceId) {
     return new Set<string>();
   }
-  const sessions = await world.runtime.client.listSessions().catch(() => []);
+  const sessions = await world.runtime.client.listSessions();
   return new Set(sessions.filter((session) => session.workspaceId === workspaceId).map((session) => session.id));
 }
 
@@ -131,7 +134,7 @@ export async function resolveLocalWorkspaceIdOnce(
   world: ReadyLocalWorld,
   repoPath: string,
 ): Promise<string | null> {
-  const workspaces = await world.runtime.client.listWorkspaces().catch(() => []);
+  const workspaces = await world.runtime.client.listWorkspaces();
   const local = workspaces.find((workspace) => workspace.kind === "local" && workspace.path === repoPath);
   return local?.id ?? null;
 }
