@@ -208,8 +208,16 @@ def _run_validate_config(tmp_path: Path, env: dict[str, str]) -> subprocess.Comp
     body = str(_deploy_steps()["Validate server deploy config"]["run"])
     script = tmp_path / "validate.sh"
     script.write_text(body)
+    github_env = tmp_path / "github-env"
+    github_output = tmp_path / "github-output"
     base_env = {
-        "AWS_DEPLOY_ROLE_ARN": "role",
+        "PATH": os.environ.get("PATH", ""),
+        "AWS_DEPLOY_ROLE_ARN": (
+            "arn:aws:iam::157466816238:role/proliferate-staging-github-actions-deploy"
+        ),
+        "DEPLOY_ENVIRONMENT": "staging",
+        "GITHUB_ENV": str(github_env),
+        "GITHUB_OUTPUT": str(github_output),
         "ECS_CLUSTER": "cluster",
         "ECS_SERVER_SERVICE": "server",
         "API_URL": "https://api",
@@ -231,7 +239,100 @@ def _run_validate_config(tmp_path: Path, env: dict[str, str]) -> subprocess.Comp
         capture_output=True,
         text=True,
         env=base_env,
+        cwd=REPO_ROOT,
     )
+
+
+@pytest.mark.parametrize(
+    (
+        "environment",
+        "role_name",
+        "expected_execution_role_name",
+        "expected_secret_name",
+        "expected_background_secret_name",
+    ),
+    [
+        (
+            "staging",
+            "proliferate-staging-github-actions-deploy",
+            "proliferate-staging-ecs-execution",
+            "proliferate/staging/server-app",
+            "proliferate/staging/background/redbeat-redis-url",
+        ),
+        (
+            "Production",
+            "proliferate-prod-github-actions-deploy",
+            "proliferate-prod-ecs-execution",
+            "proliferate/prod/server-app",
+            "proliferate/production/background/redbeat-redis-url",
+        ),
+        (
+            "production",
+            "proliferate-prod-github-actions-deploy",
+            "proliferate-prod-ecs-execution",
+            "proliferate/prod/server-app",
+            "proliferate/production/background/redbeat-redis-url",
+        ),
+    ],
+)
+def test_validate_config_exports_checked_in_redis_owner(
+    environment: str,
+    role_name: str,
+    expected_execution_role_name: str,
+    expected_secret_name: str,
+    expected_background_secret_name: str,
+    tmp_path: Path,
+) -> None:
+    result = _run_validate_config(
+        tmp_path,
+        {
+            "DEPLOY_ENVIRONMENT": environment,
+            "AWS_DEPLOY_ROLE_ARN": f"arn:aws:iam::157466816238:role/{role_name}",
+        },
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert (tmp_path / "github-env").read_text() == (
+        "AWS_REGION=us-east-1\n"
+        "EXPECTED_AWS_ACCOUNT_ID=157466816238\n"
+        f"EXPECTED_ECS_EXECUTION_ROLE_NAME={expected_execution_role_name}\n"
+        "EXPECTED_BACKGROUND_REDIS_SERVICE=secretsmanager\n"
+        f"EXPECTED_BACKGROUND_REDIS_NAME={expected_background_secret_name}\n"
+        f"REDBEAT_REDIS_SECRET_NAME={expected_secret_name}\n"
+    )
+    assert (tmp_path / "github-output").read_text() == "aws_region=us-east-1\n"
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"DEPLOY_ENVIRONMENT": "development"},
+        {
+            "AWS_DEPLOY_ROLE_ARN": (
+                "arn:aws:iam::111122223333:role/proliferate-staging-github-actions-deploy"
+            )
+        },
+        {
+            "DEPLOY_ENVIRONMENT": "production",
+            "AWS_DEPLOY_ROLE_ARN": (
+                "arn:aws:iam::157466816238:role/proliferate-staging-github-actions-deploy"
+            ),
+        },
+        {"AWS_DEPLOY_ROLE_ARN": "not-an-arn"},
+    ],
+)
+def test_validate_config_rejects_unbound_hosted_identity(
+    overrides: dict[str, str], tmp_path: Path
+) -> None:
+    result = _run_validate_config(tmp_path, overrides)
+
+    assert result.returncode != 0
+    assert "REDBEAT_REDIS_SECRET_NAME=" not in (
+        (tmp_path / "github-env").read_text() if (tmp_path / "github-env").exists() else ""
+    )
+    combined = result.stdout + result.stderr
+    for value in overrides.values():
+        assert value not in combined
 
 
 def test_validate_config_rejects_partial_background_plane(tmp_path: Path) -> None:
@@ -413,7 +514,13 @@ def _run_candidate_proof(
         "CANDIDATE_PROOF_TIMEOUT_SECONDS": timeout_seconds,
         "CANDIDATE_PROOF_POLL_SECONDS": "1",
     }
-    return subprocess.run(["bash", str(script)], capture_output=True, text=True, env=env)
+    return subprocess.run(
+        ["bash", str(script)],
+        capture_output=True,
+        text=True,
+        env=env,
+        cwd=tmp_path,
+    )
 
 
 @_requires_jq

@@ -92,6 +92,18 @@ jobs:
       - name: Terraform test (background plane fail-closed)
         run: terraform -chdir=server/infra test
 
+      # The live hosted identities intentionally do not share state with the
+      # bootstrap root above. Validate and test the child IAM ownership root
+      # independently; no credentials, backend, plan, or apply are used here.
+      - name: Terraform init (hosted Redis, no backend)
+        run: terraform -chdir=server/infra/hosted-redis init -backend=false -input=false
+
+      - name: Terraform validate (hosted Redis)
+        run: terraform -chdir=server/infra/hosted-redis validate
+
+      - name: Terraform test (hosted Redis least privilege)
+        run: terraform -chdir=server/infra/hosted-redis test
+
   ci-cd-config:
     name: CI/CD config checks
     runs-on: ubuntu-latest
