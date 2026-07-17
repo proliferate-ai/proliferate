@@ -1291,6 +1291,11 @@ qualification-selfhost:
 # directly; this target does not read or expect the local file there. AWS
 # credentials themselves stay ambient (the `aws` CLI), never a manifest var.
 QUALIFICATION_MANAGED_CLOUD_BASE_DIR ?= $(CURDIR)/tests/release/.output/managed-cloud-world
+# Managed-cloud scenario selection. Defaults to CLOUD-PROVISION-1 alone so
+# today's behaviour is byte-identical; override to add the fixture smoke, e.g.
+# CLOUD_SCENARIOS="CLOUD-PROVISION-1,MANAGED-CLOUD-FIXTURE-SMOKE-1".
+CLOUD_SCENARIOS ?= CLOUD-PROVISION-1
+
 qualification-managed-cloud:
 	@test -n "$(PROFILE)" || { \
 		echo "PROFILE=<unique-name> is required, e.g. make qualification-managed-cloud PROFILE=$$(whoami)-1 BEHAVIOR=diagnostic"; \
@@ -1350,7 +1355,7 @@ qualification-managed-cloud:
 		--lane cloud \
 		--desktop web \
 		--agents claude \
-		--scenarios CLOUD-PROVISION-1 \
+		--scenarios "$(CLOUD_SCENARIOS)" \
 		--candidate-build-map "$$candidate_map" \
 		--run-id "$$run_id" --shard-id "$$shard_id" \
 		--output-dir "$$run_dir/evidence"

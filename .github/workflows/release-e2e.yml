@@ -900,7 +900,7 @@ jobs:
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build the six exact candidates and run CLOUD-PROVISION-1 (strict)
+      - name: Build the six exact candidates and run CLOUD-PROVISION-1 + MANAGED-CLOUD-FIXTURE-SMOKE-1 (strict)
         env:
           # Mapped directly from the protected `Qualification` environment,
           # same LiteLLM inputs as local-world-smoke-1 plus the cloud-only
@@ -918,6 +918,10 @@ jobs:
           RELEASE_E2E_CLOUD_GITHUB_APP_INSTALLATION_ID: ${{ vars.RELEASE_E2E_CLOUD_GITHUB_APP_INSTALLATION_ID }}
           RELEASE_E2E_CLOUD_GITHUB_APP_PRIVATE_KEY: ${{ secrets.RELEASE_E2E_CLOUD_GITHUB_APP_PRIVATE_KEY }}
           RELEASE_E2E_CLOUD_GITHUB_APP_CLIENT_SECRET: ${{ secrets.RELEASE_E2E_CLOUD_GITHUB_APP_CLIENT_SECRET }}
+          # MANAGED-CLOUD-FIXTURE-SMOKE-1: the Stripe TEST-mode key the fixture
+          # smoke runs one bounded real test-mode op against (same secret the
+          # Tier-2 billing job maps). A live key fails the smoke closed.
+          STRIPE_TEST_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
           # MCW-004: optional override of the SSM parameter NAME holding the
           # durable D2 bot refresh-token seed (not a credential itself — the
           # value is read/written via the ambient AWS creds below). Empty is
@@ -935,7 +939,8 @@ jobs:
           set -euo pipefail
           make qualification-managed-cloud \
             PROFILE="ci-${{ github.run_id }}-${{ github.run_attempt }}" \
-            BEHAVIOR=strict
+            BEHAVIOR=strict \
+            CLOUD_SCENARIOS="CLOUD-PROVISION-1,MANAGED-CLOUD-FIXTURE-SMOKE-1"
 
       - name: Upload V4 report and bounded diagnostic logs
         if: always()
