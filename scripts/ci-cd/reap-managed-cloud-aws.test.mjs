@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -93,37 +94,64 @@ function fakeAws(initialStates, options = {}) {
     }
     if (command === "route53 list-resource-record-sets") {
       if (options.failDnsDiscovery) throw new Error("Route53 unavailable");
-      const start = args[args.indexOf("--start-record-name") + 1];
-      const tokenIndex = args.indexOf("--starting-token");
+      assert.ok(args.includes("--no-paginate"));
+      assert.equal(args.includes("--page-size"), false);
+      assert.equal(args.includes("--starting-token"), false);
+      const request = JSON.parse(args[args.indexOf("--cli-input-json") + 1]);
       const candidates = [...states.values()].flatMap((entry) => entry.dnsRecords);
       if (options.malformedDnsPage) {
-        return { stdout: JSON.stringify({ ResourceRecordSets: [], NextToken: 42 }), stderr: "" };
+        return {
+          stdout: JSON.stringify({
+            ResourceRecordSets: [],
+            IsTruncated: true,
+            NextRecordName: 42,
+            NextRecordType: "A",
+          }),
+          stderr: "",
+        };
       }
       if (options.nonProgressDns) {
         return {
           stdout: JSON.stringify({
             ResourceRecordSets: [],
-            NextToken: "repeated-route53-token",
+            IsTruncated: true,
+            NextRecordName: request.StartRecordName,
+            NextRecordType: request.StartRecordType ?? "A",
+            ...(request.StartRecordIdentifier
+              ? { NextRecordIdentifier: request.StartRecordIdentifier }
+              : {}),
           }),
           stderr: "",
         };
       }
-      if (options.paginateDns && candidates.length > 0 && tokenIndex === -1) {
+      const start = request.StartRecordName.replace(/\.$/, "");
+      const lowerBoundSuffix = `-0000.qualification.proliferate.com`;
+      const prefix = start.endsWith(lowerBoundSuffix)
+        ? `${start.slice(0, -lowerBoundSuffix.length)}-`
+        : null;
+      const matching = candidates.filter((record) => {
+        const name = record.Name.replace(/\.$/, "");
+        if (prefix !== null) return name.startsWith(prefix);
+        return name === start;
+      });
+      if (options.paginateDns && matching.length > 0 && request.StartRecordType === undefined) {
         return {
           stdout: JSON.stringify({
             ResourceRecordSets: [],
-            NextToken: "route53-page-2",
+            IsTruncated: true,
+            NextRecordName: matching[0].Name,
+            NextRecordType: matching[0].Type,
+            ...(options.paginateDnsIdentifier
+              ? { NextRecordIdentifier: "weighted-1" }
+              : {}),
           }),
           stderr: "",
         };
       }
       return {
         stdout: JSON.stringify({
-          ResourceRecordSets: candidates.filter((record) => {
-            const normalized = record.Name.replace(/\.$/, "");
-            const prefix = start.replace(`.${ZONE === "Z123ABC" ? "qualification.proliferate.com" : ""}`, "");
-            return normalized.startsWith(prefix.replace(/\.$/, ""));
-          }),
+          ResourceRecordSets: matching,
+          IsTruncated: false,
         }),
         stderr: "",
       };
@@ -244,7 +272,52 @@ test("requires cleanup revision custody and preserves it in a top-level failed r
     },
   });
   assert.equal(result.status, 2);
-  assert.equal(JSON.parse(result.stdout).cleanup_sha, CLEANUP_SHA);
+  const receipt = JSON.parse(result.stdout);
+  assert.equal(receipt.workflow_run_id, WORKFLOW_RUN_ID);
+  assert.equal(receipt.workflow_run_attempt, Number(WORKFLOW_ATTEMPT));
+  assert.equal(receipt.cleanup_sha, CLEANUP_SHA);
+  assert.equal(receipt.status, "failed");
+  assert.match(receipt.reason, /AWS region is malformed/);
+});
+
+test("the command preserves structured per-run evidence when one AWS category fails", (t) => {
+  const fakeBin = mkdtempSync(path.join(tmpdir(), "managed-cloud-aws-"));
+  t.after(() => rmSync(fakeBin, { recursive: true, force: true }));
+  const aws = path.join(fakeBin, "aws");
+  writeFileSync(aws, `#!/bin/sh
+case "$1 $2" in
+  "ec2 describe-instances") printf '{"Reservations":[]}' ;;
+  "ec2 describe-security-groups") printf '{"SecurityGroups":[]}' ;;
+  "ec2 describe-key-pairs") printf '{"KeyPairs":[]}' ;;
+  "route53 list-resource-record-sets") echo 'Route53 unavailable' >&2; exit 2 ;;
+  *) echo "unexpected command: $1 $2" >&2; exit 3 ;;
+esac
+`);
+  chmodSync(aws, 0o700);
+  const scriptPath = fileURLToPath(new URL("./reap-managed-cloud-aws.mjs", import.meta.url));
+  const result = spawnSync(process.execPath, [
+    scriptPath,
+    "--workflow-run-id", WORKFLOW_RUN_ID,
+    "--workflow-run-attempt", WORKFLOW_ATTEMPT,
+    "--cleanup-sha", CLEANUP_SHA,
+  ], {
+    encoding: "utf8",
+    env: {
+      PATH: `${fakeBin}:${process.env.PATH}`,
+      RELEASE_E2E_CLOUD_AWS_REGION: REGION,
+      RELEASE_E2E_CLOUD_ROUTE53_ZONE_ID: ZONE,
+    },
+  });
+  assert.equal(result.status, 2);
+  const receipt = JSON.parse(result.stdout);
+  assert.equal(receipt.workflow_run_id, WORKFLOW_RUN_ID);
+  assert.equal(receipt.workflow_run_attempt, Number(WORKFLOW_ATTEMPT));
+  assert.equal(receipt.cleanup_sha, CLEANUP_SHA);
+  assert.equal(receipt.status, "failed");
+  assert.match(receipt.reason, /managed-cloud AWS hard-cancel cleanup failed/);
+  assert.equal(receipt.runs.length, 1);
+  assert.match(receipt.runs[0].failures.join("\n"), /dns-discovery: Command failed/);
+  assert.doesNotMatch(result.stdout, /missing or malformed/);
 });
 
 test("refuses a run-tagged resource with missing positive-ownership tags before mutation", async () => {
@@ -323,8 +396,11 @@ test("one ambiguous provider category stays red without stranding other exact re
   assert.ok(fake.calls.some((args) => args[1] === "delete-key-pair"));
 });
 
-test("exhausts Route53 pagination and deletes an exact record found on page two", async () => {
-  const fake = fakeAws([leakedCurrentState()], { paginateDns: true });
+test("exhausts native Route53 pagination and deletes an exact record found on page two", async () => {
+  const fake = fakeAws([leakedCurrentState()], {
+    paginateDns: true,
+    paginateDnsIdentifier: true,
+  });
   const report = await reapManagedCloudAwsForWorkflowAttempt({
     workflowRunId: WORKFLOW_RUN_ID,
     workflowRunAttempt: WORKFLOW_ATTEMPT,
@@ -335,7 +411,22 @@ test("exhausts Route53 pagination and deletes an exact record found on page two"
 
   assert.equal(report.status, "reconciled");
   assert.equal(report.runs[0].discovered.dns_records, 1);
-  assert.ok(fake.calls.some((args) => args.includes("--starting-token")));
+  const reads = fake.calls.filter((args) => args[1] === "list-resource-record-sets");
+  assert.ok(reads.length >= 3);
+  const requests = reads.map((args) => JSON.parse(args[args.indexOf("--cli-input-json") + 1]));
+  assert.ok(requests.some((request) =>
+    request.StartRecordName === `${CURRENT_RUN}-0000.qualification.proliferate.com` &&
+    request.MaxItems === "100" &&
+    request.StartRecordType === undefined));
+  assert.ok(requests.some((request) =>
+    request.StartRecordName === `${CURRENT_RUN}-f85c.qualification.proliferate.com.` &&
+    request.StartRecordType === "A" &&
+    request.StartRecordIdentifier === "weighted-1"));
+  for (const args of reads) {
+    assert.ok(args.includes("--no-paginate"));
+    assert.equal(args.includes("--page-size"), false);
+    assert.equal(args.includes("--starting-token"), false);
+  }
   assert.ok(fake.calls.some((args) => args[1] === "change-resource-record-sets"));
 });
 
@@ -347,7 +438,7 @@ test("fails closed on a non-advancing or malformed Route53 page", async () => {
     cleanupSha: CLEANUP_SHA,
     region: REGION,
     hostedZoneId: ZONE,
-  }, { exec: nonProgress.exec, sleep: async () => {} }), /token did not advance/);
+  }, { exec: nonProgress.exec, sleep: async () => {} }), /cursor did not advance/);
 
   const malformed = fakeAws([emptyState(CURRENT_RUN)], { malformedDnsPage: true });
   await assert.rejects(() => reapManagedCloudAwsForWorkflowAttempt({
@@ -356,7 +447,7 @@ test("fails closed on a non-advancing or malformed Route53 page", async () => {
     cleanupSha: CLEANUP_SHA,
     region: REGION,
     hostedZoneId: ZONE,
-  }, { exec: malformed.exec, sleep: async () => {} }), /next token is malformed/);
+  }, { exec: malformed.exec, sleep: async () => {} }), /next record name is malformed/);
 });
 
 test("fails closed when a delete call returns but the exact resource remains", async () => {
@@ -420,6 +511,8 @@ test("the independent workflow runs after Release E2E completion from default-br
   assert.match(providers, /timeout-minutes: 45/);
   assert.equal(workflow.match(/Initialize bounded failed /g)?.length, 3);
   assert.equal(workflow.match(/Finalize bounded /g)?.length, 3);
+  assert.match(aws, /const structured = common && Array\.isArray\(row\.runs\)/);
+  assert.match(aws, /typeof row\.reason === "string"/);
   assert.equal(workflow.match(/if-no-files-found: error/g)?.length, 3);
   assert.equal(workflow.match(/process\.exitCode = 2/g)?.length, 3);
   for (const job of [classifier, aws, providers]) {

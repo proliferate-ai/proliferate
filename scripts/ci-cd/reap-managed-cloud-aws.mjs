@@ -184,22 +184,23 @@ async function discoverKeyPairs(inputs, exec) {
 
 async function listRoute53Records(inputs, startName, exec) {
   const rows = [];
-  const seenTokens = new Set();
-  let token = null;
+  const seenCursors = new Set();
+  let cursor = { name: startName, type: null, identifier: null };
   for (let page = 1; page <= MAX_ROUTE53_PAGES; page += 1) {
-    const args = [
-      "route53", "list-resource-record-sets",
-      "--hosted-zone-id", inputs.hostedZoneId,
-      "--start-record-name", startName,
-    ];
-    if (token !== null) args.push("--starting-token", token);
-    args.push(
-      "--max-items", String(ROUTE53_PAGE_SIZE),
-      "--page-size", String(ROUTE53_PAGE_SIZE),
-      "--output", "json",
-    );
+    const request = {
+      HostedZoneId: inputs.hostedZoneId,
+      StartRecordName: cursor.name,
+      MaxItems: String(ROUTE53_PAGE_SIZE),
+    };
+    if (cursor.type !== null) request.StartRecordType = cursor.type;
+    if (cursor.identifier !== null) request.StartRecordIdentifier = cursor.identifier;
     const payload = asRecord(
-      await awsJson(exec, args, "list-resource-record-sets"),
+      await awsJson(exec, [
+        "route53", "list-resource-record-sets",
+        "--cli-input-json", JSON.stringify(request),
+        "--no-paginate",
+        "--output", "json",
+      ], "list-resource-record-sets"),
       `list-resource-record-sets page ${page}`,
     );
     const pageRows = asArray(payload.ResourceRecordSets, "ResourceRecordSets");
@@ -207,22 +208,43 @@ async function listRoute53Records(inputs, startName, exec) {
       throw new Error(`Route53 page ${page} exceeded its bounded page size.`);
     }
     rows.push(...pageRows);
-    if (payload.NextToken === undefined) return rows;
-    if (typeof payload.NextToken !== "string" || payload.NextToken.length === 0 || payload.NextToken.length > 8192) {
-      throw new Error(`Route53 page ${page} next token is malformed.`);
+    if (typeof payload.IsTruncated !== "boolean") {
+      throw new Error(`Route53 page ${page} truncation flag is malformed.`);
     }
-    if (seenTokens.has(payload.NextToken)) {
-      throw new Error("Route53 pagination token did not advance.");
+    if (!payload.IsTruncated) return rows;
+    const nextName = payload.NextRecordName;
+    const nextType = payload.NextRecordType;
+    const nextIdentifier = payload.NextRecordIdentifier;
+    if (typeof nextName !== "string" || nextName.length === 0 || nextName.length > 1024) {
+      throw new Error(`Route53 page ${page} next record name is malformed.`);
     }
-    seenTokens.add(payload.NextToken);
-    token = payload.NextToken;
+    if (typeof nextType !== "string" || !/^[A-Z][A-Z0-9]{0,31}$/.test(nextType)) {
+      throw new Error(`Route53 page ${page} next record type is malformed.`);
+    }
+    if (
+      nextIdentifier !== undefined &&
+      (typeof nextIdentifier !== "string" || nextIdentifier.length === 0 || nextIdentifier.length > 1024)
+    ) {
+      throw new Error(`Route53 page ${page} next record identifier is malformed.`);
+    }
+    const nextCursor = {
+      name: nextName,
+      type: nextType,
+      identifier: nextIdentifier ?? null,
+    };
+    const cursorKey = JSON.stringify(nextCursor);
+    if (seenCursors.has(cursorKey) || cursorKey === JSON.stringify(cursor)) {
+      throw new Error("Route53 pagination cursor did not advance.");
+    }
+    seenCursors.add(cursorKey);
+    cursor = nextCursor;
   }
   throw new Error("Route53 pagination exceeded its safety bound.");
 }
 
 async function discoverDnsRecords(inputs, exec) {
   const startNames = [
-    `${dnsPrefix(inputs.runId)}-.${ZONE_NAME}`,
+    `${dnsPrefix(inputs.runId)}-0000.${ZONE_NAME}`,
     `mcq-${inputs.runId}-${SHARD_ID}.${ZONE_NAME}`,
   ];
   const rows = [];
@@ -388,25 +410,31 @@ export async function reapManagedCloudAwsForWorkflowAttempt(inputs, deps = {}) {
     reports.push(await cleanupOneRun({ runId, region, hostedZoneId }, { exec, sleep }));
   }
   const failures = reports.flatMap((report) => report.failures.map((failure) => `${report.run_id}: ${failure}`));
-  if (failures.length > 0) {
-    throw new Error(`managed-cloud AWS hard-cancel cleanup failed (${failures.join("; ")})`);
-  }
-  return {
+  const receipt = {
     kind: "managed_cloud_aws_hard_cancel_cleanup",
     schema_version: 1,
     workflow_run_id: String(inputs.workflowRunId),
     workflow_run_attempt: Number(inputs.workflowRunAttempt),
     cleanup_sha: cleanupSha,
-    status: reports.some((report) => Object.values(report.discovered).some((count) => count > 0))
-      ? "reconciled"
-      : "not_needed",
+    status: failures.length > 0
+      ? "failed"
+      : reports.some((report) => Object.values(report.discovered).some((count) => count > 0))
+        ? "reconciled"
+        : "not_needed",
     runs: reports,
     covered_domains: ["aws", "candidate_box_processes"],
     delegated_domains: ["e2b", "stripe", "litellm"],
   };
+  if (failures.length > 0) {
+    const error = new Error(`managed-cloud AWS hard-cancel cleanup failed (${failures.join("; ")})`);
+    receipt.reason = boundedError(error);
+    error.cleanupReceipt = receipt;
+    throw error;
+  }
+  return receipt;
 }
 
-function parseArgs(argv, env = process.env) {
+function parseArgValues(argv) {
   const values = new Map();
   for (let index = 0; index < argv.length; index += 2) {
     const key = argv[index];
@@ -421,10 +449,23 @@ function parseArgs(argv, env = process.env) {
   }
   const allowed = new Set(["--workflow-run-id", "--workflow-run-attempt", "--cleanup-sha"]);
   for (const key of values.keys()) if (!allowed.has(key)) throw new Error(`Unknown argument ${key}.`);
+  return values;
+}
+
+function commandIdentity(values) {
+  const workflowRunId = values.get("--workflow-run-id") ?? "";
+  const workflowRunAttempt = values.get("--workflow-run-attempt") ?? "";
+  const cleanupSha = values.get("--cleanup-sha") ?? "";
+  requiredPositiveInteger(workflowRunId, "workflow run id");
+  requiredPositiveInteger(workflowRunAttempt, "workflow run attempt");
+  requiredString(cleanupSha, "cleanup sha", /^[0-9a-f]{40}$/);
+  return { workflowRunId, workflowRunAttempt, cleanupSha };
+}
+
+function inputsFromValues(values, env) {
+  const identity = commandIdentity(values);
   return {
-    workflowRunId: values.get("--workflow-run-id") ?? "",
-    workflowRunAttempt: values.get("--workflow-run-attempt") ?? "",
-    cleanupSha: values.get("--cleanup-sha") ?? "",
+    ...identity,
     region: env.RELEASE_E2E_CLOUD_AWS_REGION ?? "",
     hostedZoneId: env.RELEASE_E2E_CLOUD_ROUTE53_ZONE_ID ?? "",
   };
@@ -437,16 +478,24 @@ async function main() {
   const cleanupSha = typeof rawCleanupSha === "string" && /^[0-9a-f]{40}$/.test(rawCleanupSha)
     ? rawCleanupSha
     : null;
+  let identity = null;
   try {
-    console.log(JSON.stringify(await reapManagedCloudAwsForWorkflowAttempt(parseArgs(argv))));
+    const values = parseArgValues(argv);
+    identity = commandIdentity(values);
+    console.log(JSON.stringify(await reapManagedCloudAwsForWorkflowAttempt(inputsFromValues(values, process.env))));
   } catch (error) {
-    console.log(JSON.stringify({
+    const receipt = error?.cleanupReceipt ?? {
       kind: "managed_cloud_aws_hard_cancel_cleanup",
       schema_version: 1,
+      ...(identity ? {
+        workflow_run_id: identity.workflowRunId,
+        workflow_run_attempt: Number(identity.workflowRunAttempt),
+      } : {}),
       cleanup_sha: cleanupSha,
       status: "failed",
       reason: boundedError(error),
-    }));
+    };
+    console.log(JSON.stringify(receipt));
     process.exitCode = 2;
   }
 }
