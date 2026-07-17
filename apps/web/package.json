@@ -19,7 +19,7 @@
     "@proliferate/product-domain": "workspace:*",
     "@sentry/react": "^10.66.0",
     "@tanstack/react-query": "^5.101.2",
-    "posthog-js": "^1.402.3",
+    "posthog-js": "^1.386.8",
     "react": "19.2.7",
     "react-dom": "19.2.7",
     "react-router-dom": "^7"
