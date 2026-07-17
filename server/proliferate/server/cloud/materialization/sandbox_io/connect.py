@@ -208,9 +208,9 @@ async def connect_ready_sandbox(
             adopt_provider_if_unbound=(
                 (
                     ambiguous_candidate_provider_sandbox_id,
-                    provider.template_version,
                     sandbox.owner_user_id,
                     ambiguous_candidate_usage_started_at,
+                    sandbox.provider_observed_at,
                 )
                 if ambiguous_candidate_provider_sandbox_id is not None
                 and ambiguous_candidate_usage_started_at is not None
@@ -263,8 +263,8 @@ async def connect_ready_sandbox(
             )
         except UsageProviderBindingMismatchError as mismatch_error:
             # Retain the epoch for the exact-attempt support receipt.
-            await db.commit()
             failure_error_override = mismatch_error
+            await db.commit()
             raise
         await db.commit()
 

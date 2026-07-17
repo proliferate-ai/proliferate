@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import uuid
 from collections.abc import Callable
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any
 
@@ -111,6 +112,7 @@ def _sandbox(*, provider_sandbox_id: str | None, attempt: int = 7) -> SimpleName
         owner_user_id=uuid.uuid4(),
         organization_id=None,
         materialization_attempt=attempt,
+        provider_observed_at=datetime(2026, 7, 17, tzinfo=UTC),
     )
 
 

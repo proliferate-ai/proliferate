@@ -88,14 +88,16 @@ async def test_commit_ambiguous_candidate_is_adopted_when_binding_remains_null(
         *,
         e2b_sandbox_id: str,
         expected_materialization_attempt: int,
+        expected_provider_observed_at: datetime,
         **_kwargs: object,
-    ) -> object | None:
+    ) -> bool:
         assert expected_materialization_attempt == attempt
+        assert expected_provider_observed_at == datetime(2026, 7, 17, tzinfo=UTC)
         events.append(f"adopt:{e2b_sandbox_id}")
         if state["provider_id"] is not None:
-            return None
+            return False
         state["provider_id"] = e2b_sandbox_id
-        return SimpleNamespace(provider_sandbox_id=e2b_sandbox_id)
+        return True
 
     async def _open(
         _db: object,
@@ -106,7 +108,11 @@ async def test_commit_ambiguous_candidate_is_adopted_when_binding_remains_null(
         events.append(f"open:{provider_sandbox_id}")
 
     monkeypatch.setattr(failures, "mark_cloud_sandbox_materialization_error", _mark)
-    monkeypatch.setattr(failures, "record_cloud_sandbox_provider_sandbox", _adopt)
+    monkeypatch.setattr(
+        failures,
+        "adopt_ambiguous_cloud_sandbox_provider_sandbox",
+        _adopt,
+    )
     monkeypatch.setattr(failures, "open_cloud_sandbox_provider_usage", _open)
 
     matched, provider_id = await failures.persist_materialization_failure(
@@ -117,8 +123,8 @@ async def test_commit_ambiguous_candidate_is_adopted_when_binding_remains_null(
         error=RuntimeError("ambiguous commit"),
         adopt_provider_if_unbound=(
             "provider-candidate",
-            "e2b-test",
             owner_user_id,
+            datetime(2026, 7, 17, tzinfo=UTC),
             datetime(2026, 7, 17, tzinfo=UTC),
         ),
     )

@@ -15,9 +15,11 @@ from proliferate.constants.billing import (
     USAGE_SEGMENT_OPENED_BY_RESUME,
 )
 from proliferate.db.store.billing_runtime_usage import UsageProviderBindingMismatchError
+from proliferate.db.store.cloud_sandbox_recovery import (
+    adopt_ambiguous_cloud_sandbox_provider_sandbox,
+)
 from proliferate.db.store.cloud_sandboxes import (
     mark_cloud_sandbox_materialization_error,
-    record_cloud_sandbox_provider_sandbox,
     supersede_missing_cloud_sandbox_provider,
 )
 from proliferate.integrations.sandbox import (
@@ -78,7 +80,7 @@ async def persist_materialization_failure(
     error: BaseException,
     close_usage_if_provider_matches: str | None = None,
     ensure_usage_if_provider_matches: tuple[str, UUID, datetime] | None = None,
-    adopt_provider_if_unbound: tuple[str, str, UUID, datetime] | None = None,
+    adopt_provider_if_unbound: tuple[str, UUID, datetime, datetime] | None = None,
     detach_missing_provider: tuple[str, datetime, datetime] | None = None,
 ) -> tuple[bool, str | None]:
     """Commit one failed attempt without ever masking its original exception."""
@@ -111,15 +113,20 @@ async def persist_materialization_failure(
         provider_sandbox_id = None
         for provider_sandbox_id in expected_provider_sandbox_ids:
             if provider_sandbox_id is None and adopt_provider_if_unbound is not None:
-                candidate_id, template_ref, owner_user_id, started_at = adopt_provider_if_unbound
-                adopted = await record_cloud_sandbox_provider_sandbox(
+                (
+                    candidate_id,
+                    owner_user_id,
+                    started_at,
+                    expected_provider_observed_at,
+                ) = adopt_provider_if_unbound
+                adopted = await adopt_ambiguous_cloud_sandbox_provider_sandbox(
                     db,
                     sandbox_id,
                     e2b_sandbox_id=candidate_id,
-                    e2b_template_ref=template_ref,
                     expected_materialization_attempt=expected_materialization_attempt,
+                    expected_provider_observed_at=expected_provider_observed_at,
                 )
-                if adopted is None:
+                if not adopted:
                     continue
                 await open_cloud_sandbox_provider_usage(
                     db,
