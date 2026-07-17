@@ -14,18 +14,26 @@ import {
 } from "./cloud-provision-1.js";
 import type { CellEvidenceV1, ManagedCloudFixtureSmokeEvidenceV1 } from "../evidence/schema.js";
 import { callbackRelay, type CallbackRelay, type CapturedDelivery } from "../fixtures/callback-relay.js";
-import { billingThreshold } from "../fixtures/billing-threshold.js";
+import {
+  billingThreshold,
+  billingThresholdReceiptFile,
+  restoreBillingFixtureAdjustment,
+} from "../fixtures/billing-threshold.js";
 import { injectFailureAt } from "../fixtures/failure-injection.js";
 import {
   authenticatedActor,
   type AuthenticatedActor,
 } from "../fixtures/authenticated-actor.js";
+import { selectCheapestEligibleClaudeModel } from "../services/qualification-litellm.js";
+import { CALLBACK_RELAY_DEFAULT_PORT } from "../fixtures/callback-relay.js";
+import { REMOTE_WORKDIR } from "../worlds/managed-cloud/ingress.js";
+import { RELAY_DIRNAME } from "../worlds/managed-cloud/callback-relay-agent.js";
+import { parseLastJsonLine } from "../worlds/managed-cloud/box-seeds.js";
+import type { BoxExec } from "../worlds/managed-cloud/box-exec.js";
 import {
   defaultStripeHttp,
   isLiveModeSecretKey,
-  resolveTestModeSecretKey,
   stripeCleanupReplayHandlers,
-  StripeTestClockUnavailableError,
   type StripeHttp,
 } from "../fixtures/stripe-test-clock.js";
 import {
@@ -635,7 +643,7 @@ export function createFixtureSmokeDriver(deps: Partial<FixtureSmokeRuntimeDeps> 
       return runStripeTestClockCellLive(world, state, http);
     },
     async runBillingThresholdCell(world, state) {
-      return runBillingThresholdCellLive(world, state);
+      return runBillingThresholdCellLive(world, state, productionBillingThresholdCellDeps);
     },
     async runFailureInjectionCell(world, state) {
       return runFailureInjectionCellLive(world, state);
@@ -665,6 +673,175 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// ---------------------------------------------------------------------------
+// Pure, exported parsers/builders (unit-tested over fake stat/proc/receipt
+// outputs). No I/O — the live cells feed them raw box-exec stdout.
+// ---------------------------------------------------------------------------
+
+/** Absolute relay dir on the box (mirrors callback-relay.ts's private relayDir). */
+export function relayDirOnBox(): string {
+  return `${REMOTE_WORKDIR}/${RELAY_DIRNAME}`;
+}
+
+/** Parses `stat -c '%n %a'` lines into a path→octal-mode map. */
+export function parseStatModes(stdout: string): Record<string, string> {
+  const modes: Record<string, string> = {};
+  for (const line of stdout.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      continue;
+    }
+    const idx = trimmed.lastIndexOf(" ");
+    if (idx <= 0) {
+      continue;
+    }
+    modes[trimmed.slice(0, idx)] = trimmed.slice(idx + 1);
+  }
+  return modes;
+}
+
+/** The relay pidfile shape (`{pid,starttime,script}`), parsed from its JSON text. */
+export interface RelayPidfile {
+  pid: number;
+  starttime: string;
+  script: string;
+}
+
+export function parseRelayPidfileJson(text: string): RelayPidfile {
+  const parsed = JSON.parse(text) as { pid?: unknown; starttime?: unknown; script?: unknown };
+  if (
+    typeof parsed.pid !== "number" ||
+    typeof parsed.starttime !== "string" ||
+    typeof parsed.script !== "string"
+  ) {
+    throw new Error("callback-relay: relay pidfile is malformed (expected {pid,starttime,script}).");
+  }
+  return { pid: parsed.pid, starttime: parsed.starttime, script: parsed.script };
+}
+
+/**
+ * Recomputes `/proc/<pid>/stat` starttime (field 22 overall; field 20 of the
+ * remainder AFTER the `) ` that closes the comm field — mirrors ingress.ts's own
+ * start-time extraction so a comm containing spaces/parens never shifts fields).
+ * Returns null when unparseable.
+ */
+export function parseProcStatStarttime(statLine: string): string | null {
+  const afterComm = statLine.replace(/^.*\)\s+/, "");
+  const fields = afterComm.trim().split(/\s+/);
+  // fields[0] is state (field 3 overall); starttime is field 22 overall = index 19 here.
+  const starttime = fields[19];
+  return starttime && /^\d+$/.test(starttime) ? starttime : null;
+}
+
+/** Whether `/proc/<pid>/cmdline` (NUL-joined → we pass it space-joined) names the script path. */
+export function procCmdlineContainsScript(cmdline: string, scriptPath: string): boolean {
+  return cmdline.includes(scriptPath);
+}
+
+/** One webhook_event_receipt row shape, parsed from the serverPython JSON line. */
+export interface WebhookReceiptSnapshot {
+  count: number;
+  status: string | null;
+  attemptCount: number | null;
+  processedAt: string | null;
+}
+
+export function parseWebhookReceiptSnapshot(stdout: string): WebhookReceiptSnapshot {
+  const parsed = parseLastJsonLine(stdout) as {
+    count?: unknown;
+    status?: unknown;
+    attempt_count?: unknown;
+    processed_at?: unknown;
+  };
+  return {
+    count: typeof parsed.count === "number" ? parsed.count : 0,
+    status: typeof parsed.status === "string" ? parsed.status : null,
+    attemptCount: typeof parsed.attempt_count === "number" ? parsed.attempt_count : null,
+    processedAt: typeof parsed.processed_at === "string" ? parsed.processed_at : null,
+  };
+}
+
+/**
+ * Builds the on-box python3 command that re-POSTs a HELD-then-replayed
+ * delivery's EXACT preserved bytes + headers (from `<relayDir>/replayed/<id>.bin`
+ * + `.headers.json`) to the relay's loopback stripe path — the real duplicate
+ * delivery. Skips the `Host` header (the relay's own `_forward` skip set), so
+ * the signature header rides untouched. Runs entirely on the box: no byte
+ * content crosses to the controller. Prints the upstream HTTP status as the
+ * last line for the caller to read. Pure string builder (no I/O).
+ */
+export function buildDuplicatePostScript(
+  relayDir: string,
+  deliveryId: string,
+  port: number,
+  loopbackPath: string,
+): string {
+  // The bytes/headers are read from the replayed spool by the on-box python; the
+  // deliveryId is a hex token (validated by the relay controller) so it is safe
+  // to interpolate into the literal.
+  const py = [
+    "import json,sys,urllib.request",
+    `d=${JSON.stringify(relayDir)}+"/replayed/"+${JSON.stringify(deliveryId)}`,
+    'body=open(d+".bin","rb").read()',
+    'hdrs=json.load(open(d+".headers.json"))',
+    `req=urllib.request.Request("http://127.0.0.1:${port}${loopbackPath}",data=body,method="POST")`,
+    'for k,v in hdrs:\n    if k.lower()=="host":\n        continue\n    req.add_header(k,v)',
+    "try:\n    r=urllib.request.urlopen(req,timeout=30)\n    print(r.status)\nexcept urllib.error.HTTPError as e:\n    print(e.code)",
+  ].join("\n");
+  return `python3 -c ${shellSingleQuoteScenario(py)}`;
+}
+
+/** Single-quote a value for POSIX sh interpolation (mirrors box-exec.ts). */
+function shellSingleQuoteScenario(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+/**
+ * The candidate box serverPython that reads a webhook_event_receipt snapshot for
+ * one (provider, event_id) — the real idempotency witness. Returns the row count,
+ * status, attempt_count, and processed_at; never a payload/signature.
+ */
+const WEBHOOK_RECEIPT_SNAPSHOT_PY = `import asyncio, json, os
+from sqlalchemy import func, select
+from proliferate.db.engine import async_session_factory
+from proliferate.db.models.billing import WebhookEventReceipt
+
+EVENT_ID = os.environ["SEED_EVENT_ID"]
+PROVIDER = os.environ.get("SEED_PROVIDER", "stripe")
+
+async def main():
+    async with async_session_factory() as db:
+        rows = (
+            await db.execute(
+                select(WebhookEventReceipt).where(
+                    WebhookEventReceipt.provider == PROVIDER,
+                    WebhookEventReceipt.event_id == EVENT_ID,
+                )
+            )
+        ).scalars().all()
+        first = rows[0] if rows else None
+        print(json.dumps({
+            "count": len(rows),
+            "status": first.status if first else None,
+            "attempt_count": int(first.attempt_count) if first else None,
+            "processed_at": first.processed_at.isoformat() if (first and first.processed_at) else None,
+        }))
+
+asyncio.run(main())
+`;
+
+/** Reads a webhook_event_receipt snapshot via the box-exec seam. */
+async function readWebhookReceiptSnapshot(
+  box: BoxExec,
+  eventId: string,
+): Promise<WebhookReceiptSnapshot> {
+  const result = await box.serverPython(WEBHOOK_RECEIPT_SNAPSHOT_PY, {
+    env: { SEED_EVENT_ID: eventId, SEED_PROVIDER: "stripe" },
+    scriptName: "read-webhook-receipt.py",
+  });
+  return parseWebhookReceiptSnapshot(result.stdout);
+}
+
 /** Cell A — callback relay (spec Cell A). */
 async function runCallbackRelayCellLive(
   world: ManagedCloudWorld,
@@ -674,7 +851,14 @@ async function runCallbackRelayCellLive(
   const { findEventForObject, createRunCustomer: createCustomer } = await import(
     "../fixtures/stripe-smoke-resources.js"
   );
+  if (!world.box) {
+    throw new Error("callback-relay: the managed-cloud world exposes no box-exec seam.");
+  }
+  const box = world.box;
   const relay: CallbackRelay = callbackRelay(world);
+  const relayDir = relayDirOnBox();
+  const relayPort = CALLBACK_RELAY_DEFAULT_PORT;
+  const stripePath = "/v1/billing/webhooks/stripe";
   await relay.manifest("stripe"); // baseline read
   await relay.hold("stripe");
 
@@ -718,19 +902,103 @@ async function runCallbackRelayCellLive(
     throw new Error(`callback-relay: no held delivery matched event ${evt.id} within the poll window.`);
   }
 
-  const before = await relay.manifest("stripe");
-  await relay.replay(held.deliveryId);
-  // Duplicate delivery: replaying again must not re-dispatch (idempotency); the
-  // manifest gains a new forwarded row with identical bytesSha256.
-  await relay.replay(held.deliveryId);
-  const after = await relay.manifest("stripe");
-  const witness = assertDuplicateDeliveryByteIdentity(before, after, evt.id);
+  // ── Spool file-mode proofs (0700 dir, 0600 files), BEFORE replay moves them. ──
+  const heldStat = await box.exec(
+    `stat -c '%n %a' ${shellSingleQuoteScenario(relayDir)} ` +
+      `${shellSingleQuoteScenario(`${relayDir}/held/${held.deliveryId}.bin`)} ` +
+      `${shellSingleQuoteScenario(`${relayDir}/held/${held.deliveryId}.headers.json`)}`,
+  );
+  const heldModes = parseStatModes(heldStat.stdout);
+  const dirMode = heldModes[relayDir];
+  const binMode = heldModes[`${relayDir}/held/${held.deliveryId}.bin`];
+  const headersMode = heldModes[`${relayDir}/held/${held.deliveryId}.headers.json`];
+  if (dirMode !== "700") {
+    throw new Error(`callback-relay: relay spool dir mode is ${dirMode ?? "unknown"}, expected 700.`);
+  }
+  if (binMode !== "600" || headersMode !== "600") {
+    throw new Error(
+      `callback-relay: held spool file modes are bin=${binMode ?? "?"} headers=${headersMode ?? "?"}, expected 600.`,
+    );
+  }
 
+  // ── PID/start-time/executable ownership proof: the pidfile discriminator must
+  // match the live process, so the cleanup releaser cannot signal a reused pid. ──
+  const pidfileText = await box.exec(`cat ${shellSingleQuoteScenario(`${relayDir}/relay.pid`)}`);
+  const pidfile = parseRelayPidfileJson(pidfileText.stdout);
+  const liveStat = await box.exec(`cat /proc/${pidfile.pid}/stat`);
+  const liveStarttime = parseProcStatStarttime(liveStat.stdout);
+  if (liveStarttime === null || liveStarttime !== pidfile.starttime) {
+    throw new Error(
+      `callback-relay: relay pidfile starttime (${pidfile.starttime}) does not match live /proc/${pidfile.pid}/stat ` +
+        `(${liveStarttime ?? "unreadable"}) — the recorded pid is not the running relay (reuse hazard).`,
+    );
+  }
+  const liveCmdline = await box.exec(`tr '\\0' ' ' < /proc/${pidfile.pid}/cmdline`);
+  if (!procCmdlineContainsScript(liveCmdline.stdout, pidfile.script)) {
+    throw new Error(
+      `callback-relay: live /proc/${pidfile.pid}/cmdline does not contain the relay script path ${pidfile.script}.`,
+    );
+  }
+
+  // ── First replay: forwarded byte-for-byte to the real verifying Server. ──
+  await relay.replay(held.deliveryId);
+  // The Server verified the HMAC (signature intact end-to-end) and processed the
+  // event exactly once → its webhook_event_receipt row is 'processed'.
+  const afterFirst = await pollUntil(
+    () => readWebhookReceiptSnapshot(box, evt.id),
+    (snap) => snap.count === 1 && snap.status === "processed",
+    CALLBACK_POLL_TIMEOUT_MS,
+    CALLBACK_POLL_INTERVAL_MS,
+  );
+  if (afterFirst.count !== 1 || afterFirst.status !== "processed") {
+    throw new Error(
+      `callback-relay: after the first replay the server webhook_event_receipt for ${evt.id} is ` +
+        `count=${afterFirst.count} status=${afterFirst.status ?? "none"} (expected exactly one 'processed').`,
+    );
+  }
+
+  // ── Duplicate delivery: re-POST the PRESERVED exact bytes+headers from the
+  // replayed spool through the relay loopback (channel back to pass-through
+  // first). Proves REAL idempotency — no re-dispatch — on the SERVER. ──
   await relay.release("stripe");
+  const manifestBeforeDuplicate = await relay.manifest("stripe");
+  const dupStatus = await box.exec(buildDuplicatePostScript(relayDir, held.deliveryId, relayPort, stripePath));
+  const dupCode = Number.parseInt(dupStatus.stdout.trim().split("\n").pop() ?? "", 10);
+  if (!(dupCode >= 200 && dupCode < 300)) {
+    throw new Error(`callback-relay: the duplicate delivery POST returned ${dupCode} (expected a 2xx ack).`);
+  }
+
+  // Idempotency witness on the SERVER: still exactly one row, still 'processed',
+  // and processed_at UNCHANGED (no re-dispatch of the already-processed event).
+  const afterDuplicate = await readWebhookReceiptSnapshot(box, evt.id);
+  if (afterDuplicate.count !== 1 || afterDuplicate.status !== "processed") {
+    throw new Error(
+      `callback-relay: after the duplicate delivery the server has count=${afterDuplicate.count} ` +
+        `status=${afterDuplicate.status ?? "none"} (expected the SAME single 'processed' row — re-dispatch detected).`,
+    );
+  }
+  if (afterDuplicate.processedAt !== afterFirst.processedAt) {
+    throw new Error(
+      `callback-relay: webhook_event_receipt.processed_at changed across the duplicate delivery ` +
+        `(${afterFirst.processedAt} → ${afterDuplicate.processedAt}) — the event was re-dispatched.`,
+    );
+  }
+
+  // Byte-identity witness: the duplicate produced a NEW forwarded manifest row
+  // with the IDENTICAL bytesSha256 (the relay forwarded the exact bytes verbatim).
+  const manifestAfterDuplicate = await pollUntil(
+    () => relay.manifest("stripe"),
+    (rows) => rows.filter((r) => r.providerEventId === evt.id).length > manifestBeforeDuplicate.filter((r) => r.providerEventId === evt.id).length,
+    CALLBACK_POLL_TIMEOUT_MS,
+    CALLBACK_POLL_INTERVAL_MS,
+  );
+  const witness = assertDuplicateDeliveryByteIdentity(manifestBeforeDuplicate, manifestAfterDuplicate, evt.id);
 
   return {
     externalIds: [created.customerId, evt.id, held.deliveryId],
-    observedTransition: `held→replayed→duplicate:byte_identical(${witness.bytesSha256.slice(0, 12)})`,
+    observedTransition:
+      `held→replayed:processed→duplicate:${dupCode}:already_processed(processed_at_unchanged)→` +
+      `byte_identical(${witness.bytesSha256.slice(0, 12)})[dir=700,files=600,pid_owned]`,
     cleanupEntries: ["stripe_customer", "callback_relay_spool"],
   };
 }
@@ -836,6 +1104,11 @@ async function runStripeTestClockCellLive(
   if (!("missing" in afterDelete)) {
     throw new Error("stripe-test-clock: the test clock still resolves after deletion (expected resource_missing).");
   }
+  // DELIBERATE double-release path: we do NOT reconcile the clock+customer ledger
+  // entries here. Their world-close releasers (and cell E's replay handlers) run
+  // again later — that is safe by design: deleteClock/deleteCustomer tolerate
+  // resource_missing (Stripe's clock delete cascades its customers), so a second
+  // release of an already-deleted resource is a clean no-op, not a failure.
 
   // Fail-closed live-mode assertion (local guard; no network).
   let liveThrew = false;
@@ -855,24 +1128,356 @@ async function runStripeTestClockCellLive(
   };
 }
 
-/** Cell C — billing threshold (spec Cell C). */
-async function runBillingThresholdCellLive(
-  world: ManagedCloudWorld,
-  _state: SmokeState,
-): Promise<FixtureSmokeCellResult> {
-  const actor = await authenticatedActor(asAuthenticatedActorWorld(world), "owner", { gatewaySurface: "cloud" });
-  await world.trackActorSubjects?.(actor.gatewayKey);
+// ---------------------------------------------------------------------------
+// Cell C — billing threshold. Its privileged sub-steps sit behind an injectable
+// deps seam so the full spec arc (original→positioned→crossed→gated→restored)
+// is unit-testable offline with fakes, while production wires the real on-box
+// crypto/gateway/reconcile/read operations.
+// ---------------------------------------------------------------------------
 
-  // Position the LLM ledger just above zero. The full "cause one real gateway
-  // request that crosses the threshold + observe the product gate + restore and
-  // reload" flow is the frozen Cell-C contract; positioning + observed remainder
-  // is driven by the merged billingThreshold fixture, which runs the product's
-  // own accounting+reconcile passes and returns the OBSERVED remainder.
-  const positioned = await billingThreshold(world, actor, { ledger: "llm", balance: 0.001 });
+/** A product-side gate signal observed after the threshold is crossed. */
+export type BillingGateSignal = "second_request_rejected" | "budget_status_exhausted";
+
+export interface BillingThresholdCellDeps {
+  /** Creates the fresh cloud-surface actor (fakeable so the arc is offline-testable). */
+  createActor(world: ManagedCloudWorld): Promise<AuthenticatedActor>;
+  /** Positions the LLM ledger to `balance` (the merged billingThreshold fixture). */
+  positionThreshold(
+    world: ManagedCloudWorld,
+    actor: AuthenticatedActor,
+    balance: number,
+  ): Promise<{ billingSubjectId: string; effectiveRemainder: number }>;
+  /** Resolves (idempotently, no grant mutation) the actor's personal billing subject id. */
+  resolveBillingSubjectId(world: ManagedCloudWorld, userId: string): Promise<string>;
+  /** Reads the actor's current remaining LLM credit (USD) on the candidate box. */
+  readRemainingCreditUsd(world: ManagedCloudWorld, billingSubjectId: string): Promise<number>;
+  /**
+   * Decrypts the actor's RAW scoped LiteLLM virtual key from the enrollment row
+   * (never logged/serialized). Mirrors cloud-provision-1's DECRYPT_RUNTIME_TOKEN_PY
+   * discipline: the raw key returns in-memory only.
+   */
+  decryptVirtualKey(world: ManagedCloudWorld, enrollmentId: string): Promise<string>;
+  /** The gateway's eligible model ids (allowlist ∩ live), for cheapest selection. */
+  listGatewayModels(world: ManagedCloudWorld): Promise<{ allowlist: string[]; live: string[] }>;
+  /**
+   * ONE real chat-completion against the PUBLIC gateway URL with the raw key.
+   * Returns the HTTP status + the request's cost (USD) if the response carries it
+   * (else null — cost is then read from the ledger delta). The key never appears
+   * in a thrown error/log.
+   */
+  gatewayChatCompletion(params: {
+    world: ManagedCloudWorld;
+    rawKey: string;
+    modelId: string;
+    maxTokens: number;
+    prompt: string;
+  }): Promise<{ status: number; costUsd: number | null }>;
+  /** Runs the product's accounting + reconcile passes on the candidate box. */
+  runReconcilePasses(world: ManagedCloudWorld): Promise<void>;
+  /** Reads the enrollment's budget_status on the candidate box. */
+  readBudgetStatus(world: ManagedCloudWorld, enrollmentId: string): Promise<string>;
+  /** Runs the durable restore-and-reload releaser NOW (world-close is then a no-op). */
+  restoreAdjustment(world: ManagedCloudWorld, receiptFile: string): Promise<void>;
+}
+
+const READ_REMAINING_CREDIT_PY = `import asyncio, json, os
+from uuid import UUID
+from proliferate.db.engine import async_session_factory
+from proliferate.db.store.agent_gateway.credits import get_remaining_credit_usd
+
+BILLING_SUBJECT_ID = UUID(os.environ["SEED_BILLING_SUBJECT_ID"])
+
+async def main():
+    async with async_session_factory() as db:
+        balance = await get_remaining_credit_usd(db, BILLING_SUBJECT_ID)
+        print(json.dumps({"remaining_usd": float(balance.remaining_usd)}))
+
+asyncio.run(main())
+`;
+
+/**
+ * Decrypts the enrollment's virtual key using the product's OWN store function
+ * (`get_enrollment_virtual_key_decrypted` → `decrypt_text`). Prints ONLY
+ * `{"key": ...}`; the caller parses it and never logs it (mirrors
+ * cloud-provision-1's DECRYPT_RUNTIME_TOKEN_PY).
+ */
+const DECRYPT_VIRTUAL_KEY_PY = `import asyncio, json, os
+from uuid import UUID
+from proliferate.db.engine import async_session_factory
+from proliferate.db.store.agent_gateway.enrollments import get_enrollment_virtual_key_decrypted
+
+ENROLLMENT_ID = UUID(os.environ["SEED_ENROLLMENT_ID"])
+
+async def main():
+    async with async_session_factory() as db:
+        key = await get_enrollment_virtual_key_decrypted(db, enrollment_id=ENROLLMENT_ID)
+        print(json.dumps({"key": key}))
+
+asyncio.run(main())
+`;
+
+const READ_BUDGET_STATUS_PY = `import asyncio, json, os
+from uuid import UUID
+from proliferate.db.engine import async_session_factory
+from proliferate.db.models.cloud.agent_gateway import AgentGatewayEnrollment
+
+ENROLLMENT_ID = UUID(os.environ["SEED_ENROLLMENT_ID"])
+
+async def main():
+    async with async_session_factory() as db:
+        row = await db.get(AgentGatewayEnrollment, ENROLLMENT_ID)
+        print(json.dumps({"budget_status": row.budget_status if row else None}))
+
+asyncio.run(main())
+`;
+
+const RUN_RECONCILE_PASSES_PY = `import asyncio, json
+from proliferate.server.billing.accounting_pass import run_billing_accounting_pass
+from proliferate.server.billing.reconciler import run_billing_reconcile_pass
+
+async def main():
+    await run_billing_accounting_pass()
+    await run_billing_reconcile_pass()
+    print(json.dumps({"ran": True}))
+
+asyncio.run(main())
+`;
+
+const RESOLVE_BILLING_SUBJECT_PY = `import asyncio, json, os
+from uuid import UUID
+from proliferate.db.engine import async_session_factory
+from proliferate.db.store.billing_subjects import ensure_personal_billing_subject
+
+USER_ID = UUID(os.environ["SEED_USER_ID"])
+
+async def main():
+    async with async_session_factory() as db:
+        subject = await ensure_personal_billing_subject(db, USER_ID)
+        await db.commit()
+        print(json.dumps({"billing_subject_id": str(subject.id)}))
+
+asyncio.run(main())
+`;
+
+const productionBillingThresholdCellDeps: BillingThresholdCellDeps = {
+  async createActor(world) {
+    const actor = await authenticatedActor(asAuthenticatedActorWorld(world), "owner", { gatewaySurface: "cloud" });
+    await world.trackActorSubjects?.(actor.gatewayKey);
+    return actor;
+  },
+  async positionThreshold(world, actor, balance) {
+    const positioned = await billingThreshold(world, actor, { ledger: "llm", balance });
+    return { billingSubjectId: positioned.billingSubjectId, effectiveRemainder: positioned.effectiveRemainder };
+  },
+  async resolveBillingSubjectId(world, userId) {
+    if (!world.box) {
+      throw new Error("billing-threshold: no box-exec seam to resolve the billing subject.");
+    }
+    const result = await world.box.serverPython(RESOLVE_BILLING_SUBJECT_PY, {
+      env: { SEED_USER_ID: userId },
+      scriptName: "resolve-billing-subject-cellc.py",
+    });
+    const parsed = parseLastJsonLine(result.stdout) as { billing_subject_id?: unknown };
+    if (typeof parsed.billing_subject_id !== "string" || !parsed.billing_subject_id) {
+      throw new Error(`billing-threshold: box did not report a billing subject id (${result.stdout.trim().slice(0, 200)}).`);
+    }
+    return parsed.billing_subject_id;
+  },
+  async readRemainingCreditUsd(world, billingSubjectId) {
+    if (!world.box) {
+      throw new Error("billing-threshold: no box-exec seam to read remaining credit.");
+    }
+    const result = await world.box.serverPython(READ_REMAINING_CREDIT_PY, {
+      env: { SEED_BILLING_SUBJECT_ID: billingSubjectId },
+      scriptName: "read-remaining-credit.py",
+    });
+    const parsed = parseLastJsonLine(result.stdout) as { remaining_usd?: unknown };
+    if (typeof parsed.remaining_usd !== "number") {
+      throw new Error(`billing-threshold: box did not report remaining credit (${result.stdout.trim().slice(0, 200)}).`);
+    }
+    return parsed.remaining_usd;
+  },
+  async decryptVirtualKey(world, enrollmentId) {
+    if (!world.box) {
+      throw new Error("billing-threshold: no box-exec seam to decrypt the virtual key.");
+    }
+    const result = await world.box.serverPython(DECRYPT_VIRTUAL_KEY_PY, {
+      env: { SEED_ENROLLMENT_ID: enrollmentId },
+      scriptName: "decrypt-virtual-key.py",
+    });
+    const parsed = parseLastJsonLine(result.stdout) as { key?: unknown };
+    if (typeof parsed.key !== "string" || !parsed.key) {
+      // Never echo the (absent) key material — only the failure shape.
+      throw new Error("billing-threshold: the candidate box did not report a decryptable virtual key for this enrollment.");
+    }
+    return parsed.key;
+  },
+  async listGatewayModels(world) {
+    const preflight = await world.gateway.preflight();
+    return { allowlist: preflight.eligibleClaudeModels, live: preflight.eligibleClaudeModels };
+  },
+  async gatewayChatCompletion({ world, rawKey, modelId, maxTokens, prompt }) {
+    // ONE real chat-completion to the PUBLIC gateway URL. The raw key rides only
+    // in the Authorization header; it is never placed in a thrown error/log.
+    const url = `${world.gateway.publicBaseUrl.replace(/\/$/, "")}/v1/chat/completions`;
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method: "POST",
+        headers: { "content-type": "application/json", Authorization: `Bearer ${rawKey}` },
+        body: JSON.stringify({ model: modelId, max_tokens: maxTokens, messages: [{ role: "user", content: prompt }] }),
+        signal: AbortSignal.timeout(60_000),
+      });
+    } catch {
+      // Transport failure — surface WITHOUT the key.
+      throw new Error("billing-threshold: the gateway chat-completion request failed at the transport layer.");
+    }
+    let costUsd: number | null = null;
+    const body = (await response.json().catch(() => ({}))) as { usage?: { cost?: unknown; total_cost?: unknown } };
+    const cost = body.usage?.cost ?? body.usage?.total_cost;
+    if (typeof cost === "number") {
+      costUsd = cost;
+    }
+    return { status: response.status, costUsd };
+  },
+  async runReconcilePasses(world) {
+    if (!world.box) {
+      throw new Error("billing-threshold: no box-exec seam to run reconcile passes.");
+    }
+    await world.box.serverPython(RUN_RECONCILE_PASSES_PY, { scriptName: "run-reconcile-passes.py" });
+  },
+  async readBudgetStatus(world, enrollmentId) {
+    if (!world.box) {
+      throw new Error("billing-threshold: no box-exec seam to read budget status.");
+    }
+    const result = await world.box.serverPython(READ_BUDGET_STATUS_PY, {
+      env: { SEED_ENROLLMENT_ID: enrollmentId },
+      scriptName: "read-budget-status.py",
+    });
+    const parsed = parseLastJsonLine(result.stdout) as { budget_status?: unknown };
+    return typeof parsed.budget_status === "string" ? parsed.budget_status : "unknown";
+  },
+  async restoreAdjustment(world, receiptFile) {
+    if (!world.box) {
+      throw new Error("billing-threshold: no box-exec seam to restore the adjustment.");
+    }
+    await restoreBillingFixtureAdjustment(world.box, receiptFile);
+  },
+};
+
+/** Epsilon for the restored-remainder assertion (llm ledger, USD). */
+const BILLING_REMAINDER_EPSILON = 1e-6;
+/** Cost the request must at least incur to cross the 0.001 threshold. */
+const BILLING_POSITION_BALANCE = 0.001;
+
+/**
+ * Cell C — billing threshold (frozen spec Cell C, all six obligations):
+ * original→positioned→crossed(real usage)→gated(product consequence)→restored
+ * (restore + reload the persisted ledger).
+ *
+ * The get_remaining_credit_usd formula is `sum(active grants) − sum(imported
+ * usage)`. Restoration un-expires the prior grants and deletes the run-tagged
+ * grant, so the grant side returns to its original total — BUT the real request's
+ * imported usage row persists. So the correct restored remainder is
+ * `originalRemaining − observedRequestCost` (NOT originalRemaining), asserted
+ * within epsilon. Documented against the server formula (credits.py).
+ */
+export async function runBillingThresholdCellLive(
+  world: ManagedCloudWorld,
+  state: SmokeState,
+  deps: BillingThresholdCellDeps = productionBillingThresholdCellDeps,
+): Promise<FixtureSmokeCellResult> {
+  const actor = await deps.createActor(world);
+
+  // (a) Read the ORIGINAL remaining credit BEFORE positioning, so restoration can
+  // be checked against it. The billing subject is the actor's deterministic
+  // personal subject (billingThreshold uses ensure_personal_billing_subject), so
+  // resolve it idempotently first (no grant mutation) and read its remainder.
+  const preSubjectId = await deps.resolveBillingSubjectId(world, actor.userId);
+  const originalRemaining = await deps.readRemainingCreditUsd(world, preSubjectId);
+  // (b) Position balance = 0.001 (fixture runs the product accounting+reconcile
+  // passes and returns the OBSERVED remainder + the real billing subject id).
+  const positioned = await deps.positionThreshold(world, actor, BILLING_POSITION_BALANCE);
+  const billingSubjectId = positioned.billingSubjectId;
+
+  // (c) Cause real usage: decrypt the actor's raw scoped key and make ONE real
+  // gateway chat-completion with the cheapest eligible model. Its cost (> 0.001)
+  // crosses the threshold.
+  const rawKey = await deps.decryptVirtualKey(world, actor.enrollmentId);
+  const { allowlist, live } = await deps.listGatewayModels(world);
+  const modelId = selectCheapestEligibleClaudeModel(allowlist, live);
+  if (!modelId) {
+    throw new Error("billing-threshold: no eligible cheapest Claude model to run the crossing request.");
+  }
+  const request = await deps.gatewayChatCompletion({
+    world,
+    rawKey,
+    modelId,
+    maxTokens: 32,
+    prompt: "Reply with exactly the word: pong",
+  });
+  if (!(request.status >= 200 && request.status < 300)) {
+    throw new Error(`billing-threshold: the crossing gateway request returned ${request.status} (expected 2xx).`);
+  }
+
+  // (d) Observe the product consequence: run the accounting+reconcile passes,
+  // then require (1) remaining credit ≤ 0 AND (2) at least one gate signal —
+  // a SECOND request rejected non-2xx, OR budget_status flipped to exhausted.
+  await deps.runReconcilePasses(world);
+  const crossedRemaining = await deps.readRemainingCreditUsd(world, billingSubjectId);
+  if (crossedRemaining > 0) {
+    throw new Error(
+      `billing-threshold: remaining credit did not cross to <= 0 after the real request (observed ${crossedRemaining}).`,
+    );
+  }
+  const gateSignals: BillingGateSignal[] = [];
+  const secondRequest = await deps.gatewayChatCompletion({
+    world,
+    rawKey,
+    modelId,
+    maxTokens: 32,
+    prompt: "Reply with exactly the word: pong",
+  });
+  if (!(secondRequest.status >= 200 && secondRequest.status < 300)) {
+    gateSignals.push("second_request_rejected");
+  }
+  const budgetStatus = await deps.readBudgetStatus(world, actor.enrollmentId);
+  if (budgetStatus === "exhausted" || budgetStatus === "limit_reached") {
+    gateSignals.push("budget_status_exhausted");
+  }
+  if (gateSignals.length === 0) {
+    throw new Error(
+      "billing-threshold: crossed the ledger but observed NO product-side gate signal (neither a rejected second " +
+        `request nor a flipped budget_status; budget_status=${budgetStatus}).`,
+    );
+  }
+
+  // The real request's cost: prefer the response usage; else the ledger delta
+  // (positioned≈0.001 → crossed≤0, so the imported usage cost ≈ 0.001 − crossed).
+  const observedRequestCost =
+    request.costUsd ?? Math.max(0, positioned.effectiveRemainder - crossedRemaining);
+
+  // (e) Restore + reload: run the durable releaser NOW (world-close then no-ops).
+  const receiptFile = billingThresholdReceiptFile(state.runTag, actor.userId, "llm");
+  await deps.restoreAdjustment(world, receiptFile);
+  const restoredRemaining = await deps.readRemainingCreditUsd(world, billingSubjectId);
+  // Restoration returns the GRANT side to original; the real imported usage row
+  // persists, so the correct restored remainder is originalRemaining − cost.
+  const expectedRestored = originalRemaining - observedRequestCost;
+  if (Math.abs(restoredRemaining - expectedRestored) > BILLING_REMAINDER_EPSILON) {
+    throw new Error(
+      `billing-threshold: restored remaining ${restoredRemaining} != expected ${expectedRestored} ` +
+        `(originalRemaining ${originalRemaining} − observedRequestCost ${observedRequestCost}) within ${BILLING_REMAINDER_EPSILON}. ` +
+        "Grants restored from the persisted receipt; imported usage persists by design (credits.py formula).",
+    );
+  }
 
   return {
-    externalIds: [positioned.billingSubjectId],
-    observedTransition: `positioned:remaining=${positioned.effectiveRemainder}`,
+    externalIds: [billingSubjectId],
+    observedTransition:
+      `original=${originalRemaining}→positioned=${positioned.effectiveRemainder}→` +
+      `crossed=${crossedRemaining}(cost=${observedRequestCost})→gated:${gateSignals.join("+")}→` +
+      `restored=${restoredRemaining}`,
     cleanupEntries: ["billing_fixture_adjustment"],
   };
 }
@@ -885,9 +1490,12 @@ async function runFailureInjectionCellLive(
   const actor = await authenticatedActor(asAuthenticatedActorWorld(world), "owner", { gatewaySurface: "cloud" });
   await world.trackActorSubjects?.(actor.gatewayKey);
 
-  // Control BEFORE: an unrelated authenticated product action succeeds.
-  const listWorkspaces = () => actor.api.get("/v1/workspaces").then(() => true).catch(() => false);
-  const controlBefore = await listWorkspaces();
+  // Control BEFORE: an unrelated authenticated product action succeeds. Use
+  // `/v1/organizations` — the proven authenticated product read (authenticated-
+  // actor.ts / cloud-provision-1 use it); there is no `/v1/workspaces` route on
+  // the candidate server.
+  const controlAction = () => actor.api.get("/v1/organizations").then(() => true).catch(() => false);
+  const controlBefore = await controlAction();
   if (!controlBefore) {
     throw new Error("failure-injection: the control product action did not succeed before injection.");
   }
@@ -901,10 +1509,13 @@ async function runFailureInjectionCellLive(
     try {
       while (Date.now() < probeDeadline && observedFailure === null) {
         try {
-          await actor.api.get("/v1/workspaces");
+          await actor.api.get("/v1/organizations");
         } catch (error) {
           observedFailure = describe(error).slice(0, 200);
         }
+        // Short sleep so the probe loop does not hammer the box while the
+        // container restarts.
+        await sleep(250);
       }
     } finally {
       const handle = await injection;
@@ -919,7 +1530,7 @@ async function runFailureInjectionCellLive(
   }
 
   // Recovery through the normal product path.
-  const recovered = await pollUntil(listWorkspaces, (ok) => ok === true, FAILURE_RECOVERY_TIMEOUT_MS, 3_000);
+  const recovered = await pollUntil(controlAction, (ok) => ok === true, FAILURE_RECOVERY_TIMEOUT_MS, 3_000);
   if (!recovered) {
     throw new Error("failure-injection: the product action did not recover through the normal path after disarm.");
   }
@@ -981,7 +1592,6 @@ async function runCleanupReplayCellLive(
     "stripe_webhook_endpoint",
     "stripe_product_price",
   ]);
-  const unreconciledStripeBefore = ledger.entries().filter((e) => stripeKinds.has(e.kind) && e.phase !== "reconciled");
   await replayLedger(ledger, stripeHandlers);
   const reloadedAfter = await loadCleanupLedger(world.paths.runDir);
   const unreconciledStripeAfter = reloadedAfter

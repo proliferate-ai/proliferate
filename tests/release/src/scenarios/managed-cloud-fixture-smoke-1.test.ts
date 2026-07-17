@@ -5,9 +5,17 @@ import {
   FIXTURE_SMOKE_CELL_NAMES,
   MANAGED_CLOUD_FIXTURE_SMOKE_1_ID,
   assertDuplicateDeliveryByteIdentity,
+  buildDuplicatePostScript,
   managedCloudFixtureSmoke1,
+  parseProcStatStarttime,
+  parseRelayPidfileJson,
+  parseStatModes,
+  parseWebhookReceiptSnapshot,
+  procCmdlineContainsScript,
   resolveSmokeSecretKey,
+  runBillingThresholdCellLive,
   runFixtureSmokeCells,
+  type BillingThresholdCellDeps,
   type FixtureSmokeCellResult,
   type FixtureSmokeDriver,
   type StripePreparation,
@@ -19,6 +27,7 @@ import type { CapturedDelivery } from "../fixtures/callback-relay.js";
 import type { PlannedCellV1 } from "../runner/result.js";
 import type { ManagedCloudWorld } from "../worlds/managed-cloud/world.js";
 import type { ManagedCloudCleanupEvidence } from "../worlds/managed-cloud/cleanup-kinds.js";
+import type { AuthenticatedActor } from "../fixtures/authenticated-actor.js";
 
 const REQUIRED_ENV_VARS: Record<string, string> = {
   AGENT_GATEWAY_LITELLM_BASE_URL: "https://admin.litellm.example",
@@ -381,4 +390,180 @@ test("assertDuplicateDeliveryByteIdentity throws when no new forwarded row appea
 
 test("assertDuplicateDeliveryByteIdentity throws when there is no baseline row for the event", () => {
   assert.throws(() => assertDuplicateDeliveryByteIdentity([], [], "evt_missing"), /no baseline delivery row/);
+});
+
+// ── Cell A pure parsers (mode / pid / receipt / duplicate-post builder) ─────
+
+test("parseStatModes maps each path to its octal mode", () => {
+  const stdout = "/home/ubuntu/candidate/callback-relay 700\n/home/ubuntu/candidate/callback-relay/held/ab.bin 600\n";
+  const modes = parseStatModes(stdout);
+  assert.equal(modes["/home/ubuntu/candidate/callback-relay"], "700");
+  assert.equal(modes["/home/ubuntu/candidate/callback-relay/held/ab.bin"], "600");
+});
+
+test("parseRelayPidfileJson parses {pid,starttime,script} and rejects a malformed pidfile", () => {
+  const parsed = parseRelayPidfileJson('{"pid":4242,"starttime":"9988","script":"/x/relay.py"}');
+  assert.deepEqual(parsed, { pid: 4242, starttime: "9988", script: "/x/relay.py" });
+  assert.throws(() => parseRelayPidfileJson('{"pid":"nope"}'), /malformed/);
+});
+
+test("parseProcStatStarttime extracts starttime even when comm contains spaces/parens", () => {
+  // After the parser strips through the LAST `) `, the remainder begins at field
+  // 3 (state); starttime is field 22 overall = index 19 of the remainder. Build a
+  // remainder with 19 filler fields (indices 0..18) then the starttime at index 19.
+  const remainder = Array.from({ length: 19 }, (_, i) => String(i + 1)).join(" ") + " 9988 rest more";
+  const statLine = `4242 (relay py) ${remainder}`;
+  assert.equal(parseProcStatStarttime(statLine), "9988");
+});
+
+test("procCmdlineContainsScript detects the script path in a NUL→space-joined cmdline", () => {
+  assert.equal(procCmdlineContainsScript("python3 /x/relay.py serve ", "/x/relay.py"), true);
+  assert.equal(procCmdlineContainsScript("python3 /other.py serve ", "/x/relay.py"), false);
+});
+
+test("parseWebhookReceiptSnapshot reads count/status/attempt/processed_at", () => {
+  const snap = parseWebhookReceiptSnapshot(
+    JSON.stringify({ count: 1, status: "processed", attempt_count: 1, processed_at: "2026-07-16T00:00:00Z" }),
+  );
+  assert.deepEqual(snap, { count: 1, status: "processed", attemptCount: 1, processedAt: "2026-07-16T00:00:00Z" });
+});
+
+test("buildDuplicatePostScript re-POSTs the replayed spool bytes, skipping Host, printing the status", () => {
+  const script = buildDuplicatePostScript("/home/ubuntu/candidate/callback-relay", "abc123", 8899, "/v1/billing/webhooks/stripe");
+  assert.match(script, /python3 -c/);
+  assert.match(script, /replayed/);
+  assert.match(script, /abc123/);
+  assert.match(script, /127\.0\.0\.1:8899\/v1\/billing\/webhooks\/stripe/);
+  assert.match(script, /host/i); // the Host-skip guard is present
+});
+
+// ── Cell C arc (fake deps: original→positioned→crossed→gated→restored) ──────
+
+function fakeCellCActor(): AuthenticatedActor {
+  return {
+    role: "owner",
+    userId: "user-c",
+    organizationId: "org-c",
+    enrollmentId: "enr-c",
+    api: {} as never,
+    session: {} as never,
+    gatewayKey: {} as never,
+  };
+}
+
+/** Records call order and returns a scripted arc so the whole flow is exercised. */
+function fakeCellCDeps(overrides: Partial<BillingThresholdCellDeps> = {}): {
+  deps: BillingThresholdCellDeps;
+  calls: string[];
+} {
+  const calls: string[] = [];
+  // original remaining 5.0; positioned to 0.001; the real request costs 0.01 →
+  // crossed to -0.009; restored grants → 5.0 - 0.01 = 4.99.
+  let remaining = 5.0;
+  let secondRequestCount = 0;
+  const deps: BillingThresholdCellDeps = {
+    createActor: async () => {
+      calls.push("createActor");
+      return fakeCellCActor();
+    },
+    resolveBillingSubjectId: async () => {
+      calls.push("resolveSubject");
+      return "sub-c";
+    },
+    readRemainingCreditUsd: async () => {
+      calls.push(`read:${remaining}`);
+      return remaining;
+    },
+    positionThreshold: async () => {
+      calls.push("position");
+      remaining = 0.001;
+      return { billingSubjectId: "sub-c", effectiveRemainder: 0.001 };
+    },
+    decryptVirtualKey: async () => {
+      calls.push("decrypt");
+      return "sk-raw-virtual-key";
+    },
+    listGatewayModels: async () => ({ allowlist: ["claude-haiku-4-5"], live: ["claude-haiku-4-5"] }),
+    gatewayChatCompletion: async ({ rawKey }) => {
+      assert.equal(rawKey, "sk-raw-virtual-key");
+      secondRequestCount += 1;
+      if (secondRequestCount === 1) {
+        calls.push("request1");
+        return { status: 200, costUsd: 0.01 };
+      }
+      calls.push("request2");
+      return { status: 429, costUsd: null }; // gate signal: rejected
+    },
+    runReconcilePasses: async () => {
+      calls.push("reconcile");
+      remaining = -0.009; // crossed
+    },
+    readBudgetStatus: async () => "exhausted",
+    restoreAdjustment: async () => {
+      calls.push("restore");
+      remaining = 4.99; // grants restored; imported usage (0.01) persists → 5.0 - 0.01
+    },
+    ...overrides,
+  };
+  return { deps, calls };
+}
+
+test("Cell C runs the full arc and witnesses original→positioned→crossed→gated→restored", async () => {
+  const { deps, calls } = fakeCellCDeps();
+  const world = fakeWorld();
+  const result = await runBillingThresholdCellLive(world, { runTag: "r:s", secretKey: "sk_test_x", prep: fakePrep(), aws: { region: "us-east-1", hostedZoneId: "Z1" } }, deps);
+  assert.match(result.observedTransition, /original=5/);
+  assert.match(result.observedTransition, /crossed=-0.009/);
+  assert.match(result.observedTransition, /restored=4.99/);
+  assert.match(result.observedTransition, /gated:/);
+  // The arc order: original read BEFORE positioning; restore AFTER the crossing.
+  assert.ok(calls.indexOf("read:5") < calls.indexOf("position"));
+  assert.ok(calls.indexOf("request1") < calls.indexOf("reconcile"));
+  assert.ok(calls.indexOf("restore") > calls.indexOf("reconcile"));
+});
+
+test("Cell C fails when the ledger did not cross to <= 0 after the real request", async () => {
+  const { deps } = fakeCellCDeps({
+    runReconcilePasses: async () => {
+      /* leaves remaining positive */
+    },
+  });
+  const world = fakeWorld();
+  await assert.rejects(
+    () => runBillingThresholdCellLive(world, { runTag: "r:s", secretKey: "k", prep: fakePrep(), aws: { region: "r", hostedZoneId: "z" } }, deps),
+    /did not cross to <= 0/,
+  );
+});
+
+test("Cell C fails when no product-side gate signal is observed", async () => {
+  const { deps } = fakeCellCDeps({
+    gatewayChatCompletion: async () => ({ status: 200, costUsd: 0.01 }), // second request also 200
+    readBudgetStatus: async () => "ok",
+  });
+  const world = fakeWorld();
+  await assert.rejects(
+    () => runBillingThresholdCellLive(world, { runTag: "r:s", secretKey: "k", prep: fakePrep(), aws: { region: "r", hostedZoneId: "z" } }, deps),
+    /NO product-side gate signal/,
+  );
+});
+
+test("Cell C fails when the restored remainder != originalRemaining - requestCost", async () => {
+  const { deps } = fakeCellCDeps({
+    restoreAdjustment: async () => {
+      /* leaves remaining at crossed -0.009 instead of restoring */
+    },
+  });
+  const world = fakeWorld();
+  await assert.rejects(
+    () => runBillingThresholdCellLive(world, { runTag: "r:s", secretKey: "k", prep: fakePrep(), aws: { region: "r", hostedZoneId: "z" } }, deps),
+    /restored remaining/,
+  );
+});
+
+test("Cell C never leaks the raw virtual key into the observed transition", async () => {
+  const { deps } = fakeCellCDeps();
+  const world = fakeWorld();
+  const result = await runBillingThresholdCellLive(world, { runTag: "r:s", secretKey: "k", prep: fakePrep(), aws: { region: "r", hostedZoneId: "z" } }, deps);
+  assert.ok(!result.observedTransition.includes("sk-raw-virtual-key"));
+  assert.ok(!result.externalIds.some((id) => id.includes("sk-raw-virtual-key")));
 });
