@@ -315,31 +315,17 @@ export const ENV_MANIFEST: readonly EnvVarSpec[] = [
     lanes: ["sandbox"],
   },
   {
-    name: "RELEASE_E2E_RETAINED_TEMPLATE_ID",
+    name: "RELEASE_E2E_RETAINED_RELEASE_ID",
     description:
-      "Immutable provider (E2B) template id of the retained-production N-1 sandbox image that " +
-      "T4-RUNTIME-1 provisions its baseline from before updating to candidate N. 'Retained' means the " +
-      "exact template of the last release ACTUALLY qualified through this platform — never a decremented " +
-      "version or a rebuilt-from-source approximation. Absent (with RELEASE_E2E_RETAINED_MANIFEST) -> " +
-      "T4-RUNTIME-1 reports blocked rather than fabricating an N-1 (founder ruling 2026-07-16). No " +
-      "release has been qualified through the platform yet, so this is expected to be unset until one is.",
+      "Release id (e.g. `v0.3.38`) selecting a committed retained-release receipt from " +
+      "tests/release/retained-releases/index.json as the Tier 4 N-1 baseline. The receipt is " +
+      "schema-validated, digest-checked, and policy-checked (a bootstrap_unqualified receipt fails " +
+      "closed once any qualified receipt exists) before any world side effect; a named id that cannot " +
+      "be validated is an error, never a silent block. Absent -> T4-RUNTIME-1 reports blocked rather " +
+      "than fabricating an N-1.",
     whereItLives:
-      "Produced by the release-qualification pipeline when it retains the last green release's E2B " +
-      "template; supplied to an on-demand/nightly T4-RUNTIME-1 dispatch once such a template exists.",
-    secret: false,
-    lanes: ["sandbox"],
-  },
-  {
-    name: "RELEASE_E2E_RETAINED_MANIFEST",
-    description:
-      "The retained-production N-1 release component manifest (JSON) describing the versions and digests " +
-      "of the AnyHarness/Worker/Supervisor binaries and bundled catalog/registry baked into " +
-      "RELEASE_E2E_RETAINED_TEMPLATE_ID. T4-RUNTIME-1 parses it to assert baseline N-1 identities and to " +
-      "compute what a real N-1 -> N update must change. Absent (with RELEASE_E2E_RETAINED_TEMPLATE_ID) -> " +
-      "T4-RUNTIME-1 reports blocked. Not a credential (public release metadata).",
-    whereItLives:
-      "The retained release's published manifest, captured by the qualification pipeline alongside the " +
-      "retained template id; supplied verbatim to the T4-RUNTIME-1 dispatch.",
+      "Chosen by the operator/workflow from the committed retained-release index; the only current " +
+      "receipt is the founder-ruled one-time bootstrap_unqualified v0.3.38 baseline.",
     secret: false,
     lanes: ["sandbox"],
   },

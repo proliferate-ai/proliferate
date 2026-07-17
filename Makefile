@@ -867,6 +867,29 @@ qualification-candidate-build-map:
 # target dir and clear any ambient cross-compile target so an operator's
 # CARGO_TARGET_DIR/CARGO_BUILD_TARGET cannot make this qualify a stale binary
 # at target/release/ while cargo wrote somewhere else.
+# Validate and materialize a committed retained-release receipt — the exact
+# immutable production N-1 artifact set Tier 4 update proofs start from
+# (specs/developing/testing/tier-4-scenario-contract.md "Artifact Identity").
+# Shape + policy validation run before any download; every byte is verified
+# against the receipt on every use (a cache hit is re-hashed, never trusted).
+# Read-only toward providers: LIVE=1 adds an E2B metadata lookup proving the
+# recorded immutable source tag still resolves to the recorded build id.
+#
+# RETAINED_RELEASE_ID=vX.Y.Z   Receipt to validate (see
+#                              tests/release/retained-releases/index.json).
+# LIVE=1                       Also live-verify E2B template identity
+#                              (needs E2B_API_KEY or RELEASE_E2E_E2B_API_KEY).
+# CANDIDATE_SHA=<40-hex>       Optional candidate N SHA for the N != N-1 check.
+qualification-retained-release:
+	@if [ -z "$(RETAINED_RELEASE_ID)" ]; then \
+		echo "RETAINED_RELEASE_ID=<vX.Y.Z> is required, e.g. make qualification-retained-release RETAINED_RELEASE_ID=v0.3.38"; \
+		exit 2; \
+	fi
+	cd tests/release && pnpm install --silent && pnpm exec tsx src/cli/retained-release.ts validate \
+		--release-id $(RETAINED_RELEASE_ID) \
+		$(if $(filter 1,$(LIVE)),--live,) \
+		$(if $(CANDIDATE_SHA),--candidate-sha $(CANDIDATE_SHA),)
+
 qualification-candidate-handoff-smoke:
 	pnpm install --silent
 	env -u CARGO_BUILD_TARGET \

@@ -4,8 +4,7 @@ import type { ScenarioDefinition, ScenarioRunContext } from "../types.js";
 import { ScenarioBlockedError } from "../types.js";
 import {
   RETAINED_ANYHARNESS_REPORTED_VERSION_ENV,
-  RETAINED_MANIFEST_ENV,
-  RETAINED_TEMPLATE_ID_ENV,
+  RETAINED_RELEASE_ID_ENV,
   resolveRetainedRuntimeBaseline,
   type RetainedRuntimeBaseline,
 } from "../../fixtures/retained-runtime-baseline.js";
@@ -28,24 +27,22 @@ import {
  * supervisor-owned update flow landed in #1223/#1241.
  *
  * WHY THIS SCENARIO CURRENTLY BLOCKS RATHER THAN RUNS (founder ruling
- * 2026-07-16, frozen spec "Prove Heartbeat-Driven Managed Runtime Update"):
- * a truthful N-1→N proof requires a REAL retained-production N-1 template and
- * manifest — the last artifacts actually qualified through this platform. No
- * release has been qualified through the platform yet, and no
- * retained-template resolution mechanism exists in the release harness
- * (release-worlds-and-fixtures.md defers it as "later work"). Rather than
- * fabricate an N-1 (a same-source second template labelled "N-1" would prove
- * nothing about a real cross-version update), this scenario is authored
- * complete and reports `blocked` until the retained baseline inputs
- * (RELEASE_E2E_RETAINED_TEMPLATE_ID + RELEASE_E2E_RETAINED_MANIFEST) are
- * supplied. When they are, `run()` continues into the real live proof. This
+ * 2026-07-16, frozen spec "Retain Exact Production Artifacts for Tier 4"):
+ * a truthful N-1→N proof requires a REAL retained-production N-1 baseline.
+ * The retained-release receipt mechanism now exists
+ * (tests/release/retained-releases/ + retained-release-set.ts): supplying
+ * RELEASE_E2E_RETAINED_RELEASE_ID selects a committed receipt, which is
+ * schema-, digest-, and policy-validated before `run()` continues into the
+ * real live proof. Rather than fabricate an N-1 (a same-source second
+ * template labelled "N-1" would prove nothing about a real cross-version
+ * update), this scenario reports `blocked` until a receipt is selected. This
  * keeps the gap visible (a blocked cell is reported, never silently passed)
  * without ever claiming a green it did not earn.
  *
  * Standing blockers this scenario reports honestly rather than faking:
  *   - --lane local has no managed-cloud world and no E2B sandbox -> blocked.
- *   - retained-production N-1 template/manifest inputs absent -> blocked
- *     (the founder-ruled default until a real N-1 exists).
+ *   - no retained release id selected -> blocked
+ *     (the founder-ruled default until a retained baseline is chosen).
  *   - the candidate API is not running with supervisor_owned_runtime -> blocked
  *     (a heartbeat would return the legacy direct-Worker topology, which
  *     contradicts the contract's "Worker writes the atomic mailbox request").
@@ -76,10 +73,15 @@ export const t4Runtime1: ScenarioDefinition = {
   // reported-version override is deliberately NOT here: it is optional (the
   // manifest supplies a default), and a required var would wrongly block when a
   // stamped binary needs no override.
+  // The receipt id is THE required baseline input: it names a committed,
+  // fully validated retained-release receipt. The legacy template/manifest
+  // pair is a deprecated diagnostic override and is deliberately NOT here —
+  // requiredEnv vars block the cell when absent, and the pair is an
+  // alternative, not a requirement; it is read through the optional-var idiom
+  // below (same as the reported-version override).
   requiredEnv: [
     "RELEASE_E2E_SERVER_URL",
-    RETAINED_TEMPLATE_ID_ENV,
-    RETAINED_MANIFEST_ENV,
+    RETAINED_RELEASE_ID_ENV,
     SUPERVISOR_OWNED_RUNTIME_ENV,
   ],
   plan: () => [
@@ -126,19 +128,31 @@ async function runReal(ctx: ScenarioRunContext): Promise<void> {
   // NOT ctx.env: it is intentionally absent from requiredEnv, so ctx.env would
   // never surface it. It is handed to the resolver explicitly.
   const reportedVersionOverride = process.env[RETAINED_ANYHARNESS_REPORTED_VERSION_ENV];
+  // The runner's run identity carries the authoritative candidate N source
+  // SHA. The resolver enforces retained N-1 != candidate N and fails closed
+  // when the SHA cannot be established — a real T4 run must know what it
+  // updates TO (RR-CONTROL-003).
+  const candidateSourceSha = ctx.runIdentity?.source_sha?.trim() ?? "";
+  if (candidateSourceSha.length === 0 && (ctx.env.get(RETAINED_RELEASE_ID_ENV)?.trim() ?? "").length > 0) {
+    throw new ScenarioBlockedError(
+      "T4-RUNTIME-1: a retained release was selected but this run has no resolved candidate source SHA " +
+        "(run identity is absent), so the retained N-1 != candidate N invariant cannot be enforced. " +
+        "Run through the qualification runner so the run identity carries the candidate SHA.",
+    );
+  }
   const retained: RetainedRuntimeBaseline | null = resolveRetainedRuntimeBaseline(
     ctx.env,
     reportedVersionOverride,
+    { currentCandidateSourceSha: candidateSourceSha },
   );
   if (!retained) {
     throw new ScenarioBlockedError(
-      "T4-RUNTIME-1: no retained-production N-1 template/manifest available. A truthful N-1 -> N update " +
-        "proof requires the immutable E2B template and manifest of the last release actually qualified " +
-        "through this platform; none has been qualified yet, and the harness has no retained-template " +
-        "resolution mechanism (release-worlds-and-fixtures.md defers it as later work). Supply " +
-        "RELEASE_E2E_RETAINED_TEMPLATE_ID + RELEASE_E2E_RETAINED_MANIFEST to run the live proof. Refusing " +
-        "to fabricate an N-1 (a same-source second template proves nothing about a real cross-version " +
-        "update).",
+      "T4-RUNTIME-1: no retained-production N-1 baseline selected. A truthful N-1 -> N update proof " +
+        "requires the immutable retained artifacts of a real production release. Supply " +
+        `${RETAINED_RELEASE_ID_ENV} naming a committed retained-release receipt ` +
+        "(tests/release/retained-releases/index.json — the founder-ruled bootstrap_unqualified v0.3.38 " +
+        "baseline is the current entry). Refusing to fabricate an N-1 (a same-source second template " +
+        "proves nothing about a real cross-version update).",
     );
   }
 
