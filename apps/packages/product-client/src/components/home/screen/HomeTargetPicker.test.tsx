@@ -43,6 +43,7 @@ function renderPicker(overrides: Partial<Parameters<typeof HomeTargetPicker>[0]>
 
   render(
     <HomeTargetPicker
+      coworkAvailable={true}
       destination="repository"
       repoLaunchKind="worktree"
       repositories={[keystoneRepository, productRepository]}
@@ -135,6 +136,24 @@ describe("HomeTargetPicker", () => {
 
     expect(screen.getByRole("button", { name: /No project/i })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /No repository/i })).toBeNull();
+  });
+
+  it("offers the projectless Cowork target on Desktop", () => {
+    const callbacks = renderPicker();
+
+    fireEvent.click(screen.getByRole("button", { name: /Project: Keystone repository/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Don't work in a project" }));
+
+    expect(callbacks.onSelectCowork).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not offer the Desktop-only Cowork target on Web", () => {
+    const callbacks = renderPicker({ coworkAvailable: false });
+
+    fireEvent.click(screen.getByRole("button", { name: /Project: Keystone repository/i }));
+
+    expect(screen.queryByRole("button", { name: "Don't work in a project" })).toBeNull();
+    expect(callbacks.onSelectCowork).not.toHaveBeenCalled();
   });
 
   it("selects a base branch from the branch picker without changing runtime", () => {

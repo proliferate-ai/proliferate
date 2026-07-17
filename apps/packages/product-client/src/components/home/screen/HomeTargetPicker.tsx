@@ -37,6 +37,7 @@ import {
 import { HomeProjectMenu } from "#product/components/home/screen/HomeProjectMenu";
 
 interface HomeTargetPickerProps {
+  coworkAvailable: boolean;
   destination: HomeNextDestination;
   repoLaunchKind: HomeNextRepoLaunchKind;
   repositories: SettingsRepositoryEntry[];
@@ -57,6 +58,7 @@ interface HomeTargetPickerProps {
 }
 
 export function HomeTargetPicker({
+  coworkAvailable,
   destination,
   repoLaunchKind,
   repositories,
@@ -123,6 +125,7 @@ export function HomeTargetPicker({
             aria-label={homeTargetProjectAriaLabel({ destination, selectedRepository })}
           />
         )}
+        coworkAvailable={coworkAvailable}
         destination={destination}
         repositories={repositories}
         selectedRepository={selectedRepository}

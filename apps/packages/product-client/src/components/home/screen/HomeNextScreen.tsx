@@ -23,6 +23,7 @@ import { resolveHomeTargetLaunchKindForRepository } from "#product/lib/domain/ho
 
 export function HomeNextScreen() {
   const {
+    coworkAvailable,
     destination,
     repositorySelection,
     repoLaunchKind,
@@ -140,6 +141,7 @@ export function HomeNextScreen() {
                           {promptTarget}
                         </Button>
                       )}
+                      coworkAvailable={coworkAvailable}
                       side="bottom"
                       destination={destination}
                       repositories={homeNext.repositories}
@@ -201,6 +203,7 @@ export function HomeNextScreen() {
             )}
             targetPickerSlot={(
               <HomeTargetPicker
+                coworkAvailable={coworkAvailable}
                 destination={destination}
                 repoLaunchKind={repoLaunchKind}
                 repositories={homeNext.repositories}

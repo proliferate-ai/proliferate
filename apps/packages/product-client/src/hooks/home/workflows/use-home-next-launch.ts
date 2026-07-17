@@ -1,24 +1,19 @@
 import { useCallback, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useCreateCloudWorkspace } from "#product/hooks/cloud/workflows/use-create-cloud-workspace";
 import { useCoworkThreadWorkflow } from "#product/hooks/cowork/workflows/use-cowork-thread-workflow";
 import { useHomeNextLaunchPromptActions } from "#product/hooks/home/workflows/use-home-next-launch-prompt-actions";
 import { useWorkspaceEntryActions } from "#product/hooks/workspaces/workflows/use-workspace-entry-actions";
 import { useWorkspaceSelection } from "#product/hooks/workspaces/workflows/selection/use-workspace-selection";
-import type {
-  HomeLaunchTarget,
-  HomeNextModelSelection,
-} from "#product/lib/domain/home/home-next-launch";
+import type { HomeLaunchTarget, HomeNextModelSelection } from "#product/lib/domain/home/home-next-launch";
 import {
   buildDeferredHomeLaunchId,
   useDeferredHomeLaunchStore,
 } from "#product/stores/home/deferred-home-launch-store";
 import { useChatLaunchIntentStore } from "#product/stores/chat/chat-launch-intent-store";
 import { useToastStore } from "#product/stores/toast/toast-store";
-import {
-  failLatencyFlow,
-  startLatencyFlow,
-} from "#product/lib/infra/measurement/measurement-port";
+import { failLatencyFlow, startLatencyFlow } from "#product/lib/infra/measurement/measurement-port";
 import {
   buildHomePendingWorkspaceInitialSession,
   buildResolvedHomeLaunchControlValues,
@@ -38,6 +33,7 @@ interface HomeNextLaunchInput {
 
 // Owns the Home Next submit action. Does not own read-only selection state or deferred launch replay.
 export function useHomeNextLaunch() {
+  const coworkAvailable = useProductHost().desktop !== null;
   const navigate = useNavigate();
   const [isLaunching, setIsLaunching] = useState(false);
   const inFlightRef = useRef(false);
@@ -70,6 +66,10 @@ export function useHomeNextLaunch() {
   }: HomeNextLaunchInput): Promise<boolean> => {
     const prompt = text.trim();
     if (!prompt || inFlightRef.current) {
+      return false;
+    }
+    if (target.kind === "cowork" && !coworkAvailable) {
+      showToast("Cowork threads are available in the Desktop app.", "info");
       return false;
     }
 
@@ -382,6 +382,7 @@ export function useHomeNextLaunch() {
     createLocalWorkspaceAndEnterWithResult,
     createThreadFromSelection,
     createWorktreeAndEnterWithResult,
+    coworkAvailable,
     enqueueDeferredLaunch,
     failLaunchIntentIfActive,
     markLaunchIntentMaterialized,

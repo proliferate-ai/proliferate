@@ -60,11 +60,16 @@ const screenMocks = vi.hoisted(() => {
     targetPickerProps: null as any,
     leadingControlsProps: null as any,
     trailingControlsProps: null as any,
+    productHost: { desktop: {} as object | null },
   };
 });
 
 vi.mock("react-router-dom", () => ({
   useNavigate: () => screenMocks.navigate,
+}));
+
+vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
+  useProductHost: () => screenMocks.productHost,
 }));
 
 vi.mock("#product/hooks/home/derived/use-home-next-state", () => ({
@@ -111,9 +116,11 @@ vi.mock("#product/components/home/screen/HomeTargetPicker", () => ({
     screenMocks.targetPickerProps = props;
     return (
       <div data-testid="target-picker">
-        <button type="button" onClick={() => props.onSelectCowork()}>
-          Mock cowork
-        </button>
+        {props.coworkAvailable ? (
+          <button type="button" onClick={() => props.onSelectCowork()}>
+            Mock cowork
+          </button>
+        ) : null}
         <button type="button" onClick={() => props.onSelectRepository("/repo-b")}>
           Mock repo
         </button>
@@ -187,6 +194,7 @@ function installLocalStorageMock(options?: { throwOnSet?: boolean }) {
 }
 
 function resetHomeNext() {
+  screenMocks.productHost.desktop = {};
   screenMocks.homeNext.targetDisabledReason = null;
   screenMocks.homeNext.modelAvailabilityState = "launchable";
   screenMocks.homeNext.canLaunchTarget = true;
@@ -293,6 +301,8 @@ describe("HomeNextScreen model availability notices", () => {
   it("hands cowork prompts directly to launch without rendering a Home preview", () => {
     submitPrompt("start cowork");
 
+    expect(screenMocks.homeNextStateArgs).toMatchObject({ destination: "cowork" });
+    expect(screenMocks.targetPickerProps).toMatchObject({ coworkAvailable: true });
     expect(screenMocks.launch).toHaveBeenCalledWith(expect.objectContaining({
       text: "start cowork",
       target: { kind: "cowork" },
@@ -457,6 +467,39 @@ describe("HomeNextScreen target selection persistence", () => {
       selectedSshTargetId: "ssh-target-1",
       baseBranchOverride: "feature/sticky",
     });
+  });
+
+  it("normalizes the default Cowork target to a repository target on Web", () => {
+    screenMocks.productHost.desktop = null;
+
+    render(<HomeNextScreen />);
+
+    expect(screenMocks.homeNextStateArgs).toMatchObject({ destination: "repository" });
+    expect(screenMocks.targetPickerProps).toMatchObject({ coworkAvailable: false });
+    expect(screen.queryByRole("button", { name: "Mock cowork" })).toBeNull();
+  });
+
+  it("normalizes and rejects a persisted Cowork target on Web", async () => {
+    screenMocks.productHost.desktop = null;
+    memory.values.set(HOME_NEXT_TARGET_SELECTION_STORAGE_KEY, {
+      destination: "cowork",
+      repositorySelection: { kind: "auto" },
+      repoLaunchKind: "worktree",
+      selectedSshTargetId: null,
+      baseBranchOverride: null,
+    });
+    await hydrateHomeNextTargetSelection(memory.context);
+
+    render(<HomeNextScreen />);
+
+    expect(screenMocks.homeNextStateArgs).toMatchObject({ destination: "repository" });
+    await act(async () => {
+      screenMocks.targetPickerProps.onSelectCowork();
+      await Promise.resolve();
+    });
+    expect(screenMocks.homeNextStateArgs).toMatchObject({ destination: "repository" });
+    expect(memory.readJson(HOME_NEXT_TARGET_SELECTION_STORAGE_KEY))
+      .toMatchObject({ destination: "repository" });
   });
 
   it("persists repository, branch, and runtime choices from the target picker", async () => {

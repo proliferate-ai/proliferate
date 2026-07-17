@@ -1,4 +1,5 @@
-import { useCallback, useSyncExternalStore } from "react";
+import { useCallback, useMemo, useSyncExternalStore } from "react";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import type {
   HomeNextDestination,
   HomeNextRepoLaunchKind,
@@ -98,6 +99,15 @@ export function normalizeHomeNextTargetSelectionState(
   };
 }
 
+function normalizeCoworkAvailability(
+  selection: HomeNextTargetSelectionState,
+  coworkAvailable: boolean,
+): HomeNextTargetSelectionState {
+  return !coworkAvailable && selection.destination === "cowork"
+    ? { ...selection, destination: "repository" }
+    : selection;
+}
+
 function persistTargetSelection(selection: HomeNextTargetSelectionState): void {
   hasUserWritten = true;
   cachedHomeNextTargetSelection = selection;
@@ -160,27 +170,42 @@ export function subscribeHomeNextTargetSelectionState(listener: () => void): () 
   };
 }
 
-export function useHomeNextTargetSelectionSnapshot(): HomeNextTargetSelectionState {
-  return useSyncExternalStore(
+function useHomeNextTargetSelectionForHost() {
+  const coworkAvailable = useProductHost().desktop !== null;
+  const storedTargetSelection = useSyncExternalStore(
     subscribeHomeNextTargetSelectionState,
     readHomeNextTargetSelectionState,
     () => DEFAULT_HOME_NEXT_TARGET_SELECTION,
   );
+  const targetSelection = useMemo(
+    () => normalizeCoworkAvailability(storedTargetSelection, coworkAvailable),
+    [coworkAvailable, storedTargetSelection],
+  );
+
+  return { coworkAvailable, targetSelection };
+}
+
+export function useHomeNextTargetSelectionSnapshot(): HomeNextTargetSelectionState {
+  return useHomeNextTargetSelectionForHost().targetSelection;
 }
 
 export function useHomeNextTargetSelectionState() {
-  const targetSelection = useHomeNextTargetSelectionSnapshot();
+  const { coworkAvailable, targetSelection } = useHomeNextTargetSelectionForHost();
 
   const patchTargetSelection = useCallback((patch: HomeNextTargetSelectionPatch) => {
-    const next = normalizeHomeNextTargetSelectionState({
-      ...readHomeNextTargetSelectionState(),
-      ...patch,
-    });
+    const next = normalizeCoworkAvailability(
+      normalizeHomeNextTargetSelectionState({
+        ...readHomeNextTargetSelectionState(),
+        ...patch,
+      }),
+      coworkAvailable,
+    );
     persistTargetSelection(next);
-  }, []);
+  }, [coworkAvailable]);
 
   return {
     ...targetSelection,
+    coworkAvailable,
     patchTargetSelection,
     setDestination: useCallback(
       (destination: HomeNextDestination) => patchTargetSelection({ destination }),
