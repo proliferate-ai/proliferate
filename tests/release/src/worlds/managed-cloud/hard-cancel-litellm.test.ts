@@ -247,6 +247,46 @@ test("a truncated post-delete key inventory can never report green", async () =>
   assert.equal(fake.calls.some((call) => call.path.endsWith("/delete")), true);
 });
 
+test("changing user totals or repeated ids fail before mutation", async () => {
+  for (const mode of ["changing-total", "repeated-id"] as const) {
+    const fake = provider(mixedState());
+    const fetch: FetchLike = async (url, init) => {
+      const parsed = new URL(url);
+      if (parsed.pathname.endsWith("/user/list")) {
+        const page = Number(parsed.searchParams.get("page") ?? "1");
+        if (page === 1) {
+          return response(200, {
+            users: [{ user_id: "user-page", metadata: {} }],
+            total: 2,
+            page: 1,
+            page_size: 100,
+            total_pages: 2,
+          });
+        }
+        return response(200, {
+          users: mode === "repeated-id" ? [{ user_id: "user-page", metadata: {} }] : [],
+          total: mode === "repeated-id" ? 2 : 1,
+          page: 2,
+          page_size: 100,
+          total_pages: mode === "repeated-id" ? 2 : 1,
+        });
+      }
+      return fake.fetch(url, init);
+    };
+
+    await assert.rejects(
+      () => cleanupQualificationLiteLlmRun({
+        baseUrl: "https://litellm.example",
+        masterKey: "master",
+        runId: RUN_ID,
+        shardId: SHARD_ID,
+      }, { fetch }),
+      mode === "repeated-id" ? /repeated a user id/ : /changed its authoritative pagination totals/,
+    );
+    assert.equal(fake.calls.some((call) => call.path.endsWith("/delete")), false);
+  }
+});
+
 test("partial or conflicting ownership metadata fails before mutation", async () => {
   const state = mixedState();
   state.teams[0]!.metadata = { proliferate_qualification_run_id: RUN_ID };

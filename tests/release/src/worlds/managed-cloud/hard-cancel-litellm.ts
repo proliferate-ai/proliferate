@@ -137,6 +137,9 @@ async function listUsers(
   fetch: FetchLike,
 ): Promise<Record<string, unknown>[]> {
   const rows: Record<string, unknown>[] = [];
+  const seenUserIds = new Set<string>();
+  let authoritativeTotal: number | undefined;
+  let authoritativePages: number | undefined;
   for (let page = 1; page <= MAX_PAGES; page += 1) {
     const payload = record(await jsonResponse(await fetch(
       `${base}/user/list?page=${page}&page_size=${PAGE_SIZE}`,
@@ -152,6 +155,19 @@ async function listUsers(
       payload.total_pages < 0 || payload.total_pages > MAX_PAGES
     ) {
       throw new Error("LiteLLM user inventory returned malformed pagination metadata.");
+    }
+    if (authoritativeTotal === undefined) {
+      authoritativeTotal = payload.total;
+      authoritativePages = payload.total_pages;
+    } else if (payload.total !== authoritativeTotal || payload.total_pages !== authoritativePages) {
+      throw new Error("LiteLLM user inventory changed its authoritative pagination totals.");
+    }
+    for (const row of pageRows) {
+      const userId = safeIdentity(row.user_id, "LiteLLM user id");
+      if (seenUserIds.has(userId)) {
+        throw new Error("LiteLLM user inventory repeated a user id across its pages.");
+      }
+      seenUserIds.add(userId);
     }
     if (payload.total_pages === 0) {
       if (page !== 1 || pageRows.length !== 0 || payload.total !== 0) {
