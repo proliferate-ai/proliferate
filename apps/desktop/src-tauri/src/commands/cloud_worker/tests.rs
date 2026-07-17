@@ -1,15 +1,19 @@
-use std::{env, ffi::OsString, fs, process::Stdio, sync::Arc, thread, time::Duration};
+use std::{
+    env, fs,
+    process::Stdio,
+    sync::{atomic::Ordering, Arc},
+    thread,
+    time::Duration,
+};
 
 use tokio::process::Command;
-use tokio::time::{sleep, Instant};
+use tokio::time::{sleep, timeout, Instant};
 
-use crate::agent_seed_env::current_target_triple;
-
+use super::lifecycle::{lock_for_worker_start, prepare_desktop_dispatch_worker_update};
 use super::{
-    acquire_worker_database_lock, process_matches_worker_config, read_worker_log_tail,
-    startup_watch_window, stop_tracked_desktop_dispatch_worker, worker_database_lock_is_held,
-    worker_startup_failure_message, write_worker_config, CloudWorkerProcess, CloudWorkerState,
-    WORKER_LOG_TAIL_MAX_BYTES,
+    acquire_worker_database_lock, read_worker_log_tail, startup_watch_window,
+    worker_database_lock_is_held, worker_startup_failure_message, write_worker_config,
+    CloudWorkerProcess, CloudWorkerState, WORKER_LOG_TAIL_MAX_BYTES,
 };
 
 const TEST_WORKER_LOCK_PATH_ENV: &str = "PROLIFERATE_TEST_WORKER_LOCK_PATH";
@@ -40,7 +44,7 @@ fn worker_config_uses_the_desktop_sidecar_url() {
 }
 
 #[tokio::test]
-async fn app_exit_stops_worker_and_releases_its_database_lock() {
+async fn update_preparation_only_stops_worker_for_direct_exit_installers() {
     let root = env::temp_dir().join(format!(
         "proliferate-worker-exit-lock-{}",
         uuid::Uuid::new_v4()
@@ -72,23 +76,54 @@ async fn app_exit_stops_worker_and_releases_its_database_lock() {
     }
 
     let state = Arc::new(CloudWorkerState::default());
-    *state.process.lock().await = Some(CloudWorkerProcess {
+    state.lifecycle.lock().await.process = Some(CloudWorkerProcess {
         target_id: "desktop-install".to_string(),
         child,
         config_path,
     });
 
-    assert!(stop_tracked_desktop_dispatch_worker(&state)
+    prepare_desktop_dispatch_worker_update(&state, false)
         .await
-        .expect("stop tracked worker"));
+        .expect("prepare non-exiting installer");
+    assert!(worker_database_lock_is_held(&database_path).expect("inspect retained worker lock"));
+    let admitted_start = lock_for_worker_start(&state)
+        .await
+        .expect("non-exiting installer keeps worker starts enabled");
+    assert!(admitted_start.process.is_some());
+    drop(admitted_start);
+
+    let lifecycle_guard = state.lifecycle.lock().await;
+    let shutdown_state = Arc::clone(&state);
+    let shutdown =
+        tokio::spawn(
+            async move { prepare_desktop_dispatch_worker_update(&shutdown_state, true).await },
+        );
+    timeout(Duration::from_secs(1), async {
+        while !state.terminal_shutdown_armed.load(Ordering::Acquire) {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("terminal shutdown was not armed");
+    let late_start_state = Arc::clone(&state);
+    let late_start =
+        tokio::spawn(async move { lock_for_worker_start(&late_start_state).await.is_some() });
+    drop(lifecycle_guard);
+
+    shutdown
+        .await
+        .expect("join update shutdown")
+        .expect("prepare direct-exit installer");
+    assert!(!late_start.await.expect("join queued worker start"));
     assert!(!worker_database_lock_is_held(&database_path).expect("inspect released worker lock"));
-    assert!(state.process.lock().await.is_none());
+    assert!(state.lifecycle.lock().await.process.is_none());
+    assert!(lock_for_worker_start(&state).await.is_none());
 
     fs::remove_dir_all(root).expect("remove temporary worker root");
 }
 
 #[test]
-#[ignore = "subprocess fixture for app_exit_stops_worker_and_releases_its_database_lock"]
+#[ignore = "subprocess fixture for update_preparation_only_stops_worker_for_direct_exit_installers"]
 fn worker_database_lock_holder_fixture() {
     let Some(database_path) = env::var_os(TEST_WORKER_LOCK_PATH_ENV) else {
         return;
@@ -96,41 +131,6 @@ fn worker_database_lock_holder_fixture() {
     let database_path = std::path::PathBuf::from(database_path);
     let _lock = acquire_worker_database_lock(&database_path).expect("acquire fixture lock");
     thread::sleep(Duration::from_secs(60));
-}
-
-#[test]
-fn orphan_takeover_matches_only_the_exact_worker_config() {
-    let expected_config = std::path::Path::new("/private/target/config.toml");
-    let worker_executable = std::path::PathBuf::from(format!(
-        "/app/proliferate-worker-{}",
-        current_target_triple()
-    ));
-    let matching_command = vec![
-        OsString::from("proliferate-worker"),
-        OsString::from("--config"),
-        expected_config.as_os_str().to_owned(),
-    ];
-
-    assert!(process_matches_worker_config(
-        Some(&worker_executable),
-        &matching_command,
-        expected_config,
-    ));
-    assert!(!process_matches_worker_config(
-        Some(std::path::Path::new("/app/unrelated-worker")),
-        &matching_command,
-        expected_config,
-    ));
-    assert!(!process_matches_worker_config(
-        Some(&worker_executable),
-        &matching_command,
-        std::path::Path::new("/private/other/config.toml"),
-    ));
-    assert!(!process_matches_worker_config(
-        Some(std::path::Path::new("/app/proliferate-worker-helper")),
-        &matching_command,
-        expected_config,
-    ));
 }
 
 #[test]

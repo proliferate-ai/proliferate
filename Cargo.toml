@@ -64,7 +64,6 @@ zip = { version = "8.6.0", default-features = false, features = ["deflate"] }
 tar = "0.4"
 zstd = "0.13"
 fs2 = "0.4"
-sysinfo = { version = "0.39.6", default-features = false, features = ["system"] }
 toml = "0.9"
 
 # ACP SDK
