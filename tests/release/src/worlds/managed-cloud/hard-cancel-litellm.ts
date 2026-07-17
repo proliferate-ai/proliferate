@@ -78,6 +78,9 @@ async function listKeys(
   fetch: FetchLike,
 ): Promise<Record<string, unknown>[]> {
   const rows: Record<string, unknown>[] = [];
+  const seenTokens = new Set<string>();
+  let authoritativeTotal: number | undefined;
+  let authoritativePages: number | undefined;
   for (let page = 1; page <= MAX_PAGES; page += 1) {
     const payload = record(await jsonResponse(await fetch(
       `${base}/key/list?return_full_object=true&size=${PAGE_SIZE}&page=${page}`,
@@ -85,30 +88,45 @@ async function listKeys(
     ), "LiteLLM key inventory"), "LiteLLM key inventory");
     if (!Array.isArray(payload.keys)) throw new Error("LiteLLM key inventory returned no keys array.");
     const pageRows = payload.keys.map((row) => record(row, "LiteLLM key inventory row"));
-    rows.push(...pageRows);
-    if (payload.current_page === undefined && payload.total_pages === undefined) {
-      if (pageRows.length >= PAGE_SIZE) {
-        throw new Error("LiteLLM key inventory omitted pagination for a full page.");
-      }
-      return rows;
-    }
     const current = payload.current_page;
     const totalPages = payload.total_pages;
+    const totalCount = payload.total_count;
     if (
       typeof current !== "number" || !Number.isInteger(current) || current !== page ||
       typeof totalPages !== "number" || !Number.isInteger(totalPages) ||
-      totalPages < 0 || totalPages > MAX_PAGES
+      totalPages < 0 || totalPages > MAX_PAGES ||
+      typeof totalCount !== "number" || !Number.isInteger(totalCount) ||
+      totalCount < 0 || totalCount > PAGE_SIZE * MAX_PAGES
     ) {
       throw new Error("LiteLLM key inventory returned malformed pagination metadata.");
     }
+    if (authoritativeTotal === undefined) {
+      authoritativeTotal = totalCount;
+      authoritativePages = totalPages;
+    } else if (totalCount !== authoritativeTotal || totalPages !== authoritativePages) {
+      throw new Error("LiteLLM key inventory changed its authoritative pagination totals.");
+    }
+    for (const row of pageRows) {
+      const token = safeIdentity(row.token, "LiteLLM key token id");
+      if (seenTokens.has(token)) {
+        throw new Error("LiteLLM key inventory repeated a token id across its pages.");
+      }
+      seenTokens.add(token);
+    }
+    rows.push(...pageRows);
     if (totalPages === 0) {
-      if (page !== 1 || pageRows.length !== 0 || (payload.total_count !== undefined && payload.total_count !== 0)) {
+      if (page !== 1 || pageRows.length !== 0 || totalCount !== 0) {
         throw new Error("LiteLLM key inventory returned malformed empty pagination metadata.");
       }
       return rows;
     }
     if (totalPages < page) throw new Error("LiteLLM key inventory pagination moved backwards.");
-    if (page >= totalPages) return rows;
+    if (page >= totalPages) {
+      if (rows.length !== totalCount) {
+        throw new Error("LiteLLM key inventory did not match its authoritative total.");
+      }
+      return rows;
+    }
   }
   throw new Error("LiteLLM key inventory exceeded the bounded page limit.");
 }

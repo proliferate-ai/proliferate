@@ -26,7 +26,7 @@ jobs:
   classify-source:
     name: Classify the exact Release E2E managed-cloud job
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     env:
       TARGET_WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id }}
       TARGET_WORKFLOW_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
@@ -201,10 +201,11 @@ jobs:
     needs: classify-source
     if: >-
       always() &&
-      needs.classify-source.outputs.cleanup_required == 'true' &&
+      (needs.classify-source.result != 'success' ||
+      needs.classify-source.outputs.cleanup_required == 'true') &&
       needs.classify-source.outputs.cleanup_sha != ''
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     environment: Qualification
     env:
       TARGET_WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id }}
@@ -333,11 +334,12 @@ jobs:
     needs: classify-source
     if: >-
       always() &&
-      needs.classify-source.outputs.cleanup_required == 'true' &&
+      (needs.classify-source.result != 'success' ||
+      needs.classify-source.outputs.cleanup_required == 'true') &&
       needs.classify-source.outputs.cleanup_sha != '' &&
       needs.classify-source.outputs.source_sha != ''
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     environment: Qualification
     env:
       TARGET_WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id }}

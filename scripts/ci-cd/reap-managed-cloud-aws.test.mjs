@@ -415,6 +415,9 @@ test("the independent workflow runs after Release E2E completion from default-br
   assert.match(workflow, /timeout --kill-after=30s 5m node scripts\/ci-cd\/classify-release-e2e-managed-cloud\.mjs/);
   assert.match(workflow, /timeout --kill-after=30s 15m node scripts\/ci-cd\/reap-managed-cloud-aws\.mjs/);
   assert.match(workflow, /timeout --kill-after=30s 20m pnpm exec tsx src\/cli\/reap-managed-cloud-providers\.ts/);
+  assert.match(classifier, /timeout-minutes: 15/);
+  assert.match(aws, /timeout-minutes: 30/);
+  assert.match(providers, /timeout-minutes: 45/);
   assert.equal(workflow.match(/Initialize bounded failed /g)?.length, 3);
   assert.equal(workflow.match(/Finalize bounded /g)?.length, 3);
   assert.equal(workflow.match(/if-no-files-found: error/g)?.length, 3);
@@ -445,6 +448,7 @@ test("the independent workflow runs after Release E2E completion from default-br
   assert.ok(classifier.indexOf("GH_TOKEN:") > classifier.indexOf("Inspect the exact attempt"));
   for (const downstream of [aws, providers]) {
     assert.match(downstream, /if: >-\s*\n\s*always\(\) &&/);
+    assert.match(downstream, /needs\.classify-source\.result != 'success'/);
     assert.match(downstream, /needs\.classify-source\.outputs\.cleanup_required == 'true'/);
     assert.match(downstream, /needs\.classify-source\.outputs\.cleanup_sha != ''/);
   }

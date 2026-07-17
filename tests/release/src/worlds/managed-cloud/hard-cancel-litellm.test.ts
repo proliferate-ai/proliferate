@@ -189,6 +189,64 @@ test("drains every key and user page before deleting child to parent", async () 
   assert.deepEqual(mutations, ["key", "user", "team"]);
 });
 
+test("a truncated authoritative key inventory fails before any mutation", async () => {
+  const fake = provider(mixedState());
+  const fetch: FetchLike = async (url, init) => {
+    const parsed = new URL(url);
+    if (parsed.pathname.endsWith("/key/list")) {
+      return response(200, {
+        keys: [mixedState().keys[0]],
+        current_page: 1,
+        total_pages: 1,
+        total_count: 2,
+      });
+    }
+    return fake.fetch(url, init);
+  };
+
+  await assert.rejects(
+    () => cleanupQualificationLiteLlmRun({
+      baseUrl: "https://litellm.example",
+      masterKey: "master",
+      runId: RUN_ID,
+      shardId: SHARD_ID,
+    }, { fetch }),
+    /did not match its authoritative total/,
+  );
+  assert.equal(fake.calls.some((call) => call.path.endsWith("/delete")), false);
+});
+
+test("a truncated post-delete key inventory can never report green", async () => {
+  const fake = provider(mixedState());
+  let keyInventories = 0;
+  const fetch: FetchLike = async (url, init) => {
+    const parsed = new URL(url);
+    if (parsed.pathname.endsWith("/key/list")) {
+      keyInventories += 1;
+      if (keyInventories > 1) {
+        return response(200, {
+          keys: [],
+          current_page: 1,
+          total_pages: 1,
+          total_count: 1,
+        });
+      }
+    }
+    return fake.fetch(url, init);
+  };
+
+  await assert.rejects(
+    () => cleanupQualificationLiteLlmRun({
+      baseUrl: "https://litellm.example",
+      masterKey: "master",
+      runId: RUN_ID,
+      shardId: SHARD_ID,
+    }, { fetch, sleep: async () => undefined }),
+    /did not match its authoritative total/,
+  );
+  assert.equal(fake.calls.some((call) => call.path.endsWith("/delete")), true);
+});
+
 test("partial or conflicting ownership metadata fails before mutation", async () => {
   const state = mixedState();
   state.teams[0]!.metadata = { proliferate_qualification_run_id: RUN_ID };
