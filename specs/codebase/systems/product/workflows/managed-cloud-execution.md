@@ -102,3 +102,41 @@ Runtime, worker, and Beat use the same image through the background substrate.
 This implementation defines no production enablement: hosted exact-image proof
 and controlled rollout are qualification work, and production remains a hard
 separate approval gate.
+
+## Product experience
+
+The authenticated Workflow definition surface consumes the managed Cloud API
+through `cloud/sdk` and `cloud/sdk-react`. It does not call AnyHarness, Tauri,
+or a raw runtime route. New launch is available only when the capability probe
+is reachable and reports `workflowManagedRuns`; older, unreachable, and
+capability-disabled servers keep a visible disabled control while existing-run
+history, detail, and cancellation remain usable.
+
+An eligible saved definition renders its scalar inputs in authored order. The
+client mirrors server validation for finite numbers, explicit booleans,
+required values, and exact input names. It mints one invocation UUID per user
+launch and retains the exact canonical request across create or delivery
+transport ambiguity. A response-loss recovery first reads that UUID and only
+replays the immutable PUT when it is still absent; a double click cannot mint a
+second run.
+
+Run history is definition-scoped and cursor-paginated. Run detail keeps
+delivery, desired state, execution state, and freshness distinct, polls Cloud
+only while the projection is nonterminal, and uses authored copy for
+unreachable, stale, interrupted, cancellation-pending, and target-lost states.
+Frozen argument values are owner-visible only in a collapsed, masked-on-replay
+Inputs section and are excluded from telemetry projections and error copy.
+
+Repository and scratch placement share one result path. Scratch runs never
+invent repository metadata or repository actions. Opening a result refreshes
+the exact correlated Cloud workspace and requires the same active,
+non-archived row plus matching `anyharnessWorkspaceId`; only then does the host
+open the exact ordinary `cloud:<workspaceId>` session. The Workflow surface
+never embeds a second transcript.
+
+The Tier-2 acceptance journey boots the real Web and Server against Postgres
+with `WORKFLOW_MANAGED_RUNS_ENABLED=true` and external background workers
+disabled. It proves saved-definition launch, one immutable invocation despite a
+duplicate click, durable reload/deep link, queued-before-sandbox cancellation,
+and persisted cancelled history without pretending to qualify E2B or agent
+execution.

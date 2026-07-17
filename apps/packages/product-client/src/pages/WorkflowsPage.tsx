@@ -1,19 +1,22 @@
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { WorkflowDefinitionsSurface } from "@proliferate/product-surfaces/workflows/WorkflowDefinitionsSurface";
+import { WorkflowRunsSurface } from "@proliferate/product-surfaces/workflows/WorkflowRunsSurface";
 import { WorkflowDefinitionsAccessScreen } from "#product/components/workflows/definitions/WorkflowDefinitionsAccessScreen";
 import { MainSidebarPageShell } from "#product/components/workspace/shell/screen/MainSidebarPageShell";
-import { APP_ROUTES } from "#product/config/app-routes";
+import { APP_ROUTES, workflowRunRoute } from "#product/config/app-routes";
 import { WORKFLOW_AUTH_COPY } from "#product/copy/workflows/workflow-copy";
 import { isDevAuthBypassed } from "#product/lib/domain/auth/auth-mode";
 import {
   useProductAuthStatus,
   useProductAuthUserId,
 } from "#product/hooks/auth/facade/use-product-auth";
+import { useAppCapabilities } from "#product/hooks/capabilities/derived/use-app-capabilities";
+import { useWorkflowRunOpenActions } from "#product/hooks/workflows/workflows/use-workflow-run-open-actions";
 
 export function WorkflowsPage() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { workflowId } = useParams<{ workflowId: string }>();
+  const { workflowId, runId } = useParams<{ workflowId: string; runId: string }>();
   const authStatus = useProductAuthStatus();
   const authUserId = useProductAuthUserId();
 
@@ -47,14 +50,43 @@ export function WorkflowsPage() {
     );
   }
 
+  return <AuthenticatedWorkflowsPage authUserId={authUserId} workflowId={workflowId} runId={runId} />;
+}
+
+function AuthenticatedWorkflowsPage({
+  authUserId,
+  workflowId,
+  runId,
+}: {
+  authUserId: string;
+  workflowId?: string;
+  runId?: string;
+}) {
+  const navigate = useNavigate();
+  const capabilities = useAppCapabilities();
+  const { openWorkflowRunSession } = useWorkflowRunOpenActions();
+
   return (
     <MainSidebarPageShell>
-      <WorkflowDefinitionsSurface
-        authCacheScope={authUserId}
-        selectedWorkflowId={workflowId ?? null}
-        onSelectWorkflow={(id) => navigate(`${APP_ROUTES.workflows}/${encodeURIComponent(id)}`)}
-        onBackToList={() => navigate(APP_ROUTES.workflows)}
-      />
+      {workflowId && runId ? (
+        <WorkflowRunsSurface
+          authCacheScope={authUserId}
+          workflowDefinitionId={workflowId}
+          runId={runId}
+          managedRunsEnabled={capabilities.workflowManagedRunsEnabled}
+          onBack={() => navigate(`${APP_ROUTES.workflows}/${encodeURIComponent(workflowId)}`)}
+          onOpenSession={openWorkflowRunSession}
+        />
+      ) : (
+        <WorkflowDefinitionsSurface
+          authCacheScope={authUserId}
+          selectedWorkflowId={workflowId ?? null}
+          managedRunsEnabled={capabilities.workflowManagedRunsEnabled}
+          onSelectWorkflow={(id) => navigate(`${APP_ROUTES.workflows}/${encodeURIComponent(id)}`)}
+          onOpenRun={(definitionId, invocationId) => navigate(workflowRunRoute(definitionId, invocationId))}
+          onBackToList={() => navigate(APP_ROUTES.workflows)}
+        />
+      )}
     </MainSidebarPageShell>
   );
 }

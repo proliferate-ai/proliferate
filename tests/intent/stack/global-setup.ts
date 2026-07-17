@@ -10,7 +10,16 @@ import { bootStack } from "./boot.ts";
 import { resetPasswordLoginRateLimits } from "./seed.ts";
 
 export default async function globalSetup(): Promise<() => Promise<void>> {
-  const stack = await bootStack();
+  const stack = await bootStack({
+    profile: process.env.TIER2_INTENT_PROFILE || undefined,
+    extraServerEnv: {
+      // T2-WF-RUN: admit new managed Workflow delivery while keeping the
+      // external worker phase stopped. The browser can therefore prove the
+      // durable queued/cancelled product journey without E2B.
+      WORKFLOW_MANAGED_RUNS_ENABLED: "true",
+      RUN_BACKGROUND_WORKERS: "false",
+    },
+  });
   process.env.TIER2_INTENT_API_BASE_URL = stack.apiBaseUrl;
   process.env.TIER2_INTENT_WEB_BASE_URL = stack.webBaseUrl;
   process.env.TIER2_INTENT_ANYHARNESS_BASE_URL = stack.anyharnessBaseUrl;

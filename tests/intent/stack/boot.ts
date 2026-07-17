@@ -60,6 +60,12 @@ export interface BootOptions {
 const here = path.dirname(fileURLToPath(import.meta.url));
 export const REPO_ROOT = path.resolve(here, "..", "..", "..");
 
+function serverVenvExecutable(name: string): string {
+  const binDir = process.env.TIER2_INTENT_SERVER_VENV_BIN
+    ?? path.join(REPO_ROOT, "server", ".venv", "bin");
+  return path.join(binDir, name);
+}
+
 export interface BootedStack {
   profile: string;
   apiBaseUrl: string;
@@ -304,7 +310,7 @@ export async function bootStack(options: BootOptions = {}): Promise<BootedStack>
   rmSync(setupTokenFile, { force: true });
 
   log(`running alembic migrations against ${instance.databaseName}...`);
-  run(path.join(REPO_ROOT, "server", ".venv", "bin", "alembic"), ["upgrade", "head"], {
+  run(serverVenvExecutable("alembic"), ["upgrade", "head"], {
     cwd: path.join(REPO_ROOT, "server"),
     env: { DATABASE_URL: databaseUrl, DEBUG: "true" },
   });
@@ -397,7 +403,7 @@ export async function bootStack(options: BootOptions = {}): Promise<BootedStack>
   }
   spawnTracked(
     children,
-    path.join(REPO_ROOT, "server", ".venv", "bin", "uvicorn"),
+    serverVenvExecutable("uvicorn"),
     ["proliferate.main:app", "--host", "127.0.0.1", "--port", String(instance.ports.api)],
     { cwd: path.join(REPO_ROOT, "server"), env: serverEnv, name: "server" },
   );

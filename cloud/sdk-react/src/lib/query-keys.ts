@@ -440,6 +440,46 @@ export function workflowDefinitionDetailKey(
   ] as const;
 }
 
+export function workflowRunsRootKey(apiBaseUrl: string, authCacheScope: string) {
+  return [...cloudRootKey(), "workflow-runs", apiBaseUrl, authCacheScope] as const;
+}
+
+export function workflowRunEligibilityKey(
+  apiBaseUrl: string,
+  authCacheScope: string,
+  workflowDefinitionId: string | null,
+  definitionRevision: number | null,
+) {
+  return [
+    ...workflowRunsRootKey(apiBaseUrl, authCacheScope),
+    "eligibility",
+    workflowDefinitionId,
+    definitionRevision,
+  ] as const;
+}
+
+export function workflowRunHistoryKey(
+  apiBaseUrl: string,
+  authCacheScope: string,
+  workflowDefinitionId: string | null,
+) {
+  return [...workflowRunsRootKey(apiBaseUrl, authCacheScope), "history", workflowDefinitionId] as const;
+}
+
+export function workflowRunDetailKey(
+  apiBaseUrl: string,
+  authCacheScope: string,
+  workflowDefinitionId: string | null,
+  invocationId: string | null,
+) {
+  return [
+    ...workflowRunsRootKey(apiBaseUrl, authCacheScope),
+    "detail",
+    workflowDefinitionId,
+    invocationId,
+  ] as const;
+}
+
 export interface AutomationsListKeyOptions {
   ownerScope?: CloudOwnerScope | null;
   organizationId?: string | null;
