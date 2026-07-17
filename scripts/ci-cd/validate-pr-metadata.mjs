@@ -8,6 +8,7 @@ function parseArgs(argv) {
   const parsed = {
     event: "",
     title: "",
+    bodyFile: "",
     labelsJson: "",
     changedFilesJson: "",
     draft: false,
@@ -22,6 +23,10 @@ function parseArgs(argv) {
         break;
       case "--title":
         parsed.title = argv[index + 1] || "";
+        index += 1;
+        break;
+      case "--body-file":
+        parsed.bodyFile = argv[index + 1] || "";
         index += 1;
         break;
       case "--labels-json":
@@ -47,11 +52,11 @@ function parseArgs(argv) {
 }
 
 function usage() {
-  console.log(`Validate a pull request title and release/area labels.
+  console.log(`Validate a pull request title, release note, and release/area labels.
 
 Usage:
   node scripts/ci-cd/validate-pr-metadata.mjs --event <github-event.json> [--changed-files-json <files.json>]
-  node scripts/ci-cd/validate-pr-metadata.mjs --title <title> --labels-json <json> [--changed-files-json <files.json>]
+  node scripts/ci-cd/validate-pr-metadata.mjs --title <title> --body-file <body.md> --labels-json <json> [--changed-files-json <files.json>]
 
 --changed-files-json points at a JSON array of changed paths (strings) or
 GitHub file objects ({"filename": "..."}). When provided, area labels are also
@@ -80,6 +85,7 @@ function loadInput(parsed) {
     }
     return {
       title: pr.title,
+      body: pr.body || "",
       labels: pr.labels || [],
       draft: Boolean(pr.draft),
       changedFiles,
@@ -92,7 +98,10 @@ function loadInput(parsed) {
   if (!Array.isArray(labels)) {
     throw new Error("--labels-json must be a JSON array.");
   }
-  return { title: parsed.title, labels, draft: parsed.draft, changedFiles };
+  const body = parsed.bodyFile
+    ? fs.readFileSync(parsed.bodyFile, "utf8")
+    : "";
+  return { title: parsed.title, body, labels, draft: parsed.draft, changedFiles };
 }
 
 function main() {

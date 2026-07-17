@@ -35,6 +35,7 @@ progress. Every title and label rule in this procedure applies before
 readiness. Before readiness, also update the body with:
 
 - a plain summary of the change; and
+- one complete release-note block in the format below; and
 - the commands and other evidence that prove it.
 
 Use the proof depth required by [`../testing/README.md`](../testing/README.md).
@@ -45,6 +46,59 @@ user, or support identifiers, report bodies, emails, private messages,
 telemetry identities, or other private source data. Consent-safe projection
 from the tracker remains behavior owned by the
 [Issue Lifecycle system](../../codebase/systems/engineering/issue-lifecycle/support-loop.md).
+
+### Release-note metadata
+
+Keep the engineering PR title optimized for reviewers. Separately, include
+exactly one customer-facing release-note block in the PR body:
+
+```md
+## Release note
+
+Section: New
+Title: Repository-backed workspaces
+Description: Connect GitHub repositories and create durable local or cloud workspaces without losing repository state.
+Group: repository-workspaces
+```
+
+Every field must appear exactly once on its own line. Use these rules:
+
+- `Section` is exactly `New`, `Improvement`, `Fix`, or `Omit`.
+- `Title` is a concise customer-facing headline of at most 80 characters.
+- `Description` is one customer-facing sentence of at most 300 characters and
+  ends with `.`, `!`, or `?`. Describe the outcome, not implementation detail.
+- `Group` is `none` or a lowercase, hyphenated key of at most 64 characters.
+  Reuse one key across PR slices that should become a single changelog item.
+- `TODO`, `TBD`, `N/A`, empty values, and template placeholders do not satisfy
+  the contract.
+
+The release label and release-note section must agree:
+
+| Release label | Allowed section |
+| --- | --- |
+| `release:large-feature` | `New` |
+| `release:minor-feature` | `New` or `Improvement` |
+| `release:performance` | `Improvement` |
+| `release:fix` | `Fix` |
+| `release:docs` | `Omit` |
+| `release:maintenance` | `Omit` |
+| `release:skip` | `Omit` |
+
+Every PR needs a truthful title and description, including internal work. For
+`Omit`, the description must begin with `No customer-facing behavior change`
+and explain the internal outcome:
+
+```md
+## Release note
+
+Section: Omit
+Title: Internal release validation
+Description: No customer-facing behavior change; this strengthens release qualification coverage.
+Group: none
+```
+
+The metadata check enforces this block for every non-draft PR. Release tooling
+may group public entries by `Group`; it must not publish `Omit` entries.
 
 ## Ready For Review
 
@@ -119,8 +173,8 @@ Current mechanical classification has three important edge cases:
 
 ## After Review
 
-When review changes the outcome or ownership, update the summary, proof,
-title, and labels before merge. Recheck the readiness rules after the last
-change. Generated release-note and finalizer behavior remains owned by
+When review changes the outcome or ownership, update the summary, release-note
+metadata, proof, title, and labels before merge. Recheck the readiness rules
+after the last change. Generated release-note and finalizer behavior remains owned by
 [`../deploying/README.md`](../deploying/README.md) and the Issue Lifecycle
 system; public polished changelog pages are a separate product surface.

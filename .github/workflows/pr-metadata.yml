@@ -20,7 +20,7 @@ env:
 
 jobs:
   validate-pr-metadata:
-    name: Validate PR title and labels
+    name: Validate PR title, release note, and labels
     runs-on: ubuntu-latest
     steps:
       # pull_request_target runs with write-capable secrets, so only trusted

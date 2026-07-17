@@ -23,6 +23,13 @@ export const ALLOWED_RELEASE_LABELS = Object.freeze([
   "release:skip",
 ]);
 
+export const ALLOWED_RELEASE_NOTE_SECTIONS = Object.freeze([
+  "New",
+  "Improvement",
+  "Fix",
+  "Omit",
+]);
+
 export const ALLOWED_AREA_LABELS = Object.freeze([
   "area:desktop",
   "area:anyharness",
@@ -38,6 +45,25 @@ export const ALLOWED_AREA_LABELS = Object.freeze([
 const TITLE_PATTERN = new RegExp(
   `^(${ALLOWED_TITLE_TYPES.join("|")})\\([a-z0-9][a-z0-9/-]*\\): [^\\r\\n]+$`,
 );
+
+const RELEASE_NOTE_SECTIONS_FOR_LABEL = new Map([
+  ["release:large-feature", new Set(["New"])],
+  ["release:minor-feature", new Set(["New", "Improvement"])],
+  ["release:performance", new Set(["Improvement"])],
+  ["release:fix", new Set(["Fix"])],
+  ["release:docs", new Set(["Omit"])],
+  ["release:maintenance", new Set(["Omit"])],
+  ["release:skip", new Set(["Omit"])],
+]);
+
+const RELEASE_NOTE_FIELDS = Object.freeze([
+  "Section",
+  "Title",
+  "Description",
+  "Group",
+]);
+const RELEASE_NOTE_PLACEHOLDER = /^(?:todo|tbd|n\/a|[-–—]+|\[.*\]|<.*>)$/i;
+const RELEASE_NOTE_GROUP = /^(?:none|[a-z0-9][a-z0-9-]{0,63})$/;
 
 // Area detection reuses the deploy-surface detector's `matches(path, prefixes)`
 // convention (see detect-deploy-surfaces.mjs). It is a distinct projection: the
@@ -118,6 +144,101 @@ function labelNames(labels) {
     .filter((label) => typeof label === "string" && label.length > 0);
 }
 
+function isPlaceholder(value) {
+  return value.length === 0 || RELEASE_NOTE_PLACEHOLDER.test(value);
+}
+
+/**
+ * Parse the one machine-readable release-note block required in a ready PR.
+ * HTML comments are ignored so the GitHub template can keep inline guidance
+ * without becoming release data.
+ */
+export function parseReleaseNoteMetadata(body = "") {
+  const source = String(body || "");
+  const headings = [...source.matchAll(/^## Release note[ \t]*\r?$/gm)];
+  if (headings.length !== 1) {
+    return {
+      releaseNote: null,
+      errors: [
+        `PR body must contain exactly one "## Release note" block. Found ${headings.length}.`,
+      ],
+    };
+  }
+
+  const start = headings[0].index + headings[0][0].length;
+  const remaining = source.slice(start).replace(/^\r?\n/, "");
+  const nextHeading = remaining.search(/^##[ \t]+/m);
+  const rawBlock = nextHeading === -1 ? remaining : remaining.slice(0, nextHeading);
+  const block = rawBlock.replace(/<!--[\s\S]*?-->/g, "");
+  const fields = new Map();
+  const errors = [];
+
+  for (const rawLine of block.split(/\n/)) {
+    const line = rawLine.replace(/\r$/, "").trim();
+    if (!line) continue;
+    const match = /^(Section|Title|Description|Group):[ \t]*(.*)$/.exec(line);
+    if (!match) {
+      errors.push(`Unexpected release-note line: ${line}`);
+      continue;
+    }
+    const [, field, rawValue] = match;
+    if (fields.has(field)) {
+      errors.push(`Release-note field ${field} must appear exactly once.`);
+      continue;
+    }
+    fields.set(field, rawValue.trim());
+  }
+
+  for (const field of RELEASE_NOTE_FIELDS) {
+    if (!fields.has(field)) {
+      errors.push(`Release-note field ${field} is required.`);
+    }
+  }
+
+  const releaseNote = Object.fromEntries(
+    RELEASE_NOTE_FIELDS.map((field) => [
+      field.toLowerCase(),
+      fields.get(field) || "",
+    ]),
+  );
+
+  if (!ALLOWED_RELEASE_NOTE_SECTIONS.includes(releaseNote.section)) {
+    errors.push(
+      `Release-note Section must be one of: ${ALLOWED_RELEASE_NOTE_SECTIONS.join(", ")}.`,
+    );
+  }
+  if (isPlaceholder(releaseNote.title)) {
+    errors.push("Release-note Title must be complete and cannot be a placeholder.");
+  } else if (releaseNote.title.length > 80) {
+    errors.push("Release-note Title must be at most 80 characters.");
+  }
+  if (isPlaceholder(releaseNote.description)) {
+    errors.push("Release-note Description must be complete and cannot be a placeholder.");
+  } else {
+    if (releaseNote.description.length > 300) {
+      errors.push("Release-note Description must be at most 300 characters.");
+    }
+    if (!/[.!?]$/.test(releaseNote.description)) {
+      errors.push("Release-note Description must end with ., !, or ?.");
+    }
+  }
+  if (!RELEASE_NOTE_GROUP.test(releaseNote.group)) {
+    errors.push(
+      "Release-note Group must be none or a lowercase hyphenated key of at most 64 characters.",
+    );
+  }
+  if (
+    releaseNote.section === "Omit" &&
+    !releaseNote.description.startsWith("No customer-facing behavior change")
+  ) {
+    errors.push(
+      'An Omit release note Description must begin with "No customer-facing behavior change".',
+    );
+  }
+
+  return { releaseNote, errors };
+}
+
 /**
  * Validate the PR metadata contract used by both contributors and release
  * tooling. The returned errors are intentionally plain strings so callers can
@@ -128,7 +249,12 @@ function labelNames(labels) {
  * must be applied, and an ambiguous path-to-area result blocks for a human
  * choice rather than guessing a label.
  */
-export function validatePullRequestMetadata({ title, labels = [], changedFiles = null }) {
+export function validatePullRequestMetadata({
+  title,
+  body = "",
+  labels = [],
+  changedFiles = null,
+}) {
   const names = labelNames(labels);
   const releaseLabels = names.filter((label) => label.startsWith("release:"));
   const areaLabels = names.filter((label) => label.startsWith("area:"));
@@ -177,6 +303,22 @@ export function validatePullRequestMetadata({ title, labels = [], changedFiles =
         .join("; ");
       errors.push(
         `Changed paths map to more than one area and none is applied; choose the correct area:* label(s) explicitly: ${detail}.`,
+      );
+    }
+  }
+
+  const parsedReleaseNote = parseReleaseNoteMetadata(body);
+  errors.push(...parsedReleaseNote.errors);
+  if (
+    releaseLabels.length === 1 &&
+    allowedReleaseLabels.has(releaseLabels[0]) &&
+    parsedReleaseNote.releaseNote &&
+    ALLOWED_RELEASE_NOTE_SECTIONS.includes(parsedReleaseNote.releaseNote.section)
+  ) {
+    const allowedSections = RELEASE_NOTE_SECTIONS_FOR_LABEL.get(releaseLabels[0]);
+    if (!allowedSections.has(parsedReleaseNote.releaseNote.section)) {
+      errors.push(
+        `${releaseLabels[0]} requires release-note Section ${[...allowedSections].join(" or ")}; found ${parsedReleaseNote.releaseNote.section}.`,
       );
     }
   }
