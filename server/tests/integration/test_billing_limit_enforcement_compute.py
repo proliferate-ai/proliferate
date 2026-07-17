@@ -34,10 +34,12 @@ from proliferate.constants.billing import (
     BILLING_HOLD_STATUS_ACTIVE,
     BILLING_MODE_ENFORCE,
     BILLING_MODE_OBSERVE,
+    USAGE_SEGMENT_CLOSED_BY_PROVISION_FAILURE,
     USAGE_SEGMENT_CLOSED_BY_QUOTA_ENFORCEMENT,
 )
 from proliferate.db.models.auth import User
 from proliferate.db.models.billing import BillingDecisionEvent, BillingHold, UsageSegment
+from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.db.models.organizations import Organization
 from proliferate.db.store.billing import BudgetLimitInput, replace_budget_limits
 from proliferate.db.store.billing_subjects import (
@@ -261,17 +263,14 @@ def _patch_enforce_collaborators(
     """Stub the reconciler's DB/provider collaborators for a single segment."""
 
     async def _load(_db: Any, _sandbox_id: uuid.UUID, **_kw: Any) -> Any:
-        return SimpleNamespace(id=sandbox_id, e2b_sandbox_id="ext-1")
+        return SimpleNamespace(id=sandbox_id, e2b_sandbox_id="ext-1", status="ready")
 
-    async def _close(*, sandbox_id: uuid.UUID, ended_at: Any, closed_by: str, **_kw: Any) -> None:
-        closed.append((sandbox_id, closed_by))
-
-    async def _noop(*_a: Any, **_kw: Any) -> None:
-        return None
+    async def _mark(sandbox_id: uuid.UUID, **kwargs: Any) -> bool:
+        closed.append((sandbox_id, kwargs["closed_by"]))
+        return True
 
     monkeypatch.setattr(reconciler_module, "load_cloud_sandbox_by_id", _load)
-    monkeypatch.setattr(reconciler_module, "close_usage_segment_for_sandbox", _close)
-    monkeypatch.setattr(reconciler_module, "_mark_sandbox_environment_unavailable", _noop)
+    monkeypatch.setattr(reconciler_module, "_mark_sandbox_environment_unavailable", _mark)
     monkeypatch.setattr(reconciler_module, "get_configured_sandbox_provider", lambda: fake)
 
 
@@ -289,6 +288,7 @@ def _running_state() -> ProviderSandboxState:
 def _segment_ns() -> SimpleNamespace:
     return SimpleNamespace(
         sandbox_id=uuid.uuid4(),
+        external_sandbox_id="ext-1",
         billing_subject_id=uuid.uuid4(),
         user_id=uuid.uuid4(),
         workspace_id=uuid.uuid4(),
@@ -361,6 +361,196 @@ async def test_enforce_segment_no_pause_when_not_breached(
     )
     assert fake.paused == []
     assert closed == []
+
+
+@pytest.mark.asyncio
+async def test_reconciler_provider_death_is_recoverable_and_binding_fenced(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    segment = _segment_ns()
+    closed: list[dict[str, object]] = []
+    unavailable: list[dict[str, object]] = []
+
+    async def _load(*_args: object, **_kwargs: object) -> object:
+        return SimpleNamespace(
+            id=segment.sandbox_id,
+            e2b_sandbox_id="ext-1",
+            status="ready",
+        )
+
+    async def _unavailable(_sandbox_id: uuid.UUID, **kwargs: object) -> None:
+        unavailable.append(kwargs)
+
+    monkeypatch.setattr(reconciler_module, "load_cloud_sandbox_by_id", _load)
+    monkeypatch.setattr(
+        reconciler_module,
+        "_mark_sandbox_environment_unavailable",
+        _unavailable,
+    )
+
+    await _enforce_or_reconcile_segment(
+        segment=segment,  # type: ignore[arg-type]
+        provider=_FakeProvider(),  # type: ignore[arg-type]
+        state=ProviderSandboxState(
+            external_sandbox_id="ext-1",
+            state="killed",
+            started_at=NOW,
+            end_at=NOW,
+            observed_at=NOW,
+            metadata={},
+        ),
+        billing_snapshot=SimpleNamespace(active_spend_hold=False),  # type: ignore[arg-type]
+    )
+
+    assert closed == []
+    assert unavailable == [
+        {
+            "destroyed": True,
+            "expected_provider_sandbox_id": "ext-1",
+            "expected_status": "ready",
+            "ended_at": NOW,
+            "closed_by": USAGE_SEGMENT_CLOSED_BY_PROVISION_FAILURE,
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_reconciler_ignores_usage_from_superseded_provider(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    segment = _segment_ns()
+    segment.external_sandbox_id = "ext-old"
+
+    async def _load(*_args: object, **_kwargs: object) -> object:
+        return SimpleNamespace(
+            id=segment.sandbox_id,
+            e2b_sandbox_id="ext-new",
+            status="ready",
+        )
+
+    async def _unexpected(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("stale usage segment must not mutate replacement")
+
+    monkeypatch.setattr(reconciler_module, "load_cloud_sandbox_by_id", _load)
+    monkeypatch.setattr(
+        reconciler_module,
+        "_mark_sandbox_environment_unavailable",
+        _unexpected,
+    )
+
+    await _enforce_or_reconcile_segment(
+        segment=segment,  # type: ignore[arg-type]
+        provider=_FakeProvider(),  # type: ignore[arg-type]
+        state=ProviderSandboxState(
+            external_sandbox_id="ext-old",
+            state="killed",
+            started_at=NOW,
+            end_at=NOW,
+            observed_at=NOW,
+            metadata={},
+        ),
+        billing_snapshot=SimpleNamespace(active_spend_hold=False),  # type: ignore[arg-type]
+    )
+
+
+@pytest.mark.asyncio
+async def test_reconciler_provider_mismatch_rolls_back_lifecycle_transition(
+    db_session: AsyncSession,
+    test_engine: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A different provider's open segment cannot be hidden by state mutation."""
+
+    patch_global_session_factory(test_engine, monkeypatch)
+    user_id = await _create_user(db_session)
+    subject = await ensure_personal_billing_subject(db_session, user_id)
+    sandbox = CloudSandbox(
+        owner_user_id=user_id,
+        sandbox_type="e2b",
+        provider_sandbox_id="provider-current",
+        status="ready",
+    )
+    db_session.add(sandbox)
+    await db_session.flush()
+    segment = UsageSegment(
+        user_id=user_id,
+        billing_subject_id=subject.id,
+        sandbox_id=sandbox.id,
+        external_sandbox_id="provider-conflicting",
+        started_at=NOW,
+        ended_at=None,
+        is_billable=True,
+        opened_by="provision",
+    )
+    db_session.add(segment)
+    await db_session.commit()
+
+    with pytest.raises(RuntimeError, match="different provider sandbox"):
+        await reconciler_module._mark_sandbox_environment_unavailable(
+            sandbox.id,
+            destroyed=False,
+            expected_provider_sandbox_id="provider-current",
+            expected_status="ready",
+            ended_at=NOW,
+            closed_by=USAGE_SEGMENT_CLOSED_BY_QUOTA_ENFORCEMENT,
+        )
+
+    await db_session.refresh(sandbox)
+    await db_session.refresh(segment)
+    assert sandbox.status == "ready"
+    assert sandbox.provider_sandbox_id == "provider-current"
+    assert segment.ended_at is None
+
+
+@pytest.mark.asyncio
+async def test_reconciler_killed_observation_closes_usage_after_explicit_delete(
+    db_session: AsyncSession,
+    test_engine: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    patch_global_session_factory(test_engine, monkeypatch)
+    user_id = await _create_user(db_session)
+    subject = await ensure_personal_billing_subject(db_session, user_id)
+    provider_id = "provider-destroyed-before-reconcile"
+    sandbox = CloudSandbox(
+        owner_user_id=user_id,
+        sandbox_type="e2b",
+        provider_sandbox_id=provider_id,
+        status="destroyed",
+        destroyed_at=NOW,
+    )
+    db_session.add(sandbox)
+    await db_session.flush()
+    segment = UsageSegment(
+        user_id=user_id,
+        billing_subject_id=subject.id,
+        sandbox_id=sandbox.id,
+        external_sandbox_id=provider_id,
+        started_at=NOW,
+        ended_at=None,
+        is_billable=True,
+        opened_by="provision",
+    )
+    db_session.add(segment)
+    await db_session.commit()
+
+    closed = await reconciler_module._mark_sandbox_environment_unavailable(
+        sandbox.id,
+        destroyed=True,
+        expected_provider_sandbox_id=provider_id,
+        expected_status="ready",
+        ended_at=NOW + timedelta(seconds=1),
+        closed_by=USAGE_SEGMENT_CLOSED_BY_PROVISION_FAILURE,
+    )
+
+    await db_session.refresh(sandbox)
+    await db_session.refresh(segment)
+    assert closed is True
+    assert sandbox.status == "destroyed"
+    assert sandbox.provider_sandbox_id == provider_id
+    assert sandbox.destroyed_at == NOW
+    assert segment.ended_at == NOW + timedelta(seconds=1)
+    assert segment.closed_by == USAGE_SEGMENT_CLOSED_BY_PROVISION_FAILURE
 
 
 # ── Resume-deny gate (spec §4.3) ──

@@ -61,6 +61,30 @@ async def record_cloud_sandbox_usage_started(
         )
 
 
+async def open_cloud_sandbox_provider_usage(
+    db: AsyncSession,
+    *,
+    sandbox_id: UUID,
+    provider_sandbox_id: str,
+    user_id: UUID,
+    started_at: datetime,
+    opened_by: str,
+    event_id: str,
+) -> object:
+    """Open exact provider usage inside the caller's lifecycle transaction."""
+
+    return await open_usage_segment_for_sandbox(
+        db,
+        sandbox_id=sandbox_id,
+        external_sandbox_id=provider_sandbox_id,
+        sandbox_execution_id=None,
+        started_at=started_at,
+        opened_by=opened_by,
+        user_id=user_id,
+        event_id=event_id,
+    )
+
+
 async def record_cloud_sandbox_usage_stopped(
     *,
     sandbox_id: UUID,
@@ -68,6 +92,8 @@ async def record_cloud_sandbox_usage_stopped(
     closed_by: str,
     is_billable: bool | None = None,
     event_id: str | None = None,
+    expected_external_sandbox_id: str | None = None,
+    fail_on_provider_mismatch: bool = False,
 ) -> object | None:
     async with db_session.open_async_transaction() as db:
         return await close_usage_segment_for_sandbox(
@@ -77,4 +103,35 @@ async def record_cloud_sandbox_usage_stopped(
             closed_by=closed_by,
             is_billable=is_billable,
             event_id=event_id,
+            expected_external_sandbox_id=expected_external_sandbox_id,
+            fail_on_provider_mismatch=fail_on_provider_mismatch,
         )
+
+
+async def close_cloud_sandbox_provider_usage(
+    db: AsyncSession,
+    *,
+    sandbox_id: UUID,
+    provider_sandbox_id: str,
+    ended_at: datetime,
+    closed_by: str,
+    event_id: str | None = None,
+    fail_on_provider_mismatch: bool = True,
+) -> object | None:
+    """Close only the usage segment attributed to one provider binding.
+
+    Recovery invokes this in the same transaction as binding supersession so a
+    stale open segment cannot be inherited by a replacement.
+    """
+
+    return await close_usage_segment_for_sandbox(
+        db,
+        sandbox_id=sandbox_id,
+        ended_at=ended_at,
+        closed_by=closed_by,
+        event_id=(
+            event_id or f"provider-binding-stop:{sandbox_id}:{provider_sandbox_id}:{closed_by}"
+        ),
+        expected_external_sandbox_id=provider_sandbox_id,
+        fail_on_provider_mismatch=fail_on_provider_mismatch,
+    )

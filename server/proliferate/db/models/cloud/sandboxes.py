@@ -65,6 +65,7 @@ class CloudSandbox(Base):
         nullable=True,
     )
     status: Mapped[CloudSandboxStatus] = mapped_column(_SANDBOX_STATUS_ENUM)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     anyharness_base_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     runtime_token_ciphertext: Mapped[str | None] = mapped_column(Text, nullable=True)
     anyharness_data_key_ciphertext: Mapped[str | None] = mapped_column(Text, nullable=True)

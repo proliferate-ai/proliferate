@@ -60,13 +60,25 @@ async def test_lost_record_destroys_vm_and_raises(monkeypatch: pytest.MonkeyPatc
         events.append("record_none")
         return None  # row destroyed mid-create
 
+    async def _begin_retry(*_a: Any, **_k: Any) -> object:
+        return sandbox
+
+    async def _persist_failure(*_a: Any, **_k: Any) -> None:
+        return None
+
     monkeypatch.setattr(connect, "assert_cloud_sandbox_resume_allowed", _resume_allowed)
     monkeypatch.setattr(connect, "get_sandbox_provider", lambda _ref: provider)
+    monkeypatch.setattr(
+        connect.cloud_sandboxes_store,
+        "begin_cloud_sandbox_materialization_retry",
+        _begin_retry,
+    )
     monkeypatch.setattr(
         connect.cloud_sandboxes_store,
         "record_cloud_sandbox_provider_sandbox",
         _record_none,
     )
+    monkeypatch.setattr(connect, "persist_materialization_failure", _persist_failure)
 
     db = _FakeDb(events)
     with pytest.raises(CloudMaterializationCommandError):
@@ -75,5 +87,11 @@ async def test_lost_record_destroys_vm_and_raises(monkeypatch: pytest.MonkeyPatc
     assert provider.destroyed == ["sbx-new"]
     # The billing/read phase was committed before provider I/O, but the lost
     # provider record was never committed and resume/launch never began.
-    assert db.commits == 1
-    assert events == ["commit", "provider_create", "record_none", "provider_destroy"]
+    assert db.commits == 2
+    assert events == [
+        "commit",
+        "commit",
+        "provider_create",
+        "record_none",
+        "provider_destroy",
+    ]

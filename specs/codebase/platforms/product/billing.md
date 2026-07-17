@@ -42,8 +42,14 @@ claiming the same free allocation. The reservation and grant flow is owned by
 Compute is recorded in seconds in `usage_segment`. Managed LLM usage is
 recorded in USD in `agent_llm_usage_event`. Current usage reads aggregate these
 raw ledgers; there is no rollup or materialized usage table.
-Provider create/resume events open compute segments; pause, timeout, and kill
-events close them. The provider-event boundary is documented by
+Materialization opens exact-provider compute usage in the same transaction as
+a new binding and revalidates/idempotently opens it after every successful
+resume. Provider created/resumed webhooks are advisory, exact-binding-only
+reinforcement rather than the sole opening authority. Pause, timeout, kill,
+quota enforcement, and reconciliation close only the expected provider's
+segment; lifecycle state and usage closure share a cloud-row-first transaction
+so a replacement cannot inherit or lose another provider's accounting. The
+provider-event boundary is documented by
 [`sandbox-provisioning.md`](sandbox-provisioning.md#provider-webhooks).
 
 Organizations may add the following limits over the existing Billing rules:

@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.db.store import cloud_sandboxes as cloud_sandboxes_store
 from proliferate.db.store.cloud_sandboxes import CloudSandboxValue
 from proliferate.server.cloud.materialization import locks, sandbox_io
 
@@ -45,6 +46,16 @@ async def run_cloud_sandbox_operation[T](
         ttl_seconds=lock_ttl_seconds,
         wait_timeout_seconds=wait_timeout_seconds,
     ):
-        locked_sandbox = await refresh_sandbox() if refresh_sandbox is not None else sandbox
+        if refresh_sandbox is not None:
+            locked_sandbox = await refresh_sandbox()
+        else:
+            refreshed = await cloud_sandboxes_store.load_cloud_sandbox_by_id(
+                db,
+                sandbox.id,
+                refresh=True,
+            )
+            if refreshed is None or refreshed.destroyed_at is not None:
+                raise CloudMaterializationTargetUnavailable("Cloud sandbox no longer exists.")
+            locked_sandbox = refreshed
         target = await sandbox_io.connect_ready_sandbox(db, sandbox=locked_sandbox)
         return await run(MaterializationContext(sandbox=locked_sandbox, target=target))

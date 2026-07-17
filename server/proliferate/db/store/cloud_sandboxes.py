@@ -9,16 +9,22 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Final
+from typing import Final, cast
 from uuid import UUID
 
-from sqlalchemy import select, text
+from sqlalchemy import func, or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.constants.cloud import CloudSandboxStatus
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.utils.time import utcnow
 
 _UNSET: Final = object()
+_LAST_ERROR_MAX_LENGTH = 2000
+
+
+def _bounded_last_error(value: str | None) -> str | None:
+    return value[:_LAST_ERROR_MAX_LENGTH] if value is not None else None
 
 
 @dataclass(frozen=True)
@@ -59,7 +65,7 @@ def cloud_sandbox_value(row: CloudSandbox) -> CloudSandboxValue:
         created_by_user_id=row.owner_user_id,
         billing_subject_id=None,
         status=status,
-        last_error=None,
+        last_error=row.last_error,
         e2b_sandbox_id=row.provider_sandbox_id,
         e2b_template_ref=sandbox_type,
         anyharness_base_url=row.anyharness_base_url,
@@ -168,6 +174,7 @@ async def ensure_personal_cloud_sandbox(
         sandbox_type="e2b",
         provider_sandbox_id=None,
         status="creating",
+        last_error=None,
         anyharness_base_url=None,
         runtime_token_ciphertext=None,
         anyharness_data_key_ciphertext=None,
@@ -201,8 +208,9 @@ async def update_cloud_sandbox_status(
     row = await db.get(CloudSandbox, sandbox_id)
     if row is None:
         return None
-    row.status = status
-    del last_error
+    row.status = CloudSandboxStatus(status)
+    if last_error is not _UNSET:
+        row.last_error = _bounded_last_error(cast("str | None", last_error))
     row.updated_at = utcnow()
     await db.flush()
     return cloud_sandbox_value(row)
@@ -216,14 +224,199 @@ async def record_cloud_sandbox_provider_sandbox(
     e2b_template_ref: str,
 ) -> CloudSandboxValue | None:
     del e2b_template_ref
-    row = await db.get(CloudSandbox, sandbox_id)
-    if row is None or row.destroyed_at is not None:
+    now = utcnow()
+    row = (
+        await db.execute(
+            update(CloudSandbox)
+            .where(
+                CloudSandbox.id == sandbox_id,
+                CloudSandbox.destroyed_at.is_(None),
+                or_(
+                    CloudSandbox.provider_sandbox_id.is_(None),
+                    CloudSandbox.provider_sandbox_id == e2b_sandbox_id,
+                ),
+            )
+            .values(
+                provider_sandbox_id=e2b_sandbox_id,
+                status="creating",
+                last_error=None,
+                updated_at=now,
+            )
+            .returning(CloudSandbox)
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
+    if row is None:
         return None
-    row.provider_sandbox_id = e2b_sandbox_id
-    row.status = "creating"
-    row.updated_at = utcnow()
-    await db.flush()
     return cloud_sandbox_value(row)
+
+
+async def begin_cloud_sandbox_materialization_retry(
+    db: AsyncSession,
+    sandbox_id: UUID,
+) -> CloudSandboxValue | None:
+    """Start an explicit attempt without disturbing an already-ready read model."""
+
+    row = (
+        await db.execute(
+            update(CloudSandbox)
+            .where(
+                CloudSandbox.id == sandbox_id,
+                CloudSandbox.destroyed_at.is_(None),
+                or_(
+                    CloudSandbox.status.in_((CloudSandboxStatus.error, CloudSandboxStatus.paused)),
+                    CloudSandbox.last_error.is_not(None),
+                ),
+            )
+            .values(
+                status=CloudSandboxStatus.creating,
+                last_error=None,
+                updated_at=utcnow(),
+            )
+            .returning(CloudSandbox)
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
+    if row is not None:
+        return cloud_sandbox_value(row)
+    current = await load_cloud_sandbox_by_id(db, sandbox_id, refresh=True)
+    if current is None or current.destroyed_at is not None or current.status == "destroyed":
+        return None
+    return current
+
+
+async def lock_cloud_sandbox_materialization_attempt(
+    db: AsyncSession,
+    sandbox_id: UUID,
+    *,
+    expected_provider_sandbox_id: str,
+) -> CloudSandboxValue | None:
+    """Lock the exact active provider attempt before usage attribution."""
+
+    row = (
+        await db.execute(
+            select(CloudSandbox)
+            .where(
+                CloudSandbox.id == sandbox_id,
+                CloudSandbox.destroyed_at.is_(None),
+                CloudSandbox.provider_sandbox_id == expected_provider_sandbox_id,
+                CloudSandbox.status.in_((CloudSandboxStatus.creating, CloudSandboxStatus.ready)),
+            )
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
+    return cloud_sandbox_value(row) if row is not None else None
+
+
+async def supersede_missing_cloud_sandbox_provider(
+    db: AsyncSession,
+    sandbox_id: UUID,
+    *,
+    expected_provider_sandbox_id: str,
+) -> CloudSandboxValue | None:
+    """Detach exactly one authoritatively absent provider binding.
+
+    The compare-and-set prevents a stale recovery attempt from clearing a
+    replacement that another locked attempt has already recorded.
+    """
+
+    now = utcnow()
+    row = (
+        await db.execute(
+            update(CloudSandbox)
+            .where(
+                CloudSandbox.id == sandbox_id,
+                CloudSandbox.destroyed_at.is_(None),
+                CloudSandbox.provider_sandbox_id == expected_provider_sandbox_id,
+                CloudSandbox.status.in_((CloudSandboxStatus.creating, CloudSandboxStatus.ready)),
+            )
+            .values(
+                provider_sandbox_id=None,
+                status="creating",
+                last_error=None,
+                anyharness_base_url=None,
+                runtime_token_ciphertext=None,
+                anyharness_data_key_ciphertext=None,
+                ready_at=None,
+                last_health_at=None,
+                updated_at=now,
+            )
+            .returning(CloudSandbox)
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
+    return cloud_sandbox_value(row) if row is not None else None
+
+
+async def mark_cloud_sandbox_provider_missing(
+    db: AsyncSession,
+    sandbox_id: UUID,
+    *,
+    expected_provider_sandbox_id: str,
+    last_error: str,
+) -> CloudSandboxValue | None:
+    """Fence a provider-death observation while preserving the logical row."""
+
+    row = (
+        await db.execute(
+            update(CloudSandbox)
+            .where(
+                CloudSandbox.id == sandbox_id,
+                CloudSandbox.destroyed_at.is_(None),
+                CloudSandbox.provider_sandbox_id == expected_provider_sandbox_id,
+            )
+            .values(
+                provider_sandbox_id=None,
+                status="error",
+                last_error=_bounded_last_error(last_error),
+                anyharness_base_url=None,
+                runtime_token_ciphertext=None,
+                anyharness_data_key_ciphertext=None,
+                ready_at=None,
+                last_health_at=None,
+                updated_at=utcnow(),
+            )
+            .returning(CloudSandbox)
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
+    return cloud_sandbox_value(row) if row is not None else None
+
+
+async def mark_cloud_sandbox_materialization_error(
+    db: AsyncSession,
+    sandbox_id: UUID,
+    *,
+    expected_provider_sandbox_id: str | None,
+    last_error: str,
+) -> CloudSandboxValue | None:
+    """Persist a terminal attempt failure without clobbering another binding."""
+
+    provider_matches = (
+        CloudSandbox.provider_sandbox_id.is_(None)
+        if expected_provider_sandbox_id is None
+        else CloudSandbox.provider_sandbox_id == expected_provider_sandbox_id
+    )
+    row = (
+        await db.execute(
+            update(CloudSandbox)
+            .where(
+                CloudSandbox.id == sandbox_id,
+                CloudSandbox.destroyed_at.is_(None),
+                provider_matches,
+                CloudSandbox.status.in_((CloudSandboxStatus.creating, CloudSandboxStatus.ready)),
+            )
+            .values(
+                status="error",
+                last_error=_bounded_last_error(last_error),
+                updated_at=utcnow(),
+            )
+            .returning(CloudSandbox)
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
+    return cloud_sandbox_value(row) if row is not None else None
 
 
 async def mark_cloud_sandbox_ready(
@@ -237,20 +430,31 @@ async def mark_cloud_sandbox_ready(
     anyharness_data_key_ciphertext: str,
 ) -> CloudSandboxValue | None:
     del e2b_template_ref
-    row = await db.get(CloudSandbox, sandbox_id)
-    if row is None or row.destroyed_at is not None:
-        return None
     now = utcnow()
-    row.status = "ready"
-    row.provider_sandbox_id = e2b_sandbox_id
-    row.anyharness_base_url = anyharness_base_url
-    row.runtime_token_ciphertext = anyharness_bearer_token_ciphertext
-    row.anyharness_data_key_ciphertext = anyharness_data_key_ciphertext
-    row.ready_at = now
-    row.last_health_at = now
-    row.updated_at = now
-    await db.flush()
-    return cloud_sandbox_value(row)
+    row = (
+        await db.execute(
+            update(CloudSandbox)
+            .where(
+                CloudSandbox.id == sandbox_id,
+                CloudSandbox.destroyed_at.is_(None),
+                CloudSandbox.provider_sandbox_id == e2b_sandbox_id,
+                CloudSandbox.status.in_((CloudSandboxStatus.creating, CloudSandboxStatus.ready)),
+            )
+            .values(
+                status="ready",
+                last_error=None,
+                anyharness_base_url=anyharness_base_url,
+                runtime_token_ciphertext=anyharness_bearer_token_ciphertext,
+                anyharness_data_key_ciphertext=anyharness_data_key_ciphertext,
+                ready_at=now,
+                last_health_at=now,
+                updated_at=now,
+            )
+            .returning(CloudSandbox)
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
+    return cloud_sandbox_value(row) if row is not None else None
 
 
 async def mark_cloud_sandbox_provider_state(
@@ -258,24 +462,38 @@ async def mark_cloud_sandbox_provider_state(
     sandbox_id: UUID,
     *,
     status: str,
-    e2b_sandbox_id: str | None | object = _UNSET,
+    expected_provider_sandbox_id: str,
+    expected_status: str,
 ) -> CloudSandboxValue | None:
-    row = await db.get(CloudSandbox, sandbox_id)
-    if row is None:
-        return None
     now = utcnow()
-    if e2b_sandbox_id is not _UNSET:
-        row.provider_sandbox_id = e2b_sandbox_id
-    row.status = "ready" if status == "running" else status
-    if row.status == "ready":
-        if row.ready_at is None:
-            row.ready_at = now
-        row.last_health_at = now
-    elif row.status == "destroyed":
-        row.destroyed_at = now
-    row.updated_at = now
-    await db.flush()
-    return cloud_sandbox_value(row)
+    normalized_status = "ready" if status == "running" else status
+    values: dict[str, object] = {
+        "status": normalized_status,
+        "updated_at": now,
+    }
+    if normalized_status == "ready":
+        values.update(
+            last_error=None,
+            ready_at=func.coalesce(CloudSandbox.ready_at, now),
+            last_health_at=now,
+        )
+    elif normalized_status == "destroyed":
+        values["destroyed_at"] = now
+    row = (
+        await db.execute(
+            update(CloudSandbox)
+            .where(
+                CloudSandbox.id == sandbox_id,
+                CloudSandbox.destroyed_at.is_(None),
+                CloudSandbox.provider_sandbox_id == expected_provider_sandbox_id,
+                CloudSandbox.status == CloudSandboxStatus(expected_status),
+            )
+            .values(**values)
+            .returning(CloudSandbox)
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
+    return cloud_sandbox_value(row) if row is not None else None
 
 
 async def mark_cloud_sandbox_health(
@@ -301,8 +519,8 @@ async def mark_cloud_sandbox_destroyed(
     if row is None:
         return None
     now = utcnow()
-    row.status = "destroyed"
-    del last_error
+    row.status = CloudSandboxStatus.destroyed
+    row.last_error = _bounded_last_error(last_error)
     row.destroyed_at = now
     row.updated_at = now
     await db.flush()

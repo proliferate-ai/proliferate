@@ -163,6 +163,7 @@ async def assert_current_schema(conn: AsyncConnection, head_revision: str) -> No
         "sandbox_type",
         "provider_sandbox_id",
         "status",
+        "last_error",
         "anyharness_base_url",
         "runtime_token_ciphertext",
         "anyharness_data_key_ciphertext",
@@ -180,7 +181,6 @@ async def assert_current_schema(conn: AsyncConnection, head_revision: str) -> No
         "billing_subject_id",
         "template_version",
         "runtime_generation",
-        "last_error",
     }.isdisjoint(cloud_sandbox_columns)
     cloud_sandbox_indexes = await conn.run_sync(
         lambda sync_conn: {

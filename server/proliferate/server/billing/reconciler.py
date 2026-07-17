@@ -18,6 +18,7 @@ from proliferate.constants.billing import (
     BILLING_DECISION_USER_LIMIT_PAUSE,
     BILLING_MODE_ENFORCE,
     BILLING_RECONCILE_INTERVAL_SECONDS,
+    USAGE_SEGMENT_CLOSED_BY_PROVISION_FAILURE,
     USAGE_SEGMENT_CLOSED_BY_QUOTA_ENFORCEMENT,
     USAGE_SEGMENT_CLOSED_BY_RECONCILER,
 )
@@ -39,8 +40,8 @@ from proliferate.db.store.billing_runtime_usage import (
 )
 from proliferate.db.store.cloud_sandboxes import (
     load_cloud_sandbox_by_id,
-    mark_cloud_sandbox_destroyed,
-    update_cloud_sandbox_status,
+    mark_cloud_sandbox_provider_missing,
+    mark_cloud_sandbox_provider_state,
 )
 from proliferate.integrations.sandbox import (
     ProviderSandboxState,
@@ -52,30 +53,14 @@ from proliferate.server.billing.accounting_pass import run_billing_accounting_pa
 from proliferate.server.billing.budget_limits import window_bounds
 from proliferate.server.billing.models import BillingSnapshot
 from proliferate.server.billing.snapshots import get_billing_snapshot_for_subject
+from proliferate.server.cloud.materialization.failures import (
+    PROVIDER_SANDBOX_MISSING_RECEIPT,
+)
 from proliferate.utils.time import utcnow
 
 logger = logging.getLogger("proliferate.billing.reconciler")
 
 _reconciler_task: asyncio.Task[None] | None = None
-
-
-async def close_usage_segment_for_sandbox(
-    *,
-    sandbox_id: UUID,
-    ended_at: datetime,
-    closed_by: str,
-    is_billable: bool | None = None,
-    event_id: str | None = None,
-) -> UsageSegment | None:
-    async with db_engine.async_session_factory() as db, db.begin():
-        return await close_usage_segment_for_sandbox_record(
-            db,
-            sandbox_id=sandbox_id,
-            ended_at=ended_at,
-            closed_by=closed_by,
-            is_billable=is_billable,
-            event_id=event_id,
-        )
 
 
 async def list_all_open_usage_segments() -> list[UsageSegment]:
@@ -134,19 +119,63 @@ async def _mark_sandbox_environment_unavailable(
     sandbox_id: UUID,
     *,
     destroyed: bool,
-) -> None:
+    expected_provider_sandbox_id: str,
+    expected_status: str,
+    ended_at: datetime,
+    closed_by: str,
+) -> bool:
     """Reflect a reconciler stop into the ``cloud_sandbox`` row.
 
     The old runtime-environment tables are gone (#823 cutover); the surviving
-    ``CloudSandbox`` carries the lifecycle status directly. A provider destroy
-    marks the row destroyed; a pause/stop marks it paused so the next
-    connect/resume re-provisions rather than reusing a dead handle.
+    ``CloudSandbox`` carries the lifecycle status directly. Provider death is
+    recoverable and must not masquerade as explicit product deletion.
     """
     async with db_engine.async_session_factory() as db, db.begin():
         if destroyed:
-            await mark_cloud_sandbox_destroyed(db, sandbox_id)
+            updated = await mark_cloud_sandbox_provider_missing(
+                db,
+                sandbox_id,
+                expected_provider_sandbox_id=expected_provider_sandbox_id,
+                last_error=PROVIDER_SANDBOX_MISSING_RECEIPT,
+            )
+            if updated is None:
+                # Explicit deletion may have won after reconciliation loaded
+                # the row. Preserve product-owned destroyed state, but still
+                # close usage when that historical row retains this exact
+                # provider binding. A replacement or missing row stays inert.
+                current = await load_cloud_sandbox_by_id(
+                    db,
+                    sandbox_id,
+                    lock_row=True,
+                    refresh=True,
+                )
+                if (
+                    current is None
+                    or current.destroyed_at is None
+                    or current.e2b_sandbox_id != expected_provider_sandbox_id
+                ):
+                    return False
         else:
-            await update_cloud_sandbox_status(db, sandbox_id, status="paused")
+            # Preserve a terminal materialization receipt while still ending
+            # exact provider usage for an observed pause/stop.
+            updated = await mark_cloud_sandbox_provider_state(
+                db,
+                sandbox_id,
+                status="error" if expected_status == "error" else "paused",
+                expected_provider_sandbox_id=expected_provider_sandbox_id,
+                expected_status=expected_status,
+            )
+        if not destroyed and updated is None:
+            return False
+        await close_usage_segment_for_sandbox_record(
+            db,
+            sandbox_id=sandbox_id,
+            ended_at=ended_at,
+            closed_by=closed_by,
+            expected_external_sandbox_id=expected_provider_sandbox_id,
+            fail_on_provider_mismatch=True,
+        )
+        return True
 
 
 async def _resolve_compute_limit_pause(
@@ -220,6 +249,18 @@ async def _enforce_or_reconcile_segment(
         sandbox = await load_cloud_sandbox_by_id(db, segment.sandbox_id)
     if sandbox is None:
         return
+    if segment.external_sandbox_id != sandbox.e2b_sandbox_id:
+        logger.info(
+            "billing reconciler ignored stale provider usage segment",
+            extra={
+                "sandbox_id": str(sandbox.id),
+                "segment_provider_sandbox_id": segment.external_sandbox_id,
+                "current_provider_sandbox_id": sandbox.e2b_sandbox_id,
+            },
+        )
+        return
+    if sandbox.e2b_sandbox_id is None:
+        return
 
     if state is None and sandbox.e2b_sandbox_id:
         try:
@@ -245,21 +286,25 @@ async def _enforce_or_reconcile_segment(
         return
 
     if state.state in {"paused", "stopped"}:
-        await close_usage_segment_for_sandbox(
-            sandbox_id=sandbox.id,
+        await _mark_sandbox_environment_unavailable(
+            sandbox.id,
+            destroyed=False,
+            expected_provider_sandbox_id=sandbox.e2b_sandbox_id,
+            expected_status=sandbox.status,
             ended_at=state.end_at or state.observed_at,
             closed_by=USAGE_SEGMENT_CLOSED_BY_RECONCILER,
         )
-        await _mark_sandbox_environment_unavailable(sandbox.id, destroyed=False)
         return
 
     if state.state in {"killed", "destroyed", "terminated"}:
-        await close_usage_segment_for_sandbox(
-            sandbox_id=sandbox.id,
+        await _mark_sandbox_environment_unavailable(
+            sandbox.id,
+            destroyed=True,
+            expected_provider_sandbox_id=sandbox.e2b_sandbox_id,
+            expected_status=sandbox.status,
             ended_at=state.end_at or state.observed_at,
-            closed_by=USAGE_SEGMENT_CLOSED_BY_RECONCILER,
+            closed_by=USAGE_SEGMENT_CLOSED_BY_PROVISION_FAILURE,
         )
-        await _mark_sandbox_environment_unavailable(sandbox.id, destroyed=True)
         return
 
     if settings.cloud_billing_mode == BILLING_MODE_ENFORCE and (
@@ -279,12 +324,14 @@ async def _enforce_or_reconcile_segment(
                 )
                 return
         ended_at = utcnow()
-        await close_usage_segment_for_sandbox(
-            sandbox_id=sandbox.id,
+        await _mark_sandbox_environment_unavailable(
+            sandbox.id,
+            destroyed=False,
+            expected_provider_sandbox_id=sandbox.e2b_sandbox_id,
+            expected_status=sandbox.status,
             ended_at=ended_at,
             closed_by=USAGE_SEGMENT_CLOSED_BY_QUOTA_ENFORCEMENT,
         )
-        await _mark_sandbox_environment_unavailable(sandbox.id, destroyed=False)
 
 
 async def run_billing_reconcile_pass() -> None:

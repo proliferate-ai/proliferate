@@ -10,16 +10,27 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
+from proliferate.constants.billing import (
+    USAGE_SEGMENT_CLOSED_BY_PROVISION_FAILURE,
+    USAGE_SEGMENT_OPENED_BY_PROVISION,
+    USAGE_SEGMENT_OPENED_BY_RESUME,
+)
 from proliferate.db.store import cloud_sandboxes as cloud_sandboxes_store
 from proliferate.db.store import organizations as organizations_store
 from proliferate.db.store.cloud_sandboxes import CloudSandboxValue
 from proliferate.integrations.sandbox import (
     RuntimeEndpoint,
     SandboxProvider,
+    SandboxProviderTargetUnavailableError,
     SandboxRuntimeContext,
     get_sandbox_provider,
 )
 from proliferate.server.billing.authorization import assert_cloud_sandbox_resume_allowed
+from proliferate.server.billing.runtime_usage import (
+    close_cloud_sandbox_provider_usage,
+    open_cloud_sandbox_provider_usage,
+)
+from proliferate.server.cloud.materialization.failures import persist_materialization_failure
 from proliferate.server.cloud.materialization.sandbox_io.target import (
     CloudMaterializationCommandError,
     SandboxIOTarget,
@@ -51,6 +62,7 @@ from proliferate.server.cloud.runtime.sandbox_exec import (
 )
 from proliferate.server.cloud.runtime_workers.service import worker_cloud_base_url
 from proliferate.utils.crypto import decrypt_text, encrypt_text
+from proliferate.utils.time import utcnow
 
 logger = logging.getLogger("proliferate.cloud.materialization.connect")
 
@@ -107,71 +119,175 @@ async def connect_ready_sandbox(
     # transaction across E2B resume/launch or AnyHarness health requests.
     await db.commit()
 
-    provider = get_sandbox_provider(sandbox.e2b_template_ref)
+    retried = await cloud_sandboxes_store.begin_cloud_sandbox_materialization_retry(
+        db,
+        sandbox.id,
+    )
+    if retried is None:
+        raise CloudMaterializationCommandError("Cloud sandbox was destroyed while connecting.")
+    sandbox = retried
+    await db.commit()
+
     provider_sandbox_id = sandbox.e2b_sandbox_id
-    if provider_sandbox_id is None:
-        handle = await provider.create_sandbox(
-            metadata={
-                "proliferate_cloud_sandbox_id": str(sandbox.id),
-                "proliferate_owner_user_id": str(sandbox.owner_user_id or ""),
-            }
-        )
-        provider_sandbox_id = handle.sandbox_id
-        refreshed = await cloud_sandboxes_store.record_cloud_sandbox_provider_sandbox(
+    try:
+        owner_user_id = sandbox.owner_user_id
+        if owner_user_id is None:
+            raise CloudMaterializationCommandError(
+                "Cloud sandbox has no owner for provider usage attribution."
+            )
+        provider = get_sandbox_provider(sandbox.e2b_template_ref)
+        provider_sandbox: object | None = None
+        if provider_sandbox_id is not None:
+            try:
+                provider_sandbox = await provider.resume_sandbox(provider_sandbox_id)
+            except SandboxProviderTargetUnavailableError as missing_error:
+                refreshed = await cloud_sandboxes_store.supersede_missing_cloud_sandbox_provider(
+                    db,
+                    sandbox.id,
+                    expected_provider_sandbox_id=provider_sandbox_id,
+                )
+                if refreshed is None:
+                    raise CloudMaterializationCommandError(
+                        "Cloud sandbox provider binding changed while recovering."
+                    ) from missing_error
+                # All lifecycle writers lock cloud_sandbox before usage_segment.
+                # A mismatched open segment raises, and this transaction rolls
+                # the supersession back so the old binding remains attributable.
+                await close_cloud_sandbox_provider_usage(
+                    db,
+                    sandbox_id=sandbox.id,
+                    provider_sandbox_id=provider_sandbox_id,
+                    ended_at=utcnow(),
+                    closed_by=USAGE_SEGMENT_CLOSED_BY_PROVISION_FAILURE,
+                )
+                sandbox = refreshed
+                provider_sandbox_id = None
+                # The absent binding and its exact usage segment are durable
+                # before any replacement is allocated externally.
+                await db.commit()
+
+        if provider_sandbox_id is None:
+            handle = await provider.create_sandbox(
+                metadata={
+                    "cloud_sandbox_id": str(sandbox.id),
+                    "proliferate_owner_user_id": str(owner_user_id),
+                }
+            )
+            provider_sandbox_id = handle.sandbox_id
+            refreshed = await cloud_sandboxes_store.record_cloud_sandbox_provider_sandbox(
+                db,
+                sandbox.id,
+                e2b_sandbox_id=provider_sandbox_id,
+                e2b_template_ref=provider.template_version,
+            )
+            if refreshed is None:
+                # Only the unrecorded candidate is safe to destroy after losing
+                # the compare-and-set race. Never touch a concurrently recorded
+                # winner or an unrelated provider sandbox.
+                try:
+                    await provider.destroy_sandbox(provider_sandbox_id)
+                except Exception:
+                    logger.exception(
+                        "failed to destroy provider sandbox after lost record",
+                        extra={
+                            "cloud_sandbox_id": str(sandbox.id),
+                            "e2b_sandbox_id": provider_sandbox_id,
+                        },
+                    )
+                raise CloudMaterializationCommandError("Cloud sandbox changed while provisioning.")
+            try:
+                await open_cloud_sandbox_provider_usage(
+                    db,
+                    sandbox_id=sandbox.id,
+                    provider_sandbox_id=provider_sandbox_id,
+                    user_id=owner_user_id,
+                    started_at=utcnow(),
+                    opened_by=USAGE_SEGMENT_OPENED_BY_PROVISION,
+                    event_id=(f"provider-binding-start:{sandbox.id}:{provider_sandbox_id}"),
+                )
+            except Exception:
+                # The candidate has not been committed to the logical row yet;
+                # roll back both staged writes and destroy only that candidate.
+                await db.rollback()
+                try:
+                    await provider.destroy_sandbox(provider_sandbox_id)
+                except Exception:
+                    logger.exception(
+                        "failed to destroy provider sandbox after usage attribution failure",
+                        extra={
+                            "cloud_sandbox_id": str(sandbox.id),
+                            "e2b_sandbox_id": provider_sandbox_id,
+                        },
+                    )
+                provider_sandbox_id = None
+                raise
+            sandbox = refreshed
+            await db.commit()
+            provider_sandbox = await provider.resume_sandbox(provider_sandbox_id)
+
+        if provider_sandbox is None or provider_sandbox_id is None:
+            raise CloudMaterializationCommandError(
+                "Cloud sandbox provider did not return a running sandbox."
+            )
+
+        # Provider webhooks are advisory and may arrive before binding commit,
+        # after this attempt changes status, or not at all. Directly ensure the
+        # exact resumed provider has an open segment; the store is idempotent
+        # for the same provider and rejects a conflicting live attribution.
+        active = await cloud_sandboxes_store.lock_cloud_sandbox_materialization_attempt(
             db,
             sandbox.id,
-            e2b_sandbox_id=provider_sandbox_id,
-            e2b_template_ref=provider.template_version,
+            expected_provider_sandbox_id=provider_sandbox_id,
         )
-        if refreshed is None:
-            # The row was destroyed (or vanished) mid-create. record_* returns
-            # None from its row-gone/destroyed guard BEFORE writing anything, so
-            # the provider id we just minted was never persisted to any row —
-            # unlike destroy_cloud_sandbox (P2-001), there is no DB state that a
-            # rollback could leave disagreeing with a killed VM. We are about to
-            # raise and roll this transaction back, and the VM is unrecorded
-            # either way, so an immediate inline best-effort destroy is correct
-            # here (no after-commit hook needed). This runs in the materializer's
-            # own transaction, not a request-held FOR UPDATE critical path, so it
-            # does not wedge a locked row. If this best-effort destroy fails the
-            # VM orphans; a periodic reaper backstop is tracked in #1280.
-            try:
-                await provider.destroy_sandbox(provider_sandbox_id)
-            except Exception:
-                logger.exception(
-                    "failed to destroy provider sandbox after lost record",
-                    extra={
-                        "cloud_sandbox_id": str(sandbox.id),
-                        "e2b_sandbox_id": provider_sandbox_id,
-                    },
-                )
+        if active is None:
             raise CloudMaterializationCommandError(
-                "Cloud sandbox was destroyed while provisioning."
+                "Cloud sandbox changed while resuming its provider."
             )
-        sandbox = refreshed
+        sandbox = active
+        await open_cloud_sandbox_provider_usage(
+            db,
+            sandbox_id=sandbox.id,
+            provider_sandbox_id=provider_sandbox_id,
+            user_id=owner_user_id,
+            started_at=utcnow(),
+            opened_by=USAGE_SEGMENT_OPENED_BY_RESUME,
+            event_id=f"provider-resume-start:{sandbox.id}:{provider_sandbox_id}",
+        )
         await db.commit()
 
-    provider_sandbox = await provider.resume_sandbox(provider_sandbox_id)
-    endpoint = await provider.resolve_runtime_endpoint(provider_sandbox)
-    runtime_context = await provider.resolve_runtime_context(provider_sandbox)
-    runtime_token = _runtime_token(sandbox)
-    data_key = _runtime_data_key(sandbox)
-    minted_new_credentials = False
+        endpoint = await provider.resolve_runtime_endpoint(provider_sandbox)
+        runtime_context = await provider.resolve_runtime_context(provider_sandbox)
+        runtime_token = _runtime_token(sandbox)
+        data_key = _runtime_data_key(sandbox)
 
-    if runtime_token is not None and data_key is not None:
-        try:
-            await wait_for_runtime_health(
-                endpoint.runtime_url,
-                workspace_id=sandbox.id,
-                total_attempts=4,
-                delay_seconds=0.5,
-            )
-            await verify_runtime_auth_enforced(
-                endpoint.runtime_url,
-                runtime_token,
-                workspace_id=sandbox.id,
-            )
-        except Exception:
+        if runtime_token is not None and data_key is not None:
+            try:
+                await wait_for_runtime_health(
+                    endpoint.runtime_url,
+                    workspace_id=sandbox.id,
+                    total_attempts=4,
+                    delay_seconds=0.5,
+                )
+                await verify_runtime_auth_enforced(
+                    endpoint.runtime_url,
+                    runtime_token,
+                    workspace_id=sandbox.id,
+                )
+            except Exception:
+                await _launch_anyharness_runtime(
+                    db,
+                    provider=provider,
+                    provider_sandbox=provider_sandbox,
+                    provider_sandbox_id=provider_sandbox_id,
+                    sandbox_record=sandbox,
+                    endpoint=endpoint,
+                    runtime_context=runtime_context,
+                    runtime_token=runtime_token,
+                    anyharness_data_key=data_key,
+                )
+        else:
+            runtime_token = secrets.token_urlsafe(32)
+            data_key = generate_anyharness_data_key()
             await _launch_anyharness_runtime(
                 db,
                 provider=provider,
@@ -183,30 +299,10 @@ async def connect_ready_sandbox(
                 runtime_token=runtime_token,
                 anyharness_data_key=data_key,
             )
-    else:
-        runtime_token = secrets.token_urlsafe(32)
-        data_key = generate_anyharness_data_key()
-        minted_new_credentials = True
-        await _launch_anyharness_runtime(
-            db,
-            provider=provider,
-            provider_sandbox=provider_sandbox,
-            provider_sandbox_id=provider_sandbox_id,
-            sandbox_record=sandbox,
-            endpoint=endpoint,
-            runtime_context=runtime_context,
-            runtime_token=runtime_token,
-            anyharness_data_key=data_key,
-        )
 
-    # Persist the (possibly freshly minted) runtime credentials whenever we
-    # minted them, not only when the runtime URL changed: a legacy row with a
-    # matching anyharness_base_url but a NULL token would otherwise never store
-    # the token we just minted, forcing the whole reconnect dance on every
-    # subsequent connect. _launch_anyharness_runtime already persists on its
-    # own success tail; this is the safety net for the URL-unchanged case.
-    if minted_new_credentials or sandbox.anyharness_base_url != endpoint.runtime_url:
-        await cloud_sandboxes_store.mark_cloud_sandbox_ready(
+        # Always finish the attempt with an exact-binding CAS. This clears a
+        # previous receipt even when the runtime URL and credentials were reused.
+        ready = await cloud_sandboxes_store.mark_cloud_sandbox_ready(
             db,
             sandbox.id,
             e2b_sandbox_id=provider_sandbox_id,
@@ -219,14 +315,26 @@ async def connect_ready_sandbox(
                 sandbox.anyharness_data_key_ciphertext or encrypt_text(data_key)
             ),
         )
+        if ready is None:
+            raise CloudMaterializationCommandError(
+                "Cloud sandbox provider binding changed while connecting."
+            )
         await db.commit()
 
-    return SandboxIOTarget(
-        provider=provider,
-        sandbox=provider_sandbox,
-        endpoint=endpoint,
-        runtime_context=runtime_context,
-    )
+        return SandboxIOTarget(
+            provider=provider,
+            sandbox=provider_sandbox,
+            endpoint=endpoint,
+            runtime_context=runtime_context,
+        )
+    except Exception as exc:
+        await persist_materialization_failure(
+            db,
+            sandbox_id=sandbox.id,
+            expected_provider_sandbox_id=provider_sandbox_id,
+            error=exc,
+        )
+        raise
 
 
 async def _launch_anyharness_runtime(
