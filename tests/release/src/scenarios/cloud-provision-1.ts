@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -855,8 +855,19 @@ export function createCloudProvision1Driver(
     // Client secret is single-line and rides the docker --env-file; the private
     // key is a multi-line PEM (docker --env-file rejects it), so it is written as
     // its own 0600 PEM file and mounted into the Server container on the box.
+    // #1318 / base-world repair: #1257 (3cb284a51) added
+    // require_github_app_runtime_configured() at the top of
+    // require_github_cloud_repo_authority, gating on Settings.github_app_configured
+    // — now a SIX-field check including github_app_webhook_secret. Without it the
+    // gate raises github_app_not_configured (503) inside the repo preclone, the
+    // sandbox bootstrap's best-effort try/except swallows it, and the covered repo
+    // never materializes (verifyCoveredRepo red). Qualification exercises no
+    // inbound App webhook (authorization completes via the controller boundary), so
+    // a run-scoped random value (mirrors the JWT_SECRET/CLOUD_SECRET_KEY precedent)
+    // satisfies the config gate and is never verified against a delivery.
     const githubSecretsPath = await writeSecretEnvFile(secretsDir, "github-app.env", {
       GITHUB_APP_CLIENT_SECRET: inputs.github.clientSecret,
+      GITHUB_APP_WEBHOOK_SECRET: randomBytes(32).toString("hex"),
     });
     const githubPrivateKeyPath = path.join(secretsDir, "github-app-private-key.pem");
     await writeFile(githubPrivateKeyPath, `${inputs.github.privateKey.trimEnd()}\n`, { mode: 0o600 });

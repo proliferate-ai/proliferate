@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { test } from "node:test";
 
 import {
@@ -323,6 +326,31 @@ test("resolveWorldConstructionInputs fails cleanly when the candidate build map 
 test("resolveWorldConstructionInputs fails cleanly when a required cloud env var is missing", () => {
   const result = resolveWorldConstructionInputs(fakeCtx({ env: fakeEnv({ RELEASE_E2E_CLOUD_AWS_REGION: undefined }) }));
   assert.equal(result.ok, false);
+});
+
+test("buildWorld writes GITHUB_APP_WEBHOOK_SECRET into the github-app env file (#1318 base-world repair)", async () => {
+  // #1257's six-field github_app_configured gate now requires
+  // GITHUB_APP_WEBHOOK_SECRET, else the repo-authority gate 503s inside the
+  // sandbox bootstrap and the covered repo never materializes. buildWorld writes
+  // the github-app env file BEFORE it calls constructManagedCloudWorld (which
+  // throws on the empty fake candidate map), so we catch that throw and read the
+  // staged env file off disk.
+  const runDir = await mkdtemp(path.join(os.tmpdir(), "cp1-webhook-"));
+  try {
+    const resolved = resolveWorldConstructionInputs(fakeCtx({ runDir }));
+    assert.equal(resolved.ok, true);
+    if (!resolved.ok) return;
+    const driver = createCloudProvision1Driver();
+    await driver.buildWorld(resolved.value).catch(() => undefined); // construction throws on the empty map — that's fine.
+    const githubEnv = await readFile(path.join(runDir, "secrets", "github-app.env"), "utf8");
+    const match = /^GITHUB_APP_WEBHOOK_SECRET=([0-9a-f]{64})$/m.exec(githubEnv);
+    assert.ok(match, "github-app.env must contain a 64-hex GITHUB_APP_WEBHOOK_SECRET line");
+    assert.ok(githubEnv.includes("GITHUB_APP_CLIENT_SECRET="), "the existing client secret line is preserved");
+    // The webhook secret is a run-scoped random never carried in evidence/receipts.
+    assert.notEqual(match![1], REQUIRED_ENV_VARS.RELEASE_E2E_CLOUD_GITHUB_APP_CLIENT_SECRET);
+  } finally {
+    await rm(runDir, { recursive: true, force: true });
+  }
 });
 
 test("resolveWorldConstructionInputs resolves every typed input on the happy path", () => {

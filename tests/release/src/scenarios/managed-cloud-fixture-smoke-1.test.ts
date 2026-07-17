@@ -736,6 +736,13 @@ test("buildWorld constructs the world with runDir scoped to <parentRunDir>/fixtu
     assert.equal(capturedRunDir, expected, "the world's runDir MUST be the scoped subdir, not the shared parent");
     assert.ok(capturedRunDir.endsWith(path.join(FIXTURE_SMOKE_WORLD_SUBDIR)));
     assert.notEqual(capturedRunDir, parent);
+
+    // #1318: the github-app env file MUST carry GITHUB_APP_WEBHOOK_SECRET (the
+    // six-field github_app_configured gate #1257 added), and its value never leaks.
+    const githubEnv = await readFile(path.join(expected, "secrets", "github-app.env"), "utf8");
+    const match = /^GITHUB_APP_WEBHOOK_SECRET=([0-9a-f]{64})$/m.exec(githubEnv);
+    assert.ok(match, "github-app.env must contain a 64-hex GITHUB_APP_WEBHOOK_SECRET line");
+    assert.ok(githubEnv.includes("GITHUB_APP_CLIENT_SECRET="), "the existing client secret line is preserved");
   } finally {
     await rm(parent, { recursive: true, force: true });
   }

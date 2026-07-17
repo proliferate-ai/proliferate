@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { mkdir, writeFile, rename, readFile, copyFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -695,8 +696,15 @@ export function createFixtureSmokeDriver(deps: Partial<FixtureSmokeRuntimeDeps> 
       const secretsDir = path.join(prep.scopedRunDir, "secrets");
       await mkdir(secretsDir, { recursive: true });
       const e2bSecretsPath = await writeSecretEnvFile(secretsDir, "e2b.env", { E2B_API_KEY: inputs.e2bApiKey });
+      // #1318 / base-world repair: #1257's six-field github_app_configured gate now
+      // requires GITHUB_APP_WEBHOOK_SECRET, else the repo-authority gate 503s inside
+      // the sandbox bootstrap's best-effort preclone and the covered repo never
+      // materializes. Qualification exercises no inbound App webhook, so a run-scoped
+      // random value satisfies the gate and is never verified against a delivery
+      // (same rationale + fix as cloud-provision-1.ts's buildWorld).
       const githubSecretsPath = await writeSecretEnvFile(secretsDir, "github-app.env", {
         GITHUB_APP_CLIENT_SECRET: inputs.github.clientSecret,
+        GITHUB_APP_WEBHOOK_SECRET: randomBytes(32).toString("hex"),
       });
       const githubPrivateKeyPath = path.join(secretsDir, "github-app-private-key.pem");
       await writeFile(githubPrivateKeyPath, `${inputs.github.privateKey.trimEnd()}\n`, { mode: 0o600 });
