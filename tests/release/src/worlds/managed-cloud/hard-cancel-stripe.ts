@@ -144,6 +144,11 @@ async function ownedProductFamilies(
     if (prices.some((price) => typeof price.active !== "boolean")) {
       throw new Error(`Stripe prices for product ${productId} returned no boolean active state.`);
     }
+    if (prices.some((price) => !metadataOwnsRun(price, params.runTag))) {
+      throw new Error(
+        `Stripe product ${productId} has a price without exact run ownership; refusing to mutate the family.`,
+      );
+    }
     result.push({
       productId,
       productActive: product.active,

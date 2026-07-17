@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { classifyManagedCloudAttempt } from "./classify-release-e2e-managed-cloud.mjs";
+import {
+  classifyManagedCloudAttempt,
+  classificationReceipt,
+  listWorkflowAttemptJobs,
+  parseClassificationArgs,
+  readWorkflowAttempt,
+} from "./classify-release-e2e-managed-cloud.mjs";
 
 const EXPECTED = {
   repository: "proliferate-ai/proliferate",
@@ -77,5 +83,90 @@ test("nonterminal jobs and mismatched run custody fail closed", () => {
   assert.throws(
     () => classifyManagedCloudAttempt({ ...RUN, run_attempt: 3 }, jobs("success"), EXPECTED),
     /exact completed Release E2E/,
+  );
+});
+
+test("reads immutable attempt metadata so a later rerun cannot suppress cleanup", async () => {
+  const endpoints = [];
+  const target = await readWorkflowAttempt(EXPECTED.repository, 42, EXPECTED.attempt, {
+    async fetchAttempt(_repository, endpoint) {
+      endpoints.push(endpoint);
+      if (endpoint === "actions/runs/42/attempts/2") return RUN;
+      return { ...RUN, status: "in_progress", run_attempt: 3 };
+    },
+  });
+
+  assert.deepEqual(endpoints, ["actions/runs/42/attempts/2"]);
+  assert.equal(classifyManagedCloudAttempt(target, jobs("cancelled"), EXPECTED).managedCloudStarted, true);
+});
+
+test("exhausts a second workflow-jobs page before classifying the attempt", async () => {
+  const pages = new Map([
+    [1, {
+      total_count: 101,
+      jobs: Array.from({ length: 100 }, (_, index) => ({ id: index + 1, name: `job-${index + 1}` })),
+    }],
+    [2, {
+      total_count: 101,
+      jobs: [{ id: 101, name: JOB_NAME, status: "completed", conclusion: "failure" }],
+    }],
+  ]);
+  const requested = [];
+  const inventory = await listWorkflowAttemptJobs(EXPECTED.repository, 42, 2, {
+    fetchPage: async (_repository, endpoint) => {
+      const page = Number(new URL(`https://example.invalid/${endpoint}`).searchParams.get("page"));
+      requested.push(page);
+      return pages.get(page);
+    },
+  });
+
+  assert.deepEqual(requested, [1, 2]);
+  assert.equal(inventory.jobs.length, 101);
+  assert.equal(classifyManagedCloudAttempt(RUN, inventory, EXPECTED).managedCloudStarted, true);
+});
+
+test("workflow-jobs pagination fails closed on inconsistent totals and repeated pages", async () => {
+  const first = {
+    total_count: 101,
+    jobs: Array.from({ length: 100 }, (_, index) => ({ id: index + 1, name: `job-${index + 1}` })),
+  };
+  await assert.rejects(
+    () => listWorkflowAttemptJobs(EXPECTED.repository, 42, 2, {
+      fetchPage: async (_repository, endpoint) => endpoint.endsWith("page=1")
+        ? first
+        : { total_count: 102, jobs: [{ id: 101, name: JOB_NAME }] },
+    }),
+    /total changed/,
+  );
+  await assert.rejects(
+    () => listWorkflowAttemptJobs(EXPECTED.repository, 42, 2, {
+      fetchPage: async (_repository, endpoint) => endpoint.endsWith("page=1")
+        ? first
+        : { total_count: 101, jobs: [{ id: 1, name: JOB_NAME }] },
+    }),
+    /repeated job id/,
+  );
+});
+
+test("classification receipt is bound to the required cleanup revision", () => {
+  const cleanupSha = "b".repeat(40);
+  const inputs = parseClassificationArgs([
+    "--workflow-run-id", "42",
+    "--workflow-run-attempt", "2",
+    "--cleanup-sha", cleanupSha,
+  ], { GITHUB_REPOSITORY: EXPECTED.repository });
+  const receipt = classificationReceipt({
+    sourceSha: RUN.head_sha,
+    managedCloudStarted: true,
+    jobConclusion: "failure",
+  }, inputs);
+  assert.equal(receipt.cleanup_sha, cleanupSha);
+  assert.equal(receipt.status, "classified");
+  assert.throws(
+    () => parseClassificationArgs([
+      "--workflow-run-id", "42",
+      "--workflow-run-attempt", "2",
+    ], { GITHUB_REPOSITORY: EXPECTED.repository }),
+    /cleanup sha is malformed/,
   );
 });

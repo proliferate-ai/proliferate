@@ -756,12 +756,15 @@ incomplete pagination, and accepted deletes whose resources remain are red.
 
 The LiteLLM fields are qualification-only: ordinary deployments leave both
 settings empty and retain their existing enrollment behavior. The independent
-workflow reads (but never executes) the exact source candidate's explicit
-`managed-cloud-hard-cancel-contract.v1.json` compatibility receipt to establish
-that it supported the attribution contract. Comments, dead strings, and partial
-implementation markers cannot opt a candidate in. An older candidate without
-that receipt remains explicitly non-green rather than treating an empty
-metadata sweep as proof. The exact completed attempt's job inventory is the
+workflow authorizes LiteLLM reconciliation only when the exact candidate source
+SHA appears in the append-only
+`managed-cloud-litellm-attribution-attestations.v1.json` list shipped by the
+trusted default-branch cleanup revision. Candidate-authored contract bytes,
+comments, dead strings, and partial implementation markers cannot opt a source
+in. The list intentionally ships empty; a later reviewed micro-PR may append an
+exact frozen source SHA after its attribution behavior is proven. Every
+unattested candidate remains explicitly non-green rather than treating an
+empty metadata sweep as proof. The exact completed attempt's job inventory is the
 world-start gate: if `cloud-provision-1 (manual, strict)` is absent or skipped,
 the protected provider jobs do not start; any other terminal conclusion is
 cleaned conservatively. No provider cleanup uses aliases, random product UUIDs,

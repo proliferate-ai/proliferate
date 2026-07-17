@@ -10,6 +10,8 @@ const PURPOSE = "managed-cloud-qualification";
 const SHARD_ID = "1";
 const ZONE_NAME = "qualification.proliferate.com";
 const TERMINAL_INSTANCE_STATES = new Set(["shutting-down", "terminated"]);
+const ROUTE53_PAGE_SIZE = 100;
+const MAX_ROUTE53_PAGES = 100;
 
 function defaultExec(file, args, options = {}) {
   return execFile(file, args, {
@@ -180,6 +182,44 @@ async function discoverKeyPairs(inputs, exec) {
   });
 }
 
+async function listRoute53Records(inputs, startName, exec) {
+  const rows = [];
+  const seenTokens = new Set();
+  let token = null;
+  for (let page = 1; page <= MAX_ROUTE53_PAGES; page += 1) {
+    const args = [
+      "route53", "list-resource-record-sets",
+      "--hosted-zone-id", inputs.hostedZoneId,
+      "--start-record-name", startName,
+    ];
+    if (token !== null) args.push("--starting-token", token);
+    args.push(
+      "--max-items", String(ROUTE53_PAGE_SIZE),
+      "--page-size", String(ROUTE53_PAGE_SIZE),
+      "--output", "json",
+    );
+    const payload = asRecord(
+      await awsJson(exec, args, "list-resource-record-sets"),
+      `list-resource-record-sets page ${page}`,
+    );
+    const pageRows = asArray(payload.ResourceRecordSets, "ResourceRecordSets");
+    if (pageRows.length > ROUTE53_PAGE_SIZE) {
+      throw new Error(`Route53 page ${page} exceeded its bounded page size.`);
+    }
+    rows.push(...pageRows);
+    if (payload.NextToken === undefined) return rows;
+    if (typeof payload.NextToken !== "string" || payload.NextToken.length === 0 || payload.NextToken.length > 8192) {
+      throw new Error(`Route53 page ${page} next token is malformed.`);
+    }
+    if (seenTokens.has(payload.NextToken)) {
+      throw new Error("Route53 pagination token did not advance.");
+    }
+    seenTokens.add(payload.NextToken);
+    token = payload.NextToken;
+  }
+  throw new Error("Route53 pagination exceeded its safety bound.");
+}
+
 async function discoverDnsRecords(inputs, exec) {
   const startNames = [
     `${dnsPrefix(inputs.runId)}-.${ZONE_NAME}`,
@@ -187,14 +227,7 @@ async function discoverDnsRecords(inputs, exec) {
   ];
   const rows = [];
   for (const startName of startNames) {
-    const payload = await awsJson(exec, [
-      "route53", "list-resource-record-sets",
-      "--hosted-zone-id", inputs.hostedZoneId,
-      "--start-record-name", startName,
-      "--max-items", "10",
-      "--output", "json",
-    ], "list-resource-record-sets");
-    rows.push(...asArray(asRecord(payload, "list-resource-record-sets").ResourceRecordSets, "ResourceRecordSets"));
+    rows.push(...await listRoute53Records(inputs, startName, exec));
   }
   const pattern = dnsRecordPattern(inputs.runId);
   const seen = new Set();
@@ -349,6 +382,7 @@ export async function reapManagedCloudAwsForWorkflowAttempt(inputs, deps = {}) {
   const sleep = deps.sleep ?? defaultSleep;
   const region = requiredString(inputs.region, "AWS region", /^[a-z]{2}-[a-z]+-[1-9][0-9]?$/);
   const hostedZoneId = requiredString(inputs.hostedZoneId, "Route53 hosted zone id", /^Z[A-Z0-9]+$/);
+  const cleanupSha = requiredString(inputs.cleanupSha, "cleanup sha", /^[0-9a-f]{40}$/);
   const reports = [];
   for (const runId of managedCloudRunIdentities(inputs.workflowRunId, inputs.workflowRunAttempt)) {
     reports.push(await cleanupOneRun({ runId, region, hostedZoneId }, { exec, sleep }));
@@ -362,6 +396,7 @@ export async function reapManagedCloudAwsForWorkflowAttempt(inputs, deps = {}) {
     schema_version: 1,
     workflow_run_id: String(inputs.workflowRunId),
     workflow_run_attempt: Number(inputs.workflowRunAttempt),
+    cleanup_sha: cleanupSha,
     status: reports.some((report) => Object.values(report.discovered).some((count) => count > 0))
       ? "reconciled"
       : "not_needed",
@@ -377,27 +412,38 @@ function parseArgs(argv, env = process.env) {
     const key = argv[index];
     const value = argv[index + 1];
     if (!key?.startsWith("--") || value === undefined || values.has(key)) {
-      throw new Error("Usage: reap-managed-cloud-aws --workflow-run-id <id> --workflow-run-attempt <n>");
+      throw new Error(
+        "Usage: reap-managed-cloud-aws --workflow-run-id <id> " +
+        "--workflow-run-attempt <n> --cleanup-sha <sha>",
+      );
     }
     values.set(key, value);
   }
-  const allowed = new Set(["--workflow-run-id", "--workflow-run-attempt"]);
+  const allowed = new Set(["--workflow-run-id", "--workflow-run-attempt", "--cleanup-sha"]);
   for (const key of values.keys()) if (!allowed.has(key)) throw new Error(`Unknown argument ${key}.`);
   return {
     workflowRunId: values.get("--workflow-run-id") ?? "",
     workflowRunAttempt: values.get("--workflow-run-attempt") ?? "",
+    cleanupSha: values.get("--cleanup-sha") ?? "",
     region: env.RELEASE_E2E_CLOUD_AWS_REGION ?? "",
     hostedZoneId: env.RELEASE_E2E_CLOUD_ROUTE53_ZONE_ID ?? "",
   };
 }
 
 async function main() {
+  const argv = process.argv.slice(2);
+  const cleanupIndex = argv.indexOf("--cleanup-sha");
+  const rawCleanupSha = cleanupIndex >= 0 ? argv[cleanupIndex + 1] : undefined;
+  const cleanupSha = typeof rawCleanupSha === "string" && /^[0-9a-f]{40}$/.test(rawCleanupSha)
+    ? rawCleanupSha
+    : null;
   try {
-    console.log(JSON.stringify(await reapManagedCloudAwsForWorkflowAttempt(parseArgs(process.argv.slice(2)))));
+    console.log(JSON.stringify(await reapManagedCloudAwsForWorkflowAttempt(parseArgs(argv))));
   } catch (error) {
     console.log(JSON.stringify({
       kind: "managed_cloud_aws_hard_cancel_cleanup",
       schema_version: 1,
+      cleanup_sha: cleanupSha,
       status: "failed",
       reason: boundedError(error),
     }));

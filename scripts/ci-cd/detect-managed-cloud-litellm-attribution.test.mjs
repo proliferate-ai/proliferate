@@ -1,67 +1,80 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import { test } from "node:test";
-import { fileURLToPath } from "node:url";
 
 import { sourceSupportsLiteLlmAttribution } from "./detect-managed-cloud-litellm-attribution.mjs";
 
-const INPUTS = {
-  repository: "proliferate-ai/proliferate",
-  sourceSha: "a".repeat(40),
-};
+const SOURCE_SHA = "a".repeat(40);
+const INPUTS = { sourceSha: SOURCE_SHA };
 
-const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-const CONTRACT = readFileSync(
-  path.join(REPO_ROOT, "tests/release/fixtures/managed-cloud-hard-cancel-contract.v1.json"),
-  "utf8",
-);
+function attestations(sourceShas) {
+  return JSON.stringify({
+    kind: "managed_cloud_litellm_attribution_attestations",
+    schema_version: 1,
+    source_shas: sourceShas,
+  });
+}
 
-test("accepts only the exact explicit source compatibility receipt", async () => {
-  const reads = [];
+test("an empty trusted attestation list leaves every source unsupported", async () => {
   assert.equal(await sourceSupportsLiteLlmAttribution(INPUTS, {
-    async readContract(repository, sha) {
-      reads.push([repository, sha]);
-      return CONTRACT;
-    },
-  }), true);
-  assert.deepEqual(reads, [[INPUTS.repository, INPUTS.sourceSha]]);
-});
-
-test("an older source without the explicit receipt remains unsupported", async () => {
-  assert.equal(await sourceSupportsLiteLlmAttribution(INPUTS, {
-    async readContract() { return null; },
+    async readAttestations() { return attestations([]); },
   }), false);
 });
 
-test("comments and dead implementation-marker strings cannot opt a source in", async () => {
-  const deadStrings = [
-    "AGENT_GATEWAY_QUALIFICATION_RUN_ID",
-    "AGENT_GATEWAY_QUALIFICATION_SHARD_ID",
-    "proliferate_qualification_run_id",
-    "proliferate_qualification_shard_id",
-  ].join("\n// ");
+test("only an exact source SHA in the trusted attestation list opts in", async () => {
   assert.equal(await sourceSupportsLiteLlmAttribution(INPUTS, {
-    async readContract() { return deadStrings; },
-  }).catch((error) => error.message), "managed-cloud hard-cancel source contract is malformed");
+    async readAttestations() { return attestations([SOURCE_SHA]); },
+  }), true);
+  assert.equal(await sourceSupportsLiteLlmAttribution({ sourceSha: "b".repeat(40) }, {
+    async readAttestations() { return attestations([SOURCE_SHA]); },
+  }), false);
 });
 
-test("a partial, extended, or altered receipt remains unsupported", async () => {
-  for (const contract of [
-    JSON.stringify({ ...JSON.parse(CONTRACT), shard_id: "2" }),
-    JSON.stringify({ ...JSON.parse(CONTRACT), extra: true }),
-  ]) {
-    assert.equal(await sourceSupportsLiteLlmAttribution(INPUTS, {
-      async readContract() { return contract; },
-    }), false);
+test("source-authored compatibility-contract bytes cannot opt a source in", async () => {
+  const sourceContract = JSON.stringify({
+    schema_version: 1,
+    managed_cloud_job: "cloud-provision-1 (manual, strict)",
+    run_id_format: "qlc-ci-{workflow_run_id}-{workflow_run_attempt}",
+    shard_id: "1",
+    litellm_metadata: {
+      run_id: "proliferate_qualification_run_id",
+      shard_id: "proliferate_qualification_shard_id",
+    },
+  });
+  await assert.rejects(
+    () => sourceSupportsLiteLlmAttribution(INPUTS, {
+      async readAttestations() { return sourceContract; },
+    }),
+    /unknown or missing fields/,
+  );
+});
+
+test("malformed, extended, duplicate, and non-SHA attestations fail closed", async () => {
+  const invalid = [
+    "not json",
+    JSON.stringify({ kind: "wrong", schema_version: 1, source_shas: [] }),
+    JSON.stringify({
+      kind: "managed_cloud_litellm_attribution_attestations",
+      schema_version: 1,
+      source_shas: [],
+      extra: true,
+    }),
+    attestations([SOURCE_SHA, SOURCE_SHA]),
+    attestations(["../main"]),
+  ];
+  for (const source of invalid) {
+    await assert.rejects(
+      () => sourceSupportsLiteLlmAttribution(INPUTS, {
+        async readAttestations() { return source; },
+      }),
+    );
   }
 });
 
-test("rejects untrusted source identities before reading GitHub", async () => {
+test("rejects an untrusted source identity before reading attestations", async () => {
   let called = false;
   await assert.rejects(
-    () => sourceSupportsLiteLlmAttribution({ ...INPUTS, sourceSha: "../main" }, {
-      async readContract() { called = true; return ""; },
+    () => sourceSupportsLiteLlmAttribution({ sourceSha: "../main" }, {
+      async readAttestations() { called = true; return attestations([]); },
     }),
     /source SHA is malformed/,
   );

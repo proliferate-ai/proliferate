@@ -40,6 +40,7 @@ const PROVIDER_ABSENCE = {
 export interface ProviderCleanupInputs {
   workflowRunId: string;
   workflowRunAttempt: string;
+  cleanupSha: string;
   sourceSupportsLiteLlmAttribution: boolean;
   e2bApiKey: string;
   e2bTeamId: string;
@@ -78,6 +79,7 @@ export interface ProviderCleanupReport {
   schema_version: 1;
   workflow_run_id: string;
   workflow_run_attempt: number;
+  cleanup_sha: string;
   status: "reconciled" | "not_needed" | "failed";
   runs: Array<{
     run_id: string;
@@ -97,6 +99,13 @@ function positiveInteger(value: string, label: string): number {
 function safeRunId(value: string): string {
   if (!/^[a-z0-9][a-z0-9-]{0,127}$/.test(value)) {
     throw new Error("managed-cloud run identity is malformed.");
+  }
+  return value;
+}
+
+function safeSha(value: string): string {
+  if (!/^[0-9a-f]{40}$/.test(value)) {
+    throw new Error("cleanup source SHA is malformed.");
   }
   return value;
 }
@@ -144,6 +153,7 @@ export async function reapManagedCloudProvidersForWorkflowAttempt(
   deps: ProviderCleanupDeps = DEFAULT_DEPS,
 ): Promise<ProviderCleanupReport> {
   const workflowRunAttempt = positiveInteger(inputs.workflowRunAttempt, "workflow run attempt");
+  const cleanupSha = safeSha(inputs.cleanupSha);
   const runIds = managedCloudProviderRunIdentities(inputs.workflowRunId, inputs.workflowRunAttempt);
   const secrets = [inputs.e2bApiKey, inputs.stripeSecretKey, inputs.litellmMasterKey];
   const runs: ProviderCleanupReport["runs"] = [];
@@ -170,6 +180,7 @@ export async function reapManagedCloudProvidersForWorkflowAttempt(
     schema_version: 1,
     workflow_run_id: String(positiveInteger(inputs.workflowRunId, "workflow run id")),
     workflow_run_attempt: workflowRunAttempt,
+    cleanup_sha: cleanupSha,
     status,
     runs,
   };
@@ -267,6 +278,7 @@ function parseArgs(argv: string[], env: NodeJS.ProcessEnv): ProviderCleanupInput
   const allowed = new Set([
     "--workflow-run-id",
     "--workflow-run-attempt",
+    "--cleanup-sha",
     "--source-supports-litellm-attribution",
   ]);
   for (let index = 0; index < argv.length; index += 2) {
@@ -281,6 +293,7 @@ function parseArgs(argv: string[], env: NodeJS.ProcessEnv): ProviderCleanupInput
   return {
     workflowRunId: requiredFlag(argv, "--workflow-run-id"),
     workflowRunAttempt: requiredFlag(argv, "--workflow-run-attempt"),
+    cleanupSha: safeSha(requiredFlag(argv, "--cleanup-sha")),
     sourceSupportsLiteLlmAttribution: contract === "true",
     e2bApiKey: env.RELEASE_E2E_E2B_API_KEY ?? "",
     e2bTeamId: env.RELEASE_E2E_E2B_TEAM_ID ?? "",

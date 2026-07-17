@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
@@ -14,6 +15,17 @@ const WORKFLOW_ATTEMPT = "1";
 const CURRENT_RUN = `qlc-ci-${WORKFLOW_RUN_ID}-${WORKFLOW_ATTEMPT}`;
 const REGION = "us-east-1";
 const ZONE = "Z123ABC";
+const CLEANUP_SHA = "b".repeat(40);
+
+function cleanupInputs() {
+  return {
+    workflowRunId: WORKFLOW_RUN_ID,
+    workflowRunAttempt: WORKFLOW_ATTEMPT,
+    cleanupSha: CLEANUP_SHA,
+    region: REGION,
+    hostedZoneId: ZONE,
+  };
+}
 
 function tags(runId, overrides = {}) {
   return Object.entries({
@@ -82,7 +94,29 @@ function fakeAws(initialStates, options = {}) {
     if (command === "route53 list-resource-record-sets") {
       if (options.failDnsDiscovery) throw new Error("Route53 unavailable");
       const start = args[args.indexOf("--start-record-name") + 1];
+      const tokenIndex = args.indexOf("--starting-token");
       const candidates = [...states.values()].flatMap((entry) => entry.dnsRecords);
+      if (options.malformedDnsPage) {
+        return { stdout: JSON.stringify({ ResourceRecordSets: [], NextToken: 42 }), stderr: "" };
+      }
+      if (options.nonProgressDns) {
+        return {
+          stdout: JSON.stringify({
+            ResourceRecordSets: [],
+            NextToken: "repeated-route53-token",
+          }),
+          stderr: "",
+        };
+      }
+      if (options.paginateDns && candidates.length > 0 && tokenIndex === -1) {
+        return {
+          stdout: JSON.stringify({
+            ResourceRecordSets: [],
+            NextToken: "route53-page-2",
+          }),
+          stderr: "",
+        };
+      }
       return {
         stdout: JSON.stringify({
           ResourceRecordSets: candidates.filter((record) => {
@@ -156,11 +190,13 @@ test("reaps the exact AWS resources leaked by the cancelled managed-cloud run", 
   const report = await reapManagedCloudAwsForWorkflowAttempt({
     workflowRunId: WORKFLOW_RUN_ID,
     workflowRunAttempt: WORKFLOW_ATTEMPT,
+    cleanupSha: CLEANUP_SHA,
     region: REGION,
     hostedZoneId: ZONE,
   }, { exec: fake.exec, sleep: async () => {} });
 
   assert.equal(report.status, "reconciled");
+  assert.equal(report.cleanup_sha, CLEANUP_SHA);
   assert.deepEqual(report.covered_domains, ["aws", "candidate_box_processes"]);
   assert.deepEqual(report.delegated_domains, ["e2b", "stripe", "litellm"]);
   const run = report.runs.find((row) => row.run_id === CURRENT_RUN);
@@ -175,11 +211,40 @@ test("is idempotent when the exact run identity is already pristine", async () =
   const report = await reapManagedCloudAwsForWorkflowAttempt({
     workflowRunId: WORKFLOW_RUN_ID,
     workflowRunAttempt: WORKFLOW_ATTEMPT,
+    cleanupSha: CLEANUP_SHA,
     region: REGION,
     hostedZoneId: ZONE,
   }, { exec: fake.exec, sleep: async () => {} });
   assert.equal(report.status, "not_needed");
   assert.equal(fake.calls.some((args) => args[1]?.startsWith("delete") || args[1] === "terminate-instances"), false);
+});
+
+test("requires cleanup revision custody and preserves it in a top-level failed receipt", async () => {
+  const { cleanupSha: _omitted, ...withoutCleanupSha } = cleanupInputs();
+  await assert.rejects(
+    () => reapManagedCloudAwsForWorkflowAttempt(withoutCleanupSha, {
+      exec: fakeAws([emptyState(CURRENT_RUN)]).exec,
+      sleep: async () => {},
+    }),
+    /cleanup sha is malformed/,
+  );
+
+  const scriptPath = fileURLToPath(new URL("./reap-managed-cloud-aws.mjs", import.meta.url));
+  const result = spawnSync(process.execPath, [
+    scriptPath,
+    "--workflow-run-id", WORKFLOW_RUN_ID,
+    "--workflow-run-attempt", WORKFLOW_ATTEMPT,
+    "--cleanup-sha", CLEANUP_SHA,
+  ], {
+    encoding: "utf8",
+    env: {
+      PATH: process.env.PATH,
+      RELEASE_E2E_CLOUD_AWS_REGION: "",
+      RELEASE_E2E_CLOUD_ROUTE53_ZONE_ID: "",
+    },
+  });
+  assert.equal(result.status, 2);
+  assert.equal(JSON.parse(result.stdout).cleanup_sha, CLEANUP_SHA);
 });
 
 test("refuses a run-tagged resource with missing positive-ownership tags before mutation", async () => {
@@ -189,6 +254,7 @@ test("refuses a run-tagged resource with missing positive-ownership tags before 
   await assert.rejects(() => reapManagedCloudAwsForWorkflowAttempt({
     workflowRunId: WORKFLOW_RUN_ID,
     workflowRunAttempt: WORKFLOW_ATTEMPT,
+    cleanupSha: CLEANUP_SHA,
     region: REGION,
     hostedZoneId: ZONE,
   }, { exec: fake.exec, sleep: async () => {} }), /exact managed-cloud run ownership tags/);
@@ -202,6 +268,7 @@ test("refuses same-tag security groups whose deterministic name does not match",
   await assert.rejects(() => reapManagedCloudAwsForWorkflowAttempt({
     workflowRunId: WORKFLOW_RUN_ID,
     workflowRunAttempt: WORKFLOW_ATTEMPT,
+    cleanupSha: CLEANUP_SHA,
     region: REGION,
     hostedZoneId: ZONE,
   }, { exec: fake.exec, sleep: async () => {} }), /unexpected name/);
@@ -220,6 +287,7 @@ test("does not delete unrelated DNS records returned beside the exact run record
   await reapManagedCloudAwsForWorkflowAttempt({
     workflowRunId: WORKFLOW_RUN_ID,
     workflowRunAttempt: WORKFLOW_ATTEMPT,
+    cleanupSha: CLEANUP_SHA,
     region: REGION,
     hostedZoneId: ZONE,
   }, { exec: fake.exec, sleep: async () => {} });
@@ -234,6 +302,7 @@ test("retries dependency-bound security-group deletion and proves the post-sweep
   const report = await reapManagedCloudAwsForWorkflowAttempt({
     workflowRunId: WORKFLOW_RUN_ID,
     workflowRunAttempt: WORKFLOW_ATTEMPT,
+    cleanupSha: CLEANUP_SHA,
     region: REGION,
     hostedZoneId: ZONE,
   }, { exec: fake.exec, sleep: async () => {} });
@@ -246,6 +315,7 @@ test("one ambiguous provider category stays red without stranding other exact re
   await assert.rejects(() => reapManagedCloudAwsForWorkflowAttempt({
     workflowRunId: WORKFLOW_RUN_ID,
     workflowRunAttempt: WORKFLOW_ATTEMPT,
+    cleanupSha: CLEANUP_SHA,
     region: REGION,
     hostedZoneId: ZONE,
   }, { exec: fake.exec, sleep: async () => {} }), /dns-discovery: Route53 unavailable/);
@@ -253,11 +323,48 @@ test("one ambiguous provider category stays red without stranding other exact re
   assert.ok(fake.calls.some((args) => args[1] === "delete-key-pair"));
 });
 
+test("exhausts Route53 pagination and deletes an exact record found on page two", async () => {
+  const fake = fakeAws([leakedCurrentState()], { paginateDns: true });
+  const report = await reapManagedCloudAwsForWorkflowAttempt({
+    workflowRunId: WORKFLOW_RUN_ID,
+    workflowRunAttempt: WORKFLOW_ATTEMPT,
+    cleanupSha: CLEANUP_SHA,
+    region: REGION,
+    hostedZoneId: ZONE,
+  }, { exec: fake.exec, sleep: async () => {} });
+
+  assert.equal(report.status, "reconciled");
+  assert.equal(report.runs[0].discovered.dns_records, 1);
+  assert.ok(fake.calls.some((args) => args.includes("--starting-token")));
+  assert.ok(fake.calls.some((args) => args[1] === "change-resource-record-sets"));
+});
+
+test("fails closed on a non-advancing or malformed Route53 page", async () => {
+  const nonProgress = fakeAws([emptyState(CURRENT_RUN)], { nonProgressDns: true });
+  await assert.rejects(() => reapManagedCloudAwsForWorkflowAttempt({
+    workflowRunId: WORKFLOW_RUN_ID,
+    workflowRunAttempt: WORKFLOW_ATTEMPT,
+    cleanupSha: CLEANUP_SHA,
+    region: REGION,
+    hostedZoneId: ZONE,
+  }, { exec: nonProgress.exec, sleep: async () => {} }), /token did not advance/);
+
+  const malformed = fakeAws([emptyState(CURRENT_RUN)], { malformedDnsPage: true });
+  await assert.rejects(() => reapManagedCloudAwsForWorkflowAttempt({
+    workflowRunId: WORKFLOW_RUN_ID,
+    workflowRunAttempt: WORKFLOW_ATTEMPT,
+    cleanupSha: CLEANUP_SHA,
+    region: REGION,
+    hostedZoneId: ZONE,
+  }, { exec: malformed.exec, sleep: async () => {} }), /next token is malformed/);
+});
+
 test("fails closed when a delete call returns but the exact resource remains", async () => {
   const fake = fakeAws([leakedCurrentState()], { keepKeyAfterDelete: true });
   await assert.rejects(() => reapManagedCloudAwsForWorkflowAttempt({
     workflowRunId: WORKFLOW_RUN_ID,
     workflowRunAttempt: WORKFLOW_ATTEMPT,
+    cleanupSha: CLEANUP_SHA,
     region: REGION,
     hostedZoneId: ZONE,
   }, { exec: fake.exec, sleep: async () => {} }), /exact run-owned resource\(s\) remain/);
@@ -266,13 +373,25 @@ test("fails closed when a delete call returns but the exact resource remains", a
 test("the independent workflow runs after Release E2E completion from default-branch code", () => {
   const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
   const workflow = readFileSync(path.join(repoRoot, ".github/workflows/release-e2e-hard-cancel-cleanup.yml"), "utf8");
+  const classifier = workflow.slice(
+    workflow.indexOf("  classify-source:"),
+    workflow.indexOf("  managed-cloud-aws:"),
+  );
+  const aws = workflow.slice(
+    workflow.indexOf("  managed-cloud-aws:"),
+    workflow.indexOf("  managed-cloud-providers:"),
+  );
+  const providers = workflow.slice(workflow.indexOf("  managed-cloud-providers:"));
   assert.match(workflow, /workflow_run:\s*\n\s*workflows: \["Release E2E \(tier 3\)"\]\s*\n\s*types: \[completed\]/);
   assert.doesNotMatch(workflow, /workflow_dispatch|inputs\.workflow_run/);
-  assert.equal(
-    workflow.match(/ref: \$\{\{ github\.event\.repository\.default_branch \}\}/g)?.length,
-    3,
-  );
+  assert.equal(workflow.match(/ref: \$\{\{ github\.sha \}\}/g)?.length, 1);
+  assert.equal(workflow.match(/ref: \$\{\{ needs\.classify-source\.outputs\.cleanup_sha \}\}/g)?.length, 2);
+  assert.doesNotMatch(workflow, /ref: \$\{\{ github\.event\.repository\.default_branch \}\}/);
   assert.doesNotMatch(workflow, /ref: .*github\.ref/);
+  assert.equal(workflow.match(/persist-credentials: false/g)?.length, 3);
+  assert.equal(workflow.match(/git rev-parse HEAD/g)?.length, 3);
+  assert.match(classifier, /cleanup_sha: \$\{\{ steps\.custody\.outputs\.cleanup_sha \}\}/);
+  assert.equal(workflow.match(/--cleanup-sha /g)?.length, 3);
   assert.match(workflow, /environment: Qualification/);
   assert.match(workflow, /reap-managed-cloud-aws\.mjs/);
   assert.match(workflow, /reap-managed-cloud-providers\.ts/);
@@ -286,6 +405,34 @@ test("the independent workflow runs after Release E2E completion from default-br
   assert.doesNotMatch(workflow, /managed_cloud_started=.*event === "workflow_dispatch"/);
   assert.match(workflow, /pnpm\/action-setup@b0f76dfb45f55f8421693e4803ac7bb65143bd34/);
   assert.match(workflow, /npm install -g @e2b\/cli@2\.13\.3/);
+  assert.equal(workflow.match(/Initialize bounded failed /g)?.length, 3);
+  assert.equal(workflow.match(/Finalize bounded /g)?.length, 3);
+  assert.equal(workflow.match(/if-no-files-found: error/g)?.length, 3);
+  assert.equal(workflow.match(/process\.exitCode = 2/g)?.length, 3);
+  for (const job of [classifier, aws, providers]) {
+    assert.ok(job.indexOf("Initialize bounded failed") < job.indexOf("actions/checkout@"));
+    assert.match(job, /Finalize bounded [^\n]+ receipt\s*\n\s*if: always\(\)/);
+    assert.match(job, /Upload bounded [^\n]+ receipt\s*\n\s*if: always\(\)/);
+  }
+  const awsHeader = aws.slice(0, aws.indexOf("    steps:"));
+  const providerHeader = providers.slice(0, providers.indexOf("    steps:"));
+  assert.doesNotMatch(awsHeader, /secrets\.|AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY/);
+  assert.doesNotMatch(providerHeader, /secrets\.|RELEASE_E2E_E2B_API_KEY|STRIPE_TEST_SECRET_KEY|LITELLM_MASTER_KEY/);
+  for (const secret of [
+    "RELEASE_E2E_CLOUD_AWS_ACCESS_KEY_ID",
+    "RELEASE_E2E_CLOUD_AWS_SECRET_ACCESS_KEY",
+    "RELEASE_E2E_E2B_API_KEY",
+    "STRIPE_TEST_SECRET_KEY",
+    "AGENT_GATEWAY_LITELLM_MASTER_KEY",
+  ]) {
+    assert.equal(
+      workflow.match(new RegExp(`secrets\\.${secret}`, "g"))?.length,
+      1,
+      `${secret} must be exposed to one step only`,
+    );
+  }
+  assert.equal(workflow.split("GH_TOKEN:").length - 1, 1);
+  assert.ok(classifier.indexOf("GH_TOKEN:") > classifier.indexOf("Inspect the exact attempt"));
   assert.doesNotMatch(workflow, /pnpm\/action-setup@v/);
   assert.doesNotMatch(workflow, /setup-uv|setup-python/);
   for (const match of workflow.matchAll(/uses:\s+([^\s#]+)/g)) {

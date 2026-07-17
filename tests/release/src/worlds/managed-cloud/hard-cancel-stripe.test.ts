@@ -72,8 +72,8 @@ test("product/price cleanup deactivates exact-owned families and proves zero act
     { id: "prod_foreign", active: true, metadata: { proliferate_qualification_run: "other:1" } },
   ];
   let prices = [
-    { id: "price_owned", active: true, product: "prod_owned" },
-    { id: "price_foreign", active: true, product: "prod_foreign" },
+    { id: "price_owned", active: true, product: "prod_owned", metadata: { proliferate_qualification_run: runTag } },
+    { id: "price_foreign", active: true, product: "prod_foreign", metadata: { proliferate_qualification_run: "other:1" } },
   ];
   const fake = recordingHttp((request) => {
     const path = request.path.split("?")[0]!;
@@ -103,6 +103,33 @@ test("product/price cleanup deactivates exact-owned families and proves zero act
   assert.equal(products.find((row) => row.id === "prod_foreign")?.active, true);
   assert.equal(prices.find((row) => row.id === "price_owned")?.active, false);
   assert.equal(prices.find((row) => row.id === "price_foreign")?.active, true);
+});
+
+test("a non-owned price attached to an owned product blocks every mutation", async () => {
+  const mutations: StripeHttpRequest[] = [];
+  const http: StripeHttp = {
+    async request(_key, request) {
+      if (request.method !== "GET") {
+        mutations.push(request);
+        return {};
+      }
+      if (request.path.startsWith("/products")) {
+        return {
+          data: [{ id: "prod_owned", active: true, metadata: { proliferate_qualification_run: "r:1" } }],
+          has_more: false,
+        };
+      }
+      return {
+        data: [{ id: "price_foreign", active: true, metadata: { proliferate_qualification_run: "other:1" } }],
+        has_more: false,
+      };
+    },
+  };
+  await assert.rejects(
+    () => deactivateHardCancelProductFamilies({ secretKey: KEY, runTag: "r:1" }, http),
+    /price without exact run ownership/,
+  );
+  assert.deepEqual(mutations, []);
 });
 
 test("malformed or nonadvancing provider pages fail closed", async () => {

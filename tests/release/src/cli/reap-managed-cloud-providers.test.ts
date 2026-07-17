@@ -13,6 +13,7 @@ import {
 const INPUTS: ProviderCleanupInputs = {
   workflowRunId: "29602686092",
   workflowRunAttempt: "2",
+  cleanupSha: "c".repeat(40),
   sourceSupportsLiteLlmAttribution: true,
   e2bApiKey: "e2b-secret-value",
   e2bTeamId: "team-qualification",
@@ -54,6 +55,7 @@ test("runs every provider serially for the exact identity and reports not-needed
   const calls: string[] = [];
   const report = await reapManagedCloudProvidersForWorkflowAttempt(INPUTS, emptyDeps(calls));
   assert.equal(report.status, "not_needed");
+  assert.equal(report.cleanup_sha, INPUTS.cleanupSha);
   assert.deepEqual(calls, [
     "e2b:qlc-ci-29602686092-2",
     "stripe:qlc-ci-29602686092-2:1",
@@ -150,8 +152,8 @@ test("Stripe recovery deletes only exact run-owned resources and proves zero", a
     { id: "prod_foreign", active: true, metadata: { proliferate_qualification_run: "other:1" } },
   ];
   let prices = [
-    { id: "price_owned", product: "prod_owned", active: true },
-    { id: "price_foreign", product: "prod_foreign", active: true },
+    { id: "price_owned", product: "prod_owned", active: true, metadata: { proliferate_qualification_run: runTag } },
+    { id: "price_foreign", product: "prod_foreign", active: true, metadata: { proliferate_qualification_run: "other:1" } },
   ];
   let clocks = ["clock_owned_1", "clock_owned_2"];
   const http: StripeHttp = {
