@@ -26,9 +26,6 @@ from proliferate.db import engine as db_engine
 from proliferate.db.models.billing import BillingBudgetLimit, UsageSegment
 from proliferate.db.store import billing as billing_store
 from proliferate.db.store.billing_runtime_usage import (
-    close_usage_segment_for_sandbox as close_usage_segment_for_sandbox_record,
-)
-from proliferate.db.store.billing_runtime_usage import (
     list_all_open_usage_segments as list_all_open_usage_segments_record,
 )
 from proliferate.db.store.billing_runtime_usage import (
@@ -55,6 +52,10 @@ from proliferate.integrations.sentry import report_critical
 from proliferate.server.billing.accounting_pass import run_billing_accounting_pass
 from proliferate.server.billing.budget_limits import window_bounds
 from proliferate.server.billing.models import BillingSnapshot
+from proliferate.server.billing.runtime_usage import (
+    close_cloud_sandbox_provider_usage,
+    converge_cloud_sandbox_provider_usage,
+)
 from proliferate.server.billing.snapshots import get_billing_snapshot_for_subject
 from proliferate.server.cloud.materialization import locks
 from proliferate.server.cloud.materialization.failures import (
@@ -169,12 +170,18 @@ async def _mark_sandbox_environment_unavailable(
             )
             if updated is None:
                 return False
-        await close_usage_segment_for_sandbox_record(
+        await converge_cloud_sandbox_provider_usage(
             db,
             sandbox_id=sandbox_id,
+            current_provider_sandbox_id=expected_provider_sandbox_id,
+            observed_at=ended_at,
+        )
+        await close_cloud_sandbox_provider_usage(
+            db,
+            sandbox_id=sandbox_id,
+            provider_sandbox_id=expected_provider_sandbox_id,
             ended_at=ended_at,
             closed_by=closed_by,
-            expected_external_sandbox_id=expected_provider_sandbox_id,
             fail_on_provider_mismatch=True,
         )
         return True
@@ -287,7 +294,10 @@ async def _enforce_or_reconcile_segment(
         or sandbox.materialization_attempt != _expected_materialization_attempt
     ):
         return
-    if segment.external_sandbox_id != sandbox.e2b_sandbox_id:
+    if (
+        segment.external_sandbox_id is not None
+        and segment.external_sandbox_id != sandbox.e2b_sandbox_id
+    ):
         logger.info(
             "billing reconciler ignored stale provider usage segment",
             extra={

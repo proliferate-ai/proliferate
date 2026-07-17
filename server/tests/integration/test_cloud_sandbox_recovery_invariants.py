@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
@@ -31,6 +33,7 @@ from proliferate.server.billing.runtime_usage import (
 from proliferate.server.cloud.materialization.sandbox_io.target import (
     CloudMaterializationCommandError,
 )
+from proliferate.server.cloud.webhooks import service as webhook_service
 from proliferate.utils.time import utcnow
 from proliferate.server.cloud.materialization.sandbox_io import connect as connect_module
 from tests.integration.test_cloud_sandbox_recovery import (
@@ -139,6 +142,70 @@ async def test_legacy_null_usage_converges_without_reattribution(
         observed_at=NOW + timedelta(minutes=1),
     )
     assert repeated is None
+
+
+@pytest.mark.parametrize(
+    ("event_type", "expected_status", "expected_open_provider"),
+    [
+        ("sandbox.lifecycle.killed", "error", None),
+        ("sandbox.lifecycle.resumed", "ready", "provider-current"),
+    ],
+    ids=["terminal-close", "active-reopen"],
+)
+@pytest.mark.asyncio
+async def test_webhook_converges_legacy_null_usage_before_exact_lifecycle_accounting(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+    event_type: str,
+    expected_status: str,
+    expected_open_provider: str | None,
+) -> None:
+    sandbox, legacy_segment = await _seed_open_usage(
+        db_session,
+        provider_sandbox_id="provider-current",
+        usage_provider_sandbox_id=None,
+    )
+    event_time = sandbox.provider_observed_at + timedelta(seconds=1)
+    monkeypatch.setattr(webhook_service, "_verify_e2b_signature", lambda *_args: None)
+
+    async def _billing_snapshot(_billing_subject_id: object) -> SimpleNamespace:
+        return SimpleNamespace(billing_mode="observe", active_spend_hold=False)
+
+    monkeypatch.setattr(webhook_service, "get_billing_snapshot_for_subject", _billing_snapshot)
+    payload = json.dumps(
+        {
+            "id": f"legacy-null-{event_type}",
+            "type": event_type,
+            "sandboxId": "provider-current",
+            "timestamp": event_time.isoformat(),
+            "eventData": {"sandbox_metadata": {"cloud_sandbox_id": str(sandbox.id)}},
+        }
+    ).encode()
+
+    await webhook_service.handle_e2b_webhook(db_session, payload=payload, signature=None)
+    await db_session.commit()
+
+    await db_session.refresh(sandbox)
+    await db_session.refresh(legacy_segment)
+    open_segments = list(
+        (
+            await db_session.execute(
+                select(UsageSegment).where(
+                    UsageSegment.sandbox_id == sandbox.id,
+                    UsageSegment.ended_at.is_(None),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert sandbox.status == expected_status
+    assert legacy_segment.external_sandbox_id is None
+    assert legacy_segment.closed_by == USAGE_SEGMENT_CLOSED_BY_BINDING_CONVERGENCE
+    assert legacy_segment.ended_at == event_time
+    assert [segment.external_sandbox_id for segment in open_segments] == (
+        [expected_open_provider] if expected_open_provider is not None else []
+    )
 
 
 @pytest.mark.asyncio

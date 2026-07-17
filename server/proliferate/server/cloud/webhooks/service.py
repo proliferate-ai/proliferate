@@ -34,6 +34,7 @@ from proliferate.integrations.sandbox import (
 )
 from proliferate.server.billing.runtime_usage import (
     close_cloud_sandbox_provider_usage,
+    converge_cloud_sandbox_provider_usage,
     open_cloud_sandbox_provider_usage,
     remember_cloud_sandbox_event_receipt,
 )
@@ -140,6 +141,12 @@ async def open_usage_segment_for_sandbox(
     del runtime_environment_id, workspace_id, sandbox_execution_id, is_billable
     if user_id is None or external_sandbox_id is None:
         raise RuntimeError("Provider usage requires an owner and exact provider id.")
+    await converge_cloud_sandbox_provider_usage(
+        db,
+        sandbox_id=sandbox_id,
+        current_provider_sandbox_id=external_sandbox_id,
+        observed_at=started_at,
+    )
     return await open_cloud_sandbox_provider_usage(
         db,
         sandbox_id=sandbox_id,
@@ -164,6 +171,12 @@ async def close_usage_segment_for_sandbox(
     del is_billable
     if expected_external_sandbox_id is None:
         raise RuntimeError("Provider usage close requires an exact provider id.")
+    await converge_cloud_sandbox_provider_usage(
+        db,
+        sandbox_id=sandbox_id,
+        current_provider_sandbox_id=expected_external_sandbox_id,
+        observed_at=ended_at,
+    )
     return await close_cloud_sandbox_provider_usage(
         db,
         sandbox_id=sandbox_id,

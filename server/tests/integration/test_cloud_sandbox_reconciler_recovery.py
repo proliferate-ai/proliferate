@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from proliferate.config import settings
 from proliferate.constants.billing import (
     BILLING_MODE_ENFORCE,
+    USAGE_SEGMENT_CLOSED_BY_BINDING_CONVERGENCE,
     USAGE_SEGMENT_CLOSED_BY_PROVISION_FAILURE,
     USAGE_SEGMENT_CLOSED_BY_RECONCILER,
 )
@@ -40,6 +41,7 @@ async def _seed_open_provider_usage(
     *,
     provider_sandbox_id: str,
     destroyed: bool = False,
+    legacy_null_usage: bool = False,
 ) -> tuple[CloudSandbox, UsageSegment]:
     user = User(
         email=f"reconciler-recovery-{uuid4().hex}@example.com",
@@ -65,7 +67,7 @@ async def _seed_open_provider_usage(
         user_id=user.id,
         billing_subject_id=subject.id,
         sandbox_id=sandbox.id,
-        external_sandbox_id=provider_sandbox_id,
+        external_sandbox_id=None if legacy_null_usage else provider_sandbox_id,
         started_at=NOW,
         ended_at=None,
         is_billable=True,
@@ -133,15 +135,18 @@ async def _reconcile_unknown_state(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("legacy_null_usage", [False, True], ids=["exact", "legacy-null"])
 async def test_direct_target_missing_detaches_active_binding_and_closes_exact_usage(
     db_session: AsyncSession,
     test_engine: AsyncEngine,
     monkeypatch: pytest.MonkeyPatch,
+    legacy_null_usage: bool,
 ) -> None:
     patch_global_session_factory(test_engine, monkeypatch)
     sandbox, segment = await _seed_open_provider_usage(
         db_session,
         provider_sandbox_id="provider-active-missing",
+        legacy_null_usage=legacy_null_usage,
     )
     events, lock_state = _patch_recording_materialization_lock(monkeypatch)
     provider = _ObservingProvider(
@@ -160,7 +165,11 @@ async def test_direct_target_missing_detaches_active_binding_and_closes_exact_us
     assert sandbox.materialization_attempt == 5
     assert sandbox.last_error == PROVIDER_SANDBOX_MISSING_RECEIPT
     assert segment.ended_at is not None
-    assert segment.closed_by == USAGE_SEGMENT_CLOSED_BY_PROVISION_FAILURE
+    assert segment.closed_by == (
+        USAGE_SEGMENT_CLOSED_BY_BINDING_CONVERGENCE
+        if legacy_null_usage
+        else USAGE_SEGMENT_CLOSED_BY_PROVISION_FAILURE
+    )
 
 
 @pytest.mark.asyncio
