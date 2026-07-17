@@ -311,6 +311,8 @@ jobs:
   # non-rotating bootstrap, or persisting the rotated state between runs) is
   # still needed before this authenticates for real — until then the preflight
   # skips cleanly (::notice::), the same pattern the local lane uses.
+  # The runner constrains this broad selector to Tier-3 sandbox-runtime cells;
+  # it never runs Tier-2, controller-local, self-host, or Tier-4 bodies here.
   release-e2e-staging:
     name: tier-3 staging lane (provisional)
     runs-on: ubuntu-latest

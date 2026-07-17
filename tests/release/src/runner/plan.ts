@@ -35,8 +35,9 @@ export interface PlanInputs {
    * publicly-reachable server for the `sandbox` runtime lane to call back into,
    * so planning sandbox-runtime cells there is dead work (run-1 executed
    * `T3-CHAT-1/sandbox` and `T3-WT-1/sandbox` under `--lane local`). `"staging"`
-   * plans every declared runtime lane, unchanged. Omitted → no lane filter, so
-   * callers/tests that only care about matrix expansion keep both lanes.
+   * plans only Tier-3 sandbox-runtime cells: the shared staging deployment has
+   * no controller-local AnyHarness process and this provisional job is not a
+   * Tier-2 or Tier-4 world. Omitted → no lane filter.
    */
   targetLane?: TargetLane;
 }
@@ -50,20 +51,26 @@ export interface PlanInputs {
  * ubuntu `--lane local` CI sweep never drags the EC2-provisioning `selfhost`
  * cells onto a runner that cannot host them:
  *   - `local`    → only `local` runtime cells (the world-backed local path);
+ *   - `staging`  → only `T3-*` sandbox cells (no local runtime; no Tier 2/4);
  *   - `selfhost` → only `selfhost` runtime cells (the self-host world, PR 7).
- * `staging`, `cloud`, and any unspecified target keep every declared lane, so
- * legacy staging behavior and PR 2's `--lane cloud CLOUD-PROVISION-1` selection
- * are untouched.
+ * `cloud` and any unspecified target keep every declared lane, so PR 2's
+ * explicit `--lane cloud CLOUD-PROVISION-1` selection is untouched.
  *
  * The `selfhost` case is what lets the shipped `qualification-selfhost` target
  * select the self-host lane explicitly (`--lane selfhost`) — previously it
  * passed `--lane local`, which admitted ONLY `local` cells and expanded every
  * `lanes: ["selfhost"]` PR 7 scenario to zero cells (PR7-CONTROL-001).
  */
-function laneAllowed(runtimeLane: string, targetLane: TargetLane | undefined): boolean {
+function laneAllowed(
+  scenarioId: string,
+  runtimeLane: string,
+  targetLane: TargetLane | undefined,
+): boolean {
   switch (targetLane) {
     case "local":
       return runtimeLane === "local";
+    case "staging":
+      return scenarioId.startsWith("T3-") && runtimeLane === "sandbox";
     case "selfhost":
       return runtimeLane === "selfhost";
     default:
@@ -93,9 +100,9 @@ export async function buildPlannedCells(
     seenScenarioIds.add(scenario.id);
 
     for (const runtimeLane of scenario.lanes) {
-      // `--lane local` plans ONLY local-runtime cells (decision #5); staging and
-      // the unfiltered case keep every declared lane.
-      if (!laneAllowed(runtimeLane, inputs.targetLane)) {
+      // Compatibility is decided before expansion, so staging cannot execute
+      // a controller-local or non-Tier-3 scenario body by accident.
+      if (!laneAllowed(scenario.id, runtimeLane, inputs.targetLane)) {
         continue;
       }
       if (!isMatrixScenario(scenario)) {

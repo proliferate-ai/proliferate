@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
+import type { CandidateBuildMapV1 } from "../../artifacts/build-map.js";
 import type { ScenarioDefinition } from "../types.js";
 
 /**
@@ -16,8 +17,10 @@ import type { ScenarioDefinition } from "../types.js";
  * check catches this class, because version-string equality is a lying
  * assertion: only a fetchable artifact proves a release shipped.
  *
- * Against the release under test (its desktop version — defaults to the repo
- * VERSION, overridable via RELEASE_E2E_RELEASE_DESKTOP_VERSION):
+ * Against the release under test (its desktop version — derived first from
+ * the validated candidate receipt; the dedicated legacy artifact-chain
+ * workflow may still supply RELEASE_E2E_RELEASE_DESKTOP_VERSION when it has no
+ * candidate map):
  *   1. A self-hosted server's GET /desktop/updater/latest.json follows to 200
  *      (only when RELEASE_E2E_SELFHOST_URL is set; the server redirect is
  *      display-only and points at the CDN, so this is additive).
@@ -64,7 +67,7 @@ export const t4Sh2: ScenarioDefinition = {
     if (ctx.dryRun) {
       return;
     }
-    const version = releaseDesktopVersion();
+    const version = releaseDesktopVersion(ctx.candidateBuildMap);
     const cdnBase = (process.env.RELEASE_E2E_DESKTOP_CDN_BASE_URL?.trim() || DEFAULT_CDN_BASE).replace(/\/+$/, "");
     console.log(`[T4-SH-2] release desktop version under test: ${version} (CDN ${cdnBase})`);
 
@@ -125,7 +128,18 @@ export const t4Sh2: ScenarioDefinition = {
   },
 };
 
-function releaseDesktopVersion(): string {
+export function releaseDesktopVersion(candidate: CandidateBuildMapV1 | null): string {
+  if (candidate !== null) {
+    const receiptVersions = candidate.artifacts
+      .filter((artifact) => artifact.artifact_id === "desktop-renderer/browser")
+      .map((artifact) => artifact.version);
+    if (receiptVersions.length !== 1) {
+      throw new Error(
+        "T4-SH-2: the validated candidate receipt must contain exactly one desktop-renderer/browser artifact",
+      );
+    }
+    return receiptVersions[0];
+  }
   const override = process.env.RELEASE_E2E_RELEASE_DESKTOP_VERSION?.trim();
   if (override) {
     return override;
