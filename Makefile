@@ -1293,7 +1293,17 @@ qualification-selfhost:
 QUALIFICATION_MANAGED_CLOUD_BASE_DIR ?= $(CURDIR)/tests/release/.output/managed-cloud-world
 # Managed-cloud scenario selection. Defaults to CLOUD-PROVISION-1 alone so
 # today's behaviour is byte-identical; override to add the fixture smoke, e.g.
-# CLOUD_SCENARIOS="CLOUD-PROVISION-1,MANAGED-CLOUD-FIXTURE-SMOKE-1".
+# CLOUD_SCENARIOS="MANAGED-CLOUD-FIXTURE-SMOKE-1,CLOUD-PROVISION-1".
+# ORDERING MATTERS when running both: the runner executes scenarios in the
+# --scenarios selection order (selectScenarios preserves it; execute.ts does not
+# re-sort), sequentially, one world fully closed before the next opens. Put the
+# fixture smoke FIRST — its world lives in a SCOPED subdir (<runDir>/fixture-smoke)
+# so its run_directory cleanup removes only that subdir. CLOUD-PROVISION-1 (last)
+# still finds the builder's candidate artifacts under the parent runDir and, as
+# the final scenario, may delete the parent runDir as it always has. Both worlds
+# reuse the same mcq-<run>-<shard> resource names + template alias, but never
+# overlap in time (sequential), so there is no collision; a failed smoke cleanup
+# makes CP-1's provisioning fail loudly (acceptable, fail-closed).
 CLOUD_SCENARIOS ?= CLOUD-PROVISION-1
 
 qualification-managed-cloud:

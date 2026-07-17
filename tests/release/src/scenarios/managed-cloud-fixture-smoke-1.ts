@@ -1,4 +1,4 @@
-import { mkdir, writeFile, rename, readFile } from "node:fs/promises";
+import { mkdir, writeFile, rename, readFile, copyFile } from "node:fs/promises";
 import path from "node:path";
 
 import type {
@@ -151,7 +151,16 @@ interface WebhookEndpointIntent {
 
 /** Resolved Stripe preparation done BEFORE world construction (two-stage custody). */
 export interface StripePreparation {
-  /** Path to a 0600 env file holding STRIPE_SECRET_KEY. */
+  /**
+   * The SCOPED run directory the fixture-smoke world lives in
+   * (`<inputs.runDir>/fixture-smoke`). The world's `run_directory` cleanup =
+   * rm -rf(this dir), so it must NEVER be the parent `inputs.runDir` — that
+   * holds the builder's candidate artifacts + candidate map (deleting it broke
+   * every cell live when CLOUD-PROVISION-1's world close ran first). All the
+   * fixture-smoke env files + the webhook intent file live under here.
+   */
+  scopedRunDir: string;
+  /** Path to a 0600 env file holding STRIPE_SECRET_KEY (under scopedRunDir/secrets). */
   secretsEnvFilePath: string;
   /** Path to a 0600 env file holding STRIPE_WEBHOOK_SECRET (+ optional E2B webhook secret). */
   webhookSecretEnvFilePath: string;
@@ -233,6 +242,13 @@ export interface FixtureSmokeDriver {
    */
   adoptWebhookIntent(world: ManagedCloudWorld, prep: StripePreparation, secretKey: string): Promise<void>;
   /**
+   * Best-effort direct delete of the pre-created webhook endpoint (tolerates a
+   * missing endpoint). Called inline when `buildWorld` throws AFTER `prepareStripe`
+   * created the endpoint — an ordinary construction failure should not leak it
+   * (the durable intent file remains the crash-window backstop for a runner death).
+   */
+  deleteWebhookEndpoint(prep: StripePreparation, secretKey: string): Promise<void>;
+  /**
    * Creates the fresh cloud-surface owner actor. Called at most ONCE per world
    * via `ensureOwnerActor` (memoized on `SmokeState`) — a second call would
    * re-POST the one-time `/setup` claim and fail with `SetupClosedError`. Fakeable
@@ -298,6 +314,15 @@ export async function runFixtureSmokeCells(
   try {
     world = await driver.buildWorld(inputs.value, prep);
   } catch (error) {
+    // prepareStripe already created the run-scoped webhook endpoint; an ordinary
+    // construction failure would otherwise leak it (the durable intent file only
+    // covers a full runner DEATH — nothing replays it inline). Delete it directly
+    // now (best-effort, tolerates a missing endpoint).
+    await driver.deleteWebhookEndpoint(prep, keyResult.secretKey).catch((cleanupError) => {
+      process.stderr.write(
+        `[fixture-smoke] webhook endpoint cleanup after failed world construction failed: ${describe(cleanupError)}\n`,
+      );
+    });
     return failAllAssigned(cells, `world construction failed: ${describe(error)}`);
   }
 
@@ -513,9 +538,14 @@ export function assertDuplicateDeliveryByteIdentity(
 /** Runtime deps overridable in unit tests so no bound is waited out live. */
 export interface FixtureSmokeRuntimeDeps {
   http: StripeHttp;
+  /** The world constructor (injectable so a unit test can capture `options.runDir`). */
+  constructWorld: (options: ConstructManagedCloudWorldOptions) => Promise<ManagedCloudWorld>;
 }
 
-const productionDeps: FixtureSmokeRuntimeDeps = { http: defaultStripeHttp };
+const productionDeps: FixtureSmokeRuntimeDeps = {
+  http: defaultStripeHttp,
+  constructWorld: constructManagedCloudWorld,
+};
 
 /** Reused-fixture cast (see cloud-provision-1's `asAuthenticatedActorWorld`). */
 function asAuthenticatedActorWorld(world: ManagedCloudWorld): ReadyLocalWorld {
@@ -539,13 +569,35 @@ async function writeWebhookIntentFile(runDir: string, intent: WebhookEndpointInt
   await rename(tmp, target);
 }
 
-/** Reads the run subdomain from the build sidecar the world also reads. */
-async function readRunSubdomain(runDir: string, fallbackZone: string, runId: string, shardId: string): Promise<string> {
+/** The build-written sidecar naming the subdomain baked into the renderer. */
+const SUBDOMAIN_SIDECAR_FILENAME = "cloud-world-subdomain.json";
+/** The fixture-smoke world's SCOPED run dir under the shared parent run dir. */
+export const FIXTURE_SMOKE_WORLD_SUBDIR = "fixture-smoke";
+
+/** Resolves the SCOPED fixture-smoke world run dir under the shared parent run dir. */
+export function fixtureSmokeScopedRunDir(parentRunDir: string): string {
+  return path.join(parentRunDir, FIXTURE_SMOKE_WORLD_SUBDIR);
+}
+
+/**
+ * Reads the run subdomain from the build sidecar (written by the builder in the
+ * PARENT run dir — the renderer has that exact subdomain baked in). Falls back to
+ * `world.ts`'s `allocateSubdomain` formula only when the sidecar is absent (the
+ * live run confirmed the sidecar value equals the formula). Returns the value
+ * plus whether it came from the sidecar (so the caller can copy the sidecar into
+ * the scoped dir when present).
+ */
+async function readRunSubdomain(
+  parentRunDir: string,
+  fallbackZone: string,
+  runId: string,
+  shardId: string,
+): Promise<{ subdomain: string; fromSidecar: boolean }> {
   try {
-    const raw = await readFile(path.join(runDir, "cloud-world-subdomain.json"), "utf8");
+    const raw = await readFile(path.join(parentRunDir, SUBDOMAIN_SIDECAR_FILENAME), "utf8");
     const parsed = JSON.parse(raw) as { subdomain?: unknown };
     if (typeof parsed.subdomain === "string" && parsed.subdomain.length > 0) {
-      return parsed.subdomain;
+      return { subdomain: parsed.subdomain, fromSidecar: true };
     }
   } catch {
     // fall through to the local formula (mirrors world.ts allocateSubdomain).
@@ -556,11 +608,12 @@ async function readRunSubdomain(runDir: string, fallbackZone: string, runId: str
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "")
     .slice(0, 50);
-  return `${label}.${fallbackZone}`;
+  return { subdomain: `${label}.${fallbackZone}`, fromSidecar: false };
 }
 
 export function createFixtureSmokeDriver(deps: Partial<FixtureSmokeRuntimeDeps> = {}): FixtureSmokeDriver {
   const http = deps.http ?? productionDeps.http;
+  const constructWorld = deps.constructWorld ?? productionDeps.constructWorld;
   return {
     async prepareStripe(inputs, secretKey) {
       // Fail closed on a live-mode key (reuse the fixture guard) BEFORE any create.
@@ -568,30 +621,48 @@ export function createFixtureSmokeDriver(deps: Partial<FixtureSmokeRuntimeDeps> 
         throw new Error("prepareStripe: refusing a LIVE-mode Stripe secret key (sk_live_…/rk_live_…).");
       }
       const runTag = `${inputs.run.run_id}:${inputs.run.shard_id}`;
-      const secretsDir = path.join(inputs.runDir, "secrets");
+      // SCOPED run dir: the fixture-smoke world lives in its own subdir so its
+      // `run_directory` cleanup (rm -rf) never touches the shared parent run dir,
+      // which holds the builder's candidate artifacts + candidate map. All the
+      // fixture-smoke env files + the webhook intent file live under here.
+      const scopedRunDir = fixtureSmokeScopedRunDir(inputs.runDir);
+      await mkdir(scopedRunDir, { recursive: true });
+      const secretsDir = path.join(scopedRunDir, "secrets");
       await mkdir(secretsDir, { recursive: true, mode: 0o700 });
       const secretsEnvFilePath = await writeSecretEnvFile(secretsDir, "stripe.env", {
         STRIPE_SECRET_KEY: secretKey,
       });
 
-      const subdomain = await readRunSubdomain(
+      // The subdomain is read from the PARENT run dir's build sidecar (the builder
+      // wrote it there; the renderer has that exact value baked in). When present,
+      // COPY the sidecar into the scoped dir so the world constructor's own
+      // readBuildSubdomain(scopedRunDir) reads the exact build value rather than
+      // relying on formula equality (the formula is a verified fallback only).
+      const { subdomain, fromSidecar } = await readRunSubdomain(
         inputs.runDir,
         inputs.aws.zoneName,
         inputs.run.run_id,
         inputs.run.shard_id,
       );
+      if (fromSidecar) {
+        await copyFile(
+          path.join(inputs.runDir, SUBDOMAIN_SIDECAR_FILENAME),
+          path.join(scopedRunDir, SUBDOMAIN_SIDECAR_FILENAME),
+        ).catch(() => undefined);
+      }
 
       // STAGE 1 (pre-create): record the durable scenario-owned intent BEFORE the
       // webhook endpoint exists, so a crash in the create→acquire window leaves a
-      // recovery identity (the url) on disk. The world does not exist yet, so its
-      // ledger cannot own this yet — the scenario intent file bridges that window.
+      // recovery identity (the url) on disk (under the SCOPED dir, alongside the
+      // world's ledger). The world does not exist yet, so its ledger cannot own
+      // this yet — the scenario intent file bridges that window.
       const intentRef = encodeWebhookEndpointIntentRef(subdomain);
-      await writeWebhookIntentFile(inputs.runDir, { intentRef, endpointId: null, runTag });
+      await writeWebhookIntentFile(scopedRunDir, { intentRef, endpointId: null, runTag });
 
       const created = await createWebhookEndpoint({ secretKey, subdomain, runTag }, http);
 
       // STAGE 1b: update the intent file with the real id the instant Stripe returns.
-      await writeWebhookIntentFile(inputs.runDir, { intentRef, endpointId: created.endpointId, runTag });
+      await writeWebhookIntentFile(scopedRunDir, { intentRef, endpointId: created.endpointId, runTag });
 
       // The two webhook signing secrets live in the SERVER env only (the relay
       // forwards signed bytes untouched). E2B webhook secret is optional.
@@ -603,6 +674,7 @@ export function createFixtureSmokeDriver(deps: Partial<FixtureSmokeRuntimeDeps> 
       const webhookSecretEnvFilePath = await writeSecretEnvFile(secretsDir, "stripe-webhook.env", webhookValues);
 
       return {
+        scopedRunDir,
         secretsEnvFilePath,
         webhookSecretEnvFilePath,
         subdomain,
@@ -611,8 +683,16 @@ export function createFixtureSmokeDriver(deps: Partial<FixtureSmokeRuntimeDeps> 
       };
     },
 
+    async deleteWebhookEndpoint(prep, secretKey) {
+      const { deleteWebhookEndpointById } = await import("../fixtures/stripe-smoke-resources.js");
+      await deleteWebhookEndpointById(secretKey, prep.webhookEndpointId, http);
+    },
+
     async buildWorld(inputs, prep) {
-      const secretsDir = path.join(inputs.runDir, "secrets");
+      // Every world-owned file lives under the SCOPED dir (prep.scopedRunDir), so
+      // the world's run_directory cleanup only removes the scoped subtree — never
+      // the parent's builder artifacts/candidate map.
+      const secretsDir = path.join(prep.scopedRunDir, "secrets");
       await mkdir(secretsDir, { recursive: true });
       const e2bSecretsPath = await writeSecretEnvFile(secretsDir, "e2b.env", { E2B_API_KEY: inputs.e2bApiKey });
       const githubSecretsPath = await writeSecretEnvFile(secretsDir, "github-app.env", {
@@ -651,10 +731,14 @@ export function createFixtureSmokeDriver(deps: Partial<FixtureSmokeRuntimeDeps> 
         // (default port). Both feed deployCandidateApi verbatim.
         stripe,
         callbackRelay: {},
-        runDir: inputs.runDir,
+        // SCOPED: the world's run_directory cleanup removes only this subdir, so
+        // it never deletes the shared parent run dir's builder artifacts. The
+        // copied sidecar under here lets the constructor's readBuildSubdomain read
+        // the exact build subdomain (matching the renderer's baked-in value).
+        runDir: prep.scopedRunDir,
         log: (message) => process.stderr.write(`[managed-cloud] ${message}\n`),
       };
-      return constructManagedCloudWorld(options);
+      return constructWorld(options);
     },
 
     async adoptWebhookIntent(world, prep, secretKey) {

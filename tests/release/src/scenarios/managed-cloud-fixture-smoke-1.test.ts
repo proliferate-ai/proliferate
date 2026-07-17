@@ -1,13 +1,19 @@
 import assert from "node:assert/strict";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { test } from "node:test";
 
 import {
   FIXTURE_SMOKE_CELL_NAMES,
+  FIXTURE_SMOKE_WORLD_SUBDIR,
   MANAGED_CLOUD_FIXTURE_SMOKE_1_ID,
   assertDuplicateDeliveryByteIdentity,
   allCleanupBooleansTrue,
   buildDuplicatePostScript,
+  createFixtureSmokeDriver,
   ensureOwnerActor,
+  fixtureSmokeScopedRunDir,
   managedCloudFixtureSmoke1,
   parseProcStatStarttime,
   parseRelayPidfileJson,
@@ -22,6 +28,9 @@ import {
   type FixtureSmokeDriver,
   type StripePreparation,
 } from "./managed-cloud-fixture-smoke-1.js";
+import type { StripeHttp } from "../fixtures/stripe-test-clock.js";
+import type { CloudProvision1ConstructionInputs } from "./cloud-provision-1.js";
+import type { ConstructManagedCloudWorldOptions } from "../worlds/managed-cloud/world.js";
 import { isMatrixScenario, type ScenarioRunContext } from "./types.js";
 import type { CandidateBuildMapV1 } from "../artifacts/build-map.js";
 import type { EnvResolution } from "../config/env-resolution.js";
@@ -170,8 +179,9 @@ function cleanEvidence(): ManagedCloudCleanupEvidence {
 
 function fakePrep(): StripePreparation {
   return {
-    secretsEnvFilePath: "/tmp/smoke-run-1/secrets/stripe.env",
-    webhookSecretEnvFilePath: "/tmp/smoke-run-1/secrets/stripe-webhook.env",
+    scopedRunDir: "/tmp/smoke-run-1/fixture-smoke",
+    secretsEnvFilePath: "/tmp/smoke-run-1/fixture-smoke/secrets/stripe.env",
+    webhookSecretEnvFilePath: "/tmp/smoke-run-1/fixture-smoke/secrets/stripe-webhook.env",
     subdomain: "mcq-smoke-run-1-smoke-0.qualification.proliferate.com",
     webhookEndpointId: "we_123",
     webhookIntentRef: "intent:webhook_endpoint:url=https://x/v1/billing/webhooks/stripe",
@@ -211,6 +221,7 @@ function fakeDriver(
     prepareStripe: async () => fakePrep(),
     buildWorld: async () => world,
     adoptWebhookIntent: async () => undefined,
+    deleteWebhookEndpoint: async () => undefined,
     createActor: async () => fakeCellCActor(),
     trackActorSubjects: async () => undefined,
     runCallbackRelayCell: async () => cellResult("held→replayed→duplicate:byte_identical(abc)"),
@@ -661,4 +672,122 @@ test("Cell C never leaks the raw virtual key into the observed transition", asyn
   const result = await runBillingThresholdCellLive(fakeWorld(), CELL_C_STATE, fakeCellCActor(), deps);
   assert.ok(!result.observedTransition.includes("sk-raw-virtual-key"));
   assert.ok(!result.externalIds.some((id) => id.includes("sk-raw-virtual-key")));
+});
+
+// ── Scoped world runDir (the CLOUD-PROVISION-1 shared-runDir collision fix) ──
+
+/** Minimal construction inputs for the driver's prepareStripe/buildWorld paths. */
+function fakeConstructionInputs(runDir: string): CloudProvision1ConstructionInputs {
+  return {
+    map: { schema_version: 1, kind: "proliferate.candidate-build", source_sha: "a".repeat(40), artifacts: [] },
+    litellm: { adminBaseUrl: "https://admin", publicBaseUrl: "https://public", masterKey: "sk-master" },
+    run: {
+      run_id: "smoke-run-1",
+      shard_id: "smoke-0",
+      attempt: 1,
+      source_sha: "a".repeat(40),
+      origin: { kind: "local", github_run_id: null, github_job: null },
+    },
+    runDir,
+    aws: {
+      region: "us-east-1",
+      hostedZoneId: "Z1",
+      zoneName: "qualification.proliferate.com",
+      instanceType: "t3.small",
+      imageRef: "/aws/service/x",
+    },
+    e2bTeamId: "team-test",
+    e2bApiKey: "e2b-key",
+    github: { appId: "1", clientId: "Iv1.x", installationId: "2", privateKey: "PEM", clientSecret: "cs" },
+  };
+}
+
+/** A recording StripeHttp returning a webhook endpoint on create. */
+function fakeStripeHttpForPrepare(reqs: Array<{ method: string; path: string }>): StripeHttp {
+  return {
+    async request(_key, req) {
+      reqs.push({ method: req.method, path: req.path });
+      if (req.path === "/webhook_endpoints" && req.method === "POST") {
+        return { id: "we_scoped", secret: "whsec_scoped" };
+      }
+      return {};
+    },
+  };
+}
+
+test("buildWorld constructs the world with runDir scoped to <parentRunDir>/fixture-smoke", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "smoke-scope-"));
+  try {
+    const reqs: Array<{ method: string; path: string }> = [];
+    let capturedRunDir = "";
+    const driver = createFixtureSmokeDriver({
+      http: fakeStripeHttpForPrepare(reqs),
+      constructWorld: async (options: ConstructManagedCloudWorldOptions) => {
+        capturedRunDir = options.runDir;
+        // The world is never used by this assertion; return a minimal stub.
+        return { paths: { runDir: options.runDir } } as never;
+      },
+    });
+    const inputs = fakeConstructionInputs(parent);
+    const prep = await driver.prepareStripe(inputs, "sk_test_scoped");
+    await driver.buildWorld(inputs, prep);
+    const expected = fixtureSmokeScopedRunDir(parent);
+    assert.equal(prep.scopedRunDir, expected);
+    assert.equal(capturedRunDir, expected, "the world's runDir MUST be the scoped subdir, not the shared parent");
+    assert.ok(capturedRunDir.endsWith(path.join(FIXTURE_SMOKE_WORLD_SUBDIR)));
+    assert.notEqual(capturedRunDir, parent);
+  } finally {
+    await rm(parent, { recursive: true, force: true });
+  }
+});
+
+test("prepareStripe writes env + webhook-intent under the SCOPED dir while reading the PARENT sidecar", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "smoke-scope-"));
+  try {
+    // The builder wrote the sidecar in the PARENT run dir; also drop a marker
+    // file so we can prove the scoped-dir cleanup would never touch the parent.
+    const builtSubdomain = "mcq-built-value.qualification.proliferate.com";
+    await writeFile(path.join(parent, "cloud-world-subdomain.json"), JSON.stringify({ subdomain: builtSubdomain }));
+    await mkdir(path.join(parent, "artifacts"), { recursive: true });
+    await writeFile(path.join(parent, "artifacts", "server.tar"), "BUILDER-ARTIFACT");
+
+    const reqs: Array<{ method: string; path: string }> = [];
+    const driver = createFixtureSmokeDriver({ http: fakeStripeHttpForPrepare(reqs) });
+    const prep = await driver.prepareStripe(fakeConstructionInputs(parent), "sk_test_scoped");
+
+    const scoped = fixtureSmokeScopedRunDir(parent);
+    // The subdomain came from the PARENT sidecar (build value, NOT the formula).
+    assert.equal(prep.subdomain, builtSubdomain);
+    // The sidecar was COPIED into the scoped dir so the world constructor reads it.
+    assert.equal(
+      JSON.parse(await readFile(path.join(scoped, "cloud-world-subdomain.json"), "utf8")).subdomain,
+      builtSubdomain,
+    );
+    // env files + webhook intent file live under the SCOPED dir.
+    assert.ok(prep.secretsEnvFilePath.startsWith(scoped));
+    assert.ok(prep.webhookSecretEnvFilePath.startsWith(scoped));
+    const intent = JSON.parse(await readFile(path.join(scoped, "stripe-webhook-endpoint-intent.json"), "utf8"));
+    assert.equal(intent.endpointId, "we_scoped");
+    // The builder's parent artifacts are UNTOUCHED (the scoped dir is disjoint).
+    assert.equal(await readFile(path.join(parent, "artifacts", "server.tar"), "utf8"), "BUILDER-ARTIFACT");
+  } finally {
+    await rm(parent, { recursive: true, force: true });
+  }
+});
+
+test("a construction failure after prepareStripe deletes the just-created webhook endpoint inline", async () => {
+  let deleteCalledWith: string | null = null;
+  const driver = fakeDriver({
+    prepareStripe: async () => fakePrep(),
+    buildWorld: async () => {
+      throw new Error("boom: ec2 quota exceeded");
+    },
+    deleteWebhookEndpoint: async (prep) => {
+      deleteCalledWith = prep.webhookEndpointId;
+    },
+  });
+  const outcomes = await runFixtureSmokeCells(fakeCtx(), ALL_CELLS, driver);
+  assert.ok(outcomes.every((o) => o.status === "failed"));
+  assert.match(outcomes[0]!.reason?.message ?? "", /world construction failed/);
+  assert.equal(deleteCalledWith, "we_123", "the pre-created webhook endpoint must be deleted inline on construction failure");
 });

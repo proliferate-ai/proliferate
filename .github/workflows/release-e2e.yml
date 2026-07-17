@@ -900,7 +900,7 @@ jobs:
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build the six exact candidates and run CLOUD-PROVISION-1 + MANAGED-CLOUD-FIXTURE-SMOKE-1 (strict)
+      - name: Build the six exact candidates and run MANAGED-CLOUD-FIXTURE-SMOKE-1 + CLOUD-PROVISION-1 (strict)
         env:
           # Mapped directly from the protected `Qualification` environment,
           # same LiteLLM inputs as local-world-smoke-1 plus the cloud-only
@@ -937,10 +937,15 @@ jobs:
           MANAGED_CLOUD_SMOKE_DEBUG_DIR: ${{ github.workspace }}/tests/release/.output/managed-cloud-world/qlc-ci-${{ github.run_id }}-${{ github.run_attempt }}/debug/logs
         run: |
           set -euo pipefail
+          # Fixture smoke FIRST: its world lives in a SCOPED runDir subdir so its
+          # cleanup never deletes the shared builder artifacts; CLOUD-PROVISION-1
+          # runs last and (as the final scenario) may delete the parent runDir as
+          # it always has. Order is honored by the runner (selection order,
+          # sequential, no re-sort). See the qualification-managed-cloud comment.
           make qualification-managed-cloud \
             PROFILE="ci-${{ github.run_id }}-${{ github.run_attempt }}" \
             BEHAVIOR=strict \
-            CLOUD_SCENARIOS="CLOUD-PROVISION-1,MANAGED-CLOUD-FIXTURE-SMOKE-1"
+            CLOUD_SCENARIOS="MANAGED-CLOUD-FIXTURE-SMOKE-1,CLOUD-PROVISION-1"
 
       - name: Upload V4 report and bounded diagnostic logs
         if: always()
