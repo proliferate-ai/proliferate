@@ -30,6 +30,8 @@ use crate::live::sessions::driver::types::NativeSessionStartupDisposition;
 use crate::live::sessions::handle::LiveSessionHandle;
 use crate::live::sessions::model::SessionStateDurable;
 use crate::live::sessions::sink::SessionEventSink;
+use crate::live::sessions::AgentStartupExitError;
+use crate::observability::AGENT_STDERR_TRACING_TARGET;
 
 impl SessionActor {
     /// Spawns the agent process, establishes the ACP connection, starts the
@@ -171,15 +173,20 @@ impl SessionActor {
                 }
                 let error = agent_exited_during_startup_error(exit_status, &stderr_tail);
                 tracing::warn!(
+                    target: AGENT_STDERR_TRACING_TARGET,
                     session_id = %session_id,
                     workspace_id = %workspace_id,
                     agent_kind = %source_agent_kind,
-                    error = %error.to_string().replace('\n', " | "),
+                    error = %error.caller_detail().replace('\n', " | "),
                     elapsed_ms = startup_started.elapsed().as_millis(),
                     "[workspace-latency] session.actor.process_exited_during_startup"
                 );
-                let _ = ready_tx.send(Err(anyhow::anyhow!("{error}")));
-                return Err(error);
+                // Ordinary Display/Debug formatting is status-only, so generic
+                // actor and API logging cannot retransmit raw child output.
+                // The initiating authenticated API mapper can still opt into
+                // the bounded caller detail carried by this typed error.
+                let _ = ready_tx.send(Err(anyhow::Error::new(error.clone())));
+                return Err(anyhow::Error::new(error));
             }
         };
         let supports_native_close = init_response
@@ -388,20 +395,22 @@ impl SessionActor {
 fn agent_exited_during_startup_error(
     exit_status: std::io::Result<std::process::ExitStatus>,
     stderr_tail: &AgentStderrTail,
-) -> anyhow::Error {
+) -> AgentStartupExitError {
     let status = match exit_status {
         Ok(status) => status.to_string(),
         Err(error) => format!("wait failed: {error}"),
     };
     let tail = stderr_tail.snapshot();
-    if tail.is_empty() {
-        anyhow::anyhow!("agent process exited during ACP startup ({status})")
+    let telemetry_safe_detail = format!("agent process exited during ACP startup ({status})");
+    let caller_detail = if tail.is_empty() {
+        telemetry_safe_detail.clone()
     } else {
-        anyhow::anyhow!(
+        format!(
             "agent process exited during ACP startup ({status}). Agent stderr:\n{}",
             tail.join("\n")
         )
-    }
+    };
+    AgentStartupExitError::new(telemetry_safe_detail, caller_detail)
 }
 
 pub(in crate::live::sessions::actor) fn persist_session_action_capabilities(
@@ -541,6 +550,7 @@ mod tests {
         let message = error.to_string();
         assert!(message.contains("exited during ACP startup"));
         assert!(!message.contains("Agent stderr"));
+        assert_eq!(message, error.caller_detail());
     }
 
     #[test]
@@ -551,8 +561,13 @@ mod tests {
 
         let error = agent_exited_during_startup_error(Ok(exit_status), &tail);
         assert!(error
+            .caller_detail()
+            .contains("Failed to locate codex-acp binary"));
+        assert!(!error
             .to_string()
             .contains("Failed to locate codex-acp binary"));
+        assert!(error.caller_detail().contains("Agent stderr:"));
+        assert!(!format!("{error:?}").contains("Failed to locate codex-acp binary"));
     }
 
     fn init_meta(value: serde_json::Value) -> acp::schema::Meta {

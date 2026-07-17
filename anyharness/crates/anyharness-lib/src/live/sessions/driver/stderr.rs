@@ -3,6 +3,8 @@ use std::sync::{Arc, Mutex};
 
 use tokio::process::ChildStderr;
 
+use crate::observability::AGENT_STDERR_TRACING_TARGET;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(in crate::live::sessions) enum AgentStderrSeverity {
     Error,
@@ -10,8 +12,8 @@ pub(in crate::live::sessions) enum AgentStderrSeverity {
     Debug,
 }
 
-/// Retains the most recent agent stderr lines so startup failures can surface
-/// what the process said before it died.
+/// Retains the most recent agent stderr lines so local startup diagnostics can
+/// surface what the process said before it died.
 #[derive(Debug, Clone, Default)]
 pub(in crate::live::sessions) struct AgentStderrTail {
     lines: Arc<Mutex<VecDeque<String>>>,
@@ -117,6 +119,7 @@ pub(in crate::live::sessions) fn spawn_agent_stderr_logger(
             match classify_agent_stderr_line(&line) {
                 AgentStderrSeverity::Error => {
                     tracing::error!(
+                        target: AGENT_STDERR_TRACING_TARGET,
                         session_id = %session_id,
                         agent = %agent_kind,
                         "[agent stderr] {line}"
@@ -124,6 +127,7 @@ pub(in crate::live::sessions) fn spawn_agent_stderr_logger(
                 }
                 AgentStderrSeverity::Warn => {
                     tracing::warn!(
+                        target: AGENT_STDERR_TRACING_TARGET,
                         session_id = %session_id,
                         agent = %agent_kind,
                         "[agent stderr] {line}"
@@ -131,6 +135,7 @@ pub(in crate::live::sessions) fn spawn_agent_stderr_logger(
                 }
                 AgentStderrSeverity::Debug => {
                     tracing::debug!(
+                        target: AGENT_STDERR_TRACING_TARGET,
                         session_id = %session_id,
                         agent = %agent_kind,
                         "[agent stderr] {line}"

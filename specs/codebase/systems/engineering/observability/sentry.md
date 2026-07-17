@@ -74,6 +74,14 @@ authorization headers, tokens, secrets, environment values, or provider
 responses. Correlation identifiers are diagnostic metadata, not permission to
 copy user content into Sentry.
 
+AnyHarness marks direct child-agent stderr events with a dedicated tracing
+target that the Sentry layer ignores while console/file logging remains
+available locally. The exclusion applies to Sentry events, breadcrumbs, and
+structured logs. A startup failure writes its bounded stderr tail to that
+excluded local diagnostic and carries it in a typed error for the initiating
+authenticated API response; ordinary error formatting and API telemetry use a
+status-only summary. Raw provider output is not a safe Sentry grouping key.
+
 Two exact, bounded fields are deliberately preserved through the scrubbers
 because they are deployment identity, not a raw process-environment map:
 

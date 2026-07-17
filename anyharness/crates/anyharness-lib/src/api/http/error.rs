@@ -139,17 +139,28 @@ impl ApiError {
 
     pub fn internal(detail: impl Into<String>) -> Self {
         let detail = detail.into();
+        Self::internal_with_safe_log(detail.clone(), detail)
+    }
+
+    /// Return an authenticated caller detail while logging only a separately
+    /// supplied telemetry-safe summary.
+    pub(super) fn internal_with_safe_log(
+        caller_detail: impl Into<String>,
+        telemetry_safe_detail: impl Into<String>,
+    ) -> Self {
+        let caller_detail = caller_detail.into();
+        let telemetry_safe_detail = telemetry_safe_detail.into();
         // tower_http only logs the status code on failure; this is the one
         // place every 500 passes through, so the detail must be logged here
         // or it survives only in the response body.
-        tracing::error!(detail = %detail, "internal API error");
+        tracing::error!(detail = %telemetry_safe_detail, "internal API error");
         Self(
             StatusCode::INTERNAL_SERVER_ERROR,
             ProblemDetails {
                 type_url: "about:blank".into(),
                 title: "Internal error".into(),
                 status: 500,
-                detail: Some(detail),
+                detail: Some(caller_detail),
                 instance: None,
                 code: None,
                 required_contexts: None,
@@ -170,6 +181,12 @@ impl ApiError {
     #[cfg(test)]
     pub(crate) fn code(&self) -> Option<&str> {
         self.1.code.as_deref()
+    }
+
+    /// RFC 7807 detail. Test/introspection accessor.
+    #[cfg(test)]
+    pub(crate) fn detail(&self) -> Option<&str> {
+        self.1.detail.as_deref()
     }
 }
 
@@ -206,5 +223,11 @@ mod tests {
             .required_contexts
             .is_none());
         assert!(ApiError::internal("y").1.required_contexts.is_none());
+    }
+
+    #[test]
+    fn internal_error_can_separate_caller_and_telemetry_details() {
+        let err = ApiError::internal_with_safe_log("caller diagnostic", "safe summary");
+        assert_eq!(err.1.detail.as_deref(), Some("caller diagnostic"));
     }
 }
