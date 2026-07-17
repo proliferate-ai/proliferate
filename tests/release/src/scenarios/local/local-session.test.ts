@@ -58,10 +58,14 @@ test("resolveLocalWorkspaceIdOnce returns null when no local workspace matches t
 test("resolveLocalWorkspaceSessionId joins the local workspace (by path) to its latest session", async () => {
   const world = fakeWorld(
     [{ id: RAW_WORKSPACE_ID, kind: "local", path: REPO_PATH }],
+    // Ordered as the real `GET /v1/sessions` returns them —
+    // `SessionStore::list_visible_all()` sorts `updated_at DESC`, so the
+    // most-recently-active session comes FIRST. The resolver must pick index 0
+    // of the workspace-filtered slice, not the last element (the stalest).
     [
-      { id: "session-old", workspaceId: RAW_WORKSPACE_ID },
-      { id: "session-elsewhere", workspaceId: "some-other-workspace" },
       { id: "session-new", workspaceId: RAW_WORKSPACE_ID },
+      { id: "session-elsewhere", workspaceId: "some-other-workspace" },
+      { id: "session-old", workspaceId: RAW_WORKSPACE_ID },
     ],
   );
   // The DOM logical ui-key never appears as a session.workspaceId; matching on it

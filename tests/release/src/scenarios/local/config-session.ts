@@ -1115,6 +1115,21 @@ async function switchHarnessEmptyChat(
   // materialization), so this stays faithful to the empty-chat-switch proof.
   const activeTabByIndex = p.locator(`[data-chat-tab-index="${tabIndex}"]`).first();
   const oldSessionId = await waitForReconciledSessionId(p, activeTabByIndex);
+  // The tab strip's `data-chat-tab-active`/`-session-id` are driven by the
+  // optimistic pending-highlight (`resolveWorkspaceShellActivation` →
+  // `{kind:"chat-session-pending"}`), which lands the instant a tab click
+  // registers; the AUTHORITATIVE `useSessionSelectionStore.activeSessionId`
+  // commit is deferred and coalesced ~180ms later
+  // (`CHAT_TAB_ACTIVATION_COALESCE_MS`, use-chat-tab-activation.ts). If the
+  // harness switch fires before that commit, `handleLaunchSelect` resolves
+  // `replacesSessionId` from the still-stale active session (tab A, messaged),
+  // so `beginEmptySessionReplacement` sees a non-empty record, returns null, and
+  // the product opens a NEW empty tab instead of replacing in place — the
+  // watched tab's id never changes and a spurious 3rd tab appears (Actions run
+  // 29602686092: 3 tabs [Claude,Codex,Claude], id 53c6870d… frozen). Gate on the
+  // composer committing to tab B's harness (codex here ≠ tab A's claude) before
+  // switching, proving the coalesced activeSessionId has caught up to tab B.
+  await waitForComposerHarnessCommitted(world, page, harnessBefore);
   await selectHarnessInComposer(world, page, toHarness);
   // The unused backend session is replaced IN PLACE at the same tab position:
   // poll the tab AT THIS INDEX (not the stale tab-id locator, since the tab
@@ -1320,6 +1335,48 @@ async function selectHarnessInComposer(
     await sleep(2_000);
   }
   throw new Error(`selectHarnessInComposer: no "${harness}" model option appeared in the composer picker.`);
+}
+
+/**
+ * Waits until the composer's selected model belongs to `harness`'s live gateway
+ * model set — proof that the workspace shell's authoritative `activeSessionId`
+ * has committed to a session on `harness`, not just the optimistic tab-strip
+ * highlight. Used after a post-reload tab reactivation, before a harness switch,
+ * so the switch's `replacesSessionId` resolves against the intended (empty) tab
+ * rather than the coalesce-window-stale previously-active one. Reads the same
+ * `[data-composer-model-trigger][data-composer-selected-model]` hook the smoke /
+ * cloud-provision collectors assert on; no reliance on the internal
+ * `CHAT_TAB_ACTIVATION_COALESCE_MS` timing constant.
+ */
+async function waitForComposerHarnessCommitted(
+  world: ReadyLocalWorld,
+  page: ProductPage,
+  harness: LocalHarnessKind,
+): Promise<void> {
+  const p = page.page;
+  const candidates = new Set(
+    (await world.runtime.client.getGatewayModels(harness).catch(() => [])).map((model) => model.id),
+  );
+  if (candidates.size === 0) {
+    throw new Error(
+      `waitForComposerHarnessCommitted: the runtime probed no gateway model for "${harness}", so the composer's ` +
+        "committed harness can't be verified.",
+    );
+  }
+  const trigger = p.locator("[data-composer-model-trigger][data-composer-selected-model]").first();
+  const deadline = Date.now() + TAB_SETTLE_TIMEOUT_MS;
+  let last = "";
+  while (Date.now() < deadline) {
+    last = (await trigger.getAttribute("data-composer-selected-model").catch(() => null)) ?? "";
+    if (last && candidates.has(last)) {
+      return;
+    }
+    await sleep(500);
+  }
+  throw new Error(
+    `waitForComposerHarnessCommitted: composer never committed to a "${harness}" model within ` +
+      `${TAB_SETTLE_TIMEOUT_MS}ms (last selected "${last}").`,
+  );
 }
 
 // ── Runtime/DOM read helpers ─────────────────────────────────────────────────

@@ -305,6 +305,39 @@ async def test_claim_creates_owner_and_instance_org(single_org_client, test_engi
     assert not _token_file(tmp_path).exists()
 
 
+async def test_claim_then_immediate_password_login_succeeds(
+    single_org_client, test_engine, tmp_path
+):
+    """The owner can authenticate on the very next request after claiming /setup.
+
+    Regression for the Tier-3 T3-INT-1 failure (Actions run 29602686092): the
+    claim handler only `flush()`ed the owner-account write and relied on
+    `get_async_session`'s commit-on-cleanup, which FastAPI runs AFTER the
+    response is sent. A client that claims and then immediately calls
+    `POST /auth/desktop/password/login` (the desktop first-run flow and the
+    qualification harness) could hit the user-not-found branch of
+    `authenticate_password_user` and get a spurious 401. The claim handler now
+    commits explicitly before returning, matching every sibling auth write
+    endpoint, so the owner row is durable before the 2xx leaves the server.
+    """
+    token = await _seed_setup_token(test_engine, tmp_path)
+
+    claimed = await single_org_client.post(
+        "/setup",
+        data={"email": CLAIM_EMAIL, "password": CLAIM_PASSWORD, "setup_token": token},
+    )
+    assert claimed.status_code == 200
+
+    login = await single_org_client.post(
+        "/auth/desktop/password/login",
+        json={"email": CLAIM_EMAIL, "password": CLAIM_PASSWORD},
+    )
+    assert login.status_code == 200, login.text
+    body = login.json()
+    assert body.get("access_token")
+    assert body.get("user", {}).get("email") == CLAIM_EMAIL
+
+
 async def test_claim_honors_custom_organization_name(single_org_client, test_engine, tmp_path):
     token = await _seed_setup_token(test_engine, tmp_path)
 
