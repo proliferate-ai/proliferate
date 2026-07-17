@@ -69,6 +69,30 @@ describe("query telemetry failure classification", () => {
     expect(isExpectedQueryTelemetryError(error)).toBe(true);
   });
 
+  it("treats a typed missing Cowork thread as expected query lifecycle state", () => {
+    const error = new AnyHarnessError({
+      type: "about:blank",
+      title: "Cowork thread not found",
+      status: 404,
+      code: "COWORK_THREAD_NOT_FOUND",
+    });
+
+    expect(classifyTelemetryFailure(error)).toBe("configuration_error");
+    expect(isExpectedQueryTelemetryError(error)).toBe(true);
+  });
+
+  it("does not let the Cowork lifecycle code hide a 5xx request failure", () => {
+    const error = new AnyHarnessError({
+      type: "about:blank",
+      title: "Cowork request failed",
+      status: 503,
+      code: "COWORK_THREAD_NOT_FOUND",
+    });
+
+    expect(classifyTelemetryFailure(error)).toBe("request_error");
+    expect(isExpectedQueryTelemetryError(error)).toBe(false);
+  });
+
   it("does not let an availability code hide a 5xx request failure", () => {
     const error = new AnyHarnessError({
       type: "about:blank",

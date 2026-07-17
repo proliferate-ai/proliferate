@@ -69,6 +69,12 @@ describe("createAppQueryClient query telemetry", () => {
       status: 400,
       code: "HOSTING_GH_NOT_INSTALLED",
     })],
+    ["missing Cowork thread lifecycle state", new AnyHarnessError({
+      type: "about:blank",
+      title: "Cowork thread not found",
+      status: 404,
+      code: "COWORK_THREAD_NOT_FOUND",
+    })],
   ])("does not capture %s while preserving query error state", async (_name, error) => {
     const captureException = vi.fn();
     const client = createAppQueryClient({ captureException });
@@ -100,6 +106,9 @@ describe("createAppQueryClient query telemetry", () => {
     ["5xx request failure", new ProliferateClientError("Unavailable", 503)],
     ["network failure", new TypeError("Failed to fetch")],
     ["unknown programming failure", new Error("Invariant failed")],
+    ["Cowork code-like message without a typed code", new Error(
+      "COWORK_THREAD_NOT_FOUND",
+    )],
     [
       "configuration-like unknown failure",
       Object.assign(new Error("Missing configuration invariant"), {
@@ -114,6 +123,39 @@ describe("createAppQueryClient query telemetry", () => {
     await runFailingQuery(client, queryKey, error);
 
     expect(captureException).toHaveBeenCalledExactlyOnceWith(error, {
+      tags: {
+        action: "query_error",
+        domain: "react_query",
+      },
+      extras: {
+        query_hash: hashAppQueryKey(queryKey),
+      },
+    });
+  });
+
+  it("captures the Cowork lifecycle code when its status is 5xx", async () => {
+    const captureException = vi.fn();
+    const client = createAppQueryClient({ captureException });
+    const error = new AnyHarnessError({
+      type: "about:blank",
+      title: "Cowork request failed",
+      status: 503,
+      code: "COWORK_THREAD_NOT_FOUND",
+    });
+    const queryKey = ["cowork", "managed-workspaces"];
+
+    await runFailingQuery(client, queryKey, error);
+
+    expect(captureException).toHaveBeenCalledTimes(1);
+    const [capturedError, context] = captureException.mock.calls[0];
+    expect(capturedError).not.toBe(error);
+    expect(capturedError).toMatchObject({
+      name: "AnyHarnessError",
+      message: "AnyHarness request failed (COWORK_THREAD_NOT_FOUND)",
+      status: 503,
+      code: "COWORK_THREAD_NOT_FOUND",
+    });
+    expect(context).toEqual({
       tags: {
         action: "query_error",
         domain: "react_query",
