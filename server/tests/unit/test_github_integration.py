@@ -10,6 +10,8 @@ from proliferate.integrations.github import (
     GitHubIntegrationError,
     GitHubInvalidCursor,
     GitHubRateLimited,
+    GitHubRepoAccessRequired,
+    GitHubServiceUnavailable,
 )
 
 
@@ -163,6 +165,35 @@ async def test_list_github_repositories_maps_rate_limit(
             visibility="all",
         )
     assert exc_info.value.retry_after_seconds == 30
+
+
+@pytest.mark.asyncio
+async def test_get_github_repo_branches_maps_service_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = _FakeGitHubClient(_github_response(503, {"message": "Service Unavailable"}))
+    monkeypatch.setattr(github.httpx, "AsyncClient", lambda **_kwargs: client)
+
+    with pytest.raises(
+        GitHubServiceUnavailable,
+        match="GitHub is temporarily unavailable. Try again.",
+    ):
+        await github.get_github_repo_branches("token-1", "acme", "rocket")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status_code", [401, 403, 404])
+async def test_get_github_repo_branches_preserves_repo_access_errors(
+    monkeypatch: pytest.MonkeyPatch,
+    status_code: int,
+) -> None:
+    client = _FakeGitHubClient(
+        _github_response(status_code, {"message": "Repository access required"})
+    )
+    monkeypatch.setattr(github.httpx, "AsyncClient", lambda **_kwargs: client)
+
+    with pytest.raises(GitHubRepoAccessRequired):
+        await github.get_github_repo_branches("token-1", "acme", "rocket")
 
 
 @pytest.mark.asyncio

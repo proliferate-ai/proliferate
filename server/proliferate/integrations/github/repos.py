@@ -75,6 +75,10 @@ class GitHubRateLimited(GitHubIntegrationError):
         self.rate_limit_reset_at = rate_limit_reset_at
 
 
+class GitHubServiceUnavailable(GitHubIntegrationError):
+    pass
+
+
 class GitHubRepoEmpty(GitHubIntegrationError):
     pass
 
@@ -137,6 +141,8 @@ def _raise_github_response_error(
         )
     if response.status_code in {401, 403, 404}:
         raise GitHubRepoAccessRequired(access_message)
+    if response.status_code >= 500:
+        raise GitHubServiceUnavailable("GitHub is temporarily unavailable. Try again.")
     raise GitHubIntegrationError(fallback_message)
 
 

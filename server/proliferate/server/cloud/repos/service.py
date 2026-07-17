@@ -16,6 +16,7 @@ from proliferate.integrations.github import (
     GitHubRepoAccessRequired,
     GitHubRepoBranches,
     GitHubRepoEmpty,
+    GitHubServiceUnavailable,
     get_github_repo_branches,
     list_github_repositories,
 )
@@ -103,6 +104,14 @@ def _github_rate_limited_error(exc: GitHubRateLimited) -> CloudApiError:
     )
 
 
+def _github_service_unavailable_error(exc: GitHubServiceUnavailable) -> CloudApiError:
+    return CloudApiError(
+        "github_service_unavailable",
+        str(exc),
+        status_code=503,
+    )
+
+
 def _validate_repo_catalog_params(
     *,
     query: str | None,
@@ -167,6 +176,8 @@ async def get_repo_branches_for_credentials(
             str(exc),
             status_code=400,
         ) from exc
+    except GitHubServiceUnavailable as exc:
+        raise _github_service_unavailable_error(exc) from exc
     except GitHubIntegrationError as exc:
         raise CloudApiError(
             "github_branch_lookup_failed",
@@ -228,6 +239,8 @@ async def list_cloud_repositories(
             str(exc),
             status_code=400,
         ) from exc
+    except GitHubServiceUnavailable as exc:
+        raise _github_service_unavailable_error(exc) from exc
     except GitHubIntegrationError as exc:
         raise CloudApiError(
             "github_repo_list_failed",

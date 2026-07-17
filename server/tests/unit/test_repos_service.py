@@ -19,6 +19,7 @@ from proliferate.integrations.github import (
     GitHubRepoBranches,
     GitHubRepoAccessRequired,
     GitHubRateLimited,
+    GitHubServiceUnavailable,
     list_branches,
 )
 from proliferate.db.store.repositories import RepoEnvironmentValue
@@ -179,6 +180,26 @@ class TestGetRepoBranchesForUser:
                 )
             assert exc_info.value.code == "github_branch_lookup_failed"
             assert exc_info.value.status_code == 502
+
+    @pytest.mark.asyncio
+    async def test_wraps_github_service_unavailable(self) -> None:
+        user = _make_user(github_token="gh-token")
+
+        with patch(
+            "proliferate.server.cloud.repos.service.get_github_repo_branches",
+            new_callable=AsyncMock,
+            side_effect=GitHubServiceUnavailable("GitHub is temporarily unavailable. Try again."),
+        ):
+            with pytest.raises(CloudApiError) as exc_info:
+                await get_repo_branches_for_user(
+                    user,
+                    git_owner="acme",
+                    git_repo_name="rocket",
+                    missing_access_message="msg",
+                )
+            assert exc_info.value.code == "github_service_unavailable"
+            assert exc_info.value.status_code == 503
+            assert exc_info.value.message == "GitHub is temporarily unavailable. Try again."
 
     @pytest.mark.asyncio
     async def test_rejects_user_without_github_link(self) -> None:
@@ -368,6 +389,30 @@ class TestListCloudRepositories:
         assert exc_info.value.status_code == 429
         assert exc_info.value.extra_detail == {"retryAfterSeconds": 30}
         assert exc_info.value.headers == {"Retry-After": "30"}
+
+    @pytest.mark.asyncio
+    async def test_maps_github_service_unavailable(self) -> None:
+        credentials = CloudRepoGitHubCredentials(
+            user_id=uuid.uuid4(),
+            access_token="gh-token",
+        )
+        with (
+            patch(
+                "proliferate.server.cloud.repos.service.list_github_repositories",
+                new_callable=AsyncMock,
+                side_effect=GitHubServiceUnavailable(
+                    "GitHub is temporarily unavailable. Try again."
+                ),
+            ),
+            pytest.raises(CloudApiError) as exc_info,
+        ):
+            await list_cloud_repositories(
+                object(),  # type: ignore[arg-type]
+                credentials,
+            )
+        assert exc_info.value.code == "github_service_unavailable"
+        assert exc_info.value.status_code == 503
+        assert exc_info.value.message == "GitHub is temporarily unavailable. Try again."
 
 
 class TestListBranchesAlias:
