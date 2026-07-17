@@ -587,6 +587,16 @@ jobs:
       - uses: pnpm/action-setup@v6
         with:
           version: 10
+      # T3-INT-1's audit-readback probe (tests/release/scripts/integration_audit_probe.py)
+      # runs via `uv run python …` to read the cloud_integration_tool_call_event
+      # row back from the run's own Postgres — the same `spawn("uv", …)` idiom the
+      # tier-2/tier-3/self-host jobs use. Without uv on PATH the probe dies
+      # `spawn uv ENOENT` after a fully successful MCP tool call. Match the sibling
+      # jobs (uv + python 3.12, the script's requires-python).
+      - uses: astral-sh/setup-uv@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:

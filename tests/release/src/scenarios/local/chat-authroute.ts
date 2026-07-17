@@ -296,9 +296,8 @@ export const defaultLocalRouteDriver: LocalRouteDriver = {
     // that session (setActiveSessionConfigOption), which the server correctly
     // 400s SESSION_CONFIG_REJECTED — a session must not silently jump auth
     // contexts via a config PATCH (proven: Actions run 29570511844,
-    // T3-AUTHROUTE-1/local/route=change). Open a fresh chat so the gateway model
-    // pick + send go through the create-session/launch path instead; this also
-    // restores the `[data-home-composer-editor]` that `sendBoundedTurn` expects.
+    // T3-AUTHROUTE-1/local/route=change). Open a fresh in-workspace chat tab so
+    // the gateway model pick + send go through the create-session/launch path.
     await openNewChat(p);
   },
   async waitForRouteSync(world, _page, harness, route) {
@@ -365,7 +364,11 @@ export const defaultLocalRouteDriver: LocalRouteDriver = {
   selectModelInUi: (page, modelId) => defaultLocalWorldSmokeDriver.selectModelInUi(page, modelId),
   async sendBoundedTurn(world, page, _expectedRoute, repoPath) {
     const p = page.page;
-    const editor = p.locator("[data-home-composer-editor]").first();
+    // LOCAL-2/3's first turn runs from the home screen (`[data-home-composer-editor]`);
+    // LOCAL-6's gateway turn runs from a fresh in-workspace tab
+    // (`[data-chat-composer-editor]`, opened by `openNewChat`). Accept either
+    // surface — the same dual-composer idiom `config-session.ts` uses.
+    const editor = p.locator("[data-home-composer-editor], [data-chat-composer-editor]").first();
     await editor.waitFor({ state: "visible", timeout: 15_000 });
     await editor.fill(DETERMINISTIC_PROMPT);
     const send = p.locator("[data-chat-send-button]:not([disabled])").first();
@@ -837,14 +840,12 @@ async function runLocal6RouteChangeCell(
       });
 
       // 2) Switch the selected route to gateway; a NEW session launches on it.
-      // `switchSelectedRouteToGateway` lands on a fresh home composer (opening a
-      // new chat so the gateway turn is a genuinely new session, not a rejected
-      // live config-switch on the user-key session). The home composer has no
-      // repo selected, and `sendBoundedTurn` resolves the session by repo clone
-      // path, so re-select the repo + "Work locally" exactly as the user-key
-      // setup did before launching the gateway turn.
+      // `switchSelectedRouteToGateway` opens a fresh in-workspace chat tab (so the
+      // gateway turn is a genuinely new session, not a rejected live config-switch
+      // on the user-key session). The workspace/repo binding is retained by the
+      // new-tab path — no repo re-selection needed (those "Project:"/"Runtime:"
+      // controls exist only on the home screen).
       await driver.switchSelectedRouteToGateway(world, page, harness);
-      await driver.selectRepoAndWorkLocally(page, repo);
       const gatewaySelection = await driver.resolveRouteModel(world, page, harness, "gateway");
       await driver.selectModelInUi(page, gatewaySelection.modelId);
       const before = await driver.snapshotGatewaySpend(world, actor);
@@ -1172,16 +1173,18 @@ async function returnToAppHome(page: Page, expectedSurface = "[data-home-compose
     .waitFor({ state: "visible", timeout: SETTINGS_STEP_TIMEOUT_MS });
 }
 
-/** Clicks the sidebar's "New chat" primary-nav entry (SidebarPrimaryNavigation,
- * id "new-chat" → onGoHome) and waits for the home composer to reappear, so a
- * subsequent model pick + send launches a NEW session rather than mutating the
- * currently-active one. The row renders as a labelled button (SidebarNavRow), so
- * target it by accessible name — the same idiom `returnToAppHome` uses. */
+/** Opens a NEW, genuinely-empty session tab in the CURRENT workspace via the
+ * header "+" new-tab button (`data-chat-new-tab-button`, sr-only label "New
+ * chat" → openNewSessionTab → createEmptySessionWithResolvedConfig). This stays
+ * inside the active workspace shell — the workspace/repo binding is retained —
+ * and lands on the in-workspace chat composer (`[data-chat-composer-editor]`),
+ * NOT the standalone home screen's `[data-home-composer-editor]`. That fresh
+ * session is what makes the gateway turn a new session distinct from the
+ * user-key one, without a rejected live config switch on the old session. */
 async function openNewChat(page: Page): Promise<void> {
-  await ensureSidebarOpen(page);
-  await page.getByRole("button", { name: /^New chat$/i }).first().click();
+  await page.locator("[data-chat-new-tab-button]:not([disabled])").first().click();
   await page
-    .locator("[data-home-composer-editor]")
+    .locator("[data-chat-composer-editor]")
     .first()
     .waitFor({ state: "visible", timeout: SETTINGS_STEP_TIMEOUT_MS });
 }

@@ -1085,9 +1085,9 @@ async function switchHarnessEmptyChat(
   const activeTabBefore = p.locator('[data-chat-tab][data-chat-tab-active="true"]').first();
   const harnessBefore = (await readRequiredAttr(p, "[data-chat-tab]", "data-chat-tab-harness", activeTabBefore)) as LocalHarnessKind;
   const tabIndex = Number((await activeTabBefore.getAttribute("data-chat-tab-index").catch(() => null)) ?? "0");
-  const oldSessionId = await readRequiredAttr(p, "[data-chat-tab]", "data-chat-tab-session-id", activeTabBefore);
   if (harnessBefore === toHarness) {
-    return { oldSessionId, newSessionId: oldSessionId, tabIndex, tabCountUnchanged: true, noOp: true };
+    const noopSessionId = await readRequiredAttr(p, "[data-chat-tab]", "data-chat-tab-session-id", activeTabBefore);
+    return { oldSessionId: noopSessionId, newSessionId: noopSessionId, tabIndex, tabCountUnchanged: true, noOp: true };
   }
   const beforeCount = await p.locator("[data-chat-tab]").count();
   await ensureHarnessReady(world, page, toHarness);
@@ -1101,12 +1101,25 @@ async function switchHarnessEmptyChat(
     .locator(`[data-chat-tab-index="${tabIndex}"][data-chat-tab-active="true"]`)
     .first()
     .waitFor({ state: "attached", timeout: TAB_SETTLE_TIMEOUT_MS });
+  // Capture the reconciled server id of tab B AFTER the reload+reactivation. Two
+  // reasons: (1) reload rebuilds the tab from the authoritative session list, so
+  // it now carries the server id, not the pre-reload optimistic one — comparing
+  // the post-switch id against the pre-reload id would spuriously "detect a
+  // change" from the reload alone; (2) waiting for a reconciled (non
+  // `client-session:`) id means the empty session is fully MATERIALIZED before
+  // the switch, so the product's replace-in-place path dismisses a known
+  // materialized session rather than racing a still-in-flight creation and
+  // orphaning it — the orphan reappeared as a spurious 3rd tab after reload
+  // (Actions run 29575928457, T3-SESSION-1). A materialized-but-empty session is
+  // still empty (isSessionEmptyWithIntents checks transcript/intents, not
+  // materialization), so this stays faithful to the empty-chat-switch proof.
+  const activeTabByIndex = p.locator(`[data-chat-tab-index="${tabIndex}"]`).first();
+  const oldSessionId = await waitForReconciledSessionId(p, activeTabByIndex);
   await selectHarnessInComposer(world, page, toHarness);
   // The unused backend session is replaced IN PLACE at the same tab position:
   // poll the tab AT THIS INDEX (not the stale tab-id locator, since the tab
   // element's own id changes with the session) until its session-id changes.
-  const activeTabAfter = p.locator(`[data-chat-tab-index="${tabIndex}"]`).first();
-  const newSessionId = await waitForAttrChange(p, "[data-chat-tab]", "data-chat-tab-session-id", oldSessionId, activeTabAfter);
+  const newSessionId = await waitForAttrChange(p, "[data-chat-tab]", "data-chat-tab-session-id", oldSessionId, activeTabByIndex);
   const afterCount = await p.locator("[data-chat-tab]").count();
   return { oldSessionId, newSessionId, tabIndex, tabCountUnchanged: afterCount === beforeCount, noOp: false };
 }
@@ -1172,7 +1185,12 @@ async function changeModelSameHarness(
 ): Promise<{ sessionId: string; fromModelId: string; toModelId: string; stayedInSession: boolean }> {
   const p = page.page;
   const activeTab = p.locator('[data-chat-tab][data-chat-tab-active="true"]').first();
-  const sessionId = await readRequiredAttr(p, "[data-chat-tab]", "data-chat-tab-session-id", activeTab);
+  // Capture the RECONCILED server id, not the transient `client-session:` one:
+  // this id becomes the reload expectation's active/ordered tab id
+  // (collectLocal5SessionTabsCell → reloadAndVerifyTabs), and a fresh renderer
+  // only ever shows the server id, so a client id could never match post-reload
+  // (Actions run 29575928457, T3-SESSION-1).
+  const sessionId = await waitForReconciledSessionId(p, activeTab);
   const harness = (await readRequiredAttr(p, "[data-chat-tab]", "data-chat-tab-harness", activeTab)) as LocalHarnessKind;
   // The model the composer is currently on — the change must move OFF this one,
   // otherwise a no-op selection would trivially "stay in session".
@@ -1341,6 +1359,37 @@ async function waitForAttrChange(
     await sleep(500);
   }
   throw new Error(`waitForAttrChange: attribute "${attr}" on "${selector}" never changed from "${from}"`);
+}
+
+/**
+ * Waits until the active tab's `data-chat-tab-session-id` is a RECONCILED server
+ * id — i.e. no longer a `client-session:` optimistic id (the client-side
+ * directory key a freshly-created session carries until its background
+ * materialization commits the real id; see session-creation-local-state.ts +
+ * persisted-chat-sessions.ts `isTransientClientSessionId`). Any id captured for
+ * a post-RELOAD expectation MUST be the server id: a fresh renderer only ever
+ * shows the server uuid for that tab, so an expectation built from the transient
+ * client id can never match (proven: Actions run 29575928457, T3-SESSION-1,
+ * `reloadAndVerifyTabs: tab order not preserved` — the wanted id was
+ * `client-session:claude:…`). Returns the reconciled id.
+ */
+async function waitForReconciledSessionId(
+  page: Page,
+  activeTab: ReturnType<Page["locator"]>,
+): Promise<string> {
+  const deadline = Date.now() + TAB_SETTLE_TIMEOUT_MS;
+  let last = "";
+  while (Date.now() < deadline) {
+    last = (await activeTab.getAttribute("data-chat-tab-session-id").catch(() => null)) ?? "";
+    if (last && !last.startsWith("client-session:")) {
+      return last;
+    }
+    await sleep(500);
+  }
+  throw new Error(
+    `waitForReconciledSessionId: the active tab's session id never reconciled off the optimistic ` +
+      `client id (last "${last}") within ${TAB_SETTLE_TIMEOUT_MS}ms.`,
+  );
 }
 
 /** Resolves the AnyHarness native session id backing the currently-active chat.
