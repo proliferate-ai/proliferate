@@ -2,25 +2,29 @@ use super::access::map_access_error;
 use super::error::ApiError;
 use crate::domains::agents::route_auth::RouteAuthError;
 use crate::domains::sessions::mcp_bindings::crypto::SessionMcpBindingsError;
+use crate::domains::sessions::model::AgentStartupExitError;
 use crate::domains::sessions::runtime::{
     CreateAndStartSessionError, EnsureLiveSessionError, ForkSessionError,
     PendingPromptMutationError, PendingPromptQueueError, ResolveInteractionError, SendPromptError,
     SessionLifecycleError, SetSessionConfigOptionError,
 };
 use crate::domains::sessions::service::{GetLiveConfigSnapshotError, UpdateSessionTitleError};
-use crate::live::sessions::AgentStartupExitError;
 
 fn map_internal_anyhow_error(
     error: anyhow::Error,
     telemetry_safe_detail: String,
     caller_prefix: &str,
 ) -> ApiError {
-    let caller_detail = error
-        .downcast_ref::<AgentStartupExitError>()
+    let startup_error = error.downcast_ref::<AgentStartupExitError>();
+    let caller_detail = startup_error
         .map(|error| format!("{caller_prefix}{}", error.caller_detail()))
         .unwrap_or_else(|| telemetry_safe_detail.clone());
 
-    ApiError::internal_with_safe_log(caller_detail, telemetry_safe_detail)
+    ApiError::internal_with_safe_log_and_code(
+        caller_detail,
+        telemetry_safe_detail,
+        startup_error.map(|_| AgentStartupExitError::CODE),
+    )
 }
 
 pub(super) fn map_acp_session_start_error(error: anyhow::Error) -> ApiError {
@@ -348,9 +352,9 @@ mod tests {
     use axum::http::StatusCode;
     use axum::response::IntoResponse;
 
+    use crate::domains::sessions::model::AgentStartupExitError;
     use crate::domains::sessions::runtime::{CreateAndStartSessionError, ResolveInteractionError};
     use crate::domains::workspaces::access_gate::WorkspaceAccessError;
-    use crate::live::sessions::AgentStartupExitError;
 
     #[test]
     fn pending_prompt_reorder_validation_maps_to_bad_request() {
@@ -414,6 +418,7 @@ mod tests {
                 "ACP session start failed: agent process exited during ACP startup (exit status: 1). Agent stderr:\nmissing binary"
             )
         );
+        assert_eq!(mapped.code(), Some("AGENT_STARTUP_FAILED"));
     }
 
     #[test]
@@ -436,6 +441,7 @@ mod tests {
                 "resume failed: agent process exited during ACP startup (exit status: 1). Agent stderr:\nmissing binary"
             )
         );
+        assert_eq!(mapped.code(), Some("AGENT_STARTUP_FAILED"));
     }
 
     #[test]

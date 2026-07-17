@@ -4,6 +4,7 @@ import {
   QueryCache,
   QueryClient,
 } from "@tanstack/react-query";
+import { toAnyHarnessTelemetryError } from "@anyharness/sdk";
 import {
   isExpectedMutationTelemetryError,
   isExpectedQueryTelemetryError,
@@ -118,7 +119,7 @@ export function createAppQueryClient({
           return;
         }
 
-        captureException(error, {
+        captureException(toAnyHarnessTelemetryError(error), {
           tags: {
             action: "query_error",
             domain: "react_query",
@@ -139,7 +140,7 @@ export function createAppQueryClient({
         }
 
         const mutationKey = mutation.options.mutationKey;
-        captureException(error, {
+        captureException(toAnyHarnessTelemetryError(error), {
           tags: {
             action: "mutation_error",
             domain: "react_query",

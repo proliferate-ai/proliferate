@@ -1,7 +1,52 @@
+use std::fmt;
+
 use anyharness_contract::v1;
 
 use crate::domains::sessions::prompt::PromptPayload;
 use crate::origin::OriginContext;
+
+/// Startup failure whose ordinary formatting is safe for telemetry, while an
+/// authenticated API mapper may deliberately surface the bounded local stderr
+/// diagnostic to the caller that requested the session.
+#[derive(Clone)]
+pub(crate) struct AgentStartupExitError {
+    telemetry_safe_detail: String,
+    caller_detail: String,
+}
+
+impl AgentStartupExitError {
+    /// Stable RFC 7807 extension code used by clients to replace the caller
+    /// diagnostic before sending this error to telemetry.
+    pub(crate) const CODE: &'static str = "AGENT_STARTUP_FAILED";
+
+    pub(crate) fn new(telemetry_safe_detail: String, caller_detail: String) -> Self {
+        Self {
+            telemetry_safe_detail,
+            caller_detail,
+        }
+    }
+
+    pub(crate) fn caller_detail(&self) -> &str {
+        &self.caller_detail
+    }
+}
+
+impl fmt::Display for AgentStartupExitError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(&self.telemetry_safe_detail)
+    }
+}
+
+impl fmt::Debug for AgentStartupExitError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("AgentStartupExitError")
+            .field("telemetry_safe_detail", &self.telemetry_safe_detail)
+            .finish_non_exhaustive()
+    }
+}
+
+impl std::error::Error for AgentStartupExitError {}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SessionMcpBindingPolicy {

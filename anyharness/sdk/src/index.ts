@@ -3,6 +3,7 @@ export {
   AnyHarnessError,
   hashTimingScope,
   setAnyHarnessTimingObserver,
+  toAnyHarnessTelemetryError,
 } from "./client/core.js";
 export type {
   AnyHarnessClientOptions,

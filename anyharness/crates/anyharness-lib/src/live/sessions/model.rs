@@ -33,7 +33,6 @@
 
 use std::any::Any;
 use std::collections::BTreeMap;
-use std::fmt;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -54,45 +53,6 @@ use crate::live::sessions::sink::SessionEventSink;
 // Re-exported: the normalized-payload vocabulary observers consume. The sink
 // module itself stays private to live; these shapes are part of the doorstep.
 pub use crate::live::sessions::sink::{AcpChunkPayload, AcpToolPayload, CompletedAssistantMessage};
-
-/// Startup failure whose ordinary formatting is safe for telemetry, while an
-/// authenticated API mapper may deliberately surface the bounded local stderr
-/// diagnostic to the caller that requested the session.
-#[derive(Clone)]
-pub(crate) struct AgentStartupExitError {
-    telemetry_safe_detail: String,
-    caller_detail: String,
-}
-
-impl AgentStartupExitError {
-    pub(crate) fn new(telemetry_safe_detail: String, caller_detail: String) -> Self {
-        Self {
-            telemetry_safe_detail,
-            caller_detail,
-        }
-    }
-
-    pub(crate) fn caller_detail(&self) -> &str {
-        &self.caller_detail
-    }
-}
-
-impl fmt::Display for AgentStartupExitError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(&self.telemetry_safe_detail)
-    }
-}
-
-impl fmt::Debug for AgentStartupExitError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter
-            .debug_struct("AgentStartupExitError")
-            .field("telemetry_safe_detail", &self.telemetry_safe_detail)
-            .finish_non_exhaustive()
-    }
-}
-
-impl std::error::Error for AgentStartupExitError {}
 
 /// How the actor should establish the native agent session at startup.
 #[derive(Debug, Clone, PartialEq, Eq)]

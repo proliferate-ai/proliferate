@@ -21,6 +21,5 @@ pub use manager::LiveSessionManager;
 pub(crate) use manager::RevealMcpElicitationUrlError;
 #[cfg(test)]
 pub(crate) use manager::{ScriptedSessionEvent, ScriptedSessionSpec};
-pub(crate) use model::AgentStartupExitError;
 pub use model::SessionStartupStrategy;
 pub use rendezvous::broker::PermissionDecision;

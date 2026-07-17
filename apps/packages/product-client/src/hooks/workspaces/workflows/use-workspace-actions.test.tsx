@@ -192,9 +192,20 @@ describe("useWorkspaceActions local workspace creation", () => {
     });
 
     expect(thrown).toBe(error);
+    expect(error.message).toContain("/Users/pablo/proliferate");
     expect(mocks.resolveFromPath).not.toHaveBeenCalled();
     expect(mocks.trackProductEvent).not.toHaveBeenCalled();
-    expect(mocks.captureTelemetryException).toHaveBeenCalledWith(error, {
+    expect(mocks.captureTelemetryException).toHaveBeenCalledTimes(1);
+    const [capturedError, context] = mocks.captureTelemetryException.mock.calls[0];
+    expect(capturedError).toBeInstanceOf(Error);
+    expect(capturedError).not.toBe(error);
+    expect(capturedError.message).toBe(
+      "AnyHarness request failed (WORKSPACE_CREATE_FAILED)",
+    );
+    expect("problem" in capturedError).toBe(false);
+    expect("cause" in capturedError).toBe(false);
+    expect(capturedError.stack).not.toContain("/Users/pablo/proliferate");
+    expect(context).toEqual({
       tags: {
         action: "create_local_workspace",
         domain: "workspace",

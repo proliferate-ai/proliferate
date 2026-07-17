@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { AnyHarnessError, AnyHarnessTransport } from "./core.js";
+import {
+  AnyHarnessError,
+  AnyHarnessTransport,
+  toAnyHarnessTelemetryError,
+} from "./core.js";
 
 describe("AnyHarnessTransport problem details", () => {
   it("preserves valid RFC 7807 fields", async () => {
@@ -119,6 +123,73 @@ describe("AnyHarnessTransport problem details", () => {
       title: "Request failed",
       status: 500,
     });
+  });
+
+  it("keeps caller detail while producing a detached telemetry-safe error", async () => {
+    const rawTail = "provider stderr: token=caller-only-secret";
+    const error = await requestError(problemResponse({
+      type: "about:blank",
+      title: "Internal error",
+      status: 500,
+      detail: `ACP session start failed: ${rawTail}`,
+      code: "AGENT_STARTUP_FAILED",
+    }, 500));
+
+    const telemetryError = toAnyHarnessTelemetryError(error);
+
+    expect(error.message).toContain(rawTail);
+    expect(telemetryError).toBeInstanceOf(Error);
+    expect(telemetryError).not.toBe(error);
+    expect((telemetryError as Error).message).toBe(
+      "AnyHarness request failed (AGENT_STARTUP_FAILED)",
+    );
+    expect(telemetryError).toMatchObject({
+      name: "AnyHarnessError",
+      code: "AGENT_STARTUP_FAILED",
+      status: 500,
+    });
+    expect("problem" in (telemetryError as object)).toBe(false);
+    expect("cause" in (telemetryError as object)).toBe(false);
+    expect((telemetryError as Error).stack).not.toContain(rawTail);
+    expect(JSON.stringify(telemetryError)).not.toContain(rawTail);
+  });
+
+  it("does not trust an arbitrary problem code in telemetry", () => {
+    const rawCode = "provider output must not reach telemetry";
+    const error = new AnyHarnessError({
+      type: "about:blank",
+      title: "Internal error",
+      status: 500,
+      detail: "caller-only detail",
+      code: rawCode,
+    });
+
+    const telemetryError = toAnyHarnessTelemetryError(error) as Error & { code?: string };
+
+    expect(telemetryError.message).toBe("AnyHarness request failed");
+    expect(telemetryError.code).toBeUndefined();
+    expect(telemetryError.stack).not.toContain(rawCode);
+    expect(JSON.stringify(telemetryError)).not.toContain(rawCode);
+  });
+
+  it("removes a wrapping cause chain when it contains an AnyHarness error", () => {
+    const rawTail = "provider stderr caller-only detail";
+    const cause = new AnyHarnessError({
+      type: "about:blank",
+      title: "Internal error",
+      status: 500,
+      detail: rawTail,
+      code: "AGENT_STARTUP_FAILED",
+    });
+    const wrapper = new Error("Failed to open chat", { cause });
+
+    const telemetryError = toAnyHarnessTelemetryError(wrapper);
+
+    expect(telemetryError).not.toBe(wrapper);
+    expect((telemetryError as Error).message).toContain("AGENT_STARTUP_FAILED");
+    expect("cause" in (telemetryError as object)).toBe(false);
+    expect((telemetryError as Error).stack).not.toContain(rawTail);
+    expect(JSON.stringify(telemetryError)).not.toContain(rawTail);
   });
 });
 

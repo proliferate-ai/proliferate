@@ -177,6 +177,53 @@ export class AnyHarnessError extends Error {
   }
 }
 
+const TELEMETRY_SAFE_PROBLEM_CODE = /^[A-Z][A-Z0-9_]{0,63}$/;
+
+/**
+ * Replace an AnyHarness request error (or an Error wrapping one) with a
+ * detached telemetry representation. RFC 7807 `detail` remains available on
+ * the original error for caller-facing UI, but neither it nor the original
+ * cause chain can reach an exception transport through the returned value.
+ */
+export function toAnyHarnessTelemetryError(error: unknown): unknown {
+  const anyHarnessError = findAnyHarnessError(error);
+  if (!anyHarnessError) {
+    return error;
+  }
+
+  const rawCode = anyHarnessError.problem.code;
+  const code = typeof rawCode === "string" && TELEMETRY_SAFE_PROBLEM_CODE.test(rawCode)
+    ? rawCode
+    : null;
+  const safeError = new Error(
+    code
+      ? `AnyHarness request failed (${code})`
+      : "AnyHarness request failed",
+  ) as Error & { code?: string; status: number };
+  safeError.name = "AnyHarnessError";
+  safeError.status = anyHarnessError.problem.status;
+  if (code) {
+    safeError.code = code;
+  }
+  return safeError;
+}
+
+function findAnyHarnessError(error: unknown): AnyHarnessError | null {
+  let current = error;
+  const seen = new Set<unknown>();
+  for (let depth = 0; depth < 8 && current != null; depth += 1) {
+    if (current instanceof AnyHarnessError) {
+      return current;
+    }
+    if (!(current instanceof Error) || seen.has(current)) {
+      return null;
+    }
+    seen.add(current);
+    current = (current as Error & { cause?: unknown }).cause;
+  }
+  return null;
+}
+
 export class AnyHarnessTransport {
   readonly baseUrl: string;
   readonly authToken?: string;

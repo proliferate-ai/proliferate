@@ -148,6 +148,16 @@ impl ApiError {
         caller_detail: impl Into<String>,
         telemetry_safe_detail: impl Into<String>,
     ) -> Self {
+        Self::internal_with_safe_log_and_code(caller_detail, telemetry_safe_detail, None)
+    }
+
+    /// Return an authenticated caller detail while logging only a separately
+    /// supplied telemetry-safe summary and exposing an optional stable code.
+    pub(super) fn internal_with_safe_log_and_code(
+        caller_detail: impl Into<String>,
+        telemetry_safe_detail: impl Into<String>,
+        code: Option<&str>,
+    ) -> Self {
         let caller_detail = caller_detail.into();
         let telemetry_safe_detail = telemetry_safe_detail.into();
         // tower_http only logs the status code on failure; this is the one
@@ -162,7 +172,7 @@ impl ApiError {
                 status: 500,
                 detail: Some(caller_detail),
                 instance: None,
-                code: None,
+                code: code.map(String::from),
                 required_contexts: None,
             },
         )
@@ -229,5 +239,17 @@ mod tests {
     fn internal_error_can_separate_caller_and_telemetry_details() {
         let err = ApiError::internal_with_safe_log("caller diagnostic", "safe summary");
         assert_eq!(err.1.detail.as_deref(), Some("caller diagnostic"));
+        assert!(err.1.code.is_none());
+    }
+
+    #[test]
+    fn internal_error_can_carry_a_telemetry_safe_code() {
+        let err = ApiError::internal_with_safe_log_and_code(
+            "caller diagnostic",
+            "safe summary",
+            Some("AGENT_STARTUP_FAILED"),
+        );
+        assert_eq!(err.1.detail.as_deref(), Some("caller diagnostic"));
+        assert_eq!(err.1.code.as_deref(), Some("AGENT_STARTUP_FAILED"));
     }
 }

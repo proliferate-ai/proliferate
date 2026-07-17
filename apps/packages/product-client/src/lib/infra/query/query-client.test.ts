@@ -98,12 +98,6 @@ describe("createAppQueryClient query telemetry", () => {
       "workspace_state_conflict",
     )],
     ["5xx request failure", new ProliferateClientError("Unavailable", 503)],
-    ["coded AnyHarness request failure", new AnyHarnessError({
-      type: "about:blank",
-      title: "Pull request lookup failed",
-      status: 400,
-      code: "HOSTING_PR_VIEW_FAILED",
-    })],
     ["network failure", new TypeError("Failed to fetch")],
     ["unknown programming failure", new Error("Invariant failed")],
     [
@@ -126,6 +120,88 @@ describe("createAppQueryClient query telemetry", () => {
       },
       extras: {
         query_hash: hashAppQueryKey(queryKey),
+      },
+    });
+  });
+
+  it("captures an AnyHarness 5xx without its caller-facing detail", async () => {
+    const captureException = vi.fn();
+    const client = createAppQueryClient({ captureException });
+    const rawTail = "provider stderr: caller-only-secret";
+    const error = new AnyHarnessError({
+      type: "about:blank",
+      title: "Internal error",
+      status: 500,
+      detail: rawTail,
+      code: "AGENT_STARTUP_FAILED",
+    });
+    const queryKey = ["session", "create"];
+
+    await runFailingQuery(client, queryKey, error);
+
+    expect(error.message).toBe(rawTail);
+    expect(captureException).toHaveBeenCalledTimes(1);
+    const [capturedError, context] = captureException.mock.calls[0];
+    expect(capturedError).toBeInstanceOf(Error);
+    expect(capturedError).not.toBe(error);
+    expect(capturedError.message).toBe(
+      "AnyHarness request failed (AGENT_STARTUP_FAILED)",
+    );
+    expect("problem" in capturedError).toBe(false);
+    expect("cause" in capturedError).toBe(false);
+    expect(capturedError.stack).not.toContain(rawTail);
+    expect(JSON.stringify(capturedError)).not.toContain(rawTail);
+    expect(context).toEqual({
+      tags: {
+        action: "query_error",
+        domain: "react_query",
+      },
+      extras: {
+        query_hash: hashAppQueryKey(queryKey),
+      },
+    });
+  });
+
+  it("captures an AnyHarness mutation failure without its caller-facing detail", async () => {
+    const captureException = vi.fn();
+    const client = createAppQueryClient({ captureException });
+    const rawTail = "provider stderr: mutation-caller-only-secret";
+    const error = new AnyHarnessError({
+      type: "about:blank",
+      title: "Internal error",
+      status: 500,
+      detail: rawTail,
+      code: "AGENT_STARTUP_FAILED",
+    });
+    const mutationKey = ["session", "create"];
+    const mutation = client.getMutationCache().build(client, {
+      mutationKey,
+      mutationFn: async () => {
+        throw error;
+      },
+      retry: false,
+    });
+
+    await expect(mutation.execute(undefined)).rejects.toBe(error);
+
+    expect(captureException).toHaveBeenCalledTimes(1);
+    const [capturedError, context] = captureException.mock.calls[0];
+    expect(capturedError).toBeInstanceOf(Error);
+    expect(capturedError).not.toBe(error);
+    expect(capturedError.message).toBe(
+      "AnyHarness request failed (AGENT_STARTUP_FAILED)",
+    );
+    expect("problem" in capturedError).toBe(false);
+    expect("cause" in capturedError).toBe(false);
+    expect(capturedError.stack).not.toContain(rawTail);
+    expect(JSON.stringify(capturedError)).not.toContain(rawTail);
+    expect(context).toEqual({
+      tags: {
+        action: "mutation_error",
+        domain: "react_query",
+      },
+      extras: {
+        mutation_key: hashAppQueryKey(mutationKey),
       },
     });
   });

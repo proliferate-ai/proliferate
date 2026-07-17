@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 
 use tokio::process::ChildStderr;
 
-use crate::live::sessions::AgentStartupExitError;
+use crate::domains::sessions::model::AgentStartupExitError;
 use crate::observability::AGENT_STDERR_TRACING_TARGET;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -24,13 +24,18 @@ impl AgentStderrTail {
     /// Enough to capture a fatal error plus a few lines of context without
     /// bloating the startup error string shown to the user.
     const MAX_LINES: usize = 8;
+    /// A line-oriented reader can still receive one arbitrarily large line.
+    /// Capping each retained line also bounds the full caller detail because
+    /// the number of retained lines is fixed above.
+    const MAX_LINE_BYTES: usize = 1024;
+    const TRUNCATED_SUFFIX: &'static str = "…[truncated]";
 
     pub(in crate::live::sessions) fn push(&self, line: &str) {
         let mut lines = self.lock_lines();
         while lines.len() >= Self::MAX_LINES {
             lines.pop_front();
         }
-        lines.push_back(line.to_string());
+        lines.push_back(Self::bounded_line(line));
     }
 
     fn snapshot(&self) -> Vec<String> {
@@ -64,6 +69,22 @@ impl AgentStderrTail {
         self.lines
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    fn bounded_line(line: &str) -> String {
+        if line.len() <= Self::MAX_LINE_BYTES {
+            return line.to_string();
+        }
+
+        let mut prefix_end = Self::MAX_LINE_BYTES - Self::TRUNCATED_SUFFIX.len();
+        while !line.is_char_boundary(prefix_end) {
+            prefix_end -= 1;
+        }
+
+        let mut bounded = String::with_capacity(Self::MAX_LINE_BYTES);
+        bounded.push_str(&line[..prefix_end]);
+        bounded.push_str(Self::TRUNCATED_SUFFIX);
+        bounded
     }
 }
 
@@ -226,6 +247,29 @@ mod tests {
         assert_eq!(snapshot.len(), AgentStderrTail::MAX_LINES);
         assert_eq!(snapshot.first(), Some(&format!("line {evicted}")));
         assert_eq!(snapshot.last(), Some(&format!("line {}", total - 1)));
+    }
+
+    #[test]
+    fn agent_stderr_tail_bounds_one_giant_line() {
+        let tail = AgentStderrTail::default();
+        tail.push(&"x".repeat(AgentStderrTail::MAX_LINE_BYTES * 4));
+
+        let snapshot = tail.snapshot();
+        assert_eq!(snapshot.len(), 1);
+        assert_eq!(snapshot[0].len(), AgentStderrTail::MAX_LINE_BYTES);
+        assert!(snapshot[0].ends_with(AgentStderrTail::TRUNCATED_SUFFIX));
+    }
+
+    #[test]
+    fn agent_stderr_tail_truncates_at_a_utf8_boundary() {
+        let tail = AgentStderrTail::default();
+        tail.push(&"🙂".repeat(AgentStderrTail::MAX_LINE_BYTES));
+
+        let snapshot = tail.snapshot();
+        assert_eq!(snapshot.len(), 1);
+        assert!(snapshot[0].len() <= AgentStderrTail::MAX_LINE_BYTES);
+        assert!(snapshot[0].ends_with(AgentStderrTail::TRUNCATED_SUFFIX));
+        assert!(!snapshot[0].contains('\u{fffd}'));
     }
 
     #[cfg(unix)]
