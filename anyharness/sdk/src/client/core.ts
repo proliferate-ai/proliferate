@@ -15,6 +15,7 @@ import { ReviewsClient } from "./reviews.js";
 import { RuntimeClient } from "./runtime.js";
 import { SessionsClient } from "./sessions.js";
 import { TerminalsClient } from "./terminals.js";
+import { WorkflowRunsClient } from "./workflow-runs.js";
 import { WorktreesClient } from "./worktrees.js";
 import { WorkspacesClient } from "./workspaces.js";
 
@@ -435,6 +436,7 @@ export class AnyHarnessClient {
   readonly replay: ReplayClient;
   readonly reviews: ReviewsClient;
   readonly workspaces: WorkspacesClient;
+  readonly workflowRuns: WorkflowRunsClient;
   readonly worktrees: WorktreesClient;
   readonly cowork: CoworkClient;
   readonly files: FilesClient;
@@ -456,6 +458,7 @@ export class AnyHarnessClient {
     this.replay = new ReplayClient(transport);
     this.reviews = new ReviewsClient(transport);
     this.workspaces = new WorkspacesClient(transport);
+    this.workflowRuns = new WorkflowRunsClient(transport);
     this.worktrees = new WorktreesClient(transport);
     this.cowork = new CoworkClient(transport);
     this.files = new FilesClient(transport);

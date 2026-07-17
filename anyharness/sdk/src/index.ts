@@ -292,6 +292,25 @@ export type {
 } from "./types/plans.js";
 
 export type {
+  VersionedPutWorkflowRunRequest,
+  PutWorkflowRunRequest,
+  PutWorkflowRunRequestV2,
+  VersionedWorkflowRunResponse,
+  WorkflowRunResponse,
+  WorkflowRunResponseV2,
+  WorkflowRun,
+  WorkflowRunV2,
+  WorkflowRunStep,
+  WorkflowRunStepV2,
+  WorkflowRunStatus,
+  WorkflowRunStepStatus,
+  WorkflowRunFailureCode,
+  WorkflowRunFailureCodeV2,
+  WorkflowRunInterruptionCode,
+  WorkflowRunModelSelection,
+} from "./types/workflow-runs.js";
+
+export type {
   ReviewKind,
   ReviewRunStatus,
   ReviewRoundStatus,
