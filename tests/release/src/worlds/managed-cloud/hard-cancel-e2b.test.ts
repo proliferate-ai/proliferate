@@ -134,6 +134,20 @@ test("template resolution is exact and fails on multiple immutable matches", asy
   );
 });
 
+test("a non-advancing injected clock remains bounded by observation count", async () => {
+  let observations = 0;
+  assert.equal(await resolveHardCancelE2bTemplateName(
+    "proliferate-runtime-qual-r",
+    {
+      async listTemplates() { observations += 1; return []; },
+      now: () => 0,
+      sleep: async () => undefined,
+    },
+    { timeoutMs: 3, intervalMs: 1 },
+  ), null);
+  assert.equal(observations, 4);
+});
+
 test("cleanup proves sandbox absence before template deletion and then proves template absence", async () => {
   let now = 0;
   let sandboxes = [{ providerSandboxId: "sbx-owned", state: "running" as const, templateId: TEMPLATE }];

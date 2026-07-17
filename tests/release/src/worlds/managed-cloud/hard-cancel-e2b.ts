@@ -209,14 +209,31 @@ function validWindow(window: HardCancelE2bPollWindow): HardCancelE2bPollWindow {
   return window;
 }
 
-async function pollAgain(
-  deadline: number,
-  intervalMs: number,
+interface PollState {
+  deadline: number;
+  intervalMs: number;
+  observationsRemaining: number;
+}
+
+function beginPoll(
+  window: HardCancelE2bPollWindow,
   clock: ReturnType<typeof pollClock>,
-): Promise<boolean> {
+): PollState {
+  const started = clock.now();
+  if (!Number.isFinite(started)) throw new Error("E2B cleanup clock is non-finite.");
+  return {
+    deadline: started + window.timeoutMs,
+    intervalMs: window.intervalMs,
+    observationsRemaining: Math.ceil(window.timeoutMs / window.intervalMs) + 1,
+  };
+}
+
+async function pollAgain(state: PollState, clock: ReturnType<typeof pollClock>): Promise<boolean> {
+  state.observationsRemaining -= 1;
   const now = clock.now();
-  if (!Number.isFinite(now) || now >= deadline) return false;
-  await clock.sleep(Math.min(intervalMs, deadline - now));
+  if (!Number.isFinite(now)) throw new Error("E2B cleanup clock is non-finite.");
+  if (state.observationsRemaining <= 0 || now >= state.deadline) return false;
+  await clock.sleep(Math.min(state.intervalMs, state.deadline - now));
   return true;
 }
 
@@ -229,9 +246,7 @@ export async function resolveHardCancelE2bTemplateName(
   const name = safeProviderId(templateName, "E2B template name");
   const window = validWindow(windowValue);
   const clock = pollClock(deps);
-  const started = clock.now();
-  if (!Number.isFinite(started)) throw new Error("E2B cleanup clock is non-finite.");
-  const deadline = started + window.timeoutMs;
+  const poll = beginPoll(window, clock);
   let observed: HardCancelE2bTemplateRow | null = null;
   do {
     const matches = (await deps.listTemplates()).filter((row) => exactTemplateName(row, name));
@@ -242,7 +257,7 @@ export async function resolveHardCancelE2bTemplateName(
       }
       observed = matches[0];
     }
-  } while (await pollAgain(deadline, window.intervalMs, clock));
+  } while (await pollAgain(poll, clock));
   return observed;
 }
 
@@ -257,7 +272,7 @@ export async function cleanupHardCancelE2bTemplate(
   const templateWindow = validWindow(policy.templateAbsence);
   const clock = pollClock(deps);
   const killed = new Set<string>();
-  const sandboxDeadline = clock.now() + sandboxWindow.timeoutMs;
+  const sandboxPoll = beginPoll(sandboxWindow, clock);
   while (true) {
     const inventory = await deps.listSandboxes(templateId);
     validateSandboxInventory(inventory, templateId);
@@ -269,7 +284,7 @@ export async function cleanupHardCancelE2bTemplate(
       }
       if (result.killed) killed.add(sandbox.providerSandboxId);
     }
-    if (!(await pollAgain(sandboxDeadline, sandboxWindow.intervalMs, clock))) {
+    if (!(await pollAgain(sandboxPoll, clock))) {
       throw new Error(`Timed out proving zero sandboxes for E2B template ${templateId}.`);
     }
   }
@@ -279,12 +294,12 @@ export async function cleanupHardCancelE2bTemplate(
   if (before.length === 0) return { killedSandboxIds: [...killed].sort() };
   await deps.deleteTemplate(templateId);
 
-  const templateDeadline = clock.now() + templateWindow.timeoutMs;
+  const templatePoll = beginPoll(templateWindow, clock);
   while (true) {
     const remaining = (await deps.listTemplates()).filter((row) => row.templateId === templateId);
     if (remaining.length === 0) return { killedSandboxIds: [...killed].sort() };
     if (remaining.length > 1) throw new Error(`E2B inventory repeated immutable template ${templateId}.`);
-    if (!(await pollAgain(templateDeadline, templateWindow.intervalMs, clock))) {
+    if (!(await pollAgain(templatePoll, clock))) {
       throw new Error(`Timed out proving E2B template ${templateId} absent after deletion.`);
     }
   }

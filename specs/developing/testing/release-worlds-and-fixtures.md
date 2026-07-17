@@ -766,7 +766,9 @@ world-start gate: if `cloud-provision-1 (manual, strict)` is absent or skipped,
 the protected provider jobs do not start; any other terminal conclusion is
 cleaned conservatively. No provider cleanup uses aliases, random product UUIDs,
 prefix matching, or account-wide sweeps. The ephemeral Actions runner itself
-owns its local browser and renderer processes.
+owns its local browser and renderer processes. Both automatic and manual
+cleanup triggers check out default-branch code; a manually selected feature
+branch is never executed with Qualification provider credentials.
 
 ### Per-cell evidence and result behavior
 
