@@ -264,6 +264,13 @@ portions as current creation behavior.
 
 ## Failure Boundaries
 
+An upstream GitHub 5xx while loading repository metadata or branches returns
+`github_service_unavailable` with HTTP 503 and retry guidance. It remains a
+reportable provider failure; it does not change GitHub App authorization or
+installation state and must not prompt the user to reauthorize or reinstall.
+When GitHub supplies a valid numeric `Retry-After` value, the server forwards
+it in the HTTP response header without exposing the provider response body.
+
 | Symptom | First evidence |
 | --- | --- |
 | Repository cannot be configured | GitHub authority and `repo_environment` validation |

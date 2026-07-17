@@ -10,6 +10,8 @@ from proliferate.integrations.github import (
     GitHubIntegrationError,
     GitHubInvalidCursor,
     GitHubRateLimited,
+    GitHubRepoAccessRequired,
+    GitHubServiceUnavailable,
 )
 
 
@@ -163,6 +165,52 @@ async def test_list_github_repositories_maps_rate_limit(
             visibility="all",
         )
     assert exc_info.value.retry_after_seconds == 30
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("status_code", "retry_after", "expected_retry_after_seconds"),
+    [
+        (503, "120", 120),
+        (500, "later", None),
+        (504, None, None),
+    ],
+)
+async def test_get_github_repo_branches_maps_service_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+    status_code: int,
+    retry_after: str | None,
+    expected_retry_after_seconds: int | None,
+) -> None:
+    headers = {"retry-after": retry_after} if retry_after is not None else {}
+    client = _FakeGitHubClient(
+        _github_response_with_headers(
+            status_code,
+            {"message": "provider details must stay private"},
+            headers=headers,
+        )
+    )
+    monkeypatch.setattr(github.httpx, "AsyncClient", lambda **_kwargs: client)
+
+    with pytest.raises(GitHubServiceUnavailable) as exc_info:
+        await github.get_github_repo_branches("token-1", "acme", "rocket")
+    assert str(exc_info.value) == "GitHub is temporarily unavailable. Try again."
+    assert exc_info.value.retry_after_seconds == expected_retry_after_seconds
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status_code", [401, 403, 404])
+async def test_get_github_repo_branches_preserves_repo_access_errors(
+    monkeypatch: pytest.MonkeyPatch,
+    status_code: int,
+) -> None:
+    client = _FakeGitHubClient(
+        _github_response(status_code, {"message": "Repository access required"})
+    )
+    monkeypatch.setattr(github.httpx, "AsyncClient", lambda **_kwargs: client)
+
+    with pytest.raises(GitHubRepoAccessRequired):
+        await github.get_github_repo_branches("token-1", "acme", "rocket")
 
 
 @pytest.mark.asyncio
