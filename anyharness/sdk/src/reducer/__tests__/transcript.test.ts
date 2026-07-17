@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   createTranscriptState,
   reduceEvent,
+  reduceEventBatch,
   reduceEvents,
   selectPendingApprovalInteraction,
   selectPendingMcpElicitationInteraction,
@@ -11,6 +12,12 @@ import {
 import type { ContentPart, SessionEventEnvelope, ThoughtItem, ToolCallItem } from "../../index.js";
 
 describe("transcript reducer", () => {
+  it("treats an empty event batch as a referential no-op", () => {
+    const before = createTranscriptState("session-1");
+
+    expect(reduceEventBatch(before, [])).toBe(before);
+  });
+
   it("normalizes available slash commands at the reducer boundary", () => {
     const state = reduceEvent(createTranscriptState("session-1"), {
       sessionId: "session-1",
@@ -92,6 +99,97 @@ describe("transcript reducer", () => {
     expect(afterItem.contentParts).not.toBe(beforeContentParts);
     expect(afterItem.contentParts[0]).not.toBe(beforeContentPart);
     expect(afterItem.text).toBe("Hello");
+  });
+
+  it("copy-on-write reduces a high-volume reasoning batch without per-delta copies", () => {
+    const before = reduceEvents(
+      [
+        turnStarted(1),
+        reasoningStarted(2, "reasoning-1", "seed:"),
+        completedToolItem(3, "tool-1"),
+      ],
+      "session-1",
+    );
+    const beforeItem = before.itemsById["reasoning-1"] as ThoughtItem;
+    const beforeTool = before.itemsById["tool-1"];
+    const beforeContentParts = beforeItem.contentParts;
+    const beforeContentPart = beforeContentParts[0];
+    const chunks = Array.from({ length: 200 }, (_, index) => `chunk-${index}|`);
+    const deltas = chunks.map((chunk, index) =>
+      reasoningDelta(index + 4, "reasoning-1", chunk)
+    );
+    let itemMapCopyCount = 0;
+    let reasoningItemCopyCount = 0;
+    const instrumentedItem = new Proxy(beforeItem, {
+      ownKeys(target) {
+        reasoningItemCopyCount += 1;
+        return Reflect.ownKeys(target);
+      },
+    });
+    const proxiedState = {
+      ...before,
+      itemsById: new Proxy({
+        ...before.itemsById,
+        "reasoning-1": instrumentedItem,
+      }, {
+        ownKeys(target) {
+          itemMapCopyCount += 1;
+          return Reflect.ownKeys(target);
+        },
+      }),
+    };
+
+    const after = reduceEventBatch(proxiedState, deltas);
+    const sequential = deltas.reduce(
+      (state, envelope) => reduceEvent(state, envelope),
+      before,
+    );
+    const afterItem = after.itemsById["reasoning-1"] as ThoughtItem;
+
+    expect(after).toEqual(sequential);
+    expect(itemMapCopyCount).toBe(1);
+    expect(reasoningItemCopyCount).toBe(1);
+    expect(after.turnsById).toBe(before.turnsById);
+    expect(before.itemsById["reasoning-1"]).toBe(beforeItem);
+    expect(after.itemsById["tool-1"]).toBe(beforeTool);
+    expect(beforeItem.contentParts).toBe(beforeContentParts);
+    expect(beforeContentParts[0]).toBe(beforeContentPart);
+    expect(beforeContentPart).toEqual({
+      type: "reasoning",
+      text: "seed:",
+      visibility: "private",
+    });
+    expect(beforeItem.text).toBe("seed:");
+    expect(afterItem).not.toBe(beforeItem);
+    expect(afterItem.contentParts).not.toBe(beforeContentParts);
+    expect(afterItem.text).toBe(`seed:${chunks.join("")}`);
+    expect(after.lastSeq).toBe(203);
+  });
+
+  it("preserves sequential semantics for order-sensitive updates to one item", () => {
+    const before = reduceEvents(
+      [
+        turnStarted(1),
+        reasoningStarted(2, "reasoning-1", "seed"),
+      ],
+      "session-1",
+    );
+    const events: SessionEventEnvelope[] = [
+      reasoningDelta(3, "reasoning-1", ":append"),
+      reasoningSnapshotDelta(4, "reasoning-1", "snapshot"),
+      reasoningDelta(5, "reasoning-1", ":tail"),
+      reasoningCompleted(6, "reasoning-1", "final"),
+    ];
+
+    const batched = reduceEventBatch(before, events);
+    const sequential = events.reduce(
+      (state, envelope) => reduceEvent(state, envelope),
+      before,
+    );
+
+    expect(batched).toEqual(sequential);
+    expect((batched.itemsById["reasoning-1"] as ThoughtItem).text).toBe("final");
+    expect((batched.itemsById["reasoning-1"] as ThoughtItem).isStreaming).toBe(false);
   });
 
   it("preserves unchanged item references when one item changes", () => {
@@ -1539,6 +1637,69 @@ function reasoningStarted(
         status: "in_progress",
         sourceAgentKind: "claude",
         isTransient,
+        contentParts: [{ type: "reasoning", text, visibility: "private" }],
+      },
+    },
+  };
+}
+
+function reasoningDelta(
+  seq: number,
+  itemId: string,
+  appendReasoning: string,
+): SessionEventEnvelope {
+  return {
+    sessionId: "session-1",
+    seq,
+    timestamp: `2026-04-04T00:00:${String(seq).padStart(2, "0")}Z`,
+    turnId: "turn-1",
+    itemId,
+    event: {
+      type: "item_delta",
+      delta: {
+        appendReasoning,
+      },
+    },
+  };
+}
+
+function reasoningSnapshotDelta(
+  seq: number,
+  itemId: string,
+  text: string,
+): SessionEventEnvelope {
+  return {
+    sessionId: "session-1",
+    seq,
+    timestamp: `2026-04-04T00:00:${String(seq).padStart(2, "0")}Z`,
+    turnId: "turn-1",
+    itemId,
+    event: {
+      type: "item_delta",
+      delta: {
+        replaceContentParts: [{ type: "reasoning", text, visibility: "private" }],
+      },
+    },
+  };
+}
+
+function reasoningCompleted(
+  seq: number,
+  itemId: string,
+  text: string,
+): SessionEventEnvelope {
+  return {
+    sessionId: "session-1",
+    seq,
+    timestamp: `2026-04-04T00:00:${String(seq).padStart(2, "0")}Z`,
+    turnId: "turn-1",
+    itemId,
+    event: {
+      type: "item_completed",
+      item: {
+        kind: "reasoning",
+        status: "completed",
+        sourceAgentKind: "codex",
         contentParts: [{ type: "reasoning", text, visibility: "private" }],
       },
     },
