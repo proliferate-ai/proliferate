@@ -72,15 +72,49 @@ test("--lane local filters sandbox cells out of matrix scenarios too", async () 
   );
 });
 
-test("--lane staging keeps every declared runtime lane (legacy behavior untouched)", async () => {
-  const cells = await buildPlannedCells([leaf("T3-WT-1", ["local", "sandbox"])], {
+test("--lane staging plans only Tier-3 sandbox cells", async () => {
+  const cells = await buildPlannedCells([
+    leaf("T3-WT-1", ["local", "sandbox"]),
+    leaf("T2-BILL", ["local"]),
+    leaf("T4-RUNTIME-1", ["sandbox"]),
+    leaf("CLOUD-PROVISION-1", ["sandbox"]),
+  ], {
     ...INPUTS,
     targetLane: "staging",
   });
   assert.deepEqual(
     cells.map((cell) => cell.cell_id),
-    ["T3-WT-1/local", "T3-WT-1/sandbox"],
+    ["T3-WT-1/sandbox"],
   );
+});
+
+test("--lane staging rejects a local-only selection instead of inventing a green", async () => {
+  await assert.rejects(
+    buildPlannedCells([leaf("T3-CFG-1", ["local"])], {
+      ...INPUTS,
+      targetLane: "staging",
+      requireEveryScenario: true,
+    }),
+    /Explicitly selected scenario "T3-CFG-1" has no compatible cells/,
+  );
+});
+
+test("--lane staging rejects a mixed explicit selection when any named scenario is incompatible", async () => {
+  await assert.rejects(
+    buildPlannedCells(
+      [leaf("T3-AUTHROUTE-1", ["local"]), leaf("T3-PROV-2", ["sandbox"])],
+      { ...INPUTS, targetLane: "staging", requireEveryScenario: true },
+    ),
+    /Explicitly selected scenario "T3-AUTHROUTE-1" has no compatible cells/,
+  );
+});
+
+test("--lane cloud keeps the explicit managed-cloud scenario untouched", async () => {
+  const cells = await buildPlannedCells([leaf("CLOUD-PROVISION-1", ["sandbox"])], {
+    ...INPUTS,
+    targetLane: "cloud",
+  });
+  assert.deepEqual(cells.map((cell) => cell.cell_id), ["CLOUD-PROVISION-1/sandbox"]);
 });
 
 // ── --lane selfhost: the shipped qualification-selfhost entrypoint (PR7-CONTROL-001) ──

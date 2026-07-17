@@ -279,6 +279,48 @@ test("an invalid cell expansion exits 2 before any setup side effect and writes 
   assert.deepEqual(calls, ["identity", "select"]);
 });
 
+test("a mixed explicit staging selector rejects an incompatible named scenario before setup or report", async () => {
+  const localOnly: ScenarioDefinition = {
+    ...SCENARIO,
+    id: "T3-AUTHROUTE-1",
+    lanes: ["local"],
+  };
+  const stagingCompatible: ScenarioDefinition = {
+    ...SCENARIO,
+    id: "T3-PROV-2",
+    lanes: ["sandbox"],
+  };
+  const errors: string[] = [];
+  const { deps, calls } = makeDeps();
+  deps.selectScenarios = () => {
+    calls.push("select");
+    return [localOnly, stagingCompatible];
+  };
+  deps.error = (message) => {
+    errors.push(message);
+  };
+
+  const exit = await runReleaseCommand(
+    [
+      "--behavior",
+      "diagnostic",
+      "--lane",
+      "staging",
+      "--scenarios",
+      "T3-AUTHROUTE-1,T3-PROV-2",
+    ],
+    deps,
+  );
+
+  assert.equal(exit, 2);
+  assert.deepEqual(calls, ["identity", "select"]);
+  assert.ok(
+    errors.some((message) =>
+      message.includes("T3-AUTHROUTE-1") && message.includes("no compatible cells")
+    ),
+  );
+});
+
 function twoCellMatrix(): ScenarioDefinition {
   return {
     id: "T3-TWO",
