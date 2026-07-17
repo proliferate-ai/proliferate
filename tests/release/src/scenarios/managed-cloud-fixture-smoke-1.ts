@@ -47,6 +47,7 @@ import { sweepAwsForRun } from "../worlds/managed-cloud/sweeps.js";
 import { loadCleanupLedger, replayLedger } from "../worlds/local-workspace/cleanup-ledger.js";
 import type { PlannedCellV1 } from "../runner/result.js";
 import type { CandidateStripeConfig } from "../worlds/managed-cloud/ingress.js";
+import type { ManagedCloudCleanupEvidence } from "../worlds/managed-cloud/cleanup-kinds.js";
 import {
   constructManagedCloudWorld,
   type ConstructManagedCloudWorldOptions,
@@ -169,8 +170,37 @@ interface SmokeState {
   prep: StripePreparation;
   /** AWS region + hosted zone for cell E's post-close sweep (not exposed on the world handle). */
   aws: { region: string; hostedZoneId: string };
+  /**
+   * The ONE shared owner actor for this smoke. The frozen spec's isolation
+   * section says "use a fresh actor/billing subject for this smoke" (SINGULAR):
+   * one owner actor across all cells is spec-conformant AND required — the
+   * server's `claim_first_run` raises `SetupClosedError` once any user exists, so
+   * `authenticatedActor` (which POSTs the one-time `/setup` claim) can only ever
+   * succeed ONCE against the shared world. Cells B/C/D therefore share this one
+   * actor via `ensureOwnerActor`, which memoizes it here on first call.
+   */
+  ownerActor?: AuthenticatedActor;
   /** Set by cell E's extra replay customer / cell A/B ids for the sweep + evidence. */
   extraReplayCustomerId?: string;
+}
+
+/**
+ * Lazily creates the ONE shared owner actor (memoized on `state.ownerActor`) via
+ * the driver's `createActor` seam + `trackActorSubjects`, so a second call
+ * NEVER re-claims `/setup`. Cells B/C/D call this instead of creating their own
+ * actor. Kept inside the driver seam so offline fakes still control creation.
+ */
+export async function ensureOwnerActor(
+  world: ManagedCloudWorld,
+  state: SmokeState,
+  driver: Pick<FixtureSmokeDriver, "createActor" | "trackActorSubjects">,
+): Promise<AuthenticatedActor> {
+  if (!state.ownerActor) {
+    const actor = await driver.createActor(world);
+    await driver.trackActorSubjects(world, actor);
+    state.ownerActor = actor;
+  }
+  return state.ownerActor;
 }
 
 /** One cell's real observed result, mapped by the orchestration into an outcome + evidence. */
@@ -202,6 +232,15 @@ export interface FixtureSmokeDriver {
    * we_ id) so world.close() deletes it, and update the scenario intent file.
    */
   adoptWebhookIntent(world: ManagedCloudWorld, prep: StripePreparation, secretKey: string): Promise<void>;
+  /**
+   * Creates the fresh cloud-surface owner actor. Called at most ONCE per world
+   * via `ensureOwnerActor` (memoized on `SmokeState`) — a second call would
+   * re-POST the one-time `/setup` claim and fail with `SetupClosedError`. Fakeable
+   * so offline tests can assert the single-creation contract.
+   */
+  createActor(world: ManagedCloudWorld): Promise<AuthenticatedActor>;
+  /** Enrols the actor's LiteLLM subjects for world-close cleanup (idempotent). */
+  trackActorSubjects(world: ManagedCloudWorld, actor: AuthenticatedActor): Promise<void>;
   runCallbackRelayCell(world: ManagedCloudWorld, state: SmokeState): Promise<FixtureSmokeCellResult>;
   runStripeTestClockCell(world: ManagedCloudWorld, state: SmokeState): Promise<FixtureSmokeCellResult>;
   runBillingThresholdCell(world: ManagedCloudWorld, state: SmokeState): Promise<FixtureSmokeCellResult>;
@@ -214,9 +253,9 @@ export interface FixtureSmokeDriver {
   runCleanupReplayCell(
     world: ManagedCloudWorld,
     state: SmokeState,
-    closeWorld: () => Promise<void>,
+    closeWorld: () => Promise<ManagedCloudCleanupEvidence | null>,
   ): Promise<FixtureSmokeCellResult>;
-  closeWorld(world: ManagedCloudWorld): Promise<void>;
+  closeWorld(world: ManagedCloudWorld): Promise<ManagedCloudCleanupEvidence>;
 }
 
 /**
@@ -270,12 +309,17 @@ export async function runFixtureSmokeCells(
   };
   const outcomes: ScenarioCellOutcomeWithEvidence[] = [];
   let worldClosed = false;
-  const closeOnce = async (): Promise<void> => {
+  let closeEvidence: ManagedCloudCleanupEvidence | null = null;
+  // Returns the world-close cleanup evidence on the call that actually closed it,
+  // and null on any subsequent (already-closed) call — so cell E can gate on the
+  // real close evidence (failed count + every deletion boolean).
+  const closeOnce = async (): Promise<ManagedCloudCleanupEvidence | null> => {
     if (worldClosed) {
-      return;
+      return null;
     }
     worldClosed = true;
-    await driver.closeWorld(world);
+    closeEvidence = await driver.closeWorld(world);
+    return closeEvidence;
   };
 
   try {
@@ -636,23 +680,32 @@ export function createFixtureSmokeDriver(deps: Partial<FixtureSmokeRuntimeDeps> 
       await handle.markAcquired(prep.webhookEndpointId);
     },
 
+    async createActor(world) {
+      return authenticatedActor(asAuthenticatedActorWorld(world), "owner", { gatewaySurface: "cloud" });
+    },
+    async trackActorSubjects(world, actor) {
+      await world.trackActorSubjects?.(actor.gatewayKey);
+    },
     async runCallbackRelayCell(world, state) {
       return runCallbackRelayCellLive(world, state, http);
     },
     async runStripeTestClockCell(world, state) {
-      return runStripeTestClockCellLive(world, state, http);
+      const actor = await ensureOwnerActor(world, state, this);
+      return runStripeTestClockCellLive(world, state, actor, http);
     },
     async runBillingThresholdCell(world, state) {
-      return runBillingThresholdCellLive(world, state, productionBillingThresholdCellDeps);
+      const actor = await ensureOwnerActor(world, state, this);
+      return runBillingThresholdCellLive(world, state, actor, productionBillingThresholdCellDeps);
     },
     async runFailureInjectionCell(world, state) {
-      return runFailureInjectionCellLive(world, state);
+      const actor = await ensureOwnerActor(world, state, this);
+      return runFailureInjectionCellLive(world, state, actor);
     },
     async runCleanupReplayCell(world, state, closeWorld) {
       return runCleanupReplayCellLive(world, state, closeWorld, http);
     },
     async closeWorld(world) {
-      await world.close();
+      return world.close();
     },
   };
 }
@@ -1003,10 +1056,11 @@ async function runCallbackRelayCellLive(
   };
 }
 
-/** Cell B — Stripe test clock (spec Cell B). */
+/** Cell B — Stripe test clock (spec Cell B). Uses the ONE shared owner actor. */
 async function runStripeTestClockCellLive(
   world: ManagedCloudWorld,
   state: SmokeState,
+  actor: AuthenticatedActor,
   http: StripeHttp,
 ): Promise<FixtureSmokeCellResult> {
   const smoke = await import("../fixtures/stripe-smoke-resources.js");
@@ -1034,9 +1088,6 @@ async function runStripeTestClockCellLive(
     productId = created.productId;
     priceId = created.priceId;
   }
-
-  const actor = await authenticatedActor(asAuthenticatedActorWorld(world), "owner", { gatewaySurface: "cloud" });
-  await world.trackActorSubjects?.(actor.gatewayKey);
 
   const handle = await clockFixture.stripeTestClockActor(world, actor, { secretKey: state.secretKey, priceId });
 
@@ -1139,8 +1190,6 @@ async function runStripeTestClockCellLive(
 export type BillingGateSignal = "second_request_rejected" | "budget_status_exhausted";
 
 export interface BillingThresholdCellDeps {
-  /** Creates the fresh cloud-surface actor (fakeable so the arc is offline-testable). */
-  createActor(world: ManagedCloudWorld): Promise<AuthenticatedActor>;
   /** Positions the LLM ledger to `balance` (the merged billingThreshold fixture). */
   positionThreshold(
     world: ManagedCloudWorld,
@@ -1260,11 +1309,6 @@ asyncio.run(main())
 `;
 
 const productionBillingThresholdCellDeps: BillingThresholdCellDeps = {
-  async createActor(world) {
-    const actor = await authenticatedActor(asAuthenticatedActorWorld(world), "owner", { gatewaySurface: "cloud" });
-    await world.trackActorSubjects?.(actor.gatewayKey);
-    return actor;
-  },
   async positionThreshold(world, actor, balance) {
     const positioned = await billingThreshold(world, actor, { ledger: "llm", balance });
     return { billingSubjectId: positioned.billingSubjectId, effectiveRemainder: positioned.effectiveRemainder };
@@ -1365,10 +1409,17 @@ const productionBillingThresholdCellDeps: BillingThresholdCellDeps = {
   },
 };
 
-/** Epsilon for the restored-remainder assertion (llm ledger, USD). */
+/** Epsilon for the restored-remainder assertion (llm ledger, USD). billingThreshold's llm epsilon is 1e-6. */
 const BILLING_REMAINDER_EPSILON = 1e-6;
-/** Cost the request must at least incur to cross the 0.001 threshold. */
-const BILLING_POSITION_BALANCE = 0.001;
+/**
+ * Positioned balance: a SMALL positive amount (billingThreshold requires > 0;
+ * its llm epsilon is 1e-6, so 0.0001 is comfortably positionable). Deliberately
+ * below one cheapest-model 32-token request's cost so a single real request is
+ * very likely to cross it — and the crossing LOOP below guarantees it regardless.
+ */
+const BILLING_POSITION_BALANCE = 0.0001;
+/** Max identical bounded requests to issue while trying to cross the threshold. */
+const BILLING_MAX_CROSSING_REQUESTS = 10;
 
 /**
  * Cell C — billing threshold (frozen spec Cell C, all six obligations):
@@ -1385,51 +1436,75 @@ const BILLING_POSITION_BALANCE = 0.001;
 export async function runBillingThresholdCellLive(
   world: ManagedCloudWorld,
   state: SmokeState,
+  actor: AuthenticatedActor,
   deps: BillingThresholdCellDeps = productionBillingThresholdCellDeps,
 ): Promise<FixtureSmokeCellResult> {
-  const actor = await deps.createActor(world);
-
   // (a) Read the ORIGINAL remaining credit BEFORE positioning, so restoration can
   // be checked against it. The billing subject is the actor's deterministic
   // personal subject (billingThreshold uses ensure_personal_billing_subject), so
   // resolve it idempotently first (no grant mutation) and read its remainder.
   const preSubjectId = await deps.resolveBillingSubjectId(world, actor.userId);
   const originalRemaining = await deps.readRemainingCreditUsd(world, preSubjectId);
-  // (b) Position balance = 0.001 (fixture runs the product accounting+reconcile
-  // passes and returns the OBSERVED remainder + the real billing subject id).
+  // (b) Position a SMALL balance (0.0001, > 0 per the fixture; runs the product
+  // accounting+reconcile passes and returns the OBSERVED remainder + subject id).
   const positioned = await deps.positionThreshold(world, actor, BILLING_POSITION_BALANCE);
   const billingSubjectId = positioned.billingSubjectId;
 
-  // (c) Cause real usage: decrypt the actor's raw scoped key and make ONE real
-  // gateway chat-completion with the cheapest eligible model. Its cost (> 0.001)
-  // crosses the threshold.
+  // (c) Cause real usage: decrypt the actor's raw scoped key and issue real
+  // gateway chat-completions with the cheapest eligible model until the ledger
+  // crosses to <= 0. One cheapest-model 32-token request may cost less than the
+  // positioned balance, so LOOP (max 10 identical bounded requests), running the
+  // accounting+reconcile passes + re-reading remaining after each, until crossed
+  // or the loop budget is exhausted (then fail with the observed per-request cost).
   const rawKey = await deps.decryptVirtualKey(world, actor.enrollmentId);
   const { allowlist, live } = await deps.listGatewayModels(world);
   const modelId = selectCheapestEligibleClaudeModel(allowlist, live);
   if (!modelId) {
     throw new Error("billing-threshold: no eligible cheapest Claude model to run the crossing request.");
   }
-  const request = await deps.gatewayChatCompletion({
-    world,
-    rawKey,
-    modelId,
-    maxTokens: 32,
-    prompt: "Reply with exactly the word: pong",
-  });
-  if (!(request.status >= 200 && request.status < 300)) {
-    throw new Error(`billing-threshold: the crossing gateway request returned ${request.status} (expected 2xx).`);
-  }
 
-  // (d) Observe the product consequence: run the accounting+reconcile passes,
-  // then require (1) remaining credit ≤ 0 AND (2) at least one gate signal —
-  // a SECOND request rejected non-2xx, OR budget_status flipped to exhausted.
-  await deps.runReconcilePasses(world);
-  const crossedRemaining = await deps.readRemainingCreditUsd(world, billingSubjectId);
+  // (d) Observe the product consequence: after the crossing, require (1) remaining
+  // credit ≤ 0 AND (2) at least one gate signal — a SECOND request rejected
+  // non-2xx, OR budget_status flipped to exhausted.
+  let totalObservedCost = 0;
+  let requestsIssued = 0;
+  let crossedRemaining = positioned.effectiveRemainder;
+  for (let i = 0; i < BILLING_MAX_CROSSING_REQUESTS; i += 1) {
+    const request = await deps.gatewayChatCompletion({
+      world,
+      rawKey,
+      modelId,
+      maxTokens: 32,
+      prompt: "Reply with exactly the word: pong",
+    });
+    requestsIssued += 1;
+    if (!(request.status >= 200 && request.status < 300)) {
+      // A rejected request before crossing is itself the budget gate kicking in —
+      // stop issuing (further requests would also be rejected) and let the
+      // remaining-credit + gate-signal checks below interpret it.
+      break;
+    }
+    await deps.runReconcilePasses(world);
+    const beforeRead = crossedRemaining;
+    crossedRemaining = await deps.readRemainingCreditUsd(world, billingSubjectId);
+    if (typeof request.costUsd === "number") {
+      totalObservedCost += request.costUsd;
+    } else {
+      // No inline cost — infer this request's cost from the ledger delta.
+      totalObservedCost += Math.max(0, beforeRead - crossedRemaining);
+    }
+    if (crossedRemaining <= 0) {
+      break;
+    }
+  }
   if (crossedRemaining > 0) {
     throw new Error(
-      `billing-threshold: remaining credit did not cross to <= 0 after the real request (observed ${crossedRemaining}).`,
+      `billing-threshold: remaining credit did not cross to <= 0 after ${requestsIssued} real request(s) ` +
+        `(observed remaining ${crossedRemaining}, total observed cost ${totalObservedCost}). Each request's cost is ` +
+        "below the positioned balance; widen BILLING_MAX_CROSSING_REQUESTS or lower the positioned balance.",
     );
   }
+  const observedRequestCost = totalObservedCost;
   const gateSignals: BillingGateSignal[] = [];
   const secondRequest = await deps.gatewayChatCompletion({
     world,
@@ -1451,11 +1526,6 @@ export async function runBillingThresholdCellLive(
         `request nor a flipped budget_status; budget_status=${budgetStatus}).`,
     );
   }
-
-  // The real request's cost: prefer the response usage; else the ledger delta
-  // (positioned≈0.001 → crossed≤0, so the imported usage cost ≈ 0.001 − crossed).
-  const observedRequestCost =
-    request.costUsd ?? Math.max(0, positioned.effectiveRemainder - crossedRemaining);
 
   // (e) Restore + reload: run the durable releaser NOW (world-close then no-ops).
   const receiptFile = billingThresholdReceiptFile(state.runTag, actor.userId, "llm");
@@ -1482,14 +1552,12 @@ export async function runBillingThresholdCellLive(
   };
 }
 
-/** Cell D — failure injection at the workspace_creation boundary (spec Cell D). */
+/** Cell D — failure injection at the workspace_creation boundary (spec Cell D). Uses the ONE shared owner actor. */
 async function runFailureInjectionCellLive(
   world: ManagedCloudWorld,
   _state: SmokeState,
+  actor: AuthenticatedActor,
 ): Promise<FixtureSmokeCellResult> {
-  const actor = await authenticatedActor(asAuthenticatedActorWorld(world), "owner", { gatewaySurface: "cloud" });
-  await world.trackActorSubjects?.(actor.gatewayKey);
-
   // Control BEFORE: an unrelated authenticated product action succeeds. Use
   // `/v1/organizations` — the proven authenticated product read (authenticated-
   // actor.ts / cloud-provision-1 use it); there is no `/v1/workspaces` route on
@@ -1550,11 +1618,46 @@ async function runFailureInjectionCellLive(
   };
 }
 
+/**
+ * Every required deletion boolean true (mirrors CLOUD-PROVISION-1's
+ * `allCleanupBooleansTrue`), PLUS the PR-6/smoke optional categories when present
+ * (billingFixtureCleared / relayStopped / stripeFixturesDeleted). An OPTIONAL
+ * that is `undefined` (the run registered no entry of that kind) is treated as
+ * clean; only an explicit `false` fails.
+ */
+export function allCleanupBooleansTrue(cleanup: ManagedCloudCleanupEvidence): boolean {
+  const required =
+    cleanup.sandboxesDeleted &&
+    cleanup.templateDeleted &&
+    cleanup.dnsRecordDeleted &&
+    cleanup.ec2Terminated &&
+    cleanup.securityGroupDeleted &&
+    cleanup.keyPairDeleted &&
+    cleanup.virtualKeyDeleted &&
+    cleanup.litellmSubjectsDeleted &&
+    cleanup.localPathsRemoved;
+  const optionals =
+    cleanup.billingFixtureCleared !== false &&
+    cleanup.relayStopped !== false &&
+    cleanup.stripeFixturesDeleted !== false;
+  return required && optionals;
+}
+
+/** Compact boolean summary for a cleanup-failure message. */
+function cleanupBooleanSummary(c: ManagedCloudCleanupEvidence): string {
+  return (
+    `sandboxes=${c.sandboxesDeleted} template=${c.templateDeleted} dns=${c.dnsRecordDeleted} ` +
+    `ec2=${c.ec2Terminated} sg=${c.securityGroupDeleted} key=${c.keyPairDeleted} vkey=${c.virtualKeyDeleted} ` +
+    `subjects=${c.litellmSubjectsDeleted} paths=${c.localPathsRemoved} billing=${c.billingFixtureCleared} ` +
+    `relay=${c.relayStopped} stripe=${c.stripeFixturesDeleted}`
+  );
+}
+
 /** Cell E — cleanup replay + provider sweeps (spec Cell E; ALWAYS last). */
 async function runCleanupReplayCellLive(
   world: ManagedCloudWorld,
   state: SmokeState,
-  closeWorld: () => Promise<void>,
+  closeWorld: () => Promise<ManagedCloudCleanupEvidence | null>,
   http: StripeHttp,
 ): Promise<FixtureSmokeCellResult> {
   // One extra tiny fresh resource with intent→acquired to replay: a second
@@ -1605,8 +1708,24 @@ async function runCleanupReplayCellLive(
   }
 
   // Close the world (releasers are idempotent; Stripe deletes tolerate
-  // resource_missing, so a double-release after the replay above is safe).
-  await closeWorld();
+  // resource_missing, so a double-release after the replay above is safe). Capture
+  // the cleanup evidence so the sweep + gate below use the REAL close result
+  // rather than hardcoded zeros.
+  const closeEvidence = await closeWorld();
+  if (!closeEvidence) {
+    throw new Error(
+      "cleanup-replay: the world was already closed before this cell ran — cannot gate on its cleanup evidence.",
+    );
+  }
+  // Gate on the full cleanup block (mirrors CLOUD-PROVISION-1's allCleanupBooleansTrue),
+  // INCLUDING the PR-6/smoke optionals when present: any failed releaser or any
+  // false deletion boolean fails the cell.
+  if (closeEvidence.failed > 0 || !allCleanupBooleansTrue(closeEvidence)) {
+    throw new Error(
+      `cleanup-replay: world close did not fully reconcile (failed=${closeEvidence.failed}, ` +
+        `${cleanupBooleanSummary(closeEvidence)}).`,
+    );
+  }
 
   // Provider sweeps: prove ZERO owned resources remain.
   const sweeps: ManagedCloudFixtureSmokeEvidenceV1["provider_sweeps"] = [];
@@ -1644,12 +1763,21 @@ async function runCleanupReplayCellLive(
   // beyond the shared candidate template, which is world-owned and released by
   // world.close()).
   sweeps.push({ provider: "e2b", remaining_owned_resources: 0 });
-  // Process/filesystem: the box is terminated by EC2 termination (process sweep)
-  // and the run dir is preserved as the evidence output dir (mirrors
-  // CLOUD-PROVISION-1, which keeps runDir for evidence), so no owned local
-  // process/path remains.
-  sweeps.push({ provider: "process", remaining_owned_resources: 0 });
-  sweeps.push({ provider: "filesystem", remaining_owned_resources: 0 });
+  // Process/filesystem: DERIVED from the real world-close evidence, not hardcoded.
+  // The on-box relay process is stopped by the `callback_relay_process` releaser
+  // (relayStopped), and every run-owned local path (secrets dir + reservation +
+  // run dir, save the preserved evidence output dir) by the localPathsRemoved
+  // category. A false boolean → that resource still owned. (The gate above
+  // already fails the cell on any false boolean; these counts make the residual
+  // explicit in evidence.)
+  sweeps.push({
+    provider: "process",
+    remaining_owned_resources: closeEvidence.relayStopped === false ? 1 : 0,
+  });
+  sweeps.push({
+    provider: "filesystem",
+    remaining_owned_resources: closeEvidence.localPathsRemoved === false ? 1 : 0,
+  });
 
   const totalRemaining = sweeps.reduce((sum, s) => sum + s.remaining_owned_resources, 0);
   if (totalRemaining > 0) {

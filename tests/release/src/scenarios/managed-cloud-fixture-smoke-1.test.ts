@@ -5,7 +5,9 @@ import {
   FIXTURE_SMOKE_CELL_NAMES,
   MANAGED_CLOUD_FIXTURE_SMOKE_1_ID,
   assertDuplicateDeliveryByteIdentity,
+  allCleanupBooleansTrue,
   buildDuplicatePostScript,
+  ensureOwnerActor,
   managedCloudFixtureSmoke1,
   parseProcStatStarttime,
   parseRelayPidfileJson,
@@ -209,16 +211,30 @@ function fakeDriver(
     prepareStripe: async () => fakePrep(),
     buildWorld: async () => world,
     adoptWebhookIntent: async () => undefined,
+    createActor: async () => fakeCellCActor(),
+    trackActorSubjects: async () => undefined,
     runCallbackRelayCell: async () => cellResult("held→replayed→duplicate:byte_identical(abc)"),
-    runStripeTestClockCell: async () => cellResult("created→advanced→event_observed→recovered_by_identity→deleted_absent"),
-    runBillingThresholdCell: async () => cellResult("positioned:remaining=0.001"),
-    runFailureInjectionCell: async () => cellResult("control_ok→injected_failure(500)→recovered→control_ok(relay=true)"),
+    // B/C/D route through the shared-actor memoizer exactly as production does, so
+    // the orchestration regression test can observe single-creation.
+    runStripeTestClockCell: async function (w, s) {
+      await ensureOwnerActor(w, s, this);
+      return cellResult("created→advanced→event_observed→recovered_by_identity→deleted_absent");
+    },
+    runBillingThresholdCell: async function (w, s) {
+      await ensureOwnerActor(w, s, this);
+      return cellResult("positioned:remaining=0.0001");
+    },
+    runFailureInjectionCell: async function (w, s) {
+      await ensureOwnerActor(w, s, this);
+      return cellResult("control_ok→injected_failure(500)→recovered→control_ok(relay=true)");
+    },
     runCleanupReplayCell: async (_w, _s, closeWorld) => {
       await closeWorld();
       return cleanupReplayResult();
     },
     closeWorld: async () => {
       state.closeWorldCalls += 1;
+      return cleanEvidence();
     },
     ...overrides,
   };
@@ -278,12 +294,88 @@ test("a failing earlier cell does not poison later cells (independent judgment)"
   assert.equal(driver.closeWorldCalls, 1);
 });
 
+test("cleanup-replay's closeWorld callback returns the world-close evidence (gate + sweeps use the real result)", async () => {
+  let received: unknown = "unset";
+  const driver = fakeDriver({
+    runCleanupReplayCell: async (_w, _s, closeWorld) => {
+      received = await closeWorld();
+      // A second call returns null (already closed) — cell E only gates on the
+      // first (real) close evidence.
+      const second = await closeWorld();
+      assert.equal(second, null);
+      return cleanupReplayResult();
+    },
+  });
+  const outcomes = await runFixtureSmokeCells(fakeCtx(), cellsFor(["cleanup-replay"]), driver);
+  assert.equal(outcomes[0]!.status, "green");
+  assert.ok(received && typeof received === "object", "cell E must receive the ManagedCloudCleanupEvidence, not void");
+  assert.equal((received as { failed: number }).failed, 0);
+  assert.equal((received as { stripeFixturesDeleted?: boolean }).stripeFixturesDeleted, true);
+  assert.equal(driver.closeWorldCalls, 1);
+});
+
+test("allCleanupBooleansTrue gates on required + present optional booleans", async () => {
+  const clean = cleanEvidence();
+  assert.equal(allCleanupBooleansTrue(clean), true);
+  // A false required boolean fails.
+  assert.equal(allCleanupBooleansTrue({ ...clean, ec2Terminated: false }), false);
+  // A false optional (present) fails; an undefined optional is treated as clean.
+  assert.equal(allCleanupBooleansTrue({ ...clean, relayStopped: false }), false);
+  assert.equal(allCleanupBooleansTrue({ ...clean, stripeFixturesDeleted: false }), false);
+  assert.equal(allCleanupBooleansTrue({ ...clean, relayStopped: undefined, stripeFixturesDeleted: undefined, billingFixtureCleared: undefined }), true);
+});
+
 test("cleanup-replay runs last and the world is closed exactly once even when it is the only assigned cell", async () => {
   const driver = fakeDriver();
   const outcomes = await runFixtureSmokeCells(fakeCtx(), cellsFor(["cleanup-replay"]), driver);
   assert.equal(outcomes.length, 1);
   assert.equal(outcomes[0]!.status, "green");
   assert.equal(driver.closeWorldCalls, 1);
+});
+
+test("cells B+C+D create the owner actor EXACTLY ONCE (a second /setup claim would fail)", async () => {
+  // The server's claim_first_run raises SetupClosedError once any user exists, so
+  // authenticatedActor's /setup claim can only succeed once against the shared
+  // world. This driver's createActor THROWS on the second call — proving the
+  // orchestration memoizes one shared actor across B/C/D (the bug this catches).
+  let createCount = 0;
+  const driver = fakeDriver({
+    createActor: async () => {
+      createCount += 1;
+      if (createCount > 1) {
+        throw new Error("SetupClosedError: /setup already claimed");
+      }
+      return fakeCellCActor();
+    },
+  });
+  const outcomes = await runFixtureSmokeCells(
+    fakeCtx(),
+    cellsFor(["stripe-test-clock", "billing-threshold", "failure-injection"]),
+    driver,
+  );
+  assert.equal(outcomes.length, 3);
+  assert.ok(outcomes.every((o) => o.status === "green"), JSON.stringify(outcomes.map((o) => [o.cellId, o.status, o.reason?.message])));
+  assert.equal(createCount, 1, "the owner actor must be created exactly once across cells B/C/D");
+});
+
+test("ensureOwnerActor memoizes the actor and never creates a second (createActor throws on 2nd call)", async () => {
+  let createCount = 0;
+  const state = { runTag: "r:s", secretKey: "k", prep: fakePrep(), aws: { region: "r", hostedZoneId: "z" } };
+  const seam = {
+    createActor: async () => {
+      createCount += 1;
+      if (createCount > 1) throw new Error("second creation attempted");
+      return fakeCellCActor();
+    },
+    trackActorSubjects: async () => undefined,
+  };
+  const world = fakeWorld();
+  const a1 = await ensureOwnerActor(world, state, seam);
+  const a2 = await ensureOwnerActor(world, state, seam);
+  const a3 = await ensureOwnerActor(world, state, seam);
+  assert.equal(createCount, 1);
+  assert.equal(a1, a2);
+  assert.equal(a2, a3);
 });
 
 test("the world is still closed when cleanup-replay is NOT assigned (no leak, no cleanup outcome)", async () => {
@@ -451,21 +543,22 @@ function fakeCellCActor(): AuthenticatedActor {
   };
 }
 
-/** Records call order and returns a scripted arc so the whole flow is exercised. */
-function fakeCellCDeps(overrides: Partial<BillingThresholdCellDeps> = {}): {
-  deps: BillingThresholdCellDeps;
-  calls: string[];
-} {
+/**
+ * A scripted Cell-C arc over a fake deps seam. `perRequestCost` is the ledger
+ * debit each crossing request incurs (the fake accumulates it and the crossing
+ * loop stops once remaining <= 0). Default: original 5.0, positioned 0.0001,
+ * each request costs 0.00005 (so it takes 2 requests to cross — exercising the
+ * LOOP), total cost 0.0001, restored grants → 5.0 - 0.0001.
+ */
+function fakeCellCDeps(
+  opts: { perRequestCost?: number; gateSecondStatus?: number; budgetStatus?: string } = {},
+  overrides: Partial<BillingThresholdCellDeps> = {},
+): { deps: BillingThresholdCellDeps; calls: string[] } {
   const calls: string[] = [];
-  // original remaining 5.0; positioned to 0.001; the real request costs 0.01 →
-  // crossed to -0.009; restored grants → 5.0 - 0.01 = 4.99.
+  const perRequestCost = opts.perRequestCost ?? 0.00005;
   let remaining = 5.0;
-  let secondRequestCount = 0;
+  let positioned = false;
   const deps: BillingThresholdCellDeps = {
-    createActor: async () => {
-      calls.push("createActor");
-      return fakeCellCActor();
-    },
     resolveBillingSubjectId: async () => {
       calls.push("resolveSubject");
       return "sub-c";
@@ -476,8 +569,9 @@ function fakeCellCDeps(overrides: Partial<BillingThresholdCellDeps> = {}): {
     },
     positionThreshold: async () => {
       calls.push("position");
-      remaining = 0.001;
-      return { billingSubjectId: "sub-c", effectiveRemainder: 0.001 };
+      remaining = 0.0001;
+      positioned = true;
+      return { billingSubjectId: "sub-c", effectiveRemainder: 0.0001 };
     },
     decryptVirtualKey: async () => {
       calls.push("decrypt");
@@ -486,84 +580,85 @@ function fakeCellCDeps(overrides: Partial<BillingThresholdCellDeps> = {}): {
     listGatewayModels: async () => ({ allowlist: ["claude-haiku-4-5"], live: ["claude-haiku-4-5"] }),
     gatewayChatCompletion: async ({ rawKey }) => {
       assert.equal(rawKey, "sk-raw-virtual-key");
-      secondRequestCount += 1;
-      if (secondRequestCount === 1) {
-        calls.push("request1");
-        return { status: 200, costUsd: 0.01 };
+      // After crossing, the cell issues one MORE request for the gate signal.
+      if (positioned && remaining <= 0) {
+        calls.push("gateRequest");
+        return { status: opts.gateSecondStatus ?? 429, costUsd: null };
       }
-      calls.push("request2");
-      return { status: 429, costUsd: null }; // gate signal: rejected
+      calls.push("crossRequest");
+      return { status: 200, costUsd: perRequestCost };
     },
     runReconcilePasses: async () => {
       calls.push("reconcile");
-      remaining = -0.009; // crossed
+      // Each reconcile after a crossing request debits the request's cost.
+      remaining = Number((remaining - perRequestCost).toFixed(8));
     },
-    readBudgetStatus: async () => "exhausted",
+    readBudgetStatus: async () => opts.budgetStatus ?? "exhausted",
     restoreAdjustment: async () => {
       calls.push("restore");
-      remaining = 4.99; // grants restored; imported usage (0.01) persists → 5.0 - 0.01
+      // Grants restored to original; imported usage (total cost) persists.
+      remaining = Number((5.0 - crossingTotalCost(calls, perRequestCost)).toFixed(8));
     },
     ...overrides,
   };
   return { deps, calls };
 }
 
-test("Cell C runs the full arc and witnesses original→positioned→crossed→gated→restored", async () => {
+/** Total cost across the crossing requests the fake issued (excludes the gate request). */
+function crossingTotalCost(calls: readonly string[], perRequestCost: number): number {
+  return calls.filter((c) => c === "crossRequest").length * perRequestCost;
+}
+
+const CELL_C_STATE = { runTag: "r:s", secretKey: "sk_test_x", prep: fakePrep(), aws: { region: "us-east-1", hostedZoneId: "Z1" } };
+
+test("Cell C runs the full arc across a multi-request crossing loop (original→positioned→crossed→gated→restored)", async () => {
   const { deps, calls } = fakeCellCDeps();
-  const world = fakeWorld();
-  const result = await runBillingThresholdCellLive(world, { runTag: "r:s", secretKey: "sk_test_x", prep: fakePrep(), aws: { region: "us-east-1", hostedZoneId: "Z1" } }, deps);
+  const result = await runBillingThresholdCellLive(fakeWorld(), CELL_C_STATE, fakeCellCActor(), deps);
   assert.match(result.observedTransition, /original=5/);
-  assert.match(result.observedTransition, /crossed=-0.009/);
-  assert.match(result.observedTransition, /restored=4.99/);
   assert.match(result.observedTransition, /gated:/);
-  // The arc order: original read BEFORE positioning; restore AFTER the crossing.
+  assert.match(result.observedTransition, /restored=4.9999/);
+  // The crossing took MORE than one request (loop exercised), each cost < balance.
+  assert.equal(calls.filter((c) => c === "crossRequest").length, 2);
+  // Arc order: original read BEFORE positioning; restore AFTER the crossing.
   assert.ok(calls.indexOf("read:5") < calls.indexOf("position"));
-  assert.ok(calls.indexOf("request1") < calls.indexOf("reconcile"));
-  assert.ok(calls.indexOf("restore") > calls.indexOf("reconcile"));
+  assert.ok(calls.indexOf("crossRequest") < calls.indexOf("restore"));
 });
 
-test("Cell C fails when the ledger did not cross to <= 0 after the real request", async () => {
-  const { deps } = fakeCellCDeps({
+test("Cell C fails when the ledger never crosses within the request-loop budget", async () => {
+  const { deps } = fakeCellCDeps({}, {
     runReconcilePasses: async () => {
-      /* leaves remaining positive */
+      /* never debits → remaining stays positive → loop exhausts */
     },
   });
-  const world = fakeWorld();
   await assert.rejects(
-    () => runBillingThresholdCellLive(world, { runTag: "r:s", secretKey: "k", prep: fakePrep(), aws: { region: "r", hostedZoneId: "z" } }, deps),
+    () => runBillingThresholdCellLive(fakeWorld(), CELL_C_STATE, fakeCellCActor(), deps),
     /did not cross to <= 0/,
   );
 });
 
 test("Cell C fails when no product-side gate signal is observed", async () => {
-  const { deps } = fakeCellCDeps({
-    gatewayChatCompletion: async () => ({ status: 200, costUsd: 0.01 }), // second request also 200
-    readBudgetStatus: async () => "ok",
-  });
-  const world = fakeWorld();
+  const { deps } = fakeCellCDeps({ gateSecondStatus: 200, budgetStatus: "ok" });
   await assert.rejects(
-    () => runBillingThresholdCellLive(world, { runTag: "r:s", secretKey: "k", prep: fakePrep(), aws: { region: "r", hostedZoneId: "z" } }, deps),
+    () => runBillingThresholdCellLive(fakeWorld(), CELL_C_STATE, fakeCellCActor(), deps),
     /NO product-side gate signal/,
   );
 });
 
-test("Cell C fails when the restored remainder != originalRemaining - requestCost", async () => {
-  const { deps } = fakeCellCDeps({
+test("Cell C fails when the restored remainder != originalRemaining - totalCost", async () => {
+  const { deps } = fakeCellCDeps({}, {
     restoreAdjustment: async () => {
-      /* leaves remaining at crossed -0.009 instead of restoring */
+      /* leaves remaining crossed instead of restoring */
     },
   });
-  const world = fakeWorld();
   await assert.rejects(
-    () => runBillingThresholdCellLive(world, { runTag: "r:s", secretKey: "k", prep: fakePrep(), aws: { region: "r", hostedZoneId: "z" } }, deps),
+    () => runBillingThresholdCellLive(fakeWorld(), CELL_C_STATE, fakeCellCActor(), deps),
     /restored remaining/,
   );
 });
 
 test("Cell C never leaks the raw virtual key into the observed transition", async () => {
   const { deps } = fakeCellCDeps();
-  const world = fakeWorld();
-  const result = await runBillingThresholdCellLive(world, { runTag: "r:s", secretKey: "k", prep: fakePrep(), aws: { region: "r", hostedZoneId: "z" } }, deps);
+  const result = await runBillingThresholdCellLive(fakeWorld(), CELL_C_STATE, fakeCellCActor(), deps);
   assert.ok(!result.observedTransition.includes("sk-raw-virtual-key"));
   assert.ok(!result.externalIds.some((id) => id.includes("sk-raw-virtual-key")));
 });
