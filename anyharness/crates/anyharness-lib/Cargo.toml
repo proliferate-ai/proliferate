@@ -46,3 +46,4 @@ reqwest = { workspace = true, features = ["json"] }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }
+tracing-subscriber.workspace = true
