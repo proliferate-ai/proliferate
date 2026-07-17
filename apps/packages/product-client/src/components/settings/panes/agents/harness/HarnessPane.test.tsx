@@ -125,10 +125,7 @@ vi.mock("@proliferate/cloud-sdk-react", () => ({
 // Local surface + gateway route reads the RUNTIME's resolved gateway models
 // (contract §5) instead of the cloud catalog — mock the anyharness SDK hooks
 // standing in for that runtime call.
-vi.mock("@anyharness/sdk-react", () => ({
-  useAnyHarnessWorkspaceContext: () => ({ workspaceId: "workspace-1" }),
-  useAnyHarnessRuntimeContext: () => ({ runtimeUrl: "http://127.0.0.1:8457" }),
-  useAgentGatewayModelsQuery: () => state.gatewayModels,
+vi.mock("@anyharness/sdk-react", () => ({ useAnyHarnessWorkspaceContext: () => ({ workspaceId: "workspace-1" }), useAnyHarnessRuntimeContext: () => ({ runtimeUrl: "http://127.0.0.1:8457" }), useAgentGatewayModelsQuery: () => state.gatewayModels,
   useRefreshAgentGatewayModelsMutation: () => ({
     mutate: refreshGatewayModelsMutate,
     isPending: false,
@@ -221,21 +218,9 @@ vi.mock("#product/hooks/cloud/derived/use-cloud-availability-state", () => ({
 }));
 
 vi.mock("#product/hooks/agents/derived/use-agent-catalog", () => ({
-  useAgentCatalog: () => ({
-    agentsByKind: state.agentsByKind,
-    agentsNeedingSetup: [],
-    isReconciling: false,
-    reconcileSnapshot: null,
-  }),
+  useAgentCatalog: () => ({ agentsByKind: state.agentsByKind, agentsNeedingSetup: [], isReconciling: false, reconcileSnapshot: null }),
 }));
-vi.mock("#product/hooks/agents/derived/use-workspace-agent-catalog", () => ({
-  useWorkspaceAgentCatalog: () => ({
-    agentsByKind: state.agentsByKind,
-    agentsNeedingSetup: [],
-    isReconciling: false,
-    reconcileSnapshot: null,
-  }),
-}));
+vi.mock("#product/hooks/agents/derived/use-workspace-agent-catalog", () => ({ useWorkspaceAgentCatalog: () => ({ agentsByKind: state.agentsByKind, agentsNeedingSetup: [], isReconciling: false, reconcileSnapshot: null }) }));
 vi.mock("#product/hooks/agents/workflows/use-harness-install-action", () => ({
   useHarnessInstallAction: () => null,
 }));

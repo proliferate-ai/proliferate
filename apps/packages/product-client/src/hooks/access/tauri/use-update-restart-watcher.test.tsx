@@ -2,7 +2,7 @@
 
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { DesktopUpdaterBridge } from "@proliferate/product-client/host/desktop-bridge";
+import type { DesktopUpdaterBridge } from "@proliferate/product-client/host/desktop-updater-bridge";
 
 import { useUpdaterStore } from "#product/stores/updater/updater-store";
 

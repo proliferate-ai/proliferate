@@ -22,9 +22,13 @@ export function useAgentAutoReconcile() {
   const {
     isReconciling,
     reconcileDataUpdatedAt,
+    reconcileSnapshot,
     reconcileStatus,
   } = useAgentCatalog();
   const previousReconcileStatus = useRef<string>("idle");
+  const lastRefreshedTerminalJobId = useRef<string | null>(null);
+  const terminalRefreshesInFlight = useRef(new Set<string>());
+  const legacyTerminalRefreshFailed = useRef(false);
   const isHealthy = connectionState === "healthy" && runtimeUrl.trim().length > 0;
   const {
     data: runtimeHealth,
@@ -62,7 +66,8 @@ export function useAgentAutoReconcile() {
     runtimeUrl,
   ]);
 
-  // Keep the authoritative agent list in sync with the polled reconcile job state.
+  // Refresh exactly once for each terminal reconcile job, including jobs first
+  // discovered after they have already completed between low-frequency polls.
   useEffect(() => {
     if (!runtimeUrl.trim() || reconcileDataUpdatedAt === 0) {
       previousReconcileStatus.current = reconcileStatus;
@@ -72,17 +77,51 @@ export function useAgentAutoReconcile() {
     const wasActive =
       previousReconcileStatus.current === "queued"
       || previousReconcileStatus.current === "running";
-    const isActive = reconcileStatus === "queued" || reconcileStatus === "running";
-    const becameTerminal = wasActive && (reconcileStatus === "completed" || reconcileStatus === "failed");
+    const isTerminal = reconcileStatus === "completed" || reconcileStatus === "failed";
+    const jobId = reconcileSnapshot?.jobId ?? null;
+    const refreshKey = jobId ?? "__legacy__";
+    const discoveredTerminalJob = isTerminal
+      && jobId !== null
+      && jobId !== lastRefreshedTerminalJobId.current
+      && !terminalRefreshesInFlight.current.has(refreshKey);
+    const legacyBecameTerminal = isTerminal
+      && jobId === null
+      && (wasActive || legacyTerminalRefreshFailed.current)
+      && !terminalRefreshesInFlight.current.has(refreshKey);
 
     previousReconcileStatus.current = reconcileStatus;
-
-    if (!isActive && !becameTerminal) {
-      return;
+    if (jobId !== null) {
+      legacyTerminalRefreshFailed.current = false;
     }
 
-    void invalidateAgentListResources(runtimeUrl);
-  }, [invalidateAgentListResources, reconcileDataUpdatedAt, reconcileStatus, runtimeUrl]);
+    if (!discoveredTerminalJob && !legacyBecameTerminal) {
+      return;
+    }
+    terminalRefreshesInFlight.current.add(refreshKey);
+
+    void invalidateAgentListResources(runtimeUrl, { throwOnError: true })
+      .then(() => {
+        if (jobId) {
+          lastRefreshedTerminalJobId.current = jobId;
+        } else {
+          legacyTerminalRefreshFailed.current = false;
+        }
+      })
+      .catch(() => {
+        if (jobId === null) {
+          legacyTerminalRefreshFailed.current = true;
+        }
+      })
+      .finally(() => {
+        terminalRefreshesInFlight.current.delete(refreshKey);
+      });
+  }, [
+    invalidateAgentListResources,
+    reconcileDataUpdatedAt,
+    reconcileSnapshot?.jobId,
+    reconcileStatus,
+    runtimeUrl,
+  ]);
 
   return { isReconciling };
 }

@@ -56,4 +56,27 @@ describe("useAgentResourcesCache", () => {
       "gateway-models",
     ]);
   });
+
+  it("can propagate a list refetch failure to terminal-refresh callers", async () => {
+    const failure = new Error("agent list refetch failed");
+    mocks.invalidateQueries.mockRejectedValue(failure);
+    const { result } = renderHook(() => useAgentResourcesCache());
+
+    await expect(result.current.invalidateAgentListResources(
+      "http://runtime.test",
+      { throwOnError: true },
+    )).rejects.toBe(failure);
+    expect(mocks.invalidateQueries).toHaveBeenCalledWith(
+      {
+        queryKey: [
+          "anyharness",
+          "account-1",
+          "runtime",
+          "http://runtime.test",
+          "agents",
+        ],
+      },
+      { throwOnError: true },
+    );
+  });
 });

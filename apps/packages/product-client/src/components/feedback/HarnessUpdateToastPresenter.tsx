@@ -26,6 +26,7 @@ function useHarnessProgressToast({
   toastId,
 }: HarnessProgressToastOptions) {
   const activeJobId = useRef<string | null>(null);
+  const dismissedJobId = useRef<string | null>(null);
   const progress = snapshot?.progress ?? null;
   const isActive = snapshot?.status === "queued" || snapshot?.status === "running";
 
@@ -36,9 +37,11 @@ function useHarnessProgressToast({
   useEffect(() => {
     if (!isActive || !progress) {
       if (activeJobId.current) {
-        const sameJob = snapshot?.jobId === activeJobId.current;
+        const snapshotJobId = snapshot?.jobId ?? toastId;
+        const sameJob = snapshotJobId === activeJobId.current;
+        const wasDismissed = dismissedJobId.current === activeJobId.current;
         const isTerminal = snapshot?.status === "completed" || snapshot?.status === "failed";
-        if (sameJob && isTerminal) {
+        if (sameJob && isTerminal && !wasDismissed) {
           const failed = snapshot.status === "failed"
             || progress?.components.some((component) => component.phase === "failed")
             || false;
@@ -52,7 +55,7 @@ function useHarnessProgressToast({
             action: undefined,
             cancel: undefined,
           });
-        } else {
+        } else if (!wasDismissed) {
           toast.dismiss(toastId);
         }
       }
@@ -60,7 +63,11 @@ function useHarnessProgressToast({
       return;
     }
 
-    activeJobId.current = snapshot?.jobId ?? toastId;
+    const jobId = snapshot?.jobId ?? toastId;
+    activeJobId.current = jobId;
+    if (dismissedJobId.current === jobId) {
+      return;
+    }
     const current = progress.components.find((component) =>
       !["completed", "skipped", "failed"].includes(component.phase)
     );
@@ -99,6 +106,9 @@ function useHarnessProgressToast({
         ),
         duration: Infinity,
         closeButton: true,
+        onDismiss: () => {
+          dismissedJobId.current = jobId;
+        },
         action: undefined,
         cancel: undefined,
       },

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import type { DesktopUpdaterBridge } from "@proliferate/product-client/host/desktop-bridge";
+import type { DesktopUpdaterBridge } from "@proliferate/product-client/host/desktop-updater-bridge";
 import { useUpdaterStore } from "#product/stores/updater/updater-store";
 import { useRunningAgentCount } from "#product/hooks/app/lifecycle/use-running-agent-count";
 

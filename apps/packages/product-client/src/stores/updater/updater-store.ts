@@ -2,7 +2,7 @@ import { create } from "zustand";
 import type {
   DesktopUpdate,
   DesktopUpdateDownloadProgress,
-} from "@proliferate/product-client/host/desktop-bridge";
+} from "@proliferate/product-client/host/desktop-updater-bridge";
 
 export type UpdaterPhase =
   | "idle"

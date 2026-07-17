@@ -5,8 +5,10 @@ import {
 } from "@tanstack/react-query";
 import type {
   InstallAgentRequest,
+  ReconcileAgentsResponse,
   ReconcileAgentsRequest,
 } from "@anyharness/sdk";
+import { AnyHarnessError } from "@anyharness/sdk";
 import {
   resolveRuntimeCacheScopeKey,
   resolveRuntimeConnection,
@@ -176,6 +178,32 @@ export function useCloseAgentLoginTerminalMutation() {
 
 interface AgentReconcileStatusQueryOptions extends RuntimeQueryOptions {
   refetchWhileActive?: boolean;
+  discoverWhileIdle?: boolean;
+}
+
+export const AGENT_RECONCILE_DISCOVERY_INTERVAL_MS = 30_000;
+export const AGENT_RECONCILE_ACTIVE_INTERVAL_MS = 1500;
+export const AGENT_RECONCILE_DOWNLOAD_INTERVAL_MS = 750;
+
+export function resolveAgentReconcileRefetchInterval(
+  state: { data?: ReconcileAgentsResponse; error?: unknown },
+  options: { refetchWhileActive: boolean; discoverWhileIdle: boolean },
+): number | false {
+  const status = state.data?.status;
+  if (state.error instanceof AnyHarnessError && state.error.problem.status === 404) {
+    return false;
+  }
+  if (status === "queued" || status === "running") {
+    if (!options.refetchWhileActive) return false;
+    const isDownloading = state.data?.progress?.components.some(
+      (component) => component.phase === "downloading",
+    );
+    return isDownloading
+      ? AGENT_RECONCILE_DOWNLOAD_INTERVAL_MS
+      : AGENT_RECONCILE_ACTIVE_INTERVAL_MS;
+  }
+  if (!options.discoverWhileIdle) return false;
+  return AGENT_RECONCILE_DISCOVERY_INTERVAL_MS;
 }
 
 export function useAgentReconcileStatusQuery(
@@ -185,6 +213,7 @@ export function useAgentReconcileStatusQuery(
   const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
   const cacheScopeKey = resolveRuntimeCacheScopeKey(runtime);
   const refetchWhileActive = options?.refetchWhileActive ?? true;
+  const discoverWhileIdle = options?.discoverWhileIdle ?? false;
 
   return useQuery({
     queryKey: anyHarnessAgentReconcileStatusKey(runtimeUrl, cacheScopeKey),
@@ -193,17 +222,10 @@ export function useAgentReconcileStatusQuery(
       const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
       return client.agents.getReconcileStatus(requestOptionsWithSignal(undefined, signal));
     },
-    refetchInterval: (query) => {
-      if (!refetchWhileActive) return false;
-      const status = query.state.data?.status;
-      if (status === "queued" || status === "running") {
-        const isDownloading = query.state.data?.progress?.components.some(
-          (component) => component.phase === "downloading",
-        );
-        return isDownloading ? 750 : 1500;
-      }
-      return false;
-    },
+    refetchInterval: (query) => resolveAgentReconcileRefetchInterval(query.state, {
+      refetchWhileActive,
+      discoverWhileIdle,
+    }),
   });
 }
 
@@ -214,6 +236,7 @@ export function useWorkspaceAgentReconcileStatusQuery(
   const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
   const refetchWhileActive = options?.refetchWhileActive ?? true;
+  const discoverWhileIdle = options?.discoverWhileIdle ?? false;
 
   return useQuery({
     queryKey: anyHarnessWorkspaceAgentReconcileStatusKey(cacheScopeKey, workspaceId),
@@ -223,15 +246,10 @@ export function useWorkspaceAgentReconcileStatusQuery(
       const client = getAnyHarnessClient(resolved.connection);
       return client.agents.getReconcileStatus(requestOptionsWithSignal(undefined, signal));
     },
-    refetchInterval: (query) => {
-      if (!refetchWhileActive) return false;
-      const status = query.state.data?.status;
-      if (status !== "queued" && status !== "running") return false;
-      const isDownloading = query.state.data?.progress?.components.some(
-        (component) => component.phase === "downloading",
-      );
-      return isDownloading ? 750 : 1500;
-    },
+    refetchInterval: (query) => resolveAgentReconcileRefetchInterval(query.state, {
+      refetchWhileActive,
+      discoverWhileIdle,
+    }),
   });
 }
 

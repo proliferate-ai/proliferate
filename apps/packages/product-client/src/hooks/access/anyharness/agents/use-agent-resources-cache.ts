@@ -12,16 +12,22 @@ export function useAgentResourcesCache() {
   const queryClient = useQueryClient();
   const cacheScopeKey = useAnyHarnessCacheScopeKey();
 
-  const invalidateAgentListResources = useCallback(async (runtimeUrl: string) => {
+  const invalidateAgentListResources = useCallback(async (
+    runtimeUrl: string,
+    options?: { throwOnError?: boolean },
+  ) => {
     const normalizedRuntimeUrl = runtimeUrl.trim();
     if (!normalizedRuntimeUrl) {
       return;
     }
 
     await Promise.all([
-      queryClient.invalidateQueries({
-        queryKey: anyHarnessAgentsKey(normalizedRuntimeUrl, cacheScopeKey),
-      }),
+      queryClient.invalidateQueries(
+        {
+          queryKey: anyHarnessAgentsKey(normalizedRuntimeUrl, cacheScopeKey),
+        },
+        { throwOnError: options?.throwOnError ?? false },
+      ),
     ]);
   }, [cacheScopeKey, queryClient]);
 

@@ -190,43 +190,50 @@ pub(super) fn install_agent_process_from_pin(
                 &ArtifactRole::AgentProcess,
                 Some(&launcher_path),
             )?;
-            let expected = target
-                .expected_binary
-                .clone()
-                .unwrap_or_else(|| kind.as_str().to_string());
-            let exec_path = storage.join(&expected);
-            if !exec_path.exists() {
-                // Don't leave a populated-but-unusable tree behind.
-                let _ = std::fs::remove_dir_all(&storage);
-                return Err(InstallError::MissingManagedArtifact(exec_path));
+            let prepared = (|| -> Result<InstalledArtifactResult, InstallError> {
+                let expected = target
+                    .expected_binary
+                    .clone()
+                    .unwrap_or_else(|| kind.as_str().to_string());
+                let exec_path = storage.join(&expected);
+                if !exec_path.exists() {
+                    return Err(InstallError::MissingManagedArtifact(exec_path));
+                }
+                make_executable(&exec_path)?;
+                let downloaded = target.download_size_bytes.unwrap_or(0);
+                reporter.map(|reporter| {
+                    reporter.report(
+                        &ArtifactRole::AgentProcess,
+                        InstallProgressPhase::Finalizing,
+                        downloaded,
+                        target.download_size_bytes,
+                    )
+                });
+                let staged_launcher = managed_dir.join(format!(".{}-launcher.next", kind.as_str()));
+                let _ = std::fs::remove_file(&staged_launcher);
+                generate_launcher_script(
+                    &staged_launcher,
+                    &exec_path,
+                    args,
+                    &launcher_env,
+                    &path_prefixes,
+                )?;
+                activation.activate_launcher(&staged_launcher)?;
+                Ok(InstalledArtifactResult {
+                    role: ArtifactRole::AgentProcess,
+                    path: launcher_path,
+                    source: "pinned_archive".into(),
+                    version: version.map(String::from),
+                })
+            })();
+
+            match prepared {
+                Ok(result) => {
+                    activation.commit()?;
+                    Ok(Some(result))
+                }
+                Err(error) => Err(activation.rollback_after(error)),
             }
-            make_executable(&exec_path)?;
-            let downloaded = target.download_size_bytes.unwrap_or(0);
-            reporter.map(|reporter| {
-                reporter.report(
-                    &ArtifactRole::AgentProcess,
-                    InstallProgressPhase::Finalizing,
-                    downloaded,
-                    target.download_size_bytes,
-                )
-            });
-            let staged_launcher = managed_dir.join(format!(".{}-launcher.next", kind.as_str()));
-            let _ = std::fs::remove_file(&staged_launcher);
-            generate_launcher_script(
-                &staged_launcher,
-                &exec_path,
-                args,
-                &launcher_env,
-                &path_prefixes,
-            )?;
-            activation.activate_launcher(&staged_launcher)?;
-            activation.commit()?;
-            Ok(Some(InstalledArtifactResult {
-                role: ArtifactRole::AgentProcess,
-                path: launcher_path,
-                source: "pinned_archive".into(),
-                version: version.map(String::from),
-            }))
         }
         ResolvedPinSource::Binary { .. } => Err(InstallError::InvalidInstallSpec(
             "an agent_process pin cannot be a bare Binary source".into(),

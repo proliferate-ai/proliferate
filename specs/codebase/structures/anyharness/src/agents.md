@@ -237,10 +237,14 @@ Important install cases:
   `_staging`, verifies, extracts, moves the selected executable, and removes
   staging; an archive ACP adapter downloads and extracts its complete sibling
   tree into a sibling staging directory, then swaps it into
-  `agent_process/registry_binary`; a durable activation marker keeps the tree
-  and managed launcher in one recoverable transaction, so an error or process
-  interruption restores both previous artifacts; the install manifest is
-  atomically replaced only after role work completes
+  `agent_process/registry_binary`; before either live rename, a prepared journal
+  records a unique transaction ID and whether the tree/launcher already existed.
+  Commit writes and syncs a marker carrying that same ID, with Unix
+  parent-directory syncs around the journal, marker, and live renames. A new generation starts
+  only after checked recovery removes the prior journal/marker; errors before
+  commit perform checked rollback of both artifacts, and interrupted cleanup is
+  retried before another swap. The install manifest is atomically replaced only
+  after role work completes
 
 Public HTTP routes include:
 
@@ -427,11 +431,13 @@ settles (`AgentRuntime::spawn_startup_pass` awaits hydration, then reconciles), 
 already-installed agents track the catalog pins on both the desktop sidecar and cloud
 workers. The desktop frontend no longer triggers reconcile — it polls the reconcile
 snapshot (`GET /v1/agents/reconcile`) to display per-agent status and refreshes the agent
-list as the job transitions. While a transfer is active it polls more quickly and renders
-the runtime target, aggregate bytes, and separate CLI/ACP rows. Missing non-seeded agents
-are not auto-installed at startup; they install on demand at session start or through a
-selected-agent reconcile from harness settings. The synchronous per-agent install endpoint
-remains available for compatibility.
+list once per terminal job. A bounded 30-second inactive poll discovers runtime-owned
+startup/catalog jobs that begin after the initial idle read; queued/running work polls at
+1.5 seconds and active byte transfer at 750 milliseconds. The UI renders the runtime target,
+aggregate bytes, and separate CLI/ACP rows. Missing non-seeded agents are not auto-installed
+at startup; they install on demand at session start or through a selected-agent reconcile
+from harness settings. The synchronous per-agent install endpoint remains available for
+compatibility.
 
 Seed hydration verifies the archive `.sha256`, validates the manifest target and
 schema, rejects unsafe tar entries, extracts into a staging directory under the

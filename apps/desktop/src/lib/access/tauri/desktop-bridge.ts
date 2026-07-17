@@ -1,7 +1,5 @@
 import type {
   DesktopBridge,
-  DesktopUpdate,
-  DesktopUpdateDownloadProgress,
   LocalRuntimeConnection,
   LocalRuntimeSnapshot,
   ProductCommand,
@@ -12,6 +10,10 @@ import type {
   WorkerStatus,
   WorkerConfiguration,
 } from "@proliferate/product-client/host/desktop-bridge";
+import type {
+  DesktopUpdate,
+  DesktopUpdateDownloadProgress,
+} from "@proliferate/product-client/host/desktop-updater-bridge";
 
 import { getRuntimeInfo } from "./runtime";
 import {

@@ -111,3 +111,38 @@ it("shows local aggregate MB and the current harness", () => {
     name: "Local runtime agent tools download progress",
   }).getAttribute("aria-valuenow")).toBe("42");
 });
+
+it("keeps a dismissed active job hidden until a different job starts", () => {
+  const { rerender } = render(<HarnessUpdateToastPresenter />);
+  const [, options] = sonnerMocks.toast.mock.calls[0] ?? [];
+  expect(options.onDismiss).toBeTypeOf("function");
+
+  options.onDismiss({ id: HARNESS_UPDATE_TOAST_ID });
+  vi.clearAllMocks();
+  state.localSnapshot = {
+    ...state.defaultLocalSnapshot,
+    progress: {
+      ...(state.defaultLocalSnapshot.progress as Record<string, unknown>),
+      downloadedBytes: 55_000_000,
+    },
+  };
+  rerender(<HarnessUpdateToastPresenter />);
+  expect(sonnerMocks.toast).not.toHaveBeenCalled();
+
+  state.localSnapshot = {
+    ...state.localSnapshot,
+    status: "completed",
+  };
+  rerender(<HarnessUpdateToastPresenter />);
+  expect(sonnerMocks.toast).not.toHaveBeenCalled();
+
+  state.localSnapshot = {
+    ...state.defaultLocalSnapshot,
+    jobId: "job-local-2",
+  };
+  rerender(<HarnessUpdateToastPresenter />);
+  expect(sonnerMocks.toast).toHaveBeenCalledWith(
+    expect.anything(),
+    expect.objectContaining({ id: HARNESS_UPDATE_TOAST_ID }),
+  );
+});
