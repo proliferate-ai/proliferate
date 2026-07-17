@@ -95,6 +95,20 @@ async def link_github_account(db_session: AsyncSession, user_id: str) -> None:
     await db_session.commit()
 
 
+def configure_github_app(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Configure a complete GitHub App runtime for integration tests."""
+    for field, value in {
+        "github_app_id": "12345",
+        "github_app_slug": "test-cloud",
+        "github_app_client_id": "Iv1.test-client",
+        "github_app_client_secret": "test-client-secret",
+        "github_app_webhook_secret": "test-webhook-secret",
+        "github_app_private_key": "-----BEGIN RSA PRIVATE KEY-----",
+        "github_app_private_key_path": "",
+    }.items():
+        monkeypatch.setattr(repo_authority.settings, field, value)
+
+
 async def seed_github_app_repo_authority(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
