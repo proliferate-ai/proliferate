@@ -114,6 +114,7 @@ export type CellEvidenceV1 =
   | SelfHostBaseTurnEvidenceV1
   | SelfHostInviteeEvidenceV1
   | CloudProvisionTurnEvidenceV1
+  | WorkflowManagedRunEvidenceV1
   | SelfHostGithubAuthEvidenceV1
   | SelfHostSwitchIsolationEvidenceV1
   | SelfHostGatewayEvidenceV1
@@ -682,6 +683,174 @@ export interface CloudProvisionTurnEvidenceV1 {
   };
 }
 
+/**
+ * ── Managed-Workflow qualification evidence (PR 7 release tail) ─────────────
+ *
+ * Bounded evidence a GREEN managed one-prompt Workflow qualification cell would
+ * attach for the three plain-English strict cells (completion/replay,
+ * control/restart, custody/loss). It correlates ONLY durable-state and
+ * artifact-shape facts (frozen contract "Real-LLM assertions concern durable
+ * state and artifact shape, never exact prose") — never a prompt, argument
+ * value, transcript, token, or raw provider payload.
+ *
+ * IMPORTANT (provisional-spec / live-acceptance debt): this release tail is a
+ * TEST/EVIDENCE HARNESS lane on a PROVISIONAL 0.5 spec. There is no live staging
+ * background plane (RabbitMQ/Valkey/worker/Beat), the managed-Workflow gate
+ * (`WORKFLOW_MANAGED_RUNS_ENABLED`) defaults false, and the frozen contract's
+ * "External hosted prerequisite" provisioning is explicitly NOT owned here. So
+ * the scenarios that would populate this evidence FAIL CLOSED offline: they emit
+ * no green result and thus no `workflow_managed_run` evidence until the live
+ * plane and founder sign-off exist. The type + validator are the honest schema
+ * this lane commits to, exercised only by offline unit fixtures — NOT proof that
+ * any live managed journey was run. A green cell requires complete evidence AND
+ * a clean cleanup block, exactly like the cloud/self-host kinds.
+ *
+ * The three cells share this one kind; the `cell` field records which strict
+ * cell produced it so the report validator can bind cell identity → kind and
+ * (per-cell) require the cell-specific proof booleans below. Per the frozen
+ * "Candidate and evidence identity" section, every id is a safe hash (never a
+ * raw run/invocation/session/workspace id) and every version/digest is a safe
+ * token. `input_hash` continuity is asserted across the replayed requests
+ * (frozen "Replay/loss proof": exactly one Postgres invocation / execution row /
+ * outbox generation / materialization / session / prompt / turn).
+ */
+export type WorkflowManagedCell =
+  | "WF-MANAGED-COMPLETION"
+  | "WF-MANAGED-CONTROL"
+  | "WF-MANAGED-CUSTODY";
+
+export type WorkflowManagedPlacement = "repository" | "scratch";
+
+/**
+ * A run-window observation claim (mirrors `SelfHostProviderClaim`,
+ * PR7-CONTROL-010): `"unproven"` = the observation was NOT performed and is
+ * recorded honestly (never a false absence); `"observed"` = a real run-window
+ * observation confirmed the fact. A bare `true` derived from configuration is
+ * never accepted. The managed-Workflow cells set these `"unproven"` until the
+ * live background plane exists to observe them, so no unproven observation can
+ * masquerade as a green proof.
+ */
+export type WorkflowObservationClaim = "unproven" | "observed";
+
+export interface WorkflowManagedRunEvidenceV1 {
+  kind: "workflow_managed_run";
+  /** Which of the three strict cells produced this evidence. */
+  cell: WorkflowManagedCell;
+  /** Every qualified artifact id (server/worker/Beat/AnyHarness/template receipts). */
+  artifact_ids: string[];
+  server_version: string;
+  worker_version: string;
+  beat_version: string;
+  anyharness_version: string;
+  harness: "claude";
+  model_id: string;
+  /** repository-worktree or scratch placement (frozen "Real journey 1"). */
+  placement: WorkflowManagedPlacement;
+  /**
+   * Durable single-effect identity hashes (frozen "Replay/loss proof": exactly
+   * one of each). All one-way hashes; never a raw id.
+   */
+  invocation_id_hash: string;
+  managed_execution_id_hash: string;
+  workspace_id_hash: string;
+  session_id_hash: string;
+  prompt_id_hash: string;
+  turn_id_hash: string;
+  /** The immutable AnyHarness execution store identity this run bound (frozen "custody"). */
+  execution_store_id_hash: string;
+  /**
+   * The observed terminal run state. Only the frozen lifecycle terminals a cell
+   * may legitimately reach are representable; a green completion cell requires
+   * `completed`, a green control cell `cancelled`/`interrupted`, a green custody
+   * cell `target_lost`.
+   */
+  observed_terminal_state:
+    | "completed"
+    | "cancelled"
+    | "interrupted"
+    | "target_lost";
+  /**
+   * Per-cell proof block. Exactly one is non-null, matching `cell`; the
+   * validator binds the two. Every field is a durable-state observation, not a
+   * transcript assertion.
+   */
+  completion: WorkflowCompletionProof | null;
+  control: WorkflowControlProof | null;
+  custody: WorkflowCustodyProof | null;
+  cleanup: WorkflowManagedCleanupBlock;
+}
+
+/** WF-MANAGED-COMPLETION (frozen "Real journey 1"): completion + replay/loss single-effect. */
+export interface WorkflowCompletionProof {
+  /** Deterministic branch/path/base OID observed (frozen step 7); safe token. */
+  base_oid: string;
+  /** The small run-tagged artifact validated against its schema (frozen step 8). */
+  artifact_validated: true;
+  /** Replay around simulated controller response loss converged to exactly one of each. */
+  replay_single_effect: true;
+  /** One outbox logical generation per phase (frozen "Replay/loss proof"). */
+  single_outbox_generation: true;
+  /** One AnyHarness materialization (frozen "Replay/loss proof"). */
+  single_materialization: true;
+}
+
+/** WF-MANAGED-CONTROL (frozen "Real journey 2"): cancellation + same-store restart. */
+export interface WorkflowControlProof {
+  /** Desired cancellation projected before terminal cancellation (frozen step 3). */
+  desired_before_terminal: true;
+  /** AnyHarness terminalized only from correlated cancelled-turn evidence (frozen step 5). */
+  terminal_from_correlated_evidence: true;
+  /** No second turn / no foreign session mutation bypass (frozen step 7). */
+  no_second_turn: true;
+  /** After restart the SAME executionStoreId persisted (frozen restart step 3). */
+  same_store_after_restart: true;
+  /** AnyHarness reported interrupted/runtime_restarted with zero replay (frozen restart step 4). */
+  interrupted_zero_replay: true;
+}
+
+/** WF-MANAGED-CUSTODY (frozen "Real journey 3"): background recovery + execution-store loss. */
+export interface WorkflowCustodyProof {
+  /** Eventual convergence through the exact task generation after broker/worker recovery. */
+  converged_exact_generation: true;
+  /** No duplicate workspace/run/session/turn after recovery (frozen step 6). */
+  no_duplicate_effect: true;
+  /** Store replacement produced a NEW executionStoreId (frozen replacement step 3). */
+  new_store_after_replacement: true;
+  /** Cloud became `target_lost` and preserved its last projection (frozen step 4). */
+  target_lost_preserved_projection: true;
+  /** No PUT/redelivery into the fresh store (frozen step 5). */
+  no_redelivery_into_fresh_store: true;
+  /** Product copy says the outcome is unknown (frozen step 6). */
+  product_copy_unknown: true;
+  /**
+   * The destructive store-replacement drill ran ONLY against disposable
+   * qualification state in the protected Qualification environment (frozen
+   * "This is destructive only to disposable qualification state" + founder
+   * decision #3). A green custody cell requires this true.
+   */
+  disposable_qualification_gated: true;
+}
+
+/**
+ * The managed-Workflow cleanup block. Qualification may clean ONLY its own
+ * disposable fixtures (frozen "Retention and production-readiness gate"): it
+ * does not define product retention, so this records only run-created
+ * disposable-fixture teardown. A green cell requires `failed === 0` and every
+ * deletion boolean true.
+ */
+export interface WorkflowManagedCleanupBlock {
+  ledger_id_hash: string;
+  registered: number;
+  reconciled: number;
+  failed: number;
+  invocation_fixtures_deleted: boolean;
+  disposable_workspace_deleted: boolean;
+  disposable_sandbox_deleted: boolean;
+  virtual_key_deleted: boolean;
+  litellm_subjects_deleted: boolean;
+  local_paths_removed: boolean;
+}
+
 /** V4 result: a V3 result plus one bounded optional evidence attachment. */
 export interface FinalCellResultV2 extends FinalCellResultV1 {
   evidence: CellEvidenceV1 | null;
@@ -896,6 +1065,10 @@ const SCENARIO_REQUIRED_EVIDENCE_KIND: Readonly<Record<string, CellEvidenceV1["k
   // structurally-valid evidence.
   "SELFHOST-ISOLATION-1": "selfhost_switch_isolation",
   "SELFHOST-CFN-1": "selfhost_cfn_wrapper",
+  // Managed-Workflow qualification (PR 7 release tail): all three strict cells
+  // share the one `workflow_managed_run` kind; the per-cell proof binding is on
+  // `evidence.cell` ↔ the `cell` dimension (see `validateEvidenceCellBinding`).
+  "WORKFLOW-MANAGED-QUAL-1": "workflow_managed_run",
 };
 
 /**
@@ -943,6 +1116,19 @@ function validateEvidenceCellBinding(
     if (requiredCellKind !== undefined && evidence.kind !== requiredCellKind) {
       throw new ReportValidationError(
         `${where}.kind is "${evidence.kind}" but ${result.scenario_id} cell "${cellDimension}" requires "${requiredCellKind}".`,
+      );
+    }
+  }
+
+  // (a3) managed-Workflow: the evidence's own `cell` field must equal the
+  // cell's `cell` dimension, so a structurally valid completion proof cannot be
+  // attached to a control/custody cell (PR7-CONTROL-007 discipline for a
+  // single-kind, multi-cell scenario).
+  if (evidence.kind === "workflow_managed_run" && typeof cellDimension === "string") {
+    const evidenceCell = (evidence as WorkflowManagedRunEvidenceV1).cell;
+    if (evidenceCell !== cellDimension) {
+      throw new ReportValidationError(
+        `${where}.cell is "${evidenceCell}" but the cell's dimensions name cell "${cellDimension}".`,
       );
     }
   }
@@ -1456,6 +1642,9 @@ function validateCellEvidence(
     case "cloud_provision_turn":
       validateCloudProvisionTurnEvidence(where, evidence as CloudProvisionTurnEvidenceV1, result.status);
       return;
+    case "workflow_managed_run":
+      validateWorkflowManagedRunEvidence(where, evidence as WorkflowManagedRunEvidenceV1, result.status);
+      return;
     default:
       throw new ReportValidationError(`${where}.kind is unknown.`);
   }
@@ -1940,6 +2129,271 @@ function validateCloudCleanupEvidence(
       throw new ReportValidationError(`${where}.cleanup.failed must be 0 for a green result.`);
     }
     if (deletionFields.some((field) => cleanup[field] !== true)) {
+      throw new ReportValidationError(`${where}.cleanup is incomplete on a green result.`);
+    }
+  }
+}
+
+// ── Managed-Workflow qualification evidence validation (PR 7 release tail) ────
+
+const WORKFLOW_MANAGED_RUN_EVIDENCE_KEYS = [
+  "kind",
+  "cell",
+  "artifact_ids",
+  "server_version",
+  "worker_version",
+  "beat_version",
+  "anyharness_version",
+  "harness",
+  "model_id",
+  "placement",
+  "invocation_id_hash",
+  "managed_execution_id_hash",
+  "workspace_id_hash",
+  "session_id_hash",
+  "prompt_id_hash",
+  "turn_id_hash",
+  "execution_store_id_hash",
+  "observed_terminal_state",
+  "completion",
+  "control",
+  "custody",
+  "cleanup",
+] as const;
+
+const WORKFLOW_COMPLETION_PROOF_KEYS = [
+  "base_oid",
+  "artifact_validated",
+  "replay_single_effect",
+  "single_outbox_generation",
+  "single_materialization",
+] as const;
+
+const WORKFLOW_CONTROL_PROOF_KEYS = [
+  "desired_before_terminal",
+  "terminal_from_correlated_evidence",
+  "no_second_turn",
+  "same_store_after_restart",
+  "interrupted_zero_replay",
+] as const;
+
+const WORKFLOW_CUSTODY_PROOF_KEYS = [
+  "converged_exact_generation",
+  "no_duplicate_effect",
+  "new_store_after_replacement",
+  "target_lost_preserved_projection",
+  "no_redelivery_into_fresh_store",
+  "product_copy_unknown",
+  "disposable_qualification_gated",
+] as const;
+
+const WORKFLOW_MANAGED_CLEANUP_EVIDENCE_KEYS = [
+  "ledger_id_hash",
+  "registered",
+  "reconciled",
+  "failed",
+  "invocation_fixtures_deleted",
+  "disposable_workspace_deleted",
+  "disposable_sandbox_deleted",
+  "virtual_key_deleted",
+  "litellm_subjects_deleted",
+  "local_paths_removed",
+] as const;
+
+const WORKFLOW_MANAGED_CLEANUP_DELETION_FIELDS = [
+  "invocation_fixtures_deleted",
+  "disposable_workspace_deleted",
+  "disposable_sandbox_deleted",
+  "virtual_key_deleted",
+  "litellm_subjects_deleted",
+  "local_paths_removed",
+] as const;
+
+const WORKFLOW_MANAGED_CELLS = [
+  "WF-MANAGED-COMPLETION",
+  "WF-MANAGED-CONTROL",
+  "WF-MANAGED-CUSTODY",
+] as const;
+
+const WORKFLOW_MANAGED_PLACEMENTS = ["repository", "scratch"] as const;
+
+const WORKFLOW_MANAGED_TERMINAL_STATES = [
+  "completed",
+  "cancelled",
+  "interrupted",
+  "target_lost",
+] as const;
+
+/** The one terminal state a GREEN cell of each kind must have reached. */
+const WORKFLOW_GREEN_TERMINAL_BY_CELL: Readonly<
+  Record<WorkflowManagedCell, readonly WorkflowManagedRunEvidenceV1["observed_terminal_state"][]>
+> = {
+  "WF-MANAGED-COMPLETION": ["completed"],
+  "WF-MANAGED-CONTROL": ["cancelled", "interrupted"],
+  "WF-MANAGED-CUSTODY": ["target_lost"],
+};
+
+/**
+ * Kind-scoped validator for `workflow_managed_run` (PR 7 release tail). Per the
+ * extension contract: exact key set on the object and every nested proof/cleanup
+ * block; safe-token/hash discipline on every string field (never a raw
+ * run/invocation/session id); exactly one non-null proof block matching `cell`;
+ * and on a GREEN cell the cell-appropriate terminal state, all proof witness
+ * booleans true, and a clean cleanup block. A non-green cell may still carry
+ * evidence recording its own cleanup failure. Does not touch any other kind's
+ * validator.
+ *
+ * NOTE (provisional-spec honesty): the managed-Workflow scenario fails closed
+ * offline, so no green result reaches this validator until the live background
+ * plane + founder sign-off exist. This is the honest schema guard, not proof of
+ * a live journey.
+ */
+function validateWorkflowManagedRunEvidence(
+  where: string,
+  evidence: WorkflowManagedRunEvidenceV1,
+  status: FinalTestStatus,
+): void {
+  requireExactKeys(evidence, WORKFLOW_MANAGED_RUN_EVIDENCE_KEYS, where);
+  if (evidence.kind !== "workflow_managed_run") {
+    throw new ReportValidationError(`${where}.kind is unknown.`);
+  }
+  if (!(WORKFLOW_MANAGED_CELLS as readonly string[]).includes(evidence.cell)) {
+    throw new ReportValidationError(`${where}.cell must be one of ${WORKFLOW_MANAGED_CELLS.join(", ")}.`);
+  }
+  if (!Array.isArray(evidence.artifact_ids) || evidence.artifact_ids.length === 0) {
+    throw new ReportValidationError(`${where}.artifact_ids must be a non-empty array.`);
+  }
+  for (const [index, id] of evidence.artifact_ids.entries()) {
+    requireSafeEvidenceToken(`${where}.artifact_ids[${index}]`, id);
+  }
+  requireSafeEvidenceToken(`${where}.server_version`, evidence.server_version);
+  requireSafeEvidenceToken(`${where}.worker_version`, evidence.worker_version);
+  requireSafeEvidenceToken(`${where}.beat_version`, evidence.beat_version);
+  requireSafeEvidenceToken(`${where}.anyharness_version`, evidence.anyharness_version);
+  if (evidence.harness !== "claude") {
+    throw new ReportValidationError(`${where}.harness must be "claude".`);
+  }
+  requireSafeEvidenceToken(`${where}.model_id`, evidence.model_id);
+  if (!(WORKFLOW_MANAGED_PLACEMENTS as readonly string[]).includes(evidence.placement)) {
+    throw new ReportValidationError(`${where}.placement must be one of ${WORKFLOW_MANAGED_PLACEMENTS.join(", ")}.`);
+  }
+  requireEvidenceHash(`${where}.invocation_id_hash`, evidence.invocation_id_hash);
+  requireEvidenceHash(`${where}.managed_execution_id_hash`, evidence.managed_execution_id_hash);
+  requireEvidenceHash(`${where}.workspace_id_hash`, evidence.workspace_id_hash);
+  requireEvidenceHash(`${where}.session_id_hash`, evidence.session_id_hash);
+  requireEvidenceHash(`${where}.prompt_id_hash`, evidence.prompt_id_hash);
+  requireEvidenceHash(`${where}.turn_id_hash`, evidence.turn_id_hash);
+  requireEvidenceHash(`${where}.execution_store_id_hash`, evidence.execution_store_id_hash);
+  if (!(WORKFLOW_MANAGED_TERMINAL_STATES as readonly string[]).includes(evidence.observed_terminal_state)) {
+    throw new ReportValidationError(
+      `${where}.observed_terminal_state must be one of ${WORKFLOW_MANAGED_TERMINAL_STATES.join(", ")}.`,
+    );
+  }
+
+  // Exactly one proof block, matching `cell`. The other two must be null.
+  const proofByCell: Record<WorkflowManagedCell, "completion" | "control" | "custody"> = {
+    "WF-MANAGED-COMPLETION": "completion",
+    "WF-MANAGED-CONTROL": "control",
+    "WF-MANAGED-CUSTODY": "custody",
+  };
+  const expectedProof = proofByCell[evidence.cell];
+  for (const proofField of ["completion", "control", "custody"] as const) {
+    const value = evidence[proofField];
+    if (proofField === expectedProof) {
+      if (value === null) {
+        throw new ReportValidationError(`${where}.${proofField} must be non-null for cell "${evidence.cell}".`);
+      }
+    } else if (value !== null) {
+      throw new ReportValidationError(`${where}.${proofField} must be null for cell "${evidence.cell}".`);
+    }
+  }
+
+  // On a GREEN cell, the terminal state must match the cell, and the matching
+  // proof block's witness booleans must all be true. A non-green cell may carry
+  // a proof block recording partial state without gating.
+  if (status === "green") {
+    const allowedTerminals = WORKFLOW_GREEN_TERMINAL_BY_CELL[evidence.cell];
+    if (!allowedTerminals.includes(evidence.observed_terminal_state)) {
+      throw new ReportValidationError(
+        `${where}.observed_terminal_state "${evidence.observed_terminal_state}" is not a green terminal for cell "${evidence.cell}" (expected one of ${allowedTerminals.join(", ")}).`,
+      );
+    }
+  }
+
+  if (evidence.completion !== null) {
+    const proof = evidence.completion;
+    if (typeof proof !== "object" || Array.isArray(proof)) {
+      throw new ReportValidationError(`${where}.completion must be an object or null.`);
+    }
+    requireExactKeys(proof, WORKFLOW_COMPLETION_PROOF_KEYS, `${where}.completion`);
+    requireSafeEvidenceToken(`${where}.completion.base_oid`, proof.base_oid);
+    if (status === "green") {
+      requireTrue(`${where}.completion.artifact_validated`, proof.artifact_validated);
+      requireTrue(`${where}.completion.replay_single_effect`, proof.replay_single_effect);
+      requireTrue(`${where}.completion.single_outbox_generation`, proof.single_outbox_generation);
+      requireTrue(`${where}.completion.single_materialization`, proof.single_materialization);
+    } else {
+      requireBoolean(`${where}.completion.artifact_validated`, proof.artifact_validated);
+      requireBoolean(`${where}.completion.replay_single_effect`, proof.replay_single_effect);
+      requireBoolean(`${where}.completion.single_outbox_generation`, proof.single_outbox_generation);
+      requireBoolean(`${where}.completion.single_materialization`, proof.single_materialization);
+    }
+  }
+
+  if (evidence.control !== null) {
+    const proof = evidence.control;
+    if (typeof proof !== "object" || Array.isArray(proof)) {
+      throw new ReportValidationError(`${where}.control must be an object or null.`);
+    }
+    requireExactKeys(proof, WORKFLOW_CONTROL_PROOF_KEYS, `${where}.control`);
+    for (const field of WORKFLOW_CONTROL_PROOF_KEYS) {
+      if (status === "green") {
+        requireTrue(`${where}.control.${field}`, proof[field]);
+      } else {
+        requireBoolean(`${where}.control.${field}`, proof[field]);
+      }
+    }
+  }
+
+  if (evidence.custody !== null) {
+    const proof = evidence.custody;
+    if (typeof proof !== "object" || Array.isArray(proof)) {
+      throw new ReportValidationError(`${where}.custody must be an object or null.`);
+    }
+    requireExactKeys(proof, WORKFLOW_CUSTODY_PROOF_KEYS, `${where}.custody`);
+    for (const field of WORKFLOW_CUSTODY_PROOF_KEYS) {
+      if (status === "green") {
+        requireTrue(`${where}.custody.${field}`, proof[field]);
+      } else {
+        requireBoolean(`${where}.custody.${field}`, proof[field]);
+      }
+    }
+  }
+
+  validateWorkflowManagedCleanupEvidence(where, evidence.cleanup, status);
+}
+
+function validateWorkflowManagedCleanupEvidence(
+  where: string,
+  cleanup: WorkflowManagedCleanupBlock,
+  status: FinalTestStatus,
+): void {
+  if (typeof cleanup !== "object" || cleanup === null || Array.isArray(cleanup)) {
+    throw new ReportValidationError(`${where}.cleanup must be an object.`);
+  }
+  requireExactKeys(cleanup, WORKFLOW_MANAGED_CLEANUP_EVIDENCE_KEYS, `${where}.cleanup`);
+  requireEvidenceHash(`${where}.cleanup.ledger_id_hash`, cleanup.ledger_id_hash);
+  requireNonNegativeInteger(`${where}.cleanup.registered`, cleanup.registered);
+  requireNonNegativeInteger(`${where}.cleanup.reconciled`, cleanup.reconciled);
+  requireNonNegativeInteger(`${where}.cleanup.failed`, cleanup.failed);
+  for (const field of WORKFLOW_MANAGED_CLEANUP_DELETION_FIELDS) {
+    requireBoolean(`${where}.cleanup.${field}`, cleanup[field]);
+  }
+  if (status === "green") {
+    if (cleanup.failed > 0) {
+      throw new ReportValidationError(`${where}.cleanup.failed must be 0 for a green result.`);
+    }
+    if (WORKFLOW_MANAGED_CLEANUP_DELETION_FIELDS.some((field) => cleanup[field] !== true)) {
       throw new ReportValidationError(`${where}.cleanup is incomplete on a green result.`);
     }
   }
@@ -2550,6 +3004,11 @@ const GREEN_EVIDENCE_REQUIRED_SCENARIOS: ReadonlySet<string> = new Set([
   // ever bites if it later greens without evidence — which is exactly the guard.)
   "SELFHOST-CFN-1",
   "SELFHOST-ISOLATION-1",
+  // Managed-Workflow qualification (PR 7 release tail): a green managed-Workflow
+  // cell must carry complete `workflow_managed_run` evidence. Today every cell
+  // fails closed (no live background plane / gate off), so this only bites if a
+  // cell ever greens without evidence — exactly the guard.
+  "WORKFLOW-MANAGED-QUAL-1",
 ]);
 
 function scenarioRequiresGreenEvidence(scenarioId: string): boolean {
@@ -2805,6 +3264,32 @@ export function sanitizeCellEvidence(
     case "cloud_provision_turn":
       // Owned by the managed-cloud slice; delegate to its kind-scoped sanitizer.
       return sanitizeCloudProvisionTurnEvidence(evidence, secretValues);
+    case "workflow_managed_run":
+      // Managed-Workflow qualification (PR 7 release tail): every string field is
+      // a safe token/hash by construction; clean them as a fail-closed backstop
+      // (the proof/booleans/numbers pass through untouched).
+      return {
+        ...evidence,
+        artifact_ids: evidence.artifact_ids.map(clean),
+        server_version: clean(evidence.server_version),
+        worker_version: clean(evidence.worker_version),
+        beat_version: clean(evidence.beat_version),
+        anyharness_version: clean(evidence.anyharness_version),
+        model_id: clean(evidence.model_id),
+        invocation_id_hash: clean(evidence.invocation_id_hash),
+        managed_execution_id_hash: clean(evidence.managed_execution_id_hash),
+        workspace_id_hash: clean(evidence.workspace_id_hash),
+        session_id_hash: clean(evidence.session_id_hash),
+        prompt_id_hash: clean(evidence.prompt_id_hash),
+        turn_id_hash: clean(evidence.turn_id_hash),
+        execution_store_id_hash: clean(evidence.execution_store_id_hash),
+        completion: evidence.completion
+          ? { ...evidence.completion, base_oid: clean(evidence.completion.base_oid) }
+          : null,
+        control: evidence.control ? { ...evidence.control } : null,
+        custody: evidence.custody ? { ...evidence.custody } : null,
+        cleanup: { ...evidence.cleanup, ledger_id_hash: clean(evidence.cleanup.ledger_id_hash) },
+      };
     default:
       return evidence;
   }
