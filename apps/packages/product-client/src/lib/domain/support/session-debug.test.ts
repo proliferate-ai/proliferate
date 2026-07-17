@@ -376,22 +376,140 @@ describe("sanitizeSessionDebugContentParts", () => {
       },
     ] satisfies ContentPart[];
 
-    expect(sanitizeSessionDebugContentParts(parts)).toEqual([
-      { type: "text", text: "[text:3]" },
-      { type: "tool_input_text", text: "[text:5]" },
-      { type: "tool_result_text", text: "[text:6]" },
+    const sanitized = sanitizeSessionDebugContentParts(parts);
+
+    expect(JSON.stringify(sanitized)).not.toContain("secret");
+    expect(sanitized).toEqual([
+      { type: "text", text: "[redacted:3]" },
+      { type: "tool_input_text", text: "[redacted:5]" },
+      { type: "tool_result_text", text: "[redacted:6]" },
       {
         type: "resource",
-        uri: "file:///tmp/secret.txt",
-        name: "secret.txt",
-        mimeType: "text/plain",
-        preview: "[preview:7]",
+        uri: "[redacted:22]",
+        name: "[redacted:10]",
+        mimeType: "[redacted:10]",
+        preview: "[redacted:7]",
       },
       {
         type: "file_read",
-        path: "/repo/secret.txt",
-        preview: "file preview",
+        path: "[redacted:16]",
+        preview: "[redacted:12]",
       },
+    ]);
+  });
+
+  it("fails closed for every current content shape and unknown future shapes", () => {
+    const privateContent = "private sentinel";
+    const parts = [
+      { type: "text", text: privateContent },
+      {
+        type: "image",
+        attachmentId: "attachment-id",
+        mimeType: "image/png",
+        name: privateContent,
+        uri: privateContent,
+      },
+      {
+        type: "resource",
+        mimeType: "text/plain",
+        name: privateContent,
+        preview: privateContent,
+        uri: privateContent,
+      },
+      {
+        type: "resource_link",
+        description: privateContent,
+        name: privateContent,
+        title: privateContent,
+        uri: privateContent,
+      },
+      { type: "reasoning", text: privateContent, visibility: "private" },
+      {
+        type: "tool_call",
+        nativeToolName: "shell",
+        title: privateContent,
+        toolCallId: "tool-call-id",
+      },
+      {
+        type: "terminal_output",
+        data: privateContent,
+        event: "output",
+        terminalId: "terminal-id",
+      },
+      {
+        type: "file_read",
+        basename: privateContent,
+        path: privateContent,
+        preview: privateContent,
+        scope: "full",
+        workspacePath: privateContent,
+      },
+      {
+        type: "file_change",
+        basename: privateContent,
+        newBasename: privateContent,
+        newPath: privateContent,
+        newWorkspacePath: privateContent,
+        operation: "edit",
+        patch: privateContent,
+        path: privateContent,
+        preview: privateContent,
+        workspacePath: privateContent,
+      },
+      { type: "plan", entries: [{ content: privateContent, status: "pending" }] },
+      {
+        type: "proposed_plan",
+        bodyMarkdown: privateContent,
+        planId: "plan-id",
+        snapshotHash: privateContent,
+        sourceKind: "agent",
+        sourceSessionId: "session-id",
+        title: privateContent,
+      },
+      {
+        type: "plan_reference",
+        bodyMarkdown: privateContent,
+        planId: "plan-id",
+        snapshotHash: privateContent,
+        sourceKind: "agent",
+        sourceSessionId: "session-id",
+        title: privateContent,
+      },
+      {
+        type: "proposed_plan_decision",
+        decisionState: "rejected",
+        decisionVersion: 1,
+        errorMessage: privateContent,
+        nativeResolutionState: "failed",
+        planId: "plan-id",
+      },
+      { type: "tool_input_text", text: privateContent },
+      { type: "tool_result_text", text: privateContent },
+    ] satisfies ContentPart[];
+    const futurePart = {
+      type: "future_content",
+      body: privateContent,
+      code: privateContent,
+      createdAt: privateContent,
+      id: privateContent,
+      location: privateContent,
+      nativeToolName: privateContent,
+      reason: privateContent,
+      scope: privateContent,
+      source: privateContent,
+      status: privateContent,
+      [privateContent]: true,
+    } as unknown as ContentPart;
+
+    const sanitized = sanitizeSessionDebugContentParts([...parts, futurePart]);
+
+    expect(JSON.stringify(sanitized)).not.toContain(privateContent);
+    expect(Object.keys(sanitized.at(-1) as object).some((key) => (
+      key.startsWith("[redacted-key:16:")
+    ))).toBe(true);
+    expect(sanitized.map((part) => part.type)).toEqual([
+      ...parts.map((part) => part.type),
+      "[redacted:14]",
     ]);
   });
 });
@@ -456,44 +574,47 @@ describe("sanitizeSessionDebugExportedSession", () => {
     });
 
     expect(sanitized.session?.pendingPrompts).toEqual([{
-      contentParts: [{ type: "text", text: "[text:3]" }],
-      promptId: "prompt-1",
+      contentParts: [{ type: "text", text: "[redacted:3]" }],
+      promptId: "[redacted:8]",
       promptProvenance: null,
-      queuedAt: "2026-04-16T18:09:00.000Z",
+      queuedAt: "[redacted:24]",
       seq: 2,
-      text: "[content:6]",
+      text: "[redacted:6]",
     }]);
     expect(sanitized.normalizedEvents?.[0].event).toEqual({
       type: "item_completed",
       item: {
-        contentParts: [{ type: "tool_result_text", text: "[text:6]" }],
-        kind: "assistant_message",
-        rawInput: undefined,
-        rawOutput: undefined,
-        sourceAgentKind: "codex",
-        status: "completed",
+        contentParts: [{ type: "tool_result_text", text: "[redacted:6]" }],
+        kind: "[redacted:17]",
+        rawInput: { redacted: true },
+        rawOutput: { redacted: true },
+        sourceAgentKind: "[redacted:5]",
+        status: "[redacted:9]",
       },
     });
     expect(sanitized.normalizedEvents?.[1].event).toEqual({
       type: "item_delta",
       delta: {
-        appendContentParts: [{ type: "tool_input_text", text: "[text:5]" }],
-        rawInput: undefined,
-        rawOutput: undefined,
-        replaceContentParts: [{ type: "text", text: "[text:7]" }],
+        appendContentParts: [{ type: "tool_input_text", text: "[redacted:5]" }],
+        rawInput: { redacted: true },
+        rawOutput: { redacted: true },
+        replaceContentParts: [{ type: "text", text: "[redacted:7]" }],
       },
     });
     expect(sanitized.normalizedEvents?.[2].event).toEqual({
       type: "pending_prompt_added",
-      contentParts: [{ type: "text", text: "[text:6]" }],
-      promptId: "prompt-1",
+      contentParts: [{ type: "text", text: "[redacted:6]" }],
+      promptId: "[redacted:8]",
       promptProvenance: null,
-      queuedAt: "2026-04-16T18:09:00.000Z",
+      queuedAt: "[redacted:24]",
       seq: 3,
-      text: "[content:5]",
+      text: "[redacted:5]",
     });
     expect(sanitized.rawNotifications).toEqual([{
-      ...rawNotification,
+      sessionId: "[redacted:16]",
+      seq: 4,
+      timestamp: "[redacted:24]",
+      notificationKind: "[redacted:14]",
       notification: { redacted: true },
     }]);
   });
@@ -552,10 +673,10 @@ describe("buildSessionDebugExport", () => {
       locator,
       errors: [],
     });
-    expect(payload.sessions[0].session?.pendingPrompts?.[0].text).toBe("[content:6]");
+    expect(payload.sessions[0].session?.pendingPrompts?.[0].text).toBe("[redacted:6]");
     expect(payload.sessions[0].rawNotifications?.[0].notification).toEqual({ redacted: true });
     expect(payload.sessions[0].errors).toEqual([
-      { scope: "liveConfig", message: "unavailable" },
+      { scope: "[redacted:10]", message: "[redacted:11]" },
     ]);
   });
 });

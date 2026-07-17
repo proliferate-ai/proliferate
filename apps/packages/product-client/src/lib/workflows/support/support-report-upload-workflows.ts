@@ -1,6 +1,7 @@
 import type { AnyHarnessResolvedConnection } from "@anyharness/sdk-react";
 import type { SupportBundle } from "@proliferate/product-client/host/desktop-bridge";
 import { sanitizeSupportUploadPayload } from "#product/lib/domain/support/report-upload-sanitizer";
+import { sanitizeSessionDebugExportedSession } from "#product/lib/domain/support/session-debug/sanitizer";
 import type {
   SupportReportJob,
   SupportReportServerCorrelation,
@@ -42,13 +43,14 @@ interface SupportReportPackageSession {
 }
 
 export interface SupportReportPackage {
-  schemaVersion: 3;
+  schemaVersion: 2;
   generatedAt: string;
   correlation?: SupportReportServerCorrelation;
   report: {
     jobId: string;
     createdAt: string;
-    message: string;
+    messagePresent: boolean;
+    messageLength: number;
     scope: SupportReportJob["scope"];
     context: SupportReportJob["snapshot"]["context"];
     openedAt: string;
@@ -75,8 +77,8 @@ export async function buildSupportReportPackage<
   serverCorrelation?: SupportReportServerCorrelation,
 ): Promise<SupportReportPackage> {
   const collectionErrors: string[] = [];
-  const runtimeDiagnostics = await dependencies.collectDiagnostics().catch((error) => {
-    collectionErrors.push(formatError("runtimeDiagnostics", error));
+  const runtimeDiagnostics = await dependencies.collectDiagnostics().catch(() => {
+    collectionErrors.push(formatError("runtimeDiagnostics"));
     return null;
   });
   const workspaceIds = workspaceIdsForJob(job).slice(0, MAX_WORKSPACES);
@@ -85,13 +87,14 @@ export async function buildSupportReportPackage<
   );
 
   return sanitizeSupportUploadPayload({
-    schemaVersion: 3,
+    schemaVersion: 2,
     generatedAt: dependencies.now().toISOString(),
     correlation: serverCorrelation,
     report: {
       jobId: job.jobId,
       createdAt: job.createdAt,
-      message: job.message.trim(),
+      messagePresent: job.message.trim().length > 0,
+      messageLength: job.message.trim().length,
       scope: job.scope,
       context: job.snapshot.context,
       openedAt: job.snapshot.openedAt,
@@ -139,8 +142,8 @@ async function collectWorkspaceDiagnostics<
       sessions: exportedSessions,
       errors,
     };
-  } catch (error) {
-    errors.push({ scope: "workspace", message: formatError(workspaceId, error) });
+  } catch {
+    errors.push({ scope: "workspace", message: formatError("workspace") });
     return {
       requestedWorkspaceId: workspaceId,
       sessions: [],
@@ -177,12 +180,20 @@ async function collectSessionDiagnostics(
     },
   );
 
-  return {
-    sessionId,
-    summary,
+  const sanitized = sanitizeSessionDebugExportedSession({
+    session: summary,
     normalizedEvents: Array.isArray(normalizedEvents) ? normalizedEvents : [],
     liveConfig,
     rawNotifications: Array.isArray(rawNotifications) ? rawNotifications : [],
+    errors: [],
+  });
+
+  return {
+    sessionId,
+    summary: sanitized.session,
+    normalizedEvents: sanitized.normalizedEvents ?? [],
+    liveConfig: sanitized.liveConfig,
+    rawNotifications: sanitized.rawNotifications ?? [],
     errors,
   };
 }
@@ -194,8 +205,8 @@ async function captureSessionValue<T>(
 ): Promise<T | null> {
   try {
     return await load();
-  } catch (error) {
-    errors.push({ scope, message: formatError(scope, error) });
+  } catch {
+    errors.push({ scope, message: formatError(scope) });
     return null;
   }
 }
@@ -222,8 +233,6 @@ function dateMs(value: string | null | undefined): number {
   return Number.isFinite(time) ? time : 0;
 }
 
-
-function formatError(scope: string, error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error);
-  return `${scope}: ${message}`;
+function formatError(scope: string): string {
+  return `${scope}: unavailable`;
 }

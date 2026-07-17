@@ -216,7 +216,7 @@ describe("session debug export workflows", () => {
       kind: "session",
       id: "11111111-2222-3333-4444-555555555555",
     });
-    expect(payload.sessions[0].session.id).toBe("11111111-2222-3333-4444-555555555555");
+    expect(payload.sessions[0].session.id).toBe("[redacted:36]");
     expect(payload.sessions[0].normalizedEvents).toHaveLength(1);
     expect(payload.sessions[0].rawNotifications).toHaveLength(1);
     expect(payload.sessions[0].liveConfig).toEqual({ liveConfig: null });
@@ -293,8 +293,8 @@ describe("session debug export workflows", () => {
     expect(payload.sessions[0].rawNotifications).toBeNull();
     expect(payload.sessions[0].errors).toEqual([
       {
-        scope: "rawNotifications",
-        message: "raw fetch failed",
+        scope: "[redacted:16]",
+        message: "[redacted:16]",
       },
     ]);
   });

@@ -15,15 +15,19 @@ import {
 const now = new Date("2026-05-31T12:00:00.000Z");
 
 describe("buildSupportReportPackage", () => {
-  it("uploads full content without redacting prompts, events, notifications, or live-config", async () => {
-    const sessionId = "session-full";
+  it("keeps diagnostic metadata while redacting report and session content", async () => {
+    const sessionId = "session-redaction";
     const connection: AnyHarnessResolvedConnection = {
       runtimeUrl: "http://127.0.0.1:7007",
       anyharnessWorkspaceId: "workspace-ah",
     };
     const dependencies: SupportReportUploadDependencies = {
       now: () => now,
-      collectDiagnostics: vi.fn(async () => null),
+      collectDiagnostics: vi.fn(async () => {
+        const error = new Error("runtime diagnostic private");
+        error.name = "private error name";
+        throw error;
+      }),
       resolveWorkspace: vi.fn(async () => ({ workspaceId: "workspace-ui", connection })),
       getClient: vi.fn(() => ({
         runtime: {
@@ -53,38 +57,51 @@ describe("buildSupportReportPackage", () => {
     });
     const json = JSON.stringify(payload);
 
-    // Full content is included (no redaction).
-    expect(json).toContain("prompt secret");
-    expect(json).toContain("tool output secret");
-    expect(json).toContain("raw notification secret");
-    expect(json).toContain("system prompt secret");
+    expect(json).not.toContain("report message secret");
+    expect(json).not.toContain("prompt secret");
+    expect(json).not.toContain("tool output secret");
+    expect(json).not.toContain("raw input secret");
+    expect(json).not.toContain("raw notification secret");
+    expect(json).not.toContain("system prompt secret");
+    expect(json).not.toContain("live config credential secret");
+    expect(json).not.toContain("runtime diagnostic private");
+    expect(json).not.toContain("private error name");
 
-    // Pending prompts include full text.
     expect(payload.workspaces[0]?.sessions[0]?.summary).toMatchObject({
-      pendingPrompts: [{ text: "prompt secret" }],
+      pendingPrompts: [{
+        contentParts: [{ type: "text", text: "[redacted:13]" }],
+        text: "[redacted:13]",
+      }],
     });
-
-    // Raw notifications pass through unredacted.
-    expect(payload.workspaces[0]?.sessions[0]?.rawNotifications[0]).toMatchObject({
-      notification: { text: "raw notification secret" },
-    });
-
-    // Live config includes full system prompt.
-    expect(payload.workspaces[0]?.sessions[0]?.liveConfig).toMatchObject({
-      liveConfig: {
-        systemPrompt: "system prompt secret",
-        normalizedControls: {
-          model: { currentValue: "gpt-5.4" },
+    expect(payload.workspaces[0]?.sessions[0]?.normalizedEvents[0]).toMatchObject({
+      event: {
+        item: {
+          contentParts: [{ type: "tool_result_text", text: "[redacted:18]" }],
+          rawInput: { redacted: true },
+          rawOutput: { redacted: true },
         },
       },
     });
-
-    // Schema version is 3.
-    expect(payload.schemaVersion).toBe(3);
-
-    // activeWorkspaceId and reportOpenedAt are captured.
+    expect(payload.workspaces[0]?.sessions[0]?.rawNotifications[0]).toMatchObject({
+      notification: { redacted: true },
+    });
+    expect(payload.workspaces[0]?.sessions[0]?.liveConfig).toMatchObject({
+      liveConfig: {
+        systemPrompt: "[redacted:20]",
+        providerApiKey: "[REDACTED]",
+        normalizedControls: {
+          model: { currentValue: "[redacted:7]" },
+        },
+      },
+    });
+    expect(payload.schemaVersion).toBe(2);
+    expect(payload.report.messagePresent).toBe(true);
+    expect(payload.report.messageLength).toBe("report message secret".length);
+    expect(payload.report).not.toHaveProperty("message");
     expect(payload.report.activeWorkspaceId).toBe("workspace-ui");
+    expect(payload.report.activeSessionId).toBe("session-active");
     expect(payload.report.reportOpenedAt).toBe(now.toISOString());
+    expect(payload.collectionErrors).toEqual(["runtimeDiagnostics: unavailable"]);
   });
 });
 
@@ -92,7 +109,7 @@ function makeJob(): SupportReportJob {
   return {
     jobId: "job-1",
     createdAt: now.toISOString(),
-    message: "help",
+    message: "report message secret",
     scope: {
       kind: "most_recent_workspace",
       workspaceIds: ["workspace-ui"],
@@ -122,6 +139,7 @@ function makeJob(): SupportReportJob {
     },
     attachments: [],
     activeWorkspaceId: "workspace-ui",
+    activeSessionId: "session-active",
     reportOpenedAt: now.toISOString(),
   };
 }
@@ -185,6 +203,7 @@ function makeLiveConfig(): GetSessionLiveConfigResponse {
   return {
     liveConfig: {
       systemPrompt: "system prompt secret",
+      providerApiKey: "live config credential secret",
       normalizedControls: {
         model: { currentValue: "gpt-5.4" },
       },
