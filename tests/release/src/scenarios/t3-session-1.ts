@@ -32,8 +32,8 @@ export const t3Session1: MatrixScenarioDefinition = {
   kind: "matrix",
   expandCells: (): ScenarioCellSpec[] => [{ dimensions: { harness: SESSION_TABS_START_HARNESS } }],
   planCell: (_ctx, cell: PlannedCellV1): ScenarioPlanStep[] => [
-    { description: `[${cell.cell_id}] empty-chat harness switch preserves one visible tab, replaces the backend session (id changes)` },
-    { description: `[${cell.cell_id}] switch after messages preserves the old transcript, opens a new tab to its right` },
+    { description: `[${cell.cell_id}] switch after messages preserves the old transcript, opens a new (genuinely empty) tab to its right` },
+    { description: `[${cell.cell_id}] empty-chat harness switch on that new tab replaces the backend session in place (same tab position, id changes)` },
     { description: `[${cell.cell_id}] same-harness model change stays in-session where the harness contract permits` },
     { description: `[${cell.cell_id}] reload preserves tab order, active tab, harness attachment, and transcript` },
   ],

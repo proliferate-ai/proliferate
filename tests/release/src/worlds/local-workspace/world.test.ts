@@ -181,6 +181,15 @@ test("constructLocalWorld runs the ordered startup and returns a ready handle", 
     assert.ok(cp, "expected a docker cp of the setup token");
     assert.equal(cp!.at(-1), path.join(runDir, "setup-token"));
 
+    // The Server container gets its own base URL: `worker_cloud_base_url()`
+    // (cloud/runtime_workers/service.py) 500s every `POST /v1/cloud/worker/enroll`
+    // (T3-INT-1's integration-gateway enrollment) when neither API_BASE_URL nor
+    // CLOUD_WORKER_BASE_URL is set.
+    assert.ok(
+      h.argv.some((cmd) => cmd[0] === "docker" && cmd.includes(`API_BASE_URL=http://127.0.0.1:${PORTS.server}`)),
+      "expected the Server container env to carry API_BASE_URL at the world's server port",
+    );
+
     // A fresh actor enrolled for cleanup, then a full green teardown.
     await world.trackActorSubjects!({
       userId: "u1",

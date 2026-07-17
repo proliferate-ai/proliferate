@@ -284,7 +284,10 @@ export const defaultLocalRouteDriver: LocalRouteDriver = {
     // after the user-key turn, so navigate back to the harness pane first.
     await openHarnessSettings(p, harness);
     await selectHarnessRoute(p, harness, "gateway");
-    await returnToAppHome(p);
+    // A workspace is already active here (unlike LOCAL-2/3's first settings
+    // visit), so "Back to app" returns to the workspace chat shell, not the
+    // home composer.
+    await returnToAppHome(p, "[data-workspace-shell]");
     await this.waitForRouteSync(world, page, harness, "gateway");
   },
   async waitForRouteSync(world, _page, harness, route) {
@@ -1136,12 +1139,17 @@ async function ensureSidebarOpen(page: Page): Promise<void> {
     .waitFor({ state: "visible", timeout: SETTINGS_STEP_TIMEOUT_MS });
 }
 
-/** Returns from the settings surface to the home composer so the subsequent
- * repo-selection / send flow runs on the home screen. */
-async function returnToAppHome(page: Page): Promise<void> {
+/** Returns from the settings surface to the app. Waits for `expectedSurface` to
+ * become visible afterward — the home composer by default (LOCAL-2/3 callers,
+ * where no workspace is active yet), but callers with an already-active
+ * workspace (e.g. LOCAL-6's `switchSelectedRouteToGateway`, where the product
+ * returns to the workspace chat shell rather than the home screen) must pass
+ * the surface it actually lands on, or this waits forever for a selector that
+ * never appears (proven: Actions run 29549140268, T3-AUTHROUTE-1/local/route=change). */
+async function returnToAppHome(page: Page, expectedSurface = "[data-home-composer-editor]"): Promise<void> {
   await page.getByRole("button", { name: /back to app/i }).first().click();
   await page
-    .locator("[data-home-composer-editor]")
+    .locator(expectedSurface)
     .first()
     .waitFor({ state: "visible", timeout: SETTINGS_STEP_TIMEOUT_MS });
 }

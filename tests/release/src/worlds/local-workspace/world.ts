@@ -271,7 +271,7 @@ export async function constructLocalWorld(options: ConstructLocalWorldOptions): 
     // Steps 3–6: run-scoped Docker network + Postgres + Redis + migrations +
     // Server (gateway enabled, SINGLE_ORG_MODE, short backfill interval).
     const naming = dockerNaming(options.run.run_id, options.run.shard_id);
-    const serverEnv = buildServerEnv(naming, options.litellm, options.ports.renderer);
+    const serverEnv = buildServerEnv(naming, options.litellm, options.ports.renderer, options.ports.server);
     const setupTokenHostPath = path.join(worldRoot, SETUP_TOKEN_FILENAME);
     const server = await startDockerStack({
       naming,
@@ -415,6 +415,7 @@ function buildServerEnv(
   naming: DockerNaming,
   litellm: QualificationLiteLlmConfig,
   rendererPort: number,
+  serverPort: number,
 ): ServerContainerEnv {
   const { databaseUrl, redisUrl } = dockerInternalUrls(naming);
   return {
@@ -443,6 +444,13 @@ function buildServerEnv(
     SETUP_TOKEN_FILE: SERVER_SETUP_TOKEN_CONTAINER_PATH,
     DATABASE_URL: databaseUrl,
     REDBEAT_REDIS_URL: redisUrl,
+    // The candidate Server's own base URL, required by `worker_cloud_base_url()`
+    // (server cloud/runtime_workers/service.py): without it every
+    // `POST /v1/cloud/worker/enroll` — the T3-INT-1 integration-gateway
+    // enrollment — 500s `cloud_worker_misconfigured`. The managed-cloud world
+    // already sets this (`managed-cloud/ingress.ts` API_BASE_URL comment); the
+    // local world's origin is the host-mapped server port.
+    API_BASE_URL: `http://127.0.0.1:${serverPort}`,
   };
 }
 
