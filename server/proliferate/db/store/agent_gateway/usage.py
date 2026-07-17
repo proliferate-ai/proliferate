@@ -142,7 +142,7 @@ async def llm_cost_usd_timeseries(
     Scoped to a billing subject (org or personal); optionally filtered to one
     user. Missing buckets are not zero-filled here — the caller fills gaps.
     """
-    bucket = func.date_trunc(granularity, AgentLlmUsageEvent.occurred_at)
+    bucket = func.date_trunc(granularity, AgentLlmUsageEvent.occurred_at, "UTC")
     conditions = [
         AgentLlmUsageEvent.billing_subject_id == billing_subject_id,
         AgentLlmUsageEvent.occurred_at >= _coerce_utc(start),
@@ -161,7 +161,7 @@ async def llm_cost_usd_timeseries(
             .order_by(bucket)
         )
     ).all()
-    return [(_coerce_utc(bucket_start), float(cost or 0.0)) for bucket_start, cost in rows]
+    return [(bucket_start.astimezone(UTC), float(cost or 0.0)) for bucket_start, cost in rows]
 
 
 async def llm_cost_usd_by_user(
