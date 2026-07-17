@@ -25,6 +25,12 @@ Integration code does not own:
 - Database access (no `db/store/**` imports).
 - Service-layer orchestration.
 
+Hosted product state that controls whether an external action may proceed is
+therefore not an integration concern. The durable action-approval state
+machine lives under
+`server/cloud/integrations/action_approvals/`, with persistence in the hosted
+Cloud database. Raw MCP/provider clients remain leaves beneath that boundary.
+
 ## Shape
 
 Three legal shapes, picked by what the integration is.
@@ -220,6 +226,49 @@ from integrations.stripe.client import _StripeRequestBuilder
 Integration internals (private functions, internal classes) are not part of
 the contract.
 
+## External-Action Admission Boundary
+
+An external-action approval is hosted product authorization, not vendor
+protocol state. The gateway must classify an action with its pure typed policy
+before credential resolution or any provider call. An approval request is
+bound server-side to the authenticated product user and organization scope,
+integration account UUID plus `auth_version`, runtime Worker, signed
+Worker-bound MCP session, exact verdict provider/tool, and canonical payload
+digest. Prompt text, provider arguments, gateway bearers, Worker credentials,
+and process memory are not approval sources.
+
+The hosted state machine has `pending`, `approved`, `rejected`, `revoked`,
+`expired`, and `consumed` states with a 600-second TTL. `expires_at` is the
+authoritative boundary even before observation materializes the `expired`
+state and system audit event. Request creation is committed before the gateway
+returns its typed approval-required result. Execution admission is an atomic,
+one-time, exact-binding `approved -> consumed` compare-and-set in a separate
+short transaction; its audit event must commit before credential decryption,
+auth-header rendering, or vendor network I/O.
+
+The approval and event tables retain immutable identity snapshots so deletion
+of a user, organization, account, or Worker cannot erase historical evidence.
+First-party list/get/approve/reject/revoke routes require product-user auth,
+recheck ownership and active organization membership, and expose only typed
+metadata, the payload digest, and fixed action/account/source labels. Reserved
+target/content fields remain null until a delivery slice owns one canonical
+typed action parser; provider arguments are never stored or returned. These
+routes must never return credentials, rendered auth, or raw provider payloads.
+
+The current Slack boundary executes only the exact read/search allowlist.
+Known Slack external actions can create durable requests but are not delivered;
+unknown Slack tools fail closed. The next delivery slice is limited to
+`slack_send_message`, a separate wrapper-level `approvalId`, and an explicit
+reauthorization that adds only `chat:write` to the existing exact six scopes.
+It must accept only the frozen `channel_id` plus `message` action shape, reject
+aliases and extra or rich fields, and derive binding, UI summary, and provider
+arguments from that one typed object. It must re-evaluate the verdict and full
+binding, require the current account revision, and commit one-time consumption
+before entering this raw integration layer. After the commit it must load and
+copy only the exact `(account_id, auth_version)` credential/config snapshot or
+fail, never refetch a newer revision through a generic launch resolver. Every
+other Slack mutation remains denied from delivery.
+
 ## Webhooks
 
 Webhook routes belong to the relevant product domain's `api.py`, not to
@@ -267,3 +316,6 @@ service owns "what to do when the event arrives."
 5. **Implement public functions** that product code will call.
 6. **Add unit tests** for the integration that mock the HTTP layer.
 7. **For folder integrations:** export the public API from `__init__.py`.
+8. **For external actions:** prove the hosted policy and committed admission
+   boundary with mocks before adding a vendor call; never use a live provider
+   account to verify authorization behavior.
