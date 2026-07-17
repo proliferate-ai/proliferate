@@ -1,0 +1,100 @@
+name: Release E2E — managed-cloud hard-cancel cleanup
+
+# `if: always()` steps in Release E2E cannot run after a job timeout or whole
+# workflow cancellation. This independent workflow runs from default-branch
+# code after the source workflow reaches `completed`; it never checks out or
+# executes the source run's branch. AWS's exact Purpose/RunId/ShardId tags are
+# the durable custody record that survives loss of the original runner disk.
+on:
+  workflow_run:
+    workflows: ["Release E2E (tier 3)"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      workflow_run_id:
+        description: Completed Release E2E workflow run id to reconcile.
+        required: true
+        type: string
+      workflow_run_attempt:
+        description: Exact attempt number of that completed workflow run.
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: >-
+    release-e2e-managed-cloud-cleanup-${{
+      github.event.workflow_run.id || inputs.workflow_run_id
+    }}-${{ github.event.workflow_run.run_attempt || inputs.workflow_run_attempt }}
+  cancel-in-progress: false
+
+jobs:
+  managed-cloud-aws:
+    name: Reconcile exact run-owned managed-cloud AWS resources
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: Qualification
+    env:
+      TARGET_WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id || inputs.workflow_run_id }}
+      TARGET_WORKFLOW_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.workflow_run_attempt }}
+      RELEASE_E2E_CLOUD_AWS_REGION: ${{ vars.RELEASE_E2E_CLOUD_AWS_REGION }}
+      RELEASE_E2E_CLOUD_ROUTE53_ZONE_ID: ${{ vars.RELEASE_E2E_CLOUD_ROUTE53_ZONE_ID }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.RELEASE_E2E_CLOUD_AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.RELEASE_E2E_CLOUD_AWS_SECRET_ACCESS_KEY }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      # Security boundary for workflow_run: execute only trusted default-branch
+      # cleanup code, never the triggering run's branch/head SHA. An explicit
+      # operator workflow_dispatch may exercise the selected cleanup branch so
+      # the repair itself can be proven before merge under the same protected
+      # Qualification-environment policy as Release E2E.
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.repository.default_branch || github.ref }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+
+      - name: Verify the exact source workflow attempt is completed
+        shell: bash
+        run: |
+          set -euo pipefail
+          receipt="${RUNNER_TEMP}/source-workflow-run.json"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${TARGET_WORKFLOW_RUN_ID}" > "${receipt}"
+          node - "${receipt}" "${TARGET_WORKFLOW_RUN_ATTEMPT}" <<'NODE'
+          const fs = require("node:fs");
+          const run = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+          const expectedAttempt = Number(process.argv[3]);
+          if (
+            run.name !== "Release E2E (tier 3)" ||
+            run.status !== "completed" ||
+            !Number.isSafeInteger(expectedAttempt) ||
+            expectedAttempt < 1 ||
+            run.run_attempt !== expectedAttempt ||
+            run.repository?.full_name !== process.env.GITHUB_REPOSITORY
+          ) {
+            throw new Error("Target is not the exact completed Release E2E workflow attempt.");
+          }
+          NODE
+
+      - name: Reconcile exact run-owned AWS resources
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "${RUNNER_TEMP}/managed-cloud-cleanup"
+          node scripts/ci-cd/reap-managed-cloud-aws.mjs \
+            --workflow-run-id "${TARGET_WORKFLOW_RUN_ID}" \
+            --workflow-run-attempt "${TARGET_WORKFLOW_RUN_ATTEMPT}" \
+            | tee "${RUNNER_TEMP}/managed-cloud-cleanup/report.json"
+
+      - name: Upload bounded cleanup receipt
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: managed-cloud-hard-cancel-cleanup-${{ env.TARGET_WORKFLOW_RUN_ID }}-${{ env.TARGET_WORKFLOW_RUN_ATTEMPT }}
+          path: ${{ runner.temp }}/managed-cloud-cleanup/report.json
+          retention-days: 14
+          if-no-files-found: ignore

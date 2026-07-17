@@ -731,6 +731,26 @@ idempotent provider cleanup after a process or runner crash, and a TTL janitor
 is the final abandoned-run backstop. Later janitor success does not
 retroactively turn a strict run with failed cleanup green.
 
+GitHub Actions cancellation and job timeout are a distinct failure boundary:
+steps on the cancelled runner, including `if: always()` cleanup and artifact
+upload, are not guaranteed to execute. Managed-cloud AWS ingress resources
+therefore carry exact `Purpose`/`RunId`/`ShardId` provider tags and an
+independent `workflow_run` cleanup executes trusted default-branch code after
+the source workflow completes. It derives only the current and retained
+historical run identities from the immutable Actions run id/attempt, validates
+the exact tags plus deterministic SG/key/DNS names, cleans those resources in
+dependency order, and proves a zero post-sweep. It never checks out the source
+run's branch and never performs account-wide prefix cleanup.
+
+That independent path currently covers the run-owned AWS candidate box,
+security group, key pair, Route53 record, and every process hosted on that
+candidate box; the ephemeral Actions runner itself owns its local browser and
+renderer processes. E2B, Stripe, and LiteLLM remain owned by their durable
+in-run ledgers and replay handlers; a hard cancel before those ledgers leave
+the runner remains explicit cleanup debt, never a green cleanup claim. Their
+external custody must become independently reachable before a hard-cancelled
+managed-cloud run can claim complete cross-provider reconciliation.
+
 ### Per-cell evidence and result behavior
 
 Each world provisioner returns a typed ready handle only after validating its
