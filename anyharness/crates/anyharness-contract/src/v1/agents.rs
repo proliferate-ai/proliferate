@@ -250,6 +250,44 @@ pub enum ReconcileJobStatus {
     Failed,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentInstallProgressPhase {
+    Queued,
+    Downloading,
+    Verifying,
+    Extracting,
+    Installing,
+    Finalizing,
+    Completed,
+    Skipped,
+    Failed,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentInstallProgressComponent {
+    pub agent: String,
+    /// Stable artifact role (`native_cli` or `agent_process`).
+    pub role: String,
+    pub phase: AgentInstallProgressPhase,
+    pub downloaded_bytes: u64,
+    /// Exact compressed transfer total when known. `null` means the runtime
+    /// does not own or cannot determine the package-manager transfer size.
+    pub download_size_bytes: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentInstallProgress {
+    pub downloaded_bytes: u64,
+    /// Aggregate exact total, or `null` when any component is indeterminate.
+    pub download_size_bytes: Option<u64>,
+    pub completed_components: u32,
+    pub total_components: u32,
+    pub components: Vec<AgentInstallProgressComponent>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ReconcileAgentsRequest {
@@ -260,6 +298,10 @@ pub struct ReconcileAgentsRequest {
     /// session start). Defaults to false (full-scope reconcile).
     #[serde(default)]
     pub installed_only: bool,
+    /// Optional harness kinds to reconcile. An empty list keeps the existing
+    /// all-harness behavior; the settings UI uses a single kind for install.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub agent_kinds: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -279,6 +321,14 @@ pub struct ReconcileAgentsResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub job_id: Option<String>,
     pub reinstall: bool,
+    /// Present on runtimes that support scoped reconcile progress. Optional so
+    /// newer clients can still decode responses from older runtime versions.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub installed_only: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub current_agent: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub progress: Option<AgentInstallProgress>,
     pub results: Vec<ReconcileAgentResult>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub started_at: Option<String>,

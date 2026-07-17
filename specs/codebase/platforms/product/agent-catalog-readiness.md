@@ -290,7 +290,10 @@ The producer uses provider-published SHA-256 values when the versioned source
 publishes them (Claude's release manifest, GitHub release-asset digests, and
 ACP registry archive checksums) and otherwise downloads and hashes each shipped
 target. Installation still downloads the selected target and verifies those
-catalog bytes before activation.
+catalog bytes before activation. When the provider metadata or producer-owned
+download also establishes the exact compressed length, the target records
+`downloadSizeBytes`; older targets may omit it, and the runtime falls back to
+the final HTTP response's `Content-Length`.
 
 `catalog-update` is not a read-only repository operation. Its debug AnyHarness
 binary reconciles selected agents in the operator's default development runtime
@@ -332,6 +335,14 @@ into the live managed prefix; they do not currently use a directory-level
 atomic swap or rollback. Manifest replacement uses a temporary file and rename,
 but a manifest write failure is best-effort and causes a later reconciliation
 to retry.
+
+Reconcile progress is an in-memory observation of this disk work. Direct
+binary/archive downloads expose exact transferred bytes and then verification,
+extraction, and activation phases. npm/Git roles expose package installation
+phases with an unknown transfer total because their dependency closure is
+package-manager-owned. The public reconcile aggregate is likewise unknown if
+any component total is unknown; installed directory size is never substituted
+for network download size.
 
 Runtime startup hydrates a pending release seed and then performs
 installed-only reconciliation. It updates managed agents that already have
@@ -534,8 +545,9 @@ flag: full (install missing too) or installed-only (only update agents already o
 disk; skip missing ones). The runtime drives an installed-only reconcile at
 startup (`AgentRuntime::spawn_startup_pass`, after seed hydration) so installed
 agents track the catalog pins on desktop and cloud workers — non-blocking,
-best-effort, idempotent. Activating a validated synced catalog also starts an
-installed-only reconcile so already-managed artifacts converge to its pins.
+best-effort, idempotent. Activating a validated synced catalog also starts a
+fresh installed-only reconcile after any active job finishes, using one snapshot
+of the newly active catalog so already-managed artifacts converge to its pins.
 An existing executable is not proof of convergence: when a catalog pin exists
 but the durable install manifest has no comparable version, reconcile forces a
 reinstall. Binary/archive roles compare the declared version; git roles compare

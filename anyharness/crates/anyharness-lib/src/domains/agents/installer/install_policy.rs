@@ -154,6 +154,7 @@ pub enum ResolvedPinSource {
 pub struct ResolvedPinTarget {
     pub url: String,
     pub sha256: String,
+    pub download_size_bytes: Option<u64>,
     pub expected_binary: Option<String>,
 }
 

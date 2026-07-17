@@ -273,6 +273,26 @@
                 }
               }
             }
+          },
+          "400": {
+            "description": "Unknown agent kind",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "An incompatible reconcile job is already active",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -7394,6 +7414,96 @@
           "missing_env",
           "login_required",
           "unknown"
+        ]
+      },
+      "AgentInstallProgress": {
+        "type": "object",
+        "required": [
+          "downloadedBytes",
+          "completedComponents",
+          "totalComponents",
+          "components"
+        ],
+        "properties": {
+          "completedComponents": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "components": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentInstallProgressComponent"
+            }
+          },
+          "downloadSizeBytes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Aggregate exact total, or `null` when any component is indeterminate.",
+            "minimum": 0
+          },
+          "downloadedBytes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "totalComponents": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          }
+        }
+      },
+      "AgentInstallProgressComponent": {
+        "type": "object",
+        "required": [
+          "agent",
+          "role",
+          "phase",
+          "downloadedBytes"
+        ],
+        "properties": {
+          "agent": {
+            "type": "string"
+          },
+          "downloadSizeBytes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Exact compressed transfer total when known. `null` means the runtime\ndoes not own or cannot determine the package-manager transfer size.",
+            "minimum": 0
+          },
+          "downloadedBytes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "phase": {
+            "$ref": "#/components/schemas/AgentInstallProgressPhase"
+          },
+          "role": {
+            "type": "string",
+            "description": "Stable artifact role (`native_cli` or `agent_process`)."
+          }
+        }
+      },
+      "AgentInstallProgressPhase": {
+        "type": "string",
+        "enum": [
+          "queued",
+          "downloading",
+          "verifying",
+          "extracting",
+          "installing",
+          "finalizing",
+          "completed",
+          "skipped",
+          "failed"
         ]
       },
       "AgentInstallState": {
@@ -14535,6 +14645,13 @@
       "ReconcileAgentsRequest": {
         "type": "object",
         "properties": {
+          "agentKinds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional harness kinds to reconcile. An empty list keeps the existing\nall-harness behavior; the settings UI uses a single kind for install."
+          },
           "installedOnly": {
             "type": "boolean",
             "description": "When true, only agents already installed on disk are reconciled to the\ncatalog pins; missing agents are skipped (they install on demand at\nsession start). Defaults to false (full-scope reconcile)."
@@ -14552,11 +14669,24 @@
           "results"
         ],
         "properties": {
+          "currentAgent": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "finishedAt": {
             "type": [
               "string",
               "null"
             ]
+          },
+          "installedOnly": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Present on runtimes that support scoped reconcile progress. Optional so\nnewer clients can still decode responses from older runtime versions."
           },
           "jobId": {
             "type": [
@@ -14568,6 +14698,16 @@
             "type": [
               "string",
               "null"
+            ]
+          },
+          "progress": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AgentInstallProgress"
+              }
             ]
           },
           "reinstall": {

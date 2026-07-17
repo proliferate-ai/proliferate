@@ -75,4 +75,6 @@ export const HARNESS_PANE_COPY = {
   installError: (displayName: string) =>
     `Could not install ${displayName}.`,
   readyToast: (displayName: string) => `${displayName} is ready.`,
+  updateStartedToast: (displayName: string, targetLabel: string) =>
+    `Updating ${displayName} on ${targetLabel}.`,
 } as const;

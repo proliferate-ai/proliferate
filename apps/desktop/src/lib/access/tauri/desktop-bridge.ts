@@ -1,6 +1,5 @@
 import type {
   DesktopBridge,
-  DesktopUpdate,
   LocalRuntimeConnection,
   LocalRuntimeSnapshot,
   ProductCommand,
@@ -11,6 +10,10 @@ import type {
   WorkerStatus,
   WorkerConfiguration,
 } from "@proliferate/product-client/host/desktop-bridge";
+import type {
+  DesktopUpdate,
+  DesktopUpdateDownloadProgress,
+} from "@proliferate/product-client/host/desktop-updater-bridge";
 
 import { getRuntimeInfo } from "./runtime";
 import {
@@ -180,19 +183,18 @@ export const desktopBridge: DesktopBridge = {
     },
     async downloadAndInstall(
       update: DesktopUpdate,
-      onProgress?: (fraction: number) => void,
+      onProgress?: (progress: DesktopUpdateDownloadProgress) => void,
     ): Promise<void> {
-      let received = 0;
+      let receivedBytes = 0;
       await downloadAndInstallUpdate(
         update.handle,
         onProgress
           ? (chunkLength, contentLength) => {
-              received += chunkLength;
-              // A bounded 0..1 fraction is only meaningful once the total
-              // length is known.
-              if (contentLength !== undefined && contentLength > 0) {
-                onProgress(Math.min(received / contentLength, 1));
-              }
+              receivedBytes += chunkLength;
+              onProgress({
+                receivedBytes,
+                totalBytes: contentLength ?? null,
+              });
             }
           : undefined,
       );

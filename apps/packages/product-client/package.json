@@ -23,6 +23,10 @@
       "types": "./dist/host/desktop-bridge.d.ts",
       "import": "./dist/host/desktop-bridge.js"
     },
+    "./host/desktop-updater-bridge": {
+      "types": "./dist/host/desktop-updater-bridge.d.ts",
+      "import": "./dist/host/desktop-updater-bridge.js"
+    },
     "./host/ProductHostProvider": {
       "types": "./dist/host/ProductHostProvider.d.ts",
       "import": "./dist/host/ProductHostProvider.js"

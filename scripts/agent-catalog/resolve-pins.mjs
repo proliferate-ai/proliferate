@@ -52,12 +52,16 @@ const registryByKind = new Map(registry.agents.map((a) => [a.kind, a]));
 // `--reuse-from` reference, e.g. the previously-shipped lockfile) for unchanged
 // URLs, so re-runs and draft→bundled promotion don't re-download every artifact.
 const knownSha = new Map();
+const knownSize = new Map();
 const checksumManifestCache = new Map();
 const collectShas = (doc) => {
   for (const agent of doc.agents ?? []) {
     for (const pin of [agent.harness?.native, agent.harness?.agentProcess]) {
       for (const t of Object.values(pin?.source?.targets ?? {})) {
         if (t.url && t.sha256) knownSha.set(t.url, t.sha256);
+        if (t.url && Number.isSafeInteger(t.downloadSizeBytes) && t.downloadSizeBytes > 0) {
+          knownSize.set(t.url, t.downloadSizeBytes);
+        }
       }
     }
   }
@@ -125,7 +129,10 @@ async function resolveNative(kind, install) {
       const url = install.binaryUrlTemplate
         .replaceAll("{version}", version)
         .replaceAll("{platform}", vendor);
-      targets[platKey] = { url, sha256: await shaForDirectBinary(url, version, vendor) };
+      targets[platKey] = withDownloadSize(
+        { url, sha256: await shaForDirectBinary(url, version, vendor) },
+        url,
+      );
     }
     return { version, source: { kind: "binary", targets } };
   }
@@ -139,14 +146,14 @@ async function resolveNative(kind, install) {
         .replaceAll("{version}", version)
         .replaceAll("{target}", target);
       const expectedBinary = install.expectedBinaryTemplate.replaceAll("{target}", target);
-      const publishedDigest = release.assets
-        ?.find((asset) => asset.browser_download_url === url)
-        ?.digest?.replace(/^sha256:/, "");
-      targets[platKey] = {
+      const publishedAsset = release.assets
+        ?.find((asset) => asset.browser_download_url === url);
+      const publishedDigest = publishedAsset?.digest?.replace(/^sha256:/, "");
+      targets[platKey] = withDownloadSize({
         url,
         sha256: await shaForPublished(url, publishedDigest),
         expectedBinary,
-      };
+      }, url, publishedAsset?.size);
     }
     // A native CLI is invoked by the adapter, not directly — no ACP launch args.
     return { version, source: { kind: "archive", targets, args: [] } };
@@ -196,11 +203,11 @@ async function resolveAgentProcess(kind, install, currentVersion) {
       for (const [acpKey, target] of Object.entries(entry.distribution.binary)) {
         const ourKey = ACP_PLATFORM_MAP[acpKey];
         if (!ourKey || !platforms.has(ourKey)) continue; // platform we do not ship
-        targets[ourKey] = {
+        targets[ourKey] = withDownloadSize({
           url: target.archive,
           sha256: await shaForPublished(target.archive, target.sha256),
           expectedBinary: target.cmd,
-        };
+        }, target.archive, target.size);
         if (target.args) args = target.args; // ACP-mode args (consistent across platforms)
       }
       return { version: entry.version ?? currentVersion, source: { kind: "archive", targets, args } };
@@ -255,7 +262,12 @@ async function shaFor(url) {
   const res = await fetch(url, { redirect: "follow" });
   if (!res.ok) throw new Error(`download failed ${res.status} for ${url}`);
   const hash = createHash("sha256");
-  for await (const chunk of res.body) hash.update(chunk);
+  let size = 0;
+  for await (const chunk of res.body) {
+    hash.update(chunk);
+    size += chunk.length;
+  }
+  knownSize.set(url, size);
   const digest = hash.digest("hex");
   process.stdout.write(`${digest.slice(0, 12)}…\n`);
   return digest;
@@ -289,7 +301,9 @@ async function shaForDirectBinary(url, version, vendorPlatform) {
     }
     const manifest = await manifestPromise;
     const checksum = manifest?.platforms?.[vendorPlatform]?.checksum;
+    const size = manifest?.platforms?.[vendorPlatform]?.size;
     if (manifest?.version === version && /^[a-f0-9]{64}$/i.test(checksum ?? "")) {
+      if (Number.isSafeInteger(size) && size > 0) knownSize.set(url, size);
       console.log(`   ✓ ${vendorPlatform} checksum from ${manifestUrl}`);
       return checksum.toLowerCase();
     }
@@ -297,6 +311,15 @@ async function shaForDirectBinary(url, version, vendorPlatform) {
     checksumManifestCache.delete(manifestUrl);
   }
   return shaFor(url);
+}
+
+function withDownloadSize(target, url, publishedSize) {
+  const size = Number.isSafeInteger(publishedSize) && publishedSize > 0
+    ? publishedSize
+    : knownSize.get(url);
+  return Number.isSafeInteger(size) && size > 0
+    ? { ...target, downloadSizeBytes: size }
+    : target;
 }
 
 async function fetchText(url) {

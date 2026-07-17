@@ -48,6 +48,30 @@ describe("updater store", () => {
     expect(useUpdaterStore.getState().manualCheckCompletedAt).toBeNull();
   });
 
+  it("retains byte progress and only derives a percentage from a known total", () => {
+    useUpdaterStore.getState().setDownloadProgress({
+      receivedBytes: 12_500_000,
+      totalBytes: null,
+    });
+
+    expect(useUpdaterStore.getState()).toMatchObject({
+      downloadProgress: null,
+      downloadReceivedBytes: 12_500_000,
+      downloadTotalBytes: null,
+    });
+
+    useUpdaterStore.getState().setDownloadProgress({
+      receivedBytes: 25_000_000,
+      totalBytes: 100_000_000,
+    });
+
+    expect(useUpdaterStore.getState()).toMatchObject({
+      downloadProgress: 25,
+      downloadReceivedBytes: 25_000_000,
+      downloadTotalBytes: 100_000_000,
+    });
+  });
+
   it("keeps the authored title with its available version", () => {
     useUpdaterStore.getState().setAvailable(
       update("0.3.25", "Introducing Grok"),

@@ -39,6 +39,23 @@ export function anyHarnessAgentsKey(
   return [...anyHarnessRuntimeKey(runtimeUrl, cacheScopeKey), "agents"] as const;
 }
 
+export function anyHarnessWorkspaceAgentsKey(
+  cacheScopeKey: string | null | undefined,
+  workspaceId: string | null | undefined,
+) {
+  return [...anyHarnessWorkspaceKey(cacheScopeKey, workspaceId), "agents"] as const;
+}
+
+export function anyHarnessWorkspaceAgentReconcileStatusKey(
+  cacheScopeKey: string | null | undefined,
+  workspaceId: string | null | undefined,
+) {
+  return [
+    ...anyHarnessWorkspaceAgentsKey(cacheScopeKey, workspaceId),
+    "reconcile-status",
+  ] as const;
+}
+
 export function anyHarnessAgentLaunchOptionsKey(
   runtimeUrl: string | null | undefined,
   workspaceId: string | null | undefined,

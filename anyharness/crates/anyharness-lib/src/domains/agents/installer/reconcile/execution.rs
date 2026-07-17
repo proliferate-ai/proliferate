@@ -5,10 +5,14 @@ use std::time::Instant;
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
-use super::{reconcile_agent, AgentReconcileOutcome, AgentReconcileResult};
+use super::{reconcile_agent_with_progress, AgentReconcileOutcome, AgentReconcileResult};
+use crate::domains::agents::catalog::service::{ActiveCatalog, AgentCatalogService};
+use crate::domains::agents::installer::progress::{
+    InstallProgressPhase, InstallProgressReporter, InstallProgressUpdate,
+};
 use crate::domains::agents::installer::seed::AgentSeedStore;
 use crate::domains::agents::installer::InstallOptions;
-use crate::domains::agents::model::{AgentDescriptor, AgentKind, ResolvedArtifact};
+use crate::domains::agents::model::{AgentDescriptor, AgentKind, ArtifactRole, ResolvedArtifact};
 use crate::domains::agents::readiness::service::resolve_agent;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -20,6 +24,18 @@ pub enum AgentReconcileJobStatus {
     Failed,
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum AgentReconcileStartError {
+    #[error("agent reconcile job {0} is already active")]
+    Busy(String),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum AgentReconcileAdmission {
+    ReuseCompatible,
+    RequireIdle,
+}
+
 #[derive(Debug, Clone)]
 pub struct AgentReconcileJobSnapshot {
     pub status: AgentReconcileJobStatus,
@@ -27,10 +43,21 @@ pub struct AgentReconcileJobSnapshot {
     pub reinstall: bool,
     pub installed_only: bool,
     pub current_agent: Option<AgentKind>,
+    pub agent_kinds: Vec<AgentKind>,
+    pub components: Vec<AgentInstallComponentProgress>,
     pub results: Vec<AgentReconcileResult>,
     pub started_at: Option<String>,
     pub finished_at: Option<String>,
     pub message: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AgentInstallComponentProgress {
+    pub agent: AgentKind,
+    pub role: ArtifactRole,
+    pub phase: InstallProgressPhase,
+    pub downloaded_bytes: u64,
+    pub download_size_bytes: Option<u64>,
 }
 
 #[derive(Debug, Clone)]
@@ -40,10 +67,13 @@ struct AgentReconcileJob {
     reinstall: bool,
     installed_only: bool,
     current_agent: Option<AgentKind>,
+    agent_kinds: Vec<AgentKind>,
+    components: Arc<std::sync::Mutex<Vec<AgentInstallComponentProgress>>>,
     results: Vec<AgentReconcileResult>,
     started_at: Option<String>,
     finished_at: Option<String>,
     message: Option<String>,
+    catalog: Option<ActiveCatalog>,
 }
 
 impl AgentReconcileJob {
@@ -54,6 +84,12 @@ impl AgentReconcileJob {
             reinstall: self.reinstall,
             installed_only: self.installed_only,
             current_agent: self.current_agent.clone(),
+            agent_kinds: self.agent_kinds.clone(),
+            components: self
+                .components
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .clone(),
             results: self.results.clone(),
             started_at: self.started_at.clone(),
             finished_at: self.finished_at.clone(),
@@ -64,12 +100,14 @@ impl AgentReconcileJob {
 
 pub struct AgentReconcileService {
     job: Arc<Mutex<Option<AgentReconcileJob>>>,
+    execution_lock: Arc<Mutex<()>>,
 }
 
 impl AgentReconcileService {
     pub fn new() -> Self {
         Self {
             job: Arc::new(Mutex::new(None)),
+            execution_lock: Arc::new(Mutex::new(())),
         }
     }
 
@@ -80,29 +118,35 @@ impl AgentReconcileService {
             .unwrap_or_else(AgentReconcileJobSnapshot::idle)
     }
 
-    pub async fn start_or_get(
+    pub(crate) async fn start_with_admission(
         &self,
         registry: Vec<AgentDescriptor>,
         runtime_home: PathBuf,
         reinstall: bool,
         installed_only: bool,
+        requested_agent_kinds: Vec<AgentKind>,
         agent_seed_store: Option<AgentSeedStore>,
-        catalog: Option<crate::domains::agents::catalog::service::AgentCatalogService>,
-    ) -> AgentReconcileJobSnapshot {
-        let snapshot = {
+        catalog: Option<AgentCatalogService>,
+        admission: AgentReconcileAdmission,
+    ) -> Result<AgentReconcileJobSnapshot, AgentReconcileStartError> {
+        let (snapshot, progress) = {
             let mut current = self.job.lock().await;
             if let Some(existing) = current.as_ref() {
                 if matches!(
                     existing.status,
                     AgentReconcileJobStatus::Queued | AgentReconcileJobStatus::Running
                 ) {
-                    // Reuse the in-flight job only if its scope COVERS this request.
-                    // A full job (installed_only=false) covers everything; an
-                    // installed-only job does NOT cover a full request — so a full
-                    // reconcile must supersede an in-flight installed-only pass,
-                    // otherwise missing agents would be silently skipped.
-                    let covers_request = !existing.installed_only || installed_only;
-                    if covers_request {
+                    // Public callers reuse covering jobs; internal admission requires idle.
+                    let covers_install_mode = existing.reinstall || !reinstall;
+                    let covers_installed_scope = !existing.installed_only || installed_only;
+                    let covers_agent_scope = existing.agent_kinds.is_empty()
+                        || (!requested_agent_kinds.is_empty()
+                            && requested_agent_kinds
+                                .iter()
+                                .all(|kind| existing.agent_kinds.contains(kind)));
+                    let covers_request =
+                        covers_install_mode && covers_installed_scope && covers_agent_scope;
+                    if admission == AgentReconcileAdmission::ReuseCompatible && covers_request {
                         tracing::info!(
                             job_id = %existing.job_id,
                             requested_reinstall = reinstall,
@@ -111,35 +155,38 @@ impl AgentReconcileService {
                             job_installed_only = existing.installed_only,
                             "agent reconcile request reused active job"
                         );
-                        return existing.snapshot();
+                        return Ok(existing.snapshot());
                     }
-                    tracing::info!(
-                        superseded_job_id = %existing.job_id,
+                    tracing::warn!(
+                        active_job_id = %existing.job_id,
                         job_installed_only = existing.installed_only,
                         requested_installed_only = installed_only,
-                        "full agent reconcile supersedes in-flight installed-only job"
+                        "agent reconcile request rejected while a job is active"
                     );
-                    // Fall through: a new full job replaces the slot. The superseded
-                    // task's `update_job` calls no-op once the job_id changes, so it
-                    // self-terminates (its idempotent installs are harmless).
+                    return Err(AgentReconcileStartError::Busy(existing.job_id.clone()));
                 }
             }
 
+            let catalog = catalog.map(|service| service.active_catalog());
             let job_id = Uuid::new_v4().to_string();
+            let components = Arc::new(std::sync::Mutex::new(progress_components(&registry)));
             let next_job = AgentReconcileJob {
                 job_id: job_id.clone(),
                 status: AgentReconcileJobStatus::Queued,
                 reinstall,
                 installed_only,
                 current_agent: None,
+                agent_kinds: requested_agent_kinds,
+                components: components.clone(),
                 results: Vec::new(),
                 started_at: Some(chrono::Utc::now().to_rfc3339()),
                 finished_at: None,
                 message: None,
+                catalog,
             };
             let snapshot = next_job.snapshot();
             *current = Some(next_job);
-            snapshot
+            (snapshot, components)
         };
         let job_id = snapshot.job_id.clone().unwrap_or_default();
 
@@ -152,21 +199,23 @@ impl AgentReconcileService {
         );
 
         let jobs = self.job.clone();
+        let execution_lock = self.execution_lock.clone();
         tokio::spawn(async move {
             run_reconcile_job(
                 jobs,
+                execution_lock,
                 job_id,
                 registry,
                 runtime_home,
                 reinstall,
                 installed_only,
+                progress,
                 agent_seed_store,
-                catalog,
             )
             .await;
         });
 
-        snapshot
+        Ok(snapshot)
     }
 }
 
@@ -178,6 +227,8 @@ impl AgentReconcileJobSnapshot {
             reinstall: false,
             installed_only: false,
             current_agent: None,
+            agent_kinds: Vec::new(),
+            components: Vec::new(),
             results: Vec::new(),
             started_at: None,
             finished_at: None,
@@ -188,23 +239,28 @@ impl AgentReconcileJobSnapshot {
 
 async fn run_reconcile_job(
     jobs: Arc<Mutex<Option<AgentReconcileJob>>>,
+    execution_lock: Arc<Mutex<()>>,
     job_id: String,
     registry: Vec<AgentDescriptor>,
     runtime_home: PathBuf,
     reinstall: bool,
     installed_only: bool,
+    progress: Arc<std::sync::Mutex<Vec<AgentInstallComponentProgress>>>,
     agent_seed_store: Option<AgentSeedStore>,
-    catalog: Option<crate::domains::agents::catalog::service::AgentCatalogService>,
 ) {
+    // Defense in depth around the single visible job slot: even if future
+    // callers change admission policy, blocking installers never mutate the
+    // managed artifact tree concurrently.
+    let _execution_guard = execution_lock.lock_owned().await;
     let started = Instant::now();
-    if update_job(&jobs, &job_id, |job| {
+    let Some(catalog) = update_job(&jobs, &job_id, |job| {
         job.status = AgentReconcileJobStatus::Running;
+        job.catalog.clone()
     })
     .await
-    .is_none()
-    {
+    else {
         return;
-    }
+    };
 
     tracing::info!(
         job_id = %job_id,
@@ -220,14 +276,10 @@ async fn run_reconcile_job(
 
     for descriptor in registry {
         let kind = descriptor.kind.clone();
-        if update_job(&jobs, &job_id, |job| {
+        let _ = update_job(&jobs, &job_id, |job| {
             job.current_agent = Some(kind.clone());
         })
-        .await
-        .is_none()
-        {
-            return;
-        }
+        .await;
 
         let agent_started = Instant::now();
         tracing::info!(
@@ -240,6 +292,8 @@ async fn run_reconcile_job(
         let agent_runtime_home = runtime_home.clone();
         let options = options.clone();
         let agent_catalog = catalog.clone();
+        let agent_progress = progress.clone();
+        let progress_kind = kind.clone();
         let result = match tokio::task::spawn_blocking(move || {
             // installed-only scope (startup pass): only reconcile agents WE manage
             // in runtime_home — update those to the catalog pins. Skip agents that
@@ -267,13 +321,23 @@ async fn run_reconcile_job(
             let pins = agent_catalog
                 .as_ref()
                 .and_then(|catalog| catalog.pin_overrides(descriptor.kind.as_str()));
-            reconcile_agent(&descriptor, &agent_runtime_home, &options, pins.as_ref())
+            let reporter = InstallProgressReporter::new(move |update| {
+                apply_progress_update(&agent_progress, &progress_kind, update);
+            });
+            reconcile_agent_with_progress(
+                &descriptor,
+                &agent_runtime_home,
+                &options,
+                pins.as_ref(),
+                Some(&reporter),
+            )
         })
         .await
         {
             Ok(result) => result,
             Err(error) => {
                 let message = format!("agent reconcile task failed: {error}");
+                finish_agent_components(&progress, &kind, InstallProgressPhase::Failed);
                 let _ = update_job(&jobs, &job_id, |job| {
                     job.status = AgentReconcileJobStatus::Failed;
                     job.current_agent = None;
@@ -305,18 +369,23 @@ async fn run_reconcile_job(
             }
         }
 
-        if update_job(&jobs, &job_id, |job| {
+        let terminal_phase = match result.outcome {
+            AgentReconcileOutcome::Failed => InstallProgressPhase::Failed,
+            AgentReconcileOutcome::Skipped => InstallProgressPhase::Skipped,
+            AgentReconcileOutcome::Installed | AgentReconcileOutcome::AlreadyInstalled => {
+                InstallProgressPhase::Completed
+            }
+        };
+        finish_agent_components(&progress, &kind, terminal_phase);
+
+        let _ = update_job(&jobs, &job_id, |job| {
             job.results.push(result);
             job.current_agent = None;
         })
-        .await
-        .is_none()
-        {
-            return;
-        }
+        .await;
     }
 
-    let Some((result_count, failed_count)) = update_job(&jobs, &job_id, |job| {
+    let completion = update_job(&jobs, &job_id, |job| {
         job.status = AgentReconcileJobStatus::Completed;
         job.finished_at = Some(chrono::Utc::now().to_rfc3339());
         let failed_count = job
@@ -326,8 +395,14 @@ async fn run_reconcile_job(
             .count();
         (job.results.len(), failed_count)
     })
-    .await
-    else {
+    .await;
+    let Some((result_count, failed_count)) = completion else {
+        tracing::info!(
+            job_id = %job_id,
+            reinstall,
+            elapsed_ms = started.elapsed().as_millis(),
+            "agent reconcile job completed after its tracking state disappeared"
+        );
         return;
     };
 
@@ -339,6 +414,68 @@ async fn run_reconcile_job(
         elapsed_ms = started.elapsed().as_millis(),
         "agent reconcile job completed"
     );
+}
+
+fn progress_components(registry: &[AgentDescriptor]) -> Vec<AgentInstallComponentProgress> {
+    registry
+        .iter()
+        .flat_map(|descriptor| {
+            let mut roles = Vec::with_capacity(2);
+            if descriptor.native.is_some() {
+                roles.push(ArtifactRole::NativeCli);
+            }
+            roles.push(ArtifactRole::AgentProcess);
+            roles.into_iter().map(|role| AgentInstallComponentProgress {
+                agent: descriptor.kind.clone(),
+                role,
+                phase: InstallProgressPhase::Queued,
+                downloaded_bytes: 0,
+                download_size_bytes: None,
+            })
+        })
+        .collect()
+}
+
+fn apply_progress_update(
+    progress: &Arc<std::sync::Mutex<Vec<AgentInstallComponentProgress>>>,
+    kind: &AgentKind,
+    update: InstallProgressUpdate,
+) {
+    let mut components = progress
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let Some(component) = components
+        .iter_mut()
+        .find(|component| component.agent == *kind && component.role == update.role)
+    else {
+        return;
+    };
+    component.phase = update.phase;
+    component.downloaded_bytes = component.downloaded_bytes.max(update.downloaded_bytes);
+    component.download_size_bytes = update.download_size_bytes.or(component.download_size_bytes);
+}
+
+fn finish_agent_components(
+    progress: &Arc<std::sync::Mutex<Vec<AgentInstallComponentProgress>>>,
+    kind: &AgentKind,
+    phase: InstallProgressPhase,
+) {
+    let mut components = progress
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    for component in components
+        .iter_mut()
+        .filter(|component| component.agent == *kind)
+    {
+        if !matches!(
+            component.phase,
+            InstallProgressPhase::Completed
+                | InstallProgressPhase::Skipped
+                | InstallProgressPhase::Failed
+        ) {
+            component.phase = phase;
+        }
+    }
 }
 
 async fn update_job<T>(
@@ -364,209 +501,5 @@ fn reconcile_outcome_label(outcome: &AgentReconcileOutcome) -> &'static str {
 }
 
 #[cfg(test)]
-mod tests {
-    use std::path::PathBuf;
-    use std::time::Duration;
-
-    use tokio::time::{sleep, timeout};
-
-    use super::*;
-
-    #[tokio::test]
-    async fn snapshot_defaults_to_idle() {
-        let service = AgentReconcileService::new();
-
-        let snapshot = service.snapshot().await;
-
-        assert_eq!(snapshot.status, AgentReconcileJobStatus::Idle);
-        assert_eq!(snapshot.job_id, None);
-        assert!(!snapshot.reinstall);
-        assert!(snapshot.results.is_empty());
-    }
-
-    #[tokio::test]
-    async fn start_or_get_reuses_active_job() {
-        let service = AgentReconcileService::new();
-        {
-            let mut job = service.job.lock().await;
-            *job = Some(AgentReconcileJob {
-                job_id: "existing-job".into(),
-                status: AgentReconcileJobStatus::Running,
-                reinstall: false,
-                installed_only: false,
-                current_agent: Some(AgentKind::Codex),
-                results: Vec::new(),
-                started_at: Some(chrono::Utc::now().to_rfc3339()),
-                finished_at: None,
-                message: None,
-            });
-        }
-
-        let snapshot = service
-            .start_or_get(
-                Vec::new(),
-                PathBuf::from("/tmp/anyharness-test"),
-                true,
-                false,
-                None,
-                None,
-            )
-            .await;
-
-        assert_eq!(snapshot.job_id.as_deref(), Some("existing-job"));
-        assert_eq!(snapshot.status, AgentReconcileJobStatus::Running);
-        assert!(!snapshot.reinstall);
-        assert_eq!(snapshot.current_agent, Some(AgentKind::Codex));
-    }
-
-    #[tokio::test]
-    async fn empty_registry_job_completes() {
-        let service = AgentReconcileService::new();
-
-        let snapshot = service
-            .start_or_get(
-                Vec::new(),
-                PathBuf::from("/tmp/anyharness-empty"),
-                true,
-                false,
-                None,
-                None,
-            )
-            .await;
-        assert_eq!(snapshot.status, AgentReconcileJobStatus::Queued);
-
-        let completed = timeout(Duration::from_secs(2), async {
-            loop {
-                let snapshot = service.snapshot().await;
-                if snapshot.status == AgentReconcileJobStatus::Completed {
-                    return snapshot;
-                }
-                sleep(Duration::from_millis(10)).await;
-            }
-        })
-        .await
-        .expect("expected reconcile job to complete");
-
-        assert_eq!(completed.status, AgentReconcileJobStatus::Completed);
-        assert!(completed.results.is_empty());
-        assert!(completed.finished_at.is_some());
-    }
-
-    #[tokio::test]
-    async fn installed_only_skips_uninstalled_agents() {
-        // In a fresh empty runtime home no agent_process (ACP adapter) is installed —
-        // those are managed-only, never on system PATH — so installed-only reconcile must
-        // SKIP every agent and never attempt a (network) install.
-        let service = AgentReconcileService::new();
-        let home =
-            std::env::temp_dir().join(format!("anyharness-installed-only-{}", Uuid::new_v4()));
-        let registry = crate::domains::agents::registry::built_in_registry();
-        assert!(!registry.is_empty(), "built-in registry must have agents");
-
-        service
-            .start_or_get(registry, home.clone(), false, true, None, None)
-            .await;
-
-        let completed = timeout(Duration::from_secs(5), async {
-            loop {
-                let snapshot = service.snapshot().await;
-                if snapshot.status == AgentReconcileJobStatus::Completed {
-                    return snapshot;
-                }
-                sleep(Duration::from_millis(10)).await;
-            }
-        })
-        .await
-        .expect("installed-only reconcile should complete without network installs");
-
-        assert!(
-            completed
-                .results
-                .iter()
-                .all(|result| result.outcome == AgentReconcileOutcome::Skipped),
-            "installed_only must skip agents with no installed agent_process; got {:?}",
-            completed
-                .results
-                .iter()
-                .map(|result| (result.kind.as_str(), result.outcome.clone()))
-                .collect::<Vec<_>>()
-        );
-        let _ = std::fs::remove_dir_all(&home);
-    }
-
-    #[tokio::test]
-    async fn full_reconcile_supersedes_in_flight_installed_only_job() {
-        // A full reconcile must NOT be silently swallowed by an in-flight
-        // installed-only startup pass (which skips missing agents).
-        let service = AgentReconcileService::new();
-        {
-            let mut job = service.job.lock().await;
-            *job = Some(AgentReconcileJob {
-                job_id: "startup-installed-only".into(),
-                status: AgentReconcileJobStatus::Running,
-                reinstall: false,
-                installed_only: true,
-                current_agent: None,
-                results: Vec::new(),
-                started_at: Some(chrono::Utc::now().to_rfc3339()),
-                finished_at: None,
-                message: None,
-            });
-        }
-
-        let snapshot = service
-            .start_or_get(
-                Vec::new(),
-                PathBuf::from("/tmp/anyharness-supersede"),
-                false,
-                false, // full scope
-                None,
-                None,
-            )
-            .await;
-
-        assert_ne!(
-            snapshot.job_id.as_deref(),
-            Some("startup-installed-only"),
-            "full reconcile must supersede the in-flight installed-only job, not reuse it"
-        );
-        assert!(
-            !snapshot.installed_only,
-            "the superseding job is full-scope"
-        );
-    }
-
-    #[tokio::test]
-    async fn installed_only_reuses_in_flight_installed_only_job() {
-        // Startup-style coalescing still holds: an installed-only request reuses
-        // a running installed-only job.
-        let service = AgentReconcileService::new();
-        {
-            let mut job = service.job.lock().await;
-            *job = Some(AgentReconcileJob {
-                job_id: "running-installed-only".into(),
-                status: AgentReconcileJobStatus::Running,
-                reinstall: false,
-                installed_only: true,
-                current_agent: None,
-                results: Vec::new(),
-                started_at: Some(chrono::Utc::now().to_rfc3339()),
-                finished_at: None,
-                message: None,
-            });
-        }
-
-        let snapshot = service
-            .start_or_get(
-                Vec::new(),
-                PathBuf::from("/tmp/anyharness-reuse"),
-                false,
-                true, // installed-only scope
-                None,
-                None,
-            )
-            .await;
-
-        assert_eq!(snapshot.job_id.as_deref(), Some("running-installed-only"));
-    }
-}
+#[path = "execution_tests.rs"]
+mod tests;

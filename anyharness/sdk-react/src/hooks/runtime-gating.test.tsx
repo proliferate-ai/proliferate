@@ -6,7 +6,11 @@ import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AnyHarnessRuntime } from "../context/AnyHarnessRuntime.js";
 import { AnyHarnessWorkspace } from "../context/AnyHarnessWorkspace.js";
-import { useAgentReconcileStatusQuery, useAgentsQuery } from "./agents.js";
+import {
+  useAgentReconcileStatusQuery,
+  useAgentsQuery,
+  useWorkspaceAgentsQuery,
+} from "./agents.js";
 import { useRuntimeHealthQuery } from "./runtime.js";
 import { useRuntimeWorkspacesQuery, useWorkspaceQuery } from "./workspaces.js";
 
@@ -49,12 +53,14 @@ describe("runtime query gating", () => {
 
   it("keeps local runtime queries idle while a cloud workspace query resolves", async () => {
     mocks.getWorkspace.mockResolvedValue({ id: "sandbox-workspace-1" });
+    mocks.listAgents.mockResolvedValue([]);
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     });
 
     const { result } = renderHook(() => ({
       agents: useAgentsQuery(),
+      workspaceAgents: useWorkspaceAgentsQuery(),
       health: useRuntimeHealthQuery(),
       reconcile: useAgentReconcileStatusQuery(),
       runtimeWorkspaces: useRuntimeWorkspacesQuery(),
@@ -82,16 +88,17 @@ describe("runtime query gating", () => {
     });
 
     await waitFor(() => expect(result.current.workspace.isSuccess).toBe(true));
+    await waitFor(() => expect(result.current.workspaceAgents.isSuccess).toBe(true));
 
     expect(result.current.agents.fetchStatus).toBe("idle");
     expect(result.current.health.fetchStatus).toBe("idle");
     expect(result.current.reconcile.fetchStatus).toBe("idle");
     expect(result.current.runtimeWorkspaces.fetchStatus).toBe("idle");
-    expect(mocks.listAgents).not.toHaveBeenCalled();
+    expect(mocks.listAgents).toHaveBeenCalledOnce();
     expect(mocks.getHealth).not.toHaveBeenCalled();
     expect(mocks.getReconcileStatus).not.toHaveBeenCalled();
     expect(mocks.listWorkspaces).not.toHaveBeenCalled();
-    expect(mocks.getClient).toHaveBeenCalledTimes(1);
+    expect(mocks.getClient).toHaveBeenCalledTimes(2);
     expect(mocks.getClient).toHaveBeenCalledWith({
       runtimeUrl: "https://api.test/v1/gateway/cloud-sandbox/anyharness",
       authToken: "temporary-gateway-token",
