@@ -15,7 +15,10 @@ import {
   isLoginNotAttempted,
   isTelemetryHandled,
 } from "#product/lib/domain/telemetry/errors";
-import { isAbortError } from "#product/lib/access/cloud/auth-transport";
+import {
+  InteractiveAuthTimeoutError,
+  isAbortError,
+} from "#product/lib/access/cloud/auth-transport";
 
 /**
  * The failure-side `provider` a login request classifies to. On success the
@@ -37,6 +40,10 @@ function captureActionForRequest(request: LoginRequest): string {
   return request.kind === "google" ? "link_provider" : "sign_in";
 }
 
+function isExpectedAuthControlState(error: unknown): boolean {
+  return error instanceof InteractiveAuthTimeoutError;
+}
+
 export interface AuditedAuth {
   startLogin: (request: LoginRequest) => Promise<ProductLoginOutcome>;
   logout: () => Promise<ProductLogoutOutcome>;
@@ -53,7 +60,8 @@ export interface AuditedAuth {
  * - success → `auth_signed_in {provider, source}` / `auth_signed_out {provider}`
  *   from the normalized host outcome;
  * - non-abort, transport-attempted failure → `captureException` (skipped when
- *   the error is already telemetry-handled) then `auth_sign_in_failed
+ *   the error is already telemetry-handled or is an intentional interactive
+ *   timeout) then `auth_sign_in_failed
  *   {failure_kind, provider}`;
  * - abort → re-thrown with no emission;
  * - a host pre-transport rejection (unsupported method / unresolved
@@ -81,7 +89,7 @@ export function useAuditedAuth(): AuditedAuth {
           throw error;
         }
         const provider = failureProviderForRequest(request);
-        if (!isTelemetryHandled(error)) {
+        if (!isTelemetryHandled(error) && !isExpectedAuthControlState(error)) {
           telemetry.captureException(error, {
             tags: {
               action: captureActionForRequest(request),

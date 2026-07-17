@@ -12,6 +12,7 @@ import {
 } from "./web-auth-transport";
 
 vi.mock("../../lib/access/cloud/auth/web-auth-flow", () => ({
+  SSO_SLUG_UNAVAILABLE_CODE: "sso_slug_unavailable",
   startWebAuthFlow: vi.fn(async () => {}),
   startWebSsoFlow: vi.fn(async () => {}),
   startWebSsoFlowForSlug: vi.fn(async () => {}),
@@ -110,6 +111,18 @@ describe("createWebAuthOperations", () => {
     void ops.startLogin({ kind: "sso", slug: "acme" });
     await Promise.resolve();
     expect(flowMock.startWebSsoFlowForSlug).toHaveBeenCalledWith("acme");
+  });
+
+  it("marks an unavailable slug as not attempted", async () => {
+    flowMock.startWebSsoFlowForSlug.mockRejectedValueOnce(
+      Object.assign(new Error("SSO is unavailable."), {
+        code: "sso_slug_unavailable",
+      }),
+    );
+    const { ops } = makeOps();
+
+    await expect(ops.startLogin({ kind: "sso", slug: "missing" }))
+      .rejects.toSatisfy(isLoginNotAttempted);
   });
 
   it("rejects password/apple as not-attempted so no failure event is emitted", async () => {

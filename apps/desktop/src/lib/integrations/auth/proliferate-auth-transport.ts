@@ -6,6 +6,7 @@ import { buildProliferateApiUrl } from "@/lib/infra/proliferate-api"
 // `AuthRequestError` class (instanceof-stable) and one `isAbortError` predicate.
 export {
   AuthRequestError,
+  InteractiveAuthTimeoutError,
   isDefinitiveAuthRejection,
   fetchAuthResponse,
   delay,

@@ -75,6 +75,11 @@ session replay, and telemetry-related provider and hook ownership.
   handler does not apply this query disposition rule; it separately leaves only
   explicitly coded repository-selection validation states to their owning
   mutation workflow. Other mutation failures remain reportable.
+- Auth workflows treat only `AbortError`, the explicitly branded local
+  interactive poll timeout, and an explicitly coded unavailable SSO slug as
+  typed, rendered control states. Generic HTTP 4xx responses (including an
+  unbranded 408), network failures, security failures, and unknown errors remain
+  reportable.
 - Sentry tags must stay low-cardinality. Prefer stable keys such as `domain`,
   `action`, `provider`, `workspace_kind`, and `route`.
 - Put high-cardinality or diagnostic values in scrubbed extras, not tags.
