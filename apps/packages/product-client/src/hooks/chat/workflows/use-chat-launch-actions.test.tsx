@@ -27,8 +27,9 @@ vi.mock("#product/hooks/sessions/workflows/use-session-config-actions", () => ({
   }),
 }));
 
-vi.mock("#product/hooks/cowork/workflows/use-cowork-thread-workflow", () => ({
-  useCoworkThreadWorkflow: () => ({
+vi.mock("#product/providers/CoworkThreadLaunchProvider", () => ({
+  useCoworkThreadLaunchContext: () => ({
+    desktopTargetsAvailable: true,
     createThreadFromSelection: mocks.createThreadFromSelection,
   }),
 }));

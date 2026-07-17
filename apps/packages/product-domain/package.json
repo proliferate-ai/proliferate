@@ -239,6 +239,10 @@
       "types": "./dist/telemetry/scrub.d.ts",
       "import": "./dist/telemetry/scrub.js"
     },
+    "./telemetry/control-plane-probe-timeout": {
+      "types": "./dist/telemetry/control-plane-probe-timeout.d.ts",
+      "import": "./dist/telemetry/control-plane-probe-timeout.js"
+    },
     "./repos/repo-id": {
       "types": "./dist/repos/repo-id.d.ts",
       "import": "./dist/repos/repo-id.js"

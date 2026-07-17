@@ -404,7 +404,7 @@ export const MainSidebar = memo(function MainSidebar() {
               onAddToThisMac={handleAddToThisMac}
             />
           </DebugProfiler>
-          <CoworkThreadsSection />
+          {isDesktopHost ? <CoworkThreadsSection /> : null}
         </ProductSidebarScrollableContent>
       </ProductSidebarBody>
       <ConfirmationDialog

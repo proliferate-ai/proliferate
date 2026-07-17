@@ -7,7 +7,7 @@ import {
   isWorkspaceDirectoryMissingError,
 } from "#product/lib/domain/sessions/creation/create-session-error";
 import { useSessionConfigActions } from "#product/hooks/sessions/workflows/use-session-config-actions";
-import { useCoworkThreadWorkflow } from "#product/hooks/cowork/workflows/use-cowork-thread-workflow";
+import { useCoworkThreadLaunchContext } from "#product/providers/CoworkThreadLaunchProvider";
 import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
 import { useChatInputStore } from "#product/stores/chat/chat-input-store";
 import { useToastStore } from "#product/stores/toast/toast-store";
@@ -56,7 +56,8 @@ export function useChatLaunchActions(options?: {
   const selectedWorkspace = workspaces.find((workspace) => workspace.id === selectedWorkspaceId);
   const { createEmptySessionWithResolvedConfig } = useSessionCreationActions();
   const { setActiveSessionConfigOption } = useSessionConfigActions();
-  const { createThreadFromSelection } = useCoworkThreadWorkflow();
+  const { desktopTargetsAvailable, createThreadFromSelection } =
+    useCoworkThreadLaunchContext();
   const {
     activeSessionId,
     currentLaunchIdentity,
@@ -110,6 +111,10 @@ export function useChatLaunchActions(options?: {
     persistLastUsedLaunchSelection(launchSelection);
 
     if (selectedWorkspace?.surface === "cowork") {
+      if (!desktopTargetsAvailable) {
+        showToast("Cowork threads are available in the Desktop app.", "info");
+        return;
+      }
       const latencyFlowId = startLatencyFlow({
         flowKind: "session_create",
         source: "model_selector",
@@ -167,6 +172,7 @@ export function useChatLaunchActions(options?: {
     createEmptySessionWithResolvedConfig,
     selectedWorkspace?.surface,
     selectedWorkspaceId,
+    desktopTargetsAvailable,
     setActiveSessionConfigOption,
     setWorkspaceArrivalEvent,
     showToast,

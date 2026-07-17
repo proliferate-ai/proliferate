@@ -16,6 +16,7 @@ import {
 } from "@proliferate/product-domain/telemetry/scrub";
 
 import { webEnv } from "../../config/env";
+import { shouldDropExpectedWebSentryEvent } from "./sentry-event-filter";
 
 /**
  * The Web host's vendor-telemetry bootstrap: it initializes Sentry and PostHog
@@ -234,7 +235,13 @@ function scrubSentryEventPayload(event: MutableSentryEvent): MutableSentryEvent 
   return scrubbed;
 }
 
-function scrubSentryEvent(event: ErrorEvent): ErrorEvent | null {
+function scrubSentryEvent(
+  event: ErrorEvent,
+  hint: Parameters<NonNullable<SentryInitOptions["beforeSend"]>>[1],
+): ErrorEvent | null {
+  if (shouldDropExpectedWebSentryEvent(event, hint)) {
+    return null;
+  }
   return scrubSentryEventPayload(event as unknown as MutableSentryEvent) as unknown as ErrorEvent;
 }
 

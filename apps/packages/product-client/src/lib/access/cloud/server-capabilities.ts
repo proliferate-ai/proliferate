@@ -3,6 +3,9 @@ import {
   parseServerCapabilities,
   type ServerCapabilityContract,
 } from "#product/lib/domain/capabilities/server-capability-contract";
+import {
+  createExpectedControlPlaneProbeTimeoutError,
+} from "@proliferate/product-domain/telemetry/control-plane-probe-timeout";
 
 const SERVER_CAPABILITIES_TIMEOUT_MS = 2_500;
 
@@ -20,7 +23,7 @@ export async function fetchServerCapabilities(
     typeof AbortController !== "undefined" ? new AbortController() : null;
   const timeoutId = abortController
     ? globalThis.setTimeout(
-        () => abortController.abort(),
+        () => abortController.abort(createExpectedControlPlaneProbeTimeoutError()),
         SERVER_CAPABILITIES_TIMEOUT_MS,
       )
     : null;
