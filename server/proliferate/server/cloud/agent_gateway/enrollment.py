@@ -124,7 +124,19 @@ def enrollment_key_metadata(enrollment: AgentGatewayEnrollmentRecord) -> dict[st
         metadata["proliferate_user_id"] = str(enrollment.user_id)
     if enrollment.organization_id is not None:
         metadata["proliferate_organization_id"] = str(enrollment.organization_id)
+    metadata.update(_qualification_run_metadata())
     return metadata
+
+
+def _qualification_run_metadata() -> dict[str, str]:
+    run_id = settings.agent_gateway_qualification_run_id.strip()
+    shard_id = settings.agent_gateway_qualification_shard_id.strip()
+    if not run_id:
+        return {}
+    return {
+        "proliferate_qualification_run_id": run_id,
+        "proliferate_qualification_shard_id": shard_id,
+    }
 
 
 async def ensure_user_enrollment(
@@ -245,10 +257,18 @@ async def _sync_enrollment(
     budget = _parse_budget(budget_raw)
     key_alias = _key_alias(enrollment.id, subject_label)
     metadata = enrollment_key_metadata(enrollment)
+    qualification_metadata = _qualification_run_metadata() or None
     try:
-        team_id = await litellm.ensure_team(alias=team_alias, max_budget=budget)
+        team_id = await litellm.ensure_team(
+            alias=team_alias,
+            max_budget=budget,
+            metadata=qualification_metadata,
+        )
         if litellm_user_id is not None:
-            await litellm.ensure_user(user_id=litellm_user_id)
+            await litellm.ensure_user(
+                user_id=litellm_user_id,
+                metadata=qualification_metadata,
+            )
         virtual_key = enrollment.virtual_key_id
         if virtual_key is None:
             minted = await _mint_virtual_key_idempotent(
