@@ -13,6 +13,7 @@ import {
 } from "#product/lib/workflows/support/support-report-upload-workflows";
 
 const now = new Date("2026-05-31T12:00:00.000Z");
+const nativeTimestamp = "2026-05-31T12:00:00.123456789+00:00";
 const privateValues = {
   jobId: "job-private-identifier",
   workspaceId: "workspace-ui-private-identifier",
@@ -57,7 +58,7 @@ describe("buildSupportReportPackage", () => {
           runtimeStatus: "healthy",
           runtimeHome: privateValues.manifestRuntimeHome,
           platform: "darwin-arm64",
-          timestamp: now.toISOString(),
+          timestamp: nativeTimestamp,
         },
         health: {
           runtimeHome: privateValues.healthRuntimeHome,
@@ -202,8 +203,19 @@ describe("buildSupportReportPackage", () => {
       sizeBytes: 17,
     }]);
     expect(payload.runtimeDiagnostics).toMatchObject({
-      manifest: { runtimeHome: redacted(privateValues.manifestRuntimeHome) },
-      health: { runtimeHome: redacted(privateValues.healthRuntimeHome) },
+      manifest: {
+        appVersion: "0.3.41",
+        runtimeVersion: "0.3.41",
+        runtimeStatus: "healthy",
+        runtimeHome: redacted(privateValues.manifestRuntimeHome),
+        platform: "darwin-arm64",
+        timestamp: nativeTimestamp,
+      },
+      health: {
+        runtimeHome: redacted(privateValues.healthRuntimeHome),
+        status: "ok",
+        version: "0.3.41",
+      },
       logs: [{
         source: "desktop",
         path: redacted(privateValues.logPath),
@@ -337,6 +349,47 @@ describe("buildSupportReportPackage", () => {
       health: { runtimeHome: "[redacted]" },
       logs: [{ path: "[redacted]" }],
     });
+  });
+
+  it("fails closed when session event and notification arrays are revoked", async () => {
+    const privateValue = "revoked session array private sentinel";
+    const events = Proxy.revocable([makeContentEvent(privateValue)], {});
+    const notifications = Proxy.revocable([makeRawNotification(privateValue)], {});
+    events.revoke();
+    notifications.revoke();
+    const connection: AnyHarnessResolvedConnection = {
+      runtimeUrl: privateValues.runtimeUrl,
+      anyharnessWorkspaceId: privateValues.anyharnessWorkspaceId,
+    };
+    const dependencies: SupportReportUploadDependencies = {
+      now: () => now,
+      collectDiagnostics: vi.fn(async () => null),
+      resolveWorkspace: vi.fn(async () => ({
+        workspaceId: privateValues.workspaceId,
+        connection,
+      })),
+      getClient: vi.fn(() => ({
+        runtime: { getHealth: vi.fn() },
+        sessions: {
+          list: vi.fn(async () => [makeSession(privateValues.sessionId)]),
+          get: vi.fn(async () => makeSession(privateValues.sessionId)),
+          listEvents: vi.fn(async () => (
+            events.proxy as unknown as SessionEventEnvelope[]
+          )),
+          listRawNotifications: vi.fn(async () => (
+            notifications.proxy as unknown as SessionRawNotificationEnvelope[]
+          )),
+          getLiveConfig: vi.fn(async () => makeLiveConfig()),
+        },
+      })),
+    };
+
+    const payload = await buildSupportReportPackage(makeJob(), dependencies);
+    const session = payload.workspaces[0]?.sessions[0];
+
+    expect(session?.normalizedEvents).toEqual([]);
+    expect(session?.rawNotifications).toEqual([]);
+    expect(JSON.stringify(payload)).not.toContain(privateValue);
   });
 });
 

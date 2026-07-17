@@ -1,6 +1,5 @@
 import type { AnyHarnessResolvedConnection } from "@anyharness/sdk-react";
 import type { SupportBundle } from "@proliferate/product-client/host/desktop-bridge";
-import { sanitizeSupportUploadPayload } from "#product/lib/domain/support/report-upload-sanitizer";
 import { sanitizeSessionDebugExportedSession } from "#product/lib/domain/support/session-debug/sanitizer";
 import type {
   SupportReportJob,
@@ -10,16 +9,29 @@ import type {
   SessionDebugClient,
   SessionDebugResolvedWorkspace,
 } from "#product/lib/workflows/support/session-debug-export-workflows";
+import {
+  boundedArrayValues,
+  boundedTailArrayValues,
+  isArraySafely,
+  projectAttachments,
+  projectContext,
+  projectCorrelation,
+  projectIsoTimestamp,
+  projectRuntimeDiagnostics,
+  projectScope,
+  projectScopeKind,
+  readOwnData,
+  redactString,
+  stringArrayValues,
+  stringOrEmpty,
+  type SupportReportPackageAttachment,
+} from "#product/lib/workflows/support/support-report-upload-projection";
 
 const MAX_WORKSPACES = 5;
 const MAX_SESSIONS_PER_WORKSPACE = 3;
 const MAX_EVENTS_PER_SESSION = 200;
 const MAX_RAW_NOTIFICATIONS_PER_SESSION = 100;
 const MAX_SESSION_CANDIDATES = 256;
-const MAX_ATTACHMENTS = 20;
-const MAX_IDENTIFIER_LIST_ITEMS = 100;
-const MAX_RUNTIME_LOGS = 4;
-const MAX_RUNTIME_COLLECTION_ERRORS = 4;
 
 export interface SupportReportUploadDependencies<
   Connection extends AnyHarnessResolvedConnection = AnyHarnessResolvedConnection,
@@ -62,12 +74,7 @@ export interface SupportReportPackage {
   };
   runtimeDiagnostics: SupportBundle | null;
   workspaces: SupportReportPackageWorkspace[];
-  attachments: Array<{
-    clientFileId: string;
-    fileName: string;
-    contentType: string;
-    sizeBytes: number;
-  }>;
+  attachments: SupportReportPackageAttachment[];
   collectionErrors: string[];
 }
 
@@ -92,24 +99,24 @@ export async function buildSupportReportPackage<
   const snapshot = readOwnData(job, "snapshot");
   const message = stringOrEmpty(readOwnData(job, "message"));
 
-  return sanitizeSupportUploadPayload({
+  return {
     schemaVersion: 2,
     generatedAt: dependencies.now().toISOString(),
     correlation: projectCorrelation(serverCorrelation),
     report: {
       jobId: redactString(readOwnData(job, "jobId")),
-      createdAt: projectString(readOwnData(job, "createdAt")),
+      createdAt: projectIsoTimestamp(readOwnData(job, "createdAt")),
       messagePresent: message.trim().length > 0,
       messageLength: message.trim().length,
       scope: projectedScope,
       context: projectContext(readOwnData(snapshot, "context")),
-      openedAt: projectString(readOwnData(snapshot, "openedAt")),
+      openedAt: projectIsoTimestamp(readOwnData(snapshot, "openedAt")),
     },
     runtimeDiagnostics,
     workspaces,
     attachments: projectAttachments(readOwnData(job, "attachments")),
     collectionErrors,
-  } satisfies SupportReportPackage);
+  } satisfies SupportReportPackage;
 }
 
 async function collectWorkspaceDiagnostics<
@@ -193,9 +200,9 @@ async function collectSessionDiagnostics(
 
   const sanitized = sanitizeSessionDebugExportedSession({
     session: summary,
-    normalizedEvents: Array.isArray(normalizedEvents) ? normalizedEvents : [],
+    normalizedEvents: isArraySafely(normalizedEvents) ? normalizedEvents : [],
     liveConfig,
-    rawNotifications: Array.isArray(rawNotifications) ? rawNotifications : [],
+    rawNotifications: isArraySafely(rawNotifications) ? rawNotifications : [],
     errors: [],
   });
 
@@ -270,276 +277,4 @@ function dateMs(value: string | null | undefined): number {
 
 function formatError(scope: string): string {
   return `${scope}: unavailable`;
-}
-
-function projectCorrelation(
-  correlation: unknown,
-): SupportReportServerCorrelation | undefined {
-  if (!isObject(correlation)) {
-    return undefined;
-  }
-  return {
-    reportId: redactString(readOwnData(correlation, "reportId")),
-    requestId: redactNullableString(readOwnData(correlation, "requestId")),
-    ownerUserId: redactString(readOwnData(correlation, "ownerUserId")),
-    primaryOrganizationId: redactNullableString(
-      readOwnData(correlation, "primaryOrganizationId"),
-    ),
-    primaryTenantId: redactString(readOwnData(correlation, "primaryTenantId")),
-    tenantIds: redactStringList(readOwnData(correlation, "tenantIds")),
-    cloudWorkspaceIds: redactStringList(readOwnData(correlation, "cloudWorkspaceIds")),
-    cloudTargetIds: redactStringList(readOwnData(correlation, "cloudTargetIds")),
-    anyharnessWorkspaceIds: redactStringList(
-      readOwnData(correlation, "anyharnessWorkspaceIds"),
-    ),
-    sessionIds: redactStringList(readOwnData(correlation, "sessionIds")),
-  };
-}
-
-function projectScope(scope: unknown): SupportReportJob["scope"] {
-  return {
-    kind: projectScopeKind(readOwnData(scope, "kind")),
-    workspaceIds: redactStringList(readOwnData(scope, "workspaceIds")),
-  };
-}
-
-function projectContext(
-  context: unknown,
-): SupportReportJob["snapshot"]["context"] {
-  return {
-    source: projectContextSource(readOwnData(context, "source")),
-    intent: projectContextIntent(readOwnData(context, "intent")),
-    pathname: redactNullableString(readOwnData(context, "pathname")),
-    workspaceId: redactNullableString(readOwnData(context, "workspaceId")),
-    workspaceName: redactNullableString(readOwnData(context, "workspaceName")),
-    workspaceLocation: projectWorkspaceLocation(
-      readOwnData(context, "workspaceLocation"),
-    ),
-  };
-}
-
-function projectRuntimeDiagnostics(bundle: unknown): SupportBundle | null {
-  if (!isObject(bundle)) {
-    return null;
-  }
-  const manifest = readOwnData(bundle, "manifest");
-  const logs: SupportBundle["logs"] = [];
-  for (const log of boundedArrayValues(readOwnData(bundle, "logs"), MAX_RUNTIME_LOGS)) {
-    logs.push({
-      source: normalizeDiagnosticSource(readOwnData(log, "source")),
-      path: redactString(readOwnData(log, "path")),
-      bytesRead: projectNonnegativeNumber(readOwnData(log, "bytesRead")),
-      truncated: projectBoolean(readOwnData(log, "truncated")),
-      text: projectString(readOwnData(log, "text")),
-    });
-  }
-  const collectionErrors: string[] = [];
-  for (const error of boundedArrayValues(
-    readOwnData(bundle, "collectionErrors"),
-    MAX_RUNTIME_COLLECTION_ERRORS,
-  )) {
-    collectionErrors.push(normalizeRuntimeCollectionError(error));
-  }
-  return {
-    schemaVersion: projectNonnegativeNumber(readOwnData(bundle, "schemaVersion")),
-    manifest: {
-      appVersion: projectString(readOwnData(manifest, "appVersion")),
-      runtimeVersion: projectNullableString(readOwnData(manifest, "runtimeVersion")),
-      runtimeStatus: projectNullableString(readOwnData(manifest, "runtimeStatus")),
-      runtimeHome: redactNullableString(readOwnData(manifest, "runtimeHome")),
-      platform: projectString(readOwnData(manifest, "platform")),
-      timestamp: projectString(readOwnData(manifest, "timestamp")),
-    },
-    health: projectRuntimeHealth(readOwnData(bundle, "health")),
-    logs,
-    collectionErrors,
-  };
-}
-
-function projectRuntimeHealth(value: unknown): SupportBundle["health"] {
-  if (value == null) {
-    return value;
-  }
-  if (!isObject(value)) {
-    return null;
-  }
-  return {
-    runtimeHome: redactString(readOwnData(value, "runtimeHome")),
-    status: projectString(readOwnData(value, "status")),
-    version: projectString(readOwnData(value, "version")),
-  };
-}
-
-function projectAttachments(value: unknown): SupportReportPackage["attachments"] {
-  const attachments: SupportReportPackage["attachments"] = [];
-  for (const attachment of boundedArrayValues(value, MAX_ATTACHMENTS)) {
-    attachments.push({
-      clientFileId: redactString(readOwnData(attachment, "clientFileId")),
-      fileName: redactString(readOwnData(attachment, "fileName")),
-      contentType: projectString(readOwnData(attachment, "contentType")),
-      sizeBytes: projectNonnegativeNumber(readOwnData(attachment, "sizeBytes")),
-    });
-  }
-  return attachments;
-}
-
-function normalizeDiagnosticSource(source: unknown): string {
-  return source === "desktop" || source === "anyharness" ? source : "diagnostics";
-}
-
-function normalizeRuntimeCollectionError(error: unknown): string {
-  if (error === "desktop: unavailable" || error === "anyharness: unavailable") {
-    return error;
-  }
-  return "diagnostics: unavailable";
-}
-
-function redactStringList(values: unknown): string[] {
-  const redacted: string[] = [];
-  for (const value of boundedArrayValues(values, MAX_IDENTIFIER_LIST_ITEMS)) {
-    redacted.push(redactString(value));
-  }
-  return redacted;
-}
-
-function redactNullableString(value: unknown): string | null | undefined {
-  if (value == null) {
-    return value;
-  }
-  return redactString(value);
-}
-
-function redactString(value: unknown): string {
-  return typeof value === "string" ? `[redacted:${value.length}]` : "[redacted]";
-}
-
-function projectString(value: unknown): string {
-  return typeof value === "string" ? value : "[redacted]";
-}
-
-function projectNullableString(value: unknown): string | null | undefined {
-  return value == null ? value : projectString(value);
-}
-
-function stringOrEmpty(value: unknown): string {
-  return typeof value === "string" ? value : "";
-}
-
-function projectBoolean(value: unknown): boolean {
-  return typeof value === "boolean" ? value : false;
-}
-
-function projectNonnegativeNumber(value: unknown): number {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : 0;
-}
-
-function projectScopeKind(value: unknown): SupportReportJob["scope"]["kind"] {
-  return value === "most_recent_workspace" || value === "choose_workspace"
-    ? value
-    : "app_only";
-}
-
-function projectContextSource(
-  value: unknown,
-): SupportReportJob["snapshot"]["context"]["source"] {
-  return value === "home" || value === "settings" || value === "cloud_gated"
-    ? value
-    : "sidebar";
-}
-
-function projectContextIntent(
-  value: unknown,
-): SupportReportJob["snapshot"]["context"]["intent"] {
-  return value === "unlimited_cloud" || value === "team_features" ? value : "general";
-}
-
-function projectWorkspaceLocation(
-  value: unknown,
-): SupportReportJob["snapshot"]["context"]["workspaceLocation"] {
-  return value === "cloud" || value === "local" ? value : null;
-}
-
-function stringArrayValues(value: unknown, maxItems: number): string[] {
-  return boundedArrayValues(value, maxItems).filter(
-    (item): item is string => typeof item === "string",
-  );
-}
-
-function boundedArrayValues<T = unknown>(value: unknown, maxItems: number): T[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-  const length = arrayLength(value);
-  if (length == null) {
-    return [];
-  }
-  const output: T[] = [];
-  const itemCount = Math.min(length, maxItems);
-  for (let index = 0; index < itemCount; index += 1) {
-    try {
-      const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
-      output.push(
-        descriptor && "value" in descriptor ? descriptor.value as T : undefined as T,
-      );
-    } catch {
-      output.push(undefined as T);
-    }
-  }
-  return output;
-}
-
-function boundedTailArrayValues<T = unknown>(value: unknown, maxItems: number): T[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-  const length = arrayLength(value);
-  if (length == null) {
-    return [];
-  }
-  const output: T[] = [];
-  const start = Math.max(0, length - maxItems);
-  for (let index = start; index < length; index += 1) {
-    try {
-      const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
-      output.push(
-        descriptor && "value" in descriptor ? descriptor.value as T : undefined as T,
-      );
-    } catch {
-      output.push(undefined as T);
-    }
-  }
-  return output;
-}
-
-function arrayLength(value: unknown[]): number | null {
-  try {
-    const descriptor = Object.getOwnPropertyDescriptor(value, "length");
-    return descriptor
-      && "value" in descriptor
-      && typeof descriptor.value === "number"
-      && Number.isSafeInteger(descriptor.value)
-      && descriptor.value >= 0
-      ? descriptor.value
-      : null;
-  } catch {
-    return null;
-  }
-}
-
-function readOwnData(value: unknown, key: string): unknown {
-  if (!isObject(value)) {
-    return undefined;
-  }
-  try {
-    const descriptor = Object.getOwnPropertyDescriptor(value, key);
-    return descriptor && descriptor.enumerable === true && "value" in descriptor
-      ? descriptor.value
-      : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-function isObject(value: unknown): value is object {
-  return typeof value === "object" && value !== null;
 }

@@ -1,327 +1,23 @@
 import type { ContentPart } from "@anyharness/sdk";
 import type { SessionDebugExportedSession } from "#product/lib/domain/support/session-debug/export-models";
 import {
+  isRedactedObjectKey,
+  isSafeObjectKey,
+  isSafeTypeValue,
+} from "#product/lib/domain/support/session-debug/sanitizer-shape";
+import {
   sessionDebugArrayElementNode,
   sessionDebugChildNode,
+} from "#product/lib/domain/support/session-debug/primitive-contracts";
+import {
   sessionDebugPrimitiveKind,
   type SessionDebugPrimitiveKind,
   type SessionDebugSchemaNode,
-} from "#product/lib/domain/support/session-debug/primitive-contracts";
+} from "#product/lib/domain/support/session-debug/primitive-policy";
 
 const MAX_SANITIZER_DEPTH = 16;
 const MAX_CONTAINER_ITEMS = 256;
 const MAX_SANITIZED_VALUES = 10_000;
-const REDACTED_OBJECT_KEYS = new Set([
-  "availableCommands",
-  "cost",
-  "notification",
-  "rawInput",
-  "rawOutput",
-  "sourceMetadata",
-]);
-// Keep only audited protocol shape. Unknown key names reveal only their length,
-// while their values fail closed to a fixed marker.
-const SAFE_OBJECT_KEYS = new Set([
-  "acceptedFieldIds",
-  "actionCapabilities",
-  "activeGoal",
-  "activeRoundId",
-  "activity",
-  "additions",
-  "agent",
-  "agentId",
-  "agentKind",
-  "agentType",
-  "agents",
-  "answeredQuestionIds",
-  "appendContentParts",
-  "appendReasoning",
-  "appendText",
-  "attachmentId",
-  "audio",
-  "autoIterate",
-  "availableCommands",
-  "background",
-  "basename",
-  "blockedPath",
-  "bodyMarkdown",
-  "category",
-  "childLastEventSeq",
-  "childSessionId",
-  "childTurnId",
-  "closedAt",
-  "code",
-  "collaborationMode",
-  "command",
-  "completionId",
-  "content",
-  "contentParts",
-  "context",
-  "cost",
-  "createdAt",
-  "currentModeId",
-  "currentRoundNumber",
-  "currentValue",
-  "cwd",
-  "data",
-  "dataOriginalBytes",
-  "dataTruncated",
-  "decisionState",
-  "decisionVersion",
-  "decisionReason",
-  "deletions",
-  "delta",
-  "description",
-  "details",
-  "dismissedAt",
-  "displayName",
-  "durationSeconds",
-  "effort",
-  "embeddedContext",
-  "endedAt",
-  "endLine",
-  "entrypoint",
-  "entries",
-  "errorMessage",
-  "errors",
-  "event",
-  "executionSummary",
-  "exitCode",
-  "expr",
-  "extras",
-  "fallbackModelId",
-  "fastMode",
-  "feed",
-  "feedbackJobId",
-  "feedId",
-  "fieldId",
-  "fieldType",
-  "fields",
-  "fireCount",
-  "firedAtMs",
-  "fork",
-  "format",
-  "goal",
-  "hasLiveHandle",
-  "header",
-  "id",
-  "image",
-  "integer",
-  "isOther",
-  "isSecret",
-  "isTransient",
-  "item",
-  "itemId",
-  "iterations",
-  "key",
-  "kind",
-  "label",
-  "lastPromptAt",
-  "lastFiredAtMs",
-  "line",
-  "limit",
-  "liveConfig",
-  "linkedPlanId",
-  "loop",
-  "loopId",
-  "loops",
-  "loopsNative",
-  "maxItems",
-  "maxLength",
-  "maxRounds",
-  "maximum",
-  "mcpBindingSummaries",
-  "message",
-  "messageId",
-  "metReason",
-  "mimeType",
-  "minItems",
-  "minLength",
-  "minimum",
-  "mode",
-  "modeId",
-  "model",
-  "modelId",
-  "name",
-  "native",
-  "nativeResolutionState",
-  "nativeSessionId",
-  "nativeStatus",
-  "nativeToolName",
-  "newBasename",
-  "newPath",
-  "newWorkspacePath",
-  "normalizedControls",
-  "normalizedEvents",
-  "notification",
-  "notificationKind",
-  "objective",
-  "openTarget",
-  "operation",
-  "optionId",
-  "options",
-  "origin",
-  "outcome",
-  "parentSessionId",
-  "parentToolCallId",
-  "patch",
-  "patchOriginalBytes",
-  "patchTruncated",
-  "path",
-  "payload",
-  "pendingInteractions",
-  "pendingPrompts",
-  "phase",
-  "pid",
-  "planId",
-  "preview",
-  "previewOriginalBytes",
-  "previewTruncated",
-  "promptCapabilities",
-  "promptId",
-  "prompt",
-  "promptProvenance",
-  "process",
-  "processes",
-  "provider",
-  "providerModel",
-  "questions",
-  "question",
-  "questionId",
-  "queuedAt",
-  "rawConfigOptions",
-  "rawConfigId",
-  "rawInput",
-  "rawNotifications",
-  "rawOutput",
-  "reason",
-  "reasoning",
-  "recurring",
-  "relation",
-  "required",
-  "requestId",
-  "requiresReveal",
-  "requestedModeId",
-  "requestedModelId",
-  "replaceContentParts",
-  "revision",
-  "reviewRunId",
-  "reviewRoundId",
-  "schedule",
-  "scope",
-  "seq",
-  "serverName",
-  "settable",
-  "session",
-  "sessionId",
-  "sessionLinkId",
-  "signal",
-  "size",
-  "snapshotHash",
-  "source",
-  "sourceAgentKind",
-  "sourceItemId",
-  "sourceKind",
-  "sourceMetadata",
-  "sourceSeq",
-  "sourceSessionId",
-  "sourceToolCallId",
-  "sourceTurnId",
-  "startLine",
-  "startedAt",
-  "status",
-  "stopReason",
-  "supportsGoals",
-  "supportsLoops",
-  "summary",
-  "targetedFork",
-  "terminalId",
-  "text",
-  "textOriginalBytes",
-  "textTruncated",
-  "timeUsedSeconds",
-  "timestamp",
-  "title",
-  "tokenBudget",
-  "tokensUsed",
-  "toolCallId",
-  "toolCalls",
-  "toolKind",
-  "toolStatus",
-  "transport",
-  "turn",
-  "turnId",
-  "type",
-  "unit",
-  "updatedAt",
-  "updatedAtMs",
-  "uri",
-  "usage",
-  "used",
-  "urlDisplay",
-  "value",
-  "values",
-  "visibility",
-  "workspaceId",
-  "workspacePath",
-]);
-const SAFE_TYPE_VALUES = new Set([
-  "agentSession",
-  "available_commands_update",
-  "config_option_update",
-  "current_mode_update",
-  "error",
-  "file_change",
-  "file_read",
-  "goal_cleared",
-  "goal_met",
-  "goal_updated",
-  "image",
-  "interaction_requested",
-  "interaction_resolved",
-  "item_completed",
-  "item_delta",
-  "item_started",
-  "loop_fired",
-  "loop_removed",
-  "loop_upserted",
-  "linkWake",
-  "mcp_elicitation",
-  "pending_prompt_added",
-  "pending_prompt_removed",
-  "pending_prompt_updated",
-  "pending_prompts_reordered",
-  "plan",
-  "plan_reference",
-  "process_upserted",
-  "permission",
-  "proposed_plan",
-  "proposed_plan_decision",
-  "reasoning",
-  "resource",
-  "resource_link",
-  "review_run_updated",
-  "reviewFeedback",
-  "select",
-  "session_ended",
-  "session_info_update",
-  "session_link_turn_completed",
-  "session_started",
-  "session_state_update",
-  "subagent_turn_completed",
-  "subagent_upserted",
-  "subagentWake",
-  "system",
-  "terminal_output",
-  "text",
-  "tool_call",
-  "tool_input_text",
-  "tool_result_text",
-  "turn_ended",
-  "turn_started",
-  "usage_update",
-  "user_input",
-]);
 interface SanitizerContext {
   remainingValues: number;
   seen: WeakSet<object>;
@@ -376,21 +72,21 @@ function sanitizeSessionDebugValue(
     return redactedMarker();
   }
   if (typeof value === "string") {
-    return keyHint === "type" && SAFE_TYPE_VALUES.has(value)
+    return keyHint === "type" && isSafeTypeValue(value)
       ? value
       : `[redacted:${value.length}]`;
   }
   if (typeof value !== "object") {
     return redactedMarker();
   }
-  if (REDACTED_OBJECT_KEYS.has(keyHint)) {
+  if (isRedactedObjectKey(keyHint)) {
     return redactedMarker();
   }
   if (depth >= MAX_SANITIZER_DEPTH || context.seen.has(value)) {
     return redactedMarker();
   }
   context.seen.add(value);
-  if (Array.isArray(value)) {
+  if (isArraySafely(value)) {
     return sanitizeArray(value, schemaNode, context, depth);
   }
 
@@ -465,7 +161,7 @@ function sanitizeObject(
         continue;
       }
 
-      if (!SAFE_OBJECT_KEYS.has(key)) {
+      if (!isSafeObjectKey(key)) {
         if (!consumeBudget(context)) {
           break;
         }
@@ -473,7 +169,7 @@ function sanitizeObject(
         continue;
       }
 
-      if (REDACTED_OBJECT_KEYS.has(key)) {
+      if (isRedactedObjectKey(key)) {
         if (!consumeBudget(context)) {
           break;
         }
@@ -526,4 +222,12 @@ function consumeBudget(context: SanitizerContext): boolean {
 
 function redactedMarker(): { redacted: true } {
   return { redacted: true };
+}
+
+function isArraySafely(value: unknown): value is unknown[] {
+  try {
+    return Array.isArray(value);
+  } catch {
+    return false;
+  }
 }

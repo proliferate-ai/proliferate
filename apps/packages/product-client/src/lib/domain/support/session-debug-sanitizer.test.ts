@@ -224,6 +224,17 @@ describe("sanitizeSessionDebugContentParts", () => {
     expect(JSON.stringify(sanitized)).not.toContain("cycle private sentinel");
   });
 
+  it("fails closed when a content array proxy is revoked", () => {
+    const revoked = Proxy.revocable(
+      [{ type: "text", text: "revoked private sentinel" }] as ContentPart[],
+      {},
+    );
+    revoked.revoke();
+
+    expect(() => sanitizeSessionDebugContentParts(revoked.proxy)).not.toThrow();
+    expect(sanitizeSessionDebugContentParts(revoked.proxy)).toEqual({ redacted: true });
+  });
+
   it("caps recursive depth through audited fields", () => {
     const root: Record<string, unknown> = { type: "text", text: "depth private sentinel" };
     let cursor = root;
@@ -331,6 +342,25 @@ describe("sanitizeSessionDebugContentParts", () => {
 });
 
 describe("sanitizeSessionDebugExportedSession", () => {
+  it("fails closed when a nested session array proxy is revoked", () => {
+    const revoked = Proxy.revocable(
+      [{ seq: 1, event: { type: "error", message: "revoked private sentinel" } }],
+      {},
+    );
+    revoked.revoke();
+
+    const sanitized = sanitizeSessionDebugExportedSession({
+      session: makeSession(),
+      normalizedEvents: revoked.proxy as unknown as SessionEventEnvelope[],
+      rawNotifications: [],
+      liveConfig: null,
+      errors: [],
+    });
+
+    expect(sanitized.normalizedEvents).toEqual({ redacted: true });
+    expect(JSON.stringify(sanitized)).not.toContain("revoked private sentinel");
+  });
+
   it("preserves audited numeric and boolean protocol metadata", () => {
     const sanitized = sanitizeSessionDebugExportedSession({
       session: makeSession({
