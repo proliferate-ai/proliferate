@@ -231,6 +231,17 @@ export const defaultLocalMcpDriver: LocalMcpDriver = {
       );
     }
     await selectModelInUi(page, modelId);
+    // The integration prompt REQUIRES an `integrations.call_tool` MCP call, and
+    // the session's default permission mode gates every tool call behind an
+    // interactive approval card ("Permission — AWAITING RESPONSE"; proven:
+    // Actions run 29570511844, T3-INT-1/local/harness=claude). Nothing in this
+    // headless collector clicks Allow, so the turn sits awaiting response until
+    // it times out. Select `bypassPermissions` (the same mode the product's own
+    // workflows pick for claude — anyharness workflows/resolution.rs) on the
+    // home composer BEFORE sending, so the fresh session launches with tool
+    // calls auto-executed. Not a product bug: the gate is correct behaviour; the
+    // collector simply never drove the mode.
+    await selectSessionModeInUi(page, "bypassPermissions");
 
     const prompt =
       `You have an MCP server named "proliferate_integrations" that proxies external integrations. ` +
@@ -635,6 +646,30 @@ async function selectModelInUi(page: ProductPage, modelId: string): Promise<void
     await sleep(2_000);
   }
   throw new Error(`selectModelInUi: model "${modelId}" was not offered by the composer picker within ${MODEL_PICKER_TIMEOUT_MS}ms.`);
+}
+
+/**
+ * Selects a session permission mode (e.g. `bypassPermissions`) in the composer's
+ * SessionModeControl popover. The trigger stamps `data-session-mode-trigger`
+ * (readback in `data-session-mode-selected`) and each option a
+ * `data-session-mode-option="<modeId>"` (SessionModeControl.tsx). The same
+ * popover renders on the home composer pre-launch (home-composer-controls.ts),
+ * so a selection here is carried into the session the send materializes. Read
+ * the selection back so a rejected apply surfaces loudly rather than silently
+ * leaving the session on its approval-gated default.
+ */
+async function selectSessionModeInUi(page: ProductPage, modeId: string): Promise<void> {
+  const p = page.page;
+  const trigger = p.locator("[data-session-mode-trigger]").first();
+  await trigger.waitFor({ state: "visible", timeout: 15_000 });
+  await trigger.click();
+  const option = p.locator(`[data-session-mode-option="${cssAttr(modeId)}"]`).first();
+  await option.waitFor({ state: "visible", timeout: 15_000 });
+  await option.click();
+  await p
+    .locator(`[data-session-mode-trigger][data-session-mode-selected="${cssAttr(modeId)}"]`)
+    .first()
+    .waitFor({ state: "attached", timeout: 15_000 });
 }
 
 async function readWorkspaceUiKey(page: Page): Promise<string> {

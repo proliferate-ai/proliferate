@@ -289,6 +289,17 @@ export const defaultLocalRouteDriver: LocalRouteDriver = {
     // home composer.
     await returnToAppHome(p, "[data-workspace-shell]");
     await this.waitForRouteSync(world, page, harness, "gateway");
+    // LOCAL-6 requires the gateway turn to run on a NEW session (the cell
+    // asserts gatewayTurn.sessionId !== userKeyTurn.sessionId). Back on the
+    // workspace shell the user-key session is still active, and picking the
+    // gateway model there fires the product's same-harness LIVE model switch on
+    // that session (setActiveSessionConfigOption), which the server correctly
+    // 400s SESSION_CONFIG_REJECTED — a session must not silently jump auth
+    // contexts via a config PATCH (proven: Actions run 29570511844,
+    // T3-AUTHROUTE-1/local/route=change). Open a fresh chat so the gateway model
+    // pick + send go through the create-session/launch path instead; this also
+    // restores the `[data-home-composer-editor]` that `sendBoundedTurn` expects.
+    await openNewChat(p);
   },
   async waitForRouteSync(world, _page, harness, route) {
     // Desktop's use-local-auth-state-sync pushes the newly selected route's auth
@@ -826,7 +837,14 @@ async function runLocal6RouteChangeCell(
       });
 
       // 2) Switch the selected route to gateway; a NEW session launches on it.
+      // `switchSelectedRouteToGateway` lands on a fresh home composer (opening a
+      // new chat so the gateway turn is a genuinely new session, not a rejected
+      // live config-switch on the user-key session). The home composer has no
+      // repo selected, and `sendBoundedTurn` resolves the session by repo clone
+      // path, so re-select the repo + "Work locally" exactly as the user-key
+      // setup did before launching the gateway turn.
       await driver.switchSelectedRouteToGateway(world, page, harness);
+      await driver.selectRepoAndWorkLocally(page, repo);
       const gatewaySelection = await driver.resolveRouteModel(world, page, harness, "gateway");
       await driver.selectModelInUi(page, gatewaySelection.modelId);
       const before = await driver.snapshotGatewaySpend(world, actor);
@@ -1150,6 +1168,20 @@ async function returnToAppHome(page: Page, expectedSurface = "[data-home-compose
   await page.getByRole("button", { name: /back to app/i }).first().click();
   await page
     .locator(expectedSurface)
+    .first()
+    .waitFor({ state: "visible", timeout: SETTINGS_STEP_TIMEOUT_MS });
+}
+
+/** Clicks the sidebar's "New chat" primary-nav entry (SidebarPrimaryNavigation,
+ * id "new-chat" → onGoHome) and waits for the home composer to reappear, so a
+ * subsequent model pick + send launches a NEW session rather than mutating the
+ * currently-active one. The row renders as a labelled button (SidebarNavRow), so
+ * target it by accessible name — the same idiom `returnToAppHome` uses. */
+async function openNewChat(page: Page): Promise<void> {
+  await ensureSidebarOpen(page);
+  await page.getByRole("button", { name: /^New chat$/i }).first().click();
+  await page
+    .locator("[data-home-composer-editor]")
     .first()
     .waitFor({ state: "visible", timeout: SETTINGS_STEP_TIMEOUT_MS });
 }

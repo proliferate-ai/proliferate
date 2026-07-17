@@ -1072,19 +1072,35 @@ async function switchHarnessEmptyChat(
   toHarness: LocalHarnessKind,
 ): Promise<{ oldSessionId: string; newSessionId: string; tabIndex: number; tabCountUnchanged: boolean; noOp: boolean }> {
   const p = page.page;
+  // Capture the target (empty) tab's identity from the ACTIVE tab BEFORE
+  // `ensureHarnessReady` — it reloads the page, and reload re-activates the
+  // durable, messaged tab A (its backend session is persisted; tab B's empty,
+  // in-place-replaceable session is not), so any read taken after the reload
+  // describes tab A, not the empty tab B this switch must act on. The failing
+  // run (Actions 29570511844, T3-SESSION-1) reloaded with tab A active and then
+  // "switched" claude→claude on it — a silent no-op whose session id never
+  // changed. Playwright locators are lazy (re-resolved at call time), so the
+  // index/session-id must be read here, pre-reload, and the tab re-activated by
+  // that index afterwards.
   const activeTabBefore = p.locator('[data-chat-tab][data-chat-tab-active="true"]').first();
   const harnessBefore = (await readRequiredAttr(p, "[data-chat-tab]", "data-chat-tab-harness", activeTabBefore)) as LocalHarnessKind;
-  if (harnessBefore === toHarness) {
-    const oldSessionId = await readRequiredAttr(p, "[data-chat-tab]", "data-chat-tab-session-id", activeTabBefore);
-    const tabIndexNoop = Number(
-      (await activeTabBefore.getAttribute("data-chat-tab-index").catch(() => null)) ?? "0",
-    );
-    return { oldSessionId, newSessionId: oldSessionId, tabIndex: tabIndexNoop, tabCountUnchanged: true, noOp: true };
-  }
-  await ensureHarnessReady(world, page, toHarness);
   const tabIndex = Number((await activeTabBefore.getAttribute("data-chat-tab-index").catch(() => null)) ?? "0");
   const oldSessionId = await readRequiredAttr(p, "[data-chat-tab]", "data-chat-tab-session-id", activeTabBefore);
+  if (harnessBefore === toHarness) {
+    return { oldSessionId, newSessionId: oldSessionId, tabIndex, tabCountUnchanged: true, noOp: true };
+  }
   const beforeCount = await p.locator("[data-chat-tab]").count();
+  await ensureHarnessReady(world, page, toHarness);
+  // Reload re-activated tab A; re-select the empty tab B at its captured index
+  // so the harness switch acts on the intended empty session, not the messaged
+  // one.
+  const targetTab = p.locator(`[data-chat-tab-index="${tabIndex}"]`).first();
+  await targetTab.waitFor({ state: "visible", timeout: TAB_SETTLE_TIMEOUT_MS });
+  await targetTab.click();
+  await p
+    .locator(`[data-chat-tab-index="${tabIndex}"][data-chat-tab-active="true"]`)
+    .first()
+    .waitFor({ state: "attached", timeout: TAB_SETTLE_TIMEOUT_MS });
   await selectHarnessInComposer(world, page, toHarness);
   // The unused backend session is replaced IN PLACE at the same tab position:
   // poll the tab AT THIS INDEX (not the stale tab-id locator, since the tab
