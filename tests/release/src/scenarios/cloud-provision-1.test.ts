@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -349,12 +349,19 @@ test("buildWorld writes GITHUB_APP_WEBHOOK_SECRET into the github-app env file (
   // staged env file off disk.
   const runDir = await mkdtemp(path.join(os.tmpdir(), "cp1-webhook-"));
   try {
+    await writeFile(
+      path.join(runDir, "cloud-world-subdomain.json"),
+      JSON.stringify({ subdomain: "mcq-smoke-run-1-smoke-0.qualification.proliferate.com" }),
+    );
     const resolved = resolveWorldConstructionInputs(fakeCtx({ runDir }));
     assert.equal(resolved.ok, true);
     if (!resolved.ok) return;
     const driver = createCloudProvision1Driver();
     await driver.buildWorld(resolved.value).catch(() => undefined); // construction throws on the empty map — that's fine.
-    const githubEnv = await readFile(path.join(runDir, "secrets", "github-app.env"), "utf8");
+    const githubEnv = await readFile(
+      path.join(runDir, "cloud-provision-1", "secrets", "github-app.env"),
+      "utf8",
+    );
     const match = /^GITHUB_APP_WEBHOOK_SECRET=([0-9a-f]{64})$/m.exec(githubEnv);
     assert.ok(match, "github-app.env must contain a 64-hex GITHUB_APP_WEBHOOK_SECRET line");
     assert.ok(githubEnv.includes("GITHUB_APP_CLIENT_SECRET="), "the existing client secret line is preserved");
@@ -452,6 +459,34 @@ test("runCloudProvision1Cell reports failed (not green) when cleanup does not fu
   const outcome = await runCloudProvision1Cell(fakeCell(), fakeCtx(), driver);
   assert.equal(outcome.status, "failed");
   assert.ok(outcome.evidence, "a failed cleanup still carries evidence recording the failure");
+});
+
+test("runCloudProvision1Cell stays green when exact template custody transfers durably", async () => {
+  const driver = fakeDriver({
+    closeWorld: async () => ({
+      ledgerIdHash: "e".repeat(64),
+      registered: 9,
+      reconciled: 9,
+      failed: 0,
+      sandboxesDeleted: true,
+      templateDeleted: false,
+      templateCustodyTransferred: true,
+      dnsRecordDeleted: true,
+      ec2Terminated: true,
+      securityGroupDeleted: true,
+      keyPairDeleted: true,
+      virtualKeyDeleted: true,
+      litellmSubjectsDeleted: true,
+      localPathsRemoved: true,
+    }),
+  });
+  const outcome = await runCloudProvision1Cell(fakeCell(), fakeCtx(), driver);
+  assert.equal(outcome.status, "green");
+  assert.equal(outcome.evidence?.kind, "cloud_provision_turn");
+  if (outcome.evidence?.kind === "cloud_provision_turn") {
+    assert.equal(outcome.evidence.cleanup.template_deleted, false);
+    assert.equal(outcome.evidence.cleanup.template_custody_transferred, true);
+  }
 });
 
 test("runCloudProvision1Cell reports blocked when no eligible live model intersects the allowlist", async () => {

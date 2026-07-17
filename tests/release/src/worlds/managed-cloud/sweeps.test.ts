@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { test } from "node:test";
 
 import {
@@ -6,6 +9,9 @@ import {
   countMatchingRecordSets,
   countNonTerminalInstances,
   sweepAwsForRun,
+  sweepE2bForTemplate,
+  sweepFilesystemPaths,
+  sweepProcessHostFromAws,
   type SweepExec,
 } from "./sweeps.js";
 
@@ -103,4 +109,83 @@ test("sweepAwsForRun treats a CLI failure as ambiguous → fail-closed (counts r
   );
   assert.ok(result.remaining >= 1);
   assert.ok(result.errors.some((e) => e.includes("describe-instances")));
+});
+
+test("sweepE2bForTemplate counts live sandboxes plus the still-present exact template", async () => {
+  const result = await sweepE2bForTemplate(
+    "tmpl-1",
+    async () => ({
+      matches: [{ providerSandboxId: "sbx-1", state: "paused", templateId: "tmpl-1" }],
+      count: 1,
+    }),
+    async () => ["tmpl-other", "tmpl-1"],
+  );
+  assert.equal(result.remaining, 2);
+});
+
+test("sweepE2bForTemplate rejects malformed counts and mismatched attribution", async () => {
+  await assert.rejects(
+    () => sweepE2bForTemplate(
+      "tmpl-1",
+      async () => ({ matches: [], count: 1 }),
+      async () => [],
+    ),
+    /count does not match/,
+  );
+  await assert.rejects(
+    () => sweepE2bForTemplate(
+      "tmpl-1",
+      async () => ({
+        matches: [{ providerSandboxId: "sbx-1", state: "running", templateId: "tmpl-other" }],
+        count: 1,
+      }),
+      async () => [],
+    ),
+    /ambiguously attributed/,
+  );
+});
+
+test("sweepFilesystemPaths counts a present owned path and treats only ENOENT as absent", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "mc-sweep-fs-"));
+  const present = path.join(dir, "present");
+  const absent = path.join(dir, "absent");
+  try {
+    await writeFile(present, "x");
+    assert.deepEqual(await sweepFilesystemPaths([present, absent]), { remaining: 1 });
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("sweepProcessHostFromAws derives relay-process absence only from a conclusive host sweep", () => {
+  assert.deepEqual(
+    sweepProcessHostFromAws({
+      remaining: 0,
+      detail: { instances: 0, securityGroups: 0, keyPairs: 0, dnsRecords: 0 },
+      errors: [],
+    }),
+    { remaining: 0 },
+  );
+  assert.deepEqual(
+    sweepProcessHostFromAws({
+      remaining: 1,
+      detail: { instances: 1, securityGroups: 0, keyPairs: 0, dnsRecords: 0 },
+      errors: [],
+    }),
+    { remaining: 1 },
+  );
+  assert.throws(
+    () => sweepProcessHostFromAws({
+      remaining: 1,
+      detail: { instances: 1, securityGroups: 0, keyPairs: 0, dnsRecords: 0 },
+      errors: ["describe-instances failed"],
+    }),
+    /ambiguous/,
+  );
+});
+
+test("strict AWS response parsers reject missing collection fields", () => {
+  assert.throws(() => countNonTerminalInstances("{}"), /Reservations/);
+  assert.throws(() => countArrayField("{}", "SecurityGroups"), /SecurityGroups/);
+  assert.throws(() => countMatchingRecordSets("{}", "run.q.example"), /ResourceRecordSets/);
 });

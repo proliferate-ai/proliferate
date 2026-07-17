@@ -56,6 +56,21 @@ export interface E2BStateResult {
   state: "running" | "paused";
 }
 
+export interface E2BTemplateSweepResult {
+  matches: Array<{
+    providerSandboxId: string;
+    state: "running" | "paused";
+    templateId: string;
+  }>;
+  count: number;
+}
+
+export interface E2BTemplateInventoryRow {
+  templateId: string;
+  aliases: string[];
+  names: string[];
+}
+
 export interface E2BExecResult {
   stdout: string;
   stderr: string;
@@ -136,6 +151,66 @@ export async function findProviderSandbox(
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<E2BFindResult> {
   return runProbe<E2BFindResult>(["find", cloudSandboxId], env);
+}
+
+/** Exhaustively lists live sandboxes whose observed template id exactly matches. */
+export async function listProviderSandboxesByTemplate(
+  templateId: string,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<E2BTemplateSweepResult> {
+  return runProbe<E2BTemplateSweepResult>(["list-template", templateId], env);
+}
+
+/** Lists strict immutable template identities and aliases through the authenticated E2B CLI. */
+export async function listProviderTemplates(
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<E2BTemplateInventoryRow[]> {
+  const apiKey = env.RELEASE_E2E_E2B_API_KEY?.trim() || env.E2B_API_KEY?.trim();
+  const teamId = env.RELEASE_E2E_E2B_TEAM_ID?.trim() || env.E2B_TEAM_ID?.trim();
+  if (!apiKey || !teamId) {
+    throw new Error("E2B template inventory requires the qualification API key and team id.");
+  }
+  const { execFile } = await import("node:child_process");
+  const { promisify } = await import("node:util");
+  const run = promisify(execFile);
+  const { stdout } = await run(
+    "e2b",
+    // `--team` is explicitly a team-ID selector in the E2B CLI. This is
+    // distinct from the template-name namespace, which uses the human slug.
+    ["template", "list", "--team", teamId, "--format", "json"],
+    {
+      env: { ...env, E2B_API_KEY: apiKey },
+      timeout: 60_000,
+      maxBuffer: 8 * 1024 * 1024,
+    },
+  );
+  const parsed = JSON.parse(stdout.toString().trim()) as unknown;
+  if (!Array.isArray(parsed)) {
+    throw new Error("E2B template inventory returned a non-array JSON payload.");
+  }
+  return parsed.map((row): E2BTemplateInventoryRow => {
+    if (typeof row !== "object" || row === null || Array.isArray(row)) {
+      throw new Error("E2B template inventory returned a malformed row.");
+    }
+    const value = row as Record<string, unknown>;
+    const id = typeof value.templateID === "string" ? value.templateID : value.templateId;
+    if (typeof id !== "string" || !id) {
+      throw new Error("E2B template inventory row has no immutable template id.");
+    }
+    const aliases = Array.isArray(value.aliases) ? value.aliases : [];
+    const names = Array.isArray(value.names) ? value.names : [];
+    if (aliases.some((name) => typeof name !== "string") || names.some((name) => typeof name !== "string")) {
+      throw new Error("E2B template inventory row has malformed aliases/names.");
+    }
+    return { templateId: id, aliases: aliases as string[], names: names as string[] };
+  });
+}
+
+/** Lists immutable template ids directly through the authenticated E2B CLI. */
+export async function listProviderTemplateIds(
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<string[]> {
+  return (await listProviderTemplates(env)).map((row) => row.templateId);
 }
 
 export async function getProviderSandboxState(

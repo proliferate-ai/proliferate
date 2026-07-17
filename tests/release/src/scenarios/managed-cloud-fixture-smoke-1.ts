@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { mkdir, writeFile, rename, readFile, copyFile } from "node:fs/promises";
+import { chmod, mkdir, writeFile, rename, readFile, copyFile, rm } from "node:fs/promises";
 import path from "node:path";
 
 import type {
@@ -10,6 +10,11 @@ import type {
   ScenarioRunContext,
 } from "./types.js";
 import {
+  COVERED_REPO_DEFAULT_BRANCH,
+  COVERED_REPO_NAME,
+  COVERED_REPO_OWNER,
+  EXPECTED_BOT_LOGIN,
+  resolveBotSeedForAutomation,
   resolveWorldConstructionInputs,
   type CloudProvision1ConstructionInputs,
 } from "./cloud-provision-1.js";
@@ -21,6 +26,16 @@ import {
   restoreBillingFixtureAdjustment,
 } from "../fixtures/billing-threshold.js";
 import { injectFailureAt } from "../fixtures/failure-injection.js";
+import type { FailureInjectionHandle } from "../fixtures/failure-injection.js";
+import {
+  findProviderSandbox,
+  killProviderSandbox,
+} from "../fixtures/e2b-verify.js";
+import {
+  ensureCloudSandboxRow,
+  pollCloudSandboxStatus,
+  warmPersonalCloudSandbox,
+} from "../fixtures/cloud-sandbox.js";
 import {
   authenticatedActor,
   type AuthenticatedActor,
@@ -30,28 +45,58 @@ import { CALLBACK_RELAY_DEFAULT_PORT } from "../fixtures/callback-relay.js";
 import { REMOTE_WORKDIR } from "../worlds/managed-cloud/ingress.js";
 import { RELAY_DIRNAME } from "../worlds/managed-cloud/callback-relay-agent.js";
 import { parseLastJsonLine } from "../worlds/managed-cloud/box-seeds.js";
+import {
+  persistRotatedBotSeedDurable,
+  seedGithubAuthorizationOnBox,
+  seedUnlimitedCloudEntitlementOnBox,
+} from "../worlds/managed-cloud/box-seeds.js";
 import type { BoxExec } from "../worlds/managed-cloud/box-exec.js";
 import {
   defaultStripeHttp,
   isLiveModeSecretKey,
+  STRIPE_INTENT_RECOVERY_WINDOW_MS,
   stripeCleanupReplayHandlers,
   type StripeHttp,
 } from "../fixtures/stripe-test-clock.js";
 import {
   createRunCustomer,
   createWebhookEndpoint,
+  deleteCustomerByIdHttp,
+  deleteRunCustomersByTag,
+  deleteWebhookEndpointById,
   encodeWebhookEndpointIntentRef,
-  stripeSmokeResourceReplayHandlers,
+  findWebhookEndpointByUrl,
+  findWebhookEndpointsByUrl,
   webhookEndpointUrl,
 } from "../fixtures/stripe-smoke-resources.js";
-import { sweepAwsForRun } from "../worlds/managed-cloud/sweeps.js";
-import { loadCleanupLedger, replayLedger } from "../worlds/local-workspace/cleanup-ledger.js";
+import {
+  FIXTURE_REPLAY_KINDS,
+  encodeE2bSandboxCleanupIdentity,
+} from "../fixtures/managed-cloud-fixture-replay.js";
+import {
+  replayManagedCloudFixturesInFreshProcess,
+  type ManagedCloudFixtureReplayReportV1,
+} from "../cli/replay-managed-cloud-fixtures.js";
+export {
+  decodeE2bSandboxCleanupIdentity,
+  encodeE2bSandboxCleanupIdentity,
+} from "../fixtures/managed-cloud-fixture-replay.js";
+export type { E2bSandboxCleanupIdentity } from "../fixtures/managed-cloud-fixture-replay.js";
+import {
+  sweepAwsForRun,
+  sweepE2bForTemplate,
+  sweepFilesystemPaths,
+  sweepProcessHostFromAws,
+} from "../worlds/managed-cloud/sweeps.js";
+import { loadCleanupLedger } from "../worlds/local-workspace/cleanup-ledger.js";
 import type { PlannedCellV1 } from "../runner/result.js";
 import type { CandidateStripeConfig } from "../worlds/managed-cloud/ingress.js";
 import type { ManagedCloudCleanupEvidence } from "../worlds/managed-cloud/cleanup-kinds.js";
+import { sharedTemplateCustodyPath } from "../worlds/managed-cloud/shared-template-custody.js";
 import {
   constructManagedCloudWorld,
   type ConstructManagedCloudWorldOptions,
+  type CleanupIntentHandle,
   type ManagedCloudWorld,
 } from "../worlds/managed-cloud/world.js";
 import type { ReadyLocalWorld } from "../worlds/local-workspace/world.js";
@@ -74,8 +119,9 @@ import type { ReadyLocalWorld } from "../worlds/local-workspace/world.js";
  *   billing-threshold — position the LLM ledger below one request's cost; one
  *                       real gateway request crosses it; observe the product
  *                       gate; restore + reload proves restoration.
- *   failure-injection — workspace_creation boundary (server restart); observe a
- *                       real first-attempt failure then normal-path recovery;
+ *   failure-injection — provider_create boundary (kill the first real provider
+ *                       sandbox); observe the product error then recover by the
+ *                       normal product materialization path;
  *                       control action + relay spool unaffected.
  *   cleanup-replay    — fresh executor replays the ledger with no in-memory
  *                       closures; world close; provider sweeps show zero owned.
@@ -143,11 +189,13 @@ export const managedCloudFixtureSmoke1: ScenarioDefinition = {
 
 /** The webhook endpoint two-stage-custody intent file recorded under runDir. */
 export const WEBHOOK_INTENT_FILENAME = "stripe-webhook-endpoint-intent.json";
+export const WEBHOOK_CUSTODY_DIRNAME = "cleanup-custody";
 
 interface WebhookEndpointIntent {
   intentRef: string;
   endpointId: string | null;
   runTag: string;
+  createdAt: string;
 }
 
 /** Resolved Stripe preparation done BEFORE world construction (two-stage custody). */
@@ -171,6 +219,8 @@ export interface StripePreparation {
   webhookEndpointId: string;
   /** The durable intent ref (url-based) recorded before the create. */
   webhookIntentRef: string;
+  /** Durable parent-run journal, intentionally outside the world-deleted scoped directory. */
+  webhookIntentFilePath: string;
 }
 
 /** Mutable state threaded across the cells of one shared world. */
@@ -319,12 +369,15 @@ export async function runFixtureSmokeCells(
     // construction failure would otherwise leak it (the durable intent file only
     // covers a full runner DEATH — nothing replays it inline). Delete it directly
     // now (best-effort, tolerates a missing endpoint).
-    await driver.deleteWebhookEndpoint(prep, keyResult.secretKey).catch((cleanupError) => {
-      process.stderr.write(
-        `[fixture-smoke] webhook endpoint cleanup after failed world construction failed: ${describe(cleanupError)}\n`,
+    try {
+      await driver.deleteWebhookEndpoint(prep, keyResult.secretKey);
+      return failAllAssigned(cells, `world construction failed: ${describe(error)}`);
+    } catch (cleanupError) {
+      return failAllAssigned(
+        cells,
+        `world construction failed: ${describe(error)}; pre-world Stripe cleanup also failed: ${describe(cleanupError)}`,
       );
-    });
-    return failAllAssigned(cells, `world construction failed: ${describe(error)}`);
+    }
   }
 
   const state: SmokeState = {
@@ -336,6 +389,7 @@ export async function runFixtureSmokeCells(
   const outcomes: ScenarioCellOutcomeWithEvidence[] = [];
   let worldClosed = false;
   let closeEvidence: ManagedCloudCleanupEvidence | null = null;
+  let orchestrationError: Error | null = null;
   // Returns the world-close cleanup evidence on the call that actually closed it,
   // and null on any subsequent (already-closed) call — so cell E can gate on the
   // real close evidence (failed count + every deletion boolean).
@@ -351,9 +405,21 @@ export async function runFixtureSmokeCells(
   try {
     // Adopt the pre-created webhook endpoint into the world ledger so world close
     // deletes it (belt-and-suspenders with the scenario intent file).
-    await driver.adoptWebhookIntent(world, prep, state.secretKey).catch((error) => {
-      process.stderr.write(`[fixture-smoke] webhook intent adoption failed: ${describe(error)}\n`);
-    });
+    try {
+      await driver.adoptWebhookIntent(world, prep, state.secretKey);
+    } catch (adoptionError) {
+      try {
+        await driver.deleteWebhookEndpoint(prep, state.secretKey);
+      } catch (cleanupError) {
+        throw new Error(
+          `webhook cleanup-ledger adoption failed: ${describe(adoptionError)}; direct cleanup also failed: ` +
+            `${describe(cleanupError)} (durable journal preserved at ${prep.webhookIntentFilePath}).`,
+        );
+      }
+      throw new Error(
+        `webhook cleanup-ledger adoption failed: ${describe(adoptionError)}; endpoint was deleted directly.`,
+      );
+    }
 
     const worldIdentity = worldEvidenceIdentity(world);
     const artifactIds = worldArtifactIds(world);
@@ -384,10 +450,63 @@ export async function runFixtureSmokeCells(
         ),
       );
     }
+  } catch (error) {
+    orchestrationError = error instanceof Error ? error : new Error(describe(error));
   } finally {
     // cleanup-replay closes the world when assigned; otherwise close it here
     // with no emitted outcome (the world must never leak).
-    await closeOnce().catch(() => undefined);
+    try {
+      const finalEvidence = await closeOnce();
+      if (finalEvidence) {
+        if (assigned.has("cleanup-replay")) {
+          throw new Error(
+            "cleanup-replay returned without consuming the real world-close receipt; its green result is invalid.",
+          );
+        }
+        if (finalEvidence.failed > 0 || !allCleanupBooleansTrue(finalEvidence)) {
+          throw new Error(
+            `world close did not fully reconcile (failed=${finalEvidence.failed}, ${cleanupBooleanSummary(finalEvidence)}).`,
+          );
+        }
+      }
+    } catch (error) {
+      const cleanupError = error instanceof Error ? error : new Error(describe(error));
+      orchestrationError = orchestrationError
+        ? new Error(`${orchestrationError.message}; final cleanup also failed: ${cleanupError.message}`)
+        : cleanupError;
+    }
+  }
+
+  if (orchestrationError) {
+    const byCell = new Map(outcomes.map((outcome) => [outcome.cellId, outcome]));
+    return cells.map((cell) => {
+      const prior = byCell.get(cell.cell_id);
+      if (prior?.status !== "green") {
+        if (prior) {
+          return {
+            ...prior,
+            reason: {
+              code: prior.reason?.code ?? "scenario_failure",
+              message: `${prior.reason?.message ?? "cell failed"}; required orchestration/cleanup also failed: ` +
+                describe(orchestrationError),
+            },
+          };
+        }
+        return {
+          cellId: cell.cell_id,
+          status: "failed",
+          reason: { code: "scenario_failure", message: describe(orchestrationError) },
+        };
+      }
+      return {
+        cellId: cell.cell_id,
+        status: "failed",
+        reason: {
+          code: "scenario_failure",
+          message: `cell body completed but required orchestration/cleanup failed: ${describe(orchestrationError)}`,
+        },
+      };
+    });
   }
 
   return outcomes;
@@ -468,6 +587,7 @@ function worldEvidenceIdentity(world: ManagedCloudWorld): ManagedCloudFixtureSmo
     server_digest: world.artifacts.server.sha256,
     e2b_template_id: world.artifacts.template.templateId,
     e2b_template_build_id: world.artifacts.template.buildId,
+    e2b_template_input_hash: world.artifacts.template.inputHash,
   };
 }
 
@@ -541,11 +661,19 @@ export interface FixtureSmokeRuntimeDeps {
   http: StripeHttp;
   /** The world constructor (injectable so a unit test can capture `options.runDir`). */
   constructWorld: (options: ConstructManagedCloudWorldOptions) => Promise<ManagedCloudWorld>;
+  /** Must cross a real OS-process boundary in production. */
+  replayFixturesFresh: (
+    runDir: string,
+    runId: string,
+    shardId: string,
+  ) => Promise<ManagedCloudFixtureReplayReportV1>;
 }
 
 const productionDeps: FixtureSmokeRuntimeDeps = {
   http: defaultStripeHttp,
   constructWorld: constructManagedCloudWorld,
+  replayFixturesFresh: (runDir, runId, shardId) =>
+    replayManagedCloudFixturesInFreshProcess({ runDir, runId, shardId }),
 };
 
 /** Reused-fixture cast (see cloud-provision-1's `asAuthenticatedActorWorld`). */
@@ -563,11 +691,75 @@ async function writeSecretEnvFile(dir: string, fileName: string, values: Record<
 }
 
 /** Atomic (tmp+rename) 0600 write of the scenario-owned webhook intent file. */
-async function writeWebhookIntentFile(runDir: string, intent: WebhookEndpointIntent): Promise<void> {
-  const target = path.join(runDir, WEBHOOK_INTENT_FILENAME);
-  const tmp = `${target}.tmp`;
+async function writeWebhookIntentFile(filePath: string, intent: WebhookEndpointIntent): Promise<void> {
+  const tmp = `${filePath}.tmp`;
   await writeFile(tmp, `${JSON.stringify(intent)}\n`, { mode: 0o600 });
-  await rename(tmp, target);
+  await rename(tmp, filePath);
+}
+
+async function removeWebhookIntentFile(filePath: string): Promise<void> {
+  await rm(filePath, { force: true });
+}
+
+/**
+ * Replays a pre-world webhook cleanup journal using only persisted bounded
+ * identity. This runs before a new endpoint can be created and removes the
+ * journal only after deletion or an exhaustive, out-of-window absence proof.
+ */
+export async function reconcileWebhookIntentFile(
+  filePath: string,
+  expectedRunTag: string,
+  expectedUrl: string,
+  secretKey: string,
+  http: StripeHttp,
+): Promise<void> {
+  let raw: string;
+  try {
+    raw = await readFile(filePath, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return;
+    }
+    throw error;
+  }
+  const parsed = JSON.parse(raw) as Partial<WebhookEndpointIntent>;
+  const expectedIntentRef = `intent:webhook_endpoint:url=${expectedUrl}`;
+  if (parsed.runTag !== expectedRunTag || parsed.intentRef !== expectedIntentRef || typeof parsed.createdAt !== "string") {
+    throw new Error("webhook cleanup journal identity is malformed or belongs to a different run.");
+  }
+  if (parsed.endpointId !== null && typeof parsed.endpointId !== "string") {
+    throw new Error("webhook cleanup journal endpoint id is malformed.");
+  }
+  const found = await findWebhookEndpointsByUrl(
+    { secretKey, url: expectedUrl, runTag: expectedRunTag },
+    http,
+  );
+  if (found.length > 0) {
+    if (parsed.endpointId && !found.some((match) => match.endpointId === parsed.endpointId)) {
+      throw new Error("webhook cleanup journal id does not match the run-owned endpoint at its exact URL.");
+    }
+    for (const match of found) {
+      await deleteWebhookEndpointById(secretKey, match.endpointId, http);
+    }
+    const remaining = await findWebhookEndpointsByUrl(
+      { secretKey, url: expectedUrl, runTag: expectedRunTag },
+      http,
+    );
+    if (remaining.length > 0) {
+      throw new Error(
+        `webhook cleanup journal still has ${remaining.length} exact run-owned endpoint(s) after delete; preserving custody.`,
+      );
+    }
+    await removeWebhookIntentFile(filePath);
+    return;
+  }
+  const createdAt = Date.parse(parsed.createdAt);
+  if (Number.isNaN(createdAt) || Date.now() - createdAt < STRIPE_INTENT_RECOVERY_WINDOW_MS) {
+    throw new Error(
+      "webhook cleanup journal has no visible endpoint yet; keeping it durable and retryable rather than reconciling success.",
+    );
+  }
+  await removeWebhookIntentFile(filePath);
 }
 
 /** The build-written sidecar naming the subdomain baked into the renderer. */
@@ -615,6 +807,7 @@ async function readRunSubdomain(
 export function createFixtureSmokeDriver(deps: Partial<FixtureSmokeRuntimeDeps> = {}): FixtureSmokeDriver {
   const http = deps.http ?? productionDeps.http;
   const constructWorld = deps.constructWorld ?? productionDeps.constructWorld;
+  const replayFixturesFresh = deps.replayFixturesFresh ?? productionDeps.replayFixturesFresh;
   return {
     async prepareStripe(inputs, secretKey) {
       // Fail closed on a live-mode key (reuse the fixture guard) BEFORE any create.
@@ -628,6 +821,10 @@ export function createFixtureSmokeDriver(deps: Partial<FixtureSmokeRuntimeDeps> 
       // fixture-smoke env files + the webhook intent file live under here.
       const scopedRunDir = fixtureSmokeScopedRunDir(inputs.runDir);
       await mkdir(scopedRunDir, { recursive: true });
+      const custodyDir = path.join(inputs.runDir, WEBHOOK_CUSTODY_DIRNAME);
+      await mkdir(custodyDir, { recursive: true, mode: 0o700 });
+      await chmod(custodyDir, 0o700);
+      const webhookIntentFilePath = path.join(custodyDir, WEBHOOK_INTENT_FILENAME);
       const secretsDir = path.join(scopedRunDir, "secrets");
       await mkdir(secretsDir, { recursive: true, mode: 0o700 });
       const secretsEnvFilePath = await writeSecretEnvFile(secretsDir, "stripe.env", {
@@ -645,11 +842,18 @@ export function createFixtureSmokeDriver(deps: Partial<FixtureSmokeRuntimeDeps> 
         inputs.run.run_id,
         inputs.run.shard_id,
       );
+      await reconcileWebhookIntentFile(
+        webhookIntentFilePath,
+        runTag,
+        webhookEndpointUrl(subdomain),
+        secretKey,
+        http,
+      );
       if (fromSidecar) {
         await copyFile(
           path.join(inputs.runDir, SUBDOMAIN_SIDECAR_FILENAME),
           path.join(scopedRunDir, SUBDOMAIN_SIDECAR_FILENAME),
-        ).catch(() => undefined);
+        );
       }
 
       // STAGE 1 (pre-create): record the durable scenario-owned intent BEFORE the
@@ -658,12 +862,18 @@ export function createFixtureSmokeDriver(deps: Partial<FixtureSmokeRuntimeDeps> 
       // world's ledger). The world does not exist yet, so its ledger cannot own
       // this yet — the scenario intent file bridges that window.
       const intentRef = encodeWebhookEndpointIntentRef(subdomain);
-      await writeWebhookIntentFile(scopedRunDir, { intentRef, endpointId: null, runTag });
+      const createdAt = new Date().toISOString();
+      await writeWebhookIntentFile(webhookIntentFilePath, { intentRef, endpointId: null, runTag, createdAt });
 
       const created = await createWebhookEndpoint({ secretKey, subdomain, runTag }, http);
 
       // STAGE 1b: update the intent file with the real id the instant Stripe returns.
-      await writeWebhookIntentFile(scopedRunDir, { intentRef, endpointId: created.endpointId, runTag });
+      await writeWebhookIntentFile(webhookIntentFilePath, {
+        intentRef,
+        endpointId: created.endpointId,
+        runTag,
+        createdAt,
+      });
 
       // The two webhook signing secrets live in the SERVER env only (the relay
       // forwards signed bytes untouched). E2B webhook secret is optional.
@@ -681,12 +891,13 @@ export function createFixtureSmokeDriver(deps: Partial<FixtureSmokeRuntimeDeps> 
         subdomain,
         webhookEndpointId: created.endpointId,
         webhookIntentRef: intentRef,
+        webhookIntentFilePath,
       };
     },
 
     async deleteWebhookEndpoint(prep, secretKey) {
-      const { deleteWebhookEndpointById } = await import("../fixtures/stripe-smoke-resources.js");
       await deleteWebhookEndpointById(secretKey, prep.webhookEndpointId, http);
+      await removeWebhookIntentFile(prep.webhookIntentFilePath);
     },
 
     async buildWorld(inputs, prep) {
@@ -717,6 +928,12 @@ export function createFixtureSmokeDriver(deps: Partial<FixtureSmokeRuntimeDeps> 
         checkoutCancelUrl: publicOrigin,
       };
 
+      const templateCustodyMode = process.env.RELEASE_E2E_SHARED_TEMPLATE_CUSTODY ?? "world_owned";
+      if (templateCustodyMode !== "world_owned" && templateCustodyMode !== "consumer") {
+        throw new Error(
+          `MANAGED-CLOUD-FIXTURE-SMOKE-1 does not accept shared-template custody mode ${templateCustodyMode}.`,
+        );
+      }
       const options: ConstructManagedCloudWorldOptions = {
         run: inputs.run,
         map: inputs.map,
@@ -744,6 +961,10 @@ export function createFixtureSmokeDriver(deps: Partial<FixtureSmokeRuntimeDeps> 
         // copied sidecar under here lets the constructor's readBuildSubdomain read
         // the exact build subdomain (matching the renderer's baked-in value).
         runDir: prep.scopedRunDir,
+        templateCustody:
+          templateCustodyMode === "consumer"
+            ? { mode: "shared_consumer", journalPath: sharedTemplateCustodyPath(inputs.runDir) }
+            : { mode: "world_owned" },
         log: (message) => process.stderr.write(`[managed-cloud] ${message}\n`),
       };
       return constructWorld(options);
@@ -762,6 +983,7 @@ export function createFixtureSmokeDriver(deps: Partial<FixtureSmokeRuntimeDeps> 
       };
       if (!world.registerCleanupIntent) {
         await world.registerCleanup?.("stripe_webhook_endpoint", prep.webhookEndpointId, release);
+        await removeWebhookIntentFile(prep.webhookIntentFilePath);
         return;
       }
       const handle = await world.registerCleanupIntent(
@@ -770,10 +992,19 @@ export function createFixtureSmokeDriver(deps: Partial<FixtureSmokeRuntimeDeps> 
         release,
       );
       await handle.markAcquired(prep.webhookEndpointId);
+      await removeWebhookIntentFile(prep.webhookIntentFilePath);
     },
 
     async createActor(world) {
-      return authenticatedActor(asAuthenticatedActorWorld(world), "owner", { gatewaySurface: "cloud" });
+      return authenticatedActor(asAuthenticatedActorWorld(world), "owner", {
+        gatewaySurface: "cloud",
+        resolveAndTrackActorSubjects: (params) => {
+          if (!world.resolveAndTrackActorSubjects) {
+            throw new Error("managed-cloud world exposes no enrollment-boundary LiteLLM cleanup custody.");
+          }
+          return world.resolveAndTrackActorSubjects(params);
+        },
+      });
     },
     async trackActorSubjects(world, actor) {
       await world.trackActorSubjects?.(actor.gatewayKey);
@@ -794,7 +1025,7 @@ export function createFixtureSmokeDriver(deps: Partial<FixtureSmokeRuntimeDeps> 
       return runFailureInjectionCellLive(world, state, actor);
     },
     async runCleanupReplayCell(world, state, closeWorld) {
-      return runCleanupReplayCellLive(world, state, closeWorld, http);
+      return runCleanupReplayCellLive(world, state, closeWorld, http, replayFixturesFresh);
     },
     async closeWorld(world) {
       return world.close();
@@ -987,15 +1218,49 @@ async function readWebhookReceiptSnapshot(
   return parseWebhookReceiptSnapshot(result.stdout);
 }
 
+/** Persists Cell A's customer intent before Stripe accepts the create. */
+export async function createCellACustomerWithCustody(
+  world: ManagedCloudWorld,
+  state: { secretKey: string; runTag: string },
+  http: StripeHttp,
+): Promise<string> {
+  if (!world.registerCleanupIntent) {
+    throw new Error(
+      "callback-relay: the managed-cloud world exposes no durable cleanup-intent seam for the Stripe customer.",
+    );
+  }
+
+  let acceptedCustomerId: string | null = null;
+  const handle = await world.registerCleanupIntent(
+    "stripe_customer",
+    `intent:customer:runTag=${state.runTag}:cellA`,
+    async () => {
+      if (acceptedCustomerId) {
+        await deleteCustomerByIdHttp(state.secretKey, acceptedCustomerId, http);
+        return;
+      }
+      await deleteRunCustomersByTag(
+        { secretKey: state.secretKey, runTag: state.runTag, cellTag: "cellA" },
+        http,
+      );
+    },
+  );
+  const created = await createRunCustomer(
+    { secretKey: state.secretKey, runTag: state.runTag, cellTag: "cellA" },
+    http,
+  );
+  acceptedCustomerId = created.customerId;
+  await handle.markAcquired(created.customerId);
+  return created.customerId;
+}
+
 /** Cell A — callback relay (spec Cell A). */
 async function runCallbackRelayCellLive(
   world: ManagedCloudWorld,
   state: SmokeState,
   http: StripeHttp,
 ): Promise<FixtureSmokeCellResult> {
-  const { findEventForObject, createRunCustomer: createCustomer } = await import(
-    "../fixtures/stripe-smoke-resources.js"
-  );
+  const { findEventForObject } = await import("../fixtures/stripe-smoke-resources.js");
   if (!world.box) {
     throw new Error("callback-relay: the managed-cloud world exposes no box-exec seam.");
   }
@@ -1007,27 +1272,14 @@ async function runCallbackRelayCellLive(
   await relay.manifest("stripe"); // baseline read
   await relay.hold("stripe");
 
-  // Cheapest real test-mode op firing a subscribed event: create a run-tagged
-  // customer (fires customer.created). Register it for cleanup FIRST via the
-  // world (real id → markAcquired) under stripe_customer, namespaced to cell A.
-  const created = await createCustomer({ secretKey: state.secretKey, runTag: state.runTag, cellTag: "cellA" }, http);
-  if (world.registerCleanupIntent) {
-    const handle = await world.registerCleanupIntent(
-      "stripe_customer",
-      `intent:customer:runTag=${state.runTag}:cellA`,
-      async () => {
-        const { deleteCustomerById, defaultStripeTestClockTransport } = await import(
-          "../fixtures/stripe-test-clock.js"
-        );
-        await deleteCustomerById(defaultStripeTestClockTransport, state.secretKey, created.customerId);
-      },
-    );
-    await handle.markAcquired(created.customerId);
-  }
+  // Cheapest real test-mode op firing a subscribed event. The durable cleanup
+  // intent is persisted before POST and promoted to the accepted cus_ id
+  // immediately after Stripe returns.
+  const customerId = await createCellACustomerWithCustody(world, state, http);
 
   // Correlate the customer.created event id for our customer.
   const evt = await pollUntil(
-    () => findEventForObject({ secretKey: state.secretKey, type: "customer.created", matchObjectId: created.customerId }, http),
+    () => findEventForObject({ secretKey: state.secretKey, type: "customer.created", matchObjectId: customerId }, http),
     (v) => v !== null,
     CALLBACK_POLL_TIMEOUT_MS,
     CALLBACK_POLL_INTERVAL_MS,
@@ -1140,7 +1392,7 @@ async function runCallbackRelayCellLive(
   const witness = assertDuplicateDeliveryByteIdentity(manifestBeforeDuplicate, manifestAfterDuplicate, evt.id);
 
   return {
-    externalIds: [created.customerId, evt.id, held.deliveryId],
+    externalIds: [customerId, evt.id, held.deliveryId],
     observedTransition:
       `held→replayed:processed→duplicate:${dupCode}:already_processed(processed_at_unchanged)→` +
       `byte_identical(${witness.bytesSha256.slice(0, 12)})[dir=700,files=600,pid_owned]`,
@@ -1168,6 +1420,11 @@ async function runStripeTestClockCellLive(
       async () => {
         if (productId && priceId) {
           await smoke.deactivateProductPriceById(state.secretKey, productId, priceId, http);
+        } else {
+          await smoke.deactivateRunProductPricesByTag(
+            { secretKey: state.secretKey, runTag: state.runTag },
+            http,
+          );
         }
       },
     );
@@ -1186,12 +1443,17 @@ async function runStripeTestClockCellLive(
   // Advance, then wait for the clock to settle (advance is async) before polling
   // for the renewal event.
   await handle.advanceToNextPeriod();
-  await pollUntil(
+  const clockReady = await pollUntil(
     () => smoke.getTestClockStatus({ secretKey: state.secretKey, testClockId: handle.testClockId }, http),
     (v) => "status" in v && v.status === "ready",
     CLOCK_READY_TIMEOUT_MS,
     CLOCK_READY_INTERVAL_MS,
   );
+  if (!("status" in clockReady) || clockReady.status !== "ready") {
+    throw new Error(
+      `stripe-test-clock: test clock did not return to ready after advance (observed ${JSON.stringify(clockReady)}).`,
+    );
+  }
   const renewal = await pollUntil(
     () =>
       smoke.findRenewalEventForCustomer(
@@ -1211,7 +1473,8 @@ async function runStripeTestClockCellLive(
   }
 
   // Interruption recovery: DISCARD the handle (no release()); rebuild replay
-  // handlers from the RELOADED ledger and prove recovery by persisted identity.
+  // handlers from the RELOADED ledger and actually execute them. The proof must
+  // not delete through the original in-memory controller.
   const ledger = await loadCleanupLedger(world.paths.runDir);
   const handlers = clockFixture.stripeCleanupReplayHandlers({
     secretKey: state.secretKey,
@@ -1233,16 +1496,44 @@ async function runStripeTestClockCellLive(
   if (foundCustomer?.customerId !== handle.customerId) {
     throw new Error("stripe-test-clock: recovery by runTag did not locate our customer on the clock.");
   }
-  // `handlers` is proven usable (built from the reloaded ledger); do NOT run it
-  // here (that would double-delete before the explicit delete below).
-  void handlers;
-
-  // Delete via transport, then verify absence.
-  await clockFixture.deleteTestClockById(
-    clockFixture.defaultStripeTestClockTransport,
-    state.secretKey,
-    handle.testClockId,
+  const clockEntries = ledger.unreconciled().filter(
+    (entry) =>
+      (entry.kind === "stripe_test_clock" && entry.providerId === handle.testClockId) ||
+      (entry.kind === "stripe_customer" && entry.providerId === handle.customerId),
   );
+  if (
+    !clockEntries.some((entry) => entry.kind === "stripe_test_clock") ||
+    !clockEntries.some((entry) => entry.kind === "stripe_customer")
+  ) {
+    throw new Error("stripe-test-clock: reloaded ledger did not retain both acquired clock/customer identities.");
+  }
+  // Execute only the reconstructed handlers here, without marking the durable
+  // entries reconciled. This proves identity-based deletion while deliberately
+  // leaving the entries for Cell E's independent fresh-process replay.
+  for (const entry of clockEntries) {
+    const handler = handlers[entry.kind];
+    if (!handler) {
+      throw new Error(`stripe-test-clock: no reconstructed cleanup handler for ${entry.kind}.`);
+    }
+    await handler(entry);
+  }
+  const afterReplay = await loadCleanupLedger(world.paths.runDir);
+  const unreconciledClockEntries = afterReplay
+    .entries()
+    .filter(
+      (entry) =>
+        ((entry.kind === "stripe_test_clock" && entry.providerId === handle.testClockId) ||
+          (entry.kind === "stripe_customer" && entry.providerId === handle.customerId)) &&
+        entry.phase !== "reconciled",
+    );
+  if (unreconciledClockEntries.length !== clockEntries.length) {
+    throw new Error(
+      "stripe-test-clock: reconstructed handler execution unexpectedly reconciled durable entries before " +
+        "Cell E's fresh-process replay.",
+    );
+  }
+
+  // Verify the replay-driven delete, not an in-memory handle delete.
   const afterDelete = await smoke.getTestClockStatus({ secretKey: state.secretKey, testClockId: handle.testClockId }, http);
   if (!("missing" in afterDelete)) {
     throw new Error("stripe-test-clock: the test clock still resolves after deletion (expected resource_missing).");
@@ -1281,6 +1572,17 @@ async function runStripeTestClockCellLive(
 /** A product-side gate signal observed after the threshold is crossed. */
 export type BillingGateSignal = "second_request_rejected" | "budget_status_exhausted";
 
+/** Stable product error code emitted when managed LLM credit is exhausted. */
+export const PRODUCT_LLM_CREDIT_DENIAL_CODE = "agent_gateway_credits_exhausted";
+
+export interface BillingGatewayResponse {
+  status: number;
+  completionTokens: number;
+  costUsd: number | null;
+  /** Exact product classification only; generic HTTP statuses stay unclassified. */
+  denialCode: typeof PRODUCT_LLM_CREDIT_DENIAL_CODE | null;
+}
+
 export interface BillingThresholdCellDeps {
   /** Positions the LLM ledger to `balance` (the merged billingThreshold fixture). */
   positionThreshold(
@@ -1314,7 +1616,7 @@ export interface BillingThresholdCellDeps {
     modelId: string;
     maxTokens: number;
     prompt: string;
-  }): Promise<{ status: number; completionTokens: number; costUsd: number | null }>;
+  }): Promise<BillingGatewayResponse>;
   /** Runs the product's accounting + reconcile passes on the candidate box. */
   runReconcilePasses(world: ManagedCloudWorld): Promise<void>;
   /**
@@ -1499,6 +1801,9 @@ const productionBillingThresholdCellDeps: BillingThresholdCellDeps = {
     }
     let costUsd: number | null = null;
     const body = (await response.json().catch(() => ({}))) as {
+      code?: unknown;
+      detail?: { code?: unknown };
+      error?: { code?: unknown };
       usage?: { cost?: unknown; total_cost?: unknown; completion_tokens?: unknown };
     };
     const cost = body.usage?.cost ?? body.usage?.total_cost;
@@ -1507,7 +1812,11 @@ const productionBillingThresholdCellDeps: BillingThresholdCellDeps = {
     }
     const completionTokens =
       typeof body.usage?.completion_tokens === "number" ? body.usage.completion_tokens : 0;
-    return { status: response.status, completionTokens, costUsd };
+    const observedCode = body.code ?? body.detail?.code ?? body.error?.code;
+    const denialCode = observedCode === PRODUCT_LLM_CREDIT_DENIAL_CODE
+      ? PRODUCT_LLM_CREDIT_DENIAL_CODE
+      : null;
+    return { status: response.status, completionTokens, costUsd, denialCode };
   },
   async runUsageImport(world) {
     if (!world.box) {
@@ -1685,7 +1994,10 @@ export async function runBillingThresholdCellLive(
     maxTokens: 32,
     prompt: "Reply with exactly the word: pong",
   });
-  if (!(secondRequest.status >= 200 && secondRequest.status < 300)) {
+  if (
+    !(secondRequest.status >= 200 && secondRequest.status < 300) &&
+    secondRequest.denialCode === PRODUCT_LLM_CREDIT_DENIAL_CODE
+  ) {
     gateSignals.push("second_request_rejected");
   }
   const budgetStatus = await deps.readBudgetStatus(world, actor.enrollmentId);
@@ -1694,8 +2006,9 @@ export async function runBillingThresholdCellLive(
   }
   if (gateSignals.length === 0) {
     throw new Error(
-      "billing-threshold: crossed the ledger but observed NO product-side gate signal (neither a rejected second " +
-        `request nor a flipped budget_status; budget_status=${budgetStatus}).`,
+      "billing-threshold: crossed the ledger but observed NO classified product-side gate signal (the second " +
+        `request was HTTP ${secondRequest.status} with denial_code=${secondRequest.denialCode ?? "none"}; ` +
+        `budget_status=${budgetStatus}). Generic auth/rate-limit/server failures are not billing proof.`,
     );
   }
 
@@ -1724,71 +2037,220 @@ export async function runBillingThresholdCellLive(
   };
 }
 
-/** Cell D — failure injection at the workspace_creation boundary (spec Cell D). Uses the ONE shared owner actor. */
-async function runFailureInjectionCellLive(
+export interface ProviderCreateRecoveryOps {
+  prepareActor(world: ManagedCloudWorld, actor: AuthenticatedActor): Promise<void>;
+  controlProductAction(actor: AuthenticatedActor): Promise<boolean>;
+  ensureSandbox(actor: AuthenticatedActor): Promise<{ id: string }>;
+  registerSandboxIntent(world: ManagedCloudWorld, cloudSandboxId: string): Promise<CleanupIntentHandle>;
+  startProductMaterialization(actor: AuthenticatedActor): Promise<void>;
+  waitForProvider(cloudSandboxId: string): Promise<string>;
+  injectProviderCreate(world: ManagedCloudWorld, providerSandboxId: string): Promise<FailureInjectionHandle>;
+  waitForProductError(
+    actor: AuthenticatedActor,
+    expectedProviderId: string,
+  ): Promise<ProviderCreateFailureObservation | null>;
+  recoverSandbox(actor: AuthenticatedActor): Promise<void>;
+  relayManifestReadable(world: ManagedCloudWorld): Promise<boolean>;
+}
+
+export interface ProviderCreateFailureObservation {
+  status: string;
+  lastError: string | null;
+}
+
+/**
+ * A generic status=error is not proof that our injected provider-create
+ * boundary fired. Bind the product observation to the exact killed provider id
+ * and a provider-loss classification carried by lastError.
+ */
+export function isInjectedProviderCreateFailure(
+  observation: ProviderCreateFailureObservation | null,
+  expectedProviderId: string,
+): boolean {
+  if (observation?.status !== "error" || !observation.lastError) {
+    return false;
+  }
+  const message = observation.lastError;
+  return (
+    message.includes(expectedProviderId) &&
+    /(?:e2b|provider|sandbox)/i.test(message) &&
+    /(?:not found|does not exist|no longer exists|killed|terminated|stopped|404|unavailable)/i.test(message)
+  );
+}
+
+/** Cell D — exact provider_create failure and normal-product recovery (spec Cell D). */
+export async function runFailureInjectionCellLive(
   world: ManagedCloudWorld,
   _state: SmokeState,
   actor: AuthenticatedActor,
+  ops: ProviderCreateRecoveryOps = defaultProviderCreateRecoveryOps,
 ): Promise<FixtureSmokeCellResult> {
-  // Control BEFORE: an unrelated authenticated product action succeeds. Use
-  // `/v1/organizations` — the proven authenticated product read (authenticated-
-  // actor.ts / cloud-provision-1 use it); there is no `/v1/workspaces` route on
-  // the candidate server.
-  const controlAction = () => actor.api.get("/v1/organizations").then(() => true).catch(() => false);
-  const controlBefore = await controlAction();
-  if (!controlBefore) {
+  await ops.prepareActor(world, actor);
+  if (!(await ops.controlProductAction(actor))) {
     throw new Error("failure-injection: the control product action did not succeed before injection.");
   }
 
-  // Inject the workspace_creation failure (server restart) and observe a real
-  // first-attempt failure of the product action while the restart is in flight.
-  let observedFailure: string | null = null;
-  for (let attempt = 0; attempt < 3 && observedFailure === null; attempt += 1) {
-    const injection = injectFailureAt(world, "workspace_creation", {});
-    const probeDeadline = Date.now() + 20_000;
-    try {
-      while (Date.now() < probeDeadline && observedFailure === null) {
-        try {
-          await actor.api.get("/v1/organizations");
-        } catch (error) {
-          observedFailure = describe(error).slice(0, 200);
-        }
-        // Short sleep so the probe loop does not hammer the box while the
-        // container restarts.
-        await sleep(250);
-      }
-    } finally {
-      const handle = await injection;
-      await handle.disarm();
+  const first = await ops.ensureSandbox(actor);
+  const cleanup = await ops.registerSandboxIntent(world, first.id);
+  // Trigger the real product materialization path only after durable recovery
+  // identity exists. The PUT schedules provider creation; it is not a provider
+  // backdoor and does not wait for readiness.
+  const firstAction = ops.startProductMaterialization(actor).catch(() => {
+    // Attach the rejection handler immediately: provider failure is expected
+    // during this cell, and waiting to attach `.catch()` until after the E2B
+    // poll can otherwise surface a transient unhandled rejection.
+  });
+  const firstProviderId = await ops.waitForProvider(first.id);
+  await cleanup.markAcquired(firstProviderId);
+  const injection = await ops.injectProviderCreate(world, firstProviderId);
+  try {
+    if (injection.boundary !== "provider_create" || !injection.injected) {
+      throw new Error("failure-injection: provider_create injection did not positively kill the first sandbox.");
     }
+  } finally {
+    await injection.disarm();
   }
-  if (observedFailure === null) {
+  // The scheduling request may resolve before the async provider failure or may
+  // itself surface it. Either is acceptable only if product state below records
+  // the exact failed first attempt.
+  await firstAction;
+  const productFailure = await ops.waitForProductError(actor, firstProviderId);
+  if (!isInjectedProviderCreateFailure(productFailure, firstProviderId)) {
     throw new Error(
-      "failure-injection: could not observe a real first-attempt failure across 3 injection attempts (the server " +
-        "restart completed too fast to catch). Not fabricating a success.",
+      "failure-injection: the product did not attribute status=error to the exact killed provider_create sandbox; " +
+        "refusing an unrelated-error false green.",
     );
   }
 
-  // Recovery through the normal product path.
-  const recovered = await pollUntil(controlAction, (ok) => ok === true, FAILURE_RECOVERY_TIMEOUT_MS, 3_000);
-  if (!recovered) {
-    throw new Error("failure-injection: the product action did not recover through the normal path after disarm.");
+  await ops.recoverSandbox(actor);
+  const replacementProviderId = await ops.waitForProvider(first.id);
+  if (replacementProviderId === firstProviderId) {
+    throw new Error("failure-injection: normal-path recovery did not create a replacement provider sandbox.");
+  }
+  await cleanup.markAcquired(replacementProviderId);
+
+  // Re-run the same normal product action as an idempotency/control check. It
+  // must converge on the replacement rather than create a third sandbox.
+  await ops.startProductMaterialization(actor);
+  const controlProviderId = await ops.waitForProvider(first.id);
+  if (controlProviderId !== replacementProviderId) {
+    throw new Error("failure-injection: the post-recovery control action changed provider identity.");
   }
 
-  // Control AFTER: the relay spool from cell A survived the server restart (the
-  // injection was scoped to the server container, not the box).
-  const relay = callbackRelay(world);
-  const manifestReadable = await relay
-    .manifest("stripe")
-    .then(() => true)
-    .catch(() => false);
+  const controlAfter = await ops.controlProductAction(actor);
+  const manifestReadable = await ops.relayManifestReadable(world);
+  if (!controlAfter || !manifestReadable) {
+    throw new Error(
+      `failure-injection: recovery controls were not healthy (product=${controlAfter}, relay=${manifestReadable}).`,
+    );
+  }
 
   return {
-    externalIds: [],
-    observedTransition: `control_ok→injected_failure(${observedFailure})→recovered→control_ok(relay=${manifestReadable})`,
-    cleanupEntries: [],
+    externalIds: [first.id, firstProviderId, replacementProviderId],
+    observedTransition: "control_ok→provider_created→provider_killed→product_error→normal_path_recovery→replacement_ready→controls_ok",
+    cleanupEntries: ["e2b_sandbox"],
   };
 }
+
+const defaultProviderCreateRecoveryOps: ProviderCreateRecoveryOps = {
+  async prepareActor(world, actor) {
+    if (!world.box) {
+      throw new Error("failure-injection: the world exposes no candidate-box seam for qualification setup.");
+    }
+    await seedUnlimitedCloudEntitlementOnBox(world.box, actor.userId);
+    const botSeed = await resolveBotSeedForAutomation();
+    if (!botSeed) {
+      throw new Error("failure-injection: the qualification GitHub refresh seed is unavailable.");
+    }
+    const seeded = await seedGithubAuthorizationOnBox({
+      box: world.box,
+      userId: actor.userId,
+      clientId: botSeed.clientId,
+      clientSecret: botSeed.clientSecret,
+      refreshToken: botSeed.refreshToken,
+      coveredRepoOwner: COVERED_REPO_OWNER,
+      coveredRepoName: COVERED_REPO_NAME,
+      coveredRepoDefaultBranch: COVERED_REPO_DEFAULT_BRANCH,
+      persistRotatedRefreshToken: (next) =>
+        persistRotatedBotSeedDurable(
+          {
+            localSeedFilePath: botSeed.seedFilePath,
+            source: botSeed.source,
+            ssmParameterName: botSeed.ssmParameterName,
+            region: botSeed.region,
+          },
+          next,
+        ),
+    });
+    if (seeded.githubLogin !== EXPECTED_BOT_LOGIN) {
+      throw new Error(`failure-injection: GitHub refresh seed resolved as unexpected login ${seeded.githubLogin}.`);
+    }
+  },
+  controlProductAction: (actor) => actor.api.get("/v1/organizations").then(() => true).catch(() => false),
+  ensureSandbox: (actor) => ensureCloudSandboxRow(actor.api),
+  async registerSandboxIntent(world, cloudSandboxId) {
+    if (!world.registerCleanupIntent) {
+      throw new Error(
+        "failure-injection: the managed-cloud world exposes no durable cleanup-intent seam for provider create.",
+      );
+    }
+    const handle = await world.registerCleanupIntent(
+      "e2b_sandbox",
+      encodeE2bSandboxCleanupIdentity({ cloudSandboxId, providerSandboxId: null }),
+      async () => {
+        const found = await findProviderSandbox(cloudSandboxId);
+        const matches = found.matches ?? (found.providerSandboxId
+          ? [{ providerSandboxId: found.providerSandboxId }]
+          : []);
+        for (const match of matches) {
+          await killProviderSandbox(match.providerSandboxId);
+        }
+      },
+    );
+    return {
+      entryId: handle.entryId,
+      markAcquired: (providerSandboxId) =>
+        handle.markAcquired(encodeE2bSandboxCleanupIdentity({ cloudSandboxId, providerSandboxId })),
+    };
+  },
+  startProductMaterialization: async (actor) => {
+    await actor.api.put("/v1/cloud/secrets/personal/env-vars/T3_FAILURE_INJECTION", {
+      value: `${Date.now()}`,
+    });
+  },
+  async waitForProvider(cloudSandboxId) {
+    const deadline = Date.now() + FAILURE_RECOVERY_TIMEOUT_MS;
+    while (Date.now() < deadline) {
+      const found = await findProviderSandbox(cloudSandboxId);
+      const matches = found.matches ?? (found.providerSandboxId ? [{ providerSandboxId: found.providerSandboxId }] : []);
+      if (matches.length > 1) {
+        throw new Error(`failure-injection: observed ${matches.length} live provider sandboxes for one logical row.`);
+      }
+      if (matches[0]?.providerSandboxId) {
+        return matches[0].providerSandboxId;
+      }
+      await sleep(2_000);
+    }
+    throw new Error("failure-injection: no provider sandbox appeared within the bounded wait.");
+  },
+  injectProviderCreate: (world, providerSandboxId) =>
+    injectFailureAt(world, "provider_create", { providerSandboxId }),
+  async waitForProductError(actor, expectedProviderId) {
+    const observed = await pollCloudSandboxStatus(
+      actor.api,
+      (status) => isInjectedProviderCreateFailure(
+        status ? { status: status.status, lastError: status.lastError } : null,
+        expectedProviderId,
+      ),
+      { timeoutMs: FAILURE_RECOVERY_TIMEOUT_MS, pollMs: 2_000 },
+    );
+    return observed ? { status: observed.status, lastError: observed.lastError } : null;
+  },
+  recoverSandbox: async (actor) => {
+    await warmPersonalCloudSandbox(actor.api, { timeoutMs: FAILURE_RECOVERY_TIMEOUT_MS });
+  },
+  relayManifestReadable: (world) => callbackRelay(world).manifest("stripe").then(() => true).catch(() => false),
+};
 
 /**
  * Every required deletion boolean true (mirrors CLOUD-PROVISION-1's
@@ -1800,7 +2262,7 @@ async function runFailureInjectionCellLive(
 export function allCleanupBooleansTrue(cleanup: ManagedCloudCleanupEvidence): boolean {
   const required =
     cleanup.sandboxesDeleted &&
-    cleanup.templateDeleted &&
+    cleanup.templateDeleted !== (cleanup.templateCustodyTransferred === true) &&
     cleanup.dnsRecordDeleted &&
     cleanup.ec2Terminated &&
     cleanup.securityGroupDeleted &&
@@ -1818,11 +2280,46 @@ export function allCleanupBooleansTrue(cleanup: ManagedCloudCleanupEvidence): bo
 /** Compact boolean summary for a cleanup-failure message. */
 function cleanupBooleanSummary(c: ManagedCloudCleanupEvidence): string {
   return (
-    `sandboxes=${c.sandboxesDeleted} template=${c.templateDeleted} dns=${c.dnsRecordDeleted} ` +
+    `sandboxes=${c.sandboxesDeleted} template=${c.templateDeleted} transferred=${c.templateCustodyTransferred} ` +
+    `dns=${c.dnsRecordDeleted} ` +
     `ec2=${c.ec2Terminated} sg=${c.securityGroupDeleted} key=${c.keyPairDeleted} vkey=${c.virtualKeyDeleted} ` +
     `subjects=${c.litellmSubjectsDeleted} paths=${c.localPathsRemoved} billing=${c.billingFixtureCleared} ` +
     `relay=${c.relayStopped} stripe=${c.stripeFixturesDeleted}`
   );
+}
+
+export const REQUIRED_CELL_A_D_FIXTURE_KINDS = [
+  "billing_fixture_adjustment",
+  "callback_relay_process",
+  "callback_relay_spool",
+  "e2b_sandbox",
+  "stripe_customer",
+  "stripe_product_price",
+  "stripe_test_clock",
+] as const;
+
+const REQUIRED_CELL_A_D_REPLAY_DOMAINS = ["box", "e2b", "stripe"] as const;
+
+/** Cell E must prove every representative A-D fixture, not merely one row. */
+export function assertRepresentativeFixtureReplay(report: ManagedCloudFixtureReplayReportV1): void {
+  if (
+    report.status !== "reconciled" ||
+    report.reconciled_fixture_entries !== report.selected_fixture_entries
+  ) {
+    throw new Error("cleanup-replay: the fresh executor did not reconcile every selected fixture entry.");
+  }
+  const missingKinds = REQUIRED_CELL_A_D_FIXTURE_KINDS.filter(
+    (kind) => !report.reconciled_fixture_kinds.includes(kind),
+  );
+  const missingDomains = REQUIRED_CELL_A_D_REPLAY_DOMAINS.filter(
+    (domain) => !report.reconciled_domains.includes(domain),
+  );
+  if (missingKinds.length > 0 || missingDomains.length > 0) {
+    throw new Error(
+      "cleanup-replay: the fresh executor did not prove the exact representative Cell A-D fixture set " +
+        `(missing kinds=${missingKinds.join(",") || "none"}; domains=${missingDomains.join(",") || "none"}).`,
+    );
+  }
 }
 
 /** Cell E — cleanup replay + provider sweeps (spec Cell E; ALWAYS last). */
@@ -1831,50 +2328,62 @@ async function runCleanupReplayCellLive(
   state: SmokeState,
   closeWorld: () => Promise<ManagedCloudCleanupEvidence | null>,
   http: StripeHttp,
+  replayFixturesFresh: FixtureSmokeRuntimeDeps["replayFixturesFresh"],
 ): Promise<FixtureSmokeCellResult> {
-  // One extra tiny fresh resource with intent→acquired to replay: a second
-  // run-tagged customer on no clock.
-  let extraCustomerId = "";
+  // One extra tiny fresh resource with intent→acquired to replay. Use the
+  // smoke-owned product/price kind: its intent carries a run tag that a fresh
+  // executor can recover directly. A bare customer would be incorrect here
+  // because the shared stripe_customer intent contract is clock-scoped.
+  let extraProductId = "";
+  let extraPriceId = "";
   if (world.registerCleanupIntent) {
+    const smoke = await import("../fixtures/stripe-smoke-resources.js");
     const handle = await world.registerCleanupIntent(
-      "stripe_customer",
-      `intent:customer:runTag=${state.runTag}:cellE`,
+      "stripe_product_price",
+      smoke.encodeProductPriceIntentRef(state.runTag),
       async () => {
-        const { deleteCustomerById, defaultStripeTestClockTransport } = await import(
-          "../fixtures/stripe-test-clock.js"
-        );
-        await deleteCustomerById(defaultStripeTestClockTransport, state.secretKey, extraCustomerId);
+        if (extraProductId && extraPriceId) {
+          await smoke.deactivateProductPriceById(
+            state.secretKey,
+            extraProductId,
+            extraPriceId,
+            http,
+          );
+        } else {
+          await smoke.deactivateRunProductPricesByTag(
+            { secretKey: state.secretKey, runTag: state.runTag },
+            http,
+          );
+        }
       },
     );
-    const created = await createRunCustomer({ secretKey: state.secretKey, runTag: state.runTag, cellTag: "cellE" }, http);
-    extraCustomerId = created.customerId;
-    await handle.markAcquired(created.customerId);
+    const created = await smoke.createRunProductPrice(
+      { secretKey: state.secretKey, runTag: state.runTag, unitAmount: 100 },
+      http,
+    );
+    extraProductId = created.productId;
+    extraPriceId = created.priceId;
+    await handle.markAcquired(smoke.encodeProductPriceProviderId(created.productId, created.priceId));
   }
 
-  // Fresh executor: reload the ledger (no shared in-memory state) and replay the
-  // Stripe kinds' handlers. replayLedger processes ALL unreconciled entries; the
-  // infra kinds (ec2 etc.) have no handler here and are counted "failed" by
-  // replayLedger — that is EXPECTED (world.close() releases them). We interpret
-  // by kind below rather than by replayLedger's aggregate.
-  const ledger = await loadCleanupLedger(world.paths.runDir);
-  const stripeHandlers = {
-    ...stripeCleanupReplayHandlers({ secretKey: state.secretKey, ledgerEntries: ledger.entries() }),
-    ...stripeSmokeResourceReplayHandlers({ secretKey: state.secretKey, http }),
-  };
-  const stripeKinds = new Set([
-    "stripe_test_clock",
-    "stripe_customer",
-    "stripe_webhook_endpoint",
-    "stripe_product_price",
-  ]);
-  await replayLedger(ledger, stripeHandlers);
+  // Fresh OS process: reload the ledger with no create-time closures or
+  // in-memory provider controllers. The child independently discovers the
+  // run-owned ingress from exact AWS tags, rebuilds BoxExec, and replays only
+  // fixture entries from persisted identity. A same-process helper call would
+  // not establish the frozen restart/recovery contract.
+  const replay = await replayFixturesFresh(
+    world.paths.runDir,
+    world.run.run_id,
+    world.run.shard_id,
+  );
+  assertRepresentativeFixtureReplay(replay);
   const reloadedAfter = await loadCleanupLedger(world.paths.runDir);
-  const unreconciledStripeAfter = reloadedAfter
+  const unreconciledFixtureAfter = reloadedAfter
     .entries()
-    .filter((e) => stripeKinds.has(e.kind) && e.phase !== "reconciled");
-  if (unreconciledStripeAfter.length > 0) {
+    .filter((entry) => FIXTURE_REPLAY_KINDS.has(entry.kind) && entry.phase !== "reconciled");
+  if (unreconciledFixtureAfter.length > 0) {
     throw new Error(
-      `cleanup-replay: ${unreconciledStripeAfter.length} Stripe-kind ledger entr(y/ies) remained unreconciled after ` +
+      `cleanup-replay: ${unreconciledFixtureAfter.length} fixture ledger entr(y/ies) remained unreconciled after ` +
         "replay from a fresh executor (recovery from persisted identity failed).",
     );
   }
@@ -1926,29 +2435,42 @@ async function runCleanupReplayCellLive(
     { secretKey: state.secretKey, url: webhookEndpointUrl(state.prep.subdomain) },
     http,
   );
+  const remainingProductsAndPrices = await smoke.countActiveRunProductsAndPrices(
+    { secretKey: state.secretKey, runTag: state.runTag },
+    http,
+  );
   sweeps.push({
     provider: "stripe",
-    remaining_owned_resources: remainingClocks + remainingCustomers + remainingWebhooks,
+    remaining_owned_resources:
+      remainingClocks + remainingCustomers + remainingWebhooks + remainingProductsAndPrices,
   });
 
-  // E2B: this smoke creates no sandboxes; record 0 (no owned sandboxes/template
-  // beyond the shared candidate template, which is world-owned and released by
-  // world.close()).
-  sweeps.push({ provider: "e2b", remaining_owned_resources: 0 });
-  // Process/filesystem: DERIVED from the real world-close evidence, not hardcoded.
-  // The on-box relay process is stopped by the `callback_relay_process` releaser
-  // (relayStopped), and every run-owned local path (secrets dir + reservation +
-  // run dir, save the preserved evidence output dir) by the localPathsRemoved
-  // category. A false boolean → that resource still owned. (The gate above
-  // already fails the cell on any false boolean; these counts make the residual
-  // explicit in evidence.)
+  // E2B: independently drain the provider's running/paused inventory and count
+  // sandboxes whose observed immutable template id equals this world's exact
+  // candidate receipt. The expected count is zero even though this smoke does
+  // not intentionally create a sandbox: an orphan from a partial operation must
+  // not be hidden by that assumption.
+  const e2b = await sweepE2bForTemplate(world.artifacts.template.templateId);
+  sweeps.push({ provider: "e2b", remaining_owned_resources: e2b.remaining });
+
+  // Process: the relay can execute only on the run-owned ingress host. Reuse the
+  // independent post-close AWS observation (not a cleanup boolean) to prove that
+  // no host remains capable of running it.
+  const processSweep = sweepProcessHostFromAws(aws);
   sweeps.push({
     provider: "process",
-    remaining_owned_resources: closeEvidence.relayStopped === false ? 1 : 0,
+    remaining_owned_resources: processSweep.remaining,
   });
+
+  // Filesystem: lstat the actual scoped run directory after close. Only ENOENT
+  // proves absence; permission and I/O errors stay ambiguous/non-green.
+  const filesystem = await sweepFilesystemPaths([
+    state.prep.scopedRunDir,
+    state.prep.webhookIntentFilePath,
+  ]);
   sweeps.push({
     provider: "filesystem",
-    remaining_owned_resources: closeEvidence.localPathsRemoved === false ? 1 : 0,
+    remaining_owned_resources: filesystem.remaining,
   });
 
   const totalRemaining = sweeps.reduce((sum, s) => sum + s.remaining_owned_resources, 0);
@@ -1960,9 +2482,9 @@ async function runCleanupReplayCellLive(
   }
 
   return {
-    externalIds: extraCustomerId ? [extraCustomerId] : [],
+    externalIds: extraProductId && extraPriceId ? [extraProductId, extraPriceId] : [],
     observedTransition: "extra_resource_created→replayed_from_fresh_executor→world_closed→swept_zero",
-    cleanupEntries: ["stripe_customer", "stripe_webhook_endpoint", "stripe_product_price"],
+    cleanupEntries: replay.reconciled_fixture_kinds,
     providerSweeps: sweeps,
   };
 }

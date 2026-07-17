@@ -574,12 +574,12 @@ async function waitForRemoteFile(
  *     failed-to-stop is RELAY_STOP_FAILED (a non-green cleanup error). No `||
  *     true` masks the outcome.
  */
-async function stopRelayProcess(ssh: SshExec, dest: string, key: string): Promise<void> {
+export function callbackRelayStopCommand(): string {
   const pidfile = REMOTE_RELAY_PIDFILE;
   // POSIX sh: parse the JSON pidfile with sed (no jq dependency on the box),
   // recompute the live starttime the same way the start command did, and compare
   // both discriminators before signalling. Prints exactly one sentinel.
-  const script =
+  return (
     `if [ ! -f ${pidfile} ]; then echo RELAY_STOP_ABSENT; exit 0; fi; ` +
     `PF="$(cat ${pidfile})"; ` +
     `PID=$(printf '%s' "$PF" | sed 's/.*"pid":\\([0-9]*\\).*/\\1/'); ` +
@@ -596,9 +596,12 @@ async function stopRelayProcess(ssh: SshExec, dest: string, key: string): Promis
     // Ownership confirmed → kill and verify absence.
     `kill "$PID" 2>/dev/null; sleep 1; ` +
     `if kill -0 "$PID" 2>/dev/null; then kill -9 "$PID" 2>/dev/null; sleep 1; fi; ` +
-    `if kill -0 "$PID" 2>/dev/null; then echo "RELAY_STOP_FAILED:$PID"; else rm -f ${pidfile}; echo RELAY_STOP_OK; fi`;
-  const result = await ssh.run(dest, key, script);
-  const out = result.stdout.trim();
+    `if kill -0 "$PID" 2>/dev/null; then echo "RELAY_STOP_FAILED:$PID"; else rm -f ${pidfile}; echo RELAY_STOP_OK; fi`
+  );
+}
+
+export function assertCallbackRelayStopOutput(stdout: string): void {
+  const out = stdout.trim();
   if (out.includes("RELAY_STOP_FAILED")) {
     throw new Error(
       `callback-relay cleanup: failed to stop the relay process (${out}); the signed-callback relay is still ` +
@@ -612,6 +615,11 @@ async function stopRelayProcess(ssh: SshExec, dest: string, key: string): Promis
   ) {
     throw new Error(`callback-relay cleanup: unexpected relay-stop result "${out.slice(0, 120)}".`);
   }
+}
+
+async function stopRelayProcess(ssh: SshExec, dest: string, key: string): Promise<void> {
+  const result = await ssh.run(dest, key, callbackRelayStopCommand());
+  assertCallbackRelayStopOutput(result.stdout);
 }
 
 /**

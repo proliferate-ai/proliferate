@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import type { ChildProcess, SpawnOptions } from "node:child_process";
 import { createHash } from "node:crypto";
 import { EventEmitter } from "node:events";
-import { access, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -18,7 +18,12 @@ import type { ReadinessFetch, SpawnLike } from "../local-workspace/processes.js"
 import type { ChromiumLauncher } from "../local-workspace/renderer.js";
 import type { CandidateE2bConfig, CandidateGithubAppConfig, SshExec } from "./ingress.js";
 import type { Ec2ProvisionConfig, Ec2Provisioner } from "./ec2.js";
-import type { E2bBuildConfig, E2bTemplateReceipt, ResolveOrBuildManagedCloudTemplateOptions } from "./template.js";
+import {
+  computeManagedCloudTemplateHash,
+  type E2bBuildConfig,
+  type E2bTemplateReceipt,
+  type ResolveOrBuildManagedCloudTemplateOptions,
+} from "./template.js";
 import { constructManagedCloudWorld, type ManagedCloudWorldDeps } from "./world.js";
 
 const RUN: RunIdentityV1 = {
@@ -89,7 +94,12 @@ function litellmFetch(state?: { called: boolean }): FetchLike {
 }
 
 /** Records the AWS resource lifecycle without touching real AWS. */
-function recordingProvisioner(events: string[], deletes: string[], publicIp = "203.0.113.9"): Ec2Provisioner {
+function recordingProvisioner(
+  events: string[],
+  deletes: string[],
+  publicIp = "203.0.113.9",
+  failTerminate = false,
+): Ec2Provisioner {
   return {
     async createKeyPair(_c, _t, _name, keyPath) {
       events.push("create:key_pair");
@@ -120,6 +130,9 @@ function recordingProvisioner(events: string[], deletes: string[], publicIp = "2
     },
     async terminateInstance() {
       deletes.push("ec2_instance");
+      if (failTerminate) {
+        throw new Error("simulated terminate-instances failure");
+      }
     },
     async upsertARecord() {
       events.push("create:route53_record");
@@ -203,7 +216,7 @@ function fakeResolveTemplate(state: TemplateState) {
       artifact_id: `e2b-template/${options.config.templateName}`,
       templateId: state.templateId,
       buildId: state.buildId,
-      inputHash: "b".repeat(64),
+      inputHash: await computeManagedCloudTemplateHash(options.inputs),
       bakedInputs: [{ destination: "/home/user/anyharness", sha256: "a".repeat(64) }],
     };
   };
@@ -224,6 +237,7 @@ function harness(options?: {
   publicIp?: string;
   templateId?: string;
   buildId?: string;
+  failTerminate?: boolean;
 }): Harness {
   const awsEvents: string[] = [];
   const awsDeletes: string[] = [];
@@ -244,7 +258,12 @@ function harness(options?: {
     litellmState,
     deps: {
       litellmFetch: litellmFetch(litellmState),
-      ec2Provisioner: recordingProvisioner(awsEvents, awsDeletes, options?.publicIp ?? "203.0.113.9"),
+      ec2Provisioner: recordingProvisioner(
+        awsEvents,
+        awsDeletes,
+        options?.publicIp ?? "203.0.113.9",
+        options?.failTerminate ?? false,
+      ),
       ssh: fakeSsh(),
       probeHealth: async () => ({ ok: true, version: options?.probeVersion ?? SERVER_VERSION }),
       resolveTemplate: fakeResolveTemplate(templateState),
@@ -332,7 +351,7 @@ test("constructManagedCloudWorld runs the ordered startup and returns a ready ha
       sandboxDeleted = true;
     });
     // A fresh actor enrolled for cleanup.
-    await world.trackActorSubjects!({
+    const trackedActor = {
       userId: "u1",
       enrollmentId: "e1",
       teamId: "team_1",
@@ -340,7 +359,20 @@ test("constructManagedCloudWorld runs the ordered startup and returns a ready ha
       keyAlias: "vk-user-u1-e1",
       tokenId: "tok",
       tokenIdHash: "hash",
-    });
+    };
+    await world.trackActorSubjects!(trackedActor);
+    // Scenario compatibility may call the legacy tracker after the new
+    // enrollment-boundary tracker. It must reuse one custody path, not register
+    // three additional destructive entries.
+    await world.trackActorSubjects!(trackedActor);
+    const ledger = JSON.parse(await readFile(path.join(runDir, CLEANUP_LEDGER_FILENAME), "utf8")) as {
+      entries: Array<{ kind: string }>;
+    };
+    assert.equal(ledger.entries.filter((entry) => entry.kind.startsWith("litellm_")).length, 3);
+    await assert.rejects(
+      world.trackActorSubjects!({ ...trackedActor, teamId: "conflicting-team" }),
+      /conflicting actor identities/,
+    );
 
     const evidence = await world.close();
     assert.equal(evidence.failed, 0);
@@ -389,6 +421,39 @@ test("a Server /health version mismatch fails startup and runs registered cleanu
     assert.deepEqual(h.awsDeletes, ["route53_record", "ec2_instance", "security_group", "key_pair"]);
     assert.equal(h.templateState.built, false);
     assert.equal(h.browserState.closed, false);
+  } finally {
+    await rm(src, { recursive: true, force: true });
+    await rm(runDir, { recursive: true, force: true });
+  }
+});
+
+test("a startup error preserves a cleanup failure in the terminal error", async () => {
+  const src = await mkdtemp(path.join(os.tmpdir(), "mc-src-"));
+  const runDir = await mkdtemp(path.join(os.tmpdir(), "mc-run-"));
+  try {
+    const map = await buildMap(src);
+    const secrets = await makeSecretFiles(runDir);
+    const h = harness({ probeVersion: "9.9.9-wrong", failTerminate: true });
+    await assert.rejects(
+      constructManagedCloudWorld({
+        run: RUN,
+        map,
+        litellm: LITELLM,
+        aws: AWS,
+        e2b: e2bConfig(secrets.e2b),
+        github: githubConfig(secrets.github),
+        runDir,
+        deps: h.deps,
+      }),
+      (error: unknown) => {
+        assert.ok(error instanceof AggregateError);
+        assert.match(error.message, /does not match the candidate map version/);
+        assert.match(error.message, /cleanup also failed/);
+        assert.match(error.message, /unreconciled resource/);
+        return true;
+      },
+    );
+    await access(path.join(runDir, CLEANUP_LEDGER_FILENAME));
   } finally {
     await rm(src, { recursive: true, force: true });
     await rm(runDir, { recursive: true, force: true });

@@ -270,7 +270,7 @@ export async function resolveOrBuildManagedCloudTemplate(
 }
 
 /** Reads `RELEASE_E2E_E2B_API_KEY` out of the mode-0600 secrets env file (never argv, never a field). */
-function readE2bApiKey(secretsEnvFilePath: string): string {
+export function readE2bApiKey(secretsEnvFilePath: string): string {
   const raw = readFileSync(secretsEnvFilePath, "utf8");
   for (const line of raw.split("\n")) {
     const trimmed = line.trim();

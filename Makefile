@@ -1291,22 +1291,12 @@ qualification-selfhost:
 # directly; this target does not read or expect the local file there. AWS
 # credentials themselves stay ambient (the `aws` CLI), never a manifest var.
 QUALIFICATION_MANAGED_CLOUD_BASE_DIR ?= $(CURDIR)/tests/release/.output/managed-cloud-world
-# Managed-cloud scenario selection. Defaults to CLOUD-PROVISION-1 alone so
-# today's behaviour is byte-identical; set it to run a DIFFERENT single scenario,
-# e.g. CLOUD_SCENARIOS="MANAGED-CLOUD-FIXTURE-SMOKE-1".
-#
-# DO NOT put BOTH managed-cloud scenarios in one CLOUD_SCENARIOS invocation.
-# --scenarios selection order does NOT control execution order: the runner sorts
-# ALL planned cells lexicographically by cell_id (tests/release/src/runner/plan.ts
-# — "sorted by cell_id regardless of declaration or selector order", a deliberate
-# contract). "CLOUD-PROVISION-1/..." sorts before "MANAGED-CLOUD-FIXTURE-SMOKE-1/
-# ...", so CP-1 always runs first and its run_directory cleanup (rm -rf the shared
-# parent runDir) deletes the builder's candidate artifacts the smoke's world then
-# copies from (live-proven ENOENT on artifacts/server.tar). Run each scenario as
-# its OWN invocation with its OWN run dir (distinct PROFILE → distinct run
-# identity → disjoint run dir + mcq-<runId>-* names + ledger) — see the two
-# sequential steps in .github/workflows/release-e2e.yml's managed-cloud job.
+# Managed-cloud scenario selection. Each scenario owns a scoped world subtree;
+# sequential invocations may therefore share one parent PROFILE and exact
+# candidate map while keeping ledgers/secrets/world cleanup disjoint.
 CLOUD_SCENARIOS ?= CLOUD-PROVISION-1
+CLOUD_EVIDENCE_SUBDIR ?= evidence
+SHARED_TEMPLATE_CUSTODY_MODE ?= world_owned
 
 qualification-managed-cloud:
 	@test -n "$(PROFILE)" || { \
@@ -1354,7 +1344,15 @@ qualification-managed-cloud:
 	run_dir="$(QUALIFICATION_MANAGED_CLOUD_BASE_DIR)/$$run_id/$$shard_id"; \
 	mkdir -p "$$run_dir"; \
 	candidate_map="$$run_dir/candidate-build.json"; \
-	if [ "$(REUSE_CANDIDATES)" = "1" ] && [ -f "$$candidate_map" ]; then \
+	if [ "$(REUSE_CANDIDATES)" = "1" ]; then \
+		test -f "$$candidate_map" || { \
+			echo "REUSE_CANDIDATES=1 requires the existing candidate map at $$candidate_map; refusing a silent rebuild."; \
+			exit 2; \
+		}; \
+		test -f "$$run_dir/cloud-world-subdomain.json" || { \
+			echo "REUSE_CANDIDATES=1 requires cloud-world-subdomain.json beside the candidate map."; \
+			exit 2; \
+		}; \
 		echo "[reuse] REUSE_CANDIDATES=1 — skipping candidate build, using $$candidate_map"; \
 	else \
 		build_summary=$$(node scripts/ci-cd/build-cloud-qualification-candidates.mjs \
@@ -1362,7 +1360,7 @@ qualification-managed-cloud:
 		echo "$$build_summary"; \
 		candidate_map=$$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).candidate_build_map)' "$$build_summary"); \
 	fi; \
-	cd tests/release && pnpm exec tsx src/cli/run.ts \
+	cd tests/release && RELEASE_E2E_SHARED_TEMPLATE_CUSTODY="$(SHARED_TEMPLATE_CUSTODY_MODE)" pnpm exec tsx src/cli/run.ts \
 		--behavior $(BEHAVIOR) \
 		--lane cloud \
 		--desktop web \
@@ -1370,7 +1368,7 @@ qualification-managed-cloud:
 		--scenarios "$(CLOUD_SCENARIOS)" \
 		--candidate-build-map "$$candidate_map" \
 		--run-id "$$run_id" --shard-id "$$shard_id" \
-		--output-dir "$$run_dir/evidence"
+		--output-dir "$$run_dir/$(CLOUD_EVIDENCE_SUBDIR)"
 
 test-cloud-ssh-worker:
 	@test -n "$(SSH_TARGET)" || { \

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  countActiveRunProductsAndPrices,
   countActiveRunPrices,
   countRunCustomers,
   countRunTestClocks,
@@ -9,12 +10,16 @@ import {
   createRunCustomer,
   createRunProductPrice,
   createWebhookEndpoint,
+  deleteRunCustomersByTag,
   deactivateProductPriceById,
+  deactivateRunProductPricesByTag,
   decodeProductPriceProviderId,
   deleteWebhookEndpointById,
   encodeProductPriceProviderId,
   findEventForObject,
   findRenewalEventForCustomer,
+  findRunProductPrices,
+  findRunCustomers,
   findWebhookEndpointByUrl,
   getTestClockStatus,
   stripeSmokeResourceReplayHandlers,
@@ -54,6 +59,34 @@ test("createWebhookEndpoint POSTs /webhook_endpoints with a bounded events set i
   assert.equal(reqs[0]!.form!.url, "https://run.qual.example/v1/billing/webhooks/stripe");
   assert.equal(reqs[0]!.form!["enabled_events[0]"], "customer.created");
   assert.equal(reqs[0]!.form!["metadata[proliferate_qualification_run]"], "r:s");
+});
+
+test("standalone callback-customer recovery filters by run and cell, deletes all matches, and verifies zero", async () => {
+  let rows = [
+    { id: "cus_owned_1", metadata: { proliferate_qualification_run: "r:s", proliferate_qualification_cell: "cellA" } },
+    { id: "cus_owned_2", metadata: { proliferate_qualification_run: "r:s", proliferate_qualification_cell: "cellA" } },
+    { id: "cus_other_cell", metadata: { proliferate_qualification_run: "r:s", proliferate_qualification_cell: "cellB" } },
+  ];
+  const { http } = recordingHttp((req) => {
+    if (req.method === "GET" && req.path.startsWith("/customers")) {
+      return { data: rows, has_more: false };
+    }
+    if (req.method === "DELETE" && req.path.startsWith("/customers/")) {
+      const id = req.path.split("/").at(-1);
+      rows = rows.filter((row) => row.id !== id);
+      return { id, deleted: true };
+    }
+    return {};
+  });
+  assert.deepEqual(
+    await findRunCustomers({ secretKey: KEY, runTag: "r:s", cellTag: "cellA" }, http),
+    ["cus_owned_1", "cus_owned_2"],
+  );
+  assert.equal(
+    await deleteRunCustomersByTag({ secretKey: KEY, runTag: "r:s", cellTag: "cellA" }, http),
+    2,
+  );
+  assert.deepEqual(rows.map((row) => row.id), ["cus_other_cell"]);
 });
 
 test("createWebhookEndpoint refuses a live-mode key (fail closed)", async () => {
@@ -103,13 +136,25 @@ test("createRunProductPrice POSTs /products then /prices with monthly recurring 
   assert.equal(reqs[1]!.form!.product, "prod_1");
 });
 
-test("deactivateProductPriceById POSTs active=false on the price then the product (Stripe can't delete a price)", async () => {
-  const { http, reqs } = recordingHttp(() => ({}));
+test("deactivateProductPriceById POSTs active=false then verifies both exact resources inactive", async () => {
+  const { http, reqs } = recordingHttp((req) =>
+    req.method === "GET" ? { id: req.path.split("/").at(-1), active: false } : {},
+  );
   await deactivateProductPriceById(KEY, "prod_1", "price_1", http);
   assert.deepEqual(reqs, [
     { method: "POST", path: "/prices/price_1", form: { active: "false" } },
     { method: "POST", path: "/products/prod_1", form: { active: "false" } },
+    { method: "GET", path: "/prices/price_1", form: undefined },
+    { method: "GET", path: "/products/prod_1", form: undefined },
   ]);
+});
+
+test("deactivateProductPriceById fails when Stripe accepts deactivation but still reports active", async () => {
+  const { http } = recordingHttp((req) => (req.method === "GET" ? { active: true } : {}));
+  await assert.rejects(
+    () => deactivateProductPriceById(KEY, "prod_1", "price_1", http),
+    /remained active/,
+  );
 });
 
 test("product/price provider-id encode/decode round-trips", () => {
@@ -185,8 +230,60 @@ test("sweep counters count run-owned resources and follow pagination", async () 
   assert.equal(await countActiveRunPrices({ secretKey: KEY, productId: "prod_1" }, http), 1);
 });
 
+test("run-tag recovery finds product-only interruption, deactivates it, and verifies zero active", async () => {
+  let productActive = true;
+  const { http, reqs } = recordingHttp((req) => {
+    if (req.method === "GET" && req.path.startsWith("/products")) {
+      return {
+        data: [{ id: "prod_leaked", active: productActive, metadata: { proliferate_qualification_run: "r:s" } }],
+        has_more: false,
+      };
+    }
+    if (req.method === "GET" && req.path.startsWith("/prices?product=")) {
+      return { data: [], has_more: false };
+    }
+    if (req.method === "POST" && req.path === "/products/prod_leaked") {
+      productActive = false;
+      return { id: "prod_leaked", active: false };
+    }
+    return {};
+  });
+  assert.deepEqual(await findRunProductPrices({ secretKey: KEY, runTag: "r:s" }, http), [
+    { productId: "prod_leaked", productActive: true, priceIds: [], activePriceIds: [] },
+  ]);
+  assert.deepEqual(await deactivateRunProductPricesByTag({ secretKey: KEY, runTag: "r:s" }, http), {
+    matched: 1,
+    touched: 1,
+  });
+  assert.equal(await countActiveRunProductsAndPrices({ secretKey: KEY, runTag: "r:s" }, http), 0);
+  assert.ok(reqs.some((req) => req.method === "POST" && req.path === "/products/prod_leaked"));
+});
+
+test("run-tag product recovery fails closed on malformed active state", async () => {
+  const { http } = recordingHttp((req) => {
+    if (req.path.startsWith("/products")) {
+      return {
+        data: [{ id: "prod_1", metadata: { proliferate_qualification_run: "r:s" } }],
+        has_more: false,
+      };
+    }
+    return { data: [], has_more: false };
+  });
+  await assert.rejects(() => findRunProductPrices({ secretKey: KEY, runTag: "r:s" }, http), /boolean active/);
+});
+
+test("strict Stripe pagination rejects a repeated cursor instead of classifying the sweep empty", async () => {
+  const { http } = recordingHttp(() => ({
+    data: [{ id: "cus_repeat", metadata: { proliferate_qualification_run: "other" } }],
+    has_more: true,
+  }));
+  await assert.rejects(() => countRunCustomers({ secretKey: KEY, runTag: "r:s" }, http), /did not advance/);
+});
+
 test("replay handlers delete a real webhook endpoint by id and deactivate a real product+price", async () => {
-  const { http, reqs } = recordingHttp(() => ({}));
+  const { http, reqs } = recordingHttp((req) =>
+    req.method === "GET" ? { id: req.path.split("/").at(-1), active: false } : {},
+  );
   const handlers = stripeSmokeResourceReplayHandlers({ secretKey: KEY, http });
   await handlers.stripe_webhook_endpoint!({
     entryId: "e1",
@@ -211,9 +308,15 @@ test("replay handlers delete a real webhook endpoint by id and deactivate a real
 
 test("replay handler recovers a webhook endpoint from an intent url when the real id was never acquired", async () => {
   const url = webhookEndpointUrl("run.qual.example");
+  let endpointIds = ["we_found"];
   const { http, reqs } = recordingHttp((req) => {
     if (req.method === "GET" && req.path.startsWith("/webhook_endpoints")) {
-      return { data: [{ id: "we_found", url }], has_more: false };
+      return { data: endpointIds.map((id) => ({ id, url })), has_more: false };
+    }
+    if (req.method === "DELETE" && req.path.startsWith("/webhook_endpoints/")) {
+      const id = req.path.split("/").at(-1);
+      endpointIds = endpointIds.filter((candidate) => candidate !== id);
+      return { id, deleted: true };
     }
     return {};
   });
@@ -227,4 +330,63 @@ test("replay handler recovers a webhook endpoint from an intent url when the rea
     updatedAt: new Date().toISOString(),
   });
   assert.ok(reqs.some((r) => r.method === "DELETE" && r.path === "/webhook_endpoints/we_found"));
+  assert.deepEqual(endpointIds, []);
+});
+
+test("webhook intent replay deletes every duplicate exact-url match and verifies exhaustive absence", async () => {
+  const url = webhookEndpointUrl("duplicate.qual.example");
+  let endpointIds = ["we_duplicate_1", "we_duplicate_2"];
+  const { http, reqs } = recordingHttp((req) => {
+    if (req.method === "GET" && req.path.startsWith("/webhook_endpoints")) {
+      return { data: endpointIds.map((id) => ({ id, url })), has_more: false };
+    }
+    if (req.method === "DELETE" && req.path.startsWith("/webhook_endpoints/")) {
+      const id = req.path.split("/").at(-1);
+      endpointIds = endpointIds.filter((candidate) => candidate !== id);
+      return { id, deleted: true };
+    }
+    return {};
+  });
+  const handlers = stripeSmokeResourceReplayHandlers({ secretKey: KEY, http });
+  await handlers.stripe_webhook_endpoint!({
+    entryId: "e-duplicates",
+    kind: "stripe_webhook_endpoint",
+    phase: "intent",
+    providerId: `intent:webhook_endpoint:url=${url}`,
+    createdAt: new Date(0).toISOString(),
+    updatedAt: new Date(0).toISOString(),
+  });
+  assert.deepEqual(endpointIds, []);
+  assert.equal(reqs.filter((req) => req.method === "DELETE").length, 2);
+  assert.ok(reqs.filter((req) => req.method === "GET").length >= 2, "cleanup must re-list after deletion");
+});
+
+test("replay handler recovers a product accepted before price/acquire and proves it inactive", async () => {
+  let active = true;
+  const { http } = recordingHttp((req) => {
+    if (req.method === "GET" && req.path.startsWith("/products")) {
+      return {
+        data: [{ id: "prod_partial", active, metadata: { proliferate_qualification_run: "r:s" } }],
+        has_more: false,
+      };
+    }
+    if (req.method === "GET" && req.path.startsWith("/prices?product=")) {
+      return { data: [], has_more: false };
+    }
+    if (req.method === "POST" && req.path === "/products/prod_partial") {
+      active = false;
+      return { id: "prod_partial", active: false };
+    }
+    return {};
+  });
+  const handlers = stripeSmokeResourceReplayHandlers({ secretKey: KEY, http });
+  await handlers.stripe_product_price!({
+    entryId: "e-product-intent",
+    kind: "stripe_product_price",
+    phase: "intent",
+    providerId: "intent:product_price:runTag=r:s",
+    createdAt: new Date(0).toISOString(),
+    updatedAt: new Date(0).toISOString(),
+  });
+  assert.equal(active, false);
 });

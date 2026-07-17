@@ -73,6 +73,8 @@ export interface ManagedCloudCleanupEvidence {
   failed: number;
   sandboxesDeleted: boolean;
   templateDeleted: boolean;
+  /** Exact template ownership moved to the durable parent-run journal. */
+  templateCustodyTransferred?: boolean;
   dnsRecordDeleted: boolean;
   ec2Terminated: boolean;
   securityGroupDeleted: boolean;
@@ -196,11 +198,16 @@ export class ManagedCloudCleanupStack {
       }
       try {
         await registration.release();
+        if (registration.kind !== "run_directory") {
+          // A resource is not durably reconciled until the ledger says so. If
+          // this write fails, preserve the run directory and replay the
+          // idempotent releaser later; never report a clean aggregate while the
+          // durable ledger still says acquired.
+          await this.ledger.markReconciled(registration.entryId);
+        }
+        // run_directory is the sole exception: its releaser intentionally
+        // deletes the ledger file itself, so no post-delete write is possible.
         succeeded.add(registration.entryId);
-        // The resource is gone; persisting the reconcile is best-effort — the
-        // `run_directory` releaser deletes the ledger file itself, so a failed
-        // write here must not count the successful release as a failure.
-        await this.ledger.markReconciled(registration.entryId).catch(() => undefined);
       } catch (error) {
         failed += 1;
         this.log(

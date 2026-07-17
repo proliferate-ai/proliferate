@@ -1522,6 +1522,7 @@ function validCloudCellEvidence(overrides: Partial<CloudProvisionTurnEvidenceV1>
       failed: 0,
       sandboxes_deleted: true,
       template_deleted: true,
+      template_custody_transferred: false,
       dns_record_deleted: true,
       ec2_terminated: true,
       security_group_deleted: true,
@@ -1689,6 +1690,35 @@ test("validateReportV4 rejects a green cloud cell whose cleanup has a false dele
     cleanup: { ...validCloudCellEvidence().cleanup, sandboxes_deleted: false },
   });
   assert.throws(() => validateReportV4(incomplete), /cleanup is incomplete/);
+});
+
+test("validateReportV4 accepts durable template transfer and rejects ambiguous template ownership", () => {
+  const transferred = validCloudReportV4({
+    cleanup: {
+      ...validCloudCellEvidence().cleanup,
+      template_deleted: false,
+      template_custody_transferred: true,
+    },
+  });
+  assert.doesNotThrow(() => validateReportV4(transferred));
+
+  const neither = validCloudReportV4({
+    cleanup: {
+      ...validCloudCellEvidence().cleanup,
+      template_deleted: false,
+      template_custody_transferred: false,
+    },
+  });
+  assert.throws(() => validateReportV4(neither), /exactly one of template deletion or durable custody transfer/);
+
+  const both = validCloudReportV4({
+    cleanup: {
+      ...validCloudCellEvidence().cleanup,
+      template_deleted: true,
+      template_custody_transferred: true,
+    },
+  });
+  assert.throws(() => validateReportV4(both), /exactly one of template deletion or durable custody transfer/);
 });
 
 test("validateReportV4 reuses the shared litellm invariant checks for cloud evidence", () => {

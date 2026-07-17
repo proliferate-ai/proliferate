@@ -124,6 +124,17 @@ export interface AuthenticatedActorOptions {
    * "cloud" or the sandbox's state.json carries no gateway source to probe.
    */
   gatewaySurface?: "local" | "cloud";
+  /**
+   * Managed-cloud custody seam. Once the synced enrollment exposes the exact
+   * product user + enrollment ids, resolve the provider subjects and durably
+   * register their cleanup before this fixture performs any later selection or
+   * returns control to the scenario. Local worlds omit this and resolve the key
+   * directly because their cleanup owner is different.
+   */
+  resolveAndTrackActorSubjects?(params: {
+    userId: string;
+    enrollmentId: string;
+  }): Promise<ActorKeyIdentity>;
 }
 
 interface DesktopTokenResponse {
@@ -294,14 +305,14 @@ export async function authenticatedActor(
     pollMs: options.enrollmentPollMs ?? 2_000,
   });
 
-  if (options.selectGatewayRoute !== false) {
-    await transport.putGatewaySelection(api, harnessKind, options.gatewaySurface ?? "local");
-  }
-
-  const gatewayKey = await world.gateway.resolveActorKey({
+  const gatewayKey = await (options.resolveAndTrackActorSubjects ?? ((params) => world.gateway.resolveActorKey(params)))({
     userId: session.user_id,
     enrollmentId: enrollment.id,
   });
+
+  if (options.selectGatewayRoute !== false) {
+    await transport.putGatewaySelection(api, harnessKind, options.gatewaySurface ?? "local");
+  }
 
   return {
     role,

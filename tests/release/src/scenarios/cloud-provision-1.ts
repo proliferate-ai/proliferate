@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { mkdir, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
 
@@ -52,6 +52,7 @@ import {
   type ConstructManagedCloudWorldOptions,
 } from "../worlds/managed-cloud/world.js";
 import type { ReadyLocalWorld } from "../worlds/local-workspace/world.js";
+import { sharedTemplateCustodyPath } from "../worlds/managed-cloud/shared-template-custody.js";
 
 /**
  * CLOUD-PROVISION-1 (spec "The single scenario"). A fresh, prepared,
@@ -113,6 +114,8 @@ export const COVERED_REPO_DEFAULT_BRANCH = "main";
  * `<root>/<owner>/<repo>`.
  */
 export const COVERED_REPO_CHECKOUT_ROOT = "/home/user/workspace/repos";
+const CLOUD_PROVISION_WORLD_SUBDIR = "cloud-provision-1";
+const CLOUD_SUBDOMAIN_SIDECAR = "cloud-world-subdomain.json";
 /** Default local seed-file path for the D2 bot refresh token (names only in docs). */
 const DEFAULT_BOT_SEED_PATH = path.join(
   homedir(),
@@ -848,7 +851,17 @@ export function createCloudProvision1Driver(
     deps.launchOptionsPollIntervalMs ?? productionRuntimeDeps.launchOptionsPollIntervalMs;
   return {
   async buildWorld(inputs) {
-    const secretsDir = path.join(inputs.runDir, "secrets");
+    // The candidate builder owns the parent run directory. Keep this world's
+    // cleanup ledger and transient files in a scenario-scoped subtree so its
+    // run_directory releaser cannot delete the exact candidate map/artifacts
+    // another managed-cloud scenario reuses after this proof passes.
+    const scopedRunDir = path.join(inputs.runDir, CLOUD_PROVISION_WORLD_SUBDIR);
+    await mkdir(scopedRunDir, { recursive: true });
+    await copyFile(
+      path.join(inputs.runDir, CLOUD_SUBDOMAIN_SIDECAR),
+      path.join(scopedRunDir, CLOUD_SUBDOMAIN_SIDECAR),
+    );
+    const secretsDir = path.join(scopedRunDir, "secrets");
     await mkdir(secretsDir, { recursive: true });
     const e2bSecretsPath = await writeSecretEnvFile(secretsDir, "e2b.env", {
       E2B_API_KEY: inputs.e2bApiKey,
@@ -873,6 +886,12 @@ export function createCloudProvision1Driver(
     const githubPrivateKeyPath = path.join(secretsDir, "github-app-private-key.pem");
     await writeFile(githubPrivateKeyPath, `${inputs.github.privateKey.trimEnd()}\n`, { mode: 0o600 });
 
+    const templateCustodyMode = process.env.RELEASE_E2E_SHARED_TEMPLATE_CUSTODY ?? "world_owned";
+    if (templateCustodyMode !== "world_owned" && templateCustodyMode !== "producer") {
+      throw new Error(
+        `CLOUD-PROVISION-1 does not accept shared-template custody mode ${templateCustodyMode}.`,
+      );
+    }
     const options: ConstructManagedCloudWorldOptions = {
       run: inputs.run,
       map: inputs.map,
@@ -895,7 +914,11 @@ export function createCloudProvision1Driver(
         secretsEnvFilePath: githubSecretsPath,
         privateKeyPemPath: githubPrivateKeyPath,
       },
-      runDir: inputs.runDir,
+      runDir: scopedRunDir,
+      templateCustody:
+        templateCustodyMode === "producer"
+          ? { mode: "shared_producer", journalPath: sharedTemplateCustodyPath(inputs.runDir) }
+          : { mode: "world_owned" },
       // World progress + failure diagnostics onto the runner stream (the make
       // log). The constructor's default log is a silent no-op — without this,
       // readiness/cleanup diagnostics are discarded.
@@ -913,7 +936,15 @@ export function createCloudProvision1Driver(
   // `refresh-gateway` 400s (GATEWAY_REFRESH_NO_SELECTION) and step 8's live
   // probe finds zero models.
   createActor: (world) =>
-    authenticatedActor(asAuthenticatedActorWorld(world), "owner", { gatewaySurface: "cloud" }),
+    authenticatedActor(asAuthenticatedActorWorld(world), "owner", {
+      gatewaySurface: "cloud",
+      resolveAndTrackActorSubjects: (params) => {
+        if (!world.resolveAndTrackActorSubjects) {
+          throw new Error("managed-cloud world exposes no enrollment-boundary LiteLLM cleanup custody.");
+        }
+        return world.resolveAndTrackActorSubjects(params);
+      },
+    }),
   // Actor B is a REAL invited second user (MCW-001): actor A mints an org
   // invitation, actor B registers against it and logs in. Reusing the one-time
   // `/setup` claim (as the prior version did) is not a viable second identity —
@@ -923,6 +954,12 @@ export function createCloudProvision1Driver(
       inviter: actorA,
       gatewaySurface: "cloud",
       email: `qual-actor-b-${world.run.run_id}-${world.run.shard_id}@example.com`,
+      resolveAndTrackActorSubjects: (params) => {
+        if (!world.resolveAndTrackActorSubjects) {
+          throw new Error("managed-cloud world exposes no enrollment-boundary LiteLLM cleanup custody.");
+        }
+        return world.resolveAndTrackActorSubjects(params);
+      },
     }),
   fundCore: (world, actor) =>
     // Founder ruling (option B): the candidate box carries no Stripe/billing
@@ -1840,6 +1877,7 @@ export async function runCloudProvision1Cell(
         failed: cleanup.failed,
         sandboxes_deleted: cleanup.sandboxesDeleted,
         template_deleted: cleanup.templateDeleted,
+        template_custody_transferred: cleanup.templateCustodyTransferred === true,
         dns_record_deleted: cleanup.dnsRecordDeleted,
         ec2_terminated: cleanup.ec2Terminated,
         security_group_deleted: cleanup.securityGroupDeleted,
@@ -1877,6 +1915,7 @@ export async function runCloudProvision1Cell(
 function allCleanupBooleansTrue(cleanup: {
   sandboxesDeleted: boolean;
   templateDeleted: boolean;
+  templateCustodyTransferred?: boolean;
   dnsRecordDeleted: boolean;
   ec2Terminated: boolean;
   securityGroupDeleted: boolean;
@@ -1887,7 +1926,7 @@ function allCleanupBooleansTrue(cleanup: {
 }): boolean {
   return (
     cleanup.sandboxesDeleted &&
-    cleanup.templateDeleted &&
+    cleanup.templateDeleted !== (cleanup.templateCustodyTransferred === true) &&
     cleanup.dnsRecordDeleted &&
     cleanup.ec2Terminated &&
     cleanup.securityGroupDeleted &&

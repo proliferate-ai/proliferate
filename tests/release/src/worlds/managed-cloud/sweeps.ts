@@ -1,3 +1,11 @@
+import { lstat } from "node:fs/promises";
+
+import {
+  listProviderSandboxesByTemplate,
+  listProviderTemplateIds,
+  type E2BTemplateSweepResult,
+} from "../../fixtures/e2b-verify.js";
+
 /**
  * Post-close provider sweeps for MANAGED-CLOUD-FIXTURE-SMOKE-1's cleanup-replay
  * cell (spec Cell E step 6). AFTER `world.close()` has released every ledger
@@ -61,6 +69,77 @@ export interface AwsSweepResult {
   detail: { instances: number; securityGroups: number; keyPairs: number; dnsRecords: number };
   /** Bounded reasons a category could not be conclusively classified (fail-closed). */
   errors: string[];
+}
+
+export type E2bTemplateProbe = (templateId: string) => Promise<E2BTemplateSweepResult>;
+export type E2bTemplateInventoryProbe = () => Promise<string[]>;
+
+/**
+ * Counts every running/paused E2B sandbox observed on the exact immutable
+ * run-owned template. The provider probe drains all pages. Any malformed or
+ * mismatched response throws, so ambiguity cannot become zero.
+ */
+export async function sweepE2bForTemplate(
+  templateId: string,
+  probe: E2bTemplateProbe = listProviderSandboxesByTemplate,
+  inventory: E2bTemplateInventoryProbe = listProviderTemplateIds,
+): Promise<{ remaining: number }> {
+  const [result, templateIds] = await Promise.all([probe(templateId), inventory()]);
+  if (!Number.isInteger(result.count) || result.count < 0 || !Array.isArray(result.matches)) {
+    throw new Error("E2B template sweep returned a malformed count/matches payload.");
+  }
+  if (result.count !== result.matches.length) {
+    throw new Error("E2B template sweep count does not match its exhaustive match list.");
+  }
+  for (const match of result.matches) {
+    if (
+      !match.providerSandboxId ||
+      match.templateId !== templateId ||
+      (match.state !== "running" && match.state !== "paused")
+    ) {
+      throw new Error("E2B template sweep returned an ambiguously attributed sandbox.");
+    }
+  }
+  if (!Array.isArray(templateIds) || templateIds.some((id) => typeof id !== "string" || !id)) {
+    throw new Error("E2B template inventory returned a malformed id list.");
+  }
+  const exactTemplateMatches = templateIds.filter((id) => id === templateId).length;
+  if (exactTemplateMatches > 1) {
+    throw new Error("E2B template inventory returned the same immutable template id more than once.");
+  }
+  return { remaining: result.count + exactTemplateMatches };
+}
+
+/**
+ * Directly probes run-owned filesystem paths after cleanup. Only ENOENT is
+ * absent; a present path counts as remaining and every other lstat error is
+ * ambiguous/non-green.
+ */
+export async function sweepFilesystemPaths(paths: readonly string[]): Promise<{ remaining: number }> {
+  let remaining = 0;
+  for (const ownedPath of paths) {
+    try {
+      await lstat(ownedPath);
+      remaining += 1;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+        throw new Error(`filesystem sweep could not classify ${ownedPath}: ${boundedError(error)}`);
+      }
+    }
+  }
+  return { remaining };
+}
+
+/**
+ * The relay is hosted only on the run-owned ingress instance. A real AWS sweep
+ * proving zero non-terminal ingress instances is therefore an independent
+ * provider proof that no relay process can still execute.
+ */
+export function sweepProcessHostFromAws(result: AwsSweepResult): { remaining: number } {
+  if (result.errors.length > 0) {
+    throw new Error(`process-host sweep is ambiguous because AWS sweep failed: ${result.errors.join("; ")}`);
+  }
+  return { remaining: result.detail.instances > 0 ? 1 : 0 };
 }
 
 export async function sweepAwsForRun(
@@ -158,9 +237,15 @@ export function countNonTerminalInstances(stdout: string): number {
   const parsed = JSON.parse(stdout) as {
     Reservations?: Array<{ Instances?: Array<{ State?: { Name?: string } }> }>;
   };
+  if (!Array.isArray(parsed.Reservations)) {
+    throw new Error("AWS describe-instances response has no Reservations array.");
+  }
   let count = 0;
-  for (const reservation of parsed.Reservations ?? []) {
-    for (const instance of reservation.Instances ?? []) {
+  for (const reservation of parsed.Reservations) {
+    if (!Array.isArray(reservation.Instances)) {
+      throw new Error("AWS describe-instances reservation has no Instances array.");
+    }
+    for (const instance of reservation.Instances) {
       const state = instance.State?.Name ?? "unknown";
       if (!TERMINAL_INSTANCE_STATES.has(state)) {
         count += 1;
@@ -174,14 +259,20 @@ export function countNonTerminalInstances(stdout: string): number {
 export function countArrayField(stdout: string, field: "SecurityGroups" | "KeyPairs"): number {
   const parsed = JSON.parse(stdout) as Record<string, unknown>;
   const value = parsed[field];
-  return Array.isArray(value) ? value.length : 0;
+  if (!Array.isArray(value)) {
+    throw new Error(`AWS response has no ${field} array.`);
+  }
+  return value.length;
 }
 
 /** Counts record sets whose name equals the run record (Route53 appends a trailing dot). */
 export function countMatchingRecordSets(stdout: string, recordName: string): number {
   const parsed = JSON.parse(stdout) as { ResourceRecordSets?: Array<{ Name?: string }> };
+  if (!Array.isArray(parsed.ResourceRecordSets)) {
+    throw new Error("Route53 response has no ResourceRecordSets array.");
+  }
   const wanted = normalizeDnsName(recordName);
-  return (parsed.ResourceRecordSets ?? []).filter((set) => normalizeDnsName(set.Name ?? "") === wanted).length;
+  return parsed.ResourceRecordSets.filter((set) => normalizeDnsName(set.Name ?? "") === wanted).length;
 }
 
 function normalizeDnsName(name: string): string {

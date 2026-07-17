@@ -663,8 +663,9 @@ export interface CloudProvisionTurnEvidenceV1 {
   /**
    * The managed-cloud cleanup block. Its shape mirrors
    * `ManagedCloudCleanupEvidence` (worlds/managed-cloud/cleanup-kinds.ts) in
-   * snake_case: a green cell requires `failed === 0` and every deletion boolean
-   * true (spec "Cleanup reconciles every run-created resource").
+   * snake_case: a green cell requires `failed === 0`, every ordinary deletion
+   * boolean true, and exactly one of template deletion or durable transfer true
+   * (spec "Cleanup reconciles every run-created resource").
    */
   cleanup: {
     ledger_id_hash: string;
@@ -673,6 +674,7 @@ export interface CloudProvisionTurnEvidenceV1 {
     failed: number;
     sandboxes_deleted: boolean;
     template_deleted: boolean;
+    template_custody_transferred: boolean;
     dns_record_deleted: boolean;
     ec2_terminated: boolean;
     security_group_deleted: boolean;
@@ -708,6 +710,7 @@ export interface ManagedCloudFixtureSmokeEvidenceV1 {
     server_digest: string;
     e2b_template_id: string;
     e2b_template_build_id: string;
+    e2b_template_input_hash: string;
   };
   /** Exactly one entry: the cell this evidence object belongs to. */
   cells: Array<{
@@ -1855,6 +1858,7 @@ const CLOUD_CLEANUP_EVIDENCE_KEYS = [
   "failed",
   "sandboxes_deleted",
   "template_deleted",
+  "template_custody_transferred",
   "dns_record_deleted",
   "ec2_terminated",
   "security_group_deleted",
@@ -1879,6 +1883,7 @@ const FIXTURE_SMOKE_WORLD_KEYS = [
   "server_digest",
   "e2b_template_id",
   "e2b_template_build_id",
+  "e2b_template_input_hash",
 ] as const;
 const FIXTURE_SMOKE_CELL_KEYS = ["cell_id", "external_ids", "observed_transition", "cleanup_entries"] as const;
 const FIXTURE_SMOKE_SWEEP_KEYS = ["provider", "remaining_owned_resources"] as const;
@@ -2004,7 +2009,6 @@ function validateCloudCleanupEvidence(
   requireNonNegativeInteger(`${where}.cleanup.failed`, cleanup.failed);
   const deletionFields = [
     "sandboxes_deleted",
-    "template_deleted",
     "dns_record_deleted",
     "ec2_terminated",
     "security_group_deleted",
@@ -2016,16 +2020,27 @@ function validateCloudCleanupEvidence(
   for (const field of deletionFields) {
     requireBoolean(`${where}.cleanup.${field}`, cleanup[field]);
   }
+  requireBoolean(`${where}.cleanup.template_deleted`, cleanup.template_deleted);
+  requireBoolean(
+    `${where}.cleanup.template_custody_transferred`,
+    cleanup.template_custody_transferred,
+  );
   // Green-cell rule (spec "Cleanup and failure behavior"): a green cell requires
-  // failed === 0 and every deletion boolean true; a non-green cell may record
-  // its own cleanup failure so the report is still persisted with a real
-  // nonzero exit rather than throwing and exiting 2.
+  // failed === 0, every ordinary deletion boolean true, and exactly one of
+  // template deletion / durable transfer true. A non-green cell may record its
+  // own cleanup failure so the report is still persisted with a real nonzero
+  // exit rather than throwing and exiting 2.
   if (status === "green") {
     if (cleanup.failed > 0) {
       throw new ReportValidationError(`${where}.cleanup.failed must be 0 for a green result.`);
     }
     if (deletionFields.some((field) => cleanup[field] !== true)) {
       throw new ReportValidationError(`${where}.cleanup is incomplete on a green result.`);
+    }
+    if (cleanup.template_deleted === cleanup.template_custody_transferred) {
+      throw new ReportValidationError(
+        `${where}.cleanup must prove exactly one of template deletion or durable custody transfer on a green result.`,
+      );
     }
   }
 }
@@ -2065,6 +2080,7 @@ function validateManagedCloudFixtureSmokeEvidence(
   requireSafeEvidenceToken(`${where}.world.server_digest`, world.server_digest);
   requireSafeEvidenceToken(`${where}.world.e2b_template_id`, world.e2b_template_id);
   requireSafeEvidenceToken(`${where}.world.e2b_template_build_id`, world.e2b_template_build_id);
+  requireEvidenceHash(`${where}.world.e2b_template_input_hash`, world.e2b_template_input_hash);
 
   if (!Array.isArray(evidence.cells) || evidence.cells.length !== 1) {
     throw new ReportValidationError(`${where}.cells must contain exactly one entry (this cell's own).`);
@@ -2137,9 +2153,15 @@ function validateManagedCloudFixtureSmokeEvidence(
     );
   }
   if (status === "green" && isCleanupReplay) {
-    if (evidence.provider_sweeps.length === 0) {
+    const requiredProviders = ["aws", "e2b", "stripe", "process", "filesystem"] as const;
+    const observedProviders = evidence.provider_sweeps.map((sweep) => sweep.provider);
+    if (
+      evidence.provider_sweeps.length !== requiredProviders.length ||
+      requiredProviders.some((provider) => observedProviders.filter((value) => value === provider).length !== 1)
+    ) {
       throw new ReportValidationError(
-        `${where}.provider_sweeps must be non-empty for a green cleanup-replay cell.`,
+        `${where}.provider_sweeps must contain exactly one aws|e2b|stripe|process|filesystem row ` +
+          "for a green cleanup-replay cell.",
       );
     }
     if (evidence.provider_sweeps.some((sweep) => sweep.remaining_owned_resources !== 0)) {
@@ -3231,6 +3253,7 @@ function sanitizeManagedCloudFixtureSmokeEvidence(
       server_digest: clean(evidence.world.server_digest),
       e2b_template_id: clean(evidence.world.e2b_template_id),
       e2b_template_build_id: clean(evidence.world.e2b_template_build_id),
+      e2b_template_input_hash: clean(evidence.world.e2b_template_input_hash),
     },
     cells: evidence.cells.map((cell) => ({
       ...cell,

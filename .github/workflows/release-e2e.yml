@@ -929,46 +929,115 @@ jobs:
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
 
-      # The two scenarios run as SEPARATE runner invocations with SEPARATE run
-      # dirs (distinct PROFILE → distinct run identity → distinct run dir, mcq-
-      # <runId>-* provider names, ledger, and world). This is REQUIRED, not a
-      # convenience: the runner sorts ALL planned cells lexicographically by
-      # cell_id (tests/release/src/runner/plan.ts — a deliberate contract), so
-      # --scenarios selection order does NOT control execution order. A single
-      # invocation of both scenarios would run "CLOUD-PROVISION-1/..." before
-      # "MANAGED-CLOUD-FIXTURE-SMOKE-1/..." and CP-1's run_directory cleanup
-      # (rm -rf the shared parent runDir) would delete the builder's candidate
-      # artifacts the smoke's world construction then copies from (live-proven
-      # ENOENT on artifacts/server.tar). Separate invocations keep the run dirs
-      # disjoint. The steps are sequential so only ONE live cloud world exists at
-      # a time. Each invocation builds its own candidates (accepted double-build
-      # cost; the dedicated Actions split PR owns collapsing that).
-      - name: Build candidates and run MANAGED-CLOUD-FIXTURE-SMOKE-1 (strict)
-        env:
-          # Distinct per-step debug dir (suffix -smoke) so the two invocations do
-          # not clobber each other's diagnostics.
-          MANAGED_CLOUD_SMOKE_DEBUG_DIR: ${{ github.workspace }}/tests/release/.output/managed-cloud-world/qlc-ci-${{ github.run_id }}-${{ github.run_attempt }}-smoke/debug/logs
-        run: |
-          set -euo pipefail
-          make qualification-managed-cloud \
-            PROFILE="ci-${{ github.run_id }}-${{ github.run_attempt }}-smoke" \
-            BEHAVIOR=strict \
-            CLOUD_SCENARIOS="MANAGED-CLOUD-FIXTURE-SMOKE-1"
-
+      # Prove the base managed-cloud journey FIRST, then reuse its exact candidate
+      # map/bytes for the fixture smoke. Each scenario constructs its world under
+      # a distinct subtree of the shared run directory, so world cleanup cannot
+      # delete the candidate handoff or the sibling's evidence. The second step
+      # has no `always()` escape: a red base proof blocks the derivative smoke.
       - name: Build candidates and run CLOUD-PROVISION-1 (strict)
-        # `always()` so a red fixture smoke still yields the CP-1 regression
-        # signal. A FAILED earlier step already fails the job even though this one
-        # runs (GitHub sets job conclusion to failure), so both must be green for
-        # the job to pass — no extra guard step needed.
-        if: always()
         env:
-          MANAGED_CLOUD_SMOKE_DEBUG_DIR: ${{ github.workspace }}/tests/release/.output/managed-cloud-world/qlc-ci-${{ github.run_id }}-${{ github.run_attempt }}/debug/logs
+          MANAGED_CLOUD_SMOKE_DEBUG_DIR: ${{ github.workspace }}/tests/release/.output/managed-cloud-world/qlc-ci-${{ github.run_id }}-${{ github.run_attempt }}/debug/logs/cp1
         run: |
           set -euo pipefail
-          # Default CLOUD_SCENARIOS (CLOUD-PROVISION-1 alone).
           make qualification-managed-cloud \
             PROFILE="ci-${{ github.run_id }}-${{ github.run_attempt }}" \
-            BEHAVIOR=strict
+            BEHAVIOR=strict \
+            SHARED_TEMPLATE_CUSTODY_MODE=producer \
+            CLOUD_SCENARIOS="CLOUD-PROVISION-1" \
+            CLOUD_EVIDENCE_SUBDIR="evidence/cp1"
+
+      - name: Reuse candidates and run MANAGED-CLOUD-FIXTURE-SMOKE-1 (strict)
+        env:
+          MANAGED_CLOUD_SMOKE_DEBUG_DIR: ${{ github.workspace }}/tests/release/.output/managed-cloud-world/qlc-ci-${{ github.run_id }}-${{ github.run_attempt }}/debug/logs/fixture-smoke
+        run: |
+          set -euo pipefail
+          make qualification-managed-cloud \
+            PROFILE="ci-${{ github.run_id }}-${{ github.run_attempt }}" \
+            BEHAVIOR=strict \
+            REUSE_CANDIDATES=1 \
+            SHARED_TEMPLATE_CUSTODY_MODE=consumer \
+            CLOUD_SCENARIOS="MANAGED-CLOUD-FIXTURE-SMOKE-1" \
+            CLOUD_EVIDENCE_SUBDIR="evidence/fixture-smoke"
+
+      # Acceptance is the composition, not two independently green commands:
+      # prove both V4 reports used one run/source/candidate set and the literal
+      # immutable template id/build/input hash transferred through a 0600
+      # acquired→released custody journal.
+      - name: Verify exact CP1 → fixture-smoke handoff
+        run: |
+          set -euo pipefail
+          run_id="qlc-ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          run_dir="${GITHUB_WORKSPACE}/tests/release/.output/managed-cloud-world/${run_id}/1"
+          mkdir -p "${run_dir}/evidence"
+          cd tests/release
+          pnpm exec tsx src/cli/verify-managed-cloud-handoff.ts \
+            --cp1-report "${run_dir}/evidence/cp1/${run_id}/1/attempt-1/qualification-evidence.json" \
+            --smoke-report "${run_dir}/evidence/fixture-smoke/${run_id}/1/attempt-1/qualification-evidence.json" \
+            --custody "${run_dir}/cleanup-custody/shared-e2b-template-custody.json" \
+            | tee "${run_dir}/evidence/managed-cloud-handoff-verification.json"
+
+      # Crash fallback for fixture entries that were durably acquired before a
+      # scenario process exited. Run it for BOTH scoped worlds: CP1 owns its E2B
+      # sandbox in the same fixture-kind registry, while the derivative smoke
+      # also owns Stripe/relay/billing entries. Keep attempting the second world
+      # after a first-world failure so one broken provider cannot strand another.
+      - name: Replay fixture cleanup ledger after interruption
+        if: always()
+        run: |
+          set -euo pipefail
+          run_id="qlc-ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          parent_dir="${GITHUB_WORKSPACE}/tests/release/.output/managed-cloud-world/${run_id}/1"
+          status=0
+          cd tests/release
+          for world_dir in cloud-provision-1 fixture-smoke; do
+            scoped_dir="${parent_dir}/${world_dir}"
+            if [ -f "${scoped_dir}/cleanup-ledger.json" ]; then
+              pnpm exec tsx src/cli/replay-managed-cloud-fixtures.ts \
+                --run-dir "${scoped_dir}" --run-id "${run_id}" --shard-id "1" || status=2
+            else
+              echo "{\"kind\":\"managed_cloud_fixture_cleanup_replay\",\"world_dir\":\"${world_dir}\",\"status\":\"not_needed\"}"
+            fi
+          done
+          exit "${status}"
+
+      # The webhook is created before world construction, so its cleanup
+      # custody deliberately lives outside the world's removable runDir. Run a
+      # fresh executor after either scenario outcome: this proves the persisted
+      # journal alone is sufficient after the test process exits. A remaining
+      # accepted Stripe resource makes the job red; cleanup is never best-effort.
+      - name: Replay pre-world provider cleanup custody
+        if: always()
+        run: |
+          set -euo pipefail
+          cd tests/release
+          pnpm exec tsx src/cli/replay-managed-cloud-custody.ts \
+            --run-dir "${GITHUB_WORKSPACE}/tests/release/.output/managed-cloud-world/qlc-ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}/1" \
+            --run-id "qlc-ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --shard-id "1"
+
+      # Final fresh-process fallback for each world's BASE resources. It reads
+      # only the persisted run/shard ledger and exact provider ownership:
+      # AWS tags/ids, LiteLLM subject ids/key alias, PID+starttime process
+      # custody, and scoped local paths. Domains continue independently; any
+      # ambiguous/failed identity stays unreconciled and makes this step red.
+      - name: Replay base-world cleanup ledger after interruption
+        if: always()
+        run: |
+          set -euo pipefail
+          run_id="qlc-ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          parent_dir="${GITHUB_WORKSPACE}/tests/release/.output/managed-cloud-world/${run_id}/1"
+          receipt_dir="${parent_dir}/evidence/cleanup-replay"
+          mkdir -p "${receipt_dir}"
+          status=0
+          cd tests/release
+          for world_dir in cloud-provision-1 fixture-smoke; do
+            pnpm exec tsx src/cli/replay-managed-cloud-base.ts \
+              --run-dir "${parent_dir}/${world_dir}" \
+              --run-id "${run_id}" \
+              --shard-id "1" \
+              | tee "${receipt_dir}/${world_dir}.json" || status=2
+          done
+          exit "${status}"
 
       - name: Upload V4 report and bounded diagnostic logs
         if: always()
@@ -978,6 +1047,10 @@ jobs:
           path: |
             tests/release/.output/managed-cloud-world/*/*/evidence/
             tests/release/.output/managed-cloud-world/*/*/logs/
+            tests/release/.output/managed-cloud-world/*/*/*/logs/
             tests/release/.output/managed-cloud-world/*/debug/logs/
+            tests/release/.output/managed-cloud-world/*/*/cleanup-custody/
+            tests/release/.output/managed-cloud-world/*/*/cleanup-replay/
+            tests/release/.output/managed-cloud-world/*/*/*/cleanup-ledger.json
           retention-days: 7
           if-no-files-found: ignore

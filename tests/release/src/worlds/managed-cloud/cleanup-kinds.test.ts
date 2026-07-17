@@ -4,7 +4,11 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
-import { openCleanupLedger } from "../local-workspace/cleanup-ledger.js";
+import {
+  openCleanupLedger,
+  type CleanupLedger,
+  type CleanupLedgerEntry,
+} from "../local-workspace/cleanup-ledger.js";
 import { ManagedCloudCleanupStack, type ManagedCloudCleanupKind } from "./cleanup-kinds.js";
 
 async function stackInTemp(): Promise<{ stack: ManagedCloudCleanupStack; runDir: string }> {
@@ -142,4 +146,46 @@ test("a category with a missing sub-kind still passes when its other kinds all r
   } finally {
     await rm(runDir, { recursive: true, force: true });
   }
+});
+
+test("a ledger reconcile-write failure is non-green and preserves run_directory for replay", async () => {
+  const entries: CleanupLedgerEntry[] = [];
+  const ledger: CleanupLedger = {
+    ledgerId: "run-1:shard-0",
+    async registerIntent(kind, entryId) {
+      const entry: CleanupLedgerEntry = {
+        entryId,
+        kind,
+        phase: "intent",
+        providerId: null,
+        createdAt: new Date(0).toISOString(),
+        updatedAt: new Date(0).toISOString(),
+      };
+      entries.push(entry);
+      return { ...entry };
+    },
+    async markAcquired(entryId, providerId) {
+      const entry = entries.find((candidate) => candidate.entryId === entryId)!;
+      entry.phase = "acquired";
+      entry.providerId = providerId;
+    },
+    async markReconciled() {
+      throw new Error("simulated durable ledger write failure");
+    },
+    entries: () => entries.map((entry) => ({ ...entry })),
+    unreconciled: () => entries.filter((entry) => entry.phase !== "reconciled").map((entry) => ({ ...entry })).reverse(),
+  };
+  const order: string[] = [];
+  const stack = new ManagedCloudCleanupStack({ ledger });
+  const runDirId = await stack.register("run_directory", async () => { order.push("run_directory"); });
+  await stack.acquired(runDirId, "/tmp/run");
+  const instanceId = await stack.register("ec2_instance", async () => { order.push("ec2_instance"); });
+  await stack.acquired(instanceId, "i-1");
+
+  const evidence = await stack.runAll();
+  assert.deepEqual(order, ["ec2_instance"], "run_directory must be preserved after reconcile persistence fails");
+  assert.equal(evidence.failed, 2);
+  assert.equal(evidence.reconciled, 0);
+  assert.equal(evidence.ec2Terminated, false);
+  assert.equal(evidence.localPathsRemoved, false);
 });

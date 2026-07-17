@@ -31,6 +31,7 @@ function smokeEvidence(
       server_digest: "c".repeat(64),
       e2b_template_id: "tmpl_123",
       e2b_template_build_id: "build_456",
+      e2b_template_input_hash: "e".repeat(64),
     },
     cells: [
       {
@@ -183,9 +184,26 @@ test("validateReportV4 rejects a negative remaining_owned_resources", () => {
 
 test("validateReportV4 rejects a green cleanup-replay cell whose sweep still reports owned resources", () => {
   const dirty = smokeEvidence("cleanup-replay", {
-    provider_sweeps: [{ provider: "stripe", remaining_owned_resources: 2 }],
+    provider_sweeps: smokeEvidence("cleanup-replay").provider_sweeps.map((sweep) =>
+      sweep.provider === "stripe" ? { ...sweep, remaining_owned_resources: 2 } : sweep,
+    ),
   });
   assert.throws(() => validateReportV4(reportForCell("cleanup-replay", dirty)), /remaining owned resources/);
+});
+
+test("validateReportV4 rejects a green cleanup-replay cell missing one required provider sweep", () => {
+  const dirty = smokeEvidence("cleanup-replay", {
+    provider_sweeps: smokeEvidence("cleanup-replay").provider_sweeps.filter((sweep) => sweep.provider !== "e2b"),
+  });
+  assert.throws(() => validateReportV4(reportForCell("cleanup-replay", dirty)), /exactly one/);
+});
+
+test("validateReportV4 rejects a green cleanup-replay cell with a duplicate provider sweep", () => {
+  const rows = smokeEvidence("cleanup-replay").provider_sweeps;
+  const dirty = smokeEvidence("cleanup-replay", {
+    provider_sweeps: [...rows, { provider: "aws", remaining_owned_resources: 0 }],
+  });
+  assert.throws(() => validateReportV4(reportForCell("cleanup-replay", dirty)), /exactly one/);
 });
 
 test("validateReportV4 rejects provider sweeps on a non-cleanup-replay cell", () => {

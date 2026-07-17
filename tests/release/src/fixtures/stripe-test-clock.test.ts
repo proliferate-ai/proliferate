@@ -571,7 +571,7 @@ test("RUNNER-LOSS regression: a clock accepted but NEVER acquired (intent-only l
   }
 });
 
-test("happy-path replay: an ACQUIRED real id in the reloaded ledger deletes by id without any lookup", async () => {
+test("happy-path replay: a real Stripe clock_ id in the reloaded ledger deletes by id without any lookup", async () => {
   const { mkdtemp, rm } = await import("node:fs/promises");
   const os = await import("node:os");
   const path = await import("node:path");
@@ -581,7 +581,7 @@ test("happy-path replay: an ACQUIRED real id in the reloaded ledger deletes by i
     const stack = new ManagedCloudCleanupStack({ ledger });
     const clockEntry = await stack.register("stripe_test_clock", async () => undefined);
     await stack.acquired(clockEntry, "intent:test_clock:name=x");
-    await stack.acquired(clockEntry, "tc_acq"); // markAcquired ran → real id persisted.
+    await stack.acquired(clockEntry, "clock_acq"); // Stripe's real prefix; markAcquired persisted it.
     const custEntry = await stack.register("stripe_customer", async () => undefined);
     await stack.acquired(custEntry, "cus_acq");
 
@@ -589,7 +589,7 @@ test("happy-path replay: an ACQUIRED real id in the reloaded ledger deletes by i
     const reloaded = await loadCleanupLedger(runDir);
     const result = await replayLedger(reloaded, stripeCleanupReplayHandlers({ secretKey: "sk_test_x", transport }));
 
-    assert.ok(calls.includes("deleteClock:tc_acq"), "acquired clock deleted by real id");
+    assert.ok(calls.includes("deleteClock:clock_acq"), "acquired clock deleted by real id");
     assert.ok(calls.includes("deleteCustomer:cus_acq"), "acquired customer deleted by real id");
     assert.ok(!calls.some((c) => c.startsWith("findTestClockByName")), "no lookup for an acquired real id");
     assert.equal(result.failed, 0);
@@ -797,6 +797,40 @@ test("propagation window: PAST the window, an exhaustive empty lookup reconciles
     assert.equal(result.failed, 0, "past the window an empty lookup reconciles clean");
     assert.equal(result.reconciled, 1);
     assert.ok(!calls.includes("deleteClock"), "nothing to delete — clock was never created");
+  } finally {
+    await rm(runDir, { recursive: true, force: true });
+  }
+});
+
+test("malformed cleanup timestamps fail closed instead of treating an invisible intent as never-created", async () => {
+  const { mkdtemp, rm } = await import("node:fs/promises");
+  const os = await import("node:os");
+  const path = await import("node:path");
+  const runDir = await mkdtemp(path.join(os.tmpdir(), "stripe-ledger-malformed-time-"));
+  try {
+    const ledger = await openCleanupLedger({ runDir, runId: "run-3", shardId: "shard-1" });
+    const stack = new ManagedCloudCleanupStack({ ledger });
+    const entryId = await stack.register("stripe_test_clock", async () => undefined);
+    await stack.acquired(entryId, `intent:test_clock:name=${clockNameForRun("run-3:shard-1")}`);
+
+    const raw = JSON.parse(await (await import("node:fs/promises")).readFile(
+      path.join(runDir, "cleanup-ledger.json"),
+      "utf8",
+    )) as { entries: Array<{ entryId: string; createdAt: string }> };
+    raw.entries.find((entry) => entry.entryId === entryId)!.createdAt = "not-a-timestamp";
+    await (await import("node:fs/promises")).writeFile(
+      path.join(runDir, "cleanup-ledger.json"),
+      JSON.stringify(raw),
+    );
+
+    const reloaded = await loadCleanupLedger(runDir);
+    const { transport } = fakeTransport();
+    const result = await replayLedger(
+      reloaded,
+      stripeCleanupReplayHandlers({ secretKey: "sk_test_x", transport }),
+    );
+    assert.equal(result.failed, 1);
+    assert.equal(reloaded.unreconciled().length, 1);
   } finally {
     await rm(runDir, { recursive: true, force: true });
   }

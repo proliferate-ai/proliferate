@@ -9,6 +9,11 @@ import { resolveCloudCandidateSet } from "../../artifacts/cloud-candidate-set.js
 import type { MaterializedArtifact } from "../../artifacts/local-candidate-set.js";
 import { materializeLocalArtifact } from "../../artifacts/materialize-local.js";
 import { ApiClient } from "../../fixtures/http.js";
+import {
+  killProviderSandbox,
+  listProviderSandboxesByTemplate,
+  listProviderTemplates,
+} from "../../fixtures/e2b-verify.js";
 import type { RunIdentityV1 } from "../../runner/identity.js";
 import {
   QualificationLiteLlmController,
@@ -32,6 +37,11 @@ import {
   type ManagedCloudCleanupKind,
 } from "./cleanup-kinds.js";
 import {
+  captureHostProcessCustody,
+  capturePlaywrightBrowserCustody,
+  RENDERER_PROCESS_INTENT_PREFIX,
+} from "./host-process-custody.js";
+import {
   AwsCliEc2Provisioner,
   provisionRunIngress,
   type Ec2ProvisionConfig,
@@ -50,7 +60,9 @@ import {
   type SshExec,
 } from "./ingress.js";
 import {
+  computeManagedCloudTemplateHash,
   E2bTemplateBuilder,
+  readE2bApiKey,
   resolveOrBuildManagedCloudTemplate,
   type E2bBuildConfig,
   type E2bTemplateReceipt,
@@ -58,11 +70,24 @@ import {
   type ManagedCloudTemplateInputs,
   type ResolveOrBuildManagedCloudTemplateOptions,
 } from "./template.js";
+import {
+  assertSharedTemplateCustodyAcquired,
+  loadSharedTemplateCustody,
+  markSharedTemplateAcquired,
+  markSharedTemplateReleased,
+  recordSharedTemplateIntent,
+  type SharedTemplateCustodyIdentityV1,
+} from "./shared-template-custody.js";
+import { cleanupSharedTemplateProviderResources } from "./shared-template-provider-cleanup.js";
 
 /** Host filename the first-run setup token is copied down to under the run directory. */
 const SETUP_TOKEN_FILENAME = "setup-token";
 /** Agent CLI kinds baked into the template + probed live (this world is claude-only). */
 const DEFAULT_AGENT_KINDS = ["claude"];
+const SHARED_TEMPLATE_CLEANUP_POLICY = {
+  sandboxAbsence: { timeoutMs: 120_000, intervalMs: 2_000 },
+  templateAbsence: { timeoutMs: 120_000, intervalMs: 2_000 },
+} as const;
 
 /**
  * The reusable managed-cloud-world constructor (spec "World construction").
@@ -187,6 +212,16 @@ export interface ManagedCloudWorld {
    */
   trackActorSubjects?(actor: ActorKeyIdentity): Promise<void>;
 
+  /**
+   * Enrollment-boundary variant used by managed-cloud actor fixtures. It
+   * resolves the exact deterministic key alias and durably registers all three
+   * subjects before the actor can reach funding or any scenario action.
+   */
+  resolveAndTrackActorSubjects?(params: {
+    userId: string;
+    enrollmentId: string;
+  }): Promise<ActorKeyIdentity>;
+
   close(): Promise<ManagedCloudCleanupEvidence>;
 }
 
@@ -218,6 +253,15 @@ export interface ConstructManagedCloudWorldOptions {
   callbackRelay?: CandidateCallbackRelayConfig;
   /** Run/shard-scoped root; all world state lives under here. */
   runDir: string;
+  /**
+   * Default worlds build/delete their own template. The two-stage live proof
+   * instead transfers one exact immutable template from the base regression to
+   * the fixture smoke through a durable parent-run custody journal.
+   */
+  templateCustody?:
+    | { mode: "world_owned" }
+    | { mode: "shared_producer"; journalPath: string }
+    | { mode: "shared_consumer"; journalPath: string };
   /** Agent CLI kinds baked into the template (defaults to `["claude"]`). */
   agentKinds?: string[];
   timeoutMs?: number;
@@ -243,6 +287,35 @@ export interface ManagedCloudWorldDeps {
   /** Fixed local renderer port (default: an OS-allocated ephemeral port). */
   rendererPort?: number;
   ledgerMirror?: CleanupLedgerMirror;
+  /** Provider-safe shared-template release; injectable for offline world tests. */
+  cleanupSharedTemplate?: (
+    receipt: E2bTemplateReceipt,
+    config: E2bBuildConfig,
+    builder: ManagedCloudTemplateBuilder,
+  ) => Promise<void>;
+}
+
+async function cleanupSharedTemplate(
+  receipt: E2bTemplateReceipt,
+  config: E2bBuildConfig,
+  builder: ManagedCloudTemplateBuilder,
+): Promise<void> {
+  const apiKey = readE2bApiKey(config.secretsEnvFilePath);
+  const providerEnv: NodeJS.ProcessEnv = {
+    ...process.env,
+    RELEASE_E2E_E2B_API_KEY: apiKey,
+    RELEASE_E2E_E2B_TEAM_ID: config.teamId,
+  };
+  await cleanupSharedTemplateProviderResources(
+    receipt.templateId,
+    {
+      listSandboxes: (templateId) => listProviderSandboxesByTemplate(templateId, providerEnv),
+      killSandbox: (providerSandboxId) => killProviderSandbox(providerSandboxId, providerEnv),
+      deleteTemplate: (templateId) => builder.deleteTemplate(templateId, config),
+      listTemplates: () => listProviderTemplates(providerEnv),
+    },
+    SHARED_TEMPLATE_CLEANUP_POLICY,
+  );
 }
 
 /**
@@ -332,6 +405,9 @@ export async function constructManagedCloudWorld(
       markAcquired: (realProviderId: string) => stack.acquired(entryId, realProviderId),
     };
   };
+  const trackedActors = new Map<string, { fingerprint: string; promise: Promise<void> }>();
+  const trackResolvedActor = (actor: ActorKeyIdentity): Promise<void> =>
+    trackActorSubjects(stack, gateway, actor, trackedActors);
 
   try {
     // Register durable-path + reservation releasers first so they tear down
@@ -351,6 +427,32 @@ export async function constructManagedCloudWorld(
       artifactsDir,
     );
     const rendererArtifact = await materialize(candidateSet.desktopRenderer.artifact_id, options.map, artifactsDir);
+
+    const templateInputs: ManagedCloudTemplateInputs = {
+      anyharness: anyharnessArtifact,
+      worker: workerArtifact,
+      supervisor: supervisorArtifact,
+      credentialHelper: credentialHelperArtifact,
+      bootstrapInputs: [],
+      agentKinds: options.agentKinds ?? DEFAULT_AGENT_KINDS,
+    };
+    const templateInputHash = await computeManagedCloudTemplateHash(templateInputs);
+    const templateCustody = options.templateCustody ?? { mode: "world_owned" as const };
+    const sharedTemplateIdentity: SharedTemplateCustodyIdentityV1 = {
+      runId: options.run.run_id,
+      shardId: options.run.shard_id,
+      sourceSha: options.run.source_sha,
+      templateName: options.e2b.templateName,
+      inputHash: templateInputHash,
+    };
+    let consumedSharedTemplate: E2bTemplateReceipt | null = null;
+    if (templateCustody.mode === "shared_consumer") {
+      const custody = await loadSharedTemplateCustody(templateCustody.journalPath, sharedTemplateIdentity);
+      if (custody.state !== "acquired" || !custody.receipt) {
+        throw new Error("shared managed-cloud template custody is not acquired and cannot be consumed.");
+      }
+      consumedSharedTemplate = custody.receipt;
+    }
 
     // Provision the run-scoped EC2 ingress (key pair → SG → instance → Route53),
     // every resource registered-before-create through the two-phase ledger.
@@ -401,25 +503,50 @@ export async function constructManagedCloudWorld(
       log,
     });
 
-    // Build/publish the immutable E2B template (registered-before-create by the
-    // orchestration) baking the four musl binaries under `/home/user/...`.
-    const templateInputs: ManagedCloudTemplateInputs = {
-      anyharness: anyharnessArtifact,
-      worker: workerArtifact,
-      supervisor: supervisorArtifact,
-      credentialHelper: credentialHelperArtifact,
-      bootstrapInputs: [],
-      agentKinds: options.agentKinds ?? DEFAULT_AGENT_KINDS,
-    };
+    // Build/publish (normal/producer) or consume (second proof) the immutable
+    // E2B template. Shared producer custody is durable before provider create;
+    // the consumer validates source/input identity before any AWS side effect
+    // above, then becomes the final deletion owner.
     const resolveTemplate = deps.resolveTemplate ?? resolveOrBuildManagedCloudTemplate;
-    const template = await resolveTemplate({
-      inputs: templateInputs,
-      config: options.e2b,
-      builder: deps.templateBuilder ?? new E2bTemplateBuilder(),
-      register: (providerId, release) => register("e2b_template", providerId, release),
-      cacheDir,
-      log,
-    });
+    const templateBuilder = deps.templateBuilder ?? new E2bTemplateBuilder();
+    let template: E2bTemplateReceipt;
+    if (templateCustody.mode === "shared_consumer") {
+      template = consumedSharedTemplate as E2bTemplateReceipt;
+      await register("e2b_template", template.templateId, async () => {
+        await (deps.cleanupSharedTemplate ?? cleanupSharedTemplate)(
+          template,
+          options.e2b,
+          templateBuilder,
+        );
+        await markSharedTemplateReleased(
+          templateCustody.journalPath,
+          sharedTemplateIdentity,
+          template,
+        );
+      });
+    } else {
+      if (templateCustody.mode === "shared_producer") {
+        await recordSharedTemplateIntent(templateCustody.journalPath, sharedTemplateIdentity);
+      }
+      template = await resolveTemplate({
+        inputs: templateInputs,
+        config: options.e2b,
+        builder: templateBuilder,
+        register:
+          templateCustody.mode === "world_owned"
+            ? (providerId, release) => register("e2b_template", providerId, release)
+            : async () => undefined,
+        cacheDir,
+        log,
+      });
+      if (templateCustody.mode === "shared_producer") {
+        await markSharedTemplateAcquired(
+          templateCustody.journalPath,
+          sharedTemplateIdentity,
+          template,
+        );
+      }
+    }
     if (!template.templateId || !template.buildId) {
       throw new Error("managed-cloud template receipt is missing provider template/build ids.");
     }
@@ -427,7 +554,15 @@ export async function constructManagedCloudWorld(
     // Serve the Desktop renderer (built with the public API origin baked in)
     // against a local port + launch the shared Chromium browser.
     const extracted = await extractRenderer(rendererArtifact, rendererDir, { exec: deps.extractExec });
-    const served = await serveRenderer({
+    let served: Awaited<ReturnType<typeof serveRenderer>> | null = null;
+    const rendererEntry = await stack.register("renderer_process", async () => {
+      await served?.process.terminate();
+    });
+    // Persist the unique run-directory marker before spawn. If the runner dies
+    // between spawn and exact PID capture, the fresh replayer can still find
+    // only this run's renderer command line.
+    await stack.acquired(rendererEntry, `${RENDERER_PROCESS_INTENT_PREFIX}${rendererDir}`);
+    served = await serveRenderer({
       extracted,
       host: "127.0.0.1",
       port: rendererPort,
@@ -436,19 +571,37 @@ export async function constructManagedCloudWorld(
       spawn: deps.spawn,
       fetch: deps.rendererFetch,
     });
-    await register("renderer_process", `pid:${served.process.child.pid ?? "unknown"}`, () =>
-      served.process.terminate(),
+    const rendererProcessIdentity = await captureHostProcessCustody(
+      served.process.child.pid,
+      rendererDir,
+    ).catch(() => null);
+    await stack.acquired(
+      rendererEntry,
+      rendererProcessIdentity ?? `${RENDERER_PROCESS_INTENT_PREFIX}${rendererDir}`,
     );
 
     // Pin the run subdomain to the box IP inside Chromium too — the laptop
     // resolver's observed NXDOMAIN flaps would otherwise break the renderer's
     // API calls mid-scenario. TLS/SNI still validate the real LE certificate.
-    const browser = await launchChromium({
+    let browser: Browser | null = null;
+    const browserEntry = await stack.register("browser", async () => {
+      await browser?.close();
+    });
+    // Browser launch has no caller-controlled profile path in Playwright's
+    // non-persistent API. Persist a non-actionable intent before creation; once
+    // launch returns, immediately replace it with PID/starttime/profile custody.
+    // A crash in that tiny gap stays non-green rather than killing by PID alone.
+    await stack.acquired(browserEntry, `process-intent:browser:${runDir}`);
+    browser = await launchChromium({
       log,
       launcher: deps.chromiumLauncher,
       args: [`--host-resolver-rules=MAP ${subdomain} ${record.address}`],
     });
-    await register("browser", "chromium", () => browser.close());
+    const browserProcessIdentity = await capturePlaywrightBrowserCustody(process.pid).catch(() => null);
+    await stack.acquired(
+      browserEntry,
+      browserProcessIdentity ?? `process-intent:browser:${runDir}`,
+    );
 
     log(`managed-cloud world ready (run ${options.run.run_id}/${options.run.shard_id} @ ${publicOrigin})`);
 
@@ -479,13 +632,46 @@ export async function constructManagedCloudWorld(
       paths: { runDir, secretsDir },
       registerCleanup: register,
       registerCleanupIntent,
-      trackActorSubjects: (actor) => trackActorSubjects(stack, gateway, actor),
-      close: () => stack.runAll(),
+      trackActorSubjects: trackResolvedActor,
+      resolveAndTrackActorSubjects: async (params) => {
+        const actor = await gateway.resolveActorKey(params);
+        await trackResolvedActor(actor);
+        return actor;
+      },
+      close: async () => {
+        const cleanup = await stack.runAll();
+        if (templateCustody.mode === "shared_producer") {
+          const custody = await loadSharedTemplateCustody(
+            templateCustody.journalPath,
+            sharedTemplateIdentity,
+          );
+          assertSharedTemplateCustodyAcquired(custody, template);
+          return {
+            ...cleanup,
+            templateDeleted: false,
+            templateCustodyTransferred: true,
+          };
+        }
+        return { ...cleanup, templateCustodyTransferred: false };
+      },
     };
   } catch (error) {
     // Any startup failure runs every registered cleanup exactly once, reverse
-    // order, then rethrows so the caller marks the cell failed.
-    await stack.runAll().catch(() => undefined);
+    // order. A cleanup failure is part of the terminal error; swallowing it can
+    // strand provider resources while the report names only the startup cause.
+    try {
+      const cleanup = await stack.runAll();
+      if (cleanup.failed > 0) {
+        throw new Error(`startup cleanup left ${cleanup.failed} unreconciled resource(s)`);
+      }
+    } catch (cleanupError) {
+      const startupMessage = error instanceof Error ? error.message : String(error);
+      const cleanupMessage = cleanupError instanceof Error ? cleanupError.message : String(cleanupError);
+      throw new AggregateError(
+        [error, cleanupError],
+        `managed-cloud startup failed: ${startupMessage}; cleanup also failed: ${cleanupMessage}`,
+      );
+    }
     throw error;
   }
 }
@@ -508,6 +694,34 @@ async function trackActorSubjects(
   stack: ManagedCloudCleanupStack,
   gateway: QualificationLiteLlmController,
   actor: ActorKeyIdentity,
+  tracked: Map<string, { fingerprint: string; promise: Promise<void> }>,
+): Promise<void> {
+  const fingerprint = [
+    actor.userId,
+    actor.enrollmentId,
+    actor.litellmUserId,
+    actor.teamId,
+    actor.tokenIdHash,
+  ].join("\u0000");
+  const existing = tracked.get(actor.keyAlias);
+  if (existing) {
+    if (existing.fingerprint !== fingerprint) {
+      throw new Error(`LiteLLM cleanup alias "${actor.keyAlias}" resolved to conflicting actor identities.`);
+    }
+    return existing.promise;
+  }
+  const promise = registerActorSubjects(stack, gateway, actor);
+  tracked.set(actor.keyAlias, { fingerprint, promise });
+  // Keep even a rejected registration promise pinned to this alias. A partial
+  // ledger write must fail the run and be replayed; retrying registration here
+  // would create a second destructive path for the same provider subjects.
+  await promise;
+}
+
+async function registerActorSubjects(
+  stack: ManagedCloudCleanupStack,
+  gateway: QualificationLiteLlmController,
+  actor: ActorKeyIdentity,
 ): Promise<void> {
   let result: ActorSubjectsDeletion | undefined;
   const ensure = async (): Promise<ActorSubjectsDeletion> => {
@@ -522,7 +736,7 @@ async function trackActorSubjects(
       throw new Error("LiteLLM team was not deleted.");
     }
   });
-  await stack.acquired(teamEntry, actor.teamId || "team");
+  await stack.acquired(teamEntry, actor.teamId || `missing-team:${actor.userId}`);
   const userEntry = await stack.register("litellm_user", async () => {
     if (!(await ensure()).litellmSubjectsDeleted) {
       throw new Error("LiteLLM user was not deleted.");
@@ -534,7 +748,10 @@ async function trackActorSubjects(
       throw new Error("LiteLLM virtual key was not deleted.");
     }
   });
-  await stack.acquired(keyEntry, actor.tokenIdHash);
+  // Persist only the safe deterministic alias (never the raw token). A fresh
+  // crash-replay process can re-resolve the exact token by alias and delete it;
+  // the prior tokenIdHash was evidence-safe but not independently actionable.
+  await stack.acquired(keyEntry, `key-alias:${actor.keyAlias}`);
 }
 
 /**

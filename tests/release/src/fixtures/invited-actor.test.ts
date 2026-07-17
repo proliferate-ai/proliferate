@@ -149,6 +149,28 @@ test("invitedActor does not reuse the one-time /setup claim (never calls claimSe
   assert.ok(calls.some((c) => c.startsWith("registerInvited")));
 });
 
+test("invitedActor hands actor-B enrollment custody off before selection or scenario tracking", async () => {
+  const { transport, calls } = fakeTransport({
+    getEnrollment: async () => ({ id: "enrollment-b", syncStatus: "synced", lastErrorCode: null }),
+  });
+  const custody: Array<{ userId: string; enrollmentId: string }> = [];
+
+  await assert.rejects(
+    () => invitedActor(fakeWorld(), {
+      inviter: fakeInviter(),
+      enrollmentPollMs: 1,
+      resolveAndTrackActorSubjects: async (identity) => {
+        custody.push(identity);
+        throw new Error("simulated actor-B custody interruption");
+      },
+    }, transport),
+    /simulated actor-B custody interruption/,
+  );
+
+  assert.deepEqual(custody, [{ userId: "user-b", enrollmentId: "enrollment-b" }]);
+  assert.ok(!calls.some((call) => call.startsWith("putGatewaySelection")));
+});
+
 test("invitedActor propagates a bounded timeout when enrollment never syncs", async () => {
   const { transport } = fakeTransport({
     getEnrollment: async () => ({ id: "enrollment-b", syncStatus: "pending", lastErrorCode: "gateway_unreachable" }),

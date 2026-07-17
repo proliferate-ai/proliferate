@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -8,10 +8,16 @@ import {
   FIXTURE_SMOKE_CELL_NAMES,
   FIXTURE_SMOKE_WORLD_SUBDIR,
   MANAGED_CLOUD_FIXTURE_SMOKE_1_ID,
+  WEBHOOK_CUSTODY_DIRNAME,
+  WEBHOOK_INTENT_FILENAME,
   assertDuplicateDeliveryByteIdentity,
+  assertRepresentativeFixtureReplay,
   allCleanupBooleansTrue,
   buildDuplicatePostScript,
   createFixtureSmokeDriver,
+  createCellACustomerWithCustody,
+  decodeE2bSandboxCleanupIdentity,
+  encodeE2bSandboxCleanupIdentity,
   ensureOwnerActor,
   fixtureSmokeScopedRunDir,
   managedCloudFixtureSmoke1,
@@ -19,22 +25,28 @@ import {
   parseRelayPidfileJson,
   parseStatModes,
   parseWebhookReceiptSnapshot,
+  PRODUCT_LLM_CREDIT_DENIAL_CODE,
   procCmdlineContainsScript,
+  reconcileWebhookIntentFile,
   resolveSmokeSecretKey,
   runBillingThresholdCellLive,
+  runFailureInjectionCellLive,
   runFixtureSmokeCells,
   type BillingThresholdCellDeps,
   type FixtureSmokeCellResult,
   type FixtureSmokeDriver,
+  type ProviderCreateRecoveryOps,
   type StripePreparation,
 } from "./managed-cloud-fixture-smoke-1.js";
 import type { StripeHttp } from "../fixtures/stripe-test-clock.js";
+import { encodeWebhookEndpointIntentRef, webhookEndpointUrl } from "../fixtures/stripe-smoke-resources.js";
 import type { CloudProvision1ConstructionInputs } from "./cloud-provision-1.js";
 import type { ConstructManagedCloudWorldOptions } from "../worlds/managed-cloud/world.js";
 import { isMatrixScenario, type ScenarioRunContext } from "./types.js";
 import type { CandidateBuildMapV1 } from "../artifacts/build-map.js";
 import type { EnvResolution } from "../config/env-resolution.js";
 import type { CapturedDelivery } from "../fixtures/callback-relay.js";
+import type { FailureInjectionHandle } from "../fixtures/failure-injection.js";
 import type { PlannedCellV1 } from "../runner/result.js";
 import type { ManagedCloudWorld } from "../worlds/managed-cloud/world.js";
 import type { ManagedCloudCleanupEvidence } from "../worlds/managed-cloud/cleanup-kinds.js";
@@ -185,6 +197,7 @@ function fakePrep(): StripePreparation {
     subdomain: "mcq-smoke-run-1-smoke-0.qualification.proliferate.com",
     webhookEndpointId: "we_123",
     webhookIntentRef: "intent:webhook_endpoint:url=https://x/v1/billing/webhooks/stripe",
+    webhookIntentFilePath: "/tmp/smoke-run-1/cleanup-custody/stripe-webhook-endpoint-intent.json",
   };
 }
 
@@ -497,6 +510,57 @@ test("assertDuplicateDeliveryByteIdentity throws when there is no baseline row f
 
 // ── Cell A pure parsers (mode / pid / receipt / duplicate-post builder) ─────
 
+test("Cell A persists customer intent before POST and retains cleanup through the create→acquire gap", async () => {
+  const calls: string[] = [];
+  const cleanupCapture: { release?: () => Promise<void> } = {};
+  const world = {
+    registerCleanupIntent: async (
+      kind: string,
+      providerId: string,
+      handler: () => Promise<void>,
+    ) => {
+      calls.push(`intent:${kind}:${providerId}`);
+      cleanupCapture.release = handler;
+      return {
+        entryId: "cell-a-customer",
+        markAcquired: async (customerId: string) => {
+          calls.push(`acquire:${customerId}`);
+          throw new Error("simulated runner death before durable acquire");
+        },
+      };
+    },
+  } as unknown as ManagedCloudWorld;
+  const http: StripeHttp = {
+    async request(_key, request) {
+      calls.push(`${request.method} ${request.path}`);
+      if (request.method === "POST" && request.path === "/customers") {
+        return { id: "cus_gap_1" };
+      }
+      if (request.method === "DELETE" && request.path === "/customers/cus_gap_1") {
+        return { id: "cus_gap_1", deleted: true };
+      }
+      throw new Error(`unexpected request ${request.method} ${request.path}`);
+    },
+  };
+
+  await assert.rejects(
+    () => createCellACustomerWithCustody(
+      world,
+      { secretKey: "sk_test_cell_a", runTag: "run-a:shard-a" },
+      http,
+    ),
+    /simulated runner death/,
+  );
+  assert.deepEqual(calls.slice(0, 3), [
+    "intent:stripe_customer:intent:customer:runTag=run-a:shard-a:cellA",
+    "POST /customers",
+    "acquire:cus_gap_1",
+  ]);
+  assert.ok(cleanupCapture.release, "cleanup registration must retain a replayable customer cleanup");
+  await cleanupCapture.release();
+  assert.equal(calls.at(-1), "DELETE /customers/cus_gap_1");
+});
+
 test("parseStatModes maps each path to its octal mode", () => {
   const stdout = "/home/ubuntu/candidate/callback-relay 700\n/home/ubuntu/candidate/callback-relay/held/ab.bin 600\n";
   const modes = parseStatModes(stdout);
@@ -562,7 +626,13 @@ function fakeCellCActor(): AuthenticatedActor {
  * LOOP), total cost 0.0001, restored grants → 5.0 - 0.0001.
  */
 function fakeCellCDeps(
-  opts: { perRequestCost?: number; gateSecondStatus?: number; budgetStatus?: string; completionTokens?: number } = {},
+  opts: {
+    perRequestCost?: number;
+    gateSecondStatus?: number;
+    gateDenialCode?: typeof PRODUCT_LLM_CREDIT_DENIAL_CODE | null;
+    budgetStatus?: string;
+    completionTokens?: number;
+  } = {},
   overrides: Partial<BillingThresholdCellDeps> = {},
 ): { deps: BillingThresholdCellDeps; calls: string[] } {
   const calls: string[] = [];
@@ -598,11 +668,23 @@ function fakeCellCDeps(
       // After crossing, the cell issues one MORE request for the gate signal.
       if (positioned && remaining <= 0) {
         calls.push("gateRequest");
-        return { status: opts.gateSecondStatus ?? 429, completionTokens: 0, costUsd: null };
+        return {
+          status: opts.gateSecondStatus ?? 429,
+          completionTokens: 0,
+          costUsd: null,
+          denialCode: opts.gateDenialCode === undefined
+            ? PRODUCT_LLM_CREDIT_DENIAL_CODE
+            : opts.gateDenialCode,
+        };
       }
       calls.push("crossRequest");
       pendingCost = Number((pendingCost + perRequestCost).toFixed(8));
-      return { status: 200, completionTokens: opts.completionTokens ?? 8, costUsd: perRequestCost };
+      return {
+        status: 200,
+        completionTokens: opts.completionTokens ?? 8,
+        costUsd: perRequestCost,
+        denialCode: null,
+      };
     },
     runUsageImport: async () => {
       calls.push("usageImport");
@@ -675,8 +757,46 @@ test("Cell C fails when no product-side gate signal is observed", async () => {
   const { deps } = fakeCellCDeps({ gateSecondStatus: 200, budgetStatus: "ok" });
   await assert.rejects(
     () => runBillingThresholdCellLive(fakeWorld(), CELL_C_STATE, fakeCellCActor(), deps, FAST_POLL),
-    /NO product-side gate signal/,
+    /NO classified product-side gate signal/,
   );
+});
+
+for (const status of [401, 429, 503]) {
+  test(`Cell C rejects generic HTTP ${status} as billing-gate evidence`, async () => {
+    const { deps } = fakeCellCDeps({
+      gateSecondStatus: status,
+      gateDenialCode: null,
+      budgetStatus: "ok",
+    });
+    await assert.rejects(
+      () => runBillingThresholdCellLive(fakeWorld(), CELL_C_STATE, fakeCellCActor(), deps, FAST_POLL),
+      /Generic auth\/rate-limit\/server failures are not billing proof/,
+    );
+  });
+}
+
+test("Cell C accepts the exact product billing-denial classification without a budget-status echo", async () => {
+  const { deps } = fakeCellCDeps({
+    gateSecondStatus: 402,
+    gateDenialCode: PRODUCT_LLM_CREDIT_DENIAL_CODE,
+    budgetStatus: "ok",
+  });
+  const result = await runBillingThresholdCellLive(
+    fakeWorld(), CELL_C_STATE, fakeCellCActor(), deps, FAST_POLL,
+  );
+  assert.match(result.observedTransition, /gated:second_request_rejected/);
+});
+
+test("Cell C accepts an exact exhausted budget state even when the HTTP failure is unclassified", async () => {
+  const { deps } = fakeCellCDeps({
+    gateSecondStatus: 503,
+    gateDenialCode: null,
+    budgetStatus: "exhausted",
+  });
+  const result = await runBillingThresholdCellLive(
+    fakeWorld(), CELL_C_STATE, fakeCellCActor(), deps, FAST_POLL,
+  );
+  assert.match(result.observedTransition, /gated:budget_status_exhausted/);
 });
 
 test("Cell C fails when the restored remainder != originalRemaining - totalCost", async () => {
@@ -696,6 +816,162 @@ test("Cell C never leaks the raw virtual key into the observed transition", asyn
   const result = await runBillingThresholdCellLive(fakeWorld(), CELL_C_STATE, fakeCellCActor(), deps, FAST_POLL);
   assert.ok(!result.observedTransition.includes("sk-raw-virtual-key"));
   assert.ok(!result.externalIds.some((id) => id.includes("sk-raw-virtual-key")));
+});
+
+// ── Cell D provider-create failure/recovery (normal product path) ───────
+
+function fakeProviderRecoveryOps(
+  options: {
+    injected?: boolean;
+    boundary?: FailureInjectionHandle["boundary"];
+    lastError?: string | null;
+  } = {},
+): {
+  ops: ProviderCreateRecoveryOps;
+  calls: string[];
+} {
+  const calls: string[] = [];
+  const providers = ["e2b-old", "e2b-new", "e2b-new"];
+  const ops: ProviderCreateRecoveryOps = {
+    prepareActor: async () => { calls.push("prepare"); },
+    controlProductAction: async () => { calls.push("control"); return true; },
+    ensureSandbox: async () => { calls.push("ensure-row"); return { id: "cloud-1" }; },
+    registerSandboxIntent: async (_world, id) => {
+      calls.push(`intent:${id}`);
+      return {
+        entryId: "cleanup-1",
+        markAcquired: async (providerId) => { calls.push(`acquired:${providerId}`); },
+      };
+    },
+    startProductMaterialization: async () => { calls.push("materialize"); },
+    waitForProvider: async () => {
+      calls.push("wait-provider");
+      const next = providers.shift();
+      if (!next) throw new Error("provider sequence exhausted");
+      return next;
+    },
+    injectProviderCreate: async () => {
+      calls.push("inject");
+      return {
+        boundary: options.boundary ?? "provider_create",
+        injected: options.injected ?? true,
+        disarm: async () => { calls.push("disarm"); },
+      };
+    },
+    waitForProductError: async () => {
+      calls.push("wait-error");
+      return {
+        status: "error",
+        lastError: options.lastError === undefined
+          ? "E2B provider sandbox e2b-old was not found after termination"
+          : options.lastError,
+      };
+    },
+    recoverSandbox: async () => { calls.push("recover"); },
+    relayManifestReadable: async () => { calls.push("relay-control"); return true; },
+  };
+  return { ops, calls };
+}
+
+test("Cell D persists recovery identity before product materialization, kills the first provider, and proves idempotent replacement", async () => {
+  const { ops, calls } = fakeProviderRecoveryOps();
+  const result = await runFailureInjectionCellLive(
+    fakeWorld(),
+    CELL_C_STATE,
+    fakeCellCActor(),
+    ops,
+  );
+  assert.match(result.observedTransition, /provider_killed.*normal_path_recovery.*replacement_ready/);
+  assert.deepEqual(result.externalIds, ["cloud-1", "e2b-old", "e2b-new"]);
+  assert.ok(calls.indexOf("intent:cloud-1") < calls.indexOf("materialize"));
+  assert.ok(calls.indexOf("acquired:e2b-old") < calls.indexOf("inject"));
+  assert.equal(calls.filter((call) => call === "materialize").length, 2, "initial + post-recovery control");
+  assert.equal(calls.filter((call) => call === "wait-provider").length, 3, "old + replacement + control");
+  assert.ok(calls.includes("acquired:e2b-new"));
+});
+
+test("E2B cleanup identity retains the logical sandbox across provider replacement", () => {
+  const initial = encodeE2bSandboxCleanupIdentity({ cloudSandboxId: "cloud-1", providerSandboxId: null });
+  const replacement = encodeE2bSandboxCleanupIdentity({
+    cloudSandboxId: "cloud-1",
+    providerSandboxId: "e2b-new",
+  });
+  assert.deepEqual(decodeE2bSandboxCleanupIdentity(initial), {
+    cloudSandboxId: "cloud-1",
+    providerSandboxId: null,
+  });
+  assert.deepEqual(decodeE2bSandboxCleanupIdentity(replacement), {
+    cloudSandboxId: "cloud-1",
+    providerSandboxId: "e2b-new",
+  });
+  assert.equal(decodeE2bSandboxCleanupIdentity("e2b-new"), null);
+});
+
+test("Cell D fails closed when the provider kill was not positively observed", async () => {
+  const { ops } = fakeProviderRecoveryOps({ injected: false });
+  await assert.rejects(
+    () => runFailureInjectionCellLive(fakeWorld(), CELL_C_STATE, fakeCellCActor(), ops),
+    /did not positively kill/,
+  );
+});
+
+test("Cell D rejects an unrelated status=error after provider_create injection", async () => {
+  const { ops } = fakeProviderRecoveryOps({ lastError: "GitHub authorization expired" });
+  await assert.rejects(
+    () => runFailureInjectionCellLive(fakeWorld(), CELL_C_STATE, fakeCellCActor(), ops),
+    /did not attribute status=error to the exact killed provider_create sandbox/,
+  );
+});
+
+test("Cell D rejects an injected failure from a different boundary", async () => {
+  const { ops } = fakeProviderRecoveryOps({ boundary: "runtime_readiness" });
+  await assert.rejects(
+    () => runFailureInjectionCellLive(fakeWorld(), CELL_C_STATE, fakeCellCActor(), ops),
+    /provider_create injection did not positively kill/,
+  );
+});
+
+test("Cell E requires the exact representative A-D replay kinds and domains", () => {
+  const complete = {
+    kind: "managed_cloud_fixture_cleanup_replay" as const,
+    schema_version: 1 as const,
+    status: "reconciled" as const,
+    run_id: "r",
+    shard_id: "s",
+    selected_fixture_entries: 7,
+    reconciled_fixture_entries: 7,
+    selected_fixture_kinds: [
+      "billing_fixture_adjustment",
+      "callback_relay_process",
+      "callback_relay_spool",
+      "e2b_sandbox",
+      "stripe_customer",
+      "stripe_product_price",
+      "stripe_test_clock",
+    ] as const,
+    reconciled_fixture_kinds: [
+      "billing_fixture_adjustment",
+      "callback_relay_process",
+      "callback_relay_spool",
+      "e2b_sandbox",
+      "stripe_customer",
+      "stripe_product_price",
+      "stripe_test_clock",
+    ] as const,
+    reconciled_domains: ["box", "e2b", "stripe"] as const,
+    untouched_non_fixture_entries: 0,
+    ingress_instance_id: "i-1",
+  };
+  assert.doesNotThrow(() => assertRepresentativeFixtureReplay(complete as never));
+  assert.throws(
+    () => assertRepresentativeFixtureReplay({
+      ...complete,
+      reconciled_fixture_kinds: complete.reconciled_fixture_kinds.filter(
+        (kind) => kind !== "billing_fixture_adjustment",
+      ),
+    } as never),
+    /missing kinds=billing_fixture_adjustment/,
+  );
 });
 
 // ── Scoped world runDir (the CLOUD-PROVISION-1 shared-runDir collision fix) ──
@@ -772,7 +1048,7 @@ test("buildWorld constructs the world with runDir scoped to <parentRunDir>/fixtu
   }
 });
 
-test("prepareStripe writes env + webhook-intent under the SCOPED dir while reading the PARENT sidecar", async () => {
+test("prepareStripe writes env under the scoped world and a durable webhook journal outside world cleanup", async () => {
   const parent = await mkdtemp(path.join(os.tmpdir(), "smoke-scope-"));
   try {
     // The builder wrote the sidecar in the PARENT run dir; also drop a marker
@@ -794,13 +1070,120 @@ test("prepareStripe writes env + webhook-intent under the SCOPED dir while readi
       JSON.parse(await readFile(path.join(scoped, "cloud-world-subdomain.json"), "utf8")).subdomain,
       builtSubdomain,
     );
-    // env files + webhook intent file live under the SCOPED dir.
+    // World env files are scoped. The pre-world journal deliberately lives in
+    // the parent cleanup-custody directory so a failed world cleanup cannot
+    // delete the only recovery identity.
     assert.ok(prep.secretsEnvFilePath.startsWith(scoped));
     assert.ok(prep.webhookSecretEnvFilePath.startsWith(scoped));
-    const intent = JSON.parse(await readFile(path.join(scoped, "stripe-webhook-endpoint-intent.json"), "utf8"));
+    assert.ok(!prep.webhookIntentFilePath.startsWith(scoped));
+    assert.ok(prep.webhookIntentFilePath.startsWith(path.join(parent, "cleanup-custody")));
+    const intent = JSON.parse(await readFile(prep.webhookIntentFilePath, "utf8"));
     assert.equal(intent.endpointId, "we_scoped");
+    assert.equal((await stat(path.dirname(prep.webhookIntentFilePath))).mode & 0o777, 0o700);
+    assert.equal((await stat(prep.webhookIntentFilePath)).mode & 0o777, 0o600);
     // The builder's parent artifacts are UNTOUCHED (the scoped dir is disjoint).
     assert.equal(await readFile(path.join(parent, "artifacts", "server.tar"), "utf8"), "BUILDER-ARTIFACT");
+  } finally {
+    await rm(parent, { recursive: true, force: true });
+  }
+});
+
+test("a fresh fixture executor replays the durable webhook journal before creating a replacement", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "smoke-restart-"));
+  const endpointUrl = webhookEndpointUrl("restart.qualification.proliferate.com");
+  const calls: string[] = [];
+  let nextId = 1;
+  let endpoints: Array<{ id: string; url: string; metadata: Record<string, string> }> = [];
+  const http: StripeHttp = {
+    async request(_key, req) {
+      calls.push(`${req.method} ${req.path}`);
+      if (req.method === "POST" && req.path === "/webhook_endpoints") {
+        const endpoint = {
+          id: `we_restart_${nextId++}`,
+          url: req.form?.url ?? "",
+          metadata: { proliferate_qualification_run: req.form?.["metadata[proliferate_qualification_run]"] ?? "" },
+        };
+        endpoints.push(endpoint);
+        return { id: endpoint.id, secret: `whsec_${endpoint.id}` };
+      }
+      if (req.method === "GET" && req.path.startsWith("/webhook_endpoints?")) {
+        return { data: endpoints, has_more: false };
+      }
+      if (req.method === "DELETE" && req.path.startsWith("/webhook_endpoints/")) {
+        const id = req.path.split("/").at(-1);
+        endpoints = endpoints.filter((endpoint) => endpoint.id !== id);
+        return { id, deleted: true };
+      }
+      return {};
+    },
+  };
+  try {
+    await writeFile(
+      path.join(parent, "cloud-world-subdomain.json"),
+      JSON.stringify({ subdomain: "restart.qualification.proliferate.com" }),
+    );
+    const firstDriver = createFixtureSmokeDriver({ http });
+    const first = await firstDriver.prepareStripe(fakeConstructionInputs(parent), "sk_test_restart");
+    assert.equal(first.webhookEndpointId, "we_restart_1");
+
+    // Simulate the first Node process dying before it can adopt the endpoint
+    // into the world's cleanup ledger. A new driver has no closure state.
+    const secondDriver = createFixtureSmokeDriver({ http });
+    const second = await secondDriver.prepareStripe(fakeConstructionInputs(parent), "sk_test_restart");
+    assert.equal(second.webhookEndpointId, "we_restart_2");
+    assert.deepEqual(endpoints.map((entry) => entry.id), ["we_restart_2"]);
+    assert.ok(
+      calls.indexOf("DELETE /webhook_endpoints/we_restart_1") < calls.lastIndexOf("POST /webhook_endpoints"),
+      "the prior accepted endpoint must be deleted before the replacement create",
+    );
+    assert.equal(endpointUrl, webhookEndpointUrl(second.subdomain));
+  } finally {
+    await rm(parent, { recursive: true, force: true });
+  }
+});
+
+test("webhook custody replay removes every duplicate exact run-owned endpoint before releasing custody", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "smoke-duplicate-webhook-"));
+  const custodyDir = path.join(parent, WEBHOOK_CUSTODY_DIRNAME);
+  const intentPath = path.join(custodyDir, WEBHOOK_INTENT_FILENAME);
+  const runTag = "smoke-run-1:smoke-0";
+  const url = webhookEndpointUrl("duplicate.qualification.proliferate.com");
+  let endpoints = ["we_duplicate_1", "we_duplicate_2"];
+  const http: StripeHttp = {
+    async request(_key, req) {
+      if (req.method === "GET" && req.path.startsWith("/webhook_endpoints?")) {
+        return {
+          data: endpoints.map((id) => ({
+            id,
+            url,
+            metadata: { proliferate_qualification_run: runTag },
+          })),
+          has_more: false,
+        };
+      }
+      if (req.method === "DELETE" && req.path.startsWith("/webhook_endpoints/")) {
+        const id = req.path.split("/").at(-1);
+        endpoints = endpoints.filter((candidate) => candidate !== id);
+        return { id, deleted: true };
+      }
+      return {};
+    },
+  };
+  try {
+    await mkdir(custodyDir, { recursive: true, mode: 0o700 });
+    await writeFile(
+      intentPath,
+      JSON.stringify({
+        intentRef: encodeWebhookEndpointIntentRef("duplicate.qualification.proliferate.com"),
+        endpointId: "we_duplicate_1",
+        runTag,
+        createdAt: new Date().toISOString(),
+      }),
+      { mode: 0o600 },
+    );
+    await reconcileWebhookIntentFile(intentPath, runTag, url, "sk_test_duplicate", http);
+    assert.deepEqual(endpoints, []);
+    await assert.rejects(() => readFile(intentPath), (error: NodeJS.ErrnoException) => error.code === "ENOENT");
   } finally {
     await rm(parent, { recursive: true, force: true });
   }

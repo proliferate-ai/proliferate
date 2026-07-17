@@ -1,6 +1,8 @@
 import {
   defaultStripeHttp,
   isLiveModeSecretKey,
+  STRIPE_INTENT_RECOVERY_WINDOW_MS,
+  StripeIntentStillPropagatingError,
   type StripeHttp,
 } from "./stripe-test-clock.js";
 import type { CleanupHandler, CleanupResourceKind } from "../worlds/local-workspace/cleanup-ledger.js";
@@ -130,31 +132,30 @@ export async function deleteWebhookEndpointById(
 
 /** Paginated lookup of a run-owned webhook endpoint by its exact url (recovery identity). */
 export async function findWebhookEndpointByUrl(
-  params: { secretKey: string; url: string },
+  params: { secretKey: string; url: string; runTag?: string },
   http: StripeHttp = defaultStripeHttp,
 ): Promise<{ endpointId: string } | null> {
+  const matches = await findWebhookEndpointsByUrl(params, http);
+  return matches[0] ?? null;
+}
+
+/** Exhaustive exact-url/run-tag lookup used by interruption cleanup. */
+export async function findWebhookEndpointsByUrl(
+  params: { secretKey: string; url: string; runTag?: string },
+  http: StripeHttp = defaultStripeHttp,
+): Promise<Array<{ endpointId: string }>> {
   assertTestMode(params.secretKey);
-  let startingAfter: string | undefined;
-  for (;;) {
-    const q = startingAfter ? `&starting_after=${startingAfter}` : "";
-    const page = await http.request(params.secretKey, {
-      method: "GET",
-      path: `/webhook_endpoints?limit=100${q}`,
-    });
-    const data = Array.isArray(page.data) ? (page.data as Array<Record<string, unknown>>) : [];
-    const match = data.find((e) => e.url === params.url && typeof e.id === "string");
-    if (match) {
-      return { endpointId: match.id as string };
+  const rows = await listStripeRowsStrict(params.secretKey, "/webhook_endpoints", http);
+  return rows.filter((entry) => {
+    if (entry.url !== params.url || typeof entry.id !== "string") {
+      return false;
     }
-    if (page.has_more === true && data.length > 0) {
-      const last = data[data.length - 1];
-      startingAfter = typeof last.id === "string" ? last.id : undefined;
-      if (startingAfter) {
-        continue;
-      }
+    if (!params.runTag) {
+      return true;
     }
-    return null;
-  }
+    const metadata = entry.metadata as Record<string, unknown> | undefined;
+    return metadata?.proliferate_qualification_run === params.runTag;
+  }).map((entry) => ({ endpointId: entry.id as string }));
 }
 
 // ---------------------------------------------------------------------------
@@ -238,6 +239,129 @@ export async function deactivateProductPriceById(
       http.request(secretKey, { method: "POST", path: `/products/${productId}`, form: { active: "false" } }),
     );
   }
+  // Provider acceptance is not cleanup truth. Re-read both exact resources and
+  // fail if Stripe still reports either one active. A missing resource is an
+  // idempotent clean outcome; malformed responses stay ambiguous/non-green.
+  await assertProductPriceInactive(secretKey, productId, priceId, http);
+}
+
+async function assertProductPriceInactive(
+  secretKey: string,
+  productId: string,
+  priceId: string,
+  http: StripeHttp,
+): Promise<void> {
+  const assertInactive = async (kind: "product" | "price", id: string): Promise<void> => {
+    if (!id) {
+      return;
+    }
+    try {
+      const row = await http.request(secretKey, { method: "GET", path: `/${kind}s/${id}` });
+      if (typeof row.active !== "boolean") {
+        throw new Error(`Stripe ${kind} ${id} returned no boolean active state after cleanup.`);
+      }
+      if (row.active) {
+        throw new Error(`Stripe ${kind} ${id} remained active after cleanup.`);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!/No such (price|product)|resource_missing/i.test(message)) {
+        throw error;
+      }
+    }
+  };
+  await assertInactive("price", priceId);
+  await assertInactive("product", productId);
+}
+
+/**
+ * Finds every run-owned product and its prices from strongly scoped, exhaustive
+ * Stripe LIST calls. This is the recovery path for the two-call
+ * product→price→ledger-acquire window: a product may exist even when no price
+ * was returned to the caller. Provider ambiguity throws rather than becoming an
+ * empty/clean result.
+ */
+export async function findRunProductPrices(
+  params: { secretKey: string; runTag: string },
+  http: StripeHttp = defaultStripeHttp,
+): Promise<Array<{ productId: string; productActive: boolean; priceIds: string[]; activePriceIds: string[] }>> {
+  assertTestMode(params.secretKey);
+  const products = await listStripeRowsStrict(params.secretKey, "/products", http);
+  const owned = products.filter((row) => {
+    if (typeof row.metadata !== "object" || row.metadata === null || Array.isArray(row.metadata)) {
+      throw new Error("Stripe product list returned malformed metadata; refusing to classify ownership.");
+    }
+    const metadata = row.metadata as Record<string, unknown>;
+    return typeof row.id === "string" && metadata?.proliferate_qualification_run === params.runTag;
+  });
+  const result: Array<{ productId: string; productActive: boolean; priceIds: string[]; activePriceIds: string[] }> = [];
+  for (const product of owned) {
+    const productId = product.id as string;
+    if (typeof product.active !== "boolean") {
+      throw new Error(`Stripe product ${productId} returned no boolean active state.`);
+    }
+    const prices = await listStripeRowsStrict(
+      params.secretKey,
+      `/prices?product=${encodeURIComponent(productId)}`,
+      http,
+    );
+    if (prices.some((price) => typeof price.id !== "string" || !price.id || typeof price.active !== "boolean")) {
+      throw new Error(`Stripe prices for product ${productId} returned malformed id/active state.`);
+    }
+    result.push({
+      productId,
+      productActive: product.active === true,
+      priceIds: prices.map((price) => price.id as string),
+      activePriceIds: prices.filter((price) => price.active === true).map((price) => price.id as string),
+    });
+  }
+  return result;
+}
+
+/** Deactivates every run-owned active price, then archives each active product. */
+export async function deactivateRunProductPricesByTag(
+  params: { secretKey: string; runTag: string },
+  http: StripeHttp = defaultStripeHttp,
+): Promise<{ matched: number; touched: number }> {
+  const resources = await findRunProductPrices(params, http);
+  let touched = 0;
+  for (const resource of resources) {
+    for (const priceId of resource.activePriceIds) {
+      await http.request(params.secretKey, {
+        method: "POST",
+        path: `/prices/${priceId}`,
+        form: { active: "false" },
+      });
+      touched += 1;
+    }
+    if (resource.productActive) {
+      await http.request(params.secretKey, {
+        method: "POST",
+        path: `/products/${resource.productId}`,
+        form: { active: "false" },
+      });
+      touched += 1;
+    }
+  }
+  const remaining = await countActiveRunProductsAndPrices(params, http);
+  if (remaining !== 0) {
+    throw new Error(
+      `Stripe still reports ${remaining} active run-owned product/price resource(s) after cleanup.`,
+    );
+  }
+  return { matched: resources.length, touched };
+}
+
+/** Counts active run-owned products plus active run-owned prices. */
+export async function countActiveRunProductsAndPrices(
+  params: { secretKey: string; runTag: string },
+  http: StripeHttp = defaultStripeHttp,
+): Promise<number> {
+  const resources = await findRunProductPrices(params, http);
+  return resources.reduce(
+    (total, resource) => total + (resource.productActive ? 1 : 0) + resource.activePriceIds.length,
+    0,
+  );
 }
 
 /** Encodes/decodes the `stripe_product_price` providerId (`<productId>/<priceId>`). */
@@ -271,6 +395,54 @@ export async function createRunCustomer(
     throw new Error("stripe-smoke-resources: Stripe did not return a customer id.");
   }
   return { customerId };
+}
+
+/** Exhaustive run/cell-scoped customer lookup for intent-phase recovery. */
+export async function findRunCustomers(
+  params: { secretKey: string; runTag: string; cellTag?: string },
+  http: StripeHttp = defaultStripeHttp,
+): Promise<string[]> {
+  assertTestMode(params.secretKey);
+  const rows = await listStripeRowsStrict(params.secretKey, "/customers", http);
+  return rows.flatMap((row) => {
+    const metadata = row.metadata as Record<string, unknown> | undefined;
+    const owned =
+      metadata?.proliferate_qualification_run === params.runTag &&
+      (params.cellTag === undefined || metadata.proliferate_qualification_cell === params.cellTag);
+    return owned && typeof row.id === "string" ? [row.id] : [];
+  });
+}
+
+export async function deleteCustomerByIdHttp(
+  secretKey: string,
+  customerId: string,
+  http: StripeHttp = defaultStripeHttp,
+): Promise<void> {
+  assertTestMode(secretKey);
+  try {
+    await http.request(secretKey, { method: "DELETE", path: `/customers/${customerId}` });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!/No such customer|resource_missing/i.test(message)) {
+      throw error;
+    }
+  }
+}
+
+/** Deletes every exact run/cell-owned customer and proves an exhaustive zero. */
+export async function deleteRunCustomersByTag(
+  params: { secretKey: string; runTag: string; cellTag?: string },
+  http: StripeHttp = defaultStripeHttp,
+): Promise<number> {
+  const customerIds = await findRunCustomers(params, http);
+  for (const customerId of customerIds) {
+    await deleteCustomerByIdHttp(params.secretKey, customerId, http);
+  }
+  const remaining = await findRunCustomers(params, http);
+  if (remaining.length > 0) {
+    throw new Error(`Stripe still reports ${remaining.length} exact run-owned customer(s) after cleanup.`);
+  }
+  return customerIds.length;
 }
 
 // ---------------------------------------------------------------------------
@@ -423,27 +595,50 @@ async function countPaginated(
   predicate: (row: Record<string, unknown>) => boolean,
 ): Promise<number> {
   assertTestMode(secretKey);
+  const rows = await listStripeRowsStrict(secretKey, basePath, http);
+  return rows.filter(predicate).length;
+}
+
+/**
+ * Strict Stripe cursor paginator. A malformed list, a missing cursor on a
+ * has_more page, or a repeated cursor is ambiguous provider state and fails
+ * closed; none can be converted to an empty successful sweep.
+ */
+async function listStripeRowsStrict(
+  secretKey: string,
+  basePath: string,
+  http: StripeHttp,
+): Promise<Array<Record<string, unknown>>> {
+  assertTestMode(secretKey);
   const sep = basePath.includes("?") ? "&" : "?";
+  const rows: Array<Record<string, unknown>> = [];
+  const seenCursors = new Set<string>();
   let startingAfter: string | undefined;
-  let count = 0;
-  for (;;) {
-    const q = startingAfter ? `&starting_after=${startingAfter}` : "";
-    const page = await http.request(secretKey, { method: "GET", path: `${basePath}${sep}limit=100${q}` });
-    const data = Array.isArray(page.data) ? (page.data as Array<Record<string, unknown>>) : [];
-    for (const row of data) {
-      if (predicate(row)) {
-        count += 1;
-      }
+  for (let pageNumber = 0; pageNumber < 1_000; pageNumber += 1) {
+    const cursor = startingAfter ? `&starting_after=${encodeURIComponent(startingAfter)}` : "";
+    const page = await http.request(secretKey, {
+      method: "GET",
+      path: `${basePath}${sep}limit=100${cursor}`,
+    });
+    if (!Array.isArray(page.data) || typeof page.has_more !== "boolean") {
+      throw new Error(`Stripe list ${basePath} returned a malformed page; refusing to classify it as empty.`);
     }
-    if (page.has_more === true && data.length > 0) {
-      const last = data[data.length - 1];
-      startingAfter = typeof last.id === "string" ? last.id : undefined;
-      if (startingAfter) {
-        continue;
-      }
+    const data = page.data as Array<Record<string, unknown>>;
+    if (data.some((row) => typeof row !== "object" || row === null || typeof row.id !== "string")) {
+      throw new Error(`Stripe list ${basePath} returned a row without an id; refusing ambiguous pagination.`);
     }
-    return count;
+    rows.push(...data);
+    if (!page.has_more) {
+      return rows;
+    }
+    const next = data.at(-1)?.id as string | undefined;
+    if (!next || seenCursors.has(next)) {
+      throw new Error(`Stripe list ${basePath} did not advance its cursor while has_more=true.`);
+    }
+    seenCursors.add(next);
+    startingAfter = next;
   }
+  throw new Error(`Stripe list ${basePath} exceeded the bounded pagination limit.`);
 }
 
 // ---------------------------------------------------------------------------
@@ -477,20 +672,51 @@ export function stripeSmokeResourceReplayHandlers(params: {
       }
       const url = /^intent:webhook_endpoint:url=(.+)$/.exec(providerId)?.[1];
       if (url) {
-        const found = await findWebhookEndpointByUrl({ secretKey, url }, http);
-        if (found) {
-          await deleteWebhookEndpointById(secretKey, found.endpointId, http);
+        const found = await findWebhookEndpointsByUrl({ secretKey, url }, http);
+        if (found.length > 0) {
+          for (const match of found) {
+            await deleteWebhookEndpointById(secretKey, match.endpointId, http);
+          }
+          const remaining = await findWebhookEndpointsByUrl({ secretKey, url }, http);
+          if (remaining.length > 0) {
+            throw new Error(
+              `Stripe still reports ${remaining.length} exact-url webhook endpoint(s) after cleanup.`,
+            );
+          }
+        } else if (intentCouldStillBePropagating(entry.createdAt)) {
+          throw new StripeIntentStillPropagatingError(
+            `stripe_webhook_endpoint intent for ${url} is not visible yet; leaving it unreconciled for retry.`,
+          );
         }
         return;
       }
-      // unknown/null providerId: nothing actionable → clean reconcile.
+      throw new Error("stripe_webhook_endpoint cleanup entry has an unrecognized provider identity.");
     },
     stripe_product_price: async (entry) => {
       const decoded = decodeProductPriceProviderId(entry.providerId ?? "");
       if (decoded) {
         await deactivateProductPriceById(secretKey, decoded.productId, decoded.priceId, http);
+        return;
       }
-      // An intent-only ref (no real ids) means the create never landed → clean.
+      const runTag = /^intent:product_price:runTag=(.+)$/.exec(entry.providerId ?? "")?.[1];
+      if (runTag) {
+        const cleanup = await deactivateRunProductPricesByTag({ secretKey, runTag }, http);
+        if (cleanup.matched === 0 && intentCouldStillBePropagating(entry.createdAt)) {
+          throw new StripeIntentStillPropagatingError(
+            `stripe_product_price intent for run ${runTag} is not visible yet; leaving it unreconciled for retry.`,
+          );
+        }
+        return;
+      }
+      throw new Error("stripe_product_price cleanup entry has an unrecognized provider identity.");
     },
   };
+}
+
+function intentCouldStillBePropagating(createdAt: string): boolean {
+  const createdAtMs = Date.parse(createdAt);
+  if (!Number.isFinite(createdAtMs)) {
+    throw new Error("Stripe cleanup entry has a malformed createdAt timestamp; refusing to reconcile it.");
+  }
+  return Date.now() - createdAtMs < STRIPE_INTENT_RECOVERY_WINDOW_MS;
 }

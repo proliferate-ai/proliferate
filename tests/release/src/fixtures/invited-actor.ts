@@ -7,6 +7,7 @@ import {
 } from "./authenticated-actor.js";
 import { ApiClient } from "./http.js";
 import type { ReadyLocalWorld } from "../worlds/local-workspace/world.js";
+import type { ActorKeyIdentity } from "../services/qualification-litellm.js";
 
 /**
  * A REAL second product identity (spec step 9 / MCW-001). Actor A cannot be
@@ -129,6 +130,11 @@ export interface InvitedActorOptions {
   gatewaySurface?: "local" | "cloud";
   /** Set false to skip the gateway-selection PUT (default true). */
   selectGatewayRoute?: boolean;
+  /** Managed-cloud cleanup custody, invoked before selection or return. */
+  resolveAndTrackActorSubjects?(params: {
+    userId: string;
+    enrollmentId: string;
+  }): Promise<ActorKeyIdentity>;
 }
 
 /**
@@ -165,14 +171,14 @@ export async function invitedActor(
     pollMs: options.enrollmentPollMs ?? 2_000,
   });
 
-  if (options.selectGatewayRoute !== false) {
-    await transport.putGatewaySelection(api, harnessKind, options.gatewaySurface ?? "cloud");
-  }
-
-  const gatewayKey = await world.gateway.resolveActorKey({
+  const gatewayKey = await (options.resolveAndTrackActorSubjects ?? ((params) => world.gateway.resolveActorKey(params)))({
     userId: session.user_id,
     enrollmentId: enrollment.id,
   });
+
+  if (options.selectGatewayRoute !== false) {
+    await transport.putGatewaySelection(api, harnessKind, options.gatewaySurface ?? "cloud");
+  }
 
   return {
     role: "member",
