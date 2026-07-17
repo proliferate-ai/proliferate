@@ -755,6 +755,73 @@ It reuses product assertions but has no server picker, config rewrite, relaunch,
 or cross-server switch. Hosted Proliferate Web is never pointed arbitrarily at
 a self-hosted API.
 
+## Managed-Workflow World
+
+> Status: **PROVISIONAL (release-tail draft 0.5, not frozen).** These three
+> cells are registered as `WORKFLOW-MANAGED-QUAL-1` in the release runner but
+> currently FAIL CLOSED: the frozen "External hosted prerequisite" (live staging
+> RabbitMQ + Valkey/RedBeat + Celery worker + Beat, `ECS_WORKER_SERVICE`/
+> `ECS_BEAT_SERVICE` + broker/store ids, API/worker/Beat from one immutable
+> digest with the relay-heartbeat + exact-ID execution proof, then
+> `WORKFLOW_MANAGED_RUNS_ENABLED=true` in staging) is owned OUTSIDE this
+> test/evidence lane and is not present, and this lane does not own deployment,
+> provisioning, or production promotion. The green path (complete
+> `workflow_managed_run` evidence + clean disposable-fixture cleanup) is proven
+> OFFLINE by a fake driver only. This program has a documented history of
+> false-green findings; a live managed journey that cannot be proved offline is
+> recorded as an explicit non-green, never a fabricated green.
+
+The managed one-prompt Workflow product proves against exact staging artifacts
+with real Cloud infrastructure, real background processes, real AnyHarness, and
+a cheap real agent. Each cell records only durable-state and artifact-shape
+facts (never prompts, argument values, transcript text, tokens, or raw provider
+payloads).
+
+### Managed-Workflow cases
+
+#### `workflow-managed-qual-1` — the three strict managed-V1 cells
+
+<a id="workflow-managed-qual-1"></a>All three cells share the one
+`workflow_managed_run` evidence kind; `evidence.cell` binds each proof to its
+cell. Every id is a safe one-way hash; every version/digest is a safe token.
+
+#### `WF-MANAGED-COMPLETION` — managed completion and exact replay
+
+Author one eligible saved Workflow (scalar argument plus a bounded prompt whose
+observable result is a small run-tagged workspace file) through the product UI;
+launch managed; observe `prepared → queued → delivering → accepted → running →
+completed` without regression; verify a deterministic branch/path/base OID and
+one Cloud/AnyHarness identity; validate the run-tagged file against its schema;
+and, around simulated controller response loss, replay the exact invocation,
+deliver, materialization, and run requests and assert exactly one Postgres
+invocation, managed-execution row, outbox generation per phase, materialization,
+workspace/branch/path, run/step, session, prompt id, and turn id. Runs both
+repository-worktree and scratch placement (scratch asserts one blank Git-backed
+workspace, `workspaceKind = scratch`, `repo = null`, no remote).
+
+#### `WF-MANAGED-CONTROL` — running cancellation and same-store restart
+
+Launch a bounded prompt that keeps the turn running long enough to observe a
+`turnId`; cancel from product run detail; assert desired cancellation projects
+before terminal cancellation, AnyHarness terminalizes only from correlated
+cancelled-turn evidence, Cloud projects higher-version `cancelled`, and no second
+turn or foreign session mutation bypasses. Then restart AnyHarness preserving its
+SQLite database; assert the same `executionStoreId`, an `interrupted/
+runtime_restarted` report with zero replay, Cloud interruption projection, and a
+still-inspectable retained workspace/session/transcript.
+
+#### `WF-MANAGED-CUSTODY` — background recovery and execution-store loss
+
+In a disposable staging window, commit a Workflow outbox task; interrupt broker
+publication or worker execution at an approved boundary; restore service; and
+assert eventual convergence through the exact task generation with no duplicate
+workspace/run/session/turn. Then, destructively and ONLY against disposable
+Qualification-environment state (founder decision 3), replace the authoritative
+AnyHarness SQLite store while reusing the Cloud target identity; assert a new
+`executionStoreId`, Cloud `target_lost` with its last projection preserved, no
+PUT/redelivery into the fresh store, and product copy stating the outcome is
+unknown.
+
 ## Sharding And Reuse
 
 - Local route/harness cells use a distinct actor and gateway key when they run
@@ -811,7 +878,12 @@ skips:
 - hosted Web is not booted by the current shared Playwright world and has no
   real managed-cloud host cell;
 - the current runner can swallow per-harness non-green results and still mark
-  the parent scenario green instead of emitting explicit matrix-cell results.
+  the parent scenario green instead of emitting explicit matrix-cell results;
+- the three `WORKFLOW-MANAGED-QUAL-1` managed-Workflow cells fail closed pending
+  the external live staging background plane (RabbitMQ/Valkey/RedBeat/worker/
+  Beat), the managed-Workflow gate, and founder sign-off — all owned OUTSIDE
+  this test/evidence lane (frozen "External hosted prerequisite"); the spec
+  itself is provisional (release-tail draft 0.5, not frozen).
 
 Implementation proceeds world foundation first, then independent scenario
 shards, then bug fixing against the same cases. A case becomes blocking only
