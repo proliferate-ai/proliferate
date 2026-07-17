@@ -68,22 +68,17 @@ metadata or raw tool input/output blobs.
 ## Permission Mode Launch Guard
 
 The managed `claude-agent-acp` adapter validates
-`permissions.defaultMode` from Claude settings before creating a session. The
-current managed adapter accepts `default`, `acceptEdits`, `plan`, `dontAsk`,
-and `bypassPermissions`; it does not accept `auto`.
+`permissions.defaultMode` from Claude settings before creating a session. It
+accepts `default`, `acceptEdits`, `plan`, `dontAsk`, `bypassPermissions`, and
+`auto`. `auto` is model-dependent: the adapter advertises it only when the
+resolved Claude model reports auto-mode support and clamps a stale `auto`
+default back to `default` when the active model does not support it.
 
-AnyHarness must not advertise `auto` as a Claude create-session mode until the
-managed adapter supports it. Gateway-backed Claude launches set a
-runtime-owned `CLAUDE_CONFIG_DIR` so hosted sessions do not inherit a user's
-global Claude settings default that the adapter cannot start with.
-
-Older user-owned managed Claude adapters can predate adapter support for
-`auto`. Readiness treats a managed npm package whose installed metadata does
-not match the bundled package spec as `install_required`, so the visible setup
-flow and startup reconcile can refresh the adapter. If an adapter still reaches
-session creation and fails on `permissions.defaultMode: auto`, the start error
-must include a repair hint to update/reinstall Claude setup or change the
-unsupported global Claude setting.
+Gateway-backed Claude launches set a runtime-owned `CLAUDE_CONFIG_DIR` so
+hosted sessions do not inherit unrelated user-global Claude configuration.
+Readiness treats a managed package whose installed source metadata does not
+match the bundled Git pin as `install_required`, so setup and startup reconcile
+can refresh older adapters before launch.
 
 ## Restart Semantics
 

@@ -23,14 +23,17 @@ fn draft_catalog_parses_with_expected_shape() {
 
     let claude = &catalog.agents[0];
     assert_eq!(claude.kind, "claude");
-    assert_eq!(claude.harness.agent_process.version, "0.44.0");
+    assert_eq!(
+        claude.harness.agent_process.version,
+        "0.59.0-proliferate.1"
+    );
     assert_eq!(
         claude
             .harness
             .native
             .as_ref()
             .map(|pin| pin.version.as_str()),
-        Some("2.1.181")
+        Some("2.1.212")
     );
     assert_eq!(
         claude
