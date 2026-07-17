@@ -91,6 +91,14 @@ async fn stop_process(lifecycle: &mut CloudWorkerLifecycle) -> Result<bool, Stri
             .kill()
             .await
             .map_err(|error| format!("Failed to stop Proliferate Worker: {error}")),
+        // Do not fall through to `kill` after an ambiguous inspection error.
+        // On Unix, `ECHILD` can mean another reaper collected this child while
+        // std still has no cached status; its kill fallback uses the bare PID
+        // and could signal an unrelated process after PID reuse. Retaining the
+        // owned handle and returning the classified error is the fail-closed
+        // choice. On Windows, a valid process handle is identity-stable across
+        // exit, while an invalid-handle error cannot verify shutdown; retain
+        // either way.
         Err(error) => Err(format!(
             "Failed to inspect Proliferate Worker shutdown: {error}"
         )),

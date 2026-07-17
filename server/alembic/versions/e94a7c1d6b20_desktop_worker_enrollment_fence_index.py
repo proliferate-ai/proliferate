@@ -27,9 +27,20 @@ def upgrade() -> None:
         unique=False,
         postgresql_where=sa.text("runtime_kind = 'desktop' AND desktop_install_id IS NOT NULL"),
     )
+    op.create_index(
+        "ix_cloud_runtime_worker_enrollment_desktop_created_at",
+        "cloud_runtime_worker_enrollment",
+        ["desktop_install_id", "created_at"],
+        unique=False,
+        postgresql_where=sa.text("runtime_kind = 'desktop' AND desktop_install_id IS NOT NULL"),
+    )
 
 
 def downgrade() -> None:
+    op.drop_index(
+        "ix_cloud_runtime_worker_enrollment_desktop_created_at",
+        table_name="cloud_runtime_worker_enrollment",
+    )
     op.drop_index(
         "ix_cloud_runtime_worker_enrollment_desktop_fence",
         table_name="cloud_runtime_worker_enrollment",

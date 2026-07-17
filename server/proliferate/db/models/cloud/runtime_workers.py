@@ -109,6 +109,12 @@ class CloudRuntimeWorkerEnrollment(Base):
             "created_at",
             postgresql_where=("runtime_kind = 'desktop' AND desktop_install_id IS NOT NULL"),
         ),
+        Index(
+            "ix_cloud_runtime_worker_enrollment_desktop_created_at",
+            "desktop_install_id",
+            "created_at",
+            postgresql_where=("runtime_kind = 'desktop' AND desktop_install_id IS NOT NULL"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
