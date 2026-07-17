@@ -50,10 +50,14 @@ afterEach(() => {
 });
 
 describe("ComposerIntegrationsControl", () => {
-  it("renders nothing when no integrations are connected", () => {
-    const { container } = render(<ComposerIntegrationsControl />);
+  it("renders an icon-only trigger with an empty popover when nothing is connected", () => {
+    render(<ComposerIntegrationsControl />);
 
-    expect(container.firstChild).toBeNull();
+    const trigger = screen.getByRole("button", { name: /0 connected integrations/i });
+    expect(trigger.textContent).not.toContain("0");
+
+    fireEvent.click(trigger);
+    expect(screen.getByText("Manage integrations")).toBeTruthy();
   });
 
   it("shows the connected count in the quiet state", () => {

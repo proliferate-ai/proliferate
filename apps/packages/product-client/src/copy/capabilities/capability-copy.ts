@@ -15,6 +15,15 @@ export const CAPABILITY_COPY = {
     "This control plane is reachable, but desktop GitHub sign-in is not configured.",
   cloudAuthUnavailableDetails:
     "Add GitHub OAuth credentials to this environment to enable desktop sign-in and cloud workspace creation.",
+  // Signed-in user, but the operator has not configured cloud compute
+  // (contract.cloudWorkspaces off). Never a sign-in CTA — the user is already
+  // signed in; only an operator can repair this.
+  cloudNotConfiguredDescription:
+    "Cloud is not configured on this deployment.",
+  cloudNotConfiguredDetails:
+    "Managed Cloud isn't configured on this deployment. An operator must finish configuring it before cloud workspaces can run.",
+  cloudNotConfiguredTooltip:
+    "Cloud is not configured on this deployment.",
   cloudDocsLabel: "Open setup docs",
   accountLocalDescription:
     "Cloud features require a reachable control plane.",

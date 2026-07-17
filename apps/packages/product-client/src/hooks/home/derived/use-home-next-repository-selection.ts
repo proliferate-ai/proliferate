@@ -8,7 +8,6 @@ import { useStandardRepoProjection } from "#product/hooks/workspaces/derived/use
 import {
   buildCloudRepoActionBySourceRoot,
   buildConfiguredCloudRepoKeys,
-  resolveCloudRepoActionState,
   type CloudRepoActionState,
   type CloudWorkspaceRepoTarget,
 } from "#product/lib/domain/workspaces/cloud/cloud-workspace-creation";
@@ -27,6 +26,7 @@ import { expandLogicalWorkspaceRelatedIdSet } from "#product/lib/domain/workspac
 import { buildSettingsRepositoryEntries } from "#product/lib/domain/settings/repositories";
 import { useRepoPreferencesStore } from "#product/stores/preferences/repo-preferences-store";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
+import { useCloudRepoActionState } from "#product/hooks/cloud/derived/use-cloud-repo-action-state";
 
 const EMPTY_WORKSPACES: Workspace[] = [];
 const EMPTY_REPO_ROOTS: RepoRoot[] = [];
@@ -136,7 +136,7 @@ export function useHomeNextRepositorySelection({
   );
   const cloudRepoConfigsInitialLoading =
     cloudActive && repoConfigsQuery.isPending && !repoConfigsQuery.data;
-  const cloudRepoActionBySourceRoot = useMemo(() => buildCloudRepoActionBySourceRoot({
+  const baseCloudRepoActionBySourceRoot = useMemo(() => buildCloudRepoActionBySourceRoot({
     repositories,
     cloudActive,
     configuredRepoKeys: configuredCloudRepoKeys,
@@ -147,14 +147,21 @@ export function useHomeNextRepositorySelection({
     configuredCloudRepoKeys,
     repositories,
   ]);
-  const cloudRepoAction = useMemo<CloudRepoActionState>(
-    () => resolveCloudRepoActionState({
-      repoTarget: cloudRepoTarget,
-      configuredRepoKeys: configuredCloudRepoKeys,
-      isInitialConfigLoad: cloudRepoConfigsInitialLoading,
-    }),
-    [cloudRepoConfigsInitialLoading, cloudRepoTarget, configuredCloudRepoKeys],
-  );
+  const cloudRepoAction: CloudRepoActionState = useCloudRepoActionState({
+    repoTarget: cloudRepoTarget,
+    configuredRepoKeys: configuredCloudRepoKeys,
+    isInitialConfigLoad: cloudRepoConfigsInitialLoading,
+    cloudConnected: cloudActive,
+  });
+  const cloudRepoActionBySourceRoot = useMemo(() => {
+    if (!selectedRepository) {
+      return baseCloudRepoActionBySourceRoot;
+    }
+    return {
+      ...baseCloudRepoActionBySourceRoot,
+      [selectedRepository.sourceRoot]: cloudRepoAction,
+    };
+  }, [baseCloudRepoActionBySourceRoot, cloudRepoAction, selectedRepository]);
 
   const launchTarget = useMemo<HomeLaunchTarget | null>(() =>
     resolveHomeLaunchTarget({

@@ -1,39 +1,23 @@
-import React from "react";
+import { StrictMode } from "react";
 import ReactDOM from "react-dom/client";
-import { BrowserRouter } from "react-router-dom";
 
-import { App } from "./App";
-import { webEnv } from "./config/env";
-import { getWebTelemetryConfig } from "./lib/integrations/telemetry/config";
-import {
-  getWebRootErrorHandlers,
-  initializeWebSentry,
-} from "./lib/integrations/telemetry/sentry";
-import { WebCloudProvider } from "./providers/WebCloudProvider";
-import { WebTelemetryProvider } from "./providers/WebTelemetryProvider";
+import { installWebTelemetry } from "./browser/telemetry/install-web-telemetry";
+import { WebHostApp } from "./WebHostApp";
 import "./index.css";
 
+// The Web host bootstrap: install the browser/vendor transport, then mount the
+// thin Web host around the compiled shared product. WebHostApp owns the router,
+// Cloud/session root, ProductHost snapshot, and the narrow browser
+// callback/return decoders around ProductClient.
 document.documentElement.dataset.proliferateClient = "web";
 
-const telemetryConfig = getWebTelemetryConfig();
-initializeWebSentry({
-  environment: telemetryConfig.environment,
-  release: telemetryConfig.release,
-  sentry: telemetryConfig.sentry,
-  apiBaseUrl: webEnv.apiBaseUrl,
-});
+const rootErrorHandlers = installWebTelemetry();
 
 ReactDOM.createRoot(
   document.getElementById("root")!,
-  getWebRootErrorHandlers(),
+  rootErrorHandlers,
 ).render(
-  <React.StrictMode>
-    <WebCloudProvider>
-      <BrowserRouter>
-        <WebTelemetryProvider>
-          <App />
-        </WebTelemetryProvider>
-      </BrowserRouter>
-    </WebCloudProvider>
-  </React.StrictMode>,
+  <StrictMode>
+    <WebHostApp />
+  </StrictMode>,
 );

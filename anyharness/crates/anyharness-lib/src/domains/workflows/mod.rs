@@ -16,6 +16,7 @@ pub mod runtime;
 pub mod service;
 pub mod session_extension;
 pub mod store;
+pub mod workspace_materialization;
 
 #[cfg(test)]
 mod portable_service_tests;

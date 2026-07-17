@@ -119,8 +119,10 @@ export function descriptionForStartBlockReason(
 export function buildCloudWorkspaceStatusScreenModel(
   workspace: CloudWorkspaceSummary,
 ): CloudWorkspaceStatusScreenModel {
-  const repoLabel = `${workspace.repo.owner}/${workspace.repo.name}`;
-  const branchLabel = `${workspace.repo.baseBranch} -> ${workspace.repo.branch}`;
+  const repoLabel = workspace.repo ? `${workspace.repo.owner}/${workspace.repo.name}` : "";
+  const branchLabel = workspace.repo
+    ? `${workspace.repo.baseBranch} -> ${workspace.repo.branch}`
+    : "";
   const status = resolveCloudWorkspaceStatus(workspace) ?? "error";
 
   if (workspace.actionBlockKind) {

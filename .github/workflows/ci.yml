@@ -18,7 +18,7 @@ jobs:
     name: Repo shape checks
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - uses: actions/setup-python@v6
         with:
@@ -48,20 +48,71 @@ jobs:
       - name: Check AnyHarness layer boundaries
         run: python3 scripts/check_anyharness_boundaries.py
 
+      - name: Check session mutation admission
+        run: python3 scripts/check_session_mutation_admission.py
+
+      - name: Check managed Workflow legacy-plane boundary
+        run: python3 scripts/check_workflow_managed_boundaries.py
+
       - name: Check documentation integrity
         run: |
           python3 -m unittest scripts/test_check_docs.py
           python3 scripts/check_docs.py
 
+  terraform-validate:
+    name: Terraform validate (server/infra)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: "1.9.8"
+
+      # background.tf and the rest of server/infra are loaded by Terraform even
+      # at zero resource counts, so a malformed provider/schema definition would
+      # otherwise only surface at a deploy gate. Parse and validate them here
+      # (no backend, no AWS credentials, no plan/apply) so the checked-in
+      # definitions are proven well-formed on every push/PR.
+      - name: Terraform fmt
+        run: terraform -chdir=server/infra fmt -check -recursive
+
+      - name: Terraform init (no backend)
+        run: terraform -chdir=server/infra init -backend=false -input=false
+
+      - name: Terraform validate
+        run: terraform -chdir=server/infra validate
+
+      # Plan-time proof of the background-plane fail-closed contract: the
+      # worker/Beat services can only be enabled with a managed broker/store OR
+      # both external endpoint secret references. Runs use `command = plan`
+      # against a mocked AWS provider (no credentials, no backend, no apply), so
+      # the invalid partial combos are proven to fail at plan time on the
+      # variable validation, and the valid managed/rebound combos plan cleanly.
+      - name: Terraform test (background plane fail-closed)
+        run: terraform -chdir=server/infra test
+
+      # The live hosted identities intentionally do not share state with the
+      # bootstrap root above. Validate and test the child IAM ownership root
+      # independently; no credentials, backend, plan, or apply are used here.
+      - name: Terraform init (hosted Redis, no backend)
+        run: terraform -chdir=server/infra/hosted-redis init -backend=false -input=false
+
+      - name: Terraform validate (hosted Redis)
+        run: terraform -chdir=server/infra/hosted-redis validate
+
+      - name: Terraform test (hosted Redis least privilege)
+        run: terraform -chdir=server/infra/hosted-redis test
+
   ci-cd-config:
     name: CI/CD config checks
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22"
 
@@ -80,6 +131,15 @@ jobs:
 
       - name: Test CI/CD scripts
         run: node --test scripts/ci-cd/*.test.mjs
+
+      # Launcher-level proof (BG4-LOCAL-01): `make run BACKGROUND=1` must start
+      # the Celery worker/Beat against the SELECTED profile database on
+      # profile-scoped broker/store ports. Renders `docker compose config` (no
+      # daemon needed; the compose CLI ships on the runner) and asserts the
+      # worker/Beat DATABASE_URL DB-name matches the profile DB and ports are
+      # profile-scoped.
+      - name: Test background launcher config
+        run: node --test scripts/dev-background-launch.test.mjs
 
       - name: Validate agent catalog generation discipline
         env:
@@ -103,9 +163,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22"
 
@@ -137,7 +197,7 @@ jobs:
     name: Cargo check & test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Install system deps (Tauri)
         run: |
@@ -157,9 +217,9 @@ jobs:
     name: Build SDK
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22"
 
@@ -196,9 +256,9 @@ jobs:
     name: Desktop frontend build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22"
 
@@ -223,9 +283,9 @@ jobs:
     name: Mobile typecheck
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22"
 
@@ -243,9 +303,9 @@ jobs:
     name: Web frontend build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22"
 
@@ -262,13 +322,47 @@ jobs:
       - name: Build web
         run: pnpm web:build
 
+  # Fail-closed phase-6 /login first-load budget gate (WDU-1247-B1). Builds the
+  # Web host against a fixed anonymous API fixture, loads /login in headless
+  # Chromium with that fixture intercepted, waits for the durable login-ready
+  # marker + settled network, and enforces the founder-approved gzip-9 ceilings
+  # (JS 485000 B, CSS 66000 B; zero eager fonts/images/audio) FAIL-CLOSED. No
+  # continue-on-error: a regression fails CI on PRs and main, which also gates
+  # the Deploy Staging workflow_run spine.
+  login-budget:
+    name: Login first-load budget (phase-6)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.11.0
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Install Playwright chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Build shared packages
+        run: pnpm shared:build
+
+      - name: Enforce /login runtime budget
+        run: node scripts/measure-login-runtime-budget.mjs
+
   shared-frontend-packages:
     name: Shared frontend packages
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22"
 
@@ -337,9 +431,9 @@ jobs:
           --health-timeout 3s
           --health-retries 10
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22"
       - uses: pnpm/action-setup@v6
@@ -370,7 +464,7 @@ jobs:
 
       - name: Upload Playwright traces on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: workflow-definition-lifecycle-traces
           path: tests/intent/test-results/

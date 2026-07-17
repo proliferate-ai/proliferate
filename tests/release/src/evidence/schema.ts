@@ -91,19 +91,34 @@ export interface TestRunReportV3 {
 /**
  * One result's optional bounded evidence. Append-only union (see "Parallel
  * Tracks - Extension Contract"): each track adds exactly its own kind(s).
- * `local_workspace_turn` is the Tier-3 local-world proof; `tier2_billing`
- * (PR 4) binds, per Tier-2 cell, the asserted ruled policy values, safe Stripe
+ * `local_workspace_turn` is the Tier-3 local-world proof (its `harness` widens
+ * to the closed shipped harness-kind set); the four `local_*` variants (PR 5f,
+ * audit ruling #3) cover the functional local journeys; `tier2_billing` (PR 4)
+ * binds, per Tier-2 cell, the asserted ruled policy values, safe Stripe
  * object/test-clock ids, and ledger deltas; PR 3 adds the four self-host
- * journey-cell kinds. Each kind is validated by its own kind-scoped function;
- * a kind never touches another kind's validation (extension-contract rule).
+ * journey-cell kinds; PR 2 adds `cloud_provision_turn` for the managed-cloud
+ * world. Each kind is validated by its own kind-scoped function; a kind never
+ * touches another kind's validation (extension-contract rule).
+ * Green-requires-complete-clean-evidence is preserved for every kind that
+ * demands it.
  */
 export type CellEvidenceV1 =
   | LocalWorkspaceTurnEvidenceV1
+  | LocalRouteTurnEvidenceV1
+  | LocalConfigMatrixEvidenceV1
+  | LocalSessionTabsEvidenceV1
+  | LocalMcpIntegrationEvidenceV1
   | Tier2BillingEvidenceV1
   | SelfHostInstallClaimEvidenceV1
   | SelfHostDesktopOwnerEvidenceV1
   | SelfHostBaseTurnEvidenceV1
-  | SelfHostInviteeEvidenceV1;
+  | SelfHostInviteeEvidenceV1
+  | CloudProvisionTurnEvidenceV1
+  | SelfHostGithubAuthEvidenceV1
+  | SelfHostSwitchIsolationEvidenceV1
+  | SelfHostGatewayEvidenceV1
+  | SelfHostCloudAddonEvidenceV1
+  | SelfHostCfnWrapperEvidenceV1;
 
 /**
  * ── Tier-2 billing evidence (PR 4) ─────────────────────────────────────────
@@ -149,6 +164,35 @@ export interface Tier2BillingEvidenceV1 {
     webhook_receipts_delta: number;
     holds_delta: number;
   };
+}
+
+/** The closed set of shipped catalog harness kinds (audit ruling #3). Kept as a
+ * literal union + runtime array so both the type system and the kind-scoped
+ * validators reference one source. If the catalog gains a harness kind, extend
+ * both here (append-only). */
+export type LocalHarnessKind = "claude" | "codex" | "cursor" | "grok" | "opencode";
+export const LOCAL_HARNESS_KINDS: readonly LocalHarnessKind[] = [
+  "claude",
+  "codex",
+  "cursor",
+  "grok",
+  "opencode",
+];
+
+/** Which route a local-functional turn launched on. */
+export type LocalRoute = "gateway" | "user_key";
+
+/** The correlated per-turn LiteLLM spend block, shared by the new route-turn and
+ * (structurally) identical to `LocalWorkspaceTurnEvidenceV1.litellm`. */
+export interface LocalLitellmSpendV1 {
+  token_id_hash: string;
+  request_ids: string[];
+  window_started_at: string;
+  window_finished_at: string;
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  spend_usd: number;
 }
 
 /**
@@ -233,9 +277,31 @@ export interface SelfHostBaseTurnEvidenceV1 extends SelfHostEvidenceBaseV1 {
   /** BYOK is a direct-provider call — never a gateway/LiteLLM correlation. */
   byok_route: "api_key";
   byok_key_id_hash: string;
-  no_litellm_spend: true;
-  no_e2b: true;
+  /**
+   * The frozen contract's `no_litellm_spend`/`no_e2b` are run-window provider
+   * SPEND/TRAFFIC observations. PR 7 does not perform those observations for a
+   * gateway-OFF base install (there is no LiteLLM admin API to query, and E2B
+   * traffic proof needs the managed-cloud controller PR 7 does not own), so the
+   * claims are recorded HONESTLY as `"unproven"` rather than asserted `true`
+   * (PR7-CONTROL-010: a false `true` from an unavailable/insufficient
+   * observation is worse than an explicit unproven). The cell's green rests on
+   * its REAL BYOK-direct observations — capabilities gateway/cloud both false,
+   * the pushed auth route is `api_key` not `gateway`, and the scrubbed candidate
+   * env carries no LiteLLM/E2B input — which prove the TURN was BYOK-direct, not
+   * that zero provider spend/traffic occurred anywhere. `"observed_absent"` is
+   * reserved for when a real run-window observation is later wired.
+   */
+  no_litellm_spend: SelfHostProviderClaim;
+  no_e2b: SelfHostProviderClaim;
 }
+
+/**
+ * A run-window provider-absence claim (PR7-CONTROL-010). `"unproven"` = the
+ * observation was not performed (recorded honestly, never a false absence);
+ * `"observed_absent"` = a real run-window spend/traffic observation confirmed
+ * absence. Never a bare `true` derived from configuration.
+ */
+export type SelfHostProviderClaim = "unproven" | "observed_absent";
 
 export interface SelfHostInviteeEvidenceV1 extends SelfHostEvidenceBaseV1 {
   kind: "selfhost_invitee";
@@ -246,15 +312,152 @@ export interface SelfHostInviteeEvidenceV1 extends SelfHostEvidenceBaseV1 {
   authenticated_member_action: true;
 }
 
+/**
+ * ── PR 7 self-host evidence types (append-only) ───────────────────────────
+ *
+ * Five further `SELFHOST-INSTALL-1`-family journey cells (GitHub auth,
+ * dual-server switch isolation, gateway capability, cloud add-on, and the
+ * CloudFormation-wrapper posture) attach one of these. Same rules as the
+ * PR 3 kinds above: bounded artifact ids/versions, safe hashes only (never a
+ * raw secret), green requires complete evidence AND a clean cleanup block.
+ * Each kind is validated/sanitized by its own kind-scoped function — a kind
+ * never touches another kind's rules (extension-contract).
+ */
+export interface SelfHostGithubAuthEvidenceV1 extends SelfHostEvidenceBaseV1 {
+  kind: "selfhost_github_auth";
+  owner_user_id_hash: string;
+  org_id_hash: string;
+  /** The two distinct GitHub identities exercised (owner-link vs invited/uninvited member). */
+  github_identity_a_hash: string;
+  github_identity_b_hash: string;
+  setup_password_only: true;
+  owner_link_no_duplicate: true;
+  uninvited_denied: true;
+  invited_admitted: true;
+  member_role: string;
+  methods_advertise_github: true;
+}
+
+/**
+ * `api_origin` (inherited from `SelfHostEvidenceBaseV1`) doubles as server
+ * A's origin, so this kind still gets the shared base
+ * api_origin/controller_runtime_origin distinctness check for free;
+ * `server_a_origin` is carried explicitly too so evidence never needs a
+ * reader to know that convention to find server A, and the validator below
+ * requires the two to agree.
+ */
+export interface SelfHostSwitchIsolationEvidenceV1 extends SelfHostEvidenceBaseV1 {
+  kind: "selfhost_switch_isolation";
+  server_a_origin: string;
+  server_b_origin: string;
+  no_cross_origin_token: true;
+  no_cross_origin_pending_auth: true;
+  no_cross_origin_credential: true;
+  no_cross_origin_runtime_identity: true;
+  no_cross_origin_workspace_session: true;
+  b_started_anonymous: true;
+  b_authenticated_independently: true;
+  a_state_restored_origin_scoped: true;
+}
+
+export interface SelfHostGatewayEvidenceV1 extends SelfHostEvidenceBaseV1 {
+  kind: "selfhost_gateway";
+  actor_user_id_hash: string;
+  virtual_key_id_hash: string;
+  litellm_image_digest: string;
+  model_id: string;
+  capability_gateway_before: false;
+  capability_gateway_after: true;
+  gateway_spend_correlated: true;
+  master_key_not_used: true;
+  restart_persisted: true;
+}
+
+export interface SelfHostCloudAddonEvidenceV1 extends SelfHostEvidenceBaseV1 {
+  kind: "selfhost_cloud_addon";
+  github_app_installation_id_hash: string;
+  e2b_template_id: string;
+  sandbox_id_hash: string;
+  workspace_id_hash: string;
+  session_id_hash: string;
+  turn_completed: true;
+  pause_wake_state_intact: true;
+  disable_truthful: true;
+  base_healthy_after_disable: true;
+}
+
+/**
+ * The CloudFormation-wrapper posture cleanup block. Deliberately NOT
+ * `SelfHostCleanupEvidenceBlock`: no EC2/security-group/key-pair exist in
+ * this posture (the wrapper provisions exactly one stack), and it adds
+ * S3/GHCR deletion evidence the EC2 posture never carries.
+ */
+export interface SelfHostCfnCleanupEvidenceBlock {
+  ledger_id_hash: string;
+  registered: number;
+  reconciled: number;
+  failed: number;
+  stack_deleted: boolean;
+  s3_objects_deleted: boolean;
+  ghcr_version_deleted: boolean;
+  route53_record_deleted: boolean;
+  local_paths_removed: boolean;
+}
+
+/**
+ * Does NOT extend `SelfHostEvidenceBaseV1`: a CFN-wrapper install has no
+ * controller-local AnyHarness runtime to record separately (there is no
+ * `controller_runtime_origin` in this posture), and it asserts stack
+ * template/digest/output bindings the EC2-posture base never carries.
+ * `api_origin` is still the self-host public API origin, recorded the same
+ * safe way as every other self-host kind.
+ */
+export interface SelfHostCfnWrapperEvidenceV1 {
+  kind: "selfhost_cfn_wrapper";
+  artifact_ids: string[];
+  server_version: string;
+  api_origin: string;
+  stack_name_hash: string;
+  /** The observed running-api image RepoDigest (`sha256:<hex>`) the binding rests on. */
+  image_repo_digest: string;
+  /** The run-scoped tag the candidate was pushed under + passed as ReleaseVersion (safe token). */
+  release_version_tag: string;
+  /** SHA-256 of the validated CloudFormation template (safe token). */
+  template_sha256: string;
+  template_validated: true;
+  bundle_digest_bound: true;
+  image_digest_bound: true;
+  outputs_valid: true;
+  dns_tls_verified: true;
+  meta_version_matches: true;
+  cleanup: SelfHostCfnCleanupEvidenceBlock;
+}
+
 /** The scenario id whose green cells require complete self-host evidence. */
 export const SELFHOST_INSTALL_1_SCENARIO_ID = "SELFHOST-INSTALL-1";
+
+/** The reverse-order cleanup reconciliation block, shared by the new local
+ * functional kinds and (structurally) identical to
+ * `LocalWorkspaceTurnEvidenceV1.cleanup`. */
+export interface LocalCleanupV1 {
+  ledger_id_hash: string;
+  registered: number;
+  reconciled: number;
+  failed: number;
+  virtual_key_deleted: boolean;
+  litellm_subjects_deleted: boolean;
+  browser_closed: boolean;
+  processes_stopped: boolean;
+  containers_removed: boolean;
+  local_paths_removed: boolean;
+}
 
 export interface LocalWorkspaceTurnEvidenceV1 {
   kind: "local_workspace_turn";
   artifact_ids: string[];
   server_version: string;
   anyharness_version: string;
-  harness: "claude";
+  harness: LocalHarnessKind;
   model_id: string;
   workspace_id_hash: string;
   session_id_hash: string;
@@ -279,6 +482,202 @@ export interface LocalWorkspaceTurnEvidenceV1 {
     browser_closed: boolean;
     processes_stopped: boolean;
     containers_removed: boolean;
+    local_paths_removed: boolean;
+  };
+}
+
+/**
+ * LOCAL-2 / LOCAL-3 / LOCAL-6 route turn. Exactly one of `gateway_spend`
+ * (route=gateway) / `user_key_isolation` (route=user_key) is non-null; a
+ * `route_change` block is present only for LOCAL-6. `billing_reconcile_deferred`
+ * is always true here (audit ruling #1: the product usage-import/balance/debit
+ * reconcile is DEFERRED to PR 4's billing half; no T3-BILL-1 claim is made).
+ */
+export interface LocalRouteTurnEvidenceV1 {
+  kind: "local_route_turn";
+  journey: "LOCAL-2" | "LOCAL-3" | "LOCAL-6";
+  artifact_ids: string[];
+  server_version: string;
+  anyharness_version: string;
+  harness: LocalHarnessKind;
+  route: LocalRoute;
+  model_id: string;
+  workspace_id_hash: string;
+  session_id_hash: string;
+  transcript_reopened: true;
+  /** Non-null iff route === "gateway": correlated LiteLLM spend for the actor key. */
+  gateway_spend: LocalLitellmSpendV1 | null;
+  /**
+   * Non-null iff route === "user_key". Records only the OBSERVED isolation fact —
+   * the user-key actor's managed gateway token has zero LiteLLM spend rows.
+   * `managed_balance_read_deferred` is always true: the product-ledger balance is
+   * NOT read here (hard billing non-goal, LQF-006) — a zero balance move is
+   * inferable from zero LiteLLM rows but is never encoded as an observed number.
+   */
+  user_key_isolation: { litellm_spend_rows: 0; managed_balance_read_deferred: true } | null;
+  /** LOCAL-6 only: the retained user-key session and the switched-to gateway session. */
+  route_change: {
+    original_route: "user_key";
+    original_session_id_hash: string;
+    new_route: "gateway";
+    new_session_id_hash: string;
+  } | null;
+  billing_reconcile_deferred: true;
+  cleanup: LocalCleanupV1;
+}
+
+/** LOCAL-4 live configuration matrix. Each control records the last-accepted
+ * value read back from the UI and whether the applied value was rejected (which
+ * must have restored the last-accepted value). #1063 rejections are tracked
+ * `known_1063_expected_fail`, never green. */
+export interface LocalConfigMatrixEvidenceV1 {
+  kind: "local_config_matrix";
+  artifact_ids: string[];
+  server_version: string;
+  anyharness_version: string;
+  harness: LocalHarnessKind;
+  model_id: string;
+  workspace_id_hash: string;
+  session_id_hash: string;
+  controls: Array<{ control_key: string; accepted_value: string; rejected: boolean }>;
+  known_1063_expected_fail: boolean;
+  cleanup: LocalCleanupV1;
+}
+
+/** LOCAL-5 session and tab semantics (single cell). Each boolean records one of
+ * the four proofs; `session_id_hashes` are the distinct session ids observed. */
+export interface LocalSessionTabsEvidenceV1 {
+  kind: "local_session_tabs";
+  artifact_ids: string[];
+  server_version: string;
+  anyharness_version: string;
+  harness: LocalHarnessKind;
+  workspace_id_hash: string;
+  empty_switch_session_replaced: true;
+  messaged_switch_new_tab: true;
+  same_harness_model_change_in_session: true;
+  reload_preserved: true;
+  session_id_hashes: string[];
+  cleanup: LocalCleanupV1;
+}
+
+/** LOCAL-7 Product MCP integration (per harness). Correlates the agent's tool
+ * call through the Proliferate integrations MCP to its audit row. */
+export interface LocalMcpIntegrationEvidenceV1 {
+  kind: "local_mcp_integration";
+  artifact_ids: string[];
+  server_version: string;
+  anyharness_version: string;
+  harness: LocalHarnessKind;
+  model_id: string;
+  workspace_id_hash: string;
+  session_id_hash: string;
+  integration_namespace: string;
+  tool_name: string;
+  audit_event_id_hash: string;
+  audit_ok: true;
+  cleanup: LocalCleanupV1;
+}
+
+/**
+ * ── CLOUD-PROVISION-1 evidence (spec step 10) ──────────────────────────────
+ *
+ * The bounded evidence a green managed-cloud provisioning cell attaches. It
+ * binds the artifact identities (including the composite `e2b-template/<name>`
+ * and `candidate-api/<subdomain>` receipts), the provider-verified template/
+ * build IDs, the one-way sandbox-id hash, the Worker/Supervisor identity +
+ * parentage proof, the covered-repository identity, the LiteLLM turn
+ * correlation, the actor-isolation denial proof, and the full cleanup block —
+ * with the same bounded/safe-string discipline the local kind uses. Every
+ * string field passes the shared safe-token/hash/timestamp patterns; no raw
+ * secret, provider key, local path, sandbox id, or credentialled URL is ever a
+ * field value.
+ *
+ * TYPES are owned by the contracts stage; the kind-scoped validator
+ * (`validateCloudProvisionTurnEvidence`) and sanitizer
+ * (`sanitizeCloudProvisionTurnEvidence`) bodies are owned by the
+ * scenario+evidence+cli workstream (BRIEF "Evidence"). Until implemented they
+ * throw, so a green cloud cell fails closed rather than validating loose
+ * evidence.
+ */
+export interface CloudProvisionTurnEvidenceV1 {
+  kind: "cloud_provision_turn";
+  /** Every qualified artifact id, including the template + candidate-api receipts. */
+  artifact_ids: string[];
+  server_version: string;
+  anyharness_version: string;
+  worker_version: string;
+  supervisor_version: string;
+  harness: "claude";
+  model_id: string;
+  /** Provider-verified immutable E2B template identity + baked-input digest. */
+  template: {
+    template_id: string;
+    build_id: string;
+    input_hash: string;
+  };
+  /** One-way hash of the provider (E2B) sandbox id — never the raw id. */
+  sandbox_id_hash: string;
+  /**
+   * Worker liveness (spec step 5). `supervisor_is_parent` records the HONEST
+   * current state and is NOT required to be true: on current main the
+   * fresh-provision path launches the runtime directly (no Supervisor), and
+   * Supervisor-parentage is PR 9's guarantee, deferred there (ruled
+   * 2026-07-15). PR 2 proves exactly one Worker is running with matching
+   * version identities; it does not claim Supervisor parentage.
+   */
+  worker: {
+    supervisor_is_parent: boolean;
+    heartbeat_recent: true;
+  };
+  /** Covered repository materialized by the product at the pinned commit (spec step 7). */
+  covered_repo: {
+    name: string;
+    commit: string;
+    no_credential_in_remote: true;
+  };
+  /**
+   * Actor-B isolation denial proof (spec step 9). Each field is an OBSERVED
+   * boolean (MCW-001): actor B's product listing did not reveal actor A's
+   * sandbox, and the direct runtime rejected the missing-credential and
+   * actor-B-credential probes. A GREEN cell requires all three true (the
+   * validator gates it); the scenario throws before evidence if any is false,
+   * so these are proven, not fabricated.
+   */
+  isolation: {
+    actor_b_denied: boolean;
+    runtime_rejects_missing: boolean;
+    runtime_rejects_actor_b: boolean;
+  };
+  litellm: {
+    token_id_hash: string;
+    request_ids: string[];
+    window_started_at: string;
+    window_finished_at: string;
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+    spend_usd: number;
+  };
+  /**
+   * The managed-cloud cleanup block. Its shape mirrors
+   * `ManagedCloudCleanupEvidence` (worlds/managed-cloud/cleanup-kinds.ts) in
+   * snake_case: a green cell requires `failed === 0` and every deletion boolean
+   * true (spec "Cleanup reconciles every run-created resource").
+   */
+  cleanup: {
+    ledger_id_hash: string;
+    registered: number;
+    reconciled: number;
+    failed: number;
+    sandboxes_deleted: boolean;
+    template_deleted: boolean;
+    dns_record_deleted: boolean;
+    ec2_terminated: boolean;
+    security_group_deleted: boolean;
+    key_pair_deleted: boolean;
+    virtual_key_deleted: boolean;
+    litellm_subjects_deleted: boolean;
     local_paths_removed: boolean;
   };
 }
@@ -463,10 +862,162 @@ export function validateReportV4(report: TestRunReportV4): void {
     throw new ReportValidationError("Report must be schema_version 4, kind proliferate.test-run.");
   }
   validateReportCore(report);
+  // A world-backed report (non-null candidate_build) is the functional local
+  // qualification path; the legacy diagnostic path omits the map and never
+  // requires kind-scoped evidence for its green cells. See BRIEF §"Evidence".
+  const worldBacked = report.candidate_build !== null;
+  // The exact bytes this report qualified: every evidence block's artifact_ids
+  // must name artifacts from THIS candidate identity (audit cross-field bind).
+  const candidateArtifactIds =
+    report.candidate_build === null
+      ? null
+      : new Set(report.candidate_build.artifacts.map((artifact) => artifact.artifact_id));
   for (const result of report.results) {
-    validateCellEvidence(result);
+    validateCellEvidence(result, worldBacked, candidateArtifactIds);
   }
 }
+
+/**
+ * The kind each evidence-bearing local-functional scenario MUST carry (audit
+ * LQF-005). Dispatch on `evidence.kind` alone let a green T3-SESSION cell carry
+ * a structurally valid route/config object from another scenario/harness; this
+ * binds the cell's `scenario_id` to its one legal evidence kind so mismatched
+ * evidence fails closed. `T3-WT-1`/`T3-REPO-1` (LOCAL-1) run no LLM turn and
+ * carry `evidence: null`, so they are intentionally absent.
+ */
+const SCENARIO_REQUIRED_EVIDENCE_KIND: Readonly<Record<string, CellEvidenceV1["kind"]>> = {
+  "T3-CHAT-1": "local_route_turn",
+  "T3-AUTHROUTE-1": "local_route_turn",
+  "T3-CFG-1": "local_config_matrix",
+  "T3-SESSION-1": "local_session_tabs",
+  "T3-INT-1": "local_mcp_integration",
+  // Single-kind PR 7 scenarios (PR7-CONTROL-007): bind the scenario to its one
+  // legal evidence kind so a green cell cannot carry null or another scenario's
+  // structurally-valid evidence.
+  "SELFHOST-ISOLATION-1": "selfhost_switch_isolation",
+  "SELFHOST-CFN-1": "selfhost_cfn_wrapper",
+};
+
+/**
+ * PR 7's multi-kind scenarios attach a DIFFERENT evidence kind per staged cell,
+ * so their binding is keyed on `(scenario_id, cell-dimension)` rather than
+ * scenario id alone (PR7-CONTROL-007). A green cell whose evidence kind does not
+ * match its cell dimension fails closed.
+ */
+const CELL_REQUIRED_EVIDENCE_KIND: Readonly<Record<string, CellEvidenceV1["kind"]>> = {
+  "SELFHOST-INSTALL-1/SH-INSTALL-CLAIM": "selfhost_install_claim",
+  "SELFHOST-INSTALL-1/SH-DESKTOP-OWNER": "selfhost_desktop_owner",
+  "SELFHOST-INSTALL-1/SH-BASE-TURN": "selfhost_base_turn",
+  "SELFHOST-INSTALL-1/SH-INVITEE": "selfhost_invitee",
+  "SELFHOST-QUAL-1/SH-GITHUB-AUTH": "selfhost_github_auth",
+  "SELFHOST-QUAL-1/SH-GATEWAY": "selfhost_gateway",
+  "SELFHOST-QUAL-1/SH-CLOUD-ADDON": "selfhost_cloud_addon",
+};
+
+/**
+ * Cross-field binding of a cell's identity to its evidence (audit LQF-005),
+ * run in addition to the kind-scoped structural validator. Prevents a
+ * structurally valid evidence object from a DIFFERENT scenario/harness/journey
+ * or a stale candidate build from validating against this cell.
+ */
+function validateEvidenceCellBinding(
+  result: FinalCellResultV2,
+  evidence: CellEvidenceV1,
+  where: string,
+  candidateArtifactIds: ReadonlySet<string> | null,
+): void {
+  // (a) scenario_id → required kind.
+  const requiredKind = SCENARIO_REQUIRED_EVIDENCE_KIND[result.scenario_id];
+  if (requiredKind !== undefined && evidence.kind !== requiredKind) {
+    throw new ReportValidationError(
+      `${where}.kind is "${evidence.kind}" but ${result.scenario_id} requires "${requiredKind}".`,
+    );
+  }
+
+  // (a2) (scenario_id, cell-dimension) → required kind, for PR 7's multi-kind
+  // scenarios where each staged cell attaches a different evidence kind
+  // (PR7-CONTROL-007).
+  const cellDimension = result.dimensions.cell;
+  if (typeof cellDimension === "string") {
+    const requiredCellKind = CELL_REQUIRED_EVIDENCE_KIND[`${result.scenario_id}/${cellDimension}`];
+    if (requiredCellKind !== undefined && evidence.kind !== requiredCellKind) {
+      throw new ReportValidationError(
+        `${where}.kind is "${evidence.kind}" but ${result.scenario_id} cell "${cellDimension}" requires "${requiredCellKind}".`,
+      );
+    }
+  }
+
+  // (b) AUTHROUTE dimensions → journey (route=change ⇒ LOCAL-6, else LOCAL-3).
+  if (result.scenario_id === "T3-AUTHROUTE-1" && evidence.kind === "local_route_turn") {
+    const expectedJourney = result.dimensions.route === "change" ? "LOCAL-6" : "LOCAL-3";
+    if (evidence.journey !== expectedJourney) {
+      throw new ReportValidationError(
+        `${where}.journey is "${evidence.journey}" but the cell's dimensions (route=${result.dimensions.route ?? "<harness>"}) require "${expectedJourney}".`,
+      );
+    }
+  }
+
+  // (c) evidence harness → cell harness dimension (when the cell carries one).
+  const cellHarness = result.dimensions.harness;
+  const evidenceHarness = (evidence as { harness?: unknown }).harness;
+  if (typeof cellHarness === "string" && typeof evidenceHarness === "string" && cellHarness !== evidenceHarness) {
+    throw new ReportValidationError(
+      `${where}.harness is "${evidenceHarness}" but the cell's dimensions name harness "${cellHarness}".`,
+    );
+  }
+
+  // (d) artifact_ids → exact candidate identity: every id names a THIS-build
+  // artifact. A world-backed report always has a candidate identity here; a
+  // diagnostic report (null) never reaches evidence validation with artifacts.
+  // Scoped to the local kinds this binding was authored for (LQF-005): the
+  // `cloud_provision_turn` kind legitimately mixes run-scoped receipts
+  // (`e2b-template/…`, `candidate-api/…` minted DURING the run) into its
+  // artifact_ids, which are not in the pre-run candidate_build map — its own
+  // kind-scoped validator owns those bounds.
+  const artifactIds = (evidence as { artifact_ids?: unknown }).artifact_ids;
+  const kindBindsArtifacts = evidence.kind in SCENARIO_ARTIFACT_BOUND_KINDS;
+  if (kindBindsArtifacts && candidateArtifactIds !== null && Array.isArray(artifactIds)) {
+    for (const id of artifactIds) {
+      if (typeof id === "string" && !candidateArtifactIds.has(id)) {
+        throw new ReportValidationError(
+          `${where}.artifact_ids names "${id}", which is not an artifact of this report's candidate_build.`,
+        );
+      }
+    }
+  }
+}
+
+/**
+ * Evidence kinds whose `artifact_ids` are bound to the report's exact
+ * `candidate_build` (LQF-005 rule d). The local-functional kinds only name
+ * pre-built candidate artifacts; `cloud_provision_turn`/`selfhost_*` also carry
+ * run-scoped receipts (templates, candidate-api subdomains, install bundles) not
+ * present in the pre-run map, so they are deliberately excluded and rely on
+ * their own kind-scoped validators.
+ */
+const SCENARIO_ARTIFACT_BOUND_KINDS: Readonly<Record<string, true>> = {
+  local_workspace_turn: true,
+  local_route_turn: true,
+  local_config_matrix: true,
+  local_session_tabs: true,
+  local_mcp_integration: true,
+};
+
+/**
+ * Green cells of these local-functional scenarios must carry complete
+ * kind-scoped evidence WHEN the run is world-backed (BRIEF §"Evidence"). The
+ * legacy diagnostic path (candidate_build null) is exempt. `LOCAL-WORLD-SMOKE-1`
+ * is required unconditionally (handled separately). `T3-WT-1` (LOCAL-1) is
+ * intentionally ABSENT: it runs no LLM turn and the four new kinds do not cover
+ * it, so its green cell carries `evidence: null`.
+ */
+export const LOCAL_FUNCTIONAL_EVIDENCE_SCENARIOS: readonly string[] = [
+  "T3-CHAT-1", // LOCAL-2 gateway turn → local_route_turn
+  "T3-AUTHROUTE-1", // LOCAL-3 user-key + LOCAL-6 route-change → local_route_turn
+  "T3-CFG-1", // LOCAL-4 config matrix → local_config_matrix
+  "T3-SESSION-1", // LOCAL-5 tabs → local_session_tabs
+  "T3-INT-1", // LOCAL-7 MCP → local_mcp_integration
+];
 
 /** The invariant walk shared by `validateReport` (V3) and `validateReportV4`. */
 function validateReportCore(report: ValidatableReportCore): void {
@@ -834,7 +1385,11 @@ function requireBoolean(where: string, value: unknown): void {
  * representable except on a GREEN `LOCAL-WORLD-SMOKE-1` result, which must
  * carry complete evidence (spec "Aggregate evidence" / BRIEF §6.3).
  */
-function validateCellEvidence(result: FinalCellResultV2): void {
+function validateCellEvidence(
+  result: FinalCellResultV2,
+  worldBacked = true,
+  candidateArtifactIds: ReadonlySet<string> | null = null,
+): void {
   // `evidence` is a required field of FinalCellResultV2, but the report
   // ultimately comes from parsed JSON (`writeReportV4`'s caller may pass an
   // externally-constructed object at runtime), so a missing key is still
@@ -844,7 +1399,10 @@ function validateCellEvidence(result: FinalCellResultV2): void {
   }
   const evidence = result.evidence;
   if (evidence === null) {
-    if (result.status === "green" && scenarioRequiresGreenEvidence(result.scenario_id)) {
+    if (
+      (result.status === "green" && scenarioRequiresGreenEvidence(result.scenario_id)) ||
+      requiresCompleteLocalEvidence(result, worldBacked)
+    ) {
       throw new ReportValidationError(
         `Green result "${result.cell_id}" for ${result.scenario_id} requires complete evidence.`,
       );
@@ -855,29 +1413,78 @@ function validateCellEvidence(result: FinalCellResultV2): void {
     throw new ReportValidationError(`Result "${result.cell_id}" evidence must be an object or null.`);
   }
   const where = `Result "${result.cell_id}" evidence`;
-  // Kind-scoped dispatch: each kind validates in its own function and never
-  // touches another kind's rules (extension-contract). Tier-2 billing evidence
-  // is validated by workstream D's `validateTier2BillingEvidence`.
+  // Cross-field binding (audit LQF-005): the evidence must belong to THIS cell —
+  // its kind/journey/harness match the scenario_id + dimensions, and its
+  // artifact_ids name this report's exact candidate build. Run before the
+  // kind-scoped structural dispatch, whose per-kind branches return early.
+  validateEvidenceCellBinding(result, evidence as CellEvidenceV1, where, candidateArtifactIds);
+  // Kind-scoped dispatch (audit ruling #3 + extension contract). Each kind owns
+  // its own validator so no kind can weaken another's checks. The self-host
+  // slice owns the whole `selfhost_*` namespace (its green cells require a
+  // complete, clean cleanup block exactly like local_workspace_turn); route the
+  // family to its kind-scoped validator, which reports an unknown selfhost kind
+  // rather than mis-validating it. Unknown kinds otherwise fail closed.
   const evidenceKind = (evidence as { kind?: unknown }).kind;
-  if (evidenceKind === "tier2_billing") {
-    validateTier2BillingEvidence(where, evidence as Tier2BillingEvidenceV1, result.status);
-    return;
-  }
-  // Self-host journey kinds are validated by the PR 3 kind-scoped validators
-  // (scenario+evidence+cli workstream). Their green cells require a complete,
-  // clean cleanup block exactly like local_workspace_turn; do not weaken that.
-  // The self-host slice owns the `selfhost_` kind namespace; route the whole
-  // family (known kinds and any unrecognized `selfhost_*`) to its kind-scoped
-  // validator, which reports an unknown kind rather than mis-validating a
-  // self-host-shaped object against the local_workspace_turn key set.
   if (typeof evidenceKind === "string" && evidenceKind.startsWith("selfhost_")) {
     validateSelfHostCellEvidence(where, evidence as CellEvidenceV1, result.status);
     return;
   }
-  requireExactKeys(evidence, LOCAL_WORKSPACE_TURN_EVIDENCE_KEYS, where);
-  if (evidence.kind !== "local_workspace_turn") {
-    throw new ReportValidationError(`${where}.kind is unknown.`);
+  // Dispatch to the kind-scoped validator. Adding a kind never edits another
+  // kind's function (extension-contract rule). Each validator keeps its own
+  // parameter order (the local/tier2 kinds predate the cloud PR's
+  // (where, evidence, status) convention; unifying them is out of this slice's
+  // scope).
+  switch (evidence.kind) {
+    case "local_workspace_turn":
+      validateLocalWorkspaceTurnEvidence(evidence, where, result.status);
+      return;
+    case "local_route_turn":
+      validateLocalRouteTurnEvidence(evidence, where, result.status);
+      return;
+    case "local_config_matrix":
+      validateLocalConfigMatrixEvidence(evidence, where, result.status);
+      return;
+    case "local_session_tabs":
+      validateLocalSessionTabsEvidence(evidence, where, result.status);
+      return;
+    case "local_mcp_integration":
+      validateLocalMcpIntegrationEvidence(evidence, where, result.status);
+      return;
+    case "tier2_billing":
+      validateTier2BillingEvidence(where, evidence as Tier2BillingEvidenceV1, result.status);
+      return;
+    case "cloud_provision_turn":
+      validateCloudProvisionTurnEvidence(where, evidence as CloudProvisionTurnEvidenceV1, result.status);
+      return;
+    default:
+      throw new ReportValidationError(`${where}.kind is unknown.`);
   }
+}
+
+/** Whether a green result MUST carry complete evidence (see
+ * `LOCAL_FUNCTIONAL_EVIDENCE_SCENARIOS` + BRIEF §"Evidence"). */
+function requiresCompleteLocalEvidence(result: FinalCellResultV2, worldBacked: boolean): boolean {
+  if (result.status !== "green") {
+    return false;
+  }
+  if (result.scenario_id === "LOCAL-WORLD-SMOKE-1") {
+    return true;
+  }
+  return (
+    worldBacked &&
+    result.runtime_lane === "local" &&
+    LOCAL_FUNCTIONAL_EVIDENCE_SCENARIOS.includes(result.scenario_id)
+  );
+}
+
+/** The unchanged `local_workspace_turn` validator, extracted verbatim from the
+ * pre-dispatch `validateCellEvidence` (still claude-only; the smoke's kind). */
+function validateLocalWorkspaceTurnEvidence(
+  evidence: LocalWorkspaceTurnEvidenceV1,
+  where: string,
+  status: FinalTestStatus,
+): void {
+  requireExactKeys(evidence, LOCAL_WORKSPACE_TURN_EVIDENCE_KEYS, where);
   if (!Array.isArray(evidence.artifact_ids) || evidence.artifact_ids.length === 0) {
     throw new ReportValidationError(`${where}.artifact_ids must be a non-empty array.`);
   }
@@ -896,7 +1503,446 @@ function validateCellEvidence(result: FinalCellResultV2): void {
     throw new ReportValidationError(`${where}.transcript_reopened must be true.`);
   }
   validateLitellmEvidence(where, evidence.litellm);
-  validateCleanupEvidence(where, evidence.cleanup, result.status);
+  validateCleanupEvidence(where, evidence.cleanup, status);
+}
+
+// ── Kind-scoped validators for the four new local-functional evidence kinds ──
+// Owned by the evidence-runner workstream (BRIEF §"Evidence workstream"). The
+// contracts stage provides the exact key arrays + dispatch; the workstream
+// fills these bodies with the same safe-token/hash/positive-count/complete-clean
+// rigor the `local_workspace_turn` validator uses (reuse `validateLitellmEvidence`
+// for `gateway_spend` and `validateCleanupEvidence` for `cleanup`). Green
+// requires complete, clean evidence of the matching kind; cursor typed-unsupported
+// cells are `blocked`, not green, and carry `evidence: null`.
+
+export const LOCAL_ROUTE_TURN_EVIDENCE_KEYS = [
+  "kind",
+  "journey",
+  "artifact_ids",
+  "server_version",
+  "anyharness_version",
+  "harness",
+  "route",
+  "model_id",
+  "workspace_id_hash",
+  "session_id_hash",
+  "transcript_reopened",
+  "gateway_spend",
+  "user_key_isolation",
+  "route_change",
+  "billing_reconcile_deferred",
+  "cleanup",
+] as const;
+
+export const LOCAL_CONFIG_MATRIX_EVIDENCE_KEYS = [
+  "kind",
+  "artifact_ids",
+  "server_version",
+  "anyharness_version",
+  "harness",
+  "model_id",
+  "workspace_id_hash",
+  "session_id_hash",
+  "controls",
+  "known_1063_expected_fail",
+  "cleanup",
+] as const;
+
+export const LOCAL_SESSION_TABS_EVIDENCE_KEYS = [
+  "kind",
+  "artifact_ids",
+  "server_version",
+  "anyharness_version",
+  "harness",
+  "workspace_id_hash",
+  "empty_switch_session_replaced",
+  "messaged_switch_new_tab",
+  "same_harness_model_change_in_session",
+  "reload_preserved",
+  "session_id_hashes",
+  "cleanup",
+] as const;
+
+export const LOCAL_MCP_INTEGRATION_EVIDENCE_KEYS = [
+  "kind",
+  "artifact_ids",
+  "server_version",
+  "anyharness_version",
+  "harness",
+  "model_id",
+  "workspace_id_hash",
+  "session_id_hash",
+  "integration_namespace",
+  "tool_name",
+  "audit_event_id_hash",
+  "audit_ok",
+  "cleanup",
+] as const;
+
+/** Common front matter shared by every local-functional evidence kind:
+ * bounded artifact ids + version tokens + the widened harness field. */
+function validateLocalEvidenceCommon(
+  where: string,
+  evidence: {
+    artifact_ids: unknown;
+    server_version: unknown;
+    anyharness_version: unknown;
+    harness: unknown;
+  },
+): void {
+  if (!Array.isArray(evidence.artifact_ids) || evidence.artifact_ids.length === 0) {
+    throw new ReportValidationError(`${where}.artifact_ids must be a non-empty array.`);
+  }
+  for (const [index, id] of evidence.artifact_ids.entries()) {
+    requireSafeEvidenceToken(`${where}.artifact_ids[${index}]`, id);
+  }
+  requireSafeEvidenceToken(`${where}.server_version`, evidence.server_version);
+  requireSafeEvidenceToken(`${where}.anyharness_version`, evidence.anyharness_version);
+  if (!LOCAL_HARNESS_KINDS.includes(evidence.harness as LocalHarnessKind)) {
+    throw new ReportValidationError(`${where}.harness must be one of ${LOCAL_HARNESS_KINDS.join(", ")}.`);
+  }
+}
+
+const LOCAL_ROUTE_TURN_JOURNEYS = ["LOCAL-2", "LOCAL-3", "LOCAL-6"] as const;
+const LOCAL_ROUTES = ["gateway", "user_key"] as const;
+const USER_KEY_ISOLATION_KEYS = ["litellm_spend_rows", "managed_balance_read_deferred"] as const;
+const ROUTE_CHANGE_KEYS = ["original_route", "original_session_id_hash", "new_route", "new_session_id_hash"] as const;
+
+/**
+ * LOCAL-2/LOCAL-3/LOCAL-6 route turn (BRIEF §3.3). Cross-field rules: exactly
+ * one of `gateway_spend`/`user_key_isolation` matching `route`, and
+ * `route_change` present iff `journey === "LOCAL-6"`.
+ */
+function validateLocalRouteTurnEvidence(
+  evidence: LocalRouteTurnEvidenceV1,
+  where: string,
+  status: FinalTestStatus,
+): void {
+  requireExactKeys(evidence, LOCAL_ROUTE_TURN_EVIDENCE_KEYS, where);
+  validateLocalEvidenceCommon(where, evidence);
+  if (!LOCAL_ROUTE_TURN_JOURNEYS.includes(evidence.journey as (typeof LOCAL_ROUTE_TURN_JOURNEYS)[number])) {
+    throw new ReportValidationError(`${where}.journey must be one of ${LOCAL_ROUTE_TURN_JOURNEYS.join(", ")}.`);
+  }
+  if (!LOCAL_ROUTES.includes(evidence.route as (typeof LOCAL_ROUTES)[number])) {
+    throw new ReportValidationError(`${where}.route must be one of ${LOCAL_ROUTES.join(", ")}.`);
+  }
+  requireSafeEvidenceToken(`${where}.model_id`, evidence.model_id);
+  requireEvidenceHash(`${where}.workspace_id_hash`, evidence.workspace_id_hash);
+  requireEvidenceHash(`${where}.session_id_hash`, evidence.session_id_hash);
+  if (evidence.transcript_reopened !== true) {
+    throw new ReportValidationError(`${where}.transcript_reopened must be true.`);
+  }
+  if (evidence.route === "gateway") {
+    if (evidence.gateway_spend === null) {
+      throw new ReportValidationError(`${where}.gateway_spend must be non-null when route is "gateway".`);
+    }
+    if (evidence.user_key_isolation !== null) {
+      throw new ReportValidationError(`${where}.user_key_isolation must be null when route is "gateway".`);
+    }
+    validateLitellmEvidence(where, evidence.gateway_spend);
+  } else {
+    if (evidence.gateway_spend !== null) {
+      throw new ReportValidationError(`${where}.gateway_spend must be null when route is "user_key".`);
+    }
+    if (evidence.user_key_isolation === null) {
+      throw new ReportValidationError(`${where}.user_key_isolation must be non-null when route is "user_key".`);
+    }
+    requireExactKeys(evidence.user_key_isolation, USER_KEY_ISOLATION_KEYS, `${where}.user_key_isolation`);
+    if (evidence.user_key_isolation.litellm_spend_rows !== 0) {
+      throw new ReportValidationError(`${where}.user_key_isolation.litellm_spend_rows must be 0.`);
+    }
+    if (evidence.user_key_isolation.managed_balance_read_deferred !== true) {
+      throw new ReportValidationError(
+        `${where}.user_key_isolation.managed_balance_read_deferred must be true (the product balance is not read here — LQF-006).`,
+      );
+    }
+  }
+  if (evidence.journey === "LOCAL-6") {
+    if (evidence.route_change === null) {
+      throw new ReportValidationError(`${where}.route_change must be non-null for journey "LOCAL-6".`);
+    }
+    requireExactKeys(evidence.route_change, ROUTE_CHANGE_KEYS, `${where}.route_change`);
+    if (evidence.route_change.original_route !== "user_key") {
+      throw new ReportValidationError(`${where}.route_change.original_route must be "user_key".`);
+    }
+    if (evidence.route_change.new_route !== "gateway") {
+      throw new ReportValidationError(`${where}.route_change.new_route must be "gateway".`);
+    }
+    requireEvidenceHash(`${where}.route_change.original_session_id_hash`, evidence.route_change.original_session_id_hash);
+    requireEvidenceHash(`${where}.route_change.new_session_id_hash`, evidence.route_change.new_session_id_hash);
+  } else if (evidence.route_change !== null) {
+    throw new ReportValidationError(`${where}.route_change must be null outside journey "LOCAL-6".`);
+  }
+  if (evidence.billing_reconcile_deferred !== true) {
+    throw new ReportValidationError(`${where}.billing_reconcile_deferred must be true.`);
+  }
+  validateCleanupEvidence(where, evidence.cleanup, status);
+}
+
+const CONFIG_CONTROL_KEYS = ["control_key", "accepted_value", "rejected"] as const;
+
+/** LOCAL-4 live configuration matrix (BRIEF §3.3). */
+function validateLocalConfigMatrixEvidence(
+  evidence: LocalConfigMatrixEvidenceV1,
+  where: string,
+  status: FinalTestStatus,
+): void {
+  requireExactKeys(evidence, LOCAL_CONFIG_MATRIX_EVIDENCE_KEYS, where);
+  validateLocalEvidenceCommon(where, evidence);
+  requireSafeEvidenceToken(`${where}.model_id`, evidence.model_id);
+  requireEvidenceHash(`${where}.workspace_id_hash`, evidence.workspace_id_hash);
+  requireEvidenceHash(`${where}.session_id_hash`, evidence.session_id_hash);
+  if (!Array.isArray(evidence.controls) || evidence.controls.length === 0) {
+    throw new ReportValidationError(`${where}.controls must be a non-empty array.`);
+  }
+  for (const [index, control] of evidence.controls.entries()) {
+    const controlWhere = `${where}.controls[${index}]`;
+    if (typeof control !== "object" || control === null || Array.isArray(control)) {
+      throw new ReportValidationError(`${controlWhere} must be an object.`);
+    }
+    requireExactKeys(control, CONFIG_CONTROL_KEYS, controlWhere);
+    requireSafeEvidenceToken(`${controlWhere}.control_key`, control.control_key);
+    requireSafeEvidenceToken(`${controlWhere}.accepted_value`, control.accepted_value);
+    requireBoolean(`${controlWhere}.rejected`, control.rejected);
+  }
+  requireBoolean(`${where}.known_1063_expected_fail`, evidence.known_1063_expected_fail);
+  // A known #1063 rejection is never green (BRIEF §3.3: "never green").
+  if (status === "green" && evidence.known_1063_expected_fail === true) {
+    throw new ReportValidationError(`${where}.known_1063_expected_fail cannot be true on a green result.`);
+  }
+  validateCleanupEvidence(where, evidence.cleanup, status);
+}
+
+/** LOCAL-5 session and tab semantics (BRIEF §3.3). */
+function validateLocalSessionTabsEvidence(
+  evidence: LocalSessionTabsEvidenceV1,
+  where: string,
+  status: FinalTestStatus,
+): void {
+  requireExactKeys(evidence, LOCAL_SESSION_TABS_EVIDENCE_KEYS, where);
+  validateLocalEvidenceCommon(where, evidence);
+  requireEvidenceHash(`${where}.workspace_id_hash`, evidence.workspace_id_hash);
+  if (evidence.empty_switch_session_replaced !== true) {
+    throw new ReportValidationError(`${where}.empty_switch_session_replaced must be true.`);
+  }
+  if (evidence.messaged_switch_new_tab !== true) {
+    throw new ReportValidationError(`${where}.messaged_switch_new_tab must be true.`);
+  }
+  if (evidence.same_harness_model_change_in_session !== true) {
+    throw new ReportValidationError(`${where}.same_harness_model_change_in_session must be true.`);
+  }
+  if (evidence.reload_preserved !== true) {
+    throw new ReportValidationError(`${where}.reload_preserved must be true.`);
+  }
+  if (!Array.isArray(evidence.session_id_hashes) || evidence.session_id_hashes.length === 0) {
+    throw new ReportValidationError(`${where}.session_id_hashes must be a non-empty array.`);
+  }
+  const seenSessionHashes = new Set<string>();
+  for (const [index, hash] of evidence.session_id_hashes.entries()) {
+    requireEvidenceHash(`${where}.session_id_hashes[${index}]`, hash);
+    if (seenSessionHashes.has(hash)) {
+      throw new ReportValidationError(`${where}.session_id_hashes has a duplicate entry.`);
+    }
+    seenSessionHashes.add(hash);
+  }
+  validateCleanupEvidence(where, evidence.cleanup, status);
+}
+
+/** LOCAL-7 Product MCP integration (BRIEF §3.3). */
+function validateLocalMcpIntegrationEvidence(
+  evidence: LocalMcpIntegrationEvidenceV1,
+  where: string,
+  status: FinalTestStatus,
+): void {
+  requireExactKeys(evidence, LOCAL_MCP_INTEGRATION_EVIDENCE_KEYS, where);
+  validateLocalEvidenceCommon(where, evidence);
+  requireSafeEvidenceToken(`${where}.model_id`, evidence.model_id);
+  requireEvidenceHash(`${where}.workspace_id_hash`, evidence.workspace_id_hash);
+  requireEvidenceHash(`${where}.session_id_hash`, evidence.session_id_hash);
+  requireSafeEvidenceToken(`${where}.integration_namespace`, evidence.integration_namespace);
+  requireSafeEvidenceToken(`${where}.tool_name`, evidence.tool_name);
+  requireEvidenceHash(`${where}.audit_event_id_hash`, evidence.audit_event_id_hash);
+  if (evidence.audit_ok !== true) {
+    throw new ReportValidationError(`${where}.audit_ok must be true.`);
+  }
+  validateCleanupEvidence(where, evidence.cleanup, status);
+}
+
+const CLOUD_PROVISION_TURN_EVIDENCE_KEYS = [
+  "kind",
+  "artifact_ids",
+  "server_version",
+  "anyharness_version",
+  "worker_version",
+  "supervisor_version",
+  "harness",
+  "model_id",
+  "template",
+  "sandbox_id_hash",
+  "worker",
+  "covered_repo",
+  "isolation",
+  "litellm",
+  "cleanup",
+] as const;
+
+const TEMPLATE_EVIDENCE_KEYS = ["template_id", "build_id", "input_hash"] as const;
+const WORKER_EVIDENCE_KEYS = ["supervisor_is_parent", "heartbeat_recent"] as const;
+const COVERED_REPO_EVIDENCE_KEYS = ["name", "commit", "no_credential_in_remote"] as const;
+const ISOLATION_EVIDENCE_KEYS = ["actor_b_denied", "runtime_rejects_missing", "runtime_rejects_actor_b"] as const;
+const CLOUD_CLEANUP_EVIDENCE_KEYS = [
+  "ledger_id_hash",
+  "registered",
+  "reconciled",
+  "failed",
+  "sandboxes_deleted",
+  "template_deleted",
+  "dns_record_deleted",
+  "ec2_terminated",
+  "security_group_deleted",
+  "key_pair_deleted",
+  "virtual_key_deleted",
+  "litellm_subjects_deleted",
+  "local_paths_removed",
+] as const;
+
+const FULL_SHA_PATTERN = /^[0-9a-f]{40}$/;
+
+/**
+ * Kind-scoped validator for `cloud_provision_turn` (PR 2, spec step 10). Per
+ * the extension contract: requires the exact declared key set on the object and
+ * every nested object (no extra fields); bounds every string field with the
+ * same safe-token/hash/timestamp patterns the local kind uses; reuses
+ * `validateLitellmEvidence` verbatim for the `litellm` block; requires
+ * `template.input_hash` and `sandbox_id_hash` be 64-hex digests and the
+ * template ids safe tokens; requires `covered_repo.commit` be a full sha;
+ * requires the `worker`/`covered_repo`/`isolation` proofs true (the isolation
+ * fields are observed booleans the scenario emits true only when proven);
+ * requires non-negative-integer cleanup counts and a boolean on every deletion
+ * field; and on a GREEN cell requires `cleanup.failed === 0` and every
+ * deletion boolean true (a non-green cell may record its own cleanup
+ * failure). Does not touch `validateLocalWorkspaceTurnEvidence`.
+ */
+function validateCloudProvisionTurnEvidence(
+  where: string,
+  evidence: CloudProvisionTurnEvidenceV1,
+  status: FinalTestStatus,
+): void {
+  requireExactKeys(evidence, CLOUD_PROVISION_TURN_EVIDENCE_KEYS, where);
+  if (evidence.kind !== "cloud_provision_turn") {
+    throw new ReportValidationError(`${where}.kind is unknown.`);
+  }
+  if (!Array.isArray(evidence.artifact_ids) || evidence.artifact_ids.length === 0) {
+    throw new ReportValidationError(`${where}.artifact_ids must be a non-empty array.`);
+  }
+  for (const [index, id] of evidence.artifact_ids.entries()) {
+    requireSafeEvidenceToken(`${where}.artifact_ids[${index}]`, id);
+  }
+  requireSafeEvidenceToken(`${where}.server_version`, evidence.server_version);
+  requireSafeEvidenceToken(`${where}.anyharness_version`, evidence.anyharness_version);
+  requireSafeEvidenceToken(`${where}.worker_version`, evidence.worker_version);
+  requireSafeEvidenceToken(`${where}.supervisor_version`, evidence.supervisor_version);
+  if (evidence.harness !== "claude") {
+    throw new ReportValidationError(`${where}.harness must be "claude".`);
+  }
+  requireSafeEvidenceToken(`${where}.model_id`, evidence.model_id);
+
+  const template = evidence.template;
+  if (typeof template !== "object" || template === null || Array.isArray(template)) {
+    throw new ReportValidationError(`${where}.template must be an object.`);
+  }
+  requireExactKeys(template, TEMPLATE_EVIDENCE_KEYS, `${where}.template`);
+  requireSafeEvidenceToken(`${where}.template.template_id`, template.template_id);
+  requireSafeEvidenceToken(`${where}.template.build_id`, template.build_id);
+  requireEvidenceHash(`${where}.template.input_hash`, template.input_hash);
+
+  requireEvidenceHash(`${where}.sandbox_id_hash`, evidence.sandbox_id_hash);
+
+  const worker = evidence.worker;
+  if (typeof worker !== "object" || worker === null || Array.isArray(worker)) {
+    throw new ReportValidationError(`${where}.worker must be an object.`);
+  }
+  requireExactKeys(worker, WORKER_EVIDENCE_KEYS, `${where}.worker`);
+  if (typeof worker.supervisor_is_parent !== "boolean") {
+    // Honest record, not a gate: Supervisor-parentage is PR 9's guarantee
+    // (deferred), so this is boolean, not required-true.
+    throw new ReportValidationError(`${where}.worker.supervisor_is_parent must be a boolean.`);
+  }
+  if (worker.heartbeat_recent !== true) {
+    throw new ReportValidationError(`${where}.worker.heartbeat_recent must be true.`);
+  }
+
+  const coveredRepo = evidence.covered_repo;
+  if (typeof coveredRepo !== "object" || coveredRepo === null || Array.isArray(coveredRepo)) {
+    throw new ReportValidationError(`${where}.covered_repo must be an object.`);
+  }
+  requireExactKeys(coveredRepo, COVERED_REPO_EVIDENCE_KEYS, `${where}.covered_repo`);
+  requireSafeEvidenceToken(`${where}.covered_repo.name`, coveredRepo.name);
+  if (typeof coveredRepo.commit !== "string" || !FULL_SHA_PATTERN.test(coveredRepo.commit)) {
+    throw new ReportValidationError(`${where}.covered_repo.commit must be a full lowercase 40-hex sha.`);
+  }
+  if (coveredRepo.no_credential_in_remote !== true) {
+    throw new ReportValidationError(`${where}.covered_repo.no_credential_in_remote must be true.`);
+  }
+
+  const isolation = evidence.isolation;
+  if (typeof isolation !== "object" || isolation === null || Array.isArray(isolation)) {
+    throw new ReportValidationError(`${where}.isolation must be an object.`);
+  }
+  requireExactKeys(isolation, ISOLATION_EVIDENCE_KEYS, `${where}.isolation`);
+  if (isolation.actor_b_denied !== true) {
+    throw new ReportValidationError(`${where}.isolation.actor_b_denied must be true.`);
+  }
+  if (isolation.runtime_rejects_missing !== true) {
+    throw new ReportValidationError(`${where}.isolation.runtime_rejects_missing must be true.`);
+  }
+  if (isolation.runtime_rejects_actor_b !== true) {
+    throw new ReportValidationError(`${where}.isolation.runtime_rejects_actor_b must be true.`);
+  }
+
+  validateLitellmEvidence(where, evidence.litellm);
+  validateCloudCleanupEvidence(where, evidence.cleanup, status);
+}
+
+function validateCloudCleanupEvidence(
+  where: string,
+  cleanup: CloudProvisionTurnEvidenceV1["cleanup"],
+  status: FinalTestStatus,
+): void {
+  if (typeof cleanup !== "object" || cleanup === null || Array.isArray(cleanup)) {
+    throw new ReportValidationError(`${where}.cleanup must be an object.`);
+  }
+  requireExactKeys(cleanup, CLOUD_CLEANUP_EVIDENCE_KEYS, `${where}.cleanup`);
+  requireEvidenceHash(`${where}.cleanup.ledger_id_hash`, cleanup.ledger_id_hash);
+  requireNonNegativeInteger(`${where}.cleanup.registered`, cleanup.registered);
+  requireNonNegativeInteger(`${where}.cleanup.reconciled`, cleanup.reconciled);
+  requireNonNegativeInteger(`${where}.cleanup.failed`, cleanup.failed);
+  const deletionFields = [
+    "sandboxes_deleted",
+    "template_deleted",
+    "dns_record_deleted",
+    "ec2_terminated",
+    "security_group_deleted",
+    "key_pair_deleted",
+    "virtual_key_deleted",
+    "litellm_subjects_deleted",
+    "local_paths_removed",
+  ] as const;
+  for (const field of deletionFields) {
+    requireBoolean(`${where}.cleanup.${field}`, cleanup[field]);
+  }
+  // Green-cell rule (spec "Cleanup and failure behavior"): a green cell requires
+  // failed === 0 and every deletion boolean true; a non-green cell may record
+  // its own cleanup failure so the report is still persisted with a real
+  // nonzero exit rather than throwing and exiting 2.
+  if (status === "green") {
+    if (cleanup.failed > 0) {
+      throw new ReportValidationError(`${where}.cleanup.failed must be 0 for a green result.`);
+    }
+    if (deletionFields.some((field) => cleanup[field] !== true)) {
+      throw new ReportValidationError(`${where}.cleanup is incomplete on a green result.`);
+    }
+  }
 }
 
 const SELFHOST_BASE_EVIDENCE_KEYS = [
@@ -956,6 +2002,100 @@ const SELFHOST_INVITEE_EVIDENCE_KEYS = [
   "authenticated_member_action",
 ] as const;
 
+// ── PR 7 self-host evidence key sets (append-only) ─────────────────────────
+
+const SELFHOST_GITHUB_AUTH_EVIDENCE_KEYS = [
+  ...SELFHOST_BASE_EVIDENCE_KEYS,
+  "owner_user_id_hash",
+  "org_id_hash",
+  "github_identity_a_hash",
+  "github_identity_b_hash",
+  "setup_password_only",
+  "owner_link_no_duplicate",
+  "uninvited_denied",
+  "invited_admitted",
+  "member_role",
+  "methods_advertise_github",
+] as const;
+
+const SELFHOST_SWITCH_ISOLATION_EVIDENCE_KEYS = [
+  ...SELFHOST_BASE_EVIDENCE_KEYS,
+  "server_a_origin",
+  "server_b_origin",
+  "no_cross_origin_token",
+  "no_cross_origin_pending_auth",
+  "no_cross_origin_credential",
+  "no_cross_origin_runtime_identity",
+  "no_cross_origin_workspace_session",
+  "b_started_anonymous",
+  "b_authenticated_independently",
+  "a_state_restored_origin_scoped",
+] as const;
+
+const SELFHOST_GATEWAY_EVIDENCE_KEYS = [
+  ...SELFHOST_BASE_EVIDENCE_KEYS,
+  "actor_user_id_hash",
+  "virtual_key_id_hash",
+  "litellm_image_digest",
+  "model_id",
+  "capability_gateway_before",
+  "capability_gateway_after",
+  "gateway_spend_correlated",
+  "master_key_not_used",
+  "restart_persisted",
+] as const;
+
+const SELFHOST_CLOUD_ADDON_EVIDENCE_KEYS = [
+  ...SELFHOST_BASE_EVIDENCE_KEYS,
+  "github_app_installation_id_hash",
+  "e2b_template_id",
+  "sandbox_id_hash",
+  "workspace_id_hash",
+  "session_id_hash",
+  "turn_completed",
+  "pause_wake_state_intact",
+  "disable_truthful",
+  "base_healthy_after_disable",
+] as const;
+
+const SELFHOST_CFN_WRAPPER_EVIDENCE_KEYS = [
+  "kind",
+  "artifact_ids",
+  "server_version",
+  "api_origin",
+  "stack_name_hash",
+  "image_repo_digest",
+  "release_version_tag",
+  "template_sha256",
+  "template_validated",
+  "bundle_digest_bound",
+  "image_digest_bound",
+  "outputs_valid",
+  "dns_tls_verified",
+  "meta_version_matches",
+  "cleanup",
+] as const;
+
+const SELFHOST_CFN_CLEANUP_EVIDENCE_KEYS = [
+  "ledger_id_hash",
+  "registered",
+  "reconciled",
+  "failed",
+  "stack_deleted",
+  "s3_objects_deleted",
+  "ghcr_version_deleted",
+  "route53_record_deleted",
+  "local_paths_removed",
+] as const;
+
+const SELFHOST_CFN_CLEANUP_DELETION_FIELDS = [
+  "stack_deleted",
+  "s3_objects_deleted",
+  "ghcr_version_deleted",
+  "route53_record_deleted",
+  "local_paths_removed",
+] as const;
+
 const SELFHOST_CLEANUP_EVIDENCE_KEYS = [
   "ledger_id_hash",
   "registered",
@@ -987,6 +2127,24 @@ function requireTrue(where: string, value: unknown): void {
 }
 
 /**
+ * A run-window provider-absence claim (PR7-CONTROL-010): exactly `"unproven"`
+ * (observation not performed) or `"observed_absent"` (a real run-window
+ * spend/traffic observation confirmed absence). A bare `true` — an absence
+ * asserted from configuration/an unavailable observation — is rejected.
+ */
+function requireProviderClaim(where: string, value: unknown): void {
+  if (value !== "unproven" && value !== "observed_absent") {
+    throw new ReportValidationError(`${where} must be "unproven" or "observed_absent".`);
+  }
+}
+
+function requireFalse(where: string, value: unknown): void {
+  if (value !== false) {
+    throw new ReportValidationError(`${where} must be false.`);
+  }
+}
+
+/**
  * Validates one self-host journey cell's evidence (BRIEF §"Evidence
  * workstream"): exact keys per kind; every string field passes the same
  * `requireSafeEvidenceToken`/`requireEvidenceHash` checks the local_workspace_turn
@@ -1002,11 +2160,25 @@ function validateSelfHostCellEvidence(
   status: FinalTestStatus,
 ): void {
   const kind = (evidence as { kind?: unknown }).kind;
+
+  // The CFN-wrapper posture's evidence shape has no controller_runtime_origin/
+  // anyharness_version (see `SelfHostCfnWrapperEvidenceV1`'s doc comment: it
+  // does not extend `SelfHostEvidenceBaseV1`), so it is validated end to end
+  // by its own function rather than through the shared base-field walk below.
+  if (kind === "selfhost_cfn_wrapper") {
+    validateSelfHostCfnWrapperEvidence(where, evidence as SelfHostCfnWrapperEvidenceV1, status);
+    return;
+  }
+
   const keysByKind: Record<string, readonly string[]> = {
     selfhost_install_claim: SELFHOST_INSTALL_CLAIM_EVIDENCE_KEYS,
     selfhost_desktop_owner: SELFHOST_DESKTOP_OWNER_EVIDENCE_KEYS,
     selfhost_base_turn: SELFHOST_BASE_TURN_EVIDENCE_KEYS,
     selfhost_invitee: SELFHOST_INVITEE_EVIDENCE_KEYS,
+    selfhost_github_auth: SELFHOST_GITHUB_AUTH_EVIDENCE_KEYS,
+    selfhost_switch_isolation: SELFHOST_SWITCH_ISOLATION_EVIDENCE_KEYS,
+    selfhost_gateway: SELFHOST_GATEWAY_EVIDENCE_KEYS,
+    selfhost_cloud_addon: SELFHOST_CLOUD_ADDON_EVIDENCE_KEYS,
   };
   const expectedKeys = typeof kind === "string" ? keysByKind[kind] : undefined;
   if (!expectedKeys) {
@@ -1071,8 +2243,25 @@ function validateSelfHostCellEvidence(
         throw new ReportValidationError(`${where}.byok_route must be "api_key".`);
       }
       requireEvidenceHash(`${where}.byok_key_id_hash`, e.byok_key_id_hash);
-      requireTrue(`${where}.no_litellm_spend`, e.no_litellm_spend);
-      requireTrue(`${where}.no_e2b`, e.no_e2b);
+      requireProviderClaim(`${where}.no_litellm_spend`, e.no_litellm_spend);
+      requireProviderClaim(`${where}.no_e2b`, e.no_e2b);
+      // Defense-in-depth for PR7-CONTROL-010: the frozen contract folds the
+      // provider-absence guarantees into SH-BASE-TURN, so an UNPROVEN required
+      // subclaim cannot contribute a GREEN result. A green base-turn must have
+      // BOTH claims `observed_absent`; `unproven` on green is rejected here even
+      // if the cell logic ever regressed to returning green with unproven claims.
+      if (status === "green") {
+        if (e.no_litellm_spend !== "observed_absent") {
+          throw new ReportValidationError(
+            `${where}.no_litellm_spend is "${e.no_litellm_spend}" on a GREEN result; a green SH-BASE-TURN requires "observed_absent".`,
+          );
+        }
+        if (e.no_e2b !== "observed_absent") {
+          throw new ReportValidationError(
+            `${where}.no_e2b is "${e.no_e2b}" on a GREEN result; a green SH-BASE-TURN requires "observed_absent".`,
+          );
+        }
+      }
       return;
     }
     case "selfhost_invitee": {
@@ -1086,8 +2275,131 @@ function validateSelfHostCellEvidence(
       requireTrue(`${where}.authenticated_member_action`, e.authenticated_member_action);
       return;
     }
+    case "selfhost_github_auth": {
+      const e = evidence as SelfHostGithubAuthEvidenceV1;
+      requireEvidenceHash(`${where}.owner_user_id_hash`, e.owner_user_id_hash);
+      requireEvidenceHash(`${where}.org_id_hash`, e.org_id_hash);
+      requireEvidenceHash(`${where}.github_identity_a_hash`, e.github_identity_a_hash);
+      requireEvidenceHash(`${where}.github_identity_b_hash`, e.github_identity_b_hash);
+      requireTrue(`${where}.setup_password_only`, e.setup_password_only);
+      requireTrue(`${where}.owner_link_no_duplicate`, e.owner_link_no_duplicate);
+      requireTrue(`${where}.uninvited_denied`, e.uninvited_denied);
+      requireTrue(`${where}.invited_admitted`, e.invited_admitted);
+      requireSafeEvidenceToken(`${where}.member_role`, e.member_role);
+      requireTrue(`${where}.methods_advertise_github`, e.methods_advertise_github);
+      return;
+    }
+    case "selfhost_switch_isolation": {
+      const e = evidence as SelfHostSwitchIsolationEvidenceV1;
+      requireSafeEvidenceToken(`${where}.server_a_origin`, e.server_a_origin);
+      requireSafeEvidenceToken(`${where}.server_b_origin`, e.server_b_origin);
+      // `api_origin` doubles as server A's origin (base compatibility, see the
+      // type's doc comment); the two must agree so evidence cannot claim a
+      // different server A than the shared base-field check above verified.
+      if (e.api_origin !== e.server_a_origin) {
+        throw new ReportValidationError(`${where}.api_origin must equal server_a_origin.`);
+      }
+      if (e.server_a_origin === e.server_b_origin) {
+        throw new ReportValidationError(`${where}.server_a_origin and server_b_origin must be distinct.`);
+      }
+      requireTrue(`${where}.no_cross_origin_token`, e.no_cross_origin_token);
+      requireTrue(`${where}.no_cross_origin_pending_auth`, e.no_cross_origin_pending_auth);
+      requireTrue(`${where}.no_cross_origin_credential`, e.no_cross_origin_credential);
+      requireTrue(`${where}.no_cross_origin_runtime_identity`, e.no_cross_origin_runtime_identity);
+      requireTrue(`${where}.no_cross_origin_workspace_session`, e.no_cross_origin_workspace_session);
+      requireTrue(`${where}.b_started_anonymous`, e.b_started_anonymous);
+      requireTrue(`${where}.b_authenticated_independently`, e.b_authenticated_independently);
+      requireTrue(`${where}.a_state_restored_origin_scoped`, e.a_state_restored_origin_scoped);
+      return;
+    }
+    case "selfhost_gateway": {
+      const e = evidence as SelfHostGatewayEvidenceV1;
+      requireEvidenceHash(`${where}.actor_user_id_hash`, e.actor_user_id_hash);
+      requireEvidenceHash(`${where}.virtual_key_id_hash`, e.virtual_key_id_hash);
+      requireSafeEvidenceToken(`${where}.litellm_image_digest`, e.litellm_image_digest);
+      requireSafeEvidenceToken(`${where}.model_id`, e.model_id);
+      requireFalse(`${where}.capability_gateway_before`, e.capability_gateway_before);
+      requireTrue(`${where}.capability_gateway_after`, e.capability_gateway_after);
+      requireTrue(`${where}.gateway_spend_correlated`, e.gateway_spend_correlated);
+      requireTrue(`${where}.master_key_not_used`, e.master_key_not_used);
+      requireTrue(`${where}.restart_persisted`, e.restart_persisted);
+      return;
+    }
+    case "selfhost_cloud_addon": {
+      const e = evidence as SelfHostCloudAddonEvidenceV1;
+      requireEvidenceHash(`${where}.github_app_installation_id_hash`, e.github_app_installation_id_hash);
+      requireSafeEvidenceToken(`${where}.e2b_template_id`, e.e2b_template_id);
+      requireEvidenceHash(`${where}.sandbox_id_hash`, e.sandbox_id_hash);
+      requireEvidenceHash(`${where}.workspace_id_hash`, e.workspace_id_hash);
+      requireEvidenceHash(`${where}.session_id_hash`, e.session_id_hash);
+      requireTrue(`${where}.turn_completed`, e.turn_completed);
+      requireTrue(`${where}.pause_wake_state_intact`, e.pause_wake_state_intact);
+      requireTrue(`${where}.disable_truthful`, e.disable_truthful);
+      requireTrue(`${where}.base_healthy_after_disable`, e.base_healthy_after_disable);
+      return;
+    }
     default:
       throw new ReportValidationError(`${where}.kind is unknown.`);
+  }
+}
+
+/**
+ * Kind-scoped validator for `SelfHostCfnWrapperEvidenceV1` (PR 7): this kind
+ * does not extend `SelfHostEvidenceBaseV1` (no controller-local AnyHarness
+ * runtime exists in a CFN-wrapper posture — there is only the one deployed
+ * stack), so it validates its own field set end to end rather than sharing
+ * `validateSelfHostCellEvidence`'s base-field walk. The cleanup block mirrors
+ * `validateSelfHostCleanupEvidence`'s green-requires-clean rule (`failed === 0`
+ * and every deletion boolean `true` on a GREEN cell only; a non-green cell may
+ * still record its own cleanup failure).
+ */
+function validateSelfHostCfnWrapperEvidence(
+  where: string,
+  evidence: SelfHostCfnWrapperEvidenceV1,
+  status: FinalTestStatus,
+): void {
+  requireExactKeys(evidence, SELFHOST_CFN_WRAPPER_EVIDENCE_KEYS, where);
+  if (evidence.kind !== "selfhost_cfn_wrapper") {
+    throw new ReportValidationError(`${where}.kind is unknown.`);
+  }
+  if (!Array.isArray(evidence.artifact_ids) || evidence.artifact_ids.length === 0) {
+    throw new ReportValidationError(`${where}.artifact_ids must be a non-empty array.`);
+  }
+  for (const [index, id] of evidence.artifact_ids.entries()) {
+    requireSafeEvidenceToken(`${where}.artifact_ids[${index}]`, id);
+  }
+  requireSafeEvidenceToken(`${where}.server_version`, evidence.server_version);
+  requireSafeEvidenceToken(`${where}.api_origin`, evidence.api_origin);
+  requireEvidenceHash(`${where}.stack_name_hash`, evidence.stack_name_hash);
+  requireSafeEvidenceToken(`${where}.image_repo_digest`, evidence.image_repo_digest);
+  requireSafeEvidenceToken(`${where}.release_version_tag`, evidence.release_version_tag);
+  requireSafeEvidenceToken(`${where}.template_sha256`, evidence.template_sha256);
+  requireTrue(`${where}.template_validated`, evidence.template_validated);
+  requireTrue(`${where}.bundle_digest_bound`, evidence.bundle_digest_bound);
+  requireTrue(`${where}.image_digest_bound`, evidence.image_digest_bound);
+  requireTrue(`${where}.outputs_valid`, evidence.outputs_valid);
+  requireTrue(`${where}.dns_tls_verified`, evidence.dns_tls_verified);
+  requireTrue(`${where}.meta_version_matches`, evidence.meta_version_matches);
+
+  const cleanup = evidence.cleanup;
+  if (typeof cleanup !== "object" || cleanup === null || Array.isArray(cleanup)) {
+    throw new ReportValidationError(`${where}.cleanup must be an object.`);
+  }
+  requireExactKeys(cleanup, SELFHOST_CFN_CLEANUP_EVIDENCE_KEYS, `${where}.cleanup`);
+  requireEvidenceHash(`${where}.cleanup.ledger_id_hash`, cleanup.ledger_id_hash);
+  requireNonNegativeInteger(`${where}.cleanup.registered`, cleanup.registered);
+  requireNonNegativeInteger(`${where}.cleanup.reconciled`, cleanup.reconciled);
+  requireNonNegativeInteger(`${where}.cleanup.failed`, cleanup.failed);
+  for (const field of SELFHOST_CFN_CLEANUP_DELETION_FIELDS) {
+    requireBoolean(`${where}.cleanup.${field}`, cleanup[field]);
+  }
+  if (status === "green") {
+    if (cleanup.failed > 0) {
+      throw new ReportValidationError(`${where}.cleanup.failed must be 0 for a green result.`);
+    }
+    if (SELFHOST_CFN_CLEANUP_DELETION_FIELDS.some((field) => cleanup[field] !== true)) {
+      throw new ReportValidationError(`${where}.cleanup is incomplete on a green result.`);
+    }
   }
 }
 
@@ -1224,8 +2536,20 @@ function validateCleanupEvidence(
 const GREEN_EVIDENCE_REQUIRED_SCENARIOS: ReadonlySet<string> = new Set([
   "LOCAL-WORLD-SMOKE-1",
   "T2-BILL",
-  "T2-AUTH-ORG",
   SELFHOST_INSTALL_1_SCENARIO_ID,
+  "CLOUD-PROVISION-1",
+  // Every SELFHOST-QUAL-1 cell (SH-GITHUB-AUTH / SH-GATEWAY / SH-CLOUD-ADDON)
+  // emits its kind-scoped evidence on green (a bare string here, not a scenario
+  // import, to keep schema.ts free of a scenario→schema cycle — matching
+  // CLOUD-PROVISION-1). Enforces the frozen Acceptance rule "Green requires
+  // complete evidence" for the optional-capability lane.
+  "SELFHOST-QUAL-1",
+  // PR7-CONTROL-007: CFN and isolation were missing here, so either could
+  // validate GREEN with null evidence. Both now require their kind-scoped
+  // evidence on green. (SELFHOST-ISOLATION-1 is fail-closed today, so this only
+  // ever bites if it later greens without evidence — which is exactly the guard.)
+  "SELFHOST-CFN-1",
+  "SELFHOST-ISOLATION-1",
 ]);
 
 function scenarioRequiresGreenEvidence(scenarioId: string): boolean {
@@ -1365,43 +2689,125 @@ export function sanitizeCellEvidence(
     evidence.kind === "selfhost_install_claim" ||
     evidence.kind === "selfhost_desktop_owner" ||
     evidence.kind === "selfhost_base_turn" ||
-    evidence.kind === "selfhost_invitee"
+    evidence.kind === "selfhost_invitee" ||
+    evidence.kind === "selfhost_github_auth" ||
+    evidence.kind === "selfhost_switch_isolation" ||
+    evidence.kind === "selfhost_gateway" ||
+    evidence.kind === "selfhost_cloud_addon" ||
+    evidence.kind === "selfhost_cfn_wrapper"
   ) {
     return sanitizeSelfHostCellEvidence(evidence, secretValues);
   }
   const clean = (value: string): string => boundMessage(redactUrlCredentials(redactSecrets(value, secretValues)));
-  if (evidence.kind === "tier2_billing") {
-    // All string fields are safe tokens by construction; clean them as a
-    // fail-closed backstop (numbers pass through untouched).
-    return {
-      ...evidence,
-      manifest_id: clean(evidence.manifest_id),
-      server_version: clean(evidence.server_version),
-      stripe: {
-        ...evidence.stripe,
-        test_clock_ids: evidence.stripe.test_clock_ids.map(clean),
-        object_ids: evidence.stripe.object_ids.map(clean),
-      },
-    };
+  const cleanSpend = (spend: LocalLitellmSpendV1): LocalLitellmSpendV1 => ({
+    ...spend,
+    token_id_hash: clean(spend.token_id_hash),
+    request_ids: spend.request_ids.map(clean),
+  });
+  const cleanCleanup = (cleanup: LocalCleanupV1): LocalCleanupV1 => ({
+    ...cleanup,
+    ledger_id_hash: clean(cleanup.ledger_id_hash),
+  });
+  // Kind-scoped sanitization mirrors the kind-scoped validators (audit ruling
+  // #3): each variant cleans exactly its own string-bearing fields.
+  switch (evidence.kind) {
+    case "local_workspace_turn":
+      return {
+        ...evidence,
+        artifact_ids: evidence.artifact_ids.map(clean),
+        server_version: clean(evidence.server_version),
+        anyharness_version: clean(evidence.anyharness_version),
+        model_id: clean(evidence.model_id),
+        workspace_id_hash: clean(evidence.workspace_id_hash),
+        session_id_hash: clean(evidence.session_id_hash),
+        litellm: {
+          ...evidence.litellm,
+          token_id_hash: clean(evidence.litellm.token_id_hash),
+          request_ids: evidence.litellm.request_ids.map(clean),
+        },
+        cleanup: {
+          ...evidence.cleanup,
+          ledger_id_hash: clean(evidence.cleanup.ledger_id_hash),
+        },
+      };
+    case "local_route_turn":
+      return {
+        ...evidence,
+        artifact_ids: evidence.artifact_ids.map(clean),
+        server_version: clean(evidence.server_version),
+        anyharness_version: clean(evidence.anyharness_version),
+        model_id: clean(evidence.model_id),
+        workspace_id_hash: clean(evidence.workspace_id_hash),
+        session_id_hash: clean(evidence.session_id_hash),
+        gateway_spend: evidence.gateway_spend ? cleanSpend(evidence.gateway_spend) : null,
+        route_change: evidence.route_change
+          ? {
+              ...evidence.route_change,
+              original_session_id_hash: clean(evidence.route_change.original_session_id_hash),
+              new_session_id_hash: clean(evidence.route_change.new_session_id_hash),
+            }
+          : null,
+        cleanup: cleanCleanup(evidence.cleanup),
+      };
+    case "local_config_matrix":
+      return {
+        ...evidence,
+        artifact_ids: evidence.artifact_ids.map(clean),
+        server_version: clean(evidence.server_version),
+        anyharness_version: clean(evidence.anyharness_version),
+        model_id: clean(evidence.model_id),
+        workspace_id_hash: clean(evidence.workspace_id_hash),
+        session_id_hash: clean(evidence.session_id_hash),
+        controls: evidence.controls.map((control) => ({
+          ...control,
+          control_key: clean(control.control_key),
+          accepted_value: clean(control.accepted_value),
+        })),
+        cleanup: cleanCleanup(evidence.cleanup),
+      };
+    case "local_session_tabs":
+      return {
+        ...evidence,
+        artifact_ids: evidence.artifact_ids.map(clean),
+        server_version: clean(evidence.server_version),
+        anyharness_version: clean(evidence.anyharness_version),
+        workspace_id_hash: clean(evidence.workspace_id_hash),
+        session_id_hashes: evidence.session_id_hashes.map(clean),
+        cleanup: cleanCleanup(evidence.cleanup),
+      };
+    case "local_mcp_integration":
+      return {
+        ...evidence,
+        artifact_ids: evidence.artifact_ids.map(clean),
+        server_version: clean(evidence.server_version),
+        anyharness_version: clean(evidence.anyharness_version),
+        model_id: clean(evidence.model_id),
+        workspace_id_hash: clean(evidence.workspace_id_hash),
+        session_id_hash: clean(evidence.session_id_hash),
+        integration_namespace: clean(evidence.integration_namespace),
+        tool_name: clean(evidence.tool_name),
+        audit_event_id_hash: clean(evidence.audit_event_id_hash),
+        cleanup: cleanCleanup(evidence.cleanup),
+      };
+    case "tier2_billing":
+      // All string fields are safe tokens by construction; clean them as a
+      // fail-closed backstop (numbers pass through untouched).
+      return {
+        ...evidence,
+        manifest_id: clean(evidence.manifest_id),
+        server_version: clean(evidence.server_version),
+        stripe: {
+          ...evidence.stripe,
+          test_clock_ids: evidence.stripe.test_clock_ids.map(clean),
+          object_ids: evidence.stripe.object_ids.map(clean),
+        },
+      };
+    case "cloud_provision_turn":
+      // Owned by the managed-cloud slice; delegate to its kind-scoped sanitizer.
+      return sanitizeCloudProvisionTurnEvidence(evidence, secretValues);
+    default:
+      return evidence;
   }
-  return {
-    ...evidence,
-    artifact_ids: evidence.artifact_ids.map(clean),
-    server_version: clean(evidence.server_version),
-    anyharness_version: clean(evidence.anyharness_version),
-    model_id: clean(evidence.model_id),
-    workspace_id_hash: clean(evidence.workspace_id_hash),
-    session_id_hash: clean(evidence.session_id_hash),
-    litellm: {
-      ...evidence.litellm,
-      token_id_hash: clean(evidence.litellm.token_id_hash),
-      request_ids: evidence.litellm.request_ids.map(clean),
-    },
-    cleanup: {
-      ...evidence.cleanup,
-      ledger_id_hash: clean(evidence.cleanup.ledger_id_hash),
-    },
-  };
 }
 
 /**
@@ -1416,6 +2822,27 @@ function sanitizeSelfHostCellEvidence(
   secretValues: readonly string[],
 ): CellEvidenceV1 {
   const clean = (value: string): string => boundMessage(redactUrlCredentials(redactSecrets(value, secretValues)));
+
+  // The CFN-wrapper posture's evidence shape has no controller_runtime_origin/
+  // anyharness_version (`SelfHostCfnWrapperEvidenceV1` does not extend
+  // `SelfHostEvidenceBaseV1`), so it is sanitized end to end here instead of
+  // through the shared base-field cleaning below.
+  if ((evidence as { kind?: unknown }).kind === "selfhost_cfn_wrapper") {
+    const e = evidence as SelfHostCfnWrapperEvidenceV1;
+    return {
+      ...e,
+      kind: "selfhost_cfn_wrapper",
+      artifact_ids: e.artifact_ids.map(clean),
+      server_version: clean(e.server_version),
+      api_origin: clean(e.api_origin),
+      stack_name_hash: clean(e.stack_name_hash),
+      image_repo_digest: clean(e.image_repo_digest),
+      release_version_tag: clean(e.release_version_tag),
+      template_sha256: clean(e.template_sha256),
+      cleanup: { ...e.cleanup, ledger_id_hash: clean(e.cleanup.ledger_id_hash) },
+    } as SelfHostCfnWrapperEvidenceV1;
+  }
+
   const base = evidence as unknown as SelfHostEvidenceBaseV1 & { kind: string };
   const cleanedBase = {
     ...base,
@@ -1470,12 +2897,104 @@ function sanitizeSelfHostCellEvidence(
         invitation_id_hash: clean(e.invitation_id_hash),
       } as SelfHostInviteeEvidenceV1;
     }
+    case "selfhost_github_auth": {
+      const e = evidence as SelfHostGithubAuthEvidenceV1;
+      return {
+        ...cleanedBase,
+        kind: "selfhost_github_auth",
+        owner_user_id_hash: clean(e.owner_user_id_hash),
+        org_id_hash: clean(e.org_id_hash),
+        github_identity_a_hash: clean(e.github_identity_a_hash),
+        github_identity_b_hash: clean(e.github_identity_b_hash),
+        member_role: clean(e.member_role),
+      } as SelfHostGithubAuthEvidenceV1;
+    }
+    case "selfhost_switch_isolation": {
+      const e = evidence as SelfHostSwitchIsolationEvidenceV1;
+      return {
+        ...cleanedBase,
+        kind: "selfhost_switch_isolation",
+        server_a_origin: clean(e.server_a_origin),
+        server_b_origin: clean(e.server_b_origin),
+      } as SelfHostSwitchIsolationEvidenceV1;
+    }
+    case "selfhost_gateway": {
+      const e = evidence as SelfHostGatewayEvidenceV1;
+      return {
+        ...cleanedBase,
+        kind: "selfhost_gateway",
+        actor_user_id_hash: clean(e.actor_user_id_hash),
+        virtual_key_id_hash: clean(e.virtual_key_id_hash),
+        litellm_image_digest: clean(e.litellm_image_digest),
+        model_id: clean(e.model_id),
+      } as SelfHostGatewayEvidenceV1;
+    }
+    case "selfhost_cloud_addon": {
+      const e = evidence as SelfHostCloudAddonEvidenceV1;
+      return {
+        ...cleanedBase,
+        kind: "selfhost_cloud_addon",
+        github_app_installation_id_hash: clean(e.github_app_installation_id_hash),
+        e2b_template_id: clean(e.e2b_template_id),
+        sandbox_id_hash: clean(e.sandbox_id_hash),
+        workspace_id_hash: clean(e.workspace_id_hash),
+        session_id_hash: clean(e.session_id_hash),
+      } as SelfHostCloudAddonEvidenceV1;
+    }
     default:
       // Unreachable given the CellEvidenceV1 union; fall back to the base
       // sanitization rather than throwing so an unknown future kind still
       // gets its common fields redacted (the validator rejects it either way).
       return cleanedBase as unknown as CellEvidenceV1;
   }
+}
+
+/**
+ * Kind-scoped sanitizer for `cloud_provision_turn` (PR 2). Applies the same
+ * `redactSecrets`/`redactUrlCredentials`/`boundMessage` pipeline to every
+ * string-bearing field (artifact ids, versions, model id, template ids +
+ * input_hash, sandbox_id_hash, covered_repo name/commit, litellm token/request
+ * ids, cleanup ledger_id_hash) so a raw secret or credentialled URL that
+ * reached evidence is turned into a `[REDACTED]`-bearing string the validator
+ * then rejects. Does not touch the local-kind sanitizer switch.
+ */
+function sanitizeCloudProvisionTurnEvidence(
+  evidence: CloudProvisionTurnEvidenceV1,
+  secretValues: readonly string[],
+): CloudProvisionTurnEvidenceV1 {
+  const clean = (value: string): string => boundMessage(redactUrlCredentials(redactSecrets(value, secretValues)));
+  return {
+    ...evidence,
+    artifact_ids: evidence.artifact_ids.map(clean),
+    server_version: clean(evidence.server_version),
+    anyharness_version: clean(evidence.anyharness_version),
+    worker_version: clean(evidence.worker_version),
+    supervisor_version: clean(evidence.supervisor_version),
+    model_id: clean(evidence.model_id),
+    template: {
+      ...evidence.template,
+      template_id: clean(evidence.template.template_id),
+      build_id: clean(evidence.template.build_id),
+      input_hash: clean(evidence.template.input_hash),
+    },
+    sandbox_id_hash: clean(evidence.sandbox_id_hash),
+    worker: { ...evidence.worker },
+    covered_repo: {
+      ...evidence.covered_repo,
+      name: clean(evidence.covered_repo.name),
+      commit: clean(evidence.covered_repo.commit),
+    },
+    isolation: { ...evidence.isolation },
+    litellm: {
+      ...evidence.litellm,
+      token_id_hash: clean(evidence.litellm.token_id_hash),
+      request_ids: evidence.litellm.request_ids.map(clean),
+    },
+    cleanup: {
+      ...evidence.cleanup,
+      ledger_id_hash: clean(evidence.cleanup.ledger_id_hash),
+    },
+  };
 }
 
 /** Applies `sanitizeCellEvidence` to every result in a V4 report. */

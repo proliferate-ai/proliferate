@@ -47,7 +47,9 @@
   --color-composer-control-foreground: var(--color-muted-foreground);
   --color-composer-control-active-foreground: var(--color-foreground);
   --color-composer-control-muted-foreground: var(--color-faint);
-  --color-composer-control-hover: var(--color-muted);
+  /* Not var(--color-muted): on the dark theme that equals the composer
+     surface, making the hover chip invisible. Mix a visible step instead. */
+  --color-composer-control-hover: color-mix(in oklab, var(--color-foreground) 9%, transparent);
   --color-composer-send-background: var(--color-foreground);
   --color-composer-send-foreground: var(--color-background);
   --color-composer-shadow: var(--shadow-subtle);

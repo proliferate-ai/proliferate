@@ -20,6 +20,7 @@ import {
   useDocumentFocusVisibilityNonce,
 } from "#product/hooks/ui/document/use-document-focus-visibility";
 import { useLogicalWorkspaces } from "#product/hooks/workspaces/derived/use-logical-workspaces";
+import { useDesktopInstallId } from "#product/hooks/workspaces/derived/use-desktop-install-id";
 import { useStandardRepoProjection } from "#product/hooks/workspaces/derived/use-standard-repo-projection";
 import { useWorkspaceGitStatuses } from "#product/hooks/workspaces/derived/use-workspace-git-statuses";
 import { useWorkspaceMetadataSync } from "#product/hooks/workspaces/lifecycle/use-workspace-metadata-sync";
@@ -134,6 +135,7 @@ export function useWorkspaceSidebarState({
   const cleanupAttentionWorkspaces =
     workspaceCollections?.cleanupAttentionWorkspaces ?? EMPTY_WORKSPACES;
   const { repoRoots } = useStandardRepoProjection();
+  const desktopInstallId = useDesktopInstallId();
   const { data: gitStatus } = useWorkspaceMetadataSync();
   const { statusesByLogicalId: gitStatusesByLogicalId } = useWorkspaceGitStatuses();
   const computeTargets = useComputeTargetOptions();
@@ -207,10 +209,12 @@ export function useWorkspaceSidebarState({
       sessionLastViewedAt,
       targetAppearanceById: computeTargets.targetAppearanceById,
       suppressActiveNeedsReview: windowFocused,
+      desktopInstallId,
     })), [
     activeSessionTitle,
     archivedSet,
     computeTargets.targetAppearanceById,
+    desktopInstallId,
     gitStatus,
     gitStatusesByLogicalId,
     hiddenRepoRootSet,

@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { isWorkspaceDirectoryMissingError } from "#product/lib/domain/sessions/creation/create-session-error";
 import type { ContentPart, PromptInputBlock } from "@anyharness/sdk";
 import { useProductTelemetry } from "#product/hooks/telemetry/facade/use-product-telemetry";
 import { useWorkspaceSetupStatusCache } from "#product/hooks/access/anyharness/workspaces/use-workspace-setup-status-cache";
@@ -40,6 +41,8 @@ import {
   startLatencyFlow,
 } from "#product/lib/infra/measurement/measurement-port";
 import { useGitPromptSnapshotEffects } from "#product/hooks/workspaces/workflows/use-git-prompt-snapshot-effects";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
+import { useWorkspaceCollectionsInvalidationActions } from "#product/hooks/workspaces/cache/use-workspace-collections-invalidation";
 import { completeChatPromptSubmitSideEffects } from "#product/lib/workflows/chat/complete-chat-prompt-submit-side-effects";
 
 export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
@@ -68,11 +71,13 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
     currentLaunchIdentity,
   } = useActiveSessionLaunchState();
   const { hasSlot } = useActiveSessionSurfaceSnapshot();
-  const { isDisabled } = useChatAvailabilityState({
+  const { isDisabled, sendBlockedReason } = useChatAvailabilityState({
     activeSessionId: forceNewSession ? null : activeSessionId,
   });
   const scopedLaunchIdentity = forceNewSession ? null : currentLaunchIdentity;
   const configuredLaunch = useConfiguredLaunchReadiness(scopedLaunchIdentity);
+  const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
+  const { invalidateWorkspaceCollectionsForRuntime } = useWorkspaceCollectionsInvalidationActions();
   const gitPromptEffects = useGitPromptSnapshotEffects();
   const telemetry = useProductTelemetry();
 
@@ -100,7 +105,11 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
     const text = input?.text.trim() ?? serializeChatDraftToPrompt(currentDraft).trim();
     const blocks = input?.blocks ?? [{ type: "text" as const, text }];
     const attachmentSnapshots = input?.attachmentSnapshots ?? [];
-    if ((!hasPromptContent(text, blocks) && attachmentSnapshots.length === 0) || isDisabled) {
+    if (
+      (!hasPromptContent(text, blocks) && attachmentSnapshots.length === 0)
+      || isDisabled
+      || sendBlockedReason
+    ) {
       return false;
     }
 
@@ -246,8 +255,16 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
         },
       });
 
-      const message = error instanceof Error ? error.message : String(error);
-      showToast(`Failed to send message: ${message}`);
+      // The persistent missing-worktree composer panel owns this condition;
+      // a transient toast would just restate it with internal wording. The
+      // collections cache still says the workspace is available (no
+      // refetch-on-focus), so refresh availability to mount the panel.
+      if (isWorkspaceDirectoryMissingError(error)) {
+        void invalidateWorkspaceCollectionsForRuntime(runtimeUrl);
+      } else {
+        const message = error instanceof Error ? error.message : String(error);
+        showToast(`Failed to send message: ${message}`);
+      }
       return false;
     }
   }, [
@@ -261,12 +278,15 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
     gitPromptEffects,
     hasSlot,
     forceNewSession,
+    invalidateWorkspaceCollectionsForRuntime,
     isDisabled,
     pendingWorkspaceEntry,
     promptActiveSession,
     promptSession,
+    runtimeUrl,
     selectedLogicalWorkspaceId,
     selectedWorkspaceId,
+    sendBlockedReason,
     setWorkspaceArrivalEvent,
     showToast,
     scopedLaunchIdentity,

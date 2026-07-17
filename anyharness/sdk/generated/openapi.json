@@ -79,6 +79,27 @@
             }
           }
         }
+      },
+      "delete": {
+        "tags": [
+          "agent-auth"
+        ],
+        "operationId": "delete_agent_auth_state",
+        "responses": {
+          "204": {
+            "description": "Persisted route state cleared; native auth is active"
+          },
+          "500": {
+            "description": "State could not be cleared",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/v1/agents": {
@@ -990,6 +1011,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Session execution is controlled by an active workflow run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -1010,6 +1041,56 @@
                   "items": {
                     "$ref": "#/components/schemas/RepoRoot"
                   }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/repo-roots/materializations": {
+      "post": {
+        "tags": [
+          "repo-roots"
+        ],
+        "operationId": "materialize_repo_root",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MaterializeRepoRootRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Acquired repo root",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaterializeRepoRootResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or acquisition failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Destination/operation conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             }
@@ -1374,6 +1455,77 @@
         }
       }
     },
+    "/v1/repo-roots/{repo_root_id}/workspace-materializations": {
+      "post": {
+        "tags": [
+          "repo-roots"
+        ],
+        "operationId": "materialize_workspace_at_ref",
+        "parameters": [
+          {
+            "name": "repo_root_id",
+            "in": "path",
+            "description": "Repo root ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MaterializeWorkspaceAtRefRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Materialized workspace at exact ref",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaterializeWorkspaceAtRefResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or ref failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Repo root not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Branch/head/dirty/busy/operation conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/reviews/{review_run_id}/assignments/{assignment_id}/critique": {
       "get": {
         "tags": [
@@ -1541,6 +1693,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Session execution is controlled by an active workflow run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -1582,6 +1744,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Session execution is controlled by an active workflow run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -1616,6 +1788,16 @@
           },
           "404": {
             "description": "Review run not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Session execution is controlled by an active workflow run",
             "content": {
               "application/json": {
                 "schema": {
@@ -1777,6 +1959,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Session execution is controlled by an active workflow run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -1811,6 +2003,16 @@
           },
           "404": {
             "description": "Session not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Session execution is controlled by an active workflow run",
             "content": {
               "application/json": {
                 "schema": {
@@ -1879,6 +2081,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Session execution is controlled by an active workflow run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -1913,6 +2125,16 @@
           },
           "404": {
             "description": "Session not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Session execution is controlled by an active workflow run",
             "content": {
               "application/json": {
                 "schema": {
@@ -2336,6 +2558,16 @@
           },
           "404": {
             "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Session execution is controlled by an active workflow run",
             "content": {
               "application/json": {
                 "schema": {
@@ -2773,6 +3005,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Session execution is controlled by an active workflow run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       },
@@ -2832,6 +3074,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Session execution is controlled by an active workflow run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -2883,6 +3135,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Session execution is controlled by an active workflow run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -2927,6 +3189,16 @@
           },
           "404": {
             "description": "Session not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Session execution is controlled by an active workflow run",
             "content": {
               "application/json": {
                 "schema": {
@@ -3612,6 +3884,136 @@
         }
       }
     },
+    "/v1/workflow-run-workspaces/{run_id}": {
+      "get": {
+        "tags": [
+          "workflow-run-workspaces"
+        ],
+        "operationId": "get_workflow_run_workspace",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "description": "Canonical UUID for the workflow run",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Durable materialization record",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowRunWorkspaceResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Non-canonical run ID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown workflow run workspace",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "workflow-run-workspaces"
+        ],
+        "operationId": "put_workflow_run_workspace",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "description": "Canonical UUID for the workflow run",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PutWorkflowRunWorkspaceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Exact replay of an identical placement request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowRunWorkspaceResponse"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "New durable materialization (status ready or failed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowRunWorkspaceResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid ID or placement request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Same ID with a different placement request, or the workflow run already claimed this ID before placement acceptance",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Materialization storage failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/workflow-runs/{run_id}": {
       "get": {
         "tags": [
@@ -3750,7 +4152,7 @@
             }
           },
           "409": {
-            "description": "Same ID with different invocation, or workspace mutation blocked",
+            "description": "Same ID with different invocation, workspace mutation blocked, or a schema-v2 workflow-workspace binding conflict (workflow_workspace_not_ready when this run's materialization is not ready; workflow_workspace_mismatch when the ready materialization's workspace differs from the request)",
             "content": {
               "application/json": {
                 "schema": {
@@ -4057,6 +4459,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/WorkspacePurgeResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Session execution is controlled by an active workflow run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             }
@@ -5422,6 +5834,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Session execution is controlled by an active workflow run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -5466,6 +5888,16 @@
           },
           "404": {
             "description": "Workspace not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Session execution is controlled by an active workflow run",
             "content": {
               "application/json": {
                 "schema": {
@@ -5747,6 +6179,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Session execution is controlled by an active workflow run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -5837,6 +6279,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Session execution is controlled by an active workflow run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -5884,6 +6336,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/PlanDecisionResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Session execution is controlled by an active workflow run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             }
@@ -5950,6 +6412,16 @@
           },
           "404": {
             "description": "Plan or session not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Session execution is controlled by an active workflow run",
             "content": {
               "application/json": {
                 "schema": {
@@ -6151,6 +6623,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Session execution is controlled by an active workflow run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -6277,6 +6759,16 @@
           },
           "400": {
             "description": "Invalid review request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Session execution is controlled by an active workflow run",
             "content": {
               "application/json": {
                 "schema": {
@@ -10505,6 +10997,7 @@
           "status",
           "version",
           "runtimeHome",
+          "executionStoreId",
           "capabilities",
           "agentSeed",
           "agentReconcile"
@@ -10518,6 +11011,9 @@
           },
           "capabilities": {
             "$ref": "#/components/schemas/RuntimeCapabilities"
+          },
+          "executionStoreId": {
+            "type": "string"
           },
           "resourcePressure": {
             "oneOf": [
@@ -11137,6 +11633,131 @@
               "string",
               "null"
             ]
+          }
+        }
+      },
+      "MaterializeRepoRootRequest": {
+        "type": "object",
+        "required": [
+          "operationId",
+          "repository",
+          "destinationPath",
+          "mode"
+        ],
+        "properties": {
+          "destinationPath": {
+            "type": "string",
+            "description": "Absolute destination path selected by the user-facing host."
+          },
+          "mode": {
+            "$ref": "#/components/schemas/RepoRootMaterializationMode"
+          },
+          "operationId": {
+            "type": "string",
+            "description": "Stable caller idempotency key."
+          },
+          "repository": {
+            "$ref": "#/components/schemas/MaterializeRepositoryTarget"
+          }
+        }
+      },
+      "MaterializeRepoRootResponse": {
+        "type": "object",
+        "required": [
+          "operationId",
+          "repoRoot",
+          "outcome"
+        ],
+        "properties": {
+          "operationId": {
+            "type": "string"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/RepoRootMaterializationOutcome"
+          },
+          "repoRoot": {
+            "$ref": "#/components/schemas/RepoRoot"
+          }
+        }
+      },
+      "MaterializeRepositoryTarget": {
+        "type": "object",
+        "description": "The expected identity + fetch source for a repository the runtime should\nacquire. `clone_url` may be HTTPS or SSH; the runtime relies solely on the\nlocal Git credential chain to authenticate.",
+        "required": [
+          "provider",
+          "owner",
+          "name",
+          "cloneUrl"
+        ],
+        "properties": {
+          "cloneUrl": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "owner": {
+            "type": "string"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/RepositoryProvider"
+          }
+        }
+      },
+      "MaterializeWorkspaceAtRefRequest": {
+        "type": "object",
+        "required": [
+          "operationId",
+          "branchName",
+          "headSha"
+        ],
+        "properties": {
+          "branchName": {
+            "type": "string"
+          },
+          "destinationId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 96,
+            "pattern": "^[A-Za-z0-9._-]{1,96}$"
+          },
+          "headSha": {
+            "type": "string"
+          },
+          "operationId": {
+            "type": "string",
+            "description": "Stable caller idempotency key."
+          },
+          "preferredWorkspaceName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "MaterializeWorkspaceAtRefResponse": {
+        "type": "object",
+        "required": [
+          "operationId",
+          "workspace",
+          "observedHeadSha",
+          "outcome"
+        ],
+        "properties": {
+          "observedHeadSha": {
+            "type": "string"
+          },
+          "operationId": {
+            "type": "string"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/WorkspaceMaterializationOutcome"
+          },
+          "workspace": {
+            "$ref": "#/components/schemas/Workspace"
           }
         }
       },
@@ -13729,6 +14350,26 @@
         },
         "additionalProperties": false
       },
+      "PutWorkflowRunWorkspaceRequest": {
+        "type": "object",
+        "description": "`PUT /v1/workflow-run-workspaces/{runId}` body. The path `runId` is the\ncanonical UUID later reused by the AnyHarness run and Cloud invocation; it is\nnever carried in the body.",
+        "required": [
+          "schemaVersion",
+          "placement"
+        ],
+        "properties": {
+          "placement": {
+            "$ref": "#/components/schemas/WorkflowWorkspacePlacementRequest"
+          },
+          "schemaVersion": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Exactly `1`.",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      },
       "RawSessionConfigOption": {
         "type": "object",
         "description": "A raw ACP session configuration option as exposed by the active session.\n\nThis is the transport-fidelity layer. It should match the live ACP state as\nclosely as possible without applying product-specific interpretation.",
@@ -14157,6 +14798,28 @@
         "enum": [
           "external",
           "managed"
+        ]
+      },
+      "RepoRootMaterializationMode": {
+        "type": "string",
+        "description": "Acquisition mode. Only `clone_or_adopt` is supported: clone into a\nnon-existent/empty destination, or adopt an existing matching main checkout.",
+        "enum": [
+          "clone_or_adopt"
+        ]
+      },
+      "RepoRootMaterializationOutcome": {
+        "type": "string",
+        "enum": [
+          "cloned",
+          "adopted",
+          "reused"
+        ]
+      },
+      "RepositoryProvider": {
+        "type": "string",
+        "description": "The single supported provider for repository acquisition today. Kept as a\nclosed enum so callers cannot request an unsupported host and the wire stays\nforward-compatible.",
+        "enum": [
+          "github"
         ]
       },
       "ResizeTerminalRequest": {
@@ -18589,6 +19252,163 @@
           }
         }
       },
+      "WorkflowRunWorkspaceResponse": {
+        "type": "object",
+        "description": "`PUT`/`GET` response for a Workflow run workspace materialization.",
+        "required": [
+          "runId",
+          "schemaVersion",
+          "status",
+          "placement",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string"
+          },
+          "failureCode": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "A bounded, secret-free failure code, present only when `status` is\n`failed`."
+          },
+          "finishedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "placement": {
+            "$ref": "#/components/schemas/WorkflowWorkspaceResolvedPlacement"
+          },
+          "runId": {
+            "type": "string"
+          },
+          "schemaVersion": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "status": {
+            "$ref": "#/components/schemas/WorkflowWorkspaceStatus"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "workspaceId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The durable ordinary workspace id, present once the artifact exists."
+          }
+        }
+      },
+      "WorkflowWorkspacePlacementRequest": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "No user repository: an internal blank Git repository. No repository fields are permitted.",
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "scratch"
+                ]
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "description": "A new deterministic branch/worktree from one immutable source commit.",
+            "required": [
+              "kind",
+              "repoRootId",
+              "baseRef"
+            ],
+            "properties": {
+              "baseRef": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "repositoryWorktree"
+                ]
+              },
+              "repoRootId": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        ],
+        "description": "Strict workflow workspace placement discriminated by `kind`."
+      },
+      "WorkflowWorkspaceResolvedPlacement": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "scratch"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "repoRootId",
+              "baseRef",
+              "kind"
+            ],
+            "properties": {
+              "baseOid": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Present once the immutable base OID has been resolved and persisted."
+              },
+              "baseRef": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "repositoryWorktree"
+                ]
+              },
+              "repoRootId": {
+                "type": "string"
+              }
+            }
+          }
+        ],
+        "description": "The resolved placement echoed on the response. For a repository worktree it\nexposes the resolved base OID as non-secret correlation; it never exposes\ncredentials or arbitrary runtime paths."
+      },
+      "WorkflowWorkspaceStatus": {
+        "type": "string",
+        "description": "The durable materialization status.",
+        "enum": [
+          "accepted",
+          "materializing",
+          "ready",
+          "failed"
+        ]
+      },
       "Workspace": {
         "type": "object",
         "required": [
@@ -18597,12 +19417,16 @@
           "repoRootId",
           "path",
           "surface",
+          "availability",
           "lifecycleState",
           "cleanupState",
           "createdAt",
           "updatedAt"
         ],
         "properties": {
+          "availability": {
+            "$ref": "#/components/schemas/WorkspaceAvailability"
+          },
           "cleanupAttemptedAt": {
             "type": [
               "string",
@@ -18707,6 +19531,14 @@
             "type": "string"
           }
         }
+      },
+      "WorkspaceAvailability": {
+        "type": "string",
+        "description": "Whether a workspace can currently be operated on. Computed at read time\nfrom the on-disk checkout, so the frontend can detect a deleted checkout on\nworkspace load/select rather than only when a session send fails.",
+        "enum": [
+          "available",
+          "workspace_directory_missing"
+        ]
       },
       "WorkspaceCleanupOperation": {
         "type": "string",
@@ -18817,6 +19649,25 @@
                   "string",
                   "null"
                 ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An isolated workspace materialized for one Workflow run (spec\n`workflow-workspace-placement`). Machine provenance that both names the\nowning run and excludes the workspace from generic worktree retention.",
+            "required": [
+              "runId",
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "workflow"
+                ]
+              },
+              "runId": {
+                "type": "string"
               }
             }
           }
@@ -18958,6 +19809,14 @@
         "enum": [
           "active",
           "retired"
+        ]
+      },
+      "WorkspaceMaterializationOutcome": {
+        "type": "string",
+        "enum": [
+          "created",
+          "adopted",
+          "reused"
         ]
       },
       "WorkspaceMobilityArchive": {

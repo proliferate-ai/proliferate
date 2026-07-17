@@ -95,6 +95,14 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+      # LiteLLM's cold start (Prisma client generation + first-boot schema
+      # migration against litellm-db, model-registry load) can exceed
+      # retries*interval on a small instance. Without a start_period, those
+      # early boot-time failures count toward `retries` and the container flips
+      # `unhealthy` before it is ready — which makes bootstrap.sh's
+      # `up -d --wait litellm` fail on the gateway add-on. start_period keeps
+      # failing checks from counting until the service has had time to boot.
+      start_period: 180s
 
   migrate:
     image: ${PROLIFERATE_SERVER_IMAGE:-ghcr.io/proliferate-ai/proliferate-server}:${PROLIFERATE_SERVER_IMAGE_TAG:-stable}
@@ -111,6 +119,15 @@ services:
     restart: unless-stopped
     env_file:
       - ${PROLIFERATE_ENV_FILE:-.env}
+    # Serve the compiled ProductClient Web application same-origin from the
+    # server image. The image bakes the Web distribution at /app/web-dist (see
+    # server/Dockerfile); pointing WEB_DIST_DIR at it enables self-hosted Web by
+    # default for every ordinary install — no new profile and no new public
+    # port. Caddy still exposes the single SITE_ADDRESS and proxies everything
+    # but /llm/* to this service. An operator can disable Web serving by
+    # overriding WEB_DIST_DIR to empty in .env.local.
+    environment:
+      WEB_DIST_DIR: ${WEB_DIST_DIR-/app/web-dist}
     ports:
       - "127.0.0.1:8000:8000"
     volumes:

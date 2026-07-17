@@ -1,4 +1,5 @@
 import type { ErrorContext } from "@proliferate/product-client/host/product-host";
+import { isWorkspaceDirectoryMissingError } from "#product/lib/domain/sessions/creation/create-session-error";
 import { logLatency } from "#product/lib/infra/measurement/measurement-port";
 import { useChatLaunchIntentStore } from "#product/stores/chat/chat-launch-intent-store";
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
@@ -70,32 +71,10 @@ export function cleanupSessionCreationFailure(
 
   if (input.replacementTransaction) {
     const activeSessionIdBeforeRemoval = useSessionSelectionStore.getState().activeSessionId;
-    const acquiredPrompts = getPromptOutboxEntriesForSession(input.pendingSessionId)
-      .filter((entry) => (
-        entry.dispatchedAt === null
-        && entry.deliveryState !== "cancelled"
-        && entry.deliveryState !== "echoed_tombstone"
-      ));
-    if (acquiredPrompts.length > 0) {
-      // The replacement began empty, but the still-usable composer may have
-      // queued work while it materialized. Move the complete payload into a
-      // workspace-scoped recovery surface before removing the failed shell.
-      const errorMessage = input.error instanceof Error && input.error.message.trim()
-        ? input.error.message
-        : "Session creation failed.";
-      useChatPromptRecoveryStore.getState().addRecoveries(
-        input.recoveryWorkspaceUiKey,
-        acquiredPrompts.map((prompt) => ({
-          id: prompt.clientPromptId,
-          workspaceId: input.workspaceId,
-          agentKind: input.agentKind,
-          modelId: input.modelId,
-          modeId: input.modeId,
-          errorMessage,
-          prompt,
-        })),
-      );
-    }
+    // The replacement began empty, but the still-usable composer may have
+    // queued work while it materialized. Move the complete payload into a
+    // workspace-scoped recovery surface before removing the failed shell.
+    moveOutboxPromptsToRecovery(input);
     useSessionIntentStore.getState().clearSession(input.pendingSessionId);
     removeSessionRecordAndClearSelection(input.pendingSessionId);
     const rolledBackShellIntent = input.rollbackOwnedShellIntent();
@@ -114,7 +93,19 @@ export function cleanupSessionCreationFailure(
     return;
   }
 
-  if (input.hasPrompt || input.preserveProjectedSessionOnCreateFailure) {
+  // A prompt-bearing create normally keeps the failed projected shell so the
+  // user can retry in place. When the workspace's checkout is gone that shell
+  // is a dead end (the persistent missing-worktree panel owns the condition),
+  // so move the prompt to the recovery surface and remove the shell instead.
+  const discardDeadProjectedSession =
+    input.hasPrompt
+    && !input.preserveProjectedSessionOnCreateFailure
+    && isWorkspaceDirectoryMissingError(input.error);
+
+  if (
+    (input.hasPrompt || input.preserveProjectedSessionOnCreateFailure)
+    && !discardDeadProjectedSession
+  ) {
     markProjectedSessionPromptCreateFailed(input.pendingSessionId, input.error);
     clearLaunchIntent(input.launchIntentId);
     captureCreationFailure(
@@ -127,6 +118,9 @@ export function cleanupSessionCreationFailure(
     return;
   }
 
+  if (discardDeadProjectedSession) {
+    moveOutboxPromptsToRecovery(input);
+  }
   const activeSessionIdBeforeRemoval = useSessionSelectionStore.getState().activeSessionId;
   useSessionIntentStore.getState().clearSession(input.pendingSessionId);
   removeSessionRecordAndClearSelection(input.pendingSessionId);
@@ -155,6 +149,39 @@ export function cleanupSessionCreationFailure(
   }
   clearLaunchIntent(input.launchIntentId);
   captureCreationFailure(deps.captureException, input.error, "create_session_with_resolved_config");
+}
+
+function moveOutboxPromptsToRecovery(
+  input: Pick<
+    SessionCreationFailureCleanupInput,
+    "agentKind" | "error" | "modeId" | "modelId" | "pendingSessionId"
+    | "recoveryWorkspaceUiKey" | "workspaceId"
+  >,
+): void {
+  const acquiredPrompts = getPromptOutboxEntriesForSession(input.pendingSessionId)
+    .filter((entry) => (
+      entry.dispatchedAt === null
+      && entry.deliveryState !== "cancelled"
+      && entry.deliveryState !== "echoed_tombstone"
+    ));
+  if (acquiredPrompts.length === 0) {
+    return;
+  }
+  const errorMessage = input.error instanceof Error && input.error.message.trim()
+    ? input.error.message
+    : "Session creation failed.";
+  useChatPromptRecoveryStore.getState().addRecoveries(
+    input.recoveryWorkspaceUiKey,
+    acquiredPrompts.map((prompt) => ({
+      id: prompt.clientPromptId,
+      workspaceId: input.workspaceId,
+      agentKind: input.agentKind,
+      modelId: input.modelId,
+      modeId: input.modeId,
+      errorMessage,
+      prompt,
+    })),
+  );
 }
 
 function clearLaunchIntent(launchIntentId: string | null | undefined): void {

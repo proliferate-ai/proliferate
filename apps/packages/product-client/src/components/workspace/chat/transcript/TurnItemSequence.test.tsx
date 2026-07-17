@@ -13,6 +13,7 @@ import {
   CompletedHistorySequence,
   resolveTurnItemFrontierBlockKey,
   shouldRenderCompletedArtifactCards,
+  TurnItemSequence,
 } from "#product/components/workspace/chat/transcript/TurnItemSequence";
 
 vi.mock("./TranscriptTreeNode", () => ({
@@ -80,3 +81,69 @@ describe("completion-only frontier prelude", () => {
     })).toBe(true);
   });
 });
+
+describe("completed-work transition", () => {
+  it("fades the collapsed summary only on a mounted live-to-complete handoff", () => {
+    const transcript = createTranscriptState("session-1");
+    const liveTurn = turnRecord(["read"]);
+    transcript.itemsById = {
+      read: toolItem("read", liveTurn.turnId, 1, "file_read", "in_progress"),
+    };
+    const { container, rerender } = renderTurnItemSequence({
+      turn: liveTurn,
+      transcript,
+    });
+
+    const completedTurn = turnRecord(["read", "answer"], "2026-04-04T00:00:10Z");
+    transcript.itemsById.read = toolItem("read", completedTurn.turnId, 1, "file_read", "completed");
+    transcript.itemsById.answer = assistantItem("answer", completedTurn.turnId, 2);
+    rerender(turnItemSequence({ turn: completedTurn, transcript }));
+
+    const transition = container.querySelector("[data-completed-work-transition='true']");
+    expect(transition?.className).toContain("motion-safe:animate-status-crossfade");
+    expect(transition?.className).not.toContain("height");
+
+    rerender(turnItemSequence({ turn: completedTurn, transcript }));
+    expect(container.querySelector("[data-completed-work-transition='true']"))
+      .toBe(transition);
+
+    cleanup();
+    const hydrated = renderTurnItemSequence({ turn: completedTurn, transcript });
+    expect(hydrated.container.querySelector("[data-completed-work-transition]")).toBeNull();
+  });
+});
+
+function renderTurnItemSequence({
+  turn,
+  transcript,
+}: {
+  turn: ReturnType<typeof turnRecord>;
+  transcript: ReturnType<typeof createTranscriptState>;
+}) {
+  return render(turnItemSequence({ turn, transcript }));
+}
+
+function turnItemSequence({
+  turn,
+  transcript,
+}: {
+  turn: ReturnType<typeof turnRecord>;
+  transcript: ReturnType<typeof createTranscriptState>;
+}) {
+  const presentation = buildTurnPresentation(turn, transcript);
+  return (
+    <TurnItemSequence
+      turn={turn}
+      transcript={transcript}
+      isTurnComplete={turn.completedAt !== null}
+      presentation={presentation}
+      autoFollowCollapsedActionBlockId={null}
+      tailAssistantProseRootId={presentation.finalAssistantItemId}
+      completedHistoryLabel={null}
+      animateActivityEntry={false}
+      showCompletedArtifactFallback={false}
+      workspaceId={null}
+      onOpenArtifact={vi.fn()}
+    />
+  );
+}

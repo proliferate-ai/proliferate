@@ -29,6 +29,7 @@ async def assert_current_schema(conn: AsyncConnection, head_revision: str) -> No
         "cloud_secret_file",
         "cloud_secret_set",
         "cloud_workspace",
+        "cloud_workspace_materialization",
         "desktop_auth_code",
         "github_app_authorizations",
         "github_app_installations",
@@ -168,6 +169,8 @@ async def assert_current_schema(conn: AsyncConnection, head_revision: str) -> No
         "ready_at",
         "last_health_at",
         "destroyed_at",
+        "desired_anyharness_version",
+        "desired_worker_version",
         "created_at",
         "updated_at",
     } <= cloud_sandbox_columns
@@ -244,6 +247,16 @@ async def assert_current_schema(conn: AsyncConnection, head_revision: str) -> No
         "hostname",
         "machine_fingerprint",
     } <= runtime_worker_columns
+    runtime_worker_enrollment_indexes = await conn.run_sync(
+        lambda sync_conn: {
+            index["name"]
+            for index in inspect(sync_conn).get_indexes("cloud_runtime_worker_enrollment")
+        }
+    )
+    assert {
+        "ix_cloud_runtime_worker_enrollment_desktop_fence",
+        "ix_cloud_runtime_worker_enrollment_desktop_created_at",
+    } <= runtime_worker_enrollment_indexes
 
     tool_cache_foreign_keys = await conn.run_sync(
         lambda sync_conn: {

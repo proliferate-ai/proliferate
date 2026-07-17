@@ -64,6 +64,15 @@ Existing Cloud repo:
   unavailable until authority is restored
 ```
 
+The add-repository UI presents user authorization, organization installation,
+and repository selection as separate ordered steps. It identifies the current
+step, preserves completed prerequisites, and exposes only the action for the
+current blocker. Redirect guidance is host-aware: Web explains that GitHub
+returns to the current browser, while Desktop explains that GitHub opens in a
+browser and then returns to Proliferate Desktop. A member who cannot install
+the app gets an actionable organization-admin request instead of an install
+control they cannot use.
+
 ## Token Model
 
 GitHub App user access tokens are the only sandbox Git credential source.
@@ -1062,19 +1071,30 @@ def _lease_refresh_after(*, now: datetime, expires_at: datetime) -> datetime:
 token is already inside that safety window, the server returns an immediate
 refresh point and the next Worker cycle will request a new lease again.
 
-If the GitHub refresh request returns `invalid_grant`, the server marks the
-authorization `needs_reauth` and returns `github_app_authorization_expired`.
+Rotating refresh tokens are serialized by a per-user Redis lease. The server
+ends the authorization read transaction before waiting, rereads the row after
+acquiring the lease, and ends that transaction before GitHub I/O. Both a
+successful rotation and an `invalid_grant` transition use compare-and-set on
+the exact authorization revision. A losing refresh can therefore neither
+overwrite a newer callback nor mark its replacement `needs_reauth`.
 
 ```python
 try:
     refreshed_token = await refresh_github_app_user_authorization(authorization)
 except GitHubAppInvalidGrant as exc:
-    await mark_github_app_authorization_needs_reauth(db, authorization.id)
+    changed = await mark_needs_reauth_if_unchanged(db, authorization.updated_at)
+    if not changed:
+        return await load_current_authorization(db)
     raise CloudApiError(
         "github_app_authorization_expired",
         "Reconnect the Proliferate GitHub App.",
         status_code=409,
     ) from exc
+return await replace_authorization_if_unchanged(
+    db,
+    authorization.updated_at,
+    refreshed_token,
+)
 ```
 
 The response never includes `refresh_token_ciphertext`, app private-key
@@ -1504,6 +1524,8 @@ worker refresh resolves personal target owner
 worker refresh rejects missing GitHub App auth
 worker refresh marks needs_reauth when refresh token is missing on refresh path
 worker refresh marks needs_reauth when GitHub returns invalid_grant
+concurrent rotating-token refreshes issue one GitHub request
+invalid_grant cannot clobber a newer callback authorization
 worker refresh returns GitHub App lease when authorization is ready
 worker refresh never returns refresh tokens or app secrets
 lease refreshAfter is never later than expiresAt minus ten minutes

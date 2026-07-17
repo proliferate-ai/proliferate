@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import json
 import uuid
 from datetime import UTC, datetime, timedelta
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 from httpx import AsyncClient
@@ -264,6 +266,86 @@ class TestAuthenticateIntegration:
         flow = flow_response.json()
         assert flow["status"] == "active"
         assert flow["authorizationUrl"].startswith("https://auth.example.com/authorize")
+
+    @pytest.mark.asyncio
+    async def test_authenticate_slack_uses_configured_scopes_when_challenge_omits_them(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        auth = await _authed_user(client, db_session, prefix="int-oauth-slack-scopes")
+        await _seed_definitions(db_session)
+        definition_id = await _definition_id(db_session, "slack")
+        expected_scopes = (
+            "search:read.public",
+            "search:read.private",
+            "search:read.im",
+            "search:read.mpim",
+            "search:read.files",
+            "search:read.users",
+        )
+
+        monkeypatch.setattr(oauth_clients.app_settings, "cloud_mcp_slack_enabled", True)
+        monkeypatch.setattr(
+            oauth_clients.app_settings,
+            "cloud_mcp_slack_client_id",
+            "slack-client-id",
+        )
+        monkeypatch.setattr(
+            oauth_clients.app_settings,
+            "cloud_mcp_slack_client_secret",
+            "slack-client-secret",
+        )
+        monkeypatch.setattr(
+            oauth_clients.app_settings,
+            "cloud_mcp_slack_token_endpoint_auth_method",
+            "client_secret_post",
+        )
+
+        async def _fake_protected(server_url: str) -> ProtectedResourceMetadata:
+            assert server_url == "https://mcp.slack.com/mcp"
+            return ProtectedResourceMetadata(
+                authorization_servers=("https://auth.example.com",),
+                resource="https://mcp.slack.com/mcp",
+                challenged_scope=None,
+            )
+
+        async def _fake_auth_metadata(issuer: str) -> AuthorizationServerMetadata:
+            assert issuer == "https://auth.example.com"
+            return AuthorizationServerMetadata(
+                issuer=issuer,
+                authorization_endpoint="https://auth.example.com/authorize",
+                token_endpoint="https://auth.example.com/token",
+                registration_endpoint=None,
+                token_endpoint_auth_methods_supported=("client_secret_post",),
+            )
+
+        monkeypatch.setattr(oauth_service, "discover_protected_resource_metadata", _fake_protected)
+        monkeypatch.setattr(
+            oauth_service,
+            "discover_authorization_server_metadata",
+            _fake_auth_metadata,
+        )
+
+        response = await client.post(
+            "/v1/cloud/integrations/authentications",
+            headers=auth.headers,
+            json={"definitionId": definition_id, "authKind": "oauth2"},
+        )
+
+        assert response.status_code == 200, response.text
+        body = response.json()
+        requested_scope = " ".join(expected_scopes)
+        assert parse_qs(urlsplit(body["authorizationUrl"]).query)["scope"] == [requested_scope]
+
+        persisted_flow = await db_session.scalar(
+            select(CloudIntegrationOAuthFlow).where(
+                CloudIntegrationOAuthFlow.id == uuid.UUID(body["oauthFlowId"])
+            )
+        )
+        assert persisted_flow is not None
+        assert json.loads(persisted_flow.requested_scopes) == list(expected_scopes)
 
 
 class TestRemoveAccount:

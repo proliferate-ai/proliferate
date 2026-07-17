@@ -44,7 +44,9 @@ export function getCloudRepoTargetForSelectedWorkspace(
   const cloudWorkspaceId = parseCloudWorkspaceSyntheticId(selectedWorkspaceId);
   if (cloudWorkspaceId) {
     const cloudWorkspace = cloudWorkspaces.find((workspace) => workspace.id === cloudWorkspaceId);
-    if (cloudWorkspace?.repo.provider !== "github") {
+    // Repository-only action: scratch workspaces (repo = null) never resolve a
+    // repo target.
+    if (cloudWorkspace?.repo?.provider !== "github") {
       return null;
     }
 

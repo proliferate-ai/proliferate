@@ -11,10 +11,11 @@ use subtle::ConstantTimeEq;
 use url::form_urlencoded;
 
 use super::http::{
-    agent_auth, agent_gateway_catalog, agents, auth as http_auth, catalogs, cowork, files, git,
-    goals, health, hosting, loops, mobility, plans, processes, product_mcp, replay, repo_roots,
-    reviews, sessions, sessions_config, sessions_events, sessions_fork, sessions_interactions,
-    sessions_lifecycle, sessions_prompt, sessions_resume, subagents, terminals, workflow_runs,
+    agent_auth::{delete_agent_auth_state, put_agent_auth_state},
+    agent_gateway_catalog, agents, auth as http_auth, catalogs, cowork, files, git, goals, health,
+    hosting, loops, mobility, plans, processes, product_mcp, replay, repo_roots, reviews, sessions,
+    sessions_config, sessions_events, sessions_fork, sessions_interactions, sessions_lifecycle,
+    sessions_prompt, sessions_resume, subagents, terminals, workflow_runs, workflow_workspaces,
     workspaces, workspaces_lifecycle, workspaces_purge, workspaces_setup, workspaces_worktrees,
     worktrees,
 };
@@ -68,8 +69,8 @@ pub fn build_router(state: AppState) -> Router {
             post(agents::start_agent_login_terminal),
         )
         .route("/auth/revoked-jtis", put(http_auth::push_revoked_jtis))
-        // Agent-auth state (desktop-pushed local-surface state.json)
-        .route("/agent-auth/state", put(agent_auth::put_agent_auth_state))
+        .route("/agent-auth/state", put(put_agent_auth_state))
+        .route("/agent-auth/state", delete(delete_agent_auth_state))
         // Catalogs (worker-pushed agent catalog document)
         .route("/catalogs/agents", put(catalogs::apply_agent_catalog))
         .route(
@@ -132,7 +133,15 @@ pub fn build_router(state: AppState) -> Router {
             get(repo_roots::list_repo_roots).post(repo_roots::resolve_repo_root),
         )
         .route("/repo-roots/resolve", post(repo_roots::resolve_repo_root))
+        .route(
+            "/repo-roots/materializations",
+            post(repo_roots::materialize_repo_root),
+        )
         .route("/repo-roots/{repo_root_id}", get(repo_roots::get_repo_root))
+        .route(
+            "/repo-roots/{repo_root_id}/workspace-materializations",
+            post(repo_roots::materialize_workspace_at_ref),
+        )
         .route(
             "/repo-roots/{repo_root_id}/git/branches",
             get(repo_roots::list_repo_root_git_branches),
@@ -450,6 +459,12 @@ pub fn build_router(state: AppState) -> Router {
         .route(
             "/workflow-runs/{run_id}/cancel",
             post(workflow_runs::cancel_workflow_run),
+        )
+        // Isolated Workflow workspace placement (materialization plane)
+        .route(
+            "/workflow-run-workspaces/{run_id}",
+            put(workflow_workspaces::put_workflow_run_workspace)
+                .get(workflow_workspaces::get_workflow_run_workspace),
         )
         // Loops (native crons + emulated scheduler)
         .route(

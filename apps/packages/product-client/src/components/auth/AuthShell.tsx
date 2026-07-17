@@ -62,10 +62,14 @@ export function AuthShell({ mode, markComplete, onMarkResolved }: AuthShellProps
       passwordSignInAvailable={passwordSignInAvailable}
       passwordSubmitting={passwordSubmitting}
       onGitHubSignIn={() => {
-        void signIn();
+        void signIn().catch(() => {
+          // error is already surfaced via the hook's `error` state
+        });
       }}
       onSsoSignIn={() => {
-        void signInWithSso();
+        void signInWithSso().catch(() => {
+          // error is already surfaced via the hook's `error` state
+        });
       }}
       onPasswordSignIn={(email, password) => {
         void signInWithPassword(email, password).catch(() => {

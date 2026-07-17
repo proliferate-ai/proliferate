@@ -31,7 +31,7 @@ function revokeConflictHarnesses(error: unknown): string[] | null {
 }
 
 export function ApiKeysPane() {
-  const { cloudActive } = useCloudAvailabilityState();
+  const { cloudActive, authStatus, cloudComputeEnabled } = useCloudAvailabilityState();
   const showToast = useToastStore((state) => state.show);
 
   const keysQuery = useAgentApiKeys(cloudActive);
@@ -88,8 +88,14 @@ export function ApiKeysPane() {
   }
 
   if (!cloudActive) {
+    // Truthful cause: a signed-in user on a compute-unconfigured deployment
+    // gets the operator explanation, not a "sign in" prompt they can't act on
+    // (PR2-GATING-01 class). Anonymous users still get the sign-in prompt.
+    const description = authStatus === "authenticated" && !cloudComputeEnabled
+      ? AGENT_API_KEYS_COPY.cloudNotConfigured
+      : AGENT_API_KEYS_COPY.signInRequired;
     return (
-      <section className="space-y-5">
+      <section className="space-y-5" data-api-keys-pane="">
         <SettingsPageHeader
           title={AGENT_API_KEYS_COPY.title}
           description={AGENT_API_KEYS_COPY.description}
@@ -97,7 +103,7 @@ export function ApiKeysPane() {
         <SettingsSection>
           <SettingsRow
             label={AGENT_API_KEYS_COPY.title}
-            description={AGENT_API_KEYS_COPY.signInRequired}
+            description={description}
           />
         </SettingsSection>
       </section>
@@ -105,7 +111,7 @@ export function ApiKeysPane() {
   }
 
   return (
-    <section className="space-y-5">
+    <section className="space-y-5" data-api-keys-pane="">
       <SettingsPageHeader
         title={AGENT_API_KEYS_COPY.title}
         description={AGENT_API_KEYS_COPY.description}

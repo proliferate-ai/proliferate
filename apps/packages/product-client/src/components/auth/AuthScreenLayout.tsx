@@ -100,6 +100,14 @@ export function AuthScreenLayout({
     <AuthAppearanceBoundary
       className="flex min-h-screen flex-col items-center justify-center bg-background p-8"
       data-tauri-drag-region="true"
+      // Durable readiness marker for the phase-6 /login budget collector
+      // (scripts/measure-login-runtime-budget.mjs). "auth" only once the shell
+      // has resolved to the signed-out sign-in surface; "loading" while the
+      // session bootstrap is still in flight. The collector waits for
+      // [data-auth-screen="auth"] specifically — an error/retry/loading screen
+      // never satisfies it, so a passing ledger always reflects the real
+      // login-ready point rather than any stray button/input on the page.
+      data-auth-screen={mode}
     >
       <div className="w-full max-w-md space-y-8">
         <div className="space-y-5">

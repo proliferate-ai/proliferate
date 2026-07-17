@@ -21,6 +21,8 @@ import {
   type SettingsRepositoryEntry,
 } from "#product/lib/domain/settings/repositories";
 import { useRepoPreferencesStore } from "#product/stores/preferences/repo-preferences-store";
+import { useAppCapabilities } from "#product/hooks/capabilities/derived/use-app-capabilities";
+import { useProductAuthStatus } from "#product/hooks/auth/facade/use-product-auth";
 
 const MATERIALIZATION_POLL_INTERVAL_MS = 5000;
 
@@ -60,7 +62,12 @@ export function useCloudRepoEnvironmentEditor({
   cloudActive: boolean;
 }): CloudRepoEnvironmentEditor {
   const cloudRepository = isCloudRepository(repository) ? repository : null;
-  const cloudQueryEnabled = cloudActive && cloudRepository !== null;
+  const capabilities = useAppCapabilities();
+  const signedIn = useProductAuthStatus() === "authenticated";
+  const operatorReady =
+    capabilities.githubRepositoryAccessStatus === "ready"
+    && capabilities.managedCloudStatus === "ready";
+  const cloudQueryEnabled = cloudActive && signedIn && operatorReady && cloudRepository !== null;
   const repoConfigs = useRepositories(cloudQueryEnabled);
   const authority = useGitHubRepoAuthority(
     {

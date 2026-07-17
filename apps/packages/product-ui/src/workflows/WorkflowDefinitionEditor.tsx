@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 import { Plus, Save, Trash2 } from "lucide-react";
 import {
   workflowAgentOptions,
@@ -39,6 +39,7 @@ export interface WorkflowDefinitionEditorProps {
   onCancel: () => void;
   onDelete?: () => void;
   onReload?: () => void;
+  supplementalContent?: ReactNode;
 }
 
 export function WorkflowDefinitionEditor({
@@ -57,6 +58,7 @@ export function WorkflowDefinitionEditor({
   onCancel,
   onDelete,
   onReload,
+  supplementalContent,
 }: WorkflowDefinitionEditorProps) {
   const [deleteConfirmationOpen, setDeleteConfirmationOpen] = useState(false);
   const busy = saving || deleting;
@@ -74,7 +76,7 @@ export function WorkflowDefinitionEditor({
     <>
       <ProductPageShell
         title={formTitle}
-        description="Define inputs and sequential agent stages. This PR stores and validates the definition only."
+        description="Define inputs and sequential agent stages. Saved eligible workflows can run in managed Cloud."
         actions={(
           <div className="flex items-center gap-2">
             <Button type="button" variant="ghost" disabled={busy} onClick={onCancel}>
@@ -241,6 +243,7 @@ export function WorkflowDefinitionEditor({
             ) : null}
           </div>
         </form>
+        {supplementalContent}
       </ProductPageShell>
       <ConfirmationDialog
         open={deleteConfirmationOpen}

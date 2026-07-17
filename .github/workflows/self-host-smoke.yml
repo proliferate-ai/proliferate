@@ -47,7 +47,7 @@ jobs:
     outputs:
       relevant: ${{ steps.detect.outputs.relevant }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
 
@@ -55,7 +55,13 @@ jobs:
       # catalogs/**, server/**, minus the lint/test-only entries the image does
       # not consume) plus the root VERSION file the Dockerfile copies, the
       # deploy bundle and smoke harness (both under server/**), and this
-      # workflow. Keep it in sync with server/Dockerfile.
+      # workflow. The server image now also bakes the compiled Web application,
+      # so any input to that Web artifact must trigger the heavy image smoke:
+      # apps/web/**, the shared frontend packages it bundles
+      # (apps/packages/**), the Cloud/AnyHarness SDKs those packages consume
+      # (cloud/sdk*/**, anyharness/sdk*/**), and the root workspace
+      # manifests/lockfile the frozen install resolves. Keep in sync with
+      # server/Dockerfile's web-builder stage.
       - name: Diff against merge base
         id: detect
         env:
@@ -91,6 +97,15 @@ jobs:
               catalogs/*|server/*)
                 relevant=true
                 ;;
+              apps/web/*|apps/packages/*)
+                relevant=true
+                ;;
+              cloud/sdk/*|cloud/sdk-react/*|anyharness/sdk/*|anyharness/sdk-react/*)
+                relevant=true
+                ;;
+              package.json|pnpm-lock.yaml|pnpm-workspace.yaml)
+                relevant=true
+                ;;
             esac
           done < <(git diff --name-only "$base" HEAD)
           echo "Smoke-relevant changes since ${base}: ${relevant}"
@@ -103,10 +118,21 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+
+      # The browser Web smoke (server/deploy/smoke/web-smoke.mjs) drives the
+      # live stack with headless Chromium to prove the bundled JS executes.
+      - name: Install Playwright chromium
+        run: |
+          npm install --no-save playwright@1.61.0
+          npx playwright install --with-deps chromium
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
 
       # Build once and load into the local Docker engine so the compose stack
       # reuses it (no registry push). GHA cache is shared from the main-branch

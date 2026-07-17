@@ -162,7 +162,9 @@ class TestSelectTimeEnforcement:
             sources=[],
         )
         assert cleared.status_code == 200, cleared.text
-        assert cleared.json() == []
+        assert [(source["sourceKind"], source["enabled"]) for source in cleared.json()] == [
+            ("gateway", False)
+        ]
 
     @pytest.mark.asyncio
     async def test_disallowed_harness_still_rejects_enabled_source(

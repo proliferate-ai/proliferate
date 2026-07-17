@@ -74,6 +74,18 @@ afterEach(() => {
   integrationsState.isError = false;
 });
 
+describe("UserIntegrationsPane connect surface", () => {
+  it("renders the connect trigger for an available integration", () => {
+    integrationsState.integrations = [integration({ namespace: "linear", displayName: "Linear" })];
+    const { container } = render(<UserIntegrationsPane />);
+
+    // The exact marker the qualification DOM asserts once the pane is no longer
+    // hidden behind the cloud-compute sign-in prompt for a local-only user.
+    expect(container.querySelector('[data-integration-connect-trigger="linear"]')).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Connect" })).toBeTruthy();
+  });
+});
+
 describe("UserIntegrationsPane search", () => {
   it("hides the search input when the list is short", () => {
     integrationsState.integrations = [integration()];

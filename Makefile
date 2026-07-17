@@ -17,6 +17,7 @@ USE_EXISTING_REDIS ?= 0
 STRIPE_FORWARD_TO ?= http://127.0.0.1:8000/v1/billing/webhooks/stripe
 STRIPE_SNAPSHOT_EVENTS ?= checkout.session.completed,customer.subscription.created,customer.subscription.updated,customer.subscription.deleted,invoice.paid,invoice.payment_failed
 AGENT_GATEWAY ?= 0
+BACKGROUND ?= 0
 LOCAL_LITELLM_BASE_URL ?= http://127.0.0.1:14000
 LOCAL_LITELLM_MASTER_KEY ?= sk-proliferate-local-dev
 CLOUD_WORKER_TUNNEL ?= 0
@@ -90,7 +91,8 @@ DEV_FRONTEND_ARTIFACTS := \
 	apps/packages/product-domain/dist \
 	apps/packages/ui/dist \
 	apps/packages/product-ui/dist \
-	apps/packages/product-surfaces/dist
+	apps/packages/product-surfaces/dist \
+	apps/packages/product-client/dist
 PROFILE_DB_READY_COMMAND = make server-db-ready;
 PROFILE_DB_ENSURE_COMMAND = LOCAL_PGHOST="$(LOCAL_PGHOST)" LOCAL_PGPORT="$(LOCAL_PGPORT)" LOCAL_PGUSER="$(LOCAL_PGUSER)" LOCAL_PGPASSWORD="$(LOCAL_PGPASSWORD)" USE_EXISTING_POSTGRES="$(USE_EXISTING_POSTGRES)" node scripts/dev.mjs ensure-db --db-name "$$PROLIFERATE_DEV_DB_NAME";
 PROFILE_REDIS_READY_COMMAND = make server-redis-ready;
@@ -107,6 +109,7 @@ endif
 
 .PHONY: catalog-view catalog-pin catalog-update setup run dev dev-init dev-list dev-local dev-desktop dev-runtime dev-server dev-mobile-auth dev-mobile-tunnel dev-web-auth seed-sso server-db-up server-db-wait \
         server-db-down server-db-ready server-redis-up server-redis-wait server-redis-down server-redis-ready \
+        server-background-up server-background-logs server-background-down \
         server-litellm-up server-litellm-wait server-litellm-down db db-local db-ah server-migrate serve install \
         check check-max-lines check-server-boundaries test test-server fmt clippy \
         dev-automation-worker \
@@ -271,6 +274,28 @@ run: dev-artifacts-ready
 		exit 1; \
 	fi; \
 	(cd server && DATABASE_URL="$$DATABASE_URL" .venv/bin/alembic upgrade head); \
+	background_mode="$(BACKGROUND)"; \
+	if [ "$$background_mode" = "1" ] || [ "$$background_mode" = "celery" ]; then \
+		if [ "$$use_profile_db" != "1" ]; then \
+			echo "ERROR: BACKGROUND=$$background_mode requires the profile database (do not set DATABASE_URL). The compose worker/beat reach the SAME host Postgres/profile DB the API uses." >&2; \
+			exit 1; \
+		fi; \
+		: "$${PROLIFERATE_RABBITMQ_HOST_PORT:?background port not allocated; run make setup PROFILE=$(PROFILE)}"; \
+		: "$${PROLIFERATE_RABBITMQ_MGMT_HOST_PORT:?background port not allocated; run make setup PROFILE=$(PROFILE)}"; \
+		: "$${PROLIFERATE_REDIS_HOST_PORT:?background port not allocated; run make setup PROFILE=$(PROFILE)}"; \
+		export PROLIFERATE_RABBITMQ_HOST_PORT PROLIFERATE_RABBITMQ_MGMT_HOST_PORT PROLIFERATE_REDIS_HOST_PORT; \
+		export PROLIFERATE_DB_HOST_PORT="$${PROLIFERATE_DB_HOST_PORT:-$(LOCAL_PGPORT)}"; \
+		: "$${DATABASE_URL:?}"; \
+		background_db_url="$$(node scripts/dev.mjs background-db-url --database-url "$$DATABASE_URL")"; \
+		if printf '%s' "$$background_db_url" | grep -Eq '@(127\.0\.0\.1|localhost|\[?::1\]?):'; then \
+			echo "ERROR: could not rewrite DATABASE_URL host to host.docker.internal for the background plane (got $$background_db_url)." >&2; \
+			exit 1; \
+		fi; \
+		export COMPOSE_PROJECT_NAME="proliferate_bg_$$(printf '%s' "$$PROLIFERATE_DEV_PROFILE" | tr '-' '_')"; \
+		export BACKGROUND_DATABASE_URL="$$background_db_url"; \
+		echo "Starting background plane (worker + beat) via compose project $$COMPOSE_PROJECT_NAME against $$background_db_url (broker :$$PROLIFERATE_RABBITMQ_HOST_PORT, store :$$PROLIFERATE_REDIS_HOST_PORT)"; \
+		docker compose -f server/docker-compose.yml --profile background up -d --no-deps --build rabbitmq redis worker beat; \
+	fi; \
 	stripe_listener_ready=0; \
 	if [ "$(STRIPE)" = "1" ]; then \
 		if command -v stripe >/dev/null 2>&1; then \
@@ -463,6 +488,30 @@ server-redis-wait:
 
 server-redis-down:
 	@docker compose -f server/docker-compose.yml stop redis
+
+# Self-contained local background plane: Postgres, RabbitMQ, Redis, migrations,
+# Celery worker, and Celery Beat, all on the same compose image. This is the
+# merge-gated same-image outbox->worker smoke vehicle. Set a per-worktree
+# COMPOSE_PROJECT_NAME plus PROLIFERATE_*_HOST_PORT overrides to run isolated
+# stacks side by side without default-port collisions.
+server-background-up:
+	@command -v docker >/dev/null 2>&1 || { \
+		echo "Docker is required for the local background plane. Install or start Docker and retry."; \
+		exit 1; \
+	}
+	@docker info >/dev/null 2>&1 || { \
+		echo "Docker is not running. Start Docker Desktop and retry."; \
+		exit 1; \
+	}
+	@docker compose -f server/docker-compose.yml --profile background up -d --build \
+		db rabbitmq redis migrate worker beat
+	@echo "Background plane up (worker + beat). Logs: make server-background-logs"
+
+server-background-logs:
+	@docker compose -f server/docker-compose.yml --profile background logs -f worker beat
+
+server-background-down:
+	@docker compose -f server/docker-compose.yml --profile background down
 
 server-litellm-up:
 	@command -v docker >/dev/null 2>&1 || { \
@@ -818,6 +867,29 @@ qualification-candidate-build-map:
 # target dir and clear any ambient cross-compile target so an operator's
 # CARGO_TARGET_DIR/CARGO_BUILD_TARGET cannot make this qualify a stale binary
 # at target/release/ while cargo wrote somewhere else.
+# Validate and materialize a committed retained-release receipt — the exact
+# immutable production N-1 artifact set Tier 4 update proofs start from
+# (specs/developing/testing/tier-4-scenario-contract.md "Artifact Identity").
+# Shape + policy validation run before any download; every byte is verified
+# against the receipt on every use (a cache hit is re-hashed, never trusted).
+# Read-only toward providers: LIVE=1 adds an E2B metadata lookup proving the
+# recorded immutable source tag still resolves to the recorded build id.
+#
+# RETAINED_RELEASE_ID=vX.Y.Z   Receipt to validate (see
+#                              tests/release/retained-releases/index.json).
+# LIVE=1                       Also live-verify E2B template identity
+#                              (needs E2B_API_KEY or RELEASE_E2E_E2B_API_KEY).
+# CANDIDATE_SHA=<40-hex>       Optional candidate N SHA for the N != N-1 check.
+qualification-retained-release:
+	@if [ -z "$(RETAINED_RELEASE_ID)" ]; then \
+		echo "RETAINED_RELEASE_ID=<vX.Y.Z> is required, e.g. make qualification-retained-release RETAINED_RELEASE_ID=v0.3.38"; \
+		exit 2; \
+	fi
+	cd tests/release && pnpm install --silent && pnpm exec tsx src/cli/retained-release.ts validate \
+		--release-id $(RETAINED_RELEASE_ID) \
+		$(if $(filter 1,$(LIVE)),--live,) \
+		$(if $(CANDIDATE_SHA),--candidate-sha $(CANDIDATE_SHA),)
+
 qualification-candidate-handoff-smoke:
 	pnpm install --silent
 	env -u CARGO_BUILD_TARGET \
@@ -853,6 +925,11 @@ qualification-candidate-handoff-smoke:
 # protected `staging` environment's secrets/vars — this target does not read
 # or expect the local file there.
 QUALIFICATION_INFRA_ENV ?= $(HOME)/.proliferate-local/dev/qualification-infra.env
+# Dev provisioning env (RELEASE_E2E_INTEGRATION_API_KEY, RELEASE_E2E_LOCAL_DATABASE_URL,
+# and the BYOK provider keys) written by the local provisioning scripts. Sourced
+# by qualification-local-functional AFTER qualification-infra.env when present —
+# local only; in Actions the protected Qualification environment supplies these.
+RELEASE_E2E_ENV ?= $(HOME)/.proliferate-local/dev/release-e2e.env
 QUALIFICATION_LOCAL_WORLD_BASE_DIR ?= $(CURDIR)/tests/release/.output/local-world
 qualification-local-workspace:
 	@test -n "$(PROFILE)" || { \
@@ -913,10 +990,12 @@ qualification-local-workspace:
 		--run-id "$$run_id" --shard-id "$$shard_id" \
 		--output-dir "$$run_dir/evidence"
 
-# Tier-2 strict billing/auth qualification (PR 4). Boots the shared BootedStack
+# Tier-2 strict billing qualification (PR 4). Boots the shared BootedStack
 # (real Server + Postgres + Redis + real Stripe test mode; AnyHarness runtime
-# skipped) ONCE and runs the authoritative T2-BILL-1..15 + representative
-# T2-AUTH-ORG cells through the SAME tests/release aggregate command as tier 3.
+# skipped) and runs the authoritative T2-BILL-1..15 cells through the SAME
+# tests/release aggregate command as tier 3. PR-8 non-billing rows remain
+# manifest-deferred until one collector proves each complete guarantee with
+# truthful domain evidence.
 # No candidate build (Tier-2 boots from source) — `--source-candidate`
 # synthesizes the Server identity for the strict report. Selected financial
 # cells require a Stripe `sk_test_` key (env or `stripe config`); a missing key
@@ -938,10 +1017,133 @@ qualification-tier2:
 		--lane local \
 		--desktop web \
 		--agents claude \
-		--scenarios T2-BILL,T2-AUTH-ORG \
+		--scenarios T2-BILL \
 		--source-candidate \
 		--run-id "$$run_id" --shard-id "$$shard_id" \
 		--output-dir "$$run_dir/evidence"
+# "Complete Local Workspace Qualification (Functional)" — the same three
+# exact local-world candidates as `qualification-local-workspace`
+# (`build-local-qualification-candidates.mjs`, unmodified), handed to the same
+# qualification runner, but driving the full LOCAL-1..7 functional cell set
+# (specs/developing/testing/tier-3-scenario-contract.md §"Local cases")
+# instead of the single LOCAL-WORLD-SMOKE-1 infrastructure proof. This is the
+# ONE entrypoint; the release-e2e.yml manual job invokes this same target —
+# same build step, same runner invocation.
+#
+# PROFILE=<unique-name>   Names this run (becomes its run id). Never reuse a
+#                         PROFILE for two concurrent invocations.
+# BEHAVIOR=diagnostic|strict
+# AGENTS=all|<comma-list>   Harness kinds to fan out over (default: all).
+# SCENARIOS=all|<comma-list>   Default (all): the seven functional local cell
+#                         ids below (two of which — T3-WT-1 + T3-REPO-1 — are
+#                         the canonical LOCAL-1 pair). Override to run a subset
+#                         while iterating.
+# REUSE_CANDIDATES=<dir>   Optional fast path: point at a run directory that
+#                         already has candidate-build.json +
+#                         local-world-ports.json (e.g. from a previous
+#                         qualification-local-functional or
+#                         qualification-local-workspace run) to skip
+#                         rebuilding the Server/AnyHarness/Desktop-renderer
+#                         candidates and reuse them as-is. Evidence still
+#                         writes to a fresh run dir. No target in this
+#                         Makefile builds a "managed-cloud" candidate set
+#                         today, so there is nothing to mirror beyond this
+#                         local skip-the-build shape.
+#
+# Same local secret-profile / env resolution as qualification-local-workspace
+# (QUALIFICATION_INFRA_ENV): AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL and
+# AGENT_GATEWAY_LITELLM_MASTER_KEY are required there; the functional
+# scenarios additionally read RELEASE_E2E_BYOK_ANTHROPIC_A/_B,
+# RELEASE_E2E_BYOK_OPENAI, RELEASE_E2E_BYOK_XAI, RELEASE_E2E_INTEGRATION_*,
+# and RELEASE_E2E_LOCAL_DATABASE_URL (all optional — env-manifest.ts: an
+# absent credential reports just its dependent scenarios/cells blocked, it
+# never fails the whole run) straight off the same `set -a`-sourced profile
+# file, by name, with no extra mapping needed here. In GitHub Actions those
+# same names come from the protected `Qualification` environment's
+# vars/secrets, mapped explicitly in release-e2e.yml.
+# Canonical local inventory: LOCAL-1's workspace-from-repo journey is proven by
+# BOTH T3-WT-1 (worktree/creation) and T3-REPO-1 (repo settings take effect) —
+# both fold into the world-backed `runLocal1WorkspaceLeaf`, so `SCENARIOS=all`
+# must plan and report both. Omitting T3-REPO-1 would silently drop a canonical
+# LOCAL-1 cell from the strict contract.
+QUALIFICATION_LOCAL_FUNCTIONAL_SCENARIOS := T3-WT-1,T3-REPO-1,T3-CHAT-1,T3-AUTHROUTE-1,T3-CFG-1,T3-SESSION-1,T3-INT-1
+qualification-local-functional:
+	@test -n "$(PROFILE)" || { \
+		echo "PROFILE=<unique-name> is required, e.g. make qualification-local-functional PROFILE=$$(whoami)-1 BEHAVIOR=diagnostic"; \
+		exit 1; \
+	}
+	@test -n "$(BEHAVIOR)" || { \
+		echo "BEHAVIOR=<diagnostic|strict> is required."; \
+		exit 1; \
+	}
+	@if [ "$$GITHUB_ACTIONS" != "true" ]; then \
+		test -f "$(QUALIFICATION_INFRA_ENV)" || { \
+			echo "Missing qualification secret profile at $(QUALIFICATION_INFRA_ENV)."; \
+			echo "It must define AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL and AGENT_GATEWAY_LITELLM_MASTER_KEY (mode 0600, never committed); optionally the RELEASE_E2E_BYOK_*/RELEASE_E2E_INTEGRATION_*/RELEASE_E2E_LOCAL_DATABASE_URL names too."; \
+			exit 1; \
+		}; \
+		perm=$$(stat -f '%Lp' "$(QUALIFICATION_INFRA_ENV)" 2>/dev/null || stat -c '%a' "$(QUALIFICATION_INFRA_ENV)"); \
+		test "$$perm" = "600" || { \
+			echo "$(QUALIFICATION_INFRA_ENV) must be mode 0600 (got $$perm). Run: chmod 600 $(QUALIFICATION_INFRA_ENV)"; \
+			exit 1; \
+		}; \
+	fi
+	pnpm install --silent
+	pnpm exec playwright install --with-deps chromium
+	@if [ "$$GITHUB_ACTIONS" = "true" ]; then \
+		: "$${AGENT_GATEWAY_LITELLM_BASE_URL:=$$AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL}"; \
+		export AGENT_GATEWAY_LITELLM_BASE_URL; \
+	else \
+		set -a; \
+		. "$(QUALIFICATION_INFRA_ENV)"; \
+		[ ! -f "$(RELEASE_E2E_ENV)" ] || . "$(RELEASE_E2E_ENV)"; \
+		: "$${AGENT_GATEWAY_LITELLM_BASE_URL:=$$AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL}"; \
+		set +a; \
+		export AGENT_GATEWAY_LITELLM_BASE_URL; \
+	fi; \
+	test -n "$$AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL" || { \
+		echo "AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL is required (local: $(QUALIFICATION_INFRA_ENV); Actions: Qualification environment vars)."; \
+		exit 1; \
+	}; \
+	test -n "$$AGENT_GATEWAY_LITELLM_MASTER_KEY" || { \
+		echo "AGENT_GATEWAY_LITELLM_MASTER_KEY is required (local: $(QUALIFICATION_INFRA_ENV); Actions: Qualification environment secrets)."; \
+		exit 1; \
+	}; \
+	run_id="qlf-$(PROFILE)"; \
+	shard_id="1"; \
+	build_dir="$(QUALIFICATION_LOCAL_WORLD_BASE_DIR)/$$run_id/$$shard_id"; \
+	evidence_dir="$$build_dir/evidence"; \
+	if [ -n "$(REUSE_CANDIDATES)" ]; then \
+		build_dir="$(REUSE_CANDIDATES)"; \
+		test -f "$$build_dir/candidate-build.json" || { \
+			echo "REUSE_CANDIDATES=$$build_dir has no candidate-build.json — build it first (e.g. a prior qualification-local-functional or qualification-local-workspace run), or omit REUSE_CANDIDATES."; \
+			exit 1; \
+		}; \
+		test -f "$$build_dir/local-world-ports.json" || { \
+			echo "REUSE_CANDIDATES=$$build_dir has no local-world-ports.json sidecar next to its candidate-build.json."; \
+			exit 1; \
+		}; \
+		echo "Reusing already-built local-world candidates from $$build_dir (skipping build-local-qualification-candidates.mjs)."; \
+		evidence_dir="$(QUALIFICATION_LOCAL_WORLD_BASE_DIR)/$$run_id/$$shard_id/evidence"; \
+		candidate_map="$$build_dir/candidate-build.json"; \
+	else \
+		mkdir -p "$$build_dir"; \
+		build_summary=$$(node scripts/ci-cd/build-local-qualification-candidates.mjs \
+			--run-id "$$run_id" --shard-id "$$shard_id" --run-dir "$$build_dir") || exit $$?; \
+		echo "$$build_summary"; \
+		candidate_map=$$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).candidate_build_map)' "$$build_summary"); \
+	fi; \
+	mkdir -p "$$evidence_dir"; \
+	scenarios="$(if $(filter-out all,$(SCENARIOS)),$(SCENARIOS),$(QUALIFICATION_LOCAL_FUNCTIONAL_SCENARIOS))"; \
+	cd tests/release && pnpm exec tsx src/cli/run.ts \
+		--behavior $(BEHAVIOR) \
+		--lane local \
+		--desktop web \
+		--agents $(AGENTS) \
+		--scenarios "$$scenarios" \
+		--candidate-build-map "$$candidate_map" \
+		--run-id "$$run_id" --shard-id "$$shard_id" \
+		--output-dir "$$evidence_dir"
 
 # "Prove One Real Self-Hosted Installation": build the exact self-host
 # candidate (Server image archive for the box arch + release-shaped
@@ -956,6 +1158,21 @@ qualification-tier2:
 #                         PROFILE for two concurrent invocations (each run owns
 #                         its EC2 instance, SG, key pair, and DNS record).
 # BEHAVIOR=diagnostic|strict
+# SELFHOST_SCENARIOS=<comma-separated scenario ids>   Defaults to
+#                         SELFHOST-INSTALL-1 (current behavior). Passed
+#                         verbatim to `run.ts --scenarios`.
+# SELFHOST_API_BASE_URL=<https://...>   Optional. When set, replaces the
+#                         computed `print-selfhost-run-api-base-url.ts` value
+#                         baked into the candidate renderer — for postures
+#                         that need a fixed baked origin (e.g. the fixed-origin
+#                         serial lane at https://selfhost-fixed.qualification.
+#                         proliferate.com) instead of this run's own computed
+#                         subdomain. Run-scoped scenarios leave this unset and
+#                         get the computed value, unchanged. Example:
+#                           make qualification-selfhost PROFILE=$$(whoami)-1 \
+#                             BEHAVIOR=diagnostic \
+#                             SELFHOST_SCENARIOS=SELFHOST-INSTALL-1 \
+#                             SELFHOST_API_BASE_URL=https://selfhost-fixed.qualification.proliferate.com
 #
 # Locally, AWS/SSH/BYOK inputs come from the ignored, mode-0600 qualification
 # env file (never committed, never printed): RELEASE_E2E_SELFHOST_REGION,
@@ -966,6 +1183,24 @@ qualification-tier2:
 # environment and configured AWS credentials; this target does not read the
 # local file there.
 QUALIFICATION_SELFHOST_BASE_DIR ?= $(CURDIR)/tests/release/.output/selfhost-world
+SELFHOST_SCENARIOS ?= SELFHOST-INSTALL-1
+SELFHOST_API_BASE_URL ?=
+# Exported so the recipe reads it as a SHELL env var (`$$SELFHOST_API_BASE_URL`)
+# rather than a Make expansion (`$(...)`). A Make expansion would textually inline
+# the value into the recipe before the shell runs, so a value containing a quote
+# plus shell syntax would be reparsed in this secret-bearing/AWS-authorized job
+# (PR7-CONTROL-002). Reading it from the environment keeps the value inert data.
+export SELFHOST_API_BASE_URL
+# The candidate box platform. Defaults to linux/amd64 (t3.small-based scenarios:
+# INSTALL-1/QUAL-1/ISOLATION-1). SELFHOST-CFN-1's CloudFormation template
+# defaults to a Graviton (arm64) t4g instance, so run it with
+# SELFHOST_CANDIDATE_PLATFORM=linux/arm64 so the docker-load candidate image
+# matches the box arch.
+SELFHOST_CANDIDATE_PLATFORM ?= linux/amd64
+# Optional matrix-cell filter passed verbatim to run.ts --cells (e.g. SH-GATEWAY
+# to run SELFHOST-QUAL-1's gateway cell alone on a run-scoped origin). Empty =
+# every planned cell.
+SELFHOST_CELLS ?=
 qualification-selfhost:
 	@test -n "$(PROFILE)" || { \
 		echo "PROFILE=<unique-name> is required, e.g. make qualification-selfhost PROFILE=$$(whoami)-1 BEHAVIOR=diagnostic"; \
@@ -1010,18 +1245,112 @@ qualification-selfhost:
 	shard_id="1"; \
 	run_dir="$(QUALIFICATION_SELFHOST_BASE_DIR)/$$run_id/$$shard_id"; \
 	mkdir -p "$$run_dir"; \
-	api_base_url=$$(cd tests/release && pnpm exec tsx src/cli/print-selfhost-run-api-base-url.ts "$$run_id" "$$shard_id") || exit $$?; \
+	api_base_url="$${SELFHOST_API_BASE_URL:-}"; \
+	if [ -z "$$api_base_url" ]; then \
+		api_base_url=$$(cd tests/release && pnpm exec tsx src/cli/print-selfhost-run-api-base-url.ts "$$run_id" "$$shard_id") || exit $$?; \
+	fi; \
 	build_summary=$$(node scripts/ci-cd/build-selfhost-qualification-candidates.mjs \
 		--run-id "$$run_id" --shard-id "$$shard_id" --run-dir "$$run_dir" \
+		--platform "$(SELFHOST_CANDIDATE_PLATFORM)" \
 		--api-base-url "$$api_base_url") || exit $$?; \
 	echo "$$build_summary"; \
 	candidate_map=$$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).candidate_build_map)' "$$build_summary"); \
+	cells_flag=""; \
+	if [ -n "$(SELFHOST_CELLS)" ]; then cells_flag="--cells $(SELFHOST_CELLS)"; fi; \
 	cd tests/release && pnpm exec tsx src/cli/run.ts \
 		--behavior $(BEHAVIOR) \
-		--lane local \
+		--lane selfhost \
 		--desktop web \
 		--agents claude \
-		--scenarios SELFHOST-INSTALL-1 \
+		--scenarios $(SELFHOST_SCENARIOS) \
+		$$cells_flag \
+		--candidate-build-map "$$candidate_map" \
+		--run-id "$$run_id" --shard-id "$$shard_id" \
+		--output-dir "$$run_dir/evidence"
+
+# "Prove One Real Managed-Cloud Workspace": one exact candidate Server, one
+# exact set of Linux musl runtime binaries, and one exact candidate Desktop
+# renderer built for the public candidate-API origin, handed to the
+# qualification runner, provisioned as an isolated run-scoped EC2+E2B managed-
+# cloud world, and used through the real product UI for one cheap managed-
+# gateway turn inside a real E2B sandbox. One entrypoint, same as
+# `qualification-local-workspace`; GitHub Actions' manual `release-e2e.yml`
+# job invokes this same target. New builder file
+# (`scripts/ci-cd/build-cloud-qualification-candidates.mjs`) — the local-world
+# builder and target above stay untouched (extension contract: one builder per
+# world).
+#
+# PROFILE=<unique-name>   Names this run (becomes its run id). Never reuse a
+#                         PROFILE for two concurrent invocations.
+# BEHAVIOR=diagnostic|strict
+#
+# Locally, secret VALUES come from the same ignored, mode-0600 qualification
+# profile as the local-world target, extended with the cloud inputs (E2B,
+# GitHub App, AWS region/zone — see src/config/env-manifest.ts). In GitHub
+# Actions (GITHUB_ACTIONS=true) the `Qualification` environment supplies them
+# directly; this target does not read or expect the local file there. AWS
+# credentials themselves stay ambient (the `aws` CLI), never a manifest var.
+QUALIFICATION_MANAGED_CLOUD_BASE_DIR ?= $(CURDIR)/tests/release/.output/managed-cloud-world
+qualification-managed-cloud:
+	@test -n "$(PROFILE)" || { \
+		echo "PROFILE=<unique-name> is required, e.g. make qualification-managed-cloud PROFILE=$$(whoami)-1 BEHAVIOR=diagnostic"; \
+		exit 1; \
+	}
+	@test -n "$(BEHAVIOR)" || { \
+		echo "BEHAVIOR=<diagnostic|strict> is required."; \
+		exit 1; \
+	}
+	@if [ "$$GITHUB_ACTIONS" != "true" ]; then \
+		test -f "$(QUALIFICATION_INFRA_ENV)" || { \
+			echo "Missing qualification secret profile at $(QUALIFICATION_INFRA_ENV)."; \
+			echo "It must define the LiteLLM inputs plus the cloud inputs named in tests/release/src/config/env-manifest.ts (mode 0600, never committed)."; \
+			exit 1; \
+		}; \
+		perm=$$(stat -f '%Lp' "$(QUALIFICATION_INFRA_ENV)" 2>/dev/null || stat -c '%a' "$(QUALIFICATION_INFRA_ENV)"); \
+		test "$$perm" = "600" || { \
+			echo "$(QUALIFICATION_INFRA_ENV) must be mode 0600 (got $$perm). Run: chmod 600 $(QUALIFICATION_INFRA_ENV)"; \
+			exit 1; \
+		}; \
+	fi
+	pnpm install --silent
+	pnpm exec playwright install --with-deps chromium
+	@if [ "$$GITHUB_ACTIONS" = "true" ]; then \
+		: "$${AGENT_GATEWAY_LITELLM_BASE_URL:=$$AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL}"; \
+		export AGENT_GATEWAY_LITELLM_BASE_URL; \
+	else \
+		set -a; \
+		. "$(QUALIFICATION_INFRA_ENV)"; \
+		: "$${AGENT_GATEWAY_LITELLM_BASE_URL:=$$AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL}"; \
+		set +a; \
+		export AGENT_GATEWAY_LITELLM_BASE_URL; \
+	fi; \
+	test -n "$$AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL" || { \
+		echo "AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL is required (local: $(QUALIFICATION_INFRA_ENV); Actions: Qualification environment vars)."; \
+		exit 1; \
+	}; \
+	test -n "$$AGENT_GATEWAY_LITELLM_MASTER_KEY" || { \
+		echo "AGENT_GATEWAY_LITELLM_MASTER_KEY is required (local: $(QUALIFICATION_INFRA_ENV); Actions: Qualification environment secrets)."; \
+		exit 1; \
+	}; \
+	run_id="qlc-$(PROFILE)"; \
+	shard_id="1"; \
+	run_dir="$(QUALIFICATION_MANAGED_CLOUD_BASE_DIR)/$$run_id/$$shard_id"; \
+	mkdir -p "$$run_dir"; \
+	candidate_map="$$run_dir/candidate-build.json"; \
+	if [ "$(REUSE_CANDIDATES)" = "1" ] && [ -f "$$candidate_map" ]; then \
+		echo "[reuse] REUSE_CANDIDATES=1 — skipping candidate build, using $$candidate_map"; \
+	else \
+		build_summary=$$(node scripts/ci-cd/build-cloud-qualification-candidates.mjs \
+			--run-id "$$run_id" --shard-id "$$shard_id" --run-dir "$$run_dir") || exit $$?; \
+		echo "$$build_summary"; \
+		candidate_map=$$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).candidate_build_map)' "$$build_summary"); \
+	fi; \
+	cd tests/release && pnpm exec tsx src/cli/run.ts \
+		--behavior $(BEHAVIOR) \
+		--lane cloud \
+		--desktop web \
+		--agents claude \
+		--scenarios CLOUD-PROVISION-1 \
 		--candidate-build-map "$$candidate_map" \
 		--run-id "$$run_id" --shard-id "$$shard_id" \
 		--output-dir "$$run_dir/evidence"
@@ -1072,6 +1401,7 @@ check:
 
 check-max-lines:
 	python3 scripts/check_max_lines.py
+	python3 scripts/check_session_mutation_admission.py
 
 check-server-boundaries:
 	cd server && uv run python ../scripts/check_server_boundaries.py
@@ -1148,6 +1478,7 @@ shared-build:
 	pnpm --filter @proliferate/ui build
 	pnpm --filter @proliferate/product-ui build
 	pnpm --filter @proliferate/product-surfaces build
+	pnpm --filter @proliferate/product-client build
 
 # SKIP_RUST=1 skips both cargo builds — for frontend-only worktrees (UI waves)
 # that run against a shared prebuilt runtime via ANYHARNESS_DEV_RUNTIME_BIN.

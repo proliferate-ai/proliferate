@@ -9,6 +9,12 @@ import type {
   RecentWorkItemView,
   RecentWorkRowKind,
 } from "./cloud-work-inventory-types";
+import {
+  workspaceBranchLabel,
+  workspaceDisplayTitle,
+  workspaceRepoLabel,
+  workspaceRepoRef,
+} from "./backing-kind";
 import { cloudWorkActivityPreview, recentWorkSourceForWorkspace } from "./cloud-work-items";
 import {
   recentWorkCommandabilityLabel,
@@ -93,13 +99,17 @@ function recentWorkItemForWorkspace(
     workspaceId: workspace.id,
     sessionId: null,
     openTarget: { kind: "workspace", workspaceId: workspace.id },
-    title: workspace.displayName ?? workspace.repo.name,
+    title: workspaceDisplayTitle(workspace),
     subtitle: "Workspace",
     state,
     stateLabel: recentWorkStateLabel(state),
     statusIndicator: recentWorkStatusIndicatorForWorkspace(workspace),
     activityPreview: cloudWorkActivityPreview(workspace),
-    searchText: recentSearchText(base, [workspace.displayName, workspace.repo.name, "workspace"]),
+    searchText: recentSearchText(base, [
+      workspace.displayName,
+      workspaceRepoRef(workspace)?.name,
+      "workspace",
+    ]),
   };
 }
 
@@ -118,13 +128,13 @@ function recentWorkItemForSessionSummary(
     workspaceId: workspace.id,
     sessionId: summary.sessionId,
     openTarget: { kind: "session", workspaceId: workspace.id, sessionId: summary.sessionId },
-    title: summary.title ?? summary.preview ?? workspace.displayName ?? workspace.repo.name,
-    subtitle: `${workspace.displayName ?? workspace.repo.name} session`,
+    title: summary.title ?? summary.preview ?? workspaceDisplayTitle(workspace),
+    subtitle: `${workspaceDisplayTitle(workspace)} session`,
     state,
     stateLabel: recentWorkStateLabel(state),
     statusIndicator: recentWorkStatusIndicatorForSession(workspace, summary.status, summary),
     activityPreview,
-    searchText: recentSearchText(base, [summary.title, activityPreview, workspace.displayName, workspace.repo.name, "session"]),
+    searchText: recentSearchText(base, [summary.title, activityPreview, workspace.displayName, workspaceRepoRef(workspace)?.name, "session"]),
   };
 }
 
@@ -142,13 +152,13 @@ function recentWorkItemForSessionProjection(
     workspaceId: workspace.id,
     sessionId: session.sessionId,
     openTarget: { kind: "session", workspaceId: workspace.id, sessionId: session.sessionId },
-    title: session.title ?? workspace.displayName ?? workspace.repo.name,
-    subtitle: `${workspace.displayName ?? workspace.repo.name} session`,
+    title: session.title ?? workspaceDisplayTitle(workspace),
+    subtitle: `${workspaceDisplayTitle(workspace)} session`,
     state,
     stateLabel: recentWorkStateLabel(state),
     statusIndicator: recentWorkStatusIndicatorForSession(workspace, session.status, session),
     activityPreview: null,
-    searchText: recentSearchText(base, [session.title, session.sourceAgentKind, workspace.displayName, workspace.repo.name, "session"]),
+    searchText: recentSearchText(base, [session.title, session.sourceAgentKind, workspace.displayName, workspaceRepoRef(workspace)?.name, "session"]),
   };
 }
 
@@ -178,8 +188,8 @@ function recentWorkBase(
   const ownership = recentWorkOwnership(workspace);
   const lastActivityMs = parseTime(options.rowActivityAt);
   return {
-    repoLabel: `${workspace.repo.owner}/${workspace.repo.name}`,
-    branchLabel: workspace.repo.branch ?? workspace.repo.baseBranch ?? "main",
+    repoLabel: workspaceRepoLabel(workspace) ?? "",
+    branchLabel: workspaceBranchLabel(workspace),
     sourceKind,
     sourceLabel: recentWorkSourceLabel(sourceKind),
     runtimeLocation,

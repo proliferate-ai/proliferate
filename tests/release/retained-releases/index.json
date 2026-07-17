@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "kind": "proliferate.retained-release-index",
+  "receipts": [
+    {
+      "release_id": "v0.3.38",
+      "source_sha": "e61afc274593085e51870b24269f718a543b88b4",
+      "qualification_state": "bootstrap_unqualified",
+      "receipt_path": "v0.3.38.json",
+      "receipt_sha256": "1c4672ae2d18b024e7dbe890a5991ac7a6563768eae1009bb8974bbf48eef0d9"
+    }
+  ]
+}

@@ -151,6 +151,9 @@ impl SessionRuntime {
                 StartSessionError::WorkspaceNotFound => EnsureLiveSessionError::Internal(
                     anyhow::anyhow!("workspace not found for session"),
                 ),
+                StartSessionError::WorkspaceDirectoryMissing { path } => {
+                    EnsureLiveSessionError::WorkspaceDirectoryMissing { path }
+                }
                 StartSessionError::AgentDescriptorNotFound(agent_kind) => {
                     EnsureLiveSessionError::Internal(anyhow::anyhow!(
                         "agent descriptor not found: {agent_kind}"
@@ -290,6 +293,16 @@ impl SessionRuntime {
             .get_workspace(&record.workspace_id)
             .map_err(StartSessionError::Internal)?
             .ok_or(StartSessionError::WorkspaceNotFound)?;
+        // Common admission for every live start (create, resume, prompt, fork,
+        // config): refuse a proven-deleted local checkout with a typed error so
+        // it maps to a 409 rather than a generic ACP-start 500. This is an
+        // early, friendly refusal — the directory can still vanish before the
+        // subprocess spawns, where `validate_spawn_cwd` remains the backstop.
+        if workspace.checkout_directory_missing() {
+            return Err(StartSessionError::WorkspaceDirectoryMissing {
+                path: workspace.path,
+            });
+        }
         tracing::info!(
             session_id = %record.id,
             workspace_id = %record.workspace_id,
@@ -456,6 +469,9 @@ impl SessionRuntime {
 pub(super) fn map_start_session_error_to_anyhow(error: StartSessionError) -> anyhow::Error {
     match error {
         StartSessionError::WorkspaceNotFound => anyhow::anyhow!("workspace not found for session"),
+        StartSessionError::WorkspaceDirectoryMissing { path } => {
+            anyhow::anyhow!("workspace directory is missing: {path}")
+        }
         StartSessionError::AgentDescriptorNotFound(agent_kind) => {
             anyhow::anyhow!("agent descriptor not found: {agent_kind}")
         }
@@ -502,6 +518,9 @@ fn map_mcp_launch_assembly_error_to_start(
 fn map_start_session_error_to_create(error: StartSessionError) -> CreateAndStartSessionError {
     match error {
         StartSessionError::WorkspaceNotFound => CreateAndStartSessionError::WorkspaceNotFound,
+        StartSessionError::WorkspaceDirectoryMissing { path } => {
+            CreateAndStartSessionError::WorkspaceDirectoryMissing { path }
+        }
         StartSessionError::AgentDescriptorNotFound(agent_kind) => {
             CreateAndStartSessionError::Internal(anyhow::anyhow!(
                 "agent descriptor not found: {agent_kind}"

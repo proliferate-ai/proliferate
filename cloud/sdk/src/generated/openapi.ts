@@ -816,7 +816,8 @@ export interface paths {
         /** Save Repo Environment Endpoint */
         put: operations["save_repo_environment_endpoint_v1_cloud_repositories__git_owner___git_repo_name__environment_put"];
         post?: never;
-        delete?: never;
+        /** Remove Cloud Repo Environment Endpoint */
+        delete: operations["remove_cloud_repo_environment_endpoint_v1_cloud_repositories__git_owner___git_repo_name__environment_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1217,6 +1218,41 @@ export interface paths {
         post?: never;
         /** Delete Cloud Workspace Endpoint */
         delete: operations["delete_cloud_workspace_endpoint_v1_cloud_workspaces__workspace_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workspaces/{workspace_id}/materializations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Workspace Materialization Intent Endpoint */
+        post: operations["create_workspace_materialization_intent_endpoint_v1_cloud_workspaces__workspace_id__materializations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workspaces/{workspace_id}/materializations/{materialization_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Report Workspace Materialization Endpoint */
+        put: operations["report_workspace_materialization_endpoint_v1_cloud_workspaces__workspace_id__materializations__materialization_id__put"];
+        post?: never;
+        /** Unlink Workspace Materialization Endpoint */
+        delete: operations["unlink_workspace_materialization_endpoint_v1_cloud_workspaces__workspace_id__materializations__materialization_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1739,6 +1775,71 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/worker/download/{target}/{version}/{asset}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Worker Artifact Versioned Download Endpoint
+         * @description 302 to the worker binary at an EXACT version (R9R-001).
+         *
+         *     The version-specific path a supervisor-owned Worker resolves for an update
+         *     request: the server resolves the requested version or fails closed (404) —
+         *     it never falls back to the rolling ``stable`` path, so a B-pinned sandbox is
+         *     never handed an A-labelled artifact.
+         */
+        get: operations["worker_artifact_versioned_download_endpoint_v1_cloud_worker_download__target___version___asset__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/runtime/download/{target}/{version}/{asset}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Runtime Artifact Versioned Download Endpoint
+         * @description 302 to the AnyHarness binary at an EXACT version (R9R-001).
+         *
+         *     The runtime parallel of the versioned worker download: exact-version
+         *     resolution, fail closed on an unpublished version, no rolling fallback.
+         */
+        get: operations["runtime_artifact_versioned_download_endpoint_v1_cloud_runtime_download__target___version___asset__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workers/admin/sandboxes/{cloud_sandbox_id}/desired-versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set Sandbox Desired Versions Endpoint */
+        put: operations["set_sandbox_desired_versions_endpoint_v1_cloud_workers_admin_sandboxes__cloud_sandbox_id__desired_versions_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/integration-gateway/mcp": {
         parameters: {
             query?: never;
@@ -2028,6 +2129,57 @@ export interface paths {
         /** Put Workflow Invocation Endpoint */
         put: operations["put_workflow_invocation_endpoint_v1_workflow_invocations__invocation_id__put"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workflow-invocations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Workflow Invocation History Endpoint */
+        get: operations["list_workflow_invocation_history_endpoint_v1_workflow_invocations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workflow-invocations/{invocation_id}/deliver": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Deliver Workflow Invocation Endpoint */
+        post: operations["deliver_workflow_invocation_endpoint_v1_workflow_invocations__invocation_id__deliver_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workflow-invocations/{invocation_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Workflow Invocation Endpoint */
+        post: operations["cancel_workflow_invocation_endpoint_v1_workflow_invocations__invocation_id__cancel_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4231,6 +4383,43 @@ export interface components {
             generatedName?: boolean | null;
             /** Source */
             source?: ("desktop" | "web" | "mobile") | null;
+            /** Expectedheadsha */
+            expectedHeadSha?: string | null;
+            sourceMaterialization?: components["schemas"]["CreateCloudWorkspaceSourceMaterialization"] | null;
+        };
+        /**
+         * CreateCloudWorkspaceSourceMaterialization
+         * @description The local source descriptor for an exact-ref managed-Cloud creation.
+         *
+         *     Supplied by Desktop's "Add Cloud copy" flow: it names the local AnyHarness
+         *     workspace the exact ref came from so the resulting managed-Cloud row can be
+         *     associated with it. The server never trusts these fields for the actual ref
+         *     — it independently re-verifies the authorized GitHub branch head.
+         */
+        CreateCloudWorkspaceSourceMaterialization: {
+            /**
+             * Targetkind
+             * @constant
+             */
+            targetKind: "local_desktop";
+            /** Desktopinstallid */
+            desktopInstallId: string;
+            /** Anyharnessworkspaceid */
+            anyharnessWorkspaceId: string;
+            /** Worktreepath */
+            worktreePath: string;
+            /** Observedheadsha */
+            observedHeadSha: string;
+        };
+        /** CreateMaterializationIntentRequest */
+        CreateMaterializationIntentRequest: {
+            /**
+             * Targetkind
+             * @constant
+             */
+            targetKind: "local_desktop";
+            /** Desktopinstallid */
+            desktopInstallId: string;
         };
         /** CurrentTeamCheckoutResponse */
         CurrentTeamCheckoutResponse: {
@@ -4273,6 +4462,12 @@ export interface components {
              * Format: date-time
              */
             expiresAt: string;
+            /**
+             * Pendingticketpolicy
+             * @default newest_wins
+             * @constant
+             */
+            pendingTicketPolicy: "newest_wins";
         };
         /** DesktopWorkerRevokeRequest */
         DesktopWorkerRevokeRequest: {
@@ -4396,11 +4591,33 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "ready" | "missing_user_authorization" | "expired_user_authorization" | "missing_installation" | "repo_not_covered" | "missing_user_repo_access" | "error";
+            status: "ready" | "missing_user_authorization" | "expired_user_authorization" | "missing_installation" | "repo_not_covered" | "missing_user_repo_access" | "operator_configuration_required" | "error";
             /** Action */
             action?: ("authorize_user" | "reauthorize_user" | "install_app" | "grant_repo_access") | null;
             /** Message */
             message?: string | null;
+        };
+        /**
+         * GitHubRepositoryAccessCapability
+         * @description Operator readiness of GitHub repository discovery/authority.
+         *
+         *     ``disabled`` means the operator intentionally configured no GitHub App;
+         *     ``operator_configuration_required`` means a partial App config that only
+         *     the operator can repair (clients must not offer user authorization);
+         *     ``ready`` means the App runtime config is complete. Independent of
+         *     managed-Cloud execution: an App-ready/E2B-disabled deployment can browse
+         *     and clone repositories without advertising Cloud workspaces.
+         */
+        GitHubRepositoryAccessCapability: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "disabled" | "operator_configuration_required" | "ready";
+            /** Provider */
+            provider: "github_app" | null;
+            /** Displayname */
+            displayName: string | null;
         };
         /**
          * GitProvider
@@ -4611,6 +4828,24 @@ export interface components {
             /** Remainingusd */
             remainingUsd: number;
         };
+        /**
+         * ManagedCloudCapability
+         * @description Operator readiness of managed-Cloud workspace execution.
+         *
+         *     Requires both E2B provisioning and ready GitHub repository authority,
+         *     because workspace mutations enforce GitHub App authority server-side.
+         *     ``repositoryAuthority`` names the authority provider when one is
+         *     involved in the managed-Cloud path.
+         */
+        ManagedCloudCapability: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "disabled" | "operator_configuration_required" | "ready";
+            /** Repositoryauthority */
+            repositoryAuthority: "github_app" | null;
+        };
         /** ManagedCloudWorkflowTarget */
         ManagedCloudWorkflowTarget: {
             /**
@@ -4618,6 +4853,239 @@ export interface components {
              * @constant
              */
             kind: "managedCloud";
+        };
+        /** ManagedWorkflowCorrelations */
+        ManagedWorkflowCorrelations: {
+            /** Cloudworkspaceid */
+            cloudWorkspaceId: string | null;
+            /** Anyharnessworkspaceid */
+            anyharnessWorkspaceId: string | null;
+            /** Sessionid */
+            sessionId: string | null;
+            /** Promptid */
+            promptId: string | null;
+            /** Turnid */
+            turnId: string | null;
+        };
+        /** ManagedWorkflowExecutionResponse */
+        ManagedWorkflowExecutionResponse: {
+            /**
+             * Deliverystatus
+             * @enum {string}
+             */
+            deliveryStatus: "prepared" | "queued" | "delivering" | "accepted" | "delivery_failed" | "delivery_cancelled";
+            /**
+             * Deliverycheckpoint
+             * @enum {string}
+             */
+            deliveryCheckpoint: "none" | "target_plan_frozen" | "target_bound" | "workspace_put_started" | "workspace_ready" | "run_put_started" | "accepted";
+            /**
+             * Desiredstate
+             * @enum {string}
+             */
+            desiredState: "active" | "cancelled";
+            execution: components["schemas"]["ManagedWorkflowRuntimeExecution"] | null;
+            freshness: components["schemas"]["ManagedWorkflowFreshness"];
+            correlations: components["schemas"]["ManagedWorkflowCorrelations"];
+            openTarget: components["schemas"]["ManagedWorkflowOpenTarget"] | null;
+            /** Deliveryerrorcode */
+            deliveryErrorCode: string | null;
+            /** Observationerrorcode */
+            observationErrorCode: string | null;
+            /** Acceptedat */
+            acceptedAt: string | null;
+            /**
+             * Updatedat
+             * Format: date-time
+             */
+            updatedAt: string;
+        };
+        /** ManagedWorkflowExecutionStep */
+        ManagedWorkflowExecutionStep: {
+            /**
+             * Index
+             * @constant
+             */
+            index: 0;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "running" | "completed" | "failed" | "cancelled" | "interrupted";
+            /** Failurecode */
+            failureCode: string | null;
+            /** Interruptioncode */
+            interruptionCode: "runtime_restarted" | null;
+            /** Startedat */
+            startedAt: string | null;
+            /** Finishedat */
+            finishedAt: string | null;
+        };
+        /** ManagedWorkflowFreshness */
+        ManagedWorkflowFreshness: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "live" | "stale" | "unreachable" | "target_lost";
+            /** Latestobservedat */
+            latestObservedAt: string | null;
+        };
+        /** ManagedWorkflowHistoryItem */
+        ManagedWorkflowHistoryItem: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Workflowdefinitionid
+             * Format: uuid
+             */
+            workflowDefinitionId: string;
+            /** Definitionrevision */
+            definitionRevision: number;
+            /** Title */
+            title: string;
+            /**
+             * Placementkind
+             * @enum {string}
+             */
+            placementKind: "repositoryWorktree" | "scratch";
+            /**
+             * Targetkind
+             * @constant
+             */
+            targetKind: "managedCloud";
+            /**
+             * Deliverystatus
+             * @enum {string}
+             */
+            deliveryStatus: "prepared" | "queued" | "delivering" | "accepted" | "delivery_failed" | "delivery_cancelled";
+            /**
+             * Desiredstate
+             * @enum {string}
+             */
+            desiredState: "active" | "cancelled";
+            /** Executionstatus */
+            executionStatus: ("accepted" | "running" | "completed" | "failed" | "cancelled" | "interrupted") | null;
+            /**
+             * Freshness
+             * @enum {string}
+             */
+            freshness: "pending" | "live" | "stale" | "unreachable" | "target_lost";
+            /** Latestobservedat */
+            latestObservedAt: string | null;
+            /** Cloudworkspaceid */
+            cloudWorkspaceId: string | null;
+            /** Sessionid */
+            sessionId: string | null;
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /**
+             * Updatedat
+             * Format: date-time
+             */
+            updatedAt: string;
+        };
+        /** ManagedWorkflowHistoryResponse */
+        ManagedWorkflowHistoryResponse: {
+            /** Items */
+            items: components["schemas"]["ManagedWorkflowHistoryItem"][];
+            /** Nextcursor */
+            nextCursor: string | null;
+        };
+        /** ManagedWorkflowInvocationResponse */
+        ManagedWorkflowInvocationResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Schemaversion
+             * @constant
+             */
+            schemaVersion: 1;
+            /**
+             * Workflowdefinitionid
+             * Format: uuid
+             */
+            workflowDefinitionId: string;
+            /** Definitionrevision */
+            definitionRevision: number;
+            /** Title */
+            title: string;
+            /** Description */
+            description: string;
+            definition: components["schemas"]["PortableWorkflowDefinition"];
+            /** Arguments */
+            arguments: {
+                [key: string]: boolean | number | string;
+            };
+            /** Placement */
+            placement: components["schemas"]["RepositoryWorktreePlacement"] | components["schemas"]["ScratchPlacement"];
+            target: components["schemas"]["ManagedCloudWorkflowTarget"];
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            managedExecution: components["schemas"]["ManagedWorkflowExecutionResponse"];
+        };
+        /** ManagedWorkflowOpenTarget */
+        ManagedWorkflowOpenTarget: {
+            /**
+             * Cloudworkspaceid
+             * Format: uuid
+             */
+            cloudWorkspaceId: string;
+            /** Anyharnessworkspaceid */
+            anyharnessWorkspaceId: string;
+            /** Sessionid */
+            sessionId: string;
+        };
+        /** ManagedWorkflowRuntimeExecution */
+        ManagedWorkflowRuntimeExecution: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "accepted" | "running" | "completed" | "failed" | "cancelled" | "interrupted";
+            /** Stateversion */
+            stateVersion: number;
+            /** Cancelrequestedat */
+            cancelRequestedAt: string | null;
+            /** Failurecode */
+            failureCode: string | null;
+            /** Interruptioncode */
+            interruptionCode: "runtime_restarted" | null;
+            /** Stopreason */
+            stopReason: string | null;
+            /** Startedat */
+            startedAt: string | null;
+            /** Finishedat */
+            finishedAt: string | null;
+            /** Steps */
+            steps: components["schemas"]["ManagedWorkflowExecutionStep"][];
+        };
+        /** MaterializationIntentResponse */
+        MaterializationIntentResponse: {
+            materialization: components["schemas"]["WorkspaceMaterializationSummary"];
+            /** Operationid */
+            operationId: string;
+            source: components["schemas"]["MaterializationIntentSource"];
+        };
+        /** MaterializationIntentSource */
+        MaterializationIntentSource: {
+            repository: components["schemas"]["RepoRef"];
+            /** Branchname */
+            branchName: string;
+            /** Headsha */
+            headSha: string;
         };
         /** MetaResponse */
         MetaResponse: {
@@ -5393,6 +5861,28 @@ export interface components {
             /** Basebranch */
             baseBranch: string;
         };
+        /** ReportMaterializationRequest */
+        ReportMaterializationRequest: {
+            /** Generation */
+            generation: number;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "hydrated" | "missing" | "inconsistent" | "failed";
+            /** Anyharnessworkspaceid */
+            anyharnessWorkspaceId?: string | null;
+            /** Worktreepath */
+            worktreePath?: string | null;
+            /** Observedbranch */
+            observedBranch?: string | null;
+            /** Observedheadsha */
+            observedHeadSha?: string | null;
+            /** Failurecode */
+            failureCode?: string | null;
+            /** Failuredetail */
+            failureDetail?: string | null;
+        };
         /** RepositoryWorktreePlacement */
         RepositoryWorktreePlacement: {
             /**
@@ -5442,7 +5932,8 @@ export interface components {
          *
          *     Defaults are disabled: a capability is true only when the operator
          *     configured the underlying feature. The desktop treats an absent contract
-         *     (older servers) as all-off + self-managed.
+         *     (older servers) as all-off + self-managed. ``cloudWorkspaces`` is a v1
+         *     compatibility projection of ``managedCloud.status == "ready"``.
          */
         ServerCapabilities: {
             /** Contractversion */
@@ -5459,11 +5950,37 @@ export interface components {
             webApp: components["schemas"]["WebAppCapability"];
             support: components["schemas"]["SupportCapability"];
             pricing: components["schemas"]["PricingCapability"];
+            githubRepositoryAccess: components["schemas"]["GitHubRepositoryAccessCapability"];
+            managedCloud: components["schemas"]["ManagedCloudCapability"];
+            /** Workflowmanagedruns */
+            workflowManagedRuns: boolean;
         };
         /** SetIntegrationEnabledRequest */
         SetIntegrationEnabledRequest: {
             /** Enabled */
             enabled: boolean;
+        };
+        /**
+         * SetSandboxDesiredVersionsRequest
+         * @description Admin setter body for a sandbox's target-scoped desired versions.
+         *
+         *     ``None`` (the default, and the JSON explicit ``null``) clears the
+         *     override so the target inherits the global pin again.
+         */
+        SetSandboxDesiredVersionsRequest: {
+            /** Desiredanyharnessversion */
+            desiredAnyharnessVersion?: string | null;
+            /** Desiredworkerversion */
+            desiredWorkerVersion?: string | null;
+        };
+        /** SetSandboxDesiredVersionsResponse */
+        SetSandboxDesiredVersionsResponse: {
+            /** Cloudsandboxid */
+            cloudSandboxId: string;
+            /** Desiredanyharnessversion */
+            desiredAnyharnessVersion: string | null;
+            /** Desiredworkerversion */
+            desiredWorkerVersion: string | null;
         };
         /** SsoDiscoveryResponse */
         SsoDiscoveryResponse: {
@@ -6246,6 +6763,36 @@ export interface components {
             /** Heartbeatintervalseconds */
             heartbeatIntervalSeconds: number;
             desiredVersions: components["schemas"]["WorkerDesiredVersions"];
+            /** Desiredtopology */
+            desiredTopology?: string | null;
+            supervisorBridge?: components["schemas"]["WorkerSupervisorBridge"] | null;
+        };
+        /**
+         * WorkerSupervisorBridge
+         * @description Server-materialized D5 bridge inputs for an already-provisioned legacy
+         *     target (R9R-002).
+         *
+         *     A legacy Worker's persisted config carries none of the supervisor-owned
+         *     fields, so without these it could never bridge. The server delivers the
+         *     Supervisor config TOML + a supervisor-owned Worker config TOML and the paths
+         *     to write them through the live heartbeat channel; the legacy Worker
+         *     materializes both, starts the Supervisor, and hands the box off. Absent for
+         *     Supervisor-first provisions (their on-disk config already carries the inputs)
+         *     and for every non-flag-enabled target.
+         */
+        WorkerSupervisorBridge: {
+            /** Supervisorbinarypath */
+            supervisorBinaryPath: string;
+            /** Supervisorconfigpath */
+            supervisorConfigPath: string;
+            /** Supervisorconfigtoml */
+            supervisorConfigToml: string;
+            /** Workerconfigpath */
+            workerConfigPath: string;
+            /** Workerconfigtoml */
+            workerConfigToml: string;
+            /** Markerdir */
+            markerDir: string;
         };
         /** WorkflowDefinitionCreateRequest */
         WorkflowDefinitionCreateRequest: {
@@ -6497,11 +7044,16 @@ export interface components {
             id: string;
             /** Targetid */
             targetId?: string | null;
+            /**
+             * Workspacekind
+             * @enum {string}
+             */
+            workspaceKind: "repositoryWorktree" | "scratch";
             /** Repoenvironmentid */
-            repoEnvironmentId: string;
+            repoEnvironmentId: string | null;
             /** Displayname */
             displayName: string;
-            repo: components["schemas"]["RepoRef"];
+            repo: components["schemas"]["RepoRef"] | null;
             /**
              * Status
              * @enum {string}
@@ -6521,8 +7073,9 @@ export interface components {
             executionTarget?: components["schemas"]["WorkspaceExecutionTargetSummary"];
             /** Selectedmaterializationid */
             selectedMaterializationId?: string | null;
-            /** Primarymaterialization */
-            primaryMaterialization?: null;
+            primaryMaterialization?: components["schemas"]["WorkspaceMaterializationSummary"] | null;
+            /** Materializations */
+            materializations?: components["schemas"]["WorkspaceMaterializationSummary"][];
             cloudAccess?: components["schemas"]["WorkspaceCloudAccessSummary"];
             /** Statusdetail */
             statusDetail?: string | null;
@@ -6602,6 +7155,39 @@ export interface components {
             /** Online */
             online?: boolean | null;
         };
+        /** WorkspaceMaterializationSummary */
+        WorkspaceMaterializationSummary: {
+            /** Id */
+            id: string;
+            /**
+             * Targetkind
+             * @enum {string}
+             */
+            targetKind: "managed_cloud" | "local_desktop";
+            /** Desktopinstallid */
+            desktopInstallId: string | null;
+            /** Anyharnessworkspaceid */
+            anyharnessWorkspaceId: string | null;
+            /** Worktreepath */
+            worktreePath: string | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "pending" | "hydrating" | "hydrated" | "missing" | "inconsistent" | "failed";
+            /** Generation */
+            generation: number;
+            /** Expectedheadsha */
+            expectedHeadSha: string | null;
+            /** Observedheadsha */
+            observedHeadSha: string | null;
+            /** Observedbranch */
+            observedBranch: string | null;
+            /** Failurecode */
+            failureCode: string | null;
+            /** Lastreportedat */
+            lastReportedAt: string | null;
+        };
         /** WorkspaceRuntimeAuthState */
         WorkspaceRuntimeAuthState: {
             /**
@@ -6652,11 +7238,16 @@ export interface components {
             id: string;
             /** Targetid */
             targetId?: string | null;
+            /**
+             * Workspacekind
+             * @enum {string}
+             */
+            workspaceKind: "repositoryWorktree" | "scratch";
             /** Repoenvironmentid */
-            repoEnvironmentId: string;
+            repoEnvironmentId: string | null;
             /** Displayname */
             displayName: string;
-            repo: components["schemas"]["RepoRef"];
+            repo: components["schemas"]["RepoRef"] | null;
             /**
              * Status
              * @enum {string}
@@ -6676,8 +7267,9 @@ export interface components {
             executionTarget?: components["schemas"]["WorkspaceExecutionTargetSummary"];
             /** Selectedmaterializationid */
             selectedMaterializationId?: string | null;
-            /** Primarymaterialization */
-            primaryMaterialization?: null;
+            primaryMaterialization?: components["schemas"]["WorkspaceMaterializationSummary"] | null;
+            /** Materializations */
+            materializations?: components["schemas"]["WorkspaceMaterializationSummary"][];
             cloudAccess?: components["schemas"]["WorkspaceCloudAccessSummary"];
             /** Statusdetail */
             statusDetail?: string | null;
@@ -8235,6 +8827,36 @@ export interface operations {
             };
         };
     };
+    remove_cloud_repo_environment_endpoint_v1_cloud_repositories__git_owner___git_repo_name__environment_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                git_owner: string;
+                git_repo_name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     start_github_app_user_authorization_endpoint_v1_cloud_github_app_user_authorization_start_get: {
         parameters: {
             query?: {
@@ -9100,6 +9722,7 @@ export interface operations {
         parameters: {
             query?: {
                 lifecycle?: "active" | "archived" | "all";
+                desktopInstallId?: string | null;
             };
             header?: never;
             path?: never;
@@ -9162,7 +9785,9 @@ export interface operations {
     };
     get_cloud_workspace_endpoint_v1_cloud_workspaces__workspace_id__get: {
         parameters: {
-            query?: never;
+            query?: {
+                desktopInstallId?: string | null;
+            };
             header?: never;
             path: {
                 workspace_id: string;
@@ -9197,6 +9822,107 @@ export interface operations {
             header?: never;
             path: {
                 workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_workspace_materialization_intent_endpoint_v1_cloud_workspaces__workspace_id__materializations_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateMaterializationIntentRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaterializationIntentResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    report_workspace_materialization_endpoint_v1_cloud_workspaces__workspace_id__materializations__materialization_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                materialization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportMaterializationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceMaterializationSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unlink_workspace_materialization_endpoint_v1_cloud_workspaces__workspace_id__materializations__materialization_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                materialization_id: string;
             };
             cookie?: never;
         };
@@ -10320,6 +11046,107 @@ export interface operations {
             };
         };
     };
+    worker_artifact_versioned_download_endpoint_v1_cloud_worker_download__target___version___asset__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                target: string;
+                version: string;
+                asset: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    runtime_artifact_versioned_download_endpoint_v1_cloud_runtime_download__target___version___asset__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                target: string;
+                version: string;
+                asset: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_sandbox_desired_versions_endpoint_v1_cloud_workers_admin_sandboxes__cloud_sandbox_id__desired_versions_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cloud_sandbox_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetSandboxDesiredVersionsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SetSandboxDesiredVersionsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     integration_gateway_mcp_get_v1_cloud_integration_gateway_mcp_get: {
         parameters: {
             query?: never;
@@ -10994,7 +11821,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["WorkflowInvocationResponse"];
+                    "application/json": components["schemas"]["ManagedWorkflowInvocationResponse"];
                 };
             };
             /** @description Validation Error */
@@ -11039,6 +11866,100 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkflowInvocationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_workflow_invocation_history_endpoint_v1_workflow_invocations_get: {
+        parameters: {
+            query: {
+                workflowDefinitionId: string;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManagedWorkflowHistoryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    deliver_workflow_invocation_endpoint_v1_workflow_invocations__invocation_id__deliver_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invocation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManagedWorkflowInvocationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_workflow_invocation_endpoint_v1_workflow_invocations__invocation_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invocation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManagedWorkflowInvocationResponse"];
                 };
             };
             /** @description Validation Error */

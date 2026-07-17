@@ -49,6 +49,7 @@ interface FakeMatrixOptions {
   requiredEnv?: string[];
   cells?: Array<Record<string, string>>;
   cellRequiredEnv?: Record<string, string[]>;
+  cellOptionalEnv?: Record<string, string[]>;
   runCells?: MatrixScenarioDefinition["runCells"];
   planCell?: MatrixScenarioDefinition["planCell"];
 }
@@ -66,6 +67,7 @@ function fakeMatrix(options: FakeMatrixOptions): MatrixScenarioDefinition {
       dims.map((dimensions) => ({
         dimensions,
         requiredEnv: options.cellRequiredEnv?.[Object.values(dimensions)[0]],
+        optionalEnv: options.cellOptionalEnv?.[Object.values(dimensions)[0]],
       })),
     planCell: options.planCell ?? ((_ctx, cell) => [{ description: `plan ${cell.cell_id}` }]),
     runCells:
@@ -322,6 +324,59 @@ test("diagnostic missing requirements block only affected cells; the collector r
   assert.equal(byId.get("M/local/child=c")?.status, "green");
   assert.deepEqual(received.sort(), ["M/local/child=a", "M/local/child=c"]);
   assert.equal(report.summary.intended_exit_code, 0);
+});
+
+test("optional_env is resolved into ctx.env but NEVER blocks a cell when absent (PR7-CONTROL-004)", async () => {
+  // A founder-gated live input the cell READS via ctx.env.get but does not
+  // require to plan. Absent → the cell still runs (fail-closed is the cell's
+  // job, not the runner's) and ctx.env.get returns undefined.
+  let requestedNames: readonly string[] = [];
+  let sawOptionalValue: string | undefined = "unset";
+  const matrix = fakeMatrix({
+    id: "OPT",
+    cells: [{ child: "a" }],
+    cellOptionalEnv: { a: ["FOUNDER_GATED_VAR"] },
+    runCells: async (ctx, cells) => {
+      sawOptionalValue = ctx.env.get("FOUNDER_GATED_VAR");
+      return cells.map((cell) => ({ cellId: cell.cell_id, status: "green" as const }));
+    },
+  });
+  const report = await executeSelectedCells(
+    await optionsFor([matrix], {
+      // Capture the names the executor asks to resolve — the optional var MUST be
+      // among them (reachable), even though it is absent from the fake env.
+      resolveNeededEnv: (names) => {
+        requestedNames = names;
+        return fakeEnv([]); // present: none
+      },
+    }),
+  );
+  const byId = new Map(report.results.map((result) => [result.cell_id, result]));
+  // Not blocked — the cell ran and returned green (its own logic would fail-close if it cared).
+  assert.equal(byId.get("OPT/local/child=a")?.status, "green");
+  // The optional var was offered to env resolution (reachable when supplied).
+  assert.ok(requestedNames.includes("FOUNDER_GATED_VAR"), "optional_env must reach env resolution");
+  // Absent optional var reads as undefined in ctx.env.
+  assert.equal(sawOptionalValue, undefined);
+});
+
+test("optional_env present is visible to the cell via ctx.env.get (PR7-CONTROL-004)", async () => {
+  let sawValue: string | undefined;
+  const matrix = fakeMatrix({
+    id: "OPT2",
+    cells: [{ child: "a" }],
+    cellOptionalEnv: { a: ["FOUNDER_GATED_VAR"] },
+    runCells: async (ctx, cells) => {
+      sawValue = ctx.env.get("FOUNDER_GATED_VAR");
+      return cells.map((cell) => ({ cellId: cell.cell_id, status: "green" as const }));
+    },
+  });
+  await executeSelectedCells(
+    await optionsFor([matrix], {
+      resolveNeededEnv: () => fakeEnv([], { FOUNDER_GATED_VAR: "supplied" }),
+    }),
+  );
+  assert.equal(sawValue, "supplied");
 });
 
 test("strict missing preflight executes zero collector bodies, blocks affected, cancels the rest", async () => {

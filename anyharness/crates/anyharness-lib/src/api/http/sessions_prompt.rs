@@ -1,3 +1,5 @@
+use crate::api::http::access::admit_session_mutation;
+use crate::domains::sessions::admission::SessionMutationKind;
 use std::time::Instant;
 
 use anyharness_contract::v1::{PromptSessionRequest, PromptSessionResponse};
@@ -27,6 +29,7 @@ const PROMPT_ID_MAX_BYTES: usize = 256;
     params(("session_id" = String, Path, description = "Session ID")),
     request_body = anyharness_contract::v1::PromptSessionRequest,
     responses(
+        (status = 409, description = "Session execution is controlled by an active workflow run", body = anyharness_contract::v1::ProblemDetails),
         (status = 200, description = "Prompt accepted (running or queued)", body = anyharness_contract::v1::PromptSessionResponse),
         (status = 404, description = "Session not found", body = anyharness_contract::v1::ProblemDetails),
     ),
@@ -40,6 +43,8 @@ pub async fn prompt_session(
     Json(req): Json<PromptSessionRequest>,
 ) -> Result<Json<PromptSessionResponse>, ApiError> {
     assert_session_auth_scope(&state, &auth, &session_id)?;
+    let _admission_permit =
+        admit_session_mutation(&state, &session_id, SessionMutationKind::Prompt).await?;
     let flow = FlowHeaders::from_headers(&headers);
     let span = flow.span();
     let prompt_id = request_prompt_id(req.prompt_id.as_deref(), flow.prompt_id.as_deref())?;

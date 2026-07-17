@@ -105,66 +105,6 @@ async def test_resolve_runtime_workspace_raises_when_workspace_id_is_missing(
 
 
 @pytest.mark.asyncio
-async def test_prepare_runtime_mobility_destination_uses_runtime_problem_detail(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    client = _FakeAsyncClient(
-        [
-            _response(
-                400,
-                json={
-                    "title": "Invalid request",
-                    "detail": "existing local branch has uncommitted changes",
-                },
-                url="https://runtime.invalid/v1/repo-roots/repo-1/mobility/prepare-destination",
-            )
-        ]
-    )
-    monkeypatch.setattr(workspaces.httpx, "AsyncClient", lambda **_kwargs: client)
-
-    with pytest.raises(CloudRuntimeReconnectError, match="uncommitted changes"):
-        await workspaces.prepare_runtime_mobility_destination(
-            "https://runtime.invalid",
-            "runtime-token",
-            repo_root_id="repo-1",
-            requested_branch="feature/move",
-            requested_base_sha="abc123",
-            destination_id="workspace-1",
-        )
-
-
-@pytest.mark.asyncio
-async def test_prepare_runtime_mobility_destination_accepts_current_contract_shape(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    client = _FakeAsyncClient(
-        [
-            _response(
-                200,
-                json={
-                    "repoRoot": {"id": "repo-1"},
-                    "workspace": {"id": "workspace-123"},
-                },
-                url="https://runtime.invalid/v1/repo-roots/repo-1/mobility/prepare-destination",
-            )
-        ]
-    )
-    monkeypatch.setattr(workspaces.httpx, "AsyncClient", lambda **_kwargs: client)
-
-    workspace = await workspaces.prepare_runtime_mobility_destination(
-        "https://runtime.invalid",
-        "runtime-token",
-        repo_root_id="repo-1",
-        requested_branch="feature/move",
-        requested_base_sha="abc123",
-        destination_id="workspace-1",
-    )
-
-    assert workspace.workspace_id == "workspace-123"
-    assert workspace.repo_root_id == "repo-1"
-
-
-@pytest.mark.asyncio
 async def test_list_runtime_workspaces_normalizes_live_session_counts(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -197,3 +137,114 @@ async def test_list_runtime_workspaces_normalizes_live_session_counts(
         ("workspace-1", 2),
         ("workspace-2", 0),
     ]
+
+
+def _clean_git_status_payload() -> dict[str, object]:
+    return {
+        "workspaceId": "ws-1",
+        "workspacePath": "/w/ws-1",
+        "repoRootPath": "/w",
+        "currentBranch": "feature/x",
+        "headOid": "abc123",
+        "detached": False,
+        "upstreamBranch": "origin/feature/x",
+        "suggestedBaseBranch": "main",
+        "ahead": 0,
+        "behind": 0,
+        "operation": "none",
+        "conflicted": False,
+        "clean": True,
+    }
+
+
+@pytest.mark.asyncio
+async def test_get_runtime_git_status_parses_current_contract_shape(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = _FakeAsyncClient([_response(200, method="GET", json=_clean_git_status_payload())])
+    monkeypatch.setattr(workspaces.httpx, "AsyncClient", lambda **_kwargs: client)
+
+    snapshot = await workspaces.get_runtime_git_status(
+        "https://runtime.invalid",
+        "runtime-token",
+        anyharness_workspace_id="ws-1",
+    )
+
+    assert snapshot.current_branch == "feature/x"
+    assert snapshot.head_oid == "abc123"
+    assert snapshot.upstream_branch == "origin/feature/x"
+    assert snapshot.ahead == 0 and snapshot.behind == 0
+    assert snapshot.operation == "none"
+    assert snapshot.clean is True and snapshot.conflicted is False
+    assert snapshot.detached is False
+
+
+@pytest.mark.asyncio
+async def test_get_runtime_git_status_allows_missing_optional_branch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    payload = _clean_git_status_payload()
+    payload["currentBranch"] = None
+    payload["upstreamBranch"] = None
+    payload["suggestedBaseBranch"] = None
+    payload["detached"] = True
+    client = _FakeAsyncClient([_response(200, method="GET", json=payload)])
+    monkeypatch.setattr(workspaces.httpx, "AsyncClient", lambda **_kwargs: client)
+
+    snapshot = await workspaces.get_runtime_git_status(
+        "https://runtime.invalid",
+        "runtime-token",
+        anyharness_workspace_id="ws-1",
+    )
+    assert snapshot.current_branch is None
+    assert snapshot.upstream_branch is None
+    assert snapshot.detached is True
+
+
+@pytest.mark.asyncio
+async def test_get_runtime_git_status_rejects_missing_required_field(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    payload = _clean_git_status_payload()
+    del payload["headOid"]
+    client = _FakeAsyncClient([_response(200, method="GET", json=payload)])
+    monkeypatch.setattr(workspaces.httpx, "AsyncClient", lambda **_kwargs: client)
+
+    with pytest.raises(CloudRuntimeReconnectError, match="headOid"):
+        await workspaces.get_runtime_git_status(
+            "https://runtime.invalid",
+            "runtime-token",
+            anyharness_workspace_id="ws-1",
+        )
+
+
+@pytest.mark.asyncio
+async def test_get_runtime_git_status_rejects_unknown_operation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    payload = _clean_git_status_payload()
+    payload["operation"] = "bisect"
+    client = _FakeAsyncClient([_response(200, method="GET", json=payload)])
+    monkeypatch.setattr(workspaces.httpx, "AsyncClient", lambda **_kwargs: client)
+
+    with pytest.raises(CloudRuntimeReconnectError, match="unknown operation"):
+        await workspaces.get_runtime_git_status(
+            "https://runtime.invalid",
+            "runtime-token",
+            anyharness_workspace_id="ws-1",
+        )
+
+
+@pytest.mark.asyncio
+async def test_get_runtime_git_status_transport_failure_is_typed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = _FakeAsyncClient(httpx.ConnectError("boom"))
+    monkeypatch.setattr(workspaces.httpx, "AsyncClient", lambda **_kwargs: client)
+
+    with pytest.raises(CloudRuntimeReconnectError, match="Failed to read"):
+        await workspaces.get_runtime_git_status(
+            "https://runtime.invalid",
+            "runtime-token",
+            anyharness_workspace_id="ws-1",
+        )

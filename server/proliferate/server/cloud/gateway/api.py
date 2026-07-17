@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Request, WebSocket, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.dependencies import current_product_user
+from proliferate.db import session_ops
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
 from proliferate.integrations.sentry import clear_server_sentry_user
@@ -36,6 +37,10 @@ async def proxy_cloud_sandbox_anyharness_http(
     user: User = Depends(current_product_user),
 ) -> object:
     access = await ensure_cloud_sandbox_gateway_access(db, user)
+    # The upstream response may stream indefinitely. End the shared auth/access
+    # transaction before entering that transport lifetime so it cannot pin a
+    # pool checkout or transaction-scoped sandbox locks.
+    await session_ops.commit_session(db)
     return await proxy_http_to_anyharness(
         request,
         upstream_base_url=access.upstream_base_url,
@@ -64,6 +69,9 @@ async def proxy_cloud_sandbox_anyharness_websocket(
         except GatewayWebSocketAuthError:
             await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
             return
+        # WebSocket dependencies remain alive until the socket closes. Release
+        # the completed auth/access transaction before starting the proxy pump.
+        await session_ops.commit_session(db)
         await proxy_websocket_to_anyharness(
             websocket,
             upstream_base_url=access.upstream_base_url,

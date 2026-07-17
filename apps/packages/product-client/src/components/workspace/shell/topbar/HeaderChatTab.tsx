@@ -16,6 +16,8 @@ interface HeaderChatTabProps {
   rowDragProps?: { "data-tab-drag-row-id": string };
   width: number;
   position: number;
+  /** Visual order among the strip's chat tabs; testid-only (data-chat-tab-index). */
+  stripIndex?: number;
   dragOffset: number;
   isDragging: boolean;
   canDragTab: boolean;
@@ -55,6 +57,7 @@ export function HeaderChatTab({
   rowDragProps,
   width,
   position,
+  stripIndex,
   dragOffset,
   isDragging,
   canDragTab,
@@ -178,6 +181,7 @@ export function HeaderChatTab({
         onDismiss={() => onDismiss(tab.id)}
         shortcutLabel={shortcutLabel}
         shortcutRevealVisible={shortcutRevealVisible}
+        stripIndex={stripIndex}
       />
     </div>
   );

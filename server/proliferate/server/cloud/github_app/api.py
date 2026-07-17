@@ -28,6 +28,9 @@ from proliferate.server.cloud.github_app.service import (
     get_github_repo_authority_status,
     list_github_app_accessible_repositories,
 )
+from proliferate.server.cloud.github_app.transactions import (
+    commit_github_app_reauthorization_on_error,
+)
 from proliferate.server.cloud.repos.models import (
     CloudGitRepositoriesResponse,
     cloud_git_repositories_payload,
@@ -37,6 +40,8 @@ from proliferate.server.cloud.repos.service import (
     DEFAULT_REPO_VISIBILITY,
 )
 from proliferate.utils.redirect_callback_pages import make_redirect_callback_response
+
+_REAUTH_TRANSACTION_DEPENDENCIES = [Depends(commit_github_app_reauthorization_on_error)]
 
 router = APIRouter(prefix="/github-app", tags=["github-app"])
 organization_router = APIRouter(
@@ -80,6 +85,7 @@ async def github_app_user_authorization_status_endpoint(
 @router.get(
     "/accessible-repos",
     response_model=CloudGitRepositoriesResponse,
+    dependencies=_REAUTH_TRANSACTION_DEPENDENCIES,
 )
 async def list_github_app_accessible_repositories_endpoint(
     db: AsyncSession = Depends(get_async_session),
@@ -170,7 +176,10 @@ async def github_app_user_authorization_callback_endpoint(
     return RedirectResponse(redirect_url, status_code=302)
 
 
-@callback_router.get("/installation/callback")
+@callback_router.get(
+    "/installation/callback",
+    dependencies=_REAUTH_TRANSACTION_DEPENDENCIES,
+)
 async def github_app_installation_callback_endpoint(
     installation_id: str | None = Query(default=None),
     setup_action: str | None = Query(default=None),
@@ -189,7 +198,10 @@ async def github_app_installation_callback_endpoint(
     return RedirectResponse(redirect_url, status_code=302)
 
 
-@setup_callback_router.get("/callback")
+@setup_callback_router.get(
+    "/callback",
+    dependencies=_REAUTH_TRANSACTION_DEPENDENCIES,
+)
 async def github_app_setup_callback_endpoint(
     installation_id: str | None = Query(default=None),
     setup_action: str | None = Query(default=None),

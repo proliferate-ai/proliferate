@@ -23,6 +23,7 @@ import { resolveHomeTargetLaunchKindForRepository } from "#product/lib/domain/ho
 
 export function HomeNextScreen() {
   const {
+    desktopTargetsAvailable,
     destination,
     repositorySelection,
     repoLaunchKind,
@@ -42,6 +43,7 @@ export function HomeNextScreen() {
     dismissModelProbeCard,
   } = useHomeScreen();
   const homeNext = useHomeNextState({
+    desktopTargetsAvailable,
     destination,
     repositorySelection,
     repoLaunchKind,
@@ -87,6 +89,14 @@ export function HomeNextScreen() {
       setLaunchControlOverrides({});
     },
   });
+  const launchKindForRepository = (sourceRoot: string) =>
+    desktopTargetsAvailable
+      ? resolveHomeTargetLaunchKindForRepository({
+        currentLaunchKind: repoLaunchKind,
+        sourceRoot,
+        cloudActionBySourceRoot: homeNext.cloudRepoActionBySourceRoot,
+      })
+      : "cloud";
 
   const promptTarget = destination === "repository"
     ? homeNext.selectedRepository?.name?.trim()
@@ -140,20 +150,16 @@ export function HomeNextScreen() {
                           {promptTarget}
                         </Button>
                       )}
+                      coworkAvailable={desktopTargetsAvailable}
                       side="bottom"
                       destination={destination}
                       repositories={homeNext.repositories}
                       selectedRepository={homeNext.selectedRepository}
                       onSelectRepository={(sourceRoot) => {
-                        const launchKind = resolveHomeTargetLaunchKindForRepository({
-                          currentLaunchKind: repoLaunchKind,
-                          sourceRoot,
-                          cloudActionBySourceRoot: homeNext.cloudRepoActionBySourceRoot,
-                        });
                         patchTargetSelection({
                           destination: "repository",
                           repositorySelection: { kind: "repository", sourceRoot },
-                          repoLaunchKind: launchKind,
+                          repoLaunchKind: launchKindForRepository(sourceRoot),
                         });
                       }}
                       onSelectCowork={() => {
@@ -190,8 +196,6 @@ export function HomeNextScreen() {
             controlsTrailingSlot={(
               <ComposerTrailingControls
                 runtimeControlsDisabled={false}
-                agentKind={homeAgentKind}
-                sessionConfigControls={homeSessionConfigControls}
                 isEditingQueuedPrompt={false}
                 chatDisabled={false}
                 isSubmitting={false}
@@ -203,6 +207,7 @@ export function HomeNextScreen() {
             )}
             targetPickerSlot={(
               <HomeTargetPicker
+                desktopTargetsAvailable={desktopTargetsAvailable}
                 destination={destination}
                 repoLaunchKind={repoLaunchKind}
                 repositories={homeNext.repositories}
@@ -218,18 +223,14 @@ export function HomeNextScreen() {
                   patchTargetSelection({ destination: "cowork" });
                 }}
                 onSelectRepository={(sourceRoot) => {
-                  const launchKind = resolveHomeTargetLaunchKindForRepository({
-                    currentLaunchKind: repoLaunchKind,
-                    sourceRoot,
-                    cloudActionBySourceRoot: homeNext.cloudRepoActionBySourceRoot,
-                  });
                   patchTargetSelection({
                     destination: "repository",
                     repositorySelection: { kind: "repository", sourceRoot },
-                    repoLaunchKind: launchKind,
+                    repoLaunchKind: launchKindForRepository(sourceRoot),
                   });
                 }}
                 onSelectRuntime={(launchKind, targetId = null) => {
+                  if (!desktopTargetsAvailable && launchKind !== "cloud") return;
                   patchTargetSelection({
                     repoLaunchKind: launchKind,
                     selectedSshTargetId: launchKind === "ssh" ? targetId : selectedSshTargetId,
@@ -265,7 +266,7 @@ export function HomeNextScreen() {
                   onClick={() => configureCloud()}
                   className="h-auto px-0 py-0 text-foreground underline underline-offset-4 hover:text-muted-foreground"
                 >
-                  Configure
+                  {homeNext.cloudRepoAction.label}
                 </Button>
               ) : null
             }

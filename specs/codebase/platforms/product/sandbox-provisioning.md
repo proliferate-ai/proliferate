@@ -60,6 +60,10 @@ HTTP/WS /v1/gateway/cloud-sandbox/anyharness/{path...}
 loads and decrypts runtime access from the caller's active `cloud_sandbox`.
 [`gateway/proxy.py`](../../../../server/proliferate/server/cloud/gateway/proxy.py)
 then proxies HTTP or WebSocket traffic to AnyHarness with the sandbox bearer.
+The gateway finishes the shared authentication/access transaction before it
+enters HTTP response streaming or the WebSocket pump. Long-lived proxy
+connections must not retain a database-pool checkout or transaction-scoped
+sandbox locks.
 
 ## Lifecycle
 

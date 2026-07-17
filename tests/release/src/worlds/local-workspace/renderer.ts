@@ -80,7 +80,7 @@ export async function serveRenderer(params: {
 }
 
 /** Injectable Chromium launcher — real Playwright in production, fake in tests. */
-export type ChromiumLauncher = (options: { headless: boolean }) => Promise<Browser>;
+export type ChromiumLauncher = (options: { headless: boolean; args?: string[] }) => Promise<Browser>;
 
 /**
  * Launches a single headless Chromium instance for the world. Callers create
@@ -90,11 +90,13 @@ export async function launchChromium(options?: {
   headless?: boolean;
   log?: (message: string) => void;
   launcher?: ChromiumLauncher;
+  /** Extra Chromium args (e.g. `--host-resolver-rules=MAP <host> <ip>` to pin a run subdomain). Append-only addition. */
+  args?: string[];
 }): Promise<Browser> {
   const launcher = options?.launcher ?? ((opts) => chromium.launch(opts));
   const log = options?.log ?? (() => undefined);
   log("launching Chromium via Playwright");
-  return launcher({ headless: options?.headless ?? true });
+  return launcher({ headless: options?.headless ?? true, ...(options?.args ? { args: options.args } : {}) });
 }
 
 const defaultExec: Exec = async (file, args, execOptions) => {

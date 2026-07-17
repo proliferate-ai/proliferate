@@ -37,6 +37,7 @@ describe("ensureDesktopWorker", () => {
     sdkMocks.enrollDesktopWorker.mockResolvedValue({
       enrollmentToken: "ticket-1",
       expiresAt: "2026-01-01T00:00:00Z",
+      pendingTicketPolicy: "newest_wins",
     });
   });
 
@@ -68,7 +69,30 @@ describe("ensureDesktopWorker", () => {
     await expect(ensureDesktopWorker(null, worker, { onFailure, captureException })).resolves.toBe(false);
 
     expect(tauriMocks.ensureDesktopDispatchWorker).not.toHaveBeenCalled();
+    expect(captureException).toHaveBeenCalledWith(error, {
+      tags: {
+        action: "ensure-desktop-worker",
+        domain: "cloud",
+      },
+      fingerprint: ["{{ default }}", "ensure-desktop-worker"],
+    });
     expect(onFailure).toHaveBeenCalledWith(error);
+  });
+
+  it("defers native cutover until the server advertises newest-ticket fencing", async () => {
+    sdkMocks.enrollDesktopWorker.mockResolvedValue({
+      enrollmentToken: "ticket-from-pre-fence-server",
+      expiresAt: "2026-01-01T00:00:00Z",
+    });
+    const onFailure = vi.fn();
+
+    await expect(
+      ensureDesktopWorker(null, worker, { onFailure, captureException }),
+    ).resolves.toBe(false);
+
+    expect(tauriMocks.ensureDesktopDispatchWorker).not.toHaveBeenCalled();
+    expect(onFailure).not.toHaveBeenCalled();
+    expect(captureException).not.toHaveBeenCalled();
   });
 
   it("still resolves false when the failure reporter throws", async () => {

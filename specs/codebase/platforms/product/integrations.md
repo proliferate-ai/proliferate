@@ -78,6 +78,16 @@ family.
 [`runtime_workers/service.py`](../../../../server/proliferate/server/cloud/runtime_workers/service.py)
 implements the server flow:
 
+Desktop enrollment issuance and consumption are serialized per
+`desktop_install_id`. Issuing a ticket revokes older pending tickets for that
+physical install, so only the newest ticket can enroll; the currently active
+Worker remains valid until the replacement consumes its ticket. This prevents
+a delayed pre-enrollment Worker from reclaiming authority after its
+replacement starts. The response advertises `pendingTicketPolicy =
+newest_wins`; repaired Desktop clients defer native Worker cutover and retry
+until the serving control plane provides that guarantee, so Desktop artifact
+publication does not have to race a matching server deployment.
+
 1. consume and row-lock a single-use enrollment;
 2. revoke the prior Worker and gateway token for the same runtime identity;
 3. persist the new Worker's reported version, hostname, and fingerprint;
@@ -101,7 +111,12 @@ writes them atomically with private permissions to
 `<runtime_home>/integration-gateway.json` using
 [`integration_gateway.rs`](../../../../anyharness/crates/proliferate-worker/src/integration_gateway.rs).
 AnyHarness loads that file at session launch and mounts the integration
-gateway when the binding policy permits it.
+gateway when the binding policy permits it. The freshly enrolled Worker keeps
+that response in memory and, after each successful authenticated heartbeat,
+repairs the file if a delayed predecessor overwrote it. Once a predecessor
+observes heartbeat rejection it no longer reasserts its stale bearer; if a
+heartbeat succeeded just before revocation and its write lands afterward, the
+active successor repairs that final race on its next successful heartbeat.
 
 A restart that loads an existing Worker identity from local SQLite does not
 receive or recreate a missing gateway file. A revoked or invalid durable

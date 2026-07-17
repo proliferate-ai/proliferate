@@ -6,18 +6,24 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.db.store import automation_environment_references as automations_store
 from proliferate.db.store import cloud_repo_environment_materializations as repo_mat_store
 from proliferate.db.store import cloud_sandboxes as cloud_sandboxes_store
+from proliferate.db.store import cloud_workspaces as cloud_workspaces_store
 from proliferate.db.store.cloud_repo_environment_materializations import (
     CloudRepoEnvironmentMaterializationValue,
 )
 from proliferate.db.store.repositories import (
     RepoConfigValue,
     RepoEnvironmentValue,
+    get_cloud_repo_environment,
     list_repo_configs_for_user,
     update_repo_config_commit_instructions,
     upsert_cloud_repo_environment,
     upsert_local_repo_environment,
+)
+from proliferate.db.store.repositories import (
+    remove_cloud_repo_environment as remove_cloud_repo_environment_row,
 )
 from proliferate.server.cloud.cloud_sandboxes import service as cloud_sandboxes_service
 from proliferate.server.cloud.errors import CloudApiError
@@ -229,4 +235,46 @@ async def save_repo_environment(
         git_owner=git_owner,
         git_repo_name=git_repo_name,
         body=body,
+    )
+
+
+async def remove_cloud_repo_environment(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    git_owner: str,
+    git_repo_name: str,
+) -> None:
+    environment = await get_cloud_repo_environment(
+        db,
+        user_id=user_id,
+        git_owner=git_owner,
+        git_repo_name=git_repo_name,
+        lock_mode="update",
+    )
+    if environment is None:
+        return
+    if await cloud_workspaces_store.repo_environment_has_workspaces(
+        db,
+        repo_environment_id=environment.id,
+    ):
+        raise CloudApiError(
+            "cloud_repository_in_use",
+            "Delete this repository's cloud workspaces before removing it.",
+            status_code=409,
+        )
+    if await automations_store.repo_environment_has_automation_references(
+        db,
+        repo_environment_id=environment.id,
+    ):
+        raise CloudApiError(
+            "cloud_repository_in_use",
+            "Delete this repository's automations and run history before removing it.",
+            status_code=409,
+        )
+    await remove_cloud_repo_environment_row(
+        db,
+        user_id=user_id,
+        git_owner=git_owner,
+        git_repo_name=git_repo_name,
     )

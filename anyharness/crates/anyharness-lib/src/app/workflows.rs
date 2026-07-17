@@ -8,14 +8,19 @@ use std::sync::Arc;
 
 use tokio::runtime::Handle;
 
+use crate::domains::sessions::admission::SessionMutationAdmission;
 use crate::domains::sessions::runtime::SessionRuntime;
-use crate::domains::workflows::control::WorkflowRunGates;
+use crate::domains::workflows::control::{WorkflowRunGates, WorkflowSessionControllerPolicy};
 use crate::domains::workflows::runtime::WorkflowRunRuntime;
 use crate::domains::workflows::service::WorkflowRunService;
 use crate::domains::workflows::session_extension::WorkflowRunSessionExtension;
 use crate::domains::workflows::store::WorkflowRunStore;
+use crate::domains::workflows::workspace_materialization::{
+    MaterializationStore, WorkflowWorkspaceRuntime, WorkflowWorkspaceService,
+};
 use crate::domains::workspaces::access_gate::WorkspaceAccessGate;
 use crate::domains::workspaces::operation_gate::WorkspaceOperationGate;
+use crate::domains::workspaces::runtime::WorkspaceRuntime;
 use crate::persistence::Db;
 
 use super::AppStateInitError;
@@ -25,7 +30,21 @@ pub(super) struct WorkflowWiringPhaseOne {
     pub service: Arc<WorkflowRunService>,
     pub session_extension: Arc<WorkflowRunSessionExtension>,
     pub gates: Arc<WorkflowRunGates>,
+    /// Session mutation admission (spec 2b): sessions own the mechanics; the
+    /// injected policy is the Workflows controller lookup, so this is built
+    /// here and shared with every mutation owner via AppState.
+    pub admission: Arc<SessionMutationAdmission>,
+    /// Isolated Workflow workspace placement (spec
+    /// `workflow-workspace-placement`): the durable materialization service,
+    /// shared by the run-acceptance guard and the placement runtime facade.
+    pub workspace_materialization: Arc<WorkflowWorkspaceService>,
     pub main_handle: Handle,
+}
+
+/// Phase-2 output: the two async workflow facades stored on `AppState`.
+pub(super) struct WorkflowWiringPhaseTwo {
+    pub run_runtime: Arc<WorkflowRunRuntime>,
+    pub workspace_runtime: Arc<WorkflowWorkspaceRuntime>,
 }
 
 /// Phase 1: build the store and service, synchronously fence interrupted
@@ -43,33 +62,54 @@ pub(super) fn wire_workflows_before_sessions(
     // One shared per-run gate set (spec workflow-run-control §6.1): injected
     // into BOTH the workflow runtime and the completion extension.
     let gates = Arc::new(WorkflowRunGates::new());
+    let admission = Arc::new(SessionMutationAdmission::new(Arc::new(
+        WorkflowSessionControllerPolicy::new(WorkflowRunStore::new(db.clone())),
+    )));
+    let workspace_materialization = Arc::new(WorkflowWorkspaceService::new(
+        MaterializationStore::new(db.clone()),
+    ));
     let session_extension = Arc::new(WorkflowRunSessionExtension::new(
         service.clone(),
         gates.clone(),
+        admission.clone(),
         main_handle.clone(),
     ));
     Ok(WorkflowWiringPhaseOne {
         service,
         session_extension,
         gates,
+        admission,
+        workspace_materialization,
         main_handle,
     })
 }
 
-/// Phase 2: inject the completed `SessionRuntime` into the sole async workflow
-/// facade stored on `AppState`.
+/// Phase 2: inject the completed `SessionRuntime` into the run facade and build
+/// the placement facade. Both async workflow facades are stored on `AppState`.
 pub(super) fn wire_workflow_runtime(
     phase_one: WorkflowWiringPhaseOne,
     session_runtime: Arc<SessionRuntime>,
     operation_gate: Arc<WorkspaceOperationGate>,
     access_gate: Arc<WorkspaceAccessGate>,
-) -> Arc<WorkflowRunRuntime> {
-    Arc::new(WorkflowRunRuntime::new(
+    workspace_runtime: Arc<WorkspaceRuntime>,
+) -> WorkflowWiringPhaseTwo {
+    let run_runtime = Arc::new(WorkflowRunRuntime::new(
         phase_one.service,
         session_runtime,
         operation_gate,
         access_gate,
         phase_one.gates,
+        phase_one.admission,
+        phase_one.workspace_materialization.clone(),
+        phase_one.main_handle.clone(),
+    ));
+    let workspace_runtime = Arc::new(WorkflowWorkspaceRuntime::new(
+        phase_one.workspace_materialization,
+        workspace_runtime,
         phase_one.main_handle,
-    ))
+    ));
+    WorkflowWiringPhaseTwo {
+        run_runtime,
+        workspace_runtime,
+    }
 }

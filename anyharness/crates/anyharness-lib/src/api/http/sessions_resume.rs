@@ -1,3 +1,5 @@
+use crate::api::http::access::admit_session_mutation;
+use crate::domains::sessions::admission::SessionMutationKind;
 use anyharness_contract::v1::{ResumeSessionRequest, Session};
 use axum::{
     body::Bytes,
@@ -38,6 +40,8 @@ pub async fn resume_session(
     body: Bytes,
 ) -> Result<Json<Session>, ApiError> {
     assert_session_auth_scope(&state, &auth, &session_id)?;
+    let _admission_permit =
+        admit_session_mutation(&state, &session_id, SessionMutationKind::Resume).await?;
     let span = FlowHeaders::from_headers(&headers).span();
     // Parse (and validate) the optional body so legacy fields are still rejected.
     parse_optional_resume_request(body)?;

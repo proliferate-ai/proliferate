@@ -25,38 +25,55 @@ use std::path::{Path, PathBuf};
 use anyharness_credential_discovery::{route_kinds, CredentialFact};
 
 use crate::domains::agents::registry::bundled::bundled_agent_registry_document;
-use crate::domains::agents::registry::schema::{AgentRegistryAuthSlotEnvVar, AgentRegistryEnvVarKind};
-use crate::domains::agents::route_auth::profile::{
-    resolve_profile, AgentRuntimeAuthProfile, ResolvedSource,
+use crate::domains::agents::registry::schema::{
+    AgentRegistryAuthSlotEnvVar, AgentRegistryEnvVarKind,
 };
-use crate::domains::agents::route_auth::state::load_state_file;
+use crate::domains::agents::route_auth::profile::{AgentRuntimeAuthProfile, ResolvedSource};
+use crate::domains::agents::route_auth::resolve_launch_auth_profile;
 
-/// Collect credential facts for classification, merging composed workspace env
-/// with registry-bounded ambient process env, AND the enrolled-route facts
-/// resolved from workspace-scoped `agent-auth/state.json`. Both call sites
-/// (launch_options and create_session) go through this single entry point.
+/// Collect credential facts for classification from the auth profile the
+/// launcher will actually use. Native profiles merge composed workspace env
+/// with registry-bounded ambient process env. Explicit sources replace those
+/// native facts for single-source harnesses; OpenCode intentionally composes
+/// both. Both call sites (launch_options and create_session) go through this
+/// single entry point.
 ///
 /// `runtime_home` is the AnyHarness home whose `agent-auth/state.json` the
-/// route reader consults. It uses the same resolution as `route_auth` at
-/// launch. A missing, native, or non-gateway state yields no route fact;
-/// classification then falls through exactly as before.
+/// route reader consults, including the same server-origin guard as launch.
 pub fn collect_launch_env_facts(
     agent_kind: &str,
     readiness_env: &BTreeMap<String, String>,
     runtime_home: &Path,
 ) -> Vec<CredentialFact> {
     let ambient: BTreeMap<String, String> = std::env::vars().collect();
-    let mut facts = collect_launch_env_facts_with_ambient(agent_kind, readiness_env, &ambient);
-    facts.extend(collect_enrolled_source_facts(agent_kind, runtime_home));
-    facts
+    let native_facts =
+        || collect_launch_env_facts_with_ambient(agent_kind, readiness_env, &ambient);
+    match resolve_launch_auth_profile(runtime_home, agent_kind) {
+        Ok(profile @ AgentRuntimeAuthProfile::Sources(_)) => {
+            let mut facts = collect_enrolled_source_facts(&profile);
+            // OpenCode intentionally composes injected sources with its native
+            // providers. Every other supported routed harness is single-source:
+            // its selected route must mask ambient/native credentials exactly as
+            // the launch renderer does.
+            if agent_kind == "opencode" {
+                facts.extend(native_facts());
+            }
+            facts
+        }
+        Ok(AgentRuntimeAuthProfile::Native) => native_facts(),
+        Err(error) => {
+            tracing::debug!(agent_kind, %error, "route profile unresolved; native facts govern");
+            native_facts()
+        }
+    }
 }
 
 /// Facts derived from the enrolled credential sources in workspace-scoped
-/// `agent-auth/state.json`. Reuses `route_auth::resolve_profile` — one reader,
-/// two consumers (this collector and the launch-time renderer) — so a
-/// classification-visible context exactly tracks a source the launcher would
-/// inject. A malformed state file is tolerated as "no facts" (stale in the SAFE
-/// direction: contexts stay gated until the file heals), never an error here.
+/// `agent-auth/state.json`. Reuses the launch-time route resolver — one reader,
+/// two consumers (this collector and the renderer) — so a classification-
+/// visible context exactly tracks a source the launcher would inject. Route
+/// resolution errors are logged and leave native/composed facts in control,
+/// preserving the collector's existing non-fatal behavior.
 ///
 /// Per source kind:
 /// - `gateway` → a single [`CredentialFact::Route`] for the gateway route
@@ -69,16 +86,9 @@ pub fn collect_launch_env_facts(
 ///   `Env(ANTHROPIC_API_KEY)`) never activates and the model menu comes back
 ///   empty. The Env fact carries presence only; the raw value is still rendered
 ///   into the launch env by the existing `render_profile` path at spawn time.
-fn collect_enrolled_source_facts(agent_kind: &str, runtime_home: &Path) -> Vec<CredentialFact> {
-    let state = match load_state_file(runtime_home) {
-        Ok(state) => state,
-        Err(error) => {
-            tracing::debug!(agent_kind, %error, "route state unreadable; no source facts");
-            return Vec::new();
-        }
-    };
-    match resolve_profile(state.as_ref(), agent_kind) {
-        Ok(AgentRuntimeAuthProfile::Sources(sources)) => {
+fn collect_enrolled_source_facts(profile: &AgentRuntimeAuthProfile) -> Vec<CredentialFact> {
+    match profile {
+        AgentRuntimeAuthProfile::Sources(sources) => {
             let mut facts = Vec::new();
             let mut has_gateway = false;
             for source in &sources.sources {
@@ -98,11 +108,7 @@ fn collect_enrolled_source_facts(agent_kind: &str, runtime_home: &Path) -> Vec<C
             }
             facts
         }
-        Ok(AgentRuntimeAuthProfile::Native) => Vec::new(),
-        Err(error) => {
-            tracing::debug!(agent_kind, %error, "route profile unresolved; no source facts");
-            Vec::new()
-        }
+        AgentRuntimeAuthProfile::Native => Vec::new(),
     }
 }
 
@@ -154,6 +160,10 @@ pub(crate) fn collect_launch_env_facts_with_ambient(
     let home_dir = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/"));
     anyharness_credential_discovery::collect_facts(&home_dir, &env_keys, &flag_values)
 }
+
+#[cfg(test)]
+#[path = "launch_facts_route_transition_tests.rs"]
+mod route_transition_tests;
 
 #[cfg(test)]
 mod tests {
@@ -311,7 +321,7 @@ mod tests {
     }
 
     /// A gateway source in `agent-auth/state.json` emits a `Route` fact for
-    /// that harness, collected beside the env facts.
+    /// that harness instead of native credential facts.
     #[test]
     fn gateway_source_in_state_emits_route_fact() {
         let home = temp_home();

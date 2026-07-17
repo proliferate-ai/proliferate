@@ -314,7 +314,6 @@ describe("sidebar indicators", () => {
       preferredMaterializationId: cloudWorkspaceSyntheticId(cloudWorkspace.id),
       lifecycle: "cloud_active",
     };
-
     const groups = buildGroups({
       logicalWorkspaces: [dualCloudEffective],
       workspaceActivities: {
@@ -322,10 +321,11 @@ describe("sidebar indicators", () => {
         [cloudWorkspaceSyntheticId(cloudWorkspace.id)]: "iterating",
       },
     });
-
     expect(groups[0]?.items[0]?.statusIndicator?.kind).toBe("iterating");
+    expect(groups[0]?.items[0]?.detailIndicators).toEqual([
+      expect.objectContaining({ kind: "materialization", variant: "cloud" }),
+    ]);
   });
-
   it("shows cloud workspace errors in the left status channel", () => {
     const groups = buildGroups({
       logicalWorkspaces: [
@@ -626,5 +626,23 @@ describe("sidebar indicators", () => {
 
     expect(groups[0]?.items[0]?.needsReview).toBe(true);
     expect(groups[0]?.items[0]?.statusIndicator?.kind).toBe("queued_prompt");
+  });
+  it("outranks activity with the worktree-missing indicator when the checkout is gone", () => {
+    const groups = buildGroups({
+      logicalWorkspaces: [
+        makeLocalLogicalWorkspace({
+          id: "missing-local",
+          repoKey: "/tmp/repo-a",
+          repoName: "repo-a",
+          kind: "worktree",
+          availability: "workspace_directory_missing",
+          executionSummary: workspaceExecutionSummary("errored"),
+        }),
+      ],
+    });
+
+    const indicator = groups[0]?.items[0]?.statusIndicator;
+    expect(indicator?.kind).toBe("worktree_missing");
+    expect(indicator?.tooltip).toBe("Worktree no longer exists");
   });
 });

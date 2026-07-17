@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 
 import type { ScenarioDefinition } from "./types.js";
 import { ScenarioBlockedError, ScenarioExpectedFailError } from "./types.js";
+import { isWorldBackedRun } from "./local/world-boot.js";
+import { runLocal1WorkspaceLeaf } from "./local/repo-workspace.js";
 import { ApiClient } from "../fixtures/http.js";
 import { loginDurableUser } from "../fixtures/identity.js";
 import { DEFAULT_GITHUB_TEST_REPO } from "../config/env-manifest.js";
@@ -69,6 +71,18 @@ export const t3Repo1: ScenarioDefinition = {
   ],
   run: async (ctx) => {
     if (ctx.dryRun) {
+      return;
+    }
+    // World-backed local run (functional entrypoint, candidate map supplied) =
+    // the canonical LOCAL-1 journey, folding in T3-REPO-1's correct-repository +
+    // default-branch contribution against the created workspace. The legacy
+    // repo-environment write path (its diagnostic #1043-blocked behaviour) stays
+    // unchanged for diagnostic runs with no candidate world.
+    if (ctx.runtimeLane === "local" && isWorldBackedRun(ctx)) {
+      await runLocal1WorkspaceLeaf(ctx, {
+        scenarioId: "T3-REPO-1",
+        registryFlowRef: "specs/developing/testing/tier-3-scenario-contract.md#local-1",
+      });
       return;
     }
     await runReal(ctx.env.require("RELEASE_E2E_SERVER_URL"));

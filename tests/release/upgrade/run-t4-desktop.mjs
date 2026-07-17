@@ -14,9 +14,10 @@
 //   4. Copy the N-1 `.app` to a pristine install dir; read its Info.plist
 //      version (asserts N-1).
 //   5. Run the headless Rust driver (tests/release/upgrade/updater-driver): the
-//      real tauri_plugin_updater check() + download_and_install(), verifying the
-//      N artifact's signature against the N-1-trusted pubkey and swapping the
-//      installed bundle in place.
+//      real tauri_plugin_updater check() + download() + explicit pre-install
+//      boundary + install(bytes), verifying the N artifact's signature against
+//      the N-1-trusted pubkey and swapping the installed bundle in place. This
+//      macOS mechanism driver does not qualify Windows-native Worker cleanup.
 //   6. Re-read the installed bundle's Info.plist version; assert it is now N.
 //
 // The Info.plist CFBundleShortVersionString is exactly what Tauri's
@@ -271,7 +272,7 @@ async function main() {
       env: { ...process.env, CARGO_TARGET_DIR: driverTarget },
     });
     const driverBin = join(driverTarget, "release", "t4-updater-driver");
-    console.log("[t4] driving the real tauri_plugin_updater check + download_and_install...");
+    console.log("[t4] driving real updater check + download + pre-install boundary + install...");
     run(driverBin, [
       "--feed",
       feedUrl,

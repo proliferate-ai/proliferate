@@ -28,30 +28,40 @@ function render(ui: ReactElement) {
   return testingRender(ui, { wrapper: WebProductHostWrapper });
 }
 
+const { openPrimaryMock, fileReferenceActionsCalls } = vi.hoisted(() => ({
+  openPrimaryMock: vi.fn(),
+  fileReferenceActionsCalls: [] as Array<{ rawPath: string; workspacePath?: string | null }>,
+}));
+
 vi.mock("#product/hooks/workspaces/workflows/files/use-file-reference-actions", () => ({
-  useFileReferenceActions: ({ rawPath }: { rawPath: string }) => ({
-    reference: {
-      rawPath,
-      path: rawPath,
-      line: null,
-      column: null,
-      absolutePath: `/repo/${rawPath}`,
-      workspacePath: rawPath,
-    },
-    openTargets: [],
-    canOpenInSidebar: true,
-    canOpenExternal: true,
-    copyPath: vi.fn(),
-    openInSidebar: vi.fn(),
-    openDefault: vi.fn(),
-    openPrimary: vi.fn(),
-    openWithTarget: vi.fn(),
-    reveal: vi.fn(),
-  }),
+  useFileReferenceActions: (args: { rawPath: string; workspacePath?: string | null }) => {
+    fileReferenceActionsCalls.push(args);
+    return {
+      reference: {
+        rawPath: args.rawPath,
+        path: args.rawPath,
+        line: null,
+        column: null,
+        absolutePath: `/repo/${args.rawPath}`,
+        workspacePath: args.rawPath,
+      },
+      openTargets: [],
+      canOpenInSidebar: true,
+      canOpenExternal: true,
+      copyPath: vi.fn(),
+      openInSidebar: vi.fn(),
+      openDefault: vi.fn(),
+      openPrimary: openPrimaryMock,
+      openWithTarget: vi.fn(),
+      reveal: vi.fn(),
+    };
+  },
 }));
 
 afterEach(() => {
   cleanup();
+  openPrimaryMock.mockClear();
+  fileReferenceActionsCalls.length = 0;
 });
 
 describe("CollapsedActions", () => {
@@ -329,7 +339,10 @@ describe("CollapsedActions", () => {
 
     const html = document.body.innerHTML;
     expect(html).toContain("data-collapsed-actions-ledger");
-    expect(html).toContain("Read read.ts");
+    const ledger = document.querySelector("[data-collapsed-actions-ledger]");
+    expect(ledger?.textContent).toContain("Read");
+    expect(ledger?.querySelector("[data-file-reference-badge='inline']")?.textContent)
+      .toContain("read.ts");
     expect(html).toContain("overflow-y-auto overflow-x-hidden");
     expect(html).toContain("max-h-[7.5rem]");
     expect(html).not.toContain("pl-4");
@@ -351,9 +364,9 @@ describe("CollapsedActions", () => {
     fireEvent.click(screen.getByRole("button", { name: /command/i }));
 
     const commandRow = screen.getByRole("button", { name: /Ran pnpm test/i });
-    const readRow = screen.getByText("Read read.ts");
+    const readRow = screen.getByText("Read").parentElement;
     expect(commandRow.className).toContain("text-foreground/60");
-    expect(readRow.parentElement?.className).toContain("text-foreground/60");
+    expect(readRow?.className).toContain("text-foreground/60");
   });
 
   it("starts grouped edit cards closed inside the expanded action batch", () => {
@@ -418,8 +431,10 @@ describe("CollapsedActions", () => {
     fireEvent.click(screen.getByRole("button", { name: /Read files, ran a command/i }));
 
     const searchRow = screen.getByText("Searched for anchor").parentElement;
-    const readRow = screen.getByText("Read README.md").parentElement;
+    const readRow = screen.getByText("Read").parentElement;
     const commandRow = screen.getByText("Ran pnpm test").parentElement;
+    expect(readRow?.querySelector("[data-file-reference-badge='inline']")?.textContent)
+      .toContain("README.md");
     const searchIcon = searchRow?.querySelector("svg");
     const readIcon = readRow?.querySelector("svg");
     const commandIcon = commandRow?.querySelector("svg");

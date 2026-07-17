@@ -3,16 +3,13 @@ import { Navigate, Route } from "react-router-dom"
 import { BootstrappedRoute, PublicOnlyRoute } from "#product/components/auth/AuthGate"
 import { UserPreferencesGate } from "#product/components/app/UserPreferencesGate"
 import { KeyboardShortcutsDialog } from "#product/components/workspace/shell/sidebar/KeyboardShortcutsDialog"
-import { ToastContainer } from "#product/components/feedback/Toast"
 import { UpdateRestartDialog } from "#product/components/feedback/UpdateRestartDialog"
 import { UpdateToastPresenter } from "#product/components/feedback/UpdateToastPresenter"
 import { Toaster } from "@proliferate/ui/kit/Sonner"
 import { MacWindowControlsSafeArea } from "#product/components/app/chrome/MacWindowControlsSafeArea"
 import { useLocalWorktreeSettingsTarget } from "#product/hooks/workspaces/facade/use-local-worktree-settings-target"
 import { useWorktreeCleanupPolicySync } from "#product/hooks/workspaces/lifecycle/use-worktree-cleanup-policy-sync"
-import { RepoSetupModalHost } from "#product/components/workspace/repo-setup/RepoSetupModalHost"
 import { SupportModalHost } from "#product/components/support/SupportModalHost"
-import { AddRepoFlowHost } from "#product/components/workspace/repo-setup/AddRepoFlowHost"
 import { LoginPage } from "#product/pages/LoginPage"
 import { SettingsCloudRedirect } from "#product/pages/SettingsCloudRedirect"
 import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store"
@@ -94,7 +91,8 @@ interface AppProps {
 // Thin product route/UI tree. Shared and Desktop lifecycle wiring lives above
 // this component in `ProductLifecycleRoot`, which also owns the single
 // `AppErrorBoundary` enclosing both the lifecycle hooks and this tree; `App`
-// owns only the route tree, modal hosts, and toasts.
+// owns only the route tree, public feedback hosts, and toasts. Repository and
+// workspace hosts live behind the lazy authenticated product boundary.
 export function App({ RoutesComponent }: AppProps) {
   return (
       <ShortcutRevealProvider>
@@ -196,13 +194,9 @@ export function App({ RoutesComponent }: AppProps) {
           )}
           <Route path="*" element={<Navigate to="/" replace />} />
         </RoutesComponent>
-        <RepoSetupModalHost />
-        <AddRepoFlowHost />
         <SupportModalHost />
-        {/* Legacy toast store container (non-update toasts) — kept until all
-            toast call sites migrate to Sonner. */}
-        <ToastContainer />
-        {/* Kit Sonner toaster + update lifecycle toasts (UX spec §12). */}
+        {/* Kit Sonner toaster: all toasts (update lifecycle + legacy
+            toast-store call sites, which now delegate to Sonner). */}
         <Toaster />
         <UpdateToastPresenter />
         <KeyboardShortcutsDialog />

@@ -71,9 +71,9 @@ export function cloudDefaultDisplayName(workspace: CloudWorkspaceSummary): strin
     return override;
   }
 
-  return workspace.repo.branch?.trim()
+  return workspace.repo?.branch?.trim()
     ? humanizeBranchName(workspace.repo.branch)
-    : workspace.repo.name;
+    : workspace.repo?.name ?? "Workspace";
 }
 
 export function mobilityDefaultDisplayName(

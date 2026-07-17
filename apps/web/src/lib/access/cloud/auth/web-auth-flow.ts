@@ -8,12 +8,15 @@ import {
   type AuthSessionResponse,
 } from "@proliferate/cloud-sdk";
 
-import { routes } from "../../../../config/routes";
 import { webEnv } from "../../../../config/env";
 import { createOAuthState, createPkcePair, hashOAuthSecret } from "../../../infra/auth/pkce";
 import { createWebCloudClient } from "../client";
 
 const PENDING_WEB_AUTH_KEY = "proliferate.web.pendingAuth";
+// The browser OAuth/SSO redirect target host route (see WebHostApp). Kept as a
+// local constant so the auth flow no longer depends on the deleted legacy route
+// table.
+const AUTH_CALLBACK_PATH = "/auth/callback";
 
 export class WebAuthFlowError extends Error {
   code: string | null;
@@ -42,7 +45,7 @@ export async function startWebAuthFlow(input: {
   const client = createWebCloudClient(webEnv.apiBaseUrl, null);
   const pkce = await createPkcePair();
   const clientState = createOAuthState();
-  const redirectUri = new URL(routes.authCallback, window.location.origin).toString();
+  const redirectUri = new URL(AUTH_CALLBACK_PATH, window.location.origin).toString();
   const response = await startAuthProvider(
     "web",
     input.provider,
@@ -100,7 +103,7 @@ export async function startWebSsoFlow(input: {
   }
   const pkce = await createPkcePair();
   const clientState = createOAuthState();
-  const redirectUri = new URL(routes.authCallback, window.location.origin).toString();
+  const redirectUri = new URL(AUTH_CALLBACK_PATH, window.location.origin).toString();
   const response = await startSsoAuth(
     "web",
     {
@@ -131,6 +134,7 @@ export async function startWebSsoFlow(input: {
 // generic answer, so we surface one generic message either way.
 const SSO_SLUG_UNAVAILABLE_MESSAGE =
   "We could not find single sign-on for that workspace. Check the sign-in link your admin shared.";
+export const SSO_SLUG_UNAVAILABLE_CODE = "sso_slug_unavailable";
 
 export async function startWebSsoFlowForSlug(slug: string): Promise<void> {
   const trimmed = slug.trim();
@@ -140,7 +144,10 @@ export async function startWebSsoFlowForSlug(slug: string): Promise<void> {
   const client = createWebCloudClient(webEnv.apiBaseUrl, null);
   const discovery = await discoverSso({ slug: trimmed }, client);
   if (!discovery.enabled || !discovery.organizationId) {
-    throw new Error(SSO_SLUG_UNAVAILABLE_MESSAGE);
+    throw new WebAuthFlowError(
+      SSO_SLUG_UNAVAILABLE_MESSAGE,
+      SSO_SLUG_UNAVAILABLE_CODE,
+    );
   }
   await startWebSsoFlow({
     organizationId: discovery.organizationId,

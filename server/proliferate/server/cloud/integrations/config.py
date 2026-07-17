@@ -134,6 +134,8 @@ class IntegrationConfig:
     transport: Transport = "http"
     url: UrlSpec | None = None
     display_url: str = ""
+    oauth_scopes: tuple[str, ...] = ()
+    oauth_scopes_required: bool = False
     headers: tuple[HeaderTemplate, ...] = ()
     query: tuple[QueryTemplate, ...] = ()
     secret_fields: tuple[SecretField, ...] = ()
@@ -208,6 +210,8 @@ def serialize_definition_config(cfg: IntegrationConfig) -> str:
         "transport": cfg.transport,
         "url": _url_to_json(cfg.url),
         "displayUrl": cfg.display_url,
+        "oauthScopes": list(cfg.oauth_scopes),
+        "oauthScopesRequired": cfg.oauth_scopes_required,
         "headers": [_header_to_json(h) for h in cfg.headers],
         "query": [_query_to_json(q) for q in cfg.query],
         "secretFields": [_secret_field_to_json(f) for f in cfg.secret_fields],
@@ -340,6 +344,8 @@ def parse_definition_config(config_json_str: str) -> IntegrationConfig:
         transport=transport,  # type: ignore[arg-type]
         url=_url_from_json(raw.get("url")),
         display_url=str(raw.get("displayUrl", "")),
+        oauth_scopes=tuple(str(scope) for scope in raw.get("oauthScopes", ())),
+        oauth_scopes_required=bool(raw.get("oauthScopesRequired", False)),
         headers=tuple(_header_from_json(h) for h in raw.get("headers", ())),
         query=tuple(_query_from_json(q) for q in raw.get("query", ())),
         secret_fields=tuple(_secret_field_from_json(f) for f in raw.get("secretFields", ())),

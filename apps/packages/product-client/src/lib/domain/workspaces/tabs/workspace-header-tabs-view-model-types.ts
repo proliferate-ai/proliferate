@@ -23,6 +23,12 @@ export interface HeaderChatTabEntry extends GroupedChatTab {
   isHierarchyResolved: boolean;
   isResolvingSession: boolean;
   delegatedAgent: DelegatedWorkTabIdentity | null;
+  /**
+   * True when the session behind this tab has never run a prompt (a visible
+   * empty chat). Read-only qualification signal: it feeds the tab's
+   * `data-workspace-empty-chat` testid and nothing else.
+   */
+  isEmptyChat: boolean;
 }
 
 export interface HeaderChatMenuEntry {

@@ -13,7 +13,13 @@ export function normalizeLogicalWorkspaceBranchKey(
   return trimmed && trimmed.length > 0 ? trimmed : "HEAD";
 }
 
-export type LogicalWorkspaceIdKind = "remote" | "repo-root" | "path" | "local-slot";
+export type LogicalWorkspaceIdKind =
+  | "remote"
+  | "repo-root"
+  | "path"
+  | "local-slot"
+  | "cloud-workspace"
+  | "cloud";
 
 export interface ParsedLogicalWorkspaceId {
   kind: LogicalWorkspaceIdKind;
@@ -64,6 +70,31 @@ export function buildLocalSlotLogicalWorkspaceId(workspaceId: string): string {
   ].join(":");
 }
 
+// Stable identity for a repository-less (scratch) cloud workspace, keyed by its
+// real ``CloudWorkspace.id``. Scratch workspaces carry no remote coordinates, so
+// they must never be folded onto a fabricated ``remote::::HEAD`` slot; each row
+// gets its own logical workspace and navigates independently.
+export function buildCloudWorkspaceLogicalWorkspaceId(cloudWorkspaceId: string): string {
+  return [
+    "cloud-workspace",
+    encodeLogicalSegment(cloudWorkspaceId),
+  ].join(":");
+}
+
+/**
+ * Identity-keyed id for a Cloud workspace that carries an explicit
+ * materialization ledger but no local link on this install (PR 5). Keyed by
+ * `CloudWorkspace.id` so it is stable and never heuristically merged onto a
+ * local slot by repository/branch. Distinct from the `remote:` branch-heuristic
+ * key so legacy Cloud rows and explicit rows never collide.
+ */
+export function buildCloudIdentityLogicalWorkspaceId(cloudWorkspaceId: string): string {
+  return [
+    "cloud",
+    encodeLogicalSegment(cloudWorkspaceId),
+  ].join(":");
+}
+
 export function parseLogicalWorkspaceId(
   logicalWorkspaceId: string | null | undefined,
 ): ParsedLogicalWorkspaceId | null {
@@ -72,7 +103,14 @@ export function parseLogicalWorkspaceId(
   }
 
   const [kind, ...encodedSegments] = logicalWorkspaceId.split(":");
-  if (kind !== "remote" && kind !== "repo-root" && kind !== "path" && kind !== "local-slot") {
+  if (
+    kind !== "remote"
+    && kind !== "repo-root"
+    && kind !== "path"
+    && kind !== "local-slot"
+    && kind !== "cloud-workspace"
+    && kind !== "cloud"
+  ) {
     return null;
   }
 
@@ -86,11 +124,12 @@ export function parseLogicalWorkspaceId(
   if (
     (kind === "remote" && segments.length !== 4)
     || ((kind === "repo-root" || kind === "path") && segments.length !== 2)
+    || (kind === "cloud" && segments.length !== 1)
   ) {
     return null;
   }
 
-  if (kind === "local-slot") {
+  if (kind === "local-slot" || kind === "cloud-workspace") {
     if (segments.length !== 1) {
       return null;
     }
@@ -123,9 +162,13 @@ export function replaceLogicalWorkspaceBranch(
   }
 
   const nextBranchKey = normalizeLogicalWorkspaceBranchKey(branchKey);
-  if (parsed.kind === "local-slot") {
-    // A local-slot ID is keyed by workspace id; branch identity is read from
-    // the materialized workspace row.
+  if (
+    parsed.kind === "local-slot"
+    || parsed.kind === "cloud-workspace"
+    || parsed.kind === "cloud"
+  ) {
+    // These IDs are keyed by workspace id; branch identity is read from the
+    // materialized workspace row, so the logical id has no branch to replace.
     return logicalWorkspaceId ?? null;
   }
 

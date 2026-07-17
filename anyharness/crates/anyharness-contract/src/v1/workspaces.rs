@@ -33,6 +33,16 @@ pub enum WorkspaceKind {
     Local,
 }
 
+/// Whether a workspace can currently be operated on. Computed at read time
+/// from the on-disk checkout, so the frontend can detect a deleted checkout on
+/// workspace load/select rather than only when a session send fails.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkspaceAvailability {
+    Available,
+    WorkspaceDirectoryMissing,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum WorkspaceSurface {
@@ -99,6 +109,13 @@ pub enum WorkspaceCreatorContext {
         #[serde(skip_serializing_if = "Option::is_none")]
         label: Option<String>,
     },
+    /// An isolated workspace materialized for one Workflow run (spec
+    /// `workflow-workspace-placement`). Machine provenance that both names the
+    /// owning run and excludes the workspace from generic worktree retention.
+    Workflow {
+        #[serde(rename = "runId")]
+        run_id: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -109,6 +126,7 @@ pub struct Workspace {
     pub repo_root_id: String,
     pub path: String,
     pub surface: WorkspaceSurface,
+    pub availability: WorkspaceAvailability,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub original_branch: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]

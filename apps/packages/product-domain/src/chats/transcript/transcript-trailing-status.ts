@@ -42,10 +42,13 @@ export function latestTransientStatusText(
       const parent = transcript.itemsById[item.parentToolCallId];
       if (parent?.kind === "tool_call") continue;
     }
+    // The label survives the thought's own stream closing: between a thought
+    // finishing and the next visible item arriving there is nothing else to
+    // describe the agent's current action, and blanking the label there reads
+    // as the agent stalling.
     if (
       item.kind === "thought"
       && item.isTransient
-      && item.isStreaming
       && item.text.trim()
     ) {
       return item.text.trim();

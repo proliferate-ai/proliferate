@@ -1,4 +1,4 @@
-import type { DesktopMode } from "../config/types.js";
+import type { DesktopMode, TargetLane } from "../config/types.js";
 import { isMatrixScenario, type ScenarioCellSpec, type ScenarioDefinition } from "../scenarios/types.js";
 import type { PlannedCellV1 } from "./result.js";
 
@@ -28,6 +28,47 @@ export interface PlanInputs {
   desktop: DesktopMode;
   /** Resolved `--agents` selection (catalog harness kinds), or ["all"]. */
   agents: readonly string[];
+  /**
+   * The CLI `--lane` selection (where the target server lives). When it is
+   * `"local"`, only the `local` RUNTIME lane is planned — a `--lane local`
+   * invocation drives the ephemeral local world, and there is no
+   * publicly-reachable server for the `sandbox` runtime lane to call back into,
+   * so planning sandbox-runtime cells there is dead work (run-1 executed
+   * `T3-CHAT-1/sandbox` and `T3-WT-1/sandbox` under `--lane local`). `"staging"`
+   * plans every declared runtime lane, unchanged. Omitted → no lane filter, so
+   * callers/tests that only care about matrix expansion keep both lanes.
+   */
+  targetLane?: TargetLane;
+}
+
+/**
+ * The runtime lanes a scenario may plan under a given target lane.
+ *
+ * The world-backed single-infrastructure targets pin to exactly one runtime
+ * lane so a broad `--scenarios all` selection on that target only plans the
+ * cells that target's infrastructure can actually run — critically, so the
+ * ubuntu `--lane local` CI sweep never drags the EC2-provisioning `selfhost`
+ * cells onto a runner that cannot host them:
+ *   - `local`    → only `local` runtime cells (the world-backed local path);
+ *   - `selfhost` → only `selfhost` runtime cells (the self-host world, PR 7).
+ * `staging`, `cloud`, and any unspecified target keep every declared lane, so
+ * legacy staging behavior and PR 2's `--lane cloud CLOUD-PROVISION-1` selection
+ * are untouched.
+ *
+ * The `selfhost` case is what lets the shipped `qualification-selfhost` target
+ * select the self-host lane explicitly (`--lane selfhost`) — previously it
+ * passed `--lane local`, which admitted ONLY `local` cells and expanded every
+ * `lanes: ["selfhost"]` PR 7 scenario to zero cells (PR7-CONTROL-001).
+ */
+function laneAllowed(runtimeLane: string, targetLane: TargetLane | undefined): boolean {
+  switch (targetLane) {
+    case "local":
+      return runtimeLane === "local";
+    case "selfhost":
+      return runtimeLane === "selfhost";
+    default:
+      return true;
+  }
 }
 
 /**
@@ -52,6 +93,11 @@ export async function buildPlannedCells(
     seenScenarioIds.add(scenario.id);
 
     for (const runtimeLane of scenario.lanes) {
+      // `--lane local` plans ONLY local-runtime cells (decision #5); staging and
+      // the unfiltered case keep every declared lane.
+      if (!laneAllowed(runtimeLane, inputs.targetLane)) {
+        continue;
+      }
       if (!isMatrixScenario(scenario)) {
         addCell(cells, seenCellIds, {
           cell_id: `${scenario.id}/${runtimeLane}`,
@@ -60,6 +106,7 @@ export async function buildPlannedCells(
           runtime_lane: runtimeLane,
           dimensions: {},
           required_env: [...scenario.requiredEnv],
+          optional_env: [],
         });
         continue;
       }
@@ -82,6 +129,11 @@ export async function buildPlannedCells(
           runtime_lane: runtimeLane,
           dimensions: sortedDimensions(spec.dimensions),
           required_env: [...new Set([...scenario.requiredEnv, ...(spec.requiredEnv ?? [])])],
+          // Optional env is resolved into ctx.env but never blocks planning; a
+          // var that is also in required_env stays required (required wins).
+          optional_env: [...new Set(spec.optionalEnv ?? [])].filter(
+            (name) => !scenario.requiredEnv.includes(name) && !(spec.requiredEnv ?? []).includes(name),
+          ),
         });
       }
     }

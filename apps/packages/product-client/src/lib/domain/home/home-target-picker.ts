@@ -39,7 +39,7 @@ export function homeTargetRuntimeOptionLabel(input: {
     return input.cloudAction.label;
   }
   if (input.cloudAction.kind === "configure") {
-    return "Set up cloud";
+    return input.cloudAction.label;
   }
   if (input.cloudAction.kind === "hidden") {
     return "Cloud unavailable";

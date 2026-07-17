@@ -37,6 +37,8 @@ use crate::domains::loops::runtime::{LoopRuntime, SessionLoopFireExecutor};
 use crate::domains::loops::scheduler::LoopScheduler;
 use crate::domains::loops::service::LoopService;
 use crate::domains::loops::store::LoopStore;
+use crate::domains::materialization::service::MaterializationService;
+use crate::domains::materialization::store::MaterializationOperationStore;
 use crate::domains::mobility::service::MobilityService;
 use crate::domains::mobility::store::MobilityStore;
 use crate::domains::plans::runtime::PlanRuntime;
@@ -145,11 +147,15 @@ pub struct AppState {
     pub workspace_retention_service: Arc<WorkspaceRetentionService>,
     pub worktree_inventory_service: Arc<WorktreeInventoryService>,
     pub mobility_service: Arc<MobilityService>,
+    pub materialization_service: Arc<MaterializationService>,
     pub plan_service: Arc<PlanService>,
     pub plan_runtime: Arc<PlanRuntime>,
     pub goal_service: Arc<GoalService>,
     pub goal_runtime: Arc<GoalRuntime>,
     pub workflow_run_runtime: Arc<WorkflowRunRuntime>,
+    pub workflow_workspace_runtime:
+        Arc<crate::domains::workflows::workspace_materialization::WorkflowWorkspaceRuntime>,
+    pub session_admission: Arc<crate::domains::sessions::admission::SessionMutationAdmission>,
     pub loop_service: Arc<LoopService>,
     pub loop_runtime: Arc<LoopRuntime>,
     pub activity_service: Arc<ActivityService>,
@@ -359,6 +365,7 @@ impl AppState {
         // Workflow runs — phase 1 (before SessionRuntime::new): service,
         // startup fencing, main-handle capture, completion extension.
         let workflow_wiring = workflows::wire_workflows_before_sessions(&db)?;
+        let session_admission = workflow_wiring.admission.clone();
         let workflow_run_session_extension = workflow_wiring.session_extension.clone();
         let session_extensions: Vec<
             Arc<dyn crate::domains::sessions::extensions::SessionExtension>,
@@ -389,13 +396,16 @@ impl AppState {
             loop_service.clone(),
             activity_service.clone(),
         ));
-        // Workflow runs — phase 2 (after SessionRuntime): the async facade.
-        let workflow_run_runtime = workflows::wire_workflow_runtime(
+        // Workflow runs — phase 2 (after SessionRuntime): the async facades.
+        let workflow_phase_two = workflows::wire_workflow_runtime(
             workflow_wiring,
             session_runtime.clone(),
             workspace_operation_gate.clone(),
             workspace_access_gate.clone(),
+            workspace_runtime.clone(),
         );
+        let workflow_run_runtime = workflow_phase_two.run_runtime;
+        let workflow_workspace_runtime = workflow_phase_two.workspace_runtime;
         let retire_preflight_checker = Arc::new(RetirePreflightChecker::new(
             workspace_runtime.clone(),
             workspace_access_gate.clone(),
@@ -412,6 +422,7 @@ impl AppState {
             SessionStore::new(db.clone()),
             PromptAttachmentStorage::new(runtime_home.clone()),
             workspace_operation_gate.clone(),
+            session_admission.clone(),
             checkout_deletion_gate.clone(),
             retire_preflight_checker.clone(),
             runtime_home.clone(),
@@ -425,6 +436,7 @@ impl AppState {
             retire_preflight_checker.clone(),
             workspace_operation_gate.clone(),
             checkout_deletion_gate.clone(),
+            session_admission.clone(),
             runtime_home.clone(),
         ));
         let workspace_worktree_runtime = Arc::new(WorkspaceWorktreeRuntime::new(
@@ -451,6 +463,13 @@ impl AppState {
             ReviewStore::new(db.clone()),
             workspace_access_gate.clone(),
             terminal_service.clone(),
+        ));
+        let materialization_service = Arc::new(MaterializationService::new(
+            workspace_runtime.clone(),
+            repo_root_service.clone(),
+            session_runtime.clone(),
+            terminal_service.clone(),
+            MaterializationOperationStore::new(db.clone()),
         ));
         let plan_runtime = Arc::new(PlanRuntime::new(
             plan_service.clone(),
@@ -533,11 +552,14 @@ impl AppState {
             workspace_retention_service,
             worktree_inventory_service,
             mobility_service,
+            materialization_service,
             plan_service,
             plan_runtime,
             goal_service,
             goal_runtime,
             workflow_run_runtime,
+            workflow_workspace_runtime,
+            session_admission,
             loop_service,
             loop_runtime,
             activity_service,

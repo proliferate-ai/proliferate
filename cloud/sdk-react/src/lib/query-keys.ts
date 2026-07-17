@@ -384,6 +384,7 @@ export function cloudWorkspacesKey(
   owner: CloudOwnerSelectionKey = personalCloudOwnerKey(),
   scope: string | null = null,
   lifecycle: string | null = null,
+  desktopInstallId: string | null = null,
 ) {
   return [
     ...cloudWorkspacesListRootKey(),
@@ -391,6 +392,7 @@ export function cloudWorkspacesKey(
     owner.organizationId,
     scope,
     lifecycle,
+    desktopInstallId,
   ] as const;
 }
 
@@ -435,6 +437,46 @@ export function workflowDefinitionDetailKey(
     ...workflowDefinitionsRootKey(apiBaseUrl, authCacheScope),
     "detail",
     workflowDefinitionId,
+  ] as const;
+}
+
+export function workflowRunsRootKey(apiBaseUrl: string, authCacheScope: string) {
+  return [...cloudRootKey(), "workflow-runs", apiBaseUrl, authCacheScope] as const;
+}
+
+export function workflowRunEligibilityKey(
+  apiBaseUrl: string,
+  authCacheScope: string,
+  workflowDefinitionId: string | null,
+  definitionRevision: number | null,
+) {
+  return [
+    ...workflowRunsRootKey(apiBaseUrl, authCacheScope),
+    "eligibility",
+    workflowDefinitionId,
+    definitionRevision,
+  ] as const;
+}
+
+export function workflowRunHistoryKey(
+  apiBaseUrl: string,
+  authCacheScope: string,
+  workflowDefinitionId: string | null,
+) {
+  return [...workflowRunsRootKey(apiBaseUrl, authCacheScope), "history", workflowDefinitionId] as const;
+}
+
+export function workflowRunDetailKey(
+  apiBaseUrl: string,
+  authCacheScope: string,
+  workflowDefinitionId: string | null,
+  invocationId: string | null,
+) {
+  return [
+    ...workflowRunsRootKey(apiBaseUrl, authCacheScope),
+    "detail",
+    workflowDefinitionId,
+    invocationId,
   ] as const;
 }
 
@@ -546,6 +588,11 @@ export function cloudTargetKey(targetId: string | null) {
   return [...cloudTargetsKey(), targetId] as const;
 }
 
-export function cloudWorkspaceKey(workspaceId: string | null) {
-  return [...cloudRootKey(), "workspaces", workspaceId] as const;
+export function cloudWorkspaceKey(
+  workspaceId: string | null,
+  desktopInstallId: string | null = null,
+) {
+  // desktopInstallId is a trailing element so that the install-agnostic
+  // cloudWorkspaceKey(workspaceId) still prefix-matches for invalidation.
+  return [...cloudRootKey(), "workspaces", workspaceId, desktopInstallId] as const;
 }

@@ -240,6 +240,8 @@ mod tests {
                 anyharness: None,
                 catalog_version: version.map(str::to_string),
             }),
+            desired_topology: None,
+            supervisor_bridge: None,
         }
     }
 
@@ -250,6 +252,8 @@ mod tests {
             status: None,
             server_time: None,
             desired_versions: None,
+            desired_topology: None,
+            supervisor_bridge: None,
         };
         assert_eq!(plan(&response), None);
     }
@@ -298,6 +302,11 @@ mod tests {
             anyharness_workdir: None,
             runtime_base_url: "http://127.0.0.1:8457".to_string(),
             runtime_bearer_token: Some("from-config".to_string()),
+            supervisor_update_request_dir: None,
+            supervisor_binary_path: None,
+            supervisor_config_path: None,
+            supervisor_config_toml: None,
+            supervisor_bridge_marker_dir: None,
             config_path: None,
         };
         assert_eq!(
@@ -321,6 +330,11 @@ mod tests {
             anyharness_workdir: None,
             runtime_base_url: "http://127.0.0.1:8457".to_string(),
             runtime_bearer_token: None,
+            supervisor_update_request_dir: None,
+            supervisor_binary_path: None,
+            supervisor_config_path: None,
+            supervisor_config_toml: None,
+            supervisor_bridge_marker_dir: None,
             config_path: None,
         };
         // Without the env var set, returns None.

@@ -1,3 +1,6 @@
+use crate::api::http::access::admit_session_mutation;
+use crate::domains::sessions::admission::SessionMutationKind;
+use crate::domains::sessions::admission::SessionMutationPermit;
 use anyharness_contract::v1::{
     MarkReviewRevisionReadyRequest, ProblemDetails, RetryReviewAssignmentRequest,
     ReviewCritiqueResponse, ReviewRunResponse, SessionReviewsResponse, StartCodeReviewRequest,
@@ -23,6 +26,24 @@ use crate::domains::reviews::service::ReviewError;
 use crate::domains::reviews::service::ReviewPersonaInput;
 use crate::domains::workspaces::operation_gate::WorkspaceOperationKind;
 
+/// Spec 2b: review mutations targeting a run admit against the run's parent
+/// session before durable review state changes.
+async fn admit_review_parent_session(
+    state: &AppState,
+    review_run_id: &str,
+) -> Result<SessionMutationPermit, ApiError> {
+    let detail = state
+        .review_service
+        .get_run_detail(review_run_id)
+        .map_err(map_review_error)?;
+    admit_session_mutation(
+        state,
+        &detail.parent_session_id,
+        SessionMutationKind::Review,
+    )
+    .await
+}
+
 #[utoipa::path(
     post,
     path = "/v1/workspaces/{workspace_id}/plans/{plan_id}/review",
@@ -32,6 +53,7 @@ use crate::domains::workspaces::operation_gate::WorkspaceOperationKind;
     ),
     request_body = StartPlanReviewRequest,
     responses(
+        (status = 409, description = "Session execution is controlled by an active workflow run", body = anyharness_contract::v1::ProblemDetails),
         (status = 200, description = "Started plan review", body = ReviewRunResponse),
         (status = 400, description = "Invalid review request", body = ProblemDetails),
         (status = 404, description = "Plan or session not found", body = ProblemDetails),
@@ -45,6 +67,17 @@ pub async fn start_plan_review(
     Json(req): Json<StartPlanReviewRequest>,
 ) -> Result<Json<ReviewRunResponse>, ApiError> {
     assert_workspace_auth_scope(&auth, &workspace_id)?;
+    // LOCK-01: permit is acquired BEFORE the workspace operation lease
+    // (canonical order run gate -> permit -> operation lease). The plan's
+    // session_id lookup runs before the lease; the permit is bound at handler
+    // scope so it is held across the review side effect, not dropped early.
+    let _admission_permit = match state.plan_service.get(&plan_id) {
+        Ok(Some(plan)) => Some(
+            admit_session_mutation(&state, &plan.session_id, SessionMutationKind::Review).await?,
+        ),
+        Ok(None) => None,
+        Err(_) => return Err(ApiError::internal("Failed to load review plan")),
+    };
     let _lease = state
         .workspace_operation_gate
         .acquire_shared(&workspace_id, WorkspaceOperationKind::ReviewWrite)
@@ -64,6 +97,7 @@ pub async fn start_plan_review(
     params(("workspace_id" = String, Path, description = "Workspace ID")),
     request_body = StartCodeReviewRequest,
     responses(
+        (status = 409, description = "Session execution is controlled by an active workflow run", body = anyharness_contract::v1::ProblemDetails),
         (status = 200, description = "Started code review", body = ReviewRunResponse),
         (status = 400, description = "Invalid review request", body = ProblemDetails),
     ),
@@ -76,6 +110,9 @@ pub async fn start_code_review(
     Json(req): Json<StartCodeReviewRequest>,
 ) -> Result<Json<ReviewRunResponse>, ApiError> {
     assert_workspace_auth_scope(&auth, &workspace_id)?;
+    // LOCK-01: permit before the workspace operation lease.
+    let _admission_permit =
+        admit_session_mutation(&state, &req.parent_session_id, SessionMutationKind::Review).await?;
     let _lease = state
         .workspace_operation_gate
         .acquire_shared(&workspace_id, WorkspaceOperationKind::ReviewWrite)
@@ -156,6 +193,7 @@ pub async fn retry_review_assignment(
     Path((review_run_id, assignment_id)): Path<(String, String)>,
     Json(req): Json<RetryReviewAssignmentRequest>,
 ) -> Result<Json<ReviewRunResponse>, ApiError> {
+    let _admission_permit = admit_review_parent_session(&state, &review_run_id).await?;
     let run = state
         .review_runtime
         .retry_assignment(
@@ -173,6 +211,7 @@ pub async fn retry_review_assignment(
     path = "/v1/reviews/{review_run_id}/stop",
     params(("review_run_id" = String, Path, description = "Review run ID")),
     responses(
+        (status = 409, description = "Session execution is controlled by an active workflow run", body = anyharness_contract::v1::ProblemDetails),
         (status = 200, description = "Stopped review run", body = ReviewRunResponse),
         (status = 404, description = "Review run not found", body = ProblemDetails),
     ),
@@ -182,6 +221,7 @@ pub async fn stop_review(
     State(state): State<AppState>,
     Path(review_run_id): Path<String>,
 ) -> Result<Json<ReviewRunResponse>, ApiError> {
+    let _admission_permit = admit_review_parent_session(&state, &review_run_id).await?;
     let run = state
         .review_runtime
         .stop_run(&review_run_id)
@@ -195,6 +235,7 @@ pub async fn stop_review(
     path = "/v1/reviews/{review_run_id}/send-feedback",
     params(("review_run_id" = String, Path, description = "Review run ID")),
     responses(
+        (status = 409, description = "Session execution is controlled by an active workflow run", body = anyharness_contract::v1::ProblemDetails),
         (status = 200, description = "Sent review feedback", body = ReviewRunResponse),
         (status = 400, description = "Review feedback is not ready", body = ProblemDetails),
     ),
@@ -204,6 +245,7 @@ pub async fn send_review_feedback(
     State(state): State<AppState>,
     Path(review_run_id): Path<String>,
 ) -> Result<Json<ReviewRunResponse>, ApiError> {
+    let _admission_permit = admit_review_parent_session(&state, &review_run_id).await?;
     let run = state
         .review_runtime
         .send_feedback(&review_run_id)
@@ -218,6 +260,7 @@ pub async fn send_review_feedback(
     params(("review_run_id" = String, Path, description = "Review run ID")),
     request_body = MarkReviewRevisionReadyRequest,
     responses(
+        (status = 409, description = "Session execution is controlled by an active workflow run", body = anyharness_contract::v1::ProblemDetails),
         (status = 200, description = "Started next review round", body = ReviewRunResponse),
         (status = 400, description = "Revision is not ready or max rounds reached", body = ProblemDetails),
     ),
@@ -228,6 +271,7 @@ pub async fn mark_review_revision_ready(
     Path(review_run_id): Path<String>,
     Json(req): Json<MarkReviewRevisionReadyRequest>,
 ) -> Result<Json<ReviewRunResponse>, ApiError> {
+    let _admission_permit = admit_review_parent_session(&state, &review_run_id).await?;
     let run = state
         .review_runtime
         .mark_revision_ready(&review_run_id, mark_review_revision_ready_input(req))

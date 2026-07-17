@@ -23,6 +23,9 @@ function contract(
     webApp: { available: false, baseUrl: null },
     support: { kind: "none", email: null, url: null },
     pricing: { available: false, url: null },
+    githubRepositoryAccess: { status: "disabled", provider: null, displayName: null },
+    managedCloud: { status: "disabled", repositoryAuthority: null, source: "legacy" },
+    workflowManagedRuns: false,
     ...overrides,
   };
 }
@@ -49,6 +52,7 @@ describe("deriveAppCapabilities", () => {
     expect(caps.usageMeteringEnabled).toBe(true);
     expect(caps.cloudComputeEnabled).toBe(true);
     expect(caps.agentGatewayEnabled).toBe(true);
+    expect(caps.workflowManagedRunsEnabled).toBe(false);
     expect(caps.isSelfManaged).toBe(false);
     expect(caps.serverDisplayName).toBeNull();
     expect(caps.serverLogoUrl).toBeNull();
@@ -118,6 +122,21 @@ describe("deriveAppCapabilities", () => {
     expect(caps.pricing.available).toBe(false);
   });
 
+  it("surfaces the split GitHub-access and managed-Cloud statuses", () => {
+    const caps = deriveAppCapabilities({
+      reachable: true,
+      connectedServerHost: "acme.example.com",
+      contract: contract({
+        githubRepositoryAccess: { status: "ready", provider: "github_app", displayName: "acme-app" },
+        managedCloud: { status: "operator_configuration_required", repositoryAuthority: "github_app", source: "v2" },
+      }),
+    });
+
+    expect(caps.githubRepositoryAccessStatus).toBe("ready");
+    expect(caps.githubRepositoryAccessDisplayName).toBe("acme-app");
+    expect(caps.managedCloudStatus).toBe("operator_configuration_required");
+  });
+
   it("gates capabilities on reachability", () => {
     const caps = deriveAppCapabilities({
       reachable: false,
@@ -127,6 +146,7 @@ describe("deriveAppCapabilities", () => {
         billing: true,
         cloudWorkspaces: true,
         agentGateway: true,
+        workflowManagedRuns: true,
       }),
     });
 
@@ -134,6 +154,20 @@ describe("deriveAppCapabilities", () => {
     expect(caps.billingEnabled).toBe(false);
     expect(caps.cloudComputeEnabled).toBe(false);
     expect(caps.agentGatewayEnabled).toBe(false);
+    expect(caps.workflowManagedRunsEnabled).toBe(false);
+  });
+
+  it("enables managed Workflow runs only from a reachable explicit contract", () => {
+    expect(deriveAppCapabilities({
+      reachable: true,
+      connectedServerHost: "app.proliferate.com",
+      contract: contract({ workflowManagedRuns: true }),
+    }).workflowManagedRunsEnabled).toBe(true);
+    expect(deriveAppCapabilities({
+      reachable: true,
+      connectedServerHost: "old.example.com",
+      contract: null,
+    }).workflowManagedRunsEnabled).toBe(false);
   });
 });
 

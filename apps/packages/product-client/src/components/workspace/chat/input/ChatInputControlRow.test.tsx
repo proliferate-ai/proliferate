@@ -17,10 +17,6 @@ vi.mock("#product/stores/activity/goal-bar-store", () => ({
 vi.mock("#product/hooks/cloud/derived/use-composer-integrations-state", () => ({
   useComposerIntegrationsState: () => ({ mode: "hidden", connectedCount: 0, providers: [], reauthLabel: null }),
 }));
-vi.mock("./RuntimePressureIndicator", () => ({
-  RuntimePressureIndicator: () => null,
-}));
-
 afterEach(() => {
   cleanup();
 });
@@ -108,24 +104,6 @@ function createControls(): LiveSessionControlDescriptor[] {
   ];
 }
 
-function createAccessModeControl(): LiveSessionControlDescriptor {
-  return {
-    key: "mode",
-    label: "Permissions",
-    detail: "Auto",
-    rawConfigId: "mode",
-    settable: true,
-    pendingState: null,
-    kind: "select",
-    options: [
-      { value: "read-only", label: "Read Only", selected: false },
-      { value: "auto", label: "Auto", selected: true },
-      { value: "full-access", label: "Full Access", selected: false },
-    ],
-    onSelect: vi.fn(),
-  };
-}
-
 function renderControlRow(overrides?: Partial<Parameters<typeof ChatInputControlRow>[0]>) {
   return render(
     <MemoryRouter>
@@ -161,15 +139,26 @@ describe("ChatInputControlRow", () => {
     renderControlRow();
     const reasoning = screen.getByRole("button", { name: "Reasoning: Medium" });
     expect(reasoning.getAttribute("title")?.startsWith("Reasoning: Medium")).toBe(true);
-    expect(screen.getByText("Medium").className).toContain("sr-only");
+    // The level name is a visible label beside the bars, not sr-only.
+    expect(screen.getByText("Medium").className).not.toContain("sr-only");
   });
 
-  it("renders working mode as text with a subtle disclosure chevron", () => {
+  it("does not reserve a pending glyph beside reasoning", () => {
+    const controls = createControls();
+    const effortControl = controls.find((control) => control.key === "effort")!;
+    effortControl.pendingState = "queued";
+
+    renderControlRow({ sessionConfigControls: controls });
+
+    const reasoning = screen.getByRole("button", { name: "Reasoning: Medium" });
+    expect(reasoning.parentElement?.querySelector("svg")).toBeNull();
+  });
+
+  it("renders working mode as plain text with no disclosure chevron", () => {
     renderControlRow();
     const mode = screen.getByRole("button", { name: "Mode: Default" });
     expect(screen.getByText("Default")).toBeTruthy();
-    expect(mode.querySelectorAll("svg")).toHaveLength(1);
-    expect(mode.querySelector('path[d="m6 9 6 6 6-6"]')).toBeTruthy();
+    expect(mode.querySelector("svg")).toBeNull();
   });
 
   it("does not imply disclosure for a non-settable working mode", () => {
@@ -183,19 +172,19 @@ describe("ChatInputControlRow", () => {
     expect(mode.querySelector("svg")).toBeNull();
   });
 
-  it("orders model, reasoning bars, fast mode, and working mode in the visible row", () => {
+  it("orders model, reasoning bars, working mode, and fast mode in the visible row", () => {
     renderControlRow();
 
     const model = screen.getByRole("button", { name: "Model: Opus 4.1" });
     const reasoning = screen.getByRole("button", { name: "Reasoning: Medium" });
-    const fast = screen.getByRole("button", { name: "Fast mode: Slow" });
     const mode = screen.getByRole("button", { name: "Mode: Default" });
+    const fast = screen.getByRole("button", { name: "Fast mode: Slow" });
 
     expect(model.compareDocumentPosition(reasoning) & Node.DOCUMENT_POSITION_FOLLOWING)
       .toBeTruthy();
-    expect(reasoning.compareDocumentPosition(fast) & Node.DOCUMENT_POSITION_FOLLOWING)
+    expect(reasoning.compareDocumentPosition(mode) & Node.DOCUMENT_POSITION_FOLLOWING)
       .toBeTruthy();
-    expect(fast.compareDocumentPosition(mode) & Node.DOCUMENT_POSITION_FOLLOWING)
+    expect(mode.compareDocumentPosition(fast) & Node.DOCUMENT_POSITION_FOLLOWING)
       .toBeTruthy();
   });
 
@@ -278,26 +267,6 @@ describe("ChatInputControlRow", () => {
     expect(onButton.querySelector("svg")?.getAttribute("class")).toContain("opacity-100");
   });
 
-  it("does not render overflow when no extra controls exist", () => {
-    // Effort, fast_mode, and collaboration_mode each own a visible slot.
-    renderControlRow();
-    expect(screen.queryByRole("button", { name: "More configuration options" })).toBeNull();
-  });
-
-  it("keeps Codex permissions independent from working mode in overflow", () => {
-    const controls = [createAccessModeControl(), ...createControls()];
-    renderControlRow({ agentKind: "codex", sessionConfigControls: controls });
-
-    expect(screen.getByRole("button", { name: "Mode: Default" })).toBeTruthy();
-    expect(screen.queryByText("Auto")).toBeNull();
-
-    fireEvent.click(screen.getByRole("button", { name: "More configuration options" }));
-
-    expect(screen.getByText("Permissions")).toBeTruthy();
-    expect(screen.getByText("Read Only")).toBeTruthy();
-    expect(screen.getByText("Auto")).toBeTruthy();
-    expect(screen.getByText("Full Access")).toBeTruthy();
-  });
 
   it("renders two-level reasoning with bars when effort is unavailable", () => {
     const controls = createControls().filter((control) => control.key !== "effort");
@@ -336,64 +305,4 @@ describe("ChatInputControlRow", () => {
       .toHaveProperty("disabled", true);
   });
 
-  it("renders overflow button when extra controls exist", () => {
-    const controls = createControls();
-    // Effort owns the single reasoning-level slot, so a second reasoning
-    // control remains available as an additional option.
-    controls.push({
-      key: "reasoning",
-      label: "Reasoning",
-      detail: "On",
-      rawConfigId: "reasoning",
-      settable: true,
-      pendingState: null,
-      kind: "toggle",
-      enabledValue: "on",
-      disabledValue: "off",
-      isEnabled: true,
-      options: [
-        { value: "off", label: "Off", selected: false },
-        { value: "on", label: "On", selected: true },
-      ],
-      onSelect: vi.fn(),
-    });
-    renderControlRow({ sessionConfigControls: controls });
-    expect(screen.getByRole("button", { name: "More configuration options" })).toBeTruthy();
-  });
-
-  it("overflow popover stays open on option select", async () => {
-    const controls = createControls();
-    const reasoningControl = {
-      key: "reasoning" as const,
-      label: "Reasoning",
-      detail: "On",
-      rawConfigId: "reasoning",
-      settable: true,
-      pendingState: null,
-      kind: "toggle" as const,
-      enabledValue: "on",
-      disabledValue: "off",
-      isEnabled: true,
-      options: [
-        { value: "off", label: "Off", selected: false },
-        { value: "on", label: "On", selected: true },
-      ],
-      onSelect: vi.fn(),
-    };
-    controls.push(reasoningControl);
-    renderControlRow({ sessionConfigControls: controls });
-
-    // Open the overflow popover
-    fireEvent.click(screen.getByRole("button", { name: "More configuration options" }));
-
-    // The popover should show "Reasoning" section and its options
-    expect(screen.getByText("Reasoning")).toBeTruthy();
-
-    // Click an option — popover should remain open
-    fireEvent.click(screen.getByText("Off"));
-    expect(reasoningControl.onSelect).toHaveBeenCalledWith("off");
-
-    // The popover content should still be visible
-    expect(screen.getByText("Reasoning")).toBeTruthy();
-  });
 });

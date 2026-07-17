@@ -139,6 +139,9 @@ async fn v2_run_gate_allows_one_lookup_and_schedule_then_replays_stored_plan() {
                             schedule_count.fetch_add(1, Ordering::SeqCst);
                             true
                         }
+                        AcceptV2Outcome::WorkspaceNotReady | AcceptV2Outcome::WorkspaceMismatch => {
+                            panic!("test setup has no workspace materialization")
+                        }
                         other => panic!("gate winner was not created: {other:?}"),
                     }
                 }

@@ -16,7 +16,16 @@ import {
   validateReport,
   validateReportV4,
   type CellEvidenceV1,
+  type CloudProvisionTurnEvidenceV1,
+  type FinalCellResultV2,
+  type LocalCleanupV1,
+  type LocalConfigMatrixEvidenceV1,
+  type LocalLitellmSpendV1,
+  type LocalMcpIntegrationEvidenceV1,
+  type LocalRouteTurnEvidenceV1,
+  type LocalSessionTabsEvidenceV1,
   type LocalWorkspaceTurnEvidenceV1,
+  type SelfHostBaseTurnEvidenceV1,
   type SelfHostInstallClaimEvidenceV1,
   type TestRunReportV3,
   type TestRunReportV4,
@@ -97,9 +106,20 @@ function withDerivedReasons(report: TestRunReportV3): TestRunReportV3 {
 
 
 // Minimal valid candidate evidence for strict-report tests (strict requires
-// non-null candidate_build per CBH-001).
+// non-null candidate_build per CBH-001). Declares every artifact id the
+// world-backed evidence fixtures below reference, because the V4 cross-field
+// bind (LQF-005) now requires each evidence `artifact_ids` entry to name an
+// artifact of THIS candidate identity.
 const STRICT_CB: TestRunReportV3["candidate_build"] = {
-  artifacts: [{ artifact_id: "anyharness/host", version: "1.0.0", sha256: "e".repeat(64) }],
+  artifacts: [
+    { artifact_id: "anyharness/host", version: "1.0.0", sha256: "e".repeat(64) },
+    { artifact_id: "server/linux-x64", version: "0.3.27", sha256: "1".repeat(64) },
+    { artifact_id: "anyharness/aarch64-apple-darwin", version: "0.3.27", sha256: "2".repeat(64) },
+    { artifact_id: "desktop-renderer/browser", version: "0.3.27", sha256: "3".repeat(64) },
+    { artifact_id: "server/linux-amd64", version: "0.3.27", sha256: "4".repeat(64) },
+    { artifact_id: "selfhost-bundle/linux-amd64", version: "0.3.27", sha256: "5".repeat(64) },
+    { artifact_id: "anyharness/x86_64-unknown-linux-gnu", version: "0.3.27", sha256: "6".repeat(64) },
+  ],
 };
 
 test("validateReport accepts a consistent report", () => {
@@ -657,8 +677,18 @@ function validReportV4(overrides: Partial<TestRunReportV4> = {}): TestRunReportV
   return { ...report, ...overrides };
 }
 
+/**
+ * A V4 report whose single result's evidence is known to be the
+ * `local_workspace_turn` kind — narrower than `CellEvidenceV1` so these smoke
+ * tests can read `.litellm`/`.cleanup`/`.model_id` without a per-access cast
+ * after the audit-ruling-#3 union widening. Structurally a `TestRunReportV4`.
+ */
+type SmokeReportV4 = Omit<TestRunReportV4, "results"> & {
+  results: Array<Omit<FinalCellResultV2, "evidence"> & { evidence: LocalWorkspaceTurnEvidenceV1 | null }>;
+};
+
 /** V4 report with one green LOCAL-WORLD-SMOKE-1 cell carrying complete evidence. */
-function validSmokeReportV4(evidenceOverrides: Partial<LocalWorkspaceTurnEvidenceV1> = {}): TestRunReportV4 {
+function validSmokeReportV4(evidenceOverrides: Partial<LocalWorkspaceTurnEvidenceV1> = {}): SmokeReportV4 {
   const report = validReportV4();
   report.selected_cells[0] = {
     ...report.selected_cells[0],
@@ -675,7 +705,7 @@ function validSmokeReportV4(evidenceOverrides: Partial<LocalWorkspaceTurnEvidenc
     dimensions: { harness: "claude" },
     evidence: validCellEvidence(evidenceOverrides),
   };
-  return report;
+  return report as unknown as SmokeReportV4;
 }
 
 /**
@@ -837,9 +867,15 @@ test("validateReportV4 rejects transcript_reopened !== true and harness !== clau
   (notReopened.results[0].evidence as unknown as { transcript_reopened: boolean }).transcript_reopened = false;
   assert.throws(() => validateReportV4(notReopened), /transcript_reopened must be true/);
 
+  // The cross-field cell binding (LQF-005) catches an evidence harness that
+  // disagrees with the cell's harness dimension before the kind-scoped
+  // "harness must be claude" structural check; either rejection is correct.
   const wrongHarness = validSmokeReportV4();
   (wrongHarness.results[0].evidence as unknown as { harness: string }).harness = "codex";
-  assert.throws(() => validateReportV4(wrongHarness), /harness must be "claude"/);
+  assert.throws(
+    () => validateReportV4(wrongHarness),
+    /harness is "codex" but the cell's dimensions name harness "claude"/,
+  );
 });
 
 test("sanitizeCellEvidence redacts secrets so validation then rejects the mangled value", () => {
@@ -976,6 +1012,66 @@ function validSelfHostReportV4(
   return report;
 }
 
+// ── The four new local-functional evidence kinds (audit ruling #3 / BRIEF §3) ──
+
+const CLEANUP_OK: LocalCleanupV1 = {
+  ledger_id_hash: "d".repeat(64),
+  registered: 8,
+  reconciled: 8,
+  failed: 0,
+  virtual_key_deleted: true,
+  litellm_subjects_deleted: true,
+  browser_closed: true,
+  processes_stopped: true,
+  containers_removed: true,
+  local_paths_removed: true,
+};
+
+const SPEND_OK: LocalLitellmSpendV1 = {
+  token_id_hash: "c".repeat(64),
+  request_ids: ["req-1", "req-2"],
+  window_started_at: "2026-07-14T00:00:00Z",
+  window_finished_at: "2026-07-14T00:00:10Z",
+  prompt_tokens: 10,
+  completion_tokens: 3,
+  total_tokens: 13,
+  spend_usd: 0.0004,
+};
+
+/**
+ * A world-backed (`candidate_build` non-null) V4 report with a single result
+ * for `scenarioId`/`dimensions`, carrying `evidence` and defaulting to a
+ * green `runtime_lane: "local"` result — the shape
+ * `LOCAL_FUNCTIONAL_EVIDENCE_SCENARIOS` requires complete evidence for.
+ */
+function worldBackedLocalReportV4(
+  scenarioId: string,
+  dimensions: Record<string, string>,
+  evidence: CellEvidenceV1 | null,
+  resultOverrides: Partial<FinalCellResultV2> = {},
+): TestRunReportV4 {
+  const report = validReportV4();
+  report.candidate_build = STRICT_CB;
+  const cellId = canonicalCellId(scenarioId, "local", dimensions);
+  report.selected_cells[0] = {
+    ...report.selected_cells[0],
+    cell_id: cellId,
+    scenario_id: scenarioId,
+    registry_flow_ref: `specs#${scenarioId}`,
+    dimensions,
+  };
+  report.results[0] = {
+    ...report.results[0],
+    cell_id: cellId,
+    scenario_id: scenarioId,
+    registry_flow_ref: `specs#${scenarioId}`,
+    dimensions,
+    evidence,
+    ...resultOverrides,
+  };
+  return report;
+}
+
 test("validateReportV4 accepts a green SELFHOST-INSTALL-1 cell with complete self-host evidence", () => {
   validateReportV4(validSelfHostReportV4());
 });
@@ -989,7 +1085,10 @@ test("validateReportV4 rejects a green SELFHOST-INSTALL-1 cell with null evidenc
 test("validateReportV4 rejects self-host evidence with an unknown kind", () => {
   const report = validSelfHostReportV4();
   (report.results[0].evidence as { kind: string }).kind = "selfhost_unknown_kind";
-  assert.throws(() => validateReportV4(report), /kind is unknown/);
+  // The per-cell (scenario_id, cell) kind binding (PR7-CONTROL-007) rejects the
+  // mismatch before the kind-dispatch's own "kind is unknown" — either way the
+  // unknown kind is fail-closed, which is what this asserts.
+  assert.throws(() => validateReportV4(report), /kind is unknown|requires "selfhost_install_claim"/);
 });
 
 test("validateReportV4 rejects self-host evidence with an undeclared extra field", () => {
@@ -1033,6 +1132,58 @@ test("validateReportV4 rejects a green self-host cell whose cleanup has a false 
   assert.throws(() => validateReportV4(failed), /cleanup.failed must be 0/);
 });
 
+/** A base-turn report with the given cell status + provider-absence claims. */
+function selfHostBaseTurnReportV4(
+  status: "green" | "expected_fail",
+  claim: "unproven" | "observed_absent",
+): TestRunReportV4 {
+  const report = validSelfHostReportV4();
+  const cellId = "SELFHOST-INSTALL-1/selfhost/cell=SH-BASE-TURN,harness=claude";
+  const evidence: SelfHostBaseTurnEvidenceV1 = {
+    kind: "selfhost_base_turn",
+    artifact_ids: ["server/linux-amd64"],
+    server_version: "0.3.27",
+    anyharness_version: "0.3.27",
+    harness: "claude",
+    api_origin: "sh-run-1.qualification.proliferate.com",
+    controller_runtime_origin: "127.0.0.1:8542",
+    model_id: "claude-haiku-4-5",
+    workspace_id_hash: "a".repeat(64),
+    session_id_hash: "b".repeat(64),
+    transcript_reopened: true,
+    byok_route: "api_key",
+    byok_key_id_hash: "c".repeat(64),
+    no_litellm_spend: claim,
+    no_e2b: claim,
+    cleanup: validSelfHostInstallClaimEvidence().cleanup,
+  };
+  const dims = { cell: "SH-BASE-TURN", harness: "claude" };
+  report.selected_cells[0] = { ...report.selected_cells[0], cell_id: cellId, dimensions: dims };
+  const reason =
+    status === "expected_fail" ? { code: "known_gap" as const, message: "provider-absence unproven" } : null;
+  report.results[0] = { ...report.results[0], cell_id: cellId, dimensions: dims, status, reason, evidence };
+  // Keep summary.by_status consistent with the single result's status.
+  report.summary.by_status.green = status === "green" ? 1 : 0;
+  report.summary.by_status.expected_fail = status === "expected_fail" ? 1 : 0;
+  report.verdict.reasons = expectedVerdict(report).reasons;
+  return report;
+}
+
+test("validateReportV4 REJECTS a GREEN SH-BASE-TURN with unproven provider-absence claims (PR7-CONTROL-010)", () => {
+  assert.throws(
+    () => validateReportV4(selfHostBaseTurnReportV4("green", "unproven")),
+    /no_litellm_spend is "unproven" on a GREEN result/,
+  );
+});
+
+test("validateReportV4 accepts an EXPECTED_FAIL SH-BASE-TURN with unproven claims (honest gap, PR7-CONTROL-010)", () => {
+  validateReportV4(selfHostBaseTurnReportV4("expected_fail", "unproven"));
+});
+
+test("validateReportV4 accepts a GREEN SH-BASE-TURN once provider absence is observed_absent (PR7-CONTROL-010)", () => {
+  validateReportV4(selfHostBaseTurnReportV4("green", "observed_absent"));
+});
+
 test("validateReportV4 accepts a failed self-host cell whose cleanup evidence records failed>0", () => {
   const report = validSelfHostReportV4({
     cleanup: { ...validSelfHostInstallClaimEvidence().cleanup, failed: 1, ec2_terminated: false },
@@ -1049,6 +1200,210 @@ test("validateReportV4 accepts a failed self-host cell whose cleanup evidence re
   report.summary.by_status = byStatus;
   report.summary.intended_exit_code = 1;
   report.verdict.status = "selected_cells_failed";
+  withDerivedReasons(report as unknown as TestRunReportV3);
+  validateReportV4(report);
+});
+
+function validRouteTurnEvidence(overrides: Partial<LocalRouteTurnEvidenceV1> = {}): LocalRouteTurnEvidenceV1 {
+  return {
+    kind: "local_route_turn",
+    journey: "LOCAL-2",
+    artifact_ids: ["server/linux-x64", "anyharness/aarch64-apple-darwin"],
+    server_version: "0.3.27",
+    anyharness_version: "0.3.27",
+    harness: "codex",
+    route: "gateway",
+    model_id: "claude-haiku-4-5",
+    workspace_id_hash: "a".repeat(64),
+    session_id_hash: "b".repeat(64),
+    transcript_reopened: true,
+    gateway_spend: { ...SPEND_OK },
+    user_key_isolation: null,
+    route_change: null,
+    billing_reconcile_deferred: true,
+    cleanup: { ...CLEANUP_OK },
+    ...overrides,
+  };
+}
+
+function userKeyRouteTurnEvidence(
+  overrides: Partial<LocalRouteTurnEvidenceV1> = {},
+): LocalRouteTurnEvidenceV1 {
+  return validRouteTurnEvidence({
+    journey: "LOCAL-3",
+    route: "user_key",
+    gateway_spend: null,
+    user_key_isolation: { litellm_spend_rows: 0, managed_balance_read_deferred: true },
+    ...overrides,
+  });
+}
+
+test("validateReportV4 accepts a valid local_route_turn gateway-route cell (LOCAL-2)", () => {
+  const report = worldBackedLocalReportV4(
+    "T3-CHAT-1",
+    { harness: "codex" },
+    validRouteTurnEvidence(),
+  );
+  validateReportV4(report);
+});
+
+test("validateReportV4 accepts a valid local_route_turn user-key-route cell (LOCAL-3)", () => {
+  const report = worldBackedLocalReportV4(
+    "T3-AUTHROUTE-1",
+    { harness: "codex", journey: "LOCAL-3" },
+    userKeyRouteTurnEvidence(),
+  );
+  validateReportV4(report);
+});
+
+test("validateReportV4 accepts a valid local_route_turn LOCAL-6 route-change cell", () => {
+  const report = worldBackedLocalReportV4(
+    "T3-AUTHROUTE-1",
+    // The canonical LOCAL-6 cell is keyed by the route-change dimension, not a
+    // harness; the binding derives journey=LOCAL-6 from route=change.
+    { route: "change" },
+    userKeyRouteTurnEvidence({
+      journey: "LOCAL-6",
+      route_change: {
+        original_route: "user_key",
+        original_session_id_hash: "e".repeat(64),
+        new_route: "gateway",
+        new_session_id_hash: "f".repeat(64),
+      },
+    }),
+  );
+  validateReportV4(report);
+});
+
+test("validateReportV4 rejects local_route_turn undeclared/missing fields", () => {
+  const evidence = validRouteTurnEvidence() as unknown as Record<string, unknown>;
+  evidence.extra_field = "x";
+  const report = worldBackedLocalReportV4("T3-CHAT-1", { harness: "codex" }, evidence as unknown as CellEvidenceV1);
+  assert.throws(() => validateReportV4(report), /undeclared or missing field/);
+});
+
+test("validateReportV4 rejects local_route_turn gateway route with mismatched spend/isolation", () => {
+  const missingSpend = worldBackedLocalReportV4(
+    "T3-CHAT-1",
+    { harness: "codex" },
+    validRouteTurnEvidence({ gateway_spend: null }),
+  );
+  assert.throws(() => validateReportV4(missingSpend), /gateway_spend must be non-null/);
+
+  const strayIsolation = worldBackedLocalReportV4(
+    "T3-CHAT-1",
+    { harness: "codex" },
+    validRouteTurnEvidence({ user_key_isolation: { litellm_spend_rows: 0, managed_balance_read_deferred: true } }),
+  );
+  assert.throws(() => validateReportV4(strayIsolation), /user_key_isolation must be null/);
+});
+
+test("validateReportV4 rejects local_route_turn user-key route with mismatched spend/isolation", () => {
+  const missingIsolation = worldBackedLocalReportV4(
+    "T3-AUTHROUTE-1",
+    { harness: "codex", journey: "LOCAL-3" },
+    userKeyRouteTurnEvidence({ user_key_isolation: null }),
+  );
+  assert.throws(() => validateReportV4(missingIsolation), /user_key_isolation must be non-null/);
+
+  const straySpend = worldBackedLocalReportV4(
+    "T3-AUTHROUTE-1",
+    { harness: "codex", journey: "LOCAL-3" },
+    userKeyRouteTurnEvidence({ gateway_spend: { ...SPEND_OK } }),
+  );
+  assert.throws(() => validateReportV4(straySpend), /gateway_spend must be null/);
+});
+
+test("validateReportV4 rejects local_route_turn non-zero user-key isolation counters", () => {
+  const nonZeroRows = worldBackedLocalReportV4(
+    "T3-AUTHROUTE-1",
+    { harness: "codex" },
+    userKeyRouteTurnEvidence({
+      user_key_isolation: { litellm_spend_rows: 1, managed_balance_read_deferred: true } as unknown as {
+        litellm_spend_rows: 0;
+        managed_balance_read_deferred: true;
+      },
+    }),
+  );
+  assert.throws(() => validateReportV4(nonZeroRows), /litellm_spend_rows must be 0/);
+
+  // LQF-006: the balance is never read here, so the deferral marker must be
+  // true — a fabricated false (claiming an observed balance read) is rejected.
+  const claimsBalanceRead = worldBackedLocalReportV4(
+    "T3-AUTHROUTE-1",
+    { harness: "codex" },
+    userKeyRouteTurnEvidence({
+      user_key_isolation: { litellm_spend_rows: 0, managed_balance_read_deferred: false } as unknown as {
+        litellm_spend_rows: 0;
+        managed_balance_read_deferred: true;
+      },
+    }),
+  );
+  assert.throws(() => validateReportV4(claimsBalanceRead), /managed_balance_read_deferred must be true/);
+});
+
+test("validateReportV4 rejects local_route_turn route_change presence mismatched with journey", () => {
+  const strayRouteChange = worldBackedLocalReportV4(
+    "T3-CHAT-1",
+    { harness: "codex" },
+    validRouteTurnEvidence({
+      route_change: {
+        original_route: "user_key",
+        original_session_id_hash: "e".repeat(64),
+        new_route: "gateway",
+        new_session_id_hash: "f".repeat(64),
+      },
+    }),
+  );
+  assert.throws(() => validateReportV4(strayRouteChange), /route_change must be null outside journey "LOCAL-6"/);
+
+  const missingRouteChange = worldBackedLocalReportV4(
+    "T3-AUTHROUTE-1",
+    { route: "change" },
+    userKeyRouteTurnEvidence({ journey: "LOCAL-6", route_change: null }),
+  );
+  assert.throws(
+    () => validateReportV4(missingRouteChange),
+    /route_change must be non-null for journey "LOCAL-6"/,
+  );
+});
+
+test("validateReportV4 rejects local_route_turn invalid journey/route enums", () => {
+  const badJourney = worldBackedLocalReportV4(
+    "T3-CHAT-1",
+    { harness: "codex" },
+    validRouteTurnEvidence({ journey: "LOCAL-9" as LocalRouteTurnEvidenceV1["journey"] }),
+  );
+  assert.throws(() => validateReportV4(badJourney), /journey must be one of/);
+
+  const badRoute = worldBackedLocalReportV4(
+    "T3-CHAT-1",
+    { harness: "codex" },
+    validRouteTurnEvidence({ route: "direct" as LocalRouteTurnEvidenceV1["route"] }),
+  );
+  assert.throws(() => validateReportV4(badRoute), /route must be one of/);
+});
+
+test("validateReportV4 rejects local_route_turn billing_reconcile_deferred !== true", () => {
+  const report = worldBackedLocalReportV4(
+    "T3-CHAT-1",
+    { harness: "codex" },
+    validRouteTurnEvidence({ billing_reconcile_deferred: false as unknown as true }),
+  );
+  assert.throws(() => validateReportV4(report), /billing_reconcile_deferred must be true/);
+});
+
+test("validateReportV4 accepts a failed local_route_turn cell recording its own cleanup failure", () => {
+  const report = worldBackedLocalReportV4(
+    "T3-CHAT-1",
+    { harness: "codex" },
+    validRouteTurnEvidence({ cleanup: { ...CLEANUP_OK, failed: 1, virtual_key_deleted: false } }),
+    { status: "failed", reason: { code: "scenario_failure", message: "cleanup did not fully reconcile" } },
+  );
+  report.summary.by_status = { ...report.summary.by_status, green: 0, failed: 1 };
+  report.run.behavior = "strict";
+  report.verdict.status = "selected_cells_failed";
+  report.summary.intended_exit_code = 1;
   withDerivedReasons(report as unknown as TestRunReportV3);
   validateReportV4(report);
 });
@@ -1079,6 +1434,500 @@ test("writeReportV4 writes a SELFHOST-INSTALL-1 artifact with self-host evidence
     assert.equal(parsed.schema_version, 4);
     assert.equal(parsed.results[0].evidence.kind, "selfhost_install_claim");
     assert.equal(parsed.results[0].evidence.api_origin, "sh-run-1.qualification.proliferate.com");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+function validConfigMatrixEvidence(
+  overrides: Partial<LocalConfigMatrixEvidenceV1> = {},
+): LocalConfigMatrixEvidenceV1 {
+  return {
+    kind: "local_config_matrix",
+    artifact_ids: ["server/linux-x64"],
+    server_version: "0.3.27",
+    anyharness_version: "0.3.27",
+    harness: "grok",
+    model_id: "grok-code-fast-1",
+    workspace_id_hash: "a".repeat(64),
+    session_id_hash: "b".repeat(64),
+    controls: [
+      { control_key: "reasoning_effort", accepted_value: "medium", rejected: false },
+      { control_key: "mode", accepted_value: "plan", rejected: false },
+    ],
+    known_1063_expected_fail: false,
+    cleanup: { ...CLEANUP_OK },
+    ...overrides,
+  };
+}
+
+// ── cloud_provision_turn evidence (PR 2, spec step 10) ──────────────────────
+// Append-only per the extension contract: these tests exercise only the
+// kind-scoped cloud validator/sanitizer added to schema.ts; none of the
+// LOCAL-WORLD-SMOKE-1/local_workspace_turn tests above are touched.
+
+function validCloudCellEvidence(overrides: Partial<CloudProvisionTurnEvidenceV1> = {}): CloudProvisionTurnEvidenceV1 {
+  return {
+    kind: "cloud_provision_turn",
+    artifact_ids: [
+      "server/linux/amd64",
+      "anyharness/x86_64-unknown-linux-musl",
+      "worker/x86_64-unknown-linux-musl",
+      "supervisor/x86_64-unknown-linux-musl",
+      "credential-helper/x86_64-unknown-linux-musl",
+      "desktop-renderer/browser",
+      "e2b-template/cloud-run-1",
+      "candidate-api/cloud-run-1.qualification.proliferate.com",
+    ],
+    server_version: "0.3.27",
+    anyharness_version: "0.3.27",
+    worker_version: "0.3.27",
+    supervisor_version: "0.3.27",
+    harness: "claude",
+    model_id: "claude-haiku-4-5",
+    template: {
+      template_id: "tmpl_123",
+      build_id: "build_456",
+      input_hash: "a".repeat(64),
+    },
+    sandbox_id_hash: "b".repeat(64),
+    worker: {
+      supervisor_is_parent: true,
+      heartbeat_recent: true,
+    },
+    covered_repo: {
+      name: "proliferate-e2e/e2e-fixture",
+      commit: "c".repeat(40),
+      no_credential_in_remote: true,
+    },
+    isolation: {
+      actor_b_denied: true,
+      runtime_rejects_missing: true,
+      runtime_rejects_actor_b: true,
+    },
+    litellm: {
+      token_id_hash: "d".repeat(64),
+      request_ids: ["req-1", "req-2"],
+      window_started_at: "2026-07-14T00:00:00Z",
+      window_finished_at: "2026-07-14T00:00:10Z",
+      prompt_tokens: 10,
+      completion_tokens: 3,
+      total_tokens: 13,
+      spend_usd: 0.0004,
+    },
+    cleanup: {
+      ledger_id_hash: "e".repeat(64),
+      registered: 12,
+      reconciled: 12,
+      failed: 0,
+      sandboxes_deleted: true,
+      template_deleted: true,
+      dns_record_deleted: true,
+      ec2_terminated: true,
+      security_group_deleted: true,
+      key_pair_deleted: true,
+      virtual_key_deleted: true,
+      litellm_subjects_deleted: true,
+      local_paths_removed: true,
+    },
+    ...overrides,
+  };
+}
+
+test("validateReportV4 accepts a valid local_config_matrix cell", () => {
+  const report = worldBackedLocalReportV4("T3-CFG-1", { harness: "grok" }, validConfigMatrixEvidence());
+  validateReportV4(report);
+});
+
+test("validateReportV4 rejects local_config_matrix with an empty controls array", () => {
+  const report = worldBackedLocalReportV4(
+    "T3-CFG-1",
+    { harness: "grok" },
+    validConfigMatrixEvidence({ controls: [] }),
+  );
+  assert.throws(() => validateReportV4(report), /controls must be a non-empty array/);
+});
+
+test("validateReportV4 rejects local_config_matrix control with an undeclared field", () => {
+  const controls = [
+    { control_key: "mode", accepted_value: "plan", rejected: false, extra: "x" } as unknown as {
+      control_key: string;
+      accepted_value: string;
+      rejected: boolean;
+    },
+  ];
+  const report = worldBackedLocalReportV4(
+    "T3-CFG-1",
+    { harness: "grok" },
+    validConfigMatrixEvidence({ controls }),
+  );
+  assert.throws(() => validateReportV4(report), /controls\[0\] has undeclared or missing field/);
+});
+
+test("validateReportV4 rejects a green local_config_matrix cell with known_1063_expected_fail true", () => {
+  const report = worldBackedLocalReportV4(
+    "T3-CFG-1",
+    { harness: "grok" },
+    validConfigMatrixEvidence({ known_1063_expected_fail: true }),
+  );
+  assert.throws(() => validateReportV4(report), /known_1063_expected_fail cannot be true on a green result/);
+});
+
+test("validateReportV4 accepts known_1063_expected_fail true on a non-green local_config_matrix cell", () => {
+  const report = worldBackedLocalReportV4(
+    "T3-CFG-1",
+    { harness: "grok" },
+    validConfigMatrixEvidence({ known_1063_expected_fail: true }),
+    { status: "expected_fail", reason: { code: "known_gap", message: "known #1063 rejection" } },
+  );
+  report.summary.by_status = { ...report.summary.by_status, green: 0, expected_fail: 1 };
+  report.run.behavior = "strict";
+  report.verdict.status = "selected_cells_failed";
+  report.summary.intended_exit_code = 1;
+  withDerivedReasons(report as unknown as TestRunReportV3);
+  validateReportV4(report);
+});
+
+/** V4 report with one green CLOUD-PROVISION-1 cell carrying complete evidence. */
+function validCloudReportV4(evidenceOverrides: Partial<CloudProvisionTurnEvidenceV1> = {}): TestRunReportV4 {
+  const report = validReportV4();
+  report.selected_cells[0] = {
+    ...report.selected_cells[0],
+    cell_id: "CLOUD-PROVISION-1/sandbox/harness=claude",
+    scenario_id: "CLOUD-PROVISION-1",
+    registry_flow_ref: "specs#CLOUD-PROVISION-1",
+    runtime_lane: "sandbox",
+    dimensions: { harness: "claude" },
+  };
+  report.results[0] = {
+    ...report.results[0],
+    cell_id: "CLOUD-PROVISION-1/sandbox/harness=claude",
+    scenario_id: "CLOUD-PROVISION-1",
+    registry_flow_ref: "specs#CLOUD-PROVISION-1",
+    runtime_lane: "sandbox",
+    dimensions: { harness: "claude" },
+    evidence: validCloudCellEvidence(evidenceOverrides),
+  };
+  return report;
+}
+
+test("validateReportV4 accepts a green CLOUD-PROVISION-1 cell with complete cloud_provision_turn evidence", () => {
+  validateReportV4(validCloudReportV4());
+});
+
+test("validateReportV4 rejects a green CLOUD-PROVISION-1 cell with null evidence", () => {
+  const report = validCloudReportV4();
+  report.results[0].evidence = null;
+  assert.throws(() => validateReportV4(report), /requires complete evidence/);
+});
+
+test("validateReportV4 rejects an extra field on cloud evidence or a nested cloud object", () => {
+  const report = validCloudReportV4();
+  (report.results[0].evidence as unknown as Record<string, unknown>).extra_field = "x";
+  assert.throws(() => validateReportV4(report), /undeclared or missing field/);
+
+  const templateExtra = validCloudReportV4();
+  (templateExtra.results[0].evidence as CloudProvisionTurnEvidenceV1 as unknown as Record<string, unknown>);
+  ((templateExtra.results[0].evidence as CloudProvisionTurnEvidenceV1).template as unknown as Record<string, unknown>).extra = "x";
+  assert.throws(() => validateReportV4(templateExtra), /template has undeclared/);
+
+  const isolationExtra = validCloudReportV4();
+  ((isolationExtra.results[0].evidence as CloudProvisionTurnEvidenceV1).isolation as unknown as Record<string, unknown>).extra = "x";
+  assert.throws(() => validateReportV4(isolationExtra), /isolation has undeclared/);
+
+  const cleanupExtra = validCloudReportV4();
+  ((cleanupExtra.results[0].evidence as CloudProvisionTurnEvidenceV1).cleanup as unknown as Record<string, unknown>).extra = "x";
+  assert.throws(() => validateReportV4(cleanupExtra), /cleanup has undeclared/);
+});
+
+test("validateReportV4 rejects a cloud template.input_hash / sandbox_id_hash that is not 64-hex", () => {
+  const badTemplateHash = validCloudReportV4({
+    template: { template_id: "tmpl_123", build_id: "build_456", input_hash: "not-a-hash" },
+  });
+  assert.throws(() => validateReportV4(badTemplateHash), /input_hash must be a lowercase 64-hex digest/);
+
+  const badSandboxHash = validCloudReportV4({ sandbox_id_hash: "not-a-hash" });
+  assert.throws(() => validateReportV4(badSandboxHash), /sandbox_id_hash must be a lowercase 64-hex digest/);
+});
+
+test("validateReportV4 rejects a cloud covered_repo.commit that is not a full 40-hex sha", () => {
+  const report = validCloudReportV4({
+    covered_repo: { name: "proliferate-e2e/e2e-fixture", commit: "short-sha", no_credential_in_remote: true },
+  });
+  assert.throws(() => validateReportV4(report), /commit must be a full lowercase 40-hex sha/);
+});
+
+test("validateReportV4 accepts either supervisor_is_parent value (PR 9 owns parentage)", () => {
+  // Supervisor-parentage is deferred to PR 9; PR 2 records the honest current
+  // state as a boolean rather than gating on it. A non-boolean is still rejected.
+  assert.doesNotThrow(() =>
+    validateReportV4(validCloudReportV4({ worker: { supervisor_is_parent: false, heartbeat_recent: true } })),
+  );
+  const badType = validCloudReportV4({
+    worker: { supervisor_is_parent: "yes" as unknown as boolean, heartbeat_recent: true },
+  });
+  assert.throws(() => validateReportV4(badType), /supervisor_is_parent must be a boolean/);
+});
+
+test("validateReportV4 rejects false covered_repo/isolation proofs on cloud evidence", () => {
+  const repo = validCloudReportV4({
+    covered_repo: { name: "proliferate-e2e/e2e-fixture", commit: "c".repeat(40), no_credential_in_remote: false as unknown as true },
+  });
+  assert.throws(() => validateReportV4(repo), /no_credential_in_remote must be true/);
+
+  const isolation = validCloudReportV4({
+    isolation: { actor_b_denied: true, runtime_rejects_missing: false as unknown as true, runtime_rejects_actor_b: true },
+  });
+  assert.throws(() => validateReportV4(isolation), /runtime_rejects_missing must be true/);
+});
+
+test("validateReportV4 rejects a green cloud cell whose cleanup has a false deletion flag or a failure", () => {
+  const failed = validCloudReportV4({ cleanup: { ...validCloudCellEvidence().cleanup, failed: 1 } });
+  assert.throws(() => validateReportV4(failed), /cleanup\.failed must be 0/);
+
+  const incomplete = validCloudReportV4({
+    cleanup: { ...validCloudCellEvidence().cleanup, sandboxes_deleted: false },
+  });
+  assert.throws(() => validateReportV4(incomplete), /cleanup is incomplete/);
+});
+
+test("validateReportV4 reuses the shared litellm invariant checks for cloud evidence", () => {
+  const report = validCloudReportV4({
+    litellm: { ...validCloudCellEvidence().litellm, prompt_tokens: 10, completion_tokens: 3, total_tokens: 999 },
+  });
+  assert.throws(() => validateReportV4(report), /token counts are internally inconsistent/);
+});
+
+test("validateReportV4 accepts a failed CLOUD-PROVISION-1 cell whose cleanup evidence records its own failure", () => {
+  const report = validCloudReportV4({ cleanup: { ...validCloudCellEvidence().cleanup, failed: 1, sandboxes_deleted: false } });
+  report.run.behavior = "strict";
+  report.candidate_build = STRICT_CB;
+  report.results[0] = {
+    ...report.results[0],
+    status: "failed",
+    reason: { code: "scenario_failure", message: "cleanup did not fully reconcile (failed=1)" },
+  };
+  const byStatus = Object.fromEntries(ALL_FINAL_STATUSES.map((status) => [status, 0])) as Record<
+    FinalTestStatus,
+    number
+  >;
+  byStatus.failed = 1;
+  report.summary.by_status = byStatus;
+  report.summary.intended_exit_code = 1;
+  report.verdict.status = "selected_cells_failed";
+  withDerivedReasons(report as unknown as TestRunReportV3);
+  validateReportV4(report);
+});
+
+test("validateReportV4 rejects local_config_matrix harness outside the closed catalog set", () => {
+  const report = worldBackedLocalReportV4(
+    "T3-CFG-1",
+    { harness: "gpt5" },
+    validConfigMatrixEvidence({ harness: "gpt5" as LocalConfigMatrixEvidenceV1["harness"] }),
+  );
+  assert.throws(() => validateReportV4(report), /harness must be one of/);
+});
+
+function validSessionTabsEvidence(
+  overrides: Partial<LocalSessionTabsEvidenceV1> = {},
+): LocalSessionTabsEvidenceV1 {
+  return {
+    kind: "local_session_tabs",
+    artifact_ids: ["server/linux-x64"],
+    server_version: "0.3.27",
+    anyharness_version: "0.3.27",
+    harness: "claude",
+    workspace_id_hash: "a".repeat(64),
+    empty_switch_session_replaced: true,
+    messaged_switch_new_tab: true,
+    same_harness_model_change_in_session: true,
+    reload_preserved: true,
+    session_id_hashes: ["b".repeat(64), "c".repeat(64), "d".repeat(64)],
+    cleanup: { ...CLEANUP_OK },
+    ...overrides,
+  };
+}
+
+test("validateReportV4 accepts a valid local_session_tabs cell", () => {
+  const report = worldBackedLocalReportV4("T3-SESSION-1", {}, validSessionTabsEvidence());
+  validateReportV4(report);
+});
+
+for (const flag of [
+  "empty_switch_session_replaced",
+  "messaged_switch_new_tab",
+  "same_harness_model_change_in_session",
+  "reload_preserved",
+] as const) {
+  test(`validateReportV4 rejects local_session_tabs with ${flag} !== true`, () => {
+    const report = worldBackedLocalReportV4(
+      "T3-SESSION-1",
+      {},
+      validSessionTabsEvidence({ [flag]: false } as Partial<LocalSessionTabsEvidenceV1>),
+    );
+    assert.throws(() => validateReportV4(report), new RegExp(`${flag} must be true`));
+  });
+}
+
+test("validateReportV4 rejects local_session_tabs empty or duplicate session_id_hashes", () => {
+  const empty = worldBackedLocalReportV4(
+    "T3-SESSION-1",
+    {},
+    validSessionTabsEvidence({ session_id_hashes: [] }),
+  );
+  assert.throws(() => validateReportV4(empty), /session_id_hashes must be a non-empty array/);
+
+  const duplicate = worldBackedLocalReportV4(
+    "T3-SESSION-1",
+    {},
+    validSessionTabsEvidence({ session_id_hashes: ["b".repeat(64), "b".repeat(64)] }),
+  );
+  assert.throws(() => validateReportV4(duplicate), /session_id_hashes has a duplicate entry/);
+});
+
+function validMcpIntegrationEvidence(
+  overrides: Partial<LocalMcpIntegrationEvidenceV1> = {},
+): LocalMcpIntegrationEvidenceV1 {
+  return {
+    kind: "local_mcp_integration",
+    artifact_ids: ["server/linux-x64"],
+    server_version: "0.3.27",
+    anyharness_version: "0.3.27",
+    harness: "opencode",
+    model_id: "claude-haiku-4-5",
+    workspace_id_hash: "a".repeat(64),
+    session_id_hash: "b".repeat(64),
+    integration_namespace: "exa",
+    tool_name: "exa_search",
+    audit_event_id_hash: "c".repeat(64),
+    audit_ok: true,
+    cleanup: { ...CLEANUP_OK },
+    ...overrides,
+  };
+}
+
+test("validateReportV4 accepts a valid local_mcp_integration cell", () => {
+  const report = worldBackedLocalReportV4("T3-INT-1", { harness: "opencode" }, validMcpIntegrationEvidence());
+  validateReportV4(report);
+});
+
+test("validateReportV4 rejects local_mcp_integration audit_ok !== true", () => {
+  const report = worldBackedLocalReportV4(
+    "T3-INT-1",
+    { harness: "opencode" },
+    validMcpIntegrationEvidence({ audit_ok: false as unknown as true }),
+  );
+  assert.throws(() => validateReportV4(report), /audit_ok must be true/);
+});
+
+test("validateReportV4 rejects local_mcp_integration unsafe namespace/tool_name", () => {
+  const badNamespace = worldBackedLocalReportV4(
+    "T3-INT-1",
+    { harness: "opencode" },
+    validMcpIntegrationEvidence({ integration_namespace: "../escape" }),
+  );
+  assert.throws(() => validateReportV4(badNamespace), /integration_namespace is missing or unsafe/);
+
+  const badTool = worldBackedLocalReportV4(
+    "T3-INT-1",
+    { harness: "opencode" },
+    validMcpIntegrationEvidence({ tool_name: "" }),
+  );
+  assert.throws(() => validateReportV4(badTool), /tool_name is missing or unsafe/);
+});
+
+test("validateReportV4 rejects local_mcp_integration a malformed audit_event_id_hash", () => {
+  const report = worldBackedLocalReportV4(
+    "T3-INT-1",
+    { harness: "opencode" },
+    validMcpIntegrationEvidence({ audit_event_id_hash: "not-a-hash" }),
+  );
+  assert.throws(() => validateReportV4(report), /audit_event_id_hash must be a lowercase 64-hex digest/);
+});
+
+test("validateReportV4 rejects a green cell of a LOCAL_FUNCTIONAL_EVIDENCE_SCENARIOS scenario with null evidence in a world-backed run", () => {
+  const report = worldBackedLocalReportV4("T3-CFG-1", { harness: "grok" }, null);
+  assert.throws(() => validateReportV4(report), /requires complete evidence/);
+});
+
+// ── LQF-005: cross-field evidence↔cell binding ──────────────────────────────
+
+test("LQF-005 (a): structurally valid evidence of the WRONG kind for the scenario is rejected", () => {
+  // A T3-SESSION cell carrying a structurally valid local_route_turn object
+  // (right shape, wrong scenario) must fail closed on the scenario→kind bind.
+  const report = worldBackedLocalReportV4("T3-SESSION-1", { harness: "codex" }, validRouteTurnEvidence({ harness: "codex" }));
+  assert.throws(
+    () => validateReportV4(report),
+    /kind is "local_route_turn" but T3-SESSION-1 requires "local_session_tabs"/,
+  );
+});
+
+test("LQF-005 (b): AUTHROUTE journey must match the cell's route dimension", () => {
+  // A user-key (per-harness, LOCAL-3) cell carrying LOCAL-6 journey evidence.
+  const asL6 = worldBackedLocalReportV4(
+    "T3-AUTHROUTE-1",
+    { harness: "codex" },
+    userKeyRouteTurnEvidence({ journey: "LOCAL-6" }),
+  );
+  assert.throws(() => validateReportV4(asL6), /journey is "LOCAL-6" but the cell's dimensions .* require "LOCAL-3"/);
+
+  // A route-change (LOCAL-6) cell carrying LOCAL-3 journey evidence.
+  const asL3 = worldBackedLocalReportV4(
+    "T3-AUTHROUTE-1",
+    { route: "change" },
+    userKeyRouteTurnEvidence({ journey: "LOCAL-3", route_change: null }),
+  );
+  assert.throws(() => validateReportV4(asL3), /journey is "LOCAL-3" but the cell's dimensions .* require "LOCAL-6"/);
+});
+
+test("LQF-005 (c): evidence harness disagreeing with the cell's harness dimension is rejected", () => {
+  const report = worldBackedLocalReportV4("T3-INT-1", { harness: "opencode" }, validMcpIntegrationEvidence({ harness: "grok" }));
+  assert.throws(
+    () => validateReportV4(report),
+    /harness is "grok" but the cell's dimensions name harness "opencode"/,
+  );
+});
+
+test("LQF-005 (d): artifact_ids naming an artifact outside the report's candidate_build are rejected", () => {
+  const report = worldBackedLocalReportV4(
+    "T3-CHAT-1",
+    { harness: "codex" },
+    validRouteTurnEvidence({ artifact_ids: ["server/linux-x64", "server/some-other-build"] }),
+  );
+  assert.throws(
+    () => validateReportV4(report),
+    /artifact_ids names "server\/some-other-build", which is not an artifact of this report's candidate_build/,
+  );
+});
+
+test("validateReportV4 exempts the diagnostic (non-world-backed) path from complete-evidence requirements", () => {
+  const report = worldBackedLocalReportV4("T3-CFG-1", { harness: "grok" }, null);
+  report.candidate_build = null;
+  validateReportV4(report);
+});
+
+test("sanitizeCellEvidence redacts secrets in cloud evidence so validation then rejects the mangled value", () => {
+  const secret = "sk-live-cloud-leaked";
+  const evidence = validCloudCellEvidence({ model_id: `claude-haiku-4-5-${secret}` });
+  const sanitized = sanitizeCellEvidence(evidence, [secret]) as CloudProvisionTurnEvidenceV1;
+  assert.match(sanitized.model_id, /\[REDACTED\]/);
+  assert.throws(() => validateReportV4(validCloudReportV4({ model_id: sanitized.model_id })), /is missing or unsafe/);
+});
+
+test("sanitizeCellEvidence does not touch local_workspace_turn evidence when sanitizing a cloud kind", () => {
+  const localEvidence = validCellEvidence();
+  const sanitizedLocal = sanitizeCellEvidence(localEvidence, ["unrelated-secret"]);
+  assert.deepEqual(sanitizedLocal, localEvidence);
+});
+
+test("writeReportV4 persists a green CLOUD-PROVISION-1 cell with complete cloud_provision_turn evidence", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "q1-evidence-v4-cloud-"));
+  try {
+    const written = await writeReportV4(dir, validCloudReportV4());
+    const parsed = JSON.parse(await readFile(written, "utf8"));
+    assert.equal(parsed.schema_version, 4);
+    assert.equal(parsed.results[0].evidence.kind, "cloud_provision_turn");
+    assert.equal(parsed.results[0].evidence.cleanup.failed, 0);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

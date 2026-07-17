@@ -3,9 +3,10 @@ use std::time::Duration;
 
 use super::default_branch;
 use super::executor::resolve_git_repo_root;
+pub use super::operations::clone::CloneError;
 use super::operations::{
-    branches, commit, commit_all, diff, diff_files, push, revert_patches, staging, status,
-    status_summary, worktrees,
+    branches, clone, commit, commit_all, diff, diff_files, push, revert_patches, scratch, staging,
+    status, status_summary, worktrees,
 };
 use super::types::{
     CommitError, GitBranch, GitBranchDiffFilesResult, GitDiffError, GitDiffResult, GitDiffScope,
@@ -96,6 +97,12 @@ impl GitService {
         worktrees::create_detached_worktree(source_repo_root, target_path, base_branch)
     }
 
+    /// Clone `clone_url` into `target_path` using the ambient local Git
+    /// credential chain. Auth failures are classified as `CloneError::AuthRequired`.
+    pub fn clone_repository(clone_url: &str, target_path: &str) -> Result<(), CloneError> {
+        clone::clone_repository(clone_url, target_path)
+    }
+
     pub fn create_worktree_at_ref(
         source_repo_root: &str,
         target_path: &str,
@@ -107,6 +114,62 @@ impl GitService {
 
     pub fn prune_stale_worktrees_if_possible(cwd: &Path) {
         worktrees::prune_stale_worktrees_if_possible(cwd)
+    }
+
+    /// Initialize one blank local Git repository (Workflow scratch placement):
+    /// branch `main`, stable non-personal identity, one empty initial commit, no
+    /// remote.
+    pub fn init_scratch_repository(path: &str) -> anyhow::Result<()> {
+        scratch::init_scratch_repository(path)
+    }
+
+    /// The short branch name of `checkout_path`'s HEAD, or `None` when detached.
+    pub fn checkout_current_branch(checkout_path: &Path) -> anyhow::Result<Option<String>> {
+        scratch::current_branch(checkout_path)
+    }
+
+    /// The number of commits reachable from HEAD.
+    pub fn head_commit_count(checkout_path: &Path) -> anyhow::Result<u64> {
+        scratch::head_commit_count(checkout_path)
+    }
+
+    /// Whether the repository at `checkout_path` has no configured remotes.
+    pub fn has_no_remotes(checkout_path: &Path) -> anyhow::Result<bool> {
+        scratch::has_no_remotes(checkout_path)
+    }
+
+    /// Whether HEAD points at an empty tree (an empty initial commit).
+    pub fn head_tree_is_empty(checkout_path: &Path) -> anyhow::Result<bool> {
+        scratch::head_tree_is_empty(checkout_path)
+    }
+
+    /// The absolute common git directory shared by a worktree and its source.
+    pub fn common_git_dir(checkout_path: &Path) -> anyhow::Result<String> {
+        scratch::common_git_dir(checkout_path)
+    }
+
+    /// Whether `checkout_path` is a linked worktree (not the primary checkout).
+    pub fn is_linked_worktree(checkout_path: &Path) -> anyhow::Result<bool> {
+        scratch::is_linked_worktree(checkout_path)
+    }
+
+    /// Whether the repository at `checkout_path` carries the stable AnyHarness
+    /// scratch identity (part of the exact scratch initialization contract).
+    pub fn scratch_identity_matches(checkout_path: &Path) -> anyhow::Result<bool> {
+        scratch::scratch_identity_matches(checkout_path)
+    }
+
+    /// Create a linked worktree for a Workflow placement at the exact base OID.
+    /// Unlike [`Self::create_worktree`], its failure carries no raw Git stderr —
+    /// the frozen placement contract excludes raw Git stderr from stored/logged
+    /// detail, so this seam returns a correlation-only bounded error.
+    pub fn create_workflow_worktree(
+        source_repo_root: &str,
+        target_path: &str,
+        new_branch: &str,
+        base_oid: &str,
+    ) -> anyhow::Result<()> {
+        worktrees::create_workflow_worktree(source_repo_root, target_path, new_branch, base_oid)
     }
 
     pub fn remove_worktree_force(

@@ -42,6 +42,8 @@ class CloudSandboxValue:
     ready_at: datetime | None
     last_health_at: datetime | None
     destroyed_at: datetime | None
+    desired_anyharness_version: str | None
+    desired_worker_version: str | None
 
 
 def cloud_sandbox_value(row: CloudSandbox) -> CloudSandboxValue:
@@ -69,6 +71,8 @@ def cloud_sandbox_value(row: CloudSandbox) -> CloudSandboxValue:
         ready_at=row.ready_at,
         last_health_at=row.last_health_at,
         destroyed_at=row.destroyed_at,
+        desired_anyharness_version=row.desired_anyharness_version,
+        desired_worker_version=row.desired_worker_version,
     )
 
 
@@ -119,10 +123,13 @@ async def load_cloud_sandbox_by_id(
     sandbox_id: UUID,
     *,
     lock_row: bool = False,
+    refresh: bool = False,
 ) -> CloudSandboxValue | None:
     stmt = select(CloudSandbox).where(CloudSandbox.id == sandbox_id)
     if lock_row:
         stmt = stmt.with_for_update()
+    if refresh:
+        stmt = stmt.execution_options(populate_existing=True)
     row = (await db.execute(stmt)).scalar_one_or_none()
     return cloud_sandbox_value(row) if row is not None else None
 
@@ -298,5 +305,28 @@ async def mark_cloud_sandbox_destroyed(
     del last_error
     row.destroyed_at = now
     row.updated_at = now
+    await db.flush()
+    return cloud_sandbox_value(row)
+
+
+async def set_cloud_sandbox_desired_versions(
+    db: AsyncSession,
+    sandbox_id: UUID,
+    *,
+    desired_anyharness_version: str | None,
+    desired_worker_version: str | None,
+) -> CloudSandboxValue | None:
+    """Overlay target-scoped desired versions on one sandbox (decision 1).
+
+    ``None`` clears the override so the target inherits the global pin again;
+    a value overrides it for this sandbox only. Touching sandbox A never
+    reads or writes any other sandbox's row.
+    """
+    row = await db.get(CloudSandbox, sandbox_id)
+    if row is None:
+        return None
+    row.desired_anyharness_version = desired_anyharness_version
+    row.desired_worker_version = desired_worker_version
+    row.updated_at = utcnow()
     await db.flush()
     return cloud_sandbox_value(row)

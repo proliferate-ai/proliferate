@@ -31,6 +31,7 @@
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use serde::Deserialize;
@@ -155,6 +156,7 @@ pub async fn converge(
     store: &WorkerStore,
     update: &RuntimeUpdatePlan,
 ) -> Result<(), WorkerError> {
+    warn_legacy_swap_deprecated();
     let (binary_path, launcher_path, workdir) = resolve_paths(config)?;
     let target = artifact_target()?;
     info!(
@@ -225,6 +227,27 @@ pub async fn converge(
         Err(WorkerError::AnyharnessUpdateHealthGate {
             expected: update.desired_version.clone(),
         })
+    }
+}
+
+/// One-time deprecation notice emitted the first time the legacy Worker-owned
+/// in-place AnyHarness swap actually runs. The swap is FENCED (decision 7): the
+/// server stops emitting `anyharness_update_enabled = true` for supervisor-owned
+/// targets, so a supervisor-owned Worker routes divergence through the mailbox
+/// and never reaches this path. It stays compilable behind its existing gate
+/// only for the bridge window; its deletion is a named follow-up once every
+/// target is Supervisor-owned. A Worker configured with a mailbox
+/// (`supervisor_update_request_dir`) never invokes `converge`, so this warning
+/// only ever fires for a still-legacy target.
+fn warn_legacy_swap_deprecated() {
+    static WARNED: AtomicBool = AtomicBool::new(false);
+    if !WARNED.swap(true, Ordering::Relaxed) {
+        warn!(
+            "DEPRECATED: the Worker-owned in-place AnyHarness swap is running on a \
+             non-supervisor-owned target. Managed runtime updates are moving to the \
+             Supervisor mailbox; this path is fenced and slated for removal after the \
+             bridge window."
+        );
     }
 }
 

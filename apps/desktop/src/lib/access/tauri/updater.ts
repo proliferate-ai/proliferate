@@ -1,3 +1,5 @@
+import { prepareDesktopDispatchWorkerUpdate } from "@/lib/access/tauri/cloud-worker";
+
 /** Opaque type for the update handle -- downstream code uses this without importing @tauri-apps/*. */
 export type UpdateHandle = unknown;
 
@@ -38,7 +40,7 @@ export async function downloadAndInstall(
   ) => void,
 ): Promise<void> {
   const u = update as {
-    downloadAndInstall: (
+    download: (
       cb?: (
         event:
           | { event: "Started"; data: { contentLength?: number } }
@@ -46,27 +48,34 @@ export async function downloadAndInstall(
           | { event: "Finished" },
       ) => void,
     ) => Promise<void>;
+    install: () => Promise<void>;
   };
-  if (!onProgress) {
-    await u.downloadAndInstall();
-    return;
-  }
   // The plugin emits a DownloadEvent union: contentLength arrives once on
   // "Started", then each "Progress" carries only its own chunk length. Capture
   // the total up front so we can forward the (chunkLength, contentLength) tuple.
   let contentLength: number | undefined;
-  await u.downloadAndInstall((event) => {
-    switch (event.event) {
-      case "Started":
-        contentLength = event.data.contentLength;
-        break;
-      case "Progress":
-        onProgress(event.data.chunkLength, contentLength);
-        break;
-      case "Finished":
-        break;
-    }
-  });
+  await u.download(
+    onProgress
+      ? (event) => {
+          switch (event.event) {
+            case "Started":
+              contentLength = event.data.contentLength;
+              break;
+            case "Progress":
+              onProgress(event.data.chunkLength, contentLength);
+              break;
+            case "Finished":
+              break;
+          }
+        }
+      : undefined,
+  );
+
+  // On Windows, updater installation exits the process directly and bypasses
+  // Tauri's RunEvent::Exit. Stop and reap the Worker after download but before
+  // install so every updater exit path releases the credential database lock.
+  await prepareDesktopDispatchWorkerUpdate();
+  await u.install();
 }
 
 export async function relaunch(): Promise<void> {

@@ -48,6 +48,9 @@ SERVICE_DB_SESSION_OPS_METHODS = {
 API_DB_METHODS = {"execute", "commit", "rollback", "add", "delete", "refresh"}
 STORE_FORBIDDEN_SESSION_METHODS = {"commit", "rollback"}
 RAW_HTTP_MODULES = {"httpx", "requests"}
+# Named product concerns that own service orchestration outside a generic
+# service.py retain the same database-boundary rules even when relocated.
+OWNED_SERVICE_CONCERN_FILES = {"workflow_runtime.py"}
 # Lane 6 split service.py into top-level agent-auth concern modules. Until those
 # concerns move to documented subdomains or entry points, keep service boundary
 # debt visible for the same layer law that applies to service.py.
@@ -178,7 +181,12 @@ def classify_path(path: Path) -> SourceKind:
     return SourceKind(
         is_api=is_product and name == "api.py",
         is_service=(
-            is_product and (name == "service.py" or is_agent_auth_service_concern)
+            is_product
+            and (
+                name == "service.py"
+                or name in OWNED_SERVICE_CONCERN_FILES
+                or is_agent_auth_service_concern
+            )
         ),
         is_service_boundary_debt=relative in SERVICE_BOUNDARY_DEBT_MODULES,
         is_domain=is_product and "domain" in path.parts,

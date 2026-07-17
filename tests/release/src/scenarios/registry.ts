@@ -9,11 +9,14 @@ import { t3Update1 } from "./t3-update-1.js";
 import { t3SecMat1 } from "./t3-sec-mat-1.js";
 import { t3Repo1 } from "./t3-repo-1.js";
 import { t3Int1 } from "./t3-int-1.js";
+import { t3Authroute1 } from "./t3-authroute-1.js";
+import { t3Session1 } from "./t3-session-1.js";
 import { t3Bill1 } from "./t3-bill-1.js";
 import { t3Bill2 } from "./t3-bill-2.js";
 import { t3Bill3 } from "./t3-bill-3.js";
 import { t3Bill4 } from "./t3-bill-4.js";
 import { t4Cloud1 } from "./upgrade/t4-cloud-1.js";
+import { t4Runtime1 } from "./upgrade/t4-runtime-1.js";
 import { t4Desktop1 } from "./upgrade/t4-desktop-1.js";
 import { t4Sh1 } from "./upgrade/t4-sh-1.js";
 import { t4Sh2 } from "./upgrade/t4-sh-2.js";
@@ -23,8 +26,11 @@ import { t3Sh4 } from "./selfhost/t3-sh-4.js";
 import { t3Sh5 } from "./selfhost/t3-sh-5.js";
 import { localWorldSmoke1 } from "./local-world-smoke-1.js";
 import { t2Bill } from "./tier2/t2-bill.js";
-import { t2AuthOrg } from "./tier2/t2-auth-org.js";
 import { selfhostInstall1 } from "./selfhost-install-1.js";
+import { cloudProvision1 } from "./cloud-provision-1.js";
+import { selfhostIsolation1 } from "./selfhost-isolation-1.js";
+import { selfhostQual1 } from "./selfhost-qual-1.js";
+import { selfhostCfn1 } from "./selfhost-cfn-1.js";
 
 /**
  * The tier-3 first wave (specs/developing/testing/scenarios.md#tier-3--first-wave),
@@ -55,6 +61,8 @@ export const SCENARIOS: readonly ScenarioDefinition[] = [
   t3SecMat1,
   t3Repo1,
   t3Int1,
+  t3Authroute1,
+  t3Session1,
   t3Bill1,
   t3Bill2,
   t3Bill3,
@@ -64,13 +72,17 @@ export const SCENARIOS: readonly ScenarioDefinition[] = [
   t3Sh4,
   t3Sh5,
   t4Cloud1,
+  t4Runtime1,
   t4Desktop1,
   t4Sh1,
   t4Sh2,
   localWorldSmoke1,
   t2Bill,
-  t2AuthOrg,
   selfhostInstall1,
+  cloudProvision1,
+  selfhostIsolation1,
+  selfhostQual1,
+  selfhostCfn1,
 ];
 
 export function allScenarioIds(): string[] {

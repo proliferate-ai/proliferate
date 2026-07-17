@@ -1,6 +1,9 @@
 import { CLOUD_COMPUTE_TEMPORARILY_DISABLED } from "#product/lib/domain/capabilities/cloud-compute";
 import type {
   DeploymentMode,
+  GitHubRepositoryAccessCapability,
+  ManagedCloudCapability,
+  OperatorCapabilityStatus,
   PricingCapability,
   ServerCapabilityContract,
   SupportCapability,
@@ -30,8 +33,16 @@ export interface AppCapabilities {
   usageMeteringEnabled: boolean;
   /** Cloud compute (cloud workspaces, remote access) is usable. */
   cloudComputeEnabled: boolean;
+  /** Operator readiness of GitHub repository discovery/authority. */
+  githubRepositoryAccessStatus: OperatorCapabilityStatus;
+  /** Display name (App slug) for GitHub repository access, when ready. */
+  githubRepositoryAccessDisplayName: string | null;
+  /** Operator readiness of managed-Cloud workspace execution. */
+  managedCloudStatus: OperatorCapabilityStatus;
   /** The bundled agent LLM gateway is enabled on this server. */
   agentGatewayEnabled: boolean;
+  /** New managed Workflow delivery is enabled by the connected server. */
+  workflowManagedRunsEnabled: boolean;
   /** Server-declared deployment mode. */
   deploymentMode: DeploymentMode;
   /** True when the connected server is not the hosted product. */
@@ -75,6 +86,8 @@ export function resolveEffectiveContract(
 ): ServerCapabilityContract | null {
   if (contract) return contract;
   if (!opts.isOfficialOrigin) return null;
+  // Legacy-ready: an older official server that predates the split contract had
+  // both GitHub repository access and managed Cloud ready.
   return {
     contractVersion: 0,
     deployment: { mode: "hosted_product", displayName: "", logoUrl: null },
@@ -85,8 +98,23 @@ export function resolveEffectiveContract(
     webApp: { available: true, baseUrl: null },
     support: { kind: "vendor", email: opts.fallback.supportEmail, url: null },
     pricing: { available: true, url: opts.fallback.pricingUrl },
+    githubRepositoryAccess: { status: "ready", provider: "github_app", displayName: null },
+    managedCloud: { status: "ready", repositoryAuthority: "github_app", source: "legacy" },
+    workflowManagedRuns: false,
   };
 }
+
+const DISABLED_GITHUB_ACCESS: GitHubRepositoryAccessCapability = {
+  status: "disabled",
+  provider: null,
+  displayName: null,
+};
+
+const DISABLED_MANAGED_CLOUD: ManagedCloudCapability = {
+  status: "disabled",
+  repositoryAuthority: null,
+  source: "legacy",
+};
 
 /**
  * Pure mapping from the server capability contract (plus reachability) to the
@@ -110,7 +138,11 @@ export function deriveAppCapabilities(
       billingEnabled: false,
       usageMeteringEnabled: false,
       cloudComputeEnabled: false,
+      githubRepositoryAccessStatus: "disabled",
+      githubRepositoryAccessDisplayName: null,
+      managedCloudStatus: "disabled",
       agentGatewayEnabled: false,
+      workflowManagedRunsEnabled: false,
       deploymentMode: "self_managed",
       isSelfManaged: true,
       serverDisplayName: connectedServerHost,
@@ -122,6 +154,8 @@ export function deriveAppCapabilities(
   }
 
   const hosted = contract.deployment.mode === "hosted_product";
+  const githubRepositoryAccess = contract.githubRepositoryAccess ?? DISABLED_GITHUB_ACCESS;
+  const managedCloud = contract.managedCloud ?? DISABLED_MANAGED_CLOUD;
 
   return {
     reachable,
@@ -130,7 +164,11 @@ export function deriveAppCapabilities(
     usageMeteringEnabled: reachable && contract.usageMetering,
     cloudComputeEnabled:
       reachable && contract.cloudWorkspaces && !CLOUD_COMPUTE_TEMPORARILY_DISABLED,
+    githubRepositoryAccessStatus: githubRepositoryAccess.status,
+    githubRepositoryAccessDisplayName: githubRepositoryAccess.displayName,
+    managedCloudStatus: managedCloud.status,
     agentGatewayEnabled: reachable && contract.agentGateway,
+    workflowManagedRunsEnabled: reachable && contract.workflowManagedRuns === true,
     deploymentMode: contract.deployment.mode,
     isSelfManaged: !hosted,
     serverDisplayName: hosted

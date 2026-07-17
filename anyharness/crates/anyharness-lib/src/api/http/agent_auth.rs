@@ -6,12 +6,14 @@
 //! where every session launch reads it fresh.
 
 use anyharness_contract::v1::ApplyAgentAuthStateResponse;
-use axum::{body::Bytes, extract::State, Json};
+use axum::{body::Bytes, extract::State, http::StatusCode, Json};
 
 use super::error::ApiError;
 use crate::app::AppState;
 use crate::domains::agents::route_auth::state::SOURCE_KIND_GATEWAY;
-use crate::domains::agents::route_auth::{apply_state_file, AgentAuthState, RouteAuthError};
+use crate::domains::agents::route_auth::{
+    apply_state_file, clear_state_file, AgentAuthState, RouteAuthError,
+};
 
 #[utoipa::path(
     put,
@@ -54,6 +56,22 @@ pub async fn put_agent_auth_state(
         applied: true,
         revision: document.revision,
     }))
+}
+
+#[utoipa::path(
+    delete,
+    path = "/v1/agent-auth/state",
+    responses(
+        (status = 204, description = "Persisted route state cleared; native auth is active"),
+        (status = 500, description = "State could not be cleared", body = anyharness_contract::v1::ProblemDetails),
+    ),
+    tag = "agent-auth"
+)]
+pub async fn delete_agent_auth_state(
+    State(state): State<AppState>,
+) -> Result<StatusCode, ApiError> {
+    clear_state_file(&state.runtime_home).map_err(map_route_auth_error)?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// Kick a background probe per gateway source in the just-applied document.

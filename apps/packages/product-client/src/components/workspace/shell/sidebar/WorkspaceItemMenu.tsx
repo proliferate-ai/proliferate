@@ -2,13 +2,20 @@ import { useCallback, useRef, useState } from "react";
 import { SHORTCUTS } from "#product/config/shortcuts/registry";
 import {
   Archive,
+  CloudIcon,
   Folder,
   GitBranchIcon,
   GitPullRequest,
+  Link2,
   MoreHorizontal,
   Pencil,
+  RotateCcw,
   Trash,
 } from "@proliferate/ui/icons";
+import type {
+  WorkspaceAvailabilityCommand,
+  WorkspaceAvailabilityCommandKind,
+} from "#product/lib/domain/workspaces/cloud/workspace-availability-commands";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,8 +42,24 @@ interface WorkspaceItemMenuProps {
   onCopyWorkspaceLocation?: () => void;
   onCopyBranchName?: () => void;
   onMarkDone?: () => void;
+  /** Workspace-copy availability commands (PR 5), resolved from the shared
+   * availability command model so this menu and the native menu match. */
+  availabilityCommands?: WorkspaceAvailabilityCommand[];
+  /** Invoked with the command kind when an actionable availability command is
+   * selected. Blocker commands (unsupported Git state) render disabled. */
+  onAvailabilityCommand?: (kind: WorkspaceAvailabilityCommandKind) => void;
   onShowNativeMenu?: (position?: { x: number; y: number }) => Promise<boolean>;
 }
+
+const AVAILABILITY_COMMAND_ICON: Record<WorkspaceAvailabilityCommandKind, typeof CloudIcon> = {
+  "add-cloud-copy": CloudIcon,
+  "open-on-this-mac": Folder,
+  "link-copies": Link2,
+  "relink-existing": Link2,
+  "recreate-on-this-mac": RotateCcw,
+  "unlink-this-mac": Link2,
+  "reconcile-git-state": GitBranchIcon,
+};
 
 /**
  * Three-dot workspace menu (UX spec §2), built on the kit DropdownMenu with
@@ -56,6 +79,8 @@ export function WorkspaceItemMenu({
   onCopyWorkspaceLocation,
   onCopyBranchName,
   onMarkDone,
+  availabilityCommands = [],
+  onAvailabilityCommand,
   onShowNativeMenu,
 }: WorkspaceItemMenuProps) {
   const [fallbackOpen, setFallbackOpen] = useState(false);
@@ -119,6 +144,32 @@ export function WorkspaceItemMenu({
               {getShortcutDisplayLabel(SHORTCUTS.copyWorkspacePath)}
             </DropdownMenuShortcut>
           </DropdownMenuItem>
+        )}
+        {availabilityCommands.length > 0 && (
+          <>
+            <DropdownMenuSeparator />
+            {availabilityCommands.map((command) => {
+              const Icon = AVAILABILITY_COMMAND_ICON[command.kind];
+              return (
+                <DropdownMenuItem
+                  key={command.kind}
+                  onSelect={() => {
+                    onAvailabilityCommand?.(command.kind);
+                  }}
+                >
+                  <Icon className="size-4 text-muted-foreground" />
+                  <span className="min-w-0">
+                    <span className="block">{command.label}</span>
+                    {command.blocker ? (
+                      <span className="block text-xs leading-[1.4] text-muted-foreground">
+                        {command.blocker}
+                      </span>
+                    ) : null}
+                  </span>
+                </DropdownMenuItem>
+              );
+            })}
+          </>
         )}
         {(branchName || onCopyBranchName || onOpenPullRequest) && (
           <>

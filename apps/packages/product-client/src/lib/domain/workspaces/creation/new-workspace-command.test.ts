@@ -26,6 +26,7 @@ const localWorkspace = {
   repoRootId: "repo-root-1",
   currentBranch: "main",
   originalBranch: "main",
+  availability: "available",
   lifecycleState: "active",
   cleanupState: "none",
   createdAt: "2026-01-01T00:00:00.000Z",
@@ -219,13 +220,17 @@ describe("new workspace command targets", () => {
       disabledReason: "Cloud repository settings are loading.",
     });
 
+    // A "configure" state stays actionable (routes into the Cloud action
+    // surface) rather than collapsing to a disabled dead command.
     expect(resolveNewWorkspaceCommandTarget({
       commandKind: "cloud",
       scope,
-      cloudRepoAction: { kind: "configure", label: "Configure cloud" },
-    })).toMatchObject({
+      cloudRepoAction: { kind: "configure", label: "Install Proliferate GitHub App" },
+    })).toEqual({
       commandKind: "cloud",
       cloudActionKind: "configure",
+      target: { gitOwner: "proliferate-ai", gitRepoName: "proliferate" },
+      repoGroupKeyToExpand: "/repos/proliferate",
       disabledReason: null,
     });
 

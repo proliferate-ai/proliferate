@@ -6,7 +6,7 @@ import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/sess
 import type { ConfiguredSessionControlKey } from "#product/lib/domain/chat/session-controls/presentation";
 import { SessionControlIcon } from "#product/components/session-controls/SessionControlIcon";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
-import { Check, ChevronDown } from "@proliferate/ui/icons";
+import { Check } from "@proliferate/ui/icons";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import { ComposerControlButton } from "@proliferate/ui/primitives/ComposerControlButton";
 import { PendingConfigIndicator } from "#product/components/workspace/chat/input/PendingConfigIndicator";
@@ -40,18 +40,10 @@ export function SessionModeControl({
   const triggerIcon = compactTrigger
     ? undefined
     : <SessionControlIcon icon={currentPresentation.icon} className="size-3.5" />;
-  const triggerTrailing = control.pendingState || (compactTrigger && control.settable)
-    ? (
-      <span className="flex items-center gap-1">
-        <PendingConfigIndicator pendingState={control.pendingState} />
-        {compactTrigger && control.settable && (
-          <ChevronDown
-            className="size-3 shrink-0 text-[color:var(--color-composer-control-muted-foreground)]"
-            aria-hidden
-          />
-        )}
-      </span>
-    )
+  // No disclosure chevron on the compact trigger: the mode name alone is the
+  // whole affordance; the popover still opens on click.
+  const triggerTrailing = control.pendingState
+    ? <PendingConfigIndicator pendingState={control.pendingState} />
     : null;
 
   if (!control.settable) {
@@ -64,6 +56,8 @@ export function SessionModeControl({
         detail={triggerDetail}
         trailing={triggerTrailing}
         className="max-w-[12rem]"
+        data-session-mode-trigger=""
+        data-session-mode-selected={currentValue ?? ""}
       />
     );
   }
@@ -80,6 +74,8 @@ export function SessionModeControl({
           title={`${CHAT_MODE_CONTROL_LABELS.cycleHint} (${CHAT_MODE_CONTROL_LABELS.shortcut})`}
           aria-label={`${control.label}: ${currentOption?.label ?? currentDetail ?? ""}`}
           className="max-w-[12rem]"
+          data-session-mode-trigger=""
+          data-session-mode-selected={currentValue ?? ""}
         />
       }
       side="top"
@@ -96,6 +92,7 @@ export function SessionModeControl({
             return (
               <PopoverMenuItem
                 key={option.value}
+                data-session-mode-option={option.value}
                 icon={<SessionControlIcon icon={presentation.icon} className="size-3.5 text-muted-foreground" />}
                 label={presentation.shortLabel ?? option.label}
                 trailing={option.selected ? <Check className="size-3.5 shrink-0 text-foreground/60" /> : null}

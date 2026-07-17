@@ -117,11 +117,31 @@ vi.mock("#product/hooks/cloud/derived/use-cloud-availability-state", () => ({
   useCloudAvailabilityState: () => ({ cloudActive: false, cloudUnavailable: false }),
 }));
 
+vi.mock("#product/hooks/capabilities/derived/use-app-capabilities", () => ({
+  useAppCapabilities: () => ({ managedCloudStatus: "disabled" }),
+}));
+
+const productHostState = vi.hoisted(() => ({
+  desktop: null as object | null,
+}));
+
+vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
+  useProductHost: () => productHostState,
+}));
+
+vi.mock("#product/hooks/workspaces/workflows/use-add-repo", () => ({
+  useAddRepo: () => ({ addRepoFromPath: vi.fn(), isAddingRepo: false }),
+}));
+
 vi.mock("#product/hooks/cloud/facade/use-cloud-billing", () => ({
   useCloudBilling: () => ({ data: null }),
 }));
 
 vi.mock("@proliferate/cloud-sdk-react", () => ({
+  useRemoveCloudRepoEnvironment: () => ({
+    mutateAsync: vi.fn(),
+    isPending: false,
+  }),
   useRepositories: () => ({ data: { repositories: [] }, isPending: false }),
 }));
 
@@ -270,6 +290,7 @@ afterEach(() => {
   cleanup();
   vi.clearAllMocks();
   releaseNoticeState.notice = null;
+  productHostState.desktop = null;
   workspaceUiState.sidebarOpen = true;
 });
 
@@ -280,6 +301,22 @@ function renderMainSidebar() {
     </MemoryRouter>,
   );
 }
+
+describe("MainSidebar host capabilities", () => {
+  it("omits Desktop-only Cowork threads on Web", () => {
+    renderMainSidebar();
+
+    expect(screen.queryByTestId("cowork-threads")).toBeNull();
+  });
+
+  it("shows Cowork threads when the Desktop bridge is available", () => {
+    productHostState.desktop = {};
+
+    renderMainSidebar();
+
+    expect(screen.getByTestId("cowork-threads")).not.toBeNull();
+  });
+});
 
 describe("MainSidebar support modal", () => {
   it("opens the feedback modal from Support", async () => {

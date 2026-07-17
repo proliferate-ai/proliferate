@@ -99,16 +99,21 @@ function readCompleteProbeState() {
     if (!candidateAgent?.harness?.agentProcess?.source) {
       throw new Error(`${agent}: resolved candidate has no fenced agent-process source`);
     }
-    const attestationVersions = agentSnapshots.map((snapshot) => {
-      const version = snapshot.attestation?.version;
-      if (typeof version !== "string" || !version.trim()) {
-        throw new Error(
-          `${agent}.${snapshot.authContext}: successful probe is missing agent-process attestation version`,
-        );
-      }
-      return version;
-    });
+    const attestationVersions = agentSnapshots
+      .map((snapshot) => snapshot.attestation?.version)
+      .filter((version) => typeof version === "string" && version.trim());
     const observedVersions = new Set(attestationVersions);
+    const sourceKind = candidateAgent.harness.agentProcess.source.kind;
+    const mayUseFencedPinAttestation = sourceKind === "archive" || sourceKind === "npm";
+    if (attestationVersions.length !== agentSnapshots.length && !(
+      attestationVersions.length === 0 && mayUseFencedPinAttestation
+    )) {
+      const missingSnapshot = agentSnapshots.find((snapshot) => !snapshot.attestation?.version);
+      throw new Error(
+        `${agent}.${missingSnapshot?.authContext ?? "unknown"}: successful probe is missing ` +
+        "agent-process attestation version",
+      );
+    }
     if (observedVersions.size > 1 || (
       observedVersions.size === 1 &&
       !observedVersions.has(candidateAgent.harness.agentProcess.version)

@@ -30,7 +30,7 @@ export interface paths {
         get?: never;
         put: operations["put_agent_auth_state"];
         post?: never;
-        delete?: never;
+        delete: operations["delete_agent_auth_state"];
         options?: never;
         head?: never;
         patch?: never;
@@ -356,6 +356,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/repo-roots/materializations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["materialize_repo_root"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/repo-roots/resolve": {
         parameters: {
             query?: never;
@@ -462,6 +478,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["prepare_repo_root_mobility_destination"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/repo-roots/{repo_root_id}/workspace-materializations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["materialize_workspace_at_ref"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1026,6 +1058,22 @@ export interface paths {
         options?: never;
         head?: never;
         patch: operations["update_terminal_title"];
+        trace?: never;
+    };
+    "/v1/workflow-run-workspaces/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_workflow_run_workspace"];
+        put: operations["put_workflow_run_workspace"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/v1/workflow-runs/{run_id}": {
@@ -2864,6 +2912,7 @@ export interface components {
             agentReconcile: components["schemas"]["AgentReconcileSummary"];
             agentSeed: components["schemas"]["AgentSeedHealth"];
             capabilities: components["schemas"]["RuntimeCapabilities"];
+            executionStoreId: string;
             resourcePressure?: null | components["schemas"]["RuntimeResourcePressure"];
             runtimeHome: string;
             status: string;
@@ -3018,6 +3067,44 @@ export interface components {
         };
         MarkReviewRevisionReadyRequest: {
             revisedPlanId?: string | null;
+        };
+        MaterializeRepoRootRequest: {
+            /** @description Absolute destination path selected by the user-facing host. */
+            destinationPath: string;
+            mode: components["schemas"]["RepoRootMaterializationMode"];
+            /** @description Stable caller idempotency key. */
+            operationId: string;
+            repository: components["schemas"]["MaterializeRepositoryTarget"];
+        };
+        MaterializeRepoRootResponse: {
+            operationId: string;
+            outcome: components["schemas"]["RepoRootMaterializationOutcome"];
+            repoRoot: components["schemas"]["RepoRoot"];
+        };
+        /**
+         * @description The expected identity + fetch source for a repository the runtime should
+         *     acquire. `clone_url` may be HTTPS or SSH; the runtime relies solely on the
+         *     local Git credential chain to authenticate.
+         */
+        MaterializeRepositoryTarget: {
+            cloneUrl: string;
+            name: string;
+            owner: string;
+            provider: components["schemas"]["RepositoryProvider"];
+        };
+        MaterializeWorkspaceAtRefRequest: {
+            branchName: string;
+            destinationId?: string | null;
+            headSha: string;
+            /** @description Stable caller idempotency key. */
+            operationId: string;
+            preferredWorkspaceName?: string | null;
+        };
+        MaterializeWorkspaceAtRefResponse: {
+            observedHeadSha: string;
+            operationId: string;
+            outcome: components["schemas"]["WorkspaceMaterializationOutcome"];
+            workspace: components["schemas"]["Workspace"];
         };
         McpElicitationBooleanField: components["schemas"]["McpElicitationFieldBase"];
         McpElicitationField: (components["schemas"]["McpElicitationTextField"] & {
@@ -3657,6 +3744,19 @@ export interface components {
             workspaceId: string;
         };
         /**
+         * @description `PUT /v1/workflow-run-workspaces/{runId}` body. The path `runId` is the
+         *     canonical UUID later reused by the AnyHarness run and Cloud invocation; it is
+         *     never carried in the body.
+         */
+        PutWorkflowRunWorkspaceRequest: {
+            placement: components["schemas"]["WorkflowWorkspacePlacementRequest"];
+            /**
+             * Format: int32
+             * @description Exactly `1`.
+             */
+            schemaVersion: number;
+        };
+        /**
          * @description A raw ACP session configuration option as exposed by the active session.
          *
          *     This is the transport-fidelity layer. It should match the live ACP state as
@@ -3781,6 +3881,21 @@ export interface components {
         };
         /** @enum {string} */
         RepoRootKind: "external" | "managed";
+        /**
+         * @description Acquisition mode. Only `clone_or_adopt` is supported: clone into a
+         *     non-existent/empty destination, or adopt an existing matching main checkout.
+         * @enum {string}
+         */
+        RepoRootMaterializationMode: "clone_or_adopt";
+        /** @enum {string} */
+        RepoRootMaterializationOutcome: "cloned" | "adopted" | "reused";
+        /**
+         * @description The single supported provider for repository acquisition today. Kept as a
+         *     closed enum so callers cannot request an unsupported host and the wire stays
+         *     forward-compatible.
+         * @enum {string}
+         */
+        RepositoryProvider: "github";
         ResizeTerminalRequest: {
             /** Format: int32 */
             cols: number;
@@ -4825,7 +4940,57 @@ export interface components {
             updatedAt: string;
             workspaceId: string;
         };
+        /** @description `PUT`/`GET` response for a Workflow run workspace materialization. */
+        WorkflowRunWorkspaceResponse: {
+            createdAt: string;
+            /**
+             * @description A bounded, secret-free failure code, present only when `status` is
+             *     `failed`.
+             */
+            failureCode?: string | null;
+            finishedAt?: string | null;
+            placement: components["schemas"]["WorkflowWorkspaceResolvedPlacement"];
+            runId: string;
+            /** Format: int32 */
+            schemaVersion: number;
+            status: components["schemas"]["WorkflowWorkspaceStatus"];
+            updatedAt: string;
+            /** @description The durable ordinary workspace id, present once the artifact exists. */
+            workspaceId?: string | null;
+        };
+        /** @description Strict workflow workspace placement discriminated by `kind`. */
+        WorkflowWorkspacePlacementRequest: {
+            /** @enum {string} */
+            kind: "scratch";
+        } | {
+            baseRef: string;
+            /** @enum {string} */
+            kind: "repositoryWorktree";
+            repoRootId: string;
+        };
+        /**
+         * @description The resolved placement echoed on the response. For a repository worktree it
+         *     exposes the resolved base OID as non-secret correlation; it never exposes
+         *     credentials or arbitrary runtime paths.
+         */
+        WorkflowWorkspaceResolvedPlacement: {
+            /** @enum {string} */
+            kind: "scratch";
+        } | {
+            /** @description Present once the immutable base OID has been resolved and persisted. */
+            baseOid?: string | null;
+            baseRef: string;
+            /** @enum {string} */
+            kind: "repositoryWorktree";
+            repoRootId: string;
+        };
+        /**
+         * @description The durable materialization status.
+         * @enum {string}
+         */
+        WorkflowWorkspaceStatus: "accepted" | "materializing" | "ready" | "failed";
         Workspace: {
+            availability: components["schemas"]["WorkspaceAvailability"];
             cleanupAttemptedAt?: string | null;
             cleanupErrorMessage?: string | null;
             cleanupFailedAt?: string | null;
@@ -4846,6 +5011,13 @@ export interface components {
             surface: components["schemas"]["WorkspaceSurface"];
             updatedAt: string;
         };
+        /**
+         * @description Whether a workspace can currently be operated on. Computed at read time
+         *     from the on-disk checkout, so the frontend can detect a deleted checkout on
+         *     workspace load/select rather than only when a session send fails.
+         * @enum {string}
+         */
+        WorkspaceAvailability: "available" | "workspace_directory_missing";
         /** @enum {string} */
         WorkspaceCleanupOperation: "retire" | "purge";
         /** @enum {string} */
@@ -4868,6 +5040,10 @@ export interface components {
             sourceSessionId: string;
             sourceSessionWorkspaceId?: string | null;
             sourceWorkspaceId?: string | null;
+        } | {
+            /** @enum {string} */
+            kind: "workflow";
+            runId: string;
         };
         /** @enum {string} */
         WorkspaceExecutionPhase: "running" | "awaiting_interaction" | "idle" | "errored";
@@ -4901,6 +5077,8 @@ export interface components {
         WorkspaceKind: "worktree" | "local";
         /** @enum {string} */
         WorkspaceLifecycleState: "active" | "retired";
+        /** @enum {string} */
+        WorkspaceMaterializationOutcome: "created" | "adopted" | "reused";
         WorkspaceMobilityArchive: {
             baseCommitSha: string;
             branchName?: string | null;
@@ -5183,6 +5361,33 @@ export interface operations {
             };
             /** @description Stale revision; persisted state unchanged */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    delete_agent_auth_state: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Persisted route state cleared; native auth is active */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description State could not be cleared */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5943,6 +6148,15 @@ export interface operations {
                     "application/json": components["schemas"]["ProblemDetails"];
                 };
             };
+            /** @description Session execution is controlled by an active workflow run */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
         };
     };
     list_repo_roots: {
@@ -5961,6 +6175,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RepoRoot"][];
+                };
+            };
+        };
+    };
+    materialize_repo_root: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MaterializeRepoRootRequest"];
+            };
+        };
+        responses: {
+            /** @description Acquired repo root */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaterializeRepoRootResponse"];
+                };
+            };
+            /** @description Invalid request or acquisition failure */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Destination/operation conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -6236,6 +6492,60 @@ export interface operations {
             };
         };
     };
+    materialize_workspace_at_ref: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Repo root ID */
+                repo_root_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MaterializeWorkspaceAtRefRequest"];
+            };
+        };
+        responses: {
+            /** @description Materialized workspace at exact ref */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaterializeWorkspaceAtRefResponse"];
+                };
+            };
+            /** @description Invalid request or ref failure */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Repo root not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Branch/head/dirty/busy/operation conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     get_review_assignment_critique: {
         parameters: {
             query?: never;
@@ -6351,6 +6661,15 @@ export interface operations {
                     "application/json": components["schemas"]["ProblemDetails"];
                 };
             };
+            /** @description Session execution is controlled by an active workflow run */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
         };
     };
     send_review_feedback: {
@@ -6383,6 +6702,15 @@ export interface operations {
                     "application/json": components["schemas"]["ProblemDetails"];
                 };
             };
+            /** @description Session execution is controlled by an active workflow run */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
         };
     };
     stop_review: {
@@ -6408,6 +6736,15 @@ export interface operations {
             };
             /** @description Review run not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Session execution is controlled by an active workflow run */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6535,6 +6872,15 @@ export interface operations {
                     "application/json": components["schemas"]["ProblemDetails"];
                 };
             };
+            /** @description Session execution is controlled by an active workflow run */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
         };
     };
     close_session: {
@@ -6560,6 +6906,15 @@ export interface operations {
             };
             /** @description Session not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Session execution is controlled by an active workflow run */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6612,6 +6967,15 @@ export interface operations {
                     "application/json": components["schemas"]["ProblemDetails"];
                 };
             };
+            /** @description Session execution is controlled by an active workflow run */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
         };
     };
     dismiss_session: {
@@ -6637,6 +7001,15 @@ export interface operations {
             };
             /** @description Session not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Session execution is controlled by an active workflow run */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6926,6 +7299,15 @@ export interface operations {
             };
             /** @description Not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Session execution is controlled by an active workflow run */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7252,6 +7634,15 @@ export interface operations {
                     "application/json": components["schemas"]["ProblemDetails"];
                 };
             };
+            /** @description Session execution is controlled by an active workflow run */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
         };
     };
     edit_pending_prompt: {
@@ -7283,6 +7674,15 @@ export interface operations {
             };
             /** @description Session or pending prompt not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Session execution is controlled by an active workflow run */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7324,6 +7724,15 @@ export interface operations {
                     "application/json": components["schemas"]["ProblemDetails"];
                 };
             };
+            /** @description Session execution is controlled by an active workflow run */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
         };
     };
     prompt_session: {
@@ -7353,6 +7762,15 @@ export interface operations {
             };
             /** @description Session not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Session execution is controlled by an active workflow run */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7859,6 +8277,110 @@ export interface operations {
             };
         };
     };
+    get_workflow_run_workspace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Canonical UUID for the workflow run */
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Durable materialization record */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRunWorkspaceResponse"];
+                };
+            };
+            /** @description Non-canonical run ID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unknown workflow run workspace */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    put_workflow_run_workspace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Canonical UUID for the workflow run */
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PutWorkflowRunWorkspaceRequest"];
+            };
+        };
+        responses: {
+            /** @description Exact replay of an identical placement request */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRunWorkspaceResponse"];
+                };
+            };
+            /** @description New durable materialization (status ready or failed) */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRunWorkspaceResponse"];
+                };
+            };
+            /** @description Invalid ID or placement request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Same ID with a different placement request, or the workflow run already claimed this ID before placement acceptance */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Materialization storage failure */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     get_workflow_run: {
         parameters: {
             query?: never;
@@ -7970,7 +8492,7 @@ export interface operations {
                     "application/json": components["schemas"]["ProblemDetails"];
                 };
             };
-            /** @description Same ID with different invocation, or workspace mutation blocked */
+            /** @description Same ID with different invocation, workspace mutation blocked, or a schema-v2 workflow-workspace binding conflict (workflow_workspace_not_ready when this run's materialization is not ready; workflow_workspace_mismatch when the ready materialization's workspace differs from the request) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -8228,6 +8750,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkspacePurgeResponse"];
+                };
+            };
+            /** @description Session execution is controlled by an active workflow run */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -9208,6 +9739,15 @@ export interface operations {
                     "application/json": components["schemas"]["ProblemDetails"];
                 };
             };
+            /** @description Session execution is controlled by an active workflow run */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
         };
     };
     export_workspace_mobility_archive: {
@@ -9237,6 +9777,15 @@ export interface operations {
             };
             /** @description Workspace not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Session execution is controlled by an active workflow run */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -9434,6 +9983,15 @@ export interface operations {
                     "application/json": components["schemas"]["PlanDecisionResponse"];
                 };
             };
+            /** @description Session execution is controlled by an active workflow run */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
         };
     };
     get_plan_document: {
@@ -9488,6 +10046,15 @@ export interface operations {
                     "application/json": components["schemas"]["HandoffPlanResponse"];
                 };
             };
+            /** @description Session execution is controlled by an active workflow run */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
         };
     };
     reject_plan: {
@@ -9515,6 +10082,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlanDecisionResponse"];
+                };
+            };
+            /** @description Session execution is controlled by an active workflow run */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -9557,6 +10133,15 @@ export interface operations {
             };
             /** @description Plan or session not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Session execution is controlled by an active workflow run */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -9714,6 +10299,15 @@ export interface operations {
                     "application/json": components["schemas"]["ProblemDetails"];
                 };
             };
+            /** @description Session execution is controlled by an active workflow run */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
         };
     };
     retry_retire_cleanup: {
@@ -9807,6 +10401,15 @@ export interface operations {
             };
             /** @description Invalid review request */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Session execution is controlled by an active workflow run */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

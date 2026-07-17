@@ -104,6 +104,15 @@ export function HeaderTabsStripRows({
     SHORTCUTS.tabByIndex,
   );
 
+  // Visual chat-tab order (pills/viewers excluded), exposed only through the
+  // qualification testid `data-chat-tab-index` on each tab.
+  const stripIndexBySessionId = new Map<string, number>();
+  for (const shellRow of shellRows) {
+    if (shellRow.kind === "chat" && shellRow.row.kind === "tab") {
+      stripIndexBySessionId.set(shellRow.row.tab.id, stripIndexBySessionId.size);
+    }
+  }
+
   return (
     <>
       {shellRows.map((shellRow, index) => {
@@ -163,6 +172,7 @@ export function HeaderTabsStripRows({
             rowDragProps={canDragTab ? shellDrag.getRowDragProps(rowId) : undefined}
             width={width}
             position={position}
+            stripIndex={stripIndexBySessionId.get(tab.id)}
             dragOffset={dragOffset}
             isDragging={isDragging}
             canDragTab={canDragTab}

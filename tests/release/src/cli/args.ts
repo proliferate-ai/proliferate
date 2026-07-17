@@ -6,6 +6,15 @@ export interface CliArgs {
   desktop: DesktopMode;
   agents: string[] | "all";
   scenarios: string[] | "all";
+  /**
+   * Optional matrix-cell filter: keep only planned cells whose `cell` dimension
+   * is in this list (e.g. `SH-GATEWAY`). Leaf (non-matrix) scenarios are
+   * unaffected. Used to run a single staged cell of a multi-cell scenario in
+   * isolation — e.g. SELFHOST-QUAL-1's SH-GATEWAY on a run-scoped origin
+   * without the fixed-lane SH-GITHUB-AUTH cell. "all" (default) keeps every
+   * planned cell.
+   */
+  cells: string[] | "all";
   behavior: ResultBehavior;
   dryRun: boolean;
   fileIssues: boolean;
@@ -40,6 +49,7 @@ const DEFAULTS = {
   desktop: "web" as DesktopMode,
   agents: "all" as string[] | "all",
   scenarios: "all" as string[] | "all",
+  cells: "all" as string[] | "all",
   dryRun: false,
   fileIssues: false,
   sourceCandidate: false,
@@ -80,6 +90,10 @@ export function parseArgs(argv: readonly string[]): CliArgs {
         // --only is sugar for --scenarios (per the tier-3 build task: "runner
         // should support --only <id>"); both set the same field.
         args.scenarios = parseListFlag(arg, requireValue(argv, i, arg));
+        i += 1;
+        break;
+      case "--cells":
+        args.cells = parseListFlag(arg, requireValue(argv, i, arg));
         i += 1;
         break;
       case "--behavior":
@@ -203,11 +217,15 @@ Usage: pnpm exec tsx src/cli/run.ts --behavior <diagnostic|strict> [flags]
 
 Flags:
   --behavior <diagnostic|strict>  Required. Diagnostic tolerates blocked/expected-fail; strict is a fail-closed gate.
-  --lane <local|staging>     Which target server the runtime lanes talk to (default: local)
+  --lane <local|staging|cloud|selfhost>  Which target the runtime lanes talk to (default: local); "cloud" is the
+                             run-scoped managed-cloud candidate API (CLOUD-PROVISION-1); "selfhost" is the
+                             world-backed self-host lane (PR 7, provisions its own EC2 control plane)
   --desktop <web|native>     Desktop lane to drive (default: web)
   --agents <list|all>        Comma-separated harness kinds, or "all" (default: all)
   --scenarios <list|all>     Comma-separated scenario ids, or "all" (default: all)
   --only <id>                Alias for --scenarios with a single id (e.g. --only T3-WT-1)
+  --cells <list|all>         Narrow MATRIX cells to those whose 'cell' dimension is listed (e.g. SH-GATEWAY);
+                             leaf (non-matrix) cells of a selected scenario are always kept; "all" = no filter (default: all)
   --dry-run                  Plan every selected test (calls plan(), never run()); diagnostic only
   --file-issues              File one GitHub issue per distinct failure via \`gh\` (default: off)
   --output-dir <path>        Where the combined report is written, relative to tests/release/ (default: .output)

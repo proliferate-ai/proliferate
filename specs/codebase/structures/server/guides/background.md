@@ -115,6 +115,12 @@ and are forbidden for work whose loss is a correctness bug. Loose,
 fire-and-forget notifications with explicit at-most-once tolerance may enqueue a
 task directly without the outbox, but the looseness must be deliberate.
 
+Managed Workflow execution is a current outbox consumer with exactly three
+bounded operations: `workflows.deliver`, `workflows.observe`, and
+`workflows.cancel`. Their domain service uses persisted generation CAS so broker
+redelivery and worker crashes repeat the same logical phase rather than minting
+new execution identity.
+
 ## `background/celery_app.py`
 
 The single Celery application every task and the relay import.
@@ -149,9 +155,17 @@ The bridge from the durable outbox to the broker.
 
 - Owns: reading committed outbox rows, dispatching the matching task, and
   marking rows relayed; idempotent so a re-run never double-dispatches a job id.
-- Imports: `db/store` (the outbox store), `celery_app`, task references.
-- Is the only `background/` module that touches a store, and it touches only the
-  outbox store. It carries no domain logic — it routes a row to a task by kind.
+- Imports: `db/store` (the outbox store and fixed-cardinality, read-only
+  operational snapshots), `celery_app`, task references.
+- Is the only `background/` module that touches a store. It carries no product
+  mutation or routing policy beyond the supported task registry. Read-only
+  operational snapshots may expose counts and ages only; they never expose
+  identifiers, request payloads, responses, or credentials.
+
+Managed Workflow relay telemetry includes per-family pending depth and oldest
+age plus current queued/delivering, accepted-nonterminal, pending-cancel,
+unreachable, target-lost, and projection-conflict aggregates. Worker attempt
+metrics contain only the fixed operation and a bounded safe code.
 
 ## `background/tasks/<area>.py`
 
@@ -210,7 +224,8 @@ share `domain/` and the stores.
 - External-process claim/heartbeat/report surfaces are APIs, not workers, and are
   never moved behind the broker. They stay near `api.py`/`service.py`.
 - `background/**` imports no domain service except through a task module, and
-  only `relay.py` touches a store (the outbox store).
+  only `relay.py` touches stores (outbox writes plus read-only bounded
+  operational snapshots).
 - No task module imports ORM or constructs vendor clients; it opens a session at
   the boundary and threads `db` through the normal service/store layers.
 

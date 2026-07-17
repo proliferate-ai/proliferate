@@ -1,8 +1,14 @@
 import assert from "node:assert/strict";
 
-import type { ScenarioDefinition } from "./types.js";
-import { ScenarioBlockedError, ScenarioExpectedFailError } from "./types.js";
-import { catalogHarnesses, withGatewayProbedCandidates } from "./t3-chat-1.js";
+import type {
+  MatrixScenarioDefinition,
+  ScenarioCellOutcome,
+  ScenarioCellSpec,
+} from "./types.js";
+import { ScenarioExpectedFailError } from "./types.js";
+import { catalogHarnesses, shippedHarnessKinds, withGatewayProbedCandidates } from "./t3-chat-1.js";
+import { collectLocal7McpCells } from "./local/integration-mcp.js";
+import { isWorldBackedRun } from "./local/world-boot.js";
 import { DEFAULT_GITHUB_TEST_REPO, DEFAULT_LOCAL_RUNTIME_URL } from "../config/env-manifest.js";
 import { ApiClient, ApiRequestError } from "../fixtures/http.js";
 import { loginDurableUser } from "../fixtures/identity.js";
@@ -26,6 +32,7 @@ import {
   type GatewayGrant,
   type ToolCallEvent,
 } from "../fixtures/integration-gateway.js";
+import type { PlannedCellV1 } from "../runner/result.js";
 
 /**
  * T3-INT-1 — real integration through the gateway: every harness, both lanes.
@@ -38,7 +45,27 @@ import {
  * org-policy toggle-off makes the same call return an enumerated scope/policy
  * error (toggled once, not per harness).
  *
- * Lane wiring (local):
+ * ── PR 5f (Fork C) promotion, integration-mcp workstream ────────────────────
+ * Promoted leaf → matrix (BRIEF §"Leaf→matrix promotion"): one child cell per
+ * cataloged harness kind (`shippedHarnessKinds()`, audit ruling #4 — replaces
+ * the prior hardcoded 5-harness list), on both lanes. `runCells` branches on
+ * `isWorldBackedRun(ctx)`:
+ *   - world-backed (candidate map supplied): the NEW LOCAL-7 functional
+ *     journey (`collectLocal7McpCells`) — real product-UI-driven connect +
+ *     FRESH session + one real Product-MCP call + audit correlation per
+ *     harness, green cells carrying `local_mcp_integration` evidence.
+ *   - legacy diagnostic (no candidate map): the ORIGINAL local-lane behaviour
+ *     below, preserved verbatim in its real assertions, now reporting one
+ *     explicit `ScenarioCellOutcome` per assigned harness cell instead of a
+ *     single scalar pass/fail — the shared hard gate (connect + gateway grant
+ *     + readiness + deterministic tool call) and the once-only org-policy
+ *     negative still gate the WHOLE assigned batch (a failure there fails
+ *     every assigned cell), while the per-harness agent-turn result — real
+ *     assertions unchanged — now finalizes its own cell instead of only being
+ *     logged informationally.
+ * Sandbox lane is unchanged (`ScenarioExpectedFailError`, still gated on #1042).
+ *
+ * Lane wiring (local, legacy diagnostic path):
  *  1. Connect Exa (product api_key flow, POST /v1/cloud/integrations/authentications).
  *  2. Provision a real gateway grant for the durable user (desktop enrollment +
  *     worker enroll — the exact endpoints the desktop app drives) and write the
@@ -56,37 +83,39 @@ import {
  * exposes no HTTP surface listing these rows. The gateway that WRITES the row is
  * fully real.
  */
-export const t3Int1: ScenarioDefinition = {
+export const t3Int1: MatrixScenarioDefinition = {
   id: "T3-INT-1",
   title: "real integration through the gateway — every harness, both lanes",
   registryFlowRef: "specs/developing/testing/scenarios.md#T3-INT-1",
   lanes: ["local", "sandbox"],
-  requiredEnv: [
-    "RELEASE_E2E_SERVER_URL",
-    "RELEASE_E2E_DURABLE_USER_EMAIL",
-    "RELEASE_E2E_DURABLE_USER_PASSWORD",
-    "RELEASE_E2E_DURABLE_ORG_ID",
-    "RELEASE_E2E_INTEGRATION_API_KEY",
-    "RELEASE_E2E_LOCAL_DATABASE_URL",
-  ],
-  plan: ({ runtimeLane, agents }) => {
-    const harnesses = agents.includes("all") ? ["claude", "codex", "cursor", "grok", "opencode"] : [...agents];
+  kind: "matrix",
+  // The legacy diagnostic path's durable-user/server-URL AND its static
+  // audit-probe DB URL are checked in-branch (below) rather than declared here:
+  // a world-backed functional run never sets those (it authenticates a fresh
+  // actor inside its own world and derives the audit-probe DSN from
+  // `world.db.databaseUrl` — LQF-002), and a scenario-level requiredEnv is
+  // shared across BOTH branches, so declaring them here would incorrectly
+  // block/cancel every world-backed cell too. Only the integration key — which
+  // both branches genuinely need — is declared.
+  requiredEnv: ["RELEASE_E2E_INTEGRATION_API_KEY"],
+  expandCells: async ({ agents }): Promise<ScenarioCellSpec[]> => {
+    const harnesses = agents.includes("all") ? await shippedHarnessKinds() : [...agents];
+    return harnesses.map((harness) => ({ dimensions: { harness } }));
+  },
+  planCell: ({ runtimeLane }, cell) => {
+    const harness = cell.dimensions.harness;
     return [
       { description: "connect the api_key integration once (default exa) via POST /v1/cloud/integrations/authentications" },
       { description: "provision a gateway grant (desktop enrollment + worker enroll) and write integration-gateway.json into the runtime home" },
       { description: "assert the gateway resolves the worker bearer (initialize) and lists exa as a ready provider" },
       { description: "[deterministic hard gate] a real worker-bearer tool call through the gateway proxies to exa → assert a cloud_integration_tool_call_event row with ok=true" },
-      ...harnesses.map((harness) => ({
-        description: `[${harness}] agent turn calls an exa tool through the gateway (${runtimeLane} lane) → ok=true audit row (SESSION_MODEL_GATED reported blocked, not red)`,
-      })),
+      {
+        description: `[${harness}] agent turn calls an exa tool through the gateway (${runtimeLane} lane) → ok=true audit row`,
+      },
       { description: "org-policy toggle exa off (once) → direct gateway call returns integration_provider_disabled + failure audit row" },
     ];
   },
-  run: async (ctx) => {
-    if (ctx.dryRun) {
-      return;
-    }
-
+  runCells: async (ctx, cells) => {
     if (ctx.runtimeLane === "sandbox") {
       // Piggybacks T3-CHAT-1's session matrix, which is not yet implemented for
       // the sandbox lane (driving an agent session inside a real E2B sandbox
@@ -102,24 +131,118 @@ export const t3Int1: ScenarioDefinition = {
       );
     }
 
-    const integrationApiKey = process.env.RELEASE_E2E_INTEGRATION_API_KEY;
-    const namespace = resolveIntegrationNamespace();
-    if (!integrationApiKey || integrationApiKey.trim().length === 0) {
-      throw new ScenarioBlockedError(
-        `T3-INT-1: blocked on credential — RELEASE_E2E_INTEGRATION_API_KEY is not set. ` +
-          `Mint a real api_key for the "${namespace}" integration (default: an Exa API key from https://exa.ai) ` +
-          `and add it to ~/.proliferate-local/dev/release-e2e.env (and the CI secret).`,
-      );
+    if (isWorldBackedRun(ctx)) {
+      return collectLocal7McpCells(ctx, cells);
     }
 
-    await runLocalLane(ctx.env.require("RELEASE_E2E_SERVER_URL"), namespace, integrationApiKey, ctx.agents);
+    return runLegacyLocalLane(ctx, cells);
   },
 };
 
-interface PerHarnessResult {
-  harnessKind: string;
-  status: "green" | "skipped-no-anthropic-model" | "blocked-model-gating" | "red";
-  detail: string;
+async function runLegacyLocalLane(
+  ctx: Parameters<MatrixScenarioDefinition["runCells"]>[0],
+  cells: readonly PlannedCellV1[],
+): Promise<ScenarioCellOutcome[]> {
+  const namespace = resolveIntegrationNamespace();
+  const integrationApiKey = ctx.env.require("RELEASE_E2E_INTEGRATION_API_KEY");
+
+  const serverUrl = process.env.RELEASE_E2E_SERVER_URL;
+  const durableEmail = process.env.RELEASE_E2E_DURABLE_USER_EMAIL;
+  const durablePassword = process.env.RELEASE_E2E_DURABLE_USER_PASSWORD;
+  const organizationId = process.env.RELEASE_E2E_DURABLE_ORG_ID;
+  const missing = [
+    ["RELEASE_E2E_SERVER_URL", serverUrl],
+    ["RELEASE_E2E_DURABLE_USER_EMAIL", durableEmail],
+    ["RELEASE_E2E_DURABLE_USER_PASSWORD", durablePassword],
+    ["RELEASE_E2E_DURABLE_ORG_ID", organizationId],
+    // Static audit-probe DSN — only the legacy path reads it (the world-backed
+    // path derives its own from world.db.databaseUrl, LQF-002).
+    ["RELEASE_E2E_LOCAL_DATABASE_URL", process.env.RELEASE_E2E_LOCAL_DATABASE_URL],
+  ].filter(([, value]) => !value || value.trim().length === 0).map(([name]) => name);
+  if (missing.length > 0) {
+    return cells.map((cell) => ({
+      cellId: cell.cell_id,
+      status: "blocked",
+      reason: {
+        code: "scenario_blocked",
+        message: `T3-INT-1: blocked on credential — the legacy diagnostic path needs ${missing.join(", ")} set.`,
+      },
+    }));
+  }
+
+  const runtimeHome = resolveRuntimeHome();
+  if (!runtimeHome) {
+    return cells.map((cell) => ({
+      cellId: cell.cell_id,
+      status: "blocked",
+      reason: {
+        code: "scenario_blocked",
+        message:
+          "T3-INT-1: blocked — cannot resolve the AnyHarness runtime home. Set ANYHARNESS_RUNTIME_HOME to the " +
+          "same path the local runtime was booted with (the dir the gateway dotfile is read from).",
+      },
+    }));
+  }
+
+  let session;
+  try {
+    session = await loginDurableUser({
+      serverUrl: serverUrl!,
+      email: durableEmail!,
+      password: durablePassword!,
+      organizationId: organizationId!,
+    });
+  } catch (error) {
+    return cells.map((cell) => ({
+      cellId: cell.cell_id,
+      status: "failed",
+      reason: { code: "scenario_failure", message: describe(error) },
+    }));
+  }
+  const client = new ApiClient({ baseUrl: serverUrl! }).withBearerToken(session.accessToken);
+
+  try {
+    // 1) Connect the integration (idempotent: a prior run may have connected it).
+    const catalog = await client.get<{ items: Array<{ definitionId: string; namespace: string }> }>(
+      "/v1/cloud/integrations/catalog",
+    );
+    const definition = catalog.items.find((item) => item.namespace === namespace);
+    assert.ok(definition, `T3-INT-1: catalog must contain an api_key-kind definition for namespace "${namespace}"`);
+    await connectIntegration(client, definition.definitionId, integrationApiKey);
+
+    // 2) Provision the gateway grant and write the dotfile the runtime injects.
+    const grant = await enrollGatewayWorker(client, { serverUrl: serverUrl!, organizationId: organizationId! });
+    await writeGatewayDotfile(runtimeHome, grant);
+
+    try {
+      // 3) Gateway wiring check + hard green gate: a real tool call THROUGH the
+      // gateway proxies to exa and writes an ok=true audit row. This gates the
+      // whole assigned batch — every cell fails together if this fails.
+      await assertGatewayReady(grant, namespace);
+      await assertGatewayToolCallAudited(grant, namespace, durableEmail!);
+
+      // 4) Per harness, real assertions unchanged from the prior informational
+      // loop — now finalizes each cell's own explicit outcome.
+      const outcomes = await runAgentToolCallMatrix(grant, namespace, durableEmail!, cells);
+
+      // 5) Negative, once: org-policy toggle-off → enumerated disabled error +
+      // failure audit row. A failure here fails every assigned cell (previously
+      // it failed the single scalar leaf outcome).
+      await assertOrgPolicyToggleOff(client, grant, definition!.definitionId, namespace, organizationId!, durableEmail!);
+
+      return outcomes;
+    } finally {
+      await client
+        .post("/v1/cloud/workers/desktop/revoke", { desktopInstallId: grant.desktopInstallId })
+        .catch(() => undefined);
+    }
+  } catch (error) {
+    return cells.map((cell) => ({
+      cellId: cell.cell_id,
+      status: "failed",
+      reason: { code: "scenario_failure", message: describe(error) },
+    }));
+  }
 }
 
 /** All candidate models rejected with SESSION_MODEL_GATED — T3-CHAT-1's orthogonal drift, not our failure. */
@@ -138,74 +261,6 @@ function isSessionModelGated(error: unknown): boolean {
   }
   const message = error instanceof Error ? error.message : String(error);
   return /SESSION_MODEL_GATED|gated behind auth contexts/i.test(message);
-}
-
-async function runLocalLane(
-  serverUrl: string,
-  namespace: string,
-  apiKey: string,
-  agentsSelector: readonly string[],
-): Promise<void> {
-  const durableEmail = process.env.RELEASE_E2E_DURABLE_USER_EMAIL as string;
-  const durablePassword = process.env.RELEASE_E2E_DURABLE_USER_PASSWORD as string;
-  const organizationId = process.env.RELEASE_E2E_DURABLE_ORG_ID as string;
-
-  const runtimeHome = resolveRuntimeHome();
-  if (!runtimeHome) {
-    throw new ScenarioBlockedError(
-      "T3-INT-1: blocked — cannot resolve the AnyHarness runtime home. Set ANYHARNESS_RUNTIME_HOME to the " +
-        "same path the local runtime was booted with (the dir the gateway dotfile is read from).",
-    );
-  }
-
-  const session = await loginDurableUser({ serverUrl, email: durableEmail, password: durablePassword, organizationId });
-  const client = new ApiClient({ baseUrl: serverUrl }).withBearerToken(session.accessToken);
-
-  // 1) Connect the integration (idempotent: a prior run may have connected it).
-  const catalog = await client.get<{ items: Array<{ definitionId: string; namespace: string }> }>(
-    "/v1/cloud/integrations/catalog",
-  );
-  const definition = catalog.items.find((item) => item.namespace === namespace);
-  assert.ok(definition, `T3-INT-1: catalog must contain an api_key-kind definition for namespace "${namespace}"`);
-  await connectIntegration(client, definition.definitionId, apiKey);
-
-  // 2) Provision the gateway grant and write the dotfile the runtime injects.
-  const grant = await enrollGatewayWorker(client, { serverUrl, organizationId });
-  await writeGatewayDotfile(runtimeHome, grant);
-
-  try {
-    // 3) Gateway wiring check: the worker bearer resolves and exa is ready.
-    await assertGatewayReady(grant, namespace);
-
-    // 4) Hard green gate — the gateway itself is what's under test: a real
-    //    tool call THROUGH the gateway (worker bearer, the exact path an agent
-    //    session takes) proxies to exa and writes an ok=true audit row. This is
-    //    deterministic (no LLM), so it is the scenario's pass/fail gate.
-    await assertGatewayToolCallAudited(grant, namespace, durableEmail);
-
-    // 5) Contract ideal — a real agent turn drives the same tool, INFORMATIONAL.
-    //    The gateway + audit contract is already asserted deterministically in
-    //    (4) via the identical `call_provider_tool` route; the agent turn adds
-    //    "an LLM can actually drive it", but which cheap model a gateway-keyed
-    //    account can run is the orthogonal, drifting
-    //    model-availability/gateway-classification concern T3-CHAT-1 owns
-    //    (SESSION_MODEL_GATED behind an inactive auth context). So the per-harness
-    //    outcome is logged, not asserted — a genuine agent regression is visible
-    //    in the log without making this scenario flaky on model drift.
-    const perHarness = await runAgentToolCallMatrix(client, grant, namespace, durableEmail, agentsSelector);
-    console.log("[T3-INT-1/local] agent-turn per-harness results (informational):");
-    for (const result of perHarness) {
-      console.log(`  - ${result.harnessKind}: ${result.status} (${result.detail})`);
-    }
-
-    // 6) Negative, once: org-policy toggle-off → enumerated disabled error + audit row.
-    await assertOrgPolicyToggleOff(client, grant, definition.definitionId, namespace, organizationId, durableEmail);
-  } finally {
-    // Best-effort teardown: retire the worker so the dotfile bearer is revoked.
-    await client
-      .post("/v1/cloud/workers/desktop/revoke", { desktopInstallId: grant.desktopInstallId })
-      .catch(() => undefined);
-  }
 }
 
 async function connectIntegration(client: ApiClient, definitionId: string, apiKey: string): Promise<void> {
@@ -227,16 +282,7 @@ async function connectIntegration(client: ApiClient, definitionId: string, apiKe
 }
 
 async function assertGatewayReady(grant: GatewayGrant, namespace: string): Promise<void> {
-  let initialized;
-  try {
-    initialized = await gatewayInitialize(grant);
-  } catch (error) {
-    throw new ScenarioBlockedError(
-      `T3-INT-1: blocked — the gateway MCP endpoint did not accept the worker bearer (${
-        error instanceof Error ? error.message : String(error)
-      }). The enrollment/dotfile wiring failed; the agent could never reach the gateway.`,
-    );
-  }
+  const initialized = await gatewayInitialize(grant);
   assert.ok(initialized.result, "T3-INT-1: gateway initialize must return a result");
   const providers = await gatewayListProviders(grant);
   const exa = providers.find((p) => p.provider === namespace);
@@ -284,50 +330,59 @@ async function assertGatewayToolCallAudited(
 }
 
 async function runAgentToolCallMatrix(
-  _client: ApiClient,
   grant: GatewayGrant,
   namespace: string,
   durableEmail: string,
-  agentsSelector: readonly string[],
-): Promise<PerHarnessResult[]> {
+  cells: readonly PlannedCellV1[],
+): Promise<ScenarioCellOutcome[]> {
   const runtimeUrl = process.env.RELEASE_E2E_LOCAL_RUNTIME_URL ?? DEFAULT_LOCAL_RUNTIME_URL;
   const runtime = new LocalRuntimeClient({ baseUrl: runtimeUrl });
-  const requested = agentsSelector.includes("all")
-    ? ["claude", "codex", "cursor", "grok", "opencode"]
-    : [...agentsSelector];
+  const requested = cells.map((cell) => cell.dimensions.harness);
   const choices = await catalogHarnesses(requested);
 
   const githubTestRepo = process.env.RELEASE_E2E_GITHUB_TEST_REPO ?? DEFAULT_GITHUB_TEST_REPO;
   const repoPath = await ensureLocalClone(githubTestRepo);
   const { workspace } = await runtime.createLocalWorkspace(repoPath);
 
-  const results: PerHarnessResult[] = [];
+  const outcomes: ScenarioCellOutcome[] = [];
   try {
-    for (const harnessKind of requested) {
+    for (const cell of cells) {
+      const harnessKind = cell.dimensions.harness;
       const choice = choices.get(harnessKind);
       if (!choice) {
-        results.push({
-          harnessKind,
-          status: "skipped-no-anthropic-model",
-          detail: "no Anthropic-family model in catalogs/agents/catalog.json (needs its own provider key)",
+        outcomes.push({
+          cellId: cell.cell_id,
+          status: "blocked",
+          reason: {
+            code: "scenario_blocked",
+            message: `[${harnessKind}] no Anthropic-family model in catalogs/agents/catalog.json (needs its own provider key)`,
+          },
         });
         continue;
       }
       try {
         await runOneHarnessToolCall(runtime, grant, workspace.id, harnessKind, choice, namespace, durableEmail);
-        results.push({ harnessKind, status: "green", detail: "agent called an exa tool → ok=true audit row" });
+        outcomes.push({ cellId: cell.cell_id, status: "green" });
       } catch (error) {
         if (error instanceof ModelGatedError) {
-          results.push({ harnessKind, status: "blocked-model-gating", detail: error.message });
+          outcomes.push({
+            cellId: cell.cell_id,
+            status: "blocked",
+            reason: { code: "scenario_blocked", message: error.message },
+          });
         } else {
-          results.push({ harnessKind, status: "red", detail: error instanceof Error ? error.message : String(error) });
+          outcomes.push({
+            cellId: cell.cell_id,
+            status: "failed",
+            reason: { code: "scenario_failure", message: describe(error) },
+          });
         }
       }
     }
   } finally {
     await runtime.deleteWorkspace(workspace.id).catch(() => undefined);
   }
-  return results;
+  return outcomes;
 }
 
 async function runOneHarnessToolCall(
@@ -461,4 +516,8 @@ async function assertOrgPolicyToggleOff(
     // Re-enable so the definition is left as found (durable server).
     await client.patch(path, { enabled: true }).catch(() => undefined);
   }
+}
+
+function describe(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

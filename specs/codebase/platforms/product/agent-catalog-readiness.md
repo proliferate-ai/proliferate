@@ -114,8 +114,12 @@ under Bedrock rather than transparently remapped.
 Credential fact collection reads the composed launch environment plus only
 registry-declared ambient variables; composed values win. Arbitrary ambient
 values do not become classification law. Secret facts expose presence, while
-declared flag facts may expose the value required for matching. Workspace route
-facts are collected separately from workspace route state.
+declared flag facts may expose the value required for matching. The effective
+workspace route is resolved through the same server-origin guard used at
+launch. For single-source harnesses, an explicit gateway or API-key route is
+authoritative and its source facts replace native/ambient credential facts;
+OpenCode remains additive because its native providers intentionally coexist
+with injected sources.
 
 Classification is pure. Within each auth slot, the first matching catalog
 context wins; results are unioned across slots, and baseline applies when no
@@ -128,13 +132,25 @@ gateway-available `session.models` row. Gateway model resolution uses the
 latest successful gateway probe when one exists and otherwise falls back to
 the configured seed models.
 
+Desktop local-route delivery uses revisioned `PUT /v1/agent-auth/state` for a
+non-empty rendered state and idempotent `DELETE /v1/agent-auth/state` when the
+rendered surface is native (zero harnesses). Clear is a distinct operation so
+an empty server selection can remove an older persisted route without
+weakening stale-revision protection for ordinary replacements. A successful
+apply or clear invalidates target launch options and gateway-model projections
+before the next session is created. Local route writes are serialized so a
+superseded request cannot land after the route that replaced it.
+Gateway-capable selection writes retain a disabled gateway row when another
+method is selected; the server normalizes older/direct clients' empty desired
+state to the same tombstone. It advances the surface revision across future
+gateway-to-native transitions while staying out of the rendered source list.
+
 ## Bundled Agent Inputs
 
 The supported AnyHarness agent input schemas are:
 
 ```text
 catalogs/agents/catalog.json          # the lockfile (probe-generated, source-pinned)
-catalogs/agents/schema.json
 catalogs/agents/registry.json         # trusted method/auth/launch + discovery config
 catalogs/agents/registry.schema.json
 ```
@@ -171,8 +187,11 @@ registry. It boots from the bundled `AgentCatalogDocument` and
 `AgentRegistryDocument`. Cloud convergence may replace only the active catalog:
 the worker compares `catalogVersion`, fetches the server-owned document, and
 submits it to the runtime's validated catalog-apply endpoint. A successful
-activation persists the active catalog and starts installed-only reconcile.
-The trusted registry remains the compiled/bundled method boundary throughout.
+activation replaces the process-local active catalog and starts installed-only
+reconcile. The replacement is not persisted: after a runtime restart the
+bundled catalog is active until the Worker fetches and reapplies newer
+control-plane truth. The trusted registry remains the compiled/bundled method
+boundary throughout.
 
 Dynamic model refresh is a separate `model_registry/**` concern and stores
 target-local snapshots in SQLite; it must not rewrite the active agent catalog
@@ -198,9 +217,13 @@ pinned npm/git specifier — produced by the probe (`resolve-pins.mjs`). Install
 consumes the catalog pin, materializes EXACTLY that, and verifies the
 **sha256 before use**.
 
-The sha256 is the trust anchor. A url living in the catalog cannot fetch
-unintended bytes: a mismatch hard-fails the install and leaves nothing on disk.
-This is what permits resolved download URLs to live in the (bundled, versioned,
+The sha256 is the trust anchor. A url living in the catalog cannot activate
+unintended bytes: a mismatch hard-fails the install. Direct binaries and native
+archives verify in staging before replacing their current executable.
+Registry-backed whole-tree archives currently remove the prior extracted tree
+before downloading and verifying the replacement, so a failed Cursor/OpenCode
+update can leave that managed role unavailable until retry. This is what
+permits resolved download URLs to live in the (bundled, versioned,
 build-signed) catalog rather than the registry — the integrity check, not the
 file's location, is the security boundary. The registry still owns auth,
 launch, and the install method; it is never consulted for *which bytes* once a
@@ -253,14 +276,68 @@ make catalog-update CATALOG_PROBE_AGENTS=cursor \
   CATALOG_PROBE_ARGS=--include-cursor
 ```
 
+Probe contexts run with isolated harness homes and an allowlisted credential
+surface. In particular, the OpenCode baseline context gets an isolated `HOME`
+and XDG directories and scrubs AWS credential and region variables so a
+developer's `~/.aws` state cannot silently expand the supposedly unauthenticated
+model inventory.
+
 `--allow-partial` is diagnostic only; the same mode is available as
 `ALLOW_PARTIAL=1`. The complete-probe gate refuses to promote its output, and
 `catalog-pin` refuses an incomplete local probe state.
+
+The producer uses provider-published SHA-256 values when the versioned source
+publishes them (Claude's release manifest, GitHub release-asset digests, and
+ACP registry archive checksums) and otherwise downloads and hashes each shipped
+target. Installation still downloads the selected target and verifies those
+catalog bytes before activation.
+
+`catalog-update` is not a read-only repository operation. Its debug AnyHarness
+binary reconciles selected agents in the operator's default development runtime
+home (`~/.proliferate-local/anyharness`) before probing, and it does not roll
+those installed artifacts back when the checked-in catalog backup is restored.
+Selected harness families are probed one at a time. Auth contexts inside one
+family normally run concurrently, but Codex contexts are serialized because
+parallel Codex engine startup can exhaust constrained operator memory and make
+otherwise healthy probes miss the authoritative deadline.
 
 `catalogVersion` changes with catalog content. `registryVersion` changes with
 registry content, and `probedAgainst.registryVersion` must pair the promoted
 catalog with that registry version. CI enforces those version bumps and exact
 draft/bundled equality.
+
+## Runtime Disk Reconciliation
+
+Managed artifacts live below the selected AnyHarness runtime home:
+
+```text
+<runtime-home>/agents/<kind>/.install.lock
+<runtime-home>/agents/<kind>/native/
+<runtime-home>/agents/<kind>/agent_process/
+<runtime-home>/agents/<kind>/install-manifest.json
+```
+
+The default development home is `~/.proliferate-local/anyharness`; the default
+release home is `~/.proliferate/anyharness`. An agent-scoped install lock
+serializes reconciliation. The manifest records each role's resolved version
+or immutable Git ref, source kind, installed launcher path, launcher/binary
+SHA-256, and installation time.
+
+Reconciliation first compares the active catalog pin and the installed
+manifest, then verifies the recorded launcher or binary checksum. A missing
+manifest role, pin/source mismatch, missing executable, or checksum mismatch
+reinstalls that role. The checksum covers the executable or managed launcher,
+not every file in an extracted adapter tree. npm and Git packages are installed
+into the live managed prefix; they do not currently use a directory-level
+atomic swap or rollback. Manifest replacement uses a temporary file and rename,
+but a manifest write failure is best-effort and causes a later reconciliation
+to retry.
+
+Runtime startup hydrates a pending release seed and then performs
+installed-only reconciliation. It updates managed agents that already have
+installed state, but it does not install every missing catalog agent merely
+because the runtime started. Missing-agent installation remains an explicit
+setup/install operation.
 
 ## Source Shape
 

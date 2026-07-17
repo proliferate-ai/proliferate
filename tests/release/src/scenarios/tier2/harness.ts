@@ -1,12 +1,12 @@
 /**
- * Tier-2-on-runner mechanism: the generic matrix-scenario factory (PR 4,
- * BRIEF §1/§4). `makeTier2MatrixScenario(cfg)` returns a
+ * Tier-2 billing-on-runner mechanism (PR 4, BRIEF §1/§4).
+ * `makeTier2MatrixScenario(cfg)` returns a
  * `MatrixScenarioDefinition` (lane `local`, no new lane) that boots ONE
- * `BootedStack` via the shared `bootBillingStack()`, runs every authoritative
- * manifest case against it, returns exactly one `ScenarioCellOutcome` per
+ * `BootedStack` via the shared `bootBillingStack()`, runs authoritative
+ * T2-BILL cases against it, returns exactly one `ScenarioCellOutcome` per
  * assigned cell (omitted → runner `missing`), and tears the stack down in a
- * `finally`. Green cells carry `tier2_billing` evidence; per-case billing state
- * is reset so ledger deltas are that case's own.
+ * fail-closed cleanup phase. Green cells carry `tier2_billing` evidence;
+ * per-case billing state is reset so ledger deltas are that case's own.
  *
  * The boot/reset/ledger/evidence plumbing is threaded through a
  * `Tier2HarnessDeps` seam (defaulting to the real shared implementations) so
@@ -101,9 +101,25 @@ async function bootForScenario(cfg: Tier2ScenarioConfig, deps: Tier2HarnessDeps)
       stack: boot.stack,
       stripe: boot.stripe,
       teardown: async () => {
-        await boot.stack.teardown().catch(() => undefined);
-        await boot.fake.close().catch(() => undefined);
-        deps.clearPublishedGatewayEnv();
+        const failures: unknown[] = [];
+        try {
+          await boot.stack.teardown();
+        } catch (error) {
+          failures.push(error);
+        }
+        try {
+          await boot.fake.close();
+        } catch (error) {
+          failures.push(error);
+        }
+        try {
+          deps.clearPublishedGatewayEnv();
+        } catch (error) {
+          failures.push(error);
+        }
+        if (failures.length > 0) {
+          throw new AggregateError(failures, "Tier-2 stack/fake teardown failed");
+        }
       },
     };
   }
@@ -115,7 +131,7 @@ async function bootForScenario(cfg: Tier2ScenarioConfig, deps: Tier2HarnessDeps)
     skipped: false,
     stack: boot.stack,
     stripe: boot.stripe,
-    teardown: () => boot.stack.teardown().catch(() => undefined),
+    teardown: () => boot.stack.teardown(),
   };
 }
 
@@ -124,6 +140,13 @@ export function makeTier2MatrixScenario(
   deps: Tier2HarnessDeps = DEFAULT_TIER2_HARNESS_DEPS,
 ): MatrixScenarioDefinition {
   const caseIds = Object.keys(cfg.cases);
+  const nonBillingCaseIds = caseIds.filter((caseId) => !caseId.startsWith("T2-BILL-"));
+  if (nonBillingCaseIds.length > 0) {
+    throw new Error(
+      `The shared Tier-2 billing harness cannot qualify non-billing case(s) with tier2_billing evidence: ${nonBillingCaseIds.join(", ")}. `
+      + "Keep them deferred until a domain-specific evidence collector exists.",
+    );
+  }
   return {
     id: cfg.id,
     kind: "matrix",
@@ -162,12 +185,33 @@ export function makeTier2MatrixScenario(
         }));
       }
       const outcomes: ScenarioCellOutcome[] = [];
+      let collectorFailure: unknown;
       try {
         for (const cell of cells) {
           outcomes.push(await runTier2Case(cfg, cell, boot.stack, boot.stripe, deps));
         }
-      } finally {
+      } catch (error) {
+        collectorFailure = error;
+      }
+      let teardownFailure: unknown;
+      try {
         await boot.teardown();
+      } catch (error) {
+        teardownFailure = error;
+      }
+      if (collectorFailure !== undefined || teardownFailure !== undefined) {
+        const failures = [
+          collectorFailure === undefined ? null : `collector: ${describe(collectorFailure)}`,
+          teardownFailure === undefined ? null : `cleanup: ${describe(teardownFailure)}`,
+        ].filter((message): message is string => message !== null);
+        return cells.map((cell) => ({
+          cellId: cell.cell_id,
+          status: "failed",
+          reason: {
+            code: "scenario_failure",
+            message: `Tier-2 scenario could not qualify: ${failures.join("; ")}`,
+          },
+        }));
       }
       return outcomes;
     },
@@ -198,19 +242,18 @@ export async function runTier2Case(
     };
   }
 
-  const policy = createPolicyAsserter();
-  const ids = createStripeIdCollector();
-  const ledger = deps.createLedgerProbe(stack.databaseUrl);
-  const ctx: Tier2CellContext = {
-    stack,
-    stripe,
-    policy,
-    ids,
-    ledger,
-    reset: () => deps.resetBillingState(),
-  };
-
   try {
+    const policy = createPolicyAsserter();
+    const ids = createStripeIdCollector();
+    const ledger = deps.createLedgerProbe(stack.databaseUrl);
+    const ctx: Tier2CellContext = {
+      stack,
+      stripe,
+      policy,
+      ids,
+      ledger,
+      reset: () => deps.resetBillingState(),
+    };
     await ctx.reset();
     await ledger.begin();
     const result = await handler(ctx);

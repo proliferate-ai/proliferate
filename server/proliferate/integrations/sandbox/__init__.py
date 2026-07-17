@@ -5,8 +5,11 @@ from proliferate.integrations.sandbox.base import (
     RuntimeEndpoint,
     SandboxHandle,
     SandboxProvider,
+    SandboxProviderConfigurationError,
     SandboxProviderError,
     SandboxProviderKind,
+    SandboxProviderTargetUnavailableError,
+    SandboxProviderUnavailableError,
     SandboxRuntimeContext,
 )
 from proliferate.integrations.sandbox.e2b_webhooks import (
@@ -24,8 +27,11 @@ __all__ = [
     "SandboxRuntimeContext",
     "SandboxHandle",
     "SandboxProvider",
+    "SandboxProviderConfigurationError",
     "SandboxProviderError",
     "SandboxProviderKind",
+    "SandboxProviderTargetUnavailableError",
+    "SandboxProviderUnavailableError",
     "E2BWebhookSignatureError",
     "get_configured_sandbox_provider",
     "get_sandbox_provider",

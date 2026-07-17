@@ -32,9 +32,9 @@ export function useSidebarSupportContext() {
         intent: "general" as const,
         pathname,
         workspaceId: selectedWorkspaceId,
-        workspaceName: workspace?.repo.branch
+        workspaceName: workspace?.repo?.branch
           ? humanizeBranchName(workspace.repo.branch)
-          : workspace?.repo.name,
+          : workspace?.repo?.name,
         workspaceLocation: "cloud" as const,
       };
     }

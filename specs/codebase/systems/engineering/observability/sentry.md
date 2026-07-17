@@ -74,6 +74,21 @@ authorization headers, tokens, secrets, environment values, or provider
 responses. Correlation identifiers are diagnostic metadata, not permission to
 copy user content into Sentry.
 
+AnyHarness marks direct child-agent stderr events with a dedicated tracing
+target that the Sentry layer ignores while console/file logging remains
+available locally. The exclusion applies to Sentry events, breadcrumbs, and
+structured logs. A startup failure retains at most eight lines and 1,024 UTF-8
+bytes per line, writes that bounded tail to the excluded local diagnostic, and
+carries it in a domain-owned typed error for the initiating authenticated API
+response. Ordinary error formatting and API telemetry use a status-only
+summary. The response also carries the stable `AGENT_STARTUP_FAILED` code;
+`@anyharness/sdk` uses that structured problem to create a detached telemetry
+error whose message and metadata derive only from a validated code and HTTP
+status, with no original problem or cause chain. ProductClient applies that
+projection both at its explicit exception facade and its global React Query
+capture boundary while preserving the original detail for UI.
+Raw provider output is not a safe Sentry grouping key or exception message.
+
 Two exact, bounded fields are deliberately preserved through the scrubbers
 because they are deployment identity, not a raw process-environment map:
 
@@ -155,3 +170,31 @@ following up with reporters. Observability does not own tracker state.
 Use the [Sentry operating procedure](../../../../developing/operating/analytics/sentry.md)
 to discover current provider state and verify delivery without exposing
 credentials.
+
+## Instrumenting a new feature
+
+Recommendation for surfacing "this should/shouldn't happen" signals so they land
+as tracked issues via [Issue Lifecycle](../issue-lifecycle/README.md). Choose by
+what actually happened, not by convenience — do not `raise` to flag a non-failure.
+
+| Situation | Use | Effect |
+| --- | --- | --- |
+| The operation genuinely failed | let the exception propagate | auto-captured as a `proliferate-server` issue |
+| An anomaly the user didn't feel — latency budget exceeded, invariant violated, unexpected-but-recovered branch | `capture_server_sentry_exception(..., level="warning", fingerprint=[...])` | tracked issue, request still succeeds |
+| A page-worthy "must never happen" invariant | `report_critical(...)` | fatal Sentry event **and** the `CRITICAL_FAILURE` log marker that drives the Grafana/CloudWatch alert path |
+
+Conventions that keep issues clean and countable:
+
+- **Set a stable `fingerprint`** for any recurring anomaly. It is the dedup key:
+  one issue accrues occurrences (with user/release/timing) instead of spawning
+  thousands. This — not a metric counter — is how you "count" an anomaly.
+- **Emit on threshold, not per call.** For latency, measure and emit only when a
+  budget is exceeded; the budget belongs in code, not in an alert rule.
+- **Tag consistently** so the tracker and rules can slice: `anomaly=<slug>`
+  (e.g. `latency_budget`, `invariant_violation`), `surface=<area>`. Put bounded
+  diagnostic scalars (elapsed_ms, budget_ms, ids) in `extras`.
+- Obey [Privacy and replay](#privacy-and-replay): tags/extras carry identifiers
+  and bounded scalars, never message/prompt/transcript content or secrets.
+
+Reserve `report_critical` for real paging conditions; a `warning` anomaly that
+fires constantly trains everyone to ignore the fatal ones.

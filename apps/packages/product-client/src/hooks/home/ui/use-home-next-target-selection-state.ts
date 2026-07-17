@@ -1,4 +1,5 @@
-import { useCallback, useSyncExternalStore } from "react";
+import { useCallback, useMemo, useSyncExternalStore } from "react";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import type {
   HomeNextDestination,
   HomeNextRepoLaunchKind,
@@ -98,6 +99,28 @@ export function normalizeHomeNextTargetSelectionState(
   };
 }
 
+function normalizeDesktopTargetAvailability(
+  selection: HomeNextTargetSelectionState,
+  desktopTargetsAvailable: boolean,
+): HomeNextTargetSelectionState {
+  if (
+    desktopTargetsAvailable
+    || (
+      selection.destination === "repository"
+      && selection.repoLaunchKind === "cloud"
+      && selection.selectedSshTargetId === null
+    )
+  ) {
+    return selection;
+  }
+  return {
+    ...selection,
+    destination: "repository",
+    repoLaunchKind: "cloud",
+    selectedSshTargetId: null,
+  };
+}
+
 function persistTargetSelection(selection: HomeNextTargetSelectionState): void {
   hasUserWritten = true;
   cachedHomeNextTargetSelection = selection;
@@ -160,27 +183,46 @@ export function subscribeHomeNextTargetSelectionState(listener: () => void): () 
   };
 }
 
-export function useHomeNextTargetSelectionSnapshot(): HomeNextTargetSelectionState {
-  return useSyncExternalStore(
+function useHomeNextTargetSelectionForHost() {
+  const desktopTargetsAvailable = useProductHost().desktop !== null;
+  const storedTargetSelection = useSyncExternalStore(
     subscribeHomeNextTargetSelectionState,
     readHomeNextTargetSelectionState,
     () => DEFAULT_HOME_NEXT_TARGET_SELECTION,
   );
+  const targetSelection = useMemo(
+    () => normalizeDesktopTargetAvailability(
+      storedTargetSelection,
+      desktopTargetsAvailable,
+    ),
+    [desktopTargetsAvailable, storedTargetSelection],
+  );
+
+  return { desktopTargetsAvailable, targetSelection };
+}
+
+export function useHomeNextTargetSelectionSnapshot(): HomeNextTargetSelectionState {
+  return useHomeNextTargetSelectionForHost().targetSelection;
 }
 
 export function useHomeNextTargetSelectionState() {
-  const targetSelection = useHomeNextTargetSelectionSnapshot();
+  const { desktopTargetsAvailable, targetSelection } =
+    useHomeNextTargetSelectionForHost();
 
   const patchTargetSelection = useCallback((patch: HomeNextTargetSelectionPatch) => {
-    const next = normalizeHomeNextTargetSelectionState({
-      ...readHomeNextTargetSelectionState(),
-      ...patch,
-    });
+    const next = normalizeDesktopTargetAvailability(
+      normalizeHomeNextTargetSelectionState({
+        ...readHomeNextTargetSelectionState(),
+        ...patch,
+      }),
+      desktopTargetsAvailable,
+    );
     persistTargetSelection(next);
-  }, []);
+  }, [desktopTargetsAvailable]);
 
   return {
     ...targetSelection,
+    desktopTargetsAvailable,
     patchTargetSelection,
     setDestination: useCallback(
       (destination: HomeNextDestination) => patchTargetSelection({ destination }),

@@ -1,3 +1,5 @@
+use crate::api::http::access::admit_session_mutation;
+use crate::domains::sessions::admission::SessionMutationKind;
 use anyharness_contract::v1::{
     ClearSessionLoopsResponse, SessionLoopResponse, SessionLoopsResponse, SetSessionLoopRequest,
 };
@@ -31,6 +33,8 @@ pub async fn set_session_loop(
     Json(request): Json<SetSessionLoopRequest>,
 ) -> Result<Json<SessionLoopResponse>, ApiError> {
     assert_session_auth_scope(&state, &auth, &session_id)?;
+    let _admission_permit =
+        admit_session_mutation(&state, &session_id, SessionMutationKind::Loop).await?;
     let r#loop = state
         .loop_runtime
         .set_loop(&session_id, request)
@@ -61,6 +65,8 @@ pub async fn edit_session_loop(
     Json(request): Json<SetSessionLoopRequest>,
 ) -> Result<Json<SessionLoopResponse>, ApiError> {
     assert_session_auth_scope(&state, &auth, &session_id)?;
+    let _admission_permit =
+        admit_session_mutation(&state, &session_id, SessionMutationKind::Loop).await?;
     let r#loop = state
         .loop_runtime
         .edit_loop(&session_id, &loop_id, request)
@@ -108,6 +114,8 @@ pub async fn clear_session_loops(
     Path(session_id): Path<String>,
 ) -> Result<Json<ClearSessionLoopsResponse>, ApiError> {
     assert_session_auth_scope(&state, &auth, &session_id)?;
+    let _admission_permit =
+        admit_session_mutation(&state, &session_id, SessionMutationKind::Loop).await?;
     let cleared = state
         .loop_runtime
         .clear_loop(&session_id, None)
@@ -136,6 +144,8 @@ pub async fn clear_session_loop(
     Path((session_id, loop_id)): Path<(String, String)>,
 ) -> Result<Json<ClearSessionLoopsResponse>, ApiError> {
     assert_session_auth_scope(&state, &auth, &session_id)?;
+    let _admission_permit =
+        admit_session_mutation(&state, &session_id, SessionMutationKind::Loop).await?;
     let cleared = state
         .loop_runtime
         .clear_loop(&session_id, Some(loop_id))
@@ -165,16 +175,18 @@ fn map_loop_op_error(error: LoopOpError) -> ApiError {
         LoopOpError::PromptTooLarge => {
             ApiError::bad_request("Loop prompt is too large.", "LOOP_PROMPT_TOO_LARGE")
         }
-        LoopOpError::InvalidSchedule(detail) => {
-            ApiError::bad_request(format!("Loop schedule is invalid: {detail}"), "LOOP_SCHEDULE_INVALID")
-        }
+        LoopOpError::InvalidSchedule(detail) => ApiError::bad_request(
+            format!("Loop schedule is invalid: {detail}"),
+            "LOOP_SCHEDULE_INVALID",
+        ),
         LoopOpError::NotConfirmed => ApiError::conflict(
             "The loop mutation was accepted but its native confirmation did not arrive.",
             "LOOP_NOT_CONFIRMED",
         ),
-        LoopOpError::Rejected(detail) => {
-            ApiError::bad_request(format!("Agent rejected loop operation: {detail}"), "LOOP_REJECTED")
-        }
+        LoopOpError::Rejected(detail) => ApiError::bad_request(
+            format!("Agent rejected loop operation: {detail}"),
+            "LOOP_REJECTED",
+        ),
         LoopOpError::AgentUnavailable(detail) => ApiError::service_unavailable(
             format!("The agent could not service the loop operation: {detail}"),
             "AGENT_UNAVAILABLE",

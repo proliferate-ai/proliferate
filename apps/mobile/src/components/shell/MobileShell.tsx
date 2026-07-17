@@ -1,16 +1,7 @@
 import { StatusBar } from "expo-status-bar";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  ActivityIndicator,
-  BackHandler,
-  Linking,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { useMemo } from "react";
+import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-
-import { useCloudWorkspace } from "@proliferate/cloud-sdk-react";
 
 import { MobileAuthScreen } from "../auth/MobileAuthScreen";
 import { MobileConnectGitHubScreen } from "../auth/MobileConnectGitHubScreen";
@@ -24,20 +15,14 @@ import { MobileShellWithDrawer } from "./screen/MobileShellWithDrawer";
 import { MobileTopBar } from "../primitives/MobileTopBar";
 import { MobileWorkspacesScreen } from "../work/MobileAllWorkScreen";
 import { useMobileOnboardingStatus } from "../../hooks/shell/lifecycle/use-mobile-onboarding-status";
+import { useMobileShellNavigation } from "../../hooks/shell/lifecycle/use-mobile-shell-navigation";
 import { useMobileClientDailyActivity } from "../../hooks/telemetry/lifecycle/use-mobile-client-daily-activity";
 import { useMobileScreenTelemetry } from "../../hooks/telemetry/lifecycle/use-mobile-screen-telemetry";
 import {
-  clearMobileShellNavigation,
-  persistMobileShellNavigation,
-  restoreMobileShellNavigation,
-} from "../../lib/access/native/mobile-shell-navigation-storage";
-import {
   buildMobileShellAccountSummary,
-  mobileLinkedChatForWorkspace,
   mobileShellRouteSubtitle,
-  mobileWorkspaceLinkFromUrl,
 } from "../../lib/domain/shell/mobile-shell-navigation";
-import { routeTitle, type MobileCloudChat, type RouteId } from "../../navigation/navigation-model";
+import { routeTitle } from "../../navigation/navigation-model";
 import { useMobileAuth } from "../../providers/MobileAuthProvider";
 import { colors, spacing } from "../../styles/tokens";
 
@@ -53,24 +38,13 @@ export function MobileShell() {
     loadingAction,
     error,
   } = useMobileAuth();
-  const [route, setRoute] = useState<RouteId>("home");
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [selectedChat, setSelectedChat] = useState<MobileCloudChat | null>(null);
-  const [linkedWorkspaceId, setLinkedWorkspaceId] = useState<string | null>(null);
-  const [linkedWorkspaceSessionId, setLinkedWorkspaceSessionId] = useState<string | null>(null);
-  const [initialLinkChecked, setInitialLinkChecked] = useState(false);
-  const [navigationRestored, setNavigationRestored] = useState(false);
-  const initialLinkAppliedRef = useRef(false);
-  const linkedWorkspace = useCloudWorkspace(
-    linkedWorkspaceId,
-    authState === "active" && linkedWorkspaceId !== null,
-  );
+  const ownerUserId = user?.id ?? null;
+  const nav = useMobileShellNavigation(authState, ownerUserId);
 
   const { completeOnboarding, onboardingStatus } = useMobileOnboardingStatus(authState);
-  const subtitle = useMemo(() => mobileShellRouteSubtitle(route), [route]);
+  const subtitle = useMemo(() => mobileShellRouteSubtitle(nav.route), [nav.route]);
   const account = useMemo(() => buildMobileShellAccountSummary(user), [user]);
-  const telemetryScreen = selectedChat ? "chat" : route;
-  const ownerUserId = user?.id ?? null;
+  const telemetryScreen = nav.selectedChat ? "chat" : nav.route;
 
   useMobileScreenTelemetry(authState, telemetryScreen);
   const canRecordAuthenticatedActivity = authState === "active" || authState === "needs_github";
@@ -78,153 +52,11 @@ export function MobileShell() {
     accessToken: canRecordAuthenticatedActivity ? accessToken : null,
     actorStorageKey: user?.id ?? null,
     routeOrScreen: authState === "needs_github" ? "connect_github" : telemetryScreen,
-    viewingChat: authState === "active" && selectedChat !== null,
+    viewingChat: authState === "active" && nav.selectedChat !== null,
   });
-  const applyWorkspaceLink = useCallback((url: string | null): boolean => {
-    const link = mobileWorkspaceLinkFromUrl(url);
-    if (!link) {
-      return false;
-    }
-    initialLinkAppliedRef.current = true;
-    setLinkedWorkspaceId(link.workspaceId);
-    setLinkedWorkspaceSessionId(link.sessionId);
-    setRoute("work");
-    setSelectedChat(null);
-    setDrawerOpen(false);
-    return true;
-  }, []);
-
-  useEffect(() => {
-    let active = true;
-    void Linking.getInitialURL()
-      .then((url) => {
-        if (active) {
-          applyWorkspaceLink(url);
-        }
-      })
-      .finally(() => {
-        if (active) {
-          setInitialLinkChecked(true);
-        }
-      });
-    const subscription = Linking.addEventListener("url", ({ url }) => {
-      applyWorkspaceLink(url);
-    });
-    return () => {
-      active = false;
-      subscription.remove();
-    };
-  }, [applyWorkspaceLink]);
-
-  useEffect(() => {
-    if (authState !== "active") {
-      setNavigationRestored(false);
-      return;
-    }
-    if (!initialLinkChecked) {
-      return;
-    }
-    if (initialLinkAppliedRef.current) {
-      setNavigationRestored(true);
-      return;
-    }
-    if (!ownerUserId) {
-      return;
-    }
-    let cancelled = false;
-    void restoreMobileShellNavigation(ownerUserId)
-      .then((stored) => {
-        if (cancelled) {
-          return;
-        }
-        if (stored.route) {
-          setRoute(stored.route);
-        }
-        if (stored.chat) {
-          setSelectedChat(stored.chat);
-        }
-      })
-      .catch(() => undefined)
-      .finally(() => {
-        if (!cancelled) {
-          setNavigationRestored(true);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [authState, initialLinkChecked, ownerUserId]);
-
-  useEffect(() => {
-    if (authState !== "active" || !navigationRestored || !ownerUserId) {
-      return;
-    }
-    void persistMobileShellNavigation(ownerUserId, route, selectedChat);
-  }, [authState, navigationRestored, ownerUserId, route, selectedChat]);
-
-  useEffect(() => {
-    if (!linkedWorkspaceId || !linkedWorkspace.data) {
-      return;
-    }
-    const chat = mobileLinkedChatForWorkspace(linkedWorkspace.data, [], linkedWorkspaceSessionId);
-    if (chat) {
-      setSelectedChat(chat);
-    } else {
-      setRoute("work");
-    }
-    setLinkedWorkspaceId(null);
-    setLinkedWorkspaceSessionId(null);
-  }, [linkedWorkspace.data, linkedWorkspaceId, linkedWorkspaceSessionId]);
-
-  useEffect(() => {
-    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
-      if (drawerOpen) {
-        setDrawerOpen(false);
-        return true;
-      }
-      if (selectedChat) {
-        setSelectedChat(null);
-        return true;
-      }
-      if (route !== "home") {
-        setRoute("home");
-        return true;
-      }
-      return false;
-    });
-
-    return () => subscription.remove();
-  }, [drawerOpen, route, selectedChat]);
-
-  function navigate(nextRoute: RouteId) {
-    setRoute(nextRoute);
-    setSelectedChat(null);
-    setDrawerOpen(false);
-  }
-
-  function openChat(chat: MobileCloudChat) {
-    setSelectedChat(chat);
-    setDrawerOpen(false);
-  }
-
-  const markSelectedChatSession = useCallback((sessionId: string) => {
-    setSelectedChat((current) => current ? { ...current, sessionId } : current);
-  }, []);
-  const clearSelectedChatInitialPendingPrompt = useCallback(() => {
-    setSelectedChat((current) =>
-      current?.initialPendingPrompt ? { ...current, initialPendingPrompt: null } : current
-    );
-  }, []);
 
   async function handleSignOut() {
-    setRoute("home");
-    setDrawerOpen(false);
-    setSelectedChat(null);
-    setLinkedWorkspaceId(null);
-    setLinkedWorkspaceSessionId(null);
-    setNavigationRestored(false);
-    initialLinkAppliedRef.current = false;
-    await clearMobileShellNavigation(ownerUserId).catch(() => undefined);
+    await nav.resetForSignOut(ownerUserId);
     await signOut();
   }
 
@@ -282,58 +114,58 @@ export function MobileShell() {
       <StatusBar style="light" />
 
       <MobileShellWithDrawer
-        drawerOpen={drawerOpen}
-        setDrawerOpen={setDrawerOpen}
+        drawerOpen={nav.drawerOpen}
+        setDrawerOpen={nav.setDrawerOpen}
         drawer={
           <MobileDrawer
-            activeRoute={selectedChat ? null : route}
-            onNavigate={navigate}
-            onOpenChat={openChat}
-            onNewChat={() => navigate("home")}
-            onClose={() => setDrawerOpen(false)}
+            activeRoute={nav.selectedChat ? null : nav.route}
+            onNavigate={nav.navigate}
+            onOpenChat={nav.openChat}
+            onNewChat={() => nav.navigate("home")}
+            onClose={() => nav.setDrawerOpen(false)}
             account={account}
           />
         }
       >
-        {selectedChat ? (
+        {nav.selectedChat ? (
           <MobileChatScreen
-            chat={selectedChat}
+            chat={nav.selectedChat}
             ownerUserId={ownerUserId}
             productToken={accessToken}
-            onBack={() => setSelectedChat(null)}
-            onInitialPendingPromptConsumed={clearSelectedChatInitialPendingPrompt}
-            onSessionSelected={markSelectedChatSession}
+            onBack={nav.closeChat}
+            onInitialPendingPromptConsumed={nav.clearSelectedChatInitialPendingPrompt}
+            onSessionSelected={nav.markSelectedChatSession}
           />
-        ) : route === "home" ? (
+        ) : nav.route === "home" ? (
           <MobileHomeScreen
             ownerUserId={ownerUserId}
-            onOpenChat={openChat}
-            onOpenDrawer={() => setDrawerOpen(true)}
-            onConfigureRepos={() => navigate("settings")}
+            onOpenChat={nav.openChat}
+            onOpenDrawer={() => nav.setDrawerOpen(true)}
+            onConfigureRepos={() => nav.navigate("settings")}
           />
         ) : (
           <View style={styles.body}>
-            {route === "work" ? (
+            {nav.route === "work" ? (
               <MobileWorkspacesScreen
-                onOpenChat={openChat}
-                onOpenDrawer={() => setDrawerOpen(true)}
-                onNewChat={() => navigate("home")}
+                onOpenChat={nav.openChat}
+                onOpenDrawer={() => nav.setDrawerOpen(true)}
+                onNewChat={() => nav.navigate("home")}
               />
-            ) : route === "automations" ? (
+            ) : nav.route === "automations" ? (
               <>
                 <MobileTopBar
-                  title={routeTitle(route)}
+                  title={routeTitle(nav.route)}
                   subtitle={subtitle}
-                  leading={{ kind: "menu", onPress: () => setDrawerOpen(true) }}
+                  leading={{ kind: "menu", onPress: () => nav.setDrawerOpen(true) }}
                 />
                 <MobileAutomationsScreen />
               </>
             ) : (
               <>
                 <MobileTopBar
-                  title={routeTitle(route)}
+                  title={routeTitle(nav.route)}
                   subtitle={subtitle}
-                  leading={{ kind: "menu", onPress: () => setDrawerOpen(true) }}
+                  leading={{ kind: "menu", onPress: () => nav.setDrawerOpen(true) }}
                 />
                 <MobileSettingsScreen account={account} onSignOut={() => void handleSignOut()} />
               </>

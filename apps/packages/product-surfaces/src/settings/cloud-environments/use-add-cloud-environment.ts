@@ -37,6 +37,11 @@ export interface UseAddCloudEnvironmentInput {
   userAuthorizationReturnTo?: string | null;
   installationReturnTo?: string | null;
   onOpenExternalUrl?: (url: string) => void | Promise<void>;
+  /**
+   * Hand a selected repository to the app-level ordered readiness host. When
+   * provided, this hook owns discovery only and does not validate or save.
+   */
+  onRepositorySelected?: (repo: GitRepoIdentity) => void;
   onEnvironmentAdded: (repoId: string) => void;
 }
 
@@ -53,6 +58,7 @@ export function useAddCloudEnvironment({
   userAuthorizationReturnTo = null,
   installationReturnTo = null,
   onOpenExternalUrl,
+  onRepositorySelected,
   onEnvironmentAdded,
 }: UseAddCloudEnvironmentInput): CloudRepoPickerProps {
   const [query, setQuery] = useState("");
@@ -172,6 +178,10 @@ export function useAddCloudEnvironment({
       void installGitHubApp();
     },
     onCopyAdminRequest: copyAdminRequest,
+    returnSurface: githubSetupReturnSurface(
+      userAuthorizationReturnTo,
+      installationReturnTo,
+    ),
   });
 
   const repositoryById = useMemo(() => {
@@ -205,14 +215,22 @@ export function useAddCloudEnvironment({
     setAddingRepoId(repoId);
     setError(null);
     try {
-      if ("repoConfigState" in repo && repo.repoConfigState === "configured") {
-        onEnvironmentAdded(repoId);
-        return;
-      }
-
       const catalogBlockedReason = "repoConfigState" in repo ? blockedCloudRepositoryReason(repo) : null;
       if (catalogBlockedReason) {
         throw new Error(catalogBlockedReason);
+      }
+
+      if (onRepositorySelected) {
+        onRepositorySelected({
+          gitOwner: repo.gitOwner,
+          gitRepoName: repo.gitRepoName,
+        });
+        return;
+      }
+
+      if ("repoConfigState" in repo && repo.repoConfigState === "configured") {
+        onEnvironmentAdded(repoId);
+        return;
       }
 
       const authority = await validateAuthority.mutateAsync({
@@ -292,6 +310,16 @@ export function useAddCloudEnvironment({
       }
     },
   };
+}
+
+function githubSetupReturnSurface(
+  userAuthorizationReturnTo: string | null,
+  installationReturnTo: string | null,
+): "desktop" | "web" {
+  const returnTargets = [userAuthorizationReturnTo, installationReturnTo].filter(Boolean);
+  return returnTargets.some((target) => target?.startsWith("proliferate"))
+    ? "desktop"
+    : "web";
 }
 
 function useDebouncedValue(value: string, delayMs: number): string {

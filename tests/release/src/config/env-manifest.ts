@@ -315,6 +315,50 @@ export const ENV_MANIFEST: readonly EnvVarSpec[] = [
     lanes: ["sandbox"],
   },
   {
+    name: "RELEASE_E2E_RETAINED_RELEASE_ID",
+    description:
+      "Release id (e.g. `v0.3.38`) selecting a committed retained-release receipt from " +
+      "tests/release/retained-releases/index.json as the Tier 4 N-1 baseline. The receipt is " +
+      "schema-validated, digest-checked, and policy-checked (a bootstrap_unqualified receipt fails " +
+      "closed once any qualified receipt exists) before any world side effect; a named id that cannot " +
+      "be validated is an error, never a silent block. Absent -> T4-RUNTIME-1 reports blocked rather " +
+      "than fabricating an N-1.",
+    whereItLives:
+      "Chosen by the operator/workflow from the committed retained-release index; the only current " +
+      "receipt is the founder-ruled one-time bootstrap_unqualified v0.3.38 baseline.",
+    secret: false,
+    lanes: ["sandbox"],
+  },
+  {
+    name: "RELEASE_E2E_RETAINED_ANYHARNESS_REPORTED_VERSION",
+    description:
+      "Optional override for the version the retained N-1 AnyHarness binary ACTUALLY reports from " +
+      "`--version` / `/health` (not merely its release tag). The supervisor health-gate and worker " +
+      "`--version` probe assert an exact match to the requested version (R9R-001 / R9-008), so a binary " +
+      "that is not version-stamped (issue #1089) can never converge; the proof must compare against " +
+      "observable truth. When unset, T4-RUNTIME-1 derives the reported version from the retained " +
+      "manifest.",
+    whereItLives:
+      "Set by the operator only when the retained binary's reported version diverges from its manifest " +
+      "version (e.g. an unstamped release); otherwise leave unset.",
+    secret: false,
+    lanes: ["sandbox"],
+  },
+  {
+    name: "RELEASE_E2E_SUPERVISOR_OWNED_RUNTIME",
+    description:
+      "Confirmation switch (set to `1`) asserting that the candidate API under test runs with " +
+      "PROLIFERATE_SUPERVISOR_OWNED_RUNTIME=1, so a Worker heartbeat returns desiredTopology=" +
+      "supervisor_owned and the Worker writes the durable mailbox update request rather than swapping " +
+      "the binary itself (server default is OFF). T4-RUNTIME-1 requires the supervisor-owned topology to " +
+      "observe the contract's Worker-mailbox -> Supervisor-activation flow; absent -> blocked (the " +
+      "legacy direct-Worker path would contradict the contract).",
+    whereItLives:
+      "Set by the dispatch that deploys the candidate API with the supervisor-owned runtime flag enabled.",
+    secret: false,
+    lanes: ["sandbox"],
+  },
+  {
     name: "RELEASE_E2E_SELFHOST_PROVISION",
     description:
       "Opt-in switch (set to `1`) authorizing the self-hosting scenarios (SELFHOST-INSTALL-1 cold boot, " +
@@ -423,28 +467,58 @@ export const ENV_MANIFEST: readonly EnvVarSpec[] = [
   {
     name: "RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY",
     description:
-      "Bounded, run-scoped Anthropic provider key used by SELFHOST-INSTALL-1's SH-BASE-TURN cell: the owner " +
-      "stores it through the product (POST /v1/cloud/agent-gateway/keys) and selects it for the local surface " +
-      "(sourceKind=api_key); the controller-local candidate AnyHarness spawns the harness with this raw key — " +
-      "no LiteLLM/E2B is involved. `preflightByokKey` runs before storing/selecting; a rejected key fails the " +
-      "cell closed (never blocked/skipped). Never stored in evidence (only a hash of the created key id is).",
+      "Dedicated bounded BYOK (bring-your-own-key) Anthropic provider key. Local lane: the LOCAL-3 user-API-key " +
+      "route of the CLAUDE harness (and the LOCAL-6 route-change actor); stored + selected through the product " +
+      "Settings UI as a user-owned credential, the user-key route must consume ZERO managed LLM credit and leave " +
+      "the managed balance unchanged. Self-host lane: SELFHOST-INSTALL-1's SH-BASE-TURN cell stores it through the " +
+      "product (POST /v1/cloud/agent-gateway/keys) and the controller-local candidate AnyHarness spawns the harness " +
+      "with the raw key (no LiteLLM/E2B). Distinct from RELEASE_E2E_BYOK_ANTHROPIC_B_API_KEY so the two " +
+      "Anthropic-consuming harnesses (claude, opencode) stay isolated. Never enters logs or evidence.",
     whereItLives:
-      "Local: `~/.proliferate-local/dev/qualification-infra.env` (mode 0600). CI: the `Qualification` " +
-      "environment's `RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY` secret.",
+      "A rate/spend-bounded Anthropic API key reserved for qualification BYOK. Local: " +
+      "~/.proliferate-local/dev/qualification-infra.env (mode 0600). CI: the `Qualification` environment secret.",
     secret: true,
-    lanes: ["selfhost"],
+    lanes: ["local", "selfhost"],
   },
   {
     name: "RELEASE_E2E_BYOK_ANTHROPIC_B_API_KEY",
     description:
-      "Second bounded, run-scoped Anthropic provider key, reserved for a future two-key self-host scenario " +
-      "(e.g. asserting key rotation/replacement). Not consumed by SELFHOST-INSTALL-1's single-key SH-BASE-TURN " +
-      "cell today. Never stored in evidence.",
+      "Second bounded BYOK Anthropic provider key. Local lane: the LOCAL-3 user-API-key route of the OPENCODE " +
+      "harness (its matching DIRECT provider, distinct from the injected `proliferate` gateway provider). Self-host " +
+      "lane: reserved for a future two-key scenario (e.g. key rotation/replacement); not consumed by the current " +
+      "single-key SH-BASE-TURN cell. Kept separate from RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY so concurrent " +
+      "claude/opencode user-key cells do not share a key. Zero managed spend / zero balance change asserted. " +
+      "Never enters logs or evidence.",
     whereItLives:
-      "Local: `~/.proliferate-local/dev/qualification-infra.env` (mode 0600). CI: the `Qualification` " +
-      "environment's `RELEASE_E2E_BYOK_ANTHROPIC_B_API_KEY` secret.",
+      "A second rate/spend-bounded Anthropic API key. Local: ~/.proliferate-local/dev/qualification-infra.env " +
+      "(mode 0600). CI: the `Qualification` environment secret.",
     secret: true,
-    lanes: ["selfhost"],
+    lanes: ["local", "selfhost"],
+  },
+  {
+    name: "RELEASE_E2E_BYOK_OPENAI_API_KEY",
+    description:
+      "Bounded BYOK OpenAI provider key for the LOCAL-3 user-API-key route of the CODEX harness (codex's own " +
+      "provider family). Stored + selected through the product Settings UI; the user-key route must consume " +
+      "zero managed LLM credit. Never enters logs or evidence.",
+    whereItLives:
+      "A rate/spend-bounded OpenAI API key reserved for qualification BYOK. Local: " +
+      "~/.proliferate-local/dev/qualification-infra.env (mode 0600). CI: the `Qualification` environment secret.",
+    secret: true,
+    lanes: ["local"],
+  },
+  {
+    name: "RELEASE_E2E_BYOK_XAI_API_KEY",
+    description:
+      "Bounded BYOK xAI provider key for the LOCAL-3 user-API-key route of the GROK harness. Stored + selected " +
+      "through the product Settings UI; the user-key route must consume zero managed LLM credit. Never enters " +
+      "logs or evidence. (Cursor is EXCLUDED from the user-key matrix: its CURSOR_API_KEY is an account key, " +
+      "not a provider key — no BYOK var is declared for it.)",
+    whereItLives:
+      "A rate/spend-bounded xAI API key reserved for qualification BYOK. Local: " +
+      "~/.proliferate-local/dev/qualification-infra.env (mode 0600). CI: the `Qualification` environment secret.",
+    secret: true,
+    lanes: ["local"],
   },
   {
     name: "RELEASE_E2E_SELFHOST_REGION",
@@ -480,6 +554,130 @@ export const ENV_MANIFEST: readonly EnvVarSpec[] = [
     lanes: ["selfhost"],
   },
   {
+    name: "RELEASE_E2E_SELFHOST_GITHUB_OAUTH_CLIENT_ID",
+    description:
+      "GitHub OAuth application client id SELFHOST-QUAL-1's SH-GITHUB-AUTH cell configures on the instance " +
+      "(written to .env.static as GITHUB_OAUTH_CLIENT_ID, then bootstrap.sh re-resolves + restarts the api). " +
+      "The OAuth app has a single fixed registered callback " +
+      "(https://selfhost-fixed.qualification.proliferate.com/auth/github/callback), which is why the cell " +
+      "provisions the box on the FIXED serial-lane origin. Absent -> the cell fails closed (never skipped).",
+    whereItLives:
+      "The qualification GitHub OAuth app (registered once against the fixed serial origin). Local: " +
+      "`~/.proliferate-local/dev/qualification-infra.env` (mode 0600). CI: the `Qualification` environment's " +
+      "`RELEASE_E2E_SELFHOST_GITHUB_OAUTH_CLIENT_ID` variable.",
+    secret: false,
+    lanes: ["selfhost"],
+  },
+  {
+    name: "RELEASE_E2E_SELFHOST_GITHUB_OAUTH_SECRET",
+    description:
+      "GitHub OAuth application client SECRET paired with RELEASE_E2E_SELFHOST_GITHUB_OAUTH_CLIENT_ID " +
+      "(written to .env.static as GITHUB_OAUTH_CLIENT_SECRET over the SSH control handle, never on argv). " +
+      "SH-GITHUB-AUTH fails closed when it is absent. Never stored in evidence.",
+    whereItLives:
+      "The qualification GitHub OAuth app. Local: `~/.proliferate-local/dev/qualification-infra.env` (mode " +
+      "0600). CI: the `Qualification` environment's `RELEASE_E2E_SELFHOST_GITHUB_OAUTH_SECRET` secret.",
+    secret: true,
+    lanes: ["selfhost"],
+  },
+  {
+    name: "RELEASE_E2E_SELFHOST_GITHUB_IDENTITY_A_STATE",
+    description:
+      "Filesystem path to a Playwright storage-state JSON seeding a logged-in github.com session for identity " +
+      "A (the verified GitHub identity whose email matches the password-claimed owner). SH-GITHUB-AUTH drives " +
+      "the product's real Authorize-GitHub flow from a browser context loaded with this state so no interactive " +
+      "github.com login is needed. The path (not the cookies) is the env value; the file itself is the secret " +
+      "and is never printed. Absent -> the cell fails closed.",
+    whereItLives:
+      "Captured once from a real github.com sign-in of identity A. Local: out-of-band 0600 JSON; path passed " +
+      "to the runner. CI: written from the `Qualification` environment's storage-state secret before the run.",
+    secret: false,
+    lanes: ["selfhost"],
+  },
+  {
+    name: "RELEASE_E2E_SELFHOST_GITHUB_IDENTITY_B_STATE",
+    description:
+      "Playwright storage-state JSON path for a logged-in github.com session for identity B (a SECOND, distinct " +
+      "GitHub identity). SH-GITHUB-AUTH signs B in UNINVITED first (must be denied), then admits B through a " +
+      "product-UI invitation. See RELEASE_E2E_SELFHOST_GITHUB_IDENTITY_A_STATE for the path/secret convention. " +
+      "Absent -> the cell fails closed.",
+    whereItLives:
+      "Captured once from a real github.com sign-in of identity B. Local: out-of-band 0600 JSON; path passed " +
+      "to the runner. CI: written from the `Qualification` environment's storage-state secret before the run.",
+    secret: false,
+    lanes: ["selfhost"],
+  },
+  {
+    name: "RELEASE_E2E_SELFHOST_GITHUB_IDENTITY_A_EMAIL",
+    description:
+      "Identity A's verified GitHub email. SH-GITHUB-AUTH claims the owner via password with THIS email so " +
+      "A's later GitHub sign-in links to the existing owner (no duplicate user). Absent -> the cell fails closed.",
+    whereItLives:
+      "The verified primary email on identity A's GitHub account. Local: " +
+      "`~/.proliferate-local/dev/qualification-infra.env`. CI: the `Qualification` environment variable.",
+    secret: false,
+    lanes: ["selfhost"],
+  },
+  {
+    name: "RELEASE_E2E_SELFHOST_GITHUB_IDENTITY_B_EMAIL",
+    description:
+      "Identity B's verified GitHub email. SH-GITHUB-AUTH invites THIS email through the product UI so B's " +
+      "GitHub sign-in consumes the pending invitation and receives its role. Absent -> the cell fails closed.",
+    whereItLives:
+      "The verified primary email on identity B's GitHub account. Local: " +
+      "`~/.proliferate-local/dev/qualification-infra.env`. CI: the `Qualification` environment variable.",
+    secret: false,
+    lanes: ["selfhost"],
+  },
+  {
+    name: "RELEASE_E2E_SELFHOST_LITELLM_IMAGE_TAG",
+    description:
+      "The exact LiteLLM image tag SELFHOST-QUAL-1's SH-GATEWAY cell pins the operator agent-gateway profile to " +
+      "(written as PROLIFERATE_LITELLM_IMAGE_TAG into the instance env before bootstrap brings the profile up). " +
+      "Defaults to \"stable\" when unset; CI SHOULD pin a specific immutable tag/digest here. The cell records " +
+      "the OBSERVED image digest (docker inspect over SSH) into evidence regardless, so evidence stays honest " +
+      "even under a rolling default.",
+    whereItLives:
+      "The published proliferate-litellm image tag under test. Local: " +
+      "`~/.proliferate-local/dev/qualification-infra.env`. CI: the `Qualification` environment's " +
+      "`RELEASE_E2E_SELFHOST_LITELLM_IMAGE_TAG` variable (pin to the release's LiteLLM tag).",
+    secret: false,
+    lanes: ["selfhost"],
+  },
+  {
+    name: "RELEASE_E2E_SELFHOST_CFN_BUCKET",
+    description:
+      "S3 bucket SELFHOST-CFN-1's SH-CFN-WRAPPER cell uploads the candidate proliferate-deploy.tar.gz + its " +
+      "self-hosted-assets.SHA256SUMS into (key prefix qualification/<run-id>/<shard-id>/), then presigns bounded " +
+      "GET URLs it passes to the shipped CloudFormation template as DeployBundleUrl/DeployBundleChecksumUrl. The " +
+      "scenario registers each s3_object cleanup intent BEFORE upload and deletes them on teardown. Absent -> the " +
+      "cell fails CLOSED (a required case is green or red, never a silent skip). Pending founder provisioning.",
+    whereItLives:
+      "A dedicated qualification S3 bucket (private, lifecycle-expiring) in the RELEASE_E2E_SELFHOST_REGION account. " +
+      "Local: `~/.proliferate-local/dev/qualification-infra.env` (mode 0600). CI: the `Qualification` environment's " +
+      "`RELEASE_E2E_SELFHOST_CFN_BUCKET` variable.",
+    secret: false,
+    lanes: ["selfhost"],
+  },
+  {
+    name: "RELEASE_E2E_SELFHOST_CFN_IMAGE_REPO",
+    description:
+      "GHCR container repo (ghcr.io/<org>/<name>, e.g. ghcr.io/proliferate-ai/proliferate-server-qualification) " +
+      "SELFHOST-CFN-1 pushes the docker-loaded candidate server image to under a run-scoped immutable tag " +
+      "(<run-id>-<shard-id>), then passes as the template's ServerImageRepository. The scenario registers the " +
+      "ghcr_package_version cleanup intent BEFORE the push and deletes the version by tag on teardown (gh api DELETE " +
+      "/orgs/{org}/packages/container/{name}/versions/{id}). docker login is assumed ambient (gh auth token); no " +
+      "credential is ever printed. Absent -> the cell fails CLOSED. Pending founder provisioning. NOTE (live proof): " +
+      "the template's default InstanceType is Graviton (arm64), so the candidate server image must be built for " +
+      "linux/arm64 to boot on it.",
+    whereItLives:
+      "A dedicated qualification GHCR package under the proliferate-ai org (the ambient gh token must be able to push " +
+      "and delete package versions). Local: `~/.proliferate-local/dev/qualification-infra.env` (mode 0600). CI: the " +
+      "`Qualification` environment's `RELEASE_E2E_SELFHOST_CFN_IMAGE_REPO` variable.",
+    secret: false,
+    lanes: ["selfhost"],
+  },
+  {
     name: "RELEASE_E2E_SELFHOST_SSH_USER",
     description:
       "SSH login user on the box's Ubuntu AMI. Optional; defaults to \"ubuntu\" when unset (the standard " +
@@ -489,6 +687,220 @@ export const ENV_MANIFEST: readonly EnvVarSpec[] = [
       "`Qualification` environment's `RELEASE_E2E_SELFHOST_SSH_USER` variable, if overridden.",
     secret: false,
     lanes: ["selfhost"],
+  },
+  {
+    name: "RELEASE_E2E_SELFHOST_CLOUD_E2B_API_KEY",
+    description:
+      "E2B API key the SELFHOST-QUAL-1 SH-CLOUD-ADDON cell writes into the instance env (E2B_API_KEY) so the " +
+      "self-host box's OWN server process provisions its personal cloud sandbox under this account. This is the " +
+      "INSTANCE's provider key (distinct from the harness-side RELEASE_E2E_E2B_API_KEY ground-truth backdoor); the " +
+      "cell also passes it to the E2B reap so the separate-account sandbox is torn down with the box's own key. " +
+      "Absent -> the cell fails CLOSED (a required case is green or red, never a silent skip). Pending founder provisioning.",
+    whereItLives:
+      "A dedicated qualification E2B account/team key. Local: `~/.proliferate-local/dev/qualification-infra.env` " +
+      "(mode 0600). CI: the `Qualification` environment's `RELEASE_E2E_SELFHOST_CLOUD_E2B_API_KEY` secret.",
+    secret: true,
+    lanes: ["selfhost"],
+  },
+  {
+    name: "RELEASE_E2E_SELFHOST_CLOUD_E2B_TEMPLATE_NAME",
+    description:
+      "The immutable self-built E2B runtime template ref (candidate runtime bytes) the SH-CLOUD-ADDON cell writes " +
+      "as E2B_TEMPLATE_NAME — the E2B_API_KEY + E2B_TEMPLATE_NAME complete pair is what common.sh gates the " +
+      "cloud-workspaces compose profile on. Recorded as the evidence's e2b_template_id receipt. Absent -> the cell " +
+      "fails CLOSED. Pending founder provisioning.",
+    whereItLives:
+      "The self-built qualification runtime template published to the RELEASE_E2E_SELFHOST_CLOUD_E2B_API_KEY account. " +
+      "Local: `~/.proliferate-local/dev/qualification-infra.env` (mode 0600). CI: the `Qualification` environment's " +
+      "`RELEASE_E2E_SELFHOST_CLOUD_E2B_TEMPLATE_NAME` variable.",
+    secret: false,
+    lanes: ["selfhost"],
+  },
+  {
+    name: "RELEASE_E2E_SELFHOST_CLOUD_GITHUB_APP_ID",
+    description:
+      "GitHub App id of the INSTANCE's own cloud add-on GitHub App (written as GITHUB_APP_ID), used by the " +
+      "SH-CLOUD-ADDON cell's real product GitHub-authorization path that binds a covered repo to the personal " +
+      "sandbox. This is a self-host-box App on the fixed origin, DISTINCT from the managed-cloud " +
+      "RELEASE_E2E_CLOUD_GITHUB_APP_* set (which targets the harness's managed-cloud staging installation). " +
+      "Recorded (hashed) as the evidence's github_app_installation_id_hash. Absent -> the cell fails CLOSED. Pending " +
+      "founder provisioning.",
+    whereItLives:
+      "A standing `Proliferate Self-Host Qualification Cloud` GitHub App (proliferate-e2e org) installed on the e2e " +
+      "fixture repo, callback on the fixed origin. Local: `~/.proliferate-local/dev/qualification-infra.env` (0600). " +
+      "CI: the `Qualification` environment's `RELEASE_E2E_SELFHOST_CLOUD_GITHUB_APP_ID` variable.",
+    secret: false,
+    lanes: ["selfhost"],
+  },
+  {
+    name: "RELEASE_E2E_SELFHOST_CLOUD_GITHUB_APP_CLIENT_ID",
+    description:
+      "OAuth client id of the instance cloud add-on GitHub App (written as GITHUB_APP_CLIENT_ID). Pairs with " +
+      "RELEASE_E2E_SELFHOST_CLOUD_GITHUB_APP_ID. Absent -> the SH-CLOUD-ADDON cell fails CLOSED. Pending founder provisioning.",
+    whereItLives:
+      "Same `Proliferate Self-Host Qualification Cloud` GitHub App. Local: " +
+      "`~/.proliferate-local/dev/qualification-infra.env` (0600). CI: the `Qualification` environment's " +
+      "`RELEASE_E2E_SELFHOST_CLOUD_GITHUB_APP_CLIENT_ID` variable.",
+    secret: false,
+    lanes: ["selfhost"],
+  },
+  {
+    name: "RELEASE_E2E_SELFHOST_CLOUD_GITHUB_APP_CLIENT_SECRET",
+    description:
+      "OAuth client SECRET of the instance cloud add-on GitHub App (written as GITHUB_APP_CLIENT_SECRET into a 0600 " +
+      "file scp'd to the box, never argv). Pairs with RELEASE_E2E_SELFHOST_CLOUD_GITHUB_APP_CLIENT_ID. Never stored " +
+      "in evidence. Absent -> the SH-CLOUD-ADDON cell fails CLOSED. Pending founder provisioning.",
+    whereItLives:
+      "Same GitHub App. Local: `~/.proliferate-local/dev/qualification-infra.env` (mode 0600). CI: the " +
+      "`Qualification` environment's `RELEASE_E2E_SELFHOST_CLOUD_GITHUB_APP_CLIENT_SECRET` secret.",
+    secret: true,
+    lanes: ["selfhost"],
+  },
+  {
+    name: "RELEASE_E2E_SELFHOST_CLOUD_GITHUB_APP_PRIVATE_KEY",
+    description:
+      "The PEM private key of the instance cloud add-on GitHub App (written inline as GITHUB_APP_PRIVATE_KEY into a " +
+      "0600 file scp'd to the box, never argv). Signs the App JWT the server exchanges for installation tokens. Never " +
+      "stored in evidence. Absent -> the SH-CLOUD-ADDON cell fails CLOSED. Pending founder provisioning.",
+    whereItLives:
+      "Same GitHub App's generated private key (multi-line PEM). Local: `~/.proliferate-local/dev/qualification-infra.env` " +
+      "(mode 0600, newlines preserved). CI: the `Qualification` environment's " +
+      "`RELEASE_E2E_SELFHOST_CLOUD_GITHUB_APP_PRIVATE_KEY` secret.",
+    secret: true,
+    lanes: ["selfhost"],
+  },
+  {
+    name: "RELEASE_E2E_CLOUD_AWS_REGION",
+    description:
+      "AWS region hosting CLOUD-PROVISION-1's run-scoped EC2 ingress box (Ec2ProvisionConfig.region). " +
+      "AWS credentials themselves stay ambient (the `aws` CLI), matching the self-host box precedent " +
+      "(RELEASE_E2E_SELFHOST_PROVISION) — never a manifest var.",
+    whereItLives:
+      "The qualification AWS account's chosen region for `qualification.proliferate.com` ingress boxes. " +
+      "Local: `~/.proliferate-local/dev/qualification-infra.env` (0600). CI: the `Qualification` environment.",
+    secret: false,
+    lanes: ["sandbox"],
+  },
+  {
+    name: "RELEASE_E2E_CLOUD_ROUTE53_ZONE_ID",
+    description:
+      "Route53 hosted-zone id for `qualification.proliferate.com` (Ec2ProvisionConfig.hostedZoneId), the " +
+      "zone the run-scoped `<run>.qualification.proliferate.com` A record is created under.",
+    whereItLives:
+      "The qualification AWS account's Route53 console for the `qualification.proliferate.com` zone. " +
+      "Local: `~/.proliferate-local/dev/qualification-infra.env` (0600). CI: the `Qualification` environment.",
+    secret: false,
+    lanes: ["sandbox"],
+  },
+  {
+    name: "RELEASE_E2E_CLOUD_GITHUB_APP_ID",
+    description:
+      "App id of the staging qualification GitHub App (`proliferate-cloud-staging`, installed on " +
+      "`proliferate-e2e/e2e-fixture`) the candidate Server runs with (CandidateGithubAppConfig.appId).",
+    whereItLives:
+      "The `proliferate-cloud-staging` GitHub App's settings page. Local: " +
+      "`~/.proliferate-local/dev/qualification-infra.env` (0600). CI: the `Qualification` environment.",
+    secret: false,
+    lanes: ["sandbox"],
+  },
+  {
+    name: "RELEASE_E2E_CLOUD_GITHUB_APP_CLIENT_ID",
+    description: "OAuth client id of the staging qualification GitHub App (CandidateGithubAppConfig.clientId).",
+    whereItLives: "Same App settings page as RELEASE_E2E_CLOUD_GITHUB_APP_ID.",
+    secret: false,
+    lanes: ["sandbox"],
+  },
+  {
+    name: "RELEASE_E2E_CLOUD_GITHUB_APP_INSTALLATION_ID",
+    description:
+      "Installation id of the staging qualification GitHub App on `proliferate-e2e/e2e-fixture` " +
+      "(CandidateGithubAppConfig.installationId) — the covered-repository scenario materializes.",
+    whereItLives: "The App's installation settings for the `proliferate-e2e` org.",
+    secret: false,
+    lanes: ["sandbox"],
+  },
+  {
+    name: "RELEASE_E2E_CLOUD_GITHUB_APP_PRIVATE_KEY",
+    description:
+      "PEM private key of the staging qualification GitHub App. Written to a mode-0600 env file uploaded " +
+      "to the candidate Server box (CandidateGithubAppConfig.secretsEnvFilePath) — never argv, never a " +
+      "field value, never evidence.",
+    whereItLives:
+      "Downloaded once from the `proliferate-cloud-staging` App settings page. Local: " +
+      "`~/.proliferate-local/dev/qualification-infra.env` (0600). CI: the `Qualification` environment secret.",
+    secret: true,
+    lanes: ["sandbox"],
+  },
+  {
+    name: "RELEASE_E2E_CLOUD_GITHUB_APP_CLIENT_SECRET",
+    description: "OAuth client secret of the staging qualification GitHub App, same 0600-file discipline as above.",
+    whereItLives: "Same App settings page, alongside the private key.",
+    secret: true,
+    lanes: ["sandbox"],
+  },
+  {
+    name: "RELEASE_E2E_CLOUD_GITHUB_BOT_SEED_SSM_PARAMETER",
+    description:
+      "Optional override for the AWS SSM Parameter Store NAME (not the token) holding the durable D2 " +
+      "GitHub bot refresh-token seed (SecureString). Defaults to " +
+      "/proliferate/qualification/github-bot-refresh-token when unset (box-seeds.ts's " +
+      "DEFAULT_BOT_SEED_SSM_PARAMETER). MCW-004: SSM is the resolution-order fallback (env token → local " +
+      "seed file → SSM) resolveBotSeedForAutomation uses when neither the env token nor a local seed file " +
+      "is available, and the durable rotation-write target in Actions (an ephemeral runner cannot durably " +
+      "hold the token GitHub rotates on every use). AWS credentials themselves stay ambient (the `aws` " +
+      "CLI), matching the RELEASE_E2E_CLOUD_AWS_REGION precedent — never a manifest var.",
+    whereItLives:
+      "AWS SSM Parameter Store, the qualification AWS account. This var only overrides the parameter " +
+      "NAME; set it only if the default path is wrong for the target account, not to supply a value.",
+    secret: false,
+    lanes: ["sandbox"],
+  },
+  // ── Appended for PR 6 (shared fixture layer). Sandbox lane; all secret. Only
+  // consumed when a PR-6 fixture / candidate Stripe deploy option is used —
+  // absent, the candidate Server keeps today's no-Stripe 503 checkout posture
+  // (the CLOUD-PROVISION-1 regression is untouched). Declared here so their
+  // values are redacted from the persisted report. ──────────────────────────
+  {
+    name: "STRIPE_TEST_SECRET_KEY",
+    description:
+      "Stripe TEST secret key (sk_test_…) the managed-cloud billing journeys use for real Stripe test-mode " +
+      "work: the candidate Server's own STRIPE_SECRET_KEY (so real Core-via-Stripe cloud checkout works — " +
+      "closing the fundCore 503 debt), and the stripeTestClock fixture's test-clock/customer/subscription " +
+      "setup for CLOUD-COMPUTE-RENEW-1. Resolved by the stripeTestClock fixture from this env, falling back " +
+      "to TIER2_BILLING_STRIPE_SECRET_KEY; a LIVE-mode key throws (assertCheckoutUrlTestMode discipline) and " +
+      "an unresolved key blocks the dependent cells rather than fabricating them. NOT a scenario requiredEnv " +
+      "(the Tier-2 fallback must keep working). Never live mode.",
+    whereItLives:
+      "Local: `~/.proliferate-local/dev/qualification-infra.env` (mode 0600), or the shared Stripe test-mode " +
+      "config. CI: the `Qualification` environment's Stripe test secret.",
+    secret: true,
+    lanes: ["sandbox"],
+  },
+  {
+    name: "RELEASE_E2E_CLOUD_STRIPE_WEBHOOK_SECRET",
+    description:
+      "The Stripe webhook signing secret (whsec_…) the candidate Server verifies its /v1/billing/webhooks/stripe " +
+      "deliveries against (its STRIPE_WEBHOOK_SECRET). The signed callback relay preserves the exact signed " +
+      "bytes end-to-end and never re-signs, so this is the SERVER's verification secret, declared here only for " +
+      "redaction — the relay itself never reads it. Absent → the candidate Server keeps today's no-Stripe posture.",
+    whereItLives:
+      "The Stripe test-mode webhook endpoint config for the qualification account. Local: " +
+      "`~/.proliferate-local/dev/qualification-infra.env` (mode 0600). CI: the `Qualification` environment secret.",
+    secret: true,
+    lanes: ["sandbox"],
+  },
+  {
+    name: "RELEASE_E2E_CLOUD_E2B_WEBHOOK_SECRET",
+    description:
+      "The E2B webhook signature secret the candidate Server verifies its /v1/cloud/webhooks/e2b deliveries " +
+      "against (its E2B_WEBHOOK_SIGNATURE_SECRET). As with the Stripe webhook secret, the signed callback relay " +
+      "forwards the exact signed bytes and never re-signs, so this is the SERVER's verification secret, declared " +
+      "here only for redaction. Absent → the candidate Server keeps today's posture (no E2B webhook validation).",
+    whereItLives:
+      "The E2B team's webhook configuration for the qualification account. Local: " +
+      "`~/.proliferate-local/dev/qualification-infra.env` (mode 0600). CI: the `Qualification` environment secret.",
+    secret: true,
+    lanes: ["sandbox"],
   },
 ] as const;
 

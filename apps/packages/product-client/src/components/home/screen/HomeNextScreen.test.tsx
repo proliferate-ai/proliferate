@@ -60,11 +60,16 @@ const screenMocks = vi.hoisted(() => {
     targetPickerProps: null as any,
     leadingControlsProps: null as any,
     trailingControlsProps: null as any,
+    productHost: { desktop: {} as object | null },
   };
 });
 
 vi.mock("react-router-dom", () => ({
   useNavigate: () => screenMocks.navigate,
+}));
+
+vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
+  useProductHost: () => screenMocks.productHost,
 }));
 
 vi.mock("#product/hooks/home/derived/use-home-next-state", () => ({
@@ -111,17 +116,17 @@ vi.mock("#product/components/home/screen/HomeTargetPicker", () => ({
     screenMocks.targetPickerProps = props;
     return (
       <div data-testid="target-picker">
-        <button type="button" onClick={() => props.onSelectCowork()}>
-          Mock cowork
-        </button>
+        {props.desktopTargetsAvailable ? (
+          <>
+            <button type="button" onClick={() => props.onSelectCowork()}>Mock cowork</button>
+            <button type="button" onClick={() => props.onSelectRuntime("local")}>Mock local</button>
+            <button type="button" onClick={() => props.onSelectRuntime("ssh", "ssh-target-1")}>
+              Mock ssh
+            </button>
+          </>
+        ) : null}
         <button type="button" onClick={() => props.onSelectRepository("/repo-b")}>
           Mock repo
-        </button>
-        <button type="button" onClick={() => props.onSelectRuntime("local")}>
-          Mock local
-        </button>
-        <button type="button" onClick={() => props.onSelectRuntime("ssh", "ssh-target-1")}>
-          Mock ssh
         </button>
         <button type="button" onClick={() => props.onSelectBranch("feature/sticky")}>
           Mock branch
@@ -187,6 +192,7 @@ function installLocalStorageMock(options?: { throwOnSet?: boolean }) {
 }
 
 function resetHomeNext() {
+  screenMocks.productHost.desktop = {};
   screenMocks.homeNext.targetDisabledReason = null;
   screenMocks.homeNext.modelAvailabilityState = "launchable";
   screenMocks.homeNext.canLaunchTarget = true;
@@ -293,6 +299,8 @@ describe("HomeNextScreen model availability notices", () => {
   it("hands cowork prompts directly to launch without rendering a Home preview", () => {
     submitPrompt("start cowork");
 
+    expect(screenMocks.homeNextStateArgs).toMatchObject({ destination: "cowork" });
+    expect(screenMocks.targetPickerProps).toMatchObject({ desktopTargetsAvailable: true });
     expect(screenMocks.launch).toHaveBeenCalledWith(expect.objectContaining({
       text: "start cowork",
       target: { kind: "cowork" },
@@ -411,7 +419,6 @@ describe("HomeNextScreen composer control-row parity", () => {
     });
     expect(screenMocks.trailingControlsProps).toMatchObject({
       runtimeControlsDisabled: false,
-      agentKind: "codex",
       activeSessionId: null,
       isEditingQueuedPrompt: false,
       chatDisabled: false,
@@ -458,6 +465,68 @@ describe("HomeNextScreen target selection persistence", () => {
       selectedSshTargetId: "ssh-target-1",
       baseBranchOverride: "feature/sticky",
     });
+  });
+
+  it("normalizes the default target to repository Cloud on Web", () => {
+    screenMocks.productHost.desktop = null;
+
+    render(<HomeNextScreen />);
+
+    expect(screenMocks.homeNextStateArgs).toMatchObject({
+      desktopTargetsAvailable: false,
+      destination: "repository",
+      repoLaunchKind: "cloud",
+      selectedSshTargetId: null,
+    });
+    expect(screenMocks.targetPickerProps).toMatchObject({
+      desktopTargetsAvailable: false,
+      repoLaunchKind: "cloud",
+      selectedSshTargetId: null,
+    });
+    expect(screen.queryByRole("button", { name: "Mock cowork" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Mock local" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Mock ssh" })).toBeNull();
+  });
+
+  it("normalizes and rejects persisted Desktop targets on Web", async () => {
+    screenMocks.productHost.desktop = null;
+    memory.values.set(HOME_NEXT_TARGET_SELECTION_STORAGE_KEY, {
+      destination: "cowork",
+      repositorySelection: { kind: "auto" },
+      repoLaunchKind: "ssh",
+      selectedSshTargetId: "ssh-target-1",
+      baseBranchOverride: null,
+    });
+    await hydrateHomeNextTargetSelection(memory.context);
+
+    render(<HomeNextScreen />);
+
+    expect(screenMocks.homeNextStateArgs).toMatchObject({
+      destination: "repository",
+      repoLaunchKind: "cloud",
+      selectedSshTargetId: null,
+    });
+    await act(async () => {
+      screenMocks.targetPickerProps.onSelectCowork();
+      screenMocks.targetPickerProps.onSelectRuntime("local");
+      screenMocks.targetPickerProps.onSelectRuntime("worktree");
+      screenMocks.targetPickerProps.onSelectRuntime("ssh", "ssh-target-2");
+      screenMocks.targetPickerProps.onSelectRepository("/repo-b");
+      await Promise.resolve();
+    });
+    expect(screenMocks.homeNextStateArgs).toMatchObject({
+      destination: "repository",
+      repositorySelection: { kind: "repository", sourceRoot: "/repo-b" },
+      repoLaunchKind: "cloud",
+      selectedSshTargetId: null,
+    });
+    expect(memory.readJson(HOME_NEXT_TARGET_SELECTION_STORAGE_KEY))
+      .toMatchObject({
+        destination: "repository",
+        repositorySelection: { kind: "repository", sourceRoot: "/repo-b" },
+        repoLaunchKind: "cloud",
+        selectedSshTargetId: null,
+      });
   });
 
   it("persists repository, branch, and runtime choices from the target picker", async () => {

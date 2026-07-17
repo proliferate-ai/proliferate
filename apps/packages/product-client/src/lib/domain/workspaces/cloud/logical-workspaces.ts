@@ -10,11 +10,17 @@ import {
   repoRootGroupKey,
 } from "#product/lib/domain/workspaces/cloud/collections";
 import {
+  buildCloudIdentityLogicalWorkspaceId,
   buildLocalSlotLogicalWorkspaceId,
   buildRemoteLogicalWorkspaceId,
   normalizeLogicalWorkspaceBranchKey,
 } from "#product/lib/domain/workspaces/cloud/logical-workspace-id";
-import { resolvePreferredLogicalWorkspaceMaterialization } from "#product/lib/domain/workspaces/cloud/logical-workspace-materialization";
+import {
+  cloudWorkspaceHasMaterializations,
+  explicitLocalMaterializationAnyharnessId,
+  resolvePreferredLogicalWorkspaceMaterialization,
+} from "#product/lib/domain/workspaces/cloud/logical-workspace-materialization";
+import { collapseExactLocalWorkspaceDuplicates } from "#product/lib/domain/workspaces/cloud/logical-workspace-duplicates";
 import type { LogicalWorkspace } from "#product/lib/domain/workspaces/cloud/logical-workspace-model";
 import {
   buildBaseLogicalWorkspaceIdForLocalWorkspace,
@@ -36,150 +42,16 @@ import {
   preferCloudWorkspaceForLogicalSlot,
 } from "#product/lib/domain/workspaces/cloud/logical-workspace-slot";
 
-function timestampValue(timestamp: string | null | undefined): number {
-  return timestamp ? new Date(timestamp).getTime() : 0;
-}
-
-function localWorkspaceExactMaterializationKey(workspace: Workspace): string {
-  return `${workspace.path.trim()}\0${workspaceBranchKey(workspace)}`;
-}
-
-function workspaceExecutionPriority(workspace: Workspace): number {
-  const summary = workspace.executionSummary;
-  if (!summary) {
-    return 0;
-  }
-
-  if (summary.totalSessionCount > summary.liveSessionCount) {
-    return 3;
-  }
-
-  if (summary.phase === "running" || summary.phase === "awaiting_interaction") {
-    return 2;
-  }
-
-  if (summary.totalSessionCount > 0) {
-    return 1;
-  }
-
-  return 0;
-}
-
-function compareExactLocalWorkspaceDuplicateOrder(left: Workspace, right: Workspace): number {
-  const byExecutionPriority = workspaceExecutionPriority(right) - workspaceExecutionPriority(left);
-  if (byExecutionPriority !== 0) {
-    return byExecutionPriority;
-  }
-
-  const byExecutionUpdatedAt = (
-    timestampValue(right.executionSummary?.updatedAt)
-    - timestampValue(left.executionSummary?.updatedAt)
-  );
-  if (byExecutionUpdatedAt !== 0) {
-    return byExecutionUpdatedAt;
-  }
-
-  const byWorkspaceUpdatedAt = timestampValue(right.updatedAt) - timestampValue(left.updatedAt);
-  if (byWorkspaceUpdatedAt !== 0) {
-    return byWorkspaceUpdatedAt;
-  }
-
-  return compareLocalWorkspaceCanonicalOrder(left, right);
-}
-
-interface CollapsedLocalWorkspace {
-  workspace: Workspace;
-  aliasIds: string[];
-}
-
-function localWorkspaceIdentityIds(workspace: Workspace): string[] {
-  return [workspace.id, buildLocalSlotLogicalWorkspaceId(workspace.id)];
-}
-
-function localWorkspaceMatchesSelection(
-  workspace: Workspace,
-  currentSelectionId: string | null,
-): boolean {
-  return currentSelectionId !== null
-    && localWorkspaceIdentityIds(workspace).includes(currentSelectionId);
-}
-
-function compareExactLocalWorkspaceDuplicateOrderForSelection(
-  currentSelectionId: string | null,
-): (left: Workspace, right: Workspace) => number {
-  return (left, right) => {
-    const leftSelected = localWorkspaceMatchesSelection(left, currentSelectionId);
-    const rightSelected = localWorkspaceMatchesSelection(right, currentSelectionId);
-    if (leftSelected !== rightSelected) {
-      return leftSelected ? -1 : 1;
-    }
-    return compareExactLocalWorkspaceDuplicateOrder(left, right);
-  };
-}
-
-function workspaceHasOwnSessions(workspace: Workspace): boolean {
-  return (workspace.executionSummary?.totalSessionCount ?? 0) > 0;
-}
-
-function collapseExactLocalWorkspaceDuplicates(
-  workspaces: readonly Workspace[],
-  currentSelectionId: string | null,
-): CollapsedLocalWorkspace[] {
-  const byMaterialization = new Map<string, Workspace[]>();
-  for (const workspace of workspaces) {
-    const key = localWorkspaceExactMaterializationKey(workspace);
-    const bucket = byMaterialization.get(key);
-    if (bucket) {
-      bucket.push(workspace);
-    } else {
-      byMaterialization.set(key, [workspace]);
-    }
-  }
-
-  return Array.from(byMaterialization.values()).flatMap((bucket): CollapsedLocalWorkspace[] => {
-    if (bucket.length === 1) {
-      return [{ workspace: bucket[0]!, aliasIds: [] }];
-    }
-
-    const distinct = bucket.filter(
-      (candidate) =>
-        workspaceHasOwnSessions(candidate)
-        || localWorkspaceMatchesSelection(candidate, currentSelectionId),
-    );
-    const foldable = bucket.filter(
-      (candidate) =>
-        !workspaceHasOwnSessions(candidate)
-        && !localWorkspaceMatchesSelection(candidate, currentSelectionId),
-    );
-
-    if (distinct.length === 0) {
-      const representative = [...foldable]
-        .sort(compareExactLocalWorkspaceDuplicateOrderForSelection(currentSelectionId))[0]!;
-      return [{
-        workspace: representative,
-        aliasIds: foldable
-          .filter((candidate) => candidate.id !== representative.id)
-          .flatMap(localWorkspaceIdentityIds),
-      }];
-    }
-
-    const sortedDistinct = [...distinct]
-      .sort(compareExactLocalWorkspaceDuplicateOrderForSelection(currentSelectionId));
-    const foldedAliasIds = foldable.flatMap(localWorkspaceIdentityIds);
-    return sortedDistinct.map((workspace, index) => ({
-      workspace,
-      // Fold stale empty duplicates onto the first distinct entry.
-      aliasIds: index === 0 ? foldedAliasIds : [],
-    }));
-  });
-}
-
 export function buildLogicalWorkspaces(args: {
   localWorkspaces: Workspace[];
   repoRoots: RepoRoot[];
   cloudWorkspaces: CloudWorkspaceSummary[];
   cloudMobilityWorkspaces?: CloudMobilityWorkspaceSummary[];
   currentSelectionId?: string | null;
+  /** This desktop install's id. When present, a Cloud workspace with an
+   * explicit healthy local materialization for this install merges with that
+   * exact local workspace by id — never by repository/branch heuristic. */
+  desktopInstallId?: string | null;
 }): LogicalWorkspace[] {
   const repoRootsById = new Map(args.repoRoots.map((repoRoot) => [repoRoot.id, repoRoot]));
   const cloudWorkspacesById = new Map(args.cloudWorkspaces.map((workspace) => [
@@ -217,6 +89,10 @@ export function buildLogicalWorkspaces(args: {
     }
   }
 
+  // Map every placed local workspace's AnyHarness id to its logical slot id so a
+  // Cloud workspace with an explicit local materialization can attach to the
+  // exact same local slot the server linked — never by branch heuristic.
+  const localLogicalIdByAnyharnessId = new Map<string, string>();
   for (const [baseLogicalId, bucket] of localBuckets) {
     const sortedBucket = collapseExactLocalWorkspaceDuplicates(
       bucket,
@@ -234,11 +110,28 @@ export function buildLogicalWorkspaces(args: {
         mobilityWorkspace: null,
         aliasIds: collapsed.aliasIds,
       });
+      localLogicalIdByAnyharnessId.set(workspace.id, logicalId);
     });
   }
 
   for (const workspace of args.cloudWorkspaces) {
-    const logicalId = buildLogicalWorkspaceIdForCloudWorkspace(workspace);
+    // Explicit association takes precedence over the repository/branch
+    // heuristic whenever the Cloud response carries a materialization ledger.
+    // A healthy local materialization for THIS install merges the Cloud record
+    // onto that exact local slot; otherwise the Cloud record stands on its own
+    // identity-keyed slot (no heuristic attachment to a same-branch local).
+    const explicitLocalAnyharnessId = cloudWorkspaceHasMaterializations(workspace)
+      ? explicitLocalMaterializationAnyharnessId(workspace, args.desktopInstallId)
+      : null;
+    const explicitLogicalId = explicitLocalAnyharnessId
+      ? localLogicalIdByAnyharnessId.get(explicitLocalAnyharnessId) ?? null
+      : null;
+
+    const logicalId = explicitLogicalId
+      ?? (cloudWorkspaceHasMaterializations(workspace)
+        ? buildCloudIdentityLogicalWorkspaceId(workspace.id)
+        : buildLogicalWorkspaceIdForCloudWorkspace(workspace));
+
     if (
       isCloudWorkspaceFailedBeforeReady(workspace)
       && !cloudWorkspaceMatchesSelection(workspace, logicalId, args.currentSelectionId)
@@ -309,9 +202,9 @@ export function buildLogicalWorkspaces(args: {
         : entry.cloudWorkspace
           ? repoRootsByRemoteKey.get(
             remoteRepoKey(
-              entry.cloudWorkspace.repo.provider,
-              entry.cloudWorkspace.repo.owner,
-              entry.cloudWorkspace.repo.name,
+              entry.cloudWorkspace.repo?.provider,
+              entry.cloudWorkspace.repo?.owner,
+              entry.cloudWorkspace.repo?.name,
             )!,
           ) ?? null
           : entry.mobilityWorkspace
@@ -351,17 +244,17 @@ export function buildLogicalWorkspaces(args: {
         repoRoot,
         provider:
           repoRoot?.remoteProvider
-          ?? entry.cloudWorkspace?.repo.provider
+          ?? entry.cloudWorkspace?.repo?.provider
           ?? entry.mobilityWorkspace?.repo.provider
           ?? null,
         owner:
           repoRoot?.remoteOwner
-          ?? entry.cloudWorkspace?.repo.owner
+          ?? entry.cloudWorkspace?.repo?.owner
           ?? entry.mobilityWorkspace?.repo.owner
           ?? null,
         repoName:
           repoRoot?.remoteRepoName
-          ?? entry.cloudWorkspace?.repo.name
+          ?? entry.cloudWorkspace?.repo?.name
           ?? entry.mobilityWorkspace?.repo.name
           ?? null,
         branchKey: entry.localWorkspace

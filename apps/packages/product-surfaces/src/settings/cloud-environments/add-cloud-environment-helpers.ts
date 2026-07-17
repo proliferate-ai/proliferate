@@ -17,6 +17,7 @@ export function buildGitHubAppPrerequisiteBlocker({
   onAuthorizeUser,
   onInstallGitHubApp,
   onCopyAdminRequest,
+  returnSurface,
 }: {
   organizationId: string | null;
   canManageGitHubAppInstallation: boolean;
@@ -30,11 +31,22 @@ export function buildGitHubAppPrerequisiteBlocker({
   onAuthorizeUser: () => void;
   onInstallGitHubApp: () => void;
   onCopyAdminRequest: () => void;
+  returnSurface: "desktop" | "web";
 }): CloudRepoPickerBlockerView | null {
+  const returnGuidance = returnSurface === "desktop"
+    ? "GitHub opens in your browser, then returns you to Proliferate Desktop."
+    : "GitHub opens and returns you to Proliferate in this browser.";
+
   if (!organizationId) {
     return {
       title: "Organization required",
       description: "Cloud environments require an active organization before repositories can be added.",
+      steps: [
+        setupStep("Choose an organization", "Create or join an organization first.", "current"),
+        setupStep("Authorize your GitHub identity", "Connect the GitHub account that can access the repository.", "upcoming"),
+        setupStep("Install for repository access", "Choose which organization repositories Proliferate can use.", "upcoming"),
+        setupStep("Choose a repository", "Select the repository for the cloud environment.", "upcoming"),
+      ],
     };
   }
 
@@ -42,6 +54,11 @@ export function buildGitHubAppPrerequisiteBlocker({
     return {
       title: "Checking GitHub App access",
       description: "Proliferate is checking your GitHub authorization and organization installation.",
+      steps: setupSteps({
+        userAuthorized: userAuthorizationConnected,
+        installationInstalled,
+        returnGuidance,
+      }),
     };
   }
 
@@ -51,6 +68,11 @@ export function buildGitHubAppPrerequisiteBlocker({
         ? "Reauthorize GitHub App"
         : "Authorize GitHub App",
       description: "Authorize the Proliferate GitHub App so Cloud can use your GitHub identity for repository access.",
+      steps: setupSteps({
+        userAuthorized: false,
+        installationInstalled: false,
+        returnGuidance,
+      }),
       actionLabel: userAuthorizationNeedsReconnect
         ? "Reauthorize GitHub App"
         : "Authorize GitHub App",
@@ -64,6 +86,11 @@ export function buildGitHubAppPrerequisiteBlocker({
       return {
         title: "Install GitHub App",
         description: "Install the Proliferate GitHub App for this organization before adding Cloud environments.",
+        steps: setupSteps({
+          userAuthorized: true,
+          installationInstalled: false,
+          returnGuidance,
+        }),
         actionLabel: "Install GitHub App",
         actionLoading: installingGitHubApp,
         onAction: onInstallGitHubApp,
@@ -72,12 +99,57 @@ export function buildGitHubAppPrerequisiteBlocker({
     return {
       title: "GitHub App installation required",
       description: "Ask an organization admin to install the Proliferate GitHub App before adding Cloud environments.",
+      steps: setupSteps({
+        userAuthorized: true,
+        installationInstalled: false,
+        returnGuidance: "An organization owner or admin must choose repository access before you can continue.",
+      }),
       actionLabel: "Copy admin request",
       onAction: onCopyAdminRequest,
     };
   }
 
   return null;
+}
+
+function setupSteps({
+  userAuthorized,
+  installationInstalled,
+  returnGuidance,
+}: {
+  userAuthorized: boolean;
+  installationInstalled: boolean;
+  returnGuidance: string;
+}): NonNullable<CloudRepoPickerBlockerView["steps"]> {
+  return [
+    setupStep(
+      "Authorize your GitHub identity",
+      userAuthorized ? "GitHub identity authorized." : returnGuidance,
+      userAuthorized ? "complete" : "current",
+    ),
+    setupStep(
+      "Install for repository access",
+      installationInstalled
+        ? "Organization repository access installed."
+        : userAuthorized
+          ? returnGuidance
+          : "Choose organization repository access after authorization.",
+      installationInstalled ? "complete" : userAuthorized ? "current" : "upcoming",
+    ),
+    setupStep(
+      "Choose a repository",
+      "Select the repository for the cloud environment.",
+      userAuthorized && installationInstalled ? "current" : "upcoming",
+    ),
+  ];
+}
+
+function setupStep(
+  label: string,
+  description: string,
+  status: "complete" | "current" | "upcoming",
+): NonNullable<CloudRepoPickerBlockerView["steps"]>[number] {
+  return { label, description, status };
 }
 
 export function mergeRepositories(

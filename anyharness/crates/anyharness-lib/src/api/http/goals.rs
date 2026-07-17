@@ -1,3 +1,5 @@
+use crate::api::http::access::admit_session_mutation;
+use crate::domains::sessions::admission::SessionMutationKind;
 use anyharness_contract::v1::{
     ClearSessionGoalResponse, SessionGoalResponse, SetSessionGoalRequest,
 };
@@ -31,6 +33,8 @@ pub async fn set_session_goal(
     Json(request): Json<SetSessionGoalRequest>,
 ) -> Result<Json<SessionGoalResponse>, ApiError> {
     assert_session_auth_scope(&state, &auth, &session_id)?;
+    let _admission_permit =
+        admit_session_mutation(&state, &session_id, SessionMutationKind::Goal).await?;
     let goal = state
         .goal_runtime
         .set_goal(&session_id, request)
@@ -56,6 +60,8 @@ pub async fn clear_session_goal(
     Path(session_id): Path<String>,
 ) -> Result<Json<ClearSessionGoalResponse>, ApiError> {
     assert_session_auth_scope(&state, &auth, &session_id)?;
+    let _admission_permit =
+        admit_session_mutation(&state, &session_id, SessionMutationKind::Goal).await?;
     let cleared = state
         .goal_runtime
         .clear_goal(&session_id)

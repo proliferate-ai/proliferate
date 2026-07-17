@@ -7,21 +7,33 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from sqlalchemy import Select, select
+from sqlalchemy import Select, exists, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.db.models.cloud.workspaces import CloudWorkspace
+from proliferate.db.models.cloud.workspaces import (
+    CLOUD_WORKSPACE_REPOSITORY_WORKTREE,
+    CLOUD_WORKSPACE_SCRATCH,
+    CloudWorkspace,
+)
 from proliferate.utils.time import utcnow
 
 CloudWorkspaceLifecycle = Literal["active", "archived", "all"]
+CloudWorkspaceKind = Literal["repository_worktree", "scratch"]
+
+# Scratch workspaces (managed Workflow runs) have no repository backing: their
+# branch is always ``main``. Display naming is a product derivation owned by the
+# workspace domain (``server/cloud/workspaces/domain/naming.py``); the store only
+# inserts the already-decided value.
+SCRATCH_WORKSPACE_GIT_BRANCH = "main"
 
 
 @dataclass(frozen=True)
 class CloudWorkspaceValue:
     id: UUID
     owner_user_id: UUID
-    repo_environment_id: UUID
+    workspace_kind: CloudWorkspaceKind
+    repo_environment_id: UUID | None
     display_name: str
     git_branch: str
     git_base_branch: str | None
@@ -35,6 +47,7 @@ def cloud_workspace_value(row: CloudWorkspace) -> CloudWorkspaceValue:
     return CloudWorkspaceValue(
         id=row.id,
         owner_user_id=row.owner_user_id,
+        workspace_kind=_normalize_kind(row.workspace_kind),
         repo_environment_id=row.repo_environment_id,
         display_name=row.display_name,
         git_branch=row.git_branch,
@@ -43,6 +56,14 @@ def cloud_workspace_value(row: CloudWorkspace) -> CloudWorkspaceValue:
         created_at=row.created_at,
         updated_at=row.updated_at,
         archived_at=row.archived_at,
+    )
+
+
+def _normalize_kind(value: str | None) -> CloudWorkspaceKind:
+    return (
+        CLOUD_WORKSPACE_SCRATCH
+        if value == CLOUD_WORKSPACE_SCRATCH
+        else (CLOUD_WORKSPACE_REPOSITORY_WORKTREE)
     )
 
 
@@ -86,6 +107,20 @@ async def list_active_workspace_branches_for_repo_environment(
     return {value for value in rows.scalars().all() if value}
 
 
+async def repo_environment_has_workspaces(
+    db: AsyncSession,
+    *,
+    repo_environment_id: UUID,
+) -> bool:
+    """Return whether any active or archived workspace still owns this environment."""
+
+    return bool(
+        await db.scalar(
+            select(exists().where(CloudWorkspace.repo_environment_id == repo_environment_id))
+        )
+    )
+
+
 async def get_cloud_workspace_for_user(
     db: AsyncSession,
     user_id: UUID,
@@ -112,6 +147,56 @@ async def get_cloud_workspace_by_id(
     return cloud_workspace_value(row) if row is not None else None
 
 
+async def get_cloud_workspace_for_runtime_identity(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    anyharness_workspace_id: str,
+) -> CloudWorkspaceValue | None:
+    """Load the durable product alias even after archive."""
+
+    row = (
+        (
+            await db.execute(
+                select(CloudWorkspace)
+                .where(
+                    CloudWorkspace.owner_user_id == user_id,
+                    CloudWorkspace.anyharness_workspace_id == anyharness_workspace_id,
+                )
+                .order_by(CloudWorkspace.created_at.asc())
+            )
+        )
+        .scalars()
+        .first()
+    )
+    return cloud_workspace_value(row) if row is not None else None
+
+
+async def get_repository_workspace_for_branch(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    repo_environment_id: UUID,
+    git_branch: str,
+) -> CloudWorkspaceValue | None:
+    row = (
+        (
+            await db.execute(
+                select(CloudWorkspace)
+                .where(
+                    CloudWorkspace.owner_user_id == user_id,
+                    CloudWorkspace.repo_environment_id == repo_environment_id,
+                    CloudWorkspace.git_branch == git_branch,
+                )
+                .order_by(CloudWorkspace.created_at.asc())
+            )
+        )
+        .scalars()
+        .first()
+    )
+    return cloud_workspace_value(row) if row is not None else None
+
+
 async def create_cloud_workspace(
     db: AsyncSession,
     *,
@@ -122,14 +207,52 @@ async def create_cloud_workspace(
     git_base_branch: str | None,
     anyharness_workspace_id: str | None = None,
 ) -> CloudWorkspaceValue | None:
-    """Create a workspace row; returns None when the active branch is taken."""
+    """Create a repository-worktree workspace row.
+
+    Returns None when the active repository branch is already taken.
+    """
     now = utcnow()
     workspace = CloudWorkspace(
         owner_user_id=user_id,
+        workspace_kind=CLOUD_WORKSPACE_REPOSITORY_WORKTREE,
         repo_environment_id=repo_environment_id,
         display_name=display_name,
         git_branch=git_branch,
         git_base_branch=git_base_branch,
+        anyharness_workspace_id=anyharness_workspace_id,
+        created_at=now,
+        updated_at=now,
+    )
+    try:
+        async with db.begin_nested():
+            db.add(workspace)
+            await db.flush()
+    except IntegrityError:
+        return None
+    return cloud_workspace_value(workspace)
+
+
+async def create_scratch_cloud_workspace(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    display_name: str,
+    anyharness_workspace_id: str | None = None,
+) -> CloudWorkspaceValue | None:
+    """Create a scratch (repository-less) workspace row for a managed run.
+
+    Scratch workspaces forbid a ``repo_environment_id`` and always use the
+    ``main`` branch with no base branch; repository branch uniqueness does not
+    apply to them.
+    """
+    now = utcnow()
+    workspace = CloudWorkspace(
+        owner_user_id=user_id,
+        workspace_kind=CLOUD_WORKSPACE_SCRATCH,
+        repo_environment_id=None,
+        display_name=display_name,
+        git_branch=SCRATCH_WORKSPACE_GIT_BRANCH,
+        git_base_branch=None,
         anyharness_workspace_id=anyharness_workspace_id,
         created_at=now,
         updated_at=now,

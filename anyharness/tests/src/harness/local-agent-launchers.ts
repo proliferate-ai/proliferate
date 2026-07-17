@@ -70,7 +70,8 @@ function resolveCodexLauncher(): { program: string; args: string[]; cwd: string 
 function ensureCodexNpmLauncher(): { program: string; args: string[]; cwd: string } {
   const installRoot = process.env.ANYHARNESS_TEST_CODEX_NPM_ROOT?.trim() || CODEX_NPM_INSTALL_ROOT;
   const packageSpec =
-    process.env.ANYHARNESS_TEST_CODEX_NPM_SPEC?.trim() || "@proliferateai/codex-acp@0.11.8";
+    process.env.ANYHARNESS_TEST_CODEX_NPM_SPEC?.trim() ||
+    "@proliferate-ai/codex-acp@0.18.2-proliferate.1";
   const forceInstall = process.env.ANYHARNESS_TEST_FORCE_AGENT_INSTALL === "1";
   const binaryPath = join(installRoot, "node_modules", ".bin", "codex-acp");
 

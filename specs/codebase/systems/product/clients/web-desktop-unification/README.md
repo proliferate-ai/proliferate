@@ -507,7 +507,7 @@ safe and scriptable:
   host-specific CSS in `apps/desktop`.
 - Do not redesign the product or leave duplicate old/new ownership paths.
 
-### 5. Replace the legacy Web product
+### 5. Replace the legacy Web product — complete (pending review)
 
 - Delete the duplicate Web pages, chat implementation, polling, stores,
   controllers, and product-specific logic.
@@ -600,24 +600,30 @@ enforcement. Shared `product.css`, Desktop-only CSS, and ProductClient Tailwind
 scanning are established separately. The embedded workspace browser and its
 native child-WebView capability have been removed.
 
-Desktop mounts the product through the typed host boundary. Native UI, local
-runtime, files, credentials, SSH, updater, support, shared identity,
-navigation, storage, and telemetry all route through that boundary.
+Desktop now mounts the product through the typed host boundary and, after the
+mechanical extraction, is a thin native host: the working product source moved
+into `@proliferate/product-client` while native UI, local runtime, files,
+credentials, SSH, updater, support, shared identity, navigation, storage, and
+telemetry all route through that boundary. See
+[the Desktop product move](migration/d1h.md) — PR #1215, merge `c6e094b41`.
 
-The extraction mechanics landed, and the mechanical move has since completed:
-the package entry shape was proven from Desktop and a minimal browser host,
-the source move ran against a checked ledger with a deterministic and
-idempotent import codemod, and Desktop's product source now lives in
-`@proliferate/product-client` — Desktop is a thin native host. The durable
-records are:
+The legacy Web replacement has also landed. The duplicate Web product is
+deleted and `apps/web` is now a thin browser host that mounts the same
+compiled ProductClient with `desktop: null`, keeping only browser-owned
+auth/callback, storage, links, clipboard, telemetry, deployment, and
+Cloud-client adapters. See [the legacy Web replacement](migration/d1i.md) —
+PR #1229, merge `d8ceabb4e`. The durable inputs and proofs across the
+extraction and replacement are:
 
-- [extraction-mechanics proof](migration/d1g.md);
-- [completed Desktop move](migration/d1h.md) — PR #1215, merge `c6e094b41`;
-- [application-entry contract](entry-contract.md); and
-- [source move ledger](move-ledger.md).
+- [landed extraction proof](migration/d1g.md);
+- [application-entry contract](entry-contract.md);
+- [source move ledger](move-ledger.md);
+- [Desktop product move record](migration/d1h.md);
+- [legacy Web replacement record](migration/d1i.md); and
+- [binding legacy-Web bundle baseline](migration/web-bundle-baseline-c6e094b41.json).
 
-The next step is to replace the legacy Web product with a thin browser host
-mounting the same ProductClient. The remaining order and Web cutover gates
+The next step is to qualify Desktop and hosted Web against the shared
+implementation and cut over hosted Web. The remaining order and cutover gates
 live in the
 [rollout procedure](../../../../../developing/deploying/web-desktop-unification-rollout.md).
 

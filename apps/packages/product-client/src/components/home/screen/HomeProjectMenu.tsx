@@ -17,6 +17,7 @@ interface HomeProjectMenuProps {
   trigger: ReactElement<{
     onClick?: (...args: unknown[]) => void;
   }>;
+  coworkAvailable: boolean;
   destination: HomeNextDestination;
   repositories: SettingsRepositoryEntry[];
   selectedRepository: SettingsRepositoryEntry | null;
@@ -31,6 +32,7 @@ interface HomeProjectMenuProps {
  */
 export function HomeProjectMenu({
   trigger,
+  coworkAvailable,
   destination,
   repositories,
   selectedRepository,
@@ -91,16 +93,18 @@ export function HomeProjectMenu({
                 close();
               }}
             />
-            <PopoverMenuItem
-              icon={<X className="size-4" />}
-              label="Don't work in a project"
-              trailing={destination === "cowork" ? <Check className="size-4" /> : null}
-              onClick={() => {
-                onSelectCowork();
-                setSearchValue("");
-                close();
-              }}
-            />
+            {coworkAvailable ? (
+              <PopoverMenuItem
+                icon={<X className="size-4" />}
+                label="Don't work in a project"
+                trailing={destination === "cowork" ? <Check className="size-4" /> : null}
+                onClick={() => {
+                  onSelectCowork();
+                  setSearchValue("");
+                  close();
+                }}
+              />
+            ) : null}
           </div>
         </div>
       )}

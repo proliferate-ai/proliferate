@@ -1,7 +1,7 @@
 {
   "name": "proliferate",
   "private": true,
-  "version": "0.3.30",
+  "version": "0.3.41",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -17,11 +17,11 @@
   "dependencies": {
     "@anyharness/sdk": "workspace:*",
     "@anyharness/sdk-react": "workspace:*",
-    "@codemirror/commands": "^6.10.3",
-    "@codemirror/lang-markdown": "^6.5.0",
-    "@codemirror/language": "^6.12.3",
-    "@codemirror/state": "^6.6.0",
-    "@codemirror/view": "^6.43.1",
+    "@codemirror/commands": "^6.10.4",
+    "@codemirror/lang-markdown": "^6.5.1",
+    "@codemirror/language": "^6.12.4",
+    "@codemirror/state": "^6.7.1",
+    "@codemirror/view": "^6.43.6",
     "@fontsource-variable/inter": "^5.2.8",
     "@fontsource-variable/manrope": "^5.2.8",
     "@fontsource-variable/space-grotesk": "^5.2.10",
@@ -36,9 +36,9 @@
     "@proliferate/product-surfaces": "workspace:*",
     "@proliferate/product-ui": "workspace:*",
     "@proliferate/ui": "workspace:*",
-    "@sentry/react": "^10.58.0",
-    "@tanstack/react-query": "^5.101.0",
-    "@tanstack/react-virtual": "3.14.3",
+    "@sentry/react": "^10.66.0",
+    "@tanstack/react-query": "^5.101.2",
+    "@tanstack/react-virtual": "3.14.6",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-deep-link": "^2.4.9",
     "@tauri-apps/plugin-process": "^2",
@@ -59,14 +59,14 @@
     "react-markdown": "^9",
     "react-router-dom": "^7",
     "remark-gfm": "^4",
-    "shiki": "^4.2.0",
+    "shiki": "^4.3.1",
     "tailwind-merge": "^3.6.0",
     "use-sync-external-store": "^1.6.0",
     "zustand": "^5"
   },
   "devDependencies": {
     "@sentry/cli": "^2.58.6",
-    "@sentry/vite-plugin": "^5.3.0",
+    "@sentry/vite-plugin": "^5.4.0",
     "@tailwindcss/vite": "^4",
     "@tauri-apps/cli": "^2",
     "@testing-library/dom": "^10.4.1",
@@ -79,6 +79,6 @@
     "tailwindcss": "^4",
     "typescript": "^5.7",
     "vite": "^6",
-    "vitest": "^3.2.6"
+    "vitest": "^3.2.7"
   }
 }

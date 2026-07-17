@@ -93,6 +93,14 @@ describe("transcript trailing status", () => {
     expect(latestTransientStatusText(turn, transcript)).toBe("Waiting for browser auth");
   });
 
+  it("keeps the transient status after the thought closes while it is still the tail", () => {
+    const { transcript, turn } = transcriptWithTurn([
+      transientThoughtItem("status", "Checking the next action", false),
+    ]);
+
+    expect(latestTransientStatusText(turn, transcript)).toBe("Checking the next action");
+  });
+
   it("does not revive a transient status that precedes completed prose", () => {
     const { transcript, turn } = transcriptWithTurn([
       transientThoughtItem("status", "Reading files"),
@@ -176,12 +184,13 @@ function toolItem(itemId: string): TranscriptState["itemsById"][string] {
 function transientThoughtItem(
   itemId: string,
   text: string,
+  isStreaming = true,
 ): TranscriptState["itemsById"][string] {
   return {
     kind: "thought",
     itemId,
     turnId: "turn-1",
-    status: "in_progress",
+    status: isStreaming ? "in_progress" : "completed",
     sourceAgentKind: "codex",
     isTransient: true,
     messageId: null,
@@ -192,9 +201,9 @@ function transientThoughtItem(
     timestamp: "2026-04-13T12:00:01.000Z",
     startedSeq: 1,
     lastUpdatedSeq: 1,
-    completedSeq: null,
-    completedAt: null,
+    completedSeq: isStreaming ? null : 1,
+    completedAt: isStreaming ? null : "2026-04-13T12:00:02.000Z",
     text,
-    isStreaming: true,
+    isStreaming,
   };
 }

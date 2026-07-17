@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 import {
   formatSessionCreateFailureMessage,
   formatSessionCreateToastMessage,
+  isWorkspaceDirectoryMissingError,
   toSessionCreateFailureDisplayError,
+  workspaceDirectoryMissingBlockError,
 } from "#product/lib/domain/sessions/creation/create-session-error";
 
 describe("session create failure presentation", () => {
@@ -35,7 +37,7 @@ describe("session create failure presentation", () => {
     );
   });
 
-  it("maps gated model errors to unlock guidance with the required contexts", () => {
+  it("maps gated model errors to actionable guidance without internal context ids", () => {
     const error = new AnyHarnessError({
       type: "about:blank",
       title: "Bad request",
@@ -47,16 +49,28 @@ describe("session create failure presentation", () => {
     });
 
     expect(formatSessionCreateFailureMessage(error)).toBe(
-      "This model is locked. Unlock it by signing in with or adding credentials for: anthropic-api, gateway.",
+      "This model is not available for the current authentication method. Choose an available model or change agent authentication in Settings, then try again.",
     );
+    expect(formatSessionCreateFailureMessage(error)).not.toContain("anthropic-api");
+    expect(formatSessionCreateFailureMessage(error)).not.toContain("gateway");
   });
 
-  it("maps gated model errors without contexts to generic unlock guidance", () => {
-    const error = anyHarnessError("SESSION_MODEL_GATED", "gated");
-
-    expect(formatSessionCreateFailureMessage(error)).toBe(
-      "This model is locked behind credentials this workspace does not have yet. Sign in, add an API key, or enable the gateway, then try again.",
+  it("identifies missing-worktree errors from the runtime code, the client gate, and causes", () => {
+    const runtimeError = anyHarnessError(
+      "WORKSPACE_DIRECTORY_MISSING",
+      "workspace directory is missing: /tmp/gone",
     );
+    const clientGateError = workspaceDirectoryMissingBlockError(
+      "Workspace folder no longer exists. Agents can't run in this workspace.",
+    );
+    const wrapped = new Error("Failed to create session");
+    (wrapped as Error & { cause?: unknown }).cause = runtimeError;
+
+    expect(isWorkspaceDirectoryMissingError(runtimeError)).toBe(true);
+    expect(isWorkspaceDirectoryMissingError(clientGateError)).toBe(true);
+    expect(isWorkspaceDirectoryMissingError(wrapped)).toBe(true);
+    expect(isWorkspaceDirectoryMissingError(new Error("network down"))).toBe(false);
+    expect(isWorkspaceDirectoryMissingError(anyHarnessError("SESSION_MODEL_GATED", "gated"))).toBe(false);
   });
 
   it("preserves generic errors", () => {

@@ -58,6 +58,18 @@ test("a Codex-only run requires every Codex context and no unrelated credentials
   assert.ok(stateValues(result.state, "retained").includes("cursor.cursor-login"));
 });
 
+test("Codex auth contexts are serialized to bound engine startup memory", () => {
+  const script = readFileSync(sourceScript, "utf8");
+
+  for (const context of ["openai-api", "openai-oauth", "bedrock"]) {
+    assert.match(
+      script,
+      new RegExp(`probe codex ${context}\\n\\s+wait_for_probes`),
+      `${context} must finish before another Codex engine starts`,
+    );
+  }
+});
+
 test("CATALOG_PROBE_AGENTS accepts a comma-separated focused selection", () => {
   const result = runPreflight([], { CATALOG_PROBE_AGENTS: "codex,grok" });
 
@@ -81,6 +93,16 @@ test("a credential-complete focused run selects its active agent on Bash 3.2", (
   assert.notEqual(result.status, 0);
   assert.deepEqual(stateValues(result.state, "agent"), ["codex"]);
   assert.doesNotMatch(result.stderr, /active_agents\[@\]: unbound variable/);
+});
+
+test("a Grok-only run accepts an explicit logged-in auth file", () => {
+  const result = runPreflight(["--agent", "grok"], {
+    PROBE_GROK_AUTH_JSON: sourceScript,
+  });
+
+  assert.notEqual(result.status, 2, result.stderr);
+  assert.deepEqual(stateValues(result.state, "agent"), ["grok"]);
+  assert.deepEqual(stateValues(result.state, "required"), ["grok.xai-api"]);
 });
 
 test("agent selections reject unknown names before changing probe state", () => {

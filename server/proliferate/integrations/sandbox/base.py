@@ -16,6 +16,18 @@ class SandboxProviderError(RuntimeError):
     """Raised when sandbox provider configuration or operations are invalid."""
 
 
+class SandboxProviderConfigurationError(SandboxProviderError):
+    """The provider cannot run until operator configuration is corrected."""
+
+
+class SandboxProviderUnavailableError(SandboxProviderError):
+    """A configured provider could not complete a remote operation."""
+
+
+class SandboxProviderTargetUnavailableError(SandboxProviderError):
+    """The exact remote sandbox no longer exists."""
+
+
 @dataclass(frozen=True)
 class SandboxHandle:
     provider: SandboxProviderKind

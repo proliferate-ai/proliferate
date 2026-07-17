@@ -1,3 +1,5 @@
+use crate::api::http::access::admit_session_mutation;
+use crate::domains::sessions::admission::SessionMutationKind;
 use std::time::Instant;
 
 use anyharness_contract::v1::Session;
@@ -22,6 +24,7 @@ use tracing::Instrument;
     path = "/v1/sessions/{session_id}/cancel",
     params(("session_id" = String, Path, description = "Session ID")),
     responses(
+        (status = 409, description = "Session execution is controlled by an active workflow run", body = anyharness_contract::v1::ProblemDetails),
         (status = 200, description = "Session cancelled", body = Session),
         (status = 404, description = "Session not found", body = anyharness_contract::v1::ProblemDetails),
     ),
@@ -33,6 +36,8 @@ pub async fn cancel_session(
     Path(session_id): Path<String>,
 ) -> Result<Json<Session>, ApiError> {
     assert_session_auth_scope(&state, &auth, &session_id)?;
+    let _admission_permit =
+        admit_session_mutation(&state, &session_id, SessionMutationKind::Cancel).await?;
     let updated = state
         .session_runtime
         .cancel_live_session(&session_id)
@@ -47,6 +52,7 @@ pub async fn cancel_session(
     path = "/v1/sessions/{session_id}/close",
     params(("session_id" = String, Path, description = "Session ID")),
     responses(
+        (status = 409, description = "Session execution is controlled by an active workflow run", body = anyharness_contract::v1::ProblemDetails),
         (status = 200, description = "Session closed", body = Session),
         (status = 404, description = "Session not found", body = anyharness_contract::v1::ProblemDetails),
     ),
@@ -58,6 +64,8 @@ pub async fn close_session(
     Path(session_id): Path<String>,
 ) -> Result<Json<Session>, ApiError> {
     assert_session_auth_scope(&state, &auth, &session_id)?;
+    let _admission_permit =
+        admit_session_mutation(&state, &session_id, SessionMutationKind::Close).await?;
     let record = state
         .session_runtime
         .close_live_session(&session_id)
@@ -71,6 +79,7 @@ pub async fn close_session(
     path = "/v1/sessions/{session_id}/dismiss",
     params(("session_id" = String, Path, description = "Session ID")),
     responses(
+        (status = 409, description = "Session execution is controlled by an active workflow run", body = anyharness_contract::v1::ProblemDetails),
         (status = 200, description = "Session dismissed", body = Session),
         (status = 404, description = "Session not found", body = anyharness_contract::v1::ProblemDetails),
     ),
@@ -82,6 +91,8 @@ pub async fn dismiss_session(
     Path(session_id): Path<String>,
 ) -> Result<Json<Session>, ApiError> {
     assert_session_auth_scope(&state, &auth, &session_id)?;
+    let _admission_permit =
+        admit_session_mutation(&state, &session_id, SessionMutationKind::Dismiss).await?;
     let record = state
         .session_runtime
         .dismiss_live_session(&session_id)
@@ -99,6 +110,11 @@ pub async fn dismiss_session(
     ),
     tag = "sessions"
 )]
+// Spec 2b classification (admission:derived-safe): restore targets the
+// workspace's latest DISMISSED session. A workflow-controlled session cannot
+// be dismissed (dismissal is fenced 409 while controlled, and control binds
+// at creation by the executor), so restore can never target a controlled
+// session; no admission permit is required here.
 pub async fn restore_dismissed_session(
     State(state): State<AppState>,
     Extension(auth): Extension<AuthContext>,

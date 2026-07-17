@@ -21,12 +21,15 @@ import {
 import { WorkflowDefinitionList } from "@proliferate/product-ui/workflows/WorkflowDefinitionList";
 import { PersistedWorkflowEditor } from "./PersistedWorkflowEditor";
 import { WorkflowResourceState } from "./WorkflowResourceState";
+import { WorkflowDefinitionRunsPanel } from "./WorkflowRunsSurface";
 
 export interface WorkflowDefinitionsSurfaceProps {
   authCacheScope: string;
   selectedWorkflowId?: string | null;
   onSelectWorkflow: (workflowId: string) => void;
   onBackToList: () => void;
+  managedRunsEnabled?: boolean;
+  onOpenRun?: (workflowId: string, runId: string) => void;
 }
 
 export function WorkflowDefinitionsSurface({
@@ -34,6 +37,8 @@ export function WorkflowDefinitionsSurface({
   selectedWorkflowId = null,
   onSelectWorkflow,
   onBackToList,
+  managedRunsEnabled = false,
+  onOpenRun = () => {},
 }: WorkflowDefinitionsSurfaceProps) {
   const [creating, setCreating] = useState(false);
   useEffect(() => {
@@ -65,6 +70,8 @@ export function WorkflowDefinitionsSurface({
         repositoriesLoading={repositoriesQuery.isLoading}
         onSaved={onSelectWorkflow}
         onBack={onBackToList}
+        managedRunsEnabled={managedRunsEnabled}
+        onOpenRun={(runId) => onOpenRun(selectedWorkflowId, runId)}
       />
     );
   }
@@ -197,6 +204,8 @@ function ExistingWorkflowDefinitionEditor({
   repositoriesLoading,
   onSaved,
   onBack,
+  managedRunsEnabled,
+  onOpenRun,
 }: {
   authCacheScope: string;
   workflowId: string;
@@ -207,6 +216,8 @@ function ExistingWorkflowDefinitionEditor({
   repositoriesLoading: boolean;
   onSaved: (workflowId: string) => void;
   onBack: () => void;
+  managedRunsEnabled: boolean;
+  onOpenRun: (runId: string) => void;
 }) {
   const definitionQuery = useWorkflowDefinition(workflowId, authCacheScope);
 
@@ -265,6 +276,14 @@ function ExistingWorkflowDefinitionEditor({
       }}
       onSaved={onSaved}
       onBack={onBack}
+      supplementalContent={(
+        <WorkflowDefinitionRunsPanel
+          authCacheScope={authCacheScope}
+          definition={definition}
+          managedRunsEnabled={managedRunsEnabled}
+          onOpenRun={onOpenRun}
+        />
+      )}
     />
   );
 }

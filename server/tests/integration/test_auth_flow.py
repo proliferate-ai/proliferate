@@ -1,7 +1,5 @@
 """Integration tests for the auth flow: GitHub OAuth → desktop PKCE exchange."""
 
-import base64
-import hashlib
 import time
 from datetime import UTC, datetime
 from unittest.mock import Mock
@@ -25,13 +23,8 @@ from proliferate.constants.auth import DESKTOP_GITHUB_CSRF_COOKIE, REFRESH_TOKEN
 from proliferate.db.models.auth import AuthIdentity, ProviderGrant, User
 from proliferate.integrations.github import GitHubUserProfile
 from proliferate.utils.crypto import encrypt_text
-
-
-def _make_pkce_pair() -> tuple[str, str]:
-    verifier = "test-code-verifier-that-is-long-enough-for-pkce"
-    digest = hashlib.sha256(verifier.encode("ascii")).digest()
-    challenge = base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
-    return verifier, challenge
+from tests.helpers.desktop_auth import make_pkce_pair as _make_pkce_pair
+from tests.integration.cloud_api_helpers import configure_github_app
 
 
 async def _create_user_via_manager(
@@ -604,6 +597,7 @@ class TestSingleOrgProductUserBypass:
         """
         monkeypatch.setattr(settings, "password_auth_enabled", True)
         monkeypatch.setattr(settings, "single_org_mode_override", True)
+        configure_github_app(monkeypatch)
         await _create_password_user("single-org-no-github@example.com", self.password)
 
         login = await client.post(

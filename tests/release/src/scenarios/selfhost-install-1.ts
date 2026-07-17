@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
@@ -12,12 +13,14 @@ import type {
   ScenarioRunContext,
 } from "./types.js";
 import type { CandidateBuildMapV1 } from "../artifacts/build-map.js";
+import { candidateChildEnvironment } from "../artifacts/anyharness-smoke.js";
 import type {
   CellEvidenceV1,
   SelfHostBaseTurnEvidenceV1,
   SelfHostDesktopOwnerEvidenceV1,
   SelfHostInstallClaimEvidenceV1,
   SelfHostInviteeEvidenceV1,
+  SelfHostProviderClaim,
 } from "../evidence/schema.js";
 import { SELFHOST_INSTALL_1_SCENARIO_ID } from "../evidence/schema.js";
 import type { PlannedCellV1, ResultReason, ScenarioDeclarableStatus } from "../runner/result.js";
@@ -30,7 +33,8 @@ import { runShippedInstaller, waitForHealth } from "../worlds/selfhost/install.j
 import {
   claimSelfHostOwner,
   assertSecondClaimRejected,
-  inviteAndRegisterMember,
+  inviteeEmail,
+  registerInvitee,
   type SelfHostOwnerActor,
 } from "../fixtures/selfhost-actor.js";
 import {
@@ -38,7 +42,10 @@ import {
   preflightByokKey,
   storeAndSelectByokKey,
   waitForDesktopByokSync,
+  type ByokPreflightResult,
+  type ByokSelection,
 } from "../fixtures/byok.js";
+import { defaultPreparedRepositoryTransport } from "../fixtures/prepared-repository.js";
 import {
   assertOnlyMetaFetchedBeforeTrust,
   assertRejectsInvalidUrl,
@@ -86,6 +93,26 @@ const TURN_TIMEOUT_MS = 300_000;
 const RESTART_HEALTH_TIMEOUT_MS = 180_000;
 /** A real, healthy, reachable host that is definitely not a Proliferate control plane. */
 const NON_PROLIFERATE_PROBE_URL = "https://example.com";
+/** SHR-004a: the SH-BASE-TURN transcript re-read after reload must contain the assistant's reply to `SELFHOST_TURN_PROMPT`. */
+const EXPECTED_TURN_REPLY_PATTERN = /pong/i;
+/**
+ * SHR-004b: known LiteLLM/gateway env var names
+ * (`tests/release/src/config/env-manifest.ts`). SH-BASE-TURN's world is
+ * BYOK-only — `SELFHOST_REQUIRED_ENV` above carries no gateway input — so
+ * observing their absence from the SCRUBBED candidate child env (the env the
+ * candidate AnyHarness actually receives) is part of the "world was constructed
+ * with no LiteLLM env configured" half of `no_litellm_spend`. The check is
+ * scoped to the candidate env, not the test runner's ambient env: the full
+ * strict lane sources one qualification-infra.env for all scenarios, so the
+ * runner legitimately carries the gateway inputs the sibling SELFHOST-QUAL-1
+ * cell needs — the allowlisting candidateChildEnvironment drops them here.
+ */
+const LITELLM_GATEWAY_ENV_VARS = [
+  "RELEASE_E2E_GATEWAY_TEST_KEY",
+  "AGENT_GATEWAY_LITELLM_BASE_URL",
+  "AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL",
+  "AGENT_GATEWAY_LITELLM_MASTER_KEY",
+] as const;
 
 /**
  * Env the self-host lane needs. AWS/SSH provisioning inputs + the BYOK key are
@@ -142,11 +169,11 @@ function planForCell(cell: PlannedCellV1): ScenarioPlanStep[] {
         { description: `${prefix} owner stores a run-scoped BYOK key; select it (surface=local, sourceKind=api_key)` },
         { description: `${prefix} Desktop pushes state into the controller-local candidate AnyHarness` },
         { description: `${prefix} create a local workspace + run one bounded cheapest-eligible Claude turn (no LiteLLM/E2B)` },
-        { description: `${prefix} reopen; server/renderer/AnyHarness/workspace/session/transcript stay commandable` },
+        { description: `${prefix} reload the renderer and re-read the same session's transcript; observe /meta + runtime auth state confirm no LiteLLM/E2B` },
       ];
     case SH_INVITEE:
       return [
-        { description: `${prefix} owner invites a member; capture the invitation response` },
+        { description: `${prefix} owner invites a member through the product UI; capture the invitation` },
         { description: `${prefix} register + login from a SECOND isolated product page` },
         { description: `${prefix} assert the intended role + one authenticated member action` },
       ];
@@ -386,117 +413,7 @@ export const defaultSelfHostInstallDriver: SelfHostInstallDriver = {
         },
       };
     }
-    const rawKey = process.env.RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY?.trim();
-    if (!rawKey) {
-      return {
-        status: "failed",
-        reason: {
-          code: "scenario_failure",
-          message: "SH-BASE-TURN: RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY is not set.",
-        },
-      };
-    }
-    // Fail-closed preflight (frozen spec): a rejected key is a real red, never
-    // blocked/skipped.
-    const preflight = await preflightByokKey(rawKey);
-    if (!preflight.ok) {
-      return {
-        status: "failed",
-        reason: {
-          code: "scenario_failure",
-          message: `SH-BASE-TURN: BYOK preflight rejected the key (${preflight.reason ?? "unknown reason"}).`,
-        },
-      };
-    }
-
-    const selection = await storeAndSelectByokKey(owner, {
-      rawKey,
-      harnessKind: REPRESENTATIVE_HARNESS,
-      envVarName: DEFAULT_BYOK_ENV_VAR,
-    });
-
-    const page = await openAuthenticatedPage(world, owner);
-    try {
-      try {
-        await waitForDesktopByokSync(world, page, selection);
-      } catch (error) {
-        // Enrich the timeout with whether the Desktop push actually landed in
-        // the controller-local runtime home (Layer A vs Layer B): source kinds
-        // + env-var names only, never the raw key value.
-        const diag = summarizeRuntimeAuthState(world.paths.runtimeHome, selection.harnessKind);
-        throw new Error(`${error instanceof Error ? error.message : String(error)} ${diag}`);
-      }
-
-      const modelId = await resolveBaseTurnModel(world);
-      if (!modelId) {
-        return {
-          status: "blocked",
-          reason: {
-            code: "scenario_blocked",
-            message: "SH-BASE-TURN: no launchable claude model was offered by the controller-local AnyHarness.",
-          },
-        };
-      }
-
-      const workspacePath = path.join(world.paths.runDir, "selfhost-base-turn-workspace");
-      mkdirSync(workspacePath, { recursive: true });
-      const created = await world.runtime.client.createLocalWorkspace(workspacePath);
-      const session = await world.runtime.client.createSession({
-        workspaceId: created.workspace.id,
-        agentKind: REPRESENTATIVE_HARNESS,
-        modelId,
-      });
-      await world.runtime.client.prompt(session.id, SELFHOST_TURN_PROMPT);
-      const completion = await waitForTurnCompletion(world, session.id, TURN_TIMEOUT_MS);
-      if (completion.error) {
-        // Env-gated raw diagnostic (never on the green path; provider bodies are
-        // redacted out of persisted evidence). Local diagnostic runs set
-        // LOCAL_WORLD_SMOKE_DEBUG_DIR to see the unredacted provider error.
-        if (process.env.LOCAL_WORLD_SMOKE_DEBUG_DIR) {
-          console.error(`[SH-BASE-TURN raw diag] model="${modelId}" turn error: ${completion.error}`);
-        }
-        return {
-          status: "failed",
-          reason: { code: "scenario_failure", message: `SH-BASE-TURN: assistant turn errored: ${completion.error}` },
-        };
-      }
-      if (!completion.ended) {
-        return {
-          status: "failed",
-          reason: { code: "scenario_failure", message: `SH-BASE-TURN: assistant turn did not end within ${TURN_TIMEOUT_MS}ms.` },
-        };
-      }
-      // Reopen: the workspace/session/transcript must remain commandable from
-      // the controller-local runtime after the turn.
-      const reopened = await world.runtime.client.getSession(session.id);
-      if (!reopened || reopened.workspaceId !== created.workspace.id) {
-        return {
-          status: "failed",
-          reason: { code: "scenario_failure", message: "SH-BASE-TURN: session did not remain commandable after reopen." },
-        };
-      }
-
-      const evidence: SelfHostBaseTurnEvidenceNoCleanup = {
-        kind: "selfhost_base_turn",
-        artifact_ids: artifactIds(world),
-        server_version: world.artifacts.serverImage.version,
-        anyharness_version: world.artifacts.anyharness.version,
-        harness: "claude",
-        api_origin: originOf(world.api.baseUrl),
-        controller_runtime_origin: originOf(world.runtime.baseUrl),
-        model_id: modelId,
-        workspace_id_hash: sha256Hex(created.workspace.id),
-        session_id_hash: sha256Hex(session.id),
-        transcript_reopened: true,
-        byok_route: "api_key",
-        byok_key_id_hash: sha256Hex(selection.apiKeyId),
-        no_litellm_spend: true,
-        no_e2b: true,
-      };
-      return { status: "green", evidence };
-    } finally {
-      await page.close().catch(() => undefined);
-    }
+    return runBaseTurnCell(world, owner, defaultBaseTurnCellOps);
   },
 
   async runInvitee(world) {
@@ -510,7 +427,21 @@ export const defaultSelfHostInstallDriver: SelfHostInstallDriver = {
         },
       };
     }
-    const invitee = await inviteAndRegisterMember(world, owner);
+    // SHR-001: the CREATE goes through the real renderer UI, never a direct
+    // API POST — drive the owner's authenticated Members/Invitations settings
+    // surface and submit the invite-by-email form. The API is used only to
+    // READ the created invitation's registration token back (matching the
+    // shipped self-host smoke's own token-recovery pattern), never to create it.
+    const email = inviteeEmail(world);
+    const invitePage = await openOwnerMembersSettingsPage(world, owner);
+    let createdInvitation: { id: string; email: string; status: string };
+    try {
+      await inviteMemberThroughUi(invitePage, email);
+      createdInvitation = await readCreatedInvitation(owner, email);
+    } finally {
+      await invitePage.close().catch(() => undefined);
+    }
+    const invitee = await registerInvitee(world, owner, createdInvitation);
     const page = await openAuthenticatedPage(world, invitee);
     try {
       // One authenticated member action: the invitee can list the org's
@@ -550,6 +481,332 @@ export const defaultSelfHostInstallDriver: SelfHostInstallDriver = {
   },
 
   closeWorld: (world) => world.close(),
+};
+
+// ── SH-BASE-TURN cell logic (ops injected; decision logic is offline-tested) ──
+
+/**
+ * The privileged/stateful/UI-driving steps of SH-BASE-TURN, factored out behind
+ * an injectable seam so `runBaseTurnCell`'s decision logic is unit-testable
+ * OFFLINE (no real Anthropic/browser/AnyHarness), mirroring `GatewayCellOps`
+ * in the sibling SELFHOST-QUAL-1. Production wiring (`defaultBaseTurnCellOps`)
+ * calls the real fixtures + the UI-real turn machinery.
+ */
+/**
+ * The result of a UI-real "Work locally" turn. `workspaceId` is the runtime's
+ * MATERIALIZED workspace id (what sessions/getSession key off, and what the
+ * evidence receipt hashes); `logicalWorkspaceId` is the product's LOGICAL
+ * ui-key (`repo-root:<repoRootId>:<branch>`) the DOM re-renders on reload. The
+ * two are distinct handles and MUST NOT be conflated.
+ */
+export interface LocalWorkspaceTurn {
+  workspaceId: string;
+  logicalWorkspaceId: string;
+  sessionId: string;
+  reply: string;
+}
+
+export interface BaseTurnCellOps {
+  /** The run-scoped BYOK key from the controller env (never stored/logged). */
+  resolveByokRawKey(): string | undefined;
+  /** Fail-closed provider preflight (real bounded call; offline-faked in tests). */
+  preflightByok(rawKey: string): Promise<ByokPreflightResult>;
+  /** Store + select the run-scoped key through the product (surface=local, api_key). */
+  storeAndSelectByok(owner: SelfHostOwnerActor, rawKey: string): Promise<ByokSelection>;
+  /** Open the authenticated owner's Desktop renderer page. */
+  openOwnerPage(world: ReadySelfHostWorld, owner: SelfHostOwnerActor): Promise<ProductPage>;
+  /** Wait for Desktop to push the api_key source into the controller-local runtime (throws on timeout). */
+  waitForByokSync(world: ReadySelfHostWorld, page: ProductPage, selection: ByokSelection): Promise<void>;
+  /** Secret-free runtime auth-state diagnostic for a sync timeout. */
+  summarizeAuthState(world: ReadySelfHostWorld, harnessKind: string): string;
+  /** Cheapest eligible non-premium claude model from the controller-local runtime. */
+  resolveModel(world: ReadySelfHostWorld): Promise<string | undefined>;
+  /**
+   * UI-REAL: through the renderer composer, create the local workspace + session
+   * and send the prompt, waiting for the assistant reply in the transcript DOM.
+   * Throws (bounded) on a create/turn failure. Returns the UI-created ids (as
+   * observed via the runtime's own session list) and the rendered reply text.
+   */
+  createWorkspaceTurnThroughUi(
+    world: ReadySelfHostWorld,
+    page: ProductPage,
+    modelId: string,
+    prompt: string,
+  ): Promise<LocalWorkspaceTurn>;
+  /** Runtime-side reopen: the session must remain commandable (secondary observation). */
+  reopenSession(world: ReadySelfHostWorld, sessionId: string): Promise<{ workspaceId?: string } | undefined>;
+  /**
+   * SHR-004a: reload the SAME renderer page product-native (NO localStorage
+   * preset — the product persisted its own selection when the workspace was
+   * created through the UI) and re-read the transcript. A failure to restore is
+   * a real product finding reported with a bounded, diagnosable message.
+   */
+  reloadTranscript(
+    world: ReadySelfHostWorld,
+    page: ProductPage,
+    workspaceId: string,
+  ): Promise<{ ok: true; text: string } | { ok: false; diagnostic: string }>;
+  /** SHR-004b/c: the server's advertised gateway/cloud capability booleans. */
+  fetchCapabilities(world: ReadySelfHostWorld): Promise<SelfHostMetaCapabilities>;
+  /** SHR-004b: the auth source kinds Desktop pushed into the controller-local runtime. */
+  readAuthSourceKinds(world: ReadySelfHostWorld, harnessKind: string): string[];
+  /** The LiteLLM gateway env var present on the controller env, if any. */
+  detectGatewayEnvVar(): string | undefined;
+  /** The E2B key present in the scrubbed candidate child env, if any. */
+  detectE2bEnvKey(): string | undefined;
+}
+
+/**
+ * SH-BASE-TURN decision logic (frozen tier-3 contract §`SH-BASE-TURN`):
+ * store+select a run-scoped user API key through the self-host product, then
+ * CREATE the local workspace, session, and turn ALL through the real Desktop
+ * renderer composer against the controller-local candidate AnyHarness (the
+ * UI-real path the contract names — "create a local workspace through the
+ * Desktop renderer and separate candidate AnyHarness"). The runtime-side
+ * assertions (session remains commandable; no LiteLLM/E2B) are kept as
+ * secondary OBSERVATIONS off the UI-created entities. SHR-004a's reopen proof
+ * is product-native: a plain reload restores the product's own persisted
+ * workspace selection; a failure to restore is a bounded, diagnosable red.
+ */
+export async function runBaseTurnCell(
+  world: ReadySelfHostWorld,
+  owner: SelfHostOwnerActor,
+  ops: BaseTurnCellOps,
+): Promise<SelfHostCellResult> {
+  const rawKey = ops.resolveByokRawKey();
+  if (!rawKey) {
+    return failedBaseTurn("SH-BASE-TURN: RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY is not set.");
+  }
+  // Fail-closed preflight (frozen spec): a rejected key is a real red, never
+  // blocked/skipped.
+  const preflight = await ops.preflightByok(rawKey);
+  if (!preflight.ok) {
+    return failedBaseTurn(`SH-BASE-TURN: BYOK preflight rejected the key (${preflight.reason ?? "unknown reason"}).`);
+  }
+
+  const selection = await ops.storeAndSelectByok(owner, rawKey);
+
+  const page = await ops.openOwnerPage(world, owner);
+  try {
+    try {
+      await ops.waitForByokSync(world, page, selection);
+    } catch (error) {
+      // Enrich the timeout with whether the Desktop push actually landed in the
+      // controller-local runtime home (Layer A vs Layer B): source kinds +
+      // env-var names only, never the raw key value.
+      const diag = ops.summarizeAuthState(world, selection.harnessKind);
+      throw new Error(`${describe(error)} ${diag}`);
+    }
+
+    const modelId = await ops.resolveModel(world);
+    if (!modelId) {
+      return {
+        status: "blocked",
+        reason: {
+          code: "scenario_blocked",
+          message: "SH-BASE-TURN: no launchable claude model was offered by the controller-local AnyHarness.",
+        },
+      };
+    }
+
+    // UI-REAL: workspace + session + prompt all go through the renderer composer.
+    let turn: LocalWorkspaceTurn;
+    try {
+      turn = await ops.createWorkspaceTurnThroughUi(world, page, modelId, SELFHOST_TURN_PROMPT);
+    } catch (error) {
+      // Render the ui-turn step BEFORE the "failed:" boundary so it survives
+      // evidence redaction (which withholds everything after that colon).
+      const step = (error as { uiTurnStep?: string })?.uiTurnStep;
+      const at = step ? ` at step "${step}"` : "";
+      return failedBaseTurn(
+        `SH-BASE-TURN: creating the local workspace and running the turn through the renderer${at} failed: ${describe(error)}`,
+      );
+    }
+    if (!EXPECTED_TURN_REPLY_PATTERN.test(turn.reply)) {
+      return failedBaseTurn(
+        `SH-BASE-TURN: the renderer transcript did not render the turn's reply (saw ${JSON.stringify(turn.reply)}).`,
+      );
+    }
+
+    // Reopen (runtime, secondary observation): the UI-created workspace/session
+    // must remain commandable from the controller-local runtime after the turn.
+    const reopened = await ops.reopenSession(world, turn.sessionId);
+    if (!reopened || reopened.workspaceId !== turn.workspaceId) {
+      return failedBaseTurn("SH-BASE-TURN: session did not remain commandable after reopen.");
+    }
+
+    // SHR-004a: `transcript_reopened` must be OBSERVED — reload the renderer
+    // product-native (no preset) and re-read the SAME workspace's transcript.
+    // The DOM re-renders the LOGICAL ui-key, so the reload match keys off it,
+    // not the runtime's materialized workspace id.
+    const reloaded = await ops.reloadTranscript(world, page, turn.logicalWorkspaceId);
+    if (!reloaded.ok) {
+      return failedBaseTurn(
+        `SH-BASE-TURN: after a product-native page reload the renderer did not restore the workspace/transcript — ${reloaded.diagnostic}`,
+      );
+    }
+    if (!EXPECTED_TURN_REPLY_PATTERN.test(reloaded.text)) {
+      return failedBaseTurn(
+        `SH-BASE-TURN: the renderer's re-read transcript after a fresh page load did not contain the turn's reply (saw ${JSON.stringify(reloaded.text)}).`,
+      );
+    }
+
+    // SHR-004b/c: `no_litellm_spend`/`no_e2b` must be OBSERVED, not merely
+    // asserted by construction.
+    const capabilities = await ops.fetchCapabilities(world);
+    if (capabilities.agentGateway) {
+      return failedBaseTurn(
+        "SH-BASE-TURN: /meta reports capabilities.agentGateway=true; expected the self-host instance to advertise it disabled.",
+      );
+    }
+    if (capabilities.cloudWorkspaces) {
+      return failedBaseTurn(
+        "SH-BASE-TURN: /meta reports capabilities.cloudWorkspaces=true; expected the self-host instance to advertise it disabled.",
+      );
+    }
+    const gatewayEnvVar = ops.detectGatewayEnvVar();
+    if (gatewayEnvVar) {
+      return failedBaseTurn(
+        `SH-BASE-TURN: the world's scrubbed candidate child env carries "${gatewayEnvVar}"; a BYOK-only self-host run must configure no LiteLLM gateway input.`,
+      );
+    }
+    const authSourceKinds = ops.readAuthSourceKinds(world, selection.harnessKind);
+    if (!authSourceKinds.includes("api_key")) {
+      return failedBaseTurn(
+        `SH-BASE-TURN: the pushed BYOK auth state for "${selection.harnessKind}" does not carry an "api_key" source (saw ${JSON.stringify(authSourceKinds)}).`,
+      );
+    }
+    if (authSourceKinds.includes("gateway")) {
+      return failedBaseTurn(
+        `SH-BASE-TURN: the pushed BYOK auth state for "${selection.harnessKind}" carries a "gateway" (LiteLLM virtual-key) source; a BYOK-direct turn must show only "api_key" (saw ${JSON.stringify(authSourceKinds)}).`,
+      );
+    }
+    const e2bEnvKey = ops.detectE2bEnvKey();
+    if (e2bEnvKey) {
+      return failedBaseTurn(
+        `SH-BASE-TURN: the world's scrubbed candidate child env carries an E2B key ("${e2bEnvKey}"); expected none.`,
+      );
+    }
+
+    // The checks above prove this TURN was BYOK-DIRECT (capabilities gateway/cloud
+    // both false, the pushed auth route is `api_key` not `gateway`, and the
+    // scrubbed candidate env carries no LiteLLM/E2B input). They do NOT constitute
+    // the frozen contract's run-window SPEND/TRAFFIC observation of
+    // `no_litellm_spend`/`no_e2b`, which PR 7 cannot perform for a gateway-OFF
+    // base install. So those two claims are recorded HONESTLY as "unproven"
+    // rather than asserted from configuration or from an unavailable/false
+    // container probe (PR7-CONTROL-010 — an earlier catch-to-empty container
+    // observation could false-green and has been removed).
+
+    // Honest claim status (PR7-CONTROL-010): the frozen run-window spend/traffic
+    // observation is not performed by PR 7 for a gateway-OFF base install, so
+    // these are "unproven" rather than a false absence assertion. When a real
+    // run-window observation is later wired it sets "observed_absent" and the
+    // cell can go green.
+    // Typed as the union (not narrowed to the "unproven" literal) so the
+    // green-gate comparison below is meaningful and the fields flip to
+    // "observed_absent" cleanly once a real run-window observation is wired.
+    const noLitellmSpend = "unproven" as SelfHostProviderClaim;
+    const noE2b = "unproven" as SelfHostProviderClaim;
+
+    const evidence: SelfHostBaseTurnEvidenceNoCleanup = {
+      kind: "selfhost_base_turn",
+      artifact_ids: artifactIds(world),
+      server_version: world.artifacts.serverImage.version,
+      anyharness_version: world.artifacts.anyharness.version,
+      harness: "claude",
+      api_origin: originOf(world.api.baseUrl),
+      controller_runtime_origin: originOf(world.runtime.baseUrl),
+      model_id: modelId,
+      workspace_id_hash: sha256Hex(turn.workspaceId),
+      session_id_hash: sha256Hex(turn.sessionId),
+      transcript_reopened: true,
+      byok_route: "api_key",
+      byok_key_id_hash: sha256Hex(selection.apiKeyId),
+      no_litellm_spend: noLitellmSpend,
+      no_e2b: noE2b,
+    };
+
+    // The frozen contract folds the provider-absence guarantees into
+    // SH-BASE-TURN, so an UNPROVEN required subclaim must NOT contribute a green
+    // result (PR7-CONTROL-010). The cell resolves to `expected_fail` (a known,
+    // accepted gap) with a bounded reason — the genuinely-proven BYOK-direct turn
+    // evidence still attaches, but the aggregate honestly reports the guarantee
+    // as unproven rather than green. It goes green only once both subclaims are
+    // `observed_absent` (a real run-window spend/traffic observation).
+    const unprovenClaims: string[] = [];
+    if (noLitellmSpend !== "observed_absent") {
+      unprovenClaims.push("no_litellm_spend");
+    }
+    if (noE2b !== "observed_absent") {
+      unprovenClaims.push("no_e2b");
+    }
+    if (unprovenClaims.length > 0) {
+      return {
+        status: "expected_fail",
+        reason: {
+          code: "known_gap",
+          message:
+            `SH-BASE-TURN: the BYOK-direct turn is proven, but the folded provider-absence guarantee(s) ` +
+            `[${unprovenClaims.join(", ")}] are unproven — PR 7 does not perform the frozen run-window ` +
+            `spend/traffic observation for a gateway-OFF base install. Reporting expected_fail (accepted gap), ` +
+            `not green, until that observation is wired.`,
+        },
+        evidence,
+      };
+    }
+    return { status: "green", evidence };
+  } finally {
+    await page.close().catch(() => undefined);
+  }
+}
+
+function failedBaseTurn(message: string): SelfHostCellResult {
+  return { status: "failed", reason: { code: "scenario_failure", message } };
+}
+
+/** Production wiring: real fixtures + the UI-real turn machinery. */
+export const defaultBaseTurnCellOps: BaseTurnCellOps = {
+  resolveByokRawKey: () => process.env.RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY?.trim() || undefined,
+  preflightByok: (rawKey) => preflightByokKey(rawKey),
+  storeAndSelectByok: (owner, rawKey) =>
+    storeAndSelectByokKey(owner, {
+      rawKey,
+      harnessKind: REPRESENTATIVE_HARNESS,
+      envVarName: DEFAULT_BYOK_ENV_VAR,
+    }),
+  openOwnerPage: (world, owner) => openAuthenticatedPage(world, owner),
+  waitForByokSync: (world, page, selection) => waitForDesktopByokSync(world, page, selection),
+  summarizeAuthState: (world, harnessKind) => summarizeRuntimeAuthState(world.paths.runtimeHome, harnessKind),
+  resolveModel: (world) => resolveBaseTurnModel(world),
+  createWorkspaceTurnThroughUi: (world, page, modelId, prompt) =>
+    createLocalWorkspaceTurnThroughUi(world, page, modelId, prompt, "selfhost-base-turn-workspace"),
+  async reopenSession(world, sessionId) {
+    return world.runtime.client.getSession(sessionId).catch(() => undefined);
+  },
+  reloadTranscript: (world, page, workspaceId) => reloadTranscriptProductNative(world, page, workspaceId),
+  fetchCapabilities: (world) => fetchServerCapabilities(world),
+  readAuthSourceKinds: (world, harnessKind) => readRuntimeAuthSourceKinds(world.paths.runtimeHome, harnessKind),
+  detectGatewayEnvVar: () => {
+    // Assert on the SCRUBBED candidate child env (what the candidate AnyHarness
+    // actually receives via candidateChildEnvironment), not the test runner's
+    // ambient process.env. The full self-host strict lane sources ONE
+    // qualification-infra.env for all scenarios, so the runner env legitimately
+    // carries AGENT_GATEWAY_LITELLM_* for the sibling SELFHOST-QUAL-1 gateway
+    // cell; the allowlisting candidateChildEnvironment drops those before they
+    // could reach the BYOK-only candidate runtime, which is exactly what
+    // no_litellm_spend must prove. Mirrors the E2B-key guard's scope AND its
+    // pattern-scan shape: match any surviving gateway-ish key (the four known
+    // names plus anything containing litellm/agent_gateway), not a fixed list,
+    // so a differently-named gateway var that slipped into the allowlist is
+    // still caught.
+    const candidateEnv = candidateChildEnvironment(process.env);
+    return Object.keys(candidateEnv).find(
+      (key) =>
+        (LITELLM_GATEWAY_ENV_VARS as readonly string[]).includes(key) || /litellm|agent_gateway/i.test(key),
+    );
+  },
+  detectE2bEnvKey: () => Object.keys(candidateChildEnvironment(process.env)).find((key) => /e2b/i.test(key)),
 };
 
 /**
@@ -914,8 +1171,13 @@ async function openIsolatedPage(world: ReadySelfHostWorld): Promise<ProductPage>
   return wrapPage(context, page);
 }
 
-/** Opens an isolated page with a real product session pre-installed and reloaded authenticated. */
-async function openAuthenticatedPage(
+/**
+ * Opens an isolated page with a real product session pre-installed and reloaded
+ * authenticated. Exported (export-only, no behavior change) so the sibling
+ * SELFHOST-QUAL-1 `SH-GATEWAY` cell opens the freshly-enrolled actor's renderer
+ * with the identical machinery SH-BASE-TURN uses.
+ */
+export async function openAuthenticatedPage(
   world: ReadySelfHostWorld,
   actor: { session: unknown },
 ): Promise<ProductPage> {
@@ -930,6 +1192,91 @@ async function openAuthenticatedPage(
   await page.goto(world.renderer.baseUrl, { waitUntil: "domcontentloaded" });
   await page.locator(AUTHENTICATED_READINESS_SELECTOR).first().waitFor({ state: "visible", timeout: 30_000 });
   return wrapPage(context, page);
+}
+
+/**
+ * SHR-001: opens an authenticated page navigated directly at the org
+ * Members/Invitations settings surface (`/settings?section=organization-members`
+ * — the real route `SidebarAccountFooter.tsx`'s "Settings" menu item navigates
+ * to; `AuthenticatedAppHost.tsx` keeps the home shell mounted underneath it, so
+ * `AUTHENTICATED_READINESS_SELECTOR` still resolves). Renders
+ * `OrganizationMembersPane` → `OrganizationInvitationsSection`
+ * (apps/packages/product-client/src/components/settings/panes/organization/).
+ */
+async function openOwnerMembersSettingsPage(
+  world: ReadySelfHostWorld,
+  owner: SelfHostOwnerActor,
+): Promise<ProductPage> {
+  const context = await world.renderer.browser.newContext();
+  await context.addInitScript(
+    ({ key, value }) => {
+      window.localStorage.setItem(key, value);
+    },
+    { key: BROWSER_AUTH_SESSION_KEY, value: JSON.stringify(owner.session) },
+  );
+  const page = await context.newPage();
+  await page.goto(`${world.renderer.baseUrl}/settings?section=organization-members`, {
+    waitUntil: "domcontentloaded",
+  });
+  await page.locator(AUTHENTICATED_READINESS_SELECTOR).first().waitFor({ state: "visible", timeout: 30_000 });
+  return wrapPage(context, page);
+}
+
+/**
+ * SHR-001: submits the invite-by-email form on the Members/Invitations
+ * settings surface. The product ships almost no `data-testid`s on this surface
+ * (see `product-page.ts`'s module doc on the same gap for the home/workspace
+ * shell) — `OrganizationInvitationsSection.tsx`'s email `<Input>` carries
+ * `aria-label="Invite email"` and the submit `<Button>` reads "Send
+ * invitation"; those accessible-name hooks are the most resilient selectors
+ * available. Waits for the form's own success signal: `handleInvite`
+ * (`OrganizationMembersPane.tsx`) only resets the controlled email input to ""
+ * after `createInvitation` resolves — a rejected create leaves it populated and
+ * throws, so a persistently non-empty value is a real failure, not a race.
+ */
+async function inviteMemberThroughUi(page: ProductPage, email: string): Promise<void> {
+  const p = page.page;
+  const emailInput = p.locator('input[aria-label="Invite email"]');
+  await emailInput.waitFor({ state: "visible", timeout: 30_000 });
+  await emailInput.fill(email);
+  const submit = p.getByRole("button", { name: "Send invitation" });
+  await submit.waitFor({ state: "visible", timeout: 10_000 });
+  await submit.click();
+
+  const deadline = Date.now() + 30_000;
+  while (Date.now() < deadline) {
+    const value = await emailInput.inputValue().catch(() => email);
+    if (value === "") {
+      return;
+    }
+    await sleep(500);
+  }
+  throw new Error(
+    `inviteMemberThroughUi: the invite form never confirmed success for "${email}" within 30000ms ` +
+      `(the email input still reads a non-empty value).`,
+  );
+}
+
+/**
+ * SHR-001: reads the invitation the UI just created back over the product API
+ * (the invitation id doubles as the registration token — see
+ * `registerInvitee` in `fixtures/selfhost-actor.ts`). This is a READ only: the
+ * CREATE already happened through the UI in `inviteMemberThroughUi`, matching
+ * the shipped self-host smoke's own token-recovery pattern
+ * (`server/deploy/smoke/run-smoke.sh`).
+ */
+async function readCreatedInvitation(
+  owner: SelfHostOwnerActor,
+  email: string,
+): Promise<{ id: string; email: string; status: string }> {
+  const response = await owner.api.get<{ invitations: Array<{ id: string; email: string; status: string }> }>(
+    `/v1/organizations/${encodeURIComponent(owner.organizationId)}/invitations`,
+  );
+  const invitation = response.invitations.find((entry) => entry.email === email);
+  if (!invitation) {
+    throw new Error(`readCreatedInvitation: no invitation for "${email}" was found after the UI submit.`);
+  }
+  return invitation;
 }
 
 /**
@@ -968,6 +1315,534 @@ function wrapPage(context: BrowserContext, page: Page): ProductPage {
   };
 }
 
+/** Escapes a value for safe interpolation inside a `[attr="…"]` CSS selector. */
+function cssAttr(value: string): string {
+  return value.replace(/["\\]/g, "\\$&");
+}
+
+/** Bounded UI waits for the composer-driven turn (kept generous but finite). */
+const HOME_COMPOSER_TIMEOUT_MS = 60_000;
+const MODEL_PICKER_TIMEOUT_MS = 60_000;
+const WORKSPACE_SETTLE_TIMEOUT_MS = 90_000;
+const ASSISTANT_REPLY_TIMEOUT_MS = 30_000;
+const RELOAD_SHELL_TIMEOUT_MS = 60_000;
+
+/**
+ * SHR-004a / frozen tier-3 contract §`SH-BASE-TURN` ("create a local workspace
+ * through the Desktop renderer and separate candidate AnyHarness"): drives the
+ * REAL renderer composer to create the local workspace + session and run one
+ * bounded turn — the identical machinery `local-world-smoke-1.ts` uses for its
+ * UI-real local turn, just against the self-host world's controller-local
+ * AnyHarness (the composer/workspace-entry UI is the same product renderer).
+ *
+ * Sequence (mirrors LOCAL-WORLD-SMOKE-1's Project→Work-locally→model→send flow):
+ *   1. register a run-scoped repo-root under `runDir` in the controller-local
+ *      AnyHarness (the same `POST /v1/repo-roots/resolve` path the Desktop folder
+ *      picker uses, reused verbatim from `preparedRepository`'s transport). A
+ *      repo-root REQUIRES a git repository (AnyHarness returns `NotGitRepo`
+ *      otherwise — `anyharness/.../api/http/repo_roots.rs`), so the dir is
+ *      `git init`'d with one empty baseline commit. This is prerequisite fixture
+ *      state (the workspace/session/turn under test are created by the UI below),
+ *      exactly like `preparedRepository`;
+ *   2. reload so the composer re-fetches repo-roots + launch options, then pick
+ *      the repo in the "Project:" menu and choose "Work locally" in the
+ *      "Runtime:" menu (`HomeProjectMenu.tsx` `data-repo-source-root`,
+ *      `home-target-picker.ts` "Work locally");
+ *   3. select the resolved model in the composer picker
+ *      (`ComposerModelSelectorControl.tsx` `data-composer-model-trigger` /
+ *      `data-model-option`);
+ *   4. send the prompt (`HomeComposerForm.tsx` `data-home-composer-editor`,
+ *      `ChatComposerActions.tsx` `data-chat-send-button`); the pending-workspace
+ *      composer MATERIALIZES the workspace + session and runs the first turn;
+ *   5. read the settled workspace ui-key off the shell
+ *      (`StandardWorkspaceShell.tsx` `data-workspace-shell` /
+ *      `data-workspace-ui-key` / `data-pending-workspace`), resolve the
+ *      AnyHarness session id from the runtime's own session list, drive the turn
+ *      to completion off the runtime event stream, and read the assistant reply
+ *      from the transcript DOM (`TranscriptItemBlock.tsx` `data-assistant-prose`
+ *      / `data-assistant-streaming`).
+ *
+ * Exported (pure move/export) so the sibling SELFHOST-QUAL-1 `SH-GATEWAY` cell
+ * runs its one gateway-routed turn through the identical UI-real path.
+ */
+export async function createLocalWorkspaceTurnThroughUi(
+  world: ReadySelfHostWorld,
+  page: ProductPage,
+  modelId: string,
+  prompt: string,
+  workspaceDirName: string,
+): Promise<LocalWorkspaceTurn> {
+  const p = page.page;
+  // Failure attribution: evidence redaction withholds response bodies, so a
+  // bare rethrow loses WHERE the flow died. `step` is a bounded label carried
+  // in the thrown message; a failure also drops one screenshot into the run's
+  // uploaded logs/ dir. Neither carries a response body or secret.
+  let step = "prepare repo root";
+  try {
+    return await createLocalWorkspaceTurnThroughUiInner(world, page, modelId, prompt, workspaceDirName, (s) => {
+      step = s;
+    });
+  } catch (error) {
+    // Durable screenshot: runDir/logs is reconciled away at teardown, so a
+    // failed run's screenshot only survives if a durable debug dir is set
+    // (local diagnostic runs export LOCAL_WORLD_SMOKE_DEBUG_DIR). Also drop the
+    // per-run copy for Actions log upload while the run dir still exists.
+    const shotName = `ui-turn-failure-${workspaceDirName}.png`;
+    const debugDir = process.env.LOCAL_WORLD_SMOKE_DEBUG_DIR;
+    const shotPaths = [path.join(world.paths.runDir, "logs", shotName)];
+    if (debugDir) {
+      shotPaths.push(path.join(debugDir, `${world.run.run_id}-${world.run.shard_id}-${shotName}`));
+    }
+    for (const shot of shotPaths) {
+      try {
+        mkdirSync(path.dirname(shot), { recursive: true });
+      } catch {
+        // best-effort diagnostic path
+      }
+      await p.screenshot({ path: shot, fullPage: true }).catch(() => undefined);
+    }
+    const message = error instanceof Error ? error.message : String(error);
+    // Raw diagnostic to the console only (never persisted evidence): the full
+    // message + stack survive in the run log even though evidence redaction
+    // withholds the payload after the "failed:" boundary.
+    console.error(`[ui-turn raw diag] step="${step}" workspace="${workspaceDirName}"\n${message}`);
+    if (error instanceof Error && error.stack) {
+      console.error(error.stack);
+    }
+    // Correlation diagnostic: the runtime's sessions + workspaces + the DOM's
+    // ui-key/session-id reveal whether the UI turn ran on world.runtime and how
+    // the ui-key relates to the runtime workspaceId. Ids are opaque handles.
+    try {
+      const sessions = await world.runtime.client.listSessions().catch(() => []);
+      const workspaces = await world.runtime.client.listWorkspaces().catch(() => []);
+      const domUiKeys = await p
+        .locator("[data-workspace-shell]")
+        .evaluateAll((els) => els.map((el) => el.getAttribute("data-workspace-ui-key")))
+        .catch(() => [] as Array<string | null>);
+      console.error(
+        `[ui-turn raw diag] runtime sessions=${JSON.stringify(
+          sessions.map((s) => ({ id: s.id, workspaceId: s.workspaceId, status: s.status })),
+        )} runtime workspaces=${JSON.stringify(
+          workspaces.map((w) => ({ id: w.id, kind: w.kind, repoRootId: w.repoRootId, branch: w.currentBranch })),
+        )} dom ui-keys=${JSON.stringify(domUiKeys)}`,
+      );
+    } catch {
+      // best-effort correlation diagnostic
+    }
+    // Carry the step in a property so the cell-level catch can render it
+    // BEFORE the "failed:" redaction boundary (the label after that colon is
+    // stripped by evidence redaction).
+    const wrapped = new Error(message) as Error & { uiTurnStep?: string };
+    wrapped.uiTurnStep = step;
+    throw wrapped;
+  }
+}
+
+async function createLocalWorkspaceTurnThroughUiInner(
+  world: ReadySelfHostWorld,
+  page: ProductPage,
+  modelId: string,
+  prompt: string,
+  workspaceDirName: string,
+  setStep: (step: string) => void,
+): Promise<LocalWorkspaceTurn> {
+  const p = page.page;
+
+  // 1. Prerequisite repo-root under runDir (git repo required by AnyHarness).
+  const repoPath = await prepareLocalRepoRoot(world, workspaceDirName);
+
+  setStep("reload home composer");
+  // 2. Reload so the freshly-registered repo-root + launch options are re-fetched
+  //    by the (already-open) composer, then wait for the home composer to render.
+  await p.reload({ waitUntil: "domcontentloaded" });
+  await p.locator("[data-home-composer-editor]").first().waitFor({ state: "visible", timeout: HOME_COMPOSER_TIMEOUT_MS });
+
+  setStep("select repo in Project picker");
+  // Select the repo in the Project picker and "Work locally" in the Runtime picker.
+  await clickByRole(p, "button", /^Project:/, "home Project picker trigger");
+  const repoRow = p.locator(`[data-repo-source-root="${cssAttr(repoPath)}"]`).first();
+  await repoRow.waitFor({ state: "visible", timeout: 20_000 });
+  await repoRow.click();
+  setStep("select Work locally runtime");
+  await clickByRole(p, "button", /^Runtime:/, "home Runtime picker trigger");
+  await clickMenuItemByText(p, "Work locally", '"Work locally" runtime option');
+
+  setStep("select model in composer");
+  // 3. Select the resolved model in the composer picker.
+  await selectModelInComposer(p, modelId);
+
+  setStep("send prompt");
+  // 4. Send the prompt; the pending-workspace composer materializes the workspace.
+  const editor = p.locator("[data-home-composer-editor]").first();
+  await editor.waitFor({ state: "visible", timeout: 15_000 });
+  await editor.fill(prompt);
+  const send = p.locator("[data-chat-send-button]:not([disabled])").first();
+  await send.waitFor({ state: "visible", timeout: 15_000 });
+  await send.click();
+
+  setStep("wait for workspace shell to settle");
+  // 5. Wait for the shell to settle (data-pending-workspace flips to "false"),
+  //    then read the DOM ui-key. This ui-key is the product's LOGICAL workspace
+  //    id (`repo-root:<repoRootId>:<branch>` for a "Work locally" launch), NOT
+  //    the runtime's materialized workspace id — the two are distinct handles.
+  await p.locator("[data-workspace-shell]").first().waitFor({ state: "visible", timeout: 30_000 });
+  await p
+    .locator('[data-workspace-shell][data-pending-workspace="false"]')
+    .first()
+    .waitFor({ state: "attached", timeout: WORKSPACE_SETTLE_TIMEOUT_MS });
+  const logicalWorkspaceId = await readWorkspaceUiKey(p);
+
+  // Map the logical ui-key to the runtime's MATERIALIZED workspace id (the id the
+  // runtime records on sessions and returns from getSession). All runtime
+  // correlation keys off the materialized id; the logical id is kept only for
+  // the product-native DOM reload match (the DOM re-renders the logical ui-key).
+  setStep("resolve materialized workspace id");
+  const materializedWorkspaceId = await resolveMaterializedWorkspaceId(world, logicalWorkspaceId, WORKSPACE_SETTLE_TIMEOUT_MS);
+
+  // Resolve the stable AnyHarness native session id from the runtime (the DOM's
+  // data-workspace-session-id is the client's ephemeral, reload-regenerated id).
+  setStep("resolve runtime session id");
+  const sessionId = await resolveAnyharnessSessionId(world, materializedWorkspaceId, WORKSPACE_SETTLE_TIMEOUT_MS);
+
+  // Turn completion is authoritative from AnyHarness's event stream (not
+  // DOM-timing-flaky); a session-level error is a real failure, not a hang.
+  setStep("wait for turn completion");
+  const completion = await waitForTurnCompletion(world, sessionId, TURN_TIMEOUT_MS);
+  if (completion.error) {
+    if (process.env.LOCAL_WORLD_SMOKE_DEBUG_DIR) {
+      console.error(`[SH-BASE-TURN raw diag] model="${modelId}" turn error: ${completion.error}`);
+    }
+    throw new Error(`assistant turn errored: ${completion.error}`);
+  }
+  if (!completion.ended) {
+    throw new Error(`assistant turn did not end within ${TURN_TIMEOUT_MS}ms`);
+  }
+
+  setStep("read assistant reply");
+  const reply = await readAssistantReply(p, ASSISTANT_REPLY_TIMEOUT_MS);
+  return { workspaceId: materializedWorkspaceId, logicalWorkspaceId, sessionId, reply };
+}
+
+/**
+ * SHR-004a product-native reopen: reload the SAME renderer page with NO
+ * localStorage preset. The product persisted its own workspace selection when
+ * the driver created/opened the workspace through the UI, so a plain reload
+ * must restore the SAME workspace's shell (the exact mechanism
+ * `local-world-smoke-1.ts`'s `reopenAndVerify` relies on). If the product FAILS
+ * to restore the workspace, the cell fails with a bounded message describing
+ * exactly what the post-reload DOM showed (login screen / list without the
+ * workspace / empty shell) — a real, diagnosable product finding.
+ */
+async function reloadTranscriptProductNative(
+  _world: ReadySelfHostWorld,
+  page: ProductPage,
+  workspaceId: string,
+): Promise<{ ok: true; text: string } | { ok: false; diagnostic: string }> {
+  const p = page.page;
+  await p.reload({ waitUntil: "domcontentloaded" });
+  const shell = p.locator(`[data-workspace-shell][data-workspace-ui-key="${cssAttr(workspaceId)}"]`).first();
+  try {
+    await shell.waitFor({ state: "attached", timeout: RELOAD_SHELL_TIMEOUT_MS });
+  } catch {
+    return { ok: false, diagnostic: await describePostReloadDom(p, workspaceId) };
+  }
+  const settled = p.locator('[data-assistant-prose][data-assistant-streaming="false"]').last();
+  await settled.waitFor({ state: "attached", timeout: ASSISTANT_REPLY_TIMEOUT_MS }).catch(() => undefined);
+  const text = await readAssistantReply(p, ASSISTANT_REPLY_TIMEOUT_MS);
+  if (!text.trim()) {
+    return {
+      ok: false,
+      diagnostic: `the workspace shell restored after reload but its transcript rendered no assistant reply for workspace "${workspaceId.slice(0, 8)}…"`,
+    };
+  }
+  return { ok: true, text: text.trim() };
+}
+
+/**
+ * Bounded, secret-free description of what a failed post-reload restore showed,
+ * so a real product finding is diagnosable from the persisted red without a live
+ * browser. Distinguishes a login screen, a mismatched/empty shell, and a
+ * home/list view that never re-opened the workspace.
+ */
+async function describePostReloadDom(p: Page, workspaceId: string): Promise<string> {
+  const short = workspaceId.slice(0, 8);
+  const loginCount = await p.getByRole("button", { name: "Sign in", exact: true }).count().catch(() => 0);
+  if (loginCount > 0) {
+    return `the reload landed on the login screen (no authenticated session was restored) — expected workspace "${short}…"`;
+  }
+  const shellCount = await p.locator("[data-workspace-shell]").count().catch(() => 0);
+  if (shellCount > 0) {
+    const keys = await p
+      .locator("[data-workspace-shell]")
+      .evaluateAll((els) => els.map((el) => el.getAttribute("data-workspace-ui-key")))
+      .catch(() => [] as Array<string | null>);
+    return `a workspace shell mounted but none matched workspace "${short}…" (shell ui-keys: ${JSON.stringify(keys)})`;
+  }
+  const homeCount = await p.locator("[data-home-composer-editor]").count().catch(() => 0);
+  if (homeCount > 0) {
+    return `the reload landed on the home/list view without re-opening workspace "${short}…"`;
+  }
+  return `the post-reload DOM showed neither a workspace shell, the home composer, nor a login screen (expected workspace "${short}…")`;
+}
+
+/**
+ * Registers a run-scoped local repo-root under `runDir` in the controller-local
+ * AnyHarness. AnyHarness resolves a repo-root only for a real git repository
+ * (`ResolveRepoRootError::NotGitRepo`), so the dir is `git init`'d with one
+ * empty baseline commit before the resolve call. Reuses `preparedRepository`'s
+ * exported transport (`POST /v1/repo-roots/resolve`) so the wire shape stays
+ * single-sourced. Returns the absolute repo-root path (the composer lists it
+ * under `data-repo-source-root`).
+ */
+async function prepareLocalRepoRoot(world: ReadySelfHostWorld, workspaceDirName: string): Promise<string> {
+  const repoPath = path.join(world.paths.runDir, workspaceDirName);
+  mkdirSync(repoPath, { recursive: true });
+  await runGit(["init"], repoPath);
+  // A minimal, deterministic baseline so the repo-root resolves cleanly (no
+  // network clone; committer identity is set inline so it never depends on
+  // ambient git config).
+  await runGit(
+    ["-c", "user.email=selfhost-qual@proliferate.test", "-c", "user.name=Selfhost Qual", "commit", "--allow-empty", "-m", "baseline"],
+    repoPath,
+  );
+  await defaultPreparedRepositoryTransport.resolveRepoRoot(world.runtime.baseUrl, repoPath);
+  return repoPath;
+}
+
+/** Runs `git <args>` in `cwd`, rejecting with stderr on a non-zero exit. */
+function runGit(args: string[], cwd: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const child = spawn("git", args, { cwd, stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, GIT_TERMINAL_PROMPT: "0" } });
+    let stderr = "";
+    child.stderr.on("data", (chunk) => {
+      stderr += String(chunk);
+    });
+    child.on("error", reject);
+    child.on("exit", (code) => {
+      if (code !== 0) {
+        reject(new Error(`git ${args.join(" ")} (cwd=${cwd}) failed (${code}): ${stderr}`));
+        return;
+      }
+      resolve();
+    });
+  });
+}
+
+/**
+ * Selects `modelId` in the home composer's model picker and asserts the picker
+ * reflects it (mirrors LOCAL-WORLD-SMOKE-1's `selectModelInUi`). The picker is
+ * disabled until agents are healthy and the just-installed claude agent can
+ * surface a beat after AnyHarness reports it ready, so opening is retried.
+ */
+async function selectModelInComposer(p: Page, modelId: string): Promise<void> {
+  const deadline = Date.now() + MODEL_PICKER_TIMEOUT_MS;
+  const optionSelector = `[data-model-option="${cssAttr(modelId)}"]`;
+  let lastAvailable: Array<string | null> = [];
+  while (Date.now() < deadline) {
+    const trigger = p.locator("[data-composer-model-trigger]:not([disabled])").first();
+    try {
+      await trigger.waitFor({ state: "visible", timeout: 5_000 });
+      await trigger.click();
+    } catch {
+      await sleep(1_500);
+      continue;
+    }
+    const option = p.locator(optionSelector).first();
+    if (await option.count().catch(() => 0)) {
+      await option.click();
+      await p
+        .locator(`[data-composer-model-trigger][data-composer-selected-model="${cssAttr(modelId)}"]`)
+        .first()
+        .waitFor({ state: "attached", timeout: 10_000 });
+      return;
+    }
+    lastAvailable = await p
+      .locator("[data-model-option]")
+      .evaluateAll((els) => els.map((el) => el.getAttribute("data-model-option")))
+      .catch(() => []);
+    await p.keyboard.press("Escape").catch(() => undefined);
+    await sleep(2_000);
+  }
+  throw new Error(
+    `selectModelInComposer: model "${modelId}" was not offered by the composer picker within ` +
+      `${MODEL_PICKER_TIMEOUT_MS}ms. Last available options: ${JSON.stringify(lastAvailable)}.`,
+  );
+}
+
+/** Clicks a role=button trigger whose accessible name matches `name`. */
+async function clickByRole(p: Page, role: "button", name: RegExp, what: string): Promise<void> {
+  const locator = p.getByRole(role, { name }).first();
+  try {
+    await locator.waitFor({ state: "visible", timeout: 20_000 });
+  } catch (error) {
+    throw new Error(`could not find ${what} (role=${role}, name=${name}): ${describe(error)}`);
+  }
+  await locator.click();
+}
+
+/** Clicks a popover menu row by its visible text (menu rows are native buttons). */
+async function clickMenuItemByText(p: Page, text: string, what: string): Promise<void> {
+  const byRole = p.getByRole("button", { name: text, exact: false }).first();
+  if (await byRole.count().catch(() => 0)) {
+    await byRole.waitFor({ state: "visible", timeout: 15_000 }).catch(() => undefined);
+    if (await byRole.isVisible().catch(() => false)) {
+      await byRole.click();
+      return;
+    }
+  }
+  const byText = p.getByText(text, { exact: false }).first();
+  try {
+    await byText.waitFor({ state: "visible", timeout: 15_000 });
+  } catch (error) {
+    throw new Error(`could not find ${what} (text="${text}"): ${describe(error)}`);
+  }
+  await byText.click();
+}
+
+/** Reads the settled workspace ui-key off the workspace shell (retried briefly). */
+async function readWorkspaceUiKey(p: Page): Promise<string> {
+  const shell = p.locator("[data-workspace-shell]").first();
+  const deadline = Date.now() + 30_000;
+  let workspaceId = "";
+  while (Date.now() < deadline) {
+    workspaceId = (await shell.getAttribute("data-workspace-ui-key").catch(() => "")) ?? "";
+    if (workspaceId) {
+      return workspaceId;
+    }
+    await sleep(500);
+  }
+  throw new Error(`readWorkspaceUiKey: workspace ui-key never settled (workspace="${workspaceId}").`);
+}
+
+/**
+ * Maps the product's LOGICAL workspace ui-key to the runtime's MATERIALIZED
+ * workspace id. The DOM `data-workspace-ui-key` for a "Work locally" launch is
+ * the logical key `repo-root:<repoRootId>:<branch>` (URL-encoded segments); the
+ * runtime records the materialized workspace id (a bare UUID) on its sessions
+ * and workspaces. This bridges them by matching the runtime workspace whose
+ * `repoRootId` equals the logical key's repoRootId. If the ui-key is already a
+ * bare materialized id (defensive: some launch kinds render the materialized id
+ * directly), a direct id match is accepted.
+ *
+ * `repoRootId` alone is the reliable key: this cell materializes exactly one
+ * workspace on a fresh controller-local runtime, so the repoRootId is
+ * unambiguous. Branch is only a best-effort tiebreaker when more than one
+ * workspace shares the repoRootId — it is NEVER allowed to cause a false
+ * non-match, because the logical id's branch segment comes from the product's
+ * `workspaceBranchKey` (which prefers `originalBranch` and treats a detached
+ * `"HEAD"` as absent) and can diverge from the runtime's `currentBranch`.
+ */
+async function resolveMaterializedWorkspaceId(
+  world: ReadySelfHostWorld,
+  logicalWorkspaceId: string,
+  timeoutMs: number,
+): Promise<string> {
+  const parsed = parseRepoRootLogicalWorkspaceId(logicalWorkspaceId);
+  const deadline = Date.now() + timeoutMs;
+  let lastSeen: Array<{ id: string; repoRootId: string; branch?: string | null }> = [];
+  while (Date.now() < deadline) {
+    const workspaces = await world.runtime.client.listWorkspaces().catch(() => []);
+    lastSeen = workspaces.map((w) => ({ id: w.id, repoRootId: w.repoRootId, branch: w.currentBranch }));
+    // Direct materialized-id match (ui-key already a bare workspace id).
+    const direct = workspaces.find((w) => w.id === logicalWorkspaceId);
+    if (direct) {
+      return direct.id;
+    }
+    if (parsed) {
+      const byRepoRoot = workspaces.filter((w) => w.repoRootId === parsed.repoRootId);
+      if (byRepoRoot.length === 1) {
+        return byRepoRoot[0]!.id;
+      }
+      if (byRepoRoot.length > 1) {
+        // Ambiguous only when the runtime holds several workspaces for the same
+        // repo-root; prefer an exact branch match, else the most recent.
+        const byBranch = byRepoRoot.find((w) => normalizeBranch(w.currentBranch) === parsed.branch);
+        return (byBranch ?? byRepoRoot[byRepoRoot.length - 1]!).id;
+      }
+    }
+    await sleep(1_000);
+  }
+  throw new Error(
+    `resolveMaterializedWorkspaceId: no runtime workspace matched logical ui-key "${logicalWorkspaceId}" within ${timeoutMs}ms ` +
+      `(runtime workspaces observed: ${JSON.stringify(lastSeen)}).`,
+  );
+}
+
+/**
+ * Parses a `repo-root:<repoRootId>:<branch>` logical workspace id (the format
+ * the product's `buildRepoRootLogicalWorkspaceId` emits — URL-encoded segments,
+ * mirrored here so the test harness stays free of a product-client import).
+ * Returns null for any other logical-id kind (remote/path/local-slot) or a
+ * malformed key.
+ */
+export function parseRepoRootLogicalWorkspaceId(
+  logicalWorkspaceId: string,
+): { repoRootId: string; branch: string } | null {
+  const [kind, ...encoded] = logicalWorkspaceId.split(":");
+  if (kind !== "repo-root" || encoded.length !== 2) {
+    return null;
+  }
+  try {
+    return { repoRootId: decodeURIComponent(encoded[0]!), branch: normalizeBranch(decodeURIComponent(encoded[1]!)) };
+  } catch {
+    return null;
+  }
+}
+
+/** The branch key the logical id uses: an empty/absent branch normalizes to "HEAD". */
+function normalizeBranch(value: string | null | undefined): string {
+  const trimmed = value?.trim();
+  return trimmed && trimmed.length > 0 ? trimmed : "HEAD";
+}
+
+/**
+ * Resolves the AnyHarness native session id for a just-materialized local
+ * workspace by polling the runtime's session list (the workspace holds exactly
+ * this turn's session). This is the stable, correlatable identity — unlike the
+ * Desktop client's ephemeral, reload-regenerated `data-workspace-session-id`.
+ * `workspaceId` here is the MATERIALIZED runtime id (see
+ * `resolveMaterializedWorkspaceId`), not the logical ui-key.
+ */
+async function resolveAnyharnessSessionId(world: ReadySelfHostWorld, workspaceId: string, timeoutMs: number): Promise<string> {
+  const deadline = Date.now() + timeoutMs;
+  let lastSeenWorkspaceIds: string[] = [];
+  while (Date.now() < deadline) {
+    const sessions = await world.runtime.client.listSessions().catch(() => []);
+    lastSeenWorkspaceIds = sessions.map((session) => session.workspaceId);
+    const forWorkspace = sessions.filter((session) => session.workspaceId === workspaceId);
+    if (forWorkspace.length > 0) {
+      return forWorkspace[forWorkspace.length - 1]!.id;
+    }
+    await sleep(1_000);
+  }
+  // Bounded, secret-free diagnostic: the observed session workspaceIds reveal
+  // whether the runtime saw NO session at all (empty → the turn ran on a
+  // different runtime than world.runtime) or a workspaceId FORMAT mismatch
+  // (non-empty but no exact match). Ids are opaque handles, not secrets.
+  throw new Error(
+    `resolveAnyharnessSessionId: no AnyHarness session for workspace "${workspaceId}" within ${timeoutMs}ms ` +
+      `(runtime session workspaceIds observed: ${JSON.stringify(lastSeenWorkspaceIds)}).`,
+  );
+}
+
+/**
+ * Waits for a non-streaming assistant prose block to carry non-empty text and
+ * returns the last one's trimmed content (the final assistant answer).
+ */
+async function readAssistantReply(p: Page, timeoutMs: number): Promise<string> {
+  const settled = p.locator('[data-assistant-prose][data-assistant-streaming="false"]').last();
+  await settled.waitFor({ state: "attached", timeout: timeoutMs }).catch(() => undefined);
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const text = (await settled.textContent().catch(() => "")) ?? "";
+    if (text.trim().length > 0) {
+      return text.trim();
+    }
+    await sleep(500);
+  }
+  return "";
+}
+
 /**
  * Picks the cheapest eligible non-premium model for the BYOK turn from the
  * controller-local runtime's launch options.
@@ -981,8 +1856,13 @@ function wrapPage(context: BrowserContext, page: Page): ProductPage {
  * is the anthropic-api curation default, so it is guaranteed launchable), then
  * any remaining real model, skipping the "default" sentinel and costly [1m]
  * long-context variants.
+ *
+ * Exported (export-only, no behavior change) so the SELFHOST-QUAL-1 `SH-GATEWAY`
+ * cell picks the same cheapest-eligible non-premium claude model for its one
+ * gateway-routed turn (the "default" sentinel is launchable through the gateway,
+ * but the cheapest real tier keeps the turn cheap either way).
  */
-async function resolveBaseTurnModel(world: ReadySelfHostWorld): Promise<string | undefined> {
+export async function resolveBaseTurnModel(world: ReadySelfHostWorld): Promise<string | undefined> {
   const options = await world.runtime.client.getAgentLaunchOptions();
   const entry = options.find((agent) => agent.kind === REPRESENTATIVE_HARNESS);
   const ids = (entry?.models ?? []).map((model) => model.id);
@@ -999,8 +1879,13 @@ async function resolveBaseTurnModel(world: ReadySelfHostWorld): Promise<string |
   );
 }
 
-/** Polls AnyHarness's session event stream until the turn ends or errors. */
-async function waitForTurnCompletion(
+/**
+ * Polls AnyHarness's session event stream until the turn ends or errors.
+ * Exported (export-only, no behavior change) so the SELFHOST-QUAL-1 `SH-GATEWAY`
+ * cell drives its one gateway-routed turn to completion with the identical
+ * bounded machinery.
+ */
+export async function waitForTurnCompletion(
   world: ReadySelfHostWorld,
   sessionId: string,
   timeoutMs: number,
@@ -1055,4 +1940,65 @@ function summarizeRuntimeAuthState(runtimeHome: string, harnessKind: string): st
   } catch {
     return `[diag: runtime agent-auth/state.json unparseable]`;
   }
+}
+
+/**
+ * SHR-004b: reads the controller-local runtime's agent-auth state file (the
+ * same file `summarizeRuntimeAuthState` diagnoses) and returns the harness's
+ * source `kind`s. `"api_key"`/`"gateway"` are AnyHarness's own route-auth
+ * profile constants (`anyharness/crates/anyharness-lib/src/domains/agents/
+ * route_auth/state.rs` `SOURCE_KIND_API_KEY`/`SOURCE_KIND_GATEWAY`) — a
+ * BYOK-direct turn's pushed state must show only `"api_key"`, never
+ * `"gateway"` (the LiteLLM virtual-key route). Returns `[]` if the state file
+ * is absent/unparseable/missing the harness (the caller's `includes("api_key")`
+ * check then fails closed rather than vacuously passing).
+ */
+function readRuntimeAuthSourceKinds(runtimeHome: string, harnessKind: string): string[] {
+  const statePath = path.join(runtimeHome, "agent-auth", "state.json");
+  let raw: string;
+  try {
+    raw = readFileSync(statePath, "utf8");
+  } catch {
+    return [];
+  }
+  try {
+    const parsed = JSON.parse(raw) as {
+      harnesses?: Array<{ harness_kind?: string; sources?: Array<{ kind?: string }> }>;
+    };
+    const entry = parsed.harnesses?.find((h) => h.harness_kind === harnessKind);
+    return (entry?.sources ?? []).map((source) => source.kind ?? "").filter((kind) => kind.length > 0);
+  } catch {
+    return [];
+  }
+}
+
+/** The `/meta` capability fields SHR-004b/c observe (`server/proliferate/server/meta.py` `ServerCapabilities`). */
+interface SelfHostMetaCapabilities {
+  cloudWorkspaces: boolean;
+  agentGateway: boolean;
+}
+
+/**
+ * SHR-004b/c: reads the public `/meta` capability contract the SH-DESKTOP-OWNER
+ * cell already trusts pre-login (bare `fetch`, no bearer needed) so
+ * `no_litellm_spend`/`no_e2b` are backed by the server's own OBSERVED
+ * advertisement rather than merely "we never called those paths."
+ */
+async function fetchServerCapabilities(world: ReadySelfHostWorld): Promise<SelfHostMetaCapabilities> {
+  const response = await fetch(`${world.api.baseUrl}/meta`);
+  if (!response.ok) {
+    throw new Error(`fetchServerCapabilities: GET /meta failed with HTTP ${response.status}.`);
+  }
+  const body = (await response.json()) as { capabilities?: Partial<SelfHostMetaCapabilities> };
+  const capabilities = body.capabilities;
+  if (
+    !capabilities ||
+    typeof capabilities.cloudWorkspaces !== "boolean" ||
+    typeof capabilities.agentGateway !== "boolean"
+  ) {
+    throw new Error(
+      "fetchServerCapabilities: /meta response did not carry a capabilities.cloudWorkspaces/agentGateway boolean pair.",
+    );
+  }
+  return { cloudWorkspaces: capabilities.cloudWorkspaces, agentGateway: capabilities.agentGateway };
 }

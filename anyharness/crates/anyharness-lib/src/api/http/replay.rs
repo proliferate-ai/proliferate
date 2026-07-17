@@ -1,3 +1,5 @@
+use crate::api::http::access::admit_session_mutation;
+use crate::domains::sessions::admission::SessionMutationKind;
 use anyharness_contract::v1::{
     AdvanceReplaySessionResponse, CreateReplaySessionRequest, CreateReplaySessionResponse,
     ExportReplayRecordingRequest, ExportReplayRecordingResponse, ListReplayRecordingsResponse,
@@ -88,6 +90,7 @@ pub async fn create_replay_session(
     path = "/v1/replay/sessions/{session_id}/advance",
     params(("session_id" = String, Path, description = "Replay session ID")),
     responses(
+        (status = 409, description = "Session execution is controlled by an active workflow run", body = anyharness_contract::v1::ProblemDetails),
         (status = 200, description = "Advanced replay session", body = AdvanceReplaySessionResponse),
         (status = 400, description = "Replay is disabled or not paused", body = anyharness_contract::v1::ProblemDetails),
         (status = 404, description = "Replay session is not live", body = anyharness_contract::v1::ProblemDetails),
@@ -98,6 +101,8 @@ pub async fn advance_replay_session(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
 ) -> Result<Json<AdvanceReplaySessionResponse>, ApiError> {
+    let _admission_permit =
+        admit_session_mutation(&state, &session_id, SessionMutationKind::ReplayAdvance).await?;
     state
         .session_runtime
         .advance_replay_session(&session_id)

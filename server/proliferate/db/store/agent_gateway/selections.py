@@ -20,6 +20,7 @@ from proliferate.constants.agent_gateway import (
     AGENT_API_KEY_STATUS_ACTIVE,
     AGENT_AUTH_HARNESS_KINDS,
     AGENT_AUTH_SOURCE_API_KEY,
+    AGENT_AUTH_SOURCE_GATEWAY,
     AGENT_AUTH_SOURCE_KINDS,
     AGENT_AUTH_SURFACES,
 )
@@ -97,7 +98,8 @@ async def put_auth_selections(
 
     Existing rows keyed by (source_kind, env_var_name) are updated in place,
     absent ones deleted, and new ones inserted — so row ids and created_at
-    survive across edits. Structural coherence (source shape, key ownership,
+    survive across edits. The disabled gateway revision marker is normalized
+    into every desired set. Structural coherence (source shape, key ownership,
     no duplicate source) is enforced; per-harness legality is the caller's.
     """
     if harness_kind not in AGENT_AUTH_HARNESS_KINDS:
@@ -117,6 +119,20 @@ async def put_auth_selections(
         if source.api_key_id is not None:
             referenced_key_ids.add(source.api_key_id)
 
+    # Every harness kind accepted by this store is gateway-capable. Keep a
+    # disabled gateway row even when an older/direct client sends the native
+    # state as ``sources=[]``. Besides representing no effective source, this
+    # row is the scope's durable revision marker: deleting the final row would
+    # reset the rendered revision to zero (or an older sibling scope), causing
+    # an AnyHarness runtime to reject the clear as stale and retain its prior
+    # gateway route.
+    gateway_key = _source_key(AGENT_AUTH_SOURCE_GATEWAY, None)
+    if gateway_key not in desired:
+        desired[gateway_key] = DesiredAuthSource(
+            source_kind=AGENT_AUTH_SOURCE_GATEWAY,
+            enabled=False,
+        )
+
     await _assert_keys_usable(db, user_id=user_id, api_key_ids=referenced_key_ids)
 
     existing_rows = (
@@ -135,9 +151,11 @@ async def put_auth_selections(
     existing = {_source_key(row.source_kind, row.env_var_name): row for row in existing_rows}
 
     now = utcnow()
+    selection_changed = False
     for key, row in existing.items():
         if key not in desired:
             await db.delete(row)
+            selection_changed = True
 
     for key, source in desired.items():
         row = existing.get(key)
@@ -156,6 +174,7 @@ async def put_auth_selections(
                     updated_at=now,
                 )
             )
+            selection_changed = True
             continue
         if (
             row.api_key_id != source.api_key_id
@@ -166,6 +185,16 @@ async def put_auth_selections(
             row.provider_hint = source.provider_hint
             row.enabled = source.enabled
             row.updated_at = now
+            selection_changed = True
+
+    # A disabled gateway row is the scope's durable revision marker while the
+    # effective route is native or API-key. Touch it for any desired-state
+    # change, including deletion of a newer API-key row; otherwise max(updated_at)
+    # can move backwards and the runtime correctly rejects the rendered state as
+    # stale. The row remains disabled and never reaches materialization.
+    gateway_marker = existing.get(gateway_key)
+    if selection_changed and gateway_marker is not None:
+        gateway_marker.updated_at = now
 
     await db.flush()
     return await get_scope_auth_selections(

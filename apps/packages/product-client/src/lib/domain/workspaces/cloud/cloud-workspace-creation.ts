@@ -3,9 +3,10 @@ import {
   type CloudWorkspaceSummary,
   type CreateCloudWorkspaceRequest,
 } from "#product/lib/domain/workspaces/cloud/cloud-workspace-model";
-import type { RepoConfigResponse } from "@proliferate/cloud-sdk";
+import type { GitHubRepoAuthorityResponse, RepoConfigResponse } from "@proliferate/cloud-sdk";
 import type { AuthUser } from "#product/lib/domain/auth/auth-user";
 import type { BranchPrefixType } from "#product/lib/domain/preferences/user/model";
+import type { RepositoryReadiness } from "@proliferate/product-domain/repos/repo-readiness";
 import { generateWorkspaceSlug } from "#product/lib/domain/workspaces/creation/workspace-slug";
 import {
   buildBranchName,
@@ -23,10 +24,54 @@ export type CloudWorkspaceCreateInput =
   | CreateCloudWorkspaceRequest;
 
 export type CloudRepoActionState =
-  | { kind: "hidden"; label: null }
-  | { kind: "loading"; label: "Loading cloud..." }
-  | { kind: "configure"; label: "Configure cloud" }
-  | { kind: "create"; label: "New cloud workspace" };
+  | { kind: "hidden"; label: null; accessState?: "hidden" }
+  | { kind: "loading"; label: string; accessState?: "loading" }
+  | {
+    kind: "configure";
+    label: string;
+    accessState?:
+      | "disconnected"
+      | "repository_not_configured"
+      | "github_app_missing"
+      | "github_app_expired"
+      | "github_app_not_installed"
+      | "repository_not_granted"
+      | "error";
+  }
+  | { kind: "create"; label: "New cloud workspace"; accessState?: "ready" };
+
+/** Project the shared ordered readiness result into the existing workspace UI model. */
+export function cloudRepoActionStateFromReadiness(
+  readiness: RepositoryReadiness,
+): CloudRepoActionState {
+  if (readiness.gate === 10) {
+    return { kind: "create", label: "New cloud workspace", accessState: "ready" };
+  }
+  if (readiness.gate === 4 && readiness.action === "none") {
+    return { kind: "loading", label: "Checking repository access...", accessState: "loading" };
+  }
+
+  switch (readiness.action) {
+    case "sign_in":
+      return { kind: "configure", label: "Sign in for Cloud", accessState: "disconnected" };
+    case "authorize_user":
+      return { kind: "configure", label: "Connect GitHub App", accessState: "github_app_missing" };
+    case "reauthorize_user":
+      return { kind: "configure", label: "Reconnect GitHub App", accessState: "github_app_expired" };
+    case "install_app":
+    case "copy_admin_request":
+      return { kind: "configure", label: "Install Proliferate GitHub App", accessState: "github_app_not_installed" };
+    case "grant_repo_access":
+      return { kind: "configure", label: "Grant repository access", accessState: "repository_not_granted" };
+    case "retry":
+      return { kind: "configure", label: "Check GitHub access", accessState: "error" };
+    case "set_up_cloud":
+      return { kind: "configure", label: "Configure cloud", accessState: "repository_not_configured" };
+    case "none":
+    default:
+      return { kind: "configure", label: "Review Cloud access", accessState: "error" };
+  }
+}
 
 interface CloudRepoActionRepository {
   sourceRoot: string;
@@ -48,19 +93,66 @@ export function resolveCloudRepoActionState(args: {
   repoTarget: CloudWorkspaceRepoTarget | null;
   configuredRepoKeys: ReadonlySet<string>;
   isInitialConfigLoad: boolean;
+  cloudConnected?: boolean;
+  repoAuthority?: GitHubRepoAuthorityResponse | null;
+  isInitialAuthorityLoad?: boolean;
+  authorityError?: boolean;
 }): CloudRepoActionState {
   if (!args.repoTarget) {
-    return { kind: "hidden", label: null };
+    return { kind: "hidden", label: null, accessState: "hidden" };
+  }
+  if (args.cloudConnected === false) {
+    return { kind: "configure", label: "Connect cloud", accessState: "disconnected" };
   }
   if (args.isInitialConfigLoad) {
-    return { kind: "loading", label: "Loading cloud..." };
+    return { kind: "loading", label: "Loading cloud...", accessState: "loading" };
   }
-
-  return args.configuredRepoKeys.has(
+  const configured = args.configuredRepoKeys.has(
     cloudRepositoryKey(args.repoTarget.gitOwner, args.repoTarget.gitRepoName),
-  )
-    ? { kind: "create", label: "New cloud workspace" }
-    : { kind: "configure", label: "Configure cloud" };
+  );
+  if (!configured) {
+    return {
+      kind: "configure",
+      label: "Configure cloud",
+      accessState: "repository_not_configured",
+    };
+  }
+  if (args.isInitialAuthorityLoad) {
+    return { kind: "loading", label: "Checking GitHub access...", accessState: "loading" };
+  }
+  if (args.authorityError) {
+    return { kind: "configure", label: "Check GitHub access", accessState: "error" };
+  }
+  if (!args.repoAuthority) {
+    // Callers that do not own an authority query retain the configured-repo behavior.
+    return { kind: "create", label: "New cloud workspace", accessState: "ready" };
+  }
+  if (args.repoAuthority.authorized && args.repoAuthority.status === "ready") {
+    return { kind: "create", label: "New cloud workspace", accessState: "ready" };
+  }
+  switch (args.repoAuthority.status) {
+    case "missing_user_authorization":
+    case "missing_user_repo_access":
+      return { kind: "configure", label: "Connect GitHub App", accessState: "github_app_missing" };
+    case "expired_user_authorization":
+      return { kind: "configure", label: "Reconnect GitHub App", accessState: "github_app_expired" };
+    case "missing_installation":
+      return {
+        kind: "configure",
+        label: "Install Proliferate GitHub App",
+        accessState: "github_app_not_installed",
+      };
+    case "repo_not_covered":
+      return {
+        kind: "configure",
+        label: "Grant repository access",
+        accessState: "repository_not_granted",
+      };
+    case "error":
+    case "ready":
+    default:
+      return { kind: "configure", label: "Check GitHub access", accessState: "error" };
+  }
 }
 
 export function buildCloudRepoActionBySourceRoot(args: {
@@ -82,7 +174,7 @@ export function buildCloudRepoActionBySourceRoot(args: {
         configuredRepoKeys: args.configuredRepoKeys,
         isInitialConfigLoad: args.isInitialConfigLoad,
       })
-      : { kind: "hidden", label: null };
+      : { kind: "configure", label: "Connect cloud", accessState: "disconnected" };
   }
   return actions;
 }
@@ -93,12 +185,13 @@ export function collectKnownCloudBranchNames(args: {
 }): Set<string> {
   return new Set(
     args.cloudWorkspaces
+      // Repository-only: scratch workspaces have no repo and never collide.
       .filter((workspace) =>
-        workspace.repo.provider === "github"
+        workspace.repo?.provider === "github"
         && workspace.repo.owner === args.target.gitOwner
         && workspace.repo.name === args.target.gitRepoName
       )
-      .map((workspace) => workspace.repo.branch.trim())
+      .map((workspace) => workspace.repo?.branch.trim() ?? "")
       .filter(Boolean),
   );
 }

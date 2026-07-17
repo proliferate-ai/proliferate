@@ -133,19 +133,24 @@ describe("useRepoPrStatuses", () => {
     });
   });
 
-  it("maps hosting error codes to typed availabilities", async () => {
+  it.each([
+    ["HOSTING_GH_NOT_INSTALLED", "gh_not_installed"],
+    ["HOSTING_GH_AUTH_REQUIRED", "gh_auth_required"],
+    ["HOSTING_REMOTE_UNSUPPORTED", "remote_unsupported"],
+  ] as const)("maps %s to typed %s availability", async (code, availability) => {
     mocks.listForRepoRoot.mockRejectedValue(new AnyHarnessError({
       type: "about:blank",
-      title: "gh auth required",
-      status: 409,
-      code: "HOSTING_GH_AUTH_REQUIRED",
+      title: "Hosting unavailable",
+      status: 400,
+      code,
     }));
     const queryClient = makeQueryClient();
 
     const { result } = renderRepoPrStatuses(queryClient, ["root-a"]);
 
     await waitFor(() => {
-      expect(result.current.availabilityByRepoRootId["root-a"]).toBe("gh_auth_required");
+      expect(result.current.availabilityByRepoRootId["root-a"]).toBe(availability);
     });
+    expect(result.current.entriesByRepoRootId["root-a"]).toEqual([]);
   });
 });

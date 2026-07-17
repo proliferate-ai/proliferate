@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import Select, select
+from sqlalchemy import Select, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
@@ -162,6 +162,52 @@ async def create_enrollment(
     return _enrollment_value(row)
 
 
+async def revoke_pending_desktop_enrollments_for_install(
+    db: AsyncSession,
+    *,
+    desktop_install_id: str,
+) -> None:
+    """Fence older one-time tickets so the newest Desktop enrollment wins.
+
+    The transaction lock is shared with ticket consumption. Without it, a
+    Worker stranded before enrollment could consume an older ticket after its
+    replacement enrolled, revoke the replacement, and rewrite the shared
+    integration-gateway credential.
+    """
+    await acquire_desktop_enrollment_rotation_lock(db, desktop_install_id)
+    rows = (
+        (
+            await db.execute(
+                select(CloudRuntimeWorkerEnrollment)
+                .where(
+                    CloudRuntimeWorkerEnrollment.runtime_kind == "desktop",
+                    CloudRuntimeWorkerEnrollment.desktop_install_id == desktop_install_id,
+                    CloudRuntimeWorkerEnrollment.status == "pending",
+                )
+                .with_for_update()
+            )
+        )
+        .scalars()
+        .all()
+    )
+    now = utcnow()
+    for row in rows:
+        row.status = "revoked"
+        row.updated_at = now
+    if rows:
+        await db.flush()
+
+
+async def acquire_desktop_enrollment_rotation_lock(
+    db: AsyncSession,
+    desktop_install_id: str,
+) -> None:
+    await db.execute(
+        text("SELECT pg_advisory_xact_lock(hashtextextended(:lock_key, 0))"),
+        {"lock_key": f"desktop-worker-enrollment:{desktop_install_id}"},
+    )
+
+
 async def consume_pending_enrollment_by_hash(
     db: AsyncSession,
     *,
@@ -172,6 +218,23 @@ async def consume_pending_enrollment_by_hash(
     Returns ``None`` when the token is unknown, already used, revoked, or
     expired (expired rows are flipped to ``expired`` as a side effect).
     """
+    # Discover the identity without a row lock, then take the same advisory
+    # lock used by ticket creation before locking/revalidating the row. This
+    # ordering avoids a row/advisory-lock inversion while making creation and
+    # consumption serial for one physical Desktop install.
+    identity = (
+        await db.execute(
+            select(
+                CloudRuntimeWorkerEnrollment.runtime_kind,
+                CloudRuntimeWorkerEnrollment.desktop_install_id,
+            ).where(CloudRuntimeWorkerEnrollment.token_hash == token_hash)
+        )
+    ).one_or_none()
+    if identity is not None and identity.runtime_kind == "desktop":
+        if identity.desktop_install_id is None:
+            return None
+        await acquire_desktop_enrollment_rotation_lock(db, identity.desktop_install_id)
+
     row = (
         await db.execute(
             select(CloudRuntimeWorkerEnrollment)
@@ -182,6 +245,15 @@ async def consume_pending_enrollment_by_hash(
     if row is None or row.status != "pending":
         return None
     now = utcnow()
+    if (
+        row.runtime_kind == "desktop"
+        and row.desktop_install_id is not None
+        and await _newer_desktop_enrollment_exists(db, row)
+    ):
+        row.status = "revoked"
+        row.updated_at = now
+        await db.flush()
+        return None
     if row.expires_at <= now:
         row.status = "expired"
         row.updated_at = now
@@ -192,6 +264,29 @@ async def consume_pending_enrollment_by_hash(
     row.updated_at = now
     await db.flush()
     return _enrollment_value(row)
+
+
+async def _newer_desktop_enrollment_exists(
+    db: AsyncSession,
+    row: CloudRuntimeWorkerEnrollment,
+) -> bool:
+    """Treat every older pre-fix ticket as stale once a successor exists.
+
+    ``created_at`` is generated when each row is flushed. The equality branch
+    is deliberately fail-closed for the vanishingly rare timestamp tie: both
+    siblings are rejected and Desktop obtains one fresh serialized ticket.
+    """
+    newer_id = await db.scalar(
+        select(CloudRuntimeWorkerEnrollment.id)
+        .where(
+            CloudRuntimeWorkerEnrollment.runtime_kind == "desktop",
+            CloudRuntimeWorkerEnrollment.desktop_install_id == row.desktop_install_id,
+            CloudRuntimeWorkerEnrollment.id != row.id,
+            CloudRuntimeWorkerEnrollment.created_at >= row.created_at,
+        )
+        .limit(1)
+    )
+    return newer_id is not None
 
 
 async def revoke_active_workers_for_identity(
@@ -333,6 +428,40 @@ async def get_worker_by_token_hash(
         await db.execute(
             select(CloudRuntimeWorker).where(
                 CloudRuntimeWorker.token_hash == token_hash,
+                CloudRuntimeWorker.status != "revoked",
+            )
+        )
+    ).scalar_one_or_none()
+    return _worker_value(row) if row is not None else None
+
+
+async def get_worker(
+    db: AsyncSession,
+    *,
+    worker_id: UUID,
+) -> RuntimeWorkerValue | None:
+    """Load a worker by id, including revoked rows (callers check status)."""
+    row = await db.get(CloudRuntimeWorker, worker_id)
+    return _worker_value(row) if row is not None else None
+
+
+async def get_active_desktop_worker_for_user(
+    db: AsyncSession,
+    *,
+    owner_user_id: UUID,
+    desktop_install_id: str,
+) -> RuntimeWorkerValue | None:
+    """Load the caller's non-revoked desktop worker for an install, if any.
+
+    Used to confirm that a ``desktopInstallId`` supplied on a materialization
+    request is owned by the caller before selecting/redacting local rows.
+    """
+    row = (
+        await db.execute(
+            select(CloudRuntimeWorker).where(
+                CloudRuntimeWorker.owner_user_id == owner_user_id,
+                CloudRuntimeWorker.desktop_install_id == desktop_install_id,
+                CloudRuntimeWorker.runtime_kind == "desktop",
                 CloudRuntimeWorker.status != "revoked",
             )
         )

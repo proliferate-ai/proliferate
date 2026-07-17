@@ -49,6 +49,107 @@ fails if enabled before a canonical worker service and command exist.
 
 See the [Hosted procedure](../../../../developing/deploying/hosted.md).
 
+### Background plane topology
+
+`_deploy-server.yml` builds one exact-SHA server image that the API, the Celery
+worker, and the Celery Beat scheduler all run. Its rollout order is migrations →
+broker/scheduler-store verify → worker + Beat → worker/Beat health (which also
+asserts the running task definitions carry the candidate image) → candidate-plane
+execution proof → API roll. This ordering guarantees a newly rolled API never
+enqueues a task name that no running worker can import.
+
+Resource health is not sufficient on its own — a `runningCount` of 1 does not
+prove the plane can execute work (broker credentials, task routing, worker
+task-registry import, RedBeat state, or relay publish/consume could all be
+broken while the container is up). Before the API rolls, the workflow enqueues
+one committed health no-op — keyed to this exact run and run-attempt, so a rerun
+enqueues a fresh row rather than replaying a prior attempt's already-published
+one — via a one-off task on the candidate worker task definition, then observes
+BOTH a fresh relay-heartbeat advance (Beat dispatched `background.relay` and a
+worker ran it, so the scheduler store and broker are reachable) AND an
+**exact-id** execution receipt for that specific enqueued row. The receipt is a
+structured log line the health task emits on success carrying its own task id
+(which the relay sets equal to the enqueued outbox id); the gate matches on that
+id, so an aggregate success count advanced by a concurrent deploy, an operator
+smoke, or a retry does **not** satisfy it — only execution of the row this
+attempt enqueued does. It **fails closed** on timeout. The heartbeat rides the
+plane's own CloudWatch metric namespace (`Proliferate/Background/<env>`) and the
+receipt is read from the server log group (derived from the environment name), so
+the proof references no broker/store resource ID and the identical gate covers
+both the managed-AWS-IDs path and the external-endpoint rebind path.
+
+The worker/Beat rollout is **conditional and fails closed as a set**. It runs
+only when both the worker and Beat service names are configured on the
+environment; a partial configuration (one set, the other empty) aborts the whole
+deploy rather than silently skipping the background plane and rolling the API
+alone. When neither is configured, the workflow deploys the API exactly as
+before. The re-image step also asserts that exactly one container matches each
+configured name and that the registered task definition carries the candidate
+image, so a mistyped container name fails closed instead of rolling the old
+image. Before either worker or Beat task definition is registered, the same
+checked-in hosted contract must match its execution role and its one direct
+`REDBEAT_REDIS_URL` reference by source service, account, region, and
+environment-owned name; duplicate, plaintext, field-projected, or
+sibling-environment references fail closed.
+
+`server/infra/background.tf` (Amazon MQ RabbitMQ broker, ElastiCache Serverless
+Valkey scheduler store, and the worker/Beat ECS services, task definitions,
+metric filters, and alarms) is a set of **checked-in definitions only**. Both
+Terraform stages gate on `count` flags that default to disabled, and the deploy
+workflow's background steps are inert until the service names are set. These
+definitions are **not a description of current live operating infrastructure**:
+no hosted background broker, scheduler store, or worker/Beat service is asserted
+to exist from their presence in the tree. Enabling the Terraform stages
+(provisioning the plane or rebinding to existing managed endpoints), setting the
+deploy environment's worker/Beat variables, and running the staging outbox smoke
+are **separate, individually gated actions** outside the merge of these
+definitions. `background_services_enabled = true` fails at Terraform plan time
+(a variable validation proven by `server/infra/tests/background_plane.tftest.hcl`
+under a mocked provider) unless either the managed broker/store stage is enabled
+or both external endpoint secret ARNs are supplied, so the services can never be
+created without a reachable broker/store.
+
+The hosted API also uses Redis for cross-process Cloud materialization and
+GitHub-refresh leases, independently of whether worker and Beat services are
+enabled. `server/infra/hosted-redis/` is the isolated durable owner for
+the environment-specific deploy-role and ECS-execution-role child grants. Its
+one-time non-destructive adoption imported the two pre-existing deploy policies
+and created the two dedicated execution policies only after an exact saved-plan
+shape check; it never removes the roles' other pre-existing secret grants.
+`server/deploy/hosted-redis-contract.json` is the single machine-readable map
+consumed by both that Terraform root and the workflow; it binds the current
+hosted account, region, workflow environment aliases, stable server-app secret
+names, optional background Redis reference identities, and existing role names without
+claiming ownership of the live ECS services or background secrets. The server
+deploy resolves the generated secret ARN only after
+assuming the exact environment role, preflights a valid DNS-resolved non-loopback
+`REDBEAT_REDIS_URL`, authors that exact field projection on the API task, removes
+inherited plaintext or stale references, and fails before task registration
+when any identity or dependency check fails. It also proves the live task
+definition uses the contract's account/environment execution role before
+cloning that same definition. The resolved base secret ARN is kept out of the
+job-wide environment and is produced only after every third-party action's main
+phase. Because those actions can register post-job hooks, the first-party render
+and background re-image transactions keep all identifier-bearing task JSON in
+private temporary directories and remove it on every exit before those hooks
+run. The loopback default remains a local-development convenience, not hosted
+configuration.
+
+The plane's telemetry distinguishes two age/latency signals:
+`OutboxOldestDuePendingAgeSeconds` measures a row's pre-publish wait in Postgres
+(the SLO signal, a truthful current-oldest gauge), while
+`TaskBrokerResidenceLatencySeconds` measures how long a task waited in RabbitMQ
+between relay publish and worker consume. The latter is a **lagging** per-task
+latency observed only on consume: it goes silent exactly when consumption stalls,
+so it is **not** a truthful "current oldest queued-task age". Amazon MQ exposes no
+native oldest-message-age metric, so current-oldest-queued-age is not available
+from this substrate; broker backlog is instead covered by the `AWS/AmazonMQ`
+`MessageCount` depth alarm, which does not go silent when workers stop consuming.
+Desired-vs-running worker/Beat
+alarms query `RunningTaskCount` in `ECS/ContainerInsights` (Container Insights is
+enabled on the cluster), and the task-outcome metric filters carry `task_name`
+(and, for retries/failures, safe `error_code`) dimensions.
+
 ### Release coordinators
 
 The scheduled or manually dispatched nightly train detects changes since the
@@ -103,7 +204,7 @@ gate.
 | `_deploy-e2b.yml` | Reusable only | Build and/or promote one immutable E2B template into a rolling environment tag; the smoke proves the three runtime binaries report the canonical version and carry the stamped source SHA before the rolling tag moves. |
 | `_deploy-litellm.yml` | Reusable only | Build and roll the LiteLLM ECS service when its environment switch is enabled. |
 | `_deploy-mobile.yml` | Reusable only | Run the selected EAS build and optional submit lane when enabled. |
-| `_deploy-server.yml` | Reusable only | Build the exact-SHA server image, migrate, roll ECS, and verify health. The rendered task enables strict release identity, strips inherited stale runtime-identity variables, and preserves the support-feed secret, all asserted before registration. |
+| `_deploy-server.yml` | Reusable only | Build the exact-SHA server image, migrate, conditionally roll the Celery worker and Beat before the API, roll the API, and verify health. API, worker, and Beat are all pinned to the one candidate image by its **immutable `repo@sha256:` digest** (resolved from the build/push output), never a mutable tag, so all three planes run the byte-identical image and a later tag move cannot change what a rolled service runs. The rendered task enables strict release identity, strips inherited stale runtime-identity variables, preserves the support-feed secret, and explicitly authors the API's checked-in environment-bound Redis field reference after account, region, secret-identity, and DNS-safe value preflights, all asserted before registration. |
 | `_deploy-web.yml` | Reusable only | Deploy and verify the selected Vercel web surface. |
 | `_deploy-workers.yml` | Reusable only | Report the disabled Worker lane, or fail if enabled before a canonical deploy exists. |
 

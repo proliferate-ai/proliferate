@@ -1,21 +1,22 @@
 {
-  "probedAt": "2026-06-18T02:52:36.222593+00:00",
+  "probedAt": "2026-07-17T05:32:49.472793+00:00",
   "agentKind": "claude",
   "authContext": "anthropic-oauth",
   "attestation": {
     "name": "@agentclientprotocol/claude-agent-acp",
-    "version": "0.44.0",
+    "version": "0.59.0-proliferate.1",
     "title": "Claude Agent"
   },
   "modelSource": "modelConfigOption",
   "nativeCli": {
-    "path": "/Users/pablohansen/.proliferate/anyharness/agents/claude/native/claude",
-    "version": "2.1.177 (Claude Code)"
+    "path": "/Users/pablohansen/.proliferate-local/anyharness/agents/claude/native/claude",
+    "version": "2.1.212 (Claude Code)"
   },
   "trials": [
     {
       "modelId": "claude-fable-5",
       "accepted": true,
+      "name": "Fable",
       "configOptions": [
         {
           "category": "mode",
@@ -31,7 +32,7 @@
             },
             {
               "description": "Standard behavior, prompts for dangerous operations",
-              "name": "Default",
+              "name": "Manual",
               "value": "default"
             },
             {
@@ -59,20 +60,25 @@
         },
         {
           "category": "model",
-          "currentValue": "opus",
+          "currentValue": "claude-fable-5",
           "description": "AI model to use",
           "id": "model",
           "name": "Model",
           "options": [
             {
-              "description": "Sonnet 4.6 · Efficient for routine tasks",
+              "description": "Sonnet 5 · Efficient for routine tasks",
               "name": "Default (recommended)",
               "value": "default"
             },
             {
-              "description": "Sonnet 4.6 · Efficient for routine tasks",
+              "description": "Sonnet 5 · Efficient for routine tasks",
               "name": "Sonnet",
               "value": "sonnet"
+            },
+            {
+              "description": "Fable 5 · Most capable for your hardest and longest-running tasks",
+              "name": "Fable",
+              "value": "claude-fable-5"
             },
             {
               "description": "Opus 4.8 · Best for everyday, complex tasks",
@@ -117,24 +123,6 @@
             {
               "name": "Max",
               "value": "max"
-            }
-          ],
-          "type": "select"
-        },
-        {
-          "category": "_fast_mode",
-          "currentValue": "off",
-          "description": "Favor faster responses",
-          "id": "fast_mode",
-          "name": "Fast Mode",
-          "options": [
-            {
-              "name": "Off",
-              "value": "off"
-            },
-            {
-              "name": "On",
-              "value": "on"
             }
           ],
           "type": "select"
@@ -159,7 +147,7 @@
             },
             {
               "description": "Standard behavior, prompts for dangerous operations",
-              "name": "Default",
+              "name": "Manual",
               "value": "default"
             },
             {
@@ -193,12 +181,12 @@
           "name": "Model",
           "options": [
             {
-              "description": "Sonnet 4.6 · Efficient for routine tasks",
+              "description": "Sonnet 5 · Efficient for routine tasks",
               "name": "Default (recommended)",
               "value": "default"
             },
             {
-              "description": "Sonnet 4.6 · Efficient for routine tasks",
+              "description": "Sonnet 5 · Efficient for routine tasks",
               "name": "Sonnet",
               "value": "sonnet"
             },
@@ -250,19 +238,19 @@
           "type": "select"
         },
         {
-          "category": "_fast_mode",
+          "category": "model_config",
           "currentValue": "off",
-          "description": "Favor faster responses",
-          "id": "fast_mode",
-          "name": "Fast Mode",
+          "description": "Faster responses on supported models",
+          "id": "fast",
+          "name": "Fast mode",
           "options": [
-            {
-              "name": "Off",
-              "value": "off"
-            },
             {
               "name": "On",
               "value": "on"
+            },
+            {
+              "name": "Off",
+              "value": "off"
             }
           ],
           "type": "select"
@@ -282,7 +270,7 @@
       {
         "description": "Standard behavior, prompts for dangerous operations",
         "id": "default",
-        "name": "Default"
+        "name": "Manual"
       },
       {
         "description": "Auto-accept file edit operations",
@@ -322,7 +310,7 @@
         },
         {
           "description": "Standard behavior, prompts for dangerous operations",
-          "name": "Default",
+          "name": "Manual",
           "value": "default"
         },
         {
@@ -350,18 +338,18 @@
     },
     {
       "category": "model",
-      "currentValue": "opus",
+      "currentValue": "default",
       "description": "AI model to use",
       "id": "model",
       "name": "Model",
       "options": [
         {
-          "description": "Sonnet 4.6 · Efficient for routine tasks",
+          "description": "Sonnet 5 · Efficient for routine tasks",
           "name": "Default (recommended)",
           "value": "default"
         },
         {
-          "description": "Sonnet 4.6 · Efficient for routine tasks",
+          "description": "Sonnet 5 · Efficient for routine tasks",
           "name": "Sonnet",
           "value": "sonnet"
         },
@@ -411,31 +399,13 @@
         }
       ],
       "type": "select"
-    },
-    {
-      "category": "_fast_mode",
-      "currentValue": "off",
-      "description": "Favor faster responses",
-      "id": "fast_mode",
-      "name": "Fast Mode",
-      "options": [
-        {
-          "name": "Off",
-          "value": "off"
-        },
-        {
-          "name": "On",
-          "value": "on"
-        }
-      ],
-      "type": "select"
     }
   ],
   "models": [
     {
       "modelId": "default",
       "name": "Default (recommended)",
-      "description": "Sonnet 4.6 · Efficient for routine tasks",
+      "description": "Sonnet 5 · Efficient for routine tasks",
       "configOptions": [
         {
           "category": "mode",
@@ -451,7 +421,7 @@
             },
             {
               "description": "Standard behavior, prompts for dangerous operations",
-              "name": "Default",
+              "name": "Manual",
               "value": "default"
             },
             {
@@ -511,6 +481,10 @@
               "value": "high"
             },
             {
+              "name": "Xhigh",
+              "value": "xhigh"
+            },
+            {
               "name": "Max",
               "value": "max"
             }
@@ -522,7 +496,7 @@
     {
       "modelId": "sonnet",
       "name": "Sonnet",
-      "description": "Sonnet 4.6 · Efficient for routine tasks",
+      "description": "Sonnet 5 · Efficient for routine tasks",
       "configOptions": [
         {
           "category": "mode",
@@ -538,7 +512,7 @@
             },
             {
               "description": "Standard behavior, prompts for dangerous operations",
-              "name": "Default",
+              "name": "Manual",
               "value": "default"
             },
             {
@@ -598,6 +572,10 @@
               "value": "high"
             },
             {
+              "name": "Xhigh",
+              "value": "xhigh"
+            },
+            {
               "name": "Max",
               "value": "max"
             }
@@ -625,7 +603,7 @@
             },
             {
               "description": "Standard behavior, prompts for dangerous operations",
-              "name": "Default",
+              "name": "Manual",
               "value": "default"
             },
             {
@@ -696,19 +674,19 @@
           "type": "select"
         },
         {
-          "category": "_fast_mode",
+          "category": "model_config",
           "currentValue": "off",
-          "description": "Favor faster responses",
-          "id": "fast_mode",
-          "name": "Fast Mode",
+          "description": "Faster responses on supported models",
+          "id": "fast",
+          "name": "Fast mode",
           "options": [
-            {
-              "name": "Off",
-              "value": "off"
-            },
             {
               "name": "On",
               "value": "on"
+            },
+            {
+              "name": "Off",
+              "value": "off"
             }
           ],
           "type": "select"
@@ -729,7 +707,7 @@
           "options": [
             {
               "description": "Standard behavior, prompts for dangerous operations",
-              "name": "Default",
+              "name": "Manual",
               "value": "default"
             },
             {

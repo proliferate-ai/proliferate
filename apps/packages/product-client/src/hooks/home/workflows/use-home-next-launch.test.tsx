@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import type { ReactNode } from "react";
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { renderableOutboxEntriesForTranscript } from "@proliferate/product-domain/sessions/intents/session-intent-selectors";
@@ -21,22 +22,38 @@ import { useSessionSelectionStore } from "#product/stores/sessions/session-selec
 import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
 import { useChatLaunchIntentStore } from "#product/stores/chat/chat-launch-intent-store";
 import { useDeferredHomeLaunchStore } from "#product/stores/home/deferred-home-launch-store";
-import { useToastStore } from "#product/stores/toast/toast-store";
 import { useHomeNextLaunch } from "#product/hooks/home/workflows/use-home-next-launch";
+import type { HomeLaunchTarget } from "#product/lib/domain/home/home-next-launch";
+import { CoworkThreadLaunchProvider } from "#product/providers/CoworkThreadLaunchProvider";
 
-const mocks = vi.hoisted(() => ({
-  createCloudWorkspaceAndEnterWithResult: vi.fn(),
-  createEmptySessionWithResolvedConfig: vi.fn(),
-  createLocalWorkspaceAndEnterWithResult: vi.fn(),
-  createSessionWithResolvedConfig: vi.fn(),
-  createThreadFromSelection: vi.fn(),
-  createWorktreeAndEnterWithResult: vi.fn(),
-  navigate: vi.fn(),
-  selectWorkspace: vi.fn(),
-}));
+const mocks = vi.hoisted(() => {
+  const createThreadFromSelection = vi.fn();
+  return {
+    createCloudWorkspaceAndEnterWithResult: vi.fn(),
+    createEmptySessionWithResolvedConfig: vi.fn(),
+    createLocalWorkspaceAndEnterWithResult: vi.fn(),
+    createSessionWithResolvedConfig: vi.fn(),
+    createThreadFromSelection,
+    createWorktreeAndEnterWithResult: vi.fn(),
+    navigate: vi.fn(),
+    productHost: { desktop: {} as object | null },
+    selectWorkspace: vi.fn(),
+    showToast: vi.fn(),
+    useCoworkThreadWorkflow: vi.fn(() => ({ createThreadFromSelection })),
+  };
+});
 
 vi.mock("react-router-dom", () => ({
   useNavigate: () => mocks.navigate,
+}));
+
+vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
+  useProductHost: () => mocks.productHost,
+}));
+
+vi.mock("#product/stores/toast/toast-store", () => ({
+  useToastStore: (selector: (state: { show: typeof mocks.showToast }) => unknown) =>
+    selector({ show: mocks.showToast }),
 }));
 
 vi.mock("#product/hooks/cloud/workflows/use-create-cloud-workspace", () => ({
@@ -46,9 +63,7 @@ vi.mock("#product/hooks/cloud/workflows/use-create-cloud-workspace", () => ({
 }));
 
 vi.mock("#product/hooks/cowork/workflows/use-cowork-thread-workflow", () => ({
-  useCoworkThreadWorkflow: () => ({
-    createThreadFromSelection: mocks.createThreadFromSelection,
-  }),
+  useCoworkThreadWorkflow: mocks.useCoworkThreadWorkflow,
 }));
 
 vi.mock("#product/hooks/workspaces/workflows/use-workspace-entry-actions", () => ({
@@ -86,16 +101,24 @@ vi.mock("#product/hooks/sessions/workflows/use-session-interaction-resolution-ac
   }),
 }));
 
+function launchWrapper({ children }: { children: ReactNode }) {
+  return <CoworkThreadLaunchProvider>{children}</CoworkThreadLaunchProvider>;
+}
+
+function renderHomeNextLaunch() {
+  return renderHook(() => useHomeNextLaunch(), { wrapper: launchWrapper });
+}
+
 describe("useHomeNextLaunch", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.productHost.desktop = {};
     useSessionDirectoryStore.getState().clearEntries();
     useSessionTranscriptStore.getState().clearEntries();
     useSessionIntentStore.getState().clear();
     useSessionSelectionStore.getState().clearSelection();
     useChatLaunchIntentStore.setState({ activeIntent: null });
     useDeferredHomeLaunchStore.setState({ launches: {} });
-    useToastStore.setState({ toasts: [] });
   });
 
   it("projects one destination prompt for a Home worktree launch", async () => {
@@ -134,7 +157,7 @@ describe("useHomeNextLaunch", () => {
       };
     });
 
-    const { result } = renderHook(() => useHomeNextLaunch());
+    const { result } = renderHomeNextLaunch();
     let succeeded = false;
     await act(async () => {
       succeeded = await result.current.launch({
@@ -164,5 +187,125 @@ describe("useHomeNextLaunch", () => {
     expect(destinationPromptRows[0]?.text).toBe("build the projected destination");
     expect(mocks.createSessionWithResolvedConfig).not.toHaveBeenCalled();
     expect(mocks.navigate).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not invoke the Desktop Cowork workflow from Web Home", async () => {
+    mocks.productHost.desktop = null;
+    const { result } = renderHomeNextLaunch();
+
+    let succeeded = true;
+    await act(async () => {
+      succeeded = await result.current.launch({
+        text: "start cowork on web",
+        modelSelection: { kind: "codex", modelId: "gpt-5.4" },
+        modeId: null,
+        launchControlValues: {},
+        target: { kind: "cowork" },
+      });
+    });
+
+    expect(succeeded).toBe(false);
+    expect(result.current.isLaunching).toBe(false);
+    expect(mocks.useCoworkThreadWorkflow).not.toHaveBeenCalled();
+    expect(mocks.createThreadFromSelection).not.toHaveBeenCalled();
+    expect(mocks.navigate).not.toHaveBeenCalled();
+    expect(useChatLaunchIntentStore.getState().activeIntent).toBeNull();
+    expect(mocks.showToast).toHaveBeenCalledWith(
+      "Cowork threads are available in the Desktop app.",
+      "info",
+    );
+  });
+
+  it("still invokes the Cowork workflow from Desktop Home", async () => {
+    mocks.createThreadFromSelection.mockResolvedValue(null);
+    const { result } = renderHomeNextLaunch();
+
+    await act(async () => {
+      await result.current.launch({
+        text: "start cowork on desktop",
+        modelSelection: { kind: "codex", modelId: "gpt-5.4" },
+        modeId: null,
+        launchControlValues: {},
+        target: { kind: "cowork" },
+      });
+    });
+
+    expect(mocks.useCoworkThreadWorkflow).toHaveBeenCalledTimes(1);
+    expect(mocks.createThreadFromSelection).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    {
+      label: "local",
+      target: { kind: "local", sourceRoot: "/repo", existingWorkspaceId: null },
+    },
+    {
+      label: "worktree",
+      target: {
+        kind: "worktree",
+        repoRootId: "repo-root-1",
+        sourceWorkspaceId: null,
+        baseBranch: "main",
+        defaultBranch: "main",
+      },
+    },
+    {
+      label: "SSH",
+      target: { kind: "ssh" },
+    },
+  ])("rejects a forged $label launch before Web local workflows", async ({ target }) => {
+    mocks.productHost.desktop = null;
+    const { result } = renderHomeNextLaunch();
+
+    let succeeded = true;
+    await act(async () => {
+      succeeded = await result.current.launch({
+        text: "do not launch locally",
+        modelSelection: { kind: "codex", modelId: "gpt-5.4" },
+        modeId: null,
+        launchControlValues: {},
+        target: target as HomeLaunchTarget,
+      });
+    });
+
+    expect(succeeded).toBe(false);
+    expect(mocks.useCoworkThreadWorkflow).not.toHaveBeenCalled();
+    expect(mocks.createLocalWorkspaceAndEnterWithResult).not.toHaveBeenCalled();
+    expect(mocks.createWorktreeAndEnterWithResult).not.toHaveBeenCalled();
+    expect(mocks.createCloudWorkspaceAndEnterWithResult).not.toHaveBeenCalled();
+    expect(useChatLaunchIntentStore.getState().activeIntent).toBeNull();
+    expect(mocks.showToast).toHaveBeenCalledWith(
+      "Local launch targets are available in the Desktop app.",
+      "info",
+    );
+  });
+
+  it("still invokes the Cloud workflow from Web Home", async () => {
+    mocks.productHost.desktop = null;
+    mocks.createCloudWorkspaceAndEnterWithResult.mockResolvedValue({
+      status: "interrupted",
+      failureMessage: "Expected test interruption",
+    });
+    const { result } = renderHomeNextLaunch();
+
+    await act(async () => {
+      await result.current.launch({
+        text: "launch in cloud",
+        modelSelection: { kind: "codex", modelId: "gpt-5.4" },
+        modeId: null,
+        launchControlValues: {},
+        target: {
+          kind: "cloud",
+          gitOwner: "proliferate-ai",
+          gitRepoName: "proliferate",
+          baseBranch: "main",
+        },
+      });
+    });
+
+    expect(mocks.useCoworkThreadWorkflow).not.toHaveBeenCalled();
+    expect(mocks.createCloudWorkspaceAndEnterWithResult).toHaveBeenCalledTimes(1);
+    expect(mocks.createLocalWorkspaceAndEnterWithResult).not.toHaveBeenCalled();
+    expect(mocks.createWorktreeAndEnterWithResult).not.toHaveBeenCalled();
   });
 });

@@ -46,6 +46,14 @@ impl From<WorkflowPutError> for ApiError {
                 Some("The workflow target cannot be resolved in this workspace.".into()),
                 Some("WORKFLOW_RUN_TARGET_UNRESOLVABLE"),
             ),
+            WorkflowPutError::WorkspaceNotReady => ApiError::conflict(
+                "The Workflow workspace for this run is not ready.",
+                "workflow_workspace_not_ready",
+            ),
+            WorkflowPutError::WorkspaceMismatch => ApiError::conflict(
+                "The request workspace does not match the ready Workflow materialization.",
+                "workflow_workspace_mismatch",
+            ),
             WorkflowPutError::Store(_) | WorkflowPutError::Internal(_) => {
                 ApiError::internal("workflow run storage failure")
             }

@@ -163,10 +163,48 @@ export async function runReleaseCommand(argv: readonly string[], deps: CommandDe
     cells = await buildPlannedCells(scenarios, {
       desktop: args.desktop,
       agents: args.agents === "all" ? ["all"] : args.agents,
+      // `--lane local` plans only the local runtime lane (decision #5): the
+      // world-backed qualification path has no publicly-reachable server for
+      // sandbox-runtime cells to call back into.
+      targetLane: args.lane,
     });
   } catch (error) {
     deps.error(error instanceof Error ? error.message : String(error));
     return 2;
+  }
+
+  // Optional matrix-cell filter (--cells): narrows by SCENARIO OWNERSHIP, not by
+  // presence/absence of a `cell` dimension (PR7-CONTROL-005). Within a scenario
+  // that OWNS at least one wanted cell, keep only its wanted cells; a scenario
+  // that owns NONE of the wanted cells keeps ALL of its cells untouched. So
+  // `--scenarios SELFHOST-INSTALL-1,SELFHOST-QUAL-1 --cells SH-GATEWAY` runs
+  // SELFHOST-INSTALL-1's four baseline cells (it owns none of the wanted cells)
+  // AND only SELFHOST-QUAL-1's SH-GATEWAY cell — even though INSTALL-1 is a
+  // matrix whose cells all carry a `cell` dimension. At least one cell overall
+  // must match a wanted name, else the selector picked nothing and we fail
+  // closed. The filter never resurrects an unselected scenario.
+  if (args.cells !== "all") {
+    const wanted = new Set(args.cells);
+    const cellName = (cell: (typeof cells)[number]): string | undefined => cell.dimensions.cell;
+    // Which scenarios own at least one wanted cell — those are the only ones the
+    // filter narrows.
+    const scenariosOwningWanted = new Set(
+      cells.filter((cell) => cellName(cell) !== undefined && wanted.has(cellName(cell) as string)).map((c) => c.scenario_id),
+    );
+    if (scenariosOwningWanted.size === 0) {
+      deps.error(
+        `--cells ${formatSelector(args.cells)} matched no planned cell ` +
+          `(selected scenarios: ${scenarios.map((s) => s.id).join(", ")}).`,
+      );
+      return 2;
+    }
+    cells = cells.filter((cell) => {
+      if (!scenariosOwningWanted.has(cell.scenario_id)) {
+        return true; // scenario owns none of the wanted cells → keep it whole
+      }
+      const name = cellName(cell);
+      return name !== undefined && wanted.has(name); // narrow within an owning scenario
+    });
   }
 
   // Local lane self-seeds its durable user per run (Part 2 of #1069): the CI

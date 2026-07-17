@@ -1,6 +1,7 @@
-import {
-  resolveCloudRepoActionState,
-  type CloudWorkspaceRepoTarget,
+import type { ReactNode } from "react";
+import type {
+  CloudRepoActionState,
+  CloudWorkspaceRepoTarget,
 } from "#product/lib/domain/workspaces/cloud/cloud-workspace-creation";
 import { cloudRepositoryKey } from "#product/lib/domain/settings/repositories";
 import {
@@ -11,11 +12,14 @@ import {
 import { buildSidebarNewWorkspaceCommandScope } from "#product/lib/domain/workspaces/creation/new-workspace-command";
 import { visibleSidebarGroupItems } from "#product/lib/domain/workspaces/sidebar/sidebar-visible-items";
 import type { SidebarIndicatorAction } from "#product/lib/domain/workspaces/sidebar/sidebar-indicators";
+import type { WorkspaceAvailabilityCommandKind } from "#product/lib/domain/workspaces/cloud/workspace-availability-commands";
+import type { SidebarWorkspaceItemState } from "#product/lib/domain/workspaces/sidebar/sidebar-model";
 import { SkeletonBlock } from "#product/components/feedback/Skeleton";
 import { useWorkspaceCopyActions } from "#product/hooks/workspaces/workflows/use-workspace-copy-actions";
 import { RepoGroup, type RepoGroupEnvironmentKind } from "#product/components/workspace/shell/sidebar/RepoGroup";
 import { SidebarShowToggleRow } from "#product/components/workspace/shell/sidebar/SidebarShowToggleRow";
 import { WorkspaceItem } from "#product/components/workspace/shell/sidebar/WorkspaceItem";
+import { useCloudRepoActionState } from "#product/hooks/cloud/derived/use-cloud-repo-action-state";
 
 interface SidebarWorkspaceContentProps {
   emptyState: SidebarEmptyState;
@@ -27,6 +31,7 @@ interface SidebarWorkspaceContentProps {
   onToggleRepoShowMore: (sourceRoot: string) => void;
   configuredCloudRepoKeys: ReadonlySet<string>;
   cloudRepoConfigsInitialLoading: boolean;
+  cloudConnected: boolean;
   cloudWorkspaceEnabled: boolean;
   cloudWorkspaceTooltip: string;
   onCreateWorktreeWorkspace: (repoRootId: string | null, repoGroupKeyToExpand: string) => void;
@@ -35,11 +40,15 @@ interface SidebarWorkspaceContentProps {
     target: CloudWorkspaceRepoTarget,
     repoGroupKeyToExpand: string,
   ) => void;
-  onOpenCloudRepoSettings: (target: CloudWorkspaceRepoTarget) => void;
   onSelectWorkspace: (workspaceId: string) => void;
   onIndicatorAction: (action: SidebarIndicatorAction) => void;
   onOpenPullRequest: (url: string) => void;
   onMarkWorkspaceDone: (workspaceId: string, logicalWorkspaceId: string) => void;
+  /** Begin a workspace-copy availability action (PR 5) for the given item. */
+  onWorkspaceAvailabilityCommand: (
+    item: SidebarWorkspaceItemState,
+    kind: WorkspaceAvailabilityCommandKind,
+  ) => void;
   onWorkspaceHover?: () => void;
   shortcutRevealVisible: boolean;
   shortcutLabelByWorkspaceId: ReadonlyMap<string, string>;
@@ -49,8 +58,18 @@ interface SidebarWorkspaceContentProps {
     workspaceId: string,
     displayName: string | null,
   ) => Promise<unknown>;
-  onRemoveRepo: (sourceRoot: string) => void;
+  onRemoveRepo: (sourceRoot: string) => Promise<void>;
   onOpenRepoSettings: (sourceRoot: string) => void;
+  /** Desktop host + non-disabled managed Cloud → the `…` menu can offer Cloud
+   * setup/add-to-mac. */
+  isDesktopHost: boolean;
+  managedCloudAvailable: boolean;
+  /** Opens the repo's Cloud settings surface (existing environment config). */
+  onOpenCloudRepoSettingsForGroup: (target: CloudWorkspaceRepoTarget) => void;
+  /** Begins the connected Cloud action intent (readiness → set up in Cloud). */
+  onSetUpCloudForGroup: (target: CloudWorkspaceRepoTarget) => void;
+  /** Desktop-only: register an existing local folder for a Cloud repo. */
+  onAddToThisMac: (target: CloudWorkspaceRepoTarget) => void;
 }
 
 function SidebarLoadingState() {
@@ -74,16 +93,17 @@ export function SidebarWorkspaceContent({
   onToggleRepoShowMore,
   configuredCloudRepoKeys,
   cloudRepoConfigsInitialLoading,
+  cloudConnected,
   cloudWorkspaceEnabled,
   cloudWorkspaceTooltip,
   onCreateWorktreeWorkspace,
   onCreateLocalWorkspace,
   onCreateCloudWorkspace,
-  onOpenCloudRepoSettings,
   onSelectWorkspace,
   onIndicatorAction,
   onOpenPullRequest,
   onMarkWorkspaceDone,
+  onWorkspaceAvailabilityCommand,
   onWorkspaceHover,
   shortcutRevealVisible,
   shortcutLabelByWorkspaceId,
@@ -92,6 +112,11 @@ export function SidebarWorkspaceContent({
   onRenameWorkspace,
   onRemoveRepo,
   onOpenRepoSettings,
+  isDesktopHost,
+  managedCloudAvailable,
+  onOpenCloudRepoSettingsForGroup,
+  onSetUpCloudForGroup,
+  onAddToThisMac,
 }: SidebarWorkspaceContentProps) {
   const { copyWorkspaceLocation, copyBranchName } = useWorkspaceCopyActions();
 
@@ -138,11 +163,6 @@ export function SidebarWorkspaceContent({
       : isShownMore
         ? "Show less"
         : "Show more";
-    const cloudRepoAction = resolveCloudRepoActionState({
-      repoTarget: group.cloudRepoTarget,
-      configuredRepoKeys: configuredCloudRepoKeys,
-      isInitialConfigLoad: cloudRepoConfigsInitialLoading,
-    });
     const cloudRepoTarget = group.cloudRepoTarget;
     const hasArchivedHiddenItems =
       group.items.length === 0 && group.allLogicalWorkspaceIds.length > 0;
@@ -154,8 +174,15 @@ export function SidebarWorkspaceContent({
     });
 
     return (
-      <RepoGroup
+      <CloudRepoActionGate
         key={`${group.sourceRoot}:${group.repoRootId ?? "no-repo-root"}:${groupIndex}`}
+        repoTarget={group.cloudRepoTarget}
+        configuredRepoKeys={configuredCloudRepoKeys}
+        isInitialConfigLoad={cloudRepoConfigsInitialLoading}
+        cloudConnected={cloudConnected}
+      >
+        {(cloudRepoAction) => (
+      <RepoGroup
         name={group.name}
         count={group.items.length}
         collapsed={collapsedRepoGroupKeys.has(group.sourceRoot)}
@@ -178,12 +205,23 @@ export function SidebarWorkspaceContent({
               return;
             }
             if (cloudRepoAction.kind === "configure") {
-              onOpenCloudRepoSettings(cloudRepoTarget);
+              onSetUpCloudForGroup(cloudRepoTarget);
             }
           }
           : undefined}
         onRemoveRepo={() => onRemoveRepo(group.sourceRoot)}
         onOpenSettings={() => onOpenRepoSettings(group.sourceRoot)}
+        isGitHubRepo={Boolean(cloudRepoTarget)}
+        canSetUpCloud={isDesktopHost && managedCloudAvailable}
+        onSetUpCloud={cloudRepoTarget
+          ? () => onSetUpCloudForGroup(cloudRepoTarget)
+          : undefined}
+        onAddToThisMac={isDesktopHost && cloudRepoTarget
+          ? () => onAddToThisMac(cloudRepoTarget)
+          : undefined}
+        onOpenCloudSettings={cloudRepoTarget
+          ? () => onOpenCloudRepoSettingsForGroup(cloudRepoTarget)
+          : undefined}
       >
         {group.items.length === 0 ? (
           <p className="px-3 py-2 text-xs text-sidebar-muted-foreground">
@@ -237,6 +275,8 @@ export function SidebarWorkspaceContent({
                     ? () => onMarkWorkspaceDone(item.localWorkspaceId!, item.id)
                     : undefined
                 }
+                availabilityCommands={item.availabilityCommands}
+                onAvailabilityCommand={(kind) => onWorkspaceAvailabilityCommand(item, kind)}
                 onHover={onWorkspaceHover}
                 onArchive={item.archived ? undefined : () => onArchiveWorkspace(item.id)}
                 onUnarchive={item.archived ? () => onUnarchiveWorkspace(item.id) : undefined}
@@ -256,8 +296,32 @@ export function SidebarWorkspaceContent({
           </>
         )}
       </RepoGroup>
+        )}
+      </CloudRepoActionGate>
     );
   });
+}
+
+function CloudRepoActionGate({
+  repoTarget,
+  configuredRepoKeys,
+  isInitialConfigLoad,
+  cloudConnected,
+  children,
+}: {
+  repoTarget: CloudWorkspaceRepoTarget | null;
+  configuredRepoKeys: ReadonlySet<string>;
+  isInitialConfigLoad: boolean;
+  cloudConnected: boolean;
+  children: (state: CloudRepoActionState) => ReactNode;
+}) {
+  const state = useCloudRepoActionState({
+    repoTarget,
+    configuredRepoKeys,
+    isInitialConfigLoad,
+    cloudConnected,
+  });
+  return children(state);
 }
 
 function resolveRepoGroupEnvironmentKind(

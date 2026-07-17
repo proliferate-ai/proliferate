@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import type { Workspace } from "@anyharness/sdk";
 import { useRepositories } from "@proliferate/cloud-sdk-react";
 import { APP_ROUTES } from "#product/config/app-routes";
@@ -11,11 +11,10 @@ import { useHomeNextTargetSelectionSnapshot } from "#product/hooks/home/ui/use-h
 import { useStandardRepoProjection } from "#product/hooks/workspaces/derived/use-standard-repo-projection";
 import { useWorkspaceEntryActions } from "#product/hooks/workspaces/workflows/use-workspace-entry-actions";
 import { useWorkspaceNavigationWorkflow } from "#product/hooks/workspaces/workflows/use-workspace-navigation-workflow";
-import { buildCloudRepoSettingsHref } from "#product/lib/domain/settings/navigation";
 import {
   buildConfiguredCloudRepoKeys,
-  resolveCloudRepoActionState,
 } from "#product/lib/domain/workspaces/cloud/cloud-workspace-creation";
+import { useCloudRepoActionState } from "#product/hooks/cloud/derived/use-cloud-repo-action-state";
 import {
   buildRepositoryNewWorkspaceCommandScope,
   buildSelectedWorkspaceNewWorkspaceCommandScope,
@@ -26,6 +25,7 @@ import {
   startLatencyFlow,
 } from "#product/lib/infra/measurement/measurement-port";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useCloudRepositoryIntentStore } from "#product/stores/cloud/cloud-repository-intent-store";
 import { useToastStore } from "#product/stores/toast/toast-store";
 import { useNewWorkspaceCommandScopeStore } from "#product/stores/workspaces/new-workspace-command-scope-store";
 import type { AppCommandActions, AppCommandInvocation } from "#product/hooks/app/workflows/app-command-action-types";
@@ -39,7 +39,7 @@ export type AppNewWorkspaceCommandActions = Pick<
 
 // Owns workspace creation commands exposed at the global app command surface.
 export function useAppNewWorkspaceCommandActions(): AppNewWorkspaceCommandActions {
-  const navigate = useNavigate();
+  const beginCloudRepositoryIntent = useCloudRepositoryIntentStore((state) => state.begin);
   const location = useLocation();
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const showToast = useToastStore((state) => state.show);
@@ -117,18 +117,12 @@ export function useAppNewWorkspaceCommandActions(): AppNewWorkspaceCommandAction
     activeNewWorkspaceScope
     ?? homeNewWorkspaceScope
     ?? selectedNewWorkspaceScope;
-  const commandCloudRepoAction = useMemo(
-    () => resolveCloudRepoActionState({
-      repoTarget: newWorkspaceCommandScope?.cloudRepoTarget ?? null,
-      configuredRepoKeys: configuredCloudRepoKeys,
-      isInitialConfigLoad: cloudRepoConfigsInitialLoading,
-    }),
-    [
-      cloudRepoConfigsInitialLoading,
-      configuredCloudRepoKeys,
-      newWorkspaceCommandScope?.cloudRepoTarget,
-    ],
-  );
+  const commandCloudRepoAction = useCloudRepoActionState({
+    repoTarget: newWorkspaceCommandScope?.cloudRepoTarget ?? null,
+    configuredRepoKeys: configuredCloudRepoKeys,
+    isInitialConfigLoad: cloudRepoConfigsInitialLoading,
+    cloudConnected: cloudActive,
+  });
 
   const showDisabledShortcutToast = useCallback((
     invocation: AppCommandInvocation,
@@ -200,11 +194,13 @@ export function useAppNewWorkspaceCommandActions(): AppNewWorkspaceCommandAction
     showToast,
   ]);
 
-  const cloudUnavailableReason = !cloudActive
-    ? "Cloud workspaces are unavailable."
-    : cloudWorkspaceBlocked
-      ? "Cloud workspaces are blocked by billing."
-      : null;
+  // Sign-in, operator capability, repository authority, and environment setup
+  // are actionable readiness gates. Do not disable the command before the
+  // connected dialog can explain/repair them; only billing is a terminal start
+  // block at this surface.
+  const cloudUnavailableReason = cloudWorkspaceBlocked
+    ? "Cloud workspaces are blocked by billing."
+    : null;
   const newCloudCommandTarget = useMemo(() => resolveNewWorkspaceCommandTarget({
     commandKind: "cloud",
     scope: newWorkspaceCommandScope,
@@ -223,10 +219,21 @@ export function useAppNewWorkspaceCommandActions(): AppNewWorkspaceCommandAction
       return;
     }
     if (newCloudCommandTarget.cloudActionKind === "configure") {
-      navigate(buildCloudRepoSettingsHref(
-        newCloudCommandTarget.target.gitOwner,
-        newCloudCommandTarget.target.gitRepoName,
-      ));
+      // Not a dead state: open the connected Cloud action dialog to repair the
+      // first unmet prerequisite, then continue into workspace creation
+      // (setup-and-continue) once every gate is green.
+      beginCloudRepositoryIntent({
+        kind: "create_cloud_workspace",
+        repo: {
+          gitProvider: "github",
+          gitOwner: newCloudCommandTarget.target.gitOwner,
+          gitRepoName: newCloudCommandTarget.target.gitRepoName,
+        },
+        continuation: {
+          repoGroupKeyToExpand: newCloudCommandTarget.repoGroupKeyToExpand,
+          baseBranch: newCloudCommandTarget.target.baseBranch ?? null,
+        },
+      });
       return;
     }
 
@@ -240,8 +247,8 @@ export function useAppNewWorkspaceCommandActions(): AppNewWorkspaceCommandAction
       repoGroupKeyToExpand: newCloudCommandTarget.repoGroupKeyToExpand,
     });
   }, [
+    beginCloudRepositoryIntent,
     createCloudWorkspaceAndEnter,
-    navigate,
     navigateToWorkspaceShell,
     newCloudCommandTarget,
     showDisabledShortcutToast,

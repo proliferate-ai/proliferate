@@ -49,6 +49,14 @@ def _fake_websocket() -> WebSocket:
     return cast(WebSocket, websocket)
 
 
+def _fake_session() -> AsyncSession:
+    class _FakeSession:
+        async def commit(self) -> None:
+            return None
+
+    return cast(AsyncSession, _FakeSession())
+
+
 @pytest.mark.asyncio
 async def test_ws_route_clears_sentry_user_after_proxying(
     monkeypatch: pytest.MonkeyPatch, fake_sdk: _FakeSentrySdk
@@ -77,7 +85,7 @@ async def test_ws_route_clears_sentry_user_after_proxying(
     monkeypatch.setattr(gateway_api, "accepted_gateway_websocket_subprotocol", lambda _ws: None)
 
     await gateway_api.proxy_cloud_sandbox_anyharness_websocket(
-        _fake_websocket(), "some/path", cast(AsyncSession, object())
+        _fake_websocket(), "some/path", _fake_session()
     )
 
     assert proxied == [True]
@@ -110,7 +118,7 @@ async def test_ws_route_clears_sentry_user_when_proxy_raises(
 
     with pytest.raises(RuntimeError):
         await gateway_api.proxy_cloud_sandbox_anyharness_websocket(
-            _fake_websocket(), "some/path", cast(AsyncSession, object())
+            _fake_websocket(), "some/path", _fake_session()
         )
 
     assert fake_sdk.user is None
@@ -130,7 +138,7 @@ async def test_ws_route_clears_sentry_user_on_auth_failure(
     monkeypatch.setattr(gateway_api, "product_token_from_websocket", lambda _ws: "token")
 
     await gateway_api.proxy_cloud_sandbox_anyharness_websocket(
-        _fake_websocket(), "some/path", cast(AsyncSession, object())
+        _fake_websocket(), "some/path", _fake_session()
     )
 
     assert fake_sdk.user is None

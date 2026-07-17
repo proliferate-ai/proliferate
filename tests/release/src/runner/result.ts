@@ -71,6 +71,15 @@ export interface PlannedCellV1 {
   /** Sorted-key matrix dimensions; empty for leaf cells. */
   dimensions: Record<string, string>;
   required_env: string[];
+  /**
+   * Env vars this cell READS but does not require to plan (PR7-CONTROL-004):
+   * resolved into `ctx.env` when present, excluded from the block-on-missing
+   * check so absence stays a fail-closed cell red, not a runner-blocked cell.
+   * Optional in the type (defaults to none) so the many inline test fixtures and
+   * legacy leaf cells that predate this field stay valid; the planner always
+   * populates it and readers treat a missing value as `[]`.
+   */
+  optional_env?: string[];
 }
 
 export interface FinalCellResultV1 {
@@ -108,6 +117,7 @@ export function clonePlannedCell(cell: PlannedCellV1): PlannedCellV1 {
     runtime_lane: cell.runtime_lane,
     dimensions: { ...cell.dimensions },
     required_env: [...cell.required_env],
+    optional_env: [...(cell.optional_env ?? [])],
   };
 }
 

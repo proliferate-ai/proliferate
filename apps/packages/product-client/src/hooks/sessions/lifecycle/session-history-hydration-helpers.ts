@@ -16,6 +16,7 @@ import type {
 import { scheduleAfterNextPaint } from "#product/lib/infra/scheduling/schedule-after-next-paint";
 import { batchSessionStoreWrites } from "#product/lib/infra/scheduling/react-batching";
 import { activityFromTranscript } from "#product/lib/domain/sessions/directory/directory-activity";
+import { buildSessionStreamBatchPatch } from "#product/lib/domain/sessions/stream-patch";
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import { useSessionIntentStore } from "#product/stores/sessions/session-intent-store";
 import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
@@ -90,8 +91,19 @@ export function applyHistoryStateToStores(
     reconcileEnvelopes: readonly SessionEventEnvelope[];
   },
 ): void {
-  const status = resolveSessionStatus(currentRecord.status, {
-    executionSummary: currentRecord.executionSummary,
+  const appendedEnvelopes = nextState.events
+    .filter((envelope) => envelope.seq > currentRecord.transcript.lastSeq)
+    .sort((left, right) => left.seq - right.seq);
+  const historyTransitionPatch = buildSessionStreamBatchPatch({
+    slot: currentRecord,
+    nextTranscript: nextState.transcript,
+    envelopes: appendedEnvelopes,
+  });
+  const executionSummary = historyTransitionPatch.executionSummary !== undefined
+    ? historyTransitionPatch.executionSummary
+    : currentRecord.executionSummary;
+  const status = historyTransitionPatch.status ?? resolveSessionStatus(currentRecord.status, {
+    executionSummary,
     streamConnectionState: currentRecord.streamConnectionState,
     transcript: nextState.transcript,
   });
@@ -107,10 +119,11 @@ export function applyHistoryStateToStores(
     );
     useSessionDirectoryStore.getState().patchEntry(sessionId, {
       status,
+      executionSummary,
       modeId: nextState.transcript.currentModeId ?? currentRecord.modeId,
       activity: activityFromTranscript(nextState.transcript, {
         status,
-        executionSummary: currentRecord.executionSummary,
+        executionSummary,
       }),
     });
   });

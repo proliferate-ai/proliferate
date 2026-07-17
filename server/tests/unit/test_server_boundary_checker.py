@@ -105,6 +105,27 @@ def test_service_rejects_db_commit_call(tmp_path: Path) -> None:
     assert any(".commit()" in item.message for item in violations)
 
 
+def test_owned_service_concern_rejects_db_commit_after_relocation(tmp_path: Path) -> None:
+    module = _load_checker_module()
+    module.REPO_ROOT = tmp_path
+    path = (
+        tmp_path
+        / "server"
+        / "proliferate"
+        / "server"
+        / "cloud"
+        / "materialization"
+        / "materialize"
+        / "workflow_runtime.py"
+    )
+    path.parent.mkdir(parents=True)
+    path.write_text("async def run(db) -> None:\n    await db.commit()\n")
+
+    violations = module.check_paths([path])
+
+    assert any(item.rule_id == "SERVICE_DB_METHOD_CALL" for item in violations)
+
+
 def test_service_rejects_session_ops_import_and_call(tmp_path: Path) -> None:
     module = _load_checker_module()
     path = tmp_path / "server" / "proliferate" / "server" / "example" / "service.py"

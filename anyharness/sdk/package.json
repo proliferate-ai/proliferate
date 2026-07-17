@@ -1,6 +1,6 @@
 {
   "name": "@anyharness/sdk",
-  "version": "0.3.30",
+  "version": "0.3.41",
   "description": "TypeScript SDK for the AnyHarness runtime API",
   "type": "module",
   "main": "dist/index.js",
@@ -37,6 +37,6 @@
   "devDependencies": {
     "openapi-typescript": "^7.13.0",
     "typescript": "^5.7.0",
-    "vitest": "^3.2.6"
+    "vitest": "^3.2.7"
   }
 }

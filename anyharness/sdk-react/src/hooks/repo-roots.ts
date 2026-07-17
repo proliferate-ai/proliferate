@@ -1,5 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { PrepareRepoRootMobilityDestinationRequest } from "@anyharness/sdk";
+import type {
+  MaterializeRepoRootRequest,
+  MaterializeWorkspaceAtRefRequest,
+  PrepareRepoRootMobilityDestinationRequest,
+} from "@anyharness/sdk";
 import {
   resolveRuntimeCacheScopeKey,
   resolveRuntimeConnection,
@@ -124,6 +128,50 @@ export function usePrepareRepoRootMobilityDestinationMutation() {
     }) => {
       const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
       return client.repoRoots.prepareDestination(repoRootId, input);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: anyHarnessRuntimeWorkspacesKey(runtimeUrl, cacheScopeKey),
+      });
+    },
+  });
+}
+
+export function useMaterializeRepoRootMutation() {
+  const runtime = useAnyHarnessRuntimeContext();
+  const queryClient = useQueryClient();
+  const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
+  const cacheScopeKey = resolveRuntimeCacheScopeKey(runtime);
+
+  return useMutation({
+    mutationFn: async (input: MaterializeRepoRootRequest) => {
+      const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
+      return client.repoRoots.materialize(input);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: anyHarnessRepoRootsKey(runtimeUrl, cacheScopeKey),
+      });
+    },
+  });
+}
+
+export function useMaterializeWorkspaceAtRefMutation() {
+  const runtime = useAnyHarnessRuntimeContext();
+  const queryClient = useQueryClient();
+  const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
+  const cacheScopeKey = resolveRuntimeCacheScopeKey(runtime);
+
+  return useMutation({
+    mutationFn: async ({
+      repoRootId,
+      input,
+    }: {
+      repoRootId: string;
+      input: MaterializeWorkspaceAtRefRequest;
+    }) => {
+      const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
+      return client.repoRoots.materializeWorkspaceAtRef(repoRootId, input);
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({

@@ -3,6 +3,9 @@ import {
   checkControlPlaneReachable,
   getLastKnownControlPlaneReachable,
 } from "#product/lib/access/cloud/health";
+import {
+  EXPECTED_CONTROL_PLANE_PROBE_TIMEOUT_ERROR_NAME,
+} from "@proliferate/product-domain/telemetry/control-plane-probe-timeout";
 
 describe("control plane health", () => {
   afterEach(() => {
@@ -33,11 +36,13 @@ describe("control plane health", () => {
   it("times out a hung health request so boot can fall back", async () => {
     vi.useFakeTimers();
     let signal: AbortSignal | undefined;
+    let abortReason: unknown;
     const fetchMock = vi.fn((_url: string, init?: RequestInit) => {
       signal = init?.signal ?? undefined;
       return new Promise<Response>((_resolve, reject) => {
         signal?.addEventListener("abort", () => {
-          reject(new DOMException("Aborted", "AbortError"));
+          abortReason = signal?.reason;
+          reject(abortReason);
         });
       });
     });
@@ -49,6 +54,9 @@ describe("control plane health", () => {
 
     await expect(reachable).resolves.toBe(false);
     expect(signal?.aborted).toBe(true);
+    expect(abortReason).toMatchObject({
+      name: EXPECTED_CONTROL_PLANE_PROBE_TIMEOUT_ERROR_NAME,
+    });
     expect(getLastKnownControlPlaneReachable()).toBe(false);
   });
 });

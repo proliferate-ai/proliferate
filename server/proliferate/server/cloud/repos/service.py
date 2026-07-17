@@ -16,6 +16,7 @@ from proliferate.integrations.github import (
     GitHubRepoAccessRequired,
     GitHubRepoBranches,
     GitHubRepoEmpty,
+    GitHubServiceUnavailable,
     get_github_repo_branches,
     list_github_repositories,
 )
@@ -86,10 +87,10 @@ def _rate_limit_detail(exc: GitHubRateLimited) -> dict[str, object]:
     return detail
 
 
-def _rate_limit_headers(exc: GitHubRateLimited) -> dict[str, str]:
+def _retry_after_headers(retry_after_seconds: int | None) -> dict[str, str]:
     headers: dict[str, str] = {}
-    if exc.retry_after_seconds is not None:
-        headers["Retry-After"] = str(exc.retry_after_seconds)
+    if retry_after_seconds is not None:
+        headers["Retry-After"] = str(retry_after_seconds)
     return headers
 
 
@@ -99,7 +100,16 @@ def _github_rate_limited_error(exc: GitHubRateLimited) -> CloudApiError:
         "GitHub is rate limiting repository browsing. Try again later.",
         status_code=429,
         extra_detail=_rate_limit_detail(exc),
-        headers=_rate_limit_headers(exc),
+        headers=_retry_after_headers(exc.retry_after_seconds),
+    )
+
+
+def _github_service_unavailable_error(exc: GitHubServiceUnavailable) -> CloudApiError:
+    return CloudApiError(
+        "github_service_unavailable",
+        str(exc),
+        status_code=503,
+        headers=_retry_after_headers(exc.retry_after_seconds),
     )
 
 
@@ -167,6 +177,8 @@ async def get_repo_branches_for_credentials(
             str(exc),
             status_code=400,
         ) from exc
+    except GitHubServiceUnavailable as exc:
+        raise _github_service_unavailable_error(exc) from exc
     except GitHubIntegrationError as exc:
         raise CloudApiError(
             "github_branch_lookup_failed",
@@ -228,6 +240,8 @@ async def list_cloud_repositories(
             str(exc),
             status_code=400,
         ) from exc
+    except GitHubServiceUnavailable as exc:
+        raise _github_service_unavailable_error(exc) from exc
     except GitHubIntegrationError as exc:
         raise CloudApiError(
             "github_repo_list_failed",

@@ -522,6 +522,7 @@ impl CoworkRuntime {
         let durable_session = match self.session_runtime.create_durable_session(
             &worktree.workspace.id,
             agent_kind,
+            None,
             model_id,
             mode_id,
             None,
@@ -881,7 +882,12 @@ impl CoworkRuntime {
                 input.model_id.as_deref(),
                 input.mode_id.as_deref(),
             )
-            .map_err(|error| CoworkDelegationError::Internal(anyhow::anyhow!("{error:?}")))?;
+            .map_err(|error| match error {
+                CreateAndStartSessionError::WorkspaceDirectoryMissing { path } => {
+                    CoworkDelegationError::WorkspaceDirectoryMissing(path)
+                }
+                other => CoworkDelegationError::Internal(anyhow::anyhow!("{other:?}")),
+            })?;
         let label = normalize_optional_text(input.label);
         let link = match self.delegation_service.create_coding_session_link(
             parent_session_id,
@@ -1372,9 +1378,21 @@ impl CoworkRuntime {
         let resolved_mode_id = normalize_optional_ref(mode_id)
             .or_else(|| default_cowork_coding_mode_for_agent(resolved_agent_kind));
 
+        // Same pre-durable-create checkout admission as the interactive create
+        // path: a delegated coding session against a deleted managed checkout
+        // must be refused typed instead of inserting a durable session row.
+        if let Some(path) = self
+            .session_runtime
+            .workspace_checkout_missing_path(workspace_id)
+            .map_err(CreateAndStartSessionError::Internal)?
+        {
+            return Err(CreateAndStartSessionError::WorkspaceDirectoryMissing { path });
+        }
+
         self.session_runtime.create_durable_session(
             workspace_id,
             resolved_agent_kind,
+            None,
             normalize_optional_ref(model_id).or(parent_thread.requested_model_id.as_deref()),
             resolved_mode_id,
             None,

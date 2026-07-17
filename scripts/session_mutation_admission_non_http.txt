@@ -1,0 +1,20 @@
+# Non-HTTP destructive session-mutation owners (spec 2b proof: PR1227-RETENTION-RATCHET-01).
+#
+# The HTTP ratchet in session_mutation_admission.txt only enumerates mutating
+# ROUTER handlers. Destructive owners reached OUTSIDE the HTTP router (startup
+# and post-create automatic passes) must ALSO be statically fenced, so removing
+# their permit-first admission would go undetected by the HTTP-only checker.
+#
+# Format: path::fn admit_call effect_token[,effect_token...]
+#   path         Rust file relative to anyharness/crates/anyharness-lib/src
+#   fn           destructive owner function to inspect
+#   admit_call   the admission call that MUST appear before ANY effect surface
+#   effect_token comma-separated destructive effect surfaces; the admission call
+#                must appear (syntactically, with Rust comments and string
+#                literals stripped first) BEFORE each one
+#
+# A listed owner whose admission call is absent — or reordered after an effect
+# surface — FAILS the ratchet. A listed owner whose function no longer exists is
+# a STALE entry and also fails (mirrors the HTTP checker's stale-entry teeth).
+
+domains/workspaces/retention.rs::run_pass admit_retention_sessions acquire_exclusive,WorkspaceLifecycleState::Retired,retire_worktree_materialization

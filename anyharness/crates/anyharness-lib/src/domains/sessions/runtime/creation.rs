@@ -22,6 +22,10 @@ pub(crate) struct InternalSessionCreateInput {
     pub model_id: Option<String>,
     pub mode_id: Option<String>,
     pub origin: OriginContext,
+    /// Ruling 2b-1: the workflow executor preselects the id so it can reserve
+    /// the session's mutation gate before this row exists. `None` keeps the
+    /// ordinary mint-at-create behavior.
+    pub preselected_session_id: Option<String>,
 }
 
 /// Typed failure for the internal creation seam. Access-gate refusals stay
@@ -53,6 +57,7 @@ impl SessionRuntime {
         self.access_gate
             .assert_can_mutate_for_workspace(workspace_id)
             .map_err(|error| CreateAndStartSessionError::Invalid(error.to_string()))?;
+        self.assert_workspace_checkout_present(workspace_id)?;
         let started = Instant::now();
         let system_prompt_append_count = system_prompt_append
             .as_ref()
@@ -70,6 +75,7 @@ impl SessionRuntime {
         let mut record = self.create_durable_session(
             workspace_id,
             agent_kind,
+            None,
             model_id,
             mode_id,
             system_prompt_append,
@@ -101,6 +107,7 @@ impl SessionRuntime {
         &self,
         workspace_id: &str,
         agent_kind: &str,
+        preselected_session_id: Option<&str>,
         model_id: Option<&str>,
         mode_id: Option<&str>,
         system_prompt_append: Option<Vec<String>>,
@@ -120,6 +127,7 @@ impl SessionRuntime {
             .create_session(
                 workspace_id,
                 agent_kind,
+                preselected_session_id,
                 model_id,
                 mode_id,
                 mcp_bindings_ciphertext,
@@ -136,6 +144,48 @@ impl SessionRuntime {
         self.acp_manager.get_handle(session_id).await.is_some()
     }
 
+    /// Shared checkout admission for every session-start seam. Loads the
+    /// workspace and, if it is a local checkout whose directory is *proven*
+    /// deleted (see `WorkspaceRecord::checkout_directory_missing`), returns its
+    /// path so the caller can raise its own typed `WorkspaceDirectoryMissing`
+    /// error. Remote/cloud-style workspaces and ambiguous filesystem states
+    /// (permission denied, transient I/O) are never blocked here. A workspace
+    /// that cannot be found returns `Ok(None)` — create/start classify
+    /// not-found separately.
+    ///
+    /// Races: the directory can still vanish between this pre-flight and spawn;
+    /// spawn-time `validate_spawn_cwd` remains the backstop, so this check is an
+    /// early, friendly refusal rather than a correctness guarantee.
+    pub(crate) fn workspace_checkout_missing_path(
+        &self,
+        workspace_id: &str,
+    ) -> anyhow::Result<Option<String>> {
+        Ok(self
+            .workspace_runtime
+            .get_workspace(workspace_id)?
+            .filter(|workspace| workspace.checkout_directory_missing())
+            .map(|workspace| workspace.path))
+    }
+
+    /// Pre-flight the workspace's local checkout before touching durable state.
+    /// A deleted checkout would otherwise only surface once the session
+    /// subprocess spawns, by which point an empty errored session row exists.
+    /// The common live-start seam (`start_live_session`) re-checks the same
+    /// predicate; this pre-durable-create guard specifically prevents the empty
+    /// session row.
+    pub(crate) fn assert_workspace_checkout_present(
+        &self,
+        workspace_id: &str,
+    ) -> Result<(), CreateAndStartSessionError> {
+        if let Some(path) = self
+            .workspace_checkout_missing_path(workspace_id)
+            .map_err(CreateAndStartSessionError::Internal)?
+        {
+            return Err(CreateAndStartSessionError::WorkspaceDirectoryMissing { path });
+        }
+        Ok(())
+    }
+
     /// Checked, crate-visible internal-session creation seam: assert workspace
     /// access, then create (but do not start) an InternalOnly,
     /// subagents-disabled durable session. Preserving `session_id` before
@@ -148,9 +198,23 @@ impl SessionRuntime {
         self.access_gate
             .assert_can_mutate_for_workspace(&input.workspace_id)
             .map_err(InternalSessionCreateError::WorkspaceUnavailable)?;
+        // Same pre-durable-create checkout admission as the interactive create
+        // path: a workflow run against a deleted checkout must not insert a
+        // durable session row. Dispatch classifies this as WorkspaceUnavailable.
+        if let Some(path) = self
+            .workspace_checkout_missing_path(&input.workspace_id)
+            .map_err(|error| {
+                InternalSessionCreateError::Create(CreateAndStartSessionError::Internal(error))
+            })?
+        {
+            return Err(InternalSessionCreateError::Create(
+                CreateAndStartSessionError::WorkspaceDirectoryMissing { path },
+            ));
+        }
         self.create_durable_session(
             &input.workspace_id,
             &input.agent_kind,
+            input.preselected_session_id.as_deref(),
             input.model_id.as_deref(),
             input.mode_id.as_deref(),
             None,   // no system-prompt append

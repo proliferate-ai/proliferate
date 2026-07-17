@@ -2,7 +2,7 @@ use std::{
     fs::OpenOptions,
     io::{self, Read, Seek, SeekFrom},
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{atomic::AtomicBool, Arc},
 };
 
 use fs2::FileExt;
@@ -21,17 +21,37 @@ use crate::{
 };
 
 mod launcher;
+pub(crate) mod lifecycle;
 
 use launcher::find_proliferate_worker_launcher;
 
 const WORKER_LOG_TAIL_MAX_BYTES: u64 = 64 * 1024;
+// Releases through 0.3.38 used `cloud-worker`. Some of those Desktop processes
+// exited without stopping their child, so the legacy Worker can retain that
+// namespace's credential lock across an app update. The complete v2 namespace
+// lets a freshly enrolled Worker converge without inspecting or killing an
+// unowned process; server enrollment revokes every predecessor for the same
+// desktop install.
+const WORKER_STATE_NAMESPACE: &str = "cloud-worker-v2";
+#[cfg(test)]
+const LEGACY_WORKER_STATE_NAMESPACE: &str = "cloud-worker";
+const WORKER_CREDENTIALS_LOCKED_ERROR: &str =
+    "Cannot replace worker credentials while a Proliferate Worker is still running.";
 
 #[derive(Default)]
 pub struct CloudWorkerState {
-    process: Mutex<Option<CloudWorkerProcess>>,
+    lifecycle: Mutex<CloudWorkerLifecycle>,
+    terminal_shutdown_armed: AtomicBool,
 }
 
 pub type SharedCloudWorkerState = Arc<CloudWorkerState>;
+
+#[derive(Default)]
+struct CloudWorkerLifecycle {
+    process: Option<CloudWorkerProcess>,
+    #[cfg(test)]
+    injected_stop_error: Option<String>,
+}
 
 struct CloudWorkerProcess {
     target_id: String,
@@ -41,12 +61,6 @@ struct CloudWorkerProcess {
 
 struct WorkerDatabaseLock {
     file: std::fs::File,
-}
-
-impl Drop for CloudWorkerProcess {
-    fn drop(&mut self) {
-        let _ = self.child.start_kill();
-    }
 }
 
 impl Drop for WorkerDatabaseLock {
@@ -95,27 +109,26 @@ pub async fn ensure_desktop_dispatch_worker(
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty());
 
-    let mut guard = worker_state.process.lock().await;
-    if let Some(process) = guard.as_mut() {
-        match process.child.try_wait() {
-            // A fresh enrollment token is a rotation request (e.g. a different
-            // user signed in on this machine): fall through to kill the tracked
-            // worker and re-enroll instead of keeping the predecessor's worker
-            // + gateway credentials alive under the new user.
-            Ok(None) if process.target_id == target_id && enrollment_token.is_none() => {
-                return Ok(EnsureDesktopDispatchWorkerResult {
-                    target_id,
-                    status: "running",
-                    config_path: process.config_path.to_string_lossy().into_owned(),
-                });
-            }
-            Ok(None) => {
-                let _ = process.child.start_kill();
-                let _ = process.child.wait().await;
-            }
-            Ok(Some(_)) | Err(_) => {}
-        }
-        *guard = None;
+    let Some(mut lifecycle) = lifecycle::lock_for_worker_start(&worker_state).await else {
+        let config_path = worker_paths(&target_id)?.config;
+        return Ok(EnsureDesktopDispatchWorkerResult {
+            target_id,
+            status: "terminal_shutdown_armed",
+            config_path: config_path.to_string_lossy().into_owned(),
+        });
+    };
+    if let Some(config_path) = lifecycle::prepare_existing_worker_for_ensure(
+        &mut lifecycle,
+        &target_id,
+        enrollment_token.is_some(),
+    )
+    .await?
+    {
+        return Ok(EnsureDesktopDispatchWorkerResult {
+            target_id,
+            status: "running",
+            config_path: config_path.to_string_lossy().into_owned(),
+        });
     }
 
     let launcher = find_proliferate_worker_launcher()
@@ -219,7 +232,7 @@ pub async fn ensure_desktop_dispatch_worker(
         status: "started",
         config_path: paths.config.to_string_lossy().into_owned(),
     };
-    *guard = Some(CloudWorkerProcess {
+    lifecycle.process = Some(CloudWorkerProcess {
         target_id,
         child,
         config_path: paths.config,
@@ -234,28 +247,32 @@ pub async fn ensure_desktop_dispatch_worker(
 pub async fn stop_desktop_dispatch_worker(
     state: State<'_, SharedCloudWorkerState>,
 ) -> Result<StopDesktopDispatchWorkerResult, String> {
-    let mut guard = state.process.lock().await;
-    let mut stopped = false;
-    if let Some(process) = guard.as_mut() {
-        let _ = process.child.start_kill();
-        let _ = process.child.wait().await;
-        stopped = true;
-    }
-    *guard = None;
-    drop(guard);
+    let stop_result = lifecycle::stop_tracked_desktop_dispatch_worker(&state).await;
 
     let dotfile = app_config::anyharness_runtime_home_path()?.join("integration-gateway.json");
-    match std::fs::remove_file(&dotfile) {
-        Ok(()) => {}
-        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
-        Err(error) => {
-            return Err(format!(
-                "Failed to remove integration gateway credentials at {}: {error}",
-                dotfile.display()
-            ));
+    let credential_cleanup_result = match std::fs::remove_file(&dotfile) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(format!(
+            "Failed to remove integration gateway credentials at {}: {error}",
+            dotfile.display()
+        )),
+    };
+    match (stop_result, credential_cleanup_result) {
+        (Ok(stopped), Ok(())) => Ok(StopDesktopDispatchWorkerResult { stopped }),
+        (Err(stop_error), Ok(())) => Err(stop_error),
+        (Ok(_), Err(cleanup_error)) => Err(cleanup_error),
+        (Err(stop_error), Err(cleanup_error)) => {
+            Err(format!("{stop_error}; additionally, {cleanup_error}"))
         }
     }
-    Ok(StopDesktopDispatchWorkerResult { stopped })
+}
+
+#[tauri::command]
+pub async fn prepare_desktop_dispatch_worker_update(
+    state: State<'_, SharedCloudWorkerState>,
+) -> Result<(), String> {
+    lifecycle::prepare_desktop_dispatch_worker_update(&state, cfg!(target_os = "windows")).await
 }
 
 fn non_empty(name: &str, value: String) -> Result<String, String> {
@@ -285,14 +302,22 @@ struct WorkerPaths {
 }
 
 fn worker_paths(target_id: &str) -> Result<WorkerPaths, String> {
-    let root = app_config::app_dir_path()?
-        .join("cloud-worker")
+    Ok(worker_paths_in_namespace(
+        &app_config::app_dir_path()?,
+        WORKER_STATE_NAMESPACE,
+        target_id,
+    ))
+}
+
+fn worker_paths_in_namespace(app_dir: &Path, namespace: &str, target_id: &str) -> WorkerPaths {
+    let root = app_dir
+        .join(namespace)
         .join(sanitize_path_segment(target_id));
-    Ok(WorkerPaths {
+    WorkerPaths {
         config: root.join("config.toml"),
         database: root.join("worker.sqlite3"),
         log: root.join("worker.log"),
-    })
+    }
 }
 
 fn worker_identity_exists(path: &Path) -> Result<bool, String> {
@@ -333,7 +358,7 @@ fn worker_identity_exists(path: &Path) -> Result<bool, String> {
 fn worker_database_lock_is_held(database_path: &Path) -> Result<bool, String> {
     match acquire_worker_database_lock(database_path) {
         Ok(_lock) => Ok(false),
-        Err(error) if error.contains("still running") => Ok(true),
+        Err(error) if error == WORKER_CREDENTIALS_LOCKED_ERROR => Ok(true),
         Err(error) => Err(error),
     }
 }
@@ -357,10 +382,9 @@ fn acquire_worker_database_lock(database_path: &Path) -> Result<WorkerDatabaseLo
         })?;
     match file.try_lock_exclusive() {
         Ok(()) => Ok(WorkerDatabaseLock { file }),
-        Err(error) if error.kind() == io::ErrorKind::WouldBlock => Err(
-            "Cannot replace worker credentials while a Proliferate Worker is still running."
-                .to_string(),
-        ),
+        Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
+            Err(WORKER_CREDENTIALS_LOCKED_ERROR.to_string())
+        }
         Err(error) => Err(format!(
             "Failed to inspect worker lock at {}: {error}",
             lock_path.display()

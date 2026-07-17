@@ -52,14 +52,20 @@ re-enrollment.
   current catalog route does not enforce Worker authentication.
 - The integration-gateway authorization value is distinct. On fresh
   enrollment it is written atomically to `integration-gateway.json` with
-  private directory/file permissions.
+  private directory/file permissions. That process retains the response in
+  memory and, after each successful authenticated heartbeat, restores the file
+  only when it differs. This converges a delayed predecessor write. A heartbeat
+  that succeeded immediately before revocation can race one final stale write;
+  after rejection the predecessor stops writing, and the active successor
+  repairs that race on its next successful heartbeat.
 - `runtime_bearer_token` authenticates narrow calls to the co-located
   AnyHarness runtime. It is not Cloud auth.
 
 The enrollment response's integration-gateway coordinates are not stored in
-Worker SQLite. A restart that loads an existing identity does not recreate a
-missing gateway file. Escalate that state; do not silently re-enroll or mint a
-replacement locally.
+Worker SQLite. Repair is therefore limited to the process that freshly
+enrolled and still holds those coordinates in memory. A restart that loads an
+existing identity does not recreate a missing gateway file. Escalate that
+state; do not silently re-enroll or mint a replacement locally.
 
 ## Fingerprint
 

@@ -366,7 +366,7 @@ Members
     sign-in. Domain auto-join uses the same link but is Enterprise-only.
 
 Billing
-  maturity: mixed real-now + mocked-ui
+  maturity: real-now; plan comparison remains described separately below
   owns:
     current plan, Manage action, Proliferate Credits summary, add credits,
     auto top-up, and billing portal.
@@ -374,10 +374,10 @@ Billing
     Desktop and Web reuse BillingSettingsSurface. The Billing page starts with
     current plan and credits. Plan comparison and upgrade detail live inside
     the Manage modal. Stripe portal is the cancellation/payment-method
-    surface.
-  mocked-ui:
-    when plan or visible grant data is unavailable, the shared surface uses a
-    labeled plan fallback and deterministic compute-balance values.
+    surface. Current plan, status, compute units, and LLM credits come only
+    from the selected billing owner's server state. Loading, error, disabled,
+    and absent-data states are explicit and never substitute deterministic
+    plan or balance values.
 
 Usage & Limits
   maturity: real-now, admin-only on Desktop

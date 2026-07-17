@@ -73,6 +73,13 @@ export function anyHarnessAgentGatewayModelsKey(
   return [...anyHarnessAgentsKey(runtimeUrl, cacheScopeKey), "gateway-models", kind ?? null] as const;
 }
 
+export function anyHarnessAgentGatewayModelsPrefixKey(
+  runtimeUrl: string | null | undefined,
+  cacheScopeKey: string | null | undefined,
+) {
+  return [...anyHarnessAgentsKey(runtimeUrl, cacheScopeKey), "gateway-models"] as const;
+}
+
 export function anyHarnessReconcileAgentsMutationKey(
   runtimeUrl: string | null | undefined,
   cacheScopeKey: string | null | undefined,

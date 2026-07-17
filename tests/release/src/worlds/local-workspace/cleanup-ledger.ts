@@ -19,11 +19,12 @@ import { readFile, readdir, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 /**
- * The resource kinds the local-world and self-host consumers register. This is
- * an append-only shared registry (see "Parallel Tracks - Extension Contract"):
- * new worlds add their kinds here; registered-before-create and
- * reverse-order-reconcile semantics are non-negotiable and unchanged. The
- * self-host block (PR 3) adds the four AWS resource kinds its world provisions.
+ * The resource kinds run-owned worlds register. This is an append-only shared
+ * registry (see "Parallel Tracks - Extension Contract"): new worlds add their
+ * kinds here; registered-before-create and reverse-order-reconcile semantics
+ * are non-negotiable and unchanged. The self-host block (PR 3) adds the four
+ * AWS resource kinds its world provisions; the managed-cloud block (PR 2)
+ * adds the E2B resource kinds its world provisions.
  */
 export type CleanupResourceKind =
   | "litellm_virtual_key"
@@ -49,7 +50,36 @@ export type CleanupResourceKind =
   | "ec2_instance"
   | "security_group"
   | "key_pair"
-  | "route53_record";
+  | "route53_record"
+  // ── Appended for PR 2 (managed-cloud world). Registered-before-create,
+  // reverse-order-reconcile; see worlds/managed-cloud/cleanup-kinds.ts for the
+  // cloud evidence-category mapping and cleanup stack. ──────────────────────
+  | "e2b_template"
+  | "e2b_sandbox"
+  // ── Appended for PR 6 (managed-cloud shared fixture layer). Registered-
+  // before-create, reverse-order-reconcile; released by the same cloud cleanup
+  // stack (worlds/managed-cloud/cleanup-kinds.ts). None of these fire unless a
+  // PR-6 fixture (billingThreshold / callback relay / Stripe test clock) or the
+  // append-only relay/Stripe deploy options are actually used, so a run that
+  // touches none of them registers none of them and stays byte-identical. ────
+  //   - billing_fixture_adjustment: the run-tagged BillingGrant/LlmCreditGrant
+  //     the billingThreshold fixture writes on the candidate box; released by
+  //     expiring/deleting it by its UNIQUE source_ref.
+  //   - callback_relay_spool / callback_relay_process: the on-box signed-
+  //     callback relay's spool directory and its single-file http process;
+  //     released by clearing the spool and stopping the process.
+  //   - stripe_test_clock / stripe_customer: the Stripe TEST-mode test clock and
+  //     the customer created on it (deleting the clock cascades its customers).
+  | "billing_fixture_adjustment"
+  | "callback_relay_spool"
+  | "callback_relay_process"
+  | "stripe_test_clock"
+  | "stripe_customer"
+  // Self-host world (PR 7 — append-only). CloudFormation-wrapper posture
+  // resource kinds the PR 7 workstream registers/releases the same way.
+  | "cloudformation_stack"
+  | "s3_object"
+  | "ghcr_package_version";
 
 export type CleanupPhase = "intent" | "acquired" | "reconciled";
 

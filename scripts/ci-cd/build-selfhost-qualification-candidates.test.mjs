@@ -5,6 +5,7 @@ import path from "node:path";
 import { test } from "node:test";
 
 import {
+  allocateSecondLocalWorldPorts,
   buildSelfHostDeployBundle,
   buildSelfHostQualificationCandidates,
   buildServerImageArchive,
@@ -236,6 +237,129 @@ test("buildSelfHostQualificationCandidates bakes the supplied --api-base-url int
     // Omitted → falls back to a dead LOCAL origin (never a hosted API).
     const fallback = await runWith(undefined, "run-b");
     assert.match(fallback, /^http:\/\/127\.0\.0\.1:\d+$/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("allocateSecondLocalWorldPorts returns a set disjoint from the first when the allocator is naturally distinct", async () => {
+  let next = 50000;
+  const alloc = async () => ({
+    server: next++,
+    postgres: next++,
+    redis: next++,
+    anyharness: next++,
+    renderer: next++,
+  });
+  const first = await alloc();
+  const second = await allocateSecondLocalWorldPorts(alloc, first);
+  const firstValues = new Set(Object.values(first));
+  for (const port of Object.values(second)) {
+    assert.equal(firstValues.has(port), false);
+  }
+});
+
+test("allocateSecondLocalWorldPorts retries when the allocator returns an overlapping set", async () => {
+  const first = { server: 1, postgres: 2, redis: 3, anyharness: 4, renderer: 5 };
+  let call = 0;
+  const alloc = async () => {
+    call += 1;
+    if (call === 1) {
+      // Overlaps first.server (1).
+      return { server: 1, postgres: 20, redis: 21, anyharness: 22, renderer: 23 };
+    }
+    return { server: 30, postgres: 31, redis: 32, anyharness: 33, renderer: 34 };
+  };
+  const second = await allocateSecondLocalWorldPorts(alloc, first);
+  assert.equal(call, 2);
+  assert.deepEqual(second, { server: 30, postgres: 31, redis: 32, anyharness: 33, renderer: 34 });
+});
+
+test("allocateSecondLocalWorldPorts fails closed after exhausting retries on a persistently overlapping allocator", async () => {
+  const first = { server: 1, postgres: 2, redis: 3, anyharness: 4, renderer: 5 };
+  const alloc = async () => ({ ...first });
+  await assert.rejects(() => allocateSecondLocalWorldPorts(alloc, first, { maxAttempts: 3 }), /non-overlapping/);
+});
+
+test("buildSelfHostQualificationCandidates: --second-ports off by default writes no sidecar (output unchanged from before the flag existed)", async () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "selfhost-noports-"));
+  try {
+    const { exec } = fakeExecFactory();
+    const deployDir = path.join(dir, "server", "deploy");
+    mkdirSync(deployDir, { recursive: true });
+    writeFileSync(path.join(deployDir, "install.sh"), "#!/usr/bin/env bash\n");
+    const distDir = path.join(dir, "desktop-dist");
+    mkdirSync(distDir, { recursive: true });
+    writeFileSync(path.join(distDir, "index.html"), "<html></html>");
+    const runDir = path.join(dir, "run");
+
+    const summary = await buildSelfHostQualificationCandidates(
+      {
+        runId: "qs-run-abc123",
+        shardId: "1",
+        runDir,
+        sourceSha: SHA,
+        version: "0.3.28",
+        target: "aarch64-apple-darwin",
+        platform: "linux/amd64",
+        deployDir,
+        desktopDistDir: distDir,
+      },
+      { exec, allocatePorts: fakeAllocatePorts(), log: () => {} },
+    );
+
+    assert.equal(summary.second_ports_file, undefined);
+    assert.equal(summary.second_ports, undefined);
+    assert.equal(existsSync(path.join(runDir, "local-world-ports-b.json")), false);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("buildSelfHostQualificationCandidates: --second-ports writes a disjoint sidecar with the same LocalWorldPorts shape", async () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "selfhost-secondports-"));
+  try {
+    const { exec } = fakeExecFactory();
+    const deployDir = path.join(dir, "server", "deploy");
+    mkdirSync(deployDir, { recursive: true });
+    writeFileSync(path.join(deployDir, "install.sh"), "#!/usr/bin/env bash\n");
+    const distDir = path.join(dir, "desktop-dist");
+    mkdirSync(distDir, { recursive: true });
+    writeFileSync(path.join(distDir, "index.html"), "<html></html>");
+    const runDir = path.join(dir, "run");
+
+    const summary = await buildSelfHostQualificationCandidates(
+      {
+        runId: "qs-run-abc123",
+        shardId: "1",
+        runDir,
+        sourceSha: SHA,
+        version: "0.3.28",
+        target: "aarch64-apple-darwin",
+        platform: "linux/amd64",
+        deployDir,
+        desktopDistDir: distDir,
+        secondPorts: true,
+      },
+      { exec, allocatePorts: fakeAllocatePorts(), log: () => {} },
+    );
+
+    assert.ok(existsSync(summary.ports_file));
+    const secondPortsPath = path.join(runDir, "local-world-ports-b.json");
+    assert.equal(summary.second_ports_file, secondPortsPath);
+    assert.ok(existsSync(secondPortsPath));
+
+    const first = JSON.parse(readFileSync(summary.ports_file, "utf8"));
+    const second = JSON.parse(readFileSync(secondPortsPath, "utf8"));
+    assert.deepEqual(second, summary.second_ports);
+    // Same LocalWorldPorts shape (server/postgres/redis/anyharness/renderer)
+    // as the primary local-world-ports.json sidecar.
+    assert.deepEqual(Object.keys(second).sort(), Object.keys(first).sort());
+    // Non-overlapping with the first set.
+    const firstValues = new Set(Object.values(first));
+    for (const port of Object.values(second)) {
+      assert.equal(firstValues.has(port), false);
+    }
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

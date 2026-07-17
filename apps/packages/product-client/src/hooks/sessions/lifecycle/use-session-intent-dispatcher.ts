@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useReducer, useRef } from "react";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import {
   useDeletePendingPromptMutation,
@@ -54,6 +54,10 @@ export function useSessionIntentDispatcher(): void {
   const deletePendingPromptMutation = useDeletePendingPromptMutation();
   const inFlightSessionIdsRef = useRef(new Set<string>());
   const dispatcherOwnerRef = useRef<symbol | null>(null);
+  const [dispatchSettlementVersion, notifyDispatchSettled] = useReducer(
+    (version: number) => version + 1,
+    0,
+  );
 
   useEffect(() => {
     if (activeDispatcherOwner) {
@@ -151,9 +155,12 @@ export function useSessionIntentDispatcher(): void {
       inFlightSessionIdsRef.current.add(clientSessionId);
       void dispatchIntent(intent).finally(() => {
         inFlightSessionIdsRef.current.delete(clientSessionId);
+        if (isActiveDispatcherOwner(dispatcherOwnerRef.current)) {
+          notifyDispatchSettled();
+        }
       });
     }
-  }, [dispatchIntent, dispatchVersion]);
+  }, [dispatchIntent, dispatchSettlementVersion, dispatchVersion]);
 }
 
 function isActiveDispatcherOwner(owner: symbol | null): boolean {

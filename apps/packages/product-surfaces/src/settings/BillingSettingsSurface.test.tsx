@@ -13,6 +13,7 @@ const cloudHooks = vi.hoisted(() => ({
   createRefillCheckout: vi.fn(),
   updateOverageEnabled: vi.fn(),
   refetch: vi.fn(),
+  refetchLlmBalance: vi.fn(),
 }));
 
 vi.mock("@proliferate/cloud-sdk-react", () => ({
@@ -36,6 +37,7 @@ function billingPlan(overrides: Record<string, unknown> = {}) {
     concurrentSandboxLimit: 1,
     activeSandboxCount: 0,
     isPaidCloud: false,
+    paymentHealthy: true,
     overageEnabled: false,
     hostedInvoiceUrl: null,
     startBlocked: false,
@@ -63,7 +65,14 @@ describe("BillingSettingsSurface", () => {
     cloudHooks.updateOverageEnabled.mockResolvedValue({});
     cloudHooks.useCloudBilling.mockImplementation((owner: { ownerScope?: string } | undefined) => ({
       data: owner?.ownerScope === "organization"
-        ? billingPlan({ plan: "pro", isPaidCloud: true, repoEnvironmentLimit: 20 })
+        ? billingPlan({
+            plan: "pro",
+            proBillingEnabled: true,
+            isPaidCloud: true,
+            includedManagedCloudHours: 40,
+            remainingManagedCloudHours: 37.7,
+            repoEnvironmentLimit: 20,
+          })
         : billingPlan(),
       isLoading: false,
       isError: false,
@@ -83,6 +92,7 @@ describe("BillingSettingsSurface", () => {
       data: { grantedUsd: 12000, usedUsd: 7400, remainingUsd: 4600 },
       isLoading: false,
       isError: false,
+      refetch: cloudHooks.refetchLlmBalance,
     });
   });
 
@@ -126,13 +136,13 @@ describe("BillingSettingsSurface", () => {
 
     expect(screen.getAllByRole("heading", { name: "Billing" }).length).toBeGreaterThan(0);
     expect(screen.getByText("Plan")).toBeTruthy();
-    expect(screen.getByText(/tracked, budgeted, and topped up separately/)).toBeTruthy();
-    expect(screen.getByText("360 PCUs")).toBeTruthy();
-    expect(screen.getByText("$12,000.00")).toBeTruthy();
+    expect(screen.getByText(/tracked and topped up separately/)).toBeTruthy();
+    expect(screen.getByText(/37.7 PCUs of 40 PCUs available/)).toBeTruthy();
+    expect(screen.queryByText("360 PCUs")).toBeNull();
+    expect(screen.getByText(/\$4,600.00 of \$12,000.00 available/)).toBeTruthy();
     expect(screen.queryByText("Loading")).toBeNull();
     expect(screen.getByRole<HTMLButtonElement>("button", { name: "Add compute units" }).disabled).toBe(true);
     expect(screen.getByRole<HTMLButtonElement>("button", { name: "Add LLM credits" }).disabled).toBe(true);
-    expect(screen.getAllByText("Credit pack checkout for organizations is coming soon.")).toHaveLength(2);
     expect(screen.getByLabelText("Auto top-up")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Manage" }));
@@ -202,5 +212,106 @@ describe("BillingSettingsSurface", () => {
     await waitFor(() => {
       expect(within(dialog).queryByText("checkout offline")).not.toBeNull();
     });
+  });
+
+  it("uses returned free-plan balances instead of fabricated compute values", () => {
+    render(
+      <BillingSettingsSurface
+        organization={null}
+        onOpenUrl={vi.fn()}
+        onOpenOrganizationSettings={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Free plan")).toBeTruthy();
+    expect(screen.getByText(/4 PCUs of 5 PCUs available/)).toBeTruthy();
+    expect(screen.queryByText("360 PCUs")).toBeNull();
+    expect(screen.queryByText("Mocked")).toBeNull();
+  });
+
+  it("renders retryable errors without inventing plan or balance data", () => {
+    cloudHooks.useCloudBilling.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      refetch: cloudHooks.refetch,
+    });
+    cloudHooks.useLlmBalance.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      refetch: cloudHooks.refetchLlmBalance,
+    });
+
+    render(
+      <BillingSettingsSurface
+        organization={{
+          id: "org_1",
+          name: "Team One",
+          canManageBilling: true,
+          loading: false,
+        }}
+        onOpenUrl={vi.fn()}
+        onOpenOrganizationSettings={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Billing plan unavailable")).toBeTruthy();
+    expect(screen.getByText("Could not load compute units.")).toBeTruthy();
+    expect(screen.getByText("Could not load LLM credits.")).toBeTruthy();
+    expect(screen.queryByText("Core plan")).toBeNull();
+    expect(screen.queryByText("360 PCUs")).toBeNull();
+    expect(screen.queryByText("$0.00")).toBeNull();
+
+    const retryButtons = screen.getAllByRole("button", { name: "Retry" });
+    retryButtons.forEach((button) => fireEvent.click(button));
+    expect(cloudHooks.refetch).toHaveBeenCalledTimes(2);
+    expect(cloudHooks.refetchLlmBalance).toHaveBeenCalledTimes(1);
+  });
+
+  it("loads the selected organization plan for members without billing admin access", () => {
+    render(
+      <BillingSettingsSurface
+        organization={{
+          id: "org_1",
+          name: "Team One",
+          canManageBilling: false,
+          loading: false,
+        }}
+        onOpenUrl={vi.fn()}
+        onOpenOrganizationSettings={vi.fn()}
+      />,
+    );
+
+    expect(cloudHooks.useCloudBilling).toHaveBeenCalledWith(
+      { ownerScope: "organization", organizationId: "org_1" },
+      true,
+    );
+    expect(screen.getByText("Core plan")).toBeTruthy();
+    expect(screen.getByText("Billing for Team One.")).toBeTruthy();
+  });
+
+  it("shows backend payment health instead of an unconditional active badge", () => {
+    cloudHooks.useCloudBilling.mockReturnValue({
+      data: billingPlan({
+        plan: "pro",
+        isPaidCloud: true,
+        paymentHealthy: false,
+      }),
+      isLoading: false,
+      isError: false,
+      refetch: cloudHooks.refetch,
+    });
+
+    render(
+      <BillingSettingsSurface
+        organization={null}
+        onOpenUrl={vi.fn()}
+        onOpenOrganizationSettings={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Payment issue")).toBeTruthy();
+    expect(screen.queryByText("Active")).toBeNull();
   });
 });

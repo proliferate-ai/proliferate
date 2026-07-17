@@ -136,7 +136,7 @@ export async function bootBillingStackWithLitellmFake(): Promise<BootWithFakeRes
 }
 
 /** Clear the gateway env this module published into `process.env`, so a later
- * scenario booted in the same runner process (e.g. T2-AUTH-ORG) does not
+ * scenario booted in the same runner process (e.g. T2-IDENTITY-ORG) does not
  * inherit a stale `AGENT_GATEWAY_ENABLED`. Paired with the fake teardown. */
 export function clearPublishedGatewayEnv(): void {
   delete process.env.AGENT_GATEWAY_ENABLED;

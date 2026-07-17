@@ -10,6 +10,11 @@ use tokio::process::Command;
 
 use crate::agent_seed_env::current_target_triple;
 
+const DESKTOP_DEV_CARGO_RUNNER_ENV_VARS: [&str; 2] = [
+    "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER",
+    "CARGO_TARGET_X86_64_APPLE_DARWIN_RUNNER",
+];
+
 pub(super) enum WorkerLauncher {
     Binary(PathBuf),
     CargoRun {
@@ -39,6 +44,14 @@ impl WorkerLauncher {
                     .arg("--")
                     .arg("--config")
                     .arg(config_path);
+                // The local Desktop launcher sets these runners so Cargo copies
+                // the Tauri app to a profile-specific executable before running
+                // it. A nested `cargo run` for the worker must execute the worker
+                // directly: inheriting the app runner overwrites that Desktop
+                // path and macOS rejects the copied worker's code signature.
+                for env_var in DESKTOP_DEV_CARGO_RUNNER_ENV_VARS {
+                    command.env_remove(env_var);
+                }
                 command
             }
         }
@@ -193,7 +206,11 @@ fn is_placeholder_sidecar(path: &Path) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use std::{cell::Cell, path::PathBuf};
+    use std::{
+        cell::Cell,
+        ffi::OsStr,
+        path::{Path, PathBuf},
+    };
 
     use super::{select_worker_launcher, WorkerLauncher};
 
@@ -241,5 +258,19 @@ mod tests {
         assert!(
             matches!(launcher, Some(WorkerLauncher::Binary(path)) if path == PathBuf::from("/packaged"))
         );
+    }
+
+    #[test]
+    fn cargo_run_does_not_inherit_the_desktop_app_runner() {
+        let command = cargo_run().command(Path::new("/worker/config.toml"));
+        let removed_env = command
+            .as_std()
+            .get_envs()
+            .filter_map(|(name, value)| value.is_none().then_some(name))
+            .collect::<Vec<_>>();
+
+        for env_var in super::DESKTOP_DEV_CARGO_RUNNER_ENV_VARS {
+            assert!(removed_env.contains(&OsStr::new(env_var)));
+        }
     }
 }

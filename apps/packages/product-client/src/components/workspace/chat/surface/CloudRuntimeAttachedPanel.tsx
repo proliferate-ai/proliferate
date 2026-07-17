@@ -1,27 +1,13 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { ComposerAttachedPanel } from "#product/components/workspace/chat/input/ComposerAttachedPanel";
+import {
+  ComposerAttachedPanel,
+  ComposerAttachedPanelRow,
+} from "#product/components/workspace/chat/input/ComposerAttachedPanel";
 import { CloudStatusCompactHeader } from "#product/components/workspace/chat/surface/CloudStatusCompactHeader";
 import { CircleAlert, Spinner } from "@proliferate/ui/icons";
 import { useSelectedCloudRuntimeState } from "#product/hooks/workspaces/facade/use-selected-cloud-runtime-state";
 import type { SelectedCloudRuntimeViewModel } from "#product/lib/domain/workspaces/cloud/cloud-runtime-state";
-
-function SectionRow({
-  label,
-  children,
-}: {
-  label: string;
-  children: ReactNode;
-}) {
-  return (
-    <div className="flex items-center gap-3 border-t border-border/40 px-4 py-2">
-      <span className="w-20 shrink-0 text-base font-medium uppercase tracking-[0.06em] text-muted-foreground/50">
-        {label}
-      </span>
-      <div className="min-w-0 flex-1">{children}</div>
-    </div>
-  );
-}
 
 export function CloudRuntimeAttachedPanel() {
   const selectedCloudRuntime = useSelectedCloudRuntimeState();
@@ -93,13 +79,13 @@ export function CloudRuntimeAttachedPanelView({
       onToggleExpanded={() => setExpanded((value) => !value)}
     >
       <div className="max-h-[min(32vh,280px)] overflow-y-auto">
-        <SectionRow label="Status">
+        <ComposerAttachedPanelRow label="Status">
           <span className="text-base text-muted-foreground">
             {state.actionBlockReason}
           </span>
-        </SectionRow>
+        </ComposerAttachedPanelRow>
         {state.showRetry && retry && (
-          <SectionRow label="Actions">
+          <ComposerAttachedPanelRow label="Actions">
             <Button
               size="sm"
               onClick={() => {
@@ -108,10 +94,10 @@ export function CloudRuntimeAttachedPanelView({
             >
               Retry
             </Button>
-          </SectionRow>
+          </ComposerAttachedPanelRow>
         )}
         {state.showClaim && claimAction && (
-          <SectionRow label="Actions">
+          <ComposerAttachedPanelRow label="Actions">
             <Button
               size="sm"
               loading={claimAction.loading}
@@ -121,7 +107,7 @@ export function CloudRuntimeAttachedPanelView({
             >
               {claimAction.label}
             </Button>
-          </SectionRow>
+          </ComposerAttachedPanelRow>
         )}
       </div>
     </ComposerAttachedPanel>

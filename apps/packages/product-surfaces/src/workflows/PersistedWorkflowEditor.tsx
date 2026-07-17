@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useWorkflowDefinitionActions } from "@proliferate/cloud-sdk-react";
 import {
   isWorkflowRevisionConflict,
@@ -26,6 +26,7 @@ export function PersistedWorkflowEditor({
   reloadDefinition,
   onSaved,
   onBack,
+  supplementalContent,
 }: {
   authCacheScope: string;
   definition: WorkflowDefinition;
@@ -37,6 +38,7 @@ export function PersistedWorkflowEditor({
   reloadDefinition: () => Promise<WorkflowDefinition>;
   onSaved: (workflowId: string) => void;
   onBack: () => void;
+  supplementalContent?: ReactNode;
 }) {
   // The draft is seeded from `base`, not from the live query value: a passive
   // background refetch may bump `definition.revision` while the user is
@@ -140,6 +142,7 @@ export function PersistedWorkflowEditor({
       onCancel={onBack}
       onDelete={() => void remove()}
       onReload={showReload ? () => void reload() : undefined}
+      supplementalContent={supplementalContent}
     />
   );
 }

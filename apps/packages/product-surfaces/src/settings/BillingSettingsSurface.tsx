@@ -1,25 +1,23 @@
 import { useEffect, useState } from "react";
-import type { BillingReturnSurface, LlmBalance } from "@proliferate/cloud-sdk";
+import type { BillingReturnSurface } from "@proliferate/cloud-sdk";
 import {
   useCloudBilling,
   useCloudBillingActions,
   useLlmBalance,
 } from "@proliferate/cloud-sdk-react";
-import {
-  BillingSettingsPane,
-  type BillingPlanView,
-} from "@proliferate/product-ui/billing/BillingSettingsPane";
+import { BillingSettingsPane } from "@proliferate/product-ui/billing/BillingSettingsPane";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 import {
   BillingAutoTopUpCard,
   BillingPlanCard,
   BillingPortalCard,
-  type BillingPlanPresentation,
 } from "./BillingManagementCards";
+import { BillingUsageUnitsSection } from "./BillingUsageUnitsSection";
 import {
-  BillingUsageUnitsSection,
-  type BillingUnitBalancePresentation,
-} from "./BillingUsageUnitsSection";
+  billingUnitBalances,
+  planKeyForBilling,
+  planSummary,
+} from "./billing-settings-presentation";
 
 export type BillingCheckoutReturnState = "success" | "cancel" | null;
 
@@ -41,18 +39,6 @@ export interface BillingSettingsSurfaceProps {
   onOpenOrganizationSettings: () => void;
 }
 
-const MOCK_COMPUTE_BALANCE: BillingUnitBalancePresentation = {
-  kind: "compute",
-  title: "Compute units",
-  description: "Used by hosted runtime, sandboxes, and execution time.",
-  purchased: "360 PCUs",
-  available: "118 PCUs",
-  used: "242 PCUs",
-  availablePercent: 33,
-  topUpLabel: "Add compute units",
-  lowBalanceCopy: "Need more runtime capacity? Add compute units any time.",
-};
-
 export function BillingSettingsSurface({
   organization,
   organizationLoading = organization?.loading ?? false,
@@ -64,7 +50,7 @@ export function BillingSettingsSurface({
   onOpenOrganizationSettings,
 }: BillingSettingsSurfaceProps) {
   const billingReturnOptions = { returnSurface: billingReturnSurface };
-  const comparisonOwner = organization?.canManageBilling
+  const comparisonOwner = organization
     ? { ownerScope: "organization" as const, organizationId: organization.id }
     : undefined;
   const comparisonBilling = useCloudBilling(comparisonOwner, enabled);
@@ -127,8 +113,31 @@ export function BillingSettingsSurface({
 
   const billingPlan = comparisonBilling.data;
   const currentPlanKey = planKeyForBilling(billingPlan);
-  const plan = planSummary(currentPlanKey, billingPlan);
-  const unitBalances = billingUnitBalances(billingPlan, llmBalance.data, llmBalance.isLoading);
+  const plan = billingPlan ? planSummary(currentPlanKey, billingPlan) : null;
+  const billingLoading = enabled && comparisonBilling.isLoading && !billingPlan;
+  const billingErrorMessage = enabled && comparisonBilling.isError
+    ? "Could not load the billing plan. Retry to refresh it from Proliferate Cloud."
+    : null;
+  const billingUnavailableMessage = !enabled
+    ? "Billing is unavailable for this deployment."
+    : !billingLoading && !billingErrorMessage && !billingPlan
+      ? "No billing plan was returned for this account."
+      : null;
+  const unitBalances = billingUnitBalances({
+    plan: billingPlan,
+    planLoading: billingLoading,
+    planError: comparisonBilling.isError,
+    onRetryPlan: () => {
+      void comparisonBilling.refetch();
+    },
+    llmBalance: llmBalance.data,
+    llmBalanceLoading: enabled && llmBalance.isLoading && !llmBalance.data,
+    llmBalanceError: llmBalance.isError,
+    onRetryLlmBalance: () => {
+      void llmBalance.refetch();
+    },
+    enabled,
+  });
   const topUpEnabled = Boolean(
     billingPlan?.managedCloudOverageEnabled || billingPlan?.overageEnabled,
   );
@@ -136,7 +145,9 @@ export function BillingSettingsSurface({
   const paidPlan = billingPlan?.isPaidCloud === true;
   const comparisonActionDisabled = !enabled
     || organizationLoading
-    || (canManage ? comparisonBilling.isLoading : false);
+    || comparisonBilling.isLoading
+    || comparisonBilling.isError
+    || !billingPlan;
   const billingActionDisabled = comparisonActionDisabled || !canManage || !paidPlan;
   const coreActionLoading = billingPlan?.isPaidCloud
     ? comparisonActions.creatingBillingPortal
@@ -202,8 +213,13 @@ export function BillingSettingsSurface({
           plan={plan}
           organization={organization}
           organizationLoading={organizationLoading}
-          loading={canManage ? comparisonBilling.isLoading : false}
+          loading={billingLoading}
+          errorMessage={billingErrorMessage}
+          unavailableMessage={billingUnavailableMessage}
           actionError={comparisonActionError}
+          onRetry={() => {
+            void comparisonBilling.refetch();
+          }}
           onManage={openPlanManagement}
         />
 
@@ -213,163 +229,27 @@ export function BillingSettingsSurface({
           addCreditsDisabled
         />
 
-        <BillingAutoTopUpCard
-          enabled={topUpEnabled}
-          disabled={billingActionDisabled || comparisonActions.updatingOverage}
-          saving={comparisonActions.updatingOverage}
-          onEnabledChange={(value) => {
-            void updateComparisonTopUp(value);
-          }}
-        />
+        {billingPlan ? (
+          <>
+            <BillingAutoTopUpCard
+              enabled={topUpEnabled}
+              disabled={billingActionDisabled || comparisonActions.updatingOverage}
+              saving={comparisonActions.updatingOverage}
+              onEnabledChange={(value) => {
+                void updateComparisonTopUp(value);
+              }}
+            />
 
-        <BillingPortalCard
-          loading={comparisonActions.creatingBillingPortal}
-          disabled={billingActionDisabled}
-          onOpenPortal={() => {
-            void openComparisonBillingAction("portal");
-          }}
-        />
+            <BillingPortalCard
+              loading={comparisonActions.creatingBillingPortal}
+              disabled={billingActionDisabled}
+              onOpenPortal={() => {
+                void openComparisonBillingAction("portal");
+              }}
+            />
+          </>
+        ) : null}
       </BillingSettingsPane>
     </section>
   );
-}
-
-type BillingPlanViewKey = "free" | "core" | "enterprise";
-
-function planKeyForBilling(plan: BillingPlanView | null | undefined): BillingPlanViewKey | null {
-  if (!plan) {
-    return null;
-  }
-  if (plan.isUnlimited && !plan.isPaidCloud) {
-    return "enterprise";
-  }
-  return plan.isPaidCloud ? "core" : "free";
-}
-
-function planSummary(
-  planKey: BillingPlanViewKey | null,
-  plan: BillingPlanView | null | undefined,
-): BillingPlanPresentation {
-  if (!plan) {
-    return {
-      name: "Core plan",
-      price: "$20/month",
-      badge: "Mocked",
-      badgeTone: "neutral",
-    };
-  }
-  if (planKey === "enterprise") {
-    return {
-      name: "Enterprise plan",
-      price: "custom",
-      badge: "Active",
-      badgeTone: "success",
-    };
-  }
-  if (planKey === "core") {
-    return {
-      name: "Core plan",
-      price: "$20/month",
-      badge: "Active",
-      badgeTone: "success",
-    };
-  }
-  return {
-    name: "Free plan",
-    price: "$0/month",
-    badge: "Active",
-    badgeTone: "neutral",
-  };
-}
-
-function billingUnitBalances(
-  plan: BillingPlanView | null | undefined,
-  llmBalance: LlmBalance | null | undefined,
-  llmBalanceLoading: boolean,
-): BillingUnitBalancePresentation[] {
-  return [
-    computeBalanceSummary(plan),
-    llmBalanceSummary(llmBalance, llmBalanceLoading),
-  ];
-}
-
-function llmBalanceSummary(
-  llmBalance: LlmBalance | null | undefined,
-  loading: boolean,
-): BillingUnitBalancePresentation {
-  const granted = Math.max(llmBalance?.grantedUsd ?? 0, 0);
-  const used = Math.max(llmBalance?.usedUsd ?? 0, 0);
-  const remaining = Math.max(llmBalance?.remainingUsd ?? 0, 0);
-  return {
-    kind: "llm",
-    title: "LLM credits",
-    description: "Used by model gateway calls, inference-backed tools, and managed model access.",
-    purchased: formatUsd(granted),
-    available: formatUsd(remaining),
-    used: formatUsd(used),
-    availablePercent: granted > 0 ? Math.round((remaining / granted) * 100) : null,
-    topUpLabel: "Add LLM credits",
-    lowBalanceCopy: "Need more model usage? Add LLM credits any time.",
-    loading: loading && !llmBalance,
-  };
-}
-
-function computeBalanceSummary(
-  plan: BillingPlanView | null | undefined,
-): BillingUnitBalancePresentation {
-  if (!plan) {
-    return MOCK_COMPUTE_BALANCE;
-  }
-
-  const visibleGrants = (plan.grantAllocations ?? []).filter((grant) =>
-    grant.active || grant.consumedSeconds > 0 || grant.remainingSeconds > 0
-  );
-  if (visibleGrants.length > 0) {
-    const purchased = visibleGrants.reduce(
-      (total, grant) => total + secondsToCredits(grant.totalSeconds),
-      0,
-    );
-    const available = visibleGrants.reduce(
-      (total, grant) => total + secondsToCredits(grant.remainingSeconds),
-      0,
-    );
-    const used = visibleGrants.reduce(
-      (total, grant) => total + secondsToCredits(grant.consumedSeconds),
-      0,
-    );
-    return {
-      ...MOCK_COMPUTE_BALANCE,
-      purchased: formatCredits(purchased),
-      available: formatCredits(available),
-      used: formatCredits(used),
-      availablePercent: purchased > 0 ? Math.round((available / purchased) * 100) : null,
-    };
-  }
-
-  return MOCK_COMPUTE_BALANCE;
-}
-
-function secondsToCredits(seconds: number | null | undefined): number {
-  return Math.max(seconds ?? 0, 0) / 3600;
-}
-
-function formatUsd(value: number | null | undefined): string {
-  if (value === null || value === undefined) {
-    return "Unlimited";
-  }
-  return `$${Math.max(value, 0).toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
-}
-
-function formatCredits(value: number | null | undefined): string {
-  if (value === null || value === undefined) {
-    return "Unlimited";
-  }
-  const rounded = Math.round(Math.max(value, 0) * 10) / 10;
-  const formatted = rounded.toLocaleString(undefined, {
-    maximumFractionDigits: Number.isInteger(rounded) ? 0 : 1,
-  });
-  return `${formatted} ${rounded === 1 ? "PCU" : "PCUs"}`;
 }

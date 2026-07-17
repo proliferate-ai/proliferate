@@ -29,6 +29,8 @@ const cloud = vi.hoisted(() => ({
   useWorkflowDefinition: vi.fn(),
   useCloudAgentCatalog: vi.fn(),
   useRepositories: vi.fn(),
+  useWorkflowRunEligibility: vi.fn(),
+  useWorkflowRunHistory: vi.fn(),
 }));
 
 vi.mock("@proliferate/cloud-sdk-react", () => ({
@@ -36,6 +38,14 @@ vi.mock("@proliferate/cloud-sdk-react", () => ({
   useWorkflowDefinition: cloud.useWorkflowDefinition,
   useCloudAgentCatalog: cloud.useCloudAgentCatalog,
   useRepositories: cloud.useRepositories,
+  useWorkflowRunEligibility: cloud.useWorkflowRunEligibility,
+  useWorkflowRunHistory: cloud.useWorkflowRunHistory,
+  useWorkflowRunActions: () => ({
+    putWorkflowInvocation: vi.fn(),
+    deliverWorkflowInvocation: vi.fn(),
+    cancelWorkflowInvocation: vi.fn(),
+    checkWorkflowInvocation: vi.fn(),
+  }),
   useWorkflowDefinitionActions: () => ({
     createWorkflowDefinition: cloud.create,
     creatingWorkflowDefinition: false,
@@ -122,6 +132,20 @@ describe("WorkflowDefinitionsSurface", () => {
       data: { repositories: [] },
       isLoading: false,
       isError: false,
+    });
+    cloud.useWorkflowRunEligibility.mockReturnValue({
+      data: { eligible: true, blockers: [] },
+      isLoading: false,
+      isError: false,
+    });
+    cloud.useWorkflowRunHistory.mockReturnValue({
+      data: { pages: [{ items: [], nextCursor: null }] },
+      isLoading: false,
+      isError: false,
+      hasNextPage: false,
+      isFetchingNextPage: false,
+      fetchNextPage: vi.fn(),
+      refetch: vi.fn(),
     });
     cloud.create.mockResolvedValue(persisted);
     cloud.update.mockResolvedValue(persisted);

@@ -158,16 +158,70 @@ export function withTimingCategory(
 }
 
 export class AnyHarnessError extends Error {
+  public readonly problem: ProblemDetails;
+
   constructor(
-    public readonly problem: ProblemDetails,
+    problem: ProblemDetails,
     cause?: unknown,
   ) {
-    super(problem.detail ?? problem.title);
+    const normalizedProblem = normalizeProblemDetails(problem, {
+      title: "Request failed",
+      status: 500,
+    });
+    super(normalizedProblem.detail ?? normalizedProblem.title);
     this.name = "AnyHarnessError";
+    this.problem = normalizedProblem;
     if (cause !== undefined) {
       (this as Error & { cause?: unknown }).cause = cause;
     }
   }
+}
+
+const TELEMETRY_SAFE_PROBLEM_CODE = /^[A-Z][A-Z0-9_]{0,63}$/;
+
+/**
+ * Replace an AnyHarness request error (or an Error wrapping one) with a
+ * detached telemetry representation. RFC 7807 `detail` remains available on
+ * the original error for caller-facing UI, but neither it nor the original
+ * cause chain can reach an exception transport through the returned value.
+ */
+export function toAnyHarnessTelemetryError(error: unknown): unknown {
+  const anyHarnessError = findAnyHarnessError(error);
+  if (!anyHarnessError) {
+    return error;
+  }
+
+  const rawCode = anyHarnessError.problem.code;
+  const code = typeof rawCode === "string" && TELEMETRY_SAFE_PROBLEM_CODE.test(rawCode)
+    ? rawCode
+    : null;
+  const safeError = new Error(
+    code
+      ? `AnyHarness request failed (${code})`
+      : "AnyHarness request failed",
+  ) as Error & { code?: string; status: number };
+  safeError.name = "AnyHarnessError";
+  safeError.status = anyHarnessError.problem.status;
+  if (code) {
+    safeError.code = code;
+  }
+  return safeError;
+}
+
+function findAnyHarnessError(error: unknown): AnyHarnessError | null {
+  let current = error;
+  const seen = new Set<unknown>();
+  for (let depth = 0; depth < 8 && current != null; depth += 1) {
+    if (current instanceof AnyHarnessError) {
+      return current;
+    }
+    if (!(current instanceof Error) || seen.has(current)) {
+      return null;
+    }
+    seen.add(current);
+    current = (current as Error & { cause?: unknown }).cause;
+  }
+  return null;
 }
 
 export class AnyHarnessTransport {
@@ -414,13 +468,61 @@ export class AnyHarnessClient {
 }
 
 async function toProblemDetails(res: Response): Promise<ProblemDetails> {
+  let body: unknown;
   try {
-    return (await res.json()) as ProblemDetails;
+    body = await res.json();
   } catch {
-    return {
-      type: "about:blank",
-      title: res.statusText || "Request failed",
-      status: res.status,
-    };
+    body = undefined;
   }
+
+  return normalizeProblemDetails(body, {
+    title: res.statusText || "Request failed",
+    status: res.status,
+  });
+}
+
+interface ProblemDetailsFallback {
+  title: string;
+  status: number;
+}
+
+function normalizeProblemDetails(
+  value: unknown,
+  fallback: ProblemDetailsFallback,
+): ProblemDetails {
+  const source = isJsonObject(value) ? value : {};
+  const problem: ProblemDetails = {
+    type: typeof source.type === "string" ? source.type : "about:blank",
+    title: typeof source.title === "string" ? source.title : fallback.title,
+    status: isHttpStatus(source.status) ? source.status : fallback.status,
+  };
+
+  if (typeof source.code === "string" || source.code === null) {
+    problem.code = source.code;
+  }
+  if (typeof source.detail === "string" || source.detail === null) {
+    problem.detail = source.detail;
+  }
+  if (typeof source.instance === "string" || source.instance === null) {
+    problem.instance = source.instance;
+  }
+  if (
+    source.requiredContexts === null
+    || (
+      Array.isArray(source.requiredContexts)
+      && source.requiredContexts.every((context) => typeof context === "string")
+    )
+  ) {
+    problem.requiredContexts = source.requiredContexts;
+  }
+
+  return problem;
+}
+
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isHttpStatus(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 100 && value <= 599;
 }

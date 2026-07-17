@@ -19,6 +19,7 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { PopoverSearchField } from "@proliferate/ui/primitives/PopoverSearchField";
 import { SkeletonBlock, shimmerDelay } from "@proliferate/ui/primitives/Skeleton";
+import { CloudRepoPickerBlocker } from "./CloudRepoPickerBlocker";
 
 export type CloudRepoConfigState = "missing" | "disabled" | "configured";
 
@@ -43,9 +44,16 @@ export interface CloudRepoPickerRepositoryView {
 export interface CloudRepoPickerBlockerView {
   title: string;
   description: string;
+  steps?: readonly CloudRepoPickerSetupStepView[];
   actionLabel?: string | null;
   actionLoading?: boolean;
   onAction?: (() => void) | null;
+}
+
+export interface CloudRepoPickerSetupStepView {
+  label: string;
+  description: string;
+  status: "complete" | "current" | "upcoming";
 }
 
 export interface CloudRepoPickerProps {
@@ -179,42 +187,6 @@ export function CloudRepoPicker({
           Add
         </Button>
       </form>
-    </div>
-  );
-}
-
-/** Compact prerequisite state: icon + one-liner + a single primary action. */
-function CloudRepoPickerBlocker({
-  blocker,
-}: {
-  blocker: CloudRepoPickerBlockerView;
-}) {
-  return (
-    <div>
-      <div className="flex items-start gap-3 py-1">
-        <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-control text-muted-foreground">
-          <ShieldAlert size={15} aria-hidden />
-        </span>
-        <span className="min-w-0 flex-1">
-          <h3 className="text-ui font-medium leading-5 text-foreground">{blocker.title}</h3>
-          <p className="mt-0.5 text-ui-sm leading-[1.45] text-muted-foreground">
-            {blocker.description}
-          </p>
-        </span>
-      </div>
-      {blocker.actionLabel && blocker.onAction ? (
-        <div className="mt-4 flex justify-end">
-          <Button
-            type="button"
-            variant="primary"
-            size="md"
-            loading={blocker.actionLoading}
-            onClick={blocker.onAction}
-          >
-            {blocker.actionLabel}
-          </Button>
-        </div>
-      ) : null}
     </div>
   );
 }

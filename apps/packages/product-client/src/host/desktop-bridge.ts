@@ -251,7 +251,11 @@ export interface WorkerConfiguration {
 
 export interface WorkerStatus {
   targetId: string;
-  status: "running" | "started";
+  status:
+    | "running"
+    | "started"
+    | "already_running_elsewhere"
+    | "terminal_shutdown_armed";
   configPath: string;
 }
 

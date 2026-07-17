@@ -1,3 +1,6 @@
+// @refresh reset
+// This hook-dense application root must remount after an HMR update so React
+// never reuses lifecycle hook cells from the module's previous topology.
 import { useEffect, useRef, type ReactNode } from "react"
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider"
 import type { DesktopDiagnosticsBridge } from "@proliferate/product-client/host/desktop-bridge"

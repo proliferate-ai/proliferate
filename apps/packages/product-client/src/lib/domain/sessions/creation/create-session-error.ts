@@ -6,6 +6,44 @@ const UNSUPPORTED_SESSION_MODE_CODE = "SESSION_MODE_UNSUPPORTED";
 // contexts that are not active. UNSUPPORTED means the requested model ID did
 // not resolve. GATED carries the contexts that can unlock the known model.
 const GATED_SESSION_MODEL_CODE = "SESSION_MODEL_GATED";
+// The workspace's local checkout is gone from disk. Not toasted: the
+// persistent missing-worktree composer panel owns this condition, so the
+// helpers below only identify it for suppression.
+const WORKSPACE_DIRECTORY_MISSING_CODE = "WORKSPACE_DIRECTORY_MISSING";
+
+/**
+ * Client-side pre-flight refusal, mirroring the runtime's 409. Carries the
+ * stable machine code on the error object so detection is structural — the
+ * display copy can change freely without breaking suppression.
+ */
+export function workspaceDirectoryMissingBlockError(reason: string): Error {
+  const error = new Error(reason);
+  (error as Error & { code?: string }).code = WORKSPACE_DIRECTORY_MISSING_CODE;
+  return error;
+}
+
+/**
+ * True for both the runtime's typed pre-flight refusal (problem code) and the
+ * client-side creation gate (coded Error), following cause chains. The walk
+ * is depth-capped so a (buggy) self-referential cause chain cannot recurse
+ * forever.
+ */
+export function isWorkspaceDirectoryMissingError(error: unknown): boolean {
+  let current: unknown = error;
+  for (let depth = 0; depth < 8 && current != null; depth += 1) {
+    if (current instanceof AnyHarnessError) {
+      return current.problem.code === WORKSPACE_DIRECTORY_MISSING_CODE;
+    }
+    if (!(current instanceof Error)) {
+      return false;
+    }
+    if ((current as Error & { code?: unknown }).code === WORKSPACE_DIRECTORY_MISSING_CODE) {
+      return true;
+    }
+    current = (current as Error & { cause?: unknown }).cause;
+  }
+  return false;
+}
 
 export function formatSessionCreateFailureMessage(error: unknown): string {
   const unsupportedMessage = unsupportedSessionSelectionMessage(error);
@@ -41,7 +79,7 @@ function unsupportedSessionSelectionMessage(error: unknown): string | null {
     return null;
   }
   if (error.problem.code === GATED_SESSION_MODEL_CODE) {
-    return gatedSessionModelMessage(error);
+    return gatedSessionModelMessage();
   }
   if (error.problem.code === UNSUPPORTED_SESSION_MODEL_CODE) {
     return "This target does not support the selected model yet. Update AnyHarness on the target or choose another model.";
@@ -52,17 +90,8 @@ function unsupportedSessionSelectionMessage(error: unknown): string | null {
   return null;
 }
 
-function gatedSessionModelMessage(error: AnyHarnessError): string {
-  const contexts = requiredContexts(error);
-  if (contexts.length > 0) {
-    return `This model is locked. Unlock it by signing in with or adding credentials for: ${contexts.join(", ")}.`;
-  }
-  return "This model is locked behind credentials this workspace does not have yet. Sign in, add an API key, or enable the gateway, then try again.";
-}
-
-function requiredContexts(error: AnyHarnessError): string[] {
-  const value = (error.problem as { requiredContexts?: unknown }).requiredContexts;
-  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
+function gatedSessionModelMessage(): string {
+  return "This model is not available for the current authentication method. Choose an available model or change agent authentication in Settings, then try again.";
 }
 
 function isUnsupportedSessionSelectionError(error: unknown): boolean {

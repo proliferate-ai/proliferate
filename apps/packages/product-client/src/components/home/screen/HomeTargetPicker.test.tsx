@@ -43,6 +43,7 @@ function renderPicker(overrides: Partial<Parameters<typeof HomeTargetPicker>[0]>
 
   render(
     <HomeTargetPicker
+      desktopTargetsAvailable={true}
       destination="repository"
       repoLaunchKind="worktree"
       repositories={[keystoneRepository, productRepository]}
@@ -110,18 +111,25 @@ describe("HomeTargetPicker", () => {
     expect(callbacks.onSelectRuntime).toHaveBeenCalledWith("local");
   });
 
-  it("routes unconfigured cloud choices to cloud setup", () => {
+  it("keeps Web cloud setup actionable while hiding Desktop runtime choices", () => {
     const callbacks = renderPicker({
+      desktopTargetsAvailable: false,
+      repoLaunchKind: "worktree",
       cloudActionBySourceRoot: {
-        [keystoneRepository.sourceRoot]: { kind: "configure", label: "Configure cloud" },
+        [keystoneRepository.sourceRoot]: {
+          kind: "configure",
+          label: "Grant repository access",
+        },
       },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /New worktree/i }));
-    fireEvent.click(screen.getByRole("button", { name: /Set up cloud/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Runtime: Grant repository access/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Grant repository access" }));
 
     expect(callbacks.onConfigureCloud).toHaveBeenCalledWith(keystoneRepository);
     expect(callbacks.onSelectRuntime).not.toHaveBeenCalledWith("cloud");
+    expect(screen.queryByRole("button", { name: /Work locally/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /New worktree/i })).toBeNull();
   });
 
   it("hides the runtime control for cowork starts", () => {
@@ -132,6 +140,46 @@ describe("HomeTargetPicker", () => {
 
     expect(screen.getByRole("button", { name: /No project/i })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /No repository/i })).toBeNull();
+  });
+
+  it("offers the projectless Cowork target on Desktop", () => {
+    const callbacks = renderPicker();
+
+    fireEvent.click(screen.getByRole("button", { name: /Project: Keystone repository/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Don't work in a project" }));
+
+    expect(callbacks.onSelectCowork).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not offer the Desktop-only Cowork target on Web", () => {
+    const callbacks = renderPicker({ desktopTargetsAvailable: false });
+
+    fireEvent.click(screen.getByRole("button", { name: /Project: Keystone repository/i }));
+
+    expect(screen.queryByRole("button", { name: "Don't work in a project" })).toBeNull();
+    expect(callbacks.onSelectCowork).not.toHaveBeenCalled();
+  });
+
+  it("normalizes forged Web runtime props and exposes only Cloud", () => {
+    const callbacks = renderPicker({
+      desktopTargetsAvailable: false,
+      repoLaunchKind: "worktree",
+      sshTargetsLoading: true,
+      sshTargetOptions: [{
+        id: "ssh-target-1",
+        label: "SSH server",
+        disabledReason: null,
+      } as never],
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Runtime: Cloud" }));
+
+    expect(screen.getByRole("button", { name: "Cloud" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Work locally/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /New worktree/i })).toBeNull();
+    expect(screen.queryByText("Loading targets")).toBeNull();
+    expect(screen.queryByRole("button", { name: "SSH server" })).toBeNull();
+    expect(callbacks.onSelectRuntime).not.toHaveBeenCalled();
   });
 
   it("selects a base branch from the branch picker without changing runtime", () => {

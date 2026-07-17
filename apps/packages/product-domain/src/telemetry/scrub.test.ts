@@ -26,6 +26,114 @@ describe("scrubTelemetryData", () => {
     });
   });
 
+  it("replaces cyclic object and array edges with a fixed marker", () => {
+    const cyclicObject: Record<string, unknown> = { token: "secret" };
+    cyclicObject.self = cyclicObject;
+    const cyclicArray: unknown[] = [];
+    cyclicArray.push(cyclicArray);
+
+    expect(scrubTelemetryData(cyclicObject)).toEqual({
+      token: "[redacted]",
+      self: "[circular]",
+    });
+    expect(scrubTelemetryData(cyclicArray)).toEqual(["[circular]"]);
+  });
+
+  it("reuses a completed scrubbed value for repeated shared references", () => {
+    const shared = {
+      path: "/Users/pablo/private/file.ts",
+      message: "Bearer secret-token",
+    };
+    const scrubbed = scrubTelemetryData({ first: shared, second: shared });
+
+    expect(scrubbed).toEqual({
+      first: { path: "[redacted]", message: "[redacted-token]" },
+      second: { path: "[redacted]", message: "[redacted-token]" },
+    });
+    expect(scrubbed.first).toBe(scrubbed.second);
+    expect(() => JSON.stringify(scrubbed)).not.toThrow();
+  });
+
+  it("truncates adversarially deep containers before recursion can overflow", () => {
+    const payload: Record<string, unknown> = {};
+    let cursor = payload;
+    for (let index = 0; index < 20_000; index += 1) {
+      const next: Record<string, unknown> = {};
+      cursor.next = next;
+      cursor = next;
+    }
+
+    const scrubbed = scrubTelemetryData(payload);
+    let nested: unknown = scrubbed;
+    let scrubbedDepth = 0;
+    while (nested !== null && typeof nested === "object") {
+      nested = (nested as Record<string, unknown>).next;
+      scrubbedDepth += 1;
+    }
+
+    expect(nested).toBe("[truncated]");
+    expect(scrubbedDepth).toBeLessThan(20);
+    expect(() => JSON.stringify(scrubbed)).not.toThrow();
+  });
+
+  it("bounds huge sparse arrays without retaining the source length", () => {
+    const sparse: unknown[] = [];
+    sparse.length = 1_000_000;
+    sparse[0] = { token: "secret", message: "useful" };
+    sparse[999_999] = "Bearer omitted-secret";
+
+    const scrubbed = scrubTelemetryData(sparse);
+    const serialized = JSON.stringify(scrubbed);
+
+    expect(scrubbed.length).toBeLessThan(200);
+    expect(scrubbed[0]).toEqual({ token: "[redacted]", message: "useful" });
+    expect(scrubbed.at(-1)).toBe("[truncated]");
+    expect(serialized.length).toBeLessThan(2_000);
+    expect(serialized).not.toContain("omitted-secret");
+  });
+
+  it("bounds wide objects and does not evaluate omitted accessors", () => {
+    let getterCalls = 0;
+    const wide: Record<string, unknown> = {};
+    for (let index = 0; index < 1_000; index += 1) {
+      wide[`field_${index}`] = `value-${index}`;
+    }
+    Object.defineProperty(wide, "omitted", {
+      enumerable: true,
+      get: () => {
+        getterCalls += 1;
+        return "Bearer should-not-be-read";
+      },
+    });
+
+    const scrubbed = scrubTelemetryData(wide);
+
+    expect(Object.keys(scrubbed).length).toBeLessThan(200);
+    expect(scrubbed.field_0).toBe("value-0");
+    expect(scrubbed["[truncated]"]).toBe("[truncated]");
+    expect(scrubbed.omitted).toBeUndefined();
+    expect(getterCalls).toBe(0);
+    expect(JSON.stringify(scrubbed)).not.toContain("should-not-be-read");
+  });
+
+  it("does not evaluate enumerable getters while inspecting telemetry", () => {
+    let getterCalls = 0;
+    const payload = { safe: "value" } as Record<string, unknown>;
+    Object.defineProperty(payload, "constructor", {
+      enumerable: true,
+      get: () => {
+        getterCalls += 1;
+        return "Bearer should-not-be-read";
+      },
+    });
+
+    expect(scrubTelemetryData(payload)).toEqual({
+      safe: "value",
+      constructor: "[redacted]",
+    });
+    expect(getterCalls).toBe(0);
+  });
+
   it("scrubs bearer tokens, jwt values, and absolute paths from strings", () => {
     expect(
       scrubTelemetryText(

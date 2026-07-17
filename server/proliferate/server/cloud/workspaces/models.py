@@ -10,6 +10,80 @@ from pydantic import BaseModel, Field
 CloudWorkspaceStatus = Literal["pending", "materializing", "ready", "archived", "error"]
 CloudRuntimeStatus = Literal["pending", "running", "paused", "error", "disabled"]
 
+# Placement-neutral backing kind. A repository worktree carries frozen real
+# repository metadata; a scratch workspace has no repository backing and
+# serializes ``repo``/``repoEnvironmentId`` as null (never fabricated).
+CloudWorkspaceBackingKind = Literal["repositoryWorktree", "scratch"]
+MaterializationTargetKind = Literal["managed_cloud", "local_desktop"]
+MaterializationState = Literal[
+    "pending",
+    "hydrating",
+    "hydrated",
+    "missing",
+    "inconsistent",
+    "failed",
+]
+ReportableMaterializationState = Literal["hydrated", "missing", "inconsistent", "failed"]
+
+
+class WorkspaceMaterializationSummary(BaseModel):
+    id: str
+    target_kind: MaterializationTargetKind = Field(serialization_alias="targetKind")
+    desktop_install_id: str | None = Field(serialization_alias="desktopInstallId")
+    anyharness_workspace_id: str | None = Field(serialization_alias="anyharnessWorkspaceId")
+    worktree_path: str | None = Field(serialization_alias="worktreePath")
+    state: MaterializationState
+    generation: int
+    expected_head_sha: str | None = Field(serialization_alias="expectedHeadSha")
+    observed_head_sha: str | None = Field(serialization_alias="observedHeadSha")
+    observed_branch: str | None = Field(serialization_alias="observedBranch")
+    failure_code: str | None = Field(serialization_alias="failureCode")
+    last_reported_at: str | None = Field(serialization_alias="lastReportedAt")
+
+
+class CreateMaterializationIntentRequest(BaseModel):
+    target_kind: Literal["local_desktop"] = Field(alias="targetKind")
+    desktop_install_id: str = Field(alias="desktopInstallId")
+
+
+class MaterializationIntentSource(BaseModel):
+    repository: RepoRef
+    branch_name: str = Field(serialization_alias="branchName")
+    head_sha: str = Field(serialization_alias="headSha")
+
+
+class MaterializationIntentResponse(BaseModel):
+    materialization: WorkspaceMaterializationSummary
+    operation_id: str = Field(serialization_alias="operationId")
+    source: MaterializationIntentSource
+
+
+class ReportMaterializationRequest(BaseModel):
+    generation: int
+    state: ReportableMaterializationState
+    anyharness_workspace_id: str | None = Field(default=None, alias="anyharnessWorkspaceId")
+    worktree_path: str | None = Field(default=None, alias="worktreePath")
+    observed_branch: str | None = Field(default=None, alias="observedBranch")
+    observed_head_sha: str | None = Field(default=None, alias="observedHeadSha")
+    failure_code: str | None = Field(default=None, alias="failureCode")
+    failure_detail: str | None = Field(default=None, alias="failureDetail")
+
+
+class CreateCloudWorkspaceSourceMaterialization(BaseModel):
+    """The local source descriptor for an exact-ref managed-Cloud creation.
+
+    Supplied by Desktop's "Add Cloud copy" flow: it names the local AnyHarness
+    workspace the exact ref came from so the resulting managed-Cloud row can be
+    associated with it. The server never trusts these fields for the actual ref
+    — it independently re-verifies the authorized GitHub branch head.
+    """
+
+    target_kind: Literal["local_desktop"] = Field(alias="targetKind")
+    desktop_install_id: str = Field(alias="desktopInstallId")
+    anyharness_workspace_id: str = Field(alias="anyharnessWorkspaceId")
+    worktree_path: str = Field(alias="worktreePath")
+    observed_head_sha: str = Field(alias="observedHeadSha")
+
 
 class CreateCloudWorkspaceRequest(BaseModel):
     git_provider: Literal["github"] = Field(default="github", alias="gitProvider")
@@ -20,6 +94,16 @@ class CreateCloudWorkspaceRequest(BaseModel):
     display_name: str | None = Field(default=None, alias="displayName")
     generated_name: bool | None = Field(default=None, alias="generatedName")
     source: Literal["desktop", "web", "mobile"] | None = None
+    # Exact-ref creation from a clean, published local workspace (PR 5). When
+    # supplied, the server creates the managed-Cloud copy at this exact commit
+    # of the already-published branch — after independently verifying the
+    # authorized GitHub branch head equals it — instead of forking a new branch
+    # from base. Old requests (both None) retain the branch-name creation path.
+    expected_head_sha: str | None = Field(default=None, alias="expectedHeadSha")
+    source_materialization: CreateCloudWorkspaceSourceMaterialization | None = Field(
+        default=None,
+        alias="sourceMaterialization",
+    )
 
 
 class UpdateCloudWorkspaceDisplayNameRequest(BaseModel):
@@ -74,9 +158,15 @@ class WorkspaceCloudAccessSummary(BaseModel):
 class WorkspaceSummary(BaseModel):
     id: str
     target_id: str | None = Field(default=None, serialization_alias="targetId")
-    repo_environment_id: str = Field(serialization_alias="repoEnvironmentId")
+    # The frozen response requires current servers to ALWAYS emit these three:
+    # ``workspaceKind`` non-null, and ``repo``/``repoEnvironmentId`` required but
+    # nullable for scratch (never omittable). They carry no default so the
+    # OpenAPI schema keeps them in the required set; older-server compatibility
+    # is expressed in the deliberately optional public projection type, not here.
+    workspace_kind: CloudWorkspaceBackingKind = Field(serialization_alias="workspaceKind")
+    repo_environment_id: str | None = Field(serialization_alias="repoEnvironmentId")
     display_name: str = Field(serialization_alias="displayName")
-    repo: RepoRef
+    repo: RepoRef | None
     status: CloudWorkspaceStatus
     workspace_status: CloudWorkspaceStatus = Field(serialization_alias="workspaceStatus")
     product_lifecycle: Literal["active", "archived"] = Field(
@@ -91,9 +181,13 @@ class WorkspaceSummary(BaseModel):
         default=None,
         serialization_alias="selectedMaterializationId",
     )
-    primary_materialization: None = Field(
+    primary_materialization: WorkspaceMaterializationSummary | None = Field(
         default=None,
         serialization_alias="primaryMaterialization",
+    )
+    materializations: list[WorkspaceMaterializationSummary] = Field(
+        default_factory=list,
+        serialization_alias="materializations",
     )
     cloud_access: WorkspaceCloudAccessSummary = Field(
         default_factory=WorkspaceCloudAccessSummary,
