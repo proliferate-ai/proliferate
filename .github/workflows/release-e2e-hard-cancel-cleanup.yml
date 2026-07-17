@@ -32,8 +32,66 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  classify-source:
+    name: Classify the exact Release E2E managed-cloud job
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      TARGET_WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id || inputs.workflow_run_id }}
+      TARGET_WORKFLOW_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.workflow_run_attempt }}
+      GH_TOKEN: ${{ github.token }}
+    outputs:
+      source_sha: ${{ steps.classify.outputs.source_sha }}
+      managed_cloud_started: ${{ steps.classify.outputs.managed_cloud_started }}
+      job_conclusion: ${{ steps.classify.outputs.job_conclusion }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.repository.default_branch || github.ref }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+      - name: Inspect the exact attempt's exhaustive job inventory
+        id: classify
+        shell: bash
+        run: |
+          set -euo pipefail
+          receipt="${RUNNER_TEMP}/managed-cloud-source-classification.json"
+          node scripts/ci-cd/classify-release-e2e-managed-cloud.mjs \
+            --workflow-run-id "${TARGET_WORKFLOW_RUN_ID}" \
+            --workflow-run-attempt "${TARGET_WORKFLOW_RUN_ATTEMPT}" \
+            | tee "${receipt}"
+          node - "${receipt}" <<'NODE'
+          const fs = require("node:fs");
+          const row = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+          if (
+            row.kind !== "release_e2e_managed_cloud_source_classification" ||
+            typeof row.source_sha !== "string" ||
+            !/^[0-9a-f]{40}$/.test(row.source_sha) ||
+            typeof row.managed_cloud_started !== "boolean" ||
+            typeof row.job_conclusion !== "string"
+          ) {
+            throw new Error("Managed-cloud source classification receipt is malformed.");
+          }
+          fs.appendFileSync(
+            process.env.GITHUB_OUTPUT,
+            `source_sha=${row.source_sha}\nmanaged_cloud_started=${row.managed_cloud_started}\n` +
+              `job_conclusion=${row.job_conclusion}\n`,
+          );
+          NODE
+      - name: Upload bounded source classification receipt
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: managed-cloud-hard-cancel-source-${{ env.TARGET_WORKFLOW_RUN_ID }}-${{ env.TARGET_WORKFLOW_RUN_ATTEMPT }}
+          path: ${{ runner.temp }}/managed-cloud-source-classification.json
+          retention-days: 14
+          if-no-files-found: error
+
   managed-cloud-aws:
     name: Reconcile exact run-owned managed-cloud AWS resources
+    needs: classify-source
+    if: needs.classify-source.outputs.managed_cloud_started == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: Qualification
@@ -58,28 +116,6 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Verify the exact source workflow attempt is completed
-        shell: bash
-        run: |
-          set -euo pipefail
-          receipt="${RUNNER_TEMP}/source-workflow-run.json"
-          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${TARGET_WORKFLOW_RUN_ID}" > "${receipt}"
-          node - "${receipt}" "${TARGET_WORKFLOW_RUN_ATTEMPT}" <<'NODE'
-          const fs = require("node:fs");
-          const run = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
-          const expectedAttempt = Number(process.argv[3]);
-          if (
-            run.name !== "Release E2E (tier 3)" ||
-            run.status !== "completed" ||
-            !Number.isSafeInteger(expectedAttempt) ||
-            expectedAttempt < 1 ||
-            run.run_attempt !== expectedAttempt ||
-            run.repository?.full_name !== process.env.GITHUB_REPOSITORY
-          ) {
-            throw new Error("Target is not the exact completed Release E2E workflow attempt.");
-          }
-          NODE
-
       - name: Reconcile exact run-owned AWS resources
         shell: bash
         run: |
@@ -96,5 +132,76 @@ jobs:
         with:
           name: managed-cloud-hard-cancel-cleanup-${{ env.TARGET_WORKFLOW_RUN_ID }}-${{ env.TARGET_WORKFLOW_RUN_ATTEMPT }}
           path: ${{ runner.temp }}/managed-cloud-cleanup/report.json
+          retention-days: 14
+          if-no-files-found: ignore
+
+  managed-cloud-providers:
+    name: Reconcile exact run-owned E2B, Stripe, and LiteLLM resources
+    needs: classify-source
+    if: needs.classify-source.outputs.managed_cloud_started == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: Qualification
+    env:
+      TARGET_WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id || inputs.workflow_run_id }}
+      TARGET_WORKFLOW_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.workflow_run_attempt }}
+      RELEASE_E2E_E2B_API_KEY: ${{ secrets.RELEASE_E2E_E2B_API_KEY }}
+      RELEASE_E2E_E2B_TEAM_ID: ${{ vars.RELEASE_E2E_E2B_TEAM_ID }}
+      STRIPE_TEST_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
+      AGENT_GATEWAY_LITELLM_BASE_URL: ${{ vars.AGENT_GATEWAY_LITELLM_BASE_URL }}
+      AGENT_GATEWAY_LITELLM_MASTER_KEY: ${{ secrets.AGENT_GATEWAY_LITELLM_MASTER_KEY }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      # Same workflow_run security boundary as the AWS job: only trusted
+      # default-branch cleanup code executes. The source SHA is read through
+      # the GitHub API solely to determine whether an empty LiteLLM metadata
+      # sweep is meaningful; source-branch bytes are never executed.
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.repository.default_branch || github.ref }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+      - uses: pnpm/action-setup@b0f76dfb45f55f8421693e4803ac7bb65143bd34 # v6
+        with:
+          version: 10
+
+      - name: Read the exact source attribution contract
+        id: attribution
+        shell: bash
+        run: |
+          set -euo pipefail
+          attribution="$(node scripts/ci-cd/detect-managed-cloud-litellm-attribution.mjs \
+            --source-sha "${{ needs.classify-source.outputs.source_sha }}")"
+          if [ "${attribution}" != "true" ] && [ "${attribution}" != "false" ]; then
+            echo "Source attribution detector returned an invalid value." >&2
+            exit 2
+          fi
+          echo "litellm_attribution=${attribution}" >> "${GITHUB_OUTPUT}"
+
+      - name: Install provider cleanup dependencies
+        run: |
+          set -euo pipefail
+          pnpm install --frozen-lockfile
+          npm install -g @e2b/cli@2.13.3
+
+      - name: Reconcile exact run-owned provider resources
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "${RUNNER_TEMP}/managed-cloud-provider-cleanup"
+          cd tests/release
+          pnpm exec tsx src/cli/reap-managed-cloud-providers.ts \
+            --workflow-run-id "${TARGET_WORKFLOW_RUN_ID}" \
+            --workflow-run-attempt "${TARGET_WORKFLOW_RUN_ATTEMPT}" \
+            --source-supports-litellm-attribution "${{ steps.attribution.outputs.litellm_attribution }}" \
+            | tee "${RUNNER_TEMP}/managed-cloud-provider-cleanup/report.json"
+
+      - name: Upload bounded provider cleanup receipt
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: managed-cloud-provider-hard-cancel-cleanup-${{ env.TARGET_WORKFLOW_RUN_ID }}-${{ env.TARGET_WORKFLOW_RUN_ATTEMPT }}
+          path: ${{ runner.temp }}/managed-cloud-provider-cleanup/report.json
           retention-days: 14
           if-no-files-found: ignore

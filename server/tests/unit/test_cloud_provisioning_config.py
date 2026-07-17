@@ -12,6 +12,7 @@ from __future__ import annotations
 import pytest
 
 from proliferate.config import Settings
+from proliferate.config_defaults import DEFAULT_CORS_ALLOW_ORIGINS, ENV_FILES
 from proliferate.integrations.sandbox import e2b as e2b_runtime
 from proliferate.server.cloud.cloud_sandboxes import service as cloud_sandboxes_service
 from proliferate.server.cloud.errors import CloudApiError
@@ -54,6 +55,41 @@ def test_debug_allows_missing_template() -> None:
     settings = _settings(debug=True, e2b_api_key="e2b_key", e2b_template_name="")
     assert settings.cloud_provisioning_configured is True
     assert settings.cloud_provisioning_config_error is None
+
+
+def test_extracted_settings_defaults_remain_byte_identical() -> None:
+    assert ENV_FILES == (".env", ".env.local")
+    assert DEFAULT_CORS_ALLOW_ORIGINS == (
+        "http://localhost:1420,http://127.0.0.1:1420,"
+        "http://localhost:5174,http://127.0.0.1:5174,"
+        "http://localhost:5175,http://127.0.0.1:5175,"
+        "http://localhost:5176,http://127.0.0.1:5176,"
+        "http://localhost:8081,http://127.0.0.1:8081,"
+        "http://localhost:3000,http://127.0.0.1:3000,"
+        "http://localhost:5174,http://127.0.0.1:5174,"
+        "http://tauri.localhost,tauri://localhost"
+    )
+    assert Settings.model_config["env_file"] == ENV_FILES
+    assert _settings().cors_allow_origins == DEFAULT_CORS_ALLOW_ORIGINS
+
+
+def test_qualification_provider_identity_requires_the_exact_pair() -> None:
+    configured = _settings(
+        agent_gateway_qualification_run_id="qlc-ci-123-1",
+        agent_gateway_qualification_shard_id="1",
+    )
+    assert configured.agent_gateway_qualification_run_id == "qlc-ci-123-1"
+    with pytest.raises(ValueError, match="must be set together"):
+        _settings(agent_gateway_qualification_run_id="qlc-ci-123-1")
+
+
+@pytest.mark.parametrize("value", ["../prod", "-run", "a" * 129])
+def test_qualification_provider_identity_rejects_unsafe_values(value: str) -> None:
+    with pytest.raises(ValueError, match="qualification run id is malformed"):
+        _settings(
+            agent_gateway_qualification_run_id=value,
+            agent_gateway_qualification_shard_id="1",
+        )
 
 
 def test_require_cloud_provisioning_configured_raises_503(

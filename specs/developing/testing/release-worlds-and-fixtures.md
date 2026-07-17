@@ -742,14 +742,31 @@ the exact tags plus deterministic SG/key/DNS names, cleans those resources in
 dependency order, and proves a zero post-sweep. It never checks out the source
 run's branch and never performs account-wide prefix cleanup.
 
-That independent path currently covers the run-owned AWS candidate box,
-security group, key pair, Route53 record, and every process hosted on that
-candidate box; the ephemeral Actions runner itself owns its local browser and
-renderer processes. E2B, Stripe, and LiteLLM remain owned by their durable
-in-run ledgers and replay handlers; a hard cancel before those ledgers leave
-the runner remains explicit cleanup debt, never a green cleanup claim. Their
-external custody must become independently reachable before a hard-cancelled
-managed-cloud run can claim complete cross-provider reconciliation.
+That independent path also reconciles the other externally durable providers.
+E2B ownership is the exact run-derived template family resolved to one
+immutable template id; every running or paused sandbox using that id is killed
+before the template is deleted. Stripe ownership is the exact run/shard tag on
+webhook endpoints, customers, products, and prices plus the exact run-derived
+test-clock name; every list is exhausted and post-cleanup absence/inactivity is
+proved. LiteLLM teams, users, and keys created by a qualification candidate
+carry the exact run and shard in provider-returned metadata; cleanup validates
+the complete key-to-user-to-team graph before deleting child to parent and
+proves absence afterward. Missing credentials, ambiguous attribution,
+incomplete pagination, and accepted deletes whose resources remain are red.
+
+The LiteLLM fields are qualification-only: ordinary deployments leave both
+settings empty and retain their existing enrollment behavior. The independent
+workflow reads (but never executes) the exact source candidate's explicit
+`managed-cloud-hard-cancel-contract.v1.json` compatibility receipt to establish
+that it supported the attribution contract. Comments, dead strings, and partial
+implementation markers cannot opt a candidate in. An older candidate without
+that receipt remains explicitly non-green rather than treating an empty
+metadata sweep as proof. The exact completed attempt's job inventory is the
+world-start gate: if `cloud-provision-1 (manual, strict)` is absent or skipped,
+the protected provider jobs do not start; any other terminal conclusion is
+cleaned conservatively. No provider cleanup uses aliases, random product UUIDs,
+prefix matching, or account-wide sweeps. The ephemeral Actions runner itself
+owns its local browser and renderer processes.
 
 ### Per-cell evidence and result behavior
 

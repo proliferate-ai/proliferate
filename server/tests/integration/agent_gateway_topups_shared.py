@@ -133,10 +133,16 @@ class StubLiteLLM:
             )
             monkeypatch.setattr(target, "set_key_budget", self.set_key_budget, raising=False)
 
-    async def ensure_team(self, *, alias: str, max_budget: float | None = None) -> str:
+    async def ensure_team(
+        self,
+        *,
+        alias: str,
+        max_budget: float | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> str:
         return self.teams.setdefault(alias, f"team-{alias}")
 
-    async def ensure_user(self, *, user_id: str) -> str:
+    async def ensure_user(self, *, user_id: str, metadata: dict[str, Any] | None = None) -> str:
         self.users.add(user_id)
         return user_id
 

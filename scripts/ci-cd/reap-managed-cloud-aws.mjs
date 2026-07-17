@@ -69,17 +69,12 @@ function dnsRecordPattern(runId) {
   return new RegExp(`^(?:${current}|${fallback})\\.${escapeRegExp(ZONE_NAME)}\\.?$`);
 }
 
-/**
- * The current managed-cloud job uses the first identity. The second is the
- * historical fixture-smoke identity used by runs up to #1304's repair. Both
- * are exact derivations of one GitHub Actions run+attempt; no caller-provided
- * suffix or account-wide prefix is accepted.
- */
+/** The single run identity shared by CP1 and fixture-smoke invocations. */
 export function managedCloudRunIdentities(workflowRunId, workflowRunAttempt) {
   const runId = requiredPositiveInteger(String(workflowRunId), "workflow run id");
   const attempt = requiredPositiveInteger(String(workflowRunAttempt), "workflow run attempt");
   const root = safeRunIdentity(`qlc-ci-${runId}-${attempt}`);
-  return [root, safeRunIdentity(`${root}-smoke`)];
+  return [root];
 }
 
 function asRecord(value, label) {
@@ -344,7 +339,7 @@ function boundedError(error) {
 }
 
 /**
- * Reaps only the two exact managed-cloud run identities derived from one
+ * Reaps only the exact managed-cloud run identity derived from one
  * completed Release E2E workflow attempt. AWS tags are the durable external
  * custody record: cancellation can destroy the runner filesystem without
  * destroying these provider-owned tags.
@@ -372,7 +367,7 @@ export async function reapManagedCloudAwsForWorkflowAttempt(inputs, deps = {}) {
       : "not_needed",
     runs: reports,
     covered_domains: ["aws", "candidate_box_processes"],
-    uncovered_domains: ["e2b", "stripe", "litellm"],
+    delegated_domains: ["e2b", "stripe", "litellm"],
   };
 }
 
