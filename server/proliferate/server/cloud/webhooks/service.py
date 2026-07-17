@@ -21,10 +21,11 @@ from proliferate.constants.billing import (
 )
 from proliferate.db.store.billing_subjects import ensure_personal_billing_subject
 from proliferate.db.store.cloud_sandboxes import (
+    accept_destroyed_cloud_sandbox_provider_observation,
+    apply_cloud_sandbox_provider_observation,
     load_cloud_sandbox_by_id,
     load_cloud_sandbox_by_provider_sandbox_id,
     mark_cloud_sandbox_provider_missing,
-    mark_cloud_sandbox_provider_state,
 )
 from proliferate.integrations.sandbox import (
     E2BWebhookSignatureError,
@@ -38,6 +39,7 @@ from proliferate.server.billing.runtime_usage import (
 )
 from proliferate.server.billing.snapshots import get_billing_snapshot_for_subject
 from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.materialization import locks
 from proliferate.server.cloud.materialization.failures import (
     PROVIDER_SANDBOX_MISSING_RECEIPT,
 )
@@ -45,6 +47,8 @@ from proliferate.server.cloud.runtime.domain.provider_events import (
     provider_event_kind as _provider_event_kind,
 )
 from proliferate.server.cloud.webhooks.models import E2BWebhookEvent, E2BWebhookReceipt
+from proliferate.server.cloud.webhooks.transactions import commit_webhook_phase
+from proliferate.utils.time import utcnow
 
 _E2B_WEBHOOK_ERROR_RESPONSE = {
     "unconfigured": ("webhook_unavailable", 503),
@@ -79,19 +83,27 @@ def _should_ignore_sandbox_event(
     *,
     sandbox_status: str,
     sandbox_destroyed_at: datetime | None,
-    sandbox_updated_at: datetime,
+    sandbox_provider_observed_at: datetime | None,
     event_kind: str,
     event_timestamp: datetime,
 ) -> bool:
-    if sandbox_destroyed_at is not None and event_kind != PROVIDER_EVENT_KIND_KILLED:
+    destroyed_usage_terminal_events = {
+        PROVIDER_EVENT_KIND_KILLED,
+        PROVIDER_EVENT_KIND_PAUSED,
+        PROVIDER_EVENT_KIND_TIMEOUT,
+    }
+    if (
+        sandbox_destroyed_at is not None or sandbox_status == "destroyed"
+    ) and event_kind not in destroyed_usage_terminal_events:
         return True
-    if sandbox_status == "destroyed" and event_kind != PROVIDER_EVENT_KIND_KILLED:
+    if (
+        sandbox_provider_observed_at is not None
+        and event_timestamp <= sandbox_provider_observed_at
+    ):
         return True
     if event_kind not in {PROVIDER_EVENT_KIND_CREATED, PROVIDER_EVENT_KIND_RESUMED}:
         return False
-    if sandbox_status == "error":
-        return True
-    return sandbox_status == "paused" and event_timestamp <= sandbox_updated_at
+    return sandbox_status == "error"
 
 
 async def remember_sandbox_event_receipt(
@@ -192,56 +204,98 @@ async def handle_e2b_webhook(
     if event.sandbox_id is None or sandbox.e2b_sandbox_id != event.sandbox_id:
         return E2BWebhookReceipt()
 
-    if not await remember_sandbox_event_receipt(
-        db,
-        event_id=event.id,
-        provider="e2b",
-        event_type=event.type,
-        external_sandbox_id=event.sandbox_id,
-    ):
-        return E2BWebhookReceipt()
-
     if _should_ignore_sandbox_event(
         sandbox_status=sandbox.status,
         sandbox_destroyed_at=sandbox.destroyed_at,
-        sandbox_updated_at=sandbox.updated_at,
+        sandbox_provider_observed_at=sandbox.provider_observed_at,
         event_kind=event_kind,
         event_timestamp=event.timestamp,
     ):
+        await remember_sandbox_event_receipt(
+            db,
+            event_id=event.id,
+            provider="e2b",
+            event_type=event.type,
+            external_sandbox_id=event.sandbox_id,
+        )
         return E2BWebhookReceipt()
 
     if event_kind in {PROVIDER_EVENT_KIND_CREATED, PROVIDER_EVENT_KIND_RESUMED}:
         billing_subject = await ensure_personal_billing_subject(db, sandbox.owner_user_id)
         billing = await get_billing_snapshot_for_subject(billing_subject.id)
         if billing.billing_mode == BILLING_MODE_ENFORCE and billing.active_spend_hold:
-            if event.sandbox_id:
+            # Do not commit a processed receipt before the provider side effect.
+            # Release the correlation/billing transaction before waiting on the
+            # materialization lease, then release the fresh read transaction
+            # before pausing E2B. A crash after pause remains safely retryable.
+            await commit_webhook_phase(db)
+            async with locks.redis_materialization_lock(f"cloud-sandbox:{sandbox.id}"):
+                current = await load_cloud_sandbox_by_id(db, sandbox.id, refresh=True)
+                if (
+                    current is None
+                    or current.destroyed_at is not None
+                    or current.e2b_sandbox_id != event.sandbox_id
+                    or current.materialization_attempt != sandbox.materialization_attempt
+                    or event.timestamp <= current.provider_observed_at
+                ):
+                    await remember_sandbox_event_receipt(
+                        db,
+                        event_id=event.id,
+                        provider="e2b",
+                        event_type=event.type,
+                        external_sandbox_id=event.sandbox_id,
+                    )
+                    await commit_webhook_phase(db)
+                    return E2BWebhookReceipt()
+                materialization_attempt = current.materialization_attempt
+                await commit_webhook_phase(db)
                 provider = get_sandbox_provider("e2b")
                 await provider.pause_sandbox(event.sandbox_id)
-            updated = await mark_cloud_sandbox_provider_state(
-                db,
-                sandbox.id,
-                status="paused",
-                expected_provider_sandbox_id=event.sandbox_id,
-                expected_status=sandbox.status,
-            )
-            if updated is None:
-                return E2BWebhookReceipt()
-            await close_usage_segment_for_sandbox(
-                db,
-                sandbox_id=sandbox.id,
-                ended_at=event.timestamp,
-                closed_by=USAGE_SEGMENT_CLOSED_BY_QUOTA_ENFORCEMENT,
-                event_id=event.id,
-                expected_external_sandbox_id=event.sandbox_id,
-            )
+                pause_observed_at = utcnow()
+                if not await remember_sandbox_event_receipt(
+                    db,
+                    event_id=event.id,
+                    provider="e2b",
+                    event_type=event.type,
+                    external_sandbox_id=event.sandbox_id,
+                ):
+                    await commit_webhook_phase(db)
+                    return E2BWebhookReceipt()
+                updated = await apply_cloud_sandbox_provider_observation(
+                    db,
+                    current.id,
+                    status="paused",
+                    expected_provider_sandbox_id=event.sandbox_id,
+                    expected_materialization_attempt=materialization_attempt,
+                    observed_at=pause_observed_at,
+                )
+                if updated is not None:
+                    await close_usage_segment_for_sandbox(
+                        db,
+                        sandbox_id=current.id,
+                        ended_at=pause_observed_at,
+                        closed_by=USAGE_SEGMENT_CLOSED_BY_QUOTA_ENFORCEMENT,
+                        event_id=event.id,
+                        expected_external_sandbox_id=event.sandbox_id,
+                    )
+                await commit_webhook_phase(db)
             return E2BWebhookReceipt()
 
-        updated = await mark_cloud_sandbox_provider_state(
+        if not await remember_sandbox_event_receipt(
+            db,
+            event_id=event.id,
+            provider="e2b",
+            event_type=event.type,
+            external_sandbox_id=event.sandbox_id,
+        ):
+            return E2BWebhookReceipt()
+        updated = await apply_cloud_sandbox_provider_observation(
             db,
             sandbox.id,
             status="ready",
             expected_provider_sandbox_id=event.sandbox_id,
-            expected_status=sandbox.status,
+            expected_materialization_attempt=sandbox.materialization_attempt,
+            observed_at=event.timestamp,
         )
         if updated is None:
             return E2BWebhookReceipt()
@@ -261,19 +315,37 @@ async def handle_e2b_webhook(
         )
         return E2BWebhookReceipt()
 
+    if not await remember_sandbox_event_receipt(
+        db,
+        event_id=event.id,
+        provider="e2b",
+        event_type=event.type,
+        external_sandbox_id=event.sandbox_id,
+    ):
+        return E2BWebhookReceipt()
+
     if event_kind in {PROVIDER_EVENT_KIND_PAUSED, PROVIDER_EVENT_KIND_TIMEOUT}:
         # A terminal materialization receipt remains authoritative until an
         # explicit retry. The provider stop still ends exact-ID billing, but a
         # late timeout/pause notification must not disguise the failed attempt.
-        updated = await mark_cloud_sandbox_provider_state(
+        updated = await apply_cloud_sandbox_provider_observation(
             db,
             sandbox.id,
-            status="error" if sandbox.status == "error" else "paused",
+            status="paused",
             expected_provider_sandbox_id=event.sandbox_id,
-            expected_status=sandbox.status,
+            expected_materialization_attempt=sandbox.materialization_attempt,
+            observed_at=event.timestamp,
         )
         if updated is None:
-            return E2BWebhookReceipt()
+            updated = await accept_destroyed_cloud_sandbox_provider_observation(
+                db,
+                sandbox.id,
+                expected_provider_sandbox_id=event.sandbox_id,
+                expected_materialization_attempt=sandbox.materialization_attempt,
+                observed_at=event.timestamp,
+            )
+            if updated is None:
+                return E2BWebhookReceipt()
         await close_usage_segment_for_sandbox(
             db,
             sandbox_id=sandbox.id,
@@ -289,25 +361,28 @@ async def handle_e2b_webhook(
         return E2BWebhookReceipt()
 
     if event_kind == PROVIDER_EVENT_KIND_KILLED:
+        updated = None
         if sandbox.destroyed_at is None:
             updated = await mark_cloud_sandbox_provider_missing(
                 db,
                 sandbox.id,
                 expected_provider_sandbox_id=event.sandbox_id,
+                expected_materialization_attempt=sandbox.materialization_attempt,
+                observed_at=event.timestamp,
                 last_error=PROVIDER_SANDBOX_MISSING_RECEIPT,
             )
+        if updated is None:
+            # Explicit deletion may have won after correlation. Preserve its
+            # state while fencing this exact attempt's terminal observation.
+            updated = await accept_destroyed_cloud_sandbox_provider_observation(
+                db,
+                sandbox.id,
+                expected_provider_sandbox_id=event.sandbox_id,
+                expected_materialization_attempt=sandbox.materialization_attempt,
+                observed_at=event.timestamp,
+            )
             if updated is None:
-                # An explicit delete can win after the initial read. It keeps
-                # the exact provider identity, so the killed observation must
-                # still close that provider's usage without changing the
-                # product-owned destroyed state. A replacement binding is inert.
-                current = await load_cloud_sandbox_by_id(db, sandbox.id, refresh=True)
-                if (
-                    current is None
-                    or current.destroyed_at is None
-                    or current.e2b_sandbox_id != event.sandbox_id
-                ):
-                    return E2BWebhookReceipt()
+                return E2BWebhookReceipt()
         await close_usage_segment_for_sandbox(
             db,
             sandbox_id=sandbox.id,

@@ -41,6 +41,11 @@ async def run_cloud_sandbox_operation[T](
     run: Callable[[MaterializationContext], Awaitable[T]],
 ) -> T:
     del operation_key
+    # Loading or ensuring the sandbox starts a transaction in normal callers.
+    # End it before a potentially long distributed-lock wait so the lock holder
+    # can refresh authoritative state without competing with a stale checkout.
+    if db.in_transaction():
+        await db.commit()
     async with locks.redis_materialization_lock(
         f"cloud-sandbox:{sandbox.id}",
         ttl_seconds=lock_ttl_seconds,

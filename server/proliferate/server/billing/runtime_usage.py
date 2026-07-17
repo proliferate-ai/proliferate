@@ -7,8 +7,10 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.constants.billing import USAGE_SEGMENT_CLOSED_BY_BINDING_CONVERGENCE
 from proliferate.db import session_ops as db_session
 from proliferate.db.store.billing_runtime_usage import (
+    close_conflicting_provider_usage_segment,
     close_usage_segment_for_sandbox,
     open_usage_segment_for_sandbox,
     remember_sandbox_event_receipt,
@@ -134,4 +136,28 @@ async def close_cloud_sandbox_provider_usage(
         ),
         expected_external_sandbox_id=provider_sandbox_id,
         fail_on_provider_mismatch=fail_on_provider_mismatch,
+    )
+
+
+async def converge_cloud_sandbox_provider_usage(
+    db: AsyncSession,
+    *,
+    sandbox_id: UUID,
+    current_provider_sandbox_id: str | None,
+    observed_at: datetime,
+) -> object | None:
+    """Converge legacy null attribution before provider I/O.
+
+    The caller already owns the CloudSandbox row lock. A null-attributed segment
+    is closed under that unchanged unknown identity; a successful resume opens
+    a fresh exact-provider segment later. A conflicting concrete provider raises
+    so its possibly-live billing interval is never silently stopped.
+    """
+
+    return await close_conflicting_provider_usage_segment(
+        db,
+        sandbox_id=sandbox_id,
+        current_provider_sandbox_id=current_provider_sandbox_id,
+        ended_at=observed_at,
+        closed_by=USAGE_SEGMENT_CLOSED_BY_BINDING_CONVERGENCE,
     )

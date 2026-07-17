@@ -48,9 +48,19 @@ resume. Provider created/resumed webhooks are advisory, exact-binding-only
 reinforcement rather than the sole opening authority. Pause, timeout, kill,
 quota enforcement, and reconciliation close only the expected provider's
 segment; lifecycle state and usage closure share a cloud-row-first transaction
-so a replacement cannot inherit or lose another provider's accounting. The
+so a replacement cannot inherit or lose another provider's accounting. Every
+close clamps `ended_at` to at least `started_at`, so a delayed provider
+timestamp cannot create negative duration. Before provider I/O, recovery also
+converges a pre-existing null-attributed open segment by closing it under that
+unchanged unknown identity with `binding_convergence`; only a later successful
+resume opens a new segment for the current provider. A non-null conflicting
+provider id is left open and the attempt fails with a durable support receipt,
+because that concrete provider may still be live. No old duration is
+reattributed across provider ids. The
 provider-event boundary is documented by
 [`sandbox-provisioning.md`](sandbox-provisioning.md#provider-webhooks).
+For an already-destroyed product row, later exact-provider terminal evidence
+closes retained usage without reviving or rewriting deletion state.
 
 Organizations may add the following limits over the existing Billing rules:
 

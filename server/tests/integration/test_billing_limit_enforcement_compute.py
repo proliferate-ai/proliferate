@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Callable
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
@@ -262,15 +263,30 @@ def _patch_enforce_collaborators(
     """Stub the reconciler's DB/provider collaborators for a single segment."""
 
     async def _load(_db: Any, _sandbox_id: uuid.UUID, **_kw: Any) -> Any:
-        return SimpleNamespace(id=sandbox_id, e2b_sandbox_id="ext-1", status="ready")
+        return SimpleNamespace(
+            id=sandbox_id,
+            e2b_sandbox_id="ext-1",
+            status="ready",
+            materialization_attempt=7,
+            provider_observed_at=NOW - timedelta(seconds=1),
+        )
 
     async def _mark(sandbox_id: uuid.UUID, **kwargs: Any) -> bool:
         closed.append((sandbox_id, kwargs["closed_by"]))
         return True
 
+    async def _record(*_args: object, **_kwargs: object) -> None:
+        return None
+
+    @asynccontextmanager
+    async def _locked(_key: str, **_kwargs: object):
+        yield
+
     monkeypatch.setattr(reconciler_module, "load_cloud_sandbox_by_id", _load)
     monkeypatch.setattr(reconciler_module, "_mark_sandbox_environment_unavailable", _mark)
+    monkeypatch.setattr(reconciler_module, "_record_running_provider_observation", _record)
     monkeypatch.setattr(reconciler_module, "get_configured_sandbox_provider", lambda: fake)
+    monkeypatch.setattr(reconciler_module.locks, "redis_materialization_lock", _locked)
 
 
 def _running_state() -> ProviderSandboxState:
@@ -375,6 +391,8 @@ async def test_reconciler_provider_death_is_recoverable_and_binding_fenced(
             id=segment.sandbox_id,
             e2b_sandbox_id="ext-1",
             status="ready",
+            materialization_attempt=7,
+            provider_observed_at=NOW - timedelta(seconds=1),
         )
 
     async def _unavailable(_sandbox_id: uuid.UUID, **kwargs: object) -> None:
@@ -406,7 +424,8 @@ async def test_reconciler_provider_death_is_recoverable_and_binding_fenced(
         {
             "destroyed": True,
             "expected_provider_sandbox_id": "ext-1",
-            "expected_status": "ready",
+            "expected_materialization_attempt": 7,
+            "provider_observed_at": NOW,
             "ended_at": NOW,
             "closed_by": USAGE_SEGMENT_CLOSED_BY_PROVISION_FAILURE,
         }
@@ -425,6 +444,8 @@ async def test_reconciler_ignores_usage_from_superseded_provider(
             id=segment.sandbox_id,
             e2b_sandbox_id="ext-new",
             status="ready",
+            materialization_attempt=8,
+            provider_observed_at=NOW,
         )
 
     async def _unexpected(*_args: object, **_kwargs: object) -> object:

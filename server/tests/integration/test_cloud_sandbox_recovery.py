@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from typing import Any
 from uuid import UUID, uuid4
@@ -177,9 +177,8 @@ async def test_failure_after_provider_binding_is_durable_and_retry_clears_it(
     assert failed.e2b_sandbox_id == "provider-replacement"
     assert failed.last_error == "Sandbox materialization failed. Retry later."
     assert "secret" not in (failed.last_error or "")
-    assert cloud_sandbox_payload(failed).model_dump(by_alias=True)["lastError"] == (
-        failed.last_error
-    )
+    payload = cloud_sandbox_payload(failed).model_dump(by_alias=True)
+    assert payload["lastError"] == failed.last_error
 
     async def _successful_launch(*_args: object, **_kwargs: object) -> None:
         return None
@@ -318,6 +317,7 @@ async def test_missing_provider_concurrency_creates_one_replacement_and_closes_o
     assert provider.created_metadata == [
         {
             "cloud_sandbox_id": str(row.id),
+            "proliferate_cloud_sandbox_id": str(row.id),
             "proliferate_owner_user_id": str(user.id),
         }
     ]
@@ -388,6 +388,8 @@ async def test_stale_failure_cannot_overwrite_replacement_binding(
         db_session,
         row.id,
         expected_provider_sandbox_id="provider-old",
+        expected_materialization_attempt=row.materialization_attempt,
+        observation_started_at=row.provider_observed_at + timedelta(seconds=1),
     )
     assert detached is not None
     replacement = await sandbox_store.record_cloud_sandbox_provider_sandbox(
@@ -395,19 +397,19 @@ async def test_stale_failure_cannot_overwrite_replacement_binding(
         row.id,
         e2b_sandbox_id="provider-new",
         e2b_template_ref="e2b",
+        expected_materialization_attempt=row.materialization_attempt,
     )
     assert replacement is not None
     await db_session.commit()
-
     stale = await sandbox_store.mark_cloud_sandbox_materialization_error(
         db_session,
         row.id,
         expected_provider_sandbox_id="provider-old",
+        expected_materialization_attempt=row.materialization_attempt,
         last_error="stale attempt",
     )
     assert stale is None
     await db_session.commit()
-
     current = await _value(db_session, row.id)
     assert current.e2b_sandbox_id == "provider-new"
     assert current.status == "creating"
@@ -429,13 +431,11 @@ async def test_delete_winning_retry_race_cannot_resurrect_or_contact_provider(
     factory = async_sessionmaker(test_engine, expire_on_commit=False)
     provider = _FakeProvider()
     _install_connect_stubs(monkeypatch, provider)
-
     async with factory() as retry_db, factory() as delete_db:
         stale = await _value(retry_db, row.id)
         destroyed = await sandbox_store.mark_cloud_sandbox_destroyed(delete_db, row.id)
         assert destroyed is not None
         await delete_db.commit()
-
         with pytest.raises(
             connect_module.CloudMaterializationCommandError,
             match="destroyed while connecting",
@@ -461,25 +461,25 @@ async def test_late_failure_cannot_overwrite_authoritative_pause(
         status="creating",
         provider_sandbox_id=provider_id,
     )
-    paused = await sandbox_store.mark_cloud_sandbox_provider_state(
+    paused = await sandbox_store.apply_cloud_sandbox_provider_observation(
         db_session,
         row.id,
         status="paused",
         expected_provider_sandbox_id=provider_id,
-        expected_status="creating",
+        expected_materialization_attempt=row.materialization_attempt,
+        observed_at=row.provider_observed_at + timedelta(seconds=1),
     )
     assert paused is not None
     await db_session.commit()
-
     stale_failure = await sandbox_store.mark_cloud_sandbox_materialization_error(
         db_session,
         row.id,
         expected_provider_sandbox_id=provider_id,
+        expected_materialization_attempt=row.materialization_attempt,
         last_error="stale attempt",
     )
     assert stale_failure is None
     await db_session.commit()
-
     current = await _value(db_session, row.id)
     assert current.status == "paused"
     assert current.last_error is None
@@ -499,17 +499,18 @@ async def test_late_provider_ready_event_cannot_overwrite_terminal_error(
         db_session,
         row.id,
         expected_provider_sandbox_id=provider_id,
+        expected_materialization_attempt=row.materialization_attempt,
         last_error="safe terminal receipt",
     )
     assert failed is not None
     await db_session.commit()
-
-    stale_ready = await sandbox_store.mark_cloud_sandbox_provider_state(
+    stale_ready = await sandbox_store.apply_cloud_sandbox_provider_observation(
         db_session,
         row.id,
         status="ready",
         expected_provider_sandbox_id=provider_id,
-        expected_status="creating",
+        expected_materialization_attempt=row.materialization_attempt,
+        observed_at=row.provider_observed_at + timedelta(seconds=1),
     )
     assert stale_ready is None
     await db_session.commit()
@@ -542,8 +543,7 @@ async def test_paused_sandbox_connects_without_webhook_and_opens_exact_usage(
     _install_connect_stubs(monkeypatch, provider)
 
     await connect_module.connect_ready_sandbox(
-        db_session,
-        sandbox=await _value(db_session, row.id),
+        db_session, sandbox=await _value(db_session, row.id)
     )
 
     async with factory() as check_db:

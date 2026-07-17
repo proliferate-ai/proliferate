@@ -34,6 +34,13 @@ maps to `cloud_sandbox`.
   latest terminal connection attempt or authoritative current-provider loss.
   It contains a classified operator-safe message, not raw provider or runtime
   exception text.
+- `materialization_attempt` advances for every connection attempt, including a
+  healthy `ready` retry. Attempt-owned completions compare that epoch before
+  changing lifecycle or accounting state.
+- `provider_observed_at` is the provider-specific freshness floor. Retry start,
+  conservative resume request-start acceptance, and direct provider
+  observations advance it; runtime-ready persistence does not. Delayed
+  provider observations at or before the floor are inert.
 - Runtime access consists of `anyharness_base_url`, an encrypted bearer token,
   and an encrypted AnyHarness data key.
 - `ready_at`, `last_health_at`, and `destroyed_at` record lifecycle evidence.
@@ -88,43 +95,55 @@ does three things:
 ### Just-in-time provider and runtime connection
 
 [`connect.py`](../../../../server/proliferate/server/cloud/materialization/sandbox_io/connect.py)
-owns the real connection work. Every materialization operation acquires the
-per-sandbox lock and then reloads the current row before making a lifecycle
-decision; a caller's pre-lock snapshot is never provider authority.
+owns the real connection work. Every materialization operation ends its caller
+database phase before waiting for the per-sandbox lock, then reloads the current
+row inside the lock before making a lifecycle decision; a caller's pre-lock
+snapshot is never provider authority.
 
 1. reject a destroyed sandbox and re-check billing;
-2. begin an attempt by moving `error` or `paused` to `creating`; clear the old
-   failure receipt when one exists;
-3. if and only if resume reports authoritative provider-target-not-found,
+2. begin a new attempt epoch before provider I/O, preserving `ready` for healthy
+   reuse while moving other retryable states to `creating`, and clear the old
+   failure receipt;
+3. before provider I/O, close a legacy null-attributed open usage segment under
+   that unchanged unknown identity, clamping its end no earlier than its start;
+   `binding_convergence` records the repair. A non-null conflicting provider is
+   preserved open and produces a durable support receipt before any provider
+   call, because it may still be live; duration is never reassigned;
+4. if and only if resume reports authoritative provider-target-not-found,
    compare-and-swap the expected binding to absent and close that exact
    provider's open usage segment in one transaction with cloud-row-first lock
    order. Commit the supersession before creating one replacement;
-4. create an E2B sandbox when `provider_sandbox_id` is absent, then record its
-   exact provider id and provision usage in one transaction;
-5. after every successful provider resume, lock and revalidate that the exact
-   binding is still an active attempt, then idempotently ensure its resume
-   usage segment. This does not rely on webhook timing;
-6. resolve the provider endpoint and runtime context, then reuse a healthy
+5. create an E2B sandbox when `provider_sandbox_id` is absent, then record its
+   exact provider id and provision usage in one transaction. If that commit is
+   ambiguous and the same attempt remains unbound, the failure transaction
+   adopts the known candidate and its exact usage instead of losing custody;
+6. after every successful provider resume, revalidate the exact binding and
+   attempt epoch at the conservative request-start boundary. If a pause overlaps
+   the request, a post-resume exact-ID state read decides whether to reopen usage
+   as running or retain paused closure. Cancellation, an ambiguous commit, or an
+   active observation after a transient response uses the same fenced usage
+   open in the failure transaction;
+7. resolve the provider endpoint and runtime context, then reuse a healthy
    authenticated AnyHarness or launch it directly with the
    recorded or newly minted runtime credentials;
-7. when AnyHarness is launched, start Proliferate Worker as a detached,
+8. when AnyHarness is launched, start Proliferate Worker as a detached,
    best-effort sidecar; and
-8. after launch/relaunch, persist ready status and encrypted runtime access
-   only when the expected provider binding is still current.
+9. after launch/relaunch, persist ready status and encrypted runtime access
+   only when the expected provider binding and attempt epoch are still current.
 
 Provider configuration failures and transient provider unavailability do not
 supersede the binding or create a replacement. They fail closed and preserve
 the existing provider id for a later retry. Any connection failure writes
 `error` and a sanitized `last_error` only if the attempt's exact provider
-binding and active attempt status are still current; a concurrent authoritative
-pause or explicit delete wins instead. `error` is terminal for that attempt,
+binding and epoch are still current; a concurrent authoritative pause, newer
+attempt, or explicit delete wins instead. `error` is terminal for that attempt,
 not for the logical sandbox row; a later normal materialization can retry the
 same row.
 
 Healthy reuse still verifies AnyHarness health and bearer enforcement, then
 finishes with an exact-binding ready-state write. This refreshes health
-evidence and clears `last_error` even when the runtime URL and credentials were
-reused.
+evidence and clears `last_error` without fabricating a newer provider lifecycle
+observation, even when the runtime URL and credentials were reused.
 
 The E2B launch path does not launch Proliferate Supervisor. A missing or
 unhealthy Worker does not make direct AnyHarness access unavailable. Reusing an
@@ -145,6 +164,9 @@ separate backstop. Delete does not:
 
 Treat existing runtime identities as potentially unreachable after deletion.
 Do not present deletion and recreation as a lossless repair.
+If the provider later reports paused, timeout, stopped, killed, or exact target
+absence for the retained binding, the exact attempt's usage is closed while the
+product-owned destroyed state and binding remain unchanged.
 
 ### Provider webhooks
 
@@ -156,12 +178,15 @@ or closes billing usage segments. Webhook metadata is never authority to adopt
 an uncommitted provider; direct materialization owns the required usage open,
 so delivery timing is advisory. Spend-hold processing may pause a created or
 resumed sandbox. Lifecycle state and usage mutate in one cloud-row-first
-transaction and are fenced by the exact current provider binding and expected
-status, so an event or reconciliation result for a superseded attempt cannot
-mutate the replacement. A killed event for the current binding closes that
-provider's exact usage segment, detaches the missing provider, and records a
-recoverable `error`; it does not destroy the logical sandbox row. Explicit
-product deletion is the only transition that destroys that row.
+transaction and are fenced by the current binding, attempt epoch, and provider
+freshness floor. Spend-hold work uses the same materialization lock, releases
+each database phase before provider I/O, and commits its receipt, lifecycle
+update, and usage close before releasing the lock. A killed event for the
+current binding closes that provider's exact usage segment, detaches the missing
+provider, and records a recoverable `error`; it does not destroy the logical
+sandbox row. Terminal events for an already-destroyed row close only exact usage
+and preserve deletion. Explicit product deletion is the only transition that
+destroys that row.
 
 ## Ownership Map
 
@@ -203,8 +228,11 @@ The narrow contract tests are:
 - `server/tests/unit/test_cloud_connect_race.py`
 - `server/tests/unit/test_cloud_materialization_failures.py`
 - `server/tests/unit/test_cloud_webhook_service.py`
+- `server/tests/unit/test_cloud_webhook_recovery_races.py`
 - `server/tests/unit/test_cloud_sandbox_gateway_access.py`
 - `server/tests/integration/test_cloud_sandbox_recovery.py`
+- `server/tests/integration/test_cloud_sandbox_recovery_invariants.py`
+- `server/tests/integration/test_cloud_sandbox_reconciler_recovery.py`
 - `server/tests/integration/test_cloud_sandbox_last_error_migration.py`
 - `server/tests/integration/test_cloud_sandbox_reconnect_self_heal.py`
 - `server/tests/integration/test_cloud_sandbox_wake_billing_gate.py`

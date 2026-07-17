@@ -25,6 +25,10 @@ from proliferate.utils.time import utcnow
 T = TypeVar("T")
 
 
+class UsageProviderBindingMismatchError(RuntimeError):
+    """An open segment is attributed to a different concrete provider."""
+
+
 def coerce_utc(value: datetime | None) -> datetime | None:
     if value is None:
         return None
@@ -203,7 +207,37 @@ async def close_usage_segment(
             raise RuntimeError("Open usage segment belongs to a different provider sandbox.")
         return None
 
-    segment.ended_at = coerce_utc(ended_at) or utcnow()
+    observed_end = coerce_utc(ended_at) or utcnow()
+    segment_start = coerce_utc(segment.started_at) or observed_end
+    segment.ended_at = max(observed_end, segment_start)
+    segment.closed_by = closed_by
+    segment.updated_at = utcnow()
+    await db.flush()
+    return segment
+
+
+async def close_conflicting_provider_usage_segment(
+    db: AsyncSession,
+    *,
+    sandbox_id: UUID,
+    current_provider_sandbox_id: str | None,
+    ended_at: datetime,
+    closed_by: str,
+) -> UsageSegment | None:
+    """Bound legacy null attribution, but preserve concrete conflicts for support."""
+
+    segment = await get_open_usage_segment(db, sandbox_id, lock_row=True)
+    if segment is None:
+        return None
+    if segment.external_sandbox_id is not None:
+        if segment.external_sandbox_id == current_provider_sandbox_id:
+            return None
+        raise UsageProviderBindingMismatchError(
+            "Open usage segment belongs to a different provider sandbox."
+        )
+    observed_end = coerce_utc(ended_at) or utcnow()
+    segment_start = coerce_utc(segment.started_at) or observed_end
+    segment.ended_at = max(observed_end, segment_start)
     segment.closed_by = closed_by
     segment.updated_at = utcnow()
     await db.flush()

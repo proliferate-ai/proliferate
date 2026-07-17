@@ -43,6 +43,8 @@ async def _seed_provider_usage(
         sandbox_type="e2b",
         provider_sandbox_id=provider_sandbox_id,
         status=status,
+        materialization_attempt=3,
+        provider_observed_at=NOW - timedelta(seconds=1),
         destroyed_at=NOW if status == "destroyed" else None,
     )
     db.add(sandbox)
@@ -81,7 +83,8 @@ async def test_provider_mismatch_rolls_back_lifecycle_transition(
             sandbox.id,
             destroyed=False,
             expected_provider_sandbox_id="provider-current",
-            expected_status="ready",
+            expected_materialization_attempt=3,
+            provider_observed_at=NOW,
             ended_at=NOW,
             closed_by=USAGE_SEGMENT_CLOSED_BY_QUOTA_ENFORCEMENT,
         )
@@ -111,7 +114,8 @@ async def test_killed_observation_closes_usage_after_explicit_delete(
         sandbox.id,
         destroyed=True,
         expected_provider_sandbox_id=provider_id,
-        expected_status="ready",
+        expected_materialization_attempt=3,
+        provider_observed_at=NOW + timedelta(seconds=1),
         ended_at=NOW + timedelta(seconds=1),
         closed_by=USAGE_SEGMENT_CLOSED_BY_PROVISION_FAILURE,
     )

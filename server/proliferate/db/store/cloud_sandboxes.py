@@ -12,7 +12,7 @@ from datetime import datetime
 from typing import Final, cast
 from uuid import UUID
 
-from sqlalchemy import func, or_, select, text, update
+from sqlalchemy import case, func, or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.cloud import CloudSandboxStatus
@@ -36,6 +36,7 @@ class CloudSandboxValue:
     created_by_user_id: UUID | None
     billing_subject_id: UUID | None
     status: str
+    materialization_attempt: int
     last_error: str | None
     e2b_sandbox_id: str | None
     e2b_template_ref: str
@@ -47,6 +48,7 @@ class CloudSandboxValue:
     updated_at: datetime
     ready_at: datetime | None
     last_health_at: datetime | None
+    provider_observed_at: datetime
     destroyed_at: datetime | None
     desired_anyharness_version: str | None
     desired_worker_version: str | None
@@ -65,6 +67,7 @@ def cloud_sandbox_value(row: CloudSandbox) -> CloudSandboxValue:
         created_by_user_id=row.owner_user_id,
         billing_subject_id=None,
         status=status,
+        materialization_attempt=row.materialization_attempt,
         last_error=row.last_error,
         e2b_sandbox_id=row.provider_sandbox_id,
         e2b_template_ref=sandbox_type,
@@ -76,6 +79,7 @@ def cloud_sandbox_value(row: CloudSandbox) -> CloudSandboxValue:
         updated_at=row.updated_at,
         ready_at=row.ready_at,
         last_health_at=row.last_health_at,
+        provider_observed_at=row.provider_observed_at,
         destroyed_at=row.destroyed_at,
         desired_anyharness_version=row.desired_anyharness_version,
         desired_worker_version=row.desired_worker_version,
@@ -222,6 +226,7 @@ async def record_cloud_sandbox_provider_sandbox(
     *,
     e2b_sandbox_id: str,
     e2b_template_ref: str,
+    expected_materialization_attempt: int,
 ) -> CloudSandboxValue | None:
     del e2b_template_ref
     now = utcnow()
@@ -235,11 +240,19 @@ async def record_cloud_sandbox_provider_sandbox(
                     CloudSandbox.provider_sandbox_id.is_(None),
                     CloudSandbox.provider_sandbox_id == e2b_sandbox_id,
                 ),
+                CloudSandbox.materialization_attempt == expected_materialization_attempt,
             )
             .values(
                 provider_sandbox_id=e2b_sandbox_id,
                 status="creating",
                 last_error=None,
+                provider_observed_at=case(
+                    (
+                        CloudSandbox.provider_sandbox_id == e2b_sandbox_id,
+                        func.greatest(CloudSandbox.provider_observed_at, now),
+                    ),
+                    else_=now,
+                ),
                 updated_at=now,
             )
             .returning(CloudSandbox)
@@ -255,34 +268,30 @@ async def begin_cloud_sandbox_materialization_retry(
     db: AsyncSession,
     sandbox_id: UUID,
 ) -> CloudSandboxValue | None:
-    """Start an explicit attempt without disturbing an already-ready read model."""
-
+    now = utcnow()
     row = (
         await db.execute(
             update(CloudSandbox)
             .where(
                 CloudSandbox.id == sandbox_id,
                 CloudSandbox.destroyed_at.is_(None),
-                or_(
-                    CloudSandbox.status.in_((CloudSandboxStatus.error, CloudSandboxStatus.paused)),
-                    CloudSandbox.last_error.is_not(None),
-                ),
+                CloudSandbox.status != CloudSandboxStatus.destroyed,
             )
             .values(
-                status=CloudSandboxStatus.creating,
+                status=case(
+                    (CloudSandbox.status == CloudSandboxStatus.ready, CloudSandboxStatus.ready),
+                    else_=CloudSandboxStatus.creating,
+                ),
+                materialization_attempt=CloudSandbox.materialization_attempt + 1,
                 last_error=None,
-                updated_at=utcnow(),
+                provider_observed_at=func.greatest(CloudSandbox.provider_observed_at, now),
+                updated_at=now,
             )
             .returning(CloudSandbox)
             .execution_options(populate_existing=True)
         )
     ).scalar_one_or_none()
-    if row is not None:
-        return cloud_sandbox_value(row)
-    current = await load_cloud_sandbox_by_id(db, sandbox_id, refresh=True)
-    if current is None or current.destroyed_at is not None or current.status == "destroyed":
-        return None
-    return current
+    return cloud_sandbox_value(row) if row is not None else None
 
 
 async def lock_cloud_sandbox_materialization_attempt(
@@ -290,19 +299,71 @@ async def lock_cloud_sandbox_materialization_attempt(
     sandbox_id: UUID,
     *,
     expected_provider_sandbox_id: str,
+    expected_materialization_attempt: int,
+    observed_at: datetime,
 ) -> CloudSandboxValue | None:
-    """Lock the exact active provider attempt before usage attribution."""
-
+    now = utcnow()
     row = (
         await db.execute(
-            select(CloudSandbox)
+            update(CloudSandbox)
             .where(
                 CloudSandbox.id == sandbox_id,
                 CloudSandbox.destroyed_at.is_(None),
                 CloudSandbox.provider_sandbox_id == expected_provider_sandbox_id,
-                CloudSandbox.status.in_((CloudSandboxStatus.creating, CloudSandboxStatus.ready)),
+                CloudSandbox.status.in_(
+                    (
+                        CloudSandboxStatus.creating,
+                        CloudSandboxStatus.ready,
+                        CloudSandboxStatus.paused,
+                    )
+                ),
+                CloudSandbox.materialization_attempt == expected_materialization_attempt,
+                CloudSandbox.provider_observed_at < observed_at,
             )
-            .with_for_update()
+            .values(
+                status=case(
+                    (
+                        CloudSandbox.status == CloudSandboxStatus.paused,
+                        CloudSandboxStatus.creating,
+                    ),
+                    else_=CloudSandbox.status,
+                ),
+                provider_observed_at=func.greatest(
+                    CloudSandbox.provider_observed_at,
+                    observed_at,
+                ),
+                updated_at=now,
+            )
+            .returning(CloudSandbox)
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
+    return cloud_sandbox_value(row) if row is not None else None
+
+
+async def advance_cloud_sandbox_provider_observation_floor(
+    db: AsyncSession,
+    sandbox_id: UUID,
+    *,
+    expected_provider_sandbox_id: str,
+    expected_materialization_attempt: int,
+    observed_at: datetime,
+) -> CloudSandboxValue | None:
+    row = (
+        await db.execute(
+            update(CloudSandbox)
+            .where(
+                CloudSandbox.id == sandbox_id,
+                CloudSandbox.destroyed_at.is_(None),
+                CloudSandbox.provider_sandbox_id == expected_provider_sandbox_id,
+                CloudSandbox.materialization_attempt == expected_materialization_attempt,
+                CloudSandbox.provider_observed_at < observed_at,
+            )
+            .values(
+                provider_observed_at=observed_at,
+                updated_at=utcnow(),
+            )
+            .returning(CloudSandbox)
             .execution_options(populate_existing=True)
         )
     ).scalar_one_or_none()
@@ -314,6 +375,8 @@ async def supersede_missing_cloud_sandbox_provider(
     sandbox_id: UUID,
     *,
     expected_provider_sandbox_id: str,
+    expected_materialization_attempt: int,
+    observation_started_at: datetime,
 ) -> CloudSandboxValue | None:
     """Detach exactly one authoritatively absent provider binding.
 
@@ -329,7 +392,15 @@ async def supersede_missing_cloud_sandbox_provider(
                 CloudSandbox.id == sandbox_id,
                 CloudSandbox.destroyed_at.is_(None),
                 CloudSandbox.provider_sandbox_id == expected_provider_sandbox_id,
-                CloudSandbox.status.in_((CloudSandboxStatus.creating, CloudSandboxStatus.ready)),
+                CloudSandbox.status.in_(
+                    (
+                        CloudSandboxStatus.creating,
+                        CloudSandboxStatus.ready,
+                        CloudSandboxStatus.paused,
+                    )
+                ),
+                CloudSandbox.materialization_attempt == expected_materialization_attempt,
+                CloudSandbox.provider_observed_at <= observation_started_at,
             )
             .values(
                 provider_sandbox_id=None,
@@ -354,6 +425,8 @@ async def mark_cloud_sandbox_provider_missing(
     sandbox_id: UUID,
     *,
     expected_provider_sandbox_id: str,
+    expected_materialization_attempt: int,
+    observed_at: datetime,
     last_error: str,
 ) -> CloudSandboxValue | None:
     """Fence a provider-death observation while preserving the logical row."""
@@ -365,6 +438,11 @@ async def mark_cloud_sandbox_provider_missing(
                 CloudSandbox.id == sandbox_id,
                 CloudSandbox.destroyed_at.is_(None),
                 CloudSandbox.provider_sandbox_id == expected_provider_sandbox_id,
+                CloudSandbox.materialization_attempt == expected_materialization_attempt,
+                or_(
+                    CloudSandbox.provider_observed_at.is_(None),
+                    CloudSandbox.provider_observed_at < observed_at,
+                ),
             )
             .values(
                 provider_sandbox_id=None,
@@ -375,6 +453,105 @@ async def mark_cloud_sandbox_provider_missing(
                 anyharness_data_key_ciphertext=None,
                 ready_at=None,
                 last_health_at=None,
+                provider_observed_at=observed_at,
+                updated_at=utcnow(),
+            )
+            .returning(CloudSandbox)
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
+    return cloud_sandbox_value(row) if row is not None else None
+
+
+async def apply_cloud_sandbox_provider_observation(
+    db: AsyncSession,
+    sandbox_id: UUID,
+    *,
+    status: str,
+    expected_provider_sandbox_id: str,
+    expected_materialization_attempt: int,
+    observed_at: datetime,
+) -> CloudSandboxValue | None:
+    """Apply only a newer provider observation for the current attempt."""
+
+    normalized_status = "ready" if status == "running" else status
+    if normalized_status not in {"ready", "paused"}:
+        raise ValueError(f"Unsupported provider observation status: {status}")
+    now = utcnow()
+    values: dict[str, object] = {
+        "provider_observed_at": observed_at,
+        "updated_at": now,
+    }
+    conditions = [
+        CloudSandbox.id == sandbox_id,
+        CloudSandbox.destroyed_at.is_(None),
+        CloudSandbox.provider_sandbox_id == expected_provider_sandbox_id,
+        CloudSandbox.materialization_attempt == expected_materialization_attempt,
+        or_(
+            CloudSandbox.provider_observed_at.is_(None),
+            CloudSandbox.provider_observed_at < observed_at,
+        ),
+    ]
+    if normalized_status == "ready":
+        conditions.append(
+            CloudSandbox.status.in_(
+                (
+                    CloudSandboxStatus.creating,
+                    CloudSandboxStatus.ready,
+                    CloudSandboxStatus.paused,
+                )
+            )
+        )
+        values.update(
+            status="ready",
+            last_error=None,
+            ready_at=func.coalesce(CloudSandbox.ready_at, now),
+            last_health_at=now,
+        )
+    else:
+        conditions.append(CloudSandbox.status != CloudSandboxStatus.destroyed)
+        values["status"] = case(
+            (CloudSandbox.status == CloudSandboxStatus.error, CloudSandboxStatus.error),
+            else_=CloudSandboxStatus.paused,
+        )
+    row = (
+        await db.execute(
+            update(CloudSandbox)
+            .where(*conditions)
+            .values(**values)
+            .returning(CloudSandbox)
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
+    return cloud_sandbox_value(row) if row is not None else None
+
+
+async def accept_destroyed_cloud_sandbox_provider_observation(
+    db: AsyncSession,
+    sandbox_id: UUID,
+    *,
+    expected_provider_sandbox_id: str,
+    expected_materialization_attempt: int,
+    observed_at: datetime,
+) -> CloudSandboxValue | None:
+    """Fence a terminal provider observation without changing deletion state."""
+
+    row = (
+        await db.execute(
+            update(CloudSandbox)
+            .where(
+                CloudSandbox.id == sandbox_id,
+                CloudSandbox.status == CloudSandboxStatus.destroyed,
+                CloudSandbox.destroyed_at.is_not(None),
+                CloudSandbox.provider_sandbox_id == expected_provider_sandbox_id,
+                CloudSandbox.materialization_attempt == expected_materialization_attempt,
+                or_(
+                    CloudSandbox.provider_observed_at.is_(None),
+                    CloudSandbox.provider_observed_at < observed_at,
+                ),
+            )
+            .values(
+                provider_observed_at=observed_at,
                 updated_at=utcnow(),
             )
             .returning(CloudSandbox)
@@ -389,6 +566,7 @@ async def mark_cloud_sandbox_materialization_error(
     sandbox_id: UUID,
     *,
     expected_provider_sandbox_id: str | None,
+    expected_materialization_attempt: int,
     last_error: str,
 ) -> CloudSandboxValue | None:
     """Persist a terminal attempt failure without clobbering another binding."""
@@ -398,6 +576,7 @@ async def mark_cloud_sandbox_materialization_error(
         if expected_provider_sandbox_id is None
         else CloudSandbox.provider_sandbox_id == expected_provider_sandbox_id
     )
+    now = utcnow()
     row = (
         await db.execute(
             update(CloudSandbox)
@@ -405,12 +584,19 @@ async def mark_cloud_sandbox_materialization_error(
                 CloudSandbox.id == sandbox_id,
                 CloudSandbox.destroyed_at.is_(None),
                 provider_matches,
-                CloudSandbox.status.in_((CloudSandboxStatus.creating, CloudSandboxStatus.ready)),
+                CloudSandbox.status.in_(
+                    (
+                        CloudSandboxStatus.creating,
+                        CloudSandboxStatus.ready,
+                        CloudSandboxStatus.error,
+                    )
+                ),
+                CloudSandbox.materialization_attempt == expected_materialization_attempt,
             )
             .values(
                 status="error",
                 last_error=_bounded_last_error(last_error),
-                updated_at=utcnow(),
+                updated_at=now,
             )
             .returning(CloudSandbox)
             .execution_options(populate_existing=True)
@@ -428,6 +614,7 @@ async def mark_cloud_sandbox_ready(
     anyharness_base_url: str,
     anyharness_bearer_token_ciphertext: str,
     anyharness_data_key_ciphertext: str,
+    expected_materialization_attempt: int,
 ) -> CloudSandboxValue | None:
     del e2b_template_ref
     now = utcnow()
@@ -439,6 +626,7 @@ async def mark_cloud_sandbox_ready(
                 CloudSandbox.destroyed_at.is_(None),
                 CloudSandbox.provider_sandbox_id == e2b_sandbox_id,
                 CloudSandbox.status.in_((CloudSandboxStatus.creating, CloudSandboxStatus.ready)),
+                CloudSandbox.materialization_attempt == expected_materialization_attempt,
             )
             .values(
                 status="ready",
@@ -450,45 +638,6 @@ async def mark_cloud_sandbox_ready(
                 last_health_at=now,
                 updated_at=now,
             )
-            .returning(CloudSandbox)
-            .execution_options(populate_existing=True)
-        )
-    ).scalar_one_or_none()
-    return cloud_sandbox_value(row) if row is not None else None
-
-
-async def mark_cloud_sandbox_provider_state(
-    db: AsyncSession,
-    sandbox_id: UUID,
-    *,
-    status: str,
-    expected_provider_sandbox_id: str,
-    expected_status: str,
-) -> CloudSandboxValue | None:
-    now = utcnow()
-    normalized_status = "ready" if status == "running" else status
-    values: dict[str, object] = {
-        "status": normalized_status,
-        "updated_at": now,
-    }
-    if normalized_status == "ready":
-        values.update(
-            last_error=None,
-            ready_at=func.coalesce(CloudSandbox.ready_at, now),
-            last_health_at=now,
-        )
-    elif normalized_status == "destroyed":
-        values["destroyed_at"] = now
-    row = (
-        await db.execute(
-            update(CloudSandbox)
-            .where(
-                CloudSandbox.id == sandbox_id,
-                CloudSandbox.destroyed_at.is_(None),
-                CloudSandbox.provider_sandbox_id == expected_provider_sandbox_id,
-                CloudSandbox.status == CloudSandboxStatus(expected_status),
-            )
-            .values(**values)
             .returning(CloudSandbox)
             .execution_options(populate_existing=True)
         )
