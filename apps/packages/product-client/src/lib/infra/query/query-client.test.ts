@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   createAppQueryClient,
   hashAppQueryKey,
+  shouldCaptureAppMutationError,
   shouldCaptureAppQueryError,
 } from "#product/lib/infra/query/query-client";
 
@@ -177,5 +178,33 @@ describe("createAppQueryClient query telemetry", () => {
         mutation_key: hashAppQueryKey(mutationKey),
       },
     });
+  });
+
+  it.each([
+    "REPO_ROOT_NOT_GIT_REPO",
+    "REPO_ROOT_WORKTREE_UNSUPPORTED",
+    "REPO_WORKSPACE_NOT_GIT_REPO",
+    "REPO_WORKSPACE_WORKTREE_UNSUPPORTED",
+  ])("does not capture expected repository mutation validation %s", async (code) => {
+    const captureException = vi.fn();
+    const client = createAppQueryClient({ captureException });
+    const error = new AnyHarnessError({
+      type: "about:blank",
+      title: "Repository selection rejected",
+      status: 400,
+      code,
+    });
+    const mutation = client.getMutationCache().build(client, {
+      mutationKey: ["resolve-repository"],
+      mutationFn: async () => {
+        throw error;
+      },
+      retry: false,
+    });
+
+    await expect(mutation.execute(undefined)).rejects.toBe(error);
+
+    expect(shouldCaptureAppMutationError(error)).toBe(false);
+    expect(captureException).not.toHaveBeenCalled();
   });
 });

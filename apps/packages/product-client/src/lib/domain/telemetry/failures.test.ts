@@ -3,6 +3,7 @@ import { ProliferateClientError } from "@proliferate/cloud-sdk";
 import { describe, expect, it } from "vitest";
 import {
   classifyTelemetryFailure,
+  isExpectedMutationTelemetryError,
   isExpectedQueryTelemetryError,
 } from "#product/lib/domain/telemetry/failures";
 
@@ -153,5 +154,41 @@ describe("query telemetry failure classification", () => {
     });
 
     expect(isExpectedQueryTelemetryError(error)).toBe(false);
+  });
+});
+
+describe("mutation telemetry failure classification", () => {
+  it.each([
+    "REPO_ROOT_NOT_GIT_REPO",
+    "REPO_ROOT_WORKTREE_UNSUPPORTED",
+    "REPO_WORKSPACE_NOT_GIT_REPO",
+    "REPO_WORKSPACE_WORKTREE_UNSUPPORTED",
+  ])("treats typed repository validation %s as expected", (code) => {
+    const error = new AnyHarnessError({
+      type: "about:blank",
+      title: "Repository selection rejected",
+      status: 400,
+      code,
+    });
+
+    expect(isExpectedMutationTelemetryError(error)).toBe(true);
+  });
+
+  it.each([
+    new ProliferateClientError("Bad Request", 400),
+    new AnyHarnessError({
+      type: "about:blank",
+      title: "Repository lookup failed",
+      status: 400,
+      code: "REPO_ROOT_RESOLVE_FAILED",
+    }),
+    new AnyHarnessError({
+      type: "about:blank",
+      title: "Repository validation crashed",
+      status: 503,
+      code: "REPO_ROOT_NOT_GIT_REPO",
+    }),
+  ])("keeps non-validation mutation failure %s reportable", (error) => {
+    expect(isExpectedMutationTelemetryError(error)).toBe(false);
   });
 });

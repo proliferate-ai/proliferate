@@ -72,7 +72,9 @@ session replay, and telemetry-related provider and hook ownership.
   gates, and explicitly coded GitHub App or AnyHarness availability states in
   React Query without sending them as exceptions. Generic 4xx responses remain
   reportable, as do request, network, and unknown failures. The global mutation
-  handler does not apply this query disposition rule.
+  handler does not apply this query disposition rule; it separately leaves only
+  explicitly coded repository-selection validation states to their owning
+  mutation workflow. Other mutation failures remain reportable.
 - Sentry tags must stay low-cardinality. Prefer stable keys such as `domain`,
   `action`, `provider`, `workspace_kind`, and `route`.
 - Put high-cardinality or diagnostic values in scrubbed extras, not tags.
