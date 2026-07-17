@@ -667,12 +667,18 @@ jobs:
     # dispatch that ticks `selfhost` fires this job.
     if: github.event_name == 'workflow_dispatch' && inputs.selfhost
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    # 120 (was 90): the SELFHOST-CFN-1 arm64 candidate builds under QEMU
+    # emulation on the amd64 runner, which is materially slower than a native
+    # build; the bound stays hard (a hung run still dies).
+    timeout-minutes: 120
     environment: Qualification
     permissions:
       contents: read
       # OIDC federation to assume the run-scoped AWS role (EC2 + Route53).
       id-token: write
+      # SELFHOST-CFN-1 (SH-CFN-WRAPPER) pushes the run-scoped candidate server
+      # image to GHCR and deletes that run-scoped package version in cleanup.
+      packages: write
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -688,6 +694,19 @@ jobs:
       # docker + buildx ship on ubuntu-latest; ensure a builder exists for the
       # single-platform `buildx build --load` the server-image candidate uses.
       - uses: docker/setup-buildx-action@v3
+      # SELFHOST-CFN-1 builds a linux/arm64 candidate on this amd64 runner
+      # (the shipped CloudFormation wrapper only offers Graviton t4g instance
+      # types); QEMU binfmt makes that cross-platform buildx build possible.
+      - uses: docker/setup-qemu-action@v3
+      # GHCR auth for the SELFHOST-CFN-1 candidate-image push/cleanup. The
+      # repo-scoped GITHUB_TOKEN (packages: write above) is the credential; no
+      # PAT is introduced.
+      - name: Log in to GHCR (SELFHOST-CFN-1 candidate image push)
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Configure AWS credentials (run-scoped EC2 + Route53 role)
         uses: aws-actions/configure-aws-credentials@v4
