@@ -298,9 +298,10 @@ export const defaultSelfHostQualDriver: SelfHostQualDriver = {
     }),
 
   async installAndClaim(world, opts) {
+    let receipt: Awaited<ReturnType<typeof runShippedInstaller>>;
     try {
       const { repo, tag } = splitCandidateImageRef(world.artifacts.serverImage);
-      const receipt = await runShippedInstaller({
+      receipt = await runShippedInstaller({
         box: world.control.box,
         ssh: world.control.ssh,
         serverImageArchive: world.artifacts.serverImage,
@@ -311,19 +312,25 @@ export const defaultSelfHostQualDriver: SelfHostQualDriver = {
         candidateImageTag: tag,
         corsAllowOrigins: browserOriginsForBox(world),
       });
-      const candidateServerVersion = world.artifacts.serverImage.version;
-      if (receipt.serverVersion !== candidateServerVersion) {
-        return {
-          ok: false,
-          reason:
-            `SELFHOST-QUAL-1 install: the running server advertises "${receipt.serverVersion}", ` +
-            `but the candidate map pins "${candidateServerVersion}"; refusing to claim a mismatched build.`,
-        };
-      }
+    } catch (error) {
+      return { ok: false, reason: describeSelfHostSetupFailure("install", error) };
+    }
+
+    const candidateServerVersion = world.artifacts.serverImage.version;
+    if (receipt.serverVersion !== candidateServerVersion) {
+      return {
+        ok: false,
+        reason:
+          `SELFHOST-QUAL-1 install: the running server advertises "${receipt.serverVersion}", ` +
+          `but the candidate map pins "${candidateServerVersion}"; refusing to claim a mismatched build.`,
+      };
+    }
+
+    try {
       const owner = await claimSelfHostOwner(world, opts.ownerEmail ? { email: opts.ownerEmail } : {});
       return { ok: true, owner };
     } catch (error) {
-      return { ok: false, reason: `SELFHOST-QUAL-1 install/claim failed: ${describe(error)}` };
+      return { ok: false, reason: describeSelfHostSetupFailure("owner_claim", error) };
     }
   },
 
@@ -1206,6 +1213,19 @@ function sha256Hex(value: string): string {
 
 function describe(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * Preserves the safe setup phase before the aggregate sanitizer removes any
+ * external response or command payload. The separator deliberately avoids a
+ * generic `claim failed:` prefix, which previously caused the sanitizer to
+ * discard both the phase and an already-safe HTTP status.
+ */
+export function describeSelfHostSetupFailure(
+  phase: "install" | "owner_claim",
+  error: unknown,
+): string {
+  return `SELFHOST-QUAL-1 prerequisite phase=${phase}; ${describe(error)}`;
 }
 
 function failedOutcome(cellId: string, message: string): ScenarioCellOutcome {

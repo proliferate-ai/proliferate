@@ -10,6 +10,7 @@ import {
   SH_GATEWAY,
   SH_GITHUB_AUTH,
   attachCleanupEvidence,
+  describeSelfHostSetupFailure,
   runCloudAddonCell,
   runGatewayCell,
   runGithubAuthCell,
@@ -56,10 +57,31 @@ import {
 } from "../fixtures/selfhost-github-auth.js";
 import {
   expectedVerdict,
+  redactExternalPayloads,
   validateReportV4,
   type CellEvidenceV1,
   type TestRunReportV4,
 } from "../evidence/schema.js";
+
+test("self-host setup diagnostics preserve the phase while withholding external payloads", () => {
+  const install = redactExternalPayloads(
+    describeSelfHostSetupFailure("install", new Error("ssh command failed: secret installer output")),
+  );
+  assert.match(install, /phase=install/);
+  assert.doesNotMatch(install, /secret installer output/);
+  assert.match(install, /output withheld from evidence/);
+
+  const claim = redactExternalPayloads(
+    describeSelfHostSetupFailure(
+      "owner_claim",
+      new Error("GET /v1/organizations -> 500: secret response body"),
+    ),
+  );
+  assert.match(claim, /phase=owner_claim/);
+  assert.match(claim, /GET \/v1\/organizations -> 500/);
+  assert.doesNotMatch(claim, /secret response body/);
+  assert.match(claim, /response body withheld from evidence/);
+});
 
 // ── Shared fakes ─────────────────────────────────────────────────────────────
 
