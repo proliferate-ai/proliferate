@@ -30,9 +30,8 @@ import {
   shouldShowSupportReportUploadFailureToast,
   supportReportRetriesExhausted,
 } from "#product/lib/domain/support/report-upload-failure";
-import {
-  buildSupportReportPackage,
-  type SupportReportUploadDependencies,
+import type {
+  SupportReportUploadDependencies,
 } from "#product/lib/workflows/support/support-report-upload-workflows";
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 import { useToastStore } from "#product/stores/toast/toast-store";
@@ -283,6 +282,9 @@ async function uploadSupportReport(
     | { blob: Blob; sha256: string; generatedAt: string }
     | null = null;
   if (includeLogs) {
+    const { buildSupportReportPackage } = await import(
+      "#product/lib/workflows/support/support-report-upload-workflows"
+    );
     const reportPackage = await buildSupportReportPackage(job, dependencies, serverCorrelation);
     const diagnosticsBlob = jsonBlob(reportPackage);
     if (diagnosticsBlob.size > DIAGNOSTICS_MAX_BYTES) {
