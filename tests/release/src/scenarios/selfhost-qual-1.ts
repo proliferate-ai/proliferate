@@ -165,6 +165,13 @@ export const GATEWAY_TURN_PROMPT = "Reply with exactly the word: pong";
  */
 export const EXPECTED_INVITED_ROLE = "member";
 const RESTART_HEALTH_TIMEOUT_MS = 180_000;
+/**
+ * Bounded re-gate on `/health` immediately before the owner claim: the shipped
+ * installer returns on the first healthy probe, but a just-booted stack can
+ * still 502 through Caddy briefly, and `POST /setup` is deliberately never
+ * retried (non-idempotent — see fixtures/http.ts).
+ */
+const CLAIM_HEALTH_TIMEOUT_MS = 120_000;
 
 /**
  * The world-level env the shared self-host world needs (AWS/SSH provisioning
@@ -327,6 +334,14 @@ export const defaultSelfHostQualDriver: SelfHostQualDriver = {
     }
 
     try {
+      // The installer returns on the FIRST healthy probe, but a just-booted
+      // stack can still serve 502 through Caddy for a short window. The claim
+      // chain starts with the non-idempotent `POST /setup`, which must never be
+      // blind-retried (a partially-applied first claim would make a retry read
+      // as a second claimant) — so re-gate on health here instead, mirroring
+      // SELFHOST-INSTALL-1's post-restart wait (observed: runs 29577489307 and
+      // 29624904514 both died in this window).
+      await waitForHealth(world.api.baseUrl, { timeoutMs: CLAIM_HEALTH_TIMEOUT_MS });
       const owner = await claimSelfHostOwner(world, opts.ownerEmail ? { email: opts.ownerEmail } : {});
       return { ok: true, owner };
     } catch (error) {
