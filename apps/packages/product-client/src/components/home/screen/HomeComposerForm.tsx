@@ -19,6 +19,7 @@ import type {
   HomeNextModelSelection,
   ModelAvailabilityState,
 } from "#product/lib/domain/home/home-next-launch";
+import type { ChatComposerEditorSnapshot } from "#product/lib/domain/chat/composer/file-mention-draft-model";
 
 // Surfaces whose React commits are attributed to a home `composer_typing`
 // operation. If the render-isolation is working, only "home-composer" should
@@ -106,7 +107,11 @@ export function HomeComposerForm({
   // (no-op unless VITE_PROLIFERATE_DEBUG_MAIN_THREAD is enabled).
   const typingOperationRef = useRef<MeasurementOperationId | null>(null);
   const setDraft = composer.setDraft;
-  const handleDraftChange = useCallback((value: string, eventTimeStampMs?: number) => {
+  const handleDraftChange = useCallback((
+    value: string,
+    eventTimeStampMs: number | undefined,
+    snapshot: ChatComposerEditorSnapshot,
+  ) => {
     const operationId = startMeasurementOperation({
       kind: "composer_typing",
       sampleKey: "composer",
@@ -124,7 +129,7 @@ export function HomeComposerForm({
       surface: "home-composer",
       eventTimeStampMs,
     });
-    setDraft(value);
+    setDraft(value, snapshot);
   }, [setDraft]);
   useEffect(() => () => {
     finishOrCancelMeasurementOperation(typingOperationRef.current, "unmount");
@@ -152,8 +157,12 @@ export function HomeComposerForm({
             >
               <ComposerRichTextEditor
                 value={composer.draft}
+                snapshot={composer.editorSnapshot}
                 onChange={handleDraftChange}
                 onKeyDown={composer.handleKeyDown}
+                submitBehavior="home"
+                canSubmit={composer.canSubmit}
+                onSubmit={() => { void composer.submit(); }}
                 placeholder={CHAT_COMPOSER_LABELS.placeholder}
                 disabled={false}
                 surface="home"

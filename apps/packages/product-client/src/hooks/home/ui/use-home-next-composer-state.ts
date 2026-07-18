@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { KeyboardEvent } from "react";
 import { flushSync } from "react-dom";
 import { useHomeNextLaunch } from "#product/hooks/home/workflows/use-home-next-launch";
 import { useHomeDraftHandoffStore } from "#product/stores/home/home-draft-handoff-store";
@@ -8,6 +7,8 @@ import type {
   HomeNextModelSelection,
   ModelAvailabilityState,
 } from "#product/lib/domain/home/home-next-launch";
+import type { ChatComposerEditorSnapshot } from "#product/lib/domain/chat/composer/file-mention-draft-model";
+import type { ChatComposerKeyboardEvent } from "#product/hooks/chat/ui/use-chat-composer-keyboard";
 
 interface UseHomeNextComposerStateArgs {
   targetDisabledReason: string | null;
@@ -29,14 +30,18 @@ export function useHomeNextComposerState({
   launchTarget,
 }: UseHomeNextComposerStateArgs) {
   const submitInFlightRef = useRef(false);
-  const [draft, setDraft] = useState("");
+  const [draftState, setDraftState] = useState<{
+    value: string;
+    snapshot?: ChatComposerEditorSnapshot;
+  }>({ value: "" });
+  const draft = draftState.value;
   const restoredDraftText = useHomeDraftHandoffStore((state) => state.draftText);
   const clearRestoredDraftText = useHomeDraftHandoffStore((state) => state.clearDraftText);
   const { isLaunching, launch } = useHomeNextLaunch();
 
   useEffect(() => {
     if (restoredDraftText !== null) {
-      setDraft(restoredDraftText);
+      setDraftState({ value: restoredDraftText });
       clearRestoredDraftText();
     }
   }, [clearRestoredDraftText, restoredDraftText]);
@@ -52,6 +57,13 @@ export function useHomeNextComposerState({
     && !!launchTarget
     && !isLaunching;
 
+  const setDraft = useCallback((
+    value: string,
+    snapshot?: ChatComposerEditorSnapshot,
+  ) => {
+    setDraftState(snapshot ? { value, snapshot } : { value });
+  }, []);
+
   const submit = useCallback(async () => {
     if (
       !canSubmit
@@ -61,19 +73,19 @@ export function useHomeNextComposerState({
     ) return;
 
     submitInFlightRef.current = true;
-    const submittedDraft = draft;
+    const submittedDraft = draftState;
     const restoreSubmittedDraft = () => {
-      setDraft((currentDraft) => (
-        currentDraft.length === 0 ? submittedDraft : currentDraft
+      setDraftState((currentDraft) => (
+        currentDraft.value.length === 0 ? submittedDraft : currentDraft
       ));
     };
     flushSync(() => {
-      setDraft("");
+      setDraftState({ value: "" });
     });
 
     try {
       const succeeded = await launch({
-        text: submittedDraft,
+        text: submittedDraft.value,
         modelSelection,
         modeId,
         launchControlValues,
@@ -91,7 +103,7 @@ export function useHomeNextComposerState({
     }
   }, [
     canSubmit,
-    draft,
+    draftState,
     launch,
     launchControlValues,
     launchTarget,
@@ -101,12 +113,12 @@ export function useHomeNextComposerState({
 
   const cancel = useCallback(() => {
     if (!isLaunching) {
-      setDraft("");
+      setDraftState({ value: "" });
     }
   }, [isLaunching]);
 
-  const handleKeyDown = useCallback((event: KeyboardEvent<HTMLElement>) => {
-    if (event.nativeEvent.isComposing) return;
+  const handleKeyDown = useCallback((event: ChatComposerKeyboardEvent) => {
+    if (event.isComposing || event.nativeEvent?.isComposing) return;
     if (
       event.key === "Escape"
       && !event.shiftKey
@@ -115,22 +127,12 @@ export function useHomeNextComposerState({
       && !event.metaKey
     ) {
       cancel();
-      return;
     }
-    if (
-      event.key === "Enter"
-      && (event.metaKey || event.ctrlKey)
-      && !event.shiftKey
-      && !event.altKey
-      && canSubmit
-    ) {
-      event.preventDefault();
-      void submit();
-    }
-  }, [canSubmit, cancel, submit]);
+  }, [cancel]);
 
   return {
     draft,
+    editorSnapshot: draftState.snapshot,
     setDraft,
     submitDisabledReason,
     canSubmit,

@@ -1,7 +1,10 @@
-import type { RefObject } from "react";
+import { useState, type RefObject } from "react";
 import { WORKSPACE_CHAT_COMPOSER_INPUT } from "#product/config/chat";
 import { CHAT_COMPOSER_LABELS } from "#product/copy/chat/chat-copy";
-import type { ChatComposerDraft } from "#product/lib/domain/chat/composer/file-mention-draft-model";
+import type {
+  ChatComposerDraft,
+  ChatComposerEditorSnapshot,
+} from "#product/lib/domain/chat/composer/file-mention-draft-model";
 import {
   DraftAttachmentPreviewList,
   type DraftAttachmentPreviewListProps,
@@ -17,6 +20,7 @@ interface ChatInputDraftAreaProps {
   /** Picks the follow-up placeholder once the session transcript has turns. */
   hasSessionTurns: boolean;
   isEditingQueuedPrompt: boolean;
+  editingQueueSeq: number | null;
   editDraft: string;
   onEditDraftChange: (value: string) => void;
   textareaRef: RefObject<HTMLDivElement | null>;
@@ -40,6 +44,7 @@ interface ChatInputDraftAreaProps {
 export function ChatInputDraftArea({
   hasSessionTurns,
   isEditingQueuedPrompt,
+  editingQueueSeq,
   editDraft,
   onEditDraftChange,
   textareaRef,
@@ -55,6 +60,15 @@ export function ChatInputDraftArea({
   overlayHostElement,
   onCancelEdit,
 }: ChatInputDraftAreaProps) {
+  const [editEditorState, setEditEditorState] = useState<{
+    queueSeq: number | null;
+    value: string;
+    snapshot: ChatComposerEditorSnapshot;
+  }>();
+  const editSnapshot = editEditorState?.queueSeq === editingQueueSeq
+    && editEditorState.value === editDraft
+    ? editEditorState.snapshot
+    : undefined;
   const draft = useChatDraftValue(workspaceUiKey);
   const placeholder = hasSessionTurns
     ? CHAT_COMPOSER_LABELS.followUpPlaceholder
@@ -64,18 +78,29 @@ export function ChatInputDraftArea({
       <>
         <QueuedPromptEditBanner onCancel={onCancelEdit} />
         <ComposerTextareaFrame topInset="none">
-          <ComposerRichTextEditor
-            rootRef={textareaRef}
-            value={editDraft}
-            onChange={(value) => onEditDraftChange(value)}
-            onKeyDown={onKeyDown}
-            submitBehavior="editing"
-            canSubmit={canSubmit}
-            onSubmit={onSubmit}
-            placeholder={placeholder}
-            disabled={false}
-            className="min-h-[2.5rem]"
-          />
+          <div
+            className="relative overflow-y-auto"
+            style={{
+              minHeight: `${WORKSPACE_CHAT_COMPOSER_INPUT.minHeightRem}rem`,
+              maxHeight: `calc(var(--text-composer--line-height) * ${WORKSPACE_CHAT_COMPOSER_INPUT.maxRows})`,
+            }}
+          >
+            <ComposerRichTextEditor
+              rootRef={textareaRef}
+              value={editDraft}
+              snapshot={editSnapshot}
+              onChange={(value, _eventTimeStampMs, snapshot) => {
+                setEditEditorState({ queueSeq: editingQueueSeq, value, snapshot });
+                onEditDraftChange(value);
+              }}
+              onKeyDown={onKeyDown}
+              submitBehavior="editing"
+              canSubmit={canSubmit}
+              onSubmit={onSubmit}
+              placeholder={placeholder}
+              disabled={false}
+            />
+          </div>
         </ComposerTextareaFrame>
       </>
     );

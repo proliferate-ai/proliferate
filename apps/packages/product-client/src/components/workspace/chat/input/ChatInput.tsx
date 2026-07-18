@@ -115,6 +115,7 @@ export function ChatInput({
   const { isSubmitting, run: runSubmit } = useComposerSubmitGate();
   const {
     isEditing: isEditingQueuedPrompt,
+    editingSeq,
     editDraft,
     setEditDraftText,
     cancelEdit,
@@ -340,6 +341,7 @@ export function ChatInput({
             <ChatInputDraftArea
               hasSessionTurns={hasSessionTurns}
               isEditingQueuedPrompt={effectiveIsEditingQueuedPrompt}
+              editingQueueSeq={effectiveIsEditingQueuedPrompt ? editingSeq : null}
               editDraft={editDraft}
               onEditDraftChange={setEditDraftText}
               textareaRef={textareaRef}

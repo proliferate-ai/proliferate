@@ -154,8 +154,8 @@ vi.mock("@proliferate/product-ui/chat/composer/ChatComposerSurface", () => ({
 }));
 
 vi.mock("#product/components/workspace/chat/input/ComposerRichTextEditor", () => ({
-  ComposerRichTextEditor: ({ value, onChange, onKeyDown, disabled }: any) => (
-    <textarea aria-label="Prompt" value={value} onChange={(event) => onChange(event.target.value)} onKeyDown={onKeyDown} disabled={disabled} />
+  ComposerRichTextEditor: ({ value, snapshot, onChange, onKeyDown, disabled }: any) => (
+    <textarea aria-label="Prompt" data-editor-snapshot={snapshot?.payload} value={value} onChange={(event) => onChange(event.target.value, event.timeStamp, { version: 1, payload: "home-editor-snapshot" })} onKeyDown={onKeyDown} disabled={disabled} />
   ),
 }));
 
@@ -346,6 +346,7 @@ describe("HomeNextScreen model availability notices", () => {
     fail();
     const prompt = submitPrompt("keep this draft");
     await waitFor(() => expect(prompt.value).toBe("keep this draft"));
+    expect(prompt.dataset.editorSnapshot).toBe("home-editor-snapshot");
     expect(document.querySelector("[data-home-submit-preview]")).toBeNull();
   });
 

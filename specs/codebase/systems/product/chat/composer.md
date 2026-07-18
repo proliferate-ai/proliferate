@@ -82,7 +82,9 @@ While a workspace draft is live, `ChatComposerDraft` may carry a versioned,
 opaque editor snapshot beside its Markdown nodes. The product client uses that
 snapshot only to restore editor-only identity such as whether Markdown link
 syntax came from an HTTPS paste; submission still serializes only Markdown.
-Empty drafts and plain-text compatibility writes discard the snapshot.
+Home and queued-edit state retain the same opaque snapshot locally while their
+Markdown draft is live. Empty drafts, plain-text compatibility writes, and
+external draft replacements discard the snapshot.
 
 The live editor recognizes `*`/`_` emphasis, `**`/`__` strong emphasis, and
 line-leading unordered and ordered list shortcuts. Cmd/Ctrl-B and Cmd/Ctrl-I
@@ -91,7 +93,8 @@ list and Tab/Shift-Tab indent or outdent only when the selection is inside a
 list item. Outside lists, plain Enter retains workspace submission and
 Shift-Enter inserts a newline. Home retains Cmd/Ctrl-Enter submission and
 ordinary Enter editing. Queued edits retain workspace submission behavior
-outside lists.
+outside lists and use the workspace editor's minimum height, row cap, and
+overflow scrolling.
 
 Lexical's high-priority Enter and Tab commands own this decision before native
 editor mutation. A list selection stays Lexical-owned; otherwise the workspace,
