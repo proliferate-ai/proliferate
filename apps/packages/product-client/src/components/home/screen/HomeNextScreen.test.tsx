@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import type { KeyboardEventHandler, ReactNode } from "react";
+import type { ReactNode } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { HomeNextScreen } from "#product/components/home/screen/HomeNextScreen";
@@ -154,24 +154,8 @@ vi.mock("@proliferate/product-ui/chat/composer/ChatComposerSurface", () => ({
 }));
 
 vi.mock("#product/components/workspace/chat/input/ComposerRichTextEditor", () => ({
-  ComposerRichTextEditor: ({
-    value,
-    onChange,
-    onKeyDown,
-    disabled,
-  }: {
-    value: string;
-    onChange: (value: string) => void;
-    onKeyDown: KeyboardEventHandler<HTMLElement>;
-    disabled: boolean;
-  }) => (
-    <textarea
-      aria-label="Prompt"
-      value={value}
-      onChange={(event) => onChange(event.target.value)}
-      onKeyDown={onKeyDown}
-      disabled={disabled}
-    />
+  ComposerRichTextEditor: ({ value, onChange, onKeyDown, disabled }: any) => (
+    <textarea aria-label="Prompt" value={value} onChange={(event) => onChange(event.target.value)} onKeyDown={onKeyDown} disabled={disabled} />
   ),
 }));
 
