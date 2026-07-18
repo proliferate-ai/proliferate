@@ -962,6 +962,7 @@ export function createFixtureSmokeDriver(deps: Partial<FixtureSmokeRuntimeDeps> 
         // it never deletes the shared parent run dir's builder artifacts. The
         // copied sidecar under here lets the constructor's readBuildSubdomain read
         // the exact build subdomain (matching the renderer's baked-in value).
+        tls: inputs.tls,
         runDir: prep.scopedRunDir,
         templateCustody:
           templateCustodyMode === "consumer"

@@ -19,6 +19,7 @@ import type {
 import type { Exec } from "../local-workspace/docker.js";
 import type { ReadinessFetch, SpawnLike } from "../local-workspace/processes.js";
 import type { ChromiumLauncher } from "../local-workspace/renderer.js";
+import { TEST_QUALIFICATION_TLS } from "../qualification-tls.test-fixture.js";
 import type { Ec2ProvisionConfig, Ec2Provisioner } from "./ec2.js";
 import type { CandidateE2bConfig, CandidateGithubAppConfig, SshExec } from "./ingress.js";
 import {
@@ -256,6 +257,7 @@ async function constructStage(options: {
     aws: AWS,
     e2b: e2bConfig(stageSecrets.e2b),
     github: githubConfig(stageSecrets.github),
+    tls: TEST_QUALIFICATION_TLS,
     runDir: options.runDir,
     templateCustody: { mode: options.mode, journalPath: options.journalPath },
     deps: deps(options.pair, options.cleanupSharedTemplate),

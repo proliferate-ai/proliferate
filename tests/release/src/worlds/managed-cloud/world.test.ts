@@ -445,6 +445,7 @@ test("a startup error preserves a cleanup failure in the terminal error", async 
         aws: AWS,
         e2b: e2bConfig(secrets.e2b),
         github: githubConfig(secrets.github),
+        tls: TEST_QUALIFICATION_TLS,
         runDir,
         deps: h.deps,
       }),

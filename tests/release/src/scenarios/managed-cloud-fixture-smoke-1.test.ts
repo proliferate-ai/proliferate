@@ -43,6 +43,7 @@ import {
 } from "./managed-cloud-fixture-smoke-1.js";
 import type { StripeHttp } from "../fixtures/stripe-test-clock.js";
 import { encodeWebhookEndpointIntentRef, webhookEndpointUrl } from "../fixtures/stripe-smoke-resources.js";
+import { TEST_QUALIFICATION_TLS } from "../worlds/qualification-tls.test-fixture.js";
 import type { CloudProvision1ConstructionInputs } from "./cloud-provision-1.js";
 import type { ConstructManagedCloudWorldOptions } from "../worlds/managed-cloud/world.js";
 import { isMatrixScenario, type ScenarioRunContext } from "./types.js";
@@ -68,6 +69,8 @@ const REQUIRED_ENV_VARS: Record<string, string> = {
   RELEASE_E2E_CLOUD_GITHUB_APP_INSTALLATION_ID: "78901",
   RELEASE_E2E_CLOUD_GITHUB_APP_PRIVATE_KEY: "-----BEGIN RSA PRIVATE KEY-----\ntest\n-----END RSA PRIVATE KEY-----",
   RELEASE_E2E_CLOUD_GITHUB_APP_CLIENT_SECRET: "test-client-secret",
+  RELEASE_E2E_QUALIFICATION_TLS_CERTIFICATE_B64: TEST_QUALIFICATION_TLS.certificateBase64,
+  RELEASE_E2E_QUALIFICATION_TLS_PRIVATE_KEY_B64: TEST_QUALIFICATION_TLS.privateKeyBase64,
   STRIPE_TEST_SECRET_KEY: "sk_test_abc123",
 };
 
@@ -1274,6 +1277,7 @@ function fakeConstructionInputs(runDir: string): CloudProvision1ConstructionInpu
     },
     e2bTeamId: "team-test",
     e2bApiKey: "e2b-key",
+    tls: TEST_QUALIFICATION_TLS,
     github: { appId: "1", clientId: "Iv1.x", installationId: "2", privateKey: "PEM", clientSecret: "cs" },
   };
 }
