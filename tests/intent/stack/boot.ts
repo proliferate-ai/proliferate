@@ -1,28 +1,21 @@
 // Tier-2 "mocked intent" stack-boot fixture.
 //
-// Boots a real server (FastAPI/uvicorn) + real desktop web frontend (Vite,
-// `apps/desktop` in web-port mode) against a seeded Postgres, on a dedicated,
-// profile-isolated port set. Nothing here fakes the sandbox provider or an
-// LLM (that's the tier-2 rule, see specs/developing/testing/README.md) — the
-// only things faked at this boundary are auth-adjacent externals (mock IdP,
-// email capture, Stripe test mode), and this suite doesn't even need those.
-//
-// Profile name is fixed to `t2intent` per
-// specs/developing/local/dev-profiles.md (one profile per worktree/purpose,
-// never `main`, kept for this suite's lifetime since it owns its own
-// Postgres DB).
-//
-// Reuses the same primitives `make run PROFILE=<name>` uses
-// (scripts/dev.mjs for port/profile allocation, alembic for migrations)
-// rather than shelling out to `make run` itself, because `make run` always
-// launches the Tauri desktop shell — tier 2 needs the desktop **web** build
-// (`pnpm dev` / vite) per specs/developing/testing/scenarios.md's stated
-// convention ("desktop web build (`pnpm dev` on PROLIFERATE_WEB_PORT)").
+// Boots real FastAPI, Vite, and Postgres on profile-isolated ports. It reuses
+// the profile allocator and migrations behind `make run`, but launches Vite
+// directly because Tier 2 needs the Desktop web build, not the Tauri shell.
+// Network neighbors remain fake or absent per specs/developing/testing/README.md.
 
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  assertOwnedProfileResources,
+  cleanupOwnedEphemeralProfile,
+  prepareOwnedEphemeralProfile,
+  setupTokenFileForProfile,
+  type OwnedEphemeralProfile,
+} from "./ephemeral-profile.ts";
 
 export const PROFILE = "t2intent";
 export const BILLING_PROFILE = "t2billing";
@@ -40,6 +33,8 @@ export interface StripeBillingEnv {
 export interface BootOptions {
   /** Profile name to boot under (default: the auth/org `t2intent` profile). */
   profile?: string;
+  /** Fresh run/attempt/worker/retry-owned profile. Mutually exclusive with profile. */
+  ownedProfile?: OwnedEphemeralProfile;
   /** When set, the server boots with Stripe test-mode billing wired: pro
    * billing enabled, `CLOUD_BILLING_MODE` (default `enforce`), and the Stripe
    * test keys/prices. Used only by the billing suite. */
@@ -286,14 +281,27 @@ function killTracked(child: ChildProcess): void {
 }
 
 export async function bootStack(options: BootOptions = {}): Promise<BootedStack> {
-  // TIER2_INTENT_PROFILE lets a local run boot the same harness on its own
-  // profile so parallel worktrees don't collide on ports/DB/run-lock (this
-  // branch was verified on `t2auth`). Callers that pass an explicit profile
-  // (the billing suite) still win; CI keeps the default, one profile per
-  // isolated container.
-  const profile = options.profile ?? process.env.TIER2_INTENT_PROFILE ?? PROFILE;
+  if (options.profile && options.ownedProfile) {
+    throw new Error("bootStack profile and ownedProfile are mutually exclusive.");
+  }
+  const ownedProfile = options.ownedProfile;
+  const profile = ownedProfile?.profile ?? options.profile ?? process.env.TIER2_INTENT_PROFILE ?? PROFILE;
+  if (ownedProfile) {
+    prepareOwnedEphemeralProfile(ownedProfile);
+  }
   log(`preparing profile "${profile}"...`);
   const instance = ensureProfilePorts(profile);
+  const setupTokenFile = ownedProfile?.setupTokenFile ?? setupTokenFileForProfile(profile);
+  if (ownedProfile) {
+    assertOwnedProfileResources(ownedProfile, {
+      profile,
+      setupTokenFile,
+      databaseName: instance.databaseName,
+      profileDirectory: path.dirname(profileInstancePath(profile)),
+      runtimeDirectory: instance.anyharnessRuntimeHome,
+      desktopDirectory: instance.desktopHome,
+    });
+  }
   ensureDatabase(instance.databaseName);
   ensureRedisReachable();
 
@@ -304,11 +312,6 @@ export async function bootStack(options: BootOptions = {}): Promise<BootedStack>
   // CI, or `skipFrontend`) so a spec can probe reachability itself and skip
   // gracefully rather than the boot deciding for it.
   const anyharnessBaseUrl = `http://127.0.0.1:${instance.ports.anyharness}`;
-  const setupTokenFile = `/tmp/proliferate-${profile}-setup-token`;
-  // Fresh setup token file per boot: a stale token from a prior claimed run
-  // would otherwise sit there confusing the next claim attempt.
-  rmSync(setupTokenFile, { force: true });
-
   log(`running alembic migrations against ${instance.databaseName}...`);
   run(serverVenvExecutable("alembic"), ["upgrade", "head"], {
     cwd: path.join(REPO_ROOT, "server"),
@@ -480,6 +483,16 @@ export async function bootStack(options: BootOptions = {}): Promise<BootedStack>
     // 2-minute staleness window refuses to start.
     rmSync(path.join(path.dirname(profileInstancePath(profile)), "run.lock"), { force: true });
     await new Promise((resolve) => setTimeout(resolve, 500));
+    if (ownedProfile) {
+      cleanupOwnedEphemeralProfile(ownedProfile, {
+        profile,
+        setupTokenFile,
+        databaseName: instance.databaseName,
+        profileDirectory: path.dirname(profileInstancePath(profile)),
+        runtimeDirectory: instance.anyharnessRuntimeHome,
+        desktopDirectory: instance.desktopHome,
+      });
+    }
   };
 
   return { profile, apiBaseUrl, webBaseUrl, anyharnessBaseUrl, databaseUrl, setupTokenFile, teardown };
