@@ -177,6 +177,11 @@ export const managedCloudFixtureSmoke1: ScenarioDefinition = {
     "RELEASE_E2E_CLOUD_GITHUB_APP_INSTALLATION_ID",
     "RELEASE_E2E_CLOUD_GITHUB_APP_PRIVATE_KEY",
     "RELEASE_E2E_CLOUD_GITHUB_APP_CLIENT_SECRET",
+    // The fixture smoke constructs the same public-TLS managed-cloud world as
+    // CLOUD-PROVISION-1. These must be declared here so the runner resolves
+    // them into ctx.env before resolveWorldConstructionInputs() is called.
+    "RELEASE_E2E_QUALIFICATION_TLS_CERTIFICATE_B64",
+    "RELEASE_E2E_QUALIFICATION_TLS_PRIVATE_KEY_B64",
     "STRIPE_TEST_SECRET_KEY",
   ],
   expandCells: (): ScenarioCellSpec[] =>

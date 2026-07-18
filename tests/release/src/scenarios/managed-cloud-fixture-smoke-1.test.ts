@@ -294,6 +294,8 @@ test("the scenario is a matrix over exactly the five fixture cells", async () =>
     );
   }
   assert.ok(managedCloudFixtureSmoke1.requiredEnv.includes("STRIPE_TEST_SECRET_KEY"));
+  assert.ok(managedCloudFixtureSmoke1.requiredEnv.includes("RELEASE_E2E_QUALIFICATION_TLS_CERTIFICATE_B64"));
+  assert.ok(managedCloudFixtureSmoke1.requiredEnv.includes("RELEASE_E2E_QUALIFICATION_TLS_PRIVATE_KEY_B64"));
 });
 
 test("all five cells go green with kind-scoped evidence on the happy path", async () => {
