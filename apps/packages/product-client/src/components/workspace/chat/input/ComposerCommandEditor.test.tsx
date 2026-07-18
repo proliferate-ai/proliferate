@@ -12,7 +12,7 @@ import { ComposerCommandEditor } from "#product/components/workspace/chat/input/
 import {
   isComposerLinkPaste,
   isExactHttpsComposerPaste,
-} from "#product/components/workspace/chat/input/ComposerRichTextEditor";
+} from "#product/components/workspace/chat/input/ComposerLinkPastePlugin";
 
 const slashCommandMock = vi.hoisted(() => ({
   commands: [] as SessionSlashCommandViewModel[],

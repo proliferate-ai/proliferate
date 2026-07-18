@@ -2,7 +2,7 @@ import type {
   TranscriptState,
   TurnRecord,
 } from "@anyharness/sdk";
-import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { useRevertGitPatchesMutation } from "@anyharness/sdk-react";
 import { TurnDiffPanel } from "#product/components/workspace/chat/transcript/TurnDiffPanel";
 import { TranscriptPatchTurnDiffPanel } from "#product/components/workspace/chat/transcript/TranscriptPatchTurnDiffPanel";
@@ -42,19 +42,9 @@ import type { TurnDisplayBlock } from "@proliferate/product-domain/chats/transcr
 import type { PromptPlanAttachmentDescriptor } from "@proliferate/product-domain/chats/composer/prompt-plan-attachments";
 import type { SessionViewState } from "@proliferate/product-domain/sessions/activity";
 import { useToastStore } from "#product/stores/toast/toast-store";
-import type { AssistantMessageRevealState } from "#product/components/workspace/chat/transcript/AssistantMessage";
-import {
-  getAssistantRevealProgress,
-} from "#product/components/workspace/chat/transcript/assistant-reveal-progress";
-import { logDevAssistantRevealState } from "#product/lib/infra/debug/dev-assistant-reveal-log";
+import { useAssistantRevealFrontier } from "#product/hooks/chat/ui/use-assistant-reveal-frontier";
 
 type PlanHandoffHandler = (plan: PromptPlanAttachmentDescriptor) => void;
-type AssistantRevealClaim = {
-  itemId: string;
-  targetLength: number;
-};
-
-export const RECENT_ASSISTANT_REVEAL_WINDOW_MS = 60_000;
 
 export function TranscriptTurnRow({
   row,
@@ -108,64 +98,18 @@ export function TranscriptTurnRow({
   const tailAssistantItem = tailAssistantProseRootId
     ? transcript.itemsById[tailAssistantProseRootId]
     : null;
-  const revealOriginRef = useRef({
-    turnId: turn.turnId,
-    wasLive: !turn.completedAt,
-  });
-  if (revealOriginRef.current.turnId !== turn.turnId) {
-    revealOriginRef.current = {
-      turnId: turn.turnId,
-      wasLive: !turn.completedAt,
-    };
-  } else if (!turn.completedAt) {
-    revealOriginRef.current.wasLive = true;
-  }
-  const [assistantRevealClaim, setAssistantRevealClaim] =
-    useState<AssistantRevealClaim | null>(null);
-  const cachedAssistantReveal = getAssistantRevealProgress(
-    tailAssistantProseRootId,
-  );
-  const claimedVisibleLength =
-    assistantRevealClaim?.itemId === tailAssistantProseRootId
-      ? assistantRevealClaim.targetLength
-      : cachedAssistantReveal?.visibleLength ?? 0;
   const tailAssistantTextLength = tailAssistantCopyContent?.length ?? 0;
-  const hasUnrevealedAssistantText = tailAssistantTextLength > claimedVisibleLength;
-  const shouldAnimateAssistantReveal = shouldHoldAssistantRevealFrontier({
+  const {
+    animateAssistantRevealItemId,
+    assistantRevealComplete,
+    handleAssistantRevealStateChange,
+  } = useAssistantRevealFrontier({
     itemId: tailAssistantProseRootId,
-    hasUnrevealedText: hasUnrevealedAssistantText,
-    cachedRevealComplete: cachedAssistantReveal?.complete ?? null,
-    eligibleOrigin: (
-      revealOriginRef.current.wasLive
-      || cachedAssistantReveal !== null
-      || (
-        isLatestTurn
-        && isRecentAssistantCompletion(turn.completedAt)
-      )
-    ),
+    isLatestTurn,
+    targetLength: tailAssistantTextLength,
+    turnCompletedAt: turn.completedAt,
+    turnId: turn.turnId,
   });
-  const animateAssistantRevealItemId = shouldAnimateAssistantReveal
-    ? tailAssistantProseRootId
-    : null;
-  const assistantRevealComplete = !shouldAnimateAssistantReveal;
-  const handleAssistantRevealStateChange = useCallback((
-    itemId: string,
-    state: AssistantMessageRevealState,
-  ) => {
-    logDevAssistantRevealState({ turnId: turn.turnId, itemId, state });
-    if (!state.complete) {
-      return;
-    }
-    setAssistantRevealClaim((current) => {
-      if (
-        current?.itemId === itemId
-        && current.targetLength >= state.targetLength
-      ) {
-        return current;
-      }
-      return { itemId, targetLength: state.targetLength };
-    });
-  }, [turn.turnId]);
   const visualTurnCompleted = !!turn.completedAt && assistantRevealComplete;
   const diffPanelKind = resolveTranscriptTurnDiffPanelKind({
     rowIsLastTurnRow: row.isLastTurnRow,
@@ -363,36 +307,6 @@ export function resolveTurnAssistantFooterMode({
     return "copy";
   }
   return "reserved";
-}
-
-export function isRecentAssistantCompletion(
-  completedAt: string | null | undefined,
-  nowMs = Date.now(),
-): boolean {
-  if (!completedAt) {
-    return false;
-  }
-  const completedAtMs = Date.parse(completedAt);
-  const ageMs = nowMs - completedAtMs;
-  return Number.isFinite(completedAtMs)
-    && ageMs >= 0
-    && ageMs <= RECENT_ASSISTANT_REVEAL_WINDOW_MS;
-}
-
-export function shouldHoldAssistantRevealFrontier({
-  itemId,
-  hasUnrevealedText,
-  cachedRevealComplete,
-  eligibleOrigin,
-}: {
-  itemId: string | null;
-  hasUnrevealedText: boolean;
-  cachedRevealComplete: boolean | null;
-  eligibleOrigin: boolean;
-}): boolean {
-  return itemId !== null
-    && eligibleOrigin
-    && (hasUnrevealedText || cachedRevealComplete === false);
 }
 
 export function shouldRenderStandaloneStoppedNotice(

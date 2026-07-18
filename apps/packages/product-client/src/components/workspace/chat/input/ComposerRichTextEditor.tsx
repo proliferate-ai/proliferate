@@ -1,10 +1,8 @@
 import { useEffect, useRef, type MutableRefObject, type Ref } from "react";
 import {
   $createRangeSelection,
-  $createTextNode,
   $getRoot,
   $getSelection,
-  $insertNodes,
   $isRangeSelection,
   $setSelection,
   COMMAND_PRIORITY_HIGH,
@@ -12,12 +10,11 @@ import {
   KEY_ENTER_COMMAND,
   KEY_TAB_COMMAND,
   OUTDENT_CONTENT_COMMAND,
-  PASTE_COMMAND,
   type LexicalEditor,
   type LexicalNode,
   type TextNode,
 } from "lexical";
-import { $createLinkNode, $toggleLink, LinkNode } from "@lexical/link";
+import { LinkNode } from "@lexical/link";
 import { $isListItemNode, ListItemNode, ListNode } from "@lexical/list";
 import {
   $convertFromMarkdownString,
@@ -42,6 +39,10 @@ import { MarkdownShortcutPlugin } from "@lexical/react/LexicalMarkdownShortcutPl
 import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { ComposerCaretPlugin } from "#product/components/workspace/chat/input/ComposerCaretPlugin";
+import {
+  ComposerLinkPastePlugin,
+  isComposerLinkPaste,
+} from "#product/components/workspace/chat/input/ComposerLinkPastePlugin";
 import type { ComposerKeyboardEventLike } from "#product/lib/domain/chat/composer/composer-keyboard";
 import type { ChatComposerEditorSnapshot } from "#product/lib/domain/chat/composer/file-mention-draft-model";
 
@@ -56,8 +57,6 @@ const INPUT_TRANSFORMERS: Transformer[] = [
   ITALIC_UNDERSCORE,
 ];
 const OUTPUT_TRANSFORMERS: Transformer[] = [...INPUT_TRANSFORMERS, LINK];
-const EXACT_HTTPS_URL = /^https:\/\/[^\s]+$/u;
-const MARKDOWN_HTTPS_LINK = /\[([^\]\r\n]+)\]\((https:\/\/[^\s)\r\n]+)\)/gu;
 const EXTERNAL_VALUE_TAG = "external-composer-value";
 
 type ComposerNativeKeyboardEvent = KeyboardEvent & ComposerKeyboardEventLike;
@@ -66,41 +65,6 @@ export interface ComposerEditorContext {
   plainText: string;
   anchorOffset: number;
   focusOffset: number;
-}
-
-export function isExactHttpsComposerPaste(value: string): boolean {
-  return EXACT_HTTPS_URL.test(value);
-}
-
-type ComposerPastePart =
-  | { kind: "text"; value: string }
-  | { kind: "link"; label: string; url: string };
-
-export function parseMarkdownHttpsComposerPaste(value: string): ComposerPastePart[] | null {
-  const parts: ComposerPastePart[] = [];
-  let cursor = 0;
-  let containsLink = false;
-
-  for (const match of value.matchAll(MARKDOWN_HTTPS_LINK)) {
-    const matchIndex = match.index;
-    const label = match[1];
-    const url = match[2];
-    if (matchIndex === undefined || label === undefined || url === undefined) continue;
-    if (matchIndex > cursor) {
-      parts.push({ kind: "text", value: value.slice(cursor, matchIndex) });
-    }
-    parts.push({ kind: "link", label, url });
-    containsLink = true;
-    cursor = matchIndex + match[0].length;
-  }
-
-  if (!containsLink) return null;
-  if (cursor < value.length) parts.push({ kind: "text", value: value.slice(cursor) });
-  return parts;
-}
-
-export function isComposerLinkPaste(value: string): boolean {
-  return isExactHttpsComposerPaste(value) || parseMarkdownHttpsComposerPaste(value) !== null;
 }
 
 export interface ComposerRichTextEditorProps {
@@ -353,43 +317,6 @@ function ComposerBehaviorPlugin({
     return () => { unregisterEnter(); unregisterTab(); };
   }, [canSubmit, editor, onCommandKey, onKeyDown, onSubmit, submitBehavior]);
 
-  return null;
-}
-
-function ComposerLinkPastePlugin() {
-  const [editor] = useLexicalComposerContext();
-  useEffect(() => editor.registerCommand(PASTE_COMMAND, (event) => {
-    const clipboard = "clipboardData" in event ? event.clipboardData : null;
-    const value = clipboard?.getData("text/plain") ?? "";
-    const markdownParts = parseMarkdownHttpsComposerPaste(value);
-    const isExactUrl = isExactHttpsComposerPaste(value);
-    if (!isExactUrl && markdownParts === null) return false;
-    const selection = $getSelection();
-    if (!$isRangeSelection(selection)) return false;
-    event.preventDefault();
-
-    if (isExactUrl) {
-      if (!selection.isCollapsed()) {
-        $toggleLink(value);
-        return true;
-      }
-      const link = $createLinkNode(value);
-      link.append($createTextNode(value));
-      $insertNodes([link]);
-      link.selectEnd();
-      return true;
-    }
-
-    const nodes = markdownParts!.map((part) => {
-      if (part.kind === "text") return $createTextNode(part.value);
-      const link = $createLinkNode(part.url);
-      link.append($createTextNode(part.label));
-      return link;
-    });
-    $insertNodes(nodes);
-    nodes[nodes.length - 1]?.selectEnd();
-    return true;
-  }, COMMAND_PRIORITY_HIGH), [editor]);
   return null;
 }
 

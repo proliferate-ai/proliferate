@@ -29,7 +29,7 @@ import {
 import {
   getAssistantRevealProgress,
   recordAssistantRevealProgress,
-} from "#product/components/workspace/chat/transcript/assistant-reveal-progress";
+} from "#product/lib/infra/chat/assistant-reveal-progress";
 import {
   renderTranscriptCodeBlock,
   renderTranscriptInlineCode,
