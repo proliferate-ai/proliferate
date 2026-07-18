@@ -132,6 +132,8 @@ export const selfhostIsolation1: ScenarioDefinition = {
     "RELEASE_E2E_SELFHOST_HOSTED_ZONE_ID",
     "RELEASE_E2E_SELFHOST_INSTANCE_TYPE",
     "RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY",
+    "RELEASE_E2E_QUALIFICATION_TLS_CERTIFICATE_B64",
+    "RELEASE_E2E_QUALIFICATION_TLS_PRIVATE_KEY_B64",
   ],
   expandCells: (): ScenarioCellSpec[] => [
     { dimensions: { cell: SH_SWITCH_ISOLATION, harness: REPRESENTATIVE_HARNESS } },
@@ -191,6 +193,7 @@ export const defaultSelfHostSwitchIsolationDriver: SelfHostSwitchIsolationDriver
       ports: inputs.ports,
       aws: inputs.aws,
       ssh: inputs.ssh,
+      tls: inputs.tls,
     }),
 
   async runSwitchIsolation(pair) {

@@ -92,6 +92,8 @@ test("runShippedInstaller transports bytes, runs the shipped installer pinned to
     serverImageArchive: materialized("server/linux/amd64", "/run/artifacts/server-image.tar"),
     bundle: materialized("selfhost-bundle/linux/amd64", "/run/artifacts/proliferate-deploy.tar.gz"),
     bundleSha256SumsPath: "/run/artifacts/self-hosted-assets.SHA256SUMS",
+    tlsCertificatePath: "/run/secrets/qualification-cert.pem",
+    tlsPrivateKeyPath: "/run/secrets/qualification-key.pem",
     siteAddress: "run-1.qualification.proliferate.com",
     candidateImageRepo: "proliferate-server-qualification",
     candidateImageTag: "0.3.28",
@@ -105,11 +107,13 @@ test("runShippedInstaller transports bytes, runs the shipped installer pinned to
   assert.equal(receipt.apiOrigin, "https://run-1.qualification.proliferate.com");
   assert.equal(receipt.tlsVerified, true);
 
-  // The three candidate byte streams were scp'd to their remote slots.
+  // Candidate bytes and the reusable TLS pair were scp'd to their remote slots.
   assert.deepEqual(
     ssh.scpCalls.map((c) => c.remotePath).sort(),
     [
       "proliferate-candidate/proliferate-deploy.tar.gz",
+      "proliferate-candidate/qualification-tls-certificate.pem",
+      "proliferate-candidate/qualification-tls-private-key.pem",
       "proliferate-candidate/self-hosted-assets.SHA256SUMS",
       "proliferate-candidate/server-image.tar",
     ],
@@ -124,6 +128,34 @@ test("runShippedInstaller transports bytes, runs the shipped installer pinned to
   assert.ok(installCmd!.includes("--version 0.3.28"));
   assert.ok(!/--version (stable|latest)/.test(installCmd!));
   assert.ok(!installCmd!.includes(":stable") && !installCmd!.includes(":latest"));
+  assert.ok(
+    installCmd!.includes(
+      "PROLIFERATE_COMPOSE_OVERRIDE_FILE=/home/ubuntu/proliferate-candidate/qualification-tls.compose.yml",
+    ),
+  );
+
+  const publicConfigs = ssh.runCalls
+    .filter((command) => command.includes("| base64 -d >"))
+    .map((command) => {
+      const encoded = command.match(/printf '%s' '([^']+)'/)?.[1];
+      assert.ok(encoded, "qualification config write contains base64 bytes");
+      return Buffer.from(encoded, "base64").toString("utf8");
+    });
+  assert.ok(
+    publicConfigs.some((config) =>
+      config.includes("tls /qualification-tls/certificate.pem /qualification-tls/private-key.pem"),
+    ),
+    "qualification Caddyfile pins the reusable certificate and key",
+  );
+  assert.ok(
+    publicConfigs.some(
+      (config) =>
+        config.includes("/qualification-tls/certificate.pem:ro") &&
+        config.includes("/qualification-tls/private-key.pem:ro") &&
+        config.includes("/etc/caddy/Caddyfile:ro"),
+    ),
+    "qualification compose override mounts the TLS pair and Caddyfile read-only",
+  );
 });
 
 test("runShippedInstaller passes --cors-allow-origins when browser origins are supplied, and omits it otherwise", async () => {
@@ -134,6 +166,8 @@ test("runShippedInstaller passes --cors-allow-origins when browser origins are s
     serverImageArchive: materialized("server/linux/amd64", "/run/artifacts/server-image.tar"),
     bundle: materialized("selfhost-bundle/linux/amd64", "/run/artifacts/proliferate-deploy.tar.gz"),
     bundleSha256SumsPath: "/run/artifacts/self-hosted-assets.SHA256SUMS",
+    tlsCertificatePath: "/run/secrets/qualification-cert.pem",
+    tlsPrivateKeyPath: "/run/secrets/qualification-key.pem",
     siteAddress: "run-1.qualification.proliferate.com",
     candidateImageRepo: "proliferate-server-qualification",
     candidateImageTag: "0.3.28",
@@ -152,6 +186,8 @@ test("runShippedInstaller passes --cors-allow-origins when browser origins are s
     serverImageArchive: materialized("server/linux/amd64", "/run/artifacts/server-image.tar"),
     bundle: materialized("selfhost-bundle/linux/amd64", "/run/artifacts/proliferate-deploy.tar.gz"),
     bundleSha256SumsPath: "/run/artifacts/self-hosted-assets.SHA256SUMS",
+    tlsCertificatePath: "/run/secrets/qualification-cert.pem",
+    tlsPrivateKeyPath: "/run/secrets/qualification-key.pem",
     siteAddress: "run-1.qualification.proliferate.com",
     candidateImageRepo: "proliferate-server-qualification",
     candidateImageTag: "0.3.28",
@@ -171,6 +207,8 @@ test("runShippedInstaller refuses a rolling stable/latest candidate tag", async 
         serverImageArchive: materialized("server/linux/amd64", "/a/server-image.tar"),
         bundle: materialized("selfhost-bundle/linux/amd64", "/a/proliferate-deploy.tar.gz"),
         bundleSha256SumsPath: "/a/self-hosted-assets.SHA256SUMS",
+        tlsCertificatePath: "/a/qualification-cert.pem",
+        tlsPrivateKeyPath: "/a/qualification-key.pem",
         siteAddress: "run-1.qualification.proliferate.com",
         candidateImageRepo: "proliferate-server-qualification",
         candidateImageTag: "latest",
