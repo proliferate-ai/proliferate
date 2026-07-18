@@ -81,6 +81,15 @@ impl LiveSessionManager {
         sessions.get(session_id).cloned()
     }
 
+    /// Returns only a handle whose actor startup completed. Callers that must
+    /// join an in-progress startup should fall through to `start_session`,
+    /// which waits on the shared readiness channel.
+    pub async fn get_ready_handle(&self, session_id: &str) -> Option<Arc<LiveSessionHandle>> {
+        self.get_handle(session_id)
+            .await
+            .filter(|handle| handle.native_session_id().is_some())
+    }
+
     pub async fn remove_session(&self, session_id: &str) {
         let mut sessions = self.live_sessions.write().await;
         sessions.remove(session_id);
@@ -147,6 +156,31 @@ pub(crate) struct ScriptedSessionSpec {
 
 #[cfg(test)]
 impl LiveSessionManager {
+    pub(crate) async fn insert_pending_startup_for_test(
+        &self,
+        session_id: &str,
+    ) -> watch::Sender<StartupReadinessState> {
+        let (command_tx, _command_rx) = tokio::sync::mpsc::channel(1);
+        let (event_tx, _) = tokio::sync::broadcast::channel(1);
+        let handle = Arc::new(LiveSessionHandle::new_for_test(
+            session_id,
+            command_tx,
+            event_tx,
+            None,
+            anyharness_contract::v1::SessionExecutionPhase::Starting,
+        ));
+        let (ready_tx, ready_rx) = watch::channel::<StartupReadinessState>(None);
+        self.live_sessions
+            .write()
+            .await
+            .insert(session_id.to_string(), handle);
+        self.pending_startups
+            .write()
+            .await
+            .insert(session_id.to_string(), ready_rx);
+        ready_tx
+    }
+
     /// Register a scripted handle for `session_id`: `SetConfigOption` answers
     /// `Applied`, `Prompt` answers `Started` with the scripted turn id,
     /// `CancelTurnIfActive` answers `Requested`; every command is recorded.

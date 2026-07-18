@@ -345,8 +345,10 @@ does the durable validation path.
 It:
 
 1. validates an optional caller-selected canonical lowercase v4 `sessionId`
-2. for an idempotent public replay, returns the row already owned by the same
-   workspace and agent or rejects cross-owner reuse with `SESSION_ID_CONFLICT`
+2. for an idempotent public replay, returns the nonterminal row already owned
+   by the same workspace and agent or rejects cross-owner, closed, or dismissed
+   reuse with `SESSION_ID_CONFLICT`; the UUID is first-writer resource identity,
+   so the original row remains authoritative for later same-owner replays
 3. verifies the workspace exists
 4. verifies the requested agent kind exists in the built-in registry
 5. resolves the agent and requires it to be ready
@@ -390,7 +392,8 @@ It:
 3. resolves the agent again for launch
 4. asks `LiveSessionManager` to start the live actor; idempotent create requests
    hold the session mutation permit across this operation so concurrent replays
-   cannot launch duplicate actors
+   cannot launch duplicate actors, and a replay that finds a handle still in
+   startup joins its shared readiness result instead of returning early
 5. `LiveSessionManager` reads the last durable event seq inside its start/inject
    critical section
 6. persists the native session id and updates status to `idle`

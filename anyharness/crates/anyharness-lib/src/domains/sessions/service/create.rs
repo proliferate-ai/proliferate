@@ -254,7 +254,12 @@ fn replay_existing_session(
     workspace_id: &str,
     agent_kind: &str,
 ) -> Result<CreateSessionOutcome, CreateSessionError> {
-    if existing.workspace_id != workspace_id || existing.agent_kind != agent_kind {
+    if existing.workspace_id != workspace_id
+        || existing.agent_kind != agent_kind
+        || existing.closed_at.is_some()
+        || existing.dismissed_at.is_some()
+        || existing.status == "closed"
+    {
         return Err(CreateSessionError::SessionIdConflict {
             session_id: existing.id,
         });
@@ -416,6 +421,33 @@ mod tests {
             .expect_err("cross-agent id reuse must conflict");
         assert!(matches!(
             conflict,
+            CreateSessionError::SessionIdConflict { session_id: id } if id == session_id
+        ));
+
+        state
+            .session_service
+            .store()
+            .mark_dismissed(session_id, "2026-07-17T00:01:00Z")
+            .expect("dismiss original session");
+        let dismissed_conflict = state
+            .session_service
+            .create_session(
+                "workspace-1",
+                "claude",
+                Some(session_id),
+                true,
+                None,
+                None,
+                None,
+                None,
+                SessionMcpBindingPolicy::InheritWorkspace,
+                None,
+                true,
+                OriginContext::api_local_runtime(),
+            )
+            .expect_err("dismissed idempotency ownership must not replay");
+        assert!(matches!(
+            dismissed_conflict,
             CreateSessionError::SessionIdConflict { session_id: id } if id == session_id
         ));
     }

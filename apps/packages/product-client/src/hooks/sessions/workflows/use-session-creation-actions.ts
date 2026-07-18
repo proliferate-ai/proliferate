@@ -59,10 +59,12 @@ import { cleanupSessionCreationFailure } from "#product/hooks/sessions/workflows
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 import { useWorkspaceCollectionsInvalidationActions } from "#product/hooks/workspaces/cache/use-workspace-collections-invalidation";
 import { resolveWorkspaceUiKey } from "#product/lib/domain/workspaces/selection/workspace-ui-key";
+import { supportsCallerSelectedSessionCreate } from "#product/lib/access/anyharness/runtime-target";
 import { useProductStorageContext } from "#product/hooks/persistence/facade/use-product-storage-context";
 import {
+  acknowledgePendingEmptySessionCreation,
   clearPendingEmptySessionCreation,
-  isAmbiguousSessionCreateFailure,
+  clearPendingEmptySessionCreationAfterFailure,
   persistPendingEmptySessionCreation,
   type PendingEmptySessionCreation,
 } from "#product/hooks/sessions/workflows/pending-empty-session-creation";
@@ -159,12 +161,13 @@ export function useSessionCreationActions() {
       }
     }
 
-    const preferredModeId = useUserPreferencesStore.getState()
+    const preferenceState = useUserPreferencesStore.getState();
+    const preferredModeId = preferenceState
       .defaultSessionModeByAgentKind[options.agentKind]
       ?.trim() || undefined;
-    const frozenDefaultLiveSessionControlValuesByAgentKind = {
-      ...useUserPreferencesStore.getState().defaultLiveSessionControlValuesByAgentKind,
-    };
+    const frozenDefaultLiveSessionControlValuesByAgentKind = options.frozenLiveControlValues
+      ? { [options.agentKind]: { ...options.frozenLiveControlValues } }
+      : { ...preferenceState.defaultLiveSessionControlValuesByAgentKind };
     const explicitLiveLaunchControls = pickLiveDefaultLaunchControls(
       options.launchControlValues,
     );
@@ -175,17 +178,22 @@ export function useSessionCreationActions() {
       };
     }
     const workspaceSurface = getWorkspaceSurface(workspaceId);
-    const resolvedModeId = resolveSessionCreationModeId({
-      explicitModeId: options.modeId
-        ?? options.launchControlValues?.mode
-        ?? options.launchControlValues?.access_mode,
-      workspaceSurface,
-      unattendedModeId: options.unattendedModeId,
-      preferredModeId,
-    });
+    const resolvedModeId = options.resolvedModeId !== undefined
+      ? options.resolvedModeId
+      : resolveSessionCreationModeId({
+        explicitModeId: options.modeId
+          ?? options.launchControlValues?.mode
+          ?? options.launchControlValues?.access_mode,
+        workspaceSurface,
+        unattendedModeId: options.unattendedModeId,
+        preferredModeId,
+      });
     const pendingSessionId = options.clientSessionId ?? createPendingSessionId(options.agentKind);
-    const runtimeSessionId = !hasPrompt
+    const runtimeSessionId = !hasPrompt && supportsCallerSelectedSessionCreate(workspaceId)
       ? options.runtimeSessionId ?? crypto.randomUUID()
+      : null;
+    const emptyCreateSubagentsEnabled = runtimeSessionId
+      ? options.subagentsEnabled ?? preferenceState.subagentsEnabled
       : null;
     const existingProjectedRecord = getSessionRecord(pendingSessionId);
     annotateLatencyFlow(options.latencyFlowId, {
@@ -346,6 +354,10 @@ export function useSessionCreationActions() {
         ...(options.launchControlValues
           ? { launchControlValues: { ...options.launchControlValues } }
           : {}),
+        frozenLiveControlValues: {
+          ...(frozenDefaultLiveSessionControlValuesByAgentKind[options.agentKind] ?? {}),
+        },
+        subagentsEnabled: emptyCreateSubagentsEnabled ?? preferenceState.subagentsEnabled,
         replacesSessionId: replacedSession?.materializedSessionId
           ?? options.replacesSessionId
           ?? null,
@@ -371,13 +383,15 @@ export function useSessionCreationActions() {
         localRuntime,
         ssh,
         cloudClient,
-        options: runtimeSessionId ? { ...options, runtimeSessionId } : options,
+        options: runtimeSessionId
+          ? { ...options, runtimeSessionId, subagentsEnabled: emptyCreateSubagentsEnabled }
+          : options,
         pendingSessionId,
         resolvedModeId: resolvedModeId ?? null,
         upsertWorkspaceSessionRecord,
         workspaceId,
         onRuntimeSessionCreated: pendingRuntimeSessionId
-          ? () => clearPendingEmptySessionCreation(
+          ? () => acknowledgePendingEmptySessionCreation(
             storageContext,
             workspaceId,
             pendingRuntimeSessionId,
@@ -435,13 +449,11 @@ export function useSessionCreationActions() {
       }
       return resolvedSessionId;
     } catch (error) {
-      if (pendingEmptyCreation && !isAmbiguousSessionCreateFailure(error)) {
-        await clearPendingEmptySessionCreation(
-          storageContext,
-          workspaceId,
-          pendingEmptyCreation.runtimeSessionId,
-        );
-      }
+      await clearPendingEmptySessionCreationAfterFailure(
+        storageContext,
+        pendingEmptyCreation,
+        error,
+      );
       cleanupCreateFailure(error);
       throw toSessionCreateFailureDisplayError(error);
     } finally {
@@ -476,12 +488,15 @@ export function useSessionCreationActions() {
       agentKind: options.agentKind,
       modelId: options.modelId,
       modeId: options.modeId,
+      resolvedModeId: options.resolvedModeId,
       unattendedModeId: options.unattendedModeId,
       launchControlValues: options.launchControlValues,
+      frozenLiveControlValues: options.frozenLiveControlValues,
       workspaceId: options.workspaceId,
       latencyFlowId: options.latencyFlowId,
       clientSessionId: options.clientSessionId,
       runtimeSessionId: options.runtimeSessionId,
+      subagentsEnabled: options.subagentsEnabled,
       reuseInFlightEmptySession: options.reuseInFlightEmptySession,
       preserveProjectedSessionOnCreateFailure: options.preserveProjectedSessionOnCreateFailure,
       replacesSessionId: options.replacesSessionId,

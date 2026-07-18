@@ -199,7 +199,8 @@ async function runSessionCreationMaterialization({
     }
   }
 
-  const subagentsEnabled = useUserPreferencesStore.getState().subagentsEnabled;
+  const subagentsEnabled = options.subagentsEnabled
+    ?? useUserPreferencesStore.getState().subagentsEnabled;
   assertDirectSessionCreateSupported(target);
   const session: Session = await createSession(targetConnection, {
     ...(options.runtimeSessionId ? { sessionId: options.runtimeSessionId } : {}),
@@ -210,7 +211,6 @@ async function runSessionCreationMaterialization({
     subagentsEnabled,
     origin: DESKTOP_ORIGIN,
   }, requestOptions);
-  await onRuntimeSessionCreated?.(session);
   lifecycle.discardCreatedSession = () => {
     return scheduleCreatedRuntimeSessionCleanup({
       connection: targetConnection,
@@ -249,6 +249,7 @@ async function runSessionCreationMaterialization({
       workspaceId,
     });
   };
+  await onRuntimeSessionCreated?.(session);
   if (await discardIfSuperseded(pendingSessionId, lifecycle)) {
     return pendingSessionId;
   }

@@ -12,6 +12,8 @@ export interface PendingEmptySessionCreation {
   modelId: string;
   modeId: string | null;
   launchControlValues?: Record<string, string>;
+  frozenLiveControlValues: Record<string, string>;
+  subagentsEnabled: boolean;
   replacesSessionId: string | null;
   createdAt: number;
 }
@@ -72,6 +74,7 @@ function normalizeEntry(value: unknown, workspaceId: string): PendingEmptySessio
     || typeof record.modelId !== "string"
     || record.modelId.length === 0
     || !(record.modeId === null || typeof record.modeId === "string")
+    || typeof record.subagentsEnabled !== "boolean"
     || !(record.replacesSessionId === null || typeof record.replacesSessionId === "string")
     || typeof record.createdAt !== "number"
     || !Number.isFinite(record.createdAt)
@@ -86,6 +89,8 @@ function normalizeEntry(value: unknown, workspaceId: string): PendingEmptySessio
     modelId: record.modelId,
     modeId: record.modeId,
     launchControlValues: normalizeLaunchControlValues(record.launchControlValues),
+    frozenLiveControlValues: normalizeLaunchControlValues(record.frozenLiveControlValues) ?? {},
+    subagentsEnabled: record.subagentsEnabled,
     replacesSessionId: record.replacesSessionId,
     createdAt: record.createdAt,
   };
@@ -210,10 +215,45 @@ export function clearPendingEmptySessionCreation(
   }).catch(() => undefined);
 }
 
+/**
+ * Strict acknowledgement at the POST commit boundary. Failure rejects so the
+ * materializer can retire (or honestly retain) the created runtime instead of
+ * publishing it with a stale replayable ledger entry.
+ */
+export function acknowledgePendingEmptySessionCreation(
+  context: ProductStorageContext,
+  workspaceId: string,
+  runtimeSessionId: string,
+): Promise<void> {
+  return enqueueMutation(context, workspaceId, async () => {
+    const entries = await readEntries(context, workspaceId, true);
+    await writeEntries(
+      context,
+      workspaceId,
+      entries.filter((entry) => entry.runtimeSessionId !== runtimeSessionId),
+      true,
+    );
+  });
+}
+
 /** Only transport failures have an unknown commit outcome and remain resumable. */
 export function isAmbiguousSessionCreateFailure(error: unknown): boolean {
   return error instanceof TypeError
     || (error instanceof Error && error.name === "AbortError");
+}
+
+export async function clearPendingEmptySessionCreationAfterFailure(
+  context: ProductStorageContext,
+  entry: PendingEmptySessionCreation | null,
+  error: unknown,
+): Promise<void> {
+  if (entry && !isAmbiguousSessionCreateFailure(error)) {
+    await clearPendingEmptySessionCreation(
+      context,
+      entry.workspaceId,
+      entry.runtimeSessionId,
+    );
+  }
 }
 
 export async function resumePendingEmptySessionCreations(
@@ -236,8 +276,10 @@ export async function resumePendingEmptySessionCreations(
       runtimeSessionId: entry.runtimeSessionId,
       agentKind: entry.agentKind,
       modelId: entry.modelId,
-      modeId: entry.modeId ?? undefined,
+      resolvedModeId: entry.modeId,
       launchControlValues: entry.launchControlValues,
+      frozenLiveControlValues: entry.frozenLiveControlValues,
+      subagentsEnabled: entry.subagentsEnabled,
       reuseInFlightEmptySession: false,
       preserveProjectedSessionOnCreateFailure: true,
       replacesSessionId: entry.replacesSessionId,

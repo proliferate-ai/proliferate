@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { DesktopSshBridge } from "@proliferate/product-client/host/desktop-bridge";
 
-import { resolveRuntimeTargetForWorkspace } from "#product/lib/access/anyharness/runtime-target";
+import {
+  resolveRuntimeTargetForWorkspace,
+  supportsCallerSelectedSessionCreate,
+} from "#product/lib/access/anyharness/runtime-target";
 
 function makeSshBridge(): DesktopSshBridge {
   return {
@@ -17,6 +20,12 @@ beforeEach(() => {
 });
 
 describe("resolveRuntimeTargetForWorkspace", () => {
+  it("scopes caller-selected create ids to the bundled local runtime", () => {
+    expect(supportsCallerSelectedSessionCreate("workspace-local")).toBe(true);
+    expect(supportsCallerSelectedSessionCreate("cloud:workspace-cloud")).toBe(false);
+    expect(supportsCallerSelectedSessionCreate("target:target-1:workspace-7")).toBe(false);
+  });
+
   it("resolves a target through the supplied Desktop SSH bridge", async () => {
     const ssh = makeSshBridge();
     const profile = {

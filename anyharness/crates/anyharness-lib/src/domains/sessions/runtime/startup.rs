@@ -188,10 +188,15 @@ impl SessionRuntime {
             return Err(StartSessionError::Closed);
         }
         let started = Instant::now();
-        if let Some(handle) = self.acp_manager.get_handle(&record.id).await {
+        if let Some(handle) = self.acp_manager.get_ready_handle(&record.id).await {
+            let native_session_id = handle
+                .native_session_id()
+                .expect("ready live handle must have a native session id");
+            self.persist_live_session_state(&record.id, &native_session_id);
             tracing::info!(
                 session_id = %record.id,
                 workspace_id = %record.workspace_id,
+                native_session_id = %native_session_id,
                 elapsed_ms = started.elapsed().as_millis(),
                 "[workspace-latency] session.runtime.ensure_live_handle.reused"
             );

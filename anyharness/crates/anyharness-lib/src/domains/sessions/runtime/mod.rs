@@ -35,6 +35,8 @@ mod prompt;
 mod replay;
 mod startup;
 #[cfg(test)]
+mod idempotent_creation_tests;
+#[cfg(test)]
 mod tests;
 pub(crate) mod view;
 

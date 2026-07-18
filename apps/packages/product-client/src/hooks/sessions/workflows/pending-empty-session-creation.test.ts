@@ -3,6 +3,7 @@ import type { ProductStorage } from "@proliferate/product-client/host/product-ho
 import type { ProductStorageContext } from "#product/lib/infra/persistence/product-storage";
 import {
   clearPendingEmptySessionCreation,
+  clearPendingEmptySessionCreationAfterFailure,
   isAmbiguousSessionCreateFailure,
   loadPendingEmptySessionCreations,
   persistPendingEmptySessionCreation,
@@ -18,12 +19,14 @@ const ENTRY: PendingEmptySessionCreation = {
   modelId: "sonnet",
   modeId: "default",
   launchControlValues: { thinking: "high" },
+  frozenLiveControlValues: { thinking: "high", effort: "medium" },
+  subagentsEnabled: false,
   replacesSessionId: null,
   createdAt: 42,
 };
 
 describe("pending empty-session creation", () => {
-  it("resumes an interrupted create with both original ids and acknowledges it once", async () => {
+  it("resumes with the original ids and frozen launch inputs, then acknowledges once", async () => {
     const context = memoryStorageContext();
 
     // First renderer: the intent is durable, then the POST loses its response
@@ -39,8 +42,10 @@ describe("pending empty-session creation", () => {
         runtimeSessionId: ENTRY.runtimeSessionId,
         agentKind: ENTRY.agentKind,
         modelId: ENTRY.modelId,
-        modeId: ENTRY.modeId,
+        resolvedModeId: ENTRY.modeId,
         launchControlValues: ENTRY.launchControlValues,
+        frozenLiveControlValues: ENTRY.frozenLiveControlValues,
+        subagentsEnabled: ENTRY.subagentsEnabled,
         reuseInFlightEmptySession: false,
         preserveProjectedSessionOnCreateFailure: true,
       });
@@ -96,6 +101,20 @@ describe("pending empty-session creation", () => {
     expect(isAmbiguousSessionCreateFailure(new DOMException("aborted", "AbortError")))
       .toBe(true);
     expect(isAmbiguousSessionCreateFailure(new Error("400 invalid request"))).toBe(false);
+  });
+
+  it("clears stale ownership after a terminal replay conflict", async () => {
+    const context = memoryStorageContext();
+    await persistPendingEmptySessionCreation(context, ENTRY);
+
+    await clearPendingEmptySessionCreationAfterFailure(
+      context,
+      ENTRY,
+      new Error("409 session id conflicts with a dismissed session"),
+    );
+
+    await expect(loadPendingEmptySessionCreations(context, ENTRY.workspaceId))
+      .resolves.toEqual([]);
   });
 
   it("fails bootstrap closed when the durable ledger cannot be read", async () => {
