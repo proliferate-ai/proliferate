@@ -42,6 +42,7 @@ import {
   enrollmentIsSynced,
   gatewayAuthSelectionBody,
   GATEWAY_ENV_KEYS,
+  QUALIFICATION_GATEWAY_USER_BUDGET_USD,
   renderGatewayEnvLines,
   resolveGatewayConfig,
   selectPersonalEnrollmentKeyToken,
@@ -831,6 +832,7 @@ test("resolveGatewayConfig: prefers the B upstream key, generates a fresh master
     assert.equal(result.value.upstreamKeyEnvVar, "RELEASE_E2E_BYOK_ANTHROPIC_B_API_KEY");
     assert.equal(result.value.block.upstreamAnthropicKey, "sk-b");
     assert.equal(result.value.block.litellmPublicBaseUrl, "https://box.qualification.proliferate.com/llm");
+    assert.equal(result.value.block.agentGatewayDefaultUserBudgetUsd, QUALIFICATION_GATEWAY_USER_BUDGET_USD);
     assert.match(result.value.block.litellmMasterKey, /^sk-[0-9a-f]{64}$/);
     assert.equal(result.value.imageTag, "v1.2.3-abcdef");
   }
@@ -899,6 +901,7 @@ test("stripGatewayKeysSedProgram + append overrides a shipped AGENT_GATEWAY_ENAB
   ].join("\n");
   const block = renderGatewayEnvLines({
     agentGatewayEnabled: true,
+    agentGatewayDefaultUserBudgetUsd: QUALIFICATION_GATEWAY_USER_BUDGET_USD,
     litellmMasterKey: "MASTER",
     litellmPostgresPassword: "PGPW",
     litellmPublicBaseUrl: "https://box.example.com/gateway",
@@ -916,6 +919,7 @@ test("stripGatewayKeysSedProgram + append overrides a shipped AGENT_GATEWAY_ENAB
     return match?.slice(key.length + 1);
   };
   assert.equal(firstValue("AGENT_GATEWAY_ENABLED"), "true");
+  assert.equal(firstValue("AGENT_GATEWAY_DEFAULT_USER_BUDGET_USD"), "10");
   assert.equal(firstValue("LITELLM_MASTER_KEY"), "MASTER");
   assert.equal(firstValue("PROLIFERATE_LITELLM_IMAGE_TAG"), "pinned");
   // Unrelated shipped keys are preserved.

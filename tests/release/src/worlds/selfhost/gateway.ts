@@ -33,6 +33,17 @@ export const GATEWAY_DEPLOY_DIR = SELFHOST_DEPLOY_DIR;
 /** The default LiteLLM image tag when `RELEASE_E2E_SELFHOST_LITELLM_IMAGE_TAG` is unset. */
 export const DEFAULT_LITELLM_IMAGE_TAG = "stable";
 
+/**
+ * Qualification-only headroom for the one bounded gateway turn. LiteLLM's
+ * pre-call budget reservation prices Claude's maximum possible response at
+ * $5.00. A key capped at the product fallback of exactly $5 is first reserved
+ * to $5 and then rejected by LiteLLM's `spend >= max_budget` auth check before
+ * any provider call. The disposable qualification actor therefore uses a $10
+ * cap: enough to clear that reservation edge while remaining bounded and
+ * leaving the shipped product default unchanged.
+ */
+export const QUALIFICATION_GATEWAY_USER_BUDGET_USD = "10";
+
 /** The public Caddy inference route the instance serves LiteLLM under (`handle_path /llm/*`). */
 export function gatewayPublicBaseUrl(apiOrigin: string): string {
   return `${apiOrigin.replace(/\/+$/, "")}/llm`;
@@ -47,6 +58,7 @@ export function gatewayPublicBaseUrl(apiOrigin: string): string {
  */
 export interface GatewayEnvBlock {
   agentGatewayEnabled: true;
+  agentGatewayDefaultUserBudgetUsd: typeof QUALIFICATION_GATEWAY_USER_BUDGET_USD;
   litellmMasterKey: string;
   litellmPostgresPassword: string;
   litellmPublicBaseUrl: string;
@@ -131,6 +143,7 @@ export function resolveGatewayConfig(
       upstreamKeyEnvVar,
       block: {
         agentGatewayEnabled: true,
+        agentGatewayDefaultUserBudgetUsd: QUALIFICATION_GATEWAY_USER_BUDGET_USD,
         litellmMasterKey: generateGatewayMasterKey(),
         litellmPostgresPassword: generateLitellmPostgresPassword(),
         litellmPublicBaseUrl: gatewayPublicBaseUrl(apiOrigin),
@@ -208,6 +221,7 @@ export async function selectGatewayRouteForHarness(
 export function renderGatewayEnvLines(block: GatewayEnvBlock): string {
   return [
     "AGENT_GATEWAY_ENABLED=true",
+    `AGENT_GATEWAY_DEFAULT_USER_BUDGET_USD=${block.agentGatewayDefaultUserBudgetUsd}`,
     "AGENT_GATEWAY_LITELLM_BASE_URL=http://litellm:4000",
     `AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL=${block.litellmPublicBaseUrl}`,
     `AGENT_GATEWAY_LITELLM_MASTER_KEY=${block.litellmMasterKey}`,
@@ -230,6 +244,7 @@ export function renderGatewayEnvLines(block: GatewayEnvBlock): string {
  */
 export const GATEWAY_ENV_KEYS = [
   "AGENT_GATEWAY_ENABLED",
+  "AGENT_GATEWAY_DEFAULT_USER_BUDGET_USD",
   "AGENT_GATEWAY_LITELLM_BASE_URL",
   "AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL",
   "AGENT_GATEWAY_LITELLM_MASTER_KEY",
