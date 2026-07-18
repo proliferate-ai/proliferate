@@ -49,7 +49,6 @@ from proliferate.server.setup.errors import (
     SetupClosedError,
     SetupValidationError,
 )
-from proliferate.server.setup.transactions import commit_first_run_claim
 
 logger = logging.getLogger(__name__)
 
@@ -156,12 +155,6 @@ async def claim_first_run(
         # Injected by the transport (see lifecycle.py); when omitted the file
         # still gets cleaned up by the next boot's ensure_setup_token pass.
         await schedule_token_file_cleanup(db)
-
-    # The claim owns its transaction: commit before the transport can queue a
-    # response (see transactions.commit_first_run_claim for the full rationale
-    # — store callees only flush(), and the dependency-cleanup commit runs
-    # after the response is sent, so an immediate follow-up login could 401).
-    await commit_first_run_claim(db)
 
     logger.info(
         "Instance claimed: owner %s, organization %r.",
