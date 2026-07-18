@@ -141,6 +141,26 @@ test("provider-backed jobs run shared preflight before build/provider setup", ()
   }
 });
 
+test("the self-host execution step authenticates run-scoped GHCR cleanup without argv exposure", () => {
+  const selfHost = job(release, "release-e2e-selfhost-install");
+  const executionStart = selfHost.indexOf(
+    "- name: Build the self-host candidate and run the selected self-host scenarios (strict)",
+  );
+  const executionEnd = selfHost.indexOf(
+    "- name: Upload V4 report and bounded diagnostic logs",
+    executionStart,
+  );
+  assert.ok(executionStart >= 0 && executionEnd > executionStart, "self-host execution step boundary missing");
+  const executionStep = selfHost.slice(executionStart, executionEnd);
+
+  assert.match(executionStep, /GH_TOKEN: \$\{\{ github\.token \}\}/);
+  assert.doesNotMatch(
+    executionStep,
+    /(?:make qualification-selfhost|gh api)[^\n]*GH_TOKEN/,
+    "the token must be inherited from the step environment, never placed on argv",
+  );
+});
+
 test("supported cancellation keeps local receipts and hard cancellation keeps the trusted managed reaper", () => {
   for (const id of ["release-e2e-local-functional", "release-e2e-selfhost-install", "release-e2e-managed-cloud"]) {
     const body = job(release, id);

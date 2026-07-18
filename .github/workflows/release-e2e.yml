@@ -765,6 +765,11 @@ jobs:
 
       - name: Build the self-host candidate and run the selected self-host scenarios (strict)
         env:
+          # CFN cleanup resolves and deletes the exact run-scoped GHCR package
+          # version through `gh api`. Docker login authenticates only Docker;
+          # keep the repository token step-scoped and inherited by the cleanup
+          # subprocess rather than placing it on argv or in evidence.
+          GH_TOKEN: ${{ github.token }}
           # Mapped directly from the protected `Qualification` environment.
           # Arbitrary PR code never runs this job or sees these.
           RELEASE_E2E_SELFHOST_REGION: ${{ vars.RELEASE_E2E_SELFHOST_REGION }}
