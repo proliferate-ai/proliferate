@@ -325,11 +325,21 @@ async def test_claim_session_commit_finishes_before_response_starts(
     commit_state_at_response_start: list[bool] = []
 
     async def observed_session() -> AsyncGenerator[AsyncSession, None]:
-        nonlocal commit_finished
+        # Observe the SESSION's own commit (whoever issues it), not the
+        # dependency-cleanup commit: transaction ownership lives in
+        # `service.claim_first_run`, which must commit before the handler can
+        # queue the response. The cleanup commit below is a no-op afterwards.
         async with _factory(test_engine)() as session:
+            original_commit = session.commit
+
+            async def marking_commit() -> None:
+                nonlocal commit_finished
+                await original_commit()
+                commit_finished = True
+
+            session.commit = marking_commit  # type: ignore[method-assign]
             yield session
             await session.commit()
-            commit_finished = True
 
     app.dependency_overrides[get_async_session] = observed_session
 

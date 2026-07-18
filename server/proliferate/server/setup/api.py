@@ -33,7 +33,7 @@ async def first_run_setup_page(db: AsyncSession = Depends(get_async_session)) ->
 
 @router.post("/setup", response_class=HTMLResponse, include_in_schema=False)
 async def first_run_setup_claim(
-    db: AsyncSession = Depends(get_async_session, scope="function"),
+    db: AsyncSession = Depends(get_async_session),
     email: Annotated[str, Form()] = "",
     password: Annotated[str, Form()] = "",
     setup_token: Annotated[str, Form()] = "",
