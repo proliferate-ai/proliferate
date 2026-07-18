@@ -85,8 +85,7 @@ export interface ComposerRichTextEditorProps {
   canSubmit: boolean;
   onSubmit: () => void;
   editorRef?: (editor: LexicalEditor) => void;
-  rootRef?: Ref<HTMLDivElement>;
-  surface?: "workspace" | "home";
+  rootRef?: Ref<HTMLDivElement>; surface?: "workspace" | "home";
   placeholder: string;
   disabled: boolean;
   className?: string;
@@ -102,9 +101,7 @@ export function ComposerRichTextEditor({
   submitBehavior,
   canSubmit,
   onSubmit,
-  editorRef,
-  rootRef,
-  surface = "workspace",
+  editorRef, rootRef, surface = "workspace",
   placeholder,
   disabled,
   className = "",
