@@ -14,4 +14,5 @@ pub mod status;
 mod status_operation;
 pub mod status_summary;
 pub mod worktree_restore;
+mod worktree_restore_registry;
 pub mod worktrees;
