@@ -4,14 +4,16 @@ from __future__ import annotations
 
 import asyncio
 import uuid
+from collections.abc import Awaitable, Callable
 from datetime import timedelta
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, func, literal_column, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
+from proliferate.db import session_ops
 from proliferate.db.models.cloud.integration_approvals import (
     CloudIntegrationActionApproval,
     CloudIntegrationActionApprovalEvent,
@@ -19,6 +21,7 @@ from proliferate.db.models.cloud.integration_approvals import (
 from proliferate.db.models.cloud.integrations import CloudIntegrationAccount
 from proliferate.db.models.cloud.runtime_workers import CloudRuntimeWorker
 from proliferate.db.models.organizations import OrganizationMembership
+from proliferate.db.store.integrations import action_approvals as approvals_store
 from proliferate.utils.time import utcnow
 from tests.integration import test_cloud_integration_action_approvals_api as approval_helpers
 
@@ -26,6 +29,43 @@ from tests.integration import test_cloud_integration_action_approvals_api as app
 @pytest.fixture(autouse=True)
 def _worker_cloud_base_url(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "cloud_worker_base_url", "http://cloud.test")
+
+
+async def _run_after_row_lock_crosses_expiry[T](
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    approval_id: uuid.UUID,
+    store_method_name: str,
+    operation: Callable[[], Awaitable[T]],
+) -> T:
+    """Start before expiry, then release the target row only after DB expiry."""
+    async with session_ops.open_async_session() as lock_db:
+        expires_at = (
+            await lock_db.execute(
+                update(CloudIntegrationActionApproval)
+                .where(CloudIntegrationActionApproval.id == approval_id)
+                .values(
+                    expires_at=(func.clock_timestamp() + literal_column("interval '1 second'"))
+                )
+                .returning(CloudIntegrationActionApproval.expires_at)
+            )
+        ).scalar_one()
+
+        reached_store = asyncio.Event()
+        original = getattr(approvals_store, store_method_name)
+
+        async def signal_then_call(*args: object, **kwargs: object):
+            reached_store.set()
+            return await original(*args, **kwargs)
+
+        monkeypatch.setattr(approvals_store, store_method_name, signal_then_call)
+        operation_task = asyncio.create_task(operation())
+        await asyncio.wait_for(reached_store.wait(), timeout=2)
+        while (await db_session.scalar(select(func.clock_timestamp()))) <= expires_at:
+            await asyncio.sleep(0.02)
+        await session_ops.commit_session(lock_db)
+    return await operation_task
 
 
 @pytest.mark.asyncio
@@ -175,6 +215,92 @@ async def test_concurrent_decisions_observe_one_deterministic_expiry(
     )
     assert len(events) == 1
     assert (events[0].from_status, events[0].to_status) == ("pending", "expired")
+
+
+@pytest.mark.asyncio
+async def test_decision_row_lock_crossing_expiry_cannot_approve(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context = await approval_helpers._setup_context(
+        client, db_session, prefix="approval-lock-expiry-decision"
+    )
+    approval = await approval_helpers._request_action(
+        client, context, arguments={"message": "decision waits"}
+    )
+    approval_id = uuid.UUID(str(approval["id"]))
+
+    response = await _run_after_row_lock_crosses_expiry(
+        db_session,
+        monkeypatch,
+        approval_id=approval_id,
+        store_method_name="mark_expired_if_due",
+        operation=lambda: client.post(
+            f"{approval_helpers.APPROVALS_URL}/{approval_id}/approve",
+            headers=context.auth.headers,
+        ),
+    )
+    assert response.status_code == 200
+    assert response.json()["result"] == "expired"
+    assert response.json()["approval"]["status"] == "expired"
+
+
+@pytest.mark.asyncio
+async def test_consumption_row_lock_crossing_expiry_cannot_admit_execution(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context = await approval_helpers._setup_context(
+        client, db_session, prefix="approval-lock-expiry-consume"
+    )
+    arguments = {"message": "consume waits"}
+    approval = await approval_helpers._request_action(client, context, arguments=arguments)
+    approval_id = str(approval["id"])
+    await approval_helpers._approve(client, context, approval_id)
+
+    admission = await _run_after_row_lock_crosses_expiry(
+        db_session,
+        monkeypatch,
+        approval_id=uuid.UUID(approval_id),
+        store_method_name="consume_approved_matching",
+        operation=lambda: approval_helpers._consume(
+            context,
+            approval_id=approval_id,
+            arguments=arguments,
+        ),
+    )
+    assert admission.result == "expired"
+    assert admission.approval is not None and admission.approval.status == "expired"
+
+
+@pytest.mark.asyncio
+async def test_observation_row_lock_crossing_expiry_cannot_report_active(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context = await approval_helpers._setup_context(
+        client, db_session, prefix="approval-lock-expiry-observe"
+    )
+    approval = await approval_helpers._request_action(
+        client, context, arguments={"message": "observation waits"}
+    )
+    approval_id = uuid.UUID(str(approval["id"]))
+
+    response = await _run_after_row_lock_crosses_expiry(
+        db_session,
+        monkeypatch,
+        approval_id=approval_id,
+        store_method_name="mark_expired_if_due",
+        operation=lambda: client.get(
+            f"{approval_helpers.APPROVALS_URL}/{approval_id}",
+            headers=context.auth.headers,
+        ),
+    )
+    assert response.status_code == 200
+    assert response.json()["status"] == "expired"
 
 
 @pytest.mark.asyncio

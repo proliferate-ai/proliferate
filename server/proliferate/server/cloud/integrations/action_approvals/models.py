@@ -31,6 +31,8 @@ class ActionApprovalResponse(_CamelModel):
     integration_account_auth_version: int
     organization_id: UUID | None
     execution_session_id: UUID
+    workspace_id: str
+    anyharness_session_id: str
     payload_digest: str
     action_summary: str
     account_label: str
@@ -65,6 +67,8 @@ def action_approval_response(record: ActionApprovalRecord) -> ActionApprovalResp
         integration_account_auth_version=record.integration_account_auth_version,
         organization_id=record.organization_id,
         execution_session_id=record.gateway_session_id,
+        workspace_id=record.workspace_id,
+        anyharness_session_id=record.anyharness_session_id,
         payload_digest=record.payload_digest,
         action_summary=record.safe_summary,
         account_label=record.safe_account_label,

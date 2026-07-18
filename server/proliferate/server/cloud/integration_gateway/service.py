@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import json
 import time
-from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,6 +21,9 @@ from proliferate.integrations import mcp_remote
 from proliferate.integrations.mcp_remote import McpRemoteError
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.integration_gateway.domain import json_rpc, virtual_tools
+from proliferate.server.cloud.integration_gateway.domain.execution_session import (
+    ExecutionSessionIdentity,
+)
 from proliferate.server.cloud.integration_gateway.domain.tool_args import (
     parse_call_tool_args,
     parse_list_tools_args,
@@ -192,7 +194,7 @@ async def call_provider_tool(
     provider: str,
     tool: str,
     arguments: dict[str, object],
-    gateway_session_id: UUID | None,
+    execution_session: ExecutionSessionIdentity | None,
 ) -> dict[str, object]:
     # Audit the proxied call on every path — provider-resolution or account
     # failures, upstream transport failures, and a returned tool-level error
@@ -204,8 +206,11 @@ async def call_provider_tool(
     try:
         decision = decide_tool_call(provider=provider, tool=tool)
         if isinstance(decision, ToolCallRequiresApproval):
-            if gateway_session_id is None:
+            if execution_session is None or not execution_session.is_action_capable:
                 raise IntegrationGatewaySessionRequired(provider=provider, tool=tool)
+            workspace_id = execution_session.workspace_id
+            anyharness_session_id = execution_session.anyharness_session_id
+            assert workspace_id is not None and anyharness_session_id is not None
             # Resolve only the ready account identity needed to bind the
             # request. Credential rendering and provider I/O remain below the
             # allowed path and are never entered for an approval-gated action.
@@ -217,7 +222,9 @@ async def call_provider_tool(
             try:
                 approval = await request_action_approval_committed(
                     grant=grant,
-                    gateway_session_id=gateway_session_id,
+                    gateway_session_id=execution_session.gateway_session_id,
+                    workspace_id=workspace_id,
+                    anyharness_session_id=anyharness_session_id,
                     integration_account_id=account_identity.account_id,
                     integration_account_auth_version=account_identity.auth_version,
                     verdict=decision,
@@ -227,7 +234,8 @@ async def call_provider_tool(
                         f"{str(account_identity.account_id)[:8]}"
                     ),
                     source_label=(
-                        f"{grant.runtime_kind.title()} MCP session {str(gateway_session_id)[:8]}"
+                        f"{grant.runtime_kind.title()} workspace "
+                        f"{workspace_id[:8]} session {anyharness_session_id[:8]}"
                     ),
                 )
             except InvalidActionPayload as error:
@@ -302,7 +310,7 @@ async def _call_virtual_tool(
     grant: IntegrationGatewayGrant,
     name: str,
     arguments: dict[str, object],
-    gateway_session_id: UUID | None,
+    execution_session: ExecutionSessionIdentity | None,
 ) -> dict[str, object]:
     if name == virtual_tools.LIST_PROVIDERS_TOOL:
         return await list_providers(db, grant=grant)
@@ -317,7 +325,7 @@ async def _call_virtual_tool(
             provider=call_args.provider,
             tool=call_args.tool,
             arguments=call_args.arguments,
-            gateway_session_id=gateway_session_id,
+            execution_session=execution_session,
         )
     raise CloudApiError(
         "integration_gateway_unknown_tool",
@@ -331,7 +339,7 @@ async def _handle_tools_call(
     *,
     grant: IntegrationGatewayGrant,
     params: dict[str, object],
-    gateway_session_id: UUID | None,
+    execution_session: ExecutionSessionIdentity | None,
 ) -> dict[str, object]:
     name = params.get("name")
     if not isinstance(name, str) or not virtual_tools.is_gateway_tool_name(name):
@@ -350,7 +358,7 @@ async def _handle_tools_call(
         grant=grant,
         name=name,
         arguments=arguments,
-        gateway_session_id=gateway_session_id,
+        execution_session=execution_session,
     )
     return {
         "content": [{"type": "text", "text": json.dumps(result, separators=(",", ":"))}],
@@ -364,7 +372,7 @@ async def handle_integration_gateway_json_rpc(
     *,
     grant: IntegrationGatewayGrant,
     payload: dict[str, object],
-    gateway_session_id: UUID | None = None,
+    execution_session: ExecutionSessionIdentity | None = None,
 ) -> dict[str, object] | None:
     """Dispatch one MCP JSON-RPC message. ``None`` for notifications (no reply)."""
     method = payload.get("method")
@@ -389,7 +397,7 @@ async def handle_integration_gateway_json_rpc(
                 db,
                 grant=grant,
                 params=params,
-                gateway_session_id=gateway_session_id,
+                execution_session=execution_session,
             )
         except IntegrationToolPolicyError as error:
             return json_rpc.json_rpc_result(

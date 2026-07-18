@@ -233,14 +233,17 @@ protocol state. The gateway must classify an action with its pure typed policy
 before credential resolution or any provider call. An approval request is
 bound server-side to the authenticated product user and organization scope,
 integration account UUID plus `auth_version`, runtime Worker, signed
-Worker-bound MCP session, exact verdict provider/tool, and canonical payload
-digest. Prompt text, provider arguments, gateway bearers, Worker credentials,
-and process memory are not approval sources.
+Worker/workspace/AnyHarness-session launch identity, exact verdict
+provider/tool, and canonical payload digest. Prompt text, provider arguments,
+gateway bearers, Worker credentials, and process memory are not approval
+sources.
 
 The hosted state machine has `pending`, `approved`, `rejected`, `revoked`,
 `expired`, and `consumed` states with a 600-second TTL. `expires_at` is the
 authoritative boundary even before observation materializes the `expired`
-state and system audit event. Request creation is committed before the gateway
+state and system audit event. TTL creation, predicates, transition timestamps,
+and audit timestamps use PostgreSQL `clock_timestamp()`; transition code locks
+the row before evaluating expiry. Request creation is committed before the gateway
 returns its typed approval-required result. Execution admission is an atomic,
 one-time, exact-binding `approved -> consumed` compare-and-set in a separate
 short transaction; its audit event must commit before credential decryption,

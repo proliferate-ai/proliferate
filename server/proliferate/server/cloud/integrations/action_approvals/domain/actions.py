@@ -34,6 +34,8 @@ class ActionBinding:
     integration_account_auth_version: int
     runtime_worker_id: UUID
     gateway_session_id: UUID
+    workspace_id: str
+    anyharness_session_id: str
     provider: str
     tool: str
     payload_digest: str
@@ -88,6 +90,8 @@ def bind_action(
     integration_account_auth_version: int,
     runtime_worker_id: UUID,
     gateway_session_id: UUID,
+    workspace_id: str,
+    anyharness_session_id: str,
     verdict: ToolCallRequiresApproval,
     arguments: dict[str, object],
     account_label: str,
@@ -100,19 +104,21 @@ def bind_action(
             "account": str(integration_account_id),
             "accountAuthVersion": str(integration_account_auth_version),
             "gatewaySession": str(gateway_session_id),
+            "workspace": workspace_id,
+            "anyharnessSession": anyharness_session_id,
             "organization": str(organization_id) if organization_id is not None else "personal",
             "owner": str(owner_user_id),
             "provider": verdict.provider,
             "runtimeWorker": str(runtime_worker_id),
             "tool": verdict.tool,
-            "version": "integration-action-binding-v2",
+            "version": "integration-action-binding-v3",
         }
     )
     idempotency_key = _digest(
         {
             "binding": binding_digest,
             "payload": payload_digest,
-            "version": "integration-action-idempotency-v2",
+            "version": "integration-action-idempotency-v3",
         }
     )
     # Raw provider arguments have no frozen per-tool schema in this slice. Do
@@ -136,6 +142,8 @@ def bind_action(
         integration_account_auth_version=integration_account_auth_version,
         runtime_worker_id=runtime_worker_id,
         gateway_session_id=gateway_session_id,
+        workspace_id=workspace_id,
+        anyharness_session_id=anyharness_session_id,
         provider=verdict.provider,
         tool=verdict.tool,
         payload_digest=payload_digest,

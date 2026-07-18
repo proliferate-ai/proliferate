@@ -6,8 +6,6 @@ gateway token) and drives the three virtual integration tools.
 
 from __future__ import annotations
 
-from uuid import UUID
-
 from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,6 +19,7 @@ from proliferate.server.cloud.integration_gateway.dependencies import (
 )
 from proliferate.server.cloud.integration_gateway.domain import json_rpc
 from proliferate.server.cloud.integration_gateway.domain.execution_session import (
+    ExecutionSessionIdentity,
     mint_execution_session_token,
     verify_execution_session_token,
 )
@@ -30,6 +29,8 @@ from proliferate.server.cloud.integration_gateway.service import (
 
 router = APIRouter(prefix="/integration-gateway", tags=["integration-gateway"])
 _MCP_SESSION_HEADER = "Mcp-Session-Id"
+_WORKSPACE_HEADER = "Proliferate-Workspace-Id"
+_ANYHARNESS_SESSION_HEADER = "Proliferate-Session-Id"
 
 
 @router.get("/mcp")
@@ -44,7 +45,7 @@ async def _dispatch_one(
     *,
     grant: IntegrationGatewayGrant,
     message: object,
-    gateway_session_id: UUID | None,
+    execution_session: ExecutionSessionIdentity | None,
 ) -> dict[str, object] | None:
     if not isinstance(message, dict):
         return json_rpc.invalid_request(None)
@@ -52,22 +53,26 @@ async def _dispatch_one(
         db,
         grant=grant,
         payload=message,
-        gateway_session_id=gateway_session_id,
+        execution_session=execution_session,
     )
 
 
-def _verified_execution_session_id(
+def _verified_execution_session(
     request: Request,
     *,
     grant: IntegrationGatewayGrant,
-) -> UUID | None:
+) -> ExecutionSessionIdentity | None:
     token = request.headers.get(_MCP_SESSION_HEADER)
     if token is None:
         return None
+    workspace_id = request.headers.get(_WORKSPACE_HEADER)
+    anyharness_session_id = request.headers.get(_ANYHARNESS_SESSION_HEADER)
     session_id = verify_execution_session_token(
         secret=settings.cloud_secret_key,
         runtime_worker_id=grant.runtime_worker_id,
         token=token,
+        workspace_id=workspace_id,
+        anyharness_session_id=anyharness_session_id,
     )
     if session_id is None:
         raise CloudApiError(
@@ -75,7 +80,11 @@ def _verified_execution_session_id(
             "Gateway session is invalid or no longer available; initialize again.",
             status_code=404,
         )
-    return session_id
+    return ExecutionSessionIdentity(
+        gateway_session_id=session_id,
+        workspace_id=workspace_id,
+        anyharness_session_id=anyharness_session_id,
+    )
 
 
 def _contains_initialize(body: object) -> bool:
@@ -103,13 +112,22 @@ async def integration_gateway_mcp_post(
             )
         )
 
-    gateway_session_id = _verified_execution_session_id(request, grant=grant)
+    execution_session = _verified_execution_session(request, grant=grant)
     response_headers: dict[str, str] = {}
     if _contains_initialize(body):
-        session_token = mint_execution_session_token(
-            secret=settings.cloud_secret_key,
-            runtime_worker_id=grant.runtime_worker_id,
-        )
+        try:
+            session_token = mint_execution_session_token(
+                secret=settings.cloud_secret_key,
+                runtime_worker_id=grant.runtime_worker_id,
+                workspace_id=request.headers.get(_WORKSPACE_HEADER),
+                anyharness_session_id=request.headers.get(_ANYHARNESS_SESSION_HEADER),
+            )
+        except ValueError as error:
+            raise CloudApiError(
+                "integration_gateway_launch_identity_invalid",
+                "Gateway workspace/session identity is malformed.",
+                status_code=400,
+            ) from error
         response_headers[_MCP_SESSION_HEADER] = session_token
 
     if isinstance(body, list):
@@ -121,7 +139,7 @@ async def integration_gateway_mcp_post(
                     db,
                     grant=grant,
                     message=message,
-                    gateway_session_id=gateway_session_id,
+                    execution_session=execution_session,
                 )
             )
             is not None
@@ -134,7 +152,7 @@ async def integration_gateway_mcp_post(
         db,
         grant=grant,
         message=body,
-        gateway_session_id=gateway_session_id,
+        execution_session=execution_session,
     )
     if response is None:
         return Response(status_code=202, headers=response_headers)

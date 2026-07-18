@@ -65,10 +65,20 @@ impl SessionExtension for IntegrationGatewaySessionLaunchExtension {
             catalog_entry_id: None,
             server_name: INTEGRATION_GATEWAY_ID.to_string(),
             url: config.url,
-            headers: vec![SessionMcpHeader {
-                name: "authorization".to_string(),
-                value: config.authorization,
-            }],
+            headers: vec![
+                SessionMcpHeader {
+                    name: "authorization".to_string(),
+                    value: config.authorization,
+                },
+                SessionMcpHeader {
+                    name: "proliferate-workspace-id".to_string(),
+                    value: ctx.workspace.id.clone(),
+                },
+                SessionMcpHeader {
+                    name: "proliferate-session-id".to_string(),
+                    value: ctx.session.id.clone(),
+                },
+            ],
         });
         Ok(SessionLaunchExtras {
             mcp_servers: vec![server],
@@ -199,9 +209,13 @@ mod tests {
             server.url,
             "https://cloud.test/v1/cloud/integration-gateway/mcp"
         );
-        assert_eq!(server.headers.len(), 1);
+        assert_eq!(server.headers.len(), 3);
         assert_eq!(server.headers[0].name, "authorization");
         assert_eq!(server.headers[0].value, "Bearer secret-token");
+        assert_eq!(server.headers[1].name, "proliferate-workspace-id");
+        assert_eq!(server.headers[1].value, "workspace-1");
+        assert_eq!(server.headers[2].name, "proliferate-session-id");
+        assert_eq!(server.headers[2].value, "session-1");
     }
 
     #[test]

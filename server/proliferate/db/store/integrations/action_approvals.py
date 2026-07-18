@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from uuid import UUID, uuid4
 
-from sqlalchemy import or_, select, text, update
+from sqlalchemy import func, or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,6 +27,8 @@ class ActionApprovalRecord:
     integration_account_auth_version: int
     runtime_worker_id: UUID
     gateway_session_id: UUID
+    workspace_id: str
+    anyharness_session_id: str
     provider: str
     tool: str
     payload_digest: str
@@ -63,6 +65,8 @@ def _record(row: CloudIntegrationActionApproval) -> ActionApprovalRecord:
         integration_account_auth_version=row.integration_account_auth_version,
         runtime_worker_id=row.runtime_worker_id,
         gateway_session_id=row.gateway_session_id,
+        workspace_id=row.workspace_id,
+        anyharness_session_id=row.anyharness_session_id,
         provider=row.provider_namespace,
         tool=row.tool_name,
         payload_digest=row.payload_digest,
@@ -154,6 +158,8 @@ async def create_or_get_pending(
     integration_account_auth_version: int,
     runtime_worker_id: UUID,
     gateway_session_id: UUID,
+    workspace_id: str,
+    anyharness_session_id: str,
     provider: str,
     tool: str,
     payload_digest: str,
@@ -165,8 +171,7 @@ async def create_or_get_pending(
     safe_target: str | None,
     safe_content_preview: str | None,
     safe_content_character_count: int | None,
-    expires_at: datetime,
-    now: datetime,
+    ttl_seconds: int,
 ) -> tuple[ActionApprovalRecord, bool]:
     """Create or atomically return the active row for one idempotency key.
 
@@ -184,6 +189,8 @@ async def create_or_get_pending(
         integration_account_auth_version=integration_account_auth_version,
         runtime_worker_id=runtime_worker_id,
         gateway_session_id=gateway_session_id,
+        workspace_id=workspace_id,
+        anyharness_session_id=anyharness_session_id,
         provider_namespace=provider,
         tool_name=tool,
         payload_digest=payload_digest,
@@ -196,9 +203,9 @@ async def create_or_get_pending(
         safe_content_preview=safe_content_preview,
         safe_content_character_count=safe_content_character_count,
         status="pending",
-        expires_at=expires_at,
-        created_at=now,
-        updated_at=now,
+        expires_at=func.clock_timestamp() + timedelta(seconds=ttl_seconds),
+        created_at=func.clock_timestamp(),
+        updated_at=func.clock_timestamp(),
     )
     upsert_statement = insert_statement.on_conflict_do_update(
         index_elements=[CloudIntegrationActionApproval.idempotency_key],
@@ -215,9 +222,22 @@ async def transition_if_current(
     approval_id: UUID,
     current_statuses: tuple[str, ...],
     target_status: str,
-    now: datetime,
 ) -> ActionApprovalStateTransition | None:
-    values: dict[str, object] = {"status": target_status, "updated_at": now}
+    locked = (
+        await db.execute(
+            select(CloudIntegrationActionApproval)
+            .where(CloudIntegrationActionApproval.id == approval_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
+    if locked is None or locked.status not in current_statuses:
+        return None
+    prior_status = locked.status
+    values: dict[str, object] = {
+        "status": target_status,
+        "updated_at": func.clock_timestamp(),
+    }
     timestamp_column = {
         "approved": "approved_at",
         "rejected": "rejected_at",
@@ -225,81 +245,97 @@ async def transition_if_current(
         "consumed": "consumed_at",
     }.get(target_status)
     if timestamp_column is not None:
-        values[timestamp_column] = now
-    for current_status in current_statuses:
-        row = (
-            await db.execute(
-                update(CloudIntegrationActionApproval)
-                .where(
-                    CloudIntegrationActionApproval.id == approval_id,
-                    CloudIntegrationActionApproval.status == current_status,
-                    CloudIntegrationActionApproval.expires_at > now,
-                )
-                .values(**values)
-                .returning(CloudIntegrationActionApproval)
+        values[timestamp_column] = func.clock_timestamp()
+    row = (
+        await db.execute(
+            update(CloudIntegrationActionApproval)
+            .where(
+                CloudIntegrationActionApproval.id == approval_id,
+                CloudIntegrationActionApproval.status == prior_status,
+                CloudIntegrationActionApproval.expires_at > func.clock_timestamp(),
             )
-        ).scalar_one_or_none()
-        if row is not None:
-            return ActionApprovalStateTransition(
-                approval=_record(row),
-                from_status=current_status,
-            )
-    return None
+            .values(**values)
+            .returning(CloudIntegrationActionApproval)
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        return None
+    return ActionApprovalStateTransition(approval=_record(row), from_status=prior_status)
 
 
 async def mark_expired_if_due(
-    db: AsyncSession, *, approval_id: UUID, now: datetime
+    db: AsyncSession, *, approval_id: UUID
 ) -> ActionApprovalStateTransition | None:
-    for current_status in ACTIVE_STATUSES:
-        row = (
-            await db.execute(
-                update(CloudIntegrationActionApproval)
-                .where(
-                    CloudIntegrationActionApproval.id == approval_id,
-                    CloudIntegrationActionApproval.status == current_status,
-                    CloudIntegrationActionApproval.expires_at <= now,
-                )
-                .values(status="expired", updated_at=now)
-                .returning(CloudIntegrationActionApproval)
+    locked = (
+        await db.execute(
+            select(CloudIntegrationActionApproval)
+            .where(CloudIntegrationActionApproval.id == approval_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
+    if locked is None or locked.status not in ACTIVE_STATUSES:
+        return None
+    prior_status = locked.status
+    row = (
+        await db.execute(
+            update(CloudIntegrationActionApproval)
+            .where(
+                CloudIntegrationActionApproval.id == approval_id,
+                CloudIntegrationActionApproval.status == prior_status,
+                CloudIntegrationActionApproval.expires_at <= func.clock_timestamp(),
             )
-        ).scalar_one_or_none()
-        if row is not None:
-            return ActionApprovalStateTransition(
-                approval=_record(row),
-                from_status=current_status,
-            )
-    return None
+            .values(status="expired", updated_at=func.clock_timestamp())
+            .returning(CloudIntegrationActionApproval)
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        return None
+    return ActionApprovalStateTransition(approval=_record(row), from_status=prior_status)
 
 
 async def expire_due_for_user(
-    db: AsyncSession, *, user_id: UUID, now: datetime
+    db: AsyncSession, *, user_id: UUID
 ) -> tuple[ActionApprovalStateTransition, ...]:
-    transitions: list[ActionApprovalStateTransition] = []
-    for current_status in ACTIVE_STATUSES:
-        rows = (
-            (
-                await db.execute(
-                    update(CloudIntegrationActionApproval)
-                    .where(
-                        CloudIntegrationActionApproval.owner_user_id == user_id,
-                        CloudIntegrationActionApproval.status == current_status,
-                        CloudIntegrationActionApproval.expires_at <= now,
-                    )
-                    .values(status="expired", updated_at=now)
-                    .returning(CloudIntegrationActionApproval)
+    locked = (
+        (
+            await db.execute(
+                select(CloudIntegrationActionApproval)
+                .where(
+                    CloudIntegrationActionApproval.owner_user_id == user_id,
+                    CloudIntegrationActionApproval.status.in_(ACTIVE_STATUSES),
                 )
+                .order_by(CloudIntegrationActionApproval.id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
             )
-            .scalars()
-            .all()
         )
-        transitions.extend(
-            ActionApprovalStateTransition(
-                approval=_record(row),
-                from_status=current_status,
+        .scalars()
+        .all()
+    )
+    prior_status = {row.id: row.status for row in locked}
+    if not prior_status:
+        return ()
+    rows = (
+        (
+            await db.execute(
+                update(CloudIntegrationActionApproval)
+                .where(
+                    CloudIntegrationActionApproval.id.in_(prior_status),
+                    CloudIntegrationActionApproval.status.in_(ACTIVE_STATUSES),
+                    CloudIntegrationActionApproval.expires_at <= func.clock_timestamp(),
+                )
+                .values(status="expired", updated_at=func.clock_timestamp())
+                .returning(CloudIntegrationActionApproval)
             )
-            for row in rows
         )
-    return tuple(transitions)
+        .scalars()
+        .all()
+    )
+    return tuple(
+        ActionApprovalStateTransition(approval=_record(row), from_status=prior_status[row.id])
+        for row in rows
+    )
 
 
 async def consume_approved_matching(
@@ -312,19 +348,29 @@ async def consume_approved_matching(
     integration_account_auth_version: int,
     runtime_worker_id: UUID,
     gateway_session_id: UUID,
+    workspace_id: str,
+    anyharness_session_id: str,
     provider: str,
     tool: str,
     payload_digest: str,
     binding_digest: str,
-    now: datetime,
 ) -> ActionApprovalStateTransition | None:
+    locked = (
+        await db.execute(
+            select(CloudIntegrationActionApproval.id)
+            .where(CloudIntegrationActionApproval.id == approval_id)
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+    if locked is None:
+        return None
     row = (
         await db.execute(
             update(CloudIntegrationActionApproval)
             .where(
                 CloudIntegrationActionApproval.id == approval_id,
                 CloudIntegrationActionApproval.status == "approved",
-                CloudIntegrationActionApproval.expires_at > now,
+                CloudIntegrationActionApproval.expires_at > func.clock_timestamp(),
                 CloudIntegrationActionApproval.owner_user_id == owner_user_id,
                 CloudIntegrationActionApproval.organization_id == organization_id,
                 CloudIntegrationActionApproval.integration_account_id == integration_account_id,
@@ -332,12 +378,18 @@ async def consume_approved_matching(
                 == integration_account_auth_version,
                 CloudIntegrationActionApproval.runtime_worker_id == runtime_worker_id,
                 CloudIntegrationActionApproval.gateway_session_id == gateway_session_id,
+                CloudIntegrationActionApproval.workspace_id == workspace_id,
+                CloudIntegrationActionApproval.anyharness_session_id == anyharness_session_id,
                 CloudIntegrationActionApproval.provider_namespace == provider,
                 CloudIntegrationActionApproval.tool_name == tool,
                 CloudIntegrationActionApproval.payload_digest == payload_digest,
                 CloudIntegrationActionApproval.binding_digest == binding_digest,
             )
-            .values(status="consumed", consumed_at=now, updated_at=now)
+            .values(
+                status="consumed",
+                consumed_at=func.clock_timestamp(),
+                updated_at=func.clock_timestamp(),
+            )
             .returning(CloudIntegrationActionApproval)
         )
     ).scalar_one_or_none()
@@ -357,10 +409,9 @@ async def record_event(
     actor_user_id: UUID | None,
     actor_runtime_worker_id: UUID | None,
     safe_action_summary: str,
-    created_at: datetime,
 ) -> None:
-    db.add(
-        CloudIntegrationActionApprovalEvent(
+    await db.execute(
+        insert(CloudIntegrationActionApprovalEvent).values(
             approval_id=approval_id,
             event_type=event_type,
             from_status=from_status,
@@ -369,8 +420,8 @@ async def record_event(
             actor_user_id=actor_user_id,
             actor_runtime_worker_id=actor_runtime_worker_id,
             safe_action_summary=safe_action_summary,
-            created_at=created_at,
-            updated_at=created_at,
+            created_at=func.clock_timestamp(),
+            updated_at=func.clock_timestamp(),
         )
     )
     await db.flush()

@@ -14,7 +14,7 @@ _SECRET = "test-signing-secret"
 _WORKER_ID = UUID("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee")
 _OTHER_WORKER_ID = UUID("ffffffff-1111-4222-8333-444444444444")
 _SESSION_ID = UUID("12345678-1234-4234-9234-123456789abc")
-_TOKEN = "v1.EjRWeBI0QjSSNBI0VniavA.lsgwBDu4ArLmu3v8iSa4P5lXrHxQvUvTCCp4didILog"
+_TOKEN = "v2.EjRWeBI0QjSSNBI0VniavA.n5187zG2OiAf9je5slngL9kdmoc4-x3M4k3jgCFKs4s"
 
 
 def _mint_fixed_token(monkeypatch: pytest.MonkeyPatch) -> str:
@@ -69,9 +69,9 @@ def test_verification_rejects_wrong_secret(monkeypatch: pytest.MonkeyPatch) -> N
     [
         "",
         "not-a-token",
-        "v1.only-two-parts",
+        "v2.only-two-parts",
         f"{_TOKEN}.extra",
-        _TOKEN.replace("v1.", "v2.", 1),
+        _TOKEN.replace("v2.", "v1.", 1),
         _TOKEN.replace("EjRWeBI0QjSSNBI0VniavA", "EjRWeBI0QjSSNBI0Vniav="),
         _TOKEN.replace("EjRWeBI0QjSSNBI0VniavA", "EjRWeBI0QjSSNBI0Vniav!"),
         f"{_TOKEN}=",
@@ -101,6 +101,61 @@ def test_verification_rejects_tampered_body_and_signature() -> None:
                 token=token,
             )
             is None
+        )
+
+
+def test_launch_identity_is_signed_and_must_replay_exactly(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(execution_session, "uuid4", lambda: _SESSION_ID)
+    token = mint_execution_session_token(
+        secret=_SECRET,
+        runtime_worker_id=_WORKER_ID,
+        workspace_id="workspace-1",
+        anyharness_session_id="session-1",
+    )
+
+    assert (
+        verify_execution_session_token(
+            secret=_SECRET,
+            runtime_worker_id=_WORKER_ID,
+            token=token,
+            workspace_id="workspace-1",
+            anyharness_session_id="session-1",
+        )
+        == _SESSION_ID
+    )
+    for workspace_id, anyharness_session_id in (
+        ("workspace-2", "session-1"),
+        ("workspace-1", "session-2"),
+        (None, None),
+    ):
+        assert (
+            verify_execution_session_token(
+                secret=_SECRET,
+                runtime_worker_id=_WORKER_ID,
+                token=token,
+                workspace_id=workspace_id,
+                anyharness_session_id=anyharness_session_id,
+            )
+            is None
+        )
+
+
+@pytest.mark.parametrize(
+    ("workspace_id", "anyharness_session_id"),
+    [("workspace-1", None), (None, "session-1"), ("bad value", "session-1")],
+)
+def test_malformed_launch_identity_fails_closed(
+    workspace_id: str | None,
+    anyharness_session_id: str | None,
+) -> None:
+    with pytest.raises(ValueError):
+        mint_execution_session_token(
+            secret=_SECRET,
+            runtime_worker_id=_WORKER_ID,
+            workspace_id=workspace_id,
+            anyharness_session_id=anyharness_session_id,
         )
 
 

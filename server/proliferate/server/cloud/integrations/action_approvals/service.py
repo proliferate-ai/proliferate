@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
 from typing import Literal
 from uuid import UUID
 
@@ -25,7 +24,6 @@ from proliferate.server.cloud.integrations.action_approvals.domain.actions impor
     ActionBinding,
     bind_action,
 )
-from proliferate.utils.time import utcnow
 
 DecisionKind = Literal["approve", "reject", "revoke"]
 TransitionResult = Literal["applied", "already_applied", "expired", "not_allowed"]
@@ -60,8 +58,6 @@ class ExecutionAdmission:
 async def _record_expiry(
     db: AsyncSession,
     transition: approvals_store.ActionApprovalStateTransition,
-    *,
-    now: datetime,
 ) -> None:
     await approvals_store.record_event(
         db,
@@ -73,7 +69,6 @@ async def _record_expiry(
         actor_user_id=None,
         actor_runtime_worker_id=None,
         safe_action_summary=transition.approval.safe_summary,
-        created_at=now,
     )
 
 
@@ -127,6 +122,8 @@ async def request_action_approval(
     *,
     grant: IntegrationGatewayGrant,
     gateway_session_id: UUID,
+    workspace_id: str,
+    anyharness_session_id: str,
     integration_account_id: UUID,
     integration_account_auth_version: int,
     verdict: ToolCallRequiresApproval,
@@ -150,13 +147,13 @@ async def request_action_approval(
         integration_account_auth_version=integration_account_auth_version,
         runtime_worker_id=grant.runtime_worker_id,
         gateway_session_id=gateway_session_id,
+        workspace_id=workspace_id,
+        anyharness_session_id=anyharness_session_id,
         verdict=verdict,
         arguments=arguments,
         account_label=account_label,
         source_label=source_label,
     )
-    now = utcnow()
-    expires_at = now + timedelta(seconds=CLOUD_INTEGRATION_ACTION_APPROVAL_TTL_SECONDS)
     approval, created = await approvals_store.create_or_get_pending(
         db,
         owner_user_id=binding.owner_user_id,
@@ -165,6 +162,8 @@ async def request_action_approval(
         integration_account_auth_version=binding.integration_account_auth_version,
         runtime_worker_id=binding.runtime_worker_id,
         gateway_session_id=binding.gateway_session_id,
+        workspace_id=binding.workspace_id,
+        anyharness_session_id=binding.anyharness_session_id,
         provider=binding.provider,
         tool=binding.tool,
         payload_digest=binding.payload_digest,
@@ -176,39 +175,38 @@ async def request_action_approval(
         safe_target=binding.presentation.target,
         safe_content_preview=binding.presentation.content_preview,
         safe_content_character_count=binding.presentation.content_character_count,
-        expires_at=expires_at,
-        now=now,
+        ttl_seconds=CLOUD_INTEGRATION_ACTION_APPROVAL_TTL_SECONDS,
     )
-    if not created and approval.expires_at <= now:
+    if not created:
         expired = await approvals_store.mark_expired_if_due(
             db,
             approval_id=approval.id,
-            now=now,
         )
         if expired is not None:
-            await _record_expiry(db, expired, now=now)
-        approval, created = await approvals_store.create_or_get_pending(
-            db,
-            owner_user_id=binding.owner_user_id,
-            organization_id=binding.organization_id,
-            integration_account_id=binding.integration_account_id,
-            integration_account_auth_version=binding.integration_account_auth_version,
-            runtime_worker_id=binding.runtime_worker_id,
-            gateway_session_id=binding.gateway_session_id,
-            provider=binding.provider,
-            tool=binding.tool,
-            payload_digest=binding.payload_digest,
-            binding_digest=binding.binding_digest,
-            idempotency_key=binding.idempotency_key,
-            safe_summary=binding.presentation.summary,
-            safe_account_label=binding.presentation.account_label,
-            safe_source_label=binding.presentation.source_label,
-            safe_target=binding.presentation.target,
-            safe_content_preview=binding.presentation.content_preview,
-            safe_content_character_count=binding.presentation.content_character_count,
-            expires_at=expires_at,
-            now=now,
-        )
+            await _record_expiry(db, expired)
+            approval, created = await approvals_store.create_or_get_pending(
+                db,
+                owner_user_id=binding.owner_user_id,
+                organization_id=binding.organization_id,
+                integration_account_id=binding.integration_account_id,
+                integration_account_auth_version=binding.integration_account_auth_version,
+                runtime_worker_id=binding.runtime_worker_id,
+                gateway_session_id=binding.gateway_session_id,
+                workspace_id=binding.workspace_id,
+                anyharness_session_id=binding.anyharness_session_id,
+                provider=binding.provider,
+                tool=binding.tool,
+                payload_digest=binding.payload_digest,
+                binding_digest=binding.binding_digest,
+                idempotency_key=binding.idempotency_key,
+                safe_summary=binding.presentation.summary,
+                safe_account_label=binding.presentation.account_label,
+                safe_source_label=binding.presentation.source_label,
+                safe_target=binding.presentation.target,
+                safe_content_preview=binding.presentation.content_preview,
+                safe_content_character_count=binding.presentation.content_character_count,
+                ttl_seconds=CLOUD_INTEGRATION_ACTION_APPROVAL_TTL_SECONDS,
+            )
     if created:
         await approvals_store.record_event(
             db,
@@ -220,16 +218,14 @@ async def request_action_approval(
             actor_user_id=None,
             actor_runtime_worker_id=grant.runtime_worker_id,
             safe_action_summary=approval.safe_summary,
-            created_at=now,
         )
     return approval
 
 
 async def _expire_due_for_user(db: AsyncSession, *, user_id: UUID) -> None:
-    now = utcnow()
-    expired = await approvals_store.expire_due_for_user(db, user_id=user_id, now=now)
+    expired = await approvals_store.expire_due_for_user(db, user_id=user_id)
     for transition in expired:
-        await _record_expiry(db, transition, now=now)
+        await _record_expiry(db, transition)
 
 
 async def list_action_approvals(
@@ -251,14 +247,12 @@ async def list_action_approvals(
 async def refresh_action_approval(
     db: AsyncSession, *, access: ActionApprovalAccess
 ) -> approvals_store.ActionApprovalRecord:
-    now = utcnow()
     expired = await approvals_store.mark_expired_if_due(
         db,
         approval_id=access.approval.id,
-        now=now,
     )
     if expired is not None:
-        await _record_expiry(db, expired, now=now)
+        await _record_expiry(db, expired)
         return expired.approval
     current = await approvals_store.get_approval(db, access.approval.id)
     assert current is not None
@@ -271,14 +265,12 @@ async def transition_action_approval(
     access: ActionApprovalAccess,
     decision: DecisionKind,
 ) -> ActionApprovalTransition:
-    now = utcnow()
     expired = await approvals_store.mark_expired_if_due(
         db,
         approval_id=access.approval.id,
-        now=now,
     )
     if expired is not None:
-        await _record_expiry(db, expired, now=now)
+        await _record_expiry(db, expired)
         return ActionApprovalTransition(approval=expired.approval, result="expired")
 
     target = {"approve": "approved", "reject": "rejected", "revoke": "revoked"}[decision]
@@ -288,7 +280,6 @@ async def transition_action_approval(
         approval_id=access.approval.id,
         current_statuses=allowed_current,
         target_status=target,
-        now=now,
     )
     if transitioned is not None:
         await approvals_store.record_event(
@@ -301,7 +292,6 @@ async def transition_action_approval(
             actor_user_id=access.actor_user_id,
             actor_runtime_worker_id=None,
             safe_action_summary=transitioned.approval.safe_summary,
-            created_at=now,
         )
         return ActionApprovalTransition(approval=transitioned.approval, result="applied")
 
@@ -326,6 +316,8 @@ def _matches_binding(
         and approval.integration_account_auth_version == binding.integration_account_auth_version
         and approval.runtime_worker_id == binding.runtime_worker_id
         and approval.gateway_session_id == binding.gateway_session_id
+        and approval.workspace_id == binding.workspace_id
+        and approval.anyharness_session_id == binding.anyharness_session_id
         and approval.provider == binding.provider
         and approval.tool == binding.tool
         and approval.payload_digest == binding.payload_digest
@@ -339,6 +331,8 @@ async def consume_action_for_execution(
     approval_id: UUID,
     grant: IntegrationGatewayGrant,
     gateway_session_id: UUID,
+    workspace_id: str,
+    anyharness_session_id: str,
     integration_account_id: UUID,
     integration_account_auth_version: int,
     verdict: ToolCallRequiresApproval,
@@ -369,6 +363,8 @@ async def consume_action_for_execution(
         integration_account_auth_version=integration_account_auth_version,
         runtime_worker_id=grant.runtime_worker_id,
         gateway_session_id=gateway_session_id,
+        workspace_id=workspace_id,
+        anyharness_session_id=anyharness_session_id,
         verdict=verdict,
         arguments=arguments,
         account_label=current.safe_account_label,
@@ -377,7 +373,6 @@ async def consume_action_for_execution(
     if not _matches_binding(current, binding):
         return ExecutionAdmission(result="mismatch", approval=current)
 
-    now = utcnow()
     consumed = await approvals_store.consume_approved_matching(
         db,
         approval_id=approval_id,
@@ -387,11 +382,12 @@ async def consume_action_for_execution(
         integration_account_auth_version=binding.integration_account_auth_version,
         runtime_worker_id=binding.runtime_worker_id,
         gateway_session_id=binding.gateway_session_id,
+        workspace_id=binding.workspace_id,
+        anyharness_session_id=binding.anyharness_session_id,
         provider=binding.provider,
         tool=binding.tool,
         payload_digest=binding.payload_digest,
         binding_digest=binding.binding_digest,
-        now=now,
     )
     if consumed is not None:
         await approvals_store.record_event(
@@ -404,17 +400,15 @@ async def consume_action_for_execution(
             actor_user_id=None,
             actor_runtime_worker_id=grant.runtime_worker_id,
             safe_action_summary=consumed.approval.safe_summary,
-            created_at=now,
         )
         return ExecutionAdmission(result="consumed", approval=consumed.approval)
 
     expired = await approvals_store.mark_expired_if_due(
         db,
         approval_id=approval_id,
-        now=now,
     )
     if expired is not None:
-        await _record_expiry(db, expired, now=now)
+        await _record_expiry(db, expired)
         return ExecutionAdmission(result="expired", approval=expired.approval)
     current = await approvals_store.get_approval(db, approval_id)
     assert current is not None

@@ -34,6 +34,8 @@ def upgrade() -> None:
         sa.Column("integration_account_auth_version", sa.Integer(), nullable=False),
         sa.Column("runtime_worker_id", sa.Uuid(), nullable=False),
         sa.Column("gateway_session_id", sa.Uuid(), nullable=False),
+        sa.Column("workspace_id", sa.String(length=255), nullable=False),
+        sa.Column("anyharness_session_id", sa.String(length=255), nullable=False),
         sa.Column("provider_namespace", sa.String(length=64), nullable=False),
         sa.Column("tool_name", sa.String(length=255), nullable=False),
         sa.Column("payload_digest", sa.String(length=64), nullable=False),

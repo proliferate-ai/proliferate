@@ -45,6 +45,8 @@ from tests.integration.test_cloud_integration_gateway_tool_policy_api import (
 
 APPROVALS_URL = "/v1/cloud/integrations/action-approvals"
 MCP_SESSION_HEADER = "Mcp-Session-Id"
+WORKSPACE_HEADER = "Proliferate-Workspace-Id"
+ANYHARNESS_SESSION_HEADER = "Proliferate-Session-Id"
 
 
 @pytest.fixture(autouse=True)
@@ -59,6 +61,8 @@ class ActionContext:
     gateway_bearer: str
     gateway_session_token: str
     gateway_session_id: uuid.UUID
+    workspace_id: str
+    anyharness_session_id: str
     worker_id: uuid.UUID
     user_id: uuid.UUID
     organization_id: uuid.UUID | None
@@ -79,6 +83,8 @@ class ActionContext:
         return {
             "Authorization": f"Bearer {self.gateway_bearer}",
             MCP_SESSION_HEADER: self.gateway_session_token,
+            WORKSPACE_HEADER: self.workspace_id,
+            ANYHARNESS_SESSION_HEADER: self.anyharness_session_id,
         }
 
 
@@ -87,10 +93,16 @@ async def _initialize_gateway_session(
     *,
     gateway_bearer: str,
     worker_id: uuid.UUID,
+    workspace_id: str,
+    anyharness_session_id: str,
 ) -> tuple[str, uuid.UUID]:
     initialized = await client.post(
         GATEWAY_URL,
-        headers={"Authorization": f"Bearer {gateway_bearer}"},
+        headers={
+            "Authorization": f"Bearer {gateway_bearer}",
+            WORKSPACE_HEADER: workspace_id,
+            ANYHARNESS_SESSION_HEADER: anyharness_session_id,
+        },
         json={"jsonrpc": "2.0", "id": 1, "method": "initialize"},
     )
     assert initialized.status_code == 200, initialized.text
@@ -99,6 +111,8 @@ async def _initialize_gateway_session(
         secret=settings.cloud_secret_key,
         runtime_worker_id=worker_id,
         token=token,
+        workspace_id=workspace_id,
+        anyharness_session_id=anyharness_session_id,
     )
     assert session_id is not None
     return token, session_id
@@ -143,10 +157,14 @@ async def _setup_context(
     ).scalar_one()
     account = (await accounts_store.list_accounts_for_user(db_session, user_id))[0]
     gateway_bearer = enrolled.json()["integrationGateway"]["authorization"].removeprefix("Bearer ")
+    workspace_id = f"workspace-{prefix}"
+    anyharness_session_id = f"session-{prefix}"
     gateway_session_token, gateway_session_id = await _initialize_gateway_session(
         client,
         gateway_bearer=gateway_bearer,
         worker_id=worker.id,
+        workspace_id=workspace_id,
+        anyharness_session_id=anyharness_session_id,
     )
     return ActionContext(
         auth=auth,
@@ -154,6 +172,8 @@ async def _setup_context(
         gateway_bearer=gateway_bearer,
         gateway_session_token=gateway_session_token,
         gateway_session_id=gateway_session_id,
+        workspace_id=workspace_id,
+        anyharness_session_id=anyharness_session_id,
         worker_id=worker.id,
         user_id=user_id,
         organization_id=worker.organization_id,
@@ -197,6 +217,8 @@ async def _consume(
     arguments: dict[str, object],
     grant: IntegrationGatewayGrant | None = None,
     gateway_session_id: uuid.UUID | None = None,
+    workspace_id: str | None = None,
+    anyharness_session_id: str | None = None,
     integration_account_id: uuid.UUID | None = None,
     integration_account_auth_version: int | None = None,
     verdict: ToolCallRequiresApproval | None = None,
@@ -205,6 +227,8 @@ async def _consume(
         approval_id=uuid.UUID(approval_id),
         grant=grant or context.grant,
         gateway_session_id=gateway_session_id or context.gateway_session_id,
+        workspace_id=workspace_id or context.workspace_id,
+        anyharness_session_id=anyharness_session_id or context.anyharness_session_id,
         integration_account_id=integration_account_id or context.account_id,
         integration_account_auth_version=(
             context.account_auth_version
@@ -273,6 +297,29 @@ async def test_gateway_requires_trusted_session_then_persists_one_safe_bound_ret
     assert without_session["structuredContent"]["error"]["code"] == (
         "integration_gateway_session_required"
     )
+
+    legacy_initialize = await client.post(
+        GATEWAY_URL,
+        headers={"Authorization": f"Bearer {context.gateway_bearer}"},
+        json={"jsonrpc": "2.0", "id": 2, "method": "initialize"},
+    )
+    assert legacy_initialize.status_code == 200
+    unbound_session = await _tool_call(
+        client,
+        {
+            "Authorization": f"Bearer {context.gateway_bearer}",
+            MCP_SESSION_HEADER: legacy_initialize.headers[MCP_SESSION_HEADER],
+        },
+        name="integrations.call_tool",
+        arguments={
+            "provider": "slack",
+            "tool": "slack_send_message",
+            "arguments": arguments,
+        },
+    )
+    assert unbound_session["structuredContent"]["error"]["code"] == (
+        "integration_gateway_session_required"
+    )
     assert not list((await db_session.execute(select(CloudIntegrationActionApproval))).scalars())
 
     first, retry = await asyncio.gather(
@@ -296,6 +343,8 @@ async def test_gateway_requires_trusted_session_then_persists_one_safe_bound_ret
     assert first["integrationAccountId"] == str(context.account_id)
     assert first["integrationAccountAuthVersion"] == context.account_auth_version
     assert first["executionSessionId"] == str(context.gateway_session_id)
+    assert first["workspaceId"] == context.workspace_id
+    assert first["anyharnessSessionId"] == context.anyharness_session_id
     assert first["target"] is None
     assert first["contentPreview"] is None
     assert first["contentCharacterCount"] is None
@@ -315,6 +364,8 @@ async def test_gateway_requires_trusted_session_then_persists_one_safe_bound_ret
     assert approval.integration_account_auth_version == context.account_auth_version
     assert approval.runtime_worker_id == context.worker_id
     assert approval.gateway_session_id == context.gateway_session_id
+    assert approval.workspace_id == context.workspace_id
+    assert approval.anyharness_session_id == context.anyharness_session_id
     assert approval.provider_namespace == "slack"
     assert approval.tool_name == "slack_send_message"
     assert approval.payload_digest == canonical_payload_digest(arguments)
@@ -359,7 +410,7 @@ async def test_only_product_owner_can_decide_and_decisions_are_idempotent(
     listed_approval = listed.json()["items"][0]
     assert listed_approval["approvalId"] == approval_id
     assert listed_approval["accountLabel"].startswith("Slack connection ")
-    assert listed_approval["sourceLabel"].startswith("Desktop MCP session ")
+    assert listed_approval["sourceLabel"].startswith("Desktop workspace ")
 
     first = await _approve(client, context, approval_id)
     second = await _approve(client, context, approval_id)
@@ -411,6 +462,8 @@ async def test_exact_binding_mismatches_then_committed_consumption_and_replay(
 
     mismatch_calls = (
         {"gateway_session_id": uuid.uuid4()},
+        {"workspace_id": "workspace-other"},
+        {"anyharness_session_id": "session-other"},
         {"integration_account_id": uuid.uuid4()},
         {"integration_account_auth_version": context.account_auth_version + 1},
         {"verdict": ToolCallRequiresApproval(provider="slack", tool="slack_edit_message")},
@@ -458,6 +511,8 @@ async def test_different_mcp_sessions_never_share_identical_action_approval(
         client,
         gateway_bearer=context.gateway_bearer,
         worker_id=context.worker_id,
+        workspace_id=context.workspace_id,
+        anyharness_session_id="session-second",
     )
     second = await _request_action(
         client,
@@ -466,6 +521,8 @@ async def test_different_mcp_sessions_never_share_identical_action_approval(
         headers={
             "Authorization": f"Bearer {context.gateway_bearer}",
             MCP_SESSION_HEADER: second_token,
+            WORKSPACE_HEADER: context.workspace_id,
+            ANYHARNESS_SESSION_HEADER: "session-second",
         },
     )
     assert first["id"] != second["id"]

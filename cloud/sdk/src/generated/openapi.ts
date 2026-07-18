@@ -3093,6 +3093,10 @@ export interface components {
              * Format: uuid
              */
             executionSessionId: string;
+            /** Workspaceid */
+            workspaceId: string;
+            /** Anyharnesssessionid */
+            anyharnessSessionId: string;
             /** Payloaddigest */
             payloadDigest: string;
             /** Actionsummary */

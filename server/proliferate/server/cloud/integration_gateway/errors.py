@@ -59,6 +59,8 @@ class IntegrationToolApprovalRequired(IntegrationToolPolicyError):
                     str(approval.organization_id) if approval.organization_id is not None else None
                 ),
                 "executionSessionId": str(approval.gateway_session_id),
+                "workspaceId": approval.workspace_id,
+                "anyharnessSessionId": approval.anyharness_session_id,
                 "accountLabel": approval.safe_account_label,
                 "sourceLabel": approval.safe_source_label,
                 "target": approval.safe_target,

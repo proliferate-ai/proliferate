@@ -50,6 +50,8 @@ class CloudIntegrationActionApproval(Base):
     integration_account_auth_version: Mapped[int] = mapped_column(Integer, nullable=False)
     runtime_worker_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
     gateway_session_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
+    workspace_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    anyharness_session_id: Mapped[str] = mapped_column(String(255), nullable=False)
     provider_namespace: Mapped[str] = mapped_column(String(64))
     tool_name: Mapped[str] = mapped_column(String(255))
     payload_digest: Mapped[str] = mapped_column(String(64))

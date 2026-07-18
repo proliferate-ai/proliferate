@@ -149,16 +149,21 @@ evidence.
 
 ### Gateway execution session
 
-The MCP initialize response mints an opaque, signed `Mcp-Session-Id` header.
-Its signature is bound to the authenticated Worker id, so a session header
-minted for one Worker cannot be replayed with another Worker's gateway bearer.
+At launch AnyHarness supplies its host-owned workspace and session ids as
+static MCP headers. The MCP initialize response mints an opaque, signed
+`Mcp-Session-Id` header whose signature binds the authenticated Worker plus
+those exact launch ids. Changing or omitting any identity invalidates the
+session; a session minted for one Worker, workspace, or AnyHarness session
+cannot be replayed in another.
 Subsequent approval-gated calls must return that header. Missing or invalid
 session state fails before an approval is requested; the agent cannot choose
 the trusted session id by supplying prompt text or tool arguments.
 
-The header narrows an approval to one gateway execution session. It is not an
-approval credential: only a product-authenticated human can approve, reject,
-or revoke an action.
+An older unbound client can still initialize and use read-only gateway tools,
+but cannot request an external-action approval. The signed header narrows an
+approval to one gateway execution session and one exact workspace/session
+launch. It is not an approval credential: only a product-authenticated human
+can approve, reject, or revoke an action.
 
 ### Gateway credential file
 
@@ -280,7 +285,8 @@ client claims, or arbitrary approval-like tool arguments. One approval binds:
 
 - the exact authenticated product user and personal-or-organization scope;
 - the integration account UUID and current `auth_version`;
-- the runtime Worker UUID and signed gateway-session UUID;
+- the runtime Worker UUID, signed gateway-session UUID, exact AnyHarness
+  workspace id, and exact AnyHarness session id;
 - the verdict's exact canonical provider and tool; and
 - the SHA-256 digest of canonical JSON action arguments.
 
@@ -289,12 +295,15 @@ Concurrent identical requests in the same authority and execution session
 converge on one active row. Actor, account, organization, Worker, and session
 identifiers are immutable audit snapshots rather than mutable client claims.
 
-Requests have a 600-second TTL and the explicit states `pending`, `approved`,
+Requests have a 600-second TTL, measured from PostgreSQL
+`clock_timestamp()`, and the explicit states `pending`, `approved`,
 `rejected`, `revoked`, `expired`, and `consumed`. `expires_at` is the
 authoritative time boundary: an approved row cannot be consumed at or after
 that instant even if its stored status has not yet changed. List, get,
 decision, request-reuse, and admission observations materialize a due active
 row as terminal `expired` and append the corresponding system audit event.
+Transitions acquire the approval row lock before evaluating that database
+clock, so waiting on a lock cannot extend approval validity.
 
 Approval, rejection, revocation, expiry, and the `approved -> consumed`
 transition are compare-and-set updates. Consumption matches every bound field
@@ -438,8 +447,9 @@ and [`runtime_workers/api.py`](../../../../server/proliferate/server/cloud/runti
   tools. Known actions persist a narrowly bound request, but this slice never
   delivers them. Agent arguments do not participate in the authorization
   decision.
-- The signed MCP session is Worker-bound; a missing, forged, or cross-Worker
-  session header cannot create an approval request.
+- The signed MCP session is Worker/workspace/AnyHarness-session bound; missing,
+  forged, unbound, or cross-context session state cannot create an approval
+  request.
 - Approval expiry is governed by `expires_at`, including before its terminal
   row and audit event have been materialized by an observation.
 - Account reauthorization increments `auth_version`; an approval for an older
