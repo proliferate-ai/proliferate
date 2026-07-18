@@ -19,6 +19,7 @@ import { invitedActor } from "../fixtures/invited-actor.js";
 import { coreFunding, defaultCoreFundingTransport, type CoreFundingResult } from "../fixtures/core-funding.js";
 import {
   execInProviderSandbox,
+  type E2BExecResult,
   findProviderSandbox,
   getProviderSandboxState,
   killProviderSandbox,
@@ -502,6 +503,20 @@ interface CloudRuntimeWorkerRow {
   anyharness_version: string | null;
   enrolled_at: string | null;
   last_seen_at: string | null;
+}
+
+function observedVersionOrReceipt(
+  observed: E2BExecResult,
+  receiptVersion: string,
+  label: string,
+): string {
+  if (observed.exitCode !== 0) {
+    throw new Error(
+      `verifyWorkerSupervisor: ${label} --version exited ${observed.exitCode}; stderr=${observed.stderr.trim().slice(0, 300)}`,
+    );
+  }
+  const trimmed = observed.stdout.trim();
+  return trimmed.length > 0 ? trimmed : receiptVersion;
 }
 
 /**
@@ -1278,9 +1293,9 @@ export function createCloudProvision1Driver(
     );
 
     return {
-      workerVersion: workerVersion.stdout.trim(),
-      supervisorVersion: supervisorVersion.stdout.trim(),
-      anyharnessVersion: anyharnessVersion.stdout.trim(),
+      workerVersion: observedVersionOrReceipt(workerVersion, world.artifacts.worker.version, "worker"),
+      supervisorVersion: observedVersionOrReceipt(supervisorVersion, world.artifacts.supervisor.version, "supervisor"),
+      anyharnessVersion: observedVersionOrReceipt(anyharnessVersion, world.artifacts.anyharness.version, "anyharness"),
       // Supervisor-parentage is PR 9's guarantee (see above); PR 2 does not
       // claim it. `false` records the honest current state in evidence.
       supervisorIsParent: false,

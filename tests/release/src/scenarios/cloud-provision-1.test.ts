@@ -34,6 +34,7 @@ import type { PlannedCellV1 } from "../runner/result.js";
 import type { CorrelatedTurnSpend, SpendSnapshot } from "../services/qualification-litellm.js";
 import type { BoxExec, ServerPythonOptions } from "../worlds/managed-cloud/box-exec.js";
 import type { ManagedCloudCleanupEvidence } from "../worlds/managed-cloud/cleanup-kinds.js";
+import { MANAGED_CLOUD_TEMPLATE_DESTINATIONS } from "../worlds/managed-cloud/template.js";
 import type { ManagedCloudWorld } from "../worlds/managed-cloud/world.js";
 
 const REQUIRED_ENV_VARS: Record<string, string> = {
@@ -730,6 +731,27 @@ test("createCloudProvision1Driver().verifyWorkerSupervisor asserts worker enroll
   assert.equal(calls.filter((c) => c.command.at(-1) === "--version").length, 3);
   assert.equal(calls.filter((c) => c.command[0] === "sha256sum").length, 3);
   assert.equal(calls.length, 6);
+});
+
+test("createCloudProvision1Driver().verifyWorkerSupervisor falls back to the candidate receipt when AnyHarness --version is blank", async () => {
+  const box = fakeBoxExec();
+  const { fn: exec, calls } = fakeExecInProviderSandbox(() => "[]");
+  const blankAnyharnessVersionExec = async (providerSandboxId: string, command: readonly string[]) => {
+    if (
+      command[0] === MANAGED_CLOUD_TEMPLATE_DESTINATIONS.anyharness &&
+      command.at(-1) === "--version"
+    ) {
+      return { stdout: "\n", stderr: "", exitCode: 0 };
+    }
+    return exec(providerSandboxId, command);
+  };
+  const driver = createCloudProvision1Driver({ execInProviderSandbox: blankAnyharnessVersionExec });
+  const world: ManagedCloudWorld = { ...fakeWorld(), box };
+  const result = await driver.verifyWorkerSupervisor(world, fakeConvergenceForDriver());
+
+  assert.equal(result.anyharnessVersion, world.artifacts.anyharness.version);
+  assert.equal(result.anyharnessHashMatchesReceipt, true);
+  assert.equal(calls.filter((c) => c.command[0] === "sha256sum").length, 3);
 });
 
 test("createCloudProvision1Driver().verifyWorkerSupervisor fails when a baked binary hash does not match its receipt", async () => {
