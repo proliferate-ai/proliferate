@@ -122,6 +122,13 @@ describe("home-next branch helpers", () => {
     })).toBe("main");
   });
 
+  it("does not trust a configured default without the cloud-only opt-in", () => {
+    expect(resolveHomeNextDefaultBranchName({
+      branchRefs: [],
+      repoRootDefaultBranch: "main",
+    })).toBeNull();
+  });
+
   it("falls back to git default and then the first local branch without inventing main", () => {
     expect(resolveHomeNextDefaultBranchName({
       branchRefs: [branch({ name: "zebra" }), branch({ name: "alpha", isDefault: true })],
