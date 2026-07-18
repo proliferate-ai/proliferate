@@ -77,12 +77,24 @@ export interface OpenTarget {
   iconId?: OpenTargetIconId;
 }
 
+export type DirectoryPickerUnavailableReason =
+  | "native_host_required"
+  | "picker_failed";
+
+/** A directory-picker outcome with cancellation kept distinct from a missing
+ * or failed native transport. Product workflows decide how to present the
+ * unavailable reason; a normal user cancellation remains silent. */
+export type DirectoryPickerResult =
+  | { kind: "selected"; path: string }
+  | { kind: "cancelled" }
+  | { kind: "unavailable"; reason: DirectoryPickerUnavailableReason };
+
 /**
  * Local filesystem and OS access only. Repo inspection, git, worktree, and
  * workspace behavior continue through AnyHarness.
  */
 export interface DesktopFilesBridge {
-  pickDirectory(): Promise<string | null>;
+  pickDirectory(): Promise<DirectoryPickerResult>;
   getHomeDirectory(): Promise<string>;
   isDirectory(path: string): Promise<boolean>;
 

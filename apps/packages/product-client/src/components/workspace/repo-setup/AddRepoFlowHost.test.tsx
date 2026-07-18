@@ -1,9 +1,16 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, act } from "@testing-library/react";
+import { cleanup, render, screen, act, waitFor } from "@testing-library/react";
 import type { CloudRepoPickerProps } from "@proliferate/product-ui/repos/CloudRepoPicker";
-import type { AddRepoFlowProps } from "@proliferate/product-ui/repos/AddRepoFlow";
+import type {
+  AddRepoFlowOption,
+  AddRepoFlowProps,
+} from "@proliferate/product-ui/repos/AddRepoFlow";
+import type {
+  DesktopBridge,
+  DirectoryPickerResult,
+} from "@proliferate/product-client/host/desktop-bridge";
 import { AddRepoFlowHost } from "#product/components/workspace/repo-setup/AddRepoFlowHost";
 import { useAddRepoFlowStore } from "#product/stores/ui/add-repo-flow-store";
 import { useCloudRepositoryIntentStore } from "#product/stores/cloud/cloud-repository-intent-store";
@@ -26,6 +33,15 @@ const cloudHook = vi.hoisted(() => ({
   onRepositorySelected: null as null | ((repo: { gitOwner: string; gitRepoName: string }) => void),
   legacyManual: vi.fn(),
   clonePicker: null as CloudRepoPickerProps | null,
+}));
+const productHost = vi.hoisted(() => ({
+  desktop: null as DesktopBridge | null,
+}));
+const addRepoHook = vi.hoisted(() => ({
+  addRepoFromPath: vi.fn(),
+}));
+const addRepoFlow = vi.hoisted(() => ({
+  onPickOption: null as null | ((option: AddRepoFlowOption) => void),
 }));
 
 // The OLD prerequisite-model blocker useAddCloudEnvironment produces: a
@@ -68,7 +84,10 @@ vi.mock("@proliferate/product-surfaces/settings/cloud-environments/use-add-cloud
 }));
 
 vi.mock("#product/hooks/workspaces/workflows/use-add-repo", () => ({
-  useAddRepo: () => ({ addRepoFromPath: vi.fn(), isAddingRepo: false }),
+  useAddRepo: () => ({
+    addRepoFromPath: addRepoHook.addRepoFromPath,
+    isAddingRepo: false,
+  }),
 }));
 
 // Stub the clone hook (which otherwise pulls in the AnyHarnessRuntime provider);
@@ -89,7 +108,7 @@ vi.mock("#product/hooks/organizations/facade/use-active-organization", () => ({
 
 vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
   useProductHost: () => ({
-    desktop: null,
+    desktop: productHost.desktop,
     links: { buildReturnUrl: () => "https://app.test/return", openExternal: vi.fn() },
   }),
 }));
@@ -98,10 +117,16 @@ vi.mock("react-router-dom", () => ({ useNavigate: () => vi.fn() }));
 
 // Expose the resolved cloudPicker.blocker title the host hands the flow.
 vi.mock("@proliferate/product-ui/repos/AddRepoFlow", () => ({
-  AddRepoFlow: ({ step, cloudPicker, clonePicker }: AddRepoFlowProps) => {
+  AddRepoFlow: ({ step, cloudPicker, clonePicker, error, onPickOption }: AddRepoFlowProps) => {
     const picker = step.kind === "clone" ? clonePicker : cloudPicker;
     cloudHook.clonePicker = clonePicker ?? null;
-    return <div>{picker?.blocker ? `blocker:${picker.blocker.title}` : "no-blocker"}</div>;
+    addRepoFlow.onPickOption = onPickOption;
+    return (
+      <div>
+        {picker?.blocker ? `blocker:${picker.blocker.title}` : "no-blocker"}
+        {error ? <p role="alert">{error}</p> : null}
+      </div>
+    );
   },
 }));
 
@@ -116,6 +141,9 @@ afterEach(() => {
   cloudHook.onRepositorySelected = null;
   cloudHook.clonePicker = null;
   cloudHook.legacyManual.mockClear();
+  productHost.desktop = null;
+  addRepoHook.addRepoFromPath.mockReset();
+  addRepoFlow.onPickOption = null;
   useAddRepoFlowStore.setState({ open: false, step: { kind: "entry" }, onCompleted: null });
   useCloudRepositoryIntentStore.setState({ activeIntent: null });
 });
@@ -130,6 +158,14 @@ function openCloneStep() {
   act(() => {
     useAddRepoFlowStore.setState({ open: true, step: { kind: "clone" }, onCompleted: null });
   });
+}
+
+function desktopWithPicker(result: DirectoryPickerResult): DesktopBridge {
+  return {
+    files: {
+      pickDirectory: vi.fn().mockResolvedValue(result),
+    },
+  } as unknown as DesktopBridge;
 }
 
 describe("AddRepoFlowHost cloud gating (PR2-GATING-01)", () => {
@@ -243,5 +279,45 @@ describe("AddRepoFlowHost cloud gating (PR2-GATING-01)", () => {
         gitRepoName: "manual-clone",
       },
     });
+  });
+});
+
+describe("AddRepoFlowHost local directory picker", () => {
+  it.each([
+    [
+      "native_host_required",
+      "Open the Desktop app to choose a local folder.",
+    ],
+    [
+      "picker_failed",
+      "The folder picker is unavailable right now. Try again.",
+    ],
+  ] as const)("explains the %s picker failure", async (reason, message) => {
+    productHost.desktop = desktopWithPicker({ kind: "unavailable", reason });
+    render(<AddRepoFlowHost />);
+
+    act(() => {
+      useAddRepoFlowStore.setState({ open: true, step: { kind: "entry" } });
+      addRepoFlow.onPickOption?.("add-existing-folder");
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert").textContent).toBe(message);
+    });
+    expect(addRepoHook.addRepoFromPath).not.toHaveBeenCalled();
+  });
+
+  it("keeps a normal native picker cancellation silent", async () => {
+    productHost.desktop = desktopWithPicker({ kind: "cancelled" });
+    render(<AddRepoFlowHost />);
+
+    await act(async () => {
+      useAddRepoFlowStore.setState({ open: true, step: { kind: "entry" } });
+      addRepoFlow.onPickOption?.("add-existing-folder");
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(addRepoHook.addRepoFromPath).not.toHaveBeenCalled();
   });
 });
