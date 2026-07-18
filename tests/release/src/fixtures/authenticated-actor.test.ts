@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { beforeEach, test } from "node:test";
 
 import {
   authenticatedActor,
   toStoredSession,
+  __resetAuthenticatedActorClaimCacheForTests,
   type AuthenticatedActorTransport,
 } from "./authenticated-actor.js";
 import { ApiClient } from "./http.js";
@@ -104,6 +105,13 @@ function fakeTransport(overrides: Partial<AuthenticatedActorTransport> = {}): {
   };
   return { transport, calls };
 }
+
+beforeEach(() => {
+  // All fake worlds in this file share the same `runDir` ("/tmp/run-1"), so
+  // the module-level per-world claim cache must be cleared between tests or
+  // one test's cached owner would leak into the next.
+  __resetAuthenticatedActorClaimCacheForTests();
+});
 
 test("toStoredSession maps the desktop token response onto the snake_case StoredAuthSession the client persists", () => {
   const session = toStoredSession({
@@ -238,4 +246,63 @@ test("authenticatedActor preserves password-login 401 as red and never retries i
     /password\/login -> 401/,
   );
   assert.equal(loginAttempts, 1);
+});
+
+test("authenticatedActor claims setup once per world: a second call for the same world logs in with the cached owner instead of re-claiming", async () => {
+  // Regression for run 29628880856: Tier-3 scenarios loop authenticatedActor
+  // over multiple harness cells (claude, codex, grok, ...) against ONE
+  // ReadyLocalWorld. The server's one-time first-run claim 404s any second
+  // `POST /setup`, so the second+ cell must skip claimSetup entirely.
+  const world = fakeWorld();
+  const { transport, calls } = fakeTransport();
+
+  const first = await authenticatedActor(world, "owner", { harnessKind: "claude" }, transport);
+  const second = await authenticatedActor(world, "owner", { harnessKind: "codex" }, transport);
+
+  const claimCalls = calls.filter((call) => call.startsWith("claimSetup"));
+  const commitWaits = calls.filter((call) => call === "waitForSetupCommitted");
+  assert.equal(claimCalls.length, 1, "only the first cell may claim setup");
+  assert.equal(commitWaits.length, 1, "only the first cell waits for the commit to become visible");
+
+  const loginCalls = calls.filter((call) => call.startsWith("loginWithPassword"));
+  assert.equal(loginCalls.length, 2, "every cell, including cached ones, must still log in");
+  assert.equal(loginCalls[0], loginCalls[1], "the second cell logs in with the SAME cached owner credentials");
+
+  assert.equal(first.userId, second.userId);
+});
+
+test("authenticatedActor does not cache a failed claim: a later call for the same world retries the claim honestly", async () => {
+  const world = fakeWorld();
+  let claimAttempts = 0;
+  const { transport, calls } = fakeTransport({
+    claimSetup: async (params) => {
+      claimAttempts += 1;
+      calls.push(`claimSetup:${params.email}`);
+      if (claimAttempts === 1) {
+        throw new Error("POST /setup -> 400: invalid setup token");
+      }
+    },
+  });
+
+  await assert.rejects(() => authenticatedActor(world, "owner", {}, transport), /invalid setup token/);
+  assert.equal(claimAttempts, 1);
+
+  // The failed claim must NOT be cached: the next call for the same world
+  // retries claimSetup from scratch (and here, succeeds) rather than
+  // replaying the stale rejection.
+  const actor = await authenticatedActor(world, "owner", {}, transport);
+  assert.equal(claimAttempts, 2);
+  assert.equal(actor.role, "owner");
+  assert.equal(calls.filter((call) => call.startsWith("claimSetup")).length, 2);
+});
+
+test("authenticatedActor: an explicit email opts out of the shared per-world claim cache and always claims directly", async () => {
+  const world = fakeWorld();
+  const { transport, calls } = fakeTransport();
+
+  await authenticatedActor(world, "owner", { email: "explicit-1@example.com" }, transport);
+  await authenticatedActor(world, "owner", { email: "explicit-2@example.com" }, transport);
+
+  const claimCalls = calls.filter((call) => call.startsWith("claimSetup"));
+  assert.deepEqual(claimCalls, ["claimSetup:explicit-1@example.com", "claimSetup:explicit-2@example.com"]);
 });
