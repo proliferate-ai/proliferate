@@ -59,4 +59,17 @@ async def first_run_setup_claim(
             ),
             status_code=error.status_code,
         )
+    # Commit the owner-account + organization writes durably BEFORE the 2xx is
+    # queued for transmission. `claim_first_run` and its store callees only
+    # `flush()`; without this explicit commit the only commit is the one
+    # `get_async_session` runs on dependency cleanup, which FastAPI executes
+    # AFTER `await response(...)` has already handed the response to the ASGI
+    # server. A client that claims `/setup` and immediately authenticates (the
+    # desktop first-run flow, and the Tier-3 qualification harness) can then
+    # issue `POST /auth/desktop/password/login` before the owner row is visible,
+    # getting a spurious 401 (user-not-found branch of `authenticate_password_user`).
+    # Every sibling auth write endpoint (auth/desktop/api.py, auth/identity/api.py)
+    # already commits explicitly before returning; this restores that invariant
+    # for the setup claim. The dependency's later commit becomes a harmless no-op.
+    await db.commit()
     return HTMLResponse(render_setup_success(claim.email))
