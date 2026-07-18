@@ -168,10 +168,12 @@ describe("pending empty-session creation", () => {
     expect(isAmbiguousSessionCreateFailure(new DOMException("aborted", "AbortError")))
       .toBe(true);
     expect(isAmbiguousSessionCreateFailure(new AnyHarnessError({
+      type: "about:blank",
       title: "Agent startup failed",
       status: 503,
     }))).toBe(true);
     expect(isAmbiguousSessionCreateFailure(new AnyHarnessError({
+      type: "about:blank",
       title: "Invalid request",
       status: 400,
     }))).toBe(false);
@@ -210,6 +212,27 @@ describe("pending empty-session creation", () => {
       () => true,
       create,
     )).rejects.toBe(readError);
+    expect(create).not.toHaveBeenCalled();
+    expect(context.captureException).toHaveBeenCalledOnce();
+  });
+
+  it("fails bootstrap closed when the durable ledger is malformed", async () => {
+    const context: ProductStorageContext = {
+      storage: {
+        getItem: async () => "{not valid json",
+        setItem: async () => undefined,
+        removeItem: async () => undefined,
+      },
+      captureException: vi.fn(),
+    };
+    const create = vi.fn(async () => ENTRY.clientSessionId);
+
+    await expect(resumePendingEmptySessionCreations(
+      context,
+      ENTRY.workspaceId,
+      () => true,
+      create,
+    )).rejects.toBeInstanceOf(SyntaxError);
     expect(create).not.toHaveBeenCalled();
     expect(context.captureException).toHaveBeenCalledOnce();
   });

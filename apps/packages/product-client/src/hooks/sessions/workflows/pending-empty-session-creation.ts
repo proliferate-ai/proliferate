@@ -147,13 +147,19 @@ async function readEntries(
   try {
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) {
-      return [];
+      throw new Error("pending empty-session creation ledger must be an array");
     }
-    return parsed
-      .map((entry) => normalizeEntry(entry, workspaceId))
-      .filter((entry): entry is PendingEmptySessionCreation => entry !== null)
+    const entries = parsed.map((entry) => normalizeEntry(entry, workspaceId));
+    if (entries.some((entry) => entry === null)) {
+      throw new Error("pending empty-session creation ledger contains an invalid entry");
+    }
+    return (entries as PendingEmptySessionCreation[])
       .sort((left, right) => left.createdAt - right.createdAt);
-  } catch {
+  } catch (error) {
+    captureStorageFailure(context, error, "read");
+    if (throwOnFailure) {
+      throw error;
+    }
     return [];
   }
 }
