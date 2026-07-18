@@ -206,7 +206,7 @@ async def complete_oauth_provider_callback(
                 request, provider=provider, surface=callback_surface
             ),
         )
-    except providers.OAuthProviderAuthorizationError:
+    except providers.OAuthProviderTokenRejectedError:
         return append_query(
             challenge.redirect_uri,
             error="provider_error",

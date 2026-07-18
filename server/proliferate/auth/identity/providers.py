@@ -11,6 +11,7 @@ from urllib.parse import urlencode
 import httpx
 from fastapi import HTTPException, Request, status
 from httpx_oauth.exceptions import GetIdEmailError, GetProfileError
+from httpx_oauth.oauth2 import GetAccessTokenError
 from jose import JWTError, jwt
 
 from proliferate.auth.identity.routing import auth_route_path_for_base
@@ -29,8 +30,8 @@ APPLE_JWKS_URL = "https://appleid.apple.com/auth/keys"
 APPLE_ISSUER = "https://appleid.apple.com"
 
 
-class OAuthProviderAuthorizationError(Exception):
-    """The callback grant was rejected while resolving provider identity."""
+class OAuthProviderTokenRejectedError(Exception):
+    """The provider rejected the callback grant during identity verification."""
 
 
 def parse_scope_string(value: object) -> frozenset[str]:
@@ -136,7 +137,7 @@ async def verify_oauth_callback(
                 github_profile = await github_oauth_client.get_profile(access_token)
             except GetProfileError as exc:
                 if exc.response is not None and exc.response.status_code == 401:
-                    raise OAuthProviderAuthorizationError from exc
+                    raise OAuthProviderTokenRejectedError from exc
                 raise
             account_id = str(github_profile["id"])
             raw_email = github_profile.get("email")
@@ -179,7 +180,12 @@ async def verify_oauth_callback(
         )
 
     if provider == "google":
-        token = await google_oauth_client.get_access_token(code, provider_callback_url)
+        try:
+            token = await google_oauth_client.get_access_token(code, provider_callback_url)
+        except GetAccessTokenError as exc:
+            if exc.response is None or exc.response.status_code not in {400, 401}:
+                raise
+            raise OAuthProviderTokenRejectedError from exc
         access_token = str(token["access_token"])
         id_token = token.get("id_token")
         if isinstance(id_token, str) and id_token:

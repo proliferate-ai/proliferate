@@ -1,6 +1,8 @@
 import uuid
 
 import pytest
+from httpx import Request, Response
+from httpx_oauth.oauth2 import GetAccessTokenError
 
 import proliferate.auth.identity.providers as providers
 from proliferate.auth.identity import (
@@ -8,6 +10,7 @@ from proliferate.auth.identity import (
     user_has_product_identity,
     user_has_provider,
 )
+from proliferate.auth.oauth import google_oauth_client
 from proliferate.db.models.auth import OAuthAccount, User
 
 
@@ -47,6 +50,38 @@ def test_github_link_is_product_identity() -> None:
     assert user_has_provider(user, "github") is True
     assert user_has_product_identity(user) is True
     assert onboarding_state_for_user(user) == "active"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status_code", [None, 503], ids=["transport", "provider-outage"])
+async def test_google_non_rejection_token_failure_stays_a_server_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    status_code: int | None,
+) -> None:
+    response = (
+        None
+        if status_code is None
+        else Response(
+            status_code=status_code,
+            request=Request("POST", "https://oauth2.googleapis.com/token"),
+        )
+    )
+    error = GetAccessTokenError("Google token endpoint failed.", response)
+
+    async def fail_access_token(_code: str, _redirect_uri: str) -> dict[str, object]:
+        raise error
+
+    monkeypatch.setattr(google_oauth_client, "get_access_token", fail_access_token)
+
+    with pytest.raises(GetAccessTokenError) as exc_info:
+        await providers.verify_oauth_callback(
+            provider="google",
+            surface="web",
+            code="google-code",
+            provider_callback_url="https://api.example.com/auth/web/google/callback",
+        )
+
+    assert exc_info.value is error
 
 
 @pytest.mark.asyncio
