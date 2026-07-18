@@ -55,12 +55,20 @@ test("only sanitized catalog outputs cross into the publish job", () => {
   assert.match(workflow, /name: catalog-probe-output/);
   assert.match(workflow, /scripts\/agent-catalog\/generated\/\*\.probe\.json/);
   assert.doesNotMatch(workflow, /path:[^\n]*\.probe-logs/);
-  assert.match(workflow, /Remove isolated OAuth input/);
+  assert.match(
+    workflow,
+    /if \[\[ -n "\$\{PROBE_CODEX_OAUTH_AUTH_JSON:-\}" \]\]; then\n\s+rm -f "\$PROBE_CODEX_OAUTH_AUTH_JSON"/,
+  );
 });
 
 test("scheduled failures have a deduplicated owned issue path", () => {
   assert.match(workflow, /github\.event_name == 'schedule'/);
   assert.match(workflow, /issues: write/);
   assert.match(workflow, /ops\(agent-catalog\): Catalog Probe scheduled failure/);
-  assert.match(workflow, /--assignee pablonyx/);
+  const createIndex = workflow.indexOf("issue_url=$(gh issue create");
+  const assignIndex = workflow.indexOf("if ! gh issue edit");
+  assert.notEqual(createIndex, -1);
+  assert.ok(assignIndex > createIndex, "alert issue must exist before assignment is attempted");
+  assert.match(workflow, /--add-assignee pablonyx/);
+  assert.doesNotMatch(workflow.slice(createIndex, assignIndex), /--assignee/);
 });

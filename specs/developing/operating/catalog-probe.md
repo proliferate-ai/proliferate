@@ -110,7 +110,9 @@ Inspect only the step names, conclusions, sanitized `run.state`, and generated
 catalog outputs. Do not paste raw logs into an issue. A failed scheduled run
 creates or updates the deduplicated
 `ops(agent-catalog): Catalog Probe scheduled failure` issue and assigns the
-workflow owner.
+workflow owner when that account remains assignable. The alert issue is created
+before assignment is attempted, so assignment drift cannot suppress the alert;
+route an unassigned alert through the workflow CODEOWNER.
 
 ## Revoke Or Respond To Failure
 

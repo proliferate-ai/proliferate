@@ -101,7 +101,10 @@ jobs:
 
       - name: Remove isolated OAuth input
         if: always()
-        run: rm -f "${PROBE_CODEX_OAUTH_AUTH_JSON:-}"
+        run: |
+          if [[ -n "${PROBE_CODEX_OAUTH_AUTH_JSON:-}" ]]; then
+            rm -f "$PROBE_CODEX_OAUTH_AUTH_JSON"
+          fi
 
       - name: Summarize probe completeness
         if: always()
@@ -197,7 +200,13 @@ jobs:
           if [[ -n "$issue_number" ]]; then
             gh issue comment "$issue_number" --repo "$GITHUB_REPOSITORY" --body "$message"
           else
-            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$message" \
-              --assignee pablonyx --label "release:maintenance" \
+            issue_url=$(gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$message" \
+              --label "release:maintenance" \
               --label "area:anyharness" --label "area:release"
+            )
+            created_issue_number="${issue_url##*/}"
+            if ! gh issue edit "$created_issue_number" --repo "$GITHUB_REPOSITORY" \
+              --add-assignee pablonyx; then
+              echo "::warning title=Catalog Probe alert assignment failed::Issue $created_issue_number was created but could not be assigned to pablonyx; route it through the workflow CODEOWNER."
+            fi
           fi
