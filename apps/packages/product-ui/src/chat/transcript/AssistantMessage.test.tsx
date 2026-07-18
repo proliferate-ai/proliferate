@@ -6,13 +6,15 @@ import { act, cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   AssistantMessage,
+} from "./AssistantMessage";
+import {
   MAX_STREAM_REVEAL_CHARACTERS_PER_SECOND,
   selectVisibleTarget,
   STREAM_REVEAL_COMMIT_INTERVAL_MS,
   STREAM_REVEAL_FADE_MS,
   STREAM_REVEAL_HANDOFF_DELAY_MS,
   STREAM_REVEAL_SETTLE_MS,
-} from "./AssistantMessage";
+} from "./assistant-message-reveal";
 
 let nextFrameId = 0;
 let frameTimestamp = 0;

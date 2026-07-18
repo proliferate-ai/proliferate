@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
-  isRecentAssistantCompletion,
-  RECENT_ASSISTANT_REVEAL_WINDOW_MS,
   resolveTurnAssistantFooterMode,
   resolveTranscriptTurnDiffPanelKind,
-  shouldHoldAssistantRevealFrontier,
   shouldRenderStandaloneStoppedNotice,
 } from "#product/components/workspace/chat/transcript/TranscriptTurnRow";
+import {
+  isRecentAssistantCompletion,
+  RECENT_ASSISTANT_REVEAL_WINDOW_MS,
+  shouldHoldAssistantRevealFrontier,
+} from "#product/hooks/chat/ui/use-assistant-reveal-frontier";
 import { resolveCompletedHistoryDisclosureLabel } from "#product/components/workspace/chat/transcript/TurnItemSequence";
 
 describe("resolveTranscriptTurnDiffPanelKind", () => {
