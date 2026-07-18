@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   cleanupOwnedEphemeralProfile,
+  createOwnedProfilePostgresCustody,
   createOwnedEphemeralProfile,
   ownedEphemeralProfileForWorker,
   prepareOwnedEphemeralProfile,
@@ -77,6 +78,29 @@ test("profile identity is bounded and changes across attempt, worker, and retry"
   assert.equal(new Set([base.profile, ...variants.map((value) => value.profile)]).size, 4);
   assert.notEqual(base.setupTokenFile, variants[2]!.setupTokenFile);
   assert.notEqual(base.databaseName, variants[2]!.databaseName);
+});
+
+test("database freshness, creation, server URL, and cleanup share one endpoint", () => {
+  const sqlHosts: string[] = [];
+  const custody = createOwnedProfilePostgresCustody({
+    env: {},
+    platform: "darwin",
+    executeSql: (identity, sql) => {
+      sqlHosts.push(`${identity.host}:${identity.port}:${identity.user}:${sql}`);
+      return "";
+    },
+  });
+  const profile = owned();
+
+  prepareOwnedEphemeralProfile(profile, custody.lifecycle);
+  cleanupOwnedEphemeralProfile(profile, profile, custody.lifecycle);
+
+  assert.equal(custody.identity.host, "::1");
+  assert.equal(custody.commandEnvironment.LOCAL_PGHOST, custody.identity.host);
+  assert.equal(custody.commandEnvironment.LOCAL_PGPORT, custody.identity.port);
+  assert.equal(custody.commandEnvironment.LOCAL_PGUSER, custody.identity.user);
+  assert.equal(sqlHosts.length, 2);
+  assert.ok(sqlHosts.every((call) => call.startsWith("::1:5432:proliferate:")));
 });
 
 test("freshness is fail-closed and never deletes a colliding owner", () => {

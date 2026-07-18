@@ -33,6 +33,21 @@ export interface OwnedProfileLifecycle {
   removeDirectory: (target: string) => void;
 }
 
+export interface LocalPostgresIdentity {
+  readonly host: string;
+  readonly port: string;
+  readonly user: string;
+  readonly password: string;
+}
+
+export interface OwnedProfilePostgresCustody {
+  readonly identity: LocalPostgresIdentity;
+  readonly commandEnvironment: NodeJS.ProcessEnv;
+  readonly lifecycle: OwnedProfileLifecycle;
+}
+
+type PostgresSqlExecutor = (identity: LocalPostgresIdentity, sql: string) => string;
+
 function defaultRoots(): OwnedProfileRoots {
   return {
     profileRoot: path.join(homedir(), ".proliferate-local", "dev", "profiles"),
@@ -141,16 +156,16 @@ export function ownedEphemeralProfileForWorker(options: {
   });
 }
 
-function runPsql(sql: string): string {
+function runPsql(identity: LocalPostgresIdentity, sql: string): string {
   const result = spawnSync(
     "psql",
     [
       "-h",
-      process.env.LOCAL_PGHOST || "127.0.0.1",
+      identity.host,
       "-p",
-      process.env.LOCAL_PGPORT || "5432",
+      identity.port,
       "-U",
-      process.env.LOCAL_PGUSER || "proliferate",
+      identity.user,
       "-d",
       "postgres",
       "-v",
@@ -162,7 +177,7 @@ function runPsql(sql: string): string {
     {
       env: {
         ...process.env,
-        PGPASSWORD: process.env.LOCAL_PGPASSWORD || "localdev",
+        PGPASSWORD: identity.password,
       },
       encoding: "utf8",
     },
@@ -174,17 +189,43 @@ function runPsql(sql: string): string {
   return result.stdout.trim();
 }
 
-const defaultLifecycle: OwnedProfileLifecycle = {
-  pathExists: existsSync,
-  databaseExists: (databaseName) => (
-    runPsql(`SELECT 1 FROM pg_database WHERE datname = '${databaseName}'`) === "1"
-  ),
-  dropDatabase: (databaseName) => {
-    runPsql(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`);
-  },
-  removeFile: (target) => rmSync(target, { force: true }),
-  removeDirectory: (target) => rmSync(target, { force: true, recursive: true }),
-};
+export function createOwnedProfilePostgresCustody(options: {
+  env?: NodeJS.ProcessEnv;
+  platform?: NodeJS.Platform;
+  executeSql?: PostgresSqlExecutor;
+} = {}): OwnedProfilePostgresCustody {
+  const env = options.env ?? process.env;
+  const platform = options.platform ?? process.platform;
+  const identity = Object.freeze({
+    host: env.LOCAL_PGHOST || (platform === "darwin" ? "::1" : "127.0.0.1"),
+    port: env.LOCAL_PGPORT || "5432",
+    user: env.LOCAL_PGUSER || "proliferate",
+    password: env.LOCAL_PGPASSWORD || "localdev",
+  });
+  const executeSql = options.executeSql ?? runPsql;
+  const commandEnvironment = Object.freeze({
+    LOCAL_PGHOST: identity.host,
+    LOCAL_PGPORT: identity.port,
+    LOCAL_PGUSER: identity.user,
+    LOCAL_PGPASSWORD: identity.password,
+  });
+  const lifecycle: OwnedProfileLifecycle = {
+    pathExists: existsSync,
+    databaseExists: (databaseName) => (
+      executeSql(identity, `SELECT 1 FROM pg_database WHERE datname = '${databaseName}'`) === "1"
+    ),
+    dropDatabase: (databaseName) => {
+      executeSql(identity, `DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`);
+    },
+    removeFile: (target) => rmSync(target, { force: true }),
+    removeDirectory: (target) => rmSync(target, { force: true, recursive: true }),
+  };
+  return Object.freeze({ identity, commandEnvironment, lifecycle });
+}
+
+function defaultLifecycle(): OwnedProfileLifecycle {
+  return createOwnedProfilePostgresCustody().lifecycle;
+}
 
 function assertOwnedProfileShape(owned: OwnedEphemeralProfile): void {
   if (!PROFILE_PATTERN.test(owned.profile)) {
@@ -205,7 +246,7 @@ function assertOwnedProfileShape(owned: OwnedEphemeralProfile): void {
 
 export function prepareOwnedEphemeralProfile(
   owned: OwnedEphemeralProfile,
-  lifecycle: OwnedProfileLifecycle = defaultLifecycle,
+  lifecycle: OwnedProfileLifecycle = defaultLifecycle(),
 ): void {
   assertOwnedProfileShape(owned);
   const collisions = [
@@ -237,7 +278,7 @@ export function assertOwnedProfileResources(
 export function cleanupOwnedEphemeralProfile(
   owned: OwnedEphemeralProfile,
   resources: OwnedProfileResources,
-  lifecycle: OwnedProfileLifecycle = defaultLifecycle,
+  lifecycle: OwnedProfileLifecycle = defaultLifecycle(),
 ): void {
   assertOwnedProfileResources(owned, resources);
   const failures: unknown[] = [];

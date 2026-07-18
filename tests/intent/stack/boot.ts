@@ -12,6 +12,7 @@ import { fileURLToPath } from "node:url";
 import {
   assertOwnedProfileResources,
   cleanupOwnedEphemeralProfile,
+  createOwnedProfilePostgresCustody,
   prepareOwnedEphemeralProfile,
   setupTokenFileForProfile,
   type OwnedEphemeralProfile,
@@ -109,16 +110,6 @@ function run(command: string, args: string[], options: { cwd?: string; env?: Nod
   return result.stdout.trim();
 }
 
-function localPgHost(): string {
-  if (process.env.LOCAL_PGHOST) {
-    return process.env.LOCAL_PGHOST;
-  }
-  // Matches the Makefile's OS-conditional default: Docker Desktop's Postgres
-  // listener on macOS is reached over ::1 so it isn't confused with a
-  // Homebrew Postgres bound to 127.0.0.1.
-  return process.platform === "darwin" ? "::1" : "127.0.0.1";
-}
-
 function profileInstancePath(profile: string): string {
   return path.join(
     process.env.HOME ?? "",
@@ -136,15 +127,15 @@ function ensureProfilePorts(profile: string): ProfileInstance {
   return JSON.parse(raw) as ProfileInstance;
 }
 
-function ensureDatabase(dbName: string): void {
+function ensureDatabase(dbName: string, postgresEnvironment: NodeJS.ProcessEnv): void {
   run("node", ["scripts/dev.mjs", "ensure-db", "--db-name", dbName], {
-    env: { USE_EXISTING_POSTGRES: "1" },
+    env: { ...postgresEnvironment, USE_EXISTING_POSTGRES: "1" },
   });
 }
 
-function databaseUrlFor(dbName: string): string {
+function databaseUrlFor(dbName: string, postgresEnvironment: NodeJS.ProcessEnv): string {
   return run("node", ["scripts/dev.mjs", "database-url", "--db-name", dbName], {
-    env: { LOCAL_PGHOST: localPgHost() },
+    env: postgresEnvironment,
   });
 }
 
@@ -285,9 +276,10 @@ export async function bootStack(options: BootOptions = {}): Promise<BootedStack>
     throw new Error("bootStack profile and ownedProfile are mutually exclusive.");
   }
   const ownedProfile = options.ownedProfile;
+  const postgresCustody = createOwnedProfilePostgresCustody();
   const profile = ownedProfile?.profile ?? options.profile ?? process.env.TIER2_INTENT_PROFILE ?? PROFILE;
   if (ownedProfile) {
-    prepareOwnedEphemeralProfile(ownedProfile);
+    prepareOwnedEphemeralProfile(ownedProfile, postgresCustody.lifecycle);
   }
   log(`preparing profile "${profile}"...`);
   const instance = ensureProfilePorts(profile);
@@ -302,10 +294,10 @@ export async function bootStack(options: BootOptions = {}): Promise<BootedStack>
       desktopDirectory: instance.desktopHome,
     });
   }
-  ensureDatabase(instance.databaseName);
+  ensureDatabase(instance.databaseName, postgresCustody.commandEnvironment);
   ensureRedisReachable();
 
-  const databaseUrl = databaseUrlFor(instance.databaseName);
+  const databaseUrl = databaseUrlFor(instance.databaseName, postgresCustody.commandEnvironment);
   const apiBaseUrl = `http://127.0.0.1:${instance.ports.api}`;
   const webBaseUrl = `http://127.0.0.1:${instance.ports.desktopWeb}`;
   // Published even when the runtime is skipped (TIER2_INTENT_SKIP_RUNTIME=1 in
@@ -491,7 +483,7 @@ export async function bootStack(options: BootOptions = {}): Promise<BootedStack>
         profileDirectory: path.dirname(profileInstancePath(profile)),
         runtimeDirectory: instance.anyharnessRuntimeHome,
         desktopDirectory: instance.desktopHome,
-      });
+      }, postgresCustody.lifecycle);
     }
   };
 
