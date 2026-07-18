@@ -72,6 +72,7 @@ export type RegisterCfnCleanup = (
 
 /** The owned Route53 zone the run subdomain lives under (matches `dns.ts`). */
 export const QUALIFICATION_ZONE = "qualification.proliferate.com";
+export const SELFHOST_QUALIFICATION_PURPOSE = "self-hosting-qualification";
 /** Presigned-URL lifetime: long enough for a bounded stack bootstrap, no longer. */
 export const PRESIGN_EXPIRY_SECONDS = 3600;
 /** Bounded stack create/delete wait (a t4g bootstrap has a PT20M CreationPolicy). */
@@ -100,6 +101,35 @@ export function cfnStackName(runId: string, shardId: string): string {
     .slice(0, 100)
     .replace(/-$/g, "");
   return `${base}-${digest}`;
+}
+
+export interface CfnStackTag {
+  key: "Purpose" | "Name" | "RunId" | "ShardId";
+  value: string;
+}
+
+/**
+ * Positive ownership tags for the stack and every CloudFormation resource that
+ * supports stack-tag propagation. These are also the request tags required by
+ * the bounded qualification IAM policy; an untagged create must never be sent.
+ */
+export function buildCfnStackTags(input: {
+  stackName: string;
+  runId: string;
+  shardId: string;
+}): CfnStackTag[] {
+  const tags: CfnStackTag[] = [
+    { key: "Purpose", value: SELFHOST_QUALIFICATION_PURPOSE },
+    { key: "Name", value: input.stackName },
+    { key: "RunId", value: input.runId },
+    { key: "ShardId", value: input.shardId },
+  ];
+  for (const tag of tags) {
+    if (!tag.value || tag.value.length > 256 || !/^[A-Za-z0-9_.:/=+@-]+$/.test(tag.value)) {
+      throw new Error(`CFN: unsafe ${tag.key} ownership tag value.`);
+    }
+  }
+  return tags;
 }
 
 /**
@@ -591,6 +621,7 @@ export async function createCfnStackAndWait(input: {
   stackName: string;
   templatePath: string;
   parameters: readonly CfnParameter[];
+  tags: readonly CfnStackTag[];
   region: string;
   registerCleanup: RegisterCfnCleanup;
   /**
@@ -628,6 +659,8 @@ export async function createCfnStackAndWait(input: {
       `file://${paramFile.path}`,
       "--capabilities",
       "CAPABILITY_IAM",
+      "--tags",
+      ...input.tags.map((tag) => `Key=${tag.key},Value=${tag.value}`),
       "--region",
       region,
     ]);

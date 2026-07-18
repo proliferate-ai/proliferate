@@ -6,6 +6,7 @@ import {
   SelfHostCfnCleanupStack,
   boundedStackEventsTail,
   buildCfnParameters,
+  buildCfnStackTags,
   bundleDigestBound,
   cfnSiteAddress,
   cfnStackName,
@@ -82,6 +83,12 @@ function fakeLedger(): CleanupLedger {
   };
 }
 
+const TEST_CFN_TAGS = buildCfnStackTags({
+  stackName: "proliferate-sh-cfn-x",
+  runId: "run-1",
+  shardId: "shard-0",
+});
+
 // ── Pure helpers ─────────────────────────────────────────────────────────────
 
 test("cfnStackName: deterministic, CFN-safe, ≤128, collision-free digest suffix", () => {
@@ -92,6 +99,22 @@ test("cfnStackName: deterministic, CFN-safe, ≤128, collision-free digest suffi
   assert.notEqual(a, c);
   assert.match(a, /^[A-Za-z][-A-Za-z0-9]*$/);
   assert.ok(a.length <= 128);
+});
+
+test("buildCfnStackTags: emits the bounded IAM/run-ownership tag set and rejects unsafe identity", () => {
+  assert.deepEqual(
+    buildCfnStackTags({ stackName: "proliferate-sh-cfn-run-1", runId: "run-1", shardId: "shard-0" }),
+    [
+      { key: "Purpose", value: "self-hosting-qualification" },
+      { key: "Name", value: "proliferate-sh-cfn-run-1" },
+      { key: "RunId", value: "run-1" },
+      { key: "ShardId", value: "shard-0" },
+    ],
+  );
+  assert.throws(
+    () => buildCfnStackTags({ stackName: "proliferate-sh-cfn-run-1", runId: "run,other", shardId: "1" }),
+    /unsafe RunId ownership tag value/,
+  );
 });
 
 test("runScopedImageTag: never rolling, docker-tag-safe", () => {
@@ -428,6 +451,7 @@ test("createCfnStackAndWait: registers stack BEFORE create, passes params, retur
       siteAddress: site,
       hostedZoneId: "Z1",
     }),
+    tags: TEST_CFN_TAGS,
     region: "us-east-1",
     writeParameterFile: async (json) => {
       writtenJson = json;
@@ -442,6 +466,14 @@ test("createCfnStackAndWait: registers stack BEFORE create, passes params, retur
   // PR7-CONTROL-003: params go through a file, NOT argv — and the presigned
   // bearer signature never appears in the create-stack argv.
   assert.ok(createArgs.includes("file:///tmp/params.json"), "parameters must be passed as file://");
+  const tagsAt = createArgs.indexOf("--tags");
+  assert.ok(tagsAt >= 0, "create-stack must carry positive run-ownership tags");
+  assert.deepEqual(createArgs.slice(tagsAt + 1, tagsAt + 5), [
+    "Key=Purpose,Value=self-hosting-qualification",
+    "Key=Name,Value=proliferate-sh-cfn-x",
+    "Key=RunId,Value=run-1",
+    "Key=ShardId,Value=shard-0",
+  ]);
   assert.ok(!createArgs.some((a) => a.includes("X-Amz-Signature")), "no presigned signature in argv");
   assert.ok(!createArgs.some((a) => a.startsWith("ParameterKey=")), "no ParameterKey=... argv pairs");
   assert.ok(writtenJson.includes("DeployBundleUrl"), "the parameter JSON carries the bundle params");
@@ -481,6 +513,7 @@ test("createCfnStackAndWait: a parameter-file removal failure is NON-GREEN, not 
         siteAddress: site,
         hostedZoneId: "Z1",
       }),
+      tags: TEST_CFN_TAGS,
       region: "us-east-1",
       writeParameterFile: async () => ({
         path: "/tmp/leaky-params.json",
@@ -524,6 +557,7 @@ test("createCfnStackAndWait: a create-complete wait failure tails describe-stack
       stackName: "stk",
       templatePath: "/t.yaml",
       parameters: [],
+      tags: TEST_CFN_TAGS,
       region: "us-east-1",
       writeParameterFile: async () => ({ path: "/tmp/p.json", remove: async () => undefined }),
       registerCleanup: async () => undefined,
