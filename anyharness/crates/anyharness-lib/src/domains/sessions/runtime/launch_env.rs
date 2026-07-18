@@ -22,11 +22,12 @@ pub(super) fn build_session_launch_env(
     resolved_agent: &ResolvedAgent,
     runtime_home: &Path,
     requested_model_id: Option<&str>,
+    route_api_key: Option<&str>,
 ) -> anyhow::Result<BTreeMap<String, String>> {
     match resolved_agent.descriptor.kind {
         AgentKind::Claude => build_claude_session_launch_env(resolved_agent, requested_model_id),
         AgentKind::Codex => {
-            let codex_home = prepare_local_codex_home(runtime_home)?;
+            let codex_home = prepare_local_codex_home(runtime_home, route_api_key)?;
             Ok(BTreeMap::from([(
                 "CODEX_HOME".to_string(),
                 codex_home.to_string_lossy().into_owned(),
@@ -63,7 +64,10 @@ fn build_claude_session_launch_env(
     Ok(env)
 }
 
-fn prepare_local_codex_home(runtime_home: &Path) -> anyhow::Result<PathBuf> {
+fn prepare_local_codex_home(
+    runtime_home: &Path,
+    route_api_key: Option<&str>,
+) -> anyhow::Result<PathBuf> {
     let codex_home = runtime_home.join("agent-auth").join(CODEX_LOCAL_HOME_DIR);
     fs::create_dir_all(&codex_home)
         .with_context(|| format!("failed to create local Codex home {}", codex_home.display()))?;
@@ -72,12 +76,18 @@ fn prepare_local_codex_home(runtime_home: &Path) -> anyhow::Result<PathBuf> {
         CODEX_LOCAL_CONFIG.as_bytes(),
     )?;
     remove_managed_codex_hooks(&codex_home)?;
-    sync_local_codex_auth(&codex_home)?;
+    sync_local_codex_auth(&codex_home, route_api_key)?;
     Ok(codex_home)
 }
 
-fn sync_local_codex_auth(codex_home: &Path) -> anyhow::Result<()> {
+fn sync_local_codex_auth(codex_home: &Path, route_api_key: Option<&str>) -> anyhow::Result<()> {
     let auth_path = codex_home.join("auth.json");
+    if let Some(api_key) = route_api_key.filter(|value| !value.trim().is_empty()) {
+        let contents = serde_json::to_vec(&serde_json::json!({ "OPENAI_API_KEY": api_key }))
+            .context("failed to serialize selected Codex API key")?;
+        write_private_file(&auth_path, &contents)?;
+        return Ok(());
+    }
     let Some(home_dir) = dirs::home_dir() else {
         remove_stale_file(&auth_path)?;
         tracing::warn!("could not resolve HOME while preparing local Codex auth");

@@ -187,6 +187,7 @@ fn build_session_launch_env_sets_claude_code_executable_for_claude() {
         &resolved_agent(AgentKind::Claude, Some("/tmp/managed/claude")),
         runtime_home.path(),
         None,
+        None,
     )
     .expect("build env");
 
@@ -203,6 +204,7 @@ fn build_session_launch_env_sets_requested_model_for_claude() {
         &resolved_agent(AgentKind::Claude, Some("/tmp/managed/claude")),
         runtime_home.path(),
         Some("opus[1m]"),
+        None,
     )
     .expect("build env");
 
@@ -223,6 +225,7 @@ fn build_session_launch_env_ignores_claude_without_native_path() {
         &resolved_agent(AgentKind::Claude, None),
         runtime_home.path(),
         None,
+        None,
     )
     .expect("build env");
 
@@ -236,6 +239,7 @@ fn build_session_launch_env_sets_requested_model_without_claude_native_path() {
         &resolved_agent(AgentKind::Claude, None),
         runtime_home.path(),
         Some("sonnet"),
+        None,
     )
     .expect("build env");
 
@@ -261,6 +265,7 @@ fn build_session_launch_env_sets_clean_codex_home_for_local_codex() {
         &resolved_agent(AgentKind::Codex, Some("/tmp/managed/codex")),
         runtime_home.path(),
         None,
+        None,
     )
     .expect("build env");
 
@@ -282,12 +287,40 @@ fn build_session_launch_env_sets_clean_codex_home_for_local_codex() {
 }
 
 #[test]
+fn build_session_launch_env_prefers_selected_codex_route_api_key() {
+    let runtime_home = TempDirGuard::new("codex-route-runtime");
+    let source_codex_home = TempDirGuard::new("codex-route-source");
+    std::fs::write(
+        source_codex_home.path().join("auth.json"),
+        r#"{"OPENAI_API_KEY":"sk-ambient"}"#,
+    )
+    .expect("write source auth");
+    let _codex_home_guard = EnvVarGuard::set("CODEX_HOME", source_codex_home.path());
+
+    let env = build_session_launch_env(
+        &resolved_agent(AgentKind::Codex, Some("/tmp/managed/codex")),
+        runtime_home.path(),
+        None,
+        Some("sk-selected"),
+    )
+    .expect("build env");
+
+    let codex_home = env.get("CODEX_HOME").expect("CODEX_HOME");
+    let auth_json: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(std::path::Path::new(codex_home).join("auth.json")).expect("read auth"),
+    )
+    .expect("parse auth");
+    assert_eq!(auth_json["OPENAI_API_KEY"], "sk-selected");
+}
+
+#[test]
 fn build_session_launch_env_ignores_other_agents() {
     let runtime_home = TempDirGuard::new("other-agent-runtime");
     let env = build_session_launch_env(
         &resolved_agent(AgentKind::Cursor, Some("/tmp/managed/cursor-agent")),
         runtime_home.path(),
         Some("ignored"),
+        None,
     )
     .expect("build env");
 
