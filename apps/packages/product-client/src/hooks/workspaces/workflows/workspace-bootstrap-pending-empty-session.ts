@@ -1,6 +1,5 @@
 import type { ProductStorageContext } from "#product/lib/infra/persistence/product-storage";
 import type { CreateEmptySessionWithResolvedConfigOptions } from "#product/hooks/sessions/workflows/session-creation-types";
-import { resumePendingEmptySessionCreations } from "#product/hooks/sessions/workflows/pending-empty-session-creation";
 import { elapsedMs, logLatency } from "#product/lib/infra/measurement/measurement-port";
 import { markWorkspaceBootstrappedInSession } from "#product/hooks/workspaces/lifecycle/workspace-bootstrap-memory";
 
@@ -22,6 +21,9 @@ export async function resumePendingEmptySessionCreationForBootstrap({
   isCurrent,
   createEmptySession,
 }: ResumePendingEmptySessionCreationInput): Promise<boolean> {
+  const { resumePendingEmptySessionCreations } = await import(
+    "#product/hooks/sessions/workflows/pending-empty-session-creation"
+  );
   const { resumed, unresolved } = await resumePendingEmptySessionCreations(
     storageContext,
     workspaceId,

@@ -61,13 +61,7 @@ import { useWorkspaceCollectionsInvalidationActions } from "#product/hooks/works
 import { resolveWorkspaceUiKey } from "#product/lib/domain/workspaces/selection/workspace-ui-key";
 import { supportsCallerSelectedSessionCreate } from "#product/lib/access/anyharness/runtime-target";
 import { useProductStorageContext } from "#product/hooks/persistence/facade/use-product-storage-context";
-import {
-  acknowledgePendingEmptySessionCreation,
-  clearPendingEmptySessionCreation,
-  clearPendingEmptySessionCreationAfterFailure,
-  persistPendingEmptySessionCreation,
-  type PendingEmptySessionCreation,
-} from "#product/hooks/sessions/workflows/pending-empty-session-creation";
+import type { PendingEmptySessionCreation } from "#product/hooks/sessions/workflows/pending-empty-session-creation";
 
 export function useSessionCreationActions() {
   const host = useProductHost();
@@ -366,8 +360,19 @@ export function useSessionCreationActions() {
 
     const unregisterSessionCreation = registerSessionCreation(pendingSessionId);
     const pendingRuntimeSessionId = pendingEmptyCreation?.runtimeSessionId ?? null;
+    const pendingCreationWorkflow: {
+      current: typeof import("#product/hooks/sessions/workflows/pending-empty-session-creation")
+        | null;
+    } = { current: null };
     const pendingCreationPersistence = pendingEmptyCreation
-      ? persistPendingEmptySessionCreation(storageContext, pendingEmptyCreation)
+      ? import("#product/hooks/sessions/workflows/pending-empty-session-creation")
+        .then((workflow) => {
+          pendingCreationWorkflow.current = workflow;
+          return workflow.persistPendingEmptySessionCreation(
+            storageContext,
+            pendingEmptyCreation,
+          );
+        })
       : Promise.resolve();
     const createPromise = pendingCreationPersistence.then(() => (
       // Persistence resolves before materialization can reach the POST. The
@@ -392,7 +397,7 @@ export function useSessionCreationActions() {
         upsertWorkspaceSessionRecord,
         workspaceId,
         onRuntimeSessionCreated: pendingRuntimeSessionId
-          ? () => acknowledgePendingEmptySessionCreation(
+          ? () => pendingCreationWorkflow.current!.acknowledgePendingEmptySessionCreation(
             storageContext,
             workspaceId,
             pendingRuntimeSessionId,
@@ -403,7 +408,7 @@ export function useSessionCreationActions() {
       // A superseded materializer can settle without issuing the POST. Its
       // durable intent must not be resurrected by the next bootstrap.
       if (pendingRuntimeSessionId) {
-        await clearPendingEmptySessionCreation(
+        await pendingCreationWorkflow.current?.clearPendingEmptySessionCreation(
           storageContext,
           workspaceId,
           pendingRuntimeSessionId,
@@ -450,11 +455,13 @@ export function useSessionCreationActions() {
       }
       return resolvedSessionId;
     } catch (error) {
-      await clearPendingEmptySessionCreationAfterFailure(
-        storageContext,
-        pendingEmptyCreation,
-        error,
-      );
+      if (pendingCreationWorkflow.current) {
+        await pendingCreationWorkflow.current.clearPendingEmptySessionCreationAfterFailure(
+          storageContext,
+          pendingEmptyCreation,
+          error,
+        );
+      }
       cleanupCreateFailure(error);
       throw toSessionCreateFailureDisplayError(error);
     } finally {
