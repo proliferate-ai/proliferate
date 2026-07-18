@@ -851,6 +851,23 @@ function cssAttr(value: string): string {
   return value.replace(/["\\]/g, "\\$&");
 }
 
+/**
+ * Waits for a locator to report itself enabled (not `disabled`), polling
+ * rather than relying on Playwright's default 30s click-actionability
+ * timeout — used where a trigger's mount can race a preceding reload and the
+ * scenario's own budget is far larger than 30s.
+ */
+async function waitForEnabled(locator: ReturnType<Page["locator"]>, timeoutMs: number, what: string): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await locator.isEnabled().catch(() => false)) {
+      return;
+    }
+    await sleep(250);
+  }
+  throw new Error(`waitForEnabled: ${what} did not become enabled within ${timeoutMs}ms`);
+}
+
 // ── Production UI/runtime driver bodies ──────────────────────────────────────
 //
 // These drive the real Desktop renderer + candidate AnyHarness through the
@@ -908,7 +925,20 @@ async function ensureHarnessReady(world: ReadyLocalWorld, page: ProductPage, har
 
 async function selectRepoAndWorkLocally(page: ProductPage, repo: PreparedRepository): Promise<void> {
   const p = page.page;
-  await p.getByRole("button", { name: /^Project:/ }).first().click();
+  // `ensureHarnessReady`'s preceding reload re-mounts the home screen; its
+  // generic composer/tab-strip wait settles for DOM presence but not for the
+  // Project-menu trigger's own mount, so an immediate click here can race
+  // that mount (run 29631868610: 30s "locator.click" timeout on this button,
+  // with ERR_ABORTED launch-options/reconcile polls in the network log
+  // showing they were cancelled by the reload — a pure collector settle
+  // race, not a product defect: HomeNextScreen renders the Project button
+  // unconditionally). Wait for the trigger to be visible AND enabled before
+  // clicking, with a timeout aligned to the harness-ready budget instead of
+  // Playwright's 30s click-actionability default.
+  const projectTrigger = p.getByRole("button", { name: /^Project:/ }).first();
+  await projectTrigger.waitFor({ state: "visible", timeout: HARNESS_READY_TIMEOUT_MS });
+  await waitForEnabled(projectTrigger, HARNESS_READY_TIMEOUT_MS, "Project: trigger");
+  await projectTrigger.click();
   const repoRow = p.locator(`[data-repo-source-root="${cssAttr(repo.path)}"]`).first();
   await repoRow.waitFor({ state: "visible", timeout: 20_000 });
   await repoRow.click();
