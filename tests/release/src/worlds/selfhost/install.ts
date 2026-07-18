@@ -117,7 +117,12 @@ export async function runShippedInstaller(inputs: RunInstallerInputs): Promise<I
   // --version (never stable/latest). No secret ever rides on argv.
   log(`running shipped install.sh --bundle for ${inputs.siteAddress}`);
   const installArgs = [
-    "sudo bash",
+    // Widen the shipped health gate from its 60×2s default: the gate covers
+    // Caddy's cold Let's Encrypt issuance, and 2min is tight under CA load —
+    // run 29631785126 died with `tlsv1 alert internal error` (no cert ever
+    // logged) while the identical flow succeeded hours earlier. 210×2s = 7min.
+    // `sudo VAR=… cmd` passes the assignment through to install.sh/bootstrap.
+    "sudo PROLIFERATE_HEALTHCHECK_ATTEMPTS=210 bash",
     SELFHOST_REMOTE_INSTALLER,
     "--bundle",
     SELFHOST_REMOTE_BUNDLE,
@@ -142,7 +147,29 @@ export async function runShippedInstaller(inputs: RunInstallerInputs): Promise<I
   // as NO timeout — a hung install.sh would then ride the whole 120min job
   // budget. 25min covers the slowest observed cold install (all compose image
   // pulls on a t3.small) with generous headroom while still failing a hang.
-  await ssh.run(installArgs.join(" "), { timeoutMs: inputs.timeoutMs ?? INSTALL_SSH_TIMEOUT_MS });
+  try {
+    await ssh.run(installArgs.join(" "), { timeoutMs: inputs.timeoutMs ?? INSTALL_SSH_TIMEOUT_MS });
+  } catch (error) {
+    // The dominant install failure is the health gate timing out on TLS —
+    // curl only ever reports `tlsv1 alert internal error`, which is Caddy
+    // answering WITHOUT a certificate. WHY there is no certificate (ACME
+    // rate limit? DNS? CA outage?) lives only in Caddy's log on the box, so
+    // capture its tail before the world tears down (run 29631785126 was
+    // undiagnosable without it). Best-effort: never mask the real error.
+    if (error instanceof Error) {
+      let caddyTail = "(probe failed)";
+      try {
+        caddyTail = await ssh.run(
+          `cd /opt/proliferate/server/deploy && sudo docker compose -f docker-compose.production.yml logs --no-color --tail 40 caddy 2>&1 | grep -iE 'acme|certificate|rate|error|obtain' | tail -20`,
+          { timeoutMs: 60_000 },
+        );
+      } catch {
+        // keep "(probe failed)"
+      }
+      error.message = `${error.message}\n--- caddy log tail (ACME diagnosis) ---\n${caddyTail.trim() || "none"}`;
+    }
+    throw error;
+  }
 
   // 4. Wait for public HTTPS /health (Caddy TLS issuance + stack readiness).
   const apiOrigin = `https://${inputs.siteAddress}`;
