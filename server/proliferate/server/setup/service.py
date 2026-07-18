@@ -49,6 +49,7 @@ from proliferate.server.setup.errors import (
     SetupClosedError,
     SetupValidationError,
 )
+from proliferate.server.setup.transactions import commit_first_run_claim
 
 logger = logging.getLogger(__name__)
 
@@ -156,17 +157,11 @@ async def claim_first_run(
         # still gets cleaned up by the next boot's ensure_setup_token pass.
         await schedule_token_file_cleanup(db)
 
-    # The claim owns its transaction: commit HERE, before the caller can queue
-    # a response. Store callees above only `flush()`, and the request-scoped
-    # session dependency commits on cleanup — which FastAPI runs AFTER the
-    # response has been handed to the ASGI server. A client that claims /setup
-    # and immediately calls POST /auth/desktop/password/login (the desktop
-    # first-run flow, and the Tier-3 qualification harness) could then hit the
-    # user-not-found branch of `authenticate_password_user` and get a spurious
-    # 401 (Release E2E run 29602686092, cell T3-INT-1). Committing also ends
-    # the first-run claim advisory lock's transaction and fires the
-    # `run_after_commit` token-file cleanup scheduled above.
-    await db.commit()
+    # The claim owns its transaction: commit before the transport can queue a
+    # response (see transactions.commit_first_run_claim for the full rationale
+    # — store callees only flush(), and the dependency-cleanup commit runs
+    # after the response is sent, so an immediate follow-up login could 401).
+    await commit_first_run_claim(db)
 
     logger.info(
         "Instance claimed: owner %s, organization %r.",
