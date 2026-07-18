@@ -4,6 +4,7 @@ import { isSubagentItem } from "#product/components/workspace/chat/transcript/Tr
 import { TranscriptActivityBlock } from "#product/components/workspace/chat/transcript/TranscriptActivityBlock";
 import { TranscriptItemBlock } from "#product/components/workspace/chat/transcript/TranscriptItemBlock";
 import { TranscriptToolCallGroupBlock } from "#product/components/workspace/chat/transcript/TranscriptToolCallGroupBlock";
+import type { AssistantMessageRevealState } from "#product/components/workspace/chat/transcript/AssistantMessage";
 
 type PlanHandoffHandler = (plan: PromptPlanAttachmentDescriptor) => void;
 
@@ -12,6 +13,8 @@ export function TranscriptTreeNode({
   transcript,
   childrenByParentId,
   animateActivityEntry = false,
+  animateAssistantReveal = false,
+  onAssistantRevealStateChange,
   workspaceId,
   onOpenArtifact,
   onHandOffPlanToNewSession,
@@ -20,6 +23,11 @@ export function TranscriptTreeNode({
   transcript: TranscriptState;
   childrenByParentId: Map<string, string[]>;
   animateActivityEntry?: boolean;
+  animateAssistantReveal?: boolean;
+  onAssistantRevealStateChange?: (
+    itemId: string,
+    state: AssistantMessageRevealState,
+  ) => void;
   workspaceId: string | null;
   onOpenArtifact: (workspaceId: string, artifactId: string) => void;
   onHandOffPlanToNewSession?: PlanHandoffHandler;
@@ -44,6 +52,8 @@ export function TranscriptTreeNode({
               transcript={transcript}
               childrenByParentId={childrenByParentId}
               animateActivityEntry={animateActivityEntry}
+              animateAssistantReveal={false}
+              onAssistantRevealStateChange={onAssistantRevealStateChange}
               workspaceId={workspaceId}
               onOpenArtifact={onOpenArtifact}
               onHandOffPlanToNewSession={onHandOffPlanToNewSession}
@@ -59,6 +69,8 @@ export function TranscriptTreeNode({
       item={item}
       transcript={transcript}
       animateActivityEntry={animateActivityEntry}
+      animateAssistantReveal={animateAssistantReveal}
+      onAssistantRevealStateChange={onAssistantRevealStateChange}
       workspaceId={workspaceId}
       onOpenArtifact={onOpenArtifact}
       onHandOffPlanToNewSession={onHandOffPlanToNewSession}

@@ -29,9 +29,10 @@ import {
 } from "./ChatTranscriptViewRules";
 
 const LIVE_STATUS_GRACE_MS = 150;
-// Quiet period before "Thinking…" RETURNS after yielding to tool/command work
+// Quiet period before "Thinking…" returns after yielding to tool/command work
 // — long enough that back-to-back commands never get a status flash between
-// them.
+// them. Actively streaming prose never uses this reappearance path: the answer
+// itself owns the frontier through short provider/network gaps.
 const LIVE_STATUS_REAPPEAR_GRACE_MS = 500;
 
 export interface LatestTranscriptLiveStatus {
@@ -99,6 +100,7 @@ export function useLatestTranscriptLiveStatus({
     && !latestLiveWorkBlock
     && !latestTurnHasActiveToolWork
     && sessionViewState === "working"
+    && streamingAssistantProseRevision === null
     && shouldAllowTurnTrailingStatus({
       turn: latestTurn,
       transcript,
@@ -108,7 +110,6 @@ export function useLatestTranscriptLiveStatus({
     shouldShowDelayedLatestLiveStatus
     && latestTurnTiming?.isOutboxStartedAt === true;
   const [showDelayedLatestLiveStatus, setShowDelayedLatestLiveStatus] = useState(false);
-  const [quietStreamingProseRevision, setQuietStreamingProseRevision] = useState<string | null>(null);
   const shownForTurnIdRef = useRef<string | null>(null);
 
   // The grace ref resets ONLY when the turn changes — NOT when the status
@@ -155,35 +156,6 @@ export function useLatestTranscriptLiveStatus({
     showDelayedLatestLiveStatus,
   ]);
 
-  // Assistant prose owns the live tail while tokens are arriving. If the
-  // stream goes quiet, return the working indicator so a several-second gap
-  // can never look like the agent stopped. Keying the timer to the item's
-  // revision makes the next token hide the indicator synchronously and arm a
-  // fresh quiet period.
-  useEffect(() => {
-    if (
-      !latestTurnInProgress
-      || sessionViewState !== "working"
-      || streamingAssistantProseRevision === null
-    ) {
-      setQuietStreamingProseRevision(null);
-      return;
-    }
-
-    const timeout = window.setTimeout(() => {
-      setQuietStreamingProseRevision(streamingAssistantProseRevision);
-    }, LIVE_STATUS_REAPPEAR_GRACE_MS);
-    return () => window.clearTimeout(timeout);
-  }, [
-    latestTurnInProgress,
-    sessionViewState,
-    streamingAssistantProseRevision,
-  ]);
-  const showQuietStreamingProseStatus = latestTurnInProgress
-    && sessionViewState === "working"
-    && streamingAssistantProseRevision !== null
-    && quietStreamingProseRevision === streamingAssistantProseRevision;
-
   // SINGLE-SHIMMER RULE: a live exploration/work block (or any active tool)
   // renders its own CollapsedActions shimmer. The delayed-visibility state
   // above lags one render behind the synchronous eligibility, so a freshly
@@ -221,10 +193,10 @@ export function useLatestTranscriptLiveStatus({
   const latestLiveStatus = latestNeedsInputStatus
     ?? (latestTurn
       && !hasCompetingLiveShimmer
+      && shouldShowDelayedLatestLiveStatus
       && (
         showDelayedLatestLiveStatus
         || shouldShowImmediateOutboxLiveStatus
-        || showQuietStreamingProseStatus
       )
         ? renderTurnTrailingStatus?.({
             startedAt: latestTurnTiming?.startedAt ?? latestTurn.startedAt,

@@ -191,7 +191,7 @@ export function ProductSidebarWorkspaceRow({
 
             {trailingStatus ? (
               <div
-                className={`col-start-1 row-start-1 flex size-5 items-center justify-center transition-opacity duration-150 ${shortcutLabel && shortcutRevealVisible
+                className={`col-start-1 row-start-1 flex h-5 items-center justify-end transition-opacity duration-150 ${shortcutLabel && shortcutRevealVisible
                     ? "opacity-0"
                     : "group-hover:opacity-0 group-focus-within:opacity-0"
                   }`}
@@ -201,7 +201,7 @@ export function ProductSidebarWorkspaceRow({
             ) : unreadDot ? (
               <Tooltip
                 content="Unseen activity"
-                className={`col-start-1 row-start-1 flex size-5 items-center justify-center transition-opacity duration-150 ${shortcutLabel && shortcutRevealVisible
+                className={`col-start-1 row-start-1 flex h-5 items-center justify-end transition-opacity duration-150 ${shortcutLabel && shortcutRevealVisible
                     ? "opacity-0"
                     : "group-hover:opacity-0 group-focus-within:opacity-0"
                   }`}

@@ -34,7 +34,7 @@ describe("useLatestTranscriptLiveStatus — continuous working feedback", () => 
     expect(result.current.latestLiveStatus).toBe("TAIL");
   });
 
-  it("shows status after a quiet streaming gap and hides it on the next token", () => {
+  it("does not insert a working status into a quiet streaming-prose gap", () => {
     vi.useFakeTimers();
     let state = transcriptWithAssistantProse(true, 1);
     const renderTurnTrailingStatus = vi.fn(() => "TAIL");
@@ -49,17 +49,38 @@ describe("useLatestTranscriptLiveStatus — continuous working feedback", () => 
       renderTurnTrailingStatus,
     }));
 
-    act(() => vi.advanceTimersByTime(499));
+    act(() => vi.advanceTimersByTime(5_000));
     expect(result.current.latestLiveStatus).toBeNull();
-    act(() => vi.advanceTimersByTime(1));
-    expect(result.current.latestLiveStatus).toBe("TAIL");
 
     state = transcriptWithAssistantProse(true, 2);
     rerender();
     expect(result.current.latestLiveStatus).toBeNull();
 
-    act(() => vi.advanceTimersByTime(500));
+    act(() => vi.advanceTimersByTime(5_000));
+    expect(result.current.latestLiveStatus).toBeNull();
+  });
+
+  it("removes a visible working status as soon as prose starts streaming", () => {
+    vi.useFakeTimers();
+    let state = transcriptWithAssistantProse(false, 1);
+    const renderTurnTrailingStatus = vi.fn(() => "TAIL");
+
+    const { result, rerender } = renderHook(() => useLatestTranscriptLiveStatus({
+      latestTurnId: state.turn.turnId,
+      latestTurn: state.turn,
+      transcript: state.transcript,
+      virtualRows: buildRows(state.transcript, state.turn),
+      outboxStartedAtByPromptId: new Map(),
+      sessionViewState: "working",
+      renderTurnTrailingStatus,
+    }));
+
+    act(() => vi.advanceTimersByTime(150));
     expect(result.current.latestLiveStatus).toBe("TAIL");
+
+    state = transcriptWithAssistantProse(true, 2);
+    rerender();
+    expect(result.current.latestLiveStatus).toBeNull();
   });
 });
 

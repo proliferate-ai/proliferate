@@ -431,6 +431,9 @@ importers:
       '@lexical/react':
         specifier: ^0.48.0
         version: 0.48.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(typescript@5.9.3)(yjs@13.6.31)
+      '@lexical/selection':
+        specifier: ^0.48.0
+        version: 0.48.0(typescript@5.9.3)
       '@lezer/common':
         specifier: ^1.2.3
         version: 1.5.2
