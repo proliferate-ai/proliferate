@@ -129,20 +129,31 @@ export interface LocalSessionTabsDriver {
   openPage(world: ReadyLocalWorld, actor: AuthenticatedActor): Promise<ProductPage>;
   ensureHarnessReady(world: ReadyLocalWorld, page: ProductPage, harness: LocalHarnessKind): Promise<void>;
   selectRepoAndWorkLocally(page: ProductPage, repo: PreparedRepository): Promise<void>;
-  createEmptyChat(world: ReadyLocalWorld, page: ProductPage, harness: LocalHarnessKind): Promise<{ workspaceId: string; sessionId: string; tabId: string }>;
+  /** Materializes the FIRST chat (tab A) by sending a prompt and awaiting turn
+   * completion — this necessarily gives the tab transcript (a materialized
+   * session is never empty per the product's `isSessionEmpty`), so this is the
+   * "messaged" starting point, not an empty chat. Named for what it does: the
+   * genuinely EMPTY tab used for the empty-chat-switch proof is the one the
+   * product itself opens later, in `switchHarnessAfterMessages`. */
+  materializeFirstChat(world: ReadyLocalWorld, page: ProductPage, harness: LocalHarnessKind): Promise<{ workspaceId: string; sessionId: string; tabId: string }>;
 
-  /** Switch harness in a VISIBLE EMPTY chat: assert one visible tab preserved,
-   * backend session replaced (new session id), returning old+new ids. */
-  switchHarnessEmptyChat(world: ReadyLocalWorld, page: ProductPage, toHarness: LocalHarnessKind): Promise<{ oldSessionId: string; newSessionId: string; tabId: string }>;
+  /** Switch harness on a GENUINELY EMPTY chat tab (the one `switchHarnessAfterMessages`
+   * just opened): asserts the in-place replacement (tab count and the tab's
+   * position/index unchanged; a NEW backend session id on the SAME tab
+   * position). Returns the old/new session ids, the tab's (unchanged) index,
+   * whether the tab count stayed the same, and whether the call was a no-op
+   * (requested the harness the tab was already on). */
+  switchHarnessEmptyChat(world: ReadyLocalWorld, page: ProductPage, toHarness: LocalHarnessKind): Promise<{ oldSessionId: string; newSessionId: string; tabIndex: number; tabCountUnchanged: boolean; noOp: boolean }>;
 
-  /** Send a message so the current session has transcript. */
+  /** Send a message so the current (active) session has transcript. */
   sendMessage(world: ReadyLocalWorld, page: ProductPage): Promise<{ sessionId: string }>;
 
   /** Switch harness AFTER messages: old transcript preserved on its tab, a NEW
-   * tab created immediately to the right on `toHarness`. Returns both tabs'
-   * ids AND their harnesses so the caller can prove the switch was real (the
-   * two tabs are on different harnesses). */
-  switchHarnessAfterMessages(world: ReadyLocalWorld, page: ProductPage, toHarness: LocalHarnessKind): Promise<{ preservedTabId: string; preservedTabHarness: LocalHarnessKind; newTabId: string; newTabHarness: LocalHarnessKind; newSessionId: string }>;
+   * EMPTY tab created immediately to the right on `toHarness`. Returns both
+   * tabs' ids, harnesses, AND the new tab's index so the caller can prove the
+   * switch was real (the two tabs are on different harnesses) and later verify
+   * the empty-chat switch kept that new tab's position stable. */
+  switchHarnessAfterMessages(world: ReadyLocalWorld, page: ProductPage, toHarness: LocalHarnessKind): Promise<{ preservedTabId: string; preservedTabHarness: LocalHarnessKind; newTabId: string; newTabHarness: LocalHarnessKind; newTabIndex: number; newSessionId: string }>;
 
   /** Same harness, change to a DIFFERENT supported model (excluding the active
    * one): returns the before/after model ids and whether it stayed in-session
@@ -218,7 +229,7 @@ export const defaultLocalSessionTabsDriver: LocalSessionTabsDriver = {
   openPage: (world, actor) => productPage(world, actor),
   ensureHarnessReady: (world, page, harness) => ensureHarnessReady(world, page, harness),
   selectRepoAndWorkLocally: (page, repo) => selectRepoAndWorkLocally(page, repo),
-  createEmptyChat: (world, page, harness) => createEmptyChat(world, page, harness),
+  materializeFirstChat: (world, page, harness) => materializeFirstChat(world, page, harness),
   switchHarnessEmptyChat: (world, page, toHarness) => switchHarnessEmptyChat(world, page, toHarness),
   sendMessage: (world, page) => sendMessage(world, page),
   switchHarnessAfterMessages: (world, page, toHarness) => switchHarnessAfterMessages(world, page, toHarness),
@@ -469,51 +480,68 @@ export async function collectLocal5SessionTabsCell(
     await driver.selectRepoAndWorkLocally(page, repo);
 
     const sessionIds: string[] = [];
-    const empty = await driver.createEmptyChat(world, page, startHarness);
-    sessionIds.push(empty.sessionId);
+    // Tab A: materialize the FIRST chat by sending a prompt and awaiting turn
+    // completion. This tab is MESSAGED (per the product's `isSessionEmpty`, a
+    // materialized session with transcript is never empty), so it is deliberately
+    // NOT the tab used for the empty-chat-switch proof.
+    const tabA = await driver.materializeFirstChat(world, page, startHarness);
+    sessionIds.push(tabA.sessionId);
 
-    // Proof 1: empty-chat harness switch preserves one visible tab, replaces the
-    // unused backend session (session id changes).
-    const emptySwitch = await driver.switchHarnessEmptyChat(world, page, SESSION_TABS_SWITCH_HARNESS);
+    // Proof 1 ("switch after messages"): a REAL harness switch on tab A's
+    // messaged session preserves tab A (its harness + transcript intact) and
+    // opens a NEW, genuinely EMPTY tab B, on the switched-to harness, immediately
+    // to tab A's right.
+    const afterMessagesSwitch = await driver.switchHarnessAfterMessages(world, page, SESSION_TABS_SWITCH_HARNESS);
+    if (afterMessagesSwitch.preservedTabId === afterMessagesSwitch.newTabId) {
+      throw new Error("LOCAL-5: switch-after-messages did not open a new tab beside the preserved one");
+    }
+    if (afterMessagesSwitch.preservedTabHarness === afterMessagesSwitch.newTabHarness) {
+      throw new Error(
+        `LOCAL-5: switch-after-messages was not a real harness switch (both tabs on "${afterMessagesSwitch.newTabHarness}")`,
+      );
+    }
+    if (afterMessagesSwitch.newTabHarness !== SESSION_TABS_SWITCH_HARNESS) {
+      throw new Error(
+        `LOCAL-5: the new tab is on "${afterMessagesSwitch.newTabHarness}", expected the switched-to "${SESSION_TABS_SWITCH_HARNESS}"`,
+      );
+    }
+    sessionIds.push(afterMessagesSwitch.newSessionId);
+
+    // Proof 2 ("empty-chat switch"): switch tab B — the product's OWN genuinely
+    // empty tab — back to SESSION_TABS_START_HARNESS (claude), a harness
+    // genuinely different from tab B's current codex. The switch must be a real
+    // in-place replacement, not a no-op and not a second new tab:
+    //  - tab COUNT stays the same (the driver observed it before/after),
+    //  - the switch was not requested against the harness the tab was already on,
+    //  - the session id changed from tab B's messaged-turn-free session (the DOM
+    //    tab ELEMENT id itself changes with the session — see the driver
+    //    contract note — so the poll targets the ACTIVE tab, not tab B's stale id).
+    const emptySwitch = await driver.switchHarnessEmptyChat(world, page, SESSION_TABS_START_HARNESS);
+    if (emptySwitch.noOp) {
+      throw new Error("LOCAL-5: empty-chat harness switch was a no-op (requested the harness the tab was already on)");
+    }
     if (emptySwitch.oldSessionId === emptySwitch.newSessionId) {
       throw new Error("LOCAL-5: empty-chat harness switch did not replace the backend session (id unchanged)");
     }
-    if (emptySwitch.tabId !== empty.tabId) {
-      throw new Error("LOCAL-5: empty-chat harness switch did not preserve the single visible tab");
+    if (!emptySwitch.tabCountUnchanged) {
+      throw new Error("LOCAL-5: empty-chat harness switch changed the number of tabs (expected in-place replacement)");
+    }
+    if (emptySwitch.tabIndex !== afterMessagesSwitch.newTabIndex) {
+      throw new Error(
+        `LOCAL-5: empty-chat harness switch moved the tab's position (was index ${afterMessagesSwitch.newTabIndex}, ` +
+          `now ${emptySwitch.tabIndex}); the in-place replacement must keep the same slot`,
+      );
     }
     sessionIds.push(emptySwitch.newSessionId);
 
-    // Give the current session (now on SESSION_TABS_SWITCH_HARNESS) transcript,
-    // then switch after messages. The after-message switch target MUST differ
-    // from the harness the messaged tab is on — otherwise it is not a switch and
-    // must not create a new tab. Proof 1 left the active tab on
-    // SESSION_TABS_SWITCH_HARNESS, so proof 2 switches back to
-    // SESSION_TABS_START_HARNESS (a genuinely different harness).
+    // Give the now-claude active tab (tab B, post-replacement) transcript so
+    // reload can verify it.
     const messaged = await driver.sendMessage(world, page);
     sessionIds.push(messaged.sessionId);
 
-    // Proof 2: a REAL harness switch after messages preserves the old tab (with
-    // its harness + transcript intact) and opens a new tab, on the new harness,
-    // immediately to its right.
-    const messagedSwitch = await driver.switchHarnessAfterMessages(world, page, SESSION_TABS_START_HARNESS);
-    if (messagedSwitch.preservedTabId === messagedSwitch.newTabId) {
-      throw new Error("LOCAL-5: switch-after-messages did not open a new tab beside the preserved one");
-    }
-    if (messagedSwitch.preservedTabHarness === messagedSwitch.newTabHarness) {
-      throw new Error(
-        `LOCAL-5: switch-after-messages was not a real harness switch (both tabs on "${messagedSwitch.newTabHarness}")`,
-      );
-    }
-    if (messagedSwitch.newTabHarness !== SESSION_TABS_START_HARNESS) {
-      throw new Error(
-        `LOCAL-5: the new tab is on "${messagedSwitch.newTabHarness}", expected the switched-to "${SESSION_TABS_START_HARNESS}"`,
-      );
-    }
-    sessionIds.push(messagedSwitch.newSessionId);
-
-    // Proof 3: same-harness model change (on the new tab's harness) selects a
-    // DIFFERENT eligible model and stays in-session where the harness contract
-    // permits it.
+    // Proof 3 ("same-harness model change"): on the now-claude active tab,
+    // selects a DIFFERENT eligible model and stays in-session where the harness
+    // contract permits it.
     const modelChange = await driver.changeModelSameHarness(world, page);
     if (modelChange.fromModelId === modelChange.toModelId) {
       throw new Error("LOCAL-5: same-harness model change was a no-op (model id unchanged)");
@@ -523,17 +551,19 @@ export async function collectLocal5SessionTabsCell(
     }
     sessionIds.push(modelChange.sessionId);
 
-    // Proof 4: reload preserves tab order, active tab, and — for BOTH the
-    // preserved old tab and the active new tab — the expected harness and its
-    // transcript.
+    // Proof 4 ("reload"): tab order [tab A, the current active tab id (tab B's
+    // slot, now on claude after the in-place replacement)]; both the preserved
+    // tab A and the current active tab survive with their expected harness and
+    // transcript. The active tab's CURRENT id is read fresh (post model-change),
+    // since the replacement changed it from tab B's original id.
     await driver.reloadAndVerifyTabs(world, page, {
-      tabOrder: [messagedSwitch.preservedTabId, messagedSwitch.newTabId],
-      activeTabId: messagedSwitch.newTabId,
-      preservedTab: { id: messagedSwitch.preservedTabId, harness: messagedSwitch.preservedTabHarness },
-      activeTab: { id: messagedSwitch.newTabId, harness: messagedSwitch.newTabHarness },
+      tabOrder: [afterMessagesSwitch.preservedTabId, modelChange.sessionId],
+      activeTabId: modelChange.sessionId,
+      preservedTab: { id: afterMessagesSwitch.preservedTabId, harness: afterMessagesSwitch.preservedTabHarness },
+      activeTab: { id: modelChange.sessionId, harness: startHarness },
     });
 
-    cellData = { workspaceId: empty.workspaceId, sessionIds: dedupe(sessionIds) };
+    cellData = { workspaceId: tabA.workspaceId, sessionIds: dedupe(sessionIds) };
   } catch (error) {
     await captureLocalDriverFailure(page, `${cell.cell_id}-ui-failure`);
     failure = describe(error);
@@ -968,7 +998,7 @@ async function stepReasoningEffortToValue(
 
 // ── LOCAL-5 tab-strip production bodies (new tab-strip testids, BRIEF §4.6) ──
 
-async function createEmptyChat(
+async function materializeFirstChat(
   world: ReadyLocalWorld,
   page: ProductPage,
   harness: LocalHarnessKind,
@@ -980,12 +1010,15 @@ async function createEmptyChat(
   // (single-turn) session through the real send path: select the cheapest
   // eligible model, send one bounded prompt from the home composer, then read the
   // materialized session's tab off the strip. Sending to create the session is
-  // not "seeding" — it is the only real creation path.
+  // not "seeding" — it is the only real creation path. NOTE: this necessarily
+  // gives the tab transcript (a materialized session is never empty per the
+  // product's `isSessionEmpty`), so tab A is the MESSAGED starting point, not an
+  // empty chat.
   const preflight = await world.gateway.preflight();
   const probe = (await world.runtime.client.getGatewayModels(harness).catch(() => [])).map((model) => model.id);
   const modelId = selectCheapestEligibleClaudeModel(preflight.eligibleClaudeModels, probe);
   if (!modelId) {
-    throw new Error(`createEmptyChat: no eligible non-Fable model for "${harness}" in the allowlist ∩ live probe`);
+    throw new Error(`materializeFirstChat: no eligible non-Fable model for "${harness}" in the allowlist ∩ live probe`);
   }
   await selectModelInComposer(page, modelId);
   const editor = p.locator("[data-home-composer-editor]").first();
@@ -1011,26 +1044,105 @@ async function createEmptyChat(
   const anyharnessSessionId = await resolveActiveSessionId(world, sessionId);
   const completion = await waitForTurnCompletion(world, anyharnessSessionId, TURN_TIMEOUT_MS);
   if (completion.error) {
-    throw new Error(`createEmptyChat: the materializing turn errored: ${completion.error}`);
+    throw new Error(`materializeFirstChat: the materializing turn errored: ${completion.error}`);
   }
   return { workspaceId, sessionId, tabId };
 }
 
+/**
+ * Switches the harness of the CURRENTLY ACTIVE tab — by construction the
+ * genuinely empty tab `switchHarnessAfterMessages` just opened. A messaged
+ * session is never empty per the product's `isSessionEmpty`
+ * (`transcript.turnOrder.length === 0` — see
+ * `apps/packages/product-client/src/lib/domain/sessions/session-emptiness.ts`),
+ * so a `beginEmptySessionReplacement` in-place swap only fires on a tab that
+ * never received a message — proven false for `materializeFirstChat`'s tab
+ * (Actions run 29549140268, cell T3-SESSION-1/local/harness=claude).
+ *
+ * `data-chat-tab` (the tab id) equals the session id in the DOM, so an in-place
+ * replacement necessarily changes the tab ELEMENT's own id attribute — a
+ * `tabId === tabId` equality check can never hold across a real replacement.
+ * The stable proof is POSITIONAL: the tab's `data-chat-tab-index` and the total
+ * tab count stay the same; only `data-chat-tab-session-id` (read off the
+ * ACTIVE-tab selector, not the old tab id) changes.
+ */
 async function switchHarnessEmptyChat(
   world: ReadyLocalWorld,
   page: ProductPage,
   toHarness: LocalHarnessKind,
-): Promise<{ oldSessionId: string; newSessionId: string; tabId: string }> {
-  await ensureHarnessReady(world, page, toHarness);
+): Promise<{ oldSessionId: string; newSessionId: string; tabIndex: number; tabCountUnchanged: boolean; noOp: boolean }> {
   const p = page.page;
-  const tab = p.locator("[data-chat-tab]").first();
-  const tabId = await readRequiredAttr(p, "[data-chat-tab]", "data-chat-tab", tab);
-  const oldSessionId = await readRequiredAttr(p, "[data-chat-tab]", "data-chat-tab-session-id", tab);
+  // Capture the target (empty) tab's identity from the ACTIVE tab BEFORE
+  // `ensureHarnessReady` — it reloads the page, and reload re-activates the
+  // durable, messaged tab A (its backend session is persisted; tab B's empty,
+  // in-place-replaceable session is not), so any read taken after the reload
+  // describes tab A, not the empty tab B this switch must act on. The failing
+  // run (Actions 29570511844, T3-SESSION-1) reloaded with tab A active and then
+  // "switched" claude→claude on it — a silent no-op whose session id never
+  // changed. Playwright locators are lazy (re-resolved at call time), so the
+  // index/session-id must be read here, pre-reload, and the tab re-activated by
+  // that index afterwards.
+  const activeTabBefore = p.locator('[data-chat-tab][data-chat-tab-active="true"]').first();
+  const harnessBefore = (await readRequiredAttr(p, "[data-chat-tab]", "data-chat-tab-harness", activeTabBefore)) as LocalHarnessKind;
+  const tabIndex = Number((await activeTabBefore.getAttribute("data-chat-tab-index").catch(() => null)) ?? "0");
+  if (harnessBefore === toHarness) {
+    const noopSessionId = await readRequiredAttr(p, "[data-chat-tab]", "data-chat-tab-session-id", activeTabBefore);
+    return { oldSessionId: noopSessionId, newSessionId: noopSessionId, tabIndex, tabCountUnchanged: true, noOp: true };
+  }
+  const beforeCount = await p.locator("[data-chat-tab]").count();
+  await ensureHarnessReady(world, page, toHarness);
+  // Reload re-activated tab A; re-select the empty tab B at its captured index
+  // so the harness switch acts on the intended empty session, not the messaged
+  // one.
+  const targetTab = p.locator(`[data-chat-tab-index="${tabIndex}"]`).first();
+  await targetTab.waitFor({ state: "visible", timeout: TAB_SETTLE_TIMEOUT_MS });
+  await targetTab.click();
+  await p
+    .locator(`[data-chat-tab-index="${tabIndex}"][data-chat-tab-active="true"]`)
+    .first()
+    .waitFor({ state: "attached", timeout: TAB_SETTLE_TIMEOUT_MS });
+  // Capture the reconciled server id of tab B AFTER the reload+reactivation. Two
+  // reasons: (1) reload rebuilds the tab from the authoritative session list, so
+  // it now carries the server id, not the pre-reload optimistic one — comparing
+  // the post-switch id against the pre-reload id would spuriously "detect a
+  // change" from the reload alone; (2) waiting for a reconciled (non
+  // `client-session:`) id means the empty session is fully MATERIALIZED before
+  // the switch, so the product's replace-in-place path dismisses a known
+  // materialized session rather than racing a still-in-flight creation and
+  // orphaning it — the orphan reappeared as a spurious 3rd tab after reload
+  // (Actions run 29575928457, T3-SESSION-1). A materialized-but-empty session is
+  // still empty (isSessionEmptyWithIntents checks transcript/intents, not
+  // materialization), so this stays faithful to the empty-chat-switch proof.
+  const activeTabByIndex = p.locator(`[data-chat-tab-index="${tabIndex}"]`).first();
+  const oldSessionId = await waitForReconciledSessionId(p, activeTabByIndex);
+  // KNOWN PRODUCT RACE (same class as issue #1333; #1337 landed a product fix
+  // for the orphan variant, but the round-4 no-op / spurious-new-tab symptom
+  // may persist — this cell is allowed to be red on it until proven otherwise).
+  // The tab strip's `data-chat-tab-active`/`-session-id` are driven by the
+  // optimistic pending-highlight (`resolveWorkspaceShellActivation` →
+  // `{kind:"chat-session-pending"}`), which lands the instant a tab click
+  // registers; the AUTHORITATIVE `useSessionSelectionStore.activeSessionId`
+  // commit is deferred and coalesced ~180ms later
+  // (`CHAT_TAB_ACTIVATION_COALESCE_MS`, use-chat-tab-activation.ts). If the
+  // harness switch fires before that commit, `handleLaunchSelect` resolves
+  // `replacesSessionId` from the still-stale active session (tab A, messaged),
+  // so `beginEmptySessionReplacement` sees a non-empty record, returns null, and
+  // the product opens a NEW empty tab instead of replacing in place — the
+  // watched tab's id never changes and a spurious 3rd tab appears (Actions run
+  // 29602686092: 3 tabs [Claude,Codex,Claude], id 53c6870d… frozen).
+  //
+  // A `waitForComposerHarnessCommitted` gate was tried here to close the race
+  // and PROVEN UNSOUND (removed): it passes on a stale `defaultChatAgentKind`
+  // preference fallback during the chat-session-pending suppressed phase, not on
+  // the real activeSessionId commit, so Actions runs 29602686092 + 29617987951
+  // showed the SAME 3-tab failure with and without it.
   await selectHarnessInComposer(world, page, toHarness);
-  // The unused backend session is replaced in place: same visible tab, a new
-  // session id. Poll the same tab until its session-id attribute changes.
-  const newSessionId = await waitForAttrChange(p, "[data-chat-tab]", "data-chat-tab-session-id", oldSessionId, tab);
-  return { oldSessionId, newSessionId, tabId };
+  // The unused backend session is replaced IN PLACE at the same tab position:
+  // poll the tab AT THIS INDEX (not the stale tab-id locator, since the tab
+  // element's own id changes with the session) until its session-id changes.
+  const newSessionId = await waitForAttrChange(p, "[data-chat-tab]", "data-chat-tab-session-id", oldSessionId, activeTabByIndex);
+  const afterCount = await p.locator("[data-chat-tab]").count();
+  return { oldSessionId, newSessionId, tabIndex, tabCountUnchanged: afterCount === beforeCount, noOp: false };
 }
 
 async function sendMessage(world: ReadyLocalWorld, page: ProductPage): Promise<{ sessionId: string }> {
@@ -1054,7 +1166,7 @@ async function switchHarnessAfterMessages(
   world: ReadyLocalWorld,
   page: ProductPage,
   toHarness: LocalHarnessKind,
-): Promise<{ preservedTabId: string; preservedTabHarness: LocalHarnessKind; newTabId: string; newTabHarness: LocalHarnessKind; newSessionId: string }> {
+): Promise<{ preservedTabId: string; preservedTabHarness: LocalHarnessKind; newTabId: string; newTabHarness: LocalHarnessKind; newTabIndex: number; newSessionId: string }> {
   await ensureHarnessReady(world, page, toHarness);
   const p = page.page;
   const activeTab = p.locator('[data-chat-tab][data-chat-tab-active="true"]').first();
@@ -1073,6 +1185,7 @@ async function switchHarnessAfterMessages(
   const newTab = p.locator('[data-chat-tab][data-chat-tab-active="true"]').first();
   const newTabId = await readRequiredAttr(p, "[data-chat-tab]", "data-chat-tab", newTab);
   const newTabHarness = (await readRequiredAttr(p, "[data-chat-tab]", "data-chat-tab-harness", newTab)) as LocalHarnessKind;
+  const newTabIndex = Number((await newTab.getAttribute("data-chat-tab-index").catch(() => null)) ?? String(beforeCount));
   const newSessionId = await readRequiredAttr(p, "[data-chat-tab]", "data-chat-tab-session-id", newTab);
   // The preserved (old) tab still exists, on its original harness, with its
   // transcript intact — it was not mutated by the switch.
@@ -1084,7 +1197,7 @@ async function switchHarnessAfterMessages(
         `"${preservedHarnessAfter}" — the switch mutated the old tab instead of opening a new one.`,
     );
   }
-  return { preservedTabId, preservedTabHarness, newTabId, newTabHarness, newSessionId };
+  return { preservedTabId, preservedTabHarness, newTabId, newTabHarness, newTabIndex, newSessionId };
 }
 
 async function changeModelSameHarness(
@@ -1093,7 +1206,12 @@ async function changeModelSameHarness(
 ): Promise<{ sessionId: string; fromModelId: string; toModelId: string; stayedInSession: boolean }> {
   const p = page.page;
   const activeTab = p.locator('[data-chat-tab][data-chat-tab-active="true"]').first();
-  const sessionId = await readRequiredAttr(p, "[data-chat-tab]", "data-chat-tab-session-id", activeTab);
+  // Capture the RECONCILED server id, not the transient `client-session:` one:
+  // this id becomes the reload expectation's active/ordered tab id
+  // (collectLocal5SessionTabsCell → reloadAndVerifyTabs), and a fresh renderer
+  // only ever shows the server id, so a client id could never match post-reload
+  // (Actions run 29575928457, T3-SESSION-1).
+  const sessionId = await waitForReconciledSessionId(p, activeTab);
   const harness = (await readRequiredAttr(p, "[data-chat-tab]", "data-chat-tab-harness", activeTab)) as LocalHarnessKind;
   // The model the composer is currently on — the change must move OFF this one,
   // otherwise a no-op selection would trivially "stay in session".
@@ -1262,6 +1380,37 @@ async function waitForAttrChange(
     await sleep(500);
   }
   throw new Error(`waitForAttrChange: attribute "${attr}" on "${selector}" never changed from "${from}"`);
+}
+
+/**
+ * Waits until the active tab's `data-chat-tab-session-id` is a RECONCILED server
+ * id — i.e. no longer a `client-session:` optimistic id (the client-side
+ * directory key a freshly-created session carries until its background
+ * materialization commits the real id; see session-creation-local-state.ts +
+ * persisted-chat-sessions.ts `isTransientClientSessionId`). Any id captured for
+ * a post-RELOAD expectation MUST be the server id: a fresh renderer only ever
+ * shows the server uuid for that tab, so an expectation built from the transient
+ * client id can never match (proven: Actions run 29575928457, T3-SESSION-1,
+ * `reloadAndVerifyTabs: tab order not preserved` — the wanted id was
+ * `client-session:claude:…`). Returns the reconciled id.
+ */
+async function waitForReconciledSessionId(
+  page: Page,
+  activeTab: ReturnType<Page["locator"]>,
+): Promise<string> {
+  const deadline = Date.now() + TAB_SETTLE_TIMEOUT_MS;
+  let last = "";
+  while (Date.now() < deadline) {
+    last = (await activeTab.getAttribute("data-chat-tab-session-id").catch(() => null)) ?? "";
+    if (last && !last.startsWith("client-session:")) {
+      return last;
+    }
+    await sleep(500);
+  }
+  throw new Error(
+    `waitForReconciledSessionId: the active tab's session id never reconciled off the optimistic ` +
+      `client id (last "${last}") within ${TAB_SETTLE_TIMEOUT_MS}ms.`,
+  );
 }
 
 /** Resolves the AnyHarness native session id backing the currently-active chat.
