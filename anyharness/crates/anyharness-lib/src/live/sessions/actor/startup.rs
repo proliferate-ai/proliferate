@@ -9,7 +9,9 @@ use crate::domains::sessions::model::serialize_action_capabilities;
 use crate::domains::sessions::model::RequestedModeApplyError as ModeApplyError;
 use crate::domains::sessions::prompt::capabilities::capabilities_from_acp;
 use crate::live::sessions::actor::config::apply::restore_persisted_live_config_if_needed;
-use crate::live::sessions::actor::config::handle::apply_requested_session_preferences;
+use crate::live::sessions::actor::config::handle::{
+    apply_requested_mode_preference, apply_requested_model_preference,
+};
 use crate::live::sessions::actor::config::persist::{
     emit_live_config_update, emit_startup_state, load_startup_restore_snapshot,
 };
@@ -249,33 +251,13 @@ impl SessionActor {
                 "[workspace-latency] session.actor.initial_live_config.completed"
             );
         }
-        let apply_preferences_started = Instant::now();
-        if let Err(error) = apply_requested_session_preferences(
+        apply_requested_model_preference(
             &conn,
             &native_session_id,
             &config.launch.session,
             &mut startup_state,
         )
-        .await
-        {
-            tracing::warn!(session_id = %session_id, error = %error, "failed to apply session preferences");
-            tracing::warn!(
-                session_id = %session_id,
-                workspace_id = %workspace_id,
-                error = %error,
-                elapsed_ms = apply_preferences_started.elapsed().as_millis(),
-                "[workspace-latency] session.actor.apply_preferences.failed"
-            );
-            let _ = ready_tx.send(Err(ModeApplyError::clone_for_readiness(&error)));
-            return Err(error);
-        } else {
-            tracing::info!(
-                session_id = %session_id,
-                workspace_id = %workspace_id,
-                elapsed_ms = apply_preferences_started.elapsed().as_millis(),
-                "[workspace-latency] session.actor.apply_preferences.completed"
-            );
-        }
+        .await;
         let restore_live_config_started = Instant::now();
         if let Err(error) = restore_persisted_live_config_if_needed(
             &conn,
@@ -305,6 +287,18 @@ impl SessionActor {
                 elapsed_ms = restore_live_config_started.elapsed().as_millis(),
                 "[workspace-latency] session.actor.restore_live_config.completed"
             );
+        }
+        if let Err(error) = apply_requested_mode_preference(
+            &conn,
+            &native_session_id,
+            &config.launch.session,
+            &mut startup_state,
+        )
+        .await
+        {
+            tracing::warn!(session_id = %session_id, error = %error, "failed to apply requested session mode");
+            let _ = ready_tx.send(Err(ModeApplyError::clone_for_readiness(&error)));
+            return Err(error);
         }
         let post_preferences_live_config_started = Instant::now();
         if let Err(error) = emit_live_config_update(

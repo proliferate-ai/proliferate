@@ -65,5 +65,5 @@ apps/packages/product-client/src/lib/infra/measurement/measurement-port.ts 734 p
 anyharness/crates/anyharness-lib/src/api/router.rs 628 AnyHarness router (+goals/loops/activity/feed routes, +gateway catalog version route, +workflow-runs/cancel + local materialization operations + workflow-run-workspaces routes)
 anyharness/crates/anyharness-lib/src/app/mod.rs 647 AnyHarness app wiring (+session mutation admission purge/retention wiring, +goal/loop/activity/feed services, +two-phase workflow-run and workflow-workspace wiring, +local materialization service wiring)
 anyharness/crates/anyharness-lib/src/domains/loops/runtime.rs 867 loops runtime — native write path + emulated Codex scheduler (+2b derived-safe classification comment at the fire seam)
-anyharness/crates/anyharness-lib/src/live/sessions/actor/startup.rs 648 session startup (+goal/loop capability parsing, roster reconcile-on-attach)
+anyharness/crates/anyharness-lib/src/live/sessions/actor/startup.rs 642 session startup (+goal/loop capability parsing, roster reconcile-on-attach)
 server/tests/integration/test_organizations_api.py 624 added admin-only coverage for GET .../invitations

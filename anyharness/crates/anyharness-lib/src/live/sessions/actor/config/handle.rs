@@ -15,12 +15,12 @@ use crate::live::sessions::actor::config::types::{
     tracked_config_purpose, ConfigApplyOutcome, ConfigPurpose,
 };
 use crate::live::sessions::actor::state::{SessionActor, SessionStartupState};
-pub(in crate::live::sessions::actor) async fn apply_requested_session_preferences(
+pub(in crate::live::sessions::actor) async fn apply_requested_model_preference(
     conn: &acp::ConnectionTo<acp::Agent>,
     native_session_id: &str,
     session: &SessionRecord,
     startup_state: &mut SessionStartupState,
-) -> anyhow::Result<()> {
+) {
     if let Some(model_id) = session.requested_model_id.as_deref() {
         match try_apply_model_preference(conn, native_session_id, model_id, startup_state).await {
             Ok(ConfigApplyOutcome::NotApplied) => {
@@ -52,6 +52,14 @@ pub(in crate::live::sessions::actor) async fn apply_requested_session_preference
             }
         }
     }
+}
+
+pub(in crate::live::sessions::actor) async fn apply_requested_mode_preference(
+    conn: &acp::ConnectionTo<acp::Agent>,
+    native_session_id: &str,
+    session: &SessionRecord,
+    startup_state: &mut SessionStartupState,
+) -> anyhow::Result<()> {
     if let Some(mode_id) = session.requested_mode_id.as_deref() {
         let mut outcome = try_apply_config_option(
             conn,
