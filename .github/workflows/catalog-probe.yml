@@ -15,8 +15,7 @@ on:
     - cron: "0 9 * * *"
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -27,18 +26,41 @@ jobs:
     name: Probe harnesses and draft catalog
     if: github.repository == 'proliferate-ai/proliferate'
     runs-on: ubuntu-latest
+    environment:
+      name: Catalog Probe
+      url: https://github.com/proliferate-ai/proliferate/blob/main/specs/developing/operating/catalog-probe.md
     timeout-minutes: 90
-    env:
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-      OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
-      XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
-      AWS_BEARER_TOKEN_BEDROCK: ${{ secrets.AWS_BEARER_TOKEN_BEDROCK }}
-      CODEX_AUTH_JSON_B64: ${{ secrets.CODEX_AUTH_JSON_B64 }}
+    concurrency:
+      group: catalog-probe
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Verify credential lifecycle approval
+        env:
+          CREDENTIALS_APPROVED: ${{ vars.CATALOG_PROBE_CREDENTIALS_APPROVED }}
+          CREDENTIAL_OWNER: ${{ vars.CATALOG_PROBE_CREDENTIAL_OWNER }}
+          ROTATION_DUE: ${{ vars.CATALOG_PROBE_ROTATION_DUE }}
+        run: |
+          set -euo pipefail
+          if [[ "$CREDENTIALS_APPROVED" != "true" ]]; then
+            echo "::error title=Catalog Probe credentials not approved::Complete the Catalog Probe runbook inventory, then set CATALOG_PROBE_CREDENTIALS_APPROVED=true on the Catalog Probe environment."
+            exit 2
+          fi
+          if [[ -z "$CREDENTIAL_OWNER" ]]; then
+            echo "::error title=Catalog Probe owner missing::Set CATALOG_PROBE_CREDENTIAL_OWNER on the Catalog Probe environment."
+            exit 2
+          fi
+          if [[ ! "$ROTATION_DUE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || ! rotation_epoch=$(date -u -d "$ROTATION_DUE" +%s 2>/dev/null); then
+            echo "::error title=Catalog Probe rotation date invalid::Set CATALOG_PROBE_ROTATION_DUE to the earliest credential rotation date in YYYY-MM-DD form."
+            exit 2
+          fi
+          today_epoch=$(date -u -d "$(date -u +%Y-%m-%d)" +%s)
+          if (( rotation_epoch < today_epoch )); then
+            echo "::error title=Catalog Probe credentials require rotation::The recorded rotation due date has passed; rotate or revoke the affected credentials before probing."
+            exit 2
+          fi
+          echo "Credential lifecycle approval is current for owner $CREDENTIAL_OWNER through $ROTATION_DUE."
 
       - name: Install system build dependencies
         run: |
@@ -56,6 +78,8 @@ jobs:
           workspaces: anyharness
 
       - name: Materialize isolated Codex OAuth input
+        env:
+          CODEX_AUTH_JSON_B64: ${{ secrets.CATALOG_PROBE_CODEX_AUTH_JSON_B64 }}
         run: |
           if [[ -n "${CODEX_AUTH_JSON_B64:-}" ]]; then
             auth_path="$RUNNER_TEMP/codex-auth.json"
@@ -65,7 +89,19 @@ jobs:
           fi
 
       - name: Resolve, install, probe, and finalize catalog
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.CATALOG_PROBE_ANTHROPIC_API_KEY }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CATALOG_PROBE_CLAUDE_CODE_OAUTH_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.CATALOG_PROBE_OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.CATALOG_PROBE_GEMINI_API_KEY }}
+          OPENCODE_API_KEY: ${{ secrets.CATALOG_PROBE_OPENCODE_API_KEY }}
+          XAI_API_KEY: ${{ secrets.CATALOG_PROBE_XAI_API_KEY }}
+          AWS_BEARER_TOKEN_BEDROCK: ${{ secrets.CATALOG_PROBE_AWS_BEARER_TOKEN_BEDROCK }}
         run: make catalog-update
+
+      - name: Remove isolated OAuth input
+        if: always()
+        run: rm -f "${PROBE_CODEX_OAUTH_AUTH_JSON:-}"
 
       - name: Summarize probe completeness
         if: always()
@@ -87,6 +123,33 @@ jobs:
           path: scripts/agent-catalog/catalog.html
           if-no-files-found: ignore
 
+      - name: Upload sanitized catalog output
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: catalog-probe-output
+          path: |
+            catalogs/agents/catalog.json
+            scripts/agent-catalog/catalog.draft.json
+            scripts/agent-catalog/generated/*.probe.json
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Open a catalog PR when the draft changed
+    needs: probe
+    if: needs.probe.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.0
+        with:
+          name: catalog-probe-output
+          path: .
+
       - name: Open catalog PR when the draft changed
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -106,3 +169,35 @@ jobs:
             --title "chore(catalog): probe run $(date -u +%Y-%m-%d)" \
             --label "release:maintenance" --label "area:anyharness" \
             --body "Automated exact-pin catalog probe run. Every promoted agent was resolved, installed, and probed in the same run. Review the per-context diffs in \`scripts/agent-catalog/generated/\` and the draft; download the catalog-viewer artifact from the workflow run for the rendered diff vs main. Cursor remains at its prior pin because scheduled runners do not have the required machine-local login."
+
+  alert:
+    name: Alert on a scheduled Catalog Probe failure
+    needs: [probe, publish]
+    if: >-
+      always() && github.event_name == 'schedule' &&
+      (needs.probe.result == 'failure' || needs.publish.result == 'failure')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Create or update the operational alert
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          title="ops(agent-catalog): Catalog Probe scheduled failure"
+          issue_number=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open \
+            --search "\"$title\" in:title" --json number,title \
+            --jq ".[] | select(.title == \"$title\") | .number" | head -1)
+          message="Catalog Probe failed on the default-branch schedule: $RUN_URL
+
+          Follow the [Catalog Probe runbook](https://github.com/$GITHUB_REPOSITORY/blob/main/specs/developing/operating/catalog-probe.md). Inspect only sanitized run state and credential names; never copy credential values into this issue or workflow logs."
+          if [[ -n "$issue_number" ]]; then
+            gh issue comment "$issue_number" --repo "$GITHUB_REPOSITORY" --body "$message"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$message" \
+              --assignee pablonyx --label "release:maintenance" \
+              --label "area:anyharness" --label "area:release"
+          fi
