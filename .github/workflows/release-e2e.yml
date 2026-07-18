@@ -315,6 +315,7 @@ jobs:
   # it never runs Tier-2, controller-local, self-host, or Tier-4 bodies here.
   release-e2e-staging:
     name: tier-3 staging lane (provisional)
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && !inputs.selfhost)
     runs-on: ubuntu-latest
     timeout-minutes: 60
     concurrency:

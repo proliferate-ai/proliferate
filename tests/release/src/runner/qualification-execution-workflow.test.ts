@@ -58,6 +58,11 @@ test("a self-host dispatch cannot launch unrelated release worlds", () => {
       `${id} must stay out of a self-host-only dispatch`,
     );
   }
+  assert.match(
+    job(release, "release-e2e-staging"),
+    /if: github\.event_name == 'schedule' \|\| \(github\.event_name == 'workflow_dispatch' && !inputs\.selfhost\)/,
+    "release-e2e-staging must stay out of a self-host-only dispatch while retaining its schedule",
+  );
 });
 
 test("the manual local world builds and publishes once, then reuses exact candidates", () => {
