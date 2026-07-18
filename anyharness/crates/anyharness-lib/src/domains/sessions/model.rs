@@ -48,6 +48,46 @@ impl fmt::Debug for AgentStartupExitError {
 
 impl std::error::Error for AgentStartupExitError {}
 
+/// A catalog-authorized mode that the active agent session did not expose or
+/// confirm. Session creation must fail instead of reporting success with the
+/// agent's default mode.
+#[derive(Clone, Debug)]
+pub(crate) struct RequestedModeApplyError {
+    agent_kind: String,
+    mode_id: String,
+}
+
+impl RequestedModeApplyError {
+    pub(crate) const CODE: &'static str = "SESSION_MODE_UNSUPPORTED";
+
+    pub(crate) fn new(agent_kind: impl Into<String>, mode_id: impl Into<String>) -> Self {
+        Self {
+            agent_kind: agent_kind.into(),
+            mode_id: mode_id.into(),
+        }
+    }
+
+    pub(crate) fn clone_for_readiness(error: &anyhow::Error) -> anyhow::Error {
+        error
+            .downcast_ref::<Self>()
+            .cloned()
+            .map(anyhow::Error::new)
+            .unwrap_or_else(|| anyhow::anyhow!(error.to_string()))
+    }
+}
+
+impl fmt::Display for RequestedModeApplyError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            formatter,
+            "mode '{}' is not supported by the active session for agent '{}'",
+            self.mode_id, self.agent_kind
+        )
+    }
+}
+
+impl std::error::Error for RequestedModeApplyError {}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SessionMcpBindingPolicy {
     InheritWorkspace,

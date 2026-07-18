@@ -2,7 +2,7 @@ use super::access::map_access_error;
 use super::error::ApiError;
 use crate::domains::agents::route_auth::RouteAuthError;
 use crate::domains::sessions::mcp_bindings::crypto::SessionMcpBindingsError;
-use crate::domains::sessions::model::AgentStartupExitError;
+use crate::domains::sessions::model::{AgentStartupExitError, RequestedModeApplyError};
 use crate::domains::sessions::runtime::{
     CreateAndStartSessionError, EnsureLiveSessionError, ForkSessionError,
     PendingPromptMutationError, PendingPromptQueueError, ResolveInteractionError, SendPromptError,
@@ -28,6 +28,10 @@ fn map_internal_anyhow_error(
 }
 
 pub(super) fn map_acp_session_start_error(error: anyhow::Error) -> ApiError {
+    if let Some(mode_error) = error.downcast_ref::<RequestedModeApplyError>() {
+        return ApiError::bad_request(mode_error.to_string(), RequestedModeApplyError::CODE);
+    }
+
     let telemetry_safe_detail = format!("ACP session start failed: {error}");
     map_internal_anyhow_error(error, telemetry_safe_detail, "ACP session start failed: ")
 }
@@ -352,7 +356,7 @@ mod tests {
     use axum::http::StatusCode;
     use axum::response::IntoResponse;
 
-    use crate::domains::sessions::model::AgentStartupExitError;
+    use crate::domains::sessions::model::{AgentStartupExitError, RequestedModeApplyError};
     use crate::domains::sessions::runtime::{CreateAndStartSessionError, ResolveInteractionError};
     use crate::domains::workspaces::access_gate::WorkspaceAccessError;
 
@@ -398,6 +402,22 @@ mod tests {
         .into_response();
 
         assert_eq!(response.status(), StatusCode::CONFLICT);
+    }
+
+    #[test]
+    fn unconfirmed_requested_mode_maps_to_typed_bad_request() {
+        let mapped = super::map_create_session_error(CreateAndStartSessionError::StartFailed(
+            anyhow::Error::new(RequestedModeApplyError::new("claude", "bypassPermissions")),
+        ));
+
+        assert_eq!(mapped.code(), Some("SESSION_MODE_UNSUPPORTED"));
+        assert_eq!(
+            mapped.detail(),
+            Some(
+                "mode 'bypassPermissions' is not supported by the active session for agent 'claude'"
+            )
+        );
+        assert_eq!(mapped.into_response().status(), StatusCode::BAD_REQUEST);
     }
 
     #[test]
