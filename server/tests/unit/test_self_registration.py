@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncGenerator
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from starlette.types import Message, Receive, Scope, Send
 
 from proliferate.auth.identity.store import create_auth_user
 from proliferate.auth.passwords import hash_password, verify_password
@@ -19,6 +21,7 @@ from proliferate.constants.organizations import (
     ORGANIZATION_ROLE_ADMIN,
     ORGANIZATION_ROLE_MEMBER,
 )
+from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
 from proliferate.db.models.organizations import OrganizationInvitation, OrganizationMembership
 from proliferate.db.store import organization_invitations as invitation_store
@@ -247,6 +250,103 @@ async def test_revoked_invitation_cannot_register(single_org_client, test_engine
     )
     assert response.status_code == 403
     assert await _count_users(test_engine) == 1
+
+
+async def test_revocation_commit_finishes_before_response_starts(
+    test_engine,
+    monkeypatch,
+) -> None:
+    """A revoked response is durable before another client can observe it."""
+    from proliferate.db import engine as engine_module
+    from proliferate.main import create_app
+
+    monkeypatch.setattr(settings, "single_org_mode_override", True)
+    session_factory = _factory(test_engine)
+    monkeypatch.setattr(engine_module, "engine", test_engine)
+    monkeypatch.setattr(engine_module, "async_session_factory", session_factory)
+
+    owner_id, organization_id = await _claim_instance(test_engine)
+    invited_email = "revoked-member@example.com"
+    invited_password = "another-strong-password"
+    async with session_factory() as session:
+        await update_user_password_hash(
+            session,
+            user_id=owner_id,
+            hashed_password=hash_password(PASSWORD),
+            password_set_at=datetime.now(UTC),
+        )
+        invited_user = await create_auth_user(
+            session,
+            email=invited_email,
+            display_name=None,
+            avatar_url=None,
+        )
+        await update_user_password_hash(
+            session,
+            user_id=invited_user.id,
+            hashed_password=hash_password(invited_password),
+            password_set_at=datetime.now(UTC),
+        )
+        await session.commit()
+    invitation_id = await _invite(test_engine, organization_id, email=invited_email)
+
+    app = create_app()
+    commits_finished = 0
+    commit_count_at_response_start: list[int] = []
+    target_path = f"/v1/organizations/{organization_id}/invitations/{invitation_id}"
+
+    async def observed_session() -> AsyncGenerator[AsyncSession, None]:
+        nonlocal commits_finished
+        async with session_factory() as session:
+            yield session
+            await session.commit()
+            commits_finished += 1
+
+    app.dependency_overrides[get_async_session] = observed_session
+
+    async def observed_app(scope: Scope, receive: Receive, send: Send) -> None:
+        async def observe_response_start(message: Message) -> None:
+            if message["type"] == "http.response.start" and scope["path"] == target_path:
+                commit_count_at_response_start.append(commits_finished)
+            await send(message)
+
+        await app(scope, receive, observe_response_start)
+
+    async with AsyncClient(
+        transport=ASGITransport(app=observed_app),
+        base_url="http://test",
+    ) as client:
+        owner_login = await client.post(
+            "/auth/desktop/password/login",
+            json={"email": OWNER_EMAIL, "password": PASSWORD},
+        )
+        invited_login = await client.post(
+            "/auth/desktop/password/login",
+            json={"email": invited_email, "password": invited_password},
+        )
+        owner_headers = {"Authorization": f"Bearer {owner_login.json()['access_token']}"}
+        invited_headers = {"Authorization": f"Bearer {invited_login.json()['access_token']}"}
+
+        commits_finished = 0
+        revoked = await client.delete(target_path, headers=owner_headers)
+
+        assert revoked.status_code == 200
+        assert revoked.json()["status"] == "revoked"
+        assert commit_count_at_response_start == [1]
+
+        listed = await client.get(
+            "/v1/organizations/invitations/current",
+            headers=invited_headers,
+        )
+        assert listed.status_code == 200
+        assert listed.json()["invitations"] == []
+
+        rejected = await client.post(
+            f"/v1/organizations/invitations/current/{invitation_id}/accept",
+            headers=invited_headers,
+        )
+        assert rejected.status_code == 404
+        assert rejected.json()["detail"]["code"] == "invalid_invitation"
 
 
 async def test_existing_account_registration_conflicts(single_org_client, test_engine):
