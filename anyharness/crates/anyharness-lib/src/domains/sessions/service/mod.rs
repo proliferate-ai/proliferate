@@ -8,6 +8,8 @@ use crate::domains::workspaces::store::WorkspaceStore;
 pub(crate) mod attachments;
 mod config;
 mod create;
+#[cfg(test)]
+mod create_tests;
 mod history;
 mod launch_options;
 mod mobility;
