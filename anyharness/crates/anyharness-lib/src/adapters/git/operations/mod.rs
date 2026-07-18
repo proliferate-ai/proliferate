@@ -13,4 +13,5 @@ pub mod staging;
 pub mod status;
 mod status_operation;
 pub mod status_summary;
+pub mod worktree_restore;
 pub mod worktrees;

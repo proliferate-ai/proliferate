@@ -78,6 +78,7 @@ use crate::domains::workspaces::files_runtime::{
 use crate::domains::workspaces::inventory::WorktreeInventoryService;
 use crate::domains::workspaces::operation_gate::WorkspaceOperationGate;
 use crate::domains::workspaces::purge::WorkspacePurgeService;
+use crate::domains::workspaces::restore_runtime::RestoreWorktreeRuntime;
 use crate::domains::workspaces::retention::WorkspaceRetentionService;
 use crate::domains::workspaces::retention_policy::WorktreeRetentionPolicyStore;
 use crate::domains::workspaces::retire_preflight::RetirePreflightChecker;
@@ -121,6 +122,7 @@ pub struct AppState {
     pub workspace_runtime: Arc<WorkspaceRuntime>,
     pub workspace_setup_runtime: Arc<WorkspaceSetupRuntime>,
     pub workspace_worktree_runtime: Arc<WorkspaceWorktreeRuntime>,
+    pub restore_worktree_runtime: Arc<RestoreWorktreeRuntime>,
     pub files_runtime: Arc<WorkspaceFilesRuntime>,
     pub process_service: Arc<ProcessService>,
     pub workspace_file_search_cache: Arc<WorkspaceFileSearchCache>,
@@ -444,6 +446,10 @@ impl AppState {
             workspace_setup_runtime.clone(),
             workspace_retention_service.clone(),
         ));
+        let restore_worktree_runtime = Arc::new(RestoreWorktreeRuntime::new(
+            workspace_runtime.clone(),
+            workspace_operation_gate.clone(),
+        ));
         let cowork_runtime = Arc::new(CoworkRuntime::new(
             (*cowork_service).clone(),
             cowork_delegation_service,
@@ -526,6 +532,7 @@ impl AppState {
             workspace_runtime,
             workspace_setup_runtime,
             workspace_worktree_runtime,
+            restore_worktree_runtime,
             files_runtime,
             process_service,
             workspace_file_search_cache,

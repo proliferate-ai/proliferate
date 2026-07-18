@@ -161,6 +161,8 @@ export type {
   SetupScriptStatus,
   SetupScriptExecution,
   CreateWorktreeWorkspaceResponse,
+  RestoreWorktreeWorkspaceOutcome,
+  RestoreWorktreeWorkspaceResponse,
   SetupHintCategory,
   SetupHint,
   DetectProjectSetupResponse,

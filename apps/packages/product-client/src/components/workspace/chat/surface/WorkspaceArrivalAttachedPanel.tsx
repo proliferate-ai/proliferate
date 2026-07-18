@@ -149,6 +149,7 @@ export function WorkspaceArrivalAttachedPanel() {
         workspaceKind={panelState.workspaceKind}
         workspacePath={panelState.workspacePath}
         originalBranch={panelState.originalBranch}
+        restoreEligible={panelState.restoreEligible}
       />
     );
   }

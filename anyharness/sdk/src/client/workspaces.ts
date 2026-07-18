@@ -6,6 +6,7 @@ import type {
   GetSetupStatusResponse,
   ResolveWorkspaceFromPathRequest,
   ResolveWorkspaceResponse,
+  RestoreWorktreeWorkspaceResponse,
   StartWorkspaceSetupRequest,
   UpdateWorkspaceDisplayNameRequest,
   Workspace,
@@ -43,6 +44,17 @@ export class WorkspacesClient {
       "/v1/workspaces/worktrees",
       input,
       options,
+    );
+  }
+
+  async restoreWorktree(
+    workspaceId: string,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<RestoreWorktreeWorkspaceResponse> {
+    return this.transport.post<RestoreWorktreeWorkspaceResponse>(
+      `/v1/workspaces/${encodeURIComponent(workspaceId)}/worktree/restore`,
+      undefined,
+      withTimingCategory(options, "workspace.worktree.restore"),
     );
   }
 

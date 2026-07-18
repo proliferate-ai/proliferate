@@ -50,6 +50,8 @@ pub mod workspaces;
 pub(crate) mod workspaces_contract;
 pub mod workspaces_lifecycle;
 pub mod workspaces_purge;
+pub mod workspaces_restore;
+mod workspaces_restore_errors;
 pub mod workspaces_setup;
 pub mod workspaces_worktrees;
 pub mod worktrees;

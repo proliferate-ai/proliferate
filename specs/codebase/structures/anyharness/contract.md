@@ -93,6 +93,8 @@ Owns workspace-facing transport types:
 - workspace summary
 - create and resolve requests
 - worktree creation request and response
+- missing-worktree restore response, including `restored` and idempotent
+  `already_present` outcomes
 - setup-script execution payload
 
 Workspace and session `origin` fields are advisory provenance read models only.

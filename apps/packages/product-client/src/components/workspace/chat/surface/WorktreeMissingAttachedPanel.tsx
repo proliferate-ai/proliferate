@@ -21,18 +21,27 @@ export function WorktreeMissingAttachedPanel({
   workspaceKind,
   workspacePath,
   originalBranch,
+  restoreEligible,
 }: {
   workspaceId: string;
   logicalWorkspaceId: string | null;
   workspaceKind: Workspace["kind"];
   workspacePath: string;
   originalBranch: string | null;
+  restoreEligible: boolean;
 }) {
   const copy = missingCheckoutCopy(workspaceKind);
   const [showDetails, setShowDetails] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
-  const { checkAgain, isCheckingAgain, deleteWorkspace, isDeleting } =
-    useWorktreeMissingActions({ workspaceId, logicalWorkspaceId });
+  const {
+    checkAgain,
+    isCheckingAgain,
+    restoreWorktree,
+    isRestoring,
+    restoreError,
+    deleteWorkspace,
+    isDeleting,
+  } = useWorktreeMissingActions({ workspaceId, logicalWorkspaceId });
   // Purge is worktree-only server-side (retire preflight blocks other kinds),
   // so offering Delete for a plain local workspace would always dead-end in a
   // "blocked" toast.
@@ -46,6 +55,14 @@ export function WorktreeMissingAttachedPanel({
       <div className="px-3 pb-1 text-base text-muted-foreground">
         {confirmingDelete ? copy.deleteConfirmBody : copy.body}
       </div>
+      {!confirmingDelete && restoreError && (
+        <div
+          role="alert"
+          className="mx-3 mb-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-base text-destructive"
+        >
+          {restoreError}
+        </div>
+      )}
       {!confirmingDelete && showDetails && (
         <div className="pt-1">
           <ComposerAttachedPanelRow label="Path">
@@ -103,19 +120,30 @@ export function WorktreeMissingAttachedPanel({
                 onSelect: () => {
                   void checkAgain();
                 },
-                disabled: isCheckingAgain,
+                disabled: isCheckingAgain || isRestoring,
               },
               ...(canDelete
                 ? [{
                   label: "Delete workspace…",
                   onSelect: () => setConfirmingDelete(true),
+                  disabled: isRestoring,
                 }]
                 : []),
               {
                 label: showDetails ? "Hide details" : "Show details",
                 onSelect: () => setShowDetails((value) => !value),
+                disabled: isRestoring,
               },
             ]}
+            primaryAction={restoreEligible
+              ? {
+                label: isRestoring ? "Restoring…" : "Restore worktree",
+                onSelect: () => {
+                  void restoreWorktree();
+                },
+                disabled: isRestoring || isCheckingAgain,
+              }
+              : undefined}
           />
         )}
     </ComposerAttachedPanel>

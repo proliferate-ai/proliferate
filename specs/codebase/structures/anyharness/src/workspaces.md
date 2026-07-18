@@ -22,6 +22,7 @@ The workspaces area owns:
 - durable workspace records
 - linking each workspace to a repo root
 - worktree creation
+- identity-preserving restoration of a missing worktree checkout
 - runtime env derivation from workspace + repo-root metadata
 
 ## Core Models
@@ -172,6 +173,42 @@ non-success response that could represent a compatible existing worktree, the
 worker may recover by calling `/v1/workspaces/resolve` for the requested target
 path and accepting only matching worktree identity.
 
+### Restore Missing Worktree
+
+`restore_worktree(...)`
+(`anyharness/crates/anyharness-lib/src/domains/workspaces/runtime/restore.rs`)
+recreates the checkout for an existing active `kind=worktree` workspace. It is
+not a create flow: the durable workspace row, workspace id, and attached
+sessions remain unchanged.
+
+`POST /v1/workspaces/{workspace_id}/worktree/restore` serializes requests for
+the workspace through the operation gate. A request that follows or overlaps a
+successful restore returns `outcome=already_present`, so callers may safely
+retry without creating another workspace or checkout.
+
+The Git adapter owns the filesystem and Git-registration safety checks. Before
+materializing anything, it requires:
+
+- the recorded repository root to exist and resolve unambiguously
+- the recorded local branch to exist
+- the recorded destination to be absent
+- no other active runtime workspace to own that path
+- no incompatible, locked, detached, or duplicate Git worktree registration
+- the recorded branch not to be checked out at another path
+
+An exactly matching stale registration at the recorded path may be pruned and
+recreated. Every other occupied-path or ambiguous-registration state fails
+closed with a typed conflict. Restore never removes or overwrites the
+destination. It reconstructs committed branch state only; files or edits that
+were uncommitted when the checkout was deleted are not recoverable.
+
+To close the path-occupation race, Git first creates the worktree under a
+private sibling staging directory whose checkout has the recorded target's
+leaf name. `git worktree move` then moves that checkout into the recorded
+parent. Git atomically refuses the move if the target appeared, including as an
+empty directory; the runtime removes only its own private staged checkout and
+returns the occupied-path conflict.
+
 ### Workspace Environment
 
 `workspace_env(...)`
@@ -202,6 +239,7 @@ The underlying git-context discovery lives in:
 Generic git worktree mechanics live in:
 
 - `anyharness/crates/anyharness-lib/src/adapters/git/operations/worktrees.rs`
+- `anyharness/crates/anyharness-lib/src/adapters/git/operations/worktree_restore.rs`
 
 The durable workspace rows are loaded and stored through:
 
@@ -214,6 +252,7 @@ The durable workspace rows are loaded and stored through:
 - canonical execution-surface identity
 - local vs worktree distinction
 - worktree creation
+- missing-worktree restoration for an existing durable workspace
 - workspace-derived env
 - setup-script execution for new worktrees
 
@@ -233,6 +272,10 @@ The durable workspace rows are loaded and stored through:
   deterministic and idempotent.
 - Active worktree workspace paths remain unique because worktree cleanup may
   remove the materialized checkout.
+- Restoring a missing worktree preserves the existing workspace and session
+  identities and never creates a replacement durable row.
+- Worktree restoration never removes or overwrites an occupied destination and
+  treats ambiguous Git registration state as a conflict.
 - Every workspace must point at exactly one repo root.
 - Workspace paths should be canonicalized before identity decisions.
 - Workspace env should be derived from durable workspace + repo-root records,
