@@ -126,9 +126,9 @@ async def destroy_cloud_sandbox(
     # run_after_commit defers to the root-commit event and discards on rollback.
     # The captured ids are plain locals (no ORM access inside the callback, which
     # runs after the session may be closed). Loss on process restart before the
-    # callback fires is accepted at-most-once behavior; a periodic reaper backstop
-    # for that loss (and for pre-existing orphans) is tracked as a follow-up in
-    # #1280 — there is no shipped reaper yet.
+    # callback fires is accepted at-most-once behavior. The periodic orphan
+    # reaper is the backstop for that loss and for pre-existing attributable
+    # provider sandboxes; it applies its own grace and exact-ownership checks.
     if sandbox.e2b_sandbox_id:
         provider_sandbox_id = sandbox.e2b_sandbox_id
         template_ref = sandbox.e2b_template_ref

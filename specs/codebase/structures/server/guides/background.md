@@ -96,6 +96,11 @@ A domain that runs background work owns at most a `worker/service.py` and shared
 reconciliation loop — those are the substrate's job (Beat) or do not exist (one
 process is the Celery worker fleet).
 
+The Cloud orphan-sandbox reaper is the concrete periodic example: Beat owns its
+five-minute schedule, `background/tasks/cloud_sandboxes.py` only opens a session
+and calls the domain, and `server/cloud/worker/service.py` owns provider
+attribution, the advisory singleton, the grace window, and cleanup decisions.
+
 ## The outbox
 
 On-demand jobs that must survive a restart use the **transactional outbox**. The

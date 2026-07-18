@@ -16,6 +16,7 @@ celery_app.conf.beat_schedule = build_beat_schedule()
 # task_metrics connects the worker-side success/retry/failure signal handlers.
 # All imported for side effects; no symbol is used directly here.
 import proliferate.background.task_metrics  # noqa: E402,F401
+import proliferate.background.tasks.cloud_sandboxes  # noqa: E402,F401
 import proliferate.background.tasks.customerio_sync  # noqa: E402,F401
 import proliferate.background.tasks.health  # noqa: E402,F401
 import proliferate.background.tasks.notifications  # noqa: E402,F401

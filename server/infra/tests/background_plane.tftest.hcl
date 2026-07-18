@@ -64,6 +64,21 @@ run "valid_rebound_external" {
   }
 }
 
+# Valid: the optional Cloud provider pair is complete. The key is supplied only
+# as a base Secrets Manager ARN; ECS owns field projection at task start, while
+# the non-secret template is an ordinary environment value.
+run "valid_cloud_provider_pair" {
+  command = plan
+  variables {
+    background_broker_enabled         = false
+    background_services_enabled       = true
+    celery_broker_url_secret_arn      = "arn:aws:secretsmanager:us-east-1:111122223333:secret:existing-broker"
+    redbeat_redis_url_secret_arn      = "arn:aws:secretsmanager:us-east-1:111122223333:secret:existing-store"
+    background_e2b_api_key_secret_arn = "arn:aws:secretsmanager:us-east-1:111122223333:secret:server-app-Ab12Cd"
+    background_e2b_template_name      = "team/proliferate-runtime-cloud:staging"
+  }
+}
+
 # Invalid: services on, broker off, no external secrets. This is the partial
 # combo that would create services with no connection secrets. It must fail at
 # plan time on the background_services_enabled validation.
@@ -90,5 +105,53 @@ run "invalid_partial_one_secret_fails" {
   }
   expect_failures = [
     var.background_services_enabled,
+  ]
+}
+
+# Invalid: either half of the provider pair on its own would make the reaper
+# silently inert or unable to authenticate, so both partial shapes fail closed.
+run "invalid_e2b_key_without_template_fails" {
+  command = plan
+  variables {
+    background_broker_enabled         = false
+    background_services_enabled       = true
+    celery_broker_url_secret_arn      = "arn:aws:secretsmanager:us-east-1:111122223333:secret:existing-broker"
+    redbeat_redis_url_secret_arn      = "arn:aws:secretsmanager:us-east-1:111122223333:secret:existing-store"
+    background_e2b_api_key_secret_arn = "arn:aws:secretsmanager:us-east-1:111122223333:secret:server-app-Ab12Cd"
+  }
+  expect_failures = [
+    var.background_e2b_api_key_secret_arn,
+  ]
+}
+
+run "invalid_e2b_template_without_key_fails" {
+  command = plan
+  variables {
+    background_broker_enabled    = false
+    background_services_enabled  = true
+    celery_broker_url_secret_arn = "arn:aws:secretsmanager:us-east-1:111122223333:secret:existing-broker"
+    redbeat_redis_url_secret_arn = "arn:aws:secretsmanager:us-east-1:111122223333:secret:existing-store"
+    background_e2b_template_name = "team/proliferate-runtime-cloud:staging"
+  }
+  expect_failures = [
+    var.background_e2b_api_key_secret_arn,
+  ]
+}
+
+# Invalid: callers provide the base secret only. Accepting a pre-projected ARN
+# would produce a double field selector when the task definition adds its exact
+# E2B_API_KEY projection.
+run "invalid_e2b_field_projection_fails" {
+  command = plan
+  variables {
+    background_broker_enabled         = false
+    background_services_enabled       = true
+    celery_broker_url_secret_arn      = "arn:aws:secretsmanager:us-east-1:111122223333:secret:existing-broker"
+    redbeat_redis_url_secret_arn      = "arn:aws:secretsmanager:us-east-1:111122223333:secret:existing-store"
+    background_e2b_api_key_secret_arn = "arn:aws:secretsmanager:us-east-1:111122223333:secret:server-app-Ab12Cd:E2B_API_KEY::"
+    background_e2b_template_name      = "team/proliferate-runtime-cloud:staging"
+  }
+  expect_failures = [
+    var.background_e2b_api_key_secret_arn,
   ]
 }
