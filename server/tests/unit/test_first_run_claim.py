@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncGenerator
 from pathlib import Path
 
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from starlette.types import Message, Receive, Scope, Send
 
 from proliferate.auth.identity.store import create_auth_user
 from proliferate.auth.passwords import verify_password
@@ -18,6 +20,7 @@ from proliferate.constants.organizations import (
     ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
     ORGANIZATION_ROLE_OWNER,
 )
+from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
 from proliferate.db.models.organizations import Organization, OrganizationMembership
 from proliferate.db.store import instance_setup as instance_setup_store
@@ -305,37 +308,50 @@ async def test_claim_creates_owner_and_instance_org(single_org_client, test_engi
     assert not _token_file(tmp_path).exists()
 
 
-async def test_claim_then_immediate_password_login_succeeds(
-    single_org_client, test_engine, tmp_path
+async def test_claim_session_commit_finishes_before_response_starts(
+    test_engine, monkeypatch, tmp_path
 ):
-    """The owner can authenticate on the very next request after claiming /setup.
+    """The setup transaction commits before the ASGI response starts."""
+    from proliferate.db import engine as engine_module
+    from proliferate.main import create_app
 
-    Regression for the Tier-3 T3-INT-1 failure (Actions run 29602686092): the
-    claim handler only `flush()`ed the owner-account write and relied on
-    `get_async_session`'s commit-on-cleanup, which FastAPI runs AFTER the
-    response is sent. A client that claims and then immediately calls
-    `POST /auth/desktop/password/login` (the desktop first-run flow and the
-    qualification harness) could hit the user-not-found branch of
-    `authenticate_password_user` and get a spurious 401. The claim handler now
-    commits explicitly before returning, matching every sibling auth write
-    endpoint, so the owner row is durable before the 2xx leaves the server.
-    """
+    _enable_single_org(monkeypatch, tmp_path)
+    monkeypatch.setattr(engine_module, "engine", test_engine)
+    monkeypatch.setattr(engine_module, "async_session_factory", _factory(test_engine))
+
     token = await _seed_setup_token(test_engine, tmp_path)
+    app = create_app()
+    commit_finished = False
+    commit_state_at_response_start: list[bool] = []
 
-    claimed = await single_org_client.post(
-        "/setup",
-        data={"email": CLAIM_EMAIL, "password": CLAIM_PASSWORD, "setup_token": token},
-    )
+    async def observed_session() -> AsyncGenerator[AsyncSession, None]:
+        nonlocal commit_finished
+        async with _factory(test_engine)() as session:
+            yield session
+            await session.commit()
+            commit_finished = True
+
+    app.dependency_overrides[get_async_session] = observed_session
+
+    async def observed_app(scope: Scope, receive: Receive, send: Send) -> None:
+        async def observe_response_start(message: Message) -> None:
+            if message["type"] == "http.response.start" and scope["path"] == "/setup":
+                commit_state_at_response_start.append(commit_finished)
+            await send(message)
+
+        await app(scope, receive, observe_response_start)
+
+    async with AsyncClient(
+        transport=ASGITransport(app=observed_app),
+        base_url="http://test",
+    ) as client:
+        claimed = await client.post(
+            "/setup",
+            data={"email": CLAIM_EMAIL, "password": CLAIM_PASSWORD, "setup_token": token},
+        )
+
     assert claimed.status_code == 200
-
-    login = await single_org_client.post(
-        "/auth/desktop/password/login",
-        json={"email": CLAIM_EMAIL, "password": CLAIM_PASSWORD},
-    )
-    assert login.status_code == 200, login.text
-    body = login.json()
-    assert body.get("access_token")
-    assert body.get("user", {}).get("email") == CLAIM_EMAIL
+    assert commit_state_at_response_start == [True]
 
 
 async def test_claim_honors_custom_organization_name(single_org_client, test_engine, tmp_path):
