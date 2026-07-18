@@ -7,6 +7,7 @@ import {
   GATEWAY_PROVIDER_ID,
   HARNESSES_WITHOUT_GATEWAY_AUTH_SLOT,
   LOCAL6_REPRESENTATIVE_HARNESS,
+  NoEligibleGatewayModelError,
   assertOpencodeProviderSource,
   buildLocalRouteTurnEvidence,
   collectLocal2GatewayCells,
@@ -360,6 +361,22 @@ test("LOCAL-2: an empty assistant reply fails the cell and still closes the worl
   assert.ok(calls.includes("closeWorld"));
 });
 
+test("LOCAL-2: no eligible gateway model (live probe ∩ allowlist empty) maps to a typed blocked cell, not failed", async () => {
+  const { driver, calls } = fakeDriver();
+  driver.resolveRouteModel = async (_w, _p, harness, route) => {
+    calls.push(`resolveRouteModel:${harness}:${route}`);
+    throw new NoEligibleGatewayModelError(
+      `[${harness}] no eligible non-Fable gateway model in the intersection of the qualification allowlist ` +
+        "and AnyHarness's live gateway probe",
+    );
+  };
+  const [outcome] = await collectLocal2GatewayCells(fakeCtx(), [cell("T3-CHAT-1", { harness: "grok" })], driver);
+  assert.equal(outcome.status, "blocked");
+  assert.equal(outcome.reason?.code, "scenario_blocked");
+  assert.match(outcome.reason?.message ?? "", /no eligible non-Fable gateway model/);
+  assert.ok(calls.includes("closeWorld"));
+});
+
 // ── LOCAL-3 (user-key per harness) ─────────────────────────────────────────────
 
 test("LOCAL-3: a user-key harness is green with route=user_key, zero-isolation, and no gateway spend", async () => {
@@ -455,6 +472,26 @@ test("LOCAL-6: a route switch that reuses the same session id fails (route not p
   const outcome = await collectLocal6RouteChangeCell(fakeCtx(), cell("T3-AUTHROUTE-1", { route: "change" }), driver);
   assert.equal(outcome.status, "failed");
   assert.match(outcome.reason?.message ?? "", /new session/i);
+});
+
+test("LOCAL-6: no eligible gateway model on the route=change gateway leg maps to a typed blocked cell, not failed", async () => {
+  const { driver, calls } = fakeDriver();
+  driver.resolveRouteModel = async (_w, _p, harness, route) => {
+    calls.push(`resolveRouteModel:${harness}:${route}`);
+    if (route === "gateway") {
+      throw new NoEligibleGatewayModelError(
+        `[${harness}] no eligible non-Fable gateway model in the intersection of the qualification allowlist ` +
+          "and AnyHarness's live gateway probe",
+      );
+    }
+    return { route, modelId: "claude-haiku-4-5", providerId: "anthropic" };
+  };
+  const outcome = await collectLocal6RouteChangeCell(fakeCtx(), cell("T3-AUTHROUTE-1", { route: "change" }), driver);
+  assert.equal(outcome.status, "blocked");
+  assert.equal(outcome.reason?.code, "scenario_blocked");
+  assert.match(outcome.reason?.message ?? "", /no eligible non-Fable gateway model/);
+  // The user-key leg ran first and succeeded before the gateway leg's block.
+  assert.ok(calls.includes("sendBoundedTurn:user_key"));
 });
 
 // ── Batch lifecycle: world construction, cleanup, non-world-backed ────────────
