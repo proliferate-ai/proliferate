@@ -96,7 +96,7 @@
 - name: REDBEAT_REDIS_URL
   secret: true
   default: "redis://127.0.0.1:6379/0"
-  description: Redis URL for redbeat scheduler metadata; not a Celery broker
+  description: Redis URL for RedBeat scheduler metadata and shared cross-process leases, including Cloud materialization; hosted deployments require a secret-backed non-loopback endpoint, and Redis is not the Celery broker
   tags: [local-dev, self-hosted, production]
 
 - name: REDBEAT_KEY_PREFIX

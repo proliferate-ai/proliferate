@@ -264,11 +264,18 @@ portions as current creation behavior.
 
 ## Failure Boundaries
 
+An upstream GitHub 5xx while loading repository metadata or branches returns
+`github_service_unavailable` with HTTP 503 and retry guidance. It remains a
+reportable provider failure; it does not change GitHub App authorization or
+installation state and must not prompt the user to reauthorize or reinstall.
+When GitHub supplies a valid numeric `Retry-After` value, the server forwards
+it in the HTTP response header without exposing the provider response body.
+
 | Symptom | First evidence |
 | --- | --- |
 | Repository cannot be configured | GitHub authority and `repo_environment` validation |
 | Repository preparation fails | `cloud_repo_environment_materialization.status` and `last_error` |
-| Provider or runtime reconnect fails | `cloud_sandbox` runtime access, materialization logs, E2B, and AnyHarness health |
+| Provider or runtime reconnect fails | Start with `cloud_sandbox.status`, its secret-safe `last_error`, and the exact current `provider_sandbox_id`, then correlate materialization logs, E2B, and AnyHarness health. A retry reloads under the per-sandbox lock; only authoritative target-not-found may supersede that exact binding, while transient and configuration failures retain it. |
 | Existing workspace remains `materializing` | `cloud_workspace.anyharness_workspace_id` and row age |
 | Create failed after runtime worktree creation | Correlate the request, user, repository, and branch with the AnyHarness target path; its suffix carries only the attempted Cloud id's eight-character prefix. Include the AnyHarness workspace id when present and escalate suspected orphan cleanup. |
 | Cloud row is ready but runtime is unavailable | AnyHarness health through the sandbox gateway; do not infer health from the Cloud id |

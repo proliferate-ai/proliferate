@@ -7,7 +7,16 @@ import { withProductGate } from "../fixtures/product-gate.js";
 import { ApiClient } from "../fixtures/http.js";
 import { assertDurableIdentityAvailableForLane, loginDurableUserForLane } from "../fixtures/lane-identity.js";
 import { ensureCloudSandboxRow, getCloudSandbox, withCloudSandboxBillingGate } from "../fixtures/cloud-sandbox.js";
-import { e2bVerificationAvailable, findProviderSandbox, readProviderSandboxFile } from "../fixtures/e2b-verify.js";
+import {
+  e2bVerificationAvailable,
+  execInProviderSandbox,
+  findProviderSandbox,
+  readProviderSandboxFile,
+} from "../fixtures/e2b-verify.js";
+import {
+  runScopedWorkspaceSecretPath,
+  withWorkspaceSecretLifecycle,
+} from "../fixtures/workspace-secret-lifecycle.js";
 import { DEFAULT_GITHUB_TEST_REPO } from "../config/env-manifest.js";
 import {
   githubAppSeedAvailable,
@@ -154,7 +163,6 @@ async function runReal(ctx: ScenarioRunContext): Promise<void> {
   assert.ok(sandbox, "T3-SEC-MAT-1: the durable user must have a personal cloud sandbox after materialization");
 
   if (!e2bVerificationAvailable()) {
-    await runWorkspaceFileSecretHalf(ctx, client, organizationId as string);
     throw new ScenarioExpectedFailError(
       "T3-SEC-MAT-1: personal + org secret PUT verified for real, and materialization.status reached " +
         "'ready' (the server's own signal that it wrote the sandbox files). The in-sandbox byte-level " +
@@ -188,7 +196,7 @@ async function runReal(ctx: ScenarioRunContext): Promise<void> {
   assert.equal(readyAgain?.materialization?.status, "ready", "T3-SEC-MAT-1: personal secrets must return to ready");
   await assertGlobalEnvContains(providerSandboxId, [{ name: personalName, value: updatedPersonalValue }]);
 
-  await runWorkspaceFileSecretHalf(ctx, client, organizationId as string);
+  await runWorkspaceFileSecretHalf(ctx, client);
 }
 
 async function assertGlobalEnvContains(
@@ -244,9 +252,7 @@ async function pollSecretsReady(
 async function runWorkspaceFileSecretHalf(
   ctx: ScenarioRunContext,
   client: ApiClient,
-  organizationId: string,
 ): Promise<void> {
-  void organizationId;
   const [owner, repo] = (process.env.RELEASE_E2E_GITHUB_TEST_REPO ?? DEFAULT_GITHUB_TEST_REPO).split("/");
   const durableEmail = process.env.RELEASE_E2E_DURABLE_USER_EMAIL;
 
@@ -308,38 +314,157 @@ async function runWorkspaceFileSecretHalf(
   }
   assert.equal(environment.defaultBranch, "develop", "T3-SEC-MAT-1: repo environment default branch must round-trip");
 
-  const secretPath = ".proliferate-secret/t3-sec-mat-1.txt";
+  assert.ok(ctx.runIdentity, "T3-SEC-MAT-1: a real run must carry its run identity");
+  const secretPath = runScopedWorkspaceSecretPath(ctx.runIdentity);
   const secretContent = `t3-sec-mat-1-workspace-secret-${randomUUID().slice(0, 8)}`;
-  await client.put(`/v1/cloud/repos/${owner}/${repo}/secrets/files`, { path: secretPath, content: secretContent });
-
   const branchName = `t3-sec-mat-1-${randomUUID().slice(0, 8)}`;
-  const workspace = await client.post<{ id: string; status: string }>("/v1/cloud/workspaces", {
-    gitProvider: "github",
-    gitOwner: owner,
-    gitRepoName: repo,
-    baseBranch: "develop",
-    branchName,
-    source: "web",
-  });
-
-  try {
-    const ready = await pollWorkspaceReady(client, workspace.id, { timeoutMs: 180_000 });
-    assert.equal(ready?.status, "ready", "T3-SEC-MAT-1: fresh cloud workspace must reach status=ready");
-
+  const repoPath = `/home/user/workspace/repos/${owner}/${repo}`;
+  const workspaceEnvPath = `${repoPath}/.proliferate/env/workspace.env`;
+  const workspaceManifestPath = `${repoPath}/.proliferate/env/workspace.manifest.json`;
+  const materializedSecretPath = `${repoPath}/${secretPath}`;
+  let resolvedProviderSandboxId: string | null = null;
+  const resolveProviderSandboxId = async (): Promise<string> => {
+    if (resolvedProviderSandboxId !== null) {
+      return resolvedProviderSandboxId;
+    }
     const sandbox = await getCloudSandbox(client);
     assert.ok(sandbox, "T3-SEC-MAT-1: the workspace's personal cloud sandbox must exist");
     const found = await findProviderSandbox((sandbox as { id: string }).id);
     assert.ok(found.providerSandboxId, "T3-SEC-MAT-1: must resolve the provider sandbox via E2B metadata");
+    resolvedProviderSandboxId = found.providerSandboxId as string;
+    return resolvedProviderSandboxId;
+  };
 
-    const workspaceEnvPath = `/home/user/workspace/repos/${owner}/${repo}/.proliferate/env/workspace.env`;
-    const workspaceEnvRead = await readProviderSandboxFile(found.providerSandboxId as string, workspaceEnvPath);
-    assert.ok(
-      workspaceEnvRead.content,
-      `T3-SEC-MAT-1: ${workspaceEnvPath} must exist and be readable (error: ${workspaceEnvRead.error})`,
-    );
-  } finally {
-    await client.delete(`/v1/cloud/workspaces/${workspace.id}`).catch(() => undefined);
-  }
+  await withWorkspaceSecretLifecycle({
+    client,
+    owner,
+    repo,
+    secretPath,
+    secretContent,
+    workspaceRequest: {
+      gitProvider: "github",
+      gitOwner: owner,
+      gitRepoName: repo,
+      baseBranch: "develop",
+      branchName,
+      source: "web",
+    },
+    exercise: async (workspace) => {
+      const ready = await pollWorkspaceReady(client, workspace.id, { timeoutMs: 180_000 });
+      assert.equal(ready?.status, "ready", "T3-SEC-MAT-1: fresh cloud workspace must reach status=ready");
+
+      const readyWorkspaceSecrets = await pollSecretsReady(client, `/v1/cloud/repos/${owner}/${repo}/secrets`, {
+        timeoutMs: 60_000,
+      });
+      assert.equal(
+        readyWorkspaceSecrets?.materialization?.status,
+        "ready",
+        "T3-SEC-MAT-1: workspace secrets must reach ready",
+      );
+
+      const providerSandboxId = await resolveProviderSandboxId();
+      const workspaceEnvRead = await readProviderSandboxFile(providerSandboxId, workspaceEnvPath);
+      const secretRead = await readProviderSandboxFile(providerSandboxId, materializedSecretPath);
+      const workspaceManifestRead = await readProviderSandboxFile(providerSandboxId, workspaceManifestPath);
+      assertWorkspaceSecretMaterialized({
+        workspaceEnvPath,
+        workspaceEnvRead,
+        secretPath: materializedSecretPath,
+        secretRead,
+        secretContent,
+        manifestPath: workspaceManifestPath,
+        manifestRead: workspaceManifestRead,
+      });
+    },
+    verifySecretAbsent: async () =>
+      pollWorkspaceSecretAbsent(
+        await resolveProviderSandboxId(),
+        materializedSecretPath,
+        workspaceManifestPath,
+        { timeoutMs: 60_000 },
+      ),
+  });
+}
+
+export function assertWorkspaceSecretMaterialized(input: {
+  workspaceEnvPath: string;
+  workspaceEnvRead: { content: string | null; error: string | null };
+  secretPath: string;
+  secretRead: { content: string | null; error: string | null };
+  secretContent: string;
+  manifestPath: string;
+  manifestRead: { content: string | null; error: string | null };
+}): void {
+  assert.notEqual(
+    input.workspaceEnvRead.content,
+    null,
+    `T3-SEC-MAT-1: ${input.workspaceEnvPath} must exist and be readable (error: ${input.workspaceEnvRead.error})`,
+  );
+  assert.notEqual(
+    input.secretRead.content,
+    null,
+    `T3-SEC-MAT-1: ${input.secretPath} must contain the workspace file secret (error: ${input.secretRead.error})`,
+  );
+  assert.notEqual(
+    input.manifestRead.content,
+    null,
+    `T3-SEC-MAT-1: ${input.manifestPath} must exist and be readable (error: ${input.manifestRead.error})`,
+  );
+
+  const manifest = JSON.parse(input.manifestRead.content as string) as SecretManifest;
+  const expectedSha256 = createHash("sha256").update(input.secretContent, "utf8").digest("hex");
+  const materializedSha256 = createHash("sha256")
+    .update(input.secretRead.content as string, "utf8")
+    .digest("hex");
+  assert.equal(
+    materializedSha256,
+    expectedSha256,
+    `T3-SEC-MAT-1: sha256(content) for ${input.secretPath} must match the workspace file secret`,
+  );
+  assert.equal(
+    manifest.files[input.secretPath],
+    expectedSha256,
+    `T3-SEC-MAT-1: manifest sha256 for ${input.secretPath} must match sha256(content)`,
+  );
+}
+
+async function pollWorkspaceSecretAbsent(
+  providerSandboxId: string,
+  secretPath: string,
+  manifestPath: string,
+  options: { timeoutMs: number; pollMs?: number },
+): Promise<void> {
+  const pollMs = options.pollMs ?? 2000;
+  const deadline = Date.now() + options.timeoutMs;
+  let fileAbsent = false;
+  let manifestOwnsSecret = true;
+  do {
+    const existence = await execInProviderSandbox(providerSandboxId, ["test", "!", "-e", secretPath]);
+    fileAbsent = existence.exitCode === 0;
+    const manifestExistence = await execInProviderSandbox(providerSandboxId, ["test", "!", "-e", manifestPath]);
+    if (manifestExistence.exitCode === 0) {
+      manifestOwnsSecret = false;
+    } else {
+      const manifestRead = await readProviderSandboxFile(providerSandboxId, manifestPath);
+      try {
+        const manifest = JSON.parse(manifestRead.content as string) as SecretManifest;
+        manifestOwnsSecret = Object.hasOwn(manifest.files, secretPath);
+      } catch {
+        manifestOwnsSecret = true;
+      }
+    }
+    if (fileAbsent && !manifestOwnsSecret) {
+      return;
+    }
+    if (Date.now() < deadline) {
+      await sleep(pollMs);
+    }
+  } while (Date.now() < deadline);
+
+  assert.fail(
+    `T3-SEC-MAT-1: workspace secret cleanup did not propagate within ${options.timeoutMs}ms ` +
+      `(fileAbsent=${fileAbsent}, manifestOwnsSecret=${manifestOwnsSecret})`,
+  );
 }
 
 async function pollWorkspaceReady(

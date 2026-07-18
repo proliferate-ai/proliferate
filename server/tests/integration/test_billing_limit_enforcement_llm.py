@@ -67,10 +67,16 @@ class _StubLiteLLM:
             monkeypatch.setattr(target, "set_key_budget", self.set_key_budget, raising=False)
             monkeypatch.setattr(target, "page_spend_logs", self.page_spend_logs, raising=False)
 
-    async def ensure_team(self, *, alias: str, max_budget: float | None = None) -> str:
+    async def ensure_team(
+        self,
+        *,
+        alias: str,
+        max_budget: float | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> str:
         return f"team-{alias}"
 
-    async def ensure_user(self, *, user_id: str) -> str:
+    async def ensure_user(self, *, user_id: str, metadata: dict[str, Any] | None = None) -> str:
         return user_id
 
     async def mint_virtual_key(

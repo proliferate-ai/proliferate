@@ -81,6 +81,27 @@ see [Releases](releases.md).
 
 ## Surface Notes
 
+- The server lane derives the stable staging/production server-app secret name
+  from `server/deploy/hosted-redis-contract.json`; it does not accept a Redis
+  secret ARN from a GitHub Environment variable. The workflow and the isolated
+  `server/infra/hosted-redis/` Terraform root consume that same file. Terraform
+  owns the four dedicated exact-secret child policies. Its one-time
+  configuration-driven adoption imported the two pre-existing deploy policies
+  and created the two missing ECS execution policies only after the saved plan
+  proved two imports, two creates, and no other managed change. It does not
+  remove pre-existing bundled secret grants. The workflow
+  binds the expected account, region, deploy role, live task execution role, and
+  secret identity; suppresses provider errors; rejects literal or DNS-resolved
+  loopback/unspecified Redis endpoints; and authors the exact field projection
+  on every API task revision. If the optional background plane is configured,
+  worker and Beat registration also fails closed unless each task carries the
+  contract execution role and exactly one environment-owned direct Secrets
+  Manager or Parameter Store Redis reference, with no plaintext or
+  field-projected duplicate. The resolved base
+  ARN remains step-scoped and is
+  obtained after every third-party action's main phase. The first-party render
+  and background re-image steps remove their private identifier-bearing scratch
+  files on every exit before those actions' post-job hooks execute.
 - Worker deployment is a no-op while `WORKERS_DEPLOY_ENABLED=false`. Enabling
   it before a canonical service and command exist deliberately fails.
 - The nightly and hotfix coordinators have no LiteLLM job. Deploy an exact

@@ -110,6 +110,29 @@ export async function shouldDiscardSupersededSessionCreation(
   return disposition === "committed";
 }
 
+/**
+ * Linearizes the final local publication of a materialized session against a
+ * replace-in-place request. `publish` runs synchronously in the same turn as
+ * the last supersession lookup, so a replacement can only happen entirely
+ * before publication or observe the published runtime id afterward.
+ */
+export async function publishSessionCreationIfCurrent(input: {
+  sessionId: string;
+  onSuperseded: () => Promise<boolean>;
+  publish: () => void;
+}): Promise<boolean> {
+  while (true) {
+    const supersession = supersessionBySessionId.get(input.sessionId);
+    if (!supersession || supersession.disposition === "rolled_back") {
+      input.publish();
+      return true;
+    }
+    if (await input.onSuperseded()) {
+      return false;
+    }
+  }
+}
+
 function resolveSupersession(
   sessionId: string,
   disposition: SupersessionDisposition,

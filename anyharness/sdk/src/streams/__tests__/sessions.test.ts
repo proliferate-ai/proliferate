@@ -134,6 +134,77 @@ describe("streamSession", () => {
     expect(globalThis.fetch).toHaveBeenCalledOnce();
   });
 
+  it("forwards an explicit close reason to the stream abort signal", async () => {
+    let observedReason: unknown;
+    let resolveAborted: (() => void) | undefined;
+    const aborted = new Promise<void>((resolve) => {
+      resolveAborted = resolve;
+    });
+    const onError = vi.fn();
+
+    globalThis.fetch = vi.fn((_input, init) => new Promise<Response>((_resolve, reject) => {
+      const signal = init?.signal;
+      if (!signal) {
+        reject(new Error("Expected a stream abort signal"));
+        return;
+      }
+      signal.addEventListener("abort", () => {
+        observedReason = signal.reason;
+        resolveAborted?.();
+        reject(signal.reason);
+      }, { once: true });
+    })) as typeof fetch;
+
+    const reason = new Error("expected stale close");
+    const handle = streamSession({
+      baseUrl: "http://runtime.test",
+      sessionId: "s1",
+      onEvent: () => undefined,
+      onError,
+    });
+    handle.close(reason);
+    await aborted;
+    await Promise.resolve();
+
+    expect(observedReason).toBe(reason);
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it("keeps the platform AbortError for ordinary stream closes", async () => {
+    let observedReason: unknown;
+    let resolveAborted: (() => void) | undefined;
+    const aborted = new Promise<void>((resolve) => {
+      resolveAborted = resolve;
+    });
+    const onError = vi.fn();
+
+    globalThis.fetch = vi.fn((_input, init) => new Promise<Response>((_resolve, reject) => {
+      const signal = init?.signal;
+      if (!signal) {
+        reject(new Error("Expected a stream abort signal"));
+        return;
+      }
+      signal.addEventListener("abort", () => {
+        observedReason = signal.reason;
+        resolveAborted?.();
+        reject(signal.reason);
+      }, { once: true });
+    })) as typeof fetch;
+
+    const handle = streamSession({
+      baseUrl: "http://runtime.test",
+      sessionId: "s1",
+      onEvent: () => undefined,
+      onError,
+    });
+    handle.close();
+    await aborted;
+    await Promise.resolve();
+
+    expect(observedReason).toMatchObject({ name: "AbortError" });
+    expect(onError).not.toHaveBeenCalled();
+  });
+
   it("emits sanitized stream timing events", async () => {
     const timingEvents: AnyHarnessTimingEvent[] = [];
     setAnyHarnessTimingObserver((event) => timingEvents.push(event));

@@ -9,15 +9,22 @@ import {
 
 describe("plan handoff mode helpers", () => {
   it("returns the vetted handoff defaults for supported agent families", () => {
-    expect(resolvePlanHandoffModeId("claude")).toBe("bypassPermissions");
-    expect(resolvePlanHandoffModeId("codex")).toBe("full-access");
+    expect(resolvePlanHandoffModeId("claude", "bypassPermissions"))
+      .toBe("bypassPermissions");
+    expect(resolvePlanHandoffModeId("codex", "full-access")).toBe("full-access");
   });
 
-  it("falls back to the first non-plan mode when the static default is unavailable", () => {
+  it("omits the mode when catalog curation is absent or unsupported", () => {
     expect(resolvePlanHandoffModeIdFromOptions("missing", [
       { value: "default" },
       { value: "auto" },
-    ])).toBe("default");
+    ])).toBeUndefined();
+    expect(resolvePlanHandoffModeId("codex", null)).toBeUndefined();
+  });
+
+  it("keeps a target-owned mode selectable when static presentation is stale", () => {
+    expect(listPlanHandoffModeOptions("codex", "target-unattended"))
+      .toContainEqual(expect.objectContaining({ value: "target-unattended" }));
   });
 
   it("excludes plan mode from selectable options", () => {
@@ -31,9 +38,9 @@ describe("plan handoff mode helpers", () => {
   });
 
   it("returns undefined when no configured handoff mode exists", () => {
-    expect(resolvePlanHandoffModeId("")).toBeUndefined();
-    expect(resolvePlanHandoffModeId(null)).toBeUndefined();
-    expect(resolvePlanHandoffModeId(undefined)).toBeUndefined();
+    expect(resolvePlanHandoffModeId("", "full-access")).toBeUndefined();
+    expect(resolvePlanHandoffModeId(null, "full-access")).toBeUndefined();
+    expect(resolvePlanHandoffModeId(undefined, "full-access")).toBeUndefined();
   });
 
   it("resolves Codex collaboration mode back to default before prompting", () => {

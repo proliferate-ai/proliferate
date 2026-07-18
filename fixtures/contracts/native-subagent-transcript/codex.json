@@ -1,0 +1,208 @@
+{
+  "provider": "codex",
+  "sessionId": "session-1",
+  "turnId": "turn-1",
+  "parentId": "codex-agent-1",
+  "parentTerminalBeforeTurnEnd": false,
+  "childIds": [
+    "codex-send-input-1"
+  ],
+  "acpNotifications": [
+    {
+      "sessionId": "native-codex-session",
+      "update": {
+        "sessionUpdate": "tool_call",
+        "toolCallId": "codex-agent-1",
+        "title": "Inspect the repository",
+        "kind": "think",
+        "status": "in_progress",
+        "rawInput": {
+          "prompt": "Inspect the transcript pipeline"
+        },
+        "_meta": {
+          "anyharness": {
+            "nativeToolName": "Agent",
+            "toolKind": "subagent"
+          }
+        }
+      }
+    },
+    {
+      "sessionId": "native-codex-session",
+      "update": {
+        "sessionUpdate": "tool_call",
+        "toolCallId": "codex-send-input-1",
+        "title": "Send follow-up to child",
+        "kind": "other",
+        "status": "completed",
+        "rawInput": {
+          "id": "child-thread-1",
+          "message": "Check replay ordering too"
+        },
+        "_meta": {
+          "anyharness": {
+            "nativeToolName": "send_input",
+            "toolKind": "subagent",
+            "parentToolCallId": "codex-agent-1",
+            "futureActivity": {
+              "attempt": 1
+            }
+          }
+        }
+      }
+    }
+  ],
+  "events": [
+    {
+      "sessionId": "session-1",
+      "seq": 1,
+      "timestamp": "2026-07-17T00:00:01Z",
+      "turnId": "turn-1",
+      "event": {
+        "type": "turn_started"
+      }
+    },
+    {
+      "sessionId": "session-1",
+      "seq": 2,
+      "timestamp": "2026-07-17T00:00:02Z",
+      "turnId": "turn-1",
+      "itemId": "codex-agent-1",
+      "event": {
+        "type": "item_started",
+        "item": {
+          "kind": "tool_invocation",
+          "status": "in_progress",
+          "sourceAgentKind": "codex",
+          "title": "Inspect the repository",
+          "toolCallId": "codex-agent-1",
+          "nativeToolName": "Agent",
+          "rawInput": {
+            "prompt": "Inspect the transcript pipeline"
+          },
+          "contentParts": [
+            {
+              "type": "tool_call",
+              "toolCallId": "codex-agent-1",
+              "title": "Inspect the repository",
+              "toolKind": "subagent",
+              "nativeToolName": "Agent"
+            },
+            {
+              "type": "tool_input_text",
+              "text": "Inspect the transcript pipeline"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "sessionId": "session-1",
+      "seq": 3,
+      "timestamp": "2026-07-17T00:00:03Z",
+      "turnId": "turn-1",
+      "itemId": "codex-send-input-1",
+      "event": {
+        "type": "item_started",
+        "item": {
+          "kind": "tool_invocation",
+          "status": "completed",
+          "sourceAgentKind": "codex",
+          "title": "Send follow-up to child",
+          "toolCallId": "codex-send-input-1",
+          "nativeToolName": "send_input",
+          "parentToolCallId": "codex-agent-1",
+          "rawInput": {
+            "id": "child-thread-1",
+            "message": "Check replay ordering too"
+          },
+          "contentParts": [
+            {
+              "type": "tool_call",
+              "toolCallId": "codex-send-input-1",
+              "title": "Send follow-up to child",
+              "toolKind": "subagent",
+              "nativeToolName": "send_input"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "sessionId": "session-1",
+      "seq": 4,
+      "timestamp": "2026-07-17T00:00:04Z",
+      "turnId": "turn-1",
+      "itemId": "codex-send-input-1",
+      "event": {
+        "type": "item_completed",
+        "item": {
+          "kind": "tool_invocation",
+          "status": "completed",
+          "sourceAgentKind": "codex",
+          "title": "Send follow-up to child",
+          "toolCallId": "codex-send-input-1",
+          "nativeToolName": "send_input",
+          "parentToolCallId": "codex-agent-1",
+          "rawInput": {
+            "id": "child-thread-1",
+            "message": "Check replay ordering too"
+          },
+          "contentParts": [
+            {
+              "type": "tool_call",
+              "toolCallId": "codex-send-input-1",
+              "title": "Send follow-up to child",
+              "toolKind": "subagent",
+              "nativeToolName": "send_input"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "sessionId": "session-1",
+      "seq": 5,
+      "timestamp": "2026-07-17T00:00:05Z",
+      "turnId": "turn-1",
+      "itemId": "codex-agent-1",
+      "event": {
+        "type": "item_completed",
+        "item": {
+          "kind": "tool_invocation",
+          "status": "in_progress",
+          "sourceAgentKind": "codex",
+          "title": "Inspect the repository",
+          "toolCallId": "codex-agent-1",
+          "nativeToolName": "Agent",
+          "rawInput": {
+            "prompt": "Inspect the transcript pipeline"
+          },
+          "contentParts": [
+            {
+              "type": "tool_call",
+              "toolCallId": "codex-agent-1",
+              "title": "Inspect the repository",
+              "toolKind": "subagent",
+              "nativeToolName": "Agent"
+            },
+            {
+              "type": "tool_input_text",
+              "text": "Inspect the transcript pipeline"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "sessionId": "session-1",
+      "seq": 6,
+      "timestamp": "2026-07-17T00:00:06Z",
+      "turnId": "turn-1",
+      "event": {
+        "type": "turn_ended",
+        "stopReason": "end_turn"
+      }
+    }
+  ]
+}

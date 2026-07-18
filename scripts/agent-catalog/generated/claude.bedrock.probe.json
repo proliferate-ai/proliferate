@@ -1,21 +1,22 @@
 {
-  "probedAt": "2026-06-18T02:52:37.457623+00:00",
+  "probedAt": "2026-07-17T20:48:49.740807+00:00",
   "agentKind": "claude",
   "authContext": "bedrock",
   "attestation": {
-    "name": "@agentclientprotocol/claude-agent-acp",
-    "version": "0.44.0",
+    "name": "@proliferate/claude-agent-acp",
+    "version": "0.59.0-proliferate.1",
     "title": "Claude Agent"
   },
   "modelSource": "modelConfigOption",
   "nativeCli": {
-    "path": "/Users/pablohansen/.proliferate/anyharness/agents/claude/native/claude",
-    "version": "2.1.177 (Claude Code)"
+    "path": "/Users/pablohansen/.proliferate-local/anyharness/agents/claude/native/claude",
+    "version": "2.1.212 (Claude Code)"
   },
   "trials": [
     {
       "modelId": "global.anthropic.claude-fable-5",
       "accepted": true,
+      "name": "Fable",
       "configOptions": [
         {
           "category": "mode",
@@ -25,8 +26,13 @@
           "name": "Mode",
           "options": [
             {
+              "description": "Use a model classifier to approve/deny permission prompts",
+              "name": "Auto",
+              "value": "auto"
+            },
+            {
               "description": "Standard behavior, prompts for dangerous operations",
-              "name": "Default",
+              "name": "Manual",
               "value": "default"
             },
             {
@@ -54,30 +60,35 @@
         },
         {
           "category": "model",
-          "currentValue": "us.anthropic.claude-opus-4-8",
+          "currentValue": "global.anthropic.claude-fable-5",
           "description": "AI model to use",
           "id": "model",
           "name": "Model",
           "options": [
             {
-              "description": "Use the default model (currently Sonnet 4.5)",
+              "description": "Use the default model (currently Opus 4.8)",
               "name": "Default",
               "value": "default"
             },
             {
-              "description": "Sonnet 4.6 · Efficient for routine tasks",
+              "description": "Fable 5 · Most capable for your hardest and longest-running tasks",
+              "name": "Fable",
+              "value": "global.anthropic.claude-fable-5"
+            },
+            {
+              "description": "Sonnet 5 · Efficient for routine tasks",
               "name": "Sonnet",
+              "value": "us.anthropic.claude-sonnet-5"
+            },
+            {
+              "description": "Sonnet 4.6 · Previous Sonnet version",
+              "name": "Sonnet 4.6",
               "value": "us.anthropic.claude-sonnet-4-6"
             },
             {
               "description": "Sonnet 4.6 for long sessions",
-              "name": "Sonnet (1M context)",
+              "name": "Sonnet 4.6 (1M context)",
               "value": "us.anthropic.claude-sonnet-4-6[1m]"
-            },
-            {
-              "description": "Fable 5 · Most capable for your hardest and longest-running tasks",
-              "name": "Fable",
-              "value": "us.anthropic.claude-fable-5"
             },
             {
               "description": "Opus 4.1 · Legacy",
@@ -107,7 +118,7 @@
             {
               "description": "Opus 4.6 · Legacy",
               "name": "Opus 4.6",
-              "value": "opus"
+              "value": "us.anthropic.claude-opus-4-6-v1"
             },
             {
               "description": "Opus 4.6 for long sessions",
@@ -161,7 +172,6 @@
     {
       "modelId": "us.anthropic.claude-opus-4-8",
       "accepted": true,
-      "name": "Opus",
       "configOptions": [
         {
           "category": "mode",
@@ -171,8 +181,13 @@
           "name": "Mode",
           "options": [
             {
+              "description": "Use a model classifier to approve/deny permission prompts",
+              "name": "Auto",
+              "value": "auto"
+            },
+            {
               "description": "Standard behavior, prompts for dangerous operations",
-              "name": "Default",
+              "name": "Manual",
               "value": "default"
             },
             {
@@ -200,25 +215,15 @@
         },
         {
           "category": "model",
-          "currentValue": "us.anthropic.claude-opus-4-8",
+          "currentValue": "opus",
           "description": "AI model to use",
           "id": "model",
           "name": "Model",
           "options": [
             {
-              "description": "Use the default model (currently Sonnet 4.5)",
+              "description": "Use the default model (currently Opus 4.8)",
               "name": "Default",
               "value": "default"
-            },
-            {
-              "description": "Sonnet 4.6 · Efficient for routine tasks",
-              "name": "Sonnet",
-              "value": "us.anthropic.claude-sonnet-4-6"
-            },
-            {
-              "description": "Sonnet 4.6 for long sessions",
-              "name": "Sonnet (1M context)",
-              "value": "us.anthropic.claude-sonnet-4-6[1m]"
             },
             {
               "description": "Fable 5 · Most capable for your hardest and longest-running tasks",
@@ -226,39 +231,24 @@
               "value": "us.anthropic.claude-fable-5"
             },
             {
-              "description": "Opus 4.1 · Legacy",
-              "name": "Opus 4.1",
-              "value": "us.anthropic.claude-opus-4-1-20250805-v1:0"
+              "description": "Sonnet 5 · Efficient for routine tasks",
+              "name": "Sonnet",
+              "value": "us.anthropic.claude-sonnet-5"
             },
             {
-              "description": "Opus 4.8 · Best for everyday, complex tasks",
-              "name": "Opus",
-              "value": "us.anthropic.claude-opus-4-8"
+              "description": "Sonnet 4.6 · Previous Sonnet version",
+              "name": "Sonnet 4.6",
+              "value": "us.anthropic.claude-sonnet-4-6"
             },
             {
-              "description": "Opus 4.8 for long sessions",
-              "name": "Opus (1M context)",
-              "value": "us.anthropic.claude-opus-4-8[1m]"
+              "description": "Sonnet 4.6 for long sessions",
+              "name": "Sonnet 4.6 (1M context)",
+              "value": "us.anthropic.claude-sonnet-4-6[1m]"
             },
             {
-              "description": "Opus 4.7 · Legacy",
-              "name": "Opus 4.7",
-              "value": "us.anthropic.claude-opus-4-7"
-            },
-            {
-              "description": "Opus 4.7 for long sessions",
-              "name": "Opus 4.7 (1M context)",
-              "value": "us.anthropic.claude-opus-4-7[1m]"
-            },
-            {
-              "description": "Opus 4.6 · Legacy",
-              "name": "Opus 4.6",
+              "description": "Custom Opus model",
+              "name": "us.anthropic.claude-opus-4-8",
               "value": "opus"
-            },
-            {
-              "description": "Opus 4.6 for long sessions",
-              "name": "Opus 4.6 (1M context)",
-              "value": "us.anthropic.claude-opus-4-6-v1[1m]"
             },
             {
               "description": "Haiku 4.5 · Fastest for quick answers",
@@ -310,9 +300,14 @@
   "modes": {
     "availableModes": [
       {
+        "description": "Use a model classifier to approve/deny permission prompts",
+        "id": "auto",
+        "name": "Auto"
+      },
+      {
         "description": "Standard behavior, prompts for dangerous operations",
         "id": "default",
-        "name": "Default"
+        "name": "Manual"
       },
       {
         "description": "Auto-accept file edit operations",
@@ -346,8 +341,13 @@
       "name": "Mode",
       "options": [
         {
+          "description": "Use a model classifier to approve/deny permission prompts",
+          "name": "Auto",
+          "value": "auto"
+        },
+        {
           "description": "Standard behavior, prompts for dangerous operations",
-          "name": "Default",
+          "name": "Manual",
           "value": "default"
         },
         {
@@ -375,30 +375,35 @@
     },
     {
       "category": "model",
-      "currentValue": "us.anthropic.claude-opus-4-8",
+      "currentValue": "default",
       "description": "AI model to use",
       "id": "model",
       "name": "Model",
       "options": [
         {
-          "description": "Use the default model (currently Sonnet 4.5)",
+          "description": "Use the default model (currently Opus 4.8)",
           "name": "Default",
           "value": "default"
-        },
-        {
-          "description": "Sonnet 4.6 · Efficient for routine tasks",
-          "name": "Sonnet",
-          "value": "us.anthropic.claude-sonnet-4-6"
-        },
-        {
-          "description": "Sonnet 4.6 for long sessions",
-          "name": "Sonnet (1M context)",
-          "value": "us.anthropic.claude-sonnet-4-6[1m]"
         },
         {
           "description": "Fable 5 · Most capable for your hardest and longest-running tasks",
           "name": "Fable",
           "value": "us.anthropic.claude-fable-5"
+        },
+        {
+          "description": "Sonnet 5 · Efficient for routine tasks",
+          "name": "Sonnet",
+          "value": "us.anthropic.claude-sonnet-5"
+        },
+        {
+          "description": "Sonnet 4.6 · Previous Sonnet version",
+          "name": "Sonnet 4.6",
+          "value": "us.anthropic.claude-sonnet-4-6"
+        },
+        {
+          "description": "Sonnet 4.6 for long sessions",
+          "name": "Sonnet 4.6 (1M context)",
+          "value": "us.anthropic.claude-sonnet-4-6[1m]"
         },
         {
           "description": "Opus 4.1 · Legacy",
@@ -428,7 +433,7 @@
         {
           "description": "Opus 4.6 · Legacy",
           "name": "Opus 4.6",
-          "value": "opus"
+          "value": "us.anthropic.claude-opus-4-6-v1"
         },
         {
           "description": "Opus 4.6 for long sessions",
@@ -482,7 +487,7 @@
     {
       "modelId": "default",
       "name": "Default",
-      "description": "Use the default model (currently Sonnet 4.5)",
+      "description": "Use the default model (currently Opus 4.8)",
       "configOptions": [
         {
           "category": "mode",
@@ -492,8 +497,13 @@
           "name": "Mode",
           "options": [
             {
+              "description": "Use a model classifier to approve/deny permission prompts",
+              "name": "Auto",
+              "value": "auto"
+            },
+            {
               "description": "Standard behavior, prompts for dangerous operations",
-              "name": "Default",
+              "name": "Manual",
               "value": "default"
             },
             {
@@ -522,58 +532,6 @@
         {
           "category": "model",
           "currentValue": "default",
-          "description": "AI model to use",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        }
-      ]
-    },
-    {
-      "modelId": "us.anthropic.claude-sonnet-4-6",
-      "name": "Sonnet",
-      "description": "Sonnet 4.6 · Efficient for routine tasks",
-      "configOptions": [
-        {
-          "category": "mode",
-          "currentValue": "default",
-          "description": "Session permission mode",
-          "id": "mode",
-          "name": "Mode",
-          "options": [
-            {
-              "description": "Standard behavior, prompts for dangerous operations",
-              "name": "Default",
-              "value": "default"
-            },
-            {
-              "description": "Auto-accept file edit operations",
-              "name": "Accept Edits",
-              "value": "acceptEdits"
-            },
-            {
-              "description": "Planning mode, no actual tool execution",
-              "name": "Plan Mode",
-              "value": "plan"
-            },
-            {
-              "description": "Don't prompt for permissions, deny if not pre-approved",
-              "name": "Don't Ask",
-              "value": "dontAsk"
-            },
-            {
-              "description": "Bypass all permission checks",
-              "name": "Bypass Permissions",
-              "value": "bypassPermissions"
-            }
-          ],
-          "type": "select"
-        },
-        {
-          "category": "model",
-          "currentValue": "us.anthropic.claude-sonnet-4-6",
           "description": "AI model to use",
           "id": "model",
           "name": "Model",
@@ -605,86 +563,8 @@
               "value": "high"
             },
             {
-              "name": "Max",
-              "value": "max"
-            }
-          ],
-          "type": "select"
-        }
-      ]
-    },
-    {
-      "modelId": "us.anthropic.claude-sonnet-4-6[1m]",
-      "name": "Sonnet (1M context)",
-      "description": "Sonnet 4.6 for long sessions",
-      "configOptions": [
-        {
-          "category": "mode",
-          "currentValue": "default",
-          "description": "Session permission mode",
-          "id": "mode",
-          "name": "Mode",
-          "options": [
-            {
-              "description": "Standard behavior, prompts for dangerous operations",
-              "name": "Default",
-              "value": "default"
-            },
-            {
-              "description": "Auto-accept file edit operations",
-              "name": "Accept Edits",
-              "value": "acceptEdits"
-            },
-            {
-              "description": "Planning mode, no actual tool execution",
-              "name": "Plan Mode",
-              "value": "plan"
-            },
-            {
-              "description": "Don't prompt for permissions, deny if not pre-approved",
-              "name": "Don't Ask",
-              "value": "dontAsk"
-            },
-            {
-              "description": "Bypass all permission checks",
-              "name": "Bypass Permissions",
-              "value": "bypassPermissions"
-            }
-          ],
-          "type": "select"
-        },
-        {
-          "category": "model",
-          "currentValue": "us.anthropic.claude-sonnet-4-6[1m]",
-          "description": "AI model to use",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        },
-        {
-          "category": "thought_level",
-          "currentValue": "default",
-          "description": "Available effort levels for this model",
-          "id": "effort",
-          "name": "Effort",
-          "options": [
-            {
-              "name": "Default",
-              "value": "default"
-            },
-            {
-              "name": "Low",
-              "value": "low"
-            },
-            {
-              "name": "Medium",
-              "value": "medium"
-            },
-            {
-              "name": "High",
-              "value": "high"
+              "name": "Xhigh",
+              "value": "xhigh"
             },
             {
               "name": "Max",
@@ -708,8 +588,13 @@
           "name": "Mode",
           "options": [
             {
+              "description": "Use a model classifier to approve/deny permission prompts",
+              "name": "Auto",
+              "value": "auto"
+            },
+            {
               "description": "Standard behavior, prompts for dangerous operations",
-              "name": "Default",
+              "name": "Manual",
               "value": "default"
             },
             {
@@ -782,6 +667,261 @@
       ]
     },
     {
+      "modelId": "us.anthropic.claude-sonnet-5",
+      "name": "Sonnet",
+      "description": "Sonnet 5 · Efficient for routine tasks",
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "default",
+          "description": "Session permission mode",
+          "id": "mode",
+          "name": "Mode",
+          "options": [
+            {
+              "description": "Use a model classifier to approve/deny permission prompts",
+              "name": "Auto",
+              "value": "auto"
+            },
+            {
+              "description": "Standard behavior, prompts for dangerous operations",
+              "name": "Manual",
+              "value": "default"
+            },
+            {
+              "description": "Auto-accept file edit operations",
+              "name": "Accept Edits",
+              "value": "acceptEdits"
+            },
+            {
+              "description": "Planning mode, no actual tool execution",
+              "name": "Plan Mode",
+              "value": "plan"
+            },
+            {
+              "description": "Don't prompt for permissions, deny if not pre-approved",
+              "name": "Don't Ask",
+              "value": "dontAsk"
+            },
+            {
+              "description": "Bypass all permission checks",
+              "name": "Bypass Permissions",
+              "value": "bypassPermissions"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "us.anthropic.claude-sonnet-5",
+          "description": "AI model to use",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "default",
+          "description": "Available effort levels for this model",
+          "id": "effort",
+          "name": "Effort",
+          "options": [
+            {
+              "name": "Default",
+              "value": "default"
+            },
+            {
+              "name": "Low",
+              "value": "low"
+            },
+            {
+              "name": "Medium",
+              "value": "medium"
+            },
+            {
+              "name": "High",
+              "value": "high"
+            },
+            {
+              "name": "Xhigh",
+              "value": "xhigh"
+            },
+            {
+              "name": "Max",
+              "value": "max"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "us.anthropic.claude-sonnet-4-6",
+      "name": "Sonnet 4.6",
+      "description": "Sonnet 4.6 · Previous Sonnet version",
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "default",
+          "description": "Session permission mode",
+          "id": "mode",
+          "name": "Mode",
+          "options": [
+            {
+              "description": "Standard behavior, prompts for dangerous operations",
+              "name": "Manual",
+              "value": "default"
+            },
+            {
+              "description": "Auto-accept file edit operations",
+              "name": "Accept Edits",
+              "value": "acceptEdits"
+            },
+            {
+              "description": "Planning mode, no actual tool execution",
+              "name": "Plan Mode",
+              "value": "plan"
+            },
+            {
+              "description": "Don't prompt for permissions, deny if not pre-approved",
+              "name": "Don't Ask",
+              "value": "dontAsk"
+            },
+            {
+              "description": "Bypass all permission checks",
+              "name": "Bypass Permissions",
+              "value": "bypassPermissions"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "us.anthropic.claude-sonnet-4-6",
+          "description": "AI model to use",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "default",
+          "description": "Available effort levels for this model",
+          "id": "effort",
+          "name": "Effort",
+          "options": [
+            {
+              "name": "Default",
+              "value": "default"
+            },
+            {
+              "name": "Low",
+              "value": "low"
+            },
+            {
+              "name": "Medium",
+              "value": "medium"
+            },
+            {
+              "name": "High",
+              "value": "high"
+            },
+            {
+              "name": "Max",
+              "value": "max"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "us.anthropic.claude-sonnet-4-6[1m]",
+      "name": "Sonnet 4.6 (1M context)",
+      "description": "Sonnet 4.6 for long sessions",
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "default",
+          "description": "Session permission mode",
+          "id": "mode",
+          "name": "Mode",
+          "options": [
+            {
+              "description": "Standard behavior, prompts for dangerous operations",
+              "name": "Manual",
+              "value": "default"
+            },
+            {
+              "description": "Auto-accept file edit operations",
+              "name": "Accept Edits",
+              "value": "acceptEdits"
+            },
+            {
+              "description": "Planning mode, no actual tool execution",
+              "name": "Plan Mode",
+              "value": "plan"
+            },
+            {
+              "description": "Don't prompt for permissions, deny if not pre-approved",
+              "name": "Don't Ask",
+              "value": "dontAsk"
+            },
+            {
+              "description": "Bypass all permission checks",
+              "name": "Bypass Permissions",
+              "value": "bypassPermissions"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "us.anthropic.claude-sonnet-4-6[1m]",
+          "description": "AI model to use",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "default",
+          "description": "Available effort levels for this model",
+          "id": "effort",
+          "name": "Effort",
+          "options": [
+            {
+              "name": "Default",
+              "value": "default"
+            },
+            {
+              "name": "Low",
+              "value": "low"
+            },
+            {
+              "name": "Medium",
+              "value": "medium"
+            },
+            {
+              "name": "High",
+              "value": "high"
+            },
+            {
+              "name": "Max",
+              "value": "max"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
       "modelId": "us.anthropic.claude-opus-4-1-20250805-v1:0",
       "name": "Opus 4.1",
       "description": "Opus 4.1 · Legacy",
@@ -795,7 +935,7 @@
           "options": [
             {
               "description": "Standard behavior, prompts for dangerous operations",
-              "name": "Default",
+              "name": "Manual",
               "value": "default"
             },
             {
@@ -846,8 +986,13 @@
           "name": "Mode",
           "options": [
             {
+              "description": "Use a model classifier to approve/deny permission prompts",
+              "name": "Auto",
+              "value": "auto"
+            },
+            {
               "description": "Standard behavior, prompts for dangerous operations",
-              "name": "Default",
+              "name": "Manual",
               "value": "default"
             },
             {
@@ -932,8 +1077,13 @@
           "name": "Mode",
           "options": [
             {
+              "description": "Use a model classifier to approve/deny permission prompts",
+              "name": "Auto",
+              "value": "auto"
+            },
+            {
               "description": "Standard behavior, prompts for dangerous operations",
-              "name": "Default",
+              "name": "Manual",
               "value": "default"
             },
             {
@@ -1018,8 +1168,13 @@
           "name": "Mode",
           "options": [
             {
+              "description": "Use a model classifier to approve/deny permission prompts",
+              "name": "Auto",
+              "value": "auto"
+            },
+            {
               "description": "Standard behavior, prompts for dangerous operations",
-              "name": "Default",
+              "name": "Manual",
               "value": "default"
             },
             {
@@ -1104,8 +1259,13 @@
           "name": "Mode",
           "options": [
             {
+              "description": "Use a model classifier to approve/deny permission prompts",
+              "name": "Auto",
+              "value": "auto"
+            },
+            {
               "description": "Standard behavior, prompts for dangerous operations",
-              "name": "Default",
+              "name": "Manual",
               "value": "default"
             },
             {
@@ -1178,7 +1338,7 @@
       ]
     },
     {
-      "modelId": "opus",
+      "modelId": "us.anthropic.claude-opus-4-6-v1",
       "name": "Opus 4.6",
       "description": "Opus 4.6 · Legacy",
       "configOptions": [
@@ -1191,7 +1351,7 @@
           "options": [
             {
               "description": "Standard behavior, prompts for dangerous operations",
-              "name": "Default",
+              "name": "Manual",
               "value": "default"
             },
             {
@@ -1219,7 +1379,7 @@
         },
         {
           "category": "model",
-          "currentValue": "opus",
+          "currentValue": "us.anthropic.claude-opus-4-6-v1",
           "description": "AI model to use",
           "id": "model",
           "name": "Model",
@@ -1273,7 +1433,7 @@
           "options": [
             {
               "description": "Standard behavior, prompts for dangerous operations",
-              "name": "Default",
+              "name": "Manual",
               "value": "default"
             },
             {
@@ -1355,7 +1515,7 @@
           "options": [
             {
               "description": "Standard behavior, prompts for dangerous operations",
-              "name": "Default",
+              "name": "Manual",
               "value": "default"
             },
             {

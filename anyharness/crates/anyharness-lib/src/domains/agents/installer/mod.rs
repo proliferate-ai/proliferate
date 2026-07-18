@@ -6,6 +6,7 @@ pub(crate) mod managed_npm;
 pub mod manifest;
 mod npm;
 mod pinned;
+pub mod progress;
 pub mod reconcile;
 pub mod seed;
 mod service;
@@ -17,5 +18,6 @@ mod tests;
 pub use lock::AgentInstallLock;
 pub(crate) use service::regenerate_seeded_agent_launchers;
 pub use service::{
-    install_agent, install_agent_with_pins, InstallError, InstallOptions, InstalledArtifactResult,
+    install_agent, install_agent_with_pins, install_agent_with_pins_and_progress, InstallError,
+    InstallOptions, InstalledArtifactResult,
 };

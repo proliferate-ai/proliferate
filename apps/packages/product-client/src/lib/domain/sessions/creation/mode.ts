@@ -1,9 +1,7 @@
-import { resolveCoworkDefaultSessionModeId } from "#product/lib/domain/cowork/session-mode-defaults";
-
 export function resolveSessionCreationModeId(input: {
   explicitModeId?: string | null;
   workspaceSurface: string | null | undefined;
-  agentKind: string;
+  unattendedModeId?: string | null;
   preferredModeId?: string | null;
 }): string | undefined {
   const explicitModeId = input.explicitModeId?.trim() || undefined;
@@ -12,7 +10,7 @@ export function resolveSessionCreationModeId(input: {
   }
 
   if (input.workspaceSurface === "cowork") {
-    return resolveCoworkDefaultSessionModeId(input.agentKind);
+    return input.unattendedModeId?.trim() || undefined;
   }
 
   return input.preferredModeId?.trim() || undefined;

@@ -12,6 +12,17 @@ const EXPECTED_ANYHARNESS_HOSTING_AVAILABILITY_CODES = new Set([
   "HOSTING_REMOTE_UNSUPPORTED",
 ]);
 
+const EXPECTED_ANYHARNESS_COWORK_LIFECYCLE_CODES = new Set([
+  "COWORK_THREAD_NOT_FOUND",
+]);
+
+const EXPECTED_ANYHARNESS_REPOSITORY_VALIDATION_CODES = new Set([
+  "REPO_ROOT_NOT_GIT_REPO",
+  "REPO_ROOT_WORKTREE_UNSUPPORTED",
+  "REPO_WORKSPACE_NOT_GIT_REPO",
+  "REPO_WORKSPACE_WORKTREE_UNSUPPORTED",
+]);
+
 const EXPECTED_GITHUB_APP_STATE_CODES = new Set([
   "github_app_authorization_required",
   "github_app_authorization_expired",
@@ -140,6 +151,23 @@ export function isExpectedQueryTelemetryError(error: unknown): boolean {
   return code !== null
     && (
       EXPECTED_ANYHARNESS_HOSTING_AVAILABILITY_CODES.has(code)
+      || EXPECTED_ANYHARNESS_COWORK_LIFECYCLE_CODES.has(code)
       || EXPECTED_GITHUB_APP_STATE_CODES.has(code)
     );
+}
+
+/**
+ * Returns true only for typed repository-selection validation states that the
+ * owning mutation workflow already renders to the user. Other mutation
+ * failures remain reportable, including generic 4xx responses.
+ */
+export function isExpectedMutationTelemetryError(error: unknown): boolean {
+  const status = errorStatus(error);
+  if (status !== null && status >= 500) {
+    return false;
+  }
+
+  const code = errorCode(error);
+  return code !== null
+    && EXPECTED_ANYHARNESS_REPOSITORY_VALIDATION_CODES.has(code);
 }

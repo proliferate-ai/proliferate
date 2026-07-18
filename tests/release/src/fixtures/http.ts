@@ -98,8 +98,8 @@ export class ApiClient {
     throw lastError;
   }
 
-  async delete<TResponse>(path: string): Promise<TResponse> {
-    return this.request<TResponse>("DELETE", path);
+  async delete<TResponse>(path: string, body?: unknown): Promise<TResponse> {
+    return this.request<TResponse>("DELETE", path, body);
   }
 
   private async request<TResponse>(method: string, path: string, body?: unknown): Promise<TResponse> {

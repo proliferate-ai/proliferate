@@ -55,6 +55,29 @@ def test_oauth_scope_uses_configured_fallback_once() -> None:
     assert _authorization_scope(requested_scope) == ["search:read.public search:read.private"]
 
 
+def test_exact_oauth_scope_uses_configured_ceiling_for_subset_challenge() -> None:
+    requested_scope = _resolve_requested_oauth_scope(
+        challenged_scope="search:read.public",
+        configured_scopes=("search:read.public", "search:read.private"),
+        scopes_required=True,
+        scope_policy="exact",
+    )
+
+    assert requested_scope == "search:read.public search:read.private"
+
+
+def test_exact_oauth_scope_rejects_provider_escalation() -> None:
+    with pytest.raises(IntegrationOAuthProviderError) as exc_info:
+        _resolve_requested_oauth_scope(
+            challenged_scope="search:read.public chat:write",
+            configured_scopes=("search:read.public", "search:read.private"),
+            scopes_required=True,
+            scope_policy="exact",
+        )
+
+    assert exc_info.value.code == "oauth_scope_escalation"
+
+
 def test_oauth_scope_remains_optional_for_generic_providers() -> None:
     requested_scope = _resolve_requested_oauth_scope(
         challenged_scope=None,

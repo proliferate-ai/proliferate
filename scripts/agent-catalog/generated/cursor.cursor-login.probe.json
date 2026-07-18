@@ -1,13 +1,10 @@
 {
-  "probedAt": "2026-06-18T02:53:09.426103+00:00",
+  "probedAt": "2026-07-17T05:35:36.678732+00:00",
   "agentKind": "cursor",
   "authContext": "cursor-login",
   "attestation": null,
   "modelSource": "modelConfigOption",
-  "nativeCli": {
-    "path": "/Users/pablohansen/.proliferate/anyharness/agents/claude/native/claude",
-    "version": "2.1.177 (Claude Code)"
-  },
+  "nativeCli": null,
   "trials": [],
   "currentModelId": null,
   "currentModeId": "agent",
@@ -59,7 +56,7 @@
     },
     {
       "category": "model",
-      "currentValue": "gemini-3.1-pro[]",
+      "currentValue": "glm-5.2[reasoning=high]",
       "description": "Controls which model variant is used for responses",
       "id": "model",
       "name": "Model",
@@ -67,6 +64,10 @@
         {
           "name": "Auto",
           "value": "default[]"
+        },
+        {
+          "name": "grok-4.5",
+          "value": "grok-4.5[effort=high,fast=true]"
         },
         {
           "name": "composer-2.5",
@@ -77,8 +78,24 @@
           "value": "claude-opus-4-8[thinking=true,context=300k,effort=high,fast=false]"
         },
         {
+          "name": "gpt-5.6-sol",
+          "value": "gpt-5.6-sol[context=272k,reasoning=medium,fast=false]"
+        },
+        {
           "name": "gpt-5.5",
           "value": "gpt-5.5[context=272k,reasoning=medium,fast=false]"
+        },
+        {
+          "name": "claude-fable-5",
+          "value": "claude-fable-5[thinking=true,context=300k,effort=high]"
+        },
+        {
+          "name": "claude-sonnet-5",
+          "value": "claude-sonnet-5[thinking=true,context=300k,effort=high]"
+        },
+        {
+          "name": "gpt-5.6-terra",
+          "value": "gpt-5.6-terra[context=272k,reasoning=medium,fast=false]"
         },
         {
           "name": "claude-sonnet-4-6",
@@ -93,16 +110,12 @@
           "value": "claude-opus-4-7[thinking=true,context=300k,effort=xhigh,fast=false]"
         },
         {
-          "name": "grok-build-0.1",
-          "value": "grok-build-0.1[context=200k]"
-        },
-        {
           "name": "gpt-5.4",
           "value": "gpt-5.4[context=272k,reasoning=medium,fast=false]"
         },
         {
           "name": "claude-opus-4-6",
-          "value": "claude-opus-4-6[thinking=true,context=200k,effort=high,fast=false]"
+          "value": "claude-opus-4-6[thinking=true,context=200k,effort=high]"
         },
         {
           "name": "claude-opus-4-5",
@@ -111,6 +124,10 @@
         {
           "name": "gpt-5.2",
           "value": "gpt-5.2[reasoning=medium,fast=false]"
+        },
+        {
+          "name": "gpt-5.6-luna",
+          "value": "gpt-5.6-luna[context=272k,reasoning=medium,fast=false]"
         },
         {
           "name": "gemini-3.1-pro",
@@ -127,10 +144,6 @@
         {
           "name": "claude-haiku-4-5",
           "value": "claude-haiku-4-5[thinking=true]"
-        },
-        {
-          "name": "grok-4.3",
-          "value": "grok-4.3[context=200k]"
         },
         {
           "name": "claude-sonnet-4-5",
@@ -173,12 +186,12 @@
           "value": "gemini-2.5-flash[]"
         },
         {
-          "name": "kimi-k2.5",
-          "value": "kimi-k2.5[]"
+          "name": "kimi-k2.7-code",
+          "value": "kimi-k2.7-code[]"
         },
         {
-          "name": "claude-fable-5",
-          "value": "claude-fable-5[thinking=true,context=300k,effort=high]"
+          "name": "glm-5.2",
+          "value": "glm-5.2[reasoning=high]"
         }
       ],
       "type": "select"
@@ -218,6 +231,48 @@
         {
           "category": "model",
           "currentValue": "default[]",
+          "description": "Controls which model variant is used for responses",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        }
+      ]
+    },
+    {
+      "modelId": "grok-4.5[effort=high,fast=true]",
+      "name": "grok-4.5",
+      "description": null,
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "agent",
+          "description": "Controls how the agent executes tasks",
+          "id": "mode",
+          "name": "Mode",
+          "options": [
+            {
+              "description": "Full agent capabilities with tool access",
+              "name": "Agent",
+              "value": "agent"
+            },
+            {
+              "description": "Read-only mode for planning and designing before implementation",
+              "name": "Plan",
+              "value": "plan"
+            },
+            {
+              "description": "Q&A mode - no edits or command execution",
+              "name": "Ask",
+              "value": "ask"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "grok-4.5[effort=high,fast=true]",
           "description": "Controls which model variant is used for responses",
           "id": "model",
           "name": "Model",
@@ -312,6 +367,48 @@
       ]
     },
     {
+      "modelId": "gpt-5.6-sol[context=272k,reasoning=medium,fast=false]",
+      "name": "gpt-5.6-sol",
+      "description": null,
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "agent",
+          "description": "Controls how the agent executes tasks",
+          "id": "mode",
+          "name": "Mode",
+          "options": [
+            {
+              "description": "Full agent capabilities with tool access",
+              "name": "Agent",
+              "value": "agent"
+            },
+            {
+              "description": "Read-only mode for planning and designing before implementation",
+              "name": "Plan",
+              "value": "plan"
+            },
+            {
+              "description": "Q&A mode - no edits or command execution",
+              "name": "Ask",
+              "value": "ask"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "gpt-5.6-sol[context=272k,reasoning=medium,fast=false]",
+          "description": "Controls which model variant is used for responses",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        }
+      ]
+    },
+    {
       "modelId": "gpt-5.5[context=272k,reasoning=medium,fast=false]",
       "name": "gpt-5.5",
       "description": null,
@@ -344,6 +441,132 @@
         {
           "category": "model",
           "currentValue": "gpt-5.5[context=272k,reasoning=medium,fast=false]",
+          "description": "Controls which model variant is used for responses",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        }
+      ]
+    },
+    {
+      "modelId": "claude-fable-5[thinking=true,context=300k,effort=high]",
+      "name": "claude-fable-5",
+      "description": null,
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "agent",
+          "description": "Controls how the agent executes tasks",
+          "id": "mode",
+          "name": "Mode",
+          "options": [
+            {
+              "description": "Full agent capabilities with tool access",
+              "name": "Agent",
+              "value": "agent"
+            },
+            {
+              "description": "Read-only mode for planning and designing before implementation",
+              "name": "Plan",
+              "value": "plan"
+            },
+            {
+              "description": "Q&A mode - no edits or command execution",
+              "name": "Ask",
+              "value": "ask"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "claude-fable-5[thinking=true,context=300k,effort=high]",
+          "description": "Controls which model variant is used for responses",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        }
+      ]
+    },
+    {
+      "modelId": "claude-sonnet-5[thinking=true,context=300k,effort=high]",
+      "name": "claude-sonnet-5",
+      "description": null,
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "agent",
+          "description": "Controls how the agent executes tasks",
+          "id": "mode",
+          "name": "Mode",
+          "options": [
+            {
+              "description": "Full agent capabilities with tool access",
+              "name": "Agent",
+              "value": "agent"
+            },
+            {
+              "description": "Read-only mode for planning and designing before implementation",
+              "name": "Plan",
+              "value": "plan"
+            },
+            {
+              "description": "Q&A mode - no edits or command execution",
+              "name": "Ask",
+              "value": "ask"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "claude-sonnet-5[thinking=true,context=300k,effort=high]",
+          "description": "Controls which model variant is used for responses",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        }
+      ]
+    },
+    {
+      "modelId": "gpt-5.6-terra[context=272k,reasoning=medium,fast=false]",
+      "name": "gpt-5.6-terra",
+      "description": null,
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "agent",
+          "description": "Controls how the agent executes tasks",
+          "id": "mode",
+          "name": "Mode",
+          "options": [
+            {
+              "description": "Full agent capabilities with tool access",
+              "name": "Agent",
+              "value": "agent"
+            },
+            {
+              "description": "Read-only mode for planning and designing before implementation",
+              "name": "Plan",
+              "value": "plan"
+            },
+            {
+              "description": "Q&A mode - no edits or command execution",
+              "name": "Ask",
+              "value": "ask"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "gpt-5.6-terra[context=272k,reasoning=medium,fast=false]",
           "description": "Controls which model variant is used for responses",
           "id": "model",
           "name": "Model",
@@ -480,48 +703,6 @@
       ]
     },
     {
-      "modelId": "grok-build-0.1[context=200k]",
-      "name": "grok-build-0.1",
-      "description": null,
-      "configOptions": [
-        {
-          "category": "mode",
-          "currentValue": "agent",
-          "description": "Controls how the agent executes tasks",
-          "id": "mode",
-          "name": "Mode",
-          "options": [
-            {
-              "description": "Full agent capabilities with tool access",
-              "name": "Agent",
-              "value": "agent"
-            },
-            {
-              "description": "Read-only mode for planning and designing before implementation",
-              "name": "Plan",
-              "value": "plan"
-            },
-            {
-              "description": "Q&A mode - no edits or command execution",
-              "name": "Ask",
-              "value": "ask"
-            }
-          ],
-          "type": "select"
-        },
-        {
-          "category": "model",
-          "currentValue": "grok-build-0.1[context=200k]",
-          "description": "Controls which model variant is used for responses",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        }
-      ]
-    },
-    {
       "modelId": "gpt-5.4[context=272k,reasoning=medium,fast=false]",
       "name": "gpt-5.4",
       "description": null,
@@ -564,7 +745,7 @@
       ]
     },
     {
-      "modelId": "claude-opus-4-6[thinking=true,context=200k,effort=high,fast=false]",
+      "modelId": "claude-opus-4-6[thinking=true,context=200k,effort=high]",
       "name": "claude-opus-4-6",
       "description": null,
       "configOptions": [
@@ -595,7 +776,7 @@
         },
         {
           "category": "model",
-          "currentValue": "claude-opus-4-6[thinking=true,context=200k,effort=high,fast=false]",
+          "currentValue": "claude-opus-4-6[thinking=true,context=200k,effort=high]",
           "description": "Controls which model variant is used for responses",
           "id": "model",
           "name": "Model",
@@ -680,6 +861,48 @@
         {
           "category": "model",
           "currentValue": "gpt-5.2[reasoning=medium,fast=false]",
+          "description": "Controls which model variant is used for responses",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        }
+      ]
+    },
+    {
+      "modelId": "gpt-5.6-luna[context=272k,reasoning=medium,fast=false]",
+      "name": "gpt-5.6-luna",
+      "description": null,
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "agent",
+          "description": "Controls how the agent executes tasks",
+          "id": "mode",
+          "name": "Mode",
+          "options": [
+            {
+              "description": "Full agent capabilities with tool access",
+              "name": "Agent",
+              "value": "agent"
+            },
+            {
+              "description": "Read-only mode for planning and designing before implementation",
+              "name": "Plan",
+              "value": "plan"
+            },
+            {
+              "description": "Q&A mode - no edits or command execution",
+              "name": "Ask",
+              "value": "ask"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "gpt-5.6-luna[context=272k,reasoning=medium,fast=false]",
           "description": "Controls which model variant is used for responses",
           "id": "model",
           "name": "Model",
@@ -848,48 +1071,6 @@
         {
           "category": "model",
           "currentValue": "claude-haiku-4-5[thinking=true]",
-          "description": "Controls which model variant is used for responses",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        }
-      ]
-    },
-    {
-      "modelId": "grok-4.3[context=200k]",
-      "name": "grok-4.3",
-      "description": null,
-      "configOptions": [
-        {
-          "category": "mode",
-          "currentValue": "agent",
-          "description": "Controls how the agent executes tasks",
-          "id": "mode",
-          "name": "Mode",
-          "options": [
-            {
-              "description": "Full agent capabilities with tool access",
-              "name": "Agent",
-              "value": "agent"
-            },
-            {
-              "description": "Read-only mode for planning and designing before implementation",
-              "name": "Plan",
-              "value": "plan"
-            },
-            {
-              "description": "Q&A mode - no edits or command execution",
-              "name": "Ask",
-              "value": "ask"
-            }
-          ],
-          "type": "select"
-        },
-        {
-          "category": "model",
-          "currentValue": "grok-4.3[context=200k]",
           "description": "Controls which model variant is used for responses",
           "id": "model",
           "name": "Model",
@@ -1320,8 +1501,8 @@
       ]
     },
     {
-      "modelId": "kimi-k2.5[]",
-      "name": "kimi-k2.5",
+      "modelId": "kimi-k2.7-code[]",
+      "name": "kimi-k2.7-code",
       "description": null,
       "configOptions": [
         {
@@ -1351,7 +1532,7 @@
         },
         {
           "category": "model",
-          "currentValue": "kimi-k2.5[]",
+          "currentValue": "kimi-k2.7-code[]",
           "description": "Controls which model variant is used for responses",
           "id": "model",
           "name": "Model",
@@ -1362,8 +1543,8 @@
       ]
     },
     {
-      "modelId": "claude-fable-5[thinking=true,context=300k,effort=high]",
-      "name": "claude-fable-5",
+      "modelId": "glm-5.2[reasoning=high]",
+      "name": "glm-5.2",
       "description": null,
       "configOptions": [
         {
@@ -1393,7 +1574,7 @@
         },
         {
           "category": "model",
-          "currentValue": "claude-fable-5[thinking=true,context=300k,effort=high]",
+          "currentValue": "glm-5.2[reasoning=high]",
           "description": "Controls which model variant is used for responses",
           "id": "model",
           "name": "Model",

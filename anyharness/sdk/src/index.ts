@@ -3,6 +3,7 @@ export {
   AnyHarnessError,
   hashTimingScope,
   setAnyHarnessTimingObserver,
+  toAnyHarnessTelemetryError,
 } from "./client/core.js";
 export type {
   AnyHarnessClientOptions,
@@ -66,6 +67,9 @@ export type {
   StartAgentLoginTerminalResponse,
   ReconcileOutcome,
   ReconcileJobStatus,
+  AgentInstallProgressPhase,
+  AgentInstallProgressComponent,
+  AgentInstallProgress,
   ReconcileAgentsRequest,
   ReconcileAgentResult,
   ReconcileAgentsResponse,
@@ -429,6 +433,7 @@ export type {
 export {
   createTranscriptState,
   reduceEvent,
+  reduceEventBatch,
   reduceEvents,
   selectPendingApprovalInteraction,
   selectPendingMcpElicitationInteraction,

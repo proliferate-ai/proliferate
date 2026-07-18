@@ -19,7 +19,8 @@ pub(in crate::live::sessions::sink) fn extract_text(content: &serde_json::Value)
 }
 
 fn is_subagent_tool(tool_kind: Option<&str>, native_tool_name: Option<&str>) -> bool {
-    native_tool_name == Some("Agent") || tool_kind == Some("think")
+    matches!(native_tool_name, Some("Agent" | "Task"))
+        || matches!(tool_kind, Some("subagent" | "think"))
 }
 
 pub(in crate::live::sessions::sink) fn normalize_text_parts(

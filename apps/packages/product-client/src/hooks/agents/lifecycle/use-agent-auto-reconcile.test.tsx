@@ -57,6 +57,58 @@ describe("useAgentAutoReconcile", () => {
       .toHaveBeenLastCalledWith("http://runtime.test");
   });
 
+  it("retries failed terminal refreshes and records only successful jobs", async () => {
+    arrange();
+    mocks.invalidateAgentListResources
+      .mockRejectedValueOnce(new Error("transient refresh failure"))
+      .mockResolvedValue(undefined);
+    setRuntimeHealth("ready", 1);
+    setAgentCatalog({ reconcileDataUpdatedAt: 1 });
+    const { rerender } = renderHook(() => useAgentAutoReconcile());
+
+    setAgentCatalog({
+      reconcileDataUpdatedAt: 2,
+      reconcileSnapshot: { jobId: "job-a" },
+      reconcileStatus: "completed",
+    });
+    rerender();
+    await waitFor(() => {
+      expect(mocks.invalidateAgentListResources).toHaveBeenCalledTimes(1);
+    });
+    expect(mocks.invalidateAgentListResources).toHaveBeenLastCalledWith(
+      "http://runtime.test",
+      { throwOnError: true },
+    );
+
+    setAgentCatalog({
+      reconcileDataUpdatedAt: 3,
+      reconcileSnapshot: { jobId: "job-a" },
+      reconcileStatus: "completed",
+    });
+    rerender();
+    await waitFor(() => {
+      expect(mocks.invalidateAgentListResources).toHaveBeenCalledTimes(2);
+    });
+
+    setAgentCatalog({
+      reconcileDataUpdatedAt: 4,
+      reconcileSnapshot: { jobId: "job-a" },
+      reconcileStatus: "completed",
+    });
+    rerender();
+    expect(mocks.invalidateAgentListResources).toHaveBeenCalledTimes(2);
+
+    setAgentCatalog({
+      reconcileDataUpdatedAt: 5,
+      reconcileSnapshot: { jobId: "job-b" },
+      reconcileStatus: "failed",
+    });
+    rerender();
+    await waitFor(() => {
+      expect(mocks.invalidateAgentListResources).toHaveBeenCalledTimes(3);
+    });
+  });
+
 });
 
 function arrange() {
@@ -82,6 +134,7 @@ function setAgentCatalog(
     isLoading: boolean;
     isReconciling: boolean;
     reconcileDataUpdatedAt: number;
+    reconcileSnapshot: { jobId?: string | null } | null;
     reconcileStatus: string;
   }> = {},
 ) {
@@ -91,6 +144,7 @@ function setAgentCatalog(
     isLoading: false,
     isReconciling: false,
     reconcileDataUpdatedAt: 0,
+    reconcileSnapshot: null,
     reconcileStatus: "idle",
     ...overrides,
   });

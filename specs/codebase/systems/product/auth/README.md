@@ -71,6 +71,12 @@ Denied web sessions return a stable `403` error code. OAuth callback denials
 redirect back to the web auth error route with the same stable code so the web
 app can render beta-specific copy and point the user to Desktop.
 
+When GitHub rejects a callback grant with `401` while the server resolves the
+provider profile, the consumed challenge returns to its originating surface as
+the existing `provider_error` callback state. That expected unusable-grant path
+does not escape as a server error; non-401 provider profile failures remain
+reportable.
+
 ## Email/Password
 
 Email/password auth is a controlled sign-in method for accounts that already
@@ -100,6 +106,13 @@ Argon2id hashes through `pwdlib`. Verification may upgrade older supported
 hashes when `PasswordHelper` returns an updated hash.
 
 ## Abuse And Failure Behavior
+
+OAuth provider failures stay visible without turning provider-declared protocol rejections
+into server errors. A provider callback that carries an error returns that error to the
+original client callback. A Google HTTP response rejecting the access-token exchange
+terminates the stored challenge and returns the generic `provider_error` code instead of
+exposing provider response details. Transport failures and provider outages remain server
+failures and are not normalized as provider rejections.
 
 Password login failures must return generic copy:
 

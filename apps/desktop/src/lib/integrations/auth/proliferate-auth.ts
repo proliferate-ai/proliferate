@@ -17,6 +17,7 @@ import {
   fetchAuthResponse,
   isAbortError,
   isDefinitiveAuthRejection,
+  InteractiveAuthTimeoutError,
   parseAuthError,
 } from "./proliferate-auth-transport"
 import {
@@ -247,9 +248,8 @@ export async function pollGitHubDesktopSession(
     throw lastError
   }
 
-  throw new AuthRequestError(
+  throw new InteractiveAuthTimeoutError(
     options.timeoutMessage ?? "Sign-in timed out. Finish the browser flow and try again.",
-    408,
   )
 }
 

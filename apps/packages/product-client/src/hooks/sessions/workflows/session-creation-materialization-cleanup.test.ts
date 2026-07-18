@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   committedReplacedSessionTombstonesForWorkspace,
+  filterReplacedSessionTombstones,
+  hydrateCommittedReplacedSessionTombstones,
   isReplacedSessionTombstoned,
   resetReplacedSessionTombstonesForTests,
 } from "#product/hooks/sessions/workflows/session-replacement-tombstones";
@@ -9,6 +11,11 @@ import {
 } from "#product/hooks/sessions/workflows/session-replacement-dismissals";
 import { scheduleCreatedRuntimeSessionCleanup } from "#product/hooks/sessions/workflows/session-created-runtime-cleanup";
 import { materializeSessionCreation } from "#product/hooks/sessions/workflows/session-creation-materialization";
+import {
+  beginEmptySessionReplacement,
+  type EmptySessionReplacementTransaction,
+} from "#product/hooks/sessions/workflows/use-empty-session-replacement-cleanup";
+import { reconcileReplacedSessionTombstones } from "#product/hooks/access/anyharness/workspaces/use-workspace-bootstrap-cache";
 import {
   createEmptySessionRecord,
   getSessionRecord,
@@ -28,7 +35,26 @@ const mocks = vi.hoisted(() => ({
   dismissSession: vi.fn(() => new Promise<void>(() => undefined)),
   resolveDesktopRuntimeUrlForWorkspace: vi.fn(async () => "http://runtime.test"),
   writeTombstones: vi.fn(() => true),
+  actualShouldDiscardSupersededSessionCreation: null as null | ((
+    sessionId: string,
+  ) => Promise<boolean>),
+  shouldDiscardSupersededSessionCreationOverride: null as null | ((
+    sessionId: string,
+  ) => Promise<boolean>),
 }));
+
+vi.mock("#product/hooks/sessions/workflows/session-creation-supersession", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("#product/hooks/sessions/workflows/session-creation-supersession")>();
+  mocks.actualShouldDiscardSupersededSessionCreation =
+    actual.shouldDiscardSupersededSessionCreation;
+  return {
+    ...actual,
+    shouldDiscardSupersededSessionCreation: (sessionId: string) => (
+      mocks.shouldDiscardSupersededSessionCreationOverride?.(sessionId)
+      ?? actual.shouldDiscardSupersededSessionCreation(sessionId)
+    ),
+  };
+});
 
 vi.mock("#product/lib/access/anyharness/sessions", async (importOriginal) => ({
   ...await importOriginal<typeof import("#product/lib/access/anyharness/sessions")>(),
@@ -74,6 +100,7 @@ beforeEach(() => {
   mocks.applySessionLaunchDefaults.mockReset();
   mocks.createSession.mockReset();
   mocks.resolveDesktopRuntimeUrlForWorkspace.mockClear();
+  mocks.shouldDiscardSupersededSessionCreationOverride = null;
   resetReplacedSessionTombstonesForTests();
   resetSessionReplacementDismissalsForTests();
   resetSessionCreationSupersessionForTests();
@@ -97,6 +124,27 @@ describe("created runtime cleanup", () => {
       .toEqual(["runtime-created"]);
     expect(isReplacedSessionTombstoned("workspace-1", "runtime-created")).toBe(true);
     expect(isReplacedSessionTombstoned("workspace-1", "client-created")).toBe(true);
+  });
+
+  it("retires the runtime when persistence fails but dismissal confirms absence", async () => {
+    mocks.writeTombstones.mockReturnValue(false);
+    mocks.dismissSession.mockResolvedValue();
+
+    await expect(scheduleCreatedRuntimeSessionCleanup({
+      connection: {} as never,
+      workspaceId: "workspace-1",
+      runtimeSessionId: "runtime-created",
+      clientSessionId: "client-created",
+      captureException: vi.fn(),
+    })).resolves.toBe(true);
+
+    expect(mocks.dismissSession).toHaveBeenCalledOnce();
+    expect(committedReplacedSessionTombstonesForWorkspace("workspace-1"))
+      .toEqual([]);
+    expect(isReplacedSessionTombstoned("workspace-1", "runtime-created"))
+      .toBe(true);
+    expect(isReplacedSessionTombstoned("workspace-1", "client-created"))
+      .toBe(true);
   });
 
   it("releases suppression when neither persistence nor dismissal can retire the runtime", async () => {
@@ -296,7 +344,232 @@ describe("created runtime cleanup", () => {
     defaultsGate.resolve({ session: runtimeSession, liveConfig: null });
     unregister();
   });
+
+  it("cleans a late runtime without publishing it when replacement wins the final-check race", async () => {
+    const pendingSessionId = "pending-tail-race";
+    const projectedRecord = createEmptySessionRecord(pendingSessionId, "codex", {
+      workspaceId: "workspace-1",
+      materializedSessionId: null,
+      modelId: "gpt-5",
+    });
+    const runtimeSession = {
+      id: "runtime-tail-race",
+      workspaceId: "workspace-1",
+      agentKind: "codex",
+      modelId: "gpt-5",
+      status: "idle",
+    };
+    putSessionRecord(projectedRecord);
+    const createGate = deferred<typeof runtimeSession>();
+    mocks.createSession.mockReturnValueOnce(createGate.promise);
+    mocks.applySessionLaunchDefaults.mockResolvedValue({
+      session: runtimeSession,
+      liveConfig: null,
+    });
+    const closeSessionSlotStream = vi.fn();
+    const removeWorkspaceSessionRecord = vi.fn();
+    const replacementDismiss = vi.fn(async () => undefined);
+    let replacement: EmptySessionReplacementTransaction | null = null;
+    injectReplacementAfterFinalCheckpoint(() => {
+      replacement = beginEmptySessionReplacement(
+        pendingSessionId,
+        "workspace-1",
+        {
+          closeSessionSlotStream,
+          removeWorkspaceSessionRecord,
+          dismissSessionMutation: { mutateAsync: replacementDismiss } as never,
+          captureException: vi.fn(),
+        },
+      );
+    });
+    const trackProductEvent = vi.fn();
+    const upsertWorkspaceSessionRecord = vi.fn();
+    const unregister = registerSessionCreation(pendingSessionId);
+
+    const materialization = materializeSessionCreation({
+      trackProductEvent,
+      captureException: vi.fn(),
+      ensureCloudAgentCatalog: vi.fn(async () => ({ agents: [] })),
+      existingProjectedRecord: projectedRecord,
+      frozenDefaultLiveSessionControlValuesByAgentKind: {},
+      localRuntime: null,
+      cloudClient: null,
+      options: {
+        text: "",
+        agentKind: "codex",
+        modelId: "gpt-5",
+        workspaceId: "workspace-1",
+      },
+      pendingSessionId,
+      resolvedModeId: null,
+      upsertWorkspaceSessionRecord,
+      workspaceId: "workspace-1",
+    });
+
+    await vi.waitFor(() => expect(mocks.createSession).toHaveBeenCalledOnce());
+    expect(replacement).toBeNull();
+    createGate.resolve(runtimeSession);
+    await vi.waitFor(() => expect(replacement).not.toBeNull());
+    expect(closeSessionSlotStream).toHaveBeenCalledOnce();
+    expect(getSessionRecord(pendingSessionId)).toBeNull();
+    const commit = replacement!.commit();
+    await expect(Promise.all([materialization, commit])).resolves.toEqual([
+      pendingSessionId,
+      "retired",
+    ]);
+
+    expect(getSessionRecord(pendingSessionId)).toBeNull();
+    expect(upsertWorkspaceSessionRecord).not.toHaveBeenCalled();
+    expect(trackProductEvent).not.toHaveBeenCalled();
+    expect(replacementDismiss).not.toHaveBeenCalled();
+    await vi.waitFor(() => {
+      expect(mocks.dismissSession).toHaveBeenCalledWith(
+        expect.anything(),
+        runtimeSession.id,
+      );
+    });
+    expect(committedReplacedSessionTombstonesForWorkspace("workspace-1"))
+      .toEqual([runtimeSession.id]);
+    expect(mocks.writeTombstones).toHaveBeenCalledWith({
+      "workspace-1": [{
+        runtimeSessionId: runtimeSession.id,
+        suppressedSessionIds: expect.arrayContaining([
+          runtimeSession.id,
+          pendingSessionId,
+        ]),
+      }],
+    });
+    expect(filterReplacedSessionTombstones("workspace-1", [
+      { id: runtimeSession.id },
+      { id: "runtime-replacement" },
+    ])).toEqual([{ id: "runtime-replacement" }]);
+
+    // A cold renderer hydrates the durable fence before reconciling the next
+    // authoritative list. The late runtime remains hidden while listed, and
+    // omission clears persistence without reopening a stale in-renderer list.
+    resetReplacedSessionTombstonesForTests();
+    resetSessionReplacementDismissalsForTests();
+    hydrateCommittedReplacedSessionTombstones({
+      "workspace-1": [{
+        runtimeSessionId: runtimeSession.id,
+        suppressedSessionIds: [runtimeSession.id, pendingSessionId],
+      }],
+    });
+    reconcileReplacedSessionTombstones({
+      workspaceConnection: {} as never,
+      workspaceId: "workspace-1",
+    }, [{ id: runtimeSession.id }, { id: "runtime-replacement" }]);
+    expect(committedReplacedSessionTombstonesForWorkspace("workspace-1"))
+      .toEqual([runtimeSession.id]);
+    reconcileReplacedSessionTombstones({
+      workspaceConnection: {} as never,
+      workspaceId: "workspace-1",
+    }, [{ id: "runtime-replacement" }]);
+    expect(committedReplacedSessionTombstonesForWorkspace("workspace-1"))
+      .toEqual([]);
+    expect(filterReplacedSessionTombstones("workspace-1", [
+      { id: runtimeSession.id },
+      { id: "runtime-replacement" },
+    ])).toEqual([{ id: "runtime-replacement" }]);
+    unregister();
+  });
+
+  it("publishes the late runtime normally when the tail-racing replacement rolls back", async () => {
+    const pendingSessionId = "pending-tail-rollback";
+    const projectedRecord = createEmptySessionRecord(pendingSessionId, "claude", {
+      workspaceId: "workspace-1",
+      materializedSessionId: null,
+      modelId: "sonnet",
+    });
+    const runtimeSession = {
+      id: "runtime-tail-rollback",
+      workspaceId: "workspace-1",
+      agentKind: "claude",
+      modelId: "sonnet",
+      status: "idle",
+    };
+    putSessionRecord(projectedRecord);
+    mocks.createSession.mockResolvedValue(runtimeSession);
+    mocks.applySessionLaunchDefaults.mockResolvedValue({
+      session: runtimeSession,
+      liveConfig: null,
+    });
+    const closeSessionSlotStream = vi.fn();
+    const replacementDismiss = vi.fn(async () => undefined);
+    let replacement: EmptySessionReplacementTransaction | null = null;
+    injectReplacementAfterFinalCheckpoint(() => {
+      replacement = beginEmptySessionReplacement(
+        pendingSessionId,
+        "workspace-1",
+        {
+          closeSessionSlotStream,
+          removeWorkspaceSessionRecord: vi.fn(),
+          dismissSessionMutation: { mutateAsync: replacementDismiss } as never,
+          captureException: vi.fn(),
+        },
+      );
+    });
+    const trackProductEvent = vi.fn();
+    const upsertWorkspaceSessionRecord = vi.fn();
+    const unregister = registerSessionCreation(pendingSessionId);
+    const materialization = materializeSessionCreation({
+      trackProductEvent,
+      captureException: vi.fn(),
+      ensureCloudAgentCatalog: vi.fn(async () => ({ agents: [] })),
+      existingProjectedRecord: projectedRecord,
+      frozenDefaultLiveSessionControlValuesByAgentKind: {},
+      localRuntime: null,
+      cloudClient: null,
+      options: {
+        text: "",
+        agentKind: "claude",
+        modelId: "sonnet",
+        workspaceId: "workspace-1",
+      },
+      pendingSessionId,
+      resolvedModeId: null,
+      upsertWorkspaceSessionRecord,
+      workspaceId: "workspace-1",
+    });
+
+    await vi.waitFor(() => expect(replacement).not.toBeNull());
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    replacement!.rollback();
+    await expect(materialization).resolves.toBe(pendingSessionId);
+
+    expect(closeSessionSlotStream).toHaveBeenCalledOnce();
+    expect(getSessionRecord(pendingSessionId)?.materializedSessionId)
+      .toBe(runtimeSession.id);
+    expect(upsertWorkspaceSessionRecord).toHaveBeenCalledWith(
+      "workspace-1",
+      runtimeSession,
+    );
+    expect(trackProductEvent).toHaveBeenCalledOnce();
+    expect(replacementDismiss).not.toHaveBeenCalled();
+    expect(mocks.dismissSession).not.toHaveBeenCalled();
+    expect(isReplacedSessionTombstoned("workspace-1", runtimeSession.id))
+      .toBe(false);
+    unregister();
+    removeSessionRecord(pendingSessionId);
+  });
 });
+
+function injectReplacementAfterFinalCheckpoint(onCheckpoint: () => void): void {
+  let checkCount = 0;
+  mocks.shouldDiscardSupersededSessionCreationOverride = async (sessionId) => {
+    const shouldDiscard = await mocks.actualShouldDiscardSupersededSessionCreation!(
+      sessionId,
+    );
+    checkCount += 1;
+    // The new-runtime path checks after target resolution, creation, and launch
+    // defaults. This third call is the final awaited checkpoint immediately
+    // before atomic publication, reproducing #1333's stale-false window.
+    if (checkCount === 3) {
+      onCheckpoint();
+    }
+    return shouldDiscard;
+  };
+}
 
 function deferred<T>() {
   let resolve!: (value: T) => void;

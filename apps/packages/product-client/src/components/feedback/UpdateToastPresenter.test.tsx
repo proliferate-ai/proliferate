@@ -15,6 +15,8 @@ const updaterMocks = vi.hoisted(() => ({
   errorMessage: null as string | null,
   errorSource: null as "check" | "download" | null,
   downloadProgress: null as number | null,
+  downloadReceivedBytes: null as number | null,
+  downloadTotalBytes: null as number | null,
   restartPromptOpen: false,
   manualCheckCompletedAt: null as number | null,
   downloadUpdate: vi.fn(),
@@ -52,6 +54,8 @@ afterEach(() => {
   updaterMocks.errorMessage = null;
   updaterMocks.errorSource = null;
   updaterMocks.downloadProgress = null;
+  updaterMocks.downloadReceivedBytes = null;
+  updaterMocks.downloadTotalBytes = null;
   updaterMocks.restartPromptOpen = false;
   updaterMocks.manualCheckCompletedAt = null;
   appVersionMocks.version = "0.1.22";
@@ -119,6 +123,8 @@ describe("UpdateToastPresenter", () => {
   it("keeps the authored title visible while downloading", () => {
     updaterMocks.phase = "downloading";
     updaterMocks.downloadProgress = 42;
+    updaterMocks.downloadReceivedBytes = 42_000_000;
+    updaterMocks.downloadTotalBytes = 100_000_000;
 
     render(<UpdateToastPresenter />);
 
@@ -129,12 +135,32 @@ describe("UpdateToastPresenter", () => {
     expect(screen.getByText("UPDATE")).toBeTruthy();
     expect(screen.getByText("Introducing Grok")).toBeTruthy();
     expect(screen.getByText("Downloading Proliferate 0.1.24.")).toBeTruthy();
+    expect(screen.getByText("42 MB of 100 MB")).toBeTruthy();
+    const progressbar = screen.getByRole("progressbar", {
+      name: "Update download progress",
+    });
+    expect(progressbar.getAttribute("aria-valuenow")).toBe("42");
+    expect(progressbar.getAttribute("aria-valuetext")).toBe("42 MB of 100 MB");
     expect(options).toEqual(
       expect.objectContaining({
         id: UPDATE_TOAST_ID,
         action: undefined,
       }),
     );
+  });
+
+  it("shows downloaded MB without a fake percentage when the total is unknown", () => {
+    updaterMocks.phase = "downloading";
+    updaterMocks.availableTitle = null;
+    updaterMocks.downloadReceivedBytes = 12_500_000;
+
+    render(<UpdateToastPresenter />);
+
+    const [, options] = sonnerMocks.toast.mock.calls[0] ?? [];
+    render(<>{options.description}</>);
+
+    expect(screen.getByText("12.5 MB downloaded")).toBeTruthy();
+    expect(screen.queryByRole("progressbar")).toBeNull();
   });
 
   it("keeps the authored title visible through the Restart action", () => {

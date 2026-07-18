@@ -1,16 +1,16 @@
 {
-  "probedAt": "2026-07-11T00:36:25.133691+00:00",
+  "probedAt": "2026-07-17T20:49:39.156563+00:00",
   "agentKind": "codex",
   "authContext": "openai-api",
   "attestation": {
     "name": "codex-acp",
-    "version": "0.17.0-proliferate.1",
+    "version": "0.18.3-proliferate.1",
     "title": "Codex"
   },
   "modelSource": "modelConfigOption",
   "nativeCli": {
     "path": "/Users/pablohansen/.proliferate-local/anyharness/agents/codex/native/codex",
-    "version": "codex-cli 0.144.1"
+    "version": "codex-cli 0.144.5"
   },
   "trials": [],
   "currentModelId": null,

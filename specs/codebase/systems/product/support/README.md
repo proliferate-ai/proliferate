@@ -169,6 +169,17 @@ messagePresent
 messageLength
 ```
 
+The schema-v2 package omits the later active-workspace/session fields. Structured
+identifiers, customer-provided names/paths, and runtime URLs are represented only
+by length placeholders; trusted correlation remains in the server-owned request
+record. Package assembly uses bounded, explicit projections; malformed scalar or
+container values and revoked proxies fail closed. Timestamps, versions, runtime
+states, platforms, and attachment media types must match their audited field
+contracts. Only bounded diagnostic log text receives credential, signed-URL,
+and opaque-token scrubbing; ordinary diagnostic text remains useful. Native
+collection failures use fixed `desktop`, `anyharness`, or generic diagnostic
+classes and never include paths or operating-system error text.
+
 The package runs session data through the session-debug sanitizer. Prompt and
 message bodies, raw tool input/output, event content, notification bodies, and
 sensitive live-config values are represented by redacted shape/length

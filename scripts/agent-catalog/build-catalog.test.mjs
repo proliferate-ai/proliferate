@@ -114,6 +114,18 @@ test("complete probe builds use the exact resolved candidate pins", () => {
       assert.deepEqual(agent.harness, candidateHarnesses[agent.kind]);
       assert.ok(agent.harness.agentProcess.source);
     }
+    assert.equal(
+      draft.agents.find((agent) => agent.kind === "claude").session.unattendedModeId,
+      "bypassPermissions",
+    );
+    assert.equal(
+      draft.agents.find((agent) => agent.kind === "codex").session.unattendedModeId,
+      "full-access",
+    );
+    assert.equal(
+      draft.agents.find((agent) => agent.kind === "cursor").session.unattendedModeId,
+      undefined,
+    );
     assert.deepEqual(
       draft.agents.find((agent) => agent.kind === "cursor"),
       candidate.agents.find((agent) => agent.kind === "cursor"),
@@ -188,6 +200,34 @@ test("complete probes reject missing agent-process attestation versions", () => 
     });
     assert.notEqual(result.status, 0);
     assert.match(result.stderr, /codex\.openai-api.*missing agent-process attestation version/s);
+  });
+});
+
+test("complete probes accept a missing process attestation for an immutable archive pin", () => {
+  withFixture((root) => {
+    alignProbeVersions(root);
+    writeCompleteState(root, ["opencode"]);
+    const generated = join(root, "scripts", "agent-catalog", "generated");
+    for (const name of readdirSync(generated).filter((name) => name.startsWith("opencode."))) {
+      const snapshotPath = join(generated, name);
+      const snapshot = JSON.parse(readFileSync(snapshotPath, "utf8"));
+      snapshot.attestation = null;
+      writeFileSync(snapshotPath, `${JSON.stringify(snapshot, null, 2)}\n`);
+    }
+
+    const script = join(root, "scripts", "agent-catalog", "build-catalog.mjs");
+    execFileSync(process.execPath, [script, "--require-complete-probe"]);
+
+    const candidate = JSON.parse(
+      readFileSync(join(root, "catalogs", "agents", "catalog.json"), "utf8"),
+    );
+    const draft = JSON.parse(
+      readFileSync(join(root, "scripts", "agent-catalog", "catalog.draft.json"), "utf8"),
+    );
+    assert.equal(
+      draft.agents.find((agent) => agent.kind === "opencode").harness.agentProcess.version,
+      candidate.agents.find((agent) => agent.kind === "opencode").harness.agentProcess.version,
+    );
   });
 });
 

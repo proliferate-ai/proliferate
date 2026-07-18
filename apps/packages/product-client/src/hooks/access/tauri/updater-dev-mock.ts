@@ -8,6 +8,7 @@ const DEV_UPDATER_MOCK_TITLE = "Introducing release notices";
 const DEV_UPDATER_MOCK_ERROR_MESSAGE = "Simulated updater failure";
 const DEV_UPDATER_MOCK_DOWNLOAD_DELAYS_MS = [200, 450, 700];
 const DEV_UPDATER_MOCK_DOWNLOAD_PROGRESS = [32, 68, 100];
+const DEV_UPDATER_MOCK_DOWNLOAD_TOTAL_BYTES = 125_000_000;
 
 type DevUpdaterMockPhase = Extract<
   UpdaterPhase,
@@ -19,6 +20,8 @@ export interface DevUpdaterMockState {
   version: string;
   title?: string | null;
   downloadProgress: number | null;
+  downloadReceivedBytes: number | null;
+  downloadTotalBytes: number | null;
   restartPromptOpen: boolean;
   restartWhenIdle: boolean;
   lastCheckedAt: string | null;
@@ -119,6 +122,8 @@ export function startDevUpdaterMockDownload(): void {
     ...current,
     phase: "downloading",
     downloadProgress: 0,
+    downloadReceivedBytes: 0,
+    downloadTotalBytes: DEV_UPDATER_MOCK_DOWNLOAD_TOTAL_BYTES,
     restartPromptOpen: false,
     restartWhenIdle: false,
     errorMessage: null,
@@ -137,6 +142,8 @@ export function startDevUpdaterMockDownload(): void {
           ...latest,
           phase: "ready",
           downloadProgress: null,
+          downloadReceivedBytes: null,
+          downloadTotalBytes: null,
           restartPromptOpen: true,
           errorMessage: null,
           errorSource: null,
@@ -149,6 +156,12 @@ export function startDevUpdaterMockDownload(): void {
         ...latest,
         phase: "downloading",
         downloadProgress: DEV_UPDATER_MOCK_DOWNLOAD_PROGRESS[index],
+        downloadReceivedBytes: Math.round(
+          (DEV_UPDATER_MOCK_DOWNLOAD_TOTAL_BYTES
+            * DEV_UPDATER_MOCK_DOWNLOAD_PROGRESS[index])
+            / 100,
+        ),
+        downloadTotalBytes: DEV_UPDATER_MOCK_DOWNLOAD_TOTAL_BYTES,
         restartPromptOpen: false,
         errorMessage: null,
         errorSource: null,
@@ -180,6 +193,9 @@ function normalizeDevUpdaterMock(raw: unknown): DevUpdaterMockState | null {
       version: DEV_UPDATER_MOCK_VERSION,
       title: DEV_UPDATER_MOCK_TITLE,
       downloadProgress: raw === "downloading" ? 0 : null,
+      downloadReceivedBytes: raw === "downloading" ? 0 : null,
+      downloadTotalBytes:
+        raw === "downloading" ? DEV_UPDATER_MOCK_DOWNLOAD_TOTAL_BYTES : null,
       restartPromptOpen: raw === "ready",
       restartWhenIdle: false,
       lastCheckedAt: null,
@@ -198,14 +214,33 @@ function normalizeDevUpdaterMock(raw: unknown): DevUpdaterMockState | null {
     return null;
   }
 
+  const isDownloading = candidate.phase === "downloading";
+  const downloadTotalBytes = isDownloading
+    ? candidate.downloadTotalBytes === null
+      ? null
+      : isNonNegativeFiniteNumber(candidate.downloadTotalBytes)
+        ? candidate.downloadTotalBytes
+        : DEV_UPDATER_MOCK_DOWNLOAD_TOTAL_BYTES
+    : null;
+  const downloadProgress =
+    isDownloading && downloadTotalBytes !== null
+      ? Math.max(0, Math.min(100, candidate.downloadProgress ?? 0))
+      : null;
+  const downloadReceivedBytes = isDownloading
+    ? isNonNegativeFiniteNumber(candidate.downloadReceivedBytes)
+      ? candidate.downloadReceivedBytes
+      : downloadTotalBytes !== null && downloadProgress !== null
+        ? Math.round((downloadTotalBytes * downloadProgress) / 100)
+        : 0
+    : null;
+
   return {
     phase: candidate.phase,
     version: candidate.version?.trim() || DEV_UPDATER_MOCK_VERSION,
     title: normalizeReleaseTitle(candidate.title),
-    downloadProgress:
-      candidate.phase === "downloading"
-        ? Math.max(0, Math.min(100, candidate.downloadProgress ?? 0))
-        : null,
+    downloadProgress,
+    downloadReceivedBytes,
+    downloadTotalBytes,
     restartPromptOpen:
       typeof candidate.restartPromptOpen === "boolean"
         ? candidate.restartPromptOpen
@@ -231,6 +266,10 @@ function normalizeDevUpdaterMock(raw: unknown): DevUpdaterMockState | null {
         ? candidate.manualCheckCompletedAt
         : null,
   };
+}
+
+function isNonNegativeFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0;
 }
 
 function emitDevUpdaterMockChange(): void {

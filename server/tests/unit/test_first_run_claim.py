@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncGenerator
 from pathlib import Path
 
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from starlette.types import Message, Receive, Scope, Send
 
 from proliferate.auth.identity.store import create_auth_user
 from proliferate.auth.passwords import verify_password
@@ -18,6 +20,7 @@ from proliferate.constants.organizations import (
     ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
     ORGANIZATION_ROLE_OWNER,
 )
+from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
 from proliferate.db.models.organizations import Organization, OrganizationMembership
 from proliferate.db.store import instance_setup as instance_setup_store
@@ -303,6 +306,52 @@ async def test_claim_creates_owner_and_instance_org(single_org_client, test_engi
             break
         await asyncio.sleep(0.02)
     assert not _token_file(tmp_path).exists()
+
+
+async def test_claim_session_commit_finishes_before_response_starts(
+    test_engine, monkeypatch, tmp_path
+):
+    """The setup transaction commits before the ASGI response starts."""
+    from proliferate.db import engine as engine_module
+    from proliferate.main import create_app
+
+    _enable_single_org(monkeypatch, tmp_path)
+    monkeypatch.setattr(engine_module, "engine", test_engine)
+    monkeypatch.setattr(engine_module, "async_session_factory", _factory(test_engine))
+
+    token = await _seed_setup_token(test_engine, tmp_path)
+    app = create_app()
+    commit_finished = False
+    commit_state_at_response_start: list[bool] = []
+
+    async def observed_session() -> AsyncGenerator[AsyncSession, None]:
+        nonlocal commit_finished
+        async with _factory(test_engine)() as session:
+            yield session
+            await session.commit()
+            commit_finished = True
+
+    app.dependency_overrides[get_async_session] = observed_session
+
+    async def observed_app(scope: Scope, receive: Receive, send: Send) -> None:
+        async def observe_response_start(message: Message) -> None:
+            if message["type"] == "http.response.start" and scope["path"] == "/setup":
+                commit_state_at_response_start.append(commit_finished)
+            await send(message)
+
+        await app(scope, receive, observe_response_start)
+
+    async with AsyncClient(
+        transport=ASGITransport(app=observed_app),
+        base_url="http://test",
+    ) as client:
+        claimed = await client.post(
+            "/setup",
+            data={"email": CLAIM_EMAIL, "password": CLAIM_PASSWORD, "setup_token": token},
+        )
+
+    assert claimed.status_code == 200
+    assert commit_state_at_response_start == [True]
 
 
 async def test_claim_honors_custom_organization_name(single_org_client, test_engine, tmp_path):

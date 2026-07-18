@@ -386,9 +386,18 @@ fn collect_support_logs_for_source(
                 truncated: tail.truncated,
                 text: tail.text,
             }),
-            Err(error) => collection_errors.push(format!("{}: {}", path.display(), error)),
+            Err(_) => collection_errors.push(collection_error_for_source(source)),
         }
     }
+}
+
+fn collection_error_for_source(source: &str) -> String {
+    match source {
+        "desktop" => "desktop: unavailable",
+        "anyharness" => "anyharness: unavailable",
+        _ => "diagnostics: unavailable",
+    }
+    .to_string()
 }
 
 struct LogTail {
@@ -472,8 +481,8 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     use super::{
-        collect_log_files, scrub_diagnostic_text, scrub_health_response,
-        suggested_bundle_file_name, HealthResponse,
+        collect_log_files, collection_error_for_source, scrub_diagnostic_text,
+        scrub_health_response, suggested_bundle_file_name, HealthResponse,
     };
 
     fn temp_path(file_name: &str) -> PathBuf {
@@ -523,5 +532,21 @@ mod tests {
 
         assert!(!health.runtime_home.contains(&home));
         assert!(health.runtime_home.starts_with("~") || !home.starts_with('/'));
+    }
+
+    #[test]
+    fn collection_errors_use_fixed_source_classes() {
+        assert_eq!(
+            collection_error_for_source("desktop"),
+            "desktop: unavailable"
+        );
+        assert_eq!(
+            collection_error_for_source("anyharness"),
+            "anyharness: unavailable"
+        );
+        assert_eq!(
+            collection_error_for_source("/private/path"),
+            "diagnostics: unavailable"
+        );
     }
 }

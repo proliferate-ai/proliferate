@@ -1,10 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type {
-  ContentPart,
   HealthResponse,
   Session,
-  SessionEventEnvelope,
-  SessionRawNotificationEnvelope,
 } from "@anyharness/sdk";
 import {
   fallbackLocatorSession,
@@ -18,10 +15,6 @@ import {
 import { buildSessionDebugExport } from "#product/lib/domain/support/session-debug/export-models";
 import { suggestSessionDebugFileName } from "#product/lib/domain/support/session-debug/file-name";
 import { buildSessionDebugLocator } from "#product/lib/domain/support/session-debug/locator";
-import {
-  sanitizeSessionDebugContentParts,
-  sanitizeSessionDebugExportedSession,
-} from "#product/lib/domain/support/session-debug/sanitizer";
 import { sessionLocatorFromSession } from "#product/lib/domain/support/session-debug/session-summary";
 
 const generatedAt = "2026-04-16T18:30:00.000Z";
@@ -356,149 +349,6 @@ describe("suggestSessionDebugFileName", () => {
   });
 });
 
-describe("sanitizeSessionDebugContentParts", () => {
-  it("redacts textual content and resource previews without changing part shape", () => {
-    const parts = [
-      { type: "text", text: "abc" },
-      { type: "tool_input_text", text: "input" },
-      { type: "tool_result_text", text: "result" },
-      {
-        type: "resource",
-        uri: "file:///tmp/secret.txt",
-        name: "secret.txt",
-        mimeType: "text/plain",
-        preview: "preview",
-      },
-      {
-        type: "file_read",
-        path: "/repo/secret.txt",
-        preview: "file preview",
-      },
-    ] satisfies ContentPart[];
-
-    expect(sanitizeSessionDebugContentParts(parts)).toEqual([
-      { type: "text", text: "[text:3]" },
-      { type: "tool_input_text", text: "[text:5]" },
-      { type: "tool_result_text", text: "[text:6]" },
-      {
-        type: "resource",
-        uri: "file:///tmp/secret.txt",
-        name: "secret.txt",
-        mimeType: "text/plain",
-        preview: "[preview:7]",
-      },
-      {
-        type: "file_read",
-        path: "/repo/secret.txt",
-        preview: "file preview",
-      },
-    ]);
-  });
-});
-
-describe("sanitizeSessionDebugExportedSession", () => {
-  it("redacts pending prompts, transcript content, raw metadata, and notifications", () => {
-    const rawNotification: SessionRawNotificationEnvelope = {
-      sessionId: "session-12345678",
-      seq: 4,
-      timestamp: "2026-04-16T18:11:00.000Z",
-      notificationKind: "session/update",
-      notification: {
-        token: "secret",
-        path: "/repo/secret.txt",
-      },
-    };
-    const sanitized = sanitizeSessionDebugExportedSession({
-      session: makeSession({
-        pendingPrompts: [{
-          contentParts: [{ type: "text", text: "abc" }],
-          promptId: "prompt-1",
-          promptProvenance: null,
-          queuedAt: "2026-04-16T18:09:00.000Z",
-          seq: 2,
-          text: "prompt",
-        }],
-      }),
-      normalizedEvents: [
-        eventEnvelope(1, {
-          type: "item_completed",
-          item: {
-            contentParts: [{ type: "tool_result_text", text: "result" }],
-            kind: "assistant_message",
-            rawInput: { token: "secret" },
-            rawOutput: { path: "/repo/secret.txt" },
-            sourceAgentKind: "codex",
-            status: "completed",
-          },
-        } as SessionEventEnvelope["event"]),
-        eventEnvelope(2, {
-          type: "item_delta",
-          delta: {
-            appendContentParts: [{ type: "tool_input_text", text: "input" }],
-            rawInput: { command: "secret" },
-            rawOutput: { output: "secret" },
-            replaceContentParts: [{ type: "text", text: "replace" }],
-          },
-        }),
-        eventEnvelope(3, {
-          type: "pending_prompt_added",
-          contentParts: [{ type: "text", text: "queued" }],
-          promptId: "prompt-1",
-          promptProvenance: null,
-          queuedAt: "2026-04-16T18:09:00.000Z",
-          seq: 3,
-          text: "queue",
-        }),
-      ],
-      rawNotifications: [rawNotification],
-      liveConfig: null,
-      errors: [],
-    });
-
-    expect(sanitized.session?.pendingPrompts).toEqual([{
-      contentParts: [{ type: "text", text: "[text:3]" }],
-      promptId: "prompt-1",
-      promptProvenance: null,
-      queuedAt: "2026-04-16T18:09:00.000Z",
-      seq: 2,
-      text: "[content:6]",
-    }]);
-    expect(sanitized.normalizedEvents?.[0].event).toEqual({
-      type: "item_completed",
-      item: {
-        contentParts: [{ type: "tool_result_text", text: "[text:6]" }],
-        kind: "assistant_message",
-        rawInput: undefined,
-        rawOutput: undefined,
-        sourceAgentKind: "codex",
-        status: "completed",
-      },
-    });
-    expect(sanitized.normalizedEvents?.[1].event).toEqual({
-      type: "item_delta",
-      delta: {
-        appendContentParts: [{ type: "tool_input_text", text: "[text:5]" }],
-        rawInput: undefined,
-        rawOutput: undefined,
-        replaceContentParts: [{ type: "text", text: "[text:7]" }],
-      },
-    });
-    expect(sanitized.normalizedEvents?.[2].event).toEqual({
-      type: "pending_prompt_added",
-      contentParts: [{ type: "text", text: "[text:6]" }],
-      promptId: "prompt-1",
-      promptProvenance: null,
-      queuedAt: "2026-04-16T18:09:00.000Z",
-      seq: 3,
-      text: "[content:5]",
-    });
-    expect(sanitized.rawNotifications).toEqual([{
-      ...rawNotification,
-      notification: { redacted: true },
-    }]);
-  });
-});
-
 describe("buildSessionDebugExport", () => {
   it("keeps the export envelope stable while sanitizing sessions", () => {
     const locator = buildSessionDebugLocator({
@@ -552,24 +402,10 @@ describe("buildSessionDebugExport", () => {
       locator,
       errors: [],
     });
-    expect(payload.sessions[0].session?.pendingPrompts?.[0].text).toBe("[content:6]");
+    expect(payload.sessions[0].session?.pendingPrompts?.[0].text).toBe("[redacted:6]");
     expect(payload.sessions[0].rawNotifications?.[0].notification).toEqual({ redacted: true });
     expect(payload.sessions[0].errors).toEqual([
-      { scope: "liveConfig", message: "unavailable" },
+      { scope: "[redacted:10]", message: "[redacted:11]" },
     ]);
   });
 });
-
-function eventEnvelope(
-  seq: number,
-  event: SessionEventEnvelope["event"],
-): SessionEventEnvelope {
-  return {
-    sessionId: "session-12345678",
-    seq,
-    timestamp: `2026-04-16T18:10:0${seq}.000Z`,
-    turnId: "turn-1",
-    itemId: null,
-    event,
-  };
-}

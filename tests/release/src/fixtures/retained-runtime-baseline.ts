@@ -1,103 +1,130 @@
 import type { EnvResolution } from "../config/env-resolution.js";
+import {
+  assertIndexReceiptsBound,
+  loadIndexedRetainedReceipt,
+  loadRetainedReleaseIndex,
+  qualifiedReceiptExists,
+  RETAINED_RELEASE_INDEX_PATH,
+  RetainedReleaseError,
+  validateRetainedRelease,
+  type RetainedReleaseReceiptV1,
+} from "../artifacts/retained-release-set.js";
 
 /**
  * The immutable retained-production N-1 baseline a real T4-RUNTIME-1 update
- * proof updates FROM. "Retained" means the exact artifacts of the last release
- * actually qualified through this platform — never a decremented version or a
- * rebuilt-from-source approximation (tier-4-scenario-contract.md "Shared Tier 4
- * rules": "N-1 always means the last qualified production artifacts").
+ * proof updates FROM. "Retained" means the exact artifacts of the retained
+ * production release — never a decremented version or a rebuilt-from-source
+ * approximation (tier-4-scenario-contract.md "Artifact Identity").
  *
- * The mechanism that publishes and retains such a baseline does not exist yet
- * (release-worlds-and-fixtures.md defers the retained manifest as later work),
- * so `resolveRetainedRuntimeBaseline` returns null whenever the inputs are
- * absent and the scenario reports `blocked` rather than fabricating an N-1.
- * When the inputs ARE supplied, they name a real immutable E2B template and the
- * manifest describing its component versions/digests.
+ * Resolution is receipt-backed (replacing the former env-only assembly):
+ * `RELEASE_E2E_RETAINED_RELEASE_ID` selects a committed retained-release
+ * receipt (tests/release/retained-releases/) via the append-only index; the
+ * receipt is schema-validated, digest-checked, and policy-checked
+ * (bootstrap_unqualified fails closed once a qualified receipt exists) before
+ * any world side effect. Local runs and GitHub Actions resolve the identical
+ * committed receipt — the same logical retained set with no
+ * environment-specific representation. Absent a release id, the scenario
+ * reports `blocked` rather than fabricating an N-1.
  */
 export interface RetainedRuntimeBaseline {
   /** Immutable provider (E2B) template id of the retained N-1 sandbox image. */
   templateId: string;
   /**
-   * The retained release's component manifest, verbatim as supplied
-   * (JSON string). The live proof parses it for per-component version/digest;
-   * kept opaque here so this resolver stays a thin, secret-free input gate.
+   * The retained release's component manifest (JSON string): the receipt's
+   * managed_runtime block plus release identity. The live proof parses it for
+   * per-component version/digest.
    */
   manifest: string;
   /**
    * The version the retained AnyHarness binary ACTUALLY reports from
-   * `--version` / `/health`, not merely its release tag. The supervisor
-   * health-gate and worker `--version` probe assert an exact match to the
-   * requested version (R9R-001 / R9-008); a binary that is not version-stamped
-   * (issue #1089) can never converge, so the proof must compare against what is
-   * observably reported. Defaults to the template id's declared version when a
-   * dedicated override is not supplied.
+   * `--version` / `/health`, not merely its release tag (issue #1089: an
+   * unstamped binary can never converge, so the proof compares against what
+   * is observably reported). Defaults to the receipt's anyharness version
+   * when a dedicated override is not supplied.
    */
   anyharnessReportedVersion: string;
+  /** The full validated receipt backing this baseline. */
+  receipt: RetainedReleaseReceiptV1;
+  /** SHA-256 of the exact receipt file bytes (the evidence identity). */
+  receiptSha256: string;
 }
 
-export const RETAINED_TEMPLATE_ID_ENV = "RELEASE_E2E_RETAINED_TEMPLATE_ID";
-export const RETAINED_MANIFEST_ENV = "RELEASE_E2E_RETAINED_MANIFEST";
+export const RETAINED_RELEASE_ID_ENV = "RELEASE_E2E_RETAINED_RELEASE_ID";
 export const RETAINED_ANYHARNESS_REPORTED_VERSION_ENV =
   "RELEASE_E2E_RETAINED_ANYHARNESS_REPORTED_VERSION";
 
+/** Injectable index root and policy inputs so tests never depend on committed data. */
+export interface RetainedBaselineSource {
+  indexPath?: string;
+  /**
+   * The candidate N source SHA for the N-1 != N policy check. Required
+   * whenever a release id is selected: a receipt-backed baseline without a
+   * known candidate identity fails closed (RR-CONTROL-003).
+   */
+  currentCandidateSourceSha?: string;
+}
+
 /**
- * Resolve the retained N-1 baseline from the runner-resolved environment, or
- * null when the inputs are absent (the founder-ruled default until a real
- * qualified release is retained). Both the template id and the manifest must be
- * present and non-empty; a half-supplied baseline is treated as absent so a
- * partial environment blocks cleanly rather than running against an incoherent
- * N-1.
+ * Resolve the retained N-1 baseline, or null when no release id names one
+ * (the founder-ruled default until a retained release is selected — the
+ * scenario blocks honestly). A NAMED baseline that cannot be validated
+ * (unknown id, unreadable/invalid receipt, index digest mismatch,
+ * bootstrap-after-qualified, N-1 == N) throws RetainedReleaseError — an
+ * error, never a silent block, and never a fallback.
  *
- * The two gating inputs come from `env` — the runner's single env-resolution
- * authority (`ctx.env`), which the scenario feeds by declaring both names in
- * its `requiredEnv` (T4R-CONTROL-001). The optional reported-version override
- * is passed explicitly: it is not a gating requirement (the manifest supplies a
- * default), so it must not sit in `requiredEnv` — the scenario reads it through
- * the optional-var idiom and hands the raw value here, keeping this resolver
- * free of any second, undeclared env read.
+ * The release id comes from `env` — the runner's single env-resolution
+ * authority (`ctx.env`), fed by the scenario's `requiredEnv`
+ * (T4R-CONTROL-001). The optional reported-version override is passed
+ * explicitly: it is not a gating requirement (the receipt supplies a
+ * default), so it must not sit in `requiredEnv` — the scenario reads it
+ * through the optional-var idiom and hands the raw value here.
  */
 export function resolveRetainedRuntimeBaseline(
   env: EnvResolution,
   reportedVersionOverride?: string,
+  source: RetainedBaselineSource = {},
 ): RetainedRuntimeBaseline | null {
-  const templateId = env.get(RETAINED_TEMPLATE_ID_ENV)?.trim() ?? "";
-  const manifest = env.get(RETAINED_MANIFEST_ENV)?.trim() ?? "";
-  if (templateId.length === 0 || manifest.length === 0) {
+  const releaseId = env.get(RETAINED_RELEASE_ID_ENV)?.trim() ?? "";
+  if (releaseId.length === 0) {
     return null;
   }
+
+  // A real update proof must know the candidate N it updates TO: without the
+  // candidate source SHA the N-1 != N invariant cannot be enforced, so a
+  // receipt-backed baseline fails closed rather than silently skipping it.
+  const candidateSha = source.currentCandidateSourceSha?.trim() ?? "";
+  if (candidateSha.length === 0) {
+    throw new RetainedReleaseError(
+      `Retained release "${releaseId}" was selected but no candidate source SHA was supplied; ` +
+        `the N-1 != N invariant cannot be enforced without it.`,
+    );
+  }
+
+  const indexPath = source.indexPath ?? RETAINED_RELEASE_INDEX_PATH;
+  const index = loadRetainedReleaseIndex(indexPath);
+  // Bind EVERY entry (bytes + identity/state) before deriving bootstrap
+  // policy from index metadata: a mislabeled sibling entry could otherwise
+  // hide an existing qualified receipt (RR-CONTROL-005).
+  assertIndexReceiptsBound(index, indexPath);
+  const { receipt, receiptSha256 } = loadIndexedRetainedReceipt(index, indexPath, releaseId);
+  validateRetainedRelease(receipt, {
+    requiredTargets: ["managed-runtime"],
+    currentCandidateSourceSha: candidateSha,
+    qualifiedReceiptExists: qualifiedReceiptExists(index),
+  });
+
   const reportedOverride = reportedVersionOverride?.trim() ?? "";
   return {
-    templateId,
-    manifest,
+    templateId: receipt.managed_runtime.immutable_template_id,
+    manifest: JSON.stringify({
+      release_id: receipt.release.release_id,
+      source_sha: receipt.release.source_sha,
+      qualification_state: receipt.release.qualification_state,
+      ...receipt.managed_runtime,
+    }),
     anyharnessReportedVersion:
-      reportedOverride.length > 0 ? reportedOverride : deriveReportedVersion(manifest),
+      reportedOverride.length > 0 ? reportedOverride : receipt.managed_runtime.anyharness_version,
+    receipt,
+    receiptSha256,
   };
-}
-
-/**
- * Best-effort read of the AnyHarness version the manifest declares, used only
- * when no explicit reported-version override is given. Never throws: an
- * unparseable manifest yields an empty string, which the scenario asserts
- * against so a malformed baseline blocks rather than proceeding on a guess.
- */
-function deriveReportedVersion(manifest: string): string {
-  try {
-    const parsed: unknown = JSON.parse(manifest);
-    if (parsed && typeof parsed === "object") {
-      const record = parsed as Record<string, unknown>;
-      const anyharness = record.anyharness;
-      if (anyharness && typeof anyharness === "object") {
-        const version = (anyharness as Record<string, unknown>).version;
-        if (typeof version === "string") {
-          return version.trim();
-        }
-      }
-      if (typeof record.anyharnessVersion === "string") {
-        return record.anyharnessVersion.trim();
-      }
-    }
-  } catch {
-    return "";
-  }
-  return "";
 }

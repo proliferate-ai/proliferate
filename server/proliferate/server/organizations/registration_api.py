@@ -8,11 +8,12 @@ reopens for allowlisted (invited) emails after the instance is claimed.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Depends, status
 from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.auth import PASSWORD_EMAIL_MAX_LENGTH, PASSWORD_MAX_LENGTH
-from proliferate.db.engine import AsyncSessionDep
+from proliferate.db.engine import get_async_session
 from proliferate.server.organizations.self_registration import register_invited_account
 
 router = APIRouter(prefix="/password", tags=["auth"])
@@ -42,7 +43,7 @@ class PasswordRegisterResponse(BaseModel):
 )
 async def register_with_password(
     body: PasswordRegisterRequest,
-    db: AsyncSessionDep,
+    db: AsyncSession = Depends(get_async_session, scope="function"),
 ) -> PasswordRegisterResponse:
     """Create an account for an invited email, joining the instance organization."""
     registration = await register_invited_account(

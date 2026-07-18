@@ -20,25 +20,25 @@ export function useCloudRepoActionState(args: {
   const signedIn = useProductAuthStatus() === "authenticated";
   const { activeOrganization } = useActiveOrganization();
   const canManageInstallation = isSettingsAdminRole(activeOrganization?.membership?.role);
-  if (!args.repoTarget) {
-    return { kind: "hidden", label: null, accessState: "hidden" } as const;
-  }
-  const configured = args.repoTarget
-    ? args.configuredRepoKeys.has(cloudRepositoryKey(
-      args.repoTarget.gitOwner,
-      args.repoTarget.gitRepoName,
-    ))
-    : false;
   const operatorReady =
     capabilities.githubRepositoryAccessStatus === "ready"
     && capabilities.managedCloudStatus === "ready";
   // The authority endpoint is meaningful only after the deployment and actor
   // gates, but it must run whether or not a Cloud environment already exists.
-  const shouldCheckAuthority = signedIn && operatorReady;
+  // Keep this hook unconditional: the command target changes from null to a
+  // repository when a repo's create menu opens.
+  const shouldCheckAuthority = args.repoTarget !== null && signedIn && operatorReady;
   const authority = useGitHubRepoAuthority({
     gitOwner: args.repoTarget?.gitOwner,
     gitRepoName: args.repoTarget?.gitRepoName,
   }, shouldCheckAuthority);
+  if (!args.repoTarget) {
+    return { kind: "hidden", label: null, accessState: "hidden" } as const;
+  }
+  const configured = args.configuredRepoKeys.has(cloudRepositoryKey(
+    args.repoTarget.gitOwner,
+    args.repoTarget.gitRepoName,
+  ));
 
   const readiness = resolveRepositoryReadiness({
     requirement: "managed_cloud",

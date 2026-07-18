@@ -1,21 +1,22 @@
 {
-  "probedAt": "2026-06-18T02:52:36.082085+00:00",
+  "probedAt": "2026-07-17T20:46:58.500864+00:00",
   "agentKind": "claude",
   "authContext": "anthropic-api",
   "attestation": {
-    "name": "@agentclientprotocol/claude-agent-acp",
-    "version": "0.44.0",
+    "name": "@proliferate/claude-agent-acp",
+    "version": "0.59.0-proliferate.1",
     "title": "Claude Agent"
   },
   "modelSource": "modelConfigOption",
   "nativeCli": {
-    "path": "/Users/pablohansen/.proliferate/anyharness/agents/claude/native/claude",
-    "version": "2.1.177 (Claude Code)"
+    "path": "/Users/pablohansen/.proliferate-local/anyharness/agents/claude/native/claude",
+    "version": "2.1.212 (Claude Code)"
   },
   "trials": [
     {
       "modelId": "claude-fable-5",
       "accepted": true,
+      "name": "Fable",
       "configOptions": [
         {
           "category": "mode",
@@ -31,7 +32,7 @@
             },
             {
               "description": "Standard behavior, prompts for dangerous operations",
-              "name": "Default",
+              "name": "Manual",
               "value": "default"
             },
             {
@@ -59,7 +60,7 @@
         },
         {
           "category": "model",
-          "currentValue": "opus",
+          "currentValue": "claude-fable-5",
           "description": "AI model to use",
           "id": "model",
           "name": "Model",
@@ -71,28 +72,23 @@
             },
             {
               "description": "Opus 4.8 with 1M context · Best for everyday, complex tasks · $5/$25 per Mtok",
-              "name": "Opus (1M context)",
+              "name": "Opus",
               "value": "opus[1m]"
             },
             {
-              "description": "Sonnet 4.6 · Efficient for routine tasks · $3/$15 per Mtok",
-              "name": "Sonnet",
-              "value": "sonnet"
+              "description": "Fable 5 · Most capable for your hardest and longest-running tasks",
+              "name": "Fable",
+              "value": "claude-fable-5"
             },
             {
-              "description": "Sonnet 4.6 for long sessions · $3/$15 per Mtok",
-              "name": "Sonnet (1M context)",
-              "value": "sonnet[1m]"
+              "description": "Sonnet 5 · Efficient for routine tasks · $3/$15 per Mtok",
+              "name": "Sonnet",
+              "value": "sonnet"
             },
             {
               "description": "Haiku 4.5 · Fastest for quick answers · $1/$5 per Mtok",
               "name": "Haiku",
               "value": "haiku"
-            },
-            {
-              "description": "Opus 4.8 · Best for everyday, complex tasks",
-              "name": "Opus",
-              "value": "opus"
             }
           ],
           "type": "select"
@@ -127,24 +123,6 @@
             {
               "name": "Max",
               "value": "max"
-            }
-          ],
-          "type": "select"
-        },
-        {
-          "category": "_fast_mode",
-          "currentValue": "off",
-          "description": "Favor faster responses",
-          "id": "fast_mode",
-          "name": "Fast Mode",
-          "options": [
-            {
-              "name": "Off",
-              "value": "off"
-            },
-            {
-              "name": "On",
-              "value": "on"
             }
           ],
           "type": "select"
@@ -169,7 +147,7 @@
             },
             {
               "description": "Standard behavior, prompts for dangerous operations",
-              "name": "Default",
+              "name": "Manual",
               "value": "default"
             },
             {
@@ -197,7 +175,7 @@
         },
         {
           "category": "model",
-          "currentValue": "opus",
+          "currentValue": "opus[1m]",
           "description": "AI model to use",
           "id": "model",
           "name": "Model",
@@ -209,28 +187,18 @@
             },
             {
               "description": "Opus 4.8 with 1M context · Best for everyday, complex tasks · $5/$25 per Mtok",
-              "name": "Opus (1M context)",
+              "name": "Opus",
               "value": "opus[1m]"
             },
             {
-              "description": "Sonnet 4.6 · Efficient for routine tasks · $3/$15 per Mtok",
+              "description": "Sonnet 5 · Efficient for routine tasks · $3/$15 per Mtok",
               "name": "Sonnet",
               "value": "sonnet"
-            },
-            {
-              "description": "Sonnet 4.6 for long sessions · $3/$15 per Mtok",
-              "name": "Sonnet (1M context)",
-              "value": "sonnet[1m]"
             },
             {
               "description": "Haiku 4.5 · Fastest for quick answers · $1/$5 per Mtok",
               "name": "Haiku",
               "value": "haiku"
-            },
-            {
-              "description": "Opus 4.8 · Best for everyday, complex tasks",
-              "name": "Opus",
-              "value": "opus"
             }
           ],
           "type": "select"
@@ -270,19 +238,19 @@
           "type": "select"
         },
         {
-          "category": "_fast_mode",
+          "category": "model_config",
           "currentValue": "off",
-          "description": "Favor faster responses",
-          "id": "fast_mode",
-          "name": "Fast Mode",
+          "description": "Faster responses on supported models",
+          "id": "fast",
+          "name": "Fast mode",
           "options": [
-            {
-              "name": "Off",
-              "value": "off"
-            },
             {
               "name": "On",
               "value": "on"
+            },
+            {
+              "name": "Off",
+              "value": "off"
             }
           ],
           "type": "select"
@@ -302,7 +270,7 @@
       {
         "description": "Standard behavior, prompts for dangerous operations",
         "id": "default",
-        "name": "Default"
+        "name": "Manual"
       },
       {
         "description": "Auto-accept file edit operations",
@@ -342,7 +310,7 @@
         },
         {
           "description": "Standard behavior, prompts for dangerous operations",
-          "name": "Default",
+          "name": "Manual",
           "value": "default"
         },
         {
@@ -370,7 +338,7 @@
     },
     {
       "category": "model",
-      "currentValue": "opus",
+      "currentValue": "default",
       "description": "AI model to use",
       "id": "model",
       "name": "Model",
@@ -382,28 +350,18 @@
         },
         {
           "description": "Opus 4.8 with 1M context · Best for everyday, complex tasks · $5/$25 per Mtok",
-          "name": "Opus (1M context)",
+          "name": "Opus",
           "value": "opus[1m]"
         },
         {
-          "description": "Sonnet 4.6 · Efficient for routine tasks · $3/$15 per Mtok",
+          "description": "Sonnet 5 · Efficient for routine tasks · $3/$15 per Mtok",
           "name": "Sonnet",
           "value": "sonnet"
-        },
-        {
-          "description": "Sonnet 4.6 for long sessions · $3/$15 per Mtok",
-          "name": "Sonnet (1M context)",
-          "value": "sonnet[1m]"
         },
         {
           "description": "Haiku 4.5 · Fastest for quick answers · $1/$5 per Mtok",
           "name": "Haiku",
           "value": "haiku"
-        },
-        {
-          "description": "Opus 4.8 · Best for everyday, complex tasks",
-          "name": "Opus",
-          "value": "opus"
         }
       ],
       "type": "select"
@@ -443,19 +401,19 @@
       "type": "select"
     },
     {
-      "category": "_fast_mode",
+      "category": "model_config",
       "currentValue": "off",
-      "description": "Favor faster responses",
-      "id": "fast_mode",
-      "name": "Fast Mode",
+      "description": "Faster responses on supported models",
+      "id": "fast",
+      "name": "Fast mode",
       "options": [
-        {
-          "name": "Off",
-          "value": "off"
-        },
         {
           "name": "On",
           "value": "on"
+        },
+        {
+          "name": "Off",
+          "value": "off"
         }
       ],
       "type": "select"
@@ -481,7 +439,7 @@
             },
             {
               "description": "Standard behavior, prompts for dangerous operations",
-              "name": "Default",
+              "name": "Manual",
               "value": "default"
             },
             {
@@ -552,19 +510,19 @@
           "type": "select"
         },
         {
-          "category": "_fast_mode",
+          "category": "model_config",
           "currentValue": "off",
-          "description": "Favor faster responses",
-          "id": "fast_mode",
-          "name": "Fast Mode",
+          "description": "Faster responses on supported models",
+          "id": "fast",
+          "name": "Fast mode",
           "options": [
-            {
-              "name": "Off",
-              "value": "off"
-            },
             {
               "name": "On",
               "value": "on"
+            },
+            {
+              "name": "Off",
+              "value": "off"
             }
           ],
           "type": "select"
@@ -573,7 +531,7 @@
     },
     {
       "modelId": "opus[1m]",
-      "name": "Opus (1M context)",
+      "name": "Opus",
       "description": "Opus 4.8 with 1M context · Best for everyday, complex tasks · $5/$25 per Mtok",
       "configOptions": [
         {
@@ -590,7 +548,7 @@
             },
             {
               "description": "Standard behavior, prompts for dangerous operations",
-              "name": "Default",
+              "name": "Manual",
               "value": "default"
             },
             {
@@ -661,19 +619,19 @@
           "type": "select"
         },
         {
-          "category": "_fast_mode",
+          "category": "model_config",
           "currentValue": "off",
-          "description": "Favor faster responses",
-          "id": "fast_mode",
-          "name": "Fast Mode",
+          "description": "Faster responses on supported models",
+          "id": "fast",
+          "name": "Fast mode",
           "options": [
-            {
-              "name": "Off",
-              "value": "off"
-            },
             {
               "name": "On",
               "value": "on"
+            },
+            {
+              "name": "Off",
+              "value": "off"
             }
           ],
           "type": "select"
@@ -683,7 +641,7 @@
     {
       "modelId": "sonnet",
       "name": "Sonnet",
-      "description": "Sonnet 4.6 · Efficient for routine tasks · $3/$15 per Mtok",
+      "description": "Sonnet 5 · Efficient for routine tasks · $3/$15 per Mtok",
       "configOptions": [
         {
           "category": "mode",
@@ -699,7 +657,7 @@
             },
             {
               "description": "Standard behavior, prompts for dangerous operations",
-              "name": "Default",
+              "name": "Manual",
               "value": "default"
             },
             {
@@ -759,91 +717,8 @@
               "value": "high"
             },
             {
-              "name": "Max",
-              "value": "max"
-            }
-          ],
-          "type": "select"
-        }
-      ]
-    },
-    {
-      "modelId": "sonnet[1m]",
-      "name": "Sonnet (1M context)",
-      "description": "Sonnet 4.6 for long sessions · $3/$15 per Mtok",
-      "configOptions": [
-        {
-          "category": "mode",
-          "currentValue": "default",
-          "description": "Session permission mode",
-          "id": "mode",
-          "name": "Mode",
-          "options": [
-            {
-              "description": "Use a model classifier to approve/deny permission prompts",
-              "name": "Auto",
-              "value": "auto"
-            },
-            {
-              "description": "Standard behavior, prompts for dangerous operations",
-              "name": "Default",
-              "value": "default"
-            },
-            {
-              "description": "Auto-accept file edit operations",
-              "name": "Accept Edits",
-              "value": "acceptEdits"
-            },
-            {
-              "description": "Planning mode, no actual tool execution",
-              "name": "Plan Mode",
-              "value": "plan"
-            },
-            {
-              "description": "Don't prompt for permissions, deny if not pre-approved",
-              "name": "Don't Ask",
-              "value": "dontAsk"
-            },
-            {
-              "description": "Bypass all permission checks",
-              "name": "Bypass Permissions",
-              "value": "bypassPermissions"
-            }
-          ],
-          "type": "select"
-        },
-        {
-          "category": "model",
-          "currentValue": "sonnet[1m]",
-          "description": "AI model to use",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        },
-        {
-          "category": "thought_level",
-          "currentValue": "default",
-          "description": "Available effort levels for this model",
-          "id": "effort",
-          "name": "Effort",
-          "options": [
-            {
-              "name": "Default",
-              "value": "default"
-            },
-            {
-              "name": "Low",
-              "value": "low"
-            },
-            {
-              "name": "Medium",
-              "value": "medium"
-            },
-            {
-              "name": "High",
-              "value": "high"
+              "name": "Xhigh",
+              "value": "xhigh"
             },
             {
               "name": "Max",
@@ -868,7 +743,7 @@
           "options": [
             {
               "description": "Standard behavior, prompts for dangerous operations",
-              "name": "Default",
+              "name": "Manual",
               "value": "default"
             },
             {
@@ -903,115 +778,6 @@
           "options": [],
           "type": "select",
           "valuesElided": true
-        }
-      ]
-    },
-    {
-      "modelId": "opus",
-      "name": "Opus",
-      "description": "Opus 4.8 · Best for everyday, complex tasks",
-      "configOptions": [
-        {
-          "category": "mode",
-          "currentValue": "default",
-          "description": "Session permission mode",
-          "id": "mode",
-          "name": "Mode",
-          "options": [
-            {
-              "description": "Use a model classifier to approve/deny permission prompts",
-              "name": "Auto",
-              "value": "auto"
-            },
-            {
-              "description": "Standard behavior, prompts for dangerous operations",
-              "name": "Default",
-              "value": "default"
-            },
-            {
-              "description": "Auto-accept file edit operations",
-              "name": "Accept Edits",
-              "value": "acceptEdits"
-            },
-            {
-              "description": "Planning mode, no actual tool execution",
-              "name": "Plan Mode",
-              "value": "plan"
-            },
-            {
-              "description": "Don't prompt for permissions, deny if not pre-approved",
-              "name": "Don't Ask",
-              "value": "dontAsk"
-            },
-            {
-              "description": "Bypass all permission checks",
-              "name": "Bypass Permissions",
-              "value": "bypassPermissions"
-            }
-          ],
-          "type": "select"
-        },
-        {
-          "category": "model",
-          "currentValue": "opus",
-          "description": "AI model to use",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        },
-        {
-          "category": "thought_level",
-          "currentValue": "default",
-          "description": "Available effort levels for this model",
-          "id": "effort",
-          "name": "Effort",
-          "options": [
-            {
-              "name": "Default",
-              "value": "default"
-            },
-            {
-              "name": "Low",
-              "value": "low"
-            },
-            {
-              "name": "Medium",
-              "value": "medium"
-            },
-            {
-              "name": "High",
-              "value": "high"
-            },
-            {
-              "name": "Xhigh",
-              "value": "xhigh"
-            },
-            {
-              "name": "Max",
-              "value": "max"
-            }
-          ],
-          "type": "select"
-        },
-        {
-          "category": "_fast_mode",
-          "currentValue": "off",
-          "description": "Favor faster responses",
-          "id": "fast_mode",
-          "name": "Fast Mode",
-          "options": [
-            {
-              "name": "Off",
-              "value": "off"
-            },
-            {
-              "name": "On",
-              "value": "on"
-            }
-          ],
-          "type": "select"
         }
       ]
     }

@@ -15,7 +15,7 @@ acquire the process lock beside the Worker database
   -> load durable identity or enroll once
   -> after a fresh enrollment, write integration-gateway credentials
   -> create in-memory catalog-sync state
-  -> heartbeat and converge once
+  -> heartbeat, repair that fresh gateway credential if needed, and converge once
   -> if --once: return
   -> otherwise: sleep for the configured interval and repeat
 ```
@@ -28,6 +28,8 @@ or materialization loops, and it has no custom shutdown coordinator.
 ```text
 POST heartbeat
   -> on failure: log and retry next tick
+  -> if this process freshly enrolled and the shared gateway file differs,
+     restore its credential now that heartbeat authenticated it
   -> catalog convergence (non-fatal)
   -> AnyHarness binary convergence (non-fatal; optional)
   -> Worker binary convergence (non-fatal; optional)

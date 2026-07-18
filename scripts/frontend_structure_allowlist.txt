@@ -30,11 +30,9 @@ apps/packages/product-client/src/components/workspace/shell/sidebar/WorkspaceIte
 apps/packages/product-client/src/components/workspace/shell/sidebar/MainSidebar.tsx 421 connected sidebar host; PR 5 availability-intent begin handler threaded alongside existing repo/cloud actions; extraction pending
 apps/packages/product-client/src/components/workspace/repo-setup/CloudRepoActionDialogHost.tsx 433 shared ordered-readiness continuation host for Cloud registration and retry-stable local clone; split by intent owner on next growth
 apps/packages/product-client/src/hooks/sessions/lifecycle/session-stream-flush-apply.ts 401 session stream flush/apply pending reducer split
-apps/packages/product-client/src/hooks/sessions/workflows/session-creation-materialization.ts 415 injected typed telemetry deps threaded from the calling hook; split deferred
 apps/packages/product-client/src/hooks/sessions/workflows/session-replacement-tombstones.ts 408 async ProductStorage hydration added to the in-memory tombstone model
 apps/packages/product-client/src/hooks/sessions/workflows/use-session-creation-actions.ts 423 product telemetry facade threading into session-creation workflows; split deferred
 apps/packages/product-client/src/lib/infra/measurement/measurement-port.ts 734 product-owned measurement port barrel (R1 ruling) mirroring the retained measurement surface through a swappable no-op sink; split deferred
-apps/packages/product-client/src/hooks/access/tauri/use-updater.ts 410 WDU slice 04 (G1): updater hook grew from the injected telemetry/storage scheduler DI; behavior-preserving
 apps/packages/product-client/src/host/product-host.ts 420 WDU slice 04 (G2/G4): host contract grew from getAnonymousInstallId + getSandboxGatewayAccessToken and their doc contracts
 apps/packages/product-client/src/components/playground/WorkspaceStatusPlayground.tsx 450 status-card playground fixtures pending scenario-module split (#1202 debt repair)
 apps/packages/product-client/src/lib/domain/preferences/appearance.ts 437 appearance preset model pending preset-catalog split (#1202 growth recorded in debt repair)

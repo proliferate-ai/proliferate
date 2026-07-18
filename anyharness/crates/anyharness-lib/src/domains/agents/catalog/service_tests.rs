@@ -44,14 +44,39 @@ fn bundled_catalog_declares_goal_support_for_claude_and_codex_only() {
 }
 
 #[test]
+fn active_catalog_surfaces_only_declared_unattended_modes() {
+    let mut raw: serde_json::Value =
+        serde_json::from_str(draft_catalog_json()).expect("draft must parse");
+    raw["agents"][0]["session"]["unattendedModeId"] =
+        serde_json::Value::String("bypassPermissions".to_string());
+    raw["agents"][1]["session"]["unattendedModeId"] =
+        serde_json::Value::String("full-access".to_string());
+    raw["agents"][2]["session"]
+        .as_object_mut()
+        .expect("cursor session")
+        .remove("unattendedModeId");
+    let document = parse_agent_catalog_json(&serde_json::to_string(&raw).expect("serialize"))
+        .expect("curated catalog must load");
+    let catalog = ActiveCatalog::new(Arc::new(document));
+
+    assert_eq!(
+        catalog.unattended_mode_id("claude"),
+        Some("bypassPermissions")
+    );
+    assert_eq!(catalog.unattended_mode_id("codex"), Some("full-access"));
+    assert_eq!(catalog.unattended_mode_id("cursor"), None);
+    assert_eq!(catalog.unattended_mode_id("unknown"), None);
+}
+
+#[test]
 fn pins_surface_catalog_harness_versions() {
     let catalog = draft_catalog();
 
     let claude = catalog.pins("claude").expect("claude pins");
-    assert_eq!(claude.agent_process.version, "0.44.0");
+    assert_eq!(claude.agent_process.version, "0.59.0-proliferate.1");
     assert_eq!(
         claude.native.as_ref().map(|pin| pin.version.as_str()),
-        Some("2.1.181")
+        Some("2.1.212")
     );
 
     // Cursor has no native pin; unknown kinds have no pins at all.
@@ -114,9 +139,7 @@ fn models_intersect_availability_with_active_contexts() {
             "default",
             "opus[1m]",
             "sonnet",
-            "sonnet[1m]",
             "haiku",
-            "opus",
             "claude-fable-5",
             "claude-opus-4-8"
         ]
@@ -127,9 +150,9 @@ fn models_intersect_availability_with_active_contexts() {
             "default",
             "sonnet",
             "haiku",
-            "opus",
             "claude-fable-5",
-            "claude-opus-4-8"
+            "claude-opus-4-8",
+            "opus"
         ]
     );
     // No matching context, no models; unknown kind, no models.
@@ -151,6 +174,7 @@ fn baseline_counts_as_a_context_when_active() {
         vec![
             "opencode/big-pickle",
             "opencode/deepseek-v4-flash-free",
+            "opencode/hy3-free",
             "opencode/mimo-v2.5-free",
             "opencode/nemotron-3-ultra-free",
             "opencode/north-mini-code-free"
@@ -174,9 +198,9 @@ fn visible_models_are_the_default_visible_subset_of_available() {
             "default",
             "sonnet",
             "haiku",
-            "opus",
             "claude-fable-5",
-            "claude-opus-4-8"
+            "claude-opus-4-8",
+            "opus"
         ]
     );
 }
@@ -314,19 +338,19 @@ fn validate_launch_availability_beats_visibility() {
 fn validate_launch_rejects_gated_and_unknown_models() {
     let catalog = draft_catalog();
 
-    // sonnet[1m] is api-only: gated under oauth, with the unlock condition.
+    // opus[1m] is api-only: gated under oauth, with the unlock condition.
     let gated = catalog
         .validate_launch(
             "claude",
             &contexts(&["anthropic-oauth"]),
-            Some("sonnet[1m]"),
+            Some("opus[1m]"),
             None,
         )
         .expect_err("api-only model must be gated under oauth");
     assert_eq!(
         gated,
         SelectionUnsupported::ModelGated {
-            model_id: "sonnet[1m]".into(),
+            model_id: "opus[1m]".into(),
             required_contexts: vec!["anthropic-api".into()],
         }
     );
@@ -532,6 +556,11 @@ fn validate_launch_rejects_mode_selection_without_mode_vocabulary() {
     let mut raw: serde_json::Value =
         serde_json::from_str(draft_catalog_json()).expect("draft must parse");
     let codex = &mut raw["agents"][1];
+    // Remove the curated default so the no-vocabulary fixture remains loader-valid.
+    codex["session"]
+        .as_object_mut()
+        .expect("session object")
+        .remove("unattendedModeId");
     let controls = codex["session"]["controls"]
         .as_array_mut()
         .expect("controls array");

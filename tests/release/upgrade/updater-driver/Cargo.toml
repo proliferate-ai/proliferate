@@ -5,13 +5,14 @@
 # compiles it — it is a heavy tauri-test harness that is built on demand only
 # by the T4 orchestrator on a local macOS run, never in CI.
 #
-# It exercises the REAL `tauri_plugin_updater` Rust API (the same code the
-# desktop JS wrappers in apps/desktop/src/lib/access/tauri/updater.ts call
-# through): fetch the served manifest, semver-compare, verify the N artifact's
-# minisign signature against the pubkey the N-1 build trusts, and swap the
-# on-disk N-1 `.app` bundle in place. Pointing the updater's `executable_path`
-# at a copy of the N-1 bundle (via the public UpdaterBuilder::executable_path)
-# makes the install target that copy rather than this binary.
+# It exercises the REAL `tauri_plugin_updater` Rust API: fetch the served
+# manifest, semver-compare, download and verify the N artifact's minisign
+# signature against the pubkey the N-1 build trusts, preserve an explicit
+# pre-install boundary, then swap the on-disk N-1 `.app` bundle in place.
+# Pointing the updater's `executable_path` at a copy of the N-1 bundle (via the
+# public UpdaterBuilder::executable_path) makes the install target that copy
+# rather than this binary. This macOS driver does not execute the product JS
+# wrapper or qualify its Windows-native cleanup command.
 [package]
 name = "t4-updater-driver"
 version = "0.0.0"

@@ -1,28 +1,22 @@
 // Tier-2 "mocked intent" stack-boot fixture.
 //
-// Boots a real server (FastAPI/uvicorn) + real desktop web frontend (Vite,
-// `apps/desktop` in web-port mode) against a seeded Postgres, on a dedicated,
-// profile-isolated port set. Nothing here fakes the sandbox provider or an
-// LLM (that's the tier-2 rule, see specs/developing/testing/README.md) — the
-// only things faked at this boundary are auth-adjacent externals (mock IdP,
-// email capture, Stripe test mode), and this suite doesn't even need those.
-//
-// Profile name is fixed to `t2intent` per
-// specs/developing/local/dev-profiles.md (one profile per worktree/purpose,
-// never `main`, kept for this suite's lifetime since it owns its own
-// Postgres DB).
-//
-// Reuses the same primitives `make run PROFILE=<name>` uses
-// (scripts/dev.mjs for port/profile allocation, alembic for migrations)
-// rather than shelling out to `make run` itself, because `make run` always
-// launches the Tauri desktop shell — tier 2 needs the desktop **web** build
-// (`pnpm dev` / vite) per specs/developing/testing/scenarios.md's stated
-// convention ("desktop web build (`pnpm dev` on PROLIFERATE_WEB_PORT)").
+// Boots real FastAPI, Vite, and Postgres on profile-isolated ports. It reuses
+// the profile allocator and migrations behind `make run`, but launches Vite
+// directly because Tier 2 needs the Desktop web build, not the Tauri shell.
+// Network neighbors remain fake or absent per specs/developing/testing/README.md.
 
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  assertOwnedProfileResources,
+  cleanupOwnedEphemeralProfile,
+  createOwnedProfilePostgresCustody,
+  prepareOwnedEphemeralProfile,
+  setupTokenFileForProfile,
+  type OwnedEphemeralProfile,
+} from "./ephemeral-profile.ts";
 
 export const PROFILE = "t2intent";
 export const BILLING_PROFILE = "t2billing";
@@ -40,6 +34,8 @@ export interface StripeBillingEnv {
 export interface BootOptions {
   /** Profile name to boot under (default: the auth/org `t2intent` profile). */
   profile?: string;
+  /** Fresh run/attempt/worker/retry-owned profile. Mutually exclusive with profile. */
+  ownedProfile?: OwnedEphemeralProfile;
   /** When set, the server boots with Stripe test-mode billing wired: pro
    * billing enabled, `CLOUD_BILLING_MODE` (default `enforce`), and the Stripe
    * test keys/prices. Used only by the billing suite. */
@@ -59,6 +55,12 @@ export interface BootOptions {
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 export const REPO_ROOT = path.resolve(here, "..", "..", "..");
+
+function serverVenvExecutable(name: string): string {
+  const binDir = process.env.TIER2_INTENT_SERVER_VENV_BIN
+    ?? path.join(REPO_ROOT, "server", ".venv", "bin");
+  return path.join(binDir, name);
+}
 
 export interface BootedStack {
   profile: string;
@@ -108,16 +110,6 @@ function run(command: string, args: string[], options: { cwd?: string; env?: Nod
   return result.stdout.trim();
 }
 
-function localPgHost(): string {
-  if (process.env.LOCAL_PGHOST) {
-    return process.env.LOCAL_PGHOST;
-  }
-  // Matches the Makefile's OS-conditional default: Docker Desktop's Postgres
-  // listener on macOS is reached over ::1 so it isn't confused with a
-  // Homebrew Postgres bound to 127.0.0.1.
-  return process.platform === "darwin" ? "::1" : "127.0.0.1";
-}
-
 function profileInstancePath(profile: string): string {
   return path.join(
     process.env.HOME ?? "",
@@ -135,15 +127,15 @@ function ensureProfilePorts(profile: string): ProfileInstance {
   return JSON.parse(raw) as ProfileInstance;
 }
 
-function ensureDatabase(dbName: string): void {
+function ensureDatabase(dbName: string, postgresEnvironment: NodeJS.ProcessEnv): void {
   run("node", ["scripts/dev.mjs", "ensure-db", "--db-name", dbName], {
-    env: { USE_EXISTING_POSTGRES: "1" },
+    env: { ...postgresEnvironment, USE_EXISTING_POSTGRES: "1" },
   });
 }
 
-function databaseUrlFor(dbName: string): string {
+function databaseUrlFor(dbName: string, postgresEnvironment: NodeJS.ProcessEnv): string {
   return run("node", ["scripts/dev.mjs", "database-url", "--db-name", dbName], {
-    env: { LOCAL_PGHOST: localPgHost() },
+    env: postgresEnvironment,
   });
 }
 
@@ -280,31 +272,40 @@ function killTracked(child: ChildProcess): void {
 }
 
 export async function bootStack(options: BootOptions = {}): Promise<BootedStack> {
-  // TIER2_INTENT_PROFILE lets a local run boot the same harness on its own
-  // profile so parallel worktrees don't collide on ports/DB/run-lock (this
-  // branch was verified on `t2auth`). Callers that pass an explicit profile
-  // (the billing suite) still win; CI keeps the default, one profile per
-  // isolated container.
-  const profile = options.profile ?? process.env.TIER2_INTENT_PROFILE ?? PROFILE;
+  if (options.profile && options.ownedProfile) {
+    throw new Error("bootStack profile and ownedProfile are mutually exclusive.");
+  }
+  const ownedProfile = options.ownedProfile;
+  const postgresCustody = createOwnedProfilePostgresCustody();
+  const profile = ownedProfile?.profile ?? options.profile ?? process.env.TIER2_INTENT_PROFILE ?? PROFILE;
+  if (ownedProfile) {
+    prepareOwnedEphemeralProfile(ownedProfile, postgresCustody.lifecycle);
+  }
   log(`preparing profile "${profile}"...`);
   const instance = ensureProfilePorts(profile);
-  ensureDatabase(instance.databaseName);
+  const setupTokenFile = ownedProfile?.setupTokenFile ?? setupTokenFileForProfile(profile);
+  if (ownedProfile) {
+    assertOwnedProfileResources(ownedProfile, {
+      profile,
+      setupTokenFile,
+      databaseName: instance.databaseName,
+      profileDirectory: path.dirname(profileInstancePath(profile)),
+      runtimeDirectory: instance.anyharnessRuntimeHome,
+      desktopDirectory: instance.desktopHome,
+    });
+  }
+  ensureDatabase(instance.databaseName, postgresCustody.commandEnvironment);
   ensureRedisReachable();
 
-  const databaseUrl = databaseUrlFor(instance.databaseName);
+  const databaseUrl = databaseUrlFor(instance.databaseName, postgresCustody.commandEnvironment);
   const apiBaseUrl = `http://127.0.0.1:${instance.ports.api}`;
   const webBaseUrl = `http://127.0.0.1:${instance.ports.desktopWeb}`;
   // Published even when the runtime is skipped (TIER2_INTENT_SKIP_RUNTIME=1 in
   // CI, or `skipFrontend`) so a spec can probe reachability itself and skip
   // gracefully rather than the boot deciding for it.
   const anyharnessBaseUrl = `http://127.0.0.1:${instance.ports.anyharness}`;
-  const setupTokenFile = `/tmp/proliferate-${profile}-setup-token`;
-  // Fresh setup token file per boot: a stale token from a prior claimed run
-  // would otherwise sit there confusing the next claim attempt.
-  rmSync(setupTokenFile, { force: true });
-
   log(`running alembic migrations against ${instance.databaseName}...`);
-  run(path.join(REPO_ROOT, "server", ".venv", "bin", "alembic"), ["upgrade", "head"], {
+  run(serverVenvExecutable("alembic"), ["upgrade", "head"], {
     cwd: path.join(REPO_ROOT, "server"),
     env: { DATABASE_URL: databaseUrl, DEBUG: "true" },
   });
@@ -397,7 +398,7 @@ export async function bootStack(options: BootOptions = {}): Promise<BootedStack>
   }
   spawnTracked(
     children,
-    path.join(REPO_ROOT, "server", ".venv", "bin", "uvicorn"),
+    serverVenvExecutable("uvicorn"),
     ["proliferate.main:app", "--host", "127.0.0.1", "--port", String(instance.ports.api)],
     { cwd: path.join(REPO_ROOT, "server"), env: serverEnv, name: "server" },
   );
@@ -474,6 +475,16 @@ export async function bootStack(options: BootOptions = {}): Promise<BootedStack>
     // 2-minute staleness window refuses to start.
     rmSync(path.join(path.dirname(profileInstancePath(profile)), "run.lock"), { force: true });
     await new Promise((resolve) => setTimeout(resolve, 500));
+    if (ownedProfile) {
+      cleanupOwnedEphemeralProfile(ownedProfile, {
+        profile,
+        setupTokenFile,
+        databaseName: instance.databaseName,
+        profileDirectory: path.dirname(profileInstancePath(profile)),
+        runtimeDirectory: instance.anyharnessRuntimeHome,
+        desktopDirectory: instance.desktopHome,
+      }, postgresCustody.lifecycle);
+    }
   };
 
   return { profile, apiBaseUrl, webBaseUrl, anyharnessBaseUrl, databaseUrl, setupTokenFile, teardown };

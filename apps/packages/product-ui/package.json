@@ -147,6 +147,18 @@
       "types": "./dist/workflows/WorkflowDefinitionList.d.ts",
       "import": "./dist/workflows/WorkflowDefinitionList.js"
     },
+    "./workflows/WorkflowRunForm": {
+      "types": "./dist/workflows/WorkflowRunForm.d.ts",
+      "import": "./dist/workflows/WorkflowRunForm.js"
+    },
+    "./workflows/WorkflowRunList": {
+      "types": "./dist/workflows/WorkflowRunList.d.ts",
+      "import": "./dist/workflows/WorkflowRunList.js"
+    },
+    "./workflows/WorkflowRunDetail": {
+      "types": "./dist/workflows/WorkflowRunDetail.d.ts",
+      "import": "./dist/workflows/WorkflowRunDetail.js"
+    },
     "./billing/BillingSettingsPane": {
       "types": "./dist/billing/BillingSettingsPane.d.ts",
       "import": "./dist/billing/BillingSettingsPane.js"
@@ -420,7 +432,7 @@
   "dependencies": {
     "@proliferate/product-domain": "workspace:*",
     "@proliferate/ui": "workspace:*",
-    "@tanstack/react-virtual": "3.14.3",
+    "@tanstack/react-virtual": "3.14.6",
     "lucide-react": "^0.577.0",
     "react-markdown": "^9",
     "remark-gfm": "^4",
@@ -439,6 +451,6 @@
     "react": "19.2.7",
     "react-dom": "19.2.7",
     "typescript": "^5.7",
-    "vitest": "^3.2.6"
+    "vitest": "^3.2.7"
   }
 }

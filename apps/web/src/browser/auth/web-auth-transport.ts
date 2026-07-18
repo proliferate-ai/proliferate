@@ -11,6 +11,7 @@ import { markLoginNotAttempted } from "@proliferate/product-client/internal/lib/
 
 import {
   completeWebAuthFlow,
+  SSO_SLUG_UNAVAILABLE_CODE,
   startWebAuthFlow,
   startWebSsoFlow,
   startWebSsoFlowForSlug,
@@ -125,7 +126,16 @@ export function createWebAuthOperations(
       }
       case "sso": {
         if (request.slug) {
-          await startWebSsoFlowForSlug(request.slug);
+          try {
+            await startWebSsoFlowForSlug(request.slug);
+          } catch (error) {
+            if (webAuthFlowErrorCode(error) === SSO_SLUG_UNAVAILABLE_CODE) {
+              throw markLoginNotAttempted(
+                error instanceof Error ? error : new Error("SSO is unavailable."),
+              );
+            }
+            throw error;
+          }
         } else {
           await startWebSsoFlow({
             email: request.email,

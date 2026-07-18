@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { reduceEvents } from "@anyharness/sdk";
 import type { SessionEventEnvelope } from "@anyharness/sdk";
+import claudeNativeSubagentFixture from "../../../../../../../../fixtures/contracts/native-subagent-transcript/claude.json";
+import codexNativeSubagentFixture from "../../../../../../../../fixtures/contracts/native-subagent-transcript/codex.json";
 import {
   appendHistoryTail,
   applyStreamEnvelope,
@@ -8,7 +10,44 @@ import {
   replaySessionHistory,
 } from "#product/lib/domain/sessions/stream/stream-state";
 
+type NativeSubagentFixture = {
+  provider: "claude" | "codex";
+  sessionId: string;
+  events: SessionEventEnvelope[];
+};
+
+const nativeSubagentFixtures = [
+  claudeNativeSubagentFixture,
+  codexNativeSubagentFixture,
+] as unknown as NativeSubagentFixture[];
+
 describe("session-stream-state", () => {
+  describe.each(nativeSubagentFixtures)("$provider native subagent fixture", (fixture) => {
+    it("deduplicates and orders a live batch to match durable replay", () => {
+      const replay = replaySessionHistory(fixture.sessionId, fixture.events);
+      const initial = replaySessionHistory(fixture.sessionId, fixture.events.slice(0, 1));
+      const tail = fixture.events.slice(1);
+      const duplicatedTailEvent = tail[Math.floor(tail.length / 2)];
+
+      const result = applyStreamEnvelopeBatch(initial, [
+        ...[...tail].reverse(),
+        fixture.events[0],
+        duplicatedTailEvent,
+      ]);
+
+      expect(result.gapEnvelope).toBeNull();
+      expect(result.appliedEnvelopes.map((event) => event.seq)).toEqual(
+        tail.map((event) => event.seq),
+      );
+      expect(result.duplicateEnvelopes.map((event) => event.seq)).toEqual([
+        fixture.events[0].seq,
+        duplicatedTailEvent.seq,
+      ]);
+      expect(result.state.events).toEqual(fixture.events);
+      expect(result.state.transcript).toEqual(replay.transcript);
+    });
+  });
+
   it("ignores duplicate stream envelopes", () => {
     const state = replaySessionHistory("session-1", [turnStarted(1)]);
 
@@ -117,6 +156,59 @@ describe("session-stream-state", () => {
     expect(result.state.transcript.lastSeq).toBe(4);
   });
 
+  it("applies a high-volume reasoning frame as one transcript reduction batch", () => {
+    const state = replaySessionHistory("session-1", [
+      turnStarted(1),
+      reasoningStarted(2, "reasoning-1", "seed:"),
+    ]);
+    const beforeItem = state.transcript.itemsById["reasoning-1"];
+    const chunks = Array.from({ length: 200 }, (_, index) => `chunk-${index}|`);
+    const instrumented = instrumentReasoningCopies(state, "reasoning-1");
+
+    const result = applyStreamEnvelopeBatch(
+      instrumented.state,
+      chunks.map((chunk, index) => reasoningDelta(index + 3, "reasoning-1", chunk)),
+    );
+    const afterItem = result.state.transcript.itemsById["reasoning-1"];
+
+    expect(result.gapEnvelope).toBeNull();
+    expect(result.appliedEnvelopes).toHaveLength(200);
+    expect(result.state.events).toHaveLength(202);
+    expect(result.state.transcript.lastSeq).toBe(202);
+    expect(instrumented.copyCounts).toEqual({ itemMap: 1, reasoningItem: 1 });
+    expect(state.transcript.itemsById["reasoning-1"]).toBe(beforeItem);
+    expect(afterItem).not.toBe(beforeItem);
+    expect(afterItem.kind).toBe("thought");
+    if (afterItem.kind !== "thought") {
+      throw new Error("expected reasoning item");
+    }
+    expect(afterItem.text).toBe(`seed:${chunks.join("")}`);
+  });
+
+  it("applies a high-volume reasoning history tail as one transcript batch", () => {
+    const state = replaySessionHistory("session-1", [
+      turnStarted(1),
+      reasoningStarted(2, "reasoning-1", "seed:"),
+    ]);
+    const instrumented = instrumentReasoningCopies(state, "reasoning-1");
+    const chunks = Array.from({ length: 200 }, (_, index) => `tail-${index}|`);
+
+    const result = appendHistoryTail(
+      instrumented.state,
+      chunks.map((chunk, index) => reasoningDelta(index + 3, "reasoning-1", chunk)),
+    );
+
+    expect(result.applied).toBe(true);
+    expect(result.state.transcript.lastSeq).toBe(202);
+    expect(instrumented.copyCounts).toEqual({ itemMap: 1, reasoningItem: 1 });
+    const afterItem = result.state.transcript.itemsById["reasoning-1"];
+    expect(afterItem.kind).toBe("thought");
+    if (afterItem.kind !== "thought") {
+      throw new Error("expected reasoning item");
+    }
+    expect(afterItem.text).toBe(`seed:${chunks.join("")}`);
+  });
+
   it("sorts stream batches by sequence before detecting gaps", () => {
     const state = replaySessionHistory("session-1", [turnStarted(1)]);
 
@@ -166,6 +258,37 @@ describe("session-stream-state", () => {
   });
 });
 
+function instrumentReasoningCopies(
+  state: ReturnType<typeof replaySessionHistory>,
+  itemId: string,
+) {
+  const item = state.transcript.itemsById[itemId];
+  const copyCounts = { itemMap: 0, reasoningItem: 0 };
+  return {
+    copyCounts,
+    state: {
+      ...state,
+      transcript: {
+        ...state.transcript,
+        itemsById: new Proxy({
+          ...state.transcript.itemsById,
+          [itemId]: new Proxy(item, {
+            ownKeys(target) {
+              copyCounts.reasoningItem += 1;
+              return Reflect.ownKeys(target);
+            },
+          }),
+        }, {
+          ownKeys(target) {
+            copyCounts.itemMap += 1;
+            return Reflect.ownKeys(target);
+          },
+        }),
+      },
+    },
+  };
+}
+
 function turnStarted(seq: number): SessionEventEnvelope {
   return {
     sessionId: "session-1",
@@ -195,6 +318,47 @@ function assistantStarted(
         sourceAgentKind: "claude",
         contentParts: [{ type: "text", text }],
       },
+    },
+  };
+}
+
+function reasoningStarted(
+  seq: number,
+  itemId: string,
+  text: string,
+): SessionEventEnvelope {
+  return {
+    sessionId: "session-1",
+    seq,
+    timestamp: `2026-04-04T00:00:${String(seq).padStart(2, "0")}Z`,
+    turnId: "turn-1",
+    itemId,
+    event: {
+      type: "item_started",
+      item: {
+        kind: "reasoning",
+        status: "in_progress",
+        sourceAgentKind: "codex",
+        contentParts: [{ type: "reasoning", text, visibility: "private" }],
+      },
+    },
+  };
+}
+
+function reasoningDelta(
+  seq: number,
+  itemId: string,
+  appendReasoning: string,
+): SessionEventEnvelope {
+  return {
+    sessionId: "session-1",
+    seq,
+    timestamp: `2026-04-04T00:00:${String(seq).padStart(2, "0")}Z`,
+    turnId: "turn-1",
+    itemId,
+    event: {
+      type: "item_delta",
+      delta: { appendReasoning },
     },
   };
 }

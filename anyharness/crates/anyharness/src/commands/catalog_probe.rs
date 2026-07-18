@@ -246,10 +246,10 @@ fn auth_env_for_context(
             }
             Ok(env)
         }
-        // OpenCode resolves credentials from env vars AND its own config/auth
-        // storage (XDG dirs), so every opencode context isolates those dirs —
-        // otherwise machine-local opencode.jsonc / auth.json would pollute the
-        // auth attribution.
+        // OpenCode resolves credentials from env vars, XDG config/auth storage,
+        // and provider SDK defaults below HOME (for example ~/.aws). Isolate all
+        // of those roots so machine-local provider state cannot pollute auth
+        // attribution.
         (AgentKind::OpenCode, "baseline") => opencode_isolation_env(auth_context, isolation_dirs),
         (AgentKind::OpenCode, "anthropic-api") => {
             let mut env = opencode_isolation_env(auth_context, isolation_dirs)?;
@@ -344,13 +344,35 @@ wire_api = "responses"
             "cursor-agent ignores CURSOR_API_KEY for ACP sessions; run `cursor-agent login` \
              on this machine and use --auth-context cursor-login instead"
         ),
-        // Grok (xAI Grok Build) speaks ACP natively and authenticates from
-        // XAI_API_KEY. Isolate HOME so machine-local ~/.grok config (default
-        // model, cached login) cannot pollute observed values.
+        // Grok (xAI Grok Build) speaks ACP natively. Isolate HOME so
+        // machine-local config cannot pollute observed values, then inject one
+        // explicit API key or copy the selected logged-in auth file.
         (AgentKind::Grok, "xai-api") => {
-            let key = secrets.require("XAI_API_KEY")?;
             let mut env = isolation_env(auth_context, &[("HOME", "home")], isolation_dirs)?;
-            env.insert("XAI_API_KEY".to_string(), key);
+            if let Some(key) = secrets.get("XAI_API_KEY") {
+                env.insert("XAI_API_KEY".to_string(), key);
+            } else if let Some(key) = secrets.get("GROK_API_KEY") {
+                env.insert("GROK_API_KEY".to_string(), key);
+            } else {
+                let source = std::env::var("PROBE_GROK_AUTH_JSON").unwrap_or_else(|_| {
+                    format!(
+                        "{}/.grok/auth.json",
+                        std::env::var("HOME").unwrap_or_default()
+                    )
+                });
+                if !std::path::Path::new(&source).is_file() {
+                    bail!(
+                        "xai-api requires XAI_API_KEY, GROK_API_KEY, or a logged-in Grok \
+                         auth.json; not found at {source}"
+                    );
+                }
+                let isolated_home =
+                    std::path::Path::new(env.get("HOME").expect("grok isolation home"));
+                let grok_dir = isolated_home.join(".grok");
+                std::fs::create_dir_all(&grok_dir)?;
+                std::fs::copy(&source, grok_dir.join("auth.json"))
+                    .with_context(|| format!("failed to copy {source}"))?;
+            }
             Ok(env)
         }
         _ => bail!(
@@ -384,6 +406,8 @@ const CREDENTIAL_ENV_VARS: &[&str] = &[
     "AWS_SECRET_ACCESS_KEY",
     "AWS_SESSION_TOKEN",
     "AWS_PROFILE",
+    "AWS_REGION",
+    "AWS_DEFAULT_REGION",
 ];
 
 /// Region for bedrock auth contexts; model availability is region-dependent
@@ -413,6 +437,10 @@ impl ProbeSecrets {
             .get(key)
             .cloned()
             .ok_or_else(|| anyhow!("this auth context requires {key} in the environment"))
+    }
+
+    fn get(&self, key: &str) -> Option<String> {
+        self.values.get(key).cloned()
     }
 }
 
@@ -450,6 +478,7 @@ fn opencode_isolation_env(
     isolation_env(
         auth_context,
         &[
+            ("HOME", "home"),
             ("XDG_CONFIG_HOME", "config"),
             ("XDG_DATA_HOME", "data"),
             ("XDG_CACHE_HOME", "cache"),
@@ -480,4 +509,46 @@ fn isolation_env(
         env.insert(var.to_string(), path.to_string_lossy().into_owned());
     }
     Ok(env)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn opencode_isolation_covers_home_and_all_xdg_roots() {
+        let mut isolation_dirs = IsolationDirs::default();
+        let env = opencode_isolation_env("baseline", &mut isolation_dirs).unwrap();
+        let base = isolation_dirs.0[0].clone();
+
+        for key in [
+            "HOME",
+            "XDG_CONFIG_HOME",
+            "XDG_DATA_HOME",
+            "XDG_CACHE_HOME",
+            "XDG_STATE_HOME",
+        ] {
+            assert!(std::path::Path::new(&env[key]).is_dir(), "missing {key}");
+        }
+
+        drop(isolation_dirs);
+        assert!(!base.exists(), "probe isolation must be removed on drop");
+    }
+
+    #[test]
+    fn grok_context_accepts_the_alternate_api_key_name() {
+        let secrets = ProbeSecrets {
+            values: BTreeMap::from([("GROK_API_KEY".to_string(), "test-key".to_string())]),
+        };
+        let mut isolation_dirs = IsolationDirs::default();
+
+        let env = auth_env_for_context(&secrets, &AgentKind::Grok, "xai-api", &mut isolation_dirs)
+            .unwrap();
+
+        assert_eq!(
+            env.get("GROK_API_KEY").map(String::as_str),
+            Some("test-key")
+        );
+        assert!(!env.contains_key("XAI_API_KEY"));
+    }
 }

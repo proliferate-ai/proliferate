@@ -167,6 +167,10 @@ export async function runReleaseCommand(argv: readonly string[], deps: CommandDe
       // world-backed qualification path has no publicly-reachable server for
       // sandbox-runtime cells to call back into.
       targetLane: args.lane,
+      // Broad `all` is a world-compatibility sweep and may filter scenarios.
+      // An explicit selector is a request for every named scenario, so none
+      // may disappear without a terminal result.
+      requireEveryScenario: args.scenarios !== "all",
     });
   } catch (error) {
     deps.error(error instanceof Error ? error.message : String(error));

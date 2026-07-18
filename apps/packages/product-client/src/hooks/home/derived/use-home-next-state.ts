@@ -11,6 +11,7 @@ import { useHomeNextRepositorySelection } from "#product/hooks/home/derived/use-
 import { useComputeTargetOptions } from "#product/hooks/compute/derived/use-compute-target-options";
 
 interface UseHomeNextStateArgs {
+  desktopTargetsAvailable: boolean;
   destination: HomeNextDestination;
   repositorySelection: HomeNextRepositorySelection;
   repoLaunchKind: HomeNextRepoLaunchKind;
@@ -22,6 +23,7 @@ interface UseHomeNextStateArgs {
 
 // Owns read-only Home Next launch state composition. Does not own launch actions.
 export function useHomeNextState({
+  desktopTargetsAvailable,
   destination,
   repositorySelection,
   repoLaunchKind,
@@ -30,34 +32,45 @@ export function useHomeNextState({
   modeOverrideId,
   selectedSshTargetId = null,
 }: UseHomeNextStateArgs) {
-  const model = useHomeNextModelSelection({ modelSelectionOverride, repoLaunchKind });
+  const effectiveDestination = desktopTargetsAvailable ? destination : "repository";
+  const effectiveRepoLaunchKind = desktopTargetsAvailable ? repoLaunchKind : "cloud";
+  const model = useHomeNextModelSelection({
+    modelSelectionOverride,
+    repoLaunchKind: effectiveRepoLaunchKind,
+  });
   const repository = useHomeNextRepositorySelection({
-    destination,
+    destination: effectiveDestination,
     repositorySelection,
-    repoLaunchKind,
+    repoLaunchKind: effectiveRepoLaunchKind,
     baseBranchOverride,
   });
   const mode = useHomeNextModeSelection({
-    destination,
+    destination: effectiveDestination,
     modelSelection: model.effectiveModelSelection,
     modeOverrideId,
+    repoLaunchKind: effectiveRepoLaunchKind,
   });
   const computeTargets = useComputeTargetOptions({
-    enabled: destination === "repository",
+    enabled: desktopTargetsAvailable && effectiveDestination === "repository",
   });
-  const selectedSshTarget = computeTargets.sshTargetOptions.find((target) =>
+  const sshTargetOptions = desktopTargetsAvailable ? computeTargets.sshTargetOptions : [];
+  const selectedSshTarget = sshTargetOptions.find((target) =>
     target.id === selectedSshTargetId
   ) ?? null;
+  const launchTarget =
+    desktopTargetsAvailable || repository.launchTarget?.kind === "cloud"
+      ? repository.launchTarget
+      : null;
 
   const targetDisabledReason = useMemo(() => {
-    if (destination === "cowork") {
+    if (effectiveDestination === "cowork") {
       return null;
     }
     if (!repository.selectedRepository) {
       return "Choose a repository";
     }
 
-    if (repoLaunchKind === "local") {
+    if (effectiveRepoLaunchKind === "local") {
       return null;
     }
 
@@ -75,7 +88,7 @@ export function useHomeNextState({
       return "Choose a base branch";
     }
 
-    if (repoLaunchKind === "cloud") {
+    if (effectiveRepoLaunchKind === "cloud") {
       if (!repository.cloudActive) {
         return "Sign in to use cloud workspaces";
       }
@@ -93,7 +106,7 @@ export function useHomeNextState({
       }
     }
 
-    if (repoLaunchKind === "ssh") {
+    if (effectiveRepoLaunchKind === "ssh") {
       if (computeTargets.isLoading) {
         return "Loading SSH targets";
       }
@@ -109,12 +122,13 @@ export function useHomeNextState({
       return "SSH target launches are not wired yet";
     }
 
-    return repository.launchTarget ? null : "Choose where to launch";
+    return launchTarget ? null : "Choose where to launch";
   }, [
     computeTargets.isLoading,
     computeTargets.sshTargetOptions.length,
-    destination,
-    repoLaunchKind,
+    effectiveDestination,
+    effectiveRepoLaunchKind,
+    launchTarget,
     repository.branchOptions.length,
     repository.branchQuery.isError,
     repository.branchQuery.isLoading,
@@ -129,8 +143,9 @@ export function useHomeNextState({
 
   return {
     ...repository,
-    sshTargetOptions: computeTargets.sshTargetOptions,
-    sshTargetsLoading: computeTargets.isLoading,
+    launchTarget,
+    sshTargetOptions,
+    sshTargetsLoading: desktopTargetsAvailable && computeTargets.isLoading,
     selectedSshTarget,
     ...model,
     modeOptions: mode.modeOptions,
@@ -139,6 +154,6 @@ export function useHomeNextState({
     targetDisabledReason,
     canLaunchTarget:
       targetDisabledReason === null
-      && repository.launchTarget !== null,
+      && launchTarget !== null,
   };
 }

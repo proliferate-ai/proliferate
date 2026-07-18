@@ -17,7 +17,7 @@ const EMPTY_RECONCILE_RESULTS: NonNullable<
 
 export function useAgentCatalog() {
   const agentsQuery = useAgentsQuery();
-  const reconcileQuery = useAgentReconcileStatusQuery();
+  const reconcileQuery = useAgentReconcileStatusQuery({ discoverWhileIdle: true });
   const agents = agentsQuery.data ?? EMPTY_AGENTS;
   const reconcileResults = reconcileQuery.data?.results ?? EMPTY_RECONCILE_RESULTS;
 

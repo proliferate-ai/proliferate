@@ -4,6 +4,7 @@ import { useAppCapabilities } from "#product/hooks/capabilities/derived/use-app-
 import { useAddRepo } from "#product/hooks/workspaces/workflows/use-add-repo";
 import { useCloudRepositoryIntentStore } from "#product/stores/cloud/cloud-repository-intent-store";
 import { useToastStore } from "#product/stores/toast/toast-store";
+import { directoryPickerUnavailableCopy } from "#product/copy/workspaces/directory-picker-copy";
 
 interface RepoAvailabilityTarget {
   gitOwner: string;
@@ -42,11 +43,15 @@ export function useSidebarRepoAvailabilityActions() {
       if (!files) {
         return;
       }
-      const path = await files.pickDirectory();
-      if (!path) {
+      const picked = await files.pickDirectory();
+      if (picked.kind === "cancelled") {
         return;
       }
-      const result = await addRepoFromPath(path, {
+      if (picked.kind === "unavailable") {
+        showToast(directoryPickerUnavailableCopy(picked.reason));
+        return;
+      }
+      const result = await addRepoFromPath(picked.path, {
         expectedRepoIdentity: {
           gitProvider: "github",
           gitOwner: target.gitOwner,

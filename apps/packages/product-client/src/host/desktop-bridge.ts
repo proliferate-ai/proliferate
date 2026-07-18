@@ -1,5 +1,6 @@
 import type { AnyHarnessClientConnection } from "@anyharness/sdk-react";
 import type { ServerMeta } from "#product/lib/domain/auth/connect-server";
+import type { DesktopUpdaterBridge } from "./desktop-updater-bridge";
 
 /**
  * The typed Desktop bridge: product-level native capabilities grouped by
@@ -76,12 +77,24 @@ export interface OpenTarget {
   iconId?: OpenTargetIconId;
 }
 
+export type DirectoryPickerUnavailableReason =
+  | "native_host_required"
+  | "picker_failed";
+
+/** A directory-picker outcome with cancellation kept distinct from a missing
+ * or failed native transport. Product workflows decide how to present the
+ * unavailable reason; a normal user cancellation remains silent. */
+export type DirectoryPickerResult =
+  | { kind: "selected"; path: string }
+  | { kind: "cancelled" }
+  | { kind: "unavailable"; reason: DirectoryPickerUnavailableReason };
+
 /**
  * Local filesystem and OS access only. Repo inspection, git, worktree, and
  * workspace behavior continue through AnyHarness.
  */
 export interface DesktopFilesBridge {
-  pickDirectory(): Promise<string | null>;
+  pickDirectory(): Promise<DirectoryPickerResult>;
   getHomeDirectory(): Promise<string>;
   isDirectory(path: string): Promise<boolean>;
 
@@ -215,33 +228,6 @@ export interface DesktopConnectBridge {
   fetchServerMeta(url: string): Promise<ServerMetaProbeResult>;
 }
 
-// --- Updater ----------------------------------------------------------------
-
-/**
- * An available desktop update. `handle` is the opaque native update handle
- * returned by the check; ProductClient passes it back to
- * `downloadAndInstall` without inspecting it. Native handles stay private to
- * the Desktop implementation.
- */
-export interface DesktopUpdate {
-  version: string;
-  title: string | null;
-  handle: unknown;
-}
-
-export interface DesktopUpdaterBridge {
-  /** False in unpackaged Desktop builds unless the development updater is active. */
-  isSupported(): boolean;
-  getVersion(): Promise<string>;
-  check(): Promise<DesktopUpdate | null>;
-  /** `onProgress` receives download completion as a 0..1 fraction. */
-  downloadAndInstall(
-    update: DesktopUpdate,
-    onProgress?: (fraction: number) => void,
-  ): Promise<void>;
-  relaunch(): Promise<void>;
-}
-
 // --- Desktop worker ---------------------------------------------------------
 
 export interface WorkerConfiguration {
@@ -251,7 +237,11 @@ export interface WorkerConfiguration {
 
 export interface WorkerStatus {
   targetId: string;
-  status: "running" | "started";
+  status:
+    | "running"
+    | "started"
+    | "already_running_elsewhere"
+    | "terminal_shutdown_armed";
   configPath: string;
 }
 

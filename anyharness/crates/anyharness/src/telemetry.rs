@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use anyharness_lib::app::default_runtime_home;
+use anyharness_lib::{app::default_runtime_home, observability::AGENT_STDERR_TRACING_TARGET};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Layer};
 
 use crate::{
@@ -49,6 +49,24 @@ fn sample_rate(key: &str, default: f32) -> f32 {
 
 fn env_filter_from_env() -> tracing_subscriber::EnvFilter {
     tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into())
+}
+
+fn sentry_event_filter_for_target(
+    target: &str,
+    default_filter: sentry_tracing::EventFilter,
+) -> sentry_tracing::EventFilter {
+    if target == AGENT_STDERR_TRACING_TARGET {
+        sentry_tracing::EventFilter::Ignore
+    } else {
+        default_filter
+    }
+}
+
+fn sentry_event_filter(metadata: &tracing::Metadata<'_>) -> sentry_tracing::EventFilter {
+    sentry_event_filter_for_target(
+        metadata.target(),
+        sentry_tracing::default_event_filter(metadata),
+    )
 }
 
 fn runtime_home_from_serve(args: &ServeArgs) -> PathBuf {
@@ -111,7 +129,7 @@ pub fn init(command: &Commands) -> TelemetryGuards {
 
     tracing_subscriber::registry()
         .with(console_layer)
-        .with(sentry_tracing::layer())
+        .with(sentry_tracing::layer().event_filter(sentry_event_filter))
         .with(file_sink.as_ref().map(|sink| {
             tracing_subscriber::fmt::layer()
                 .with_ansi(false)
@@ -200,12 +218,14 @@ fn sentry_scope_tags() -> Vec<(&'static str, String)> {
 mod tests {
     use super::{
         default_release, log_path_for_command, runtime_home_from_install, runtime_home_from_serve,
-        sentry_scope_tags, sentry_user_from_id, stamped_git_sha,
+        sentry_event_filter, sentry_event_filter_for_target, sentry_scope_tags,
+        sentry_user_from_id, stamped_git_sha,
     };
     use crate::{
         cli::Commands,
         commands::{install_agents::InstallAgentsArgs, serve::ServeArgs},
     };
+    use anyharness_lib::observability::AGENT_STDERR_TRACING_TARGET;
 
     #[test]
     fn tracing_error_reaches_the_sentry_client() {
@@ -217,7 +237,8 @@ mod tests {
         // `sentry-core` the layer uses; it fails (0 events) whenever the two
         // crates diverge again.
         use tracing_subscriber::layer::SubscriberExt;
-        let subscriber = tracing_subscriber::registry().with(sentry_tracing::layer());
+        let subscriber = tracing_subscriber::registry()
+            .with(sentry_tracing::layer().event_filter(sentry_event_filter));
         let events = sentry::test::with_captured_events(|| {
             tracing::subscriber::with_default(subscriber, || {
                 tracing::error!("sentry emission regression probe");
@@ -225,6 +246,42 @@ mod tests {
         });
         assert_eq!(events.len(), 1, "tracing ERROR must reach the Sentry client");
         assert_eq!(events[0].level, sentry::Level::Error);
+    }
+
+    #[test]
+    fn agent_stderr_stays_out_of_sentry_while_runtime_errors_remain_visible() {
+        use tracing_subscriber::layer::SubscriberExt;
+        let subscriber = tracing_subscriber::registry()
+            .with(sentry_tracing::layer().event_filter(sentry_event_filter));
+        let events = sentry::test::with_captured_events(|| {
+            tracing::subscriber::with_default(subscriber, || {
+                tracing::error!(
+                    target: AGENT_STDERR_TRACING_TARGET,
+                    "raw child-process stderr"
+                );
+                tracing::error!("ordinary runtime failure");
+            });
+        });
+
+        assert_eq!(events.len(), 1, "agent stderr must be ignored by Sentry");
+        assert_eq!(
+            events[0].message.as_deref(),
+            Some("ordinary runtime failure")
+        );
+    }
+
+    #[test]
+    fn agent_stderr_filter_ignores_every_sentry_signal_type() {
+        let all_signal_types = sentry_tracing::EventFilter::Event
+            | sentry_tracing::EventFilter::Breadcrumb
+            | sentry_tracing::EventFilter::Log;
+
+        let filter = sentry_event_filter_for_target(AGENT_STDERR_TRACING_TARGET, all_signal_types);
+
+        assert!(
+            filter.is_empty(),
+            "agent stderr must map to EventFilter::Ignore"
+        );
     }
 
     #[test]

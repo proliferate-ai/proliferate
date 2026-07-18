@@ -14,6 +14,8 @@ function baseState(overrides: Partial<DevUpdaterMockState>): DevUpdaterMockState
     phase: "available",
     version: "0.1.42",
     downloadProgress: null,
+    downloadReceivedBytes: null,
+    downloadTotalBytes: null,
     restartPromptOpen: false,
     restartWhenIdle: false,
     lastCheckedAt: null,
@@ -72,6 +74,23 @@ describe("updater dev mock", () => {
 
     writeDevUpdaterMock(baseState({ phase: "available", restartWhenIdle: true }));
     expect(readDevUpdaterMock()).toMatchObject({ phase: "available", restartWhenIdle: false });
+  });
+
+  it("fills byte progress for a legacy downloading preview", () => {
+    window.localStorage.setItem(
+      DEV_UPDATER_MOCK_KEY,
+      JSON.stringify({
+        phase: "downloading",
+        version: "0.1.3",
+        downloadProgress: 40,
+      }),
+    );
+
+    expect(readDevUpdaterMock()).toMatchObject({
+      downloadProgress: 40,
+      downloadReceivedBytes: 50_000_000,
+      downloadTotalBytes: 125_000_000,
+    });
   });
 
   it("fills defaults when reading a legacy payload without the new fields", () => {

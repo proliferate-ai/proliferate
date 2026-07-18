@@ -118,6 +118,7 @@ class AgentCatalogSession(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     supportsGoals: bool = False
+    unattendedModeId: str | None = None
     controls: list[AgentCatalogSessionControl] = []
     models: list[AgentCatalogModel] = []
     defaults: dict[str, str] = {}

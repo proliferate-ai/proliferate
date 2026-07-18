@@ -67,6 +67,9 @@ function fakeTransport(overrides: Partial<AuthenticatedActorTransport> = {}): {
     claimSetup: async (params) => {
       calls.push(`claimSetup:${params.email}`);
     },
+    waitForSetupCommitted: async () => {
+      calls.push("waitForSetupCommitted");
+    },
     loginWithPassword: async (apiBaseUrl, email) => {
       calls.push(`loginWithPassword:${email}`);
       return {
@@ -138,6 +141,7 @@ test("authenticatedActor drives claim -> login -> org lookup -> enrollment poll 
   assert.deepEqual(calls, [
     "readSetupToken:/tmp/run-1/setup-token",
     "claimSetup:qual-owner-local-run-1-local-0@example.com",
+    "waitForSetupCommitted",
     "loginWithPassword:qual-owner-local-run-1-local-0@example.com",
     "listOrganizations",
     "getEnrollment:1",
@@ -199,4 +203,39 @@ test("authenticatedActor propagates claim failures without masking them", async 
     },
   });
   await assert.rejects(() => authenticatedActor(world, "owner", {}, transport), /invalid setup token/);
+});
+
+test("authenticatedActor requires committed setup visibility before its single password-login attempt", async () => {
+  const world = fakeWorld();
+  let readinessChecked = false;
+  const { transport, calls } = fakeTransport({
+    waitForSetupCommitted: async () => {
+      readinessChecked = true;
+      throw new Error("setup claim did not become committed/visible");
+    },
+  });
+
+  await assert.rejects(
+    () => authenticatedActor(world, "owner", {}, transport),
+    /did not become committed\/visible/,
+  );
+  assert.equal(readinessChecked, true);
+  assert.ok(!calls.some((call) => call.startsWith("loginWithPassword")));
+});
+
+test("authenticatedActor preserves password-login 401 as red and never retries it", async () => {
+  const world = fakeWorld();
+  let loginAttempts = 0;
+  const { transport } = fakeTransport({
+    loginWithPassword: async () => {
+      loginAttempts += 1;
+      throw new Error("POST /auth/desktop/password/login -> 401: invalid credentials");
+    },
+  });
+
+  await assert.rejects(
+    () => authenticatedActor(world, "owner", {}, transport),
+    /password\/login -> 401/,
+  );
+  assert.equal(loginAttempts, 1);
 });

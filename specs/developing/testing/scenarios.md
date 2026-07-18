@@ -189,7 +189,9 @@ block (see T2-BILL-2) → blocked message, no workspace row.
 Local/worktree creation drive the local AnyHarness runtime and OS file
 pickers — partially Tauri-bound. Tier 2 asserts only what web mode can reach:
 the Add-Repo flow branches (`add-repo-flow-store.ts`) render and validate
-inputs. Full local/worktree creation is asserted in tier 3's desktop lane.
+inputs, and a missing native folder-picker transport is distinguished from
+user cancellation and explained in the UI. Full local/worktree creation is
+asserted in tier 3's desktop lane.
 [If this proves too thin, the fallback is a runtime-API-level test against a
 locally booted anyharness — decide when building.]
 
@@ -764,27 +766,33 @@ The Tauri-updater mechanism from the tier-4 registry (a broken updater strands
 every existing desktop user). Build a test-flavor N-1 `.app` pointed at a local
 update feed, build an N `.app` signed with the **same** key, stage
 N + `latest.json` behind `tests/release/scripts/serve-updater-feed.mjs`, then
-drive the real `tauri_plugin_updater` (`check()` + `download_and_install()` —
-the code the JS wrappers in `apps/desktop/src/lib/access/tauri/updater.ts` call
-through) against a pristine copy of the N-1 bundle. Assert:
+drive the real `tauri_plugin_updater` (`check()` + `download()` + an explicit
+pre-install boundary + `install(bytes)`) against a pristine copy of the N-1
+bundle. Assert:
 - `check()` reports an available update whose version == N;
-- `download_and_install()` verifies the N artifact's minisign signature against
-  the pubkey the N-1 build trusts (signature is checked at download, not
-  check() time) and swaps the on-disk `.app` in place;
+- `download()` verifies the N artifact's minisign signature against the pubkey
+  the N-1 build trusts (signature is checked at download, not check() time),
+  then `install(bytes)` swaps the on-disk `.app` in place;
 - the installed bundle's `CFBundleShortVersionString` went N-1 → N — exactly
   what `getVersion()` returns after a relaunch, so this is the faithful
   "the relaunched app is version N" assertion.
 
 The GUI is deliberately not clicked: the update UX is user-gated inside a
 release webview (Settings → "Desktop updates" → check → download → restart),
-and webview automation is far more brittle headlessly than invoking the same
-updater API directly. The headless Rust driver
-(`tests/release/upgrade/updater-driver`) is the "call the wrappers directly"
-path — it exercises the parts that actually break (manifest fetch, semver
-compare, signature verification, real macOS bundle swap). Its mock app reports
+and webview automation is far more brittle headlessly than invoking the updater
+engine directly. The headless Rust driver
+(`tests/release/upgrade/updater-driver`) does not call the production JS wrapper;
+it exercises manifest fetch, semver compare, signature verification, an
+explicit pre-install boundary, and the real macOS bundle swap. Its mock app reports
 running version 0.1.0 (a `tauri::test` limitation, not the real N-1 semver);
 irrelevant to what is asserted, since the on-disk bundle version is read from
 the real N-1 build's Info.plist.
+
+This macOS-only collector does not qualify the Windows-native Worker cleanup
+that the product inserts at the pre-install boundary. Focused JS ordering and
+native subprocess tests cover that logic below the packaged-product boundary;
+a real Windows direct-exit updater journey remains an explicit qualification
+gap.
 
 **Local-macOS-aarch64-only**, gated behind `RELEASE_E2E_DESKTOP_T4=1` (two full
 `tauri build`s, ~10+ min cold; bundles are cached across runs). In CI / on any

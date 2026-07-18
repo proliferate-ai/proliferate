@@ -5,6 +5,9 @@ import {
   startStartupTimer,
   summarizeStartupError,
 } from "#product/lib/infra/measurement/measurement-port";
+import {
+  createExpectedControlPlaneProbeTimeoutError,
+} from "@proliferate/product-domain/telemetry/control-plane-probe-timeout";
 
 let lastKnownControlPlaneReachable: boolean | null = null;
 const CONTROL_PLANE_HEALTH_TIMEOUT_MS = 2_500;
@@ -21,7 +24,7 @@ export async function checkControlPlaneReachable(apiBaseUrl: string): Promise<bo
     : null;
   const timeoutId = abortController
     ? globalThis.setTimeout(
-      () => abortController.abort(),
+      () => abortController.abort(createExpectedControlPlaneProbeTimeoutError()),
       CONTROL_PLANE_HEALTH_TIMEOUT_MS,
     )
     : null;

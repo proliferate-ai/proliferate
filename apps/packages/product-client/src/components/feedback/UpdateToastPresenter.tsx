@@ -2,8 +2,10 @@ import { useEffect, useRef } from "react";
 import { toast } from "@proliferate/ui/kit/Sonner";
 import { CircleAlert } from "@proliferate/ui/icons";
 import { Badge } from "@proliferate/ui/primitives/Badge";
+import { ProgressBar } from "@proliferate/ui/primitives/ProgressBar";
 import { useUpdater, type UpdaterPhase } from "#product/hooks/access/tauri/use-updater";
 import { useAppVersion } from "#product/hooks/access/tauri/app/use-app-version";
+import { formatByteProgress } from "#product/lib/domain/updates/byte-progress";
 
 export const UPDATE_TOAST_ID = "app-update";
 // The "you're up to date" confirmation is a transient success signal, not a
@@ -33,15 +35,34 @@ function humanizeDownloadError(message: string): string {
   return looksHuman ? message : DOWNLOAD_ERROR_FALLBACK;
 }
 
-function DownloadProgressBar({ progress }: { progress: number | null }) {
+function DownloadProgressDetails({
+  progress,
+  receivedBytes,
+  totalBytes,
+}: {
+  progress: number | null;
+  receivedBytes: number | null;
+  totalBytes: number | null;
+}) {
+  const byteLabel =
+    receivedBytes === null
+      ? "Starting download…"
+      : formatByteProgress(receivedBytes, totalBytes);
+
   return (
     <span className="mt-1.5 block">
-      <span className="block h-0.5 w-full overflow-hidden rounded-full bg-accent">
-        <span
-          className="block h-full rounded-full bg-special transition-[width] duration-300"
-          style={{ width: `${Math.max(2, progress ?? 2)}%` }}
-        />
+      <span className="block text-xs tabular-nums text-muted-foreground">
+        {byteLabel}
       </span>
+      {progress !== null && (
+        <ProgressBar
+          aria-label="Update download progress"
+          aria-valuetext={byteLabel}
+          value={progress}
+          className="mt-1.5 h-0.5 w-full overflow-hidden rounded-full bg-accent"
+          indicatorClassName="h-full rounded-full bg-special transition-[width] duration-300"
+        />
+      )}
     </span>
   );
 }
@@ -63,16 +84,24 @@ function AuthoredUpdateTitle({ title }: { title: string }) {
 function TitledDownloadProgress({
   version,
   progress,
+  receivedBytes,
+  totalBytes,
 }: {
   version: string | null;
   progress: number | null;
+  receivedBytes: number | null;
+  totalBytes: number | null;
 }) {
   return (
     <span className="block">
       <span className="block">
         {version ? `Downloading Proliferate ${version}.` : "Downloading update."}
       </span>
-      <DownloadProgressBar progress={progress} />
+      <DownloadProgressDetails
+        progress={progress}
+        receivedBytes={receivedBytes}
+        totalBytes={totalBytes}
+      />
     </span>
   );
 }
@@ -91,6 +120,8 @@ export function UpdateToastPresenter() {
     errorMessage,
     errorSource,
     downloadProgress,
+    downloadReceivedBytes,
+    downloadTotalBytes,
     restartPromptOpen,
     manualCheckCompletedAt,
     downloadUpdate,
@@ -213,9 +244,15 @@ export function UpdateToastPresenter() {
           <TitledDownloadProgress
             version={availableVersion}
             progress={downloadProgress}
+            receivedBytes={downloadReceivedBytes}
+            totalBytes={downloadTotalBytes}
           />
         ) : (
-          <DownloadProgressBar progress={downloadProgress} />
+          <DownloadProgressDetails
+            progress={downloadProgress}
+            receivedBytes={downloadReceivedBytes}
+            totalBytes={downloadTotalBytes}
+          />
         ),
         duration: Infinity,
         closeButton: true,
@@ -255,6 +292,8 @@ export function UpdateToastPresenter() {
     availableTitle,
     availableVersion,
     downloadProgress,
+    downloadReceivedBytes,
+    downloadTotalBytes,
     downloadUpdate,
     errorMessage,
     errorSource,

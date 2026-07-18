@@ -26,50 +26,25 @@
 // CLOUD_SECRET_KEY to be set to something other than the "CHANGE-ME" defaults
 // (config.py's `validate_secrets_in_production`), so this boot sets those too.
 
-import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
+import { claimOwnedInstance } from "../stack/claim.ts";
 import { bootStack, type BootedStack } from "../stack/boot.ts";
+import { ownedEphemeralProfileForWorker } from "../stack/ephemeral-profile.ts";
 import { ADMIN_EMAIL, ADMIN_PASSWORD } from "../stack/seed.ts";
-
-async function claimInstance(stack: BootedStack): Promise<void> {
-  const token = readFileSync(stack.setupTokenFile, "utf8").trim();
-  const response = await fetch(`${stack.apiBaseUrl}/setup`, {
-    method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      email: ADMIN_EMAIL,
-      password: ADMIN_PASSWORD,
-      setup_token: token,
-      organization_name: "T2 Self-Host Gating",
-    }).toString(),
-  });
-  const html = await response.text();
-  if (response.status !== 200) {
-    throw new Error(`T2-SH-6: instance claim failed (${response.status}): ${html.slice(0, 300)}`);
-  }
-}
-
-async function loginOn(baseUrl: string, email: string, password: string): Promise<string> {
-  const response = await fetch(`${baseUrl}/auth/desktop/password/login`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ email, password }),
-  });
-  const body = (await response.json()) as { access_token?: string };
-  if (response.status !== 200 || !body.access_token) {
-    throw new Error(`T2-SH-6: login failed for ${email} (${response.status}): ${JSON.stringify(body)}`);
-  }
-  return body.access_token;
-}
 
 test.describe("T2-SH-6: cloud-workspace provisioning stays safe when E2B is half-configured", () => {
   test.setTimeout(180_000);
   let stack: BootedStack;
   let ownerToken: string;
 
-  test.beforeAll(async () => {
+  test.beforeAll(async ({}, testInfo) => {
+    const ownedProfile = ownedEphemeralProfileForWorker({
+      namespace: "t2e2bgate",
+      workerIndex: testInfo.workerIndex,
+      retry: testInfo.retry,
+    });
     stack = await bootStack({
-      profile: "t2e2bgate",
+      ownedProfile,
       skipFrontend: true,
       extraServerEnv: {
         DEBUG: "false",
@@ -79,8 +54,18 @@ test.describe("T2-SH-6: cloud-workspace provisioning stays safe when E2B is half
         E2B_TEMPLATE_NAME: "",
       },
     });
-    await claimInstance(stack);
-    ownerToken = await loginOn(stack.apiBaseUrl, ADMIN_EMAIL, ADMIN_PASSWORD);
+    try {
+      ownerToken = await claimOwnedInstance({
+        stack,
+        ownedProfile,
+        email: ADMIN_EMAIL,
+        password: ADMIN_PASSWORD,
+        organizationName: "T2 Self-Host Gating",
+      });
+    } catch (error) {
+      await stack.teardown();
+      throw error;
+    }
   });
 
   test.afterAll(async () => {

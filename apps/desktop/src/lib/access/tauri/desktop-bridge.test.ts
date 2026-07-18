@@ -39,6 +39,8 @@ const mocks = vi.hoisted(() => ({
   stageSupportReportAttachment: vi.fn(),
   readStagedSupportReportAttachment: vi.fn(),
   deleteStagedSupportReportAttachment: vi.fn(),
+  fetchServerMeta: vi.fn(),
+  isTauriRuntimeAvailable: vi.fn(() => true),
 }));
 
 vi.mock("@/lib/access/tauri/runtime", () => ({
@@ -112,6 +114,10 @@ vi.mock("@/lib/access/tauri/support", () => ({
   readStagedSupportReportAttachment: mocks.readStagedSupportReportAttachment,
   deleteStagedSupportReportAttachment: mocks.deleteStagedSupportReportAttachment,
 }));
+vi.mock("@/lib/access/tauri/connect-server", () => ({
+  fetchServerMeta: mocks.fetchServerMeta,
+  isTauriRuntimeAvailable: mocks.isTauriRuntimeAvailable,
+}));
 
 import { desktopBridge } from "@/lib/access/tauri/desktop-bridge";
 
@@ -123,6 +129,7 @@ async function flushMicrotasks(): Promise<void> {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.isTauriRuntimeAvailable.mockReturnValue(true);
 });
 
 describe("desktopBridge identity", () => {
@@ -168,14 +175,17 @@ describe("runtime", () => {
 });
 
 describe("files", () => {
-  it("delegates renamed methods to the shell wrappers", async () => {
+  it("normalizes a selected directory and delegates the other shell wrappers", async () => {
     mocks.pickFolder.mockResolvedValue("/repo");
     mocks.getHomeDir.mockResolvedValue("/home/dev");
     mocks.pathIsDirectory.mockResolvedValue(true);
     mocks.revealInFinder.mockResolvedValue(undefined);
     mocks.openInTerminal.mockResolvedValue(undefined);
 
-    await expect(desktopBridge.files.pickDirectory()).resolves.toBe("/repo");
+    await expect(desktopBridge.files.pickDirectory()).resolves.toEqual({
+      kind: "selected",
+      path: "/repo",
+    });
     await expect(desktopBridge.files.getHomeDirectory()).resolves.toBe("/home/dev");
     await expect(desktopBridge.files.isDirectory("/repo")).resolves.toBe(true);
     expect(mocks.pathIsDirectory).toHaveBeenCalledWith("/repo");
@@ -185,6 +195,29 @@ describe("files", () => {
 
     await desktopBridge.files.openTerminal("/repo");
     expect(mocks.openInTerminal).toHaveBeenCalledWith("/repo");
+  });
+
+  it("keeps native cancellation distinct from picker unavailability", async () => {
+    mocks.pickFolder.mockResolvedValue(null);
+    await expect(desktopBridge.files.pickDirectory()).resolves.toEqual({
+      kind: "cancelled",
+    });
+
+    mocks.pickFolder.mockRejectedValue(new Error("native picker failed"));
+    await expect(desktopBridge.files.pickDirectory()).resolves.toEqual({
+      kind: "unavailable",
+      reason: "picker_failed",
+    });
+  });
+
+  it("reports the missing native host without invoking the picker", async () => {
+    mocks.isTauriRuntimeAvailable.mockReturnValue(false);
+
+    await expect(desktopBridge.files.pickDirectory()).resolves.toEqual({
+      kind: "unavailable",
+      reason: "native_host_required",
+    });
+    expect(mocks.pickFolder).not.toHaveBeenCalled();
   });
 
   it("passes editor/open-target methods through unchanged", async () => {
@@ -340,7 +373,7 @@ describe("updater", () => {
     await expect(desktopBridge.updater.check()).rejects.toThrow("network down");
   });
 
-  it("accumulates chunk lengths into a bounded 0..1 fraction", async () => {
+  it("accumulates chunk lengths while preserving the reported total bytes", async () => {
     // updater.ts adapts the real Started/Progress DownloadEvent union into
     // these (chunkLength, contentLength) tuples: Started(100) captures the
     // total, then each Progress forwards its own chunk length.
@@ -350,18 +383,22 @@ describe("updater", () => {
       cb?.(10, 100); // overshoot -> clamped to 1
     });
 
-    const fractions: number[] = [];
+    const progress: Array<{ receivedBytes: number; totalBytes: number | null }> = [];
     await desktopBridge.updater.downloadAndInstall(
       { version: "0.4.0", title: null, handle: { id: 1 } },
-      (fraction) => fractions.push(fraction),
+      (snapshot) => progress.push(snapshot),
     );
 
     expect(mocks.downloadAndInstall).toHaveBeenCalledTimes(1);
     expect(mocks.downloadAndInstall.mock.calls[0][0]).toEqual({ id: 1 });
-    expect(fractions).toEqual([0.4, 1, 1]);
+    expect(progress).toEqual([
+      { receivedBytes: 40, totalBytes: 100 },
+      { receivedBytes: 100, totalBytes: 100 },
+      { receivedBytes: 110, totalBytes: 100 },
+    ]);
   });
 
-  it("does not call onProgress while total length is unknown or zero", async () => {
+  it("reports received bytes while total length is unknown or zero", async () => {
     mocks.downloadAndInstall.mockImplementation(async (_handle, cb) => {
       cb?.(50, undefined);
       cb?.(50, 0);
@@ -373,7 +410,14 @@ describe("updater", () => {
       onProgress,
     );
 
-    expect(onProgress).not.toHaveBeenCalled();
+    expect(onProgress).toHaveBeenNthCalledWith(1, {
+      receivedBytes: 50,
+      totalBytes: null,
+    });
+    expect(onProgress).toHaveBeenNthCalledWith(2, {
+      receivedBytes: 100,
+      totalBytes: 0,
+    });
   });
 
   it("delegates getVersion and relaunch", async () => {

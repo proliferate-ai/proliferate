@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { DesktopUpdaterBridge } from "@proliferate/product-client/host/desktop-bridge";
+import type { DesktopUpdaterBridge } from "@proliferate/product-client/host/desktop-updater-bridge";
 import type { ErrorContext } from "@proliferate/product-client/host/product-host";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useUpdaterStore } from "#product/stores/updater/updater-store";
@@ -15,7 +15,6 @@ import {
   type TrackProductEvent,
 } from "#product/hooks/telemetry/facade/use-product-telemetry";
 import { useProductStorageContext } from "#product/hooks/persistence/facade/use-product-storage-context";
-import { classifyTelemetryFailure } from "#product/lib/domain/telemetry/failures";
 import { normalizeReleaseTitle } from "#product/lib/domain/updates/release-notice";
 import {
   clearDevUpdaterMockDownload,
@@ -28,6 +27,7 @@ import {
   writeDevUpdaterMock,
   type DevUpdaterMockState,
 } from "./updater-dev-mock";
+import { runDownloadAndPrepareRestart } from "./updater-download";
 
 const INITIAL_CHECK_DELAY_MS = 10_000;
 const CHECK_INTERVAL_MS = 1_800_000; // 30 minutes
@@ -125,47 +125,6 @@ async function runUpdateCheck(
   }
 }
 
-async function runDownloadAndPrepareRestart(
-  updater: DesktopUpdaterBridge,
-  deps: UpdaterSchedulerDeps,
-): Promise<void> {
-  const store = useUpdaterStore.getState();
-  const update = store._update;
-  const version = update?.version ?? null;
-  if (!update) {
-    return;
-  }
-
-  store.setPhase("downloading");
-  store.setDownloadProgress(0);
-  deps.track("app_update_download_started", { version });
-
-  try {
-    await updater.downloadAndInstall(update, (fraction) => {
-      useUpdaterStore.getState().setDownloadProgress(
-        Math.min(100, Math.round(fraction * 100)),
-      );
-    });
-
-    useUpdaterStore.getState().setReady();
-    deps.track("app_update_install_succeeded", { version });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    useUpdaterStore.getState().setError(message, "download");
-    deps.track("app_update_install_failed", {
-      failure_kind: classifyTelemetryFailure(error),
-      version,
-    });
-    deps.captureException(error, {
-      tags: {
-        action: "download_and_relaunch",
-        domain: "updater",
-        route: "settings",
-      },
-    });
-  }
-}
-
 async function ensureAutoCheckScheduler(
   updater: DesktopUpdaterBridge,
   deps: UpdaterSchedulerDeps,
@@ -231,6 +190,8 @@ export function useUpdater() {
   const storeErrorMessage = useUpdaterStore((s) => s.errorMessage);
   const storeErrorSource = useUpdaterStore((s) => s.errorSource);
   const storeDownloadProgress = useUpdaterStore((s) => s.downloadProgress);
+  const storeDownloadReceivedBytes = useUpdaterStore((s) => s.downloadReceivedBytes);
+  const storeDownloadTotalBytes = useUpdaterStore((s) => s.downloadTotalBytes);
   const storeRestartPromptOpen = useUpdaterStore((s) => s.restartPromptOpen);
   const storeRestartWhenIdle = useUpdaterStore((s) => s.restartWhenIdle);
   const storeManualCheckCompletedAt = useUpdaterStore((s) => s.manualCheckCompletedAt);
@@ -245,7 +206,15 @@ export function useUpdater() {
   const lastCheckedAt = devMock?.lastCheckedAt ?? storeLastCheckedAt;
   const errorMessage = devMock?.errorMessage ?? storeErrorMessage;
   const errorSource = devMock ? devMock.errorSource : storeErrorSource;
-  const downloadProgress = devMock?.downloadProgress ?? storeDownloadProgress;
+  const downloadProgress = devMock
+    ? devMock.downloadProgress
+    : storeDownloadProgress;
+  const downloadReceivedBytes = devMock
+    ? devMock.downloadReceivedBytes
+    : storeDownloadReceivedBytes;
+  const downloadTotalBytes = devMock
+    ? devMock.downloadTotalBytes
+    : storeDownloadTotalBytes;
   const restartPromptOpen = devMock?.restartPromptOpen ?? storeRestartPromptOpen;
   const restartWhenIdle = devMock ? devMock.restartWhenIdle : storeRestartWhenIdle;
   const manualCheckCompletedAt = devMock
@@ -393,6 +362,8 @@ export function useUpdater() {
     errorMessage,
     errorSource,
     downloadProgress,
+    downloadReceivedBytes,
+    downloadTotalBytes,
     restartPromptOpen,
     restartWhenIdle,
     manualCheckCompletedAt,

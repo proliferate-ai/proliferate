@@ -1,7 +1,12 @@
 use std::collections::VecDeque;
+use std::io;
 use std::sync::{Arc, Mutex};
 
+use tokio::io::{AsyncBufRead, AsyncBufReadExt};
 use tokio::process::ChildStderr;
+
+use crate::domains::sessions::model::AgentStartupExitError;
+use crate::observability::AGENT_STDERR_TRACING_TARGET;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(in crate::live::sessions) enum AgentStderrSeverity {
@@ -10,8 +15,8 @@ pub(in crate::live::sessions) enum AgentStderrSeverity {
     Debug,
 }
 
-/// Retains the most recent agent stderr lines so startup failures can surface
-/// what the process said before it died.
+/// Retains the most recent agent stderr lines so local startup diagnostics can
+/// surface what the process said before it died.
 #[derive(Debug, Clone, Default)]
 pub(in crate::live::sessions) struct AgentStderrTail {
     lines: Arc<Mutex<VecDeque<String>>>,
@@ -21,17 +26,43 @@ impl AgentStderrTail {
     /// Enough to capture a fatal error plus a few lines of context without
     /// bloating the startup error string shown to the user.
     const MAX_LINES: usize = 8;
+    /// A line-oriented reader can still receive one arbitrarily large line.
+    /// Capping each retained line also bounds the full caller detail because
+    /// the number of retained lines is fixed above.
+    const MAX_LINE_BYTES: usize = 1024;
+    const TRUNCATED_SUFFIX: &'static str = "…[truncated]";
 
     pub(in crate::live::sessions) fn push(&self, line: &str) {
         let mut lines = self.lock_lines();
         while lines.len() >= Self::MAX_LINES {
             lines.pop_front();
         }
-        lines.push_back(line.to_string());
+        lines.push_back(Self::bounded_line(line));
     }
 
-    pub(in crate::live::sessions) fn snapshot(&self) -> Vec<String> {
+    fn snapshot(&self) -> Vec<String> {
         self.lock_lines().iter().cloned().collect()
+    }
+
+    pub(in crate::live::sessions) fn startup_exit_error(
+        &self,
+        exit_status: std::io::Result<std::process::ExitStatus>,
+    ) -> AgentStartupExitError {
+        let status = match exit_status {
+            Ok(status) => status.to_string(),
+            Err(error) => format!("wait failed: {error}"),
+        };
+        let tail = self.snapshot();
+        let telemetry_safe_detail = format!("agent process exited during ACP startup ({status})");
+        let caller_detail = if tail.is_empty() {
+            telemetry_safe_detail.clone()
+        } else {
+            format!(
+                "agent process exited during ACP startup ({status}). Agent stderr:\n{}",
+                tail.join("\n")
+            )
+        };
+        AgentStartupExitError::new(telemetry_safe_detail, caller_detail)
     }
 
     fn lock_lines(&self) -> std::sync::MutexGuard<'_, VecDeque<String>> {
@@ -40,6 +71,126 @@ impl AgentStderrTail {
         self.lines
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    fn bounded_line(line: &str) -> String {
+        Self::bounded_line_with_truncation(line, line.len() > Self::MAX_LINE_BYTES)
+    }
+
+    fn bounded_line_with_truncation(line: &str, truncated: bool) -> String {
+        if !truncated && line.len() <= Self::MAX_LINE_BYTES {
+            return line.to_string();
+        }
+
+        let max_prefix_bytes = Self::MAX_LINE_BYTES - Self::TRUNCATED_SUFFIX.len();
+        let mut prefix_end = line.len().min(max_prefix_bytes);
+        while !line.is_char_boundary(prefix_end) {
+            prefix_end -= 1;
+        }
+
+        let mut bounded = String::with_capacity(Self::MAX_LINE_BYTES);
+        bounded.push_str(&line[..prefix_end]);
+        bounded.push_str(Self::TRUNCATED_SUFFIX);
+        bounded
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct BoundedAgentStderrLine {
+    bytes: Vec<u8>,
+    truncated: bool,
+    terminated_by_newline: bool,
+}
+
+impl BoundedAgentStderrLine {
+    fn into_record(mut self) -> Option<AgentStderrRecord> {
+        // Match `AsyncBufReadExt::lines`: remove the CR from a complete CRLF
+        // line, but do not mistake a retained-prefix CR for the delimiter when
+        // the physical line was truncated.
+        if self.terminated_by_newline && !self.truncated && self.bytes.last() == Some(&b'\r') {
+            self.bytes.pop();
+        }
+
+        let decoded = String::from_utf8_lossy(&self.bytes);
+        let sanitized = sanitize_agent_stderr_line(&decoded);
+        if sanitized.is_empty() {
+            return None;
+        }
+
+        let line = AgentStderrTail::bounded_line_with_truncation(&sanitized, self.truncated);
+        let severity = classify_agent_stderr_line(&line);
+        Some(AgentStderrRecord { line, severity })
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct AgentStderrRecord {
+    line: String,
+    severity: AgentStderrSeverity,
+}
+
+/// Copies only a bounded prefix while consuming the complete physical line.
+/// This keeps newline-free child output from growing a `String` without bound
+/// while still draining the pipe so the child cannot block on stderr.
+async fn next_bounded_agent_stderr_line<R>(
+    reader: &mut R,
+) -> io::Result<Option<BoundedAgentStderrLine>>
+where
+    R: AsyncBufRead + Unpin,
+{
+    let mut bytes = Vec::with_capacity(AgentStderrTail::MAX_LINE_BYTES);
+    let mut truncated = false;
+
+    loop {
+        let (consumed, found_newline) = {
+            let available = reader.fill_buf().await?;
+            if available.is_empty() {
+                return if bytes.is_empty() && !truncated {
+                    Ok(None)
+                } else {
+                    Ok(Some(BoundedAgentStderrLine {
+                        bytes,
+                        truncated,
+                        terminated_by_newline: false,
+                    }))
+                };
+            }
+
+            let newline_index = available.iter().position(|byte| *byte == b'\n');
+            let content_bytes = newline_index.unwrap_or(available.len());
+            let remaining = AgentStderrTail::MAX_LINE_BYTES.saturating_sub(bytes.len());
+            let retained_bytes = content_bytes.min(remaining);
+            bytes.extend_from_slice(&available[..retained_bytes]);
+            truncated |= retained_bytes < content_bytes;
+
+            (
+                content_bytes + usize::from(newline_index.is_some()),
+                newline_index.is_some(),
+            )
+        };
+
+        reader.consume(consumed);
+        if found_newline {
+            return Ok(Some(BoundedAgentStderrLine {
+                bytes,
+                truncated,
+                terminated_by_newline: true,
+            }));
+        }
+    }
+}
+
+async fn next_agent_stderr_record<R>(reader: &mut R) -> io::Result<Option<AgentStderrRecord>>
+where
+    R: AsyncBufRead + Unpin,
+{
+    loop {
+        let Some(line) = next_bounded_agent_stderr_line(reader).await? else {
+            return Ok(None);
+        };
+        if let Some(record) = line.into_record() {
+            return Ok(Some(record));
+        }
     }
 }
 
@@ -104,47 +255,68 @@ pub(in crate::live::sessions) fn spawn_agent_stderr_logger(
     let tail = AgentStderrTail::default();
     let tail_writer = tail.clone();
     let reader_task = tokio::task::spawn_local(async move {
-        use tokio::io::AsyncBufReadExt;
-        let reader = tokio::io::BufReader::new(stderr);
-        let mut lines = reader.lines();
-        while let Ok(Some(line)) = lines.next_line().await {
-            let line = sanitize_agent_stderr_line(&line);
-            if line.is_empty() {
-                continue;
-            }
-            tail_writer.push(&line);
-
-            match classify_agent_stderr_line(&line) {
-                AgentStderrSeverity::Error => {
-                    tracing::error!(
-                        session_id = %session_id,
-                        agent = %agent_kind,
-                        "[agent stderr] {line}"
-                    );
-                }
-                AgentStderrSeverity::Warn => {
-                    tracing::warn!(
-                        session_id = %session_id,
-                        agent = %agent_kind,
-                        "[agent stderr] {line}"
-                    );
-                }
-                AgentStderrSeverity::Debug => {
-                    tracing::debug!(
-                        session_id = %session_id,
-                        agent = %agent_kind,
-                        "[agent stderr] {line}"
-                    );
-                }
-            }
+        let mut reader =
+            tokio::io::BufReader::with_capacity(AgentStderrTail::MAX_LINE_BYTES, stderr);
+        while let Ok(Some(record)) = next_agent_stderr_record(&mut reader).await {
+            tail_writer.push(&record.line);
+            log_agent_stderr_record(&record, &session_id, &agent_kind);
         }
     });
     (tail, reader_task)
 }
 
+fn log_agent_stderr_record(record: &AgentStderrRecord, session_id: &str, agent_kind: &str) {
+    let line = &record.line;
+    match record.severity {
+        AgentStderrSeverity::Error => {
+            tracing::error!(
+                target: AGENT_STDERR_TRACING_TARGET,
+                session_id = %session_id,
+                agent = %agent_kind,
+                "[agent stderr] {line}"
+            );
+        }
+        AgentStderrSeverity::Warn => {
+            tracing::warn!(
+                target: AGENT_STDERR_TRACING_TARGET,
+                session_id = %session_id,
+                agent = %agent_kind,
+                "[agent stderr] {line}"
+            );
+        }
+        AgentStderrSeverity::Debug => {
+            tracing::debug!(
+                target: AGENT_STDERR_TRACING_TARGET,
+                session_id = %session_id,
+                agent = %agent_kind,
+                "[agent stderr] {line}"
+            );
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(unix)]
+    use std::os::unix::process::ExitStatusExt;
+
+    #[derive(Clone)]
+    struct SharedLogWriter(Arc<Mutex<Vec<u8>>>);
+
+    impl io::Write for SharedLogWriter {
+        fn write(&mut self, buffer: &[u8]) -> io::Result<usize> {
+            self.0
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .extend_from_slice(buffer);
+            Ok(buffer.len())
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
 
     #[test]
     fn sanitize_agent_stderr_line_strips_ansi_sequences() {
@@ -197,5 +369,143 @@ mod tests {
         assert_eq!(snapshot.len(), AgentStderrTail::MAX_LINES);
         assert_eq!(snapshot.first(), Some(&format!("line {evicted}")));
         assert_eq!(snapshot.last(), Some(&format!("line {}", total - 1)));
+    }
+
+    #[test]
+    fn agent_stderr_tail_bounds_one_giant_line() {
+        let tail = AgentStderrTail::default();
+        tail.push(&"x".repeat(AgentStderrTail::MAX_LINE_BYTES * 4));
+
+        let snapshot = tail.snapshot();
+        assert_eq!(snapshot.len(), 1);
+        assert_eq!(snapshot[0].len(), AgentStderrTail::MAX_LINE_BYTES);
+        assert!(snapshot[0].ends_with(AgentStderrTail::TRUNCATED_SUFFIX));
+    }
+
+    #[test]
+    fn agent_stderr_tail_truncates_at_a_utf8_boundary() {
+        let tail = AgentStderrTail::default();
+        tail.push(&"🙂".repeat(AgentStderrTail::MAX_LINE_BYTES));
+
+        let snapshot = tail.snapshot();
+        assert_eq!(snapshot.len(), 1);
+        assert!(snapshot[0].len() <= AgentStderrTail::MAX_LINE_BYTES);
+        assert!(snapshot[0].ends_with(AgentStderrTail::TRUNCATED_SUFFIX));
+        assert!(!snapshot[0].contains('\u{fffd}'));
+    }
+
+    #[tokio::test]
+    async fn giant_newline_free_write_is_bounded_before_retention_classification_and_logging() {
+        use tokio::io::AsyncWriteExt;
+
+        let (reader_io, mut writer) = tokio::io::duplex(64);
+        let giant_write = "🙂"
+            .repeat(AgentStderrTail::MAX_LINE_BYTES * 16)
+            .into_bytes();
+        let writer_task = tokio::spawn(async move {
+            writer.write_all(b"ERROR ").await.expect("write prefix");
+            writer
+                .write_all(&giant_write)
+                .await
+                .expect("write giant newline-free payload");
+            writer
+                .write_all(b"DO_NOT_RETAIN_OR_LOG\nWARN drain completed: \xff")
+                .await
+                .expect("write delimiter and lossy EOF line");
+            writer.shutdown().await.expect("close writer");
+        });
+
+        let mut reader = tokio::io::BufReader::with_capacity(64, reader_io);
+        let first = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            next_agent_stderr_record(&mut reader),
+        )
+        .await
+        .expect("giant line drain timed out")
+        .expect("read giant line")
+        .expect("giant line record");
+        assert_eq!(first.severity, AgentStderrSeverity::Error);
+        assert_eq!(first.line.len(), AgentStderrTail::MAX_LINE_BYTES);
+        assert!(first.line.ends_with(AgentStderrTail::TRUNCATED_SUFFIX));
+        assert!(!first.line.contains("DO_NOT_RETAIN_OR_LOG"));
+        assert!(!first.line.contains('\u{fffd}'));
+
+        let tail = AgentStderrTail::default();
+        tail.push(&first.line);
+        assert_eq!(tail.snapshot(), vec![first.line.clone()]);
+
+        let log_bytes = Arc::new(Mutex::new(Vec::new()));
+        let log_writer = Arc::clone(&log_bytes);
+        let subscriber = tracing_subscriber::fmt()
+            .without_time()
+            .with_ansi(false)
+            .with_writer(move || SharedLogWriter(Arc::clone(&log_writer)))
+            .finish();
+        tracing::subscriber::with_default(subscriber, || {
+            log_agent_stderr_record(&first, "session", "agent");
+        });
+        let logged = String::from_utf8(
+            log_bytes
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clone(),
+        )
+        .expect("formatted log is UTF-8");
+        assert!(logged.contains(&first.line));
+        assert!(!logged.contains("DO_NOT_RETAIN_OR_LOG"));
+
+        let second = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            next_agent_stderr_record(&mut reader),
+        )
+        .await
+        .expect("lossy EOF line drain timed out")
+        .expect("read next line")
+        .expect("next line record");
+        assert_eq!(second.line, "WARN drain completed: �");
+        assert_eq!(second.severity, AgentStderrSeverity::Warn);
+        assert!(tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            next_agent_stderr_record(&mut reader),
+        )
+        .await
+        .expect("EOF drain timed out")
+        .expect("read EOF")
+        .is_none());
+        tokio::time::timeout(std::time::Duration::from_secs(5), writer_task)
+            .await
+            .expect("writer task timed out")
+            .expect("writer task completed");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn startup_exit_error_reports_status_without_stderr() {
+        let tail = AgentStderrTail::default();
+        let exit_status = std::process::ExitStatus::from_raw(0x100); // exit code 1
+
+        let error = tail.startup_exit_error(Ok(exit_status));
+        let message = error.to_string();
+        assert!(message.contains("exited during ACP startup"));
+        assert!(!message.contains("Agent stderr"));
+        assert_eq!(message, error.caller_detail());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn startup_exit_error_includes_stderr_tail_only_for_caller() {
+        let tail = AgentStderrTail::default();
+        tail.push("Failed to locate codex-acp binary");
+        let exit_status = std::process::ExitStatus::from_raw(0x100);
+
+        let error = tail.startup_exit_error(Ok(exit_status));
+        assert!(error
+            .caller_detail()
+            .contains("Failed to locate codex-acp binary"));
+        assert!(!error
+            .to_string()
+            .contains("Failed to locate codex-acp binary"));
+        assert!(error.caller_detail().contains("Agent stderr:"));
+        assert!(!format!("{error:?}").contains("Failed to locate codex-acp binary"));
     }
 }

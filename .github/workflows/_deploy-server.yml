@@ -34,7 +34,6 @@ jobs:
       image_uri: ${{ steps.image.outputs.image_uri }}
       task_definition_arn: ${{ steps.task.outputs.task_definition_arn }}
     env:
-      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
       AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
       ECR_SERVER_REPOSITORY: ${{ vars.ECR_SERVER_REPOSITORY || 'proliferate-server' }}
       ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
@@ -88,11 +87,23 @@ jobs:
       DEPLOY_ENVIRONMENT: ${{ inputs.environment }}
       GIT_SHA: ${{ inputs.git_sha }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ inputs.git_sha }}
 
+      # GitHub variables are not automatically redacted. Mask every externally
+      # configured AWS identifier before validation or an action can report it.
+      - name: Mask hosted AWS identifiers
+        run: |
+          set -euo pipefail
+          for identifier in "$AWS_DEPLOY_ROLE_ARN" "$SUPPORT_FEED_SECRET_ARN"; do
+            if [ -n "$identifier" ]; then
+              echo "::add-mask::${identifier}"
+            fi
+          done
+
       - name: Validate server deploy config
+        id: hosted_contract
         run: |
           set -euo pipefail
           : "${AWS_DEPLOY_ROLE_ARN:?Set AWS_DEPLOY_ROLE_ARN on the GitHub environment.}"
@@ -103,6 +114,65 @@ jobs:
           : "${WEB_URL:?Set WEB_URL on the GitHub environment.}"
           : "${E2B_TEMPLATE_REF:?Set E2B_TEMPLATE_REF on the GitHub environment.}"
           : "${SUPPORT_FEED_SECRET_ARN:?Set SUPPORT_FEED_SECRET_ARN on the GitHub environment.}"
+
+          contract_fields="$(
+            jq -er --arg environment "$DEPLOY_ENVIRONMENT" '
+              . as $contract
+              | [
+                  .environments
+                  | to_entries[]
+                  | select(.value.workflow_names | index($environment))
+                ] as $matches
+              | if ($matches | length) != 1 then
+                  error("environment must match exactly one hosted contract")
+                else
+                  [
+                    $contract.aws_account_id,
+                    $contract.aws_region,
+                    $matches[0].value.secret_name,
+                    $matches[0].value.background_redis_reference_service,
+                    $matches[0].value.background_redis_reference_name,
+                    $matches[0].value.deploy_role_name,
+                    $matches[0].value.execution_role_name
+                  ]
+                  | @tsv
+                end
+            ' server/deploy/hosted-redis-contract.json 2>/dev/null
+          )" || {
+            echo "Unable to resolve the checked-in hosted server environment contract." >&2
+            exit 1
+          }
+          IFS=$'\t' read -r \
+            expected_account_id aws_region redis_secret_name \
+            background_redis_reference_service background_redis_reference_name \
+            expected_role_name expected_execution_role_name \
+            <<< "$contract_fields"
+
+          if [[ ! "$expected_account_id" =~ ^[0-9]{12}$ \
+              || ! "$aws_region" =~ ^[a-z]{2}-[a-z0-9-]+-[0-9]+$ \
+              || ! "$redis_secret_name" =~ ^[A-Za-z0-9/_+=.@-]+$ \
+              || ! "$background_redis_reference_service" =~ ^(secretsmanager|ssm)$ \
+              || ! "$background_redis_reference_name" =~ ^[A-Za-z0-9/_+=.@-]+$ \
+              || ! "$expected_role_name" =~ ^[A-Za-z0-9_+=,.@-]+$ \
+              || ! "$expected_execution_role_name" =~ ^[A-Za-z0-9_+=,.@-]+$ ]]; then
+            echo "The checked-in hosted server environment contract is malformed." >&2
+            exit 1
+          fi
+          expected_role_arn="arn:aws:iam::${expected_account_id}:role/${expected_role_name}"
+          if [ "$AWS_DEPLOY_ROLE_ARN" != "$expected_role_arn" ]; then
+            echo "Hosted server deploy role does not match the checked-in account/environment contract." >&2
+            exit 1
+          fi
+          {
+            echo "AWS_REGION=${aws_region}"
+            echo "EXPECTED_AWS_ACCOUNT_ID=${expected_account_id}"
+            echo "EXPECTED_ECS_EXECUTION_ROLE_NAME=${expected_execution_role_name}"
+            echo "EXPECTED_BACKGROUND_REDIS_SERVICE=${background_redis_reference_service}"
+            echo "EXPECTED_BACKGROUND_REDIS_NAME=${background_redis_reference_name}"
+            echo "REDBEAT_REDIS_SECRET_NAME=${redis_secret_name}"
+          } >> "$GITHUB_ENV"
+          echo "aws_region=${aws_region}" >> "$GITHUB_OUTPUT"
+
           if [ "$SUPPORT_TRACKER_ENABLED" = "true" ]; then
             : "${SUPPORT_GITHUB_APP_ID:?Set SUPPORT_GITHUB_APP_ID when support tracker is enabled.}"
             : "${SUPPORT_GITHUB_APP_INSTALLATION_ID:?Set SUPPORT_GITHUB_APP_INSTALLATION_ID when support tracker is enabled.}"
@@ -128,10 +198,24 @@ jobs:
           fi
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v6
+        uses: aws-actions/configure-aws-credentials@517a711dbcd0e402f90c77e7e2f81e849156e31d # v6.2.2
         with:
           role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
+          aws-region: ${{ steps.hosted_contract.outputs.aws_region }}
+          mask-aws-account-id: true
+
+      - name: Verify AWS deployment identity
+        run: |
+          set -euo pipefail
+          actual_account="$(aws sts get-caller-identity --query Account --output text 2>/dev/null)" || {
+            echo "Unable to verify the hosted server AWS identity." >&2
+            exit 1
+          }
+          if [ "$actual_account" != "$EXPECTED_AWS_ACCOUNT_ID" ]; then
+            echo "Hosted server AWS identity does not match the checked-in account contract." >&2
+            exit 1
+          fi
+          echo "Hosted server AWS identity verified."
 
       # Prove the environment's support-feed secret is reachable and carries the
       # supportFeedToken field before any ECS mutation, without resolving the
@@ -144,11 +228,12 @@ jobs:
               --secret-id "$SUPPORT_FEED_SECRET_ARN" \
               --query SecretString \
               --output text \
+              2>/dev/null \
             | jq -e 'type == "object" and (has("supportFeedToken"))
                      and (.supportFeedToken | type == "string")
                      and (.supportFeedToken | length > 0)' \
-              >/dev/null; then
-            echo "Support feed secret ${SUPPORT_FEED_SECRET_ARN} is missing, inaccessible, or has no supportFeedToken field." >&2
+              >/dev/null 2>/dev/null; then
+            echo "The support feed secret is missing, inaccessible, or malformed." >&2
             exit 1
           fi
           echo "Support feed secret reference verified (field present; value not read)."
@@ -232,23 +317,197 @@ jobs:
           echo "image_ref=$image_ref" >> "$GITHUB_OUTPUT"
           echo "Pinning task definitions to immutable ${image_ref}"
 
-      - name: Render ECS task definition
-        id: task
+      # Run this value-bearing preflight only after every third-party action's
+      # main phase. Their post-job hooks run later, so the first-party task-
+      # definition transactions below delete every identifier-bearing artifact
+      # before exit.
+      # The masked base ARN is a step output consumed explicitly by the first-party
+      # render step; it never enters the job-wide environment.
+      - name: Verify API Redis secret reference
+        id: redis_secret
+        env:
+          REDIS_PREFLIGHT_TIMEOUT_SECONDS: "20"
         run: |
           set -euo pipefail
+          case "$REDIS_PREFLIGHT_TIMEOUT_SECONDS" in
+            ''|*[!0-9]*|0)
+              echo "The API Redis DNS timeout guard is misconfigured." >&2
+              exit 1
+              ;;
+          esac
+          if ! command -v timeout >/dev/null 2>&1; then
+            echo "The API Redis DNS timeout guard is unavailable." >&2
+            exit 1
+          fi
+
+          redis_preflight_status=0
+          REDBEAT_REDIS_SECRET_ARN="$(
+            aws secretsmanager get-secret-value \
+              --secret-id "$REDBEAT_REDIS_SECRET_NAME" \
+              --output json \
+              2>/dev/null \
+            | timeout --signal=TERM --kill-after=2s \
+                "${REDIS_PREFLIGHT_TIMEOUT_SECONDS}s" python3 -c '
+          import ipaddress
+          import json
+          import os
+          import re
+          import socket
+          import sys
+          from urllib.parse import unquote, urlsplit
+
+          try:
+              response = json.load(sys.stdin)
+              arn = response.get("ARN")
+              secret_string = response.get("SecretString")
+              expected_region = re.escape(os.environ.get("AWS_REGION", ""))
+              expected_account = re.escape(os.environ.get("EXPECTED_AWS_ACCOUNT_ID", ""))
+              expected_secret = re.escape(os.environ.get("REDBEAT_REDIS_SECRET_NAME", ""))
+              expected_arn = re.compile(
+                  rf"arn:aws:secretsmanager:{expected_region}:"
+                  rf"{expected_account}:secret:{expected_secret}-[A-Za-z0-9]{{6}}"
+              )
+              if not isinstance(arn, str) or expected_arn.fullmatch(arn) is None:
+                  raise ValueError
+              if not isinstance(secret_string, str):
+                  raise ValueError
+              payload = json.loads(secret_string)
+              value = payload.get("REDBEAT_REDIS_URL")
+              if not isinstance(value, str) or value != value.strip():
+                  raise ValueError
+              parsed = urlsplit(value)
+              host = parsed.hostname
+              _ = parsed.port  # Force validation of an optional explicit port.
+              if parsed.scheme not in {"redis", "rediss"} or not host:
+                  raise ValueError
+              normalized_host = unquote(host).rstrip(".").lower()
+              if normalized_host == "localhost" or normalized_host.endswith(".localhost"):
+                  raise ValueError
+              try:
+                  address = ipaddress.ip_address(normalized_host)
+              except ValueError:
+                  try:
+                      address = ipaddress.ip_address(socket.inet_aton(normalized_host))
+                  except OSError:
+                      address = None
+              if address is not None and (address.is_loopback or address.is_unspecified):
+                  raise ValueError
+
+              try:
+                  answers = socket.getaddrinfo(
+                      normalized_host,
+                      parsed.port or 6379,
+                      type=socket.SOCK_STREAM,
+                  )
+              except OSError as exc:
+                  raise ValueError from exc
+              if not answers:
+                  raise ValueError
+              for answer in answers:
+                  resolved_host = answer[4][0].split("%", 1)[0]
+                  resolved_address = ipaddress.ip_address(resolved_host)
+                  if resolved_address.is_loopback or resolved_address.is_unspecified:
+                      raise ValueError
+              print(arn)
+          except Exception:
+              raise SystemExit(1)
+          ' 2>/dev/null
+          )" || redis_preflight_status=$?
+          case "$redis_preflight_status" in
+            0) ;;
+            124|137)
+              echo "API Redis endpoint validation timed out before non-loopback DNS safety could be established." >&2
+              exit 1
+              ;;
+            125|126|127)
+              echo "The API Redis DNS timeout guard failed." >&2
+              exit 1
+              ;;
+            *)
+              echo "The API Redis secret is missing, inaccessible, or has no valid non-loopback REDBEAT_REDIS_URL field." >&2
+              exit 1
+              ;;
+          esac
+          if [ -z "$REDBEAT_REDIS_SECRET_ARN" ]; then
+            echo "The API Redis secret is missing, inaccessible, or has no valid non-loopback REDBEAT_REDIS_URL field." >&2
+            exit 1
+          fi
+          echo "::add-mask::${REDBEAT_REDIS_SECRET_ARN}"
+          echo "secret_arn=${REDBEAT_REDIS_SECRET_ARN}" >> "$GITHUB_OUTPUT"
+          echo "API Redis secret reference verified (value not printed or retained)."
+
+      - name: Render ECS task definition
+        id: task
+        env:
+          REDBEAT_REDIS_SECRET_ARN: ${{ steps.redis_secret.outputs.secret_arn }}
+        run: |
+          set -euo pipefail
+
+          # HOSTED_REDIS_SCRATCH_BEGIN
+          # Third-party actions register post-job hooks. Keep every file that can
+          # carry the Redis identifier in a private directory, and remove each
+          # one before this first-party step exits on success or failure.
+          : "${RUNNER_TEMP:?RUNNER_TEMP is required for private render scratch space.}"
+          umask 077
+          render_dir="$(mktemp -d "${RUNNER_TEMP}/hosted-redis-render.XXXXXX")"
+          task_definition_raw="${render_dir}/task-definition.raw.json"
+          env_updates_file="${render_dir}/env-updates.json"
+          secret_updates_file="${render_dir}/secret-updates.json"
+          merge_program_file="${render_dir}/merge-task.jq"
+          assert_program_file="${render_dir}/assert-task.jq"
+          task_definition_rendered="${render_dir}/task-definition.json"
+          cleanup_render_files() {
+            rm -f -- \
+              "$task_definition_raw" \
+              "$env_updates_file" \
+              "$secret_updates_file" \
+              "$merge_program_file" \
+              "$assert_program_file" \
+              "$task_definition_rendered"
+            rmdir "$render_dir" 2>/dev/null || true
+          }
+          trap cleanup_render_files EXIT
+          # HOSTED_REDIS_SCRATCH_END
+
+          # HOSTED_EXECUTION_ROLE_VERIFY_BEGIN
+          # Fetch and verify the exact live definition cloned below. This binds
+          # Terraform's configured execution role to the ECS surface without a
+          # second-fetch race between verification and registration.
           task_definition_arn="$(
             aws ecs describe-services \
               --cluster "$ECS_CLUSTER" \
               --services "$ECS_SERVER_SERVICE" \
               --query 'services[0].taskDefinition' \
-              --output text
-          )"
-          test "$task_definition_arn" != "None"
-
-          aws ecs describe-task-definition \
-            --task-definition "$task_definition_arn" \
-            --query taskDefinition \
-            > task-definition.raw.json
+              --output text \
+              2>/dev/null
+          )" || {
+            echo "Unable to verify the hosted server task execution role." >&2
+            exit 1
+          }
+          expected_task_prefix="arn:aws:ecs:${AWS_REGION}:${EXPECTED_AWS_ACCOUNT_ID}:task-definition/"
+          if [[ "$task_definition_arn" != "${expected_task_prefix}"?* ]]; then
+            echo "Unable to verify the hosted server task execution role." >&2
+            exit 1
+          fi
+          if ! aws ecs describe-task-definition \
+              --task-definition "$task_definition_arn" \
+              --query taskDefinition \
+              --output json \
+              > "$task_definition_raw" \
+              2>/dev/null; then
+            echo "Unable to verify the hosted server task execution role." >&2
+            exit 1
+          fi
+          expected_execution_role_arn="arn:aws:iam::${EXPECTED_AWS_ACCOUNT_ID}:role/${EXPECTED_ECS_EXECUTION_ROLE_NAME}"
+          if ! jq -e --arg expected "$expected_execution_role_arn" \
+              '.executionRoleArn == $expected' \
+              "$task_definition_raw" \
+              >/dev/null 2>/dev/null; then
+            echo "Unable to verify the hosted server task execution role." >&2
+            exit 1
+          fi
+          echo "Hosted server task execution role verified."
+          # HOSTED_EXECUTION_ROLE_VERIFY_END
 
           support_github_private_key_parameter="$SUPPORT_GITHUB_APP_PRIVATE_KEY_PARAMETER_NAME"
           if [ -z "$support_github_private_key_parameter" ] && [ "$SUPPORT_TRACKER_ENABLED" = "true" ]; then
@@ -354,21 +613,25 @@ jobs:
               {"name":"SUPPORT_LINEAR_PROJECT_ID","value":$support_linear_project_id},
               {"name":"SUPPORT_LINEAR_LABEL_IDS","value":$support_linear_label_ids},
               {"name":"SUPPORT_LINEAR_PRIVATE_DETAILS_LABEL_ID","value":$support_linear_private_details_label_id}
-            ]' > env-updates.json
+            ]' > "$env_updates_file"
 
-          # The support-feed bearer token is always projected as exactly one ECS
-          # secret referencing the environment's supportFeedToken field. It is
-          # listed first and unconditionally; the render/assert jq below strips
-          # any inherited plaintext duplicate and rejects a missing/duplicated
-          # reference before registration.
+          # Hosted dependencies are authored as exact ECS field projections.
+          # Listing them unconditionally makes merge_secrets replace inherited
+          # manual/stale references; the assertion below proves the final refs.
+          # HOSTED_SECRET_UPDATES_BEGIN
           jq -n \
             --arg support_feed_secret_arn "$SUPPORT_FEED_SECRET_ARN" \
+            --arg redis_secret_arn "$REDBEAT_REDIS_SECRET_ARN" \
             --arg support_github_private_key_parameter "$support_github_private_key_parameter" \
             --arg support_linear_api_key_parameter "$support_linear_api_key_parameter" \
             '[
               {
                 "name":"SUPPORT_FEED_BEARER_TOKEN",
                 "valueFrom":($support_feed_secret_arn + ":supportFeedToken::")
+              },
+              {
+                "name":"REDBEAT_REDIS_URL",
+                "valueFrom":($redis_secret_arn + ":REDBEAT_REDIS_URL::")
               },
               (
                 if $support_github_private_key_parameter == "" then empty else
@@ -386,18 +649,19 @@ jobs:
                 }
                 end
               )
-            ]' > secret-updates.json
+            ]' > "$secret_updates_file"
+          # HOSTED_SECRET_UPDATES_END
 
           # The render (MERGE_JQ) and fail-closed check (ASSERT_JQ) are pure
           # JSON->JSON programs with no AWS dependency. They are written to files
-          # verbatim so server/tests/integration/test_support_feed.py can extract
-          # and exercise the exact logic that runs here. Keep the heredoc
+          # verbatim so server/tests/integration/test_support_feed_deploy_render.py
+          # can extract and exercise the exact logic that runs here. Keep the heredoc
           # sentinels (MERGE_JQ / ASSERT_JQ) stable; the test greps for them.
-          cat > merge-task.jq <<'MERGE_JQ'
+          cat > "$merge_program_file" <<'MERGE_JQ'
           def merge_environment($updates):
             (.environment // []) as $current
             | ($updates[0] | map(.name)) as $updated_names
-            | ["SUPPORT_GITHUB_APP_PRIVATE_KEY", "SUPPORT_LINEAR_API_KEY", "SUPPORT_FEED_BEARER_TOKEN"] as $secret_names
+            | ["SUPPORT_GITHUB_APP_PRIVATE_KEY", "SUPPORT_LINEAR_API_KEY", "SUPPORT_FEED_BEARER_TOKEN", "REDBEAT_REDIS_URL"] as $secret_names
             # Stale runtime-identity overrides the server never re-authors. The
             # task definition is merged from the previous revision, so dropping
             # our own assignments is not enough: any inherited copy must be
@@ -436,9 +700,11 @@ jobs:
             )
           MERGE_JQ
 
-          cat > assert-task.jq <<'ASSERT_JQ'
+          cat > "$assert_program_file" <<'ASSERT_JQ'
           def feed_secrets($c): [ $c.secrets[]? | select(.name == "SUPPORT_FEED_BEARER_TOKEN") ];
           def feed_plain($c): [ $c.environment[]? | select(.name == "SUPPORT_FEED_BEARER_TOKEN") ];
+          def redis_secrets($c): [ $c.secrets[]? | select(.name == "REDBEAT_REDIS_URL") ];
+          def redis_plain($c): [ $c.environment[]? | select(.name == "REDBEAT_REDIS_URL") ];
           def forbidden_names: ["SERVER_VERSION", "ANYHARNESS_VERSION", "ANYHARNESS_GIT_SHA", "E2B_TEMPLATE_VERSION", "CLOUD_RUNTIME_SENTRY_RELEASE", "CLOUD_TARGET_SENTRY_RELEASE", "E2B_RUNTIME_SENTRY_RELEASE"];
           def stale_vars($c): [ $c.environment[]? | select(.name as $n | forbidden_names | index($n)) ];
           def strict_identity($c): [ $c.environment[]? | select(.name == "PROLIFERATE_REQUIRE_RELEASE_IDENTITY" and .value == "1") ];
@@ -451,6 +717,8 @@ jobs:
           | (feed_plain($c)) as $plain
           | (stale_vars($c)) as $stale
           | (strict_identity($c)) as $strict
+          | (redis_secrets($c)) as $redis_secrets
+          | (redis_plain($c)) as $redis_plain
           | if ($secrets | length) != 1 then
               error("expected exactly one SUPPORT_FEED_BEARER_TOKEN ECS secret, found \($secrets | length)")
             elif ($plain | length) != 0 then
@@ -463,23 +731,31 @@ jobs:
               error("stale runtime-identity variables must not remain: \($stale | map(.name) | join(", "))")
             elif ($strict | length) != 1 then
               error("PROLIFERATE_REQUIRE_RELEASE_IDENTITY=1 must be set for strict hosted release identity")
+            elif ($redis_secrets | length) != 1 then
+              error("expected exactly one REDBEAT_REDIS_URL ECS secret, found \($redis_secrets | length)")
+            elif ($redis_plain | length) != 0 then
+              error("REDBEAT_REDIS_URL must not be present as a plaintext environment entry")
+            elif (($redis_secrets[0].valueFrom // "") != $redis_value_from) then
+              error("REDBEAT_REDIS_URL must match the environment-owned Secrets Manager field reference")
             else empty end
           ASSERT_JQ
 
           jq \
             --arg container "$ECS_SERVER_CONTAINER_NAME" \
             --arg image "${{ steps.digest.outputs.image_ref }}" \
-            --slurpfile updates env-updates.json \
-            --slurpfile secret_updates secret-updates.json \
-            -f merge-task.jq \
-            task-definition.raw.json > task-definition.json
+            --slurpfile updates "$env_updates_file" \
+            --slurpfile secret_updates "$secret_updates_file" \
+            -f "$merge_program_file" \
+            "$task_definition_raw" > "$task_definition_rendered"
 
           # Fail closed before register-task-definition: exactly one secret-backed
-          # SUPPORT_FEED_BEARER_TOKEN, no plaintext duplicate, correct field ref.
+          # SUPPORT_FEED_BEARER_TOKEN and REDBEAT_REDIS_URL, no plaintext
+          # duplicates, and valid AWS secret references.
           jq \
             --arg container "$ECS_SERVER_CONTAINER_NAME" \
-            -f assert-task.jq \
-            task-definition.json > /dev/null
+            --arg redis_value_from "${REDBEAT_REDIS_SECRET_ARN}:REDBEAT_REDIS_URL::" \
+            -f "$assert_program_file" \
+            "$task_definition_rendered" > /dev/null
 
           # Fail closed unless the server container is pinned to an IMMUTABLE
           # digest (`repo@sha256:...`), never a mutable tag. A mutable tag could be
@@ -488,7 +764,7 @@ jobs:
           server_image="$(
             jq -r --arg container "$ECS_SERVER_CONTAINER_NAME" \
               'first(.containerDefinitions[] | select(.name == $container) | .image)' \
-              task-definition.json
+              "$task_definition_rendered"
           )"
           case "$server_image" in
             *@sha256:*) ;;
@@ -500,10 +776,14 @@ jobs:
 
           new_task_definition_arn="$(
             aws ecs register-task-definition \
-              --cli-input-json file://task-definition.json \
+              --cli-input-json "file://${task_definition_rendered}" \
               --query 'taskDefinition.taskDefinitionArn' \
-              --output text
-          )"
+              --output text \
+              2>/dev/null
+          )" || {
+            echo "Unable to register the verified hosted server task definition." >&2
+            exit 1
+          }
           echo "task_definition_arn=$new_task_definition_arn" >> "$GITHUB_OUTPUT"
 
       - name: Run Alembic migrations
@@ -599,6 +879,30 @@ jobs:
         if: ${{ env.ECS_WORKER_SERVICE != '' && env.ECS_BEAT_SERVICE != '' }}
         run: |
           set -euo pipefail
+          # HOSTED_BACKGROUND_SCRATCH_BEGIN
+          # Re-imaging preserves the full task definition, including secret
+          # identifiers. Keep both definitions private and remove them before
+          # any third-party post-job action can run.
+          : "${RUNNER_TEMP:?RUNNER_TEMP is required for private background scratch space.}"
+          umask 077
+          background_render_dir="$(mktemp -d "${RUNNER_TEMP}/hosted-background-render.XXXXXX")"
+          worker_task_raw="${background_render_dir}/worker.raw.json"
+          worker_task_rendered="${background_render_dir}/worker.json"
+          beat_task_raw="${background_render_dir}/beat.raw.json"
+          beat_task_rendered="${background_render_dir}/beat.json"
+          background_assert_program="${background_render_dir}/assert-task.jq"
+          cleanup_background_task_files() {
+            rm -f -- \
+              "$worker_task_raw" \
+              "$worker_task_rendered" \
+              "$beat_task_raw" \
+              "$beat_task_rendered" \
+              "$background_assert_program"
+            rmdir "$background_render_dir" 2>/dev/null || true
+          }
+          trap cleanup_background_task_files EXIT
+          # HOSTED_BACKGROUND_SCRATCH_END
+
           # Re-image a celery service in place: take its current task definition,
           # swap only the container image to the candidate, register, and roll.
           # Environment/secrets are Terraform-owned and left intact. The candidate
@@ -613,22 +917,80 @@ jobs:
               exit 1
               ;;
           esac
+          expected_background_execution_role="arn:aws:iam::${EXPECTED_AWS_ACCOUNT_ID}:role/${EXPECTED_ECS_EXECUTION_ROLE_NAME}"
+          case "$EXPECTED_BACKGROUND_REDIS_SERVICE" in
+            secretsmanager)
+              expected_background_redis_prefix="arn:aws:secretsmanager:${AWS_REGION}:${EXPECTED_AWS_ACCOUNT_ID}:secret:${EXPECTED_BACKGROUND_REDIS_NAME}-"
+              expected_background_redis_exact=""
+              ;;
+            ssm)
+              background_parameter_name="${EXPECTED_BACKGROUND_REDIS_NAME#/}"
+              if [ -z "$background_parameter_name" ]; then
+                echo "The hosted background Redis contract is malformed." >&2
+                exit 1
+              fi
+              expected_background_redis_prefix=""
+              expected_background_redis_exact="arn:aws:ssm:${AWS_REGION}:${EXPECTED_AWS_ACCOUNT_ID}:parameter/${background_parameter_name}"
+              ;;
+            *)
+              echo "The hosted background Redis contract is malformed." >&2
+              exit 1
+              ;;
+          esac
+          cat > "$background_assert_program" <<'BACKGROUND_ASSERT_JQ'
+          def redis_secrets($container):
+            [$container.secrets[]? | select(.name == "REDBEAT_REDIS_URL")];
+          def redis_plain($container):
+            [$container.environment[]? | select(.name == "REDBEAT_REDIS_URL")];
+          def allowed_redis_reference($value):
+            if $redis_exact != "" then
+              $value == $redis_exact
+            else
+              ($value | startswith($redis_prefix))
+              and (($value | ltrimstr($redis_prefix)) | test("^[A-Za-z0-9]{6}$"))
+            end;
+
+          ([.containerDefinitions[] | select(.name == $container)]) as $matches
+          | if ($matches | length) != 1 then false
+            else
+              $matches[0] as $target
+              | (redis_secrets($target)) as $redis
+              | (redis_plain($target)) as $plain
+              | (
+                  .executionRoleArn == $execution_role
+                  and ($redis | length) == 1
+                  and ($plain | length) == 0
+                  and allowed_redis_reference(($redis[0].valueFrom // ""))
+                )
+            end
+          BACKGROUND_ASSERT_JQ
+
           roll_service() {
-            service="$1"; container="$2"
+            service="$1"; container="$2"; task_raw="$3"; task_rendered="$4"
             current_arn="$(
               aws ecs describe-services --cluster "$ECS_CLUSTER" --services "$service" \
-                --query 'services[0].taskDefinition' --output text
-            )"
-            test "$current_arn" != "None"
-            aws ecs describe-task-definition --task-definition "$current_arn" \
-              --query taskDefinition > "td-${container}.raw.json"
+                --query 'services[0].taskDefinition' --output text \
+                2>/dev/null
+            )" || {
+              echo "Unable to verify the hosted background task definition." >&2
+              return 1
+            }
+            if [ "$current_arn" = "None" ]; then
+              echo "Unable to verify the hosted background task definition." >&2
+              return 1
+            fi
+            if ! aws ecs describe-task-definition --task-definition "$current_arn" \
+                --query taskDefinition > "$task_raw" 2>/dev/null; then
+              echo "Unable to verify the hosted background task definition." >&2
+              return 1
+            fi
             # Fail closed if the named container does not match exactly one
             # definition: a wrong ECS_*_CONTAINER_NAME would otherwise rewrite
             # nothing, register the OLD image, and still report success.
             match_count="$(
               jq --arg container "$container" \
                 '[.containerDefinitions[] | select(.name == $container)] | length' \
-                "td-${container}.raw.json"
+                "$task_raw"
             )"
             if [ "$match_count" != "1" ]; then
               echo "Expected exactly one '${container}' container in ${service}'s task definition, found ${match_count}." >&2
@@ -642,39 +1004,71 @@ jobs:
               | .containerDefinitions |= map(
                   if .name == $container then .image = $image else . end
                 )
-            ' "td-${container}.raw.json" > "td-${container}.json"
+            ' "$task_raw" > "$task_rendered"
+            # The re-image path preserves secrets, so validate the exact
+            # account/region/environment-bound execution role and the one
+            # allowed direct Redis secret projection on the rendered document
+            # before registration. Any plaintext, duplicate, field selector,
+            # sibling secret, or role mismatch fails closed.
+            if ! jq -e \
+                --arg container "$container" \
+                --arg execution_role "$expected_background_execution_role" \
+                --arg redis_prefix "$expected_background_redis_prefix" \
+                --arg redis_exact "$expected_background_redis_exact" \
+                -f "$background_assert_program" \
+                "$task_rendered" \
+                >/dev/null 2>/dev/null; then
+              echo "Background task definition violates the hosted execution-role/Redis contract." >&2
+              return 1
+            fi
             # Assert the rewritten definition carries the candidate image on the
             # named container before registration.
             rewritten_image="$(
               jq -r --arg container "$container" \
                 'first(.containerDefinitions[] | select(.name == $container) | .image)' \
-                "td-${container}.json"
+                "$task_rendered"
             )"
             if [ "$rewritten_image" != "$candidate_image" ]; then
               echo "Container '${container}' image is '${rewritten_image}', expected candidate '${candidate_image}'." >&2
               exit 1
             fi
             new_arn="$(
-              aws ecs register-task-definition --cli-input-json "file://td-${container}.json" \
-                --query 'taskDefinition.taskDefinitionArn' --output text
-            )"
+              aws ecs register-task-definition --cli-input-json "file://${task_rendered}" \
+                --query 'taskDefinition.taskDefinitionArn' --output text \
+                2>/dev/null
+            )" || {
+              echo "Unable to register the verified hosted background task definition." >&2
+              return 1
+            }
             # Confirm the REGISTERED revision (not just the local file) carries the
             # candidate image on exactly the named container.
             registered_image="$(
               aws ecs describe-task-definition --task-definition "$new_arn" \
                 --query "taskDefinition.containerDefinitions[?name=='${container}'].image | [0]" \
-                --output text
-            )"
+                --output text \
+                2>/dev/null
+            )" || {
+              echo "Unable to verify the registered hosted background task definition." >&2
+              return 1
+            }
             if [ "$registered_image" != "$candidate_image" ]; then
-              echo "Registered ${service} task def ${new_arn} carries image '${registered_image}', expected '${candidate_image}'." >&2
+              echo "Registered ${service} task definition does not carry the candidate image." >&2
               exit 1
             fi
-            aws ecs update-service --cluster "$ECS_CLUSTER" --service "$service" \
-              --task-definition "$new_arn" --force-new-deployment > /dev/null
+            if ! aws ecs update-service --cluster "$ECS_CLUSTER" --service "$service" \
+                --task-definition "$new_arn" --force-new-deployment \
+                >/dev/null 2>/dev/null; then
+              echo "Unable to roll the verified hosted background task definition." >&2
+              return 1
+            fi
             echo "$new_arn"
           }
-          worker_arn="$(roll_service "$ECS_WORKER_SERVICE" "$ECS_WORKER_CONTAINER_NAME")"
-          beat_arn="$(roll_service "$ECS_BEAT_SERVICE" "$ECS_BEAT_CONTAINER_NAME")"
+          worker_arn="$(roll_service \
+            "$ECS_WORKER_SERVICE" "$ECS_WORKER_CONTAINER_NAME" \
+            "$worker_task_raw" "$worker_task_rendered")"
+          beat_arn="$(roll_service \
+            "$ECS_BEAT_SERVICE" "$ECS_BEAT_CONTAINER_NAME" \
+            "$beat_task_raw" "$beat_task_rendered")"
           {
             echo "worker_task_definition_arn=$worker_arn"
             echo "beat_task_definition_arn=$beat_arn"

@@ -122,6 +122,7 @@ function baseOptions(h: Awaited<ReturnType<typeof harness>>, ssh: SshExec) {
       privateKeyPemPath: h.githubPrivateKey,
     },
     e2b: { teamId: "team", secretsEnvFilePath: h.e2bSecrets, templateName: "tmpl" },
+    qualificationRun: { runId: "run-1", shardId: "1" },
     publicOrigin: `https://${RECORD.recordName}`,
     rendererOrigin: "http://127.0.0.1:41999",
     secretsDir: h.secretsDir,

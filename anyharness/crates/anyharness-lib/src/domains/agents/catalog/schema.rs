@@ -137,6 +137,10 @@ pub struct AgentCatalogPinTarget {
     /// Keyed in `targets` by the registry platform key (`macos_arm64`, …).
     pub url: String,
     pub sha256: String,
+    /// Exact compressed transfer size when the catalog producer can establish
+    /// it. Older catalogs omit this; the installer also reads Content-Length.
+    #[serde(default)]
+    pub download_size_bytes: Option<u64>,
     /// For `Archive`: the binary name inside the extracted tree.
     #[serde(default)]
     pub expected_binary: Option<String>,
@@ -217,6 +221,12 @@ pub struct AgentCatalogSession {
     /// initialize `_meta.anyharness.goals` advertisement.
     #[serde(default)]
     pub supports_goals: bool,
+    /// Curation-owned mode for product surfaces that deliberately run the
+    /// harness unattended (for example cowork delegation and workflows).
+    /// Absent means no unattended mode has been vetted for this agent, so
+    /// consumers must omit `mode_id` rather than infer one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unattended_mode_id: Option<String>,
     /// The control universe: every key/value any model of this harness might
     /// support. Per-model matrices are subsets of this.
     #[serde(default)]

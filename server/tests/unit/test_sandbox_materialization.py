@@ -1,4 +1,4 @@
-"""Sandbox bootstrap pre-clones configured repos with the right call (T1).
+"""Sandbox bootstrap materialization contracts (T1).
 
 Regression (issue #948): `_materialize_sandbox` called
 `materialize_repo_environment_in_context(db, ctx=, repo_environment=obj)`, but
@@ -7,6 +7,13 @@ attempt_updated_at)`. Every GitHub-connect bootstrap for a user with >=1 cloud
 repo raised a TypeError (logged, not surfaced), so no repo was pre-cloned. The
 bootstrap now opens a materialization row per repo and calls with the correct
 kwargs, best-effort so one repo cannot abort the whole bootstrap.
+
+Regression (issue #1026): bootstrap materialized GitHub credentials before it
+even listed configured repos. A password-only user with no GitHub App
+authorization therefore aborted before global secrets and agent auth were
+materialized. Server-side credential setup belongs to each repo-environment
+attempt, while the Worker owns ongoing provider-level convergence; repo-less
+bootstrap must not require either path.
 """
 
 from __future__ import annotations
@@ -17,7 +24,7 @@ from typing import Any
 
 import pytest
 
-from proliferate.server.cloud.materialization.materialize import sandbox
+from proliferate.server.cloud.materialization.materialize import github_credentials, sandbox
 
 
 class _FakeDb:
@@ -46,10 +53,43 @@ def _patch_common(monkeypatch: pytest.MonkeyPatch, repo_envs: list[Any]) -> None
     async def _begin(*_a: Any, **_k: Any) -> Any:
         return SimpleNamespace(id=uuid.uuid4(), updated_at="2026-07-10T00:00:00Z")
 
-    monkeypatch.setattr(sandbox.github_credentials, "materialize_github_credentials", _noop)
     monkeypatch.setattr(sandbox.secret_set, "materialize_global_secrets_for_user", _noop)
     monkeypatch.setattr(sandbox.repositories_store, "list_cloud_repo_environments", _list)
     monkeypatch.setattr(sandbox.repo_mat_store, "begin_repo_environment_materialization", _begin)
+
+
+@pytest.mark.asyncio
+async def test_repo_less_bootstrap_does_not_require_github_credentials(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_common(monkeypatch, [])
+
+    async def _unexpected_github_credentials(*_a: Any, **_k: Any) -> None:
+        raise AssertionError("repo-less bootstrap must not require GitHub credentials")
+
+    non_repo_materializers: list[str] = []
+
+    async def _global_secrets(*_a: Any, **_k: Any) -> None:
+        non_repo_materializers.append("global-secrets")
+
+    async def _agent_auth(*_a: Any, **_k: Any) -> None:
+        non_repo_materializers.append("agent-auth")
+
+    monkeypatch.setattr(
+        github_credentials,
+        "materialize_github_credentials",
+        _unexpected_github_credentials,
+    )
+    monkeypatch.setattr(
+        sandbox.secret_set,
+        "materialize_global_secrets_for_user",
+        _global_secrets,
+    )
+    monkeypatch.setattr(sandbox.agent_auth, "materialize_agent_auth", _agent_auth)
+
+    await sandbox._materialize_sandbox(_ctx(), db=_FakeDb(), user_id=uuid.uuid4())
+
+    assert non_repo_materializers == ["global-secrets", "agent-auth"]
 
 
 @pytest.mark.asyncio

@@ -1,24 +1,18 @@
 import { useCallback, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCreateCloudWorkspace } from "#product/hooks/cloud/workflows/use-create-cloud-workspace";
-import { useCoworkThreadWorkflow } from "#product/hooks/cowork/workflows/use-cowork-thread-workflow";
 import { useHomeNextLaunchPromptActions } from "#product/hooks/home/workflows/use-home-next-launch-prompt-actions";
 import { useWorkspaceEntryActions } from "#product/hooks/workspaces/workflows/use-workspace-entry-actions";
 import { useWorkspaceSelection } from "#product/hooks/workspaces/workflows/selection/use-workspace-selection";
-import type {
-  HomeLaunchTarget,
-  HomeNextModelSelection,
-} from "#product/lib/domain/home/home-next-launch";
+import type { HomeLaunchTarget, HomeNextModelSelection } from "#product/lib/domain/home/home-next-launch";
 import {
   buildDeferredHomeLaunchId,
   useDeferredHomeLaunchStore,
 } from "#product/stores/home/deferred-home-launch-store";
 import { useChatLaunchIntentStore } from "#product/stores/chat/chat-launch-intent-store";
 import { useToastStore } from "#product/stores/toast/toast-store";
-import {
-  failLatencyFlow,
-  startLatencyFlow,
-} from "#product/lib/infra/measurement/measurement-port";
+import { failLatencyFlow, startLatencyFlow } from "#product/lib/infra/measurement/measurement-port";
+import { useCoworkThreadLaunchContext } from "#product/providers/CoworkThreadLaunchProvider";
 import {
   buildHomePendingWorkspaceInitialSession,
   buildResolvedHomeLaunchControlValues,
@@ -48,7 +42,8 @@ export function useHomeNextLaunch() {
   const failLaunchIntentIfActive = useChatLaunchIntentStore((state) => state.failIfActive);
   const markLaunchIntentMaterialized =
     useChatLaunchIntentStore((state) => state.markMaterializedIfActive);
-  const { createThreadFromSelection } = useCoworkThreadWorkflow();
+  const { desktopTargetsAvailable, createThreadFromSelection } =
+    useCoworkThreadLaunchContext();
   const {
     promptExistingSession,
     promptProjectedOrCreateFreshSession,
@@ -70,6 +65,13 @@ export function useHomeNextLaunch() {
   }: HomeNextLaunchInput): Promise<boolean> => {
     const prompt = text.trim();
     if (!prompt || inFlightRef.current) {
+      return false;
+    }
+    if (!desktopTargetsAvailable && target.kind !== "cloud") {
+      const message = target.kind === "cowork"
+        ? "Cowork threads are available in the Desktop app."
+        : "Local launch targets are available in the Desktop app.";
+      showToast(message, "info");
       return false;
     }
 
@@ -382,6 +384,7 @@ export function useHomeNextLaunch() {
     createLocalWorkspaceAndEnterWithResult,
     createThreadFromSelection,
     createWorktreeAndEnterWithResult,
+    desktopTargetsAvailable,
     enqueueDeferredLaunch,
     failLaunchIntentIfActive,
     markLaunchIntentMaterialized,
@@ -391,8 +394,5 @@ export function useHomeNextLaunch() {
     showToast,
   ]);
 
-  return {
-    isLaunching,
-    launch,
-  };
+  return { isLaunching, launch };
 }

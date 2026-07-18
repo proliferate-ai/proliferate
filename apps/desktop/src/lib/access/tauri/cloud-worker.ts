@@ -7,7 +7,11 @@ export interface EnsureDesktopDispatchWorkerInput {
 
 export interface EnsureDesktopDispatchWorkerResult {
   targetId: string;
-  status: "running" | "started";
+  status:
+    | "running"
+    | "started"
+    | "already_running_elsewhere"
+    | "terminal_shutdown_armed";
   configPath: string;
 }
 
@@ -25,4 +29,8 @@ export interface StopDesktopDispatchWorkerResult {
 
 export async function stopDesktopDispatchWorker(): Promise<StopDesktopDispatchWorkerResult> {
   return invoke<StopDesktopDispatchWorkerResult>("stop_desktop_dispatch_worker");
+}
+
+export async function prepareDesktopDispatchWorkerUpdate(): Promise<void> {
+  await invoke("prepare_desktop_dispatch_worker_update");
 }

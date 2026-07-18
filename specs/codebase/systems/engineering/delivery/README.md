@@ -86,7 +86,11 @@ alone. When neither is configured, the workflow deploys the API exactly as
 before. The re-image step also asserts that exactly one container matches each
 configured name and that the registered task definition carries the candidate
 image, so a mistyped container name fails closed instead of rolling the old
-image.
+image. Before either worker or Beat task definition is registered, the same
+checked-in hosted contract must match its execution role and its one direct
+`REDBEAT_REDIS_URL` reference by source service, account, region, and
+environment-owned name; duplicate, plaintext, field-projected, or
+sibling-environment references fail closed.
 
 `server/infra/background.tf` (Amazon MQ RabbitMQ broker, ElastiCache Serverless
 Valkey scheduler store, and the worker/Beat ECS services, task definitions,
@@ -104,6 +108,32 @@ definitions. `background_services_enabled = true` fails at Terraform plan time
 under a mocked provider) unless either the managed broker/store stage is enabled
 or both external endpoint secret ARNs are supplied, so the services can never be
 created without a reachable broker/store.
+
+The hosted API also uses Redis for cross-process Cloud materialization and
+GitHub-refresh leases, independently of whether worker and Beat services are
+enabled. `server/infra/hosted-redis/` is the isolated durable owner for
+the environment-specific deploy-role and ECS-execution-role child grants. Its
+one-time non-destructive adoption imported the two pre-existing deploy policies
+and created the two dedicated execution policies only after an exact saved-plan
+shape check; it never removes the roles' other pre-existing secret grants.
+`server/deploy/hosted-redis-contract.json` is the single machine-readable map
+consumed by both that Terraform root and the workflow; it binds the current
+hosted account, region, workflow environment aliases, stable server-app secret
+names, optional background Redis reference identities, and existing role names without
+claiming ownership of the live ECS services or background secrets. The server
+deploy resolves the generated secret ARN only after
+assuming the exact environment role, preflights a valid DNS-resolved non-loopback
+`REDBEAT_REDIS_URL`, authors that exact field projection on the API task, removes
+inherited plaintext or stale references, and fails before task registration
+when any identity or dependency check fails. It also proves the live task
+definition uses the contract's account/environment execution role before
+cloning that same definition. The resolved base secret ARN is kept out of the
+job-wide environment and is produced only after every third-party action's main
+phase. Because those actions can register post-job hooks, the first-party render
+and background re-image transactions keep all identifier-bearing task JSON in
+private temporary directories and remove it on every exit before those hooks
+run. The loopback default remains a local-development convenience, not hosted
+configuration.
 
 The plane's telemetry distinguishes two age/latency signals:
 `OutboxOldestDuePendingAgeSeconds` measures a row's pre-publish wait in Postgres
@@ -174,7 +204,7 @@ gate.
 | `_deploy-e2b.yml` | Reusable only | Build and/or promote one immutable E2B template into a rolling environment tag; the smoke proves the three runtime binaries report the canonical version and carry the stamped source SHA before the rolling tag moves. |
 | `_deploy-litellm.yml` | Reusable only | Build and roll the LiteLLM ECS service when its environment switch is enabled. |
 | `_deploy-mobile.yml` | Reusable only | Run the selected EAS build and optional submit lane when enabled. |
-| `_deploy-server.yml` | Reusable only | Build the exact-SHA server image, migrate, conditionally roll the Celery worker and Beat before the API, roll the API, and verify health. API, worker, and Beat are all pinned to the one candidate image by its **immutable `repo@sha256:` digest** (resolved from the build/push output), never a mutable tag, so all three planes run the byte-identical image and a later tag move cannot change what a rolled service runs. The rendered task enables strict release identity, strips inherited stale runtime-identity variables, and preserves the support-feed secret, all asserted before registration. |
+| `_deploy-server.yml` | Reusable only | Build the exact-SHA server image, migrate, conditionally roll the Celery worker and Beat before the API, roll the API, and verify health. API, worker, and Beat are all pinned to the one candidate image by its **immutable `repo@sha256:` digest** (resolved from the build/push output), never a mutable tag, so all three planes run the byte-identical image and a later tag move cannot change what a rolled service runs. The rendered task enables strict release identity, strips inherited stale runtime-identity variables, preserves the support-feed secret, and explicitly authors the API's checked-in environment-bound Redis field reference after account, region, secret-identity, and DNS-safe value preflights, all asserted before registration. |
 | `_deploy-web.yml` | Reusable only | Deploy and verify the selected Vercel web surface. |
 | `_deploy-workers.yml` | Reusable only | Report the disabled Worker lane, or fail if enabled before a canonical deploy exists. |
 
@@ -190,8 +220,8 @@ gate.
 | `codeql.yml` | Push or pull request on `main`, plus weekly schedule | Run CodeQL security analysis. |
 | `intent-tests.yml` | Pull request or manual | Run the broad intent and billing suites; these lanes are currently provisional/non-blocking. |
 | `pr-metadata.yml` | Pull-request metadata events | Enforce ready-PR title and label metadata mechanically. Human policy belongs to the PR procedure. |
-| `release-e2e-selfhost.yml` | Scheduled, manual, or reusable | Run self-host artifact-chain and optional provisioning qualification. No current release coordinator calls it. |
-| `release-e2e.yml` | Scheduled or manual | Run live Tier 3 release qualification; it is not a per-PR merge gate. |
+| `release-e2e-selfhost.yml` | Scheduled, manual, or reusable | Run self-host artifact-chain and optional provisioning qualification. Tier 4 and self-host provisioning use separate non-cancelling job groups; no current release coordinator calls it. |
+| `release-e2e.yml` | Scheduled or manual | Run live Tier 3 release qualification; it is not a per-PR merge gate. Local, staging, Tier 2, managed-cloud, and self-host use independent non-cancelling job groups, so unrelated worlds may overlap while same-world runs do not. These groups do not promise FIFO ordering. |
 | `self-host-smoke.yml` | Pull request, push to `main`, or manual | Smoke the production Compose path when relevant paths change. Branch-protection status is not encoded here. |
 | `server-ci.yml` | Relevant push/PR, `server-v*` tag, manual, or reusable | Validate/package the server and publish self-host images/assets when invoked as a release. |
 

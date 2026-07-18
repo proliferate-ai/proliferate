@@ -1858,6 +1858,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/integrations/action-approvals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Action Approvals Endpoint */
+        get: operations["list_action_approvals_endpoint_v1_cloud_integrations_action_approvals_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/integrations/action-approvals/{approval_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Action Approval Endpoint */
+        get: operations["get_action_approval_endpoint_v1_cloud_integrations_action_approvals__approval_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/integrations/action-approvals/{approval_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve Action Approval Endpoint */
+        post: operations["approve_action_approval_endpoint_v1_cloud_integrations_action_approvals__approval_id__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/integrations/action-approvals/{approval_id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reject Action Approval Endpoint */
+        post: operations["reject_action_approval_endpoint_v1_cloud_integrations_action_approvals__approval_id__reject_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/integrations/action-approvals/{approval_id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke Action Approval Endpoint */
+        post: operations["revoke_action_approval_endpoint_v1_cloud_integrations_action_approvals__approval_id__revoke_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/integrations/catalog": {
         parameters: {
             query?: never;
@@ -2973,6 +3058,87 @@ export interface components {
             /** Githubgrantstatus */
             githubGrantStatus: string | null;
         };
+        /** ActionApprovalListResponse */
+        ActionApprovalListResponse: {
+            /** Items */
+            items: components["schemas"]["ActionApprovalResponse"][];
+        };
+        /** ActionApprovalResponse */
+        ActionApprovalResponse: {
+            /**
+             * Approvalid
+             * Format: uuid
+             */
+            approvalId: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "approved" | "rejected" | "consumed" | "expired" | "revoked";
+            /** Provider */
+            provider: string;
+            /** Tool */
+            tool: string;
+            /**
+             * Integrationaccountid
+             * Format: uuid
+             */
+            integrationAccountId: string;
+            /** Integrationaccountauthversion */
+            integrationAccountAuthVersion: number;
+            /** Organizationid */
+            organizationId: string | null;
+            /**
+             * Executionsessionid
+             * Format: uuid
+             */
+            executionSessionId: string;
+            /** Workspaceid */
+            workspaceId: string;
+            /** Anyharnesssessionid */
+            anyharnessSessionId: string;
+            /** Payloaddigest */
+            payloadDigest: string;
+            /** Actionsummary */
+            actionSummary: string;
+            /** Accountlabel */
+            accountLabel: string;
+            /** Sourcelabel */
+            sourceLabel: string;
+            /** Target */
+            target: string | null;
+            /** Contentpreview */
+            contentPreview: string | null;
+            /** Contentcharactercount */
+            contentCharacterCount: number | null;
+            /**
+             * Requestedat
+             * Format: date-time
+             */
+            requestedAt: string;
+            /**
+             * Expiresat
+             * Format: date-time
+             */
+            expiresAt: string;
+            /** Approvedat */
+            approvedAt: string | null;
+            /** Rejectedat */
+            rejectedAt: string | null;
+            /** Revokedat */
+            revokedAt: string | null;
+            /** Consumedat */
+            consumedAt: string | null;
+        };
+        /** ActionApprovalTransitionResponse */
+        ActionApprovalTransitionResponse: {
+            approval: components["schemas"]["ActionApprovalResponse"];
+            /**
+             * Result
+             * @enum {string}
+             */
+            result: "applied" | "already_applied" | "expired" | "not_allowed";
+        };
         /** AdminIntegrationDefinitionResponse */
         AdminIntegrationDefinitionResponse: {
             /**
@@ -3356,6 +3522,8 @@ export interface components {
              * @default false
              */
             supportsGoals: boolean;
+            /** Unattendedmodeid */
+            unattendedModeId?: string | null;
             /**
              * Controls
              * @default []
@@ -4462,6 +4630,12 @@ export interface components {
              * Format: date-time
              */
             expiresAt: string;
+            /**
+             * Pendingticketpolicy
+             * @default newest_wins
+             * @constant
+             */
+            pendingTicketPolicy: "newest_wins";
         };
         /** DesktopWorkerRevokeRequest */
         DesktopWorkerRevokeRequest: {
@@ -11177,6 +11351,161 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+        };
+    };
+    list_action_approvals_endpoint_v1_cloud_integrations_action_approvals_get: {
+        parameters: {
+            query?: {
+                status?: ("pending" | "approved" | "rejected" | "consumed" | "expired" | "revoked") | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionApprovalListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_action_approval_endpoint_v1_cloud_integrations_action_approvals__approval_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                approval_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionApprovalResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    approve_action_approval_endpoint_v1_cloud_integrations_action_approvals__approval_id__approve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                approval_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionApprovalTransitionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reject_action_approval_endpoint_v1_cloud_integrations_action_approvals__approval_id__reject_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                approval_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionApprovalTransitionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_action_approval_endpoint_v1_cloud_integrations_action_approvals__approval_id__revoke_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                approval_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionApprovalTransitionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

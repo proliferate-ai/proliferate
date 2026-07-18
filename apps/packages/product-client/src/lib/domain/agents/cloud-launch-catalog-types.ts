@@ -107,6 +107,8 @@ export interface DesktopAgentLaunchAgent {
   displayName: string;
   description?: string | null;
   defaultModelId: string | null;
+  /** Catalog-owned unattended permission mode; null means the family declares none. */
+  unattendedModeId?: string | null;
   models: DesktopAgentLaunchModel[];
   launchControls: DesktopAgentLaunchControl[];
 }
@@ -131,12 +133,15 @@ export interface RuntimeAgentLaunchOptions {
   kind: string;
   displayName: string;
   defaultModelId?: string | null;
+  /** Present-null is authoritative; missing permits cloud-catalog compatibility fallback. */
+  unattendedModeId?: string | null;
   models: Array<{
     id: string;
     displayName: string;
     aliases?: string[];
     isDefault: boolean;
     defaultOptIn?: boolean | null;
+    modes?: string[] | null;
   }>;
 }
 
@@ -175,6 +180,8 @@ export interface CloudAgentCatalogAuthContextInput {
 export interface CloudAgentCatalogSessionInput {
   controls?: CloudAgentCatalogControlInput[];
   models: CloudAgentCatalogModelInput[];
+  /** Curation-owned mode for unattended product/runtime surfaces. */
+  unattendedModeId?: string | null;
   /** Curation default per auth context id (contextId -> modelId). */
   defaults?: Record<string, string> | null;
   observedDefaults?: Record<string, string> | null;

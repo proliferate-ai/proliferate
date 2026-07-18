@@ -456,6 +456,29 @@ async def test_create_github_app_installation_url_allows_desktop_environment_ret
     )
 
 
+@pytest.mark.asyncio
+async def test_create_github_app_installation_url_allows_web_environment_return(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(service.settings, "cloud_secret_key", "test-secret")
+    monkeypatch.setattr(service.settings, "github_app_slug", "proliferate-dev")
+    monkeypatch.setattr(service.settings, "frontend_base_url", "https://app.example.test")
+    org_user = _OrgUser(actor_user_id=uuid.uuid4(), organization_id=uuid.uuid4())
+
+    response = await service.create_github_app_installation_url(
+        object(),
+        org_user=org_user,
+        return_to=(
+            "https://app.example.test/settings/environments"
+            "?source=github_app_installation_callback"
+        ),
+    )
+
+    assert response.installation_url.startswith(
+        "https://github.com/apps/proliferate-dev/installations/new?state="
+    )
+
+
 # --- Repo authority error-to-status/action mapping (frozen PR 1 contract) -----
 #
 # The authority endpoint may only recommend an action that can actually repair

@@ -236,7 +236,7 @@ async def resend_organization_invitation_endpoint(
 async def revoke_organization_invitation_endpoint(
     invitation_id: UUID,
     org_admin: CurrentOrgUser = Depends(current_path_org_admin),
-    db: AsyncSession = Depends(get_async_session),
+    db: AsyncSession = Depends(get_async_session, scope="function"),
 ) -> OrganizationInvitationResponse:
     invitation = await revoke_invitation(db, org_admin, invitation_id)
     return invitation_response(invitation)

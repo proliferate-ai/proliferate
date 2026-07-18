@@ -24,7 +24,7 @@ export function WorkflowDefinitionList({
   return (
     <ProductPageShell
       title="Workflows"
-      description="Define reusable, sequential agent workflows. Execution is added in the next step."
+      description="Define reusable agent workflows and inspect their managed Cloud runs."
       actions={(
         <Button type="button" onClick={onNew}>
           <Plus className="size-4" aria-hidden />

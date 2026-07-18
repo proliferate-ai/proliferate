@@ -38,6 +38,18 @@ export type BootWithFakeResult =
   | { skipped: true; reason: string }
   | ({ skipped: false } & BillingStackWithFake);
 
+/** Injectable boot seams for the failed-boot cleanup regression. Production
+ * always uses the real management fake + billing stack. */
+export interface BootBillingStackWithLitellmFakeDeps {
+  startFake: typeof startLitellmManagementFake;
+  bootStack: typeof bootBillingStack;
+}
+
+const DEFAULT_BOOT_WITH_FAKE_DEPS: BootBillingStackWithLitellmFakeDeps = {
+  startFake: startLitellmManagementFake,
+  bootStack: bootBillingStack,
+};
+
 function required(name: string): string {
   const value = process.env[name];
   if (!value) {
@@ -103,17 +115,36 @@ export async function seedFakeSpendRows(rows: import("../fakes/litellm-managemen
  * desktop web/AnyHarness runtime (`skipFrontend`) since every import/exhaustion
  * assertion is API + DB, never UI.
  */
-export async function bootBillingStackWithLitellmFake(): Promise<BootWithFakeResult> {
-  const fake = await startLitellmManagementFake();
-  const boot: BillingBootResult = await bootBillingStack({
-    skipFrontend: true,
-    extraServerEnv: {
-      AGENT_GATEWAY_ENABLED: "true",
-      AGENT_GATEWAY_LITELLM_BASE_URL: fake.baseUrl,
-      AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL: fake.baseUrl,
-      AGENT_GATEWAY_LITELLM_MASTER_KEY: fake.masterKey,
-    },
-  });
+export async function bootBillingStackWithLitellmFake(
+  deps: BootBillingStackWithLitellmFakeDeps = DEFAULT_BOOT_WITH_FAKE_DEPS,
+): Promise<BootWithFakeResult> {
+  const fake = await deps.startFake();
+  let boot: BillingBootResult;
+  try {
+    boot = await deps.bootStack({
+      skipFrontend: true,
+      extraServerEnv: {
+        AGENT_GATEWAY_ENABLED: "true",
+        AGENT_GATEWAY_LITELLM_BASE_URL: fake.baseUrl,
+        AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL: fake.baseUrl,
+        AGENT_GATEWAY_LITELLM_MASTER_KEY: fake.masterKey,
+      },
+    });
+  } catch (bootError) {
+    // The fake is created before Stripe/profile setup because the Server needs
+    // its URL at boot. If that later setup throws, no NormalizedBoot reaches
+    // the release harness teardown. Close here so the listening HTTP server
+    // cannot keep the runner alive after it writes the aggregate report.
+    try {
+      await fake.close();
+    } catch (cleanupError) {
+      throw new AggregateError(
+        [bootError, cleanupError],
+        "Tier-2 billing stack boot failed and the LiteLLM management fake could not close",
+      );
+    }
+    throw bootError;
+  }
   if (boot.skipped) {
     await fake.close();
     return { skipped: true, reason: boot.reason };

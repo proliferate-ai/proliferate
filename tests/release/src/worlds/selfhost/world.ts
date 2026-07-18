@@ -6,6 +6,8 @@ import { promisify } from "node:util";
 
 import type { Browser } from "playwright";
 
+import { registerCancellationFinalizer } from "../../cli/cancellation-finalizer.js";
+
 import type { MaterializedArtifact } from "../../artifacts/local-candidate-set.js";
 import type { CandidateBuildMapV1 } from "../../artifacts/build-map.js";
 import {
@@ -272,6 +274,12 @@ export async function constructSelfHostWorld(
     mirror: deps.ledgerMirror,
   });
   const stack = new SelfHostCleanupStack({ ledger, log });
+  const cancellationFinalizer = registerCancellationFinalizer({
+    world: "self-host",
+    run: options.run,
+    runDir,
+    finalize: () => stack.runAll(),
+  });
 
   const register = async (
     kind: SelfHostCleanupResourceKind,
@@ -401,12 +409,12 @@ export async function constructSelfHostWorld(
       control,
       paths: { runDir, runtimeHome, artifactsDir, keyPath: box.keyPath },
       registerCleanup: (kind, providerId, release) => register(kind, providerId, release),
-      close: () => stack.runAll(),
+      close: () => cancellationFinalizer.run(),
     };
   } catch (error) {
     // Any startup failure runs every registered cleanup exactly once, reverse
     // order, then rethrows so the caller marks the cell failed.
-    await stack.runAll().catch(() => undefined);
+    await cancellationFinalizer.run().catch(() => undefined);
     throw error;
   }
 }

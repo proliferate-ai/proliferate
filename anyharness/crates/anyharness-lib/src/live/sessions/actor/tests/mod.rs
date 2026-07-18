@@ -54,6 +54,7 @@ mod domain_ops;
 mod notifications;
 mod prompt;
 mod queue;
+mod requested_mode;
 mod shutdown;
 
 async fn actor_exit_test_context(

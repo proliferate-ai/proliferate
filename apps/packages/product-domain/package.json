@@ -67,6 +67,14 @@
       "types": "./dist/workflows/validation.d.ts",
       "import": "./dist/workflows/validation.js"
     },
+    "./workflows/arguments": {
+      "types": "./dist/workflows/arguments.d.ts",
+      "import": "./dist/workflows/arguments.js"
+    },
+    "./workflows/run-presentation": {
+      "types": "./dist/workflows/run-presentation.d.ts",
+      "import": "./dist/workflows/run-presentation.js"
+    },
     "./chats/model": {
       "types": "./dist/chats/model.d.ts",
       "import": "./dist/chats/model.js"
@@ -231,6 +239,14 @@
       "types": "./dist/telemetry/scrub.d.ts",
       "import": "./dist/telemetry/scrub.js"
     },
+    "./telemetry/control-plane-probe-timeout": {
+      "types": "./dist/telemetry/control-plane-probe-timeout.d.ts",
+      "import": "./dist/telemetry/control-plane-probe-timeout.js"
+    },
+    "./telemetry/session-stream-stale-close": {
+      "types": "./dist/telemetry/session-stream-stale-close.d.ts",
+      "import": "./dist/telemetry/session-stream-stale-close.js"
+    },
     "./repos/repo-id": {
       "types": "./dist/repos/repo-id.d.ts",
       "import": "./dist/repos/repo-id.js"
@@ -375,6 +391,6 @@
   },
   "devDependencies": {
     "typescript": "^5.7",
-    "vitest": "^3.2.6"
+    "vitest": "^3.2.7"
   }
 }

@@ -2,6 +2,7 @@ use std::path::Path;
 
 pub mod execution;
 
+use crate::domains::agents::installer::progress::InstallProgressReporter;
 use crate::domains::agents::installer::{
     self, InstallError, InstallOptions, InstalledArtifactResult,
 };
@@ -59,7 +60,23 @@ pub fn reconcile_agent(
     options: &InstallOptions,
     catalog_pins: Option<&crate::domains::agents::installer::install_policy::PinOverrides>,
 ) -> AgentReconcileResult {
-    match installer::install_agent_with_pins(descriptor, runtime_home, options, catalog_pins) {
+    reconcile_agent_with_progress(descriptor, runtime_home, options, catalog_pins, None)
+}
+
+pub fn reconcile_agent_with_progress(
+    descriptor: &AgentDescriptor,
+    runtime_home: &Path,
+    options: &InstallOptions,
+    catalog_pins: Option<&crate::domains::agents::installer::install_policy::PinOverrides>,
+    reporter: Option<&InstallProgressReporter>,
+) -> AgentReconcileResult {
+    match installer::install_agent_with_pins_and_progress(
+        descriptor,
+        runtime_home,
+        options,
+        catalog_pins,
+        reporter,
+    ) {
         Ok(artifacts) if artifacts.is_empty() => AgentReconcileResult {
             kind: descriptor.kind.clone(),
             outcome: AgentReconcileOutcome::AlreadyInstalled,

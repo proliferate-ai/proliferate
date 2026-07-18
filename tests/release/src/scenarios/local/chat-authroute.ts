@@ -17,7 +17,11 @@ import {
 } from "../local-world-smoke-1.js";
 import { bootLocalFunctionalWorld, isWorldBackedRun, resolveLocalFunctionalWorldInputs } from "./world-boot.js";
 import { captureLocalDriverFailure } from "./debug-capture.js";
-import { resolveLocalWorkspaceSessionId } from "./local-session.js";
+import {
+  resolveLocalWorkspaceSessionAfter,
+  resolveLocalWorkspaceSessionId,
+  snapshotLocalWorkspaceSessionIds,
+} from "./local-session.js";
 import type {
   LocalCleanupV1,
   LocalHarnessKind,
@@ -284,8 +288,21 @@ export const defaultLocalRouteDriver: LocalRouteDriver = {
     // after the user-key turn, so navigate back to the harness pane first.
     await openHarnessSettings(p, harness);
     await selectHarnessRoute(p, harness, "gateway");
-    await returnToAppHome(p);
+    // A workspace is already active here (unlike LOCAL-2/3's first settings
+    // visit), so "Back to app" returns to the workspace chat shell, not the
+    // home composer.
+    await returnToAppHome(p, "[data-workspace-shell]");
     await this.waitForRouteSync(world, page, harness, "gateway");
+    // LOCAL-6 requires the gateway turn to run on a NEW session (the cell
+    // asserts gatewayTurn.sessionId !== userKeyTurn.sessionId). Back on the
+    // workspace shell the user-key session is still active, and picking the
+    // gateway model there fires the product's same-harness LIVE model switch on
+    // that session (setActiveSessionConfigOption), which the server correctly
+    // 400s SESSION_CONFIG_REJECTED — a session must not silently jump auth
+    // contexts via a config PATCH (proven: Actions run 29570511844,
+    // T3-AUTHROUTE-1/local/route=change). Open a fresh in-workspace chat tab so
+    // the gateway model pick + send go through the create-session/launch path.
+    await openNewChat(p);
   },
   async waitForRouteSync(world, _page, harness, route) {
     // Desktop's use-local-auth-state-sync pushes the newly selected route's auth
@@ -351,7 +368,16 @@ export const defaultLocalRouteDriver: LocalRouteDriver = {
   selectModelInUi: (page, modelId) => defaultLocalWorldSmokeDriver.selectModelInUi(page, modelId),
   async sendBoundedTurn(world, page, _expectedRoute, repoPath) {
     const p = page.page;
-    const editor = p.locator("[data-home-composer-editor]").first();
+    // Snapshot before Send. LOCAL-6 uses the same concrete workspace for both
+    // routes; resolving the "latest" session after the click can otherwise
+    // bind the gateway leg to the already-completed user-key session while the
+    // new process is still reconciling.
+    const preSendSessionIds = await snapshotLocalWorkspaceSessionIds(world, repoPath);
+    // LOCAL-2/3's first turn runs from the home screen (`[data-home-composer-editor]`);
+    // LOCAL-6's gateway turn runs from a fresh in-workspace tab
+    // (`[data-chat-composer-editor]`, opened by `openNewChat`). Accept either
+    // surface — the same dual-composer idiom `config-session.ts` uses.
+    const editor = p.locator("[data-home-composer-editor], [data-chat-composer-editor]").first();
     await editor.waitFor({ state: "visible", timeout: 15_000 });
     await editor.fill(DETERMINISTIC_PROMPT);
     const send = p.locator("[data-chat-send-button]:not([disabled])").first();
@@ -365,9 +391,22 @@ export const defaultLocalRouteDriver: LocalRouteDriver = {
     // `data-workspace-ui-key` is the LOGICAL workspace id (repo-remote keyed);
     // the AnyHarness session keys off the CONCRETE runtime workspace at the repo
     // clone path (see local-session.ts). Keep the ui-key for shell selectors, but
-    // resolve the session from the runtime's own local workspace.
+    // resolve only a session created after the pre-send snapshot from the
+    // runtime's own local workspace. The shell may briefly expose a
+    // `client-session:*` alias; one new runtime id is its unambiguous target.
     const workspaceId = await readWorkspaceUiKey(p);
-    const sessionId = await resolveLocalWorkspaceSessionId(world, repoPath, WORKSPACE_SETTLE_TIMEOUT_MS);
+    const activeSessionAlias =
+      (await p
+        .locator("[data-workspace-shell]")
+        .first()
+        .getAttribute("data-workspace-session-id")
+        .catch(() => null)) || null;
+    const sessionId = await resolveLocalWorkspaceSessionAfter(
+      world,
+      repoPath,
+      WORKSPACE_SETTLE_TIMEOUT_MS,
+      { existingSessionIds: preSendSessionIds, activeSessionAlias },
+    );
     const completion = await waitForTurnCompletion(world, sessionId, TURN_TIMEOUT_MS);
     if (completion.error) {
       throw new Error(`sendBoundedTurn: assistant turn errored: ${completion.error}`);
@@ -823,6 +862,11 @@ async function runLocal6RouteChangeCell(
       });
 
       // 2) Switch the selected route to gateway; a NEW session launches on it.
+      // `switchSelectedRouteToGateway` opens a fresh in-workspace chat tab (so the
+      // gateway turn is a genuinely new session, not a rejected live config-switch
+      // on the user-key session). The workspace/repo binding is retained by the
+      // new-tab path — no repo re-selection needed (those "Project:"/"Runtime:"
+      // controls exist only on the home screen).
       await driver.switchSelectedRouteToGateway(world, page, harness);
       const gatewaySelection = await driver.resolveRouteModel(world, page, harness, "gateway");
       await driver.selectModelInUi(page, gatewaySelection.modelId);
@@ -1136,12 +1180,33 @@ async function ensureSidebarOpen(page: Page): Promise<void> {
     .waitFor({ state: "visible", timeout: SETTINGS_STEP_TIMEOUT_MS });
 }
 
-/** Returns from the settings surface to the home composer so the subsequent
- * repo-selection / send flow runs on the home screen. */
-async function returnToAppHome(page: Page): Promise<void> {
+/** Returns from the settings surface to the app. Waits for `expectedSurface` to
+ * become visible afterward — the home composer by default (LOCAL-2/3 callers,
+ * where no workspace is active yet), but callers with an already-active
+ * workspace (e.g. LOCAL-6's `switchSelectedRouteToGateway`, where the product
+ * returns to the workspace chat shell rather than the home screen) must pass
+ * the surface it actually lands on, or this waits forever for a selector that
+ * never appears (proven: Actions run 29549140268, T3-AUTHROUTE-1/local/route=change). */
+async function returnToAppHome(page: Page, expectedSurface = "[data-home-composer-editor]"): Promise<void> {
   await page.getByRole("button", { name: /back to app/i }).first().click();
   await page
-    .locator("[data-home-composer-editor]")
+    .locator(expectedSurface)
+    .first()
+    .waitFor({ state: "visible", timeout: SETTINGS_STEP_TIMEOUT_MS });
+}
+
+/** Opens a NEW, genuinely-empty session tab in the CURRENT workspace via the
+ * header "+" new-tab button (`data-chat-new-tab-button`, sr-only label "New
+ * chat" → openNewSessionTab → createEmptySessionWithResolvedConfig). This stays
+ * inside the active workspace shell — the workspace/repo binding is retained —
+ * and lands on the in-workspace chat composer (`[data-chat-composer-editor]`),
+ * NOT the standalone home screen's `[data-home-composer-editor]`. That fresh
+ * session is what makes the gateway turn a new session distinct from the
+ * user-key one, without a rejected live config switch on the old session. */
+async function openNewChat(page: Page): Promise<void> {
+  await page.locator("[data-chat-new-tab-button]:not([disabled])").first().click();
+  await page
+    .locator("[data-chat-composer-editor]")
     .first()
     .waitFor({ state: "visible", timeout: SETTINGS_STEP_TIMEOUT_MS });
 }

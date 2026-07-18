@@ -581,7 +581,7 @@ fn catalog_applied_reconcile_poke(agent_runtime: Arc<AgentRuntime>) -> Arc<dyn F
         tokio::spawn(async move {
             // installed-only: a cloud-catalog swap updates already-installed
             // agents to the new pins; missing agents install on demand.
-            agent_runtime.start_reconcile(false, true).await;
+            agent_runtime.reconcile_installed_when_idle().await;
         });
     })
 }

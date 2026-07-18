@@ -24,6 +24,7 @@ import { describeReadinessBlocker } from "#product/lib/domain/workspaces/cloud/d
 import { useAddRepoFlowStore } from "#product/stores/ui/add-repo-flow-store";
 import { useToastStore } from "#product/stores/toast/toast-store";
 import { useCloudRepositoryIntentStore } from "#product/stores/cloud/cloud-repository-intent-store";
+import { directoryPickerUnavailableCopy } from "#product/copy/workspaces/directory-picker-copy";
 
 /**
  * App-level host for the unified add-repository flow. Entry offers only the
@@ -233,11 +234,15 @@ export function AddRepoFlowHost() {
         setFlowError("Local repositories are only available in Desktop.");
         return;
       }
-      const path = await files.pickDirectory();
-      if (!path) {
+      const picked = await files.pickDirectory();
+      if (picked.kind === "cancelled") {
         return;
       }
-      const result = await addRepoFromPath(path, {
+      if (picked.kind === "unavailable") {
+        setFlowError(directoryPickerUnavailableCopy(picked.reason));
+        return;
+      }
+      const result = await addRepoFromPath(picked.path, {
         createCloudEnvironment: false,
       });
       if (result.succeeded) {

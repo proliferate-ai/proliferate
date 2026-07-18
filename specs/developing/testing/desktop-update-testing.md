@@ -81,8 +81,8 @@ appears in the shipped config; the config guard test asserts that.
    the user accepts to download, and a restart dialog completes the swap. A GUI
    test must click that chain. The app wraps the plugin's JS API in
    `apps/desktop/src/lib/access/tauri/updater.ts` (`checkForUpdate` →
-   `check()`, `downloadAndInstall`, `relaunch`) — a test build can call these
-   directly to skip the manual toast.
+   `check()`, then `download()` → native Worker preparation → `install()`, plus
+   `relaunch`) — a test build can call these directly to skip the manual toast.
 
 ## Proving `check()` without the full GUI
 
@@ -113,10 +113,10 @@ The mock app reports package version `0.1.0`, so a feed serving `>0.1.0` yields
 - **`dangerousInsecureTransportProtocol` is mandatory for http feeds** — a
   release build silently refuses a non-https endpoint otherwise. The overlay
   already carries it; if you point at an https tunnel it is harmless.
-- **Signature timing:** `check()` does not verify the signature; `downloadAndInstall`
+- **Signature timing:** `check()` does not verify the signature; `download()`
   does. A malformed/missing `.sig` still lets `check()` report the update but
-  fails the install — so a full upgrade test needs the staged artifact signed by
-  the key the N−1 build trusts.
+  fails before the pre-install boundary — so a full upgrade test needs the
+  staged artifact signed by the key the N−1 build trusts.
 - **Sidecars are stubbed locally.** `apps/desktop/src-tauri/binaries/*` are
   placeholder shell scripts in a dev checkout; a test build bundles those, which
   is fine for exercising the *updater* but not the agent runtime.
@@ -140,16 +140,18 @@ cells.
 | --- | --- | --- |
 | Scenario | `tests/release/src/scenarios/upgrade/t4-desktop-1.ts` | Current partial T4-DESKTOP-1 collector. Gates on platform / CI / opt-in and shells out to the orchestrator. |
 | Orchestrator | `tests/release/upgrade/run-t4-desktop.mjs` | Builds N-1 + N (cached), stages the feed, copies the N-1 bundle, runs the driver, asserts N-1 → N. |
-| Headless driver | `tests/release/upgrade/updater-driver/` | A **workspace-detached** cargo crate. Drives the real `tauri_plugin_updater` `check()` + `download_and_install()` against a real N-1 `.app`. |
+| Headless driver | `tests/release/upgrade/updater-driver/` | A **workspace-detached** cargo crate. Drives the real `tauri_plugin_updater` `check()` + `download()` + explicit pre-install boundary + `install(bytes)` against a real N-1 `.app`. |
 
 **Why a headless Rust driver, not GUI automation.** The update UX is user-gated
 inside a release webview (Settings → "Desktop updates" → check → download →
 restart). Automating a webview headlessly is brittle; the readme's other option
 — "call the wrappers in `apps/desktop/src/lib/access/tauri/updater.ts`
-directly" — is what the driver does at the Rust layer the JS wrappers call
-through. `UpdaterBuilder::executable_path` points the install at a copy of the
-N-1 bundle (not the driver binary), so the real macOS `.app` swap happens on
-that copy. The driver's mock app reports running version `0.1.0` (a
+directly" — is not implemented by this collector. The driver calls the Rust
+updater engine beneath the plugin and preserves the wrapper's pre-install
+boundary, but it does not execute the JS wrapper or its native command.
+`UpdaterBuilder::executable_path` points the install at a copy of the N-1
+bundle (not the driver binary), so the real macOS `.app` swap happens on that
+copy. The driver's mock app reports running version `0.1.0` (a
 `tauri::test` limitation, not the real N-1 semver); this does not affect what is
 asserted — the manifest fetch, the semver "update available" decision, the
 **minisign signature verification of the real N artifact against the
@@ -181,6 +183,14 @@ node tests/release/upgrade/run-t4-desktop.mjs --from 0.3.17 --to 0.3.18
   executables for the three `externalBin` sidecars. That is adequate for this
   updater-engine prototype and explicitly disqualifies it as production
   artifact or AnyHarness-convergence evidence.
+- **Windows cleanup is not qualified here.** This collector is macOS-only, and
+  native Worker preparation is intentionally a no-op on macOS because install
+  returns without exiting the app. Focused renderer tests prove the production
+  `download()` → awaited native preparation → `install()` order, while native
+  subprocess tests prove direct-exit-mode cleanup retains its owned child on a
+  failed stop and succeeds on retry. No packaged Windows updater journey
+  currently proves the installer's direct-exit behavior, so this collector
+  must not be cited as that platform evidence.
 - **Version mutation is restored.** The orchestrator edits
   `tauri.conf.json`'s `version` for each build and restores it (even on
   failure) — don't commit a changed version from a T4 run.

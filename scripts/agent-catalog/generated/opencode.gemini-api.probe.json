@@ -1,17 +1,14 @@
 {
-  "probedAt": "2026-06-18T02:52:36.465671+00:00",
+  "probedAt": "2026-07-17T05:35:02.869666+00:00",
   "agentKind": "opencode",
   "authContext": "gemini-api",
   "attestation": {
     "name": "OpenCode",
-    "version": "1.17.7",
+    "version": "1.18.3",
     "title": null
   },
   "modelSource": "modelConfigOption",
-  "nativeCli": {
-    "path": "/Users/pablohansen/.proliferate/anyharness/agents/claude/native/claude",
-    "version": "2.1.177 (Claude Code)"
-  },
+  "nativeCli": null,
   "trials": [],
   "currentModelId": null,
   "currentModeId": null,
@@ -76,20 +73,16 @@
           "value": "google/gemini-flash-lite-latest"
         },
         {
+          "name": "Google/Gemini Omni Flash Preview",
+          "value": "google/gemini-omni-flash-preview"
+        },
+        {
           "name": "Google/Gemma 4 26B A4B IT",
           "value": "google/gemma-4-26b-a4b-it"
         },
         {
           "name": "Google/Gemma 4 31B IT",
           "value": "google/gemma-4-31b-it"
-        },
-        {
-          "name": "Google/Gemma 4 E2B IT",
-          "value": "google/gemma-4-E2B-it"
-        },
-        {
-          "name": "Google/Gemma 4 E4B IT",
-          "value": "google/gemma-4-E4B-it"
         },
         {
           "name": "Google/Nano Banana",
@@ -110,6 +103,10 @@
         {
           "name": "OpenCode Zen/DeepSeek V4 Flash Free",
           "value": "opencode/deepseek-v4-flash-free"
+        },
+        {
+          "name": "OpenCode Zen/Hy3 Free",
+          "value": "opencode/hy3-free"
         },
         {
           "name": "OpenCode Zen/MiMo V2.5 Free",
@@ -724,14 +721,22 @@
         },
         {
           "category": "thought_level",
-          "currentValue": "low",
+          "currentValue": "minimal",
           "description": "Available effort levels for this model",
           "id": "effort",
           "name": "Effort",
           "options": [
             {
+              "name": "Minimal",
+              "value": "minimal"
+            },
+            {
               "name": "Low",
               "value": "low"
+            },
+            {
+              "name": "Medium",
+              "value": "medium"
             },
             {
               "name": "High",
@@ -777,14 +782,22 @@
         },
         {
           "category": "thought_level",
-          "currentValue": "low",
+          "currentValue": "minimal",
           "description": "Available effort levels for this model",
           "id": "effort",
           "name": "Effort",
           "options": [
             {
+              "name": "Minimal",
+              "value": "minimal"
+            },
+            {
               "name": "Low",
               "value": "low"
+            },
+            {
+              "name": "Medium",
+              "value": "medium"
             },
             {
               "name": "High",
@@ -792,6 +805,41 @@
             }
           ],
           "type": "select"
+        },
+        {
+          "category": "mode",
+          "currentValue": "build",
+          "id": "mode",
+          "name": "Session Mode",
+          "options": [
+            {
+              "description": "The default agent. Executes tools based on configured permissions.",
+              "name": "build",
+              "value": "build"
+            },
+            {
+              "description": "Plan mode. Disallows all edit tools.",
+              "name": "plan",
+              "value": "plan"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "google/gemini-omni-flash-preview",
+      "name": "Google/Gemini Omni Flash Preview",
+      "description": null,
+      "configOptions": [
+        {
+          "category": "model",
+          "currentValue": "google/gemini-omni-flash-preview",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
         },
         {
           "category": "mode",
@@ -921,112 +969,6 @@
       ]
     },
     {
-      "modelId": "google/gemma-4-E2B-it",
-      "name": "Google/Gemma 4 E2B IT",
-      "description": null,
-      "configOptions": [
-        {
-          "category": "model",
-          "currentValue": "google/gemma-4-E2B-it",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        },
-        {
-          "category": "thought_level",
-          "currentValue": "low",
-          "description": "Available effort levels for this model",
-          "id": "effort",
-          "name": "Effort",
-          "options": [
-            {
-              "name": "Low",
-              "value": "low"
-            },
-            {
-              "name": "High",
-              "value": "high"
-            }
-          ],
-          "type": "select"
-        },
-        {
-          "category": "mode",
-          "currentValue": "build",
-          "id": "mode",
-          "name": "Session Mode",
-          "options": [
-            {
-              "description": "The default agent. Executes tools based on configured permissions.",
-              "name": "build",
-              "value": "build"
-            },
-            {
-              "description": "Plan mode. Disallows all edit tools.",
-              "name": "plan",
-              "value": "plan"
-            }
-          ],
-          "type": "select"
-        }
-      ]
-    },
-    {
-      "modelId": "google/gemma-4-E4B-it",
-      "name": "Google/Gemma 4 E4B IT",
-      "description": null,
-      "configOptions": [
-        {
-          "category": "model",
-          "currentValue": "google/gemma-4-E4B-it",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        },
-        {
-          "category": "thought_level",
-          "currentValue": "low",
-          "description": "Available effort levels for this model",
-          "id": "effort",
-          "name": "Effort",
-          "options": [
-            {
-              "name": "Low",
-              "value": "low"
-            },
-            {
-              "name": "High",
-              "value": "high"
-            }
-          ],
-          "type": "select"
-        },
-        {
-          "category": "mode",
-          "currentValue": "build",
-          "id": "mode",
-          "name": "Session Mode",
-          "options": [
-            {
-              "description": "The default agent. Executes tools based on configured permissions.",
-              "name": "build",
-              "value": "build"
-            },
-            {
-              "description": "Plan mode. Disallows all edit tools.",
-              "name": "plan",
-              "value": "plan"
-            }
-          ],
-          "type": "select"
-        }
-      ]
-    },
-    {
       "modelId": "google/gemini-2.5-flash-image",
       "name": "Google/Nano Banana",
       "description": null,
@@ -1039,24 +981,6 @@
           "options": [],
           "type": "select",
           "valuesElided": true
-        },
-        {
-          "category": "thought_level",
-          "currentValue": "high",
-          "description": "Available effort levels for this model",
-          "id": "effort",
-          "name": "Effort",
-          "options": [
-            {
-              "name": "High",
-              "value": "high"
-            },
-            {
-              "name": "Max",
-              "value": "max"
-            }
-          ],
-          "type": "select"
         },
         {
           "category": "mode",
@@ -1147,20 +1071,6 @@
           "valuesElided": true
         },
         {
-          "category": "thought_level",
-          "currentValue": "high",
-          "description": "Available effort levels for this model",
-          "id": "effort",
-          "name": "Effort",
-          "options": [
-            {
-              "name": "High",
-              "value": "high"
-            }
-          ],
-          "type": "select"
-        },
-        {
           "category": "mode",
           "currentValue": "build",
           "id": "mode",
@@ -1232,19 +1142,11 @@
         },
         {
           "category": "thought_level",
-          "currentValue": "low",
+          "currentValue": "high",
           "description": "Available effort levels for this model",
           "id": "effort",
           "name": "Effort",
           "options": [
-            {
-              "name": "Low",
-              "value": "low"
-            },
-            {
-              "name": "Medium",
-              "value": "medium"
-            },
             {
               "name": "High",
               "value": "high"
@@ -1255,6 +1157,41 @@
             }
           ],
           "type": "select"
+        },
+        {
+          "category": "mode",
+          "currentValue": "build",
+          "id": "mode",
+          "name": "Session Mode",
+          "options": [
+            {
+              "description": "The default agent. Executes tools based on configured permissions.",
+              "name": "build",
+              "value": "build"
+            },
+            {
+              "description": "Plan mode. Disallows all edit tools.",
+              "name": "plan",
+              "value": "plan"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "opencode/hy3-free",
+      "name": "OpenCode Zen/Hy3 Free",
+      "description": null,
+      "configOptions": [
+        {
+          "category": "model",
+          "currentValue": "opencode/hy3-free",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
         },
         {
           "category": "mode",
@@ -1292,28 +1229,6 @@
           "valuesElided": true
         },
         {
-          "category": "thought_level",
-          "currentValue": "low",
-          "description": "Available effort levels for this model",
-          "id": "effort",
-          "name": "Effort",
-          "options": [
-            {
-              "name": "Low",
-              "value": "low"
-            },
-            {
-              "name": "Medium",
-              "value": "medium"
-            },
-            {
-              "name": "High",
-              "value": "high"
-            }
-          ],
-          "type": "select"
-        },
-        {
           "category": "mode",
           "currentValue": "build",
           "id": "mode",
@@ -1347,28 +1262,6 @@
           "options": [],
           "type": "select",
           "valuesElided": true
-        },
-        {
-          "category": "thought_level",
-          "currentValue": "low",
-          "description": "Available effort levels for this model",
-          "id": "effort",
-          "name": "Effort",
-          "options": [
-            {
-              "name": "Low",
-              "value": "low"
-            },
-            {
-              "name": "Medium",
-              "value": "medium"
-            },
-            {
-              "name": "High",
-              "value": "high"
-            }
-          ],
-          "type": "select"
         },
         {
           "category": "mode",

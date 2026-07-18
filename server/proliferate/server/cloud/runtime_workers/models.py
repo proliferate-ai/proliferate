@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -147,6 +148,7 @@ class DesktopWorkerEnrollmentRequest(_CamelModel):
 class DesktopWorkerEnrollmentResponse(_CamelModel):
     enrollment_token: str
     expires_at: datetime
+    pending_ticket_policy: Literal["newest_wins"] = "newest_wins"
 
 
 class DesktopWorkerRevokeRequest(_CamelModel):

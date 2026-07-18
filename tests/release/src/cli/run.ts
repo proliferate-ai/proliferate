@@ -14,6 +14,8 @@ import { executeSelectedCells } from "../runner/execute.js";
 import { loadCandidateBuildMap } from "../artifacts/build-map.js";
 import { readLocalWorldPortsFile } from "../worlds/local-workspace/ports.js";
 import { writeReportV4 } from "../evidence/write.js";
+import { armPostReportExitWatchdog } from "./exit-watchdog.js";
+import { installCancellationHandlers } from "./cancellation-finalizer.js";
 
 /**
  * Thin process adapter: supplies the real side-effect dependencies to
@@ -127,6 +129,8 @@ function printEnvManifestReport(): void {
   }
 }
 
+installCancellationHandlers();
+
 process.exitCode = await runReleaseCommand(process.argv.slice(2), {
   resolveIdentity: (overrides) => resolveRunIdentity({ overrides }),
   selectScenarios,
@@ -141,3 +145,4 @@ process.exitCode = await runReleaseCommand(process.argv.slice(2), {
   log: (message) => console.log(message),
   error: (message) => console.error(message),
 });
+armPostReportExitWatchdog();

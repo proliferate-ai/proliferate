@@ -1,8 +1,12 @@
 import { useCallback } from "react";
 import {
   useInstallAgentMutation,
+  useAgentReconcileStatusQuery,
   useReconcileAgentsMutation,
   useRuntimeHealthQuery,
+  useWorkspaceAgentReconcileStatusQuery,
+  useWorkspaceInstallAgentMutation,
+  useWorkspaceReconcileAgentsMutation,
 } from "@anyharness/sdk-react";
 import type {
   InstallAgentRequest,
@@ -23,19 +27,37 @@ function assertAgentSeedReady(isAgentSeedHydrating: boolean): void {
   }
 }
 
-export function useAgentInstallationActions() {
+export type AgentInstallTarget = "runtime" | "workspace";
+
+export function useAgentInstallationActions(
+  target: AgentInstallTarget = "runtime",
+) {
   // Owns manual agent install/reconcile actions. Agent query-cache shape stays
   // behind the agents cache hook.
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const connectionState = useHarnessConnectionStore((state) => state.connectionState);
   const { invalidateAgentSetupResources } = useAgentResourcesCache();
   const installMutation = useInstallAgentMutation();
+  const workspaceInstallMutation = useWorkspaceInstallAgentMutation();
   const reconcileMutation = useReconcileAgentsMutation();
+  const workspaceReconcileMutation = useWorkspaceReconcileAgentsMutation();
+  const runtimeReconcileQuery = useAgentReconcileStatusQuery({
+    enabled: target === "runtime",
+  });
+  const workspaceReconcileQuery = useWorkspaceAgentReconcileStatusQuery({
+    enabled: target === "workspace",
+  });
+  const reconcileSnapshot = target === "runtime"
+    ? runtimeReconcileQuery.data
+    : workspaceReconcileQuery.data;
+  const supportsScopedReconcile = reconcileSnapshot !== undefined
+    && Object.prototype.hasOwnProperty.call(reconcileSnapshot, "installedOnly");
 
   const isHealthy =
     connectionState === "healthy" && runtimeUrl.trim().length > 0;
   const { data: runtimeHealth } = useRuntimeHealthQuery({ enabled: isHealthy });
-  const isAgentSeedHydrating = runtimeHealth?.agentSeed?.status === "hydrating";
+  const isAgentSeedHydrating = target === "runtime"
+    && runtimeHealth?.agentSeed?.status === "hydrating";
 
   const refreshAgentResources = useCallback(async () => {
     await invalidateAgentSetupResources(runtimeUrl);
@@ -43,27 +65,54 @@ export function useAgentInstallationActions() {
 
   const installAgent = useCallback(
     async (kind: string, request?: InstallAgentRequest) => {
-      assertHealthyRuntime(runtimeUrl, isHealthy);
-      assertAgentSeedReady(isAgentSeedHydrating);
-      return installMutation.mutateAsync({ kind, request });
+      if (target === "runtime") {
+        assertHealthyRuntime(runtimeUrl, isHealthy);
+        assertAgentSeedReady(isAgentSeedHydrating);
+        return installMutation.mutateAsync({ kind, request });
+      }
+      return workspaceInstallMutation.mutateAsync({ kind, request });
     },
-    [installMutation, isAgentSeedHydrating, isHealthy, runtimeUrl],
+    [
+      installMutation,
+      isAgentSeedHydrating,
+      isHealthy,
+      runtimeUrl,
+      target,
+      workspaceInstallMutation,
+    ],
   );
 
   const reconcileAgents = useCallback(
     async (options?: ReconcileAgentsRequest) => {
-      assertHealthyRuntime(runtimeUrl, isHealthy);
-      assertAgentSeedReady(isAgentSeedHydrating);
-      return reconcileMutation.mutateAsync(options ?? {});
+      if (target === "runtime") {
+        assertHealthyRuntime(runtimeUrl, isHealthy);
+        assertAgentSeedReady(isAgentSeedHydrating);
+        return reconcileMutation.mutateAsync(options ?? {});
+      }
+      return workspaceReconcileMutation.mutateAsync(options ?? {});
     },
-    [isAgentSeedHydrating, isHealthy, reconcileMutation, runtimeUrl],
+    [
+      isAgentSeedHydrating,
+      isHealthy,
+      reconcileMutation,
+      runtimeUrl,
+      target,
+      workspaceReconcileMutation,
+    ],
   );
 
   return {
     installAgent,
     isAgentSeedHydrating,
-    isInstallingAgent: installMutation.isPending,
+    isInstallingAgent: target === "runtime"
+      ? installMutation.isPending
+      : workspaceInstallMutation.isPending,
+    isReconcilingAgents: target === "runtime"
+      ? reconcileMutation.isPending
+      : workspaceReconcileMutation.isPending,
     reconcileAgents,
+    reconcileSnapshot,
     refreshAgentResources,
+    supportsScopedReconcile,
   };
 }

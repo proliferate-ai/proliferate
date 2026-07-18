@@ -1,16 +1,16 @@
 {
-  "probedAt": "2026-07-11T00:36:25.416008+00:00",
+  "probedAt": "2026-07-17T20:49:47.388664+00:00",
   "agentKind": "codex",
   "authContext": "openai-oauth",
   "attestation": {
     "name": "codex-acp",
-    "version": "0.17.0-proliferate.1",
+    "version": "0.18.3-proliferate.1",
     "title": "Codex"
   },
   "modelSource": "modelConfigOption",
   "nativeCli": {
     "path": "/Users/pablohansen/.proliferate-local/anyharness/agents/codex/native/codex",
-    "version": "codex-cli 0.144.1"
+    "version": "codex-cli 0.144.5"
   },
   "trials": [],
   "currentModelId": null,
@@ -128,7 +128,7 @@
     },
     {
       "category": "thought_level",
-      "currentValue": "medium",
+      "currentValue": "low",
       "description": "Choose how much reasoning effort the model should use",
       "id": "reasoning_effort",
       "name": "Reasoning Effort",
@@ -250,7 +250,7 @@
         },
         {
           "category": "thought_level",
-          "currentValue": "medium",
+          "currentValue": "low",
           "description": "Choose how much reasoning effort the model should use",
           "id": "reasoning_effort",
           "name": "Reasoning Effort",
@@ -372,7 +372,7 @@
         },
         {
           "category": "thought_level",
-          "currentValue": "medium",
+          "currentValue": "low",
           "description": "Choose how much reasoning effort the model should use",
           "id": "reasoning_effort",
           "name": "Reasoning Effort",
@@ -494,7 +494,7 @@
         },
         {
           "category": "thought_level",
-          "currentValue": "medium",
+          "currentValue": "low",
           "description": "Choose how much reasoning effort the model should use",
           "id": "reasoning_effort",
           "name": "Reasoning Effort",
@@ -611,7 +611,7 @@
         },
         {
           "category": "thought_level",
-          "currentValue": "medium",
+          "currentValue": "low",
           "description": "Choose how much reasoning effort the model should use",
           "id": "reasoning_effort",
           "name": "Reasoning Effort",
@@ -723,7 +723,7 @@
         },
         {
           "category": "thought_level",
-          "currentValue": "medium",
+          "currentValue": "low",
           "description": "Choose how much reasoning effort the model should use",
           "id": "reasoning_effort",
           "name": "Reasoning Effort",
@@ -835,7 +835,7 @@
         },
         {
           "category": "thought_level",
-          "currentValue": "medium",
+          "currentValue": "low",
           "description": "Choose how much reasoning effort the model should use",
           "id": "reasoning_effort",
           "name": "Reasoning Effort",
@@ -927,7 +927,7 @@
         },
         {
           "category": "thought_level",
-          "currentValue": "medium",
+          "currentValue": "low",
           "description": "Choose how much reasoning effort the model should use",
           "id": "reasoning_effort",
           "name": "Reasoning Effort",

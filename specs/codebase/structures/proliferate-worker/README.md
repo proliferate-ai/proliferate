@@ -44,6 +44,8 @@ config + single-process lock + local SQLite
   -> load durable Worker identity, or exchange one enrollment token
   -> write integration-gateway credentials after a fresh enrollment
   -> heartbeat Cloud
+  -> after each successful heartbeat, repair that fresh gateway credential if
+     a revoked predecessor overwrote the shared file
   -> use desiredVersions to converge, in order:
        agent catalog
        AnyHarness binary:
@@ -112,7 +114,7 @@ inventory, or materialization subsystems.
 | `self_update.rs` | Verify, preflight, swap, and exec the Worker binary on a **legacy** (non-supervisor-owned) target; deprecated, scheduled for deletion after the bridge window | AnyHarness or Supervisor updates, any behavior on a supervisor-owned target | [Lifecycle](guides/lifecycle.md) |
 | `anyharness_update.rs` | Verify, stop, swap, relaunch, health-gate, and roll back AnyHarness on a **legacy** target; deprecated, scheduled for deletion after the bridge window | General runtime lifecycle, any behavior on a supervisor-owned target | [Lifecycle](guides/lifecycle.md) |
 | `supervisor_bridge.rs` | Write one durable mailbox update request per diverging heartbeat on a supervisor-owned target; the one-time D5 bridge that hands an already-provisioned legacy target to Proliferate Supervisor | Update download, verification, activation, health-gating, or rollback (Supervisor owns all of that) | [Lifecycle](guides/lifecycle.md) |
-| `integration_gateway.rs` | Write the private gateway credential file returned by enrollment | Credential issuance or recovery | [Identity](guides/identity.md) |
+| `integration_gateway.rs` | Write the private gateway credential file returned by enrollment and repair it after an authenticated heartbeat when a predecessor overwrote it | Credential issuance or re-enrollment | [Identity](guides/identity.md) |
 | `cloud_client/**` | Raw Cloud HTTP and wire shapes | Convergence decisions or local persistence | [Clients](guides/clients.md) |
 | `store/**` | Durable Worker identity and AnyHarness update state in local SQLite | Cloud or AnyHarness product truth | [Store](guides/store.md) |
 | Root support files | Configuration, errors, telemetry, process locking, version reporting | Hidden service layers | [Root support](guides/root-support.md) |
@@ -180,7 +182,10 @@ and `anyharness_update.rs` owns its health probe. There is no general
 - Keep `main.rs` thin and keep `runtime.rs` readable as process choreography.
 - Treat the durable Worker token as the only credential the Worker uses for
   its own post-enrollment Cloud requests. The separately returned
-  integration-gateway bearer is written for AnyHarness to consume.
+  integration-gateway bearer is written for AnyHarness to consume. A Worker
+  may reassert the bearer retained from its own fresh enrollment only after
+  that Worker's heartbeat authenticates successfully; after heartbeat rejects
+  that Worker it must not rewrite shared gateway authority again.
 - Never follow redirects on authenticated Cloud requests; public artifact
   downloads use a separate redirect-following client.
 - Keep update gates disabled unless the launcher owns this binary lifecycle.

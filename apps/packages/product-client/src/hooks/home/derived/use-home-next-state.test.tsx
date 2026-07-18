@@ -58,23 +58,44 @@ const stateMocks = vi.hoisted(() => {
     isLoading: false,
   } as any;
 
-  return { model, repository, mode, computeTargets };
+  return {
+    model,
+    repository,
+    mode,
+    computeTargets,
+    modelArgs: null as any,
+    repositoryArgs: null as any,
+    modeArgs: null as any,
+    computeTargetArgs: null as any,
+  };
 });
 
 vi.mock("#product/hooks/home/derived/use-home-next-model-selection", () => ({
-  useHomeNextModelSelection: () => stateMocks.model,
+  useHomeNextModelSelection: (args: any) => {
+    stateMocks.modelArgs = args;
+    return stateMocks.model;
+  },
 }));
 
 vi.mock("#product/hooks/home/derived/use-home-next-repository-selection", () => ({
-  useHomeNextRepositorySelection: () => stateMocks.repository,
+  useHomeNextRepositorySelection: (args: any) => {
+    stateMocks.repositoryArgs = args;
+    return stateMocks.repository;
+  },
 }));
 
 vi.mock("#product/hooks/home/derived/use-home-next-mode-selection", () => ({
-  useHomeNextModeSelection: () => stateMocks.mode,
+  useHomeNextModeSelection: (args: any) => {
+    stateMocks.modeArgs = args;
+    return stateMocks.mode;
+  },
 }));
 
 vi.mock("#product/hooks/compute/derived/use-compute-target-options", () => ({
-  useComputeTargetOptions: () => stateMocks.computeTargets,
+  useComputeTargetOptions: (args: any) => {
+    stateMocks.computeTargetArgs = args;
+    return stateMocks.computeTargets;
+  },
 }));
 
 function resetMocks() {
@@ -106,16 +127,23 @@ function resetMocks() {
   stateMocks.repository.launchTarget = { kind: "local", sourceRoot: "/repo" };
   stateMocks.computeTargets.sshTargetOptions = [];
   stateMocks.computeTargets.isLoading = false;
+  stateMocks.modelArgs = null;
+  stateMocks.repositoryArgs = null;
+  stateMocks.modeArgs = null;
+  stateMocks.computeTargetArgs = null;
 }
 
 function renderHomeNextState({
+  desktopTargetsAvailable = true,
   destination = "cowork",
   repoLaunchKind = "local",
 }: {
+  desktopTargetsAvailable?: boolean;
   destination?: HomeNextDestination;
   repoLaunchKind?: HomeNextRepoLaunchKind;
 } = {}) {
   return renderHook(() => useHomeNextState({
+    desktopTargetsAvailable,
     destination,
     repositorySelection: { kind: "auto" },
     repoLaunchKind,
@@ -174,5 +202,51 @@ describe("useHomeNextState", () => {
     const noBranch = renderHomeNextState({ destination: "repository", repoLaunchKind: "worktree" });
     expect(noBranch.result.current.targetDisabledReason).toBe("Choose a base branch");
     noBranch.unmount();
+  });
+
+  it("forces the Web target model to repository Cloud and rejects local targets", () => {
+    stateMocks.computeTargets.sshTargetOptions = [{ id: "ssh-target-1" }];
+    stateMocks.computeTargets.isLoading = true;
+    const web = renderHomeNextState({
+      desktopTargetsAvailable: false,
+      destination: "cowork",
+      repoLaunchKind: "worktree",
+    });
+
+    expect(stateMocks.modelArgs).toMatchObject({ repoLaunchKind: "cloud" });
+    expect(stateMocks.repositoryArgs).toMatchObject({
+      destination: "repository",
+      repoLaunchKind: "cloud",
+    });
+    expect(stateMocks.modeArgs).toMatchObject({
+      destination: "repository",
+      repoLaunchKind: "cloud",
+    });
+    expect(stateMocks.computeTargetArgs).toEqual({ enabled: false });
+    expect(web.result.current.sshTargetOptions).toEqual([]);
+    expect(web.result.current.sshTargetsLoading).toBe(false);
+    expect(web.result.current.selectedSshTarget).toBeNull();
+    expect(web.result.current.launchTarget).toBeNull();
+    expect(web.result.current.canLaunchTarget).toBe(false);
+    web.unmount();
+  });
+
+  it("preserves a Cloud launch target in the Web target model", () => {
+    stateMocks.repository.launchTarget = {
+      kind: "cloud",
+      gitOwner: "owner",
+      gitRepoName: "repo",
+      baseBranch: "main",
+    };
+
+    const web = renderHomeNextState({
+      desktopTargetsAvailable: false,
+      destination: "repository",
+      repoLaunchKind: "cloud",
+    });
+
+    expect(web.result.current.launchTarget).toMatchObject({ kind: "cloud" });
+    expect(web.result.current.targetDisabledReason).toBeNull();
+    expect(web.result.current.canLaunchTarget).toBe(true);
   });
 });

@@ -279,7 +279,7 @@ fn map_create_cowork_thread_error(error: CoworkCreateThreadError) -> ApiError {
                 super::sessions_errors::map_route_auth_error(&error)
             }
             crate::domains::sessions::runtime::CreateAndStartSessionError::StartFailed(error) => {
-                ApiError::internal(format!("ACP session start failed: {error}"))
+                super::sessions_errors::map_acp_session_start_error(error)
             }
             crate::domains::sessions::runtime::CreateAndStartSessionError::Internal(error) => {
                 ApiError::internal(error.to_string())

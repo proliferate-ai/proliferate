@@ -4,6 +4,8 @@ import path from "node:path";
 
 import type { Browser } from "playwright";
 
+import { registerCancellationFinalizer } from "../../cli/cancellation-finalizer.js";
+
 import type { CandidateBuildMapV1 } from "../../artifacts/build-map.js";
 import { resolveCloudCandidateSet } from "../../artifacts/cloud-candidate-set.js";
 import type { MaterializedArtifact } from "../../artifacts/local-candidate-set.js";
@@ -306,6 +308,12 @@ export async function constructManagedCloudWorld(
     mirror: deps.ledgerMirror,
   });
   const stack = new ManagedCloudCleanupStack({ ledger, log });
+  const cancellationFinalizer = registerCancellationFinalizer({
+    world: "managed-cloud",
+    run: options.run,
+    runDir,
+    finalize: () => stack.runAll(),
+  });
 
   const register = async (
     kind: ManagedCloudCleanupKind,
@@ -382,6 +390,7 @@ export async function constructManagedCloudWorld(
       litellm: options.litellm,
       github: options.github,
       e2b: options.e2b,
+      qualificationRun: { runId: options.run.run_id, shardId: options.run.shard_id },
       // PR 6 (append-only): forwarded verbatim; both undefined by default, so
       // deployCandidateApi's absent-config path (today's behaviour) runs.
       stripe: options.stripe,
@@ -480,12 +489,12 @@ export async function constructManagedCloudWorld(
       registerCleanup: register,
       registerCleanupIntent,
       trackActorSubjects: (actor) => trackActorSubjects(stack, gateway, actor),
-      close: () => stack.runAll(),
+      close: () => cancellationFinalizer.run(),
     };
   } catch (error) {
     // Any startup failure runs every registered cleanup exactly once, reverse
     // order, then rethrows so the caller marks the cell failed.
-    await stack.runAll().catch(() => undefined);
+    await cancellationFinalizer.run().catch(() => undefined);
     throw error;
   }
 }

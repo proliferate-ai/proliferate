@@ -45,6 +45,8 @@ class StubLiteLLM:
     def __init__(self) -> None:
         self.teams: dict[str, str] = {}
         self.users: set[str] = set()
+        self.team_metadata: list[dict[str, Any] | None] = []
+        self.user_metadata: list[dict[str, Any] | None] = []
         self.minted: list[dict[str, Any]] = []
         # Live keys keyed by alias -> token_id, mirroring LiteLLM's globally
         # unique key_alias enforcement so idempotency can be exercised.
@@ -66,11 +68,19 @@ class StubLiteLLM:
             self.delete_virtual_keys_by_alias,
         )
 
-    async def ensure_team(self, *, alias: str, max_budget: float | None = None) -> str:
+    async def ensure_team(
+        self,
+        *,
+        alias: str,
+        max_budget: float | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> str:
+        self.team_metadata.append(metadata)
         team_id = self.teams.setdefault(alias, f"team-{alias}")
         return team_id
 
-    async def ensure_user(self, *, user_id: str) -> str:
+    async def ensure_user(self, *, user_id: str, metadata: dict[str, Any] | None = None) -> str:
+        self.user_metadata.append(metadata)
         self.users.add(user_id)
         return user_id
 
@@ -175,6 +185,28 @@ async def test_user_enrollment_syncs_against_gateway(
     again = await ensure_user_enrollment(db_session, user_id)
     assert again.id == enrollment.id
     assert len(stub_litellm.minted) == 1
+
+
+@pytest.mark.asyncio
+async def test_qualification_enrollment_stamps_exact_run_ownership(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+    stub_litellm: StubLiteLLM,
+) -> None:
+    monkeypatch.setattr(settings, "agent_gateway_enabled", True)
+    monkeypatch.setattr(settings, "agent_gateway_qualification_run_id", "qlc-ci-123-1")
+    monkeypatch.setattr(settings, "agent_gateway_qualification_shard_id", "1")
+    user_id = await _create_user(db_session)
+
+    await ensure_user_enrollment(db_session, user_id)
+
+    expected = {
+        "proliferate_qualification_run_id": "qlc-ci-123-1",
+        "proliferate_qualification_shard_id": "1",
+    }
+    assert stub_litellm.team_metadata == [expected]
+    assert stub_litellm.user_metadata == [expected]
+    assert all(stub_litellm.minted[0]["metadata"][key] == value for key, value in expected.items())
 
 
 @pytest.mark.asyncio

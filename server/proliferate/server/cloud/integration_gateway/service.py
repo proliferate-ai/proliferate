@@ -21,12 +21,36 @@ from proliferate.integrations import mcp_remote
 from proliferate.integrations.mcp_remote import McpRemoteError
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.integration_gateway.domain import json_rpc, virtual_tools
+from proliferate.server.cloud.integration_gateway.domain.execution_session import (
+    ExecutionSessionIdentity,
+)
 from proliferate.server.cloud.integration_gateway.domain.tool_args import (
     parse_call_tool_args,
     parse_list_tools_args,
 )
+from proliferate.server.cloud.integration_gateway.domain.tool_policy import (
+    ToolCallAllowed,
+    ToolCallDenied,
+    ToolCallRequiresApproval,
+    decide_tool_call,
+)
+from proliferate.server.cloud.integration_gateway.errors import (
+    IntegrationGatewaySessionRequired,
+    IntegrationToolApprovalRequired,
+    IntegrationToolNotAllowed,
+    IntegrationToolPolicyError,
+)
 from proliferate.server.cloud.integration_gateway.models import GatewayProviderAccount
 from proliferate.server.cloud.integrations.access import resolve_launch
+from proliferate.server.cloud.integrations.action_approvals.domain.actions import (
+    InvalidActionPayload,
+)
+from proliferate.server.cloud.integrations.action_approvals.service import (
+    ActionApprovalAccountRevisionMismatch,
+)
+from proliferate.server.cloud.integrations.action_approvals.transactions import (
+    request_action_approval_committed,
+)
 from proliferate.server.cloud.integrations.tools import get_or_refresh_tool_cache
 
 _PROTOCOL_VERSION = "2025-06-18"
@@ -48,6 +72,17 @@ def _org_allows(grant: IntegrationGatewayGrant, row: ReadyAccountRow) -> bool:
     if row.org_policy_enabled is not None:
         return row.org_policy_enabled
     return row.definition.enabled_by_default
+
+
+def _org_allows_identity(
+    grant: IntegrationGatewayGrant,
+    row: accounts_store.ReadyAccountIdentityRow,
+) -> bool:
+    if grant.organization_id is None:
+        return True
+    if row.org_policy_enabled is not None:
+        return row.org_policy_enabled
+    return row.definition_enabled_by_default
 
 
 async def ready_accounts_for_grant(
@@ -94,6 +129,34 @@ async def account_for_provider(
     return GatewayProviderAccount(account=row.account, definition=row.definition)
 
 
+async def account_identity_for_provider(
+    db: AsyncSession,
+    *,
+    grant: IntegrationGatewayGrant,
+    provider: str,
+) -> accounts_store.ReadyAccountIdentityRow:
+    """Resolve a ready provider binding without selecting credential columns."""
+    row = await accounts_store.get_ready_account_identity_for_provider(
+        db,
+        grant.owner_user_id,
+        provider,
+        organization_id=grant.organization_id,
+    )
+    if row is None:
+        raise CloudApiError(
+            "integration_provider_not_found",
+            f"No connected integration provider '{provider}'.",
+            status_code=404,
+        )
+    if not _org_allows_identity(grant, row):
+        raise CloudApiError(
+            "integration_provider_disabled",
+            f"Integration provider '{provider}' is disabled by your organization's policy.",
+            status_code=404,
+        )
+    return row
+
+
 async def list_providers(
     db: AsyncSession,
     *,
@@ -131,6 +194,7 @@ async def call_provider_tool(
     provider: str,
     tool: str,
     arguments: dict[str, object],
+    execution_session: ExecutionSessionIdentity | None,
 ) -> dict[str, object]:
     # Audit the proxied call on every path — provider-resolution or account
     # failures, upstream transport failures, and a returned tool-level error
@@ -140,6 +204,61 @@ async def call_provider_tool(
     ok = False
     error_code: str | None = None
     try:
+        decision = decide_tool_call(provider=provider, tool=tool)
+        if isinstance(decision, ToolCallRequiresApproval):
+            if execution_session is None or not execution_session.is_action_capable:
+                raise IntegrationGatewaySessionRequired(provider=provider, tool=tool)
+            workspace_id = execution_session.workspace_id
+            anyharness_session_id = execution_session.anyharness_session_id
+            assert workspace_id is not None and anyharness_session_id is not None
+            # Resolve only the ready account identity needed to bind the
+            # request. Credential rendering and provider I/O remain below the
+            # allowed path and are never entered for an approval-gated action.
+            account_identity = await account_identity_for_provider(
+                db,
+                grant=grant,
+                provider=provider,
+            )
+            try:
+                approval = await request_action_approval_committed(
+                    grant=grant,
+                    gateway_session_id=execution_session.gateway_session_id,
+                    workspace_id=workspace_id,
+                    anyharness_session_id=anyharness_session_id,
+                    integration_account_id=account_identity.account_id,
+                    integration_account_auth_version=account_identity.auth_version,
+                    verdict=decision,
+                    arguments=arguments,
+                    account_label=(
+                        f"{account_identity.display_name} connection "
+                        f"{str(account_identity.account_id)[:8]}"
+                    ),
+                    source_label=(
+                        f"{grant.runtime_kind.title()} workspace "
+                        f"{workspace_id[:8]} session {anyharness_session_id[:8]}"
+                    ),
+                )
+            except InvalidActionPayload as error:
+                raise CloudApiError(
+                    "integration_action_payload_invalid",
+                    "Integration action arguments must be valid JSON values.",
+                    status_code=400,
+                ) from error
+            except ActionApprovalAccountRevisionMismatch as error:
+                raise CloudApiError(
+                    "integration_account_changed",
+                    "Integration account changed before approval could be requested.",
+                    status_code=409,
+                ) from error
+            raise IntegrationToolApprovalRequired(
+                provider=provider,
+                tool=tool,
+                approval=approval,
+            )
+        if isinstance(decision, ToolCallDenied):
+            raise IntegrationToolNotAllowed(provider=provider, tool=tool)
+        if not isinstance(decision, ToolCallAllowed):
+            raise IntegrationToolNotAllowed(provider=provider, tool=tool)
         pair = await account_for_provider(db, grant=grant, provider=provider)
         url, headers, query = await resolve_launch(db, pair.account, pair.definition)
         result = await mcp_remote.call_tool(
@@ -191,20 +310,22 @@ async def _call_virtual_tool(
     grant: IntegrationGatewayGrant,
     name: str,
     arguments: dict[str, object],
+    execution_session: ExecutionSessionIdentity | None,
 ) -> dict[str, object]:
     if name == virtual_tools.LIST_PROVIDERS_TOOL:
         return await list_providers(db, grant=grant)
     if name == virtual_tools.LIST_TOOLS_TOOL:
-        args = parse_list_tools_args(arguments)
-        return await list_tools_for_provider(db, grant=grant, provider=args.provider)
+        list_args = parse_list_tools_args(arguments)
+        return await list_tools_for_provider(db, grant=grant, provider=list_args.provider)
     if name == virtual_tools.CALL_TOOL_TOOL:
-        args = parse_call_tool_args(arguments)
+        call_args = parse_call_tool_args(arguments)
         return await call_provider_tool(
             db,
             grant=grant,
-            provider=args.provider,
-            tool=args.tool,
-            arguments=args.arguments,
+            provider=call_args.provider,
+            tool=call_args.tool,
+            arguments=call_args.arguments,
+            execution_session=execution_session,
         )
     raise CloudApiError(
         "integration_gateway_unknown_tool",
@@ -218,6 +339,7 @@ async def _handle_tools_call(
     *,
     grant: IntegrationGatewayGrant,
     params: dict[str, object],
+    execution_session: ExecutionSessionIdentity | None,
 ) -> dict[str, object]:
     name = params.get("name")
     if not isinstance(name, str) or not virtual_tools.is_gateway_tool_name(name):
@@ -231,7 +353,13 @@ async def _handle_tools_call(
     # MCP tools/call wraps the tool result in a content envelope; we return the
     # structured result as a single JSON text block plus a structuredContent
     # mirror so agents can consume either shape.
-    result = await _call_virtual_tool(db, grant=grant, name=name, arguments=arguments)
+    result = await _call_virtual_tool(
+        db,
+        grant=grant,
+        name=name,
+        arguments=arguments,
+        execution_session=execution_session,
+    )
     return {
         "content": [{"type": "text", "text": json.dumps(result, separators=(",", ":"))}],
         "structuredContent": result,
@@ -244,6 +372,7 @@ async def handle_integration_gateway_json_rpc(
     *,
     grant: IntegrationGatewayGrant,
     payload: dict[str, object],
+    execution_session: ExecutionSessionIdentity | None = None,
 ) -> dict[str, object] | None:
     """Dispatch one MCP JSON-RPC message. ``None`` for notifications (no reply)."""
     method = payload.get("method")
@@ -264,7 +393,21 @@ async def handle_integration_gateway_json_rpc(
         params = payload.get("params")
         params = params if isinstance(params, dict) else {}
         try:
-            result = await _handle_tools_call(db, grant=grant, params=params)
+            result = await _handle_tools_call(
+                db,
+                grant=grant,
+                params=params,
+                execution_session=execution_session,
+            )
+        except IntegrationToolPolicyError as error:
+            return json_rpc.json_rpc_result(
+                request_id=request_id,
+                result={
+                    "content": [{"type": "text", "text": error.message}],
+                    "structuredContent": {"error": error.structured_error()},
+                    "isError": True,
+                },
+            )
         except (CloudApiError, McpRemoteError) as error:
             # Surface tool-level failures (bad provider, or an upstream MCP that
             # is down/timing out) as an MCP error result, not a transport error,

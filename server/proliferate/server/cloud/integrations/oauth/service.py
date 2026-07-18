@@ -26,7 +26,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings as app_settings
 from proliferate.db.store.integrations.accounts import set_account_credentials
-from proliferate.db.store.integrations.definitions import IntegrationDefinitionRecord
+from proliferate.db.store.integrations.definitions import (
+    IntegrationDefinitionRecord,
+    get_definition,
+)
 from proliferate.db.store.integrations.oauth_clients import (
     delete_oauth_client,
     get_oauth_client,
@@ -54,6 +57,13 @@ from proliferate.integrations.integration_oauth import (
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.integrations.config import parse_definition_config, render_mcp_url
 from proliferate.server.cloud.integrations.oauth.clients import resolve_oauth_client
+from proliferate.server.cloud.integrations.oauth.scope_policy import (
+    OAuthScopePolicyError,
+    validate_callback_oauth_scopes,
+)
+from proliferate.server.cloud.integrations.oauth.scope_policy import (
+    resolve_requested_oauth_scope as resolve_scope_policy,
+)
 from proliferate.utils.crypto import decrypt_text, encrypt_json, encrypt_text
 
 # Callback path appended to the API base URL for the shared OAuth callback.
@@ -129,25 +139,28 @@ def _resolve_requested_oauth_scope(
     challenged_scope: str | None,
     configured_scopes: tuple[str, ...],
     scopes_required: bool,
+    scope_policy: str = "provider",
 ) -> str | None:
-    challenge = (challenged_scope or "").strip()
-    if challenge:
-        return challenge
-
-    configured = " ".join(scope.strip() for scope in configured_scopes if scope.strip())
-    if configured:
-        return configured
-
-    if scopes_required:
-        raise IntegrationOAuthProviderError(
-            "missing_oauth_scope",
-            "This integration requires OAuth scopes, but none were provided.",
+    try:
+        return resolve_scope_policy(
+            challenged_scope=challenged_scope,
+            configured_scopes=configured_scopes,
+            scopes_required=scopes_required,
+            scope_policy=scope_policy,
         )
-    return None
+    except OAuthScopePolicyError as exc:
+        raise IntegrationOAuthProviderError(exc.code, exc.message) from exc
 
 
 def _requested_scopes_json(requested_scope: str | None) -> str:
     return json.dumps(requested_scope.split() if requested_scope else [])
+
+
+def _parse_requested_scopes(requested_scopes_json: str) -> tuple[str, ...]:
+    raw = json.loads(requested_scopes_json)
+    if not isinstance(raw, list) or not all(isinstance(scope, str) for scope in raw):
+        raise ValueError("OAuth flow has invalid requested scope metadata.")
+    return tuple(raw)
 
 
 def _should_drop_cached_oauth_client_on_token_error(error_code: str) -> bool:
@@ -293,6 +306,7 @@ async def start_oauth_flow(
             challenged_scope=protected.challenged_scope,
             configured_scopes=config.oauth_scopes,
             scopes_required=config.oauth_scopes_required,
+            scope_policy=config.oauth_scope_policy,
         )
         issuer = protected.authorization_servers[0]
         auth_metadata = await discover_authorization_server_metadata(issuer)
@@ -443,6 +457,16 @@ async def complete_oauth_callback(
         failed = await fail_oauth_flow(db, flow_id=flow.id, failure_code="account_missing") or flow
         return _callback_result(failed, ok=False, status="failed")
 
+    definition = await get_definition(db, flow.definition_id)
+    try:
+        if definition is None:
+            raise ValueError("OAuth flow definition is missing.")
+        config = parse_definition_config(definition.config_json)
+        requested_scopes = _parse_requested_scopes(flow.requested_scopes)
+    except (json.JSONDecodeError, ValueError):
+        failed = await fail_oauth_flow(db, flow_id=flow.id, failure_code="invalid_flow") or flow
+        return _callback_result(failed, ok=False, status="failed")
+
     oauth_client = await get_oauth_client(
         db,
         issuer=flow.issuer or "",
@@ -467,10 +491,22 @@ async def complete_oauth_callback(
             token_endpoint_auth_method=(
                 oauth_client.token_endpoint_auth_method if oauth_client else None
             ),
+            provider_namespace=definition.namespace,
         )
     except IntegrationOAuthProviderError as exc:
         if _should_drop_cached_oauth_client_on_token_error(exc.code) and oauth_client is not None:
             await delete_oauth_client(db, oauth_client.id)
+        failed = await fail_oauth_flow(db, flow_id=flow.id, failure_code=exc.code) or flow
+        return _callback_result(failed, ok=False, status="failed")
+
+    try:
+        granted_scopes = validate_callback_oauth_scopes(
+            granted_scopes=token.scopes,
+            requested_scopes=requested_scopes,
+            configured_scopes=config.oauth_scopes,
+            scope_policy=config.oauth_scope_policy,
+        )
+    except OAuthScopePolicyError as exc:
         failed = await fail_oauth_flow(db, flow_id=flow.id, failure_code=exc.code) or flow
         return _callback_result(failed, ok=False, status="failed")
 
@@ -485,7 +521,7 @@ async def complete_oauth_callback(
                 access_token=token.access_token,
                 refresh_token=token.refresh_token,
                 expires_at=token.expires_at,
-                scopes=token.scopes,
+                scopes=granted_scopes,
                 token_endpoint=flow.token_endpoint,
                 redirect_uri=flow.redirect_uri,
             )

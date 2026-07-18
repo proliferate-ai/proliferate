@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import type { DesktopAgentLaunchAgent } from "#product/lib/domain/agents/cloud-launch-catalog";
 import {
+  buildReviewRequest,
   createStoredReviewKindDefaults,
   createReviewSetupDraft,
   createReviewSetupReviewerDraft,
@@ -20,11 +22,47 @@ import {
   resolveReviewPersonaTemplates,
 } from "#product/lib/domain/reviews/review-personas";
 
+const LAUNCH_AGENTS = [
+  launchAgent("codex", "gpt-5.4", "full-access", ["read-only", "full-access"]),
+  launchAgent(
+    "claude",
+    "sonnet",
+    "bypassPermissions",
+    ["default", "acceptEdits", "bypassPermissions"],
+  ),
+];
+
 const SESSION_DEFAULTS: ReviewSessionDefaults = {
   agentKind: "codex",
   modelId: "gpt-5.4",
-  modeId: "read-only",
+  launchAgents: LAUNCH_AGENTS,
 };
+
+function launchAgent(
+  kind: string,
+  modelId: string,
+  unattendedModeId: string | null,
+  modeValues: string[] | null,
+): DesktopAgentLaunchAgent {
+  return {
+    kind,
+    displayName: kind,
+    defaultModelId: modelId,
+    unattendedModeId,
+    models: [{
+      id: modelId,
+      displayName: modelId,
+      aliases: [],
+      status: "active",
+      isDefault: true,
+      availability: null,
+      sessionDefaultControls: [],
+      modeValues,
+      tuningControlValues: null,
+    }],
+    launchControls: [],
+  };
+}
 
 function reviewer(overrides: Partial<ReviewSetupReviewerDraft>): ReviewSetupReviewerDraft {
   return {
@@ -185,9 +223,19 @@ describe("review setup config", () => {
     expect(nextAvailableReviewPersonaTemplate(templates, reviewers)?.id).toBe("plan-skeptic");
   });
 
-  it("uses execution mode defaults for selected reviewer harnesses", () => {
-    expect(resolveReviewExecutionModeIdForAgent("codex", "read-only")).toBe("full-access");
-    expect(resolveReviewExecutionModeIdForAgent("claude", "missing")).toBe("bypassPermissions");
+  it("keeps explicit review choices ahead of unattended catalog defaults", () => {
+    expect(resolveReviewExecutionModeIdForAgent(
+      "codex",
+      "read-only",
+      "full-access",
+    )).toBe("read-only");
+    expect(resolveReviewExecutionModeIdForAgent(
+      "claude",
+      null,
+      "bypassPermissions",
+    )).toBe("bypassPermissions");
+    expect(resolveReviewExecutionModeIdForAgent("cursor", "ask", null)).toBe("ask");
+    expect(resolveReviewExecutionModeIdForAgent("cursor", null, null)).toBe("");
   });
 
   it("hydrates initial reviewer personalities with inherited harness defaults", () => {
@@ -205,6 +253,94 @@ describe("review setup config", () => {
       modelId: "gpt-5.4",
       modeId: "full-access",
     });
+  });
+
+  it("keeps a stored explicit review mode ahead of catalog curation", () => {
+    const draft = createReviewSetupDraft({
+      kind: "plan",
+      sessionDefaults: SESSION_DEFAULTS,
+      storedDefaults: {
+        ...createStoredReviewKindDefaults(),
+        agentKind: "codex",
+        modelId: "gpt-5.4",
+        modeId: "read-only",
+      },
+    });
+
+    expect(draft.reviewers[0]?.modeId).toBe("read-only");
+  });
+
+  it("resolves each stored reviewer against its own target catalog agent", () => {
+    const draft = createReviewSetupDraft({
+      kind: "plan",
+      sessionDefaults: SESSION_DEFAULTS,
+      storedDefaults: {
+        ...createStoredReviewKindDefaults(),
+        modeId: "full-access",
+        reviewers: {
+          mode: "custom",
+          items: [
+            reviewer({ modeId: "" }),
+            reviewer({
+              id: "implementation-readiness",
+              agentKind: "claude",
+              modelId: "sonnet",
+              modeId: "",
+            }),
+          ],
+        },
+      },
+    });
+
+    expect(draft.reviewers.map((item) => item.modeId)).toEqual([
+      "full-access",
+      "bypassPermissions",
+    ]);
+  });
+
+  it("keeps a mixed-agent reviewer override ahead of its catalog default", () => {
+    const draft = createReviewSetupDraft({
+      kind: "plan",
+      sessionDefaults: SESSION_DEFAULTS,
+      storedDefaults: {
+        ...createStoredReviewKindDefaults(),
+        modeId: "full-access",
+        reviewers: {
+          mode: "custom",
+          items: [reviewer({
+            agentKind: "claude",
+            modelId: "sonnet",
+            modeId: "acceptEdits",
+          })],
+        },
+      },
+    });
+
+    expect(draft.reviewers[0]?.modeId).toBe("acceptEdits");
+  });
+
+  it("omits mode for an uncurated reviewer instead of fabricating one", () => {
+    const draft = createReviewSetupDraft({
+      kind: "code",
+      sessionDefaults: SESSION_DEFAULTS,
+      storedDefaults: {
+        ...createStoredReviewKindDefaults(),
+        modeId: "full-access",
+        reviewers: {
+          mode: "custom",
+          items: [reviewer({
+            agentKind: "grok",
+            modelId: "grok-4",
+            modeId: "",
+          })],
+        },
+      },
+    });
+    const { request, error } = buildReviewRequest(draft, "parent-session");
+
+    expect(error).toBeNull();
+    expect(draft.reviewers[0]?.modeId).toBe("");
+    expect(request?.reviewers[0]).not.toHaveProperty("modeId");
   });
 
   it("refreshes stored reviewer labels from resolved settings personalities", () => {
@@ -242,6 +378,7 @@ describe("review setup config", () => {
     expect(draft.reviewers[0]).toMatchObject({
       label: "Strict plan reviewer",
       prompt: "Use the stricter saved prompt.",
+      modeId: "read-only",
     });
   });
 

@@ -867,6 +867,29 @@ qualification-candidate-build-map:
 # target dir and clear any ambient cross-compile target so an operator's
 # CARGO_TARGET_DIR/CARGO_BUILD_TARGET cannot make this qualify a stale binary
 # at target/release/ while cargo wrote somewhere else.
+# Validate and materialize a committed retained-release receipt — the exact
+# immutable production N-1 artifact set Tier 4 update proofs start from
+# (specs/developing/testing/tier-4-scenario-contract.md "Artifact Identity").
+# Shape + policy validation run before any download; every byte is verified
+# against the receipt on every use (a cache hit is re-hashed, never trusted).
+# Read-only toward providers: LIVE=1 adds an E2B metadata lookup proving the
+# recorded immutable source tag still resolves to the recorded build id.
+#
+# RETAINED_RELEASE_ID=vX.Y.Z   Receipt to validate (see
+#                              tests/release/retained-releases/index.json).
+# LIVE=1                       Also live-verify E2B template identity
+#                              (needs E2B_API_KEY or RELEASE_E2E_E2B_API_KEY).
+# CANDIDATE_SHA=<40-hex>       Optional candidate N SHA for the N != N-1 check.
+qualification-retained-release:
+	@if [ -z "$(RETAINED_RELEASE_ID)" ]; then \
+		echo "RETAINED_RELEASE_ID=<vX.Y.Z> is required, e.g. make qualification-retained-release RETAINED_RELEASE_ID=v0.3.38"; \
+		exit 2; \
+	fi
+	cd tests/release && pnpm install --silent && pnpm exec tsx src/cli/retained-release.ts validate \
+		--release-id $(RETAINED_RELEASE_ID) \
+		$(if $(filter 1,$(LIVE)),--live,) \
+		$(if $(CANDIDATE_SHA),--candidate-sha $(CANDIDATE_SHA),)
+
 qualification-candidate-handoff-smoke:
 	pnpm install --silent
 	env -u CARGO_BUILD_TARGET \
@@ -929,8 +952,6 @@ qualification-local-workspace:
 			exit 1; \
 		}; \
 	fi
-	pnpm install --silent
-	pnpm exec playwright install --with-deps chromium
 	@if [ "$$GITHUB_ACTIONS" = "true" ]; then \
 		: "$${AGENT_GATEWAY_LITELLM_BASE_URL:=$$AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL}"; \
 		export AGENT_GATEWAY_LITELLM_BASE_URL; \
@@ -941,20 +962,34 @@ qualification-local-workspace:
 		set +a; \
 		export AGENT_GATEWAY_LITELLM_BASE_URL; \
 	fi; \
-	test -n "$$AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL" || { \
-		echo "AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL is required (local: $(QUALIFICATION_INFRA_ENV); Actions: Qualification environment vars)."; \
-		exit 1; \
-	}; \
-	test -n "$$AGENT_GATEWAY_LITELLM_MASTER_KEY" || { \
-		echo "AGENT_GATEWAY_LITELLM_MASTER_KEY is required (local: $(QUALIFICATION_INFRA_ENV); Actions: Qualification environment secrets)."; \
-		exit 1; \
-	}; \
 	run_id="ql-$(PROFILE)"; \
 	shard_id="1"; \
 	run_dir="$(QUALIFICATION_LOCAL_WORLD_BASE_DIR)/$$run_id/$$shard_id"; \
-	mkdir -p "$$run_dir"; \
-	build_summary=$$(node scripts/ci-cd/build-local-qualification-candidates.mjs \
-		--run-id "$$run_id" --shard-id "$$shard_id" --run-dir "$$run_dir") || exit $$?; \
+	mkdir -p "$$run_dir/preflight"; \
+	source_sha=$$(git rev-parse HEAD); \
+	attempt="$${GITHUB_RUN_ATTEMPT:-1}"; \
+	if [ -n "$(REUSE_CANDIDATES)" ]; then \
+		node scripts/ci-cd/qualification-preflight.mjs \
+			--world local --source-sha "$$source_sha" --run-id "$$run_id" --shard-id "$$shard_id" --attempt "$$attempt" \
+			--scenarios LOCAL-WORLD-SMOKE-1 --artifact-mode reuse \
+			--candidate-build-map "$(REUSE_CANDIDATES)/candidate-build.json" \
+			--output "$$run_dir/preflight/qualification-preflight.json" || exit $$?; \
+	else \
+		node scripts/ci-cd/qualification-preflight.mjs \
+			--world local --source-sha "$$source_sha" --run-id "$$run_id" --shard-id "$$shard_id" --attempt "$$attempt" \
+			--scenarios LOCAL-WORLD-SMOKE-1 --artifact-mode build \
+			--output "$$run_dir/preflight/qualification-preflight.json" || exit $$?; \
+	fi; \
+	pnpm install --silent; \
+	pnpm exec playwright install --with-deps chromium; \
+	if [ -n "$(REUSE_CANDIDATES)" ]; then \
+		build_summary=$$(node scripts/ci-cd/build-local-qualification-candidates.mjs \
+			--run-id "$$run_id" --shard-id "$$shard_id" --run-dir "$$run_dir" \
+			--reuse-from "$(REUSE_CANDIDATES)") || exit $$?; \
+	else \
+		build_summary=$$(node scripts/ci-cd/build-local-qualification-candidates.mjs \
+			--run-id "$$run_id" --shard-id "$$shard_id" --run-dir "$$run_dir") || exit $$?; \
+	fi; \
 	echo "$$build_summary"; \
 	candidate_map=$$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).candidate_build_map)' "$$build_summary"); \
 	cd tests/release && pnpm exec tsx src/cli/run.ts \
@@ -1065,8 +1100,6 @@ qualification-local-functional:
 			exit 1; \
 		}; \
 	fi
-	pnpm install --silent
-	pnpm exec playwright install --with-deps chromium
 	@if [ "$$GITHUB_ACTIONS" = "true" ]; then \
 		: "$${AGENT_GATEWAY_LITELLM_BASE_URL:=$$AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL}"; \
 		export AGENT_GATEWAY_LITELLM_BASE_URL; \
@@ -1078,40 +1111,39 @@ qualification-local-functional:
 		set +a; \
 		export AGENT_GATEWAY_LITELLM_BASE_URL; \
 	fi; \
-	test -n "$$AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL" || { \
-		echo "AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL is required (local: $(QUALIFICATION_INFRA_ENV); Actions: Qualification environment vars)."; \
-		exit 1; \
-	}; \
-	test -n "$$AGENT_GATEWAY_LITELLM_MASTER_KEY" || { \
-		echo "AGENT_GATEWAY_LITELLM_MASTER_KEY is required (local: $(QUALIFICATION_INFRA_ENV); Actions: Qualification environment secrets)."; \
-		exit 1; \
-	}; \
 	run_id="qlf-$(PROFILE)"; \
 	shard_id="1"; \
 	build_dir="$(QUALIFICATION_LOCAL_WORLD_BASE_DIR)/$$run_id/$$shard_id"; \
 	evidence_dir="$$build_dir/evidence"; \
+	scenarios="$(if $(filter-out all,$(SCENARIOS)),$(SCENARIOS),$(QUALIFICATION_LOCAL_FUNCTIONAL_SCENARIOS))"; \
+	mkdir -p "$$build_dir/preflight"; \
+	source_sha=$$(git rev-parse HEAD); \
+	attempt="$${GITHUB_RUN_ATTEMPT:-1}"; \
 	if [ -n "$(REUSE_CANDIDATES)" ]; then \
-		build_dir="$(REUSE_CANDIDATES)"; \
-		test -f "$$build_dir/candidate-build.json" || { \
-			echo "REUSE_CANDIDATES=$$build_dir has no candidate-build.json — build it first (e.g. a prior qualification-local-functional or qualification-local-workspace run), or omit REUSE_CANDIDATES."; \
-			exit 1; \
-		}; \
-		test -f "$$build_dir/local-world-ports.json" || { \
-			echo "REUSE_CANDIDATES=$$build_dir has no local-world-ports.json sidecar next to its candidate-build.json."; \
-			exit 1; \
-		}; \
-		echo "Reusing already-built local-world candidates from $$build_dir (skipping build-local-qualification-candidates.mjs)."; \
-		evidence_dir="$(QUALIFICATION_LOCAL_WORLD_BASE_DIR)/$$run_id/$$shard_id/evidence"; \
-		candidate_map="$$build_dir/candidate-build.json"; \
+		node scripts/ci-cd/qualification-preflight.mjs \
+			--world local --source-sha "$$source_sha" --run-id "$$run_id" --shard-id "$$shard_id" --attempt "$$attempt" \
+			--scenarios "$$scenarios" --artifact-mode reuse \
+			--candidate-build-map "$(REUSE_CANDIDATES)/candidate-build.json" \
+			--output "$$build_dir/preflight/qualification-preflight.json" || exit $$?; \
 	else \
-		mkdir -p "$$build_dir"; \
+		node scripts/ci-cd/qualification-preflight.mjs \
+			--world local --source-sha "$$source_sha" --run-id "$$run_id" --shard-id "$$shard_id" --attempt "$$attempt" \
+			--scenarios "$$scenarios" --artifact-mode build \
+			--output "$$build_dir/preflight/qualification-preflight.json" || exit $$?; \
+	fi; \
+	pnpm install --silent; \
+	pnpm exec playwright install --with-deps chromium; \
+	if [ -n "$(REUSE_CANDIDATES)" ]; then \
+		build_summary=$$(node scripts/ci-cd/build-local-qualification-candidates.mjs \
+			--run-id "$$run_id" --shard-id "$$shard_id" --run-dir "$$build_dir" \
+			--reuse-from "$(REUSE_CANDIDATES)") || exit $$?; \
+	else \
 		build_summary=$$(node scripts/ci-cd/build-local-qualification-candidates.mjs \
 			--run-id "$$run_id" --shard-id "$$shard_id" --run-dir "$$build_dir") || exit $$?; \
-		echo "$$build_summary"; \
-		candidate_map=$$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).candidate_build_map)' "$$build_summary"); \
 	fi; \
+	echo "$$build_summary"; \
+	candidate_map=$$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).candidate_build_map)' "$$build_summary"); \
 	mkdir -p "$$evidence_dir"; \
-	scenarios="$(if $(filter-out all,$(SCENARIOS)),$(SCENARIOS),$(QUALIFICATION_LOCAL_FUNCTIONAL_SCENARIOS))"; \
 	cd tests/release && pnpm exec tsx src/cli/run.ts \
 		--behavior $(BEHAVIOR) \
 		--lane local \
@@ -1190,7 +1222,7 @@ qualification-selfhost:
 	@if [ "$$GITHUB_ACTIONS" != "true" ]; then \
 		test -f "$(QUALIFICATION_INFRA_ENV)" || { \
 			echo "Missing qualification secret profile at $(QUALIFICATION_INFRA_ENV)."; \
-			echo "It must define the RELEASE_E2E_SELFHOST_* inputs and RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY (mode 0600, never committed)."; \
+			echo "It must define the selected scenario's RELEASE_E2E_SELFHOST_* and optional BYOK inputs (mode 0600, never committed)."; \
 			exit 1; \
 		}; \
 		perm=$$(stat -f '%Lp' "$(QUALIFICATION_INFRA_ENV)" 2>/dev/null || stat -c '%a' "$(QUALIFICATION_INFRA_ENV)"); \
@@ -1199,29 +1231,25 @@ qualification-selfhost:
 			exit 1; \
 		}; \
 	fi
-	pnpm install --silent
-	pnpm exec playwright install --with-deps chromium
 	@if [ "$$GITHUB_ACTIONS" != "true" ]; then \
 		set -a; \
 		. "$(QUALIFICATION_INFRA_ENV)"; \
 		set +a; \
 	fi; \
-	test -n "$$RELEASE_E2E_SELFHOST_REGION" || { \
-		echo "RELEASE_E2E_SELFHOST_REGION is required (local: $(QUALIFICATION_INFRA_ENV); Actions: Qualification environment vars)."; \
-		exit 1; \
-	}; \
-	test -n "$$RELEASE_E2E_SELFHOST_HOSTED_ZONE_ID" || { \
-		echo "RELEASE_E2E_SELFHOST_HOSTED_ZONE_ID is required (local: $(QUALIFICATION_INFRA_ENV); Actions: Qualification environment vars)."; \
-		exit 1; \
-	}; \
-	test -n "$$RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY" || { \
-		echo "RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY is required (local: $(QUALIFICATION_INFRA_ENV); Actions: Qualification environment secrets)."; \
-		exit 1; \
-	}; \
 	run_id="qs-$(PROFILE)"; \
 	shard_id="1"; \
 	run_dir="$(QUALIFICATION_SELFHOST_BASE_DIR)/$$run_id/$$shard_id"; \
-	mkdir -p "$$run_dir"; \
+	preflight_cells="$(SELFHOST_CELLS)"; \
+	if [ -z "$$preflight_cells" ]; then preflight_cells=all; fi; \
+	mkdir -p "$$run_dir/preflight"; \
+	source_sha=$$(git rev-parse HEAD); \
+	attempt="$${GITHUB_RUN_ATTEMPT:-1}"; \
+	node scripts/ci-cd/qualification-preflight.mjs \
+		--world self-host --source-sha "$$source_sha" --run-id "$$run_id" --shard-id "$$shard_id" --attempt "$$attempt" \
+		--scenarios "$(SELFHOST_SCENARIOS)" --cells "$$preflight_cells" --artifact-mode build \
+		--output "$$run_dir/preflight/qualification-preflight.json" || exit $$?; \
+	pnpm install --silent; \
+	pnpm exec playwright install --with-deps chromium; \
 	api_base_url="$${SELFHOST_API_BASE_URL:-}"; \
 	if [ -z "$$api_base_url" ]; then \
 		api_base_url=$$(cd tests/release && pnpm exec tsx src/cli/print-selfhost-run-api-base-url.ts "$$run_id" "$$shard_id") || exit $$?; \
@@ -1268,6 +1296,11 @@ qualification-selfhost:
 # directly; this target does not read or expect the local file there. AWS
 # credentials themselves stay ambient (the `aws` CLI), never a manifest var.
 QUALIFICATION_MANAGED_CLOUD_BASE_DIR ?= $(CURDIR)/tests/release/.output/managed-cloud-world
+# A separate clean checkout of the canonical repository pinned to the trusted
+# default-branch cleanup revision. Candidate checkout bytes cannot authorize
+# their own LiteLLM hard-cancel reconciliation.
+QUALIFICATION_TRUSTED_CLEANUP_REPOSITORY ?=
+QUALIFICATION_TRUSTED_CLEANUP_DEFAULT_BRANCH ?= main
 qualification-managed-cloud:
 	@test -n "$(PROFILE)" || { \
 		echo "PROFILE=<unique-name> is required, e.g. make qualification-managed-cloud PROFILE=$$(whoami)-1 BEHAVIOR=diagnostic"; \
@@ -1289,8 +1322,6 @@ qualification-managed-cloud:
 			exit 1; \
 		}; \
 	fi
-	pnpm install --silent
-	pnpm exec playwright install --with-deps chromium
 	@if [ "$$GITHUB_ACTIONS" = "true" ]; then \
 		: "$${AGENT_GATEWAY_LITELLM_BASE_URL:=$$AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL}"; \
 		export AGENT_GATEWAY_LITELLM_BASE_URL; \
@@ -1301,22 +1332,38 @@ qualification-managed-cloud:
 		set +a; \
 		export AGENT_GATEWAY_LITELLM_BASE_URL; \
 	fi; \
-	test -n "$$AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL" || { \
-		echo "AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL is required (local: $(QUALIFICATION_INFRA_ENV); Actions: Qualification environment vars)."; \
-		exit 1; \
-	}; \
-	test -n "$$AGENT_GATEWAY_LITELLM_MASTER_KEY" || { \
-		echo "AGENT_GATEWAY_LITELLM_MASTER_KEY is required (local: $(QUALIFICATION_INFRA_ENV); Actions: Qualification environment secrets)."; \
+	test -n "$(QUALIFICATION_TRUSTED_CLEANUP_REPOSITORY)" || { \
+		echo "QUALIFICATION_TRUSTED_CLEANUP_REPOSITORY=<clean trusted-default-branch checkout> is required before managed-cloud build or provider work."; \
 		exit 1; \
 	}; \
 	run_id="qlc-$(PROFILE)"; \
 	shard_id="1"; \
 	run_dir="$(QUALIFICATION_MANAGED_CLOUD_BASE_DIR)/$$run_id/$$shard_id"; \
-	mkdir -p "$$run_dir"; \
+	mkdir -p "$$run_dir/preflight"; \
+	source_sha=$$(git rev-parse HEAD); \
+	attempt="$${GITHUB_RUN_ATTEMPT:-1}"; \
 	candidate_map="$$run_dir/candidate-build.json"; \
 	if [ "$(REUSE_CANDIDATES)" = "1" ] && [ -f "$$candidate_map" ]; then \
-		echo "[reuse] REUSE_CANDIDATES=1 — skipping candidate build, using $$candidate_map"; \
+		node scripts/ci-cd/qualification-preflight.mjs \
+			--world managed-cloud --source-sha "$$source_sha" --run-id "$$run_id" --shard-id "$$shard_id" --attempt "$$attempt" \
+			--scenarios CLOUD-PROVISION-1 --artifact-mode reuse --candidate-build-map "$$candidate_map" \
+			--cleanup-attestation-repository "$(QUALIFICATION_TRUSTED_CLEANUP_REPOSITORY)" \
+			--cleanup-attestation-default-branch "$(QUALIFICATION_TRUSTED_CLEANUP_DEFAULT_BRANCH)" \
+			--cleanup-attestations "$(QUALIFICATION_TRUSTED_CLEANUP_REPOSITORY)/tests/release/fixtures/managed-cloud-litellm-attribution-attestations.v1.json" \
+			--output "$$run_dir/preflight/qualification-preflight.json" || exit $$?; \
+		echo "[reuse] REUSE_CANDIDATES=1 — exact candidate cache verified at $$candidate_map"; \
 	else \
+		node scripts/ci-cd/qualification-preflight.mjs \
+			--world managed-cloud --source-sha "$$source_sha" --run-id "$$run_id" --shard-id "$$shard_id" --attempt "$$attempt" \
+			--scenarios CLOUD-PROVISION-1 --artifact-mode build \
+			--cleanup-attestation-repository "$(QUALIFICATION_TRUSTED_CLEANUP_REPOSITORY)" \
+			--cleanup-attestation-default-branch "$(QUALIFICATION_TRUSTED_CLEANUP_DEFAULT_BRANCH)" \
+			--cleanup-attestations "$(QUALIFICATION_TRUSTED_CLEANUP_REPOSITORY)/tests/release/fixtures/managed-cloud-litellm-attribution-attestations.v1.json" \
+			--output "$$run_dir/preflight/qualification-preflight.json" || exit $$?; \
+	fi; \
+	pnpm install --silent; \
+	pnpm exec playwright install --with-deps chromium; \
+	if ! { [ "$(REUSE_CANDIDATES)" = "1" ] && [ -f "$$candidate_map" ]; }; then \
 		build_summary=$$(node scripts/ci-cd/build-cloud-qualification-candidates.mjs \
 			--run-id "$$run_id" --shard-id "$$shard_id" --run-dir "$$run_dir") || exit $$?; \
 		echo "$$build_summary"; \

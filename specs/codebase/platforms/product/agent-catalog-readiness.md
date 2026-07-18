@@ -37,8 +37,9 @@ Cloud product catalog
 
 AnyHarness agent catalog + registry
   Target-runtime support manifests. The catalog says which model/mode/control
-  options are statically known. The registry says what this runtime knows how
-  to install, discover, authenticate, materialize, and launch.
+  options are statically known and may declare the default mode for unattended
+  launches. The registry says what this runtime knows how to install, discover,
+  authenticate, materialize, and launch.
 
 AnyHarness dynamic model registry snapshot
   Target-local, runtime-refreshed model list for provider-agnostic harnesses
@@ -55,6 +56,11 @@ Consequences:
 
 - Desktop may render optimistically from cloud/catalog product data.
 - AnyHarness must still validate and resolve what the target can actually run.
+- For a selected local, cloud, or SSH target, the active AnyHarness catalog is
+  authoritative for the unattended session-mode default. The cloud product
+  catalog is only a compatibility fallback when an older target response omits
+  that launch-option property; an explicit `null` from a current target means
+  that the target has no unattended default.
 - Dynamic model registry snapshots may refine target model availability but
   must not mutate the bundled catalog or influence trusted executable behavior.
 - A live session's active model/config truth comes from ACP live config, not
@@ -151,7 +157,6 @@ The supported AnyHarness agent input schemas are:
 
 ```text
 catalogs/agents/catalog.json          # the lockfile (probe-generated, source-pinned)
-catalogs/agents/schema.json
 catalogs/agents/registry.json         # trusted method/auth/launch + discovery config
 catalogs/agents/registry.schema.json
 ```
@@ -160,7 +165,16 @@ The catalog document describes optimistic/static session choices:
 
 - agent kind and display name
 - fallback session model/control metadata
+- optional `session.unattendedModeId` curation for product flows that explicitly
+  launch unattended sessions
 - compatibility/status metadata needed to display choices
+
+`session.unattendedModeId` is not the interactive session default. When set, it
+must be a non-blank value in the agent-level `session.controls` entry whose key
+is `mode`. Every model that declares its own `controls.mode` values must also
+include it; models without a model-specific mode list inherit the agent-level
+vocabulary. Catalog validation rejects an invalid value before the document can
+become active.
 
 The registry document describes trusted runtime behavior:
 
@@ -188,8 +202,11 @@ registry. It boots from the bundled `AgentCatalogDocument` and
 `AgentRegistryDocument`. Cloud convergence may replace only the active catalog:
 the worker compares `catalogVersion`, fetches the server-owned document, and
 submits it to the runtime's validated catalog-apply endpoint. A successful
-activation persists the active catalog and starts installed-only reconcile.
-The trusted registry remains the compiled/bundled method boundary throughout.
+activation replaces the process-local active catalog and starts installed-only
+reconcile. The replacement is not persisted: after a runtime restart the
+bundled catalog is active until the Worker fetches and reapplies newer
+control-plane truth. The trusted registry remains the compiled/bundled method
+boundary throughout.
 
 Dynamic model refresh is a separate `model_registry/**` concern and stores
 target-local snapshots in SQLite; it must not rewrite the active agent catalog
@@ -215,9 +232,13 @@ pinned npm/git specifier — produced by the probe (`resolve-pins.mjs`). Install
 consumes the catalog pin, materializes EXACTLY that, and verifies the
 **sha256 before use**.
 
-The sha256 is the trust anchor. A url living in the catalog cannot fetch
-unintended bytes: a mismatch hard-fails the install and leaves nothing on disk.
-This is what permits resolved download URLs to live in the (bundled, versioned,
+The sha256 is the trust anchor. A url living in the catalog cannot activate
+unintended bytes: a mismatch hard-fails the install. Direct binaries and native
+archives verify in staging before replacing their current executable.
+Registry-backed whole-tree archives currently remove the prior extracted tree
+before downloading and verifying the replacement, so a failed Cursor/OpenCode
+update can leave that managed role unavailable until retry. This is what
+permits resolved download URLs to live in the (bundled, versioned,
 build-signed) catalog rather than the registry — the integrity check, not the
 file's location, is the security boundary. The registry still owns auth,
 launch, and the install method; it is never consulted for *which bytes* once a
@@ -270,14 +291,79 @@ make catalog-update CATALOG_PROBE_AGENTS=cursor \
   CATALOG_PROBE_ARGS=--include-cursor
 ```
 
+Probe contexts run with isolated harness homes and an allowlisted credential
+surface. In particular, the OpenCode baseline context gets an isolated `HOME`
+and XDG directories and scrubs AWS credential and region variables so a
+developer's `~/.aws` state cannot silently expand the supposedly unauthenticated
+model inventory.
+
 `--allow-partial` is diagnostic only; the same mode is available as
 `ALLOW_PARTIAL=1`. The complete-probe gate refuses to promote its output, and
 `catalog-pin` refuses an incomplete local probe state.
+
+The producer uses provider-published SHA-256 values when the versioned source
+publishes them (Claude's release manifest, GitHub release-asset digests, and
+ACP registry archive checksums) and otherwise downloads and hashes each shipped
+target. Installation still downloads the selected target and verifies those
+catalog bytes before activation. When the provider metadata or producer-owned
+download also establishes the exact compressed length, the target records
+`downloadSizeBytes`; older targets may omit it, and the runtime falls back to
+the final HTTP response's `Content-Length`.
+
+`catalog-update` is not a read-only repository operation. Its debug AnyHarness
+binary reconciles selected agents in the operator's default development runtime
+home (`~/.proliferate-local/anyharness`) before probing, and it does not roll
+those installed artifacts back when the checked-in catalog backup is restored.
+Selected harness families are probed one at a time. Auth contexts inside one
+family normally run concurrently, but Codex contexts are serialized because
+parallel Codex engine startup can exhaust constrained operator memory and make
+otherwise healthy probes miss the authoritative deadline.
 
 `catalogVersion` changes with catalog content. `registryVersion` changes with
 registry content, and `probedAgainst.registryVersion` must pair the promoted
 catalog with that registry version. CI enforces those version bumps and exact
 draft/bundled equality.
+
+## Runtime Disk Reconciliation
+
+Managed artifacts live below the selected AnyHarness runtime home:
+
+```text
+<runtime-home>/agents/<kind>/.install.lock
+<runtime-home>/agents/<kind>/native/
+<runtime-home>/agents/<kind>/agent_process/
+<runtime-home>/agents/<kind>/install-manifest.json
+```
+
+The default development home is `~/.proliferate-local/anyharness`; the default
+release home is `~/.proliferate/anyharness`. An agent-scoped install lock
+serializes reconciliation. The manifest records each role's resolved version
+or immutable Git ref, source kind, installed launcher path, launcher/binary
+SHA-256, and installation time.
+
+Reconciliation first compares the active catalog pin and the installed
+manifest, then verifies the recorded launcher or binary checksum. A missing
+manifest role, pin/source mismatch, missing executable, or checksum mismatch
+reinstalls that role. The checksum covers the executable or managed launcher,
+not every file in an extracted adapter tree. npm and Git packages are installed
+into the live managed prefix; they do not currently use a directory-level
+atomic swap or rollback. Manifest replacement uses a temporary file and rename,
+but a manifest write failure is best-effort and causes a later reconciliation
+to retry.
+
+Reconcile progress is an in-memory observation of this disk work. Direct
+binary/archive downloads expose exact transferred bytes and then verification,
+extraction, and activation phases. npm/Git roles expose package installation
+phases with an unknown transfer total because their dependency closure is
+package-manager-owned. The public reconcile aggregate is likewise unknown if
+any component total is unknown; installed directory size is never substituted
+for network download size.
+
+Runtime startup hydrates a pending release seed and then performs
+installed-only reconciliation. It updates managed agents that already have
+installed state, but it does not install every missing catalog agent merely
+because the runtime started. Missing-agent installation remains an explicit
+setup/install operation.
 
 ## Source Shape
 
@@ -474,8 +560,9 @@ flag: full (install missing too) or installed-only (only update agents already o
 disk; skip missing ones). The runtime drives an installed-only reconcile at
 startup (`AgentRuntime::spawn_startup_pass`, after seed hydration) so installed
 agents track the catalog pins on desktop and cloud workers — non-blocking,
-best-effort, idempotent. Activating a validated synced catalog also starts an
-installed-only reconcile so already-managed artifacts converge to its pins.
+best-effort, idempotent. Activating a validated synced catalog also starts a
+fresh installed-only reconcile after any active job finishes, using one snapshot
+of the newly active catalog so already-managed artifacts converge to its pins.
 An existing executable is not proof of convergence: when a catalog pin exists
 but the durable install manifest has no comparable version, reconcile forces a
 reinstall. Binary/archive roles compare the declared version; git roles compare
@@ -571,6 +658,19 @@ SessionRuntime
   -> live ACP config becomes active-session truth
 ```
 
+Unattended product flows resolve the create-session `mode_id` with this
+precedence:
+
+1. a non-blank mode explicitly selected by the user or caller
+2. the selected target's catalog-projected `unattendedModeId`, when the selected
+   model supports that mode
+3. no `mode_id`, so the agent process keeps its own safe/default behavior
+
+Ordinary interactive session creation does not opt into the unattended default.
+An agent without curated unattended semantics, an unknown model, or a selected
+model whose mode vocabulary does not contain the curated value follows step 3.
+There is no product hardcoded per-agent fallback map.
+
 ### Model/config display
 
 ```text
@@ -600,6 +700,12 @@ filtering.
 That internal projection should be named as resolved launch options, not as a
 public catalog response, and should carry only the fields those internal flows
 need.
+
+The user-facing launch-options response projects the same active-catalog
+`unattendedModeId` for the selected runtime connection. Local and remote targets
+therefore use one contract. Product clients may enrich that target response with
+cloud display metadata, but must preserve target ownership of the unattended
+default and its explicit unset state.
 
 ## Banned Shapes
 
@@ -634,6 +740,9 @@ The catalog/readiness structure is complete when:
 - old split catalog structs/functions/env vars are gone.
 - all launch/model metadata AnyHarness still uses is projected from
   `AgentCatalogDocument` or `AgentRegistryDocument`, according to ownership.
+- unattended session-mode defaults are optional catalog curation, validated
+  against agent/model mode vocabularies, and projected from the active target
+  catalog without per-agent runtime or product fallback maps.
 - executable/process/auth descriptor projection is sourced only from trusted
   registry data.
 - install, credential detection, readiness, reconcile, seed, and portability

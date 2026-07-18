@@ -35,23 +35,44 @@ def test_provider_event_precedence_ignores_resume_after_pause() -> None:
     assert _should_ignore_sandbox_event(
         sandbox_status="paused",
         sandbox_destroyed_at=None,
-        sandbox_updated_at=event_time,
+        sandbox_provider_observed_at=event_time,
         event_kind="resumed",
         event_timestamp=event_time,
     )
-    assert not _should_ignore_sandbox_event(
+    assert _should_ignore_sandbox_event(
         sandbox_status="paused",
         sandbox_destroyed_at=None,
-        sandbox_updated_at=event_time,
+        sandbox_provider_observed_at=event_time,
         event_kind="killed",
         event_timestamp=event_time,
     )
     assert _should_ignore_sandbox_event(
         sandbox_status="destroyed",
         sandbox_destroyed_at=event_time,
-        sandbox_updated_at=event_time,
+        sandbox_provider_observed_at=event_time,
+        event_kind="killed",
+        event_timestamp=event_time,
+    )
+    assert not _should_ignore_sandbox_event(
+        sandbox_status="destroyed",
+        sandbox_destroyed_at=event_time,
+        sandbox_provider_observed_at=event_time,
         event_kind="paused",
         event_timestamp=event_time + timedelta(seconds=1),
+    )
+    assert not _should_ignore_sandbox_event(
+        sandbox_status="error",
+        sandbox_destroyed_at=None,
+        sandbox_provider_observed_at=event_time,
+        event_kind="timeout",
+        event_timestamp=event_time + timedelta(seconds=1),
+    )
+    assert _should_ignore_sandbox_event(
+        sandbox_status="ready",
+        sandbox_destroyed_at=None,
+        sandbox_provider_observed_at=event_time,
+        event_kind="timeout",
+        event_timestamp=event_time - timedelta(seconds=1),
     )
 
 
@@ -60,15 +81,19 @@ async def test_duplicate_e2b_webhook_returns_before_state_mutation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     event_id = f"evt-{uuid4()}"
+    sandbox = _sandbox(status="ready", updated_at=datetime.now(UTC))
     payload = _webhook_payload(
         event_id=event_id,
         event_type="sandbox.lifecycle.killed",
-        sandbox_id="sandbox-123",
+        sandbox_id=sandbox.e2b_sandbox_id,
         timestamp=datetime.now(UTC),
     )
 
     async def _remember_sandbox_event_receipt(*_args: object, **_kwargs: object) -> bool:
         return False
+
+    async def _load(*_args: object, **_kwargs: object) -> object:
+        return sandbox
 
     async def _unexpected(*_args: object, **_kwargs: object) -> object:
         raise AssertionError("duplicate webhook should stop after receipt dedupe")
@@ -82,8 +107,10 @@ async def test_duplicate_e2b_webhook_returns_before_state_mutation(
     monkeypatch.setattr(
         webhook_service,
         "load_cloud_sandbox_by_provider_sandbox_id",
-        _unexpected,
+        _load,
     )
+    monkeypatch.setattr(webhook_service, "mark_cloud_sandbox_provider_missing", _unexpected)
+    monkeypatch.setattr(webhook_service, "close_usage_segment_for_sandbox", _unexpected)
 
     receipt = await webhook_service.handle_e2b_webhook(object(), payload=payload, signature=None)
 
@@ -91,7 +118,7 @@ async def test_duplicate_e2b_webhook_returns_before_state_mutation(
 
 
 @pytest.mark.asyncio
-async def test_killed_e2b_webhook_closes_usage_and_marks_destroyed(
+async def test_killed_e2b_webhook_closes_usage_and_preserves_recoverable_row(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     event_time = datetime.now(UTC)
@@ -111,7 +138,7 @@ async def test_killed_e2b_webhook_closes_usage_and_marks_destroyed(
         payload=_webhook_payload(
             event_type="sandbox.lifecycle.killed",
             sandbox_id=sandbox.e2b_sandbox_id,
-            timestamp=event_time,
+            timestamp=event_time + timedelta(seconds=1),
             cloud_sandbox_id=str(sandbox.id),
         ),
         signature=None,
@@ -119,7 +146,9 @@ async def test_killed_e2b_webhook_closes_usage_and_marks_destroyed(
 
     assert receipt.received is True
     assert closed_segments[-1]["closed_by"] == USAGE_SEGMENT_CLOSED_BY_WEBHOOK_KILLED
-    assert sandbox_state_updates[-1] == {"status": "destroyed"}
+    assert closed_segments[-1]["expected_external_sandbox_id"] == sandbox.e2b_sandbox_id
+    assert sandbox_state_updates[-1]["status"] == "error"
+    assert sandbox_state_updates[-1]["expected_provider_sandbox_id"] == (sandbox.e2b_sandbox_id)
 
 
 @pytest.mark.asyncio
@@ -143,7 +172,7 @@ async def test_timeout_e2b_webhook_closes_usage_as_paused(
         payload=_webhook_payload(
             event_type="sandbox.lifecycle.timeout",
             sandbox_id=sandbox.e2b_sandbox_id,
-            timestamp=event_time,
+            timestamp=event_time + timedelta(seconds=1),
             cloud_sandbox_id=str(sandbox.id),
         ),
         signature=None,
@@ -151,7 +180,310 @@ async def test_timeout_e2b_webhook_closes_usage_as_paused(
 
     assert receipt.received is True
     assert closed_segments[-1]["closed_by"] == USAGE_SEGMENT_CLOSED_BY_WEBHOOK_TIMEOUT
-    assert sandbox_state_updates[-1] == {"status": "paused"}
+    assert sandbox_state_updates[-1] == {
+        "status": "paused",
+        "expected_provider_sandbox_id": sandbox.e2b_sandbox_id,
+        "expected_materialization_attempt": sandbox.materialization_attempt,
+        "observed_at": event_time + timedelta(seconds=1),
+    }
+
+
+@pytest.mark.asyncio
+async def test_old_provider_webhook_cannot_mutate_replacement(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    event_time = datetime.now(UTC)
+    sandbox = _sandbox(status="ready", updated_at=event_time)
+    sandbox.e2b_sandbox_id = "sandbox-replacement"
+
+    async def _remember(*_args: object, **_kwargs: object) -> bool:
+        return True
+
+    async def _load_provider(*_args: object, **_kwargs: object) -> None:
+        return None
+
+    async def _load_logical(*_args: object, **_kwargs: object) -> object:
+        return sandbox
+
+    async def _unexpected(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("stale provider event must be inert")
+
+    monkeypatch.setattr(webhook_service, "_verify_e2b_signature", lambda *_args: None)
+    monkeypatch.setattr(webhook_service, "remember_sandbox_event_receipt", _remember)
+    monkeypatch.setattr(
+        webhook_service,
+        "load_cloud_sandbox_by_provider_sandbox_id",
+        _load_provider,
+    )
+    monkeypatch.setattr(webhook_service, "load_cloud_sandbox_by_id", _load_logical)
+    monkeypatch.setattr(webhook_service, "close_usage_segment_for_sandbox", _unexpected)
+    monkeypatch.setattr(webhook_service, "mark_cloud_sandbox_provider_missing", _unexpected)
+
+    receipt = await webhook_service.handle_e2b_webhook(
+        object(),
+        payload=_webhook_payload(
+            event_type="sandbox.lifecycle.killed",
+            sandbox_id="sandbox-old",
+            timestamp=event_time,
+            cloud_sandbox_id=str(sandbox.id),
+        ),
+        signature=None,
+    )
+
+    assert receipt.received is True
+
+
+@pytest.mark.asyncio
+async def test_resumed_webhook_cannot_mask_materialization_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    event_time = datetime.now(UTC)
+    sandbox = _sandbox(status="error", updated_at=event_time)
+    closed_segments: list[dict[str, object]] = []
+    sandbox_state_updates: list[dict[str, object]] = []
+    _patch_webhook_state(
+        monkeypatch,
+        sandbox=sandbox,
+        closed_segments=closed_segments,
+        sandbox_state_updates=sandbox_state_updates,
+    )
+
+    await webhook_service.handle_e2b_webhook(
+        object(),
+        payload=_webhook_payload(
+            event_type="sandbox.lifecycle.resumed",
+            sandbox_id=sandbox.e2b_sandbox_id,
+            timestamp=event_time + timedelta(seconds=1),
+        ),
+        signature=None,
+    )
+
+    assert closed_segments == []
+    assert sandbox_state_updates == []
+
+
+@pytest.mark.asyncio
+async def test_timeout_after_materialization_error_closes_usage_without_masking_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    event_time = datetime.now(UTC)
+    sandbox = _sandbox(status="error", updated_at=event_time)
+    closed_segments: list[dict[str, object]] = []
+    sandbox_state_updates: list[dict[str, object]] = []
+    _patch_webhook_state(
+        monkeypatch,
+        sandbox=sandbox,
+        closed_segments=closed_segments,
+        sandbox_state_updates=sandbox_state_updates,
+    )
+
+    await webhook_service.handle_e2b_webhook(
+        object(),
+        payload=_webhook_payload(
+            event_type="sandbox.lifecycle.timeout",
+            sandbox_id=sandbox.e2b_sandbox_id,
+            timestamp=event_time + timedelta(seconds=1),
+        ),
+        signature=None,
+    )
+
+    assert sandbox_state_updates == [
+        {
+            "status": "paused",
+            "expected_provider_sandbox_id": sandbox.e2b_sandbox_id,
+            "expected_materialization_attempt": sandbox.materialization_attempt,
+            "observed_at": event_time + timedelta(seconds=1),
+        }
+    ]
+    assert closed_segments[-1]["closed_by"] == USAGE_SEGMENT_CLOSED_BY_WEBHOOK_TIMEOUT
+    assert closed_segments[-1]["expected_external_sandbox_id"] == sandbox.e2b_sandbox_id
+
+
+@pytest.mark.asyncio
+async def test_timeout_error_snapshot_cas_loss_cannot_close_retry_usage(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    event_time = datetime.now(UTC)
+    sandbox = _sandbox(status="error", updated_at=event_time)
+    closed_segments: list[dict[str, object]] = []
+    sandbox_state_updates: list[dict[str, object]] = []
+    _patch_webhook_state(
+        monkeypatch,
+        sandbox=sandbox,
+        closed_segments=closed_segments,
+        sandbox_state_updates=sandbox_state_updates,
+    )
+
+    async def _lost(*_args: object, **_kwargs: object) -> None:
+        return None
+
+    monkeypatch.setattr(webhook_service, "apply_cloud_sandbox_provider_observation", _lost)
+
+    await webhook_service.handle_e2b_webhook(
+        object(),
+        payload=_webhook_payload(
+            event_type="sandbox.lifecycle.timeout",
+            sandbox_id=sandbox.e2b_sandbox_id,
+            timestamp=event_time + timedelta(seconds=1),
+        ),
+        signature=None,
+    )
+
+    assert closed_segments == []
+
+
+@pytest.mark.asyncio
+async def test_prebinding_webhook_is_not_claimed_or_used_as_adoption_authority(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    event_time = datetime.now(UTC)
+    sandbox = _sandbox(status="creating", updated_at=event_time)
+    sandbox.e2b_sandbox_id = None
+
+    async def _load_provider(*_args: object, **_kwargs: object) -> None:
+        return None
+
+    async def _load_logical(*_args: object, **_kwargs: object) -> object:
+        return sandbox
+
+    async def _unexpected(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("unbound provider event must remain retryable and inert")
+
+    monkeypatch.setattr(webhook_service, "_verify_e2b_signature", lambda *_args: None)
+    monkeypatch.setattr(
+        webhook_service,
+        "load_cloud_sandbox_by_provider_sandbox_id",
+        _load_provider,
+    )
+    monkeypatch.setattr(webhook_service, "load_cloud_sandbox_by_id", _load_logical)
+    monkeypatch.setattr(webhook_service, "remember_sandbox_event_receipt", _unexpected)
+    monkeypatch.setattr(webhook_service, "open_usage_segment_for_sandbox", _unexpected)
+
+    receipt = await webhook_service.handle_e2b_webhook(
+        object(),
+        payload=_webhook_payload(
+            event_type="sandbox.lifecycle.created",
+            sandbox_id="provider-before-binding",
+            timestamp=event_time,
+            cloud_sandbox_id=str(sandbox.id),
+        ),
+        signature=None,
+    )
+
+    assert receipt.received is True
+
+
+@pytest.mark.asyncio
+async def test_created_webhook_cas_loss_cannot_open_usage(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    event_time = datetime.now(UTC)
+    sandbox = _sandbox(status="creating", updated_at=event_time)
+
+    async def _remember(*_args: object, **_kwargs: object) -> bool:
+        return True
+
+    async def _load(*_args: object, **_kwargs: object) -> object:
+        return sandbox
+
+    async def _subject(*_args: object, **_kwargs: object) -> object:
+        return SimpleNamespace(id=uuid4())
+
+    async def _billing(*_args: object, **_kwargs: object) -> object:
+        return SimpleNamespace(billing_mode="observe", active_spend_hold=False)
+
+    async def _lost(*_args: object, **_kwargs: object) -> None:
+        return None
+
+    async def _unexpected(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("lost lifecycle CAS must not mutate usage")
+
+    monkeypatch.setattr(webhook_service, "_verify_e2b_signature", lambda *_args: None)
+    monkeypatch.setattr(webhook_service, "remember_sandbox_event_receipt", _remember)
+    monkeypatch.setattr(webhook_service, "load_cloud_sandbox_by_provider_sandbox_id", _load)
+    monkeypatch.setattr(webhook_service, "ensure_personal_billing_subject", _subject)
+    monkeypatch.setattr(webhook_service, "get_billing_snapshot_for_subject", _billing)
+    monkeypatch.setattr(webhook_service, "apply_cloud_sandbox_provider_observation", _lost)
+    monkeypatch.setattr(webhook_service, "open_usage_segment_for_sandbox", _unexpected)
+
+    await webhook_service.handle_e2b_webhook(
+        object(),
+        payload=_webhook_payload(
+            event_type="sandbox.lifecycle.created",
+            sandbox_id=sandbox.e2b_sandbox_id,
+            timestamp=event_time + timedelta(seconds=1),
+        ),
+        signature=None,
+    )
+
+
+@pytest.mark.parametrize(
+    ("event_type", "closed_by", "correlate_after_delete"),
+    [
+        ("sandbox.lifecycle.killed", USAGE_SEGMENT_CLOSED_BY_WEBHOOK_KILLED, False),
+        ("sandbox.lifecycle.timeout", USAGE_SEGMENT_CLOSED_BY_WEBHOOK_TIMEOUT, True),
+    ],
+)
+@pytest.mark.asyncio
+async def test_terminal_webhook_closes_usage_for_exact_destroyed_binding(
+    monkeypatch: pytest.MonkeyPatch,
+    event_type: str,
+    closed_by: str,
+    correlate_after_delete: bool,
+) -> None:
+    event_time = datetime.now(UTC)
+    sandbox = _sandbox(status="ready", updated_at=event_time)
+    destroyed = _sandbox(status="destroyed", updated_at=event_time)
+    destroyed.id = sandbox.id
+    destroyed.e2b_sandbox_id = sandbox.e2b_sandbox_id
+    destroyed.destroyed_at = event_time
+    closed_segments: list[dict[str, object]] = []
+    sandbox_state_updates: list[dict[str, object]] = []
+    _patch_webhook_state(
+        monkeypatch,
+        sandbox=destroyed if correlate_after_delete else sandbox,
+        closed_segments=closed_segments,
+        sandbox_state_updates=sandbox_state_updates,
+    )
+
+    async def _lost(*_args: object, **_kwargs: object) -> None:
+        return None
+
+    async def _accept_destroyed(*_args: object, **_kwargs: object) -> object:
+        return destroyed
+
+    monkeypatch.setattr(webhook_service, "mark_cloud_sandbox_provider_missing", _lost)
+    monkeypatch.setattr(webhook_service, "apply_cloud_sandbox_provider_observation", _lost)
+    monkeypatch.setattr(
+        webhook_service,
+        "accept_destroyed_cloud_sandbox_provider_observation",
+        _accept_destroyed,
+    )
+    if correlate_after_delete:
+
+        async def _missing_provider_binding(*_args: object, **_kwargs: object) -> None:
+            return None
+
+        monkeypatch.setattr(
+            webhook_service,
+            "load_cloud_sandbox_by_provider_sandbox_id",
+            _missing_provider_binding,
+        )
+        monkeypatch.setattr(webhook_service, "load_cloud_sandbox_by_id", _accept_destroyed)
+
+    await webhook_service.handle_e2b_webhook(
+        object(),
+        payload=_webhook_payload(
+            event_type=event_type,
+            sandbox_id=sandbox.e2b_sandbox_id,
+            timestamp=event_time + timedelta(seconds=1),
+            cloud_sandbox_id=str(sandbox.id) if correlate_after_delete else None,
+        ),
+        signature=None,
+    )
+
+    assert closed_segments[-1]["closed_by"] == closed_by
+    assert closed_segments[-1]["expected_external_sandbox_id"] == sandbox.e2b_sandbox_id
 
 
 def _sandbox(*, status: str, updated_at: datetime) -> SimpleNamespace:
@@ -159,8 +491,10 @@ def _sandbox(*, status: str, updated_at: datetime) -> SimpleNamespace:
         id=uuid4(),
         owner_user_id=uuid4(),
         status=status,
+        materialization_attempt=0,
         destroyed_at=None,
         updated_at=updated_at,
+        provider_observed_at=updated_at,
         e2b_sandbox_id="sandbox-123",
     )
 
@@ -201,12 +535,24 @@ def _patch_webhook_state(
     ) -> object:
         return sandbox
 
-    async def _mark_cloud_sandbox_provider_state(
+    async def _apply_cloud_sandbox_provider_observation(
         _db: object,
         _sandbox_id: object,
         **kwargs: object,
-    ) -> None:
+    ) -> object:
         sandbox_state_updates.append(kwargs)
+        return sandbox
+
+    async def _mark_cloud_sandbox_provider_missing(
+        _db: object,
+        _sandbox_id: object,
+        **kwargs: object,
+    ) -> object:
+        sandbox_state_updates.append({"status": "error", **kwargs})
+        return sandbox
+
+    async def _reject_destroyed_observation(*_args: object, **_kwargs: object) -> None:
+        return None
 
     async def _close_usage_segment_for_sandbox(*_args: object, **kwargs: object) -> None:
         closed_segments.append(kwargs)
@@ -224,8 +570,18 @@ def _patch_webhook_state(
     )
     monkeypatch.setattr(
         webhook_service,
-        "mark_cloud_sandbox_provider_state",
-        _mark_cloud_sandbox_provider_state,
+        "apply_cloud_sandbox_provider_observation",
+        _apply_cloud_sandbox_provider_observation,
+    )
+    monkeypatch.setattr(
+        webhook_service,
+        "mark_cloud_sandbox_provider_missing",
+        _mark_cloud_sandbox_provider_missing,
+    )
+    monkeypatch.setattr(
+        webhook_service,
+        "accept_destroyed_cloud_sandbox_provider_observation",
+        _reject_destroyed_observation,
     )
     monkeypatch.setattr(
         webhook_service,

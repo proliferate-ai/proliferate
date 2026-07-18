@@ -14,17 +14,17 @@
     "test:billing": "playwright test --config playwright.billing.config.ts",
     "test:billing-import": "playwright test --config playwright.billing-import.config.ts",
     "test:sso": "playwright test specs/sso.spec.ts",
-    "test:unit": "tsx --test \"fakes/**/*.test.ts\""
+    "test:unit": "tsx --test \"fakes/**/*.test.ts\" \"stack/**/*.test.ts\""
   },
   "dependencies": {
     "pg": "^8.13.1"
   },
   "devDependencies": {
     "@playwright/test": "^1.51.1",
-    "@types/node": "^24.13.2",
+    "@types/node": "^24.13.3",
     "@types/pg": "^8.11.10",
     "oauth2-mock-server": "^9.1.0",
-    "tsx": "^4.22.4",
+    "tsx": "^4.23.1",
     "typescript": "^5.7.0"
   }
 }

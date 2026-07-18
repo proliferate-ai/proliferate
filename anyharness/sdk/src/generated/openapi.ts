@@ -2032,6 +2032,36 @@ export interface components {
         AgentCliAuthState: "authenticated" | "expired" | "absent" | "unsupported";
         /** @enum {string} */
         AgentCredentialState: "ready" | "missing_env" | "login_required" | "unknown";
+        AgentInstallProgress: {
+            /** Format: int32 */
+            completedComponents: number;
+            components: components["schemas"]["AgentInstallProgressComponent"][];
+            /**
+             * Format: int64
+             * @description Aggregate exact total, or `null` when any component is indeterminate.
+             */
+            downloadSizeBytes?: number | null;
+            /** Format: int64 */
+            downloadedBytes: number;
+            /** Format: int32 */
+            totalComponents: number;
+        };
+        AgentInstallProgressComponent: {
+            agent: string;
+            /**
+             * Format: int64
+             * @description Exact compressed transfer total when known. `null` means the runtime
+             *     does not own or cannot determine the package-manager transfer size.
+             */
+            downloadSizeBytes?: number | null;
+            /** Format: int64 */
+            downloadedBytes: number;
+            phase: components["schemas"]["AgentInstallProgressPhase"];
+            /** @description Stable artifact role (`native_cli` or `agent_process`). */
+            role: string;
+        };
+        /** @enum {string} */
+        AgentInstallProgressPhase: "queued" | "downloading" | "verifying" | "extracting" | "installing" | "finalizing" | "completed" | "skipped" | "failed";
         /** @enum {string} */
         AgentInstallState: "installed" | "install_required" | "installing" | "failed";
         AgentLaunchModelOption: {
@@ -2057,6 +2087,13 @@ export interface components {
             displayName: string;
             kind: string;
             models: components["schemas"]["AgentLaunchModelOption"][];
+            /**
+             * @description Curated unattended mode from the selected runtime's active catalog.
+             *     This field intentionally serializes as `null` when no mode is vetted,
+             *     allowing clients to distinguish that declaration from an older runtime
+             *     that omitted the field entirely.
+             */
+            unattendedModeId?: string | null;
         };
         AgentLaunchOptionsResponse: {
             agents: components["schemas"]["AgentLaunchOption"][];
@@ -3809,6 +3846,11 @@ export interface components {
         };
         ReconcileAgentsRequest: {
             /**
+             * @description Optional harness kinds to reconcile. An empty list keeps the existing
+             *     all-harness behavior; the settings UI uses a single kind for install.
+             */
+            agentKinds?: string[];
+            /**
              * @description When true, only agents already installed on disk are reconciled to the
              *     catalog pins; missing agents are skipped (they install on demand at
              *     session start). Defaults to false (full-scope reconcile).
@@ -3817,9 +3859,16 @@ export interface components {
             reinstall?: boolean;
         };
         ReconcileAgentsResponse: {
+            currentAgent?: string | null;
             finishedAt?: string | null;
+            /**
+             * @description Present on runtimes that support scoped reconcile progress. Optional so
+             *     newer clients can still decode responses from older runtime versions.
+             */
+            installedOnly?: boolean | null;
             jobId?: string | null;
             message?: string | null;
+            progress?: null | components["schemas"]["AgentInstallProgress"];
             reinstall: boolean;
             results: components["schemas"]["ReconcileAgentResult"][];
             startedAt?: string | null;
@@ -5542,6 +5591,24 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReconcileAgentsResponse"];
+                };
+            };
+            /** @description Unknown agent kind */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description An incompatible reconcile job is already active */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
                 };
             };
         };

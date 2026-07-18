@@ -57,10 +57,21 @@ def test_slack_seed_has_exact_required_oauth_scopes() -> None:
 
     assert slack.config.oauth_scopes == expected_scopes
     assert slack.config.oauth_scopes_required is True
+    assert slack.config.oauth_scope_policy == "exact"
 
     reparsed = parse_definition_config(serialize_definition_config(slack.config))
     assert reparsed.oauth_scopes == expected_scopes
     assert reparsed.oauth_scopes_required is True
+    assert reparsed.oauth_scope_policy == "exact"
+
+
+def test_parse_rejects_unknown_oauth_scope_policy() -> None:
+    with pytest.raises(IntegrationConfigError, match="unsupported OAuth scope policy"):
+        parse_definition_config('{"oauthScopePolicy":"provider-controlled"}')
+
+
+def test_legacy_config_defaults_to_provider_scope_policy() -> None:
+    assert parse_definition_config("{}").oauth_scope_policy == "provider"
 
 
 def test_parse_rejects_malformed_config() -> None:

@@ -4,6 +4,7 @@ use super::agent_process;
 use super::install_policy::{effective_source, ResolvedPinSource};
 use super::lock::AgentInstallLock;
 use super::pinned;
+use super::progress::{InstallProgressPhase, InstallProgressReporter};
 use crate::domains::agents::installer::seed;
 use crate::domains::agents::model::*;
 use crate::domains::agents::readiness::paths::artifact_root;
@@ -81,6 +82,16 @@ pub fn install_agent_with_pins(
     options: &InstallOptions,
     catalog_pins: Option<&super::install_policy::PinOverrides>,
 ) -> Result<Vec<InstalledArtifactResult>, InstallError> {
+    install_agent_with_pins_and_progress(descriptor, runtime_home, options, catalog_pins, None)
+}
+
+pub fn install_agent_with_pins_and_progress(
+    descriptor: &AgentDescriptor,
+    runtime_home: &Path,
+    options: &InstallOptions,
+    catalog_pins: Option<&super::install_policy::PinOverrides>,
+    reporter: Option<&InstallProgressReporter>,
+) -> Result<Vec<InstalledArtifactResult>, InstallError> {
     let _install_lock = AgentInstallLock::acquire_agent(runtime_home, &descriptor.kind)?;
     let plan = plan_for_descriptor(descriptor, runtime_home, options.reinstall, catalog_pins);
     if plan.has_reinstalls() {
@@ -123,7 +134,16 @@ pub fn install_agent_with_pins(
             &descriptor.kind,
             &ArtifactRole::NativeCli,
             runtime_home,
+            reporter,
         )? {
+            reporter.map(|reporter| {
+                reporter.report(
+                    &ArtifactRole::NativeCli,
+                    InstallProgressPhase::Completed,
+                    0,
+                    None,
+                )
+            });
             tracing::info!(
                 agent = descriptor.kind.as_str(),
                 role = "native_cli",
@@ -151,8 +171,17 @@ pub fn install_agent_with_pins(
             &descriptor.launch.executable_name,
             runtime_home,
             process_options.reinstall,
+            reporter,
         )?;
         if let Some(result) = result {
+            reporter.map(|reporter| {
+                reporter.report(
+                    &ArtifactRole::AgentProcess,
+                    InstallProgressPhase::Completed,
+                    0,
+                    None,
+                )
+            });
             tracing::info!(
                 agent = descriptor.kind.as_str(),
                 role = "agent_process",
@@ -162,6 +191,15 @@ pub fn install_agent_with_pins(
                 "installed managed agent artifact"
             );
             installed.push(result);
+        } else {
+            reporter.map(|reporter| {
+                reporter.report(
+                    &ArtifactRole::AgentProcess,
+                    InstallProgressPhase::Skipped,
+                    0,
+                    None,
+                )
+            });
         }
     }
 
@@ -270,9 +308,11 @@ fn install_pinned_role(
     kind: &AgentKind,
     role: &ArtifactRole,
     runtime_home: &Path,
+    reporter: Option<&InstallProgressReporter>,
 ) -> Result<Option<InstalledArtifactResult>, InstallError> {
     let target_path = artifact_root(runtime_home, kind, role).join(kind.as_str());
     if is_valid_executable(&target_path) && !options.reinstall {
+        reporter.map(|reporter| reporter.report(role, InstallProgressPhase::Skipped, 0, None));
         return Ok(None);
     }
     let result = pinned::install_binary_or_archive_from_pin(
@@ -281,6 +321,7 @@ fn install_pinned_role(
         kind,
         role,
         runtime_home,
+        reporter,
     )?;
     Ok(Some(result))
 }

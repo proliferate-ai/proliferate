@@ -66,11 +66,12 @@ the cells whose isolation contract permits it.
 
 ## Candidate Artifacts
 
-The first implemented slice of this contract is the candidate-only,
-local-file-only `CandidateBuildMapV1` in
-[`candidate-build-handoff.md`](candidate-build-handoff.md) (one AnyHarness
-artifact, validated and recorded by the runner). The complete remote/full
-manifest below — multi-platform slots, remote locators, retained N-1, and
+The implemented bounded handoff is the candidate-only, local-file-only
+`CandidateBuildMapV1` in
+[`candidate-build-handoff.md`](candidate-build-handoff.md). Each current world
+resolver requires its exact artifact set; the runner validates source identity,
+shape, local files, and every digest before setup. The complete remote/full
+manifest below — portable remote locators, retained N-1, and cross-run
 digest-verified downloads — is later work layered on that contract.
 
 Every live or upgrade run begins with a content-addressed candidate manifest:
@@ -94,9 +95,13 @@ across worlds. Compilation caches may accelerate the build, but a cache entry is
 not qualification evidence. Downstream jobs download the prepared artifact and
 verify its digest against the candidate manifest.
 
-Tier 4 additionally resolves the retained manifest for the last qualified
-production release, N-1. N-1 is not inferred by decrementing a patch version or
-rebuilding current source with an older version string.
+Tier 4 additionally resolves the retained-release receipt for the last
+qualified production release, N-1 — implemented as `RetainedReleaseReceiptV1`
+(`tests/release/src/artifacts/retained-release-set.ts`) with committed
+receipts under `tests/release/retained-releases/` (see that directory's
+README for the N-1 identity rules, the one-time v0.3.38 bootstrap exception,
+and the retention roots). N-1 is not inferred by decrementing a patch version
+or rebuilding current source with an older version string.
 
 Both manifests are versioned machine contracts. Each available artifact slot
 contains an immutable locator plus the digest/checksum needed to verify the
@@ -646,6 +651,15 @@ A red CI run must reproduce by using its candidate manifest and runner flags
 locally. Secrets are named in the environment-variable catalog and never
 embedded in scenarios, artifacts, logs, or evidence.
 
+The current local manual job is a bounded precursor to the target topology: it
+builds one local-file candidate publication, runs the smoke world beneath
+`<run>/worlds/local-world-smoke-1`, and then copies and re-verifies the same
+published bytes for the functional run. The smoke finalizer owns only its child
+world directory, not the parent candidate map, ports sidecar, or artifact
+bytes. A retained local checkout can reuse that exact map on retry. GitHub
+reruns on a fresh runner still rebuild because no immutable remote candidate
+cache exists, and no current workflow claims cross-run reuse.
+
 ## Foundation Contracts
 
 ### Run and shard identity
@@ -679,6 +693,32 @@ invoke the same preflight implementation. Diagnostic behavior marks only the
 affected cells blocked and emits non-qualifying evidence; strict behavior fails
 before any external mutation. Actual provider permissions, callback delivery,
 and reachability are world-readiness checks.
+
+The current shared preflight is `scripts/ci-cd/qualification-preflight.mjs`.
+Its receipt records names/statuses, exact run/source identity, safe candidate
+artifact identities and digests when a local map is reused, and the trusted
+cleanup revision; it never records environment values or locator paths. Artifact
+mode `external` is accepted only for read-only Tier 4 validation: it records a
+null candidate build and explicitly delegates published-CDN/git artifact
+identity and availability checks to the selected scenario, without claiming a
+local build or cache hit. `T4-SH-2` uses this posture because it validates the
+already-published Desktop release. Self-host requirements are
+scenario-scoped, so `SELFHOST-CFN-1` requires its bucket/image-repository pair
+but not the BYOK or instance-type inputs used by
+install/qualification/isolation cells. Optional `SELFHOST-QUAL-1` inputs become
+early blockers only when their owning cell is explicitly selected; the default
+all-cell run preserves independent per-cell red outcomes. Managed-cloud preflight
+loads the attestation bytes from a separate canonical-origin checkout, proves
+that checkout's `HEAD` equals the bounded `ls-remote` result for the repository
+default branch, reads the committed file rather than mutable working-tree
+bytes, and requires the candidate SHA to be present. An unattested candidate
+fails before dependency installation, build, or provider mutation.
+
+Managed-cloud preflight currently checks only the GitHub App fields consumed by
+the current candidate-world constructor. The Server's complete six-field App
+configuration gate is not yet wired by that path; #1304/#1318 owns that repair.
+Webhook/slug preflight requirements must be derived from the repaired production
+path when it lands, not added here as dead preflight-only inputs.
 
 ### Typed ready-world handles
 
@@ -726,6 +766,64 @@ all enter the same reconciliation path. A cleanup-by-run command can replay
 idempotent provider cleanup after a process or runner crash, and a TTL janitor
 is the final abandoned-run backstop. Later janitor success does not
 retroactively turn a strict run with failed cleanup green.
+
+The current CLI installs one process bridge for `SIGINT` and `SIGTERM`.
+Local-workspace, managed-cloud, and self-host world constructors register their
+existing cleanup stacks with it immediately. Normal close, startup failure, and
+signal handling await one memoized finalizer, so cleanup cannot execute twice;
+signal evidence is written beside the world directory with exact
+run/shard/attempt/source identity and a red status when the cleanup summary
+reports failures. `SIGKILL`, runner loss, and a job-level timeout may bypass
+that bridge and the `if: always()` upload step.
+
+GitHub Actions cancellation and job timeout are a distinct failure boundary:
+steps on the cancelled runner, including `if: always()` cleanup and artifact
+upload, are not guaranteed to execute. Managed-cloud AWS ingress resources
+therefore carry exact `Purpose`/`RunId`/`ShardId` provider tags and an
+independent `workflow_run` cleanup executes trusted default-branch code after
+the source workflow completes. It derives the single run identity shared by
+the managed-cloud invocations from the immutable Actions run id/attempt,
+validates the exact tags plus deterministic SG/key/DNS names, cleans those resources in
+dependency order, and proves a zero post-sweep. It never checks out the source
+run's branch and never performs account-wide prefix cleanup.
+
+That independent path also reconciles the other externally durable providers.
+E2B ownership is the exact run-derived template family resolved to one
+immutable template id; every running or paused sandbox using that id is killed
+before the template is deleted. Stripe ownership is the exact run/shard tag on
+webhook endpoints, customers, products, and prices plus the exact run-derived
+test-clock name; every list is exhausted and post-cleanup absence/inactivity is
+proved. LiteLLM teams, users, and keys created by a qualification candidate
+carry the exact run and shard in provider-returned metadata; cleanup validates
+the complete key-to-user-to-team graph before deleting child to parent and
+proves absence afterward. Missing credentials, ambiguous attribution,
+incomplete pagination, and accepted deletes whose resources remain are red.
+
+The LiteLLM fields are qualification-only: ordinary deployments leave both
+settings empty and retain their existing enrollment behavior. The independent
+workflow authorizes LiteLLM reconciliation only when the exact candidate source
+SHA appears in the append-only
+`managed-cloud-litellm-attribution-attestations.v1.json` list shipped by the
+trusted default-branch cleanup revision. Candidate-authored contract bytes,
+comments, dead strings, and partial implementation markers cannot opt a source
+in. The list contains only individually reviewed frozen source SHAs; a later
+reviewed micro-PR may append another exact source SHA after its attribution
+behavior is proven. The source workflow's managed preflight consumes committed
+bytes from a separately fetched default-branch checkout and records that exact
+trusted revision; it never treats candidate checkout bytes as authorization. Every
+unattested candidate remains explicitly non-green rather than treating an
+empty metadata sweep as proof. The exact completed attempt's job inventory is the
+world-start gate: if `cloud-provision-1 (manual, strict)` is absent or skipped,
+the protected provider jobs do not start; any other terminal conclusion is
+cleaned conservatively. Inventory/API/receipt-upload failure stays red and also
+defaults to cleanup-required; only an exhaustive exact absent/skipped result
+suppresses the reapers. Provider calls, CLIs, dependency installs, and each
+reaper command carry internal time budgets below their job timeout so evidence
+finalization retains execution headroom. No provider cleanup uses aliases, random product UUIDs,
+prefix matching, or account-wide sweeps. The ephemeral Actions runner itself
+owns its local browser and renderer processes. The secret-bearing cleanup has
+no manual-dispatch surface: GitHub starts the default-branch workflow only from
+the completed source workflow's `workflow_run` event.
 
 ### Per-cell evidence and result behavior
 

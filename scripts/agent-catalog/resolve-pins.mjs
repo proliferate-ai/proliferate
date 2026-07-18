@@ -52,11 +52,16 @@ const registryByKind = new Map(registry.agents.map((a) => [a.kind, a]));
 // `--reuse-from` reference, e.g. the previously-shipped lockfile) for unchanged
 // URLs, so re-runs and draft→bundled promotion don't re-download every artifact.
 const knownSha = new Map();
+const knownSize = new Map();
+const checksumManifestCache = new Map();
 const collectShas = (doc) => {
   for (const agent of doc.agents ?? []) {
     for (const pin of [agent.harness?.native, agent.harness?.agentProcess]) {
       for (const t of Object.values(pin?.source?.targets ?? {})) {
         if (t.url && t.sha256) knownSha.set(t.url, t.sha256);
+        if (t.url && Number.isSafeInteger(t.downloadSizeBytes) && t.downloadSizeBytes > 0) {
+          knownSize.set(t.url, t.downloadSizeBytes);
+        }
       }
     }
   }
@@ -124,12 +129,16 @@ async function resolveNative(kind, install) {
       const url = install.binaryUrlTemplate
         .replaceAll("{version}", version)
         .replaceAll("{platform}", vendor);
-      targets[platKey] = { url, sha256: await shaFor(url) };
+      targets[platKey] = withDownloadSize(
+        { url, sha256: await shaForDirectBinary(url, version, vendor) },
+        url,
+      );
     }
     return { version, source: { kind: "binary", targets } };
   }
   if (install.kind === "tarball_release") {
-    const version = await githubLatestTag(install.versionedUrlTemplate);
+    const release = await githubLatestRelease(install.versionedUrlTemplate);
+    const version = release.tag_name;
     const targets = {};
     for (const [platKey, target] of Object.entries(install.platformMap)) {
       if (!platforms.has(platKey)) continue;
@@ -137,7 +146,14 @@ async function resolveNative(kind, install) {
         .replaceAll("{version}", version)
         .replaceAll("{target}", target);
       const expectedBinary = install.expectedBinaryTemplate.replaceAll("{target}", target);
-      targets[platKey] = { url, sha256: await shaFor(url), expectedBinary };
+      const publishedAsset = release.assets
+        ?.find((asset) => asset.browser_download_url === url);
+      const publishedDigest = publishedAsset?.digest?.replace(/^sha256:/, "");
+      targets[platKey] = withDownloadSize({
+        url,
+        sha256: await shaForPublished(url, publishedDigest),
+        expectedBinary,
+      }, url, publishedAsset?.size);
     }
     // A native CLI is invoked by the adapter, not directly — no ACP launch args.
     return { version, source: { kind: "archive", targets, args: [] } };
@@ -187,11 +203,11 @@ async function resolveAgentProcess(kind, install, currentVersion) {
       for (const [acpKey, target] of Object.entries(entry.distribution.binary)) {
         const ourKey = ACP_PLATFORM_MAP[acpKey];
         if (!ourKey || !platforms.has(ourKey)) continue; // platform we do not ship
-        targets[ourKey] = {
+        targets[ourKey] = withDownloadSize({
           url: target.archive,
-          sha256: await shaFor(target.archive),
+          sha256: await shaForPublished(target.archive, target.sha256),
           expectedBinary: target.cmd,
-        };
+        }, target.archive, target.size);
         if (target.args) args = target.args; // ACP-mode args (consistent across platforms)
       }
       return { version: entry.version ?? currentVersion, source: { kind: "archive", targets, args } };
@@ -228,16 +244,15 @@ function npmIntegrity(pkg) {
   return out.stdout.trim() || null;
 }
 
-async function githubLatestTag(versionedUrlTemplate) {
+async function githubLatestRelease(versionedUrlTemplate) {
   // versionedUrlTemplate looks like
   //   https://github.com/<owner>/<repo>/releases/download/{version}/...
   const m = versionedUrlTemplate.match(/github\.com\/([^/]+)\/([^/]+)\/releases/);
   if (!m) throw new Error(`cannot derive GitHub repo from ${versionedUrlTemplate}`);
   const [, owner, repo] = m;
-  const rel = await fetchJson(`https://api.github.com/repos/${owner}/${repo}/releases/latest`, {
+  return fetchJson(`https://api.github.com/repos/${owner}/${repo}/releases/latest`, {
     headers: { "User-Agent": "proliferate-resolve-pins", Accept: "application/vnd.github+json" },
   });
-  return rel.tag_name;
 }
 
 async function shaFor(url) {
@@ -247,10 +262,64 @@ async function shaFor(url) {
   const res = await fetch(url, { redirect: "follow" });
   if (!res.ok) throw new Error(`download failed ${res.status} for ${url}`);
   const hash = createHash("sha256");
-  for await (const chunk of res.body) hash.update(chunk);
+  let size = 0;
+  for await (const chunk of res.body) {
+    hash.update(chunk);
+    size += chunk.length;
+  }
+  knownSize.set(url, size);
   const digest = hash.digest("hex");
   process.stdout.write(`${digest.slice(0, 12)}…\n`);
   return digest;
+}
+
+async function shaForPublished(url, publishedDigest) {
+  if (knownSha.has(url)) return knownSha.get(url);
+  if (noDownload) return "";
+  if (/^[a-f0-9]{64}$/i.test(publishedDigest ?? "")) {
+    console.log(`   ✓ checksum published for ${url}`);
+    return publishedDigest.toLowerCase();
+  }
+  return shaFor(url);
+}
+
+async function shaForDirectBinary(url, version, vendorPlatform) {
+  if (knownSha.has(url)) return knownSha.get(url);
+  if (noDownload) return "";
+
+  // Claude Code's direct-binary channel publishes a versioned manifest beside
+  // its per-platform directories. Prefer that provider checksum so a catalog
+  // refresh does not download every ~250 MB binary merely to rediscover the
+  // digest. Other direct-binary layouts keep the existing download-and-hash
+  // behavior as a fail-safe.
+  const manifestUrl = new URL("../manifest.json", url).toString();
+  try {
+    let manifestPromise = checksumManifestCache.get(manifestUrl);
+    if (!manifestPromise) {
+      manifestPromise = fetchJson(manifestUrl);
+      checksumManifestCache.set(manifestUrl, manifestPromise);
+    }
+    const manifest = await manifestPromise;
+    const checksum = manifest?.platforms?.[vendorPlatform]?.checksum;
+    const size = manifest?.platforms?.[vendorPlatform]?.size;
+    if (manifest?.version === version && /^[a-f0-9]{64}$/i.test(checksum ?? "")) {
+      if (Number.isSafeInteger(size) && size > 0) knownSize.set(url, size);
+      console.log(`   ✓ ${vendorPlatform} checksum from ${manifestUrl}`);
+      return checksum.toLowerCase();
+    }
+  } catch {
+    checksumManifestCache.delete(manifestUrl);
+  }
+  return shaFor(url);
+}
+
+function withDownloadSize(target, url, publishedSize) {
+  const size = Number.isSafeInteger(publishedSize) && publishedSize > 0
+    ? publishedSize
+    : knownSize.get(url);
+  return Number.isSafeInteger(size) && size > 0
+    ? { ...target, downloadSizeBytes: size }
+    : target;
 }
 
 async function fetchText(url) {
