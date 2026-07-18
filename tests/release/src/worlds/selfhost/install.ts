@@ -59,6 +59,9 @@ export interface RunInstallerInputs {
  * candidate bundle so the exact shipped script runs — never a checkout copy.
  */
 export const SELFHOST_REMOTE_DIR = "proliferate-candidate";
+
+/** Outer ssh budget for the shipped install.sh run (see call site). */
+const INSTALL_SSH_TIMEOUT_MS = 25 * 60_000;
 export const SELFHOST_REMOTE_IMAGE_ARCHIVE = `${SELFHOST_REMOTE_DIR}/server-image.tar`;
 export const SELFHOST_REMOTE_BUNDLE = `${SELFHOST_REMOTE_DIR}/proliferate-deploy.tar.gz`;
 export const SELFHOST_REMOTE_SHA256SUMS = `${SELFHOST_REMOTE_DIR}/self-hosted-assets.SHA256SUMS`;
@@ -135,7 +138,11 @@ export async function runShippedInstaller(inputs: RunInstallerInputs): Promise<I
     installArgs.push("--cors-allow-origins", inputs.corsAllowOrigins.trim());
   }
   installArgs.push("--yes");
-  await ssh.run(installArgs.join(" "), { timeoutMs: inputs.timeoutMs });
+  // Bounded: callers historically passed no timeoutMs, which execFile treats
+  // as NO timeout — a hung install.sh would then ride the whole 120min job
+  // budget. 25min covers the slowest observed cold install (all compose image
+  // pulls on a t3.small) with generous headroom while still failing a hang.
+  await ssh.run(installArgs.join(" "), { timeoutMs: inputs.timeoutMs ?? INSTALL_SSH_TIMEOUT_MS });
 
   // 4. Wait for public HTTPS /health (Caddy TLS issuance + stack readiness).
   const apiOrigin = `https://${inputs.siteAddress}`;

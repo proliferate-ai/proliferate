@@ -716,13 +716,24 @@ export class ReportValidationError extends Error {
 
 export const MAX_MESSAGE_CODE_POINTS = 4096;
 
-/** Bounds a message to 4,096 Unicode code points. */
+/**
+ * Bounds a message to 4,096 Unicode code points, keeping the head AND the
+ * tail. Failed remote commands reject with "Command failed: <cmd>\n<stderr>",
+ * and chatty stderr (docker pull/compose progress) pushes the actual die()/
+ * exit line past a head-only cap — run 29630784953's SH-INSTALL-CLAIM evidence
+ * was 4096 points of pull progress with the real failure line truncated away.
+ * The head keeps the command identity; the tail keeps the reason it failed.
+ */
 export function boundMessage(message: string): string {
   const codePoints = [...message];
   if (codePoints.length <= MAX_MESSAGE_CODE_POINTS) {
     return message;
   }
-  return `${codePoints.slice(0, MAX_MESSAGE_CODE_POINTS - 1).join("")}…`;
+  const headLength = 1024;
+  const tailLength = MAX_MESSAGE_CODE_POINTS - headLength - 1;
+  const head = codePoints.slice(0, headLength).join("");
+  const tail = codePoints.slice(codePoints.length - tailLength).join("");
+  return `${head}…${tail}`;
 }
 
 /** Replaces exact resolved secret values anywhere in the string with [REDACTED]. */
