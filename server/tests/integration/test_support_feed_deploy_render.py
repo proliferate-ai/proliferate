@@ -29,6 +29,7 @@ _PROD_FEED_ARN = (
 _FEED_VALUE_FROM = f"{_PROD_FEED_ARN}:supportFeedToken::"
 _APP_SECRET_ARN = APP_SECRET_ARN
 _REDIS_VALUE_FROM = f"{_APP_SECRET_ARN}:REDBEAT_REDIS_URL::"
+_E2B_VALUE_FROM = f"{_APP_SECRET_ARN}:E2B_API_KEY::"
 _STALE_REDIS_VALUE_FROM = (
     "arn:aws:secretsmanager:us-east-1:157466816238:"
     "secret:stale-server-app-Zz99Yy:REDBEAT_REDIS_URL::"
@@ -165,38 +166,15 @@ def _assert_task(final_task: dict, tmp_path: Path) -> subprocess.CompletedProces
         "--arg",
         "redis_value_from",
         _REDIS_VALUE_FROM,
+        "--arg",
+        "e2b_value_from",
+        _E2B_VALUE_FROM,
     )
 
 
 def _server_container(task: dict) -> dict:
     (container,) = [c for c in task["containerDefinitions"] if c["name"] == _CONTAINER]
     return container
-
-
-def test_deploy_preflights_environment_owned_redis_field_before_render() -> None:
-    workflow = yaml.safe_load(_DEPLOY_WORKFLOW.read_text())
-    steps = workflow["jobs"]["deploy"]["steps"]
-    names = [step.get("name", "") for step in steps]
-    preflight = next(
-        step for step in steps if step.get("name") == "Verify API Redis secret reference"
-    )
-    run = str(preflight["run"])
-
-    assert names.index("Verify API Redis secret reference") < names.index(
-        "Render ECS task definition"
-    )
-    assert '--secret-id "$REDBEAT_REDIS_SECRET_NAME"' in run
-    assert 'response.get("ARN")' in run
-    assert 'response.get("SecretString")' in run
-    assert 'payload.get("REDBEAT_REDIS_URL")' in run
-    assert "urlsplit" in run
-    assert "unquote(host)" in run
-    assert "ipaddress.ip_address" in run
-    assert "address.is_loopback" in run
-    assert "socket.inet_aton" in run
-    assert "socket.getaddrinfo" in run
-    assert "resolved_address.is_loopback" in run
-    assert "value not printed or retained" in run
 
 
 def _redis_preflight_run() -> str:
@@ -369,6 +347,7 @@ def test_render_authors_hosted_secrets_and_strips_inherited_plaintext(tmp_path: 
                     {"name": "API_URL", "value": "old"},
                     {"name": "SUPPORT_FEED_BEARER_TOKEN", "value": "LEAKED-PLAINTEXT"},
                     {"name": "REDBEAT_REDIS_URL", "value": "redis://plaintext.invalid/0"},
+                    {"name": "E2B_API_KEY", "value": "LEAKED-E2B-KEY"},
                     # Stale runtime-identity overrides inherited from the prior
                     # task revision; the merge must strip them.
                     {"name": "ANYHARNESS_GIT_SHA", "value": "deadbeefcafe"},
@@ -384,6 +363,12 @@ def test_render_authors_hosted_secrets_and_strips_inherited_plaintext(tmp_path: 
                         "valueFrom": _STALE_VALUE_FROM,
                     },
                     {"name": "REDBEAT_REDIS_URL", "valueFrom": _STALE_REDIS_VALUE_FROM},
+                    {
+                        "name": "E2B_API_KEY",
+                        "valueFrom": (
+                            "arn:aws:secretsmanager:us-east-1:1:secret:stale:E2B_API_KEY::"
+                        ),
+                    },
                     {"name": "OTHER", "valueFrom": "keepme"},
                 ],
             },
@@ -402,6 +387,10 @@ def test_render_authors_hosted_secrets_and_strips_inherited_plaintext(tmp_path: 
         {"name": "REDBEAT_REDIS_URL", "valueFrom": _REDIS_VALUE_FROM}
     ]
     assert [e for e in container["environment"] if e["name"] == "REDBEAT_REDIS_URL"] == []
+    assert [s for s in container["secrets"] if s["name"] == "E2B_API_KEY"] == [
+        {"name": "E2B_API_KEY", "valueFrom": _E2B_VALUE_FROM}
+    ]
+    assert [e for e in container["environment"] if e["name"] == "E2B_API_KEY"] == []
     # A non-feed inherited secret survives.
     assert any(s["name"] == "OTHER" for s in container["secrets"])
     # Every inherited stale runtime-identity override is stripped.
@@ -435,6 +424,7 @@ def test_render_assert_passes_on_well_formed_task(tmp_path: Path) -> None:
                 "secrets": [
                     {"name": "SUPPORT_FEED_BEARER_TOKEN", "valueFrom": _FEED_VALUE_FROM},
                     {"name": "REDBEAT_REDIS_URL", "valueFrom": _REDIS_VALUE_FROM},
+                    {"name": "E2B_API_KEY", "valueFrom": _E2B_VALUE_FROM},
                 ],
             }
         ]

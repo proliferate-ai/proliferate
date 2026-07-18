@@ -7,6 +7,7 @@ from kombu import Queue
 
 from proliferate.background.config import (
     BACKGROUND_RELAY_TASK,
+    CLOUD_SANDBOX_ORPHAN_REAP_TASK,
     CUSTOMERIO_ENGAGEMENT_SYNC_TASK,
     DEFAULT_QUEUE,
     HEALTH_NOOP_TASK,
@@ -40,6 +41,7 @@ def test_celery_app_import_registers_noop_task_without_broker_connection() -> No
     assert isinstance(celery_app, Celery)
     assert HEALTH_NOOP_TASK in celery_app.tasks
     assert BACKGROUND_RELAY_TASK in celery_app.tasks
+    assert CLOUD_SANDBOX_ORPHAN_REAP_TASK in celery_app.tasks
     assert NOTIFICATIONS_SEND_SLACK_TASK in celery_app.tasks
     assert WORKFLOW_DELIVER_TASK in celery_app.tasks
     assert WORKFLOW_OBSERVE_TASK in celery_app.tasks
@@ -59,6 +61,7 @@ def test_celery_routes_and_queues_match_ratified_names() -> None:
     assert celery_app.conf.task_routes == {
         HEALTH_NOOP_TASK: {"queue": PERIODIC_DEFAULT_QUEUE},
         BACKGROUND_RELAY_TASK: {"queue": PERIODIC_DEFAULT_QUEUE},
+        CLOUD_SANDBOX_ORPHAN_REAP_TASK: {"queue": PERIODIC_DEFAULT_QUEUE},
         NOTIFICATIONS_SEND_SLACK_TASK: {"queue": NOTIFICATIONS_QUEUE},
         CUSTOMERIO_ENGAGEMENT_SYNC_TASK: {"queue": PERIODIC_DEFAULT_QUEUE},
         WORKFLOW_DELIVER_TASK: {"queue": DEFAULT_QUEUE},

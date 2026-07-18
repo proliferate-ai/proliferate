@@ -97,8 +97,12 @@ see [Releases](releases.md).
   worker and Beat registration also fails closed unless each task carries the
   contract execution role and exactly one environment-owned direct Secrets
   Manager or Parameter Store Redis reference, with no plaintext or
-  field-projected duplicate. The resolved base
-  ARN remains step-scoped and is
+  field-projected duplicate. Each also carries exactly one `E2B_API_KEY` field
+  projection from the verified server-app secret and the reviewed
+  `E2B_TEMPLATE_NAME`; plaintext, duplicate, partial, stale, or
+  sibling-environment provider configuration fails before registration and is
+  checked again on the registered revision. The resolved base ARN remains
+  step-scoped and is
   obtained after every third-party action's main phase. The first-party render
   and background re-image steps remove their private identifier-bearing scratch
   files on every exit before those actions' post-job hooks execute.
