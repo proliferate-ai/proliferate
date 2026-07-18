@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -150,4 +151,53 @@ test("supported cancellation keeps local receipts and hard cancellation keeps th
   assert.match(hardCancel, /Reconcile exact run-owned managed-cloud AWS resources/);
   assert.match(hardCancel, /Reconcile exact run-owned E2B, Stripe, and LiteLLM resources/);
   assert.doesNotMatch(hardCancel, /workflow_dispatch/);
+});
+
+// The self-host cell selector's literal "all" must mean "no cell filter" — the
+// same contract qualification-preflight.mjs's parseSelector applies (and the
+// preflight step in this very job defaults to `--cells all`). Run 29630600180
+// failed closed in 49s on `selfhost_cells=all`; these tests EXECUTE the job's
+// real validator shell (everything before the make invocation) so the workflow
+// and runner contracts cannot drift apart silently again.
+function selfHostValidatorScript(): string {
+  const body = job(release, "release-e2e-selfhost-install");
+  const runStart = body.indexOf("set -euo pipefail");
+  const runEnd = body.indexOf("make qualification-selfhost");
+  assert.ok(runStart >= 0 && runEnd > runStart, "self-host validator shell not found");
+  return body
+    .slice(runStart, runEnd)
+    .split("\n")
+    .map((line) => line.replace(/^ {10}/, ""))
+    .join("\n");
+}
+
+function runSelfHostValidator(env: Record<string, string>): {
+  status: number | null;
+  stdout: string;
+  stderr: string;
+} {
+  const script = `${selfHostValidatorScript()}\nprintf 'CELLS_ARG=%s\\n' "$cells_arg"\n`;
+  const result = spawnSync("bash", ["-c", script], {
+    env: { ...process.env, ...env },
+    encoding: "utf8",
+  });
+  return { status: result.status, stdout: result.stdout, stderr: result.stderr };
+}
+
+test('self-host cell selector treats literal "all" as no cell filter (runner/preflight contract)', () => {
+  for (const value of ["all", " all "]) {
+    const run = runSelfHostValidator({ SELFHOST_CELLS_INPUT: value });
+    assert.equal(run.status, 0, `selfhost_cells=${JSON.stringify(value)} must not fail closed: ${run.stdout}${run.stderr}`);
+    assert.match(run.stdout, /CELLS_ARG=\n/, "literal all must normalize to an empty (unfiltered) cell selector");
+  }
+});
+
+test("self-host cell selector still fails closed on unknown cells and keeps real filters", () => {
+  const unknown = runSelfHostValidator({ SELFHOST_CELLS_INPUT: "SH-NOT-A-CELL" });
+  assert.equal(unknown.status, 2, "unknown cells must fail closed");
+  const blank = runSelfHostValidator({ SELFHOST_CELLS_INPUT: " , ," });
+  assert.equal(blank.status, 2, "explicit-but-empty selector must fail closed (PR7-CONTROL-005)");
+  const gateway = runSelfHostValidator({ SELFHOST_CELLS_INPUT: "SH-GATEWAY" });
+  assert.equal(gateway.status, 0);
+  assert.match(gateway.stdout, /CELLS_ARG=SH-GATEWAY\n/);
 });

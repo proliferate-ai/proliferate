@@ -827,6 +827,15 @@ jobs:
           # names; validate the same way so it too cannot inject.
           allowed_cells="SH-INSTALL-CLAIM SH-DESKTOP-OWNER SH-BASE-TURN SH-INVITEE SH-GITHUB-AUTH SH-GATEWAY SH-CLOUD-ADDON SH-SWITCH-ISOLATION SH-CFN-WRAPPER"
           cells_arg=""
+          # Literal "all" means "no cell filter" — the runner/preflight contract
+          # (qualification-preflight.mjs parseSelector) treats "all" as select-
+          # everything, and the preflight step above already defaults to it. It
+          # must therefore pass this allowlist too, not fail closed (observed:
+          # run 29630600180 died on `selfhost_cells=all` in 49s).
+          cells_normalized="$(printf '%s' "${SELFHOST_CELLS_INPUT:-}" | tr -d '[:space:]')"
+          if [ "$cells_normalized" = "all" ]; then
+            SELFHOST_CELLS_INPUT=""
+          fi
           if [ -n "${SELFHOST_CELLS_INPUT:-}" ]; then
             IFS=',' read -ra cparts <<< "$SELFHOST_CELLS_INPUT"
             cclean=""
