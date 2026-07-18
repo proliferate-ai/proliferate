@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { createTranscriptState } from "@anyharness/sdk";
-import type { ToolCallItem } from "@anyharness/sdk";
+import { createTranscriptState, reduceEvents } from "@anyharness/sdk";
+import type { SessionEventEnvelope, ToolCallItem } from "@anyharness/sdk";
+import claudeNativeSubagentFixture from "../../../../../../fixtures/contracts/native-subagent-transcript/claude.json";
+import codexNativeSubagentFixture from "../../../../../../fixtures/contracts/native-subagent-transcript/codex.json";
 import {
   formatCollapsedActionsSummary,
   summarizeCollapsedActions,
@@ -22,7 +24,45 @@ import {
   userItem,
 } from "./transcript-presentation-test-fixtures";
 
+type NativeSubagentFixture = {
+  provider: "claude" | "codex";
+  sessionId: string;
+  turnId: string;
+  parentId: string;
+  childIds: string[];
+  events: SessionEventEnvelope[];
+};
+
+const nativeSubagentFixtures = [
+  claudeNativeSubagentFixture,
+  codexNativeSubagentFixture,
+] as unknown as NativeSubagentFixture[];
+
 describe("buildTurnPresentation", () => {
+  describe.each(nativeSubagentFixtures)("$provider native subagent fixture", (fixture) => {
+    it("keeps ordered child activity under a durable parent item", () => {
+      const transcript = reduceEvents(
+        fixture.events,
+        fixture.sessionId,
+        { replayMode: true },
+      );
+      const turn = transcript.turnsById[fixture.turnId];
+
+      if (!turn) {
+        throw new Error(`missing fixture turn ${fixture.turnId}`);
+      }
+      const presentation = buildTurnPresentation(turn, transcript);
+
+      expect(presentation.rootIds).toEqual([fixture.parentId]);
+      expect(presentation.childrenByParentId.get(fixture.parentId)).toEqual(
+        fixture.childIds,
+      );
+      expect(presentation.displayBlocks).toEqual([
+        { kind: "item", itemId: fixture.parentId },
+      ]);
+    });
+  });
+
   it("orders items by startedSeq before insertion order", () => {
     const transcript = createTranscriptState("session-1");
     transcript.itemsById = {
@@ -125,7 +165,7 @@ describe("buildTurnPresentation", () => {
     ]);
   });
 
-  it("keeps native Agent calls with nested child work as normal item blocks ONLY while running", () => {
+  it("keeps running native Agent calls with nested child work as normal item blocks", () => {
     const transcript = createTranscriptState("session-1");
     transcript.itemsById = {
       agent: {
@@ -142,8 +182,6 @@ describe("buildTurnPresentation", () => {
 
     const presentation = buildTurnPresentation(turn, transcript);
 
-    // Running native Agent items produce normal item blocks (the renderer
-    // hides them with an early-return).
     expect(presentation.childrenByParentId.get("agent")).toEqual(["childRead"]);
     expect(presentation.displayBlocks).toEqual([
       { kind: "item", itemId: "agent" },
@@ -151,7 +189,7 @@ describe("buildTurnPresentation", () => {
     ]);
   });
 
-  it("routes finished foreground native Agent subagents to subagent_creations blocks", () => {
+  it("keeps finished foreground native Agent subagents in the durable transcript", () => {
     const transcript = createTranscriptState("session-1");
     transcript.itemsById = {
       agent: {
@@ -165,19 +203,13 @@ describe("buildTurnPresentation", () => {
 
     const presentation = buildTurnPresentation(turn, transcript);
 
-    // Finished foreground native Agent items route to subagent_creations
-    // blocks (rendered via SubagentCreationGroupBlock as quiet done-lines).
     expect(presentation.displayBlocks).toEqual([
-      {
-        kind: "subagent_creations",
-        blockId: "agent-agent",
-        itemIds: ["agent"],
-      },
+      { kind: "item", itemId: "agent" },
       { kind: "item", itemId: "final" },
     ]);
   });
 
-  it("routes finished background native Agent subagents to subagent_creations blocks", () => {
+  it("keeps finished background native Agent subagents in the durable transcript", () => {
     const transcript = createTranscriptState("session-1");
     transcript.itemsById = {
       agent: {
@@ -200,14 +232,8 @@ describe("buildTurnPresentation", () => {
 
     const presentation = buildTurnPresentation(turn, transcript);
 
-    // Finished background native Agent items also route to subagent_creations
-    // blocks.
     expect(presentation.displayBlocks).toEqual([
-      {
-        kind: "subagent_creations",
-        blockId: "agent-agent",
-        itemIds: ["agent"],
-      },
+      { kind: "item", itemId: "agent" },
       { kind: "item", itemId: "final" },
     ]);
   });
@@ -239,8 +265,6 @@ describe("buildTurnPresentation", () => {
 
     const presentation = buildTurnPresentation(turn, transcript);
 
-    // Background launches with pending state are still running, so they
-    // produce normal item blocks (the renderer hides them).
     expect(presentation.displayBlocks).toEqual([
       { kind: "item", itemId: "agent" },
     ]);

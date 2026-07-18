@@ -1,9 +1,9 @@
 {
-  "probedAt": "2026-07-17T05:32:48.831389+00:00",
+  "probedAt": "2026-07-17T20:46:58.500864+00:00",
   "agentKind": "claude",
   "authContext": "anthropic-api",
   "attestation": {
-    "name": "@agentclientprotocol/claude-agent-acp",
+    "name": "@proliferate/claude-agent-acp",
     "version": "0.59.0-proliferate.1",
     "title": "Claude Agent"
   },

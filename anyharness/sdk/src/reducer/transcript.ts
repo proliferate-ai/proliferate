@@ -1431,7 +1431,7 @@ function deriveToolCallSemanticKind(
     return "subagent";
   }
 
-  if (nativeToolName === "Agent" || normalizedToolKind === "think") {
+  if (nativeToolName === "Agent" || nativeToolName === "Task" || normalizedToolKind === "think") {
     return "subagent";
   }
   if (

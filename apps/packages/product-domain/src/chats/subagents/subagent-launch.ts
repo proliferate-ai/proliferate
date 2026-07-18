@@ -61,14 +61,14 @@ export function resolveSubagentExecutionState(
     return "completed_background";
   }
 
-  // A native-Agent fire-and-forget async launch flips its launch tool-call to
+  // A native Agent/Task fire-and-forget async launch flips its launch tool-call to
   // status:"completed" the instant the launch receipt returns, while the
   // subagent keeps running. When the pending-background metadata is not
   // attached to this item's rawOutput, the checks above fall through and the
   // launch would be mis-classified as completed. Detect the bare launch
-  // receipt (no structured summary yet) and treat it as still running so the
-  // transcript stays quiet — the live subagent lives in the composer roster,
-  // and the raw orchestration receipt never leaks into the transcript.
+  // receipt (no structured summary yet) and treat it as still running. The
+  // transcript can show the durable task row without exposing the raw
+  // orchestration receipt, while the composer roster summarizes live state.
   if (isAsyncLaunchReceipt(item)) {
     return "background";
   }
@@ -124,7 +124,7 @@ export function parseAsyncSubagentLaunch(
   }
 
   const backgroundWork = getBackgroundWork(item);
-  // A native-Agent async launch may or may not carry pending-background
+  // A native Agent/Task async launch may or may not carry pending-background
   // metadata on this item's rawOutput. Recognise the launch receipt either
   // way: prefer the structured metadata, else fall back to the receipt text
   // signature. The final synthesized result replaces this text once the
@@ -141,10 +141,10 @@ export function parseAsyncSubagentLaunch(
 }
 
 /**
- * True when this item is a native-Agent background launch whose result is
+ * True when this item is a native Agent/Task background launch whose result is
  * still only the orchestration launch receipt (no final synthesized result
- * yet). Used to keep the transcript quiet while the subagent runs even when
- * the pending-background metadata is absent from rawOutput.
+ * yet). Used to keep the receipt out of the transcript while the subagent runs
+ * even when the pending-background metadata is absent from rawOutput.
  */
 function isAsyncLaunchReceipt(item: ToolCallItem): boolean {
   if (!isSubagent(item) || !readBooleanField(item.rawInput, "run_in_background")) {

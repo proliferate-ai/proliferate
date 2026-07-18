@@ -87,6 +87,7 @@ pub(super) struct AnyHarnessMeta {
     pub(super) transcript_event: Option<String>,
     pub(super) native_tool_name: Option<String>,
     pub(super) tool_kind: Option<String>,
+    pub(super) parent_tool_call_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]

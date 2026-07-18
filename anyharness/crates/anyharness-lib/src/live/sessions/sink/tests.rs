@@ -4,6 +4,7 @@ use std::sync::Arc;
 use serde_json::json;
 use tokio::sync::broadcast;
 
+mod native_subagents;
 mod support;
 
 use super::{AcpChunkPayload, SessionEventSink};

@@ -1,10 +1,10 @@
 {
-  "probedAt": "2026-07-17T05:35:01.459582+00:00",
+  "probedAt": "2026-07-17T20:49:47.676715+00:00",
   "agentKind": "codex",
   "authContext": "bedrock",
   "attestation": {
     "name": "codex-acp",
-    "version": "0.18.2-proliferate.1",
+    "version": "0.18.3-proliferate.1",
     "title": "Codex"
   },
   "modelSource": "modelConfigOption",

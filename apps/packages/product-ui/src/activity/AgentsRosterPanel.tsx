@@ -10,8 +10,8 @@ export interface AgentsRosterPanelProps {
 /**
  * The ⑂ chip's click-in panel: a read-only summary of harness-native
  * subagents. Shows ONLY running subagents — finished ones leave the roster
- * immediately and appear as a quiet done-line in the transcript instead. This
- * is the standalone rendering for this PR — a follow-up integration pass
+ * immediately, while their durable nested work remains in the transcript.
+ * This is the standalone rendering for this PR — a follow-up integration pass
  * merges this roster into the existing delegated-work surfaces
  * (`features/delegated-work.md`) as a new `subagent` source, inheriting
  * generated identity/color there.
