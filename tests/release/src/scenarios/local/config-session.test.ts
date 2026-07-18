@@ -204,8 +204,14 @@ function makeConfigDriver(
       calls.push("createActor");
       return fakeActor();
     },
+    selectGatewayRoute: async (_actor, harness) => {
+      calls.push(`selectGatewayRoute:${harness}`);
+    },
     prepareRepo: async () => ({ path: "/tmp/repo", repoUrl: "https://github.com/x/y.git", commit: "c", repoRootId: "rr" }) satisfies PreparedRepository,
-    openPage: async () => fakePage(),
+    openPage: async () => {
+      calls.push("openPage");
+      return fakePage();
+    },
     ensureHarnessReady: async () => undefined,
     selectRepoAndWorkLocally: async () => undefined,
     runBaselineTurn: async (_w, _p, harness) => {
@@ -240,6 +246,29 @@ test("LOCAL-4: green per-harness cells carry local_config_matrix evidence with a
   assert.equal(claude.controls[0]!.accepted_value, "high");
   assert.equal(claude.controls[0]!.rejected, false);
   assert.equal(claude.known_1063_expected_fail, false);
+});
+
+test("LOCAL-4: selects the gateway route for EVERY runnable harness before the page boots", async () => {
+  // Regression for run 29628880856: the reused owner actor only had claude's
+  // gateway route selected, so codex/grok never synced a route into AnyHarness
+  // and never became launchable. Each runnable harness must get its own
+  // selection, all before `openPage` (the real renderer syncs routes at boot).
+  const { driver, calls } = makeConfigDriver();
+  const outcomes = await collectLocal4ConfigCells(
+    fakeCtx(),
+    [cfgCell("claude"), cfgCell("grok"), cfgCell("cursor")],
+    driver,
+  );
+  for (const harness of ["claude", "grok"]) {
+    assert.ok(calls.includes(`selectGatewayRoute:${harness}`), `expected a gateway selection for ${harness}`);
+  }
+  // Cursor ships no gateway slot — it must never be selected for.
+  assert.ok(!calls.includes("selectGatewayRoute:cursor"), "cursor must not get a gateway selection");
+  // All selections happen before the page opens.
+  const firstOpen = calls.indexOf("openPage");
+  assert.ok(firstOpen === -1 || calls.filter((c) => c.startsWith("selectGatewayRoute:")).every((c) => calls.indexOf(c) < firstOpen));
+  // The claude/grok cells still finish green (cursor stays blocked).
+  assert.equal(outcomes.find((o) => (o.evidence as { harness?: string } | undefined)?.harness === "grok")?.status, "green");
 });
 
 test("LOCAL-4: cursor is typed unsupported (blocked, no evidence), never green", async () => {
