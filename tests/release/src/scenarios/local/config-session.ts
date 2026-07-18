@@ -927,19 +927,29 @@ async function ensureHarnessReady(world: ReadyLocalWorld, page: ProductPage, har
 
 async function selectRepoAndWorkLocally(page: ProductPage, repo: PreparedRepository): Promise<void> {
   const p = page.page;
-  // `ensureHarnessReady`'s preceding reload re-mounts the home screen; its
-  // generic composer/tab-strip wait settles for DOM presence but not for the
-  // Project-menu trigger's own mount, so an immediate click here can race
-  // that mount (run 29631868610: 30s "locator.click" timeout on this button,
-  // with ERR_ABORTED launch-options/reconcile polls in the network log
-  // showing they were cancelled by the reload — a pure collector settle
-  // race, not a product defect: HomeNextScreen renders the Project button
-  // unconditionally). Wait for the trigger to be visible AND enabled before
-  // clicking, with a timeout aligned to the harness-ready budget instead of
-  // Playwright's 30s click-actionability default.
   const projectTrigger = p.getByRole("button", { name: /^Project:/ }).first();
-  await projectTrigger.waitFor({ state: "visible", timeout: HARNESS_READY_TIMEOUT_MS });
-  await waitForEnabled(projectTrigger, HARNESS_READY_TIMEOUT_MS, "Project: trigger");
+
+  // LOCAL-4 deliberately reuses one renderer page across the harness matrix.
+  // After the first cell creates a workspace, `ensureHarnessReady` reloads that
+  // active workspace shell; it does not return to Home. The old collector then
+  // waited five minutes for a Project trigger that only exists on Home (run
+  // 29631868610's captured HTML has `data-workspace-shell` and the chat
+  // composer, with no Project trigger). Use the real sidebar navigation before
+  // selecting the next cell's repository. This preserves the real renderer and
+  // Worker/enrollment boundary; it only restores the UI surface the collector
+  // requires.
+  if (!await projectTrigger.isVisible().catch(() => false)) {
+    const newChatNav = p.locator("nav").getByRole("button", { name: "New chat" }).first();
+    await newChatNav.waitFor({ state: "visible", timeout: 30_000 });
+    await newChatNav.click();
+    await p
+      .locator("[data-home-composer-editor]")
+      .first()
+      .waitFor({ state: "visible", timeout: 30_000 });
+  }
+
+  await projectTrigger.waitFor({ state: "visible", timeout: 30_000 });
+  await waitForEnabled(projectTrigger, 30_000, "Project: trigger");
   await projectTrigger.click();
   const repoRow = p.locator(`[data-repo-source-root="${cssAttr(repo.path)}"]`).first();
   await repoRow.waitFor({ state: "visible", timeout: 20_000 });
