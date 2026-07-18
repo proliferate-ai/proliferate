@@ -129,8 +129,9 @@ export type SelfHostQualCellName = (typeof SELFHOST_QUAL_CELL_ORDER)[number];
  * real path) while their absence stays a fail-closed cell red — never a
  * runner-blocked cell, and SH-GATEWAY stays runnable without SH-GITHUB-AUTH's
  * OAuth app. Every name is manifest-declared. `RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY`
- * is scenario-level required already; the `_B_` upstream key is the gateway's
- * preferred (optional) separate-spend key.
+ * is scenario-level required already and is SH-GATEWAY's bounded upstream key;
+ * `_B_` remains an optional fallback owned separately by the local harness
+ * matrix.
  */
 export const SELFHOST_QUAL_CELL_OPTIONAL_ENV: Record<SelfHostQualCellName, readonly string[]> = {
   [SH_GITHUB_AUTH]: [

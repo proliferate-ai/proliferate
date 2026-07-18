@@ -91,10 +91,13 @@ export function generateLitellmPostgresPassword(): string {
 
 /**
  * Resolves the SH-GATEWAY env block from the controller env + the box's public
- * API origin. The upstream provider credential prefers the `_B_` BYOK manifest
- * key (so gateway spend separates from the SH-BASE-TURN BYOK-regression cell's
- * `_A_` key) and falls back to `_A_`; when neither exists the cell fails closed.
- * The master key and postgres password are freshly generated here.
+ * API origin. The upstream provider credential uses the scenario-required
+ * `_A_` BYOK key (the same bounded self-host provider capacity already proven
+ * by SH-BASE-TURN) and falls back to optional `_B_` only when `_A_` is absent.
+ * Gateway spend is correlated to the actor's INSTANCE LiteLLM virtual key, so
+ * sharing upstream provider capacity cannot create a false correlation. When
+ * neither key exists the cell fails closed. The master key and postgres
+ * password are freshly generated here.
  */
 export function resolveGatewayConfig(
   env: GatewayEnvSource,
@@ -102,18 +105,18 @@ export function resolveGatewayConfig(
 ): { ok: true; value: GatewayConfig } | { ok: false; reason: string } {
   const bKey = env.get("RELEASE_E2E_BYOK_ANTHROPIC_B_API_KEY")?.trim();
   const aKey = env.get("RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY")?.trim();
-  const upstreamKeyEnvVar = bKey
-    ? "RELEASE_E2E_BYOK_ANTHROPIC_B_API_KEY"
-    : aKey
-      ? "RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY"
+  const upstreamKeyEnvVar = aKey
+    ? "RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY"
+    : bKey
+      ? "RELEASE_E2E_BYOK_ANTHROPIC_B_API_KEY"
       : undefined;
-  const upstreamAnthropicKey = bKey || aKey;
+  const upstreamAnthropicKey = aKey || bKey;
   if (!upstreamKeyEnvVar || !upstreamAnthropicKey) {
     return {
       ok: false,
       reason:
-        "SH-GATEWAY: no upstream provider key configured — set RELEASE_E2E_BYOK_ANTHROPIC_B_API_KEY " +
-        "(preferred) or RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY so the operator LiteLLM profile has a real backend.",
+        "SH-GATEWAY: no upstream provider key configured — set RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY " +
+        "(preferred) or RELEASE_E2E_BYOK_ANTHROPIC_B_API_KEY so the operator LiteLLM profile has a real backend.",
     };
   }
   // The LiteLLM image MUST be pinned to an immutable tag (PR7-CONTROL-010):

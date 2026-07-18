@@ -822,15 +822,15 @@ function gatewayEnvGet(extra: Record<string, string>): (name: string) => string 
   return (name) => base[name];
 }
 
-test("resolveGatewayConfig: prefers the B upstream key, generates a fresh master key + public /llm url", () => {
+test("resolveGatewayConfig: uses the required A upstream key, generates a fresh master key + public /llm url", () => {
   const result = resolveGatewayConfig(
     { get: gatewayEnvGet({ RELEASE_E2E_BYOK_ANTHROPIC_B_API_KEY: "sk-b", RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY: "sk-a" }) },
     "https://box.qualification.proliferate.com",
   );
   assert.equal(result.ok, true);
   if (result.ok) {
-    assert.equal(result.value.upstreamKeyEnvVar, "RELEASE_E2E_BYOK_ANTHROPIC_B_API_KEY");
-    assert.equal(result.value.block.upstreamAnthropicKey, "sk-b");
+    assert.equal(result.value.upstreamKeyEnvVar, "RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY");
+    assert.equal(result.value.block.upstreamAnthropicKey, "sk-a");
     assert.equal(result.value.block.litellmPublicBaseUrl, "https://box.qualification.proliferate.com/llm");
     assert.equal(result.value.block.agentGatewayDefaultUserBudgetUsd, QUALIFICATION_GATEWAY_USER_BUDGET_USD);
     assert.match(result.value.block.litellmMasterKey, /^sk-[0-9a-f]{64}$/);
@@ -838,14 +838,15 @@ test("resolveGatewayConfig: prefers the B upstream key, generates a fresh master
   }
 });
 
-test("resolveGatewayConfig: falls back to the A upstream key", () => {
+test("resolveGatewayConfig: falls back to the optional B upstream key", () => {
   const result = resolveGatewayConfig(
-    { get: gatewayEnvGet({ RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY: "sk-a" }) },
+    { get: gatewayEnvGet({ RELEASE_E2E_BYOK_ANTHROPIC_B_API_KEY: "sk-b" }) },
     "https://box.example.com",
   );
   assert.equal(result.ok, true);
   if (result.ok) {
-    assert.equal(result.value.upstreamKeyEnvVar, "RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY");
+    assert.equal(result.value.upstreamKeyEnvVar, "RELEASE_E2E_BYOK_ANTHROPIC_B_API_KEY");
+    assert.equal(result.value.block.upstreamAnthropicKey, "sk-b");
   }
 });
 
