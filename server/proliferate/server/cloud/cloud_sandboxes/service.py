@@ -25,6 +25,7 @@ from proliferate.server.billing.authorization import (
 )
 from proliferate.server.cloud.cloud_sandboxes.transactions import run_after_commit
 from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.provisioning_observability import provisioning_phase
 from proliferate.utils.crypto import decrypt_text
 
 logger = logging.getLogger("proliferate.cloud.cloud_sandboxes")
@@ -81,20 +82,23 @@ async def ensure_personal_cloud_sandbox_exists(
     *,
     user_id: UUID,
 ) -> CloudSandboxValue:
-    await sandbox_store.acquire_cloud_sandbox_owner_lock(
-        db,
-        owner_scope="personal",
-        owner_user_id=user_id,
-        organization_id=None,
-    )
-    billing_subject = await billing_subjects.ensure_personal_billing_subject(db, user_id)
-    sandbox = await sandbox_store.ensure_personal_cloud_sandbox(
-        db,
-        user_id=user_id,
-        created_by_user_id=user_id,
-        billing_subject_id=billing_subject.id,
-        e2b_template_ref="e2b",
-    )
+    async with provisioning_phase(scope="sandbox_ensure", phase="owner_lock"):
+        await sandbox_store.acquire_cloud_sandbox_owner_lock(
+            db,
+            owner_scope="personal",
+            owner_user_id=user_id,
+            organization_id=None,
+        )
+    async with provisioning_phase(scope="sandbox_ensure", phase="billing_subject"):
+        billing_subject = await billing_subjects.ensure_personal_billing_subject(db, user_id)
+    async with provisioning_phase(scope="sandbox_ensure", phase="sandbox_row"):
+        sandbox = await sandbox_store.ensure_personal_cloud_sandbox(
+            db,
+            user_id=user_id,
+            created_by_user_id=user_id,
+            billing_subject_id=billing_subject.id,
+            e2b_template_ref="e2b",
+        )
     return sandbox
 
 
