@@ -104,6 +104,12 @@ remains pending and delivery status is `skipped`.
 Admins can also copy the invite link. The copied URL is exactly the same URL
 that email delivery sends.
 
+Successful invited-registration and invitation-revocation responses are
+durability boundaries: their database transaction commits before the response
+starts. An immediate password login, invitation list, or accept attempt must
+therefore observe the registered or revoked state without retrying a
+contradictory product result into success.
+
 ## Global Pending Invites
 
 Pending invitations for the signed-in email should be visible from the
