@@ -25,6 +25,7 @@ import {
   GATEWAY_UNSUPPORTED_HARNESSES,
   gatewayUnsupportedMessage,
 } from "../../fixtures/gateway-unsupported-harnesses.js";
+import { waitForSidebarControlReady } from "./sidebar-control-readiness.js";
 
 /**
  * LOCAL-4 (live configuration matrix, per harness) under `T3-CFG-1/local`, and
@@ -940,7 +941,7 @@ async function selectRepoAndWorkLocally(page: ProductPage, repo: PreparedReposit
   // requires.
   if (!await projectTrigger.isVisible().catch(() => false)) {
     const newChatNav = p.locator("nav").getByRole("button", { name: "New chat" }).first();
-    await newChatNav.waitFor({ state: "visible", timeout: 30_000 });
+    await waitForSidebarControlReady(p, newChatNav);
     await newChatNav.click();
     await p
       .locator("[data-home-composer-editor]")
