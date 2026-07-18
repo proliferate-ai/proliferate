@@ -548,8 +548,10 @@ async def connect_ready_sandbox(
                     anyharness_data_key=data_key,
                 )
         else:
-            runtime_token = secrets.token_urlsafe(32)
-            data_key = generate_anyharness_data_key()
+            if runtime_token is None:
+                runtime_token = secrets.token_urlsafe(32)
+            if data_key is None:
+                data_key = generate_anyharness_data_key()
             await _launch_anyharness_runtime(
                 db,
                 provider=provider,
