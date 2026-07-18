@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { buildModelAvailabilityRetryOptions } from "#product/lib/domain/sessions/creation/retry-options";
 import {
   materializeSessionRecord,
+  promoteMaterializedSessionIdentity,
   removeSessionRecordAndClearSelection,
 } from "#product/hooks/sessions/workflows/session-creation-local-state";
 import {
@@ -12,11 +13,16 @@ import {
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
+import {
+  getSessionIntentsForSession,
+  useSessionIntentStore,
+} from "#product/stores/sessions/session-intent-store";
 
 beforeEach(() => {
   useSessionSelectionStore.getState().clearSelection();
   useSessionDirectoryStore.getState().clearEntries();
   useSessionTranscriptStore.getState().clearEntries();
+  useSessionIntentStore.getState().clear();
 });
 
 describe("projected session materialization", () => {
@@ -69,6 +75,64 @@ describe("projected session materialization", () => {
     expect(useSessionSelectionStore.getState().activeSessionId).toBeNull();
     expect(getSessionRecord("pending-codex")).toBeNull();
     expect(useSessionSelectionStore.getState().activeSessionVersion).toBe(versionBefore + 1);
+  });
+
+  it("promotes a recovered shell and its queued work to the authoritative runtime id", () => {
+    const clientSessionId = "client-session:codex:recovered";
+    const runtimeSessionId = "01234567-89ab-4def-8123-456789abcdef";
+    useSessionSelectionStore.getState().activateWorkspace({
+      logicalWorkspaceId: "workspace-1",
+      workspaceId: "workspace-1",
+    });
+    putSessionRecord(
+      createEmptySessionRecord(clientSessionId, "codex", {
+        workspaceId: "workspace-1",
+        materializedSessionId: null,
+      }),
+    );
+    useSessionSelectionStore.getState().setActiveSessionId(clientSessionId);
+    useSessionIntentStore.getState().enqueueConfig({
+      clientSessionId,
+      workspaceId: "workspace-1",
+      configId: "reasoning_effort",
+      value: "high",
+    });
+
+    materializeSessionRecord(
+      clientSessionId,
+      runtimeSessionId,
+      createEmptySessionRecord(clientSessionId, "codex", {
+        workspaceId: "workspace-1",
+        materializedSessionId: runtimeSessionId,
+      }),
+    );
+    useSessionIntentStore.getState().bindMaterializedSession(
+      clientSessionId,
+      runtimeSessionId,
+    );
+
+    expect(promoteMaterializedSessionIdentity(clientSessionId)).toBe(runtimeSessionId);
+    expect(useSessionSelectionStore.getState().activeSessionId).toBe(runtimeSessionId);
+    expect(getSessionRecord(clientSessionId)).toBeNull();
+    expect(getSessionRecord(runtimeSessionId)).toMatchObject({
+      sessionId: runtimeSessionId,
+      materializedSessionId: runtimeSessionId,
+      transcript: {
+        sessionMeta: { sessionId: runtimeSessionId },
+      },
+    });
+    expect(
+      useSessionDirectoryStore.getState()
+        .clientSessionIdByMaterializedSessionId[runtimeSessionId],
+    ).toBe(runtimeSessionId);
+    expect(getSessionIntentsForSession(clientSessionId)).toEqual([]);
+    expect(getSessionIntentsForSession(runtimeSessionId)).toEqual([
+      expect.objectContaining({
+        clientSessionId: runtimeSessionId,
+        materializedSessionId: runtimeSessionId,
+        kind: "update_config",
+      }),
+    ]);
   });
 });
 

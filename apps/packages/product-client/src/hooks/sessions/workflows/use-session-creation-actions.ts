@@ -53,8 +53,12 @@ import {
 import { registerSessionCreation } from "#product/hooks/sessions/workflows/session-creation-supersession";
 import {
   beginReplacementShellPreferences,
+  replaceSessionIdInShellPreferences,
   type ReplacementShellPreferencesTransaction,
 } from "#product/hooks/sessions/workflows/session-replacement-shell-preferences";
+import {
+  promoteMaterializedSessionIdentity,
+} from "#product/hooks/sessions/workflows/session-creation-local-state";
 import { cleanupSessionCreationFailure } from "#product/hooks/sessions/workflows/session-creation-failure-cleanup";
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 import { useWorkspaceCollectionsInvalidationActions } from "#product/hooks/workspaces/cache/use-workspace-collections-invalidation";
@@ -394,6 +398,22 @@ export function useSessionCreationActions() {
       // A superseded materializer can settle without issuing the POST. Its
       // durable intent must not be resurrected by the next bootstrap.
       await pendingCreationLifecycle.current?.clear();
+      if (options.adoptMaterializedSessionId === true) {
+        const adoptedSessionId = promoteMaterializedSessionIdentity(pendingSessionId);
+        if (adoptedSessionId !== pendingSessionId) {
+          if (currentOwnedShellWorkspaceId) {
+            replaceSessionIdInShellPreferences({
+              shellWorkspaceId: currentOwnedShellWorkspaceId,
+              materializedWorkspaceId: workspaceId,
+              replacedSessionId: pendingSessionId,
+              replacementSessionId: adoptedSessionId,
+            });
+          }
+          writeOwnedShellIntent(adoptedSessionId);
+          currentOwnedSessionId = adoptedSessionId;
+          return adoptedSessionId;
+        }
+      }
       return resolvedSessionId;
     }).finally(unregisterSessionCreation);
 
@@ -478,6 +498,7 @@ export function useSessionCreationActions() {
       latencyFlowId: options.latencyFlowId,
       clientSessionId: options.clientSessionId,
       runtimeSessionId: options.runtimeSessionId,
+      adoptMaterializedSessionId: options.adoptMaterializedSessionId,
       subagentsEnabled: options.subagentsEnabled,
       reuseInFlightEmptySession: options.reuseInFlightEmptySession,
       preserveProjectedSessionOnCreateFailure: options.preserveProjectedSessionOnCreateFailure,

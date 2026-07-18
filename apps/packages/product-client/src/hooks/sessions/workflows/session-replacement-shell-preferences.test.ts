@@ -2,7 +2,10 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { createManualChatGroupId } from "#product/lib/domain/workspaces/tabs/manual-groups";
 import { chatWorkspaceShellTabKey } from "#product/lib/domain/workspaces/tabs/shell-tabs";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
-import { beginReplacementShellPreferences } from "#product/hooks/sessions/workflows/session-replacement-shell-preferences";
+import {
+  beginReplacementShellPreferences,
+  replaceSessionIdInShellPreferences,
+} from "#product/hooks/sessions/workflows/session-replacement-shell-preferences";
 
 describe("replacement shell preferences", () => {
   beforeEach(() => {
@@ -118,6 +121,32 @@ describe("replacement shell preferences", () => {
         .toEqual(["old", "other"]);
       expect(rolledBack.manualChatGroupsByWorkspace[workspaceId]?.[0]?.sessionIds)
         .toEqual(["old", "other"]);
+    }
+  });
+
+  it("promotes a recovered alias across logical and materialized workspace keys", () => {
+    seedPreferences("workspace-logical");
+    seedPreferences("workspace-runtime");
+
+    replaceSessionIdInShellPreferences({
+      shellWorkspaceId: "workspace-logical",
+      materializedWorkspaceId: "workspace-runtime",
+      replacedSessionId: "old",
+      replacementSessionId: "runtime-session-id",
+    });
+
+    const promoted = useWorkspaceUiStore.getState();
+    for (const workspaceId of ["workspace-logical", "workspace-runtime"]) {
+      expect(promoted.shellTabOrderByWorkspace[workspaceId]).toContain(
+        chatWorkspaceShellTabKey("runtime-session-id"),
+      );
+      expect(promoted.shellTabOrderByWorkspace[workspaceId]).not.toContain(
+        chatWorkspaceShellTabKey("old"),
+      );
+      expect(promoted.visibleChatSessionIdsByWorkspace[workspaceId])
+        .toEqual(["runtime-session-id", "other"]);
+      expect(promoted.manualChatGroupsByWorkspace[workspaceId]?.[0]?.sessionIds)
+        .toEqual(["runtime-session-id", "other"]);
     }
   });
 });
