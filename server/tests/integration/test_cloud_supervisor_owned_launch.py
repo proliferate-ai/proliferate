@@ -90,7 +90,10 @@ class _FakeProvider:
         return _CommandResult(exit_code=0)
 
 
-def _install_stubs(monkeypatch: pytest.MonkeyPatch, provider: _FakeProvider) -> list[str]:
+def _install_stubs(
+    monkeypatch: pytest.MonkeyPatch,
+    provider: _FakeProvider,
+) -> tuple[list[str], list[dict[str, object]]]:
     """Installs the same stubs as the reconnect self-heal suite, plus a
     ``launch_worker_sidecar`` spy so tests can assert it was (not) called."""
     monkeypatch.setattr(connect_module, "get_sandbox_provider", lambda _ref: provider)
@@ -99,7 +102,13 @@ def _install_stubs(monkeypatch: pytest.MonkeyPatch, provider: _FakeProvider) -> 
         "build_runtime_launch_script",
         lambda *a, **k: "#!/bin/bash\ntrue\n",
     )
-    monkeypatch.setattr(runtime_launch_module, "build_runtime_env", lambda *a, **k: {})
+    runtime_env_calls: list[dict[str, object]] = []
+
+    def _capture_runtime_env(*_args: object, **kwargs: object) -> dict[str, str]:
+        runtime_env_calls.append(kwargs)
+        return {}
+
+    monkeypatch.setattr(runtime_launch_module, "build_runtime_env", _capture_runtime_env)
     monkeypatch.setattr(
         runtime_launch_module,
         "worker_cloud_base_url",
@@ -133,7 +142,7 @@ def _install_stubs(monkeypatch: pytest.MonkeyPatch, provider: _FakeProvider) -> 
     monkeypatch.setattr(runtime_launch_module, "verify_runtime_auth_enforced", _ok_auth)
     monkeypatch.setattr(runtime_launch_module, "launch_worker_sidecar", _spy_sidecar)
     monkeypatch.setattr(connect_module, "assert_cloud_sandbox_resume_allowed", _resume_allowed)
-    return sidecar_calls
+    return sidecar_calls, runtime_env_calls
 
 
 async def _seed_sandbox(db: AsyncSession) -> CloudSandbox:
@@ -174,7 +183,7 @@ async def test_flag_off_keeps_legacy_launch_unchanged(
 ) -> None:
     monkeypatch.setattr(settings, "supervisor_owned_runtime", False)
     provider = _FakeProvider(db_session)
-    sidecar_calls = _install_stubs(monkeypatch, provider)
+    sidecar_calls, runtime_env_calls = _install_stubs(monkeypatch, provider)
     sandbox = await _seed_sandbox(db_session)
     value = await sandbox_store.load_personal_cloud_sandbox(db_session, sandbox.owner_user_id)
     assert value is not None
@@ -188,6 +197,9 @@ async def test_flag_off_keeps_legacy_launch_unchanged(
     assert launch_command in provider.commands
     assert supervisor_command not in provider.commands
     assert sidecar_calls == ["called"]
+    assert [(call["target_id"], call["sandbox_id"]) for call in runtime_env_calls] == [
+        (sandbox.id, sandbox.provider_sandbox_id)
+    ]
     assert worker_config_path(runtime_context) not in provider.written_files
     assert supervisor_config_path(runtime_context) not in provider.written_files
     assert provider.runtime_io_transactions
@@ -201,7 +213,7 @@ async def test_flag_on_launches_supervisor_first_no_sidecar(
 ) -> None:
     monkeypatch.setattr(settings, "supervisor_owned_runtime", True)
     provider = _FakeProvider(db_session)
-    sidecar_calls = _install_stubs(monkeypatch, provider)
+    sidecar_calls, runtime_env_calls = _install_stubs(monkeypatch, provider)
     sandbox = await _seed_sandbox(db_session)
     value = await sandbox_store.load_personal_cloud_sandbox(db_session, sandbox.owner_user_id)
     assert value is not None
@@ -223,6 +235,9 @@ async def test_flag_on_launches_supervisor_first_no_sidecar(
     assert launch_command not in provider.commands
     # The Supervisor spawns the Worker itself: no separate sidecar launch.
     assert sidecar_calls == []
+    assert [(call["target_id"], call["sandbox_id"]) for call in runtime_env_calls] == [
+        (sandbox.id, sandbox.provider_sandbox_id)
+    ]
     assert worker_config_path(runtime_context) in provider.written_files
     assert supervisor_config_path(runtime_context) in provider.written_files
 

@@ -160,10 +160,16 @@ pub enum SelectionUnsupported {
         model_id: String,
     },
     /// In the catalog, but not available under the active auth contexts.
+    /// Carries the requested spelling separately from the canonical catalog
+    /// identity so callers retain the exact rejected selection without
+    /// confusing an alias or variant with the model that owned the gate.
     /// `required_contexts` is `availability.anyOf` — the unlock condition.
     ModelGated {
-        model_id: String,
+        requested_model_id: String,
+        canonical_model_id: String,
+        active_contexts: Vec<String>,
         required_contexts: Vec<String>,
+        catalog_version: String,
     },
     UnsupportedMode {
         mode_id: String,
@@ -177,6 +183,10 @@ impl ActiveCatalog {
 
     pub fn agents(&self) -> &[AgentCatalogAgent] {
         &self.document.agents
+    }
+
+    pub fn catalog_version(&self) -> &str {
+        &self.document.catalog_version
     }
 
     pub fn agent(&self, kind: &str) -> Option<&AgentCatalogAgent> {
@@ -309,8 +319,11 @@ impl ActiveCatalog {
                 })?;
                 if !model_is_available(resolved.model, contexts) {
                     return Err(SelectionUnsupported::ModelGated {
-                        model_id: requested.to_string(),
+                        requested_model_id: requested.to_string(),
+                        canonical_model_id: resolved.model.id.clone(),
+                        active_contexts: contexts.ids().to_vec(),
                         required_contexts: resolved.model.availability.any_of.clone(),
+                        catalog_version: self.document.catalog_version.clone(),
                     });
                 }
                 Some(resolved)

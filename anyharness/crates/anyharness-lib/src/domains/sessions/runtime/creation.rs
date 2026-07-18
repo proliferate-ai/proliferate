@@ -347,15 +347,9 @@ fn map_create_session_service_error(
             agent_kind,
             model_id,
         },
-        crate::domains::sessions::service::CreateSessionError::ModelGated {
-            agent_kind,
-            model_id,
-            required_contexts,
-        } => CreateAndStartSessionError::ModelGated {
-            agent_kind,
-            model_id,
-            required_contexts,
-        },
+        crate::domains::sessions::service::CreateSessionError::ModelGated(context) => {
+            CreateAndStartSessionError::ModelGated(context)
+        }
         crate::domains::sessions::service::CreateSessionError::ModeUnsupported {
             agent_kind,
             mode_id,

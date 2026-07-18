@@ -179,6 +179,49 @@ export class AnyHarnessError extends Error {
 }
 
 const TELEMETRY_SAFE_PROBLEM_CODE = /^[A-Z][A-Z0-9_]{0,63}$/;
+const ANYHARNESS_RUNTIME_INCIDENT_INSTANCE =
+  /^urn:proliferate:anyharness:incident:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const MAX_ERROR_CAUSE_CHAIN_DEPTH = 8;
+
+/**
+ * Whether an AnyHarness request error (or an Error wrapping one) carries the
+ * runtime-owned incident receipt returned through RFC 7807 `instance`.
+ *
+ * The receipt is correlation only: its exact namespace and canonical UUID
+ * shape identify the runtime as the exception owner, without claiming that a
+ * telemetry vendor accepted the corresponding event.
+ */
+export function hasAnyHarnessRuntimeIncidentReceipt(error: unknown): boolean {
+  let current = error;
+  let foundReceipt = false;
+  const seen = new Set<Error>();
+
+  for (let depth = 0; depth < MAX_ERROR_CAUSE_CHAIN_DEPTH; depth += 1) {
+    if (!(current instanceof Error) || seen.has(current)) {
+      return false;
+    }
+    seen.add(current);
+
+    if (
+      current instanceof AnyHarnessError
+      && typeof current.problem.instance === "string"
+      && ANYHARNESS_RUNTIME_INCIDENT_INSTANCE.test(current.problem.instance)
+    ) {
+      foundReceipt = true;
+    }
+
+    const cause = readErrorCause(current);
+    if (!cause.ok) {
+      return false;
+    }
+    if (cause.value == null) {
+      return foundReceipt;
+    }
+    current = cause.value;
+  }
+
+  return false;
+}
 
 /**
  * Replace an AnyHarness request error (or an Error wrapping one) with a
@@ -212,7 +255,11 @@ export function toAnyHarnessTelemetryError(error: unknown): unknown {
 function findAnyHarnessError(error: unknown): AnyHarnessError | null {
   let current = error;
   const seen = new Set<unknown>();
-  for (let depth = 0; depth < 8 && current != null; depth += 1) {
+  for (
+    let depth = 0;
+    depth < MAX_ERROR_CAUSE_CHAIN_DEPTH && current != null;
+    depth += 1
+  ) {
     if (current instanceof AnyHarnessError) {
       return current;
     }
@@ -220,9 +267,26 @@ function findAnyHarnessError(error: unknown): AnyHarnessError | null {
       return null;
     }
     seen.add(current);
-    current = (current as Error & { cause?: unknown }).cause;
+    const cause = readErrorCause(current);
+    if (!cause.ok) {
+      return null;
+    }
+    current = cause.value;
   }
   return null;
+}
+
+function readErrorCause(
+  error: Error,
+): { ok: true; value: unknown } | { ok: false } {
+  try {
+    return {
+      ok: true,
+      value: (error as Error & { cause?: unknown }).cause,
+    };
+  } catch {
+    return { ok: false };
+  }
 }
 
 export class AnyHarnessTransport {

@@ -27,6 +27,9 @@ const ENTRY: PendingEmptySessionCreation = {
   createdAt: 42,
 };
 
+const VALID_RUNTIME_INCIDENT_RECEIPT =
+  "urn:proliferate:anyharness:incident:8fd6ea9a-1246-4ef0-a526-9cc5f86ed960";
+
 describe("pending empty-session creation", () => {
   it("prepares and persists the bundled-local lifecycle with frozen inputs", async () => {
     const context = memoryStorageContext();
@@ -144,6 +147,84 @@ describe("pending empty-session creation", () => {
     });
   });
 
+  it("suppresses recovery capture for a cause-wrapped runtime incident receipt", async () => {
+    const captureException = vi.fn();
+    const context = memoryStorageContext(captureException);
+    await persistPendingEmptySessionCreation(context, ENTRY);
+    const runtimeError = new AnyHarnessError({
+      type: "about:blank",
+      title: "Model is not available",
+      status: 400,
+      detail: "caller-facing gated-model detail",
+      code: "SESSION_MODEL_GATED",
+      instance: VALID_RUNTIME_INCIDENT_RECEIPT,
+    });
+    const wrappedError = Object.assign(new Error("resume failed"), {
+      cause: runtimeError,
+    });
+
+    await expect(resumePendingEmptySessionCreations(
+      context,
+      ENTRY.workspaceId,
+      () => true,
+      async () => { throw wrappedError; },
+    )).resolves.toEqual({ resumed: 0, unresolved: 1 });
+
+    expect(captureException).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["a legacy runtime without a receipt", undefined],
+    ["a malformed receipt", "urn:proliferate:anyharness:incident:not-a-uuid"],
+    [
+      "a foreign receipt",
+      "urn:proliferate:server:incident:8fd6ea9a-1246-4ef0-a526-9cc5f86ed960",
+    ],
+  ])("keeps sanitized recovery capture for %s", async (_name, instance) => {
+    const captureException = vi.fn();
+    const context = memoryStorageContext(captureException);
+    await persistPendingEmptySessionCreation(context, ENTRY);
+    const rawDetail = "caller-facing provider detail";
+    const runtimeError = new AnyHarnessError({
+      type: "about:blank",
+      title: "Model is not available",
+      status: 400,
+      detail: rawDetail,
+      code: "SESSION_MODEL_GATED",
+      instance,
+    });
+    const wrappedError = Object.assign(new Error("resume failed"), {
+      cause: runtimeError,
+    });
+
+    await expect(resumePendingEmptySessionCreations(
+      context,
+      ENTRY.workspaceId,
+      () => true,
+      async () => { throw wrappedError; },
+    )).resolves.toEqual({ resumed: 0, unresolved: 1 });
+
+    expect(captureException).toHaveBeenCalledOnce();
+    const [capturedError, captureContext] = captureException.mock.calls[0];
+    expect(capturedError).toMatchObject({
+      name: "AnyHarnessError",
+      message: "AnyHarness request failed (SESSION_MODEL_GATED)",
+      status: 400,
+      code: "SESSION_MODEL_GATED",
+    });
+    expect(capturedError).not.toBe(wrappedError);
+    expect("problem" in capturedError).toBe(false);
+    expect("cause" in capturedError).toBe(false);
+    expect(capturedError.stack).not.toContain(rawDetail);
+    expect(JSON.stringify(capturedError)).not.toContain(rawDetail);
+    expect(captureContext).toEqual({
+      tags: {
+        domain: "pending_empty_session_creation",
+        action: "resume",
+      },
+    });
+  });
+
   it("serializes concurrent writes so separate empty tabs are not lost", async () => {
     const context = memoryStorageContext();
     const second: PendingEmptySessionCreation = {
@@ -239,7 +320,9 @@ describe("pending empty-session creation", () => {
   });
 });
 
-function memoryStorageContext(): ProductStorageContext {
+function memoryStorageContext(
+  captureException: ProductStorageContext["captureException"] = vi.fn(),
+): ProductStorageContext {
   const values = new Map<string, string>();
   const storage: ProductStorage = {
     getItem: async (key) => values.get(key) ?? null,
@@ -250,5 +333,5 @@ function memoryStorageContext(): ProductStorageContext {
       values.delete(key);
     },
   };
-  return { storage, captureException: vi.fn() };
+  return { storage, captureException };
 }

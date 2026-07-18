@@ -45,9 +45,10 @@ renderer and native shell, hosted Web and Mobile clients, AnyHarness, and the
 managed target Worker and Supervisor. Components with explicit scrubbers may
 transmit scrubbed exceptions, stack traces, traces, breadcrumbs, component
 release/environment, surface tags, and allowlisted correlation identifiers to
-the Sentry destination selected by their configured DSN. Desktop-native and
-AnyHarness can transmit exceptions and stack traces but lack an explicit
-before-send scrubber. Server structured logs go to the deployment log sink and
+the Sentry destination selected by their configured DSN. AnyHarness applies an
+explicit before-send scrubber to its hosted-product events and breadcrumbs.
+Desktop-native can transmit exceptions and stack traces but lacks that
+explicit scrubber. Server structured logs go to the deployment log sink and
 can be queried through CloudWatch/Grafana in the hosted stack.
 
 Sentry is diagnostic telemetry, not session replay by default. Web and Mobile
@@ -59,9 +60,9 @@ runtime telemetry disable setting disables vendor telemetry as well.
 
 Known current gaps:
 
-- the Desktop-native and AnyHarness Rust adapters do not install the explicit
-  before-send scrubbers used by the server, clients, Worker, and Supervisor;
+- the Desktop-native Rust adapter does not install the explicit before-send
+  scrubber used by the server, clients, AnyHarness, Worker, and Supervisor;
 - Desktop renderer error replay can retain identifier-bearing route metadata.
 
 Do not add free-form user content or secrets to tracing events. Closing either
-source-code gap requires a separate implementation PR.
+remaining source-code gap requires a separate implementation PR.

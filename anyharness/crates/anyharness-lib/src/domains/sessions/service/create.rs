@@ -4,7 +4,7 @@ use std::time::Instant;
 
 use uuid::Uuid;
 
-use super::{CreateSessionError, CreateSessionOutcome, SessionService};
+use super::{CreateSessionError, CreateSessionOutcome, ModelGatedContext, SessionService};
 use crate::domains::agents::auth::context::classify;
 use crate::domains::agents::auth::launch_facts::collect_launch_env_facts;
 use crate::domains::agents::catalog::service::{ActiveCatalog, SelectionUnsupported};
@@ -147,6 +147,8 @@ impl SessionService {
         let (resolved_model_id, resolved_mode_id, agent_auth_contexts) = resolve_selection(
             &catalog,
             &descriptor,
+            workspace_id,
+            preselected_session_id.as_deref(),
             agent_kind,
             model_id,
             mode_id,
@@ -275,6 +277,8 @@ fn replay_existing_session(
 fn resolve_selection(
     catalog: &ActiveCatalog,
     descriptor: &AgentDescriptor,
+    workspace_id: &str,
+    attempted_session_id: Option<&str>,
     agent_kind: &str,
     model_id: Option<&str>,
     mode_id: Option<&str>,
@@ -286,7 +290,9 @@ fn resolve_selection(
     let active = classify(descriptor, contexts, &facts);
     let selection = catalog
         .validate_launch(agent_kind, &active, model_id, mode_id)
-        .map_err(|unsupported| map_selection_unsupported(agent_kind, unsupported))?;
+        .map_err(|unsupported| {
+            map_selection_unsupported(workspace_id, attempted_session_id, agent_kind, unsupported)
+        })?;
     let provenance = serde_json::to_string(active.ids())
         .map_err(|error| CreateSessionError::Internal(error.into()))?;
     Ok((
@@ -297,6 +303,8 @@ fn resolve_selection(
 }
 
 fn map_selection_unsupported(
+    workspace_id: &str,
+    attempted_session_id: Option<&str>,
     agent_kind: &str,
     unsupported: SelectionUnsupported,
 ) -> CreateSessionError {
@@ -309,20 +317,33 @@ fn map_selection_unsupported(
             model_id,
         },
         SelectionUnsupported::ModelGated {
-            model_id,
+            requested_model_id,
+            canonical_model_id,
+            active_contexts,
             required_contexts,
+            catalog_version,
         } => {
             tracing::info!(
+                workspace_id,
+                attempted_session_id,
                 agent_kind,
-                model_id = %model_id,
+                requested_model_id = %requested_model_id,
+                canonical_model_id = %canonical_model_id,
+                active_contexts = ?active_contexts,
                 required_contexts = ?required_contexts,
+                catalog_version = %catalog_version,
                 "session create rejected: model gated behind inactive auth contexts"
             );
-            CreateSessionError::ModelGated {
+            CreateSessionError::ModelGated(ModelGatedContext {
+                workspace_id: workspace_id.to_string(),
+                attempted_session_id: attempted_session_id.map(ToOwned::to_owned),
                 agent_kind: agent_kind.to_string(),
-                model_id,
+                requested_model_id,
+                canonical_model_id,
+                active_contexts,
                 required_contexts,
-            }
+                catalog_version,
+            })
         }
         SelectionUnsupported::UnsupportedMode { mode_id } => CreateSessionError::ModeUnsupported {
             agent_kind: agent_kind.to_string(),

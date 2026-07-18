@@ -7,6 +7,8 @@ env must carry exactly what the pin advertises so heartbeats report what runs.
 
 from __future__ import annotations
 
+import uuid
+
 import pytest
 
 from proliferate.server.cloud.runtime.bootstrap import build_runtime_env
@@ -31,6 +33,18 @@ class TestRuntimeVersionPin:
 
 
 class TestRuntimeLaunchEnvExport:
+    def test_exports_logical_target_identity_separately_from_provider_sandbox(self) -> None:
+        target_id = uuid.uuid4()
+        env = build_runtime_env(
+            "tok",
+            anyharness_data_key="key",
+            target_id=target_id,
+            sandbox_id="e2b-provider-sandbox",
+        )
+
+        assert env["ANYHARNESS_RUNTIME_TARGET_ID"] == str(target_id)
+        assert env["PROLIFERATE_SANDBOX_ID"] == "e2b-provider-sandbox"
+
     def test_exports_pin_when_stamped(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("RUNTIME_VERSION", "3.4.5")
         env = build_runtime_env("tok", anyharness_data_key="key")

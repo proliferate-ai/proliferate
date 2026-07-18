@@ -1,4 +1,8 @@
-import { AnyHarnessError } from "@anyharness/sdk";
+import {
+  AnyHarnessError,
+  hasAnyHarnessRuntimeIncidentReceipt,
+  toAnyHarnessTelemetryError,
+} from "@anyharness/sdk";
 import type { ProductStorageContext } from "#product/lib/infra/persistence/product-storage";
 import type { CreateEmptySessionWithResolvedConfigOptions } from "#product/hooks/sessions/workflows/session-creation-types";
 import { supportsCallerSelectedSessionCreate } from "#product/lib/access/anyharness/caller-selected-session-create";
@@ -59,8 +63,11 @@ function captureStorageFailure(
   error: unknown,
   action: "read" | "write" | "remove" | "resume",
 ): void {
+  if (hasAnyHarnessRuntimeIncidentReceipt(error)) {
+    return;
+  }
   try {
-    const captured = context.captureException(error, {
+    const captured = context.captureException(toAnyHarnessTelemetryError(error), {
       tags: {
         domain: "pending_empty_session_creation",
         action,

@@ -504,6 +504,11 @@ class TestSupervisorBridgeDelivery:
         assert "anyharness_update_enabled = false" in bridge["workerConfigToml"]
         # The supervisor config carries the runtime env (mailbox drain target).
         assert "update_request_dir" in bridge["supervisorConfigToml"]
+        assert f'ANYHARNESS_RUNTIME_TARGET_ID = "{sandbox.id}"' in bridge["supervisorConfigToml"]
+        assert (
+            f'PROLIFERATE_SANDBOX_ID = "{sandbox.provider_sandbox_id}"'
+            in bridge["supervisorConfigToml"]
+        )
 
     @pytest.mark.asyncio
     async def test_no_bridge_when_flag_off(

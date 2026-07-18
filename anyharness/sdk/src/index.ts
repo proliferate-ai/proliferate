@@ -1,6 +1,7 @@
 export {
   AnyHarnessClient,
   AnyHarnessError,
+  hasAnyHarnessRuntimeIncidentReceipt,
   hashTimingScope,
   setAnyHarnessTimingObserver,
   toAnyHarnessTelemetryError,

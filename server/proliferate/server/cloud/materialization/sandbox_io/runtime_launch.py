@@ -115,6 +115,7 @@ async def launch_anyharness_runtime(
             build_runtime_env(
                 runtime_token,
                 anyharness_data_key=anyharness_data_key,
+                target_id=sandbox_record.id,
                 organization_id=organization_id,
                 sandbox_id=provider_sandbox_id,
                 user_id=sandbox_record.owner_user_id,
@@ -197,6 +198,7 @@ async def _launch_supervisor_owned_runtime(
     anyharness_env = build_runtime_env(
         runtime_token,
         anyharness_data_key=anyharness_data_key,
+        target_id=sandbox_record.id,
         organization_id=organization_id,
         sandbox_id=provider_sandbox_id,
         user_id=sandbox_record.owner_user_id,

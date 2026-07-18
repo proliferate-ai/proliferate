@@ -110,17 +110,7 @@ pub(super) fn map_create_session_error(error: CreateAndStartSessionError) -> Api
             format!("model '{model_id}' is not supported for agent '{agent_kind}'"),
             "SESSION_MODEL_UNSUPPORTED",
         ),
-        CreateAndStartSessionError::ModelGated {
-            agent_kind,
-            model_id,
-            required_contexts,
-        } => ApiError::model_gated(
-            format!(
-                "model '{model_id}' for agent '{agent_kind}' is gated behind auth contexts \
-                 {required_contexts:?}"
-            ),
-            required_contexts,
-        ),
+        CreateAndStartSessionError::ModelGated(context) => ApiError::model_gated(context),
         CreateAndStartSessionError::ModeUnsupported {
             agent_kind,
             mode_id,
@@ -362,6 +352,7 @@ mod tests {
 
     use crate::domains::sessions::model::{AgentStartupExitError, RequestedModeApplyError};
     use crate::domains::sessions::runtime::{CreateAndStartSessionError, ResolveInteractionError};
+    use crate::domains::sessions::service::ModelGatedContext;
     use crate::domains::workspaces::access_gate::WorkspaceAccessError;
 
     #[test]
@@ -386,14 +377,25 @@ mod tests {
 
     #[test]
     fn model_gated_maps_to_bad_request() {
-        let response = super::map_create_session_error(CreateAndStartSessionError::ModelGated {
-            agent_kind: "claude".to_string(),
-            model_id: "opus".to_string(),
-            required_contexts: vec!["anthropic-api".to_string()],
-        })
-        .into_response();
+        let mapped = super::map_create_session_error(CreateAndStartSessionError::ModelGated(
+            ModelGatedContext {
+                workspace_id: "workspace-1".to_string(),
+                attempted_session_id: None,
+                agent_kind: "claude".to_string(),
+                requested_model_id: "opus".to_string(),
+                canonical_model_id: "opus".to_string(),
+                active_contexts: vec!["anthropic-oauth".to_string()],
+                required_contexts: vec!["anthropic-api".to_string()],
+                catalog_version: "2026-07-18".to_string(),
+            },
+        ));
 
-        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(mapped.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(mapped.code(), Some("SESSION_MODEL_GATED"));
+        assert!(mapped
+            .instance()
+            .is_some_and(|instance| instance.starts_with("urn:proliferate:anyharness:incident:")));
+        assert_eq!(mapped.into_response().status(), StatusCode::BAD_REQUEST);
     }
 
     #[test]

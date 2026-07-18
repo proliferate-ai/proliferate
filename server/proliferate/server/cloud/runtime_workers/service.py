@@ -383,6 +383,7 @@ def _build_supervisor_bridge_inputs(
         anyharness_env = build_runtime_env(
             runtime_token,
             anyharness_data_key=anyharness_data_key,
+            target_id=sandbox.id,
             organization_id=sandbox.organization_id,
             sandbox_id=sandbox.e2b_sandbox_id,
             user_id=sandbox.owner_user_id,
