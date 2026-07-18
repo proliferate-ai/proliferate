@@ -114,6 +114,16 @@ jobs:
           : "${WEB_URL:?Set WEB_URL on the GitHub environment.}"
           : "${E2B_TEMPLATE_REF:?Set E2B_TEMPLATE_REF on the GitHub environment.}"
           : "${SUPPORT_FEED_SECRET_ARN:?Set SUPPORT_FEED_SECRET_ARN on the GitHub environment.}"
+          if ! python3 -c '
+          import os
+          import sys
+
+          value = os.environ.get("E2B_TEMPLATE_REF", "")
+          raise SystemExit(0 if value and value == value.strip() else 1)
+          '; then
+            echo "E2B_TEMPLATE_REF must be nonempty and have no leading or trailing whitespace." >&2
+            exit 1
+          fi
 
           contract_fields="$(
             jq -er --arg environment "$DEPLOY_ENVIRONMENT" '

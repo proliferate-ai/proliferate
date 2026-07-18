@@ -98,8 +98,8 @@ process is the Celery worker fleet).
 
 The Cloud orphan-sandbox reaper is the concrete periodic example: Beat owns its
 five-minute schedule, `background/tasks/cloud_sandboxes.py` only opens a session
-and calls the domain, and `server/cloud/worker/service.py` owns provider
-attribution, the advisory singleton, the grace window, and cleanup decisions.
+and calls the domain, and `server/cloud/worker/` owns the advisory singleton,
+provider attribution, grace window, and cleanup decisions.
 
 ## The outbox
 

@@ -115,6 +115,7 @@ variable "background_e2b_api_key_secret_arn" {
       || (
         can(regex("^arn:[^:]+:secretsmanager:[^:]+:[0-9]{12}:secret:[^:]+$", var.background_e2b_api_key_secret_arn))
         && var.background_e2b_template_name != ""
+        && trimspace(var.background_e2b_template_name) == var.background_e2b_template_name
       )
     )
     error_message = "Background E2B configuration must be absent as a pair or use a base Secrets Manager ARN plus a non-empty background_e2b_template_name; partial or field-projected inputs are rejected."

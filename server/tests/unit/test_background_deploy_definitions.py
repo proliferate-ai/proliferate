@@ -336,15 +336,20 @@ def test_validate_config_rejects_unbound_hosted_identity(
 
 
 def test_validate_config_rejects_partial_background_plane(tmp_path: Path) -> None:
-    # Worker set, Beat missing: must fail closed rather than skip the rollout.
     worker_only = _run_validate_config(tmp_path, {"ECS_WORKER_SERVICE": "worker-svc"})
     assert worker_only.returncode != 0
     assert "Partial background-plane configuration" in worker_only.stderr
 
-    # Beat set, worker missing: symmetric failure.
     beat_only = _run_validate_config(tmp_path, {"ECS_BEAT_SERVICE": "beat-svc"})
     assert beat_only.returncode != 0
     assert "Partial background-plane configuration" in beat_only.stderr
+
+
+@pytest.mark.parametrize("template", [" ", " leading", "trailing "])
+def test_validate_rejects_noncanonical_e2b_template(template: str, tmp_path: Path) -> None:
+    result = _run_validate_config(tmp_path, {"E2B_TEMPLATE_REF": template})
+    assert result.returncode != 0
+    assert "no leading or trailing whitespace" in result.stderr
 
 
 def test_validate_config_allows_complete_and_absent_background_plane(tmp_path: Path) -> None:

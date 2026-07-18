@@ -393,6 +393,12 @@
   description: Explicit E2B template ref for cloud provisioning, typically TEAM_SLUG/proliferate-runtime-cloud:production
   tags: [local-dev, self-hosted, production]
 
+- name: CLOUD_SANDBOX_REAPER_GRACE_SECONDS
+  secret: false
+  default: "900.0"
+  description: Minimum known provider-object age before the periodic orphan reaper may destroy an otherwise eligible running or paused E2B sandbox
+  tags: [local-dev, self-hosted, production]
+
 - name: E2B_WEBHOOK_SIGNATURE_SECRET
   secret: true
   default: ""

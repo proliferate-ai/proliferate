@@ -10,6 +10,7 @@ from uuid import UUID, uuid4
 import pytest
 
 from proliferate.integrations.sandbox import ProviderSandboxState
+from proliferate.server.cloud.worker import orphan_sandboxes as reaper
 from proliferate.server.cloud.worker import service
 from proliferate.utils.time import utcnow
 
@@ -75,9 +76,9 @@ def _patch_rows(
     async def _load(_db: object, sandbox_id: UUID) -> Any:
         return rows.get(sandbox_id)
 
-    monkeypatch.setattr(service, "load_cloud_sandbox_by_id", _load)
-    monkeypatch.setattr(service.settings, "cloud_sandbox_reaper_grace_seconds", grace_seconds)
-    monkeypatch.setattr(service, "utcnow", lambda: NOW)
+    monkeypatch.setattr(reaper, "load_cloud_sandbox_by_id", _load)
+    monkeypatch.setattr(reaper.settings, "cloud_sandbox_reaper_grace_seconds", grace_seconds)
+    monkeypatch.setattr(reaper, "utcnow", lambda: NOW)
 
 
 @pytest.mark.asyncio
@@ -101,7 +102,7 @@ async def test_destroyed_local_row_reaps_running_and_paused_provider(
         ]
     )
 
-    await service._reap(object(), provider=provider)  # type: ignore[arg-type]
+    await reaper.reap_orphan_sandboxes(object(), provider=provider)  # type: ignore[arg-type]
 
     assert provider.destroy_attempts == ["sbx-orphan"]
 
@@ -137,7 +138,7 @@ async def test_superseded_provider_is_reaped_only_past_grace(
         ]
     )
 
-    await service._reap(object(), provider=provider)  # type: ignore[arg-type]
+    await reaper.reap_orphan_sandboxes(object(), provider=provider)  # type: ignore[arg-type]
 
     assert provider.destroy_attempts == ["sbx-old"]
 
@@ -164,7 +165,7 @@ async def test_attribution_failures_never_destroy_provider_objects(
         ]
     )
 
-    await service._reap(object(), provider=provider)  # type: ignore[arg-type]
+    await reaper.reap_orphan_sandboxes(object(), provider=provider)  # type: ignore[arg-type]
 
     assert provider.destroy_attempts == []
 
@@ -201,7 +202,7 @@ async def test_active_inflight_exact_and_nonlive_objects_are_never_destroyed(
         ]
     )
 
-    await service._reap(object(), provider=provider)  # type: ignore[arg-type]
+    await reaper.reap_orphan_sandboxes(object(), provider=provider)  # type: ignore[arg-type]
 
     assert provider.destroy_attempts == []
 
@@ -230,7 +231,7 @@ async def test_destroyed_row_honors_known_age_and_tolerates_missing_age(
         ]
     )
 
-    await service._reap(object(), provider=provider)  # type: ignore[arg-type]
+    await reaper.reap_orphan_sandboxes(object(), provider=provider)  # type: ignore[arg-type]
 
     assert provider.destroy_attempts == ["sbx-no-age"]
 
@@ -257,7 +258,7 @@ async def test_one_destroy_failure_does_not_expand_or_abort_the_pass(
         fail_destroy={"sbx-first"},
     )
 
-    await service._reap(object(), provider=provider)  # type: ignore[arg-type]
+    await reaper.reap_orphan_sandboxes(object(), provider=provider)  # type: ignore[arg-type]
 
     assert provider.destroy_attempts == ["sbx-first", "sbx-second"]
 
@@ -275,8 +276,8 @@ def test_future_and_naive_timestamps_remain_inside_grace() -> None:
         metadata=naive.metadata,
     )
 
-    assert service._within_grace(future, now=NOW, grace_seconds=900.0)
-    assert service._within_grace(naive, now=NOW, grace_seconds=900.0)
+    assert reaper._within_grace(future, now=NOW, grace_seconds=900.0)
+    assert reaper._within_grace(naive, now=NOW, grace_seconds=900.0)
 
 
 class _LockDb:

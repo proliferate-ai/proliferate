@@ -164,7 +164,8 @@ Delete revokes the active Worker and its integration-gateway token, marks the
 exact current provider sandbox after the database commit. The after-commit
 callback can be lost if the server process exits; the periodic orphan reaper is
 the backstop for that gap and for a create that reached E2B but lost its local
-binding. Delete does not:
+binding once the row later provides positive destroyed or superseded evidence.
+An active unbound row remains protected as an in-flight create. Delete does not:
 
 - delete or remap `cloud_workspace` rows;
 - clear their stored AnyHarness workspace ids; or
@@ -183,6 +184,9 @@ when Cloud provisioning is configured. The thin task opens a database session
 and delegates to
 [`cloud/worker/service.py`](../../../../server/proliferate/server/cloud/worker/service.py).
 A session advisory lock admits at most one reaper pass across the worker fleet.
+The provider attribution and cleanup decisions live beside that entrypoint in
+`cloud/worker/orphan_sandboxes.py`. `CLOUD_SANDBOX_REAPER_GRACE_SECONDS`
+controls the grace window and defaults to 900 seconds.
 
 The reaper lists both running and paused provider sandboxes and destroys only
 objects whose exact `proliferate_cloud_sandbox_id` creation tag is a canonical

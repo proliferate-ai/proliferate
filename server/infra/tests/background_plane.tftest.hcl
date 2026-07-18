@@ -138,6 +138,21 @@ run "invalid_e2b_template_without_key_fails" {
   ]
 }
 
+run "invalid_e2b_whitespace_template_fails" {
+  command = plan
+  variables {
+    background_broker_enabled         = false
+    background_services_enabled       = true
+    celery_broker_url_secret_arn      = "arn:aws:secretsmanager:us-east-1:111122223333:secret:existing-broker"
+    redbeat_redis_url_secret_arn      = "arn:aws:secretsmanager:us-east-1:111122223333:secret:existing-store"
+    background_e2b_api_key_secret_arn = "arn:aws:secretsmanager:us-east-1:111122223333:secret:server-app-Ab12Cd"
+    background_e2b_template_name      = " team/proliferate-runtime-cloud:staging"
+  }
+  expect_failures = [
+    var.background_e2b_api_key_secret_arn,
+  ]
+}
+
 # Invalid: callers provide the base secret only. Accepting a pre-projected ARN
 # would produce a double field selector when the task definition adds its exact
 # E2B_API_KEY projection.
