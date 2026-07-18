@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { CircleAlert } from "@proliferate/ui/icons";
 import type { GoalTranscriptEvent } from "@proliferate/product-domain/activity/goal-transcript-events";
 import { AssistantMessage } from "#product/components/workspace/chat/transcript/AssistantMessage";
@@ -232,9 +232,11 @@ A couple of useful confirmations: the worktree is detached with unrelated local 
 function LiveStreamPreview() {
   const [visibleLength, setVisibleLength] = useState(0);
   const [cycle, setCycle] = useState(0);
+  const [revealComplete, setRevealComplete] = useState(false);
 
   useEffect(() => {
     setVisibleLength(0);
+    setRevealComplete(false);
     const interval = window.setInterval(() => {
       setVisibleLength((current) => {
         if (current >= LIVE_STREAM_TEXT.length) {
@@ -250,12 +252,23 @@ function LiveStreamPreview() {
     };
   }, [cycle]);
 
+  const handleRevealStateChange = useCallback(
+    (state: { complete: boolean }) => setRevealComplete(state.complete),
+    [],
+  );
+
   const content = LIVE_STREAM_TEXT.slice(0, visibleLength);
   const isStreaming = visibleLength < LIVE_STREAM_TEXT.length;
   return (
     <>
-      {content && <AssistantMessage content={content} isStreaming={isStreaming} />}
-      {!isStreaming && (
+      {content && (
+        <AssistantMessage
+          content={content}
+          isStreaming={isStreaming}
+          onRevealStateChange={handleRevealStateChange}
+        />
+      )}
+      {!isStreaming && revealComplete && (
         <TransientStatusRow text="Reading workspace flow entry points" />
       )}
     </>

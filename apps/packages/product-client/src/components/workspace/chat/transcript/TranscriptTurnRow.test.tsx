@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  isRecentAssistantCompletion,
+  RECENT_ASSISTANT_REVEAL_WINDOW_MS,
   resolveTurnAssistantFooterMode,
   resolveTranscriptTurnDiffPanelKind,
+  shouldHoldAssistantRevealFrontier,
   shouldRenderStandaloneStoppedNotice,
 } from "#product/components/workspace/chat/transcript/TranscriptTurnRow";
 import { resolveCompletedHistoryDisclosureLabel } from "#product/components/workspace/chat/transcript/TurnItemSequence";
@@ -51,6 +54,7 @@ describe("resolveTurnAssistantFooterMode", () => {
       rowIsLastTurnRow: true,
       turnCompleted: true,
       hasAssistantCopyContent: false,
+      assistantRevealComplete: true,
     })).toBe("reserved");
   });
 
@@ -59,12 +63,66 @@ describe("resolveTurnAssistantFooterMode", () => {
       rowIsLastTurnRow: true,
       turnCompleted: true,
       hasAssistantCopyContent: true,
+      assistantRevealComplete: true,
     })).toBe("copy");
     expect(resolveTurnAssistantFooterMode({
       rowIsLastTurnRow: false,
       turnCompleted: true,
       hasAssistantCopyContent: true,
+      assistantRevealComplete: true,
     })).toBe("none");
+  });
+
+  it("keeps completion controls reserved until the reveal fully settles", () => {
+    expect(resolveTurnAssistantFooterMode({
+      rowIsLastTurnRow: true,
+      turnCompleted: true,
+      hasAssistantCopyContent: true,
+      assistantRevealComplete: false,
+    })).toBe("reserved");
+  });
+});
+
+describe("recent completed assistant reveal", () => {
+  const nowMs = Date.parse("2026-07-18T08:00:00.000Z");
+
+  it("includes atomic short completions inside the reveal window", () => {
+    expect(isRecentAssistantCompletion(
+      new Date(nowMs - RECENT_ASSISTANT_REVEAL_WINDOW_MS).toISOString(),
+      nowMs,
+    )).toBe(true);
+  });
+
+  it("does not replay hydrated history or future timestamps", () => {
+    expect(isRecentAssistantCompletion(
+      new Date(nowMs - RECENT_ASSISTANT_REVEAL_WINDOW_MS - 1).toISOString(),
+      nowMs,
+    )).toBe(false);
+    expect(isRecentAssistantCompletion(
+      new Date(nowMs + 1).toISOString(),
+      nowMs,
+    )).toBe(false);
+    expect(isRecentAssistantCompletion(null, nowMs)).toBe(false);
+  });
+});
+
+describe("assistant reveal frontier", () => {
+  it("stays claimed while the final word fade is still settling", () => {
+    expect(shouldHoldAssistantRevealFrontier({
+      itemId: "assistant-item",
+      hasUnrevealedText: false,
+      cachedRevealComplete: false,
+      eligibleOrigin: true,
+    })).toBe(true);
+  });
+
+  it("releases only a settled frontier with no buffered text", () => {
+    expect(shouldHoldAssistantRevealFrontier({
+      itemId: "assistant-item",
+      hasUnrevealedText: false,
+      cachedRevealComplete: true,
+      eligibleOrigin: true,
+    })).toBe(false);
   });
 });
 

@@ -2,6 +2,7 @@ import type {
   TranscriptItem,
   TranscriptState,
 } from "@anyharness/sdk";
+import { useCallback } from "react";
 import { ReasoningBlock } from "#product/components/workspace/chat/tool-calls/ReasoningBlock";
 import type { PromptPlanAttachmentDescriptor } from "@proliferate/product-domain/chats/composer/prompt-plan-attachments";
 import {
@@ -21,7 +22,14 @@ import {
 } from "@proliferate/product-domain/chats/transcript/transcript-action-time";
 import type { TranscriptOpenSessionRole } from "@proliferate/product-domain/chats/transcript/transcript-open-target";
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
-import { AssistantMessage } from "#product/components/workspace/chat/transcript/AssistantMessage";
+import {
+  AssistantMessage,
+  type AssistantMessageRevealState,
+} from "#product/components/workspace/chat/transcript/AssistantMessage";
+import {
+  getAssistantRevealProgress,
+  recordAssistantRevealProgress,
+} from "#product/components/workspace/chat/transcript/assistant-reveal-progress";
 import {
   renderTranscriptCodeBlock,
   renderTranscriptInlineCode,
@@ -50,6 +58,8 @@ export function TranscriptItemBlock({
   item,
   transcript,
   animateActivityEntry = false,
+  animateAssistantReveal = false,
+  onAssistantRevealStateChange,
   workspaceId,
   onOpenArtifact,
   onHandOffPlanToNewSession,
@@ -57,6 +67,11 @@ export function TranscriptItemBlock({
   item: TranscriptItem;
   transcript: TranscriptState;
   animateActivityEntry?: boolean;
+  animateAssistantReveal?: boolean;
+  onAssistantRevealStateChange?: (
+    itemId: string,
+    state: AssistantMessageRevealState,
+  ) => void;
   workspaceId: string | null;
   onOpenArtifact: (workspaceId: string, artifactId: string) => void;
   onHandOffPlanToNewSession?: PlanHandoffHandler;
@@ -66,6 +81,10 @@ export function TranscriptItemBlock({
   const openSession = useTranscriptOpenSession();
   const canOpenSession = useTranscriptCanOpenSession();
   const recordRelationshipHint = useSessionDirectoryStore((state) => state.recordRelationshipHint);
+  const reportAssistantRevealState = useCallback((state: AssistantMessageRevealState) => {
+    recordAssistantRevealProgress(item.itemId, state);
+    onAssistantRevealStateChange?.(item.itemId, state);
+  }, [item.itemId, onAssistantRevealStateChange]);
 
   switch (item.kind) {
     case "user_message": {
@@ -168,6 +187,13 @@ export function TranscriptItemBlock({
             <AssistantMessage
               content={item.text}
               isStreaming={item.isStreaming}
+              animateReveal={animateAssistantReveal}
+              initialVisibleLength={animateAssistantReveal
+                ? getAssistantRevealProgress(item.itemId)?.visibleLength
+                : undefined}
+              onRevealStateChange={animateAssistantReveal && onAssistantRevealStateChange
+                ? reportAssistantRevealState
+                : undefined}
               renderLink={renderTranscriptLink}
               renderInlineCode={renderTranscriptInlineCode}
               renderCodeBlock={renderTranscriptCodeBlock}

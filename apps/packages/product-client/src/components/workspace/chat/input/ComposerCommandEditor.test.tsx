@@ -9,7 +9,10 @@ import {
 } from "#product/lib/domain/chat/composer/file-mention-draft-model";
 import type { SessionSlashCommandViewModel } from "#product/lib/domain/chat/composer/session-slash-command-policy";
 import { ComposerCommandEditor } from "#product/components/workspace/chat/input/ComposerCommandEditor";
-import { isExactHttpsComposerPaste } from "#product/components/workspace/chat/input/ComposerRichTextEditor";
+import {
+  isComposerLinkPaste,
+  isExactHttpsComposerPaste,
+} from "#product/components/workspace/chat/input/ComposerRichTextEditor";
 
 const slashCommandMock = vi.hoisted(() => ({
   commands: [] as SessionSlashCommandViewModel[],
@@ -176,11 +179,15 @@ describe("ComposerCommandEditor", () => {
     expect(textarea.querySelector("ul li")?.textContent).toContain("item");
   });
 
-  it("recognizes only exact HTTPS paste values and keeps typed Markdown links literal", () => {
+  it("recognizes exact HTTPS URLs and complete pasted Markdown HTTPS links", () => {
     expect(isExactHttpsComposerPaste("https://example.com/path?q=1")).toBe(true);
     expect(isExactHttpsComposerPaste("http://example.com")).toBe(false);
     expect(isExactHttpsComposerPaste(" https://example.com")).toBe(false);
     expect(isExactHttpsComposerPaste("https://example.com extra")).toBe(false);
+    expect(isComposerLinkPaste("[Docs](https://example.com)")).toBe(true);
+    expect(isComposerLinkPaste("See [Docs](https://example.com) now")).toBe(true);
+    expect(isComposerLinkPaste("[Docs](https://example.com")).toBe(false);
+    expect(isComposerLinkPaste("[Docs](http://example.com)")).toBe(false);
 
     const { textarea: typed } = renderEditor({
       draft: createTextDraft("[Docs](https://example.com)"),

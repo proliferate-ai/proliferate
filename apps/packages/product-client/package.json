@@ -66,6 +66,7 @@
     "@lexical/list": "^0.48.0",
     "@lexical/markdown": "^0.48.0",
     "@lexical/react": "^0.48.0",
+    "@lexical/selection": "^0.48.0",
     "@lezer/common": "^1.2.3",
     "@lezer/highlight": "^1.2.3",
     "@monaco-editor/react": "^4",

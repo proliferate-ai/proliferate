@@ -117,6 +117,10 @@ Rules:
 
 - Detection happens at render time from raw markdown; do not store parsed file
   references in transcript items.
+- While prose is streaming, a trailing incomplete local-file link is closed
+  only in the Markdown render copy so its file mention appears as soon as the
+  destination begins. Never persist the synthetic delimiter or expose the raw
+  partial absolute destination while waiting for the real closing delimiter.
 - Mention labels display the workspace-relative path plus a `(line N)` suffix;
   raw absolute hrefs must not be shown as label text.
 - External/web link hrefs render as a shared inline provider-icon mention
@@ -367,14 +371,49 @@ Additional dependencies:
 - `latestStreamingAssistantProseRevision` controls whether the trailing
   status renders. Only prose that is *actively streaming* suppresses the
   indicator: while text streams, the growing prose is the placeholder. The
-  moment prose completes with the turn still in progress (thinking or
-  preparing a tool call), the trailing indicator becomes eligible again. If
-  active prose receives no delta for 500ms, the indicator returns during that
-  quiet gap; the next `(itemId, lastUpdatedSeq)` revision hides it
-  synchronously and re-arms the quiet timer. A completed-looking transcript
-  with silent background work is never acceptable.
+  moment transport prose completes with the turn still in progress (thinking
+  or preparing a tool call), the trailing indicator becomes eligible only
+  after the prose's visual reveal and final opacity settle complete.
+  Never insert the generic working indicator into a quiet gap inside actively
+  streaming prose; the answer retains frontier ownership until its prose item
+  completes visually. A following thought or live tool/action row also remains
+  withheld behind that visual frontier, then takes ownership when the reveal
+  settles; transport arrival alone must not overlap it with buffered prose.
+  Inferred silence alone never creates another frontier row.
   The indicator is a frontier row above the assistant footer; it must never
   occupy the footer itself.
+- Streaming prose uses one paced, source-ordered reveal frontier. Completed
+  words stay fully opaque; each recent word receives its own uniform opacity
+  fade, and a later line must not render until the frontier reaches it. A later
+  word begins fading before earlier word fades finish, rather than replacing
+  or prematurely completing them. The reveal must not sweep a gradient through
+  the individual letters of a word. Once a source prefix has settled, a
+  transport pause, completion transition, or transcript-row remount must never
+  place that prefix back into fresh fade spans; only newly revealed source may
+  animate.
+  Pace the frontier behind a small token reserve so
+  transport batches do not read as alternating bursts and pauses, with a hard
+  maximum of 360 source characters per second; accumulated ordinary batches
+  must never trigger an adaptive catch-up jump. Initial live chunks, reconnect
+  batches, and newly completed short answers all enter through the same capped
+  frontier; a corrected stream rewinds to its shared source prefix before
+  resuming at the cap. Presentation or virtual-row key changes may remount the
+  prose component; retain a bounded item-level visible-prefix claim so the new
+  instance begins at exactly the prior painted source length and continues at
+  the cap. A remount must never replay from zero or expose the buffered suffix
+  in one paint. Only hydrated history opts out and renders immediately. When
+  transport streaming completes, continue draining any
+  buffered suffix at the same capped speed. Then finish the newest word's fade
+  and leave all prose fully opaque; never strand the last word halfway through
+  its fade. Reveal commits are cadence-bounded (32ms) so Markdown parse,
+  and reconciliation do not run on every display frame. After the 320ms
+  final-opacity fade, retain the completed prose
+  frontier for a 160ms quiet handoff before releasing a following thought,
+  tool, or status row.
+  Completion-only chrome (copy/timestamp, goal marker, stopped notice, and turn
+  diff) stays hidden or reserved until that final opacity settle reports
+  complete. Reduced-motion preferences render the complete available prefix
+  without reveal motion.
 - `TurnAssistantActionRow` renders its fixed footer when `reserveSlot` is true
   even before assistant prose exists. The latest materialized turn and pending
   prompt both reserve it; a completion without copyable prose keeps it reserved.

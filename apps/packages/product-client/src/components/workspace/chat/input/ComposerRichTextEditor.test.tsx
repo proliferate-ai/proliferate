@@ -20,9 +20,28 @@ import {
 } from "#product/components/workspace/chat/input/ComposerRichTextEditor";
 import type { ChatComposerEditorSnapshot } from "#product/lib/domain/chat/composer/file-mention-draft-model";
 
-afterEach(cleanup);
+let originalRangeRectDescriptor: PropertyDescriptor | undefined;
+
+afterEach(() => {
+  cleanup();
+  if (originalRangeRectDescriptor === undefined) {
+    Reflect.deleteProperty(Range.prototype, "getBoundingClientRect");
+  } else {
+    Object.defineProperty(
+      Range.prototype,
+      "getBoundingClientRect",
+      originalRangeRectDescriptor,
+    );
+  }
+  vi.restoreAllMocks();
+});
 beforeEach(() => {
+  originalRangeRectDescriptor = Object.getOwnPropertyDescriptor(
+    Range.prototype,
+    "getBoundingClientRect",
+  );
   vi.stubGlobal("DragEvent", class DragEvent extends Event {});
+  vi.stubGlobal("ClipboardEvent", class ClipboardEvent extends Event {});
 });
 
 describe("ComposerRichTextEditor", () => {
@@ -81,7 +100,7 @@ describe("ComposerRichTextEditor", () => {
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
-  it("creates bare and selected HTTPS links while typed Markdown stays literal", async () => {
+  it("creates bare and selected HTTPS links", async () => {
     const bare = renderEditor();
     await bare.ready();
     act(() => resetText(bare.editor, ""));
@@ -100,11 +119,33 @@ describe("ComposerRichTextEditor", () => {
     });
     await waitFor(() => expect(selected.root.querySelector("a")?.textContent).toBe("Docs"));
 
+  });
+
+  it("formats complete Markdown HTTPS links only when pasted", async () => {
+    const onChange = vi.fn();
+    const pasted = renderEditor({ onChange });
+    await pasted.ready();
+    act(() => resetText(pasted.editor, ""));
+    onChange.mockClear();
+
+    const completePaste = pasteEvent("Read [Docs](https://example.com/docs) or [Help](https://example.com/help). ");
+    act(() => { pasted.editor.dispatchCommand(PASTE_COMMAND, completePaste); });
+
+    await waitFor(() => expect(pasted.root.querySelectorAll("a")).toHaveLength(2));
+    expect(completePaste.defaultPrevented).toBe(true);
+    expect(pasted.root.textContent).toBe("Read Docs or Help. ");
+    expect(pasted.root.querySelector('a[href="https://example.com/docs"]')?.textContent).toBe("Docs");
+    expect(onChange.mock.calls[onChange.mock.calls.length - 1]?.[0]).toBe(
+      "Read [Docs](https://example.com/docs) or [Help](https://example.com/help). ",
+    );
+
     cleanup();
-    const typed = renderEditor({ value: "[Docs](https://example.com)" });
+    const typed = renderEditor();
     await typed.ready();
+    act(() => resetText(typed.editor, ""));
+    await typeCharacters(typed.editor, "[Docs](https://example.com)");
     expect(typed.root.querySelector("a")).toBeNull();
-    expect(typed.root.textContent).toContain("[Docs](https://example.com)");
+    expect(typed.root.textContent).toBe("[Docs](https://example.com)");
   });
 
   it("restores pasted-link identity from the controlled snapshot", async () => {
@@ -172,6 +213,74 @@ describe("ComposerRichTextEditor", () => {
     });
     expect(homeSubmit).toHaveBeenCalledTimes(1);
   });
+
+  it("shows a one-pixel replacement caret only after valid geometry", async () => {
+    mockRangeRect({ height: 15, left: 24, top: 18 });
+    const harness = renderEditor();
+    await harness.ready();
+
+    act(() => {
+      harness.root.focus();
+      resetText(harness.editor, "caret");
+    });
+
+    const caret = await waitFor(() => {
+      const nextCaret = document.body.querySelector<HTMLElement>(
+        "[data-chat-composer-caret]",
+      );
+      expect(nextCaret?.style.display).toBe("block");
+      return nextCaret!;
+    });
+    expect(caret.style.width).toBe("1px");
+    expect(caret.style.height).toBe("15px");
+    expect(caret.style.left).toBe("24px");
+    expect(harness.root.style.caretColor).toBe("transparent");
+
+    fireEvent.compositionStart(harness.root);
+    expect(caret.style.display).toBe("none");
+    expect(harness.root.style.caretColor).toBe("");
+
+    fireEvent.compositionEnd(harness.root);
+    act(() => insertText(harness.editor, "!"));
+    await waitFor(() => expect(caret.style.display).toBe("block"));
+
+    act(() => {
+      harness.editor.update(() => {
+        $getRoot().getAllTextNodes()[0]?.select(0, 1);
+      }, { discrete: true });
+    });
+    await waitFor(() => expect(caret.style.display).toBe("none"));
+    expect(harness.root.style.caretColor).toBe("");
+
+    act(() => harness.root.blur());
+    await waitFor(() => expect(harness.root.style.caretColor).toBe(""));
+
+    act(() => {
+      harness.root.focus();
+      insertText(harness.editor, "!");
+    });
+    await waitFor(() => expect(harness.root.style.caretColor).toBe("transparent"));
+    harness.unmount();
+    expect(harness.root.style.caretColor).toBe("");
+    expect(caret.isConnected).toBe(false);
+  });
+
+  it("keeps the native caret when replacement geometry is invalid", async () => {
+    mockRangeRect({ height: 0, left: 24, top: 18 });
+    const harness = renderEditor();
+    await harness.ready();
+
+    act(() => {
+      harness.root.focus();
+      resetText(harness.editor, "fallback");
+    });
+
+    await waitFor(() => expect(harness.root.style.caretColor).toBe(""));
+    expect(
+      document.body.querySelector<HTMLElement>("[data-chat-composer-caret]")
+        ?.style.display,
+    ).not.toBe("block");
+  });
 });
 
 function renderEditor(overrides: Partial<ComposerRichTextEditorProps> = {}) {
@@ -197,6 +306,7 @@ function renderEditor(overrides: Partial<ComposerRichTextEditorProps> = {}) {
       props = { ...props, ...next };
       rendered.rerender(<ComposerRichTextEditor {...props} />);
     },
+    unmount: rendered.unmount,
   };
 }
 
@@ -228,9 +338,34 @@ function keyEvent(key: string, init: KeyboardEventInit = {}): KeyboardEvent {
 }
 
 function pasteEvent(text: string): ClipboardEvent {
-  const event = new Event("paste", { bubbles: true, cancelable: true }) as ClipboardEvent;
+  const event = new ClipboardEvent("paste", { bubbles: true, cancelable: true });
   Object.defineProperty(event, "clipboardData", {
     value: { getData: (type: string) => type === "text/plain" ? text : "" },
   });
   return event;
+}
+
+function mockRangeRect({
+  height,
+  left,
+  top,
+}: {
+  height: number;
+  left: number;
+  top: number;
+}) {
+  Object.defineProperty(Range.prototype, "getBoundingClientRect", {
+    configurable: true,
+    value: vi.fn(() => ({
+      bottom: top + height,
+      height,
+      left,
+      right: left,
+      toJSON: () => ({}),
+      top,
+      width: 0,
+      x: left,
+      y: top,
+    } satisfies DOMRect)),
+  });
 }

@@ -11,10 +11,12 @@ import {
 import { buildTurnPresentation } from "@proliferate/product-domain/chats/transcript/transcript-presentation";
 import {
   CompletedHistorySequence,
+  constrainTurnItemSequencePresentation,
   resolveTurnItemFrontierBlockKey,
   shouldRenderCompletedArtifactCards,
   TurnItemSequence,
 } from "#product/components/workspace/chat/transcript/TurnItemSequence";
+import type { TurnPresentation } from "@proliferate/product-domain/chats/transcript/transcript-presentation";
 
 vi.mock("./TranscriptTreeNode", () => ({
   TranscriptTreeNode: ({ itemId }: { itemId: string }) => (
@@ -113,6 +115,28 @@ describe("completed-work transition", () => {
   });
 });
 
+describe("assistant visual frontier", () => {
+  it("withholds following thinking and tool blocks until prose settles", () => {
+    const presentation = {
+      rootIds: ["answer", "thought", "command"],
+      childrenByParentId: new Map(),
+      displayBlocks: [
+        { kind: "item", itemId: "answer" },
+        { kind: "item", itemId: "thought" },
+        { kind: "collapsed_actions", blockId: "command-command", itemIds: ["command"] },
+      ],
+      finalAssistantItemId: null,
+      completedHistoryRootIds: [],
+      completedHistorySummary: null,
+    } as TurnPresentation;
+
+    expect(
+      constrainTurnItemSequencePresentation(presentation, "answer").displayBlocks,
+    ).toEqual([{ kind: "item", itemId: "answer" }]);
+    expect(constrainTurnItemSequencePresentation(presentation, null)).toBe(presentation);
+  });
+});
+
 function renderTurnItemSequence({
   turn,
   transcript,
@@ -141,6 +165,7 @@ function turnItemSequence({
       tailAssistantProseRootId={presentation.finalAssistantItemId}
       completedHistoryLabel={null}
       animateActivityEntry={false}
+      animateAssistantRevealItemId={null}
       showCompletedArtifactFallback={false}
       workspaceId={null}
       onOpenArtifact={vi.fn()}

@@ -102,13 +102,25 @@ Home, or queued-edit surface applies its own submit contract exactly once. The
 same native `beforeinput`, `keydown`, or `paste` event timestamp is forwarded to
 typing measurement when that event changes the document.
 
-Link creation is deliberately paste-only: an exact `https://` clipboard value
+The editable surface keeps WebKit's native selection and browser-owned editing
+semantics. On macOS, where current WebKit paints its redesigned insertion caret
+at two CSS pixels, the product client paints a one-pixel visual caret at the
+collapsed Lexical selection. The visual caret uses Lexical's DOM-range mapping,
+does not mutate editor content, and hides the native caret only after it has a
+valid attached rectangle. Failed measurement, blur, a non-collapsed selection,
+IME composition, and unmount restore the native caret immediately. Its height
+scales from the independent composer appearance tokens; composer font size and
+line height remain unchanged, including user-selected scale changes.
+
+Link creation is deliberately paste-only. An exact `https://` clipboard value
 becomes a link, wrapping a non-collapsed selection or inserting the URL when
-the selection is collapsed. Typed URLs, typed Markdown link syntax, `http://`,
-and clipboard values containing surrounding or additional text remain literal
-editor text. The Markdown exporter still serializes an actual pasted link, so
-the existing prompt submission and sent-message Markdown renderer need no
-special link transport.
+the selection is collapsed. Complete Markdown HTTPS links in pasted text also
+become links while preserving all surrounding clipboard text, and a single
+paste may contain multiple links. Typed URLs, typed Markdown link syntax,
+`http://` destinations, and incomplete pasted Markdown link syntax remain
+literal editor text. The Markdown exporter still serializes an actual pasted
+link, so the existing prompt submission and sent-message Markdown renderer
+need no special link transport.
 
 Slash-command discovery remains prompt-leading and composer-local. IME
 composition bypasses submission and command keyboard handling. The editor root
