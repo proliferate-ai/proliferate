@@ -693,8 +693,9 @@ function fakeExecInProviderSandbox(
     if (command[0] === "sha256sum") {
       return { stdout: `${"a".repeat(64)}  ${command[1]}`, stderr: "", exitCode: 0 };
     }
-    // A binary `--version` exec.
-    return { stdout: "1.4.0", stderr: "", exitCode: 0 };
+    // A binary `--version` exec. The real clap binaries print
+    // `<binary-name> <version>`; the fake world's candidate receipts are 1.0.0.
+    return { stdout: `${path.basename(command[0]!)} 1.0.0`, stderr: "", exitCode: 0 };
   };
   return { fn, calls };
 }
@@ -716,9 +717,9 @@ test("createCloudProvision1Driver().verifyWorkerSupervisor asserts worker enroll
   const driver = createCloudProvision1Driver({ execInProviderSandbox: exec });
   const world: ManagedCloudWorld = { ...fakeWorld(), box };
   const result = await driver.verifyWorkerSupervisor(world, fakeConvergenceForDriver());
-  assert.equal(result.workerVersion, "1.4.0");
-  assert.equal(result.supervisorVersion, "1.4.0");
-  assert.equal(result.anyharnessVersion, "1.4.0");
+  assert.equal(result.workerVersion, "1.0.0");
+  assert.equal(result.supervisorVersion, "1.0.0");
+  assert.equal(result.anyharnessVersion, "1.0.0");
   assert.equal(result.supervisorIsParent, false, "supervisor-parentage stays deferred to PR 9");
   assert.equal(result.heartbeatRecent, true);
   // The binary hashes were compared against the candidate receipts (MCW-003).
@@ -733,25 +734,47 @@ test("createCloudProvision1Driver().verifyWorkerSupervisor asserts worker enroll
   assert.equal(calls.length, 6);
 });
 
-test("createCloudProvision1Driver().verifyWorkerSupervisor falls back to the candidate receipt when AnyHarness --version is blank", async () => {
+test("createCloudProvision1Driver().verifyWorkerSupervisor canonicalizes clap --version output to the candidate receipt token", async () => {
   const box = fakeBoxExec();
   const { fn: exec, calls } = fakeExecInProviderSandbox(() => "[]");
-  const blankAnyharnessVersionExec = async (providerSandboxId: string, command: readonly string[]) => {
+  const clapAnyharnessVersionExec = async (providerSandboxId: string, command: readonly string[]) => {
     if (
       command[0] === MANAGED_CLOUD_TEMPLATE_DESTINATIONS.anyharness &&
       command.at(-1) === "--version"
     ) {
-      return { stdout: "\n", stderr: "", exitCode: 0 };
+      return { stdout: `anyharness ${fakeWorld().artifacts.anyharness.version}\n`, stderr: "", exitCode: 0 };
     }
     return exec(providerSandboxId, command);
   };
-  const driver = createCloudProvision1Driver({ execInProviderSandbox: blankAnyharnessVersionExec });
+  const driver = createCloudProvision1Driver({ execInProviderSandbox: clapAnyharnessVersionExec });
   const world: ManagedCloudWorld = { ...fakeWorld(), box };
   const result = await driver.verifyWorkerSupervisor(world, fakeConvergenceForDriver());
 
   assert.equal(result.anyharnessVersion, world.artifacts.anyharness.version);
   assert.equal(result.anyharnessHashMatchesReceipt, true);
   assert.equal(calls.filter((c) => c.command[0] === "sha256sum").length, 3);
+});
+
+test("createCloudProvision1Driver().verifyWorkerSupervisor rejects blank or diverged --version output", async () => {
+  for (const stdout of ["\n", "anyharness 9.9.9\n"]) {
+    const box = fakeBoxExec();
+    const { fn: exec } = fakeExecInProviderSandbox(() => "[]");
+    const badAnyharnessVersionExec = async (providerSandboxId: string, command: readonly string[]) => {
+      if (
+        command[0] === MANAGED_CLOUD_TEMPLATE_DESTINATIONS.anyharness &&
+        command.at(-1) === "--version"
+      ) {
+        return { stdout, stderr: "", exitCode: 0 };
+      }
+      return exec(providerSandboxId, command);
+    };
+    const driver = createCloudProvision1Driver({ execInProviderSandbox: badAnyharnessVersionExec });
+    const world: ManagedCloudWorld = { ...fakeWorld(), box };
+    await assert.rejects(
+      () => driver.verifyWorkerSupervisor(world, fakeConvergenceForDriver()),
+      /did not advertise candidate receipt version 1\.0\.0/,
+    );
+  }
 });
 
 test("createCloudProvision1Driver().verifyWorkerSupervisor fails when a baked binary hash does not match its receipt", async () => {

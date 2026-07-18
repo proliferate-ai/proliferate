@@ -505,7 +505,7 @@ interface CloudRuntimeWorkerRow {
   last_seen_at: string | null;
 }
 
-function observedVersionOrReceipt(
+function observedVersionMatchingReceipt(
   observed: E2BExecResult,
   receiptVersion: string,
   label: string,
@@ -515,8 +515,24 @@ function observedVersionOrReceipt(
       `verifyWorkerSupervisor: ${label} --version exited ${observed.exitCode}; stderr=${observed.stderr.trim().slice(0, 300)}`,
     );
   }
-  const trimmed = observed.stdout.trim();
-  return trimmed.length > 0 ? trimmed : receiptVersion;
+  // clap prints `<binary-name> <version>` for `--version`. Persisting that
+  // whole line would make otherwise-valid evidence fail the safe-token schema
+  // because it contains whitespace. Match the exact receipt version as a
+  // whitespace token (also tolerating clap's conventional leading `v`) and
+  // persist the receipt's canonical token. A blank or diverged response stays
+  // non-green: the hash check below proves the bytes, while this check proves
+  // the stamped version those exact bytes advertise.
+  const versionMatches = observed.stdout
+    .split(/\s+/)
+    .filter(Boolean)
+    .some((token) => token === receiptVersion || token === `v${receiptVersion}`);
+  if (!versionMatches) {
+    throw new Error(
+      `verifyWorkerSupervisor: ${label} --version did not advertise candidate receipt version ${receiptVersion}; ` +
+        `stdout=${JSON.stringify(observed.stdout.trim().slice(0, 200))}`,
+    );
+  }
+  return receiptVersion;
 }
 
 /**
@@ -1293,9 +1309,17 @@ export function createCloudProvision1Driver(
     );
 
     return {
-      workerVersion: observedVersionOrReceipt(workerVersion, world.artifacts.worker.version, "worker"),
-      supervisorVersion: observedVersionOrReceipt(supervisorVersion, world.artifacts.supervisor.version, "supervisor"),
-      anyharnessVersion: observedVersionOrReceipt(anyharnessVersion, world.artifacts.anyharness.version, "anyharness"),
+      workerVersion: observedVersionMatchingReceipt(workerVersion, world.artifacts.worker.version, "worker"),
+      supervisorVersion: observedVersionMatchingReceipt(
+        supervisorVersion,
+        world.artifacts.supervisor.version,
+        "supervisor",
+      ),
+      anyharnessVersion: observedVersionMatchingReceipt(
+        anyharnessVersion,
+        world.artifacts.anyharness.version,
+        "anyharness",
+      ),
       // Supervisor-parentage is PR 9's guarantee (see above); PR 2 does not
       // claim it. `false` records the honest current state in evidence.
       supervisorIsParent: false,
