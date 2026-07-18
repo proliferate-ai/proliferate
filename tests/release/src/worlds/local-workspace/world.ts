@@ -4,6 +4,8 @@ import path from "node:path";
 
 import type { Browser } from "playwright";
 
+import { registerCancellationFinalizer } from "../../cli/cancellation-finalizer.js";
+
 import type { CandidateBuildMapV1 } from "../../artifacts/build-map.js";
 import {
   resolveLocalCandidateSet,
@@ -235,6 +237,12 @@ export async function constructLocalWorld(options: ConstructLocalWorldOptions): 
     mirror: deps.ledgerMirror,
   });
   const stack = new LocalWorldCleanupStack({ ledger, log });
+  const cancellationFinalizer = registerCancellationFinalizer({
+    world: "local",
+    run: options.run,
+    runDir: worldRoot,
+    finalize: () => stack.runAll(),
+  });
 
   const register = async (
     kind: CleanupResourceKind,
@@ -349,12 +357,12 @@ export async function constructLocalWorld(options: ConstructLocalWorldOptions): 
       db: { databaseUrl: dockerHostDatabaseUrl(options.ports.postgres) },
       registerCleanup: register,
       trackActorSubjects: (actor) => trackActorSubjects(stack, gateway, actor),
-      close: () => stack.runAll(),
+      close: () => cancellationFinalizer.run(),
     };
   } catch (error) {
     // Any startup failure runs every registered cleanup exactly once, reverse
     // order, then rethrows so the caller marks the cell failed.
-    await stack.runAll().catch(() => undefined);
+    await cancellationFinalizer.run().catch(() => undefined);
     throw error;
   }
 }

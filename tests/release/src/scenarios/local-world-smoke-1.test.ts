@@ -5,6 +5,7 @@ import {
   DETERMINISTIC_PROMPT,
   LOCAL_WORLD_SMOKE_1_ID,
   REPRESENTATIVE_HARNESS,
+  localWorldSmokeWorldRoot,
   localWorldSmoke1,
   resolveWorldConstructionInputs,
   runLocalWorldSmokeCell,
@@ -48,6 +49,13 @@ function fakeCandidateMap(): CandidateBuildMapV1 {
     ],
   };
 }
+
+test("smoke world state is isolated below the candidate publication root", () => {
+  assert.equal(
+    localWorldSmokeWorldRoot("/qualification/ql-run/1"),
+    "/qualification/ql-run/1/worlds/local-world-smoke-1",
+  );
+});
 
 function fakePorts(): LocalWorldPorts {
   return { server: 1, postgres: 2, redis: 3, anyharness: 4, renderer: 5 };

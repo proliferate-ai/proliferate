@@ -96,18 +96,18 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: release-e2e-tier3
-  cancel-in-progress: false
-
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   release-e2e-local:
     name: tier-3 local lane (provisional)
+    if: github.event_name == 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    concurrency:
+      group: release-e2e-local
+      cancel-in-progress: false
     # Provisional posture, enforced twice: the job name says so, and the job
     # never fails the workflow while it is provisional (README CI mapping —
     # tier 3 is not yet a merge gate).
@@ -317,6 +317,9 @@ jobs:
     name: tier-3 staging lane (provisional)
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    concurrency:
+      group: release-e2e-staging
+      cancel-in-progress: false
     continue-on-error: true
     environment: staging
     steps:
@@ -387,78 +390,6 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-  # ---------------------------------------------------------------------------
-  # Local-world smoke — "Prove One Real Local Workspace Turn": builds one
-  # exact candidate Server, one exact candidate AnyHarness, and one exact
-  # candidate Desktop renderer; starts them as an isolated local world; and
-  # drives one real cheap managed-gateway turn through the actual product UI
-  # (the LOCAL-WORLD-SMOKE-1 cell). This is a provisional infrastructure
-  # proof, not the canonical LOCAL-2 guarantee.
-  #
-  # `workflow_dispatch` only while stability is established (no `schedule`
-  # trigger yet) — unlike the two lanes above, this job is NOT
-  # `continue-on-error`: a red command here stays red, with its real exit
-  # code. It runs `make qualification-local-workspace`, the exact same
-  # entrypoint a laptop uses; only the LiteLLM input source differs (the
-  # protected `Qualification` GitHub environment's vars/secrets, never the
-  # ignored local secret profile, and never routed to arbitrary pull-request
-  # code — the environment's branch policy allows only main and
-  # codex/local-world-smoke-1).
-  release-e2e-local-world-smoke:
-    name: local-world-smoke-1 (manual, strict)
-    if: github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    environment: Qualification
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: "22"
-      - uses: pnpm/action-setup@v6
-        with:
-          version: 10
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "."
-
-      - name: Install workspace dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build the three exact candidates and run LOCAL-WORLD-SMOKE-1 (strict)
-        env:
-          # Mapped directly from the protected `Qualification` environment. Both
-          # the admin/control-plane and public URLs exist there as distinct
-          # variables, so each maps to its own input (no public-covers-admin
-          # fallback). Arbitrary PR code never runs this job or sees these.
-          AGENT_GATEWAY_LITELLM_BASE_URL: ${{ vars.AGENT_GATEWAY_LITELLM_BASE_URL }}
-          AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL: ${{ vars.AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL }}
-          AGENT_GATEWAY_LITELLM_MASTER_KEY: ${{ secrets.AGENT_GATEWAY_LITELLM_MASTER_KEY }}
-          # Bounded, secret-free failure diagnostics written inside the uploaded
-          # logs/ tree (all captures pass through redact-diagnostics.ts before
-          # they are written). Deliberately OUTSIDE the run dir
-          # (<base>/<run-id>/<shard>) — the cleanup stack deletes the run dir on
-          # teardown, which would delete the captures before upload. This
-          # sibling path still matches the `*/*/logs/` upload glob below.
-          LOCAL_WORLD_SMOKE_DEBUG_DIR: ${{ github.workspace }}/tests/release/.output/local-world/ql-ci-${{ github.run_id }}-${{ github.run_attempt }}/debug/logs
-        run: |
-          set -euo pipefail
-          make qualification-local-workspace \
-            PROFILE="ci-${{ github.run_id }}-${{ github.run_attempt }}" \
-            BEHAVIOR=strict
-
-      - name: Upload V4 report and bounded diagnostic logs
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: local-world-smoke-1-evidence
-          path: |
-            tests/release/.output/local-world/*/*/evidence/
-            tests/release/.output/local-world/*/*/logs/
-          retention-days: 7
-          if-no-files-found: ignore
-
   # ── PR 4: Tier-2 strict billing/auth qualification ──────────────────────────
   # `workflow_dispatch` only while stability is established. NOT
   # `continue-on-error` — a red command stays red with its real exit code. Runs
@@ -473,6 +404,9 @@ jobs:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    concurrency:
+      group: release-e2e-tier2
+      cancel-in-progress: false
     environment: Qualification
     services:
       postgres:
@@ -560,32 +494,54 @@ jobs:
   # (~/Vault/Vault/Workspace/Testing/Complete Local Workspace Qualification
   # (Functional).md; specs/developing/testing/tier-3-scenario-contract.md
   # §"Local cases" LOCAL-1..7, billing carve-out excepted — see LOCAL-BILL-1..7,
-  # out of scope until PR 4). Same three exact candidates as the smoke job
-  # above (identical build step), but drives the full functional local cell
-  # set — repo-to-workspace, gateway chat, user-key auth route + route change,
-  # config matrix, session tabs, and the MCP integration turn — instead of the
-  # single LOCAL-WORLD-SMOKE-1 infrastructure proof.
+  # out of scope until PR 4). This one job builds the three exact candidates,
+  # runs LOCAL-WORLD-SMOKE-1, then materializes and re-hashes that exact map for
+  # the functional cell set. Candidate bytes are built and published once per
+  # workflow run; no second cargo/docker/pnpm build seam is entered.
   #
   # `workflow_dispatch` only, same posture as the smoke job: NOT
   # `continue-on-error`, `environment: Qualification` (protected — branch
   # policy gates which refs may run it; the BYOK/integration/LiteLLM secrets
   # below never see arbitrary pull-request code). Before dispatching this
   # manually, check the Actions tab for an in-progress/pending release-e2e.yml
-  # run first — every job in this workflow shares the `release-e2e-tier3`
-  # concurrency group (queued, not cancelled, since cancel-in-progress is
-  # false above), so a second dispatch just waits rather than racing the
-  # first one's world.
+  # run first — this world has its own non-cancelling concurrency group, so an
+  # unrelated managed-cloud, self-host, Tier-2, or Tier-4 run cannot replace it.
   release-e2e-local-functional:
-    name: local-functional (manual, LOCAL-1..7)
+    name: local smoke + functional (manual, build once)
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    concurrency:
+      group: release-e2e-local
+      cancel-in-progress: false
     environment: Qualification
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22"
+      - name: Preflight local world before installs or candidate builds
+        env:
+          AGENT_GATEWAY_LITELLM_BASE_URL: ${{ vars.AGENT_GATEWAY_LITELLM_BASE_URL }}
+          AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL: ${{ vars.AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL }}
+          AGENT_GATEWAY_LITELLM_MASTER_KEY: ${{ secrets.AGENT_GATEWAY_LITELLM_MASTER_KEY }}
+          RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY: ${{ secrets.RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY }}
+          RELEASE_E2E_BYOK_ANTHROPIC_B_API_KEY: ${{ secrets.RELEASE_E2E_BYOK_ANTHROPIC_B_API_KEY }}
+          RELEASE_E2E_BYOK_OPENAI_API_KEY: ${{ secrets.RELEASE_E2E_BYOK_OPENAI_API_KEY }}
+          RELEASE_E2E_BYOK_XAI_API_KEY: ${{ secrets.RELEASE_E2E_BYOK_XAI_API_KEY }}
+          RELEASE_E2E_INTEGRATION_NAMESPACE: ${{ vars.RELEASE_E2E_INTEGRATION_NAMESPACE }}
+          RELEASE_E2E_INTEGRATION_API_KEY: ${{ secrets.RELEASE_E2E_INTEGRATION_API_KEY }}
+          SCENARIOS_INPUT: ${{ github.event.inputs.scenarios || 'all' }}
+        run: |
+          node scripts/ci-cd/qualification-preflight.mjs \
+            --world local \
+            --source-sha "${GITHUB_SHA}" \
+            --run-id "qlf-ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --shard-id 1 \
+            --attempt "${GITHUB_RUN_ATTEMPT}" \
+            --scenarios "${SCENARIOS_INPUT}" \
+            --artifact-mode build \
+            --output "tests/release/.output/preflight/local/qualification-preflight.json"
       - uses: pnpm/action-setup@v6
         with:
           version: 10
@@ -594,10 +550,7 @@ jobs:
         with:
           workspaces: "."
 
-      - name: Install workspace dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build the three exact candidates and run the local-functional cell set
+      - name: Build once, run the smoke, then reuse the exact candidates for functional cells
         env:
           # Same LiteLLM mapping as local-world-smoke-1 above — one source of
           # truth, the protected `Qualification` environment.
@@ -633,11 +586,21 @@ jobs:
           BEHAVIOR: ${{ github.event.inputs.local_functional_behavior || 'strict' }}
         run: |
           set -euo pipefail
+          profile="ci-${{ github.run_id }}-${{ github.run_attempt }}"
+          smoke_rc=0
+          functional_rc=0
+          make qualification-local-workspace \
+            PROFILE="$profile" \
+            BEHAVIOR=strict || smoke_rc=$?
+          candidate_dir="${GITHUB_WORKSPACE}/tests/release/.output/local-world/ql-${profile}/1"
           make qualification-local-functional \
-            PROFILE="ci-${{ github.run_id }}-${{ github.run_attempt }}" \
+            PROFILE="$profile" \
             BEHAVIOR="$BEHAVIOR" \
             AGENTS="$AGENTS" \
-            SCENARIOS="$SCENARIOS"
+            SCENARIOS="$SCENARIOS" \
+            REUSE_CANDIDATES="$candidate_dir" || functional_rc=$?
+          if [ "$smoke_rc" -eq 2 ] || [ "$functional_rc" -eq 2 ]; then exit 2; fi
+          if [ "$smoke_rc" -ne 0 ] || [ "$functional_rc" -ne 0 ]; then exit 1; fi
 
       - name: Upload V4 report and bounded diagnostic logs
         if: always()
@@ -647,6 +610,12 @@ jobs:
           path: |
             tests/release/.output/local-world/*/*/evidence/
             tests/release/.output/local-world/*/*/logs/
+            tests/release/.output/local-world/*/*/preflight/
+            tests/release/.output/local-world/ql-*/*/candidate-build.json
+            tests/release/.output/local-world/ql-*/*/local-world-ports.json
+            tests/release/.output/local-world/ql-*/*/artifacts/
+            tests/release/.output/local-world/**/*-cancellation-finalization.json
+            tests/release/.output/preflight/local/
           retention-days: 7
           if-no-files-found: ignore
 
@@ -672,6 +641,9 @@ jobs:
     if: github.event_name == 'workflow_dispatch' && inputs.selfhost
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    concurrency:
+      group: release-e2e-self-host
+      cancel-in-progress: false
     environment: Qualification
     permissions:
       contents: read
@@ -682,6 +654,42 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22"
+      - name: Preflight self-host world before installs, builds, or AWS mutation
+        env:
+          RELEASE_E2E_SELFHOST_REGION: ${{ vars.RELEASE_E2E_SELFHOST_REGION }}
+          RELEASE_E2E_SELFHOST_HOSTED_ZONE_ID: ${{ vars.RELEASE_E2E_SELFHOST_HOSTED_ZONE_ID }}
+          RELEASE_E2E_SELFHOST_INSTANCE_TYPE: ${{ vars.RELEASE_E2E_SELFHOST_INSTANCE_TYPE }}
+          RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY: ${{ secrets.RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY }}
+          RELEASE_E2E_BYOK_ANTHROPIC_B_API_KEY: ${{ secrets.RELEASE_E2E_BYOK_ANTHROPIC_B_API_KEY }}
+          RELEASE_E2E_SELFHOST_GITHUB_OAUTH_CLIENT_ID: ${{ vars.RELEASE_E2E_SELFHOST_GITHUB_OAUTH_CLIENT_ID }}
+          RELEASE_E2E_SELFHOST_GITHUB_OAUTH_SECRET: ${{ secrets.RELEASE_E2E_SELFHOST_GITHUB_OAUTH_SECRET }}
+          RELEASE_E2E_SELFHOST_GITHUB_IDENTITY_A_STATE: ${{ secrets.RELEASE_E2E_SELFHOST_GITHUB_IDENTITY_A_STATE }}
+          RELEASE_E2E_SELFHOST_GITHUB_IDENTITY_B_STATE: ${{ secrets.RELEASE_E2E_SELFHOST_GITHUB_IDENTITY_B_STATE }}
+          RELEASE_E2E_SELFHOST_GITHUB_IDENTITY_A_EMAIL: ${{ vars.RELEASE_E2E_SELFHOST_GITHUB_IDENTITY_A_EMAIL }}
+          RELEASE_E2E_SELFHOST_GITHUB_IDENTITY_B_EMAIL: ${{ vars.RELEASE_E2E_SELFHOST_GITHUB_IDENTITY_B_EMAIL }}
+          RELEASE_E2E_SELFHOST_LITELLM_IMAGE_TAG: ${{ vars.RELEASE_E2E_SELFHOST_LITELLM_IMAGE_TAG }}
+          RELEASE_E2E_SELFHOST_CLOUD_E2B_API_KEY: ${{ secrets.RELEASE_E2E_SELFHOST_CLOUD_E2B_API_KEY }}
+          RELEASE_E2E_SELFHOST_CLOUD_E2B_TEMPLATE_NAME: ${{ vars.RELEASE_E2E_SELFHOST_CLOUD_E2B_TEMPLATE_NAME }}
+          RELEASE_E2E_SELFHOST_CLOUD_GITHUB_APP_ID: ${{ vars.RELEASE_E2E_SELFHOST_CLOUD_GITHUB_APP_ID }}
+          RELEASE_E2E_SELFHOST_CLOUD_GITHUB_APP_CLIENT_ID: ${{ vars.RELEASE_E2E_SELFHOST_CLOUD_GITHUB_APP_CLIENT_ID }}
+          RELEASE_E2E_SELFHOST_CLOUD_GITHUB_APP_CLIENT_SECRET: ${{ secrets.RELEASE_E2E_SELFHOST_CLOUD_GITHUB_APP_CLIENT_SECRET }}
+          RELEASE_E2E_SELFHOST_CLOUD_GITHUB_APP_PRIVATE_KEY: ${{ secrets.RELEASE_E2E_SELFHOST_CLOUD_GITHUB_APP_PRIVATE_KEY }}
+          RELEASE_E2E_SELFHOST_CFN_BUCKET: ${{ vars.RELEASE_E2E_SELFHOST_CFN_BUCKET }}
+          RELEASE_E2E_SELFHOST_CFN_IMAGE_REPO: ${{ vars.RELEASE_E2E_SELFHOST_CFN_IMAGE_REPO }}
+          RELEASE_E2E_AWS_ROLE_ARN: ${{ vars.RELEASE_E2E_SELFHOST_AWS_ROLE_ARN }}
+          SELFHOST_SCENARIOS_INPUT: ${{ inputs.selfhost_scenarios }}
+          SELFHOST_CELLS_INPUT: ${{ inputs.selfhost_cells }}
+        run: |
+          node scripts/ci-cd/qualification-preflight.mjs \
+            --world self-host \
+            --source-sha "${GITHUB_SHA}" \
+            --run-id "qs-ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --shard-id 1 \
+            --attempt "${GITHUB_RUN_ATTEMPT}" \
+            --scenarios "${SELFHOST_SCENARIOS_INPUT:-SELFHOST-INSTALL-1}" \
+            --cells "${SELFHOST_CELLS_INPUT:-all}" \
+            --artifact-mode build \
+            --output "tests/release/.output/preflight/self-host/qualification-preflight.json"
       - uses: pnpm/action-setup@v6
         with:
           version: 10
@@ -836,6 +844,8 @@ jobs:
             tests/release/.output/selfhost-world/**/evidence/
             tests/release/.output/selfhost-world/**/logs/
             tests/release/.output/selfhost-world/**/cleanup-ledger.json
+            tests/release/.output/selfhost-world/**/*-cancellation-finalization.json
+            tests/release/.output/preflight/self-host/
           retention-days: 7
           if-no-files-found: ignore
 
@@ -862,12 +872,52 @@ jobs:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    concurrency:
+      group: release-e2e-managed-cloud
+      cancel-in-progress: false
     environment: Qualification
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Fetch the trusted default-branch cleanup authorization
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          path: .qualification-trusted-default
+          fetch-depth: 1
+          sparse-checkout: tests/release/fixtures/managed-cloud-litellm-attribution-attestations.v1.json
+          sparse-checkout-cone-mode: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22"
+      - name: Preflight managed cloud before installs, builds, or provider mutation
+        env:
+          AGENT_GATEWAY_LITELLM_BASE_URL: ${{ vars.AGENT_GATEWAY_LITELLM_BASE_URL }}
+          AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL: ${{ vars.AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL }}
+          AGENT_GATEWAY_LITELLM_MASTER_KEY: ${{ secrets.AGENT_GATEWAY_LITELLM_MASTER_KEY }}
+          RELEASE_E2E_E2B_API_KEY: ${{ secrets.RELEASE_E2E_E2B_API_KEY }}
+          RELEASE_E2E_E2B_TEAM_ID: ${{ vars.RELEASE_E2E_E2B_TEAM_ID }}
+          RELEASE_E2E_CLOUD_AWS_REGION: ${{ vars.RELEASE_E2E_CLOUD_AWS_REGION }}
+          RELEASE_E2E_CLOUD_ROUTE53_ZONE_ID: ${{ vars.RELEASE_E2E_CLOUD_ROUTE53_ZONE_ID }}
+          RELEASE_E2E_CLOUD_GITHUB_APP_ID: ${{ vars.RELEASE_E2E_CLOUD_GITHUB_APP_ID }}
+          RELEASE_E2E_CLOUD_GITHUB_APP_CLIENT_ID: ${{ vars.RELEASE_E2E_CLOUD_GITHUB_APP_CLIENT_ID }}
+          RELEASE_E2E_CLOUD_GITHUB_APP_INSTALLATION_ID: ${{ vars.RELEASE_E2E_CLOUD_GITHUB_APP_INSTALLATION_ID }}
+          RELEASE_E2E_CLOUD_GITHUB_APP_PRIVATE_KEY: ${{ secrets.RELEASE_E2E_CLOUD_GITHUB_APP_PRIVATE_KEY }}
+          RELEASE_E2E_CLOUD_GITHUB_APP_CLIENT_SECRET: ${{ secrets.RELEASE_E2E_CLOUD_GITHUB_APP_CLIENT_SECRET }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.RELEASE_E2E_CLOUD_AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.RELEASE_E2E_CLOUD_AWS_SECRET_ACCESS_KEY }}
+        run: |
+          node scripts/ci-cd/qualification-preflight.mjs \
+            --world managed-cloud \
+            --source-sha "${GITHUB_SHA}" \
+            --run-id "qlc-ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --shard-id 1 \
+            --attempt "${GITHUB_RUN_ATTEMPT}" \
+            --scenarios CLOUD-PROVISION-1 \
+            --artifact-mode build \
+            --cleanup-attestation-repository "${GITHUB_WORKSPACE}/.qualification-trusted-default" \
+            --cleanup-attestation-default-branch "${{ github.event.repository.default_branch }}" \
+            --cleanup-attestations "${GITHUB_WORKSPACE}/.qualification-trusted-default/tests/release/fixtures/managed-cloud-litellm-attribution-attestations.v1.json" \
+            --output "tests/release/.output/preflight/managed-cloud/qualification-preflight.json"
       - uses: pnpm/action-setup@v6
         with:
           version: 10
@@ -939,7 +989,9 @@ jobs:
           set -euo pipefail
           make qualification-managed-cloud \
             PROFILE="ci-${{ github.run_id }}-${{ github.run_attempt }}" \
-            BEHAVIOR=strict
+            BEHAVIOR=strict \
+            QUALIFICATION_TRUSTED_CLEANUP_REPOSITORY="${GITHUB_WORKSPACE}/.qualification-trusted-default" \
+            QUALIFICATION_TRUSTED_CLEANUP_DEFAULT_BRANCH="${{ github.event.repository.default_branch }}"
 
       - name: Upload V4 report and bounded diagnostic logs
         if: always()
@@ -949,5 +1001,7 @@ jobs:
           path: |
             tests/release/.output/managed-cloud-world/*/*/evidence/
             tests/release/.output/managed-cloud-world/*/*/logs/
+            tests/release/.output/managed-cloud-world/**/*-cancellation-finalization.json
+            tests/release/.output/preflight/managed-cloud/
           retention-days: 7
           if-no-files-found: ignore
