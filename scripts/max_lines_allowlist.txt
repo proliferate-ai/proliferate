@@ -9,7 +9,7 @@
 
 anyharness/crates/anyharness-contract/src/v1/events.rs 1092 existing AnyHarness contract oversized file
 anyharness/crates/anyharness-contract/src/v1/sessions.rs 779 existing AnyHarness contract oversized file (+caller-selected idempotent create id)
-anyharness/crates/anyharness-lib/src/api/openapi.rs 682 existing AnyHarness oversized file (+hosting schema registration, +agent-auth state response, +gateway catalog endpoints) + enriched gateway-models schema fields (model-table §1) + workflow-runs + local materialization operations + workflow-run-workspaces paths/schemas + agent install progress schemas (central OpenAPI registry; per-route path/schema registration only)
+anyharness/crates/anyharness-lib/src/api/openapi.rs 686 existing AnyHarness oversized file (+hosting schema registration, +agent-auth state response, +gateway catalog endpoints) + enriched gateway-models schema fields (model-table §1) + workflow-runs + local materialization operations + workflow-run-workspaces paths/schemas + agent install progress schemas + worktree restore path/schemas (central OpenAPI registry; per-route path/schema registration only)
 anyharness/crates/anyharness-lib/src/api/router_tests.rs 1364 existing AnyHarness oversized test file (+hosting PR-status route tests, +catalog version + enrichment tests)
 anyharness/crates/anyharness-lib/src/domains/materialization/service.rs 625 local materialization domain service (exact-ref workspace materialization + repo-root acquisition orchestration, in-process keyed operation-lock admission, idempotent replay/failure recording; blocking git mechanics split into acquire.rs) — split into service/ on next growth per guides/domains.md
 anyharness/crates/anyharness-lib/src/domains/workflows/service.rs 664 workflow durable rules (+run-control cancel-intent use case and helpers); split into service/ on next growth per guides/domains.md
@@ -62,8 +62,8 @@ apps/packages/product-client/src/lib/domain/workspaces/cloud/logical-workspaces.
 apps/packages/product-client/src/lib/domain/workspaces/sidebar/sidebar.test.ts 691 workspace git-status threading extends existing oversized test file
 apps/packages/product-client/src/lib/domain/workspaces/sidebar/sidebar-indicators.test.ts 648 existing desktop oversized test file
 apps/packages/product-client/src/lib/infra/measurement/measurement-port.ts 734 product-owned measurement port barrel (R1 ruling) mirroring the retained measurement surface through a swappable no-op sink; split deferred
-anyharness/crates/anyharness-lib/src/api/router.rs 628 AnyHarness router (+goals/loops/activity/feed routes, +gateway catalog version route, +workflow-runs/cancel + local materialization operations + workflow-run-workspaces routes)
-anyharness/crates/anyharness-lib/src/app/mod.rs 647 AnyHarness app wiring (+session mutation admission purge/retention wiring, +goal/loop/activity/feed services, +two-phase workflow-run and workflow-workspace wiring, +local materialization service wiring)
+anyharness/crates/anyharness-lib/src/api/router.rs 632 AnyHarness router (+goals/loops/activity/feed routes, +gateway catalog version route, +workflow-runs/cancel + local materialization operations + workflow-run-workspaces routes + worktree restore route)
+anyharness/crates/anyharness-lib/src/app/mod.rs 654 AnyHarness app wiring (+session mutation admission purge/retention wiring, +goal/loop/activity/feed services, +two-phase workflow-run and workflow-workspace wiring, +local materialization service wiring + worktree restore runtime wiring)
 anyharness/crates/anyharness-lib/src/domains/loops/runtime.rs 867 loops runtime — native write path + emulated Codex scheduler (+2b derived-safe classification comment at the fire seam)
 anyharness/crates/anyharness-lib/src/live/sessions/actor/startup.rs 642 session startup (+goal/loop capability parsing, roster reconcile-on-attach)
 server/tests/integration/test_organizations_api.py 624 added admin-only coverage for GET .../invitations

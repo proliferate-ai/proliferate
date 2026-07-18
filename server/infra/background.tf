@@ -95,6 +95,39 @@ variable "redbeat_redis_url_secret_arn" {
   default     = ""
 }
 
+# Optional Cloud-provider pair for the background plane. The API key reference
+# is a base Secrets Manager ARN for a JSON record containing E2B_API_KEY; ECS
+# performs the field projection at task start, so the key is never a plaintext
+# task-definition environment value or Terraform input. Supplying exactly one
+# half is rejected when the services are enabled.
+variable "background_e2b_api_key_secret_arn" {
+  description = "Base Secrets Manager ARN whose E2B_API_KEY field the worker and Beat resolve."
+  type        = string
+  default     = ""
+
+  validation {
+    condition = (
+      var.background_services_enabled == false
+      || (
+        var.background_e2b_api_key_secret_arn == ""
+        && var.background_e2b_template_name == ""
+      )
+      || (
+        can(regex("^arn:[^:]+:secretsmanager:[^:]+:[0-9]{12}:secret:[^:]+$", var.background_e2b_api_key_secret_arn))
+        && var.background_e2b_template_name != ""
+        && trimspace(var.background_e2b_template_name) == var.background_e2b_template_name
+      )
+    )
+    error_message = "Background E2B configuration must be absent as a pair or use a base Secrets Manager ARN plus a non-empty background_e2b_template_name; partial or field-projected inputs are rejected."
+  }
+}
+
+variable "background_e2b_template_name" {
+  description = "Non-secret E2B template ref supplied to the worker and Beat with the API-key secret."
+  type        = string
+  default     = ""
+}
+
 variable "background_worker_desired_count" {
   description = "Celery worker replica count (horizontally scalable)."
   type        = number
@@ -298,21 +331,33 @@ locals {
   background_connection_secret_arns = compact([
     local.celery_broker_url_secret_arn,
     local.redbeat_redis_url_secret_arn,
+    var.background_e2b_api_key_secret_arn,
   ])
   # Shared with API so worker/beat reach the same Postgres outbox.
   background_database_url = "postgresql+asyncpg://proliferate:${var.db_password}@${aws_db_instance.postgres.endpoint}/proliferate"
-  background_common_environment = [
-    { name = "DATABASE_URL", value = local.background_database_url },
-    { name = "JWT_SECRET", value = var.jwt_secret },
-    { name = "PROLIFERATE_TELEMETRY_MODE", value = var.telemetry_mode },
-    { name = "BACKGROUND_RELAY_OLDEST_DUE_SLO_SECONDS", value = tostring(var.background_relay_oldest_due_slo_seconds) },
-  ]
+  background_common_environment = concat(
+    [
+      { name = "DATABASE_URL", value = local.background_database_url },
+      { name = "JWT_SECRET", value = var.jwt_secret },
+      { name = "PROLIFERATE_TELEMETRY_MODE", value = var.telemetry_mode },
+      { name = "BACKGROUND_RELAY_OLDEST_DUE_SLO_SECONDS", value = tostring(var.background_relay_oldest_due_slo_seconds) },
+    ],
+    var.background_e2b_template_name == "" ? [] : [
+      { name = "E2B_TEMPLATE_NAME", value = var.background_e2b_template_name },
+    ],
+  )
   background_connection_secrets = concat(
     local.celery_broker_url_secret_arn == "" ? [] : [
       { name = "CELERY_BROKER_URL", valueFrom = local.celery_broker_url_secret_arn }
     ],
     local.redbeat_redis_url_secret_arn == "" ? [] : [
       { name = "REDBEAT_REDIS_URL", valueFrom = local.redbeat_redis_url_secret_arn }
+    ],
+    var.background_e2b_api_key_secret_arn == "" ? [] : [
+      {
+        name      = "E2B_API_KEY"
+        valueFrom = "${var.background_e2b_api_key_secret_arn}:E2B_API_KEY::"
+      }
     ],
   )
   # Whether the plane has connection secrets, decided from KNOWN inputs only.

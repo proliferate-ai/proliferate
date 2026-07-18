@@ -26,6 +26,11 @@ REDIS_PREFIX = (
 REDIS_ARN = f"{REDIS_PREFIX}Ab12Cd"
 SSM_NAME = "/proliferate/staging/background/redbeat-redis-url"
 SSM_ARN = f"arn:aws:ssm:{REGION}:{ACCOUNT}:parameter{SSM_NAME}"
+SERVER_APP_ARN = (
+    f"arn:aws:secretsmanager:{REGION}:{ACCOUNT}:secret:{STAGING['secret_name']}-Ab12Cd"
+)
+E2B_KEY_REFERENCE = f"{SERVER_APP_ARN}:E2B_API_KEY::"
+E2B_TEMPLATE = "team/proliferate-runtime-cloud:staging"
 
 requires_jq = pytest.mark.skipif(shutil.which("jq") is None, reason="jq is required")
 
@@ -50,8 +55,13 @@ def _task(container: str) -> dict[str, object]:
             {
                 "name": container,
                 "image": "example.invalid/server@sha256:abc",
-                "environment": [],
-                "secrets": [{"name": "REDBEAT_REDIS_URL", "valueFrom": REDIS_ARN}],
+                "environment": [
+                    {"name": "E2B_TEMPLATE_NAME", "value": E2B_TEMPLATE},
+                ],
+                "secrets": [
+                    {"name": "REDBEAT_REDIS_URL", "valueFrom": REDIS_ARN},
+                    {"name": "E2B_API_KEY", "valueFrom": E2B_KEY_REFERENCE},
+                ],
             }
         ],
     }
@@ -86,6 +96,12 @@ def _run_assertion(
             "--arg",
             "redis_exact",
             redis_exact,
+            "--arg",
+            "e2b_api_key_reference",
+            E2B_KEY_REFERENCE,
+            "--arg",
+            "e2b_template",
+            E2B_TEMPLATE,
             "-f",
             str(program),
             str(document),
@@ -199,6 +215,82 @@ def test_worker_and_beat_reject_identity_or_projection_mismatch(
     assert result.returncode != 0
 
 
+def _missing_e2b_secret(task: dict[str, object], container: str) -> None:
+    del container
+    task["containerDefinitions"][0]["secrets"] = [
+        secret
+        for secret in task["containerDefinitions"][0]["secrets"]
+        if secret["name"] != "E2B_API_KEY"
+    ]
+
+
+def _plaintext_e2b_key(task: dict[str, object], container: str) -> None:
+    del container
+    task["containerDefinitions"][0]["environment"].append(
+        {"name": "E2B_API_KEY", "value": "plaintext"}
+    )
+
+
+def _wrong_e2b_secret(task: dict[str, object], container: str) -> None:
+    del container
+    task["containerDefinitions"][0]["secrets"][1]["valueFrom"] = E2B_KEY_REFERENCE.replace(
+        "staging/server-app", "prod/server-app"
+    )
+
+
+def _duplicate_e2b_secret(task: dict[str, object], container: str) -> None:
+    del container
+    task["containerDefinitions"][0]["secrets"].append(
+        {"name": "E2B_API_KEY", "valueFrom": E2B_KEY_REFERENCE}
+    )
+
+
+def _missing_e2b_template(task: dict[str, object], container: str) -> None:
+    del container
+    task["containerDefinitions"][0]["environment"] = []
+
+
+def _wrong_e2b_template(task: dict[str, object], container: str) -> None:
+    del container
+    task["containerDefinitions"][0]["environment"][0]["value"] = (
+        "team/proliferate-runtime-cloud:production"
+    )
+
+
+@pytest.mark.parametrize("container", ["worker", "beat"])
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        _missing_e2b_secret,
+        _plaintext_e2b_key,
+        _wrong_e2b_secret,
+        _duplicate_e2b_secret,
+        _missing_e2b_template,
+        _wrong_e2b_template,
+    ],
+    ids=[
+        "missing-key",
+        "plaintext-key",
+        "wrong-key-reference",
+        "duplicate-key",
+        "missing-template",
+        "wrong-template",
+    ],
+)
+@requires_jq
+def test_worker_and_beat_reject_incomplete_or_unowned_e2b_configuration(
+    container: str,
+    mutate: Callable[[dict[str, object], str], None],
+    tmp_path: Path,
+) -> None:
+    task = _task(container)
+    mutate(task, container)
+
+    result = _run_assertion(task, container, tmp_path)
+
+    assert result.returncode != 0
+
+
 def test_background_registration_uses_the_checked_in_contract_before_aws_mutation() -> None:
     steps = _steps()
     validation = str(steps["Validate server deploy config"]["run"])
@@ -212,6 +304,11 @@ def test_background_registration_uses_the_checked_in_contract_before_aws_mutatio
     assert "ssm)" in background
     assert "expected_background_execution_role" in background
     assert "expected_background_redis_prefix" in background
+    assert "expected_e2b_api_key_reference" in background
+    assert "E2B_TEMPLATE_NAME" in background
+    assert "E2B_API_KEY" in background
+    assert "merge_environment" in background
+    assert "merge_secrets" in background
     assert background.index("BACKGROUND_ASSERT_JQ") < background.index(
         "aws ecs register-task-definition"
     )

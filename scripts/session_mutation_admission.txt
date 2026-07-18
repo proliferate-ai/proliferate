@@ -89,6 +89,7 @@ terminals::resize_terminal workspace-scoped workspace terminal lifecycle
 terminals::start_terminal_command workspace-scoped workspace terminal lifecycle
 terminals::update_terminal_title workspace-scoped workspace terminal cosmetic
 workspaces::update_workspace_display_name workspace-scoped workspace cosmetic rename
+workspaces_restore::restore_worktree workspace-scoped restores missing workspace files without mutating or removing session execution state
 # (moved to fenced per RETIRE-01 ruling B)
 workspaces_lifecycle::retry_retire_cleanup workspace-scoped cleanup retry of an already-admitted retirement (mirrors purge retry)
 workspaces_purge::retry_purge_workspace workspace-scoped purge retry of an already-admitted purge

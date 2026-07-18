@@ -16,13 +16,17 @@ mod materialization;
 mod mobility;
 mod records;
 mod repo_metadata;
+mod restore;
 mod workflow_placement;
 mod worktrees;
 
 pub use exact_ref::{ExactRefOutcome, ExactRefWorkspace};
+pub use restore::{RestoreWorktreeError, RestoreWorktreeResult};
 
 #[cfg(test)]
 mod exact_ref_tests;
+#[cfg(test)]
+mod restore_tests;
 #[cfg(test)]
 mod test_support;
 #[cfg(test)]

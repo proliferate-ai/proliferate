@@ -42,7 +42,30 @@ const retireResponse: WorkspaceRetireResponse = {
   cleanupMessage: null,
 };
 
-describe("WorkspacesClient retire URLs", () => {
+describe("WorkspacesClient workspace URLs", () => {
+  it("encodes worktree restore workspace ids and sends no request body", async () => {
+    const calls: Array<{ path: string; body: unknown; timingCategory?: string }> = [];
+    const transport = {
+      post: async (
+        path: string,
+        body: unknown,
+        options?: { timingCategory?: string },
+      ) => {
+        calls.push({ path, body, timingCategory: options?.timingCategory });
+        return { outcome: "restored" };
+      },
+    } as unknown as AnyHarnessTransport;
+    const client = new WorkspacesClient(transport);
+
+    await client.restoreWorktree("workspace/1");
+
+    expect(calls).toEqual([{
+      path: "/v1/workspaces/workspace%2F1/worktree/restore",
+      body: undefined,
+      timingCategory: "workspace.worktree.restore",
+    }]);
+  });
+
   it("encodes retire preflight workspace ids", async () => {
     const calls: string[] = [];
     const transport = {

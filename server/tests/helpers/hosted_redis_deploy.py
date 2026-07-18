@@ -127,6 +127,7 @@ def run_redis_preflight(
     aws_exit: int = 0,
     dns_timeout_seconds: int = 20,
     dns_delay_seconds: int = 30,
+    e2b_api_key: str | None = "synthetic-e2b-key",
 ) -> tuple[subprocess.CompletedProcess[str], str]:
     """Run the exact workflow body against deterministic DNS and fake AWS."""
 
@@ -152,7 +153,12 @@ def run_redis_preflight(
         "FAKE_AWS_RESPONSE": json.dumps(
             {
                 "ARN": secret_arn,
-                "SecretString": json.dumps({"REDBEAT_REDIS_URL": redis_url}),
+                "SecretString": json.dumps(
+                    {
+                        "REDBEAT_REDIS_URL": redis_url,
+                        **({} if e2b_api_key is None else {"E2B_API_KEY": e2b_api_key}),
+                    }
+                ),
             }
         ),
         "AWS_REGION": "us-east-1",

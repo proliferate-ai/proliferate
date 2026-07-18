@@ -28,6 +28,8 @@ from tests.integration.test_cloud_integration_gateway_api import (
 )
 
 MCP_SESSION_HEADER = "Mcp-Session-Id"
+WORKSPACE_HEADER = "Proliferate-Workspace-Id"
+ANYHARNESS_SESSION_HEADER = "Proliferate-Session-Id"
 
 
 @pytest.fixture(autouse=True)
@@ -44,9 +46,14 @@ async def _first_worker(db_session: AsyncSession) -> CloudRuntimeWorker:
 async def _initialized_gateway_headers(
     client: AsyncClient,
     *,
-    bearer: str,
+    authorization: str,
 ) -> dict[str, str]:
-    headers = {"Authorization": f"Bearer {bearer}"}
+    identity = uuid.uuid4().hex
+    headers = {
+        "Authorization": authorization,
+        WORKSPACE_HEADER: f"workspace-{identity}",
+        ANYHARNESS_SESSION_HEADER: f"session-{identity}",
+    }
     initialized = await client.post(
         GATEWAY_URL,
         headers=headers,
@@ -149,7 +156,10 @@ async def test_every_known_slack_mutation_returns_typed_approval_required(
     bearer = await _gateway_bearer(client, db_session, prefix="gw-slack-policy-write")
     worker = await _first_worker(db_session)
     await _seed_ready_slack_account(db_session, user_id=worker.owner_user_id)
-    gateway_headers = await _initialized_gateway_headers(client, bearer=bearer)
+    gateway_headers = await _initialized_gateway_headers(
+        client,
+        authorization=f"Bearer {bearer}",
+    )
 
     async def unexpected_call_tool(**_kwargs: object) -> dict[str, object]:
         raise AssertionError("Slack mutation reached the upstream MCP")
@@ -341,18 +351,13 @@ async def test_worker_token_and_gateway_arguments_cannot_bypass_policy(
 
     gateway_authorization = enrolled.json()["integrationGateway"]["authorization"]
     await _seed_ready_slack_account(db_session, user_id=uuid.UUID(auth.user_id))
-    initialized = await client.post(
-        GATEWAY_URL,
-        headers={"Authorization": gateway_authorization},
-        json={"jsonrpc": "2.0", "id": 1, "method": "initialize"},
+    gateway_headers = await _initialized_gateway_headers(
+        client,
+        authorization=gateway_authorization,
     )
-    assert initialized.status_code == 200
     result = await _tool_call(
         client,
-        {
-            "Authorization": gateway_authorization,
-            MCP_SESSION_HEADER: initialized.headers[MCP_SESSION_HEADER],
-        },
+        gateway_headers,
         name="integrations.call_tool",
         arguments={
             "provider": "slack",

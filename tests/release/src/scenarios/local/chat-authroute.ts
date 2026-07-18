@@ -29,6 +29,10 @@ import type {
   LocalRoute,
   LocalRouteTurnEvidenceV1,
 } from "../../evidence/schema.js";
+import {
+  GATEWAY_UNSUPPORTED_HARNESSES,
+  gatewayUnsupportedMessage,
+} from "../../fixtures/gateway-unsupported-harnesses.js";
 
 /**
  * LOCAL-2 (managed gateway turn per harness), LOCAL-3 (user API-key turn per
@@ -98,9 +102,7 @@ export const GATEWAY_PROVIDER_ID = "proliferate";
  * matrix their cell is the truthful typed `blocked` (unsupported) result — never
  * green-required, never dropped. Cursor is the only such kind today.
  */
-export const HARNESSES_WITHOUT_GATEWAY_AUTH_SLOT: ReadonlySet<LocalHarnessKind> = new Set<LocalHarnessKind>([
-  "cursor",
-]);
+export const HARNESSES_WITHOUT_GATEWAY_AUTH_SLOT: ReadonlySet<LocalHarnessKind> = GATEWAY_UNSUPPORTED_HARNESSES;
 
 /**
  * How a harness selects its model on each route (BRIEF §"BYOK input mapping"):
@@ -348,7 +350,7 @@ export const defaultLocalRouteDriver: LocalRouteDriver = {
         probe.map((model) => model.id),
       );
       if (!modelId) {
-        throw new Error(
+        throw new NoEligibleGatewayModelError(
           `[${harness}] no eligible non-Fable gateway model in the intersection of the qualification ` +
             "allowlist and AnyHarness's live gateway probe",
         );
@@ -682,10 +684,11 @@ async function runLocal2GatewayCell(
       status: "blocked",
       reason: {
         code: "scenario_blocked",
-        message:
-          `[${harness}] the candidate catalog ships no managed-gateway auth slot for this harness, so the ` +
-          "managed gateway route is unsupported (it carries an account key, not a provider key); this cell is " +
-          "the truthful typed-unsupported result and is never green-required",
+        message: gatewayUnsupportedMessage(
+          harness,
+          "the managed gateway route (LOCAL-2) is unsupported for it; this cell is the truthful typed-unsupported " +
+            "result and is never green-required",
+        ),
       },
     };
   }
@@ -1023,6 +1026,14 @@ function harnessOf(cell: PlannedCellV1): LocalHarnessKind {
 }
 
 function failedPending(cell: PlannedCellV1, error: unknown): PendingRouteCell {
+  if (error instanceof NoEligibleGatewayModelError) {
+    return {
+      cellId: cell.cell_id,
+      kind: "terminal",
+      status: "blocked",
+      reason: { code: "scenario_blocked", message: error.message },
+    };
+  }
   return {
     cellId: cell.cell_id,
     kind: "terminal",
@@ -1112,6 +1123,19 @@ function cssAttr(value: string): string {
  * silently-weakened assertion.
  */
 export class CloudSurfaceGatedError extends Error {}
+
+/**
+ * Thrown from `resolveRouteModel`'s gateway branch when the intersection of
+ * the qualification allowlist and AnyHarness's live gateway probe is empty
+ * for a harness. This is a live-gateway/allowlist intersection gap in the
+ * running environment — NOT an unsupported product combo (unlike
+ * `GATEWAY_UNSUPPORTED_HARNESSES`, which is permanent) — so it maps to a
+ * typed `blocked` outcome, identical in kind to `NoEligibleMcpModelError`
+ * (integration-mcp.ts) for the same underlying condition. The cell must
+ * resume running normally the instant the gateway serves eligible models
+ * again; nothing here weakens or removes the eligibility check itself.
+ */
+export class NoEligibleGatewayModelError extends Error {}
 
 /** The Agents-scope settings sidebar label for each harness (fix round 3: the
  * user-key surface lives on the per-harness settings pane, reached via the

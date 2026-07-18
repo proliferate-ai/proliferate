@@ -375,6 +375,20 @@ pub struct CreateWorktreeWorkspaceResponse {
     pub setup_script: Option<SetupScriptExecution>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum RestoreWorktreeWorkspaceOutcome {
+    Restored,
+    AlreadyPresent,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RestoreWorktreeWorkspaceResponse {
+    pub workspace: Workspace,
+    pub outcome: RestoreWorktreeWorkspaceOutcome,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum SetupHintCategory {
