@@ -21,6 +21,10 @@ import { resolveWorldConstructionInputs } from "../local-world-smoke-1.js";
 import { bootLocalFunctionalWorld, type LocalFunctionalWorldInputs } from "./world-boot.js";
 import { captureLocalDriverFailure } from "./debug-capture.js";
 import { resolveLocalWorkspaceSessionId } from "./local-session.js";
+import {
+  GATEWAY_UNSUPPORTED_HARNESSES,
+  gatewayUnsupportedMessage,
+} from "../../fixtures/gateway-unsupported-harnesses.js";
 
 /**
  * LOCAL-4 (live configuration matrix, per harness) under `T3-CFG-1/local`, and
@@ -57,11 +61,6 @@ export const BASELINE_PROMPT = "Reply with exactly the word: pong";
  * to a second shipped kind so the tab/session replacement is observable. */
 export const SESSION_TABS_START_HARNESS: LocalHarnessKind = "claude";
 export const SESSION_TABS_SWITCH_HARNESS: LocalHarnessKind = "codex";
-
-/** Cursor ships with no gateway auth slot; its LOCAL-4 baseline turn cannot run
- * on the gateway-enrolled world, so its cell is the truthful typed `blocked`
- * (mirroring LOCAL-2's cursor treatment) — never green, never silently dropped. */
-const GATEWAY_UNSUPPORTED_HARNESSES: ReadonlySet<LocalHarnessKind> = new Set(["cursor"]);
 
 /** Bounded waits for the live browser flow (kept generous but finite). */
 const HARNESS_READY_TIMEOUT_MS = 300_000;
@@ -336,7 +335,10 @@ export async function collectLocal4ConfigCells(
           cell,
           outcome: {
             kind: "blocked",
-            message: `[${harness}] ships with no gateway auth slot; its LOCAL-4 baseline turn cannot run on the gateway-enrolled world (typed unsupported)`,
+            message: gatewayUnsupportedMessage(
+              harness,
+              "its LOCAL-4 baseline turn cannot run on the gateway-enrolled world",
+            ),
           },
         });
         continue;
