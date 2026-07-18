@@ -7,6 +7,7 @@ import {
   isAmbiguousSessionCreateFailure,
   loadPendingEmptySessionCreations,
   persistPendingEmptySessionCreation,
+  preparePendingEmptySessionCreation,
   resumePendingEmptySessionCreations,
   type PendingEmptySessionCreation,
 } from "#product/hooks/sessions/workflows/pending-empty-session-creation";
@@ -26,6 +27,49 @@ const ENTRY: PendingEmptySessionCreation = {
 };
 
 describe("pending empty-session creation", () => {
+  it("prepares and persists the bundled-local lifecycle with frozen inputs", async () => {
+    const context = memoryStorageContext();
+    const lifecycle = preparePendingEmptySessionCreation(context, {
+      workspaceId: ENTRY.workspaceId,
+      clientSessionId: ENTRY.clientSessionId,
+      runtimeSessionId: ENTRY.runtimeSessionId,
+      agentKind: ENTRY.agentKind,
+      modelId: ENTRY.modelId,
+      modeId: ENTRY.modeId,
+      launchControlValues: ENTRY.launchControlValues,
+      frozenLiveControlValues: ENTRY.frozenLiveControlValues,
+      subagentsEnabled: ENTRY.subagentsEnabled,
+      replacesSessionId: ENTRY.replacesSessionId,
+    });
+
+    expect(lifecycle).toMatchObject({
+      runtimeSessionId: ENTRY.runtimeSessionId,
+      subagentsEnabled: ENTRY.subagentsEnabled,
+    });
+    await lifecycle?.persist();
+    await expect(loadPendingEmptySessionCreations(context, ENTRY.workspaceId))
+      .resolves.toEqual([expect.objectContaining({
+        ...ENTRY,
+        createdAt: expect.any(Number),
+      })]);
+    await lifecycle?.acknowledge();
+    await expect(loadPendingEmptySessionCreations(context, ENTRY.workspaceId))
+      .resolves.toEqual([]);
+  });
+
+  it("does not prepare caller-selected ids for version-skewed targets", () => {
+    const context = memoryStorageContext();
+    expect(preparePendingEmptySessionCreation(context, {
+      workspaceId: "cloud:workspace-1",
+      clientSessionId: ENTRY.clientSessionId,
+      agentKind: ENTRY.agentKind,
+      modelId: ENTRY.modelId,
+      modeId: ENTRY.modeId,
+      frozenLiveControlValues: ENTRY.frozenLiveControlValues,
+      subagentsEnabled: ENTRY.subagentsEnabled,
+    })).toBeNull();
+  });
+
   it("resumes with the original ids and frozen launch inputs, then acknowledges once", async () => {
     const context = memoryStorageContext();
 

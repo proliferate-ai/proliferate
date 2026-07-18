@@ -1,5 +1,7 @@
 import type { ProductStorageContext } from "#product/lib/infra/persistence/product-storage";
 import type { CreateEmptySessionWithResolvedConfigOptions } from "#product/hooks/sessions/workflows/session-creation-types";
+import { supportsCallerSelectedSessionCreate } from "#product/lib/access/anyharness/runtime-target";
+import { getSessionRecord } from "#product/stores/sessions/session-records";
 
 const STORAGE_KEY_PREFIX = "proliferate.pending-empty-session-creations.v1";
 const UUID_V4_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -21,6 +23,28 @@ export interface PendingEmptySessionCreation {
 export interface PendingEmptySessionResumeResult {
   resumed: number;
   unresolved: number;
+}
+
+export interface PendingEmptySessionCreationLifecycle {
+  runtimeSessionId: string;
+  subagentsEnabled: boolean;
+  persist: () => Promise<void>;
+  acknowledge: () => Promise<void>;
+  clear: () => Promise<void>;
+  clearAfterFailure: (error: unknown) => Promise<void>;
+}
+
+interface PreparePendingEmptySessionCreationInput {
+  workspaceId: string;
+  clientSessionId: string;
+  runtimeSessionId?: string | null;
+  agentKind: string;
+  modelId: string;
+  modeId: string | null;
+  launchControlValues?: Record<string, string>;
+  frozenLiveControlValues: Record<string, string>;
+  subagentsEnabled: boolean;
+  replacesSessionId?: string | null;
 }
 
 const mutationQueues = new WeakMap<object, Map<string, Promise<void>>>();
@@ -188,6 +212,56 @@ export function persistPendingEmptySessionCreation(
     next.sort((left, right) => left.createdAt - right.createdAt);
     await writeEntries(context, entry.workspaceId, next, true);
   });
+}
+
+export function preparePendingEmptySessionCreation(
+  context: ProductStorageContext,
+  input: PreparePendingEmptySessionCreationInput,
+): PendingEmptySessionCreationLifecycle | null {
+  if (!supportsCallerSelectedSessionCreate(input.workspaceId)) {
+    return null;
+  }
+  const runtimeSessionId = input.runtimeSessionId ?? crypto.randomUUID();
+  const replacedSession = input.replacesSessionId
+    ? getSessionRecord(input.replacesSessionId)
+    : null;
+  const entry: PendingEmptySessionCreation = {
+    workspaceId: input.workspaceId,
+    clientSessionId: input.clientSessionId,
+    runtimeSessionId,
+    agentKind: input.agentKind,
+    modelId: input.modelId,
+    modeId: input.modeId,
+    ...(input.launchControlValues
+      ? { launchControlValues: { ...input.launchControlValues } }
+      : {}),
+    frozenLiveControlValues: { ...input.frozenLiveControlValues },
+    subagentsEnabled: input.subagentsEnabled,
+    replacesSessionId: replacedSession?.materializedSessionId
+      ?? input.replacesSessionId
+      ?? null,
+    createdAt: Date.now(),
+  };
+  return {
+    runtimeSessionId,
+    subagentsEnabled: entry.subagentsEnabled,
+    persist: () => persistPendingEmptySessionCreation(context, entry),
+    acknowledge: () => acknowledgePendingEmptySessionCreation(
+      context,
+      entry.workspaceId,
+      entry.runtimeSessionId,
+    ),
+    clear: () => clearPendingEmptySessionCreation(
+      context,
+      entry.workspaceId,
+      entry.runtimeSessionId,
+    ),
+    clearAfterFailure: (error) => clearPendingEmptySessionCreationAfterFailure(
+      context,
+      entry,
+      error,
+    ),
+  };
 }
 
 export function loadPendingEmptySessionCreations(
