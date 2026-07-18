@@ -39,6 +39,8 @@ const mocks = vi.hoisted(() => ({
   stageSupportReportAttachment: vi.fn(),
   readStagedSupportReportAttachment: vi.fn(),
   deleteStagedSupportReportAttachment: vi.fn(),
+  fetchServerMeta: vi.fn(),
+  isTauriRuntimeAvailable: vi.fn(() => true),
 }));
 
 vi.mock("@/lib/access/tauri/runtime", () => ({
@@ -112,6 +114,10 @@ vi.mock("@/lib/access/tauri/support", () => ({
   readStagedSupportReportAttachment: mocks.readStagedSupportReportAttachment,
   deleteStagedSupportReportAttachment: mocks.deleteStagedSupportReportAttachment,
 }));
+vi.mock("@/lib/access/tauri/connect-server", () => ({
+  fetchServerMeta: mocks.fetchServerMeta,
+  isTauriRuntimeAvailable: mocks.isTauriRuntimeAvailable,
+}));
 
 import { desktopBridge } from "@/lib/access/tauri/desktop-bridge";
 
@@ -123,6 +129,7 @@ async function flushMicrotasks(): Promise<void> {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.isTauriRuntimeAvailable.mockReturnValue(true);
 });
 
 describe("desktopBridge identity", () => {
@@ -168,14 +175,17 @@ describe("runtime", () => {
 });
 
 describe("files", () => {
-  it("delegates renamed methods to the shell wrappers", async () => {
+  it("normalizes a selected directory and delegates the other shell wrappers", async () => {
     mocks.pickFolder.mockResolvedValue("/repo");
     mocks.getHomeDir.mockResolvedValue("/home/dev");
     mocks.pathIsDirectory.mockResolvedValue(true);
     mocks.revealInFinder.mockResolvedValue(undefined);
     mocks.openInTerminal.mockResolvedValue(undefined);
 
-    await expect(desktopBridge.files.pickDirectory()).resolves.toBe("/repo");
+    await expect(desktopBridge.files.pickDirectory()).resolves.toEqual({
+      kind: "selected",
+      path: "/repo",
+    });
     await expect(desktopBridge.files.getHomeDirectory()).resolves.toBe("/home/dev");
     await expect(desktopBridge.files.isDirectory("/repo")).resolves.toBe(true);
     expect(mocks.pathIsDirectory).toHaveBeenCalledWith("/repo");
@@ -185,6 +195,29 @@ describe("files", () => {
 
     await desktopBridge.files.openTerminal("/repo");
     expect(mocks.openInTerminal).toHaveBeenCalledWith("/repo");
+  });
+
+  it("keeps native cancellation distinct from picker unavailability", async () => {
+    mocks.pickFolder.mockResolvedValue(null);
+    await expect(desktopBridge.files.pickDirectory()).resolves.toEqual({
+      kind: "cancelled",
+    });
+
+    mocks.pickFolder.mockRejectedValue(new Error("native picker failed"));
+    await expect(desktopBridge.files.pickDirectory()).resolves.toEqual({
+      kind: "unavailable",
+      reason: "picker_failed",
+    });
+  });
+
+  it("reports the missing native host without invoking the picker", async () => {
+    mocks.isTauriRuntimeAvailable.mockReturnValue(false);
+
+    await expect(desktopBridge.files.pickDirectory()).resolves.toEqual({
+      kind: "unavailable",
+      reason: "native_host_required",
+    });
+    expect(mocks.pickFolder).not.toHaveBeenCalled();
   });
 
   it("passes editor/open-target methods through unchanged", async () => {

@@ -27,6 +27,8 @@ from tests.integration.test_cloud_integration_gateway_api import (
     _tool_call,
 )
 
+MCP_SESSION_HEADER = "Mcp-Session-Id"
+
 
 @pytest.fixture(autouse=True)
 def _worker_cloud_base_url(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -37,6 +39,21 @@ async def _first_worker(db_session: AsyncSession) -> CloudRuntimeWorker:
     worker = (await db_session.execute(select(CloudRuntimeWorker))).scalars().first()
     assert worker is not None
     return worker
+
+
+async def _initialized_gateway_headers(
+    client: AsyncClient,
+    *,
+    bearer: str,
+) -> dict[str, str]:
+    headers = {"Authorization": f"Bearer {bearer}"}
+    initialized = await client.post(
+        GATEWAY_URL,
+        headers=headers,
+        json={"jsonrpc": "2.0", "id": 1, "method": "initialize"},
+    )
+    assert initialized.status_code == 200, initialized.text
+    return {**headers, MCP_SESSION_HEADER: initialized.headers[MCP_SESSION_HEADER]}
 
 
 async def _seed_ready_slack_account(
@@ -130,6 +147,9 @@ async def test_every_known_slack_mutation_returns_typed_approval_required(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     bearer = await _gateway_bearer(client, db_session, prefix="gw-slack-policy-write")
+    worker = await _first_worker(db_session)
+    await _seed_ready_slack_account(db_session, user_id=worker.owner_user_id)
+    gateway_headers = await _initialized_gateway_headers(client, bearer=bearer)
 
     async def unexpected_call_tool(**_kwargs: object) -> dict[str, object]:
         raise AssertionError("Slack mutation reached the upstream MCP")
@@ -142,7 +162,7 @@ async def test_every_known_slack_mutation_returns_typed_approval_required(
     for tool in sorted(SLACK_MUTATING_TOOL_NAMES):
         result = await _tool_call(
             client,
-            {"Authorization": f"Bearer {bearer}"},
+            gateway_headers,
             name="integrations.call_tool",
             arguments={
                 "provider": "slack",
@@ -156,15 +176,15 @@ async def test_every_known_slack_mutation_returns_typed_approval_required(
         )
 
         assert result["isError"] is True
-        assert result["structuredContent"]["error"] == {
-            "code": "integration_tool_approval_required",
-            "message": (
-                "This external action requires approval and is not supported until approved."
-            ),
-            "provider": "slack",
-            "tool": tool,
-            "approval": {"required": True, "status": "unsupported"},
-        }
+        error = result["structuredContent"]["error"]
+        assert error["code"] == "integration_tool_approval_required"
+        assert error["provider"] == "slack"
+        assert error["tool"] == tool
+        assert error["approval"]["required"] is True
+        assert error["approval"]["status"] == "pending"
+        assert error["approval"]["actionSummary"].startswith("Slack external action:")
+        assert len(error["approval"]["payloadDigest"]) == 64
+        assert "agent-claimed-approval" not in str(error)
 
     await db_session.rollback()
     events = list(
@@ -320,9 +340,19 @@ async def test_worker_token_and_gateway_arguments_cannot_bypass_policy(
     assert worker_attempt.status_code == 401
 
     gateway_authorization = enrolled.json()["integrationGateway"]["authorization"]
+    await _seed_ready_slack_account(db_session, user_id=uuid.UUID(auth.user_id))
+    initialized = await client.post(
+        GATEWAY_URL,
+        headers={"Authorization": gateway_authorization},
+        json={"jsonrpc": "2.0", "id": 1, "method": "initialize"},
+    )
+    assert initialized.status_code == 200
     result = await _tool_call(
         client,
-        {"Authorization": gateway_authorization},
+        {
+            "Authorization": gateway_authorization,
+            MCP_SESSION_HEADER: initialized.headers[MCP_SESSION_HEADER],
+        },
         name="integrations.call_tool",
         arguments={
             "provider": "slack",

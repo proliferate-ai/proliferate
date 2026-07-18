@@ -119,6 +119,7 @@ module = [
     "proliferate.server.cloud.live.models",
     "proliferate.server.cloud.managed_sandboxes.models",
     "proliferate.server.cloud.repos.models",
+    "proliferate.server.cloud.integrations.action_approvals.models",
     "proliferate.server.support.models",
     "proliferate.config",
 ]

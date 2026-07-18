@@ -107,11 +107,7 @@ export async function openOutlookCompose(input: EmailComposeInput): Promise<void
 }
 
 export async function pickFolder(): Promise<string | null> {
-  try {
-    return await invoke<string | null>("pick_folder");
-  } catch {
-    return null;
-  }
+  return invoke<string | null>("pick_folder");
 }
 
 function isTauriDesktop(): boolean {

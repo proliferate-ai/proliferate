@@ -13,6 +13,7 @@ import { useWorkspaceCollectionsMutationCacheActions } from "#product/hooks/work
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 import { useToastStore } from "#product/stores/toast/toast-store";
 import { ensureRuntimeReady } from "#product/hooks/workspaces/workflows/runtime-ready";
+import { directoryPickerUnavailableCopy } from "#product/copy/workspaces/directory-picker-copy";
 
 /** Map a clone failure to a user-facing message, naming local Git auth and the
  * PR 3 typed errors without leaking sandbox paths. */
@@ -112,13 +113,19 @@ export function useCloneRepo() {
     }
     let attempt = retryAttempt;
     if (!attempt) {
-      const parent = await files.pickDirectory();
-      if (!parent) {
+      const picked = await files.pickDirectory();
+      if (picked.kind === "cancelled") {
         return { succeeded: false, error: "Clone cancelled.", cancelled: true };
+      }
+      if (picked.kind === "unavailable") {
+        return {
+          succeeded: false,
+          error: directoryPickerUnavailableCopy(picked.reason),
+        };
       }
       attempt = {
         operationId: `clone:${crypto.randomUUID()}`,
-        destinationPath: `${parent.replace(/\/+$/u, "")}/${repo.gitRepoName}`,
+        destinationPath: `${picked.path.replace(/\/+$/u, "")}/${repo.gitRepoName}`,
       };
     }
     setIsCloning(true);

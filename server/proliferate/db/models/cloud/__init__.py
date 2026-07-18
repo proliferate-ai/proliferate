@@ -7,6 +7,7 @@ Callers should import concrete models from the owning module in this package.
 from . import agent_gateway as agent_gateway  # noqa: F401
 from . import agent_run_config as agent_run_config  # noqa: F401
 from . import github_app as github_app  # noqa: F401
+from . import integration_approvals as integration_approvals  # noqa: F401
 from . import integrations as integrations  # noqa: F401
 from . import repositories as repositories  # noqa: F401
 from . import runtime_workers as runtime_workers  # noqa: F401

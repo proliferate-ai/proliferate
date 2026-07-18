@@ -4,6 +4,8 @@ import path from "node:path";
 
 import type { Browser } from "playwright";
 
+import { registerCancellationFinalizer } from "../../cli/cancellation-finalizer.js";
+
 import type { CandidateBuildMapV1 } from "../../artifacts/build-map.js";
 import { resolveCloudCandidateSet } from "../../artifacts/cloud-candidate-set.js";
 import type { MaterializedArtifact } from "../../artifacts/local-candidate-set.js";
@@ -398,6 +400,12 @@ export async function constructManagedCloudWorld(
     mirror: deps.ledgerMirror,
   });
   const stack = new ManagedCloudCleanupStack({ ledger, log });
+  const cancellationFinalizer = registerCancellationFinalizer({
+    world: "managed-cloud",
+    run: options.run,
+    runDir,
+    finalize: () => stack.runAll(),
+  });
 
   const register = async (
     kind: ManagedCloudCleanupKind,
@@ -670,7 +678,7 @@ export async function constructManagedCloudWorld(
         trackedActors,
       ),
       close: async () => {
-        const cleanup = await stack.runAll();
+        const cleanup = await cancellationFinalizer.run();
         if (templateCustody.mode === "shared_producer") {
           const custody = await loadSharedTemplateCustody(
             templateCustody.journalPath,
@@ -691,7 +699,7 @@ export async function constructManagedCloudWorld(
     // order. A cleanup failure is part of the terminal error; swallowing it can
     // strand provider resources while the report names only the startup cause.
     try {
-      const cleanup = await stack.runAll();
+      const cleanup = await cancellationFinalizer.run();
       if (cleanup.failed > 0) {
         throw new Error(`startup cleanup left ${cleanup.failed} unreconciled resource(s)`);
       }

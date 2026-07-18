@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import type { ChildProcess, SpawnOptions } from "node:child_process";
 import { createHash } from "node:crypto";
 import { EventEmitter } from "node:events";
-import { access, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -17,6 +17,7 @@ import type { Exec } from "./docker.js";
 import type { ReadinessFetch, SpawnLike } from "./processes.js";
 import type { ChromiumLauncher } from "./renderer.js";
 import { constructLocalWorld, type LocalWorldDeps, type LocalWorldPorts } from "./world.js";
+import { localWorldSmokeWorldRoot } from "../../scenarios/local-world-smoke-1.js";
 
 const RUN: RunIdentityV1 = {
   run_id: "local-run-1",
@@ -181,6 +182,18 @@ test("constructLocalWorld runs the ordered startup and returns a ready handle", 
     assert.ok(cp, "expected a docker cp of the setup token");
     assert.equal(cp!.at(-1), path.join(runDir, "setup-token"));
 
+    // T3-INT-1's host Worker needs the candidate Server's host-mapped origin
+    // for enrollment and integration-gateway calls. Without it the Server
+    // rejects every /v1/cloud/worker/enroll as cloud_worker_misconfigured.
+    const serverRun = h.argv.find(
+      (cmd) => cmd[0] === "docker" && cmd.includes("--name") && cmd.some((arg) => arg.endsWith("-server")),
+    );
+    assert.ok(serverRun, "expected the candidate Server docker run");
+    assert.ok(
+      serverRun!.includes(`API_BASE_URL=http://127.0.0.1:${PORTS.server}`),
+      "expected Server env to publish the host-reachable API base URL",
+    );
+
     // A fresh actor enrolled for cleanup, then a full green teardown.
     await world.trackActorSubjects!({
       userId: "u1",
@@ -216,11 +229,13 @@ test("worldRoot: materialization targets the world subdir and cleanup never dele
   // materialize hit `copyfile server.tar ENOENT`.
   const runDir = await mkdtemp(path.join(os.tmpdir(), "world-run-"));
   const sharedArtifacts = path.join(runDir, "artifacts");
-  const worldRoot = path.join(runDir, "worlds", "t3-wt-1");
+  const worldRoot = localWorldSmokeWorldRoot(runDir);
   try {
     const { mkdir } = await import("node:fs/promises");
     await mkdir(sharedArtifacts, { recursive: true });
     const map = await buildMap(sharedArtifacts);
+    const mapPath = path.join(runDir, "candidate-build.json");
+    await writeFile(mapPath, `${JSON.stringify(map)}\n`);
     const h = harness();
     const world = await constructLocalWorld({ run: RUN, map, litellm: LITELLM, runDir, worldRoot, ports: PORTS, deps: h.deps });
 
@@ -233,6 +248,7 @@ test("worldRoot: materialization targets the world subdir and cleanup never dele
     for (const artifact of map.artifacts) {
       await access(artifact.locator.path);
     }
+    await access(mapPath);
 
     const evidence = await world.close();
     assert.equal(evidence.failed, 0);
@@ -243,6 +259,23 @@ test("worldRoot: materialization targets the world subdir and cleanup never dele
     for (const artifact of map.artifacts) {
       await access(artifact.locator.path);
     }
+    await access(mapPath);
+
+    // Only after smoke teardown, the next compatible step performs the exact
+    // source+digest validation used by `--reuse-from`. Cleanup cannot turn a
+    // missing or corrupted publication into an apparent cache hit.
+    // @ts-expect-error The repository-owned Node build helper is plain ESM JavaScript.
+    const { loadCandidateBuildMapForReuse } = await import("../../../../../scripts/ci-cd/assemble-candidate-build-map.mjs");
+    const reusable = loadCandidateBuildMapForReuse({
+      mapPath,
+      expectedSourceSha: RUN.source_sha,
+      expectedArtifactIds: map.artifacts.map((artifact) => artifact.artifact_id),
+    });
+    assert.deepEqual(
+      reusable.artifacts.map((artifact: CandidateBuildArtifactV1) => artifact.sha256),
+      map.artifacts.map((artifact) => artifact.sha256),
+    );
+    assert.deepEqual(JSON.parse(await readFile(mapPath, "utf8")), map);
   } finally {
     await rm(runDir, { recursive: true, force: true });
   }

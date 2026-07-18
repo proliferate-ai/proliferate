@@ -14,7 +14,7 @@
     "test:billing": "playwright test --config playwright.billing.config.ts",
     "test:billing-import": "playwright test --config playwright.billing-import.config.ts",
     "test:sso": "playwright test specs/sso.spec.ts",
-    "test:unit": "tsx --test \"fakes/**/*.test.ts\""
+    "test:unit": "tsx --test \"fakes/**/*.test.ts\" \"stack/**/*.test.ts\""
   },
   "dependencies": {
     "pg": "^8.13.1"

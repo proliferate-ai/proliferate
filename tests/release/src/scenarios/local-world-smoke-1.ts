@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import path from "node:path";
 
 import type { Page } from "playwright";
 
@@ -65,6 +66,11 @@ import { resolveLocalWorkspaceSessionId } from "./local/local-session.js";
 export const LOCAL_WORLD_SMOKE_1_ID = "LOCAL-WORLD-SMOKE-1";
 export const REPRESENTATIVE_HARNESS = "claude";
 export const DETERMINISTIC_PROMPT = "Reply with exactly the word: pong";
+
+/** Mutable smoke state is a child of the immutable candidate publication. */
+export function localWorldSmokeWorldRoot(runDir: string): string {
+  return path.join(runDir, "worlds", "local-world-smoke-1");
+}
 
 /** Bounded waits for the live browser flow (kept generous but finite). */
 const GATEWAY_SYNC_TIMEOUT_MS = 120_000;
@@ -204,7 +210,8 @@ export interface LocalWorldSmokeDriver {
 }
 
 export const defaultLocalWorldSmokeDriver: LocalWorldSmokeDriver = {
-  buildWorld: ({ map, litellm, run, runDir, ports }) => constructLocalWorld({ run, map, litellm, runDir, ports }),
+  buildWorld: ({ map, litellm, run, runDir, ports }) =>
+    constructLocalWorld({ run, map, litellm, runDir, worldRoot: localWorldSmokeWorldRoot(runDir), ports }),
   createActor: (world) => authenticatedActor(world, "owner"),
   prepareRepo: (world, actor, cellId) => preparedRepository(world, actor, { cellId }),
   openPage: (world, actor) => productPage(world, actor),

@@ -189,7 +189,9 @@ block (see T2-BILL-2) → blocked message, no workspace row.
 Local/worktree creation drive the local AnyHarness runtime and OS file
 pickers — partially Tauri-bound. Tier 2 asserts only what web mode can reach:
 the Add-Repo flow branches (`add-repo-flow-store.ts`) render and validate
-inputs. Full local/worktree creation is asserted in tier 3's desktop lane.
+inputs, and a missing native folder-picker transport is distinguished from
+user cancellation and explained in the UI. Full local/worktree creation is
+asserted in tier 3's desktop lane.
 [If this proves too thin, the fallback is a runtime-API-level test against a
 locally booted anyharness — decide when building.]
 

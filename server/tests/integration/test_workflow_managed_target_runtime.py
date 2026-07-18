@@ -41,6 +41,52 @@ async def _seed_sandbox(
 
 
 @pytest.mark.asyncio
+async def test_operation_ends_transaction_before_lock_and_refreshes_binding(
+    client: AsyncClient,
+    test_engine: AsyncEngine,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _owner_id, sandbox_id = await _seed_sandbox(client, test_engine)
+    factory = async_sessionmaker(test_engine, expire_on_commit=False)
+
+    async with factory() as db:
+        stale = await cloud_sandboxes_store.load_cloud_sandbox_by_id(db, sandbox_id)
+        assert stale is not None and stale.e2b_sandbox_id is None
+        assert db.in_transaction()
+
+        @asynccontextmanager
+        async def locked(key: str, **_kwargs: object):  # type: ignore[no-untyped-def]
+            assert key == f"cloud-sandbox:{sandbox_id}"
+            assert not db.in_transaction()
+            async with factory() as replacement_db:
+                replacement = await replacement_db.get(CloudSandbox, sandbox_id)
+                assert replacement is not None
+                replacement.provider_sandbox_id = "provider-race-winner"
+                await replacement_db.commit()
+            yield
+
+        async def connect(locked_db, *, sandbox):  # type: ignore[no-untyped-def]
+            assert locked_db is db
+            assert sandbox.e2b_sandbox_id == "provider-race-winner"
+            return SimpleNamespace()
+
+        async def run(ctx: operation.MaterializationContext) -> str | None:
+            return ctx.sandbox.e2b_sandbox_id
+
+        monkeypatch.setattr(operation.locks, "redis_materialization_lock", locked)
+        monkeypatch.setattr(operation.sandbox_io, "connect_ready_sandbox", connect)
+
+        provider_id = await operation.run_cloud_sandbox_operation(
+            db,
+            sandbox=stale,
+            operation_key="refresh-after-lock",
+            run=run,
+        )
+
+    assert provider_id == "provider-race-winner"
+
+
+@pytest.mark.asyncio
 async def test_duplicate_cold_runtime_access_serializes_connect_and_store_probe(
     client: AsyncClient,
     test_engine: AsyncEngine,
@@ -92,6 +138,7 @@ async def test_duplicate_cold_runtime_access_serializes_connect_and_store_probe(
                 sandbox_id,
                 e2b_sandbox_id="provider-a",
                 e2b_template_ref="e2b",
+                expected_materialization_attempt=sandbox.materialization_attempt,
             )
             assert persisted is not None
             await db.commit()

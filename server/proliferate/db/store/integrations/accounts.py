@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import Row, and_, delete, or_, select
+from sqlalchemy import Row, and_, delete, literal, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import Select
 
@@ -121,6 +121,19 @@ class ReadyAccountRow:
     org_policy_enabled: bool | None
 
 
+@dataclass(frozen=True)
+class ReadyAccountIdentityRow:
+    """A ready account's non-secret identity, definition, and policy verdict."""
+
+    account_id: UUID
+    owner_user_id: UUID
+    auth_version: int
+    provider: str
+    display_name: str
+    definition_enabled_by_default: bool
+    org_policy_enabled: bool | None
+
+
 def _ready_accounts_stmt(user_id: UUID, organization_id: UUID | None) -> Select:
     """Ready accounts + non-archived definitions, LEFT JOINed to the org policy.
 
@@ -193,6 +206,77 @@ async def get_ready_account_for_provider(
         )
     ).first()
     return _ready_account_row(row, organization_id) if row is not None else None
+
+
+async def get_ready_account_identity_for_provider(
+    db: AsyncSession,
+    user_id: UUID,
+    namespace: str,
+    *,
+    organization_id: UUID | None = None,
+    account_id: UUID | None = None,
+    for_update: bool = False,
+) -> ReadyAccountIdentityRow | None:
+    """Resolve only non-secret account identity for approval authorization.
+
+    This projection deliberately excludes credential ciphertext, settings, and
+    provider launch configuration. `for_update` fences the account revision
+    while a short request/admission transaction performs its binding CAS.
+    """
+    statement = (
+        select(
+            CloudIntegrationAccount.id,
+            CloudIntegrationAccount.owner_user_id,
+            CloudIntegrationAccount.auth_version,
+            CloudIntegrationDefinition.namespace,
+            CloudIntegrationDefinition.display_name,
+            CloudIntegrationDefinition.enabled_by_default,
+        )
+        .join(
+            CloudIntegrationDefinition,
+            CloudIntegrationDefinition.id == CloudIntegrationAccount.definition_id,
+        )
+        .where(
+            CloudIntegrationAccount.owner_user_id == user_id,
+            CloudIntegrationAccount.enabled.is_(True),
+            CloudIntegrationAccount.status == "ready",
+            CloudIntegrationDefinition.archived_at.is_(None),
+            CloudIntegrationDefinition.namespace == namespace,
+            or_(
+                CloudIntegrationDefinition.organization_id.is_(None),
+                CloudIntegrationDefinition.organization_id == organization_id,
+            ),
+        )
+        .order_by(CloudIntegrationAccount.created_at.asc())
+        .limit(1)
+    )
+    if organization_id is not None:
+        statement = statement.add_columns(CloudIntegrationPolicy.enabled).outerjoin(
+            CloudIntegrationPolicy,
+            and_(
+                CloudIntegrationPolicy.definition_id == CloudIntegrationAccount.definition_id,
+                CloudIntegrationPolicy.organization_id == organization_id,
+            ),
+        )
+    else:
+        statement = statement.add_columns(literal(None).label("org_policy_enabled"))
+    if account_id is not None:
+        statement = statement.where(CloudIntegrationAccount.id == account_id)
+    if for_update:
+        statement = statement.with_for_update(of=CloudIntegrationAccount)
+
+    row = (await db.execute(statement)).first()
+    if row is None:
+        return None
+    return ReadyAccountIdentityRow(
+        account_id=row[0],
+        owner_user_id=row[1],
+        auth_version=row[2],
+        provider=row[3],
+        display_name=row[4],
+        definition_enabled_by_default=row[5],
+        org_policy_enabled=row[6] if organization_id is not None else None,
+    )
 
 
 async def upsert_account(

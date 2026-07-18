@@ -19,11 +19,12 @@ from __future__ import annotations
 import html
 from typing import Annotated
 
-from fastapi import APIRouter, Form
+from fastapi import APIRouter, Depends, Form
 from fastapi.responses import HTMLResponse
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
-from proliferate.db.engine import AsyncSessionDep
+from proliferate.db.engine import get_async_session
 from proliferate.server.organizations.errors import OrganizationServiceError
 from proliferate.server.organizations.self_registration import register_invited_account
 from proliferate.server.setup.pages import render_page
@@ -93,7 +94,7 @@ async def invited_registration_page(token: str = "", email: str = "") -> HTMLRes
 
 @router.post("/register", response_class=HTMLResponse, include_in_schema=False)
 async def invited_registration_submit(
-    db: AsyncSessionDep,
+    db: AsyncSession = Depends(get_async_session, scope="function"),
     email: Annotated[str, Form()] = "",
     password: Annotated[str, Form()] = "",
     invitation_token: Annotated[str, Form()] = "",

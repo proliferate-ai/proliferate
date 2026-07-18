@@ -32,7 +32,19 @@ export async function resolveLocalWorkspaceSessionId(
       const sessions = await world.runtime.client.listSessions().catch(() => []);
       const forWorkspace = sessions.filter((session) => session.workspaceId === workspaceId);
       if (forWorkspace.length > 0) {
-        return forWorkspace[forWorkspace.length - 1]!.id;
+        // `GET /v1/sessions` is served by `SessionStore::list_visible_all()`,
+        // which orders `ORDER BY updated_at DESC` (anyharness-lib
+        // domains/sessions/store/sessions.rs) — the most-recently-active session
+        // FIRST, not last. Filtering by workspace preserves that order, so index
+        // 0 is the session this call is trying to resolve (the one whose turn was
+        // just sent). Taking `[length - 1]` returned the STALEST session in the
+        // workspace, which surfaced once LOCAL-6 opened a second in-workspace
+        // session (the gateway tab): the untouched user-key session sorted last,
+        // so the gateway leg's reopen resolve returned the user-key session id
+        // and the session-equality check spuriously fired even though the
+        // product genuinely created two sessions (two distinct ids in the
+        // network log, Actions run 29602686092, T3-AUTHROUTE-1/route=change).
+        return forWorkspace[0]!.id;
       }
     } else {
       lastWorkspaces = JSON.stringify(

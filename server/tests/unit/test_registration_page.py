@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncGenerator
 from datetime import timedelta
 from uuid import uuid4
 
+import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from starlette.types import Message, Receive, Scope, Send
 
 from proliferate.auth.identity.store import create_auth_user
 from proliferate.auth.passwords import verify_password
@@ -18,6 +21,7 @@ from proliferate.constants.organizations import (
     ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
     ORGANIZATION_ROLE_MEMBER,
 )
+from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
 from proliferate.db.models.organizations import OrganizationInvitation, OrganizationMembership
 from proliferate.db.store import organization_invitations as invitation_store
@@ -203,6 +207,72 @@ async def test_register_page_creates_account_and_membership(single_org_client, t
         assert invitation is not None
         assert invitation.status == ORGANIZATION_INVITATION_STATUS_ACCEPTED
         assert invitation.accepted_by_user_id == user.id
+
+
+@pytest.mark.parametrize(
+    ("path", "wire_kind", "expected_status"),
+    [
+        ("/register", "form", 200),
+        ("/auth/password/register", "json", 201),
+    ],
+)
+async def test_registration_commit_finishes_before_response_starts(
+    test_engine,
+    monkeypatch,
+    path: str,
+    wire_kind: str,
+    expected_status: int,
+) -> None:
+    """Both invited-registration surfaces publish only durable success."""
+    from proliferate.db import engine as engine_module
+    from proliferate.main import create_app
+
+    monkeypatch.setattr(settings, "single_org_mode_override", True)
+    monkeypatch.setattr(engine_module, "engine", test_engine)
+    monkeypatch.setattr(engine_module, "async_session_factory", _factory(test_engine))
+
+    _, organization_id = await _claim_instance(test_engine)
+    invitation_id = await _invite(test_engine, organization_id)
+    app = create_app()
+    commit_finished = False
+    commit_state_at_response_start: list[bool] = []
+
+    async def observed_session() -> AsyncGenerator[AsyncSession, None]:
+        nonlocal commit_finished
+        async with _factory(test_engine)() as session:
+            yield session
+            await session.commit()
+            commit_finished = True
+
+    app.dependency_overrides[get_async_session] = observed_session
+
+    async def observed_app(scope: Scope, receive: Receive, send: Send) -> None:
+        async def observe_response_start(message: Message) -> None:
+            if message["type"] == "http.response.start" and scope["path"] == path:
+                commit_state_at_response_start.append(commit_finished)
+            await send(message)
+
+        await app(scope, receive, observe_response_start)
+
+    request_kwargs = (
+        {"data": _form(invitation_token=str(invitation_id))}
+        if wire_kind == "form"
+        else {
+            "json": {
+                "email": INVITED_EMAIL,
+                "password": PASSWORD,
+                "invitationToken": str(invitation_id),
+            }
+        }
+    )
+    async with AsyncClient(
+        transport=ASGITransport(app=observed_app),
+        base_url="http://test",
+    ) as client:
+        response = await client.post(path, **request_kwargs)
+
+    assert response.status_code == expected_status
+    assert commit_state_at_response_start == [True]
 
 
 async def test_register_page_wrong_token_rerenders_with_generic_error(

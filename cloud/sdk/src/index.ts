@@ -11,6 +11,7 @@ export * from "./client/billing.js";
 export * from "./client/cloud-secrets.js";
 export * from "./client/github-app.js";
 export * from "./client/integrations.js";
+export * from "./client/integration-action-approvals.js";
 export * from "./client/deep-links.js";
 export * from "./client/cloud-sandboxes.js";
 export * from "./client/desktop-workers.js";
