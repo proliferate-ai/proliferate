@@ -1,8 +1,6 @@
-import { Fragment } from "react";
 import type { ContentPart } from "@anyharness/sdk";
 import { FileIcon, Link2, Spinner, X } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { FilePathLink } from "#product/components/content/ui/FilePathLink";
 import { FileTreeEntryIcon } from "#product/components/workspace/files/file-icons";
 import { PlanReferenceAttachmentCard } from "#product/components/workspace/chat/content/PlanReferenceAttachmentCard";
 import { usePromptAttachmentUrl } from "#product/hooks/access/anyharness/sessions/use-prompt-attachment-url";
@@ -13,9 +11,8 @@ import {
   type PromptDisplayPart,
 } from "@proliferate/product-domain/chats/composer/prompt-display-parts";
 import type { PromptDraftAttachmentDescriptor } from "@proliferate/product-domain/chats/composer/prompt-attachment-rules";
-import { tokenizeSerializedFileLinks } from "#product/lib/domain/chat/composer/file-mention-links";
-import { useChatContentSearchPaint } from "@proliferate/product-ui/chat/transcript/ChatContentSearchContext";
-import { markSearchChildren } from "@proliferate/product-ui/chat/transcript/MarkdownContentSearchMarks";
+import { MarkdownBody } from "@proliferate/product-ui/chat/transcript/MarkdownBody";
+import { renderTranscriptLink } from "#product/components/workspace/chat/transcript/transcript-markdown";
 
 type PromptContentRendererVariant = "transcript" | "compact";
 type PromptContentRendererLayout = "stack" | "wrap" | "auto";
@@ -128,32 +125,13 @@ function PromptDisplayPartView({
 }
 
 function FileLinkedText({ text }: { text: string }) {
-  const tokens = tokenizeSerializedFileLinks(text);
-  // Chat content-search paint for user-message prose. Only applies inside a
-  // committed transcript turn row (not the composer or in-flight prompt rows,
-  // which the search index doesn't cover).
-  const paint = useChatContentSearchPaint();
-  const searchPaint = paint?.rowUnitId.startsWith("chatrow:turn:") ? paint : null;
-
   return (
-    <div className="whitespace-pre-wrap break-words text-[length:var(--prose-text-size,var(--text-chat))] leading-[var(--prose-text-line-height,var(--text-chat--line-height))]">
-      {tokens.map((token, index) => {
-        if (token.type === "text") {
-          return (
-            <Fragment key={`text-${index}`}>
-              {searchPaint
-                ? markSearchChildren(token.text, searchPaint.query, searchPaint.rowUnitId)
-                : token.text}
-            </Fragment>
-          );
-        }
-        return (
-          <FilePathLink key={`${token.path}-${index}`} rawPath={token.path}>
-            {token.label}
-          </FilePathLink>
-        );
-      })}
-    </div>
+    <MarkdownBody
+      content={text}
+      renderLink={renderTranscriptLink}
+      enableContentSearch
+      className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+    />
   );
 }
 
