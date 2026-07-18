@@ -26,16 +26,18 @@ use crate::live::sessions::LiveSessionManager;
 mod config;
 mod creation;
 mod fork;
+#[cfg(test)]
+mod idempotent_creation_tests;
 mod interactions;
 mod launch_env;
+#[cfg(test)]
+mod launch_env_tests;
 mod launch_policy;
 mod lifecycle;
 mod pending_prompts;
 mod prompt;
 mod replay;
 mod startup;
-#[cfg(test)]
-mod idempotent_creation_tests;
 #[cfg(test)]
 mod tests;
 pub(crate) mod view;
