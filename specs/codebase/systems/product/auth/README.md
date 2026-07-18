@@ -101,6 +101,13 @@ hashes when `PasswordHelper` returns an updated hash.
 
 ## Abuse And Failure Behavior
 
+OAuth provider failures stay visible without turning provider-declared protocol rejections
+into server errors. A provider callback that carries an error returns that error to the
+original client callback. A Google HTTP response rejecting the access-token exchange
+terminates the stored challenge and returns the generic `provider_error` code instead of
+exposing provider response details. Transport failures and provider outages remain server
+failures and are not normalized as provider rejections.
+
 Password login failures must return generic copy:
 
 ```text

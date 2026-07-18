@@ -197,14 +197,21 @@ async def complete_oauth_provider_callback(
         surface=surface,
     )
     callback_surface = surface or challenge.surface
-    verified = await providers.verify_oauth_callback(
-        provider=provider,
-        surface=callback_surface,
-        code=code,
-        provider_callback_url=providers.provider_callback_url(
-            request, provider=provider, surface=callback_surface
-        ),
-    )
+    try:
+        verified = await providers.verify_oauth_callback(
+            provider=provider,
+            surface=callback_surface,
+            code=code,
+            provider_callback_url=providers.provider_callback_url(
+                request, provider=provider, surface=callback_surface
+            ),
+        )
+    except providers.OAuthProviderTokenRejectedError:
+        return append_query(
+            challenge.redirect_uri,
+            error="provider_error",
+            state=challenge.client_state,
+        )
     if callback_surface == "web" and challenge.purpose == "login":
         beta_email = await _beta_email_for_provider_login(db, verified=verified)
         ensure_web_beta_email_allowed(beta_email)
