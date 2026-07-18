@@ -272,6 +272,10 @@ genuinely needs a real agent or sandbox is tier 3, not tier 2.
   the stack once per run and publishes `TIER2_INTENT_*` env vars to every
   worker; you never boot it yourself. The stack runs `SINGLE_ORG_MODE=true`
   with GitHub OAuth env unset (password + first-run claim only).
+  A dedicated server-only posture that must boot separately uses
+  `ownedEphemeralProfileForWorker`: the profile, setup-token path, database,
+  and local state are run/attempt/worker/retry-owned and removed only by that
+  owner. A retry never reuses a claimed profile or consumed setup token.
 - **Seed through the product's own API, not the DB.** Reuse the helpers in
   `stack/seed.ts` (`ensureInstanceClaimed`, `passwordLogin`, `inviteMember`,
   `registerFreshMember`, `getOwnOrganization`, …). Add new helpers there rather

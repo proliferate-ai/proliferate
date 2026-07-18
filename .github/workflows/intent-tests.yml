@@ -76,6 +76,9 @@ jobs:
       - name: Install Playwright chromium
         run: pnpm -C tests/intent exec playwright install --with-deps chromium
 
+      - name: Run tier-2 fixture unit tests
+        run: pnpm -C tests/intent test:unit
+
       - name: Run tier-2 intent suite
         env:
           # The boot fixture allocates the t2intent profile itself; on the
