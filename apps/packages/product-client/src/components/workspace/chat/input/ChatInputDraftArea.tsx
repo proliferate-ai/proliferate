@@ -1,4 +1,4 @@
-import type { KeyboardEventHandler, RefObject } from "react";
+import type { RefObject } from "react";
 import { WORKSPACE_CHAT_COMPOSER_INPUT } from "#product/config/chat";
 import { CHAT_COMPOSER_LABELS } from "#product/copy/chat/chat-copy";
 import type { ChatComposerDraft } from "#product/lib/domain/chat/composer/file-mention-draft-model";
@@ -11,6 +11,7 @@ import { ComposerCommandEditor } from "#product/components/workspace/chat/input/
 import { ComposerTextarea } from "@proliferate/ui/primitives/ComposerTextarea";
 import { ComposerTextareaFrame } from "@proliferate/ui/primitives/ComposerTextareaFrame";
 import { QueuedPromptEditBanner } from "#product/components/workspace/chat/input/QueuedPromptEditBanner";
+import type { ChatComposerKeyboardEvent } from "#product/hooks/chat/ui/use-chat-composer-keyboard";
 
 interface ChatInputDraftAreaProps {
   /** Picks the follow-up placeholder once the session transcript has turns. */
@@ -28,7 +29,7 @@ interface ChatInputDraftAreaProps {
   canSubmit: boolean;
   isDisabled: boolean;
   onSubmit: () => void;
-  onKeyDown: KeyboardEventHandler<HTMLTextAreaElement>;
+  onKeyDown: (event: ChatComposerKeyboardEvent) => void;
   hasDraftAttachments: boolean;
   draftAttachments: DraftAttachmentPreviewListProps["attachments"];
   onRemoveDraftAttachment: DraftAttachmentPreviewListProps["onRemove"];
@@ -70,7 +71,7 @@ export function ChatInputDraftArea({
             rows={WORKSPACE_CHAT_COMPOSER_INPUT.minRows}
             value={editDraft}
             onChange={(event) => onEditDraftChange(event.target.value)}
-            onKeyDown={onKeyDown}
+            onKeyDown={(event) => onKeyDown(event)}
             placeholder={placeholder}
             spellCheck={false}
             autoComplete="off"

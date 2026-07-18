@@ -70,6 +70,48 @@ Non-negotiable:
 - **The composer surface paints the seam.** There is no `flatTop` prop or alternate composer mode. Ordinary dock-region panels remain narrower attached trays above the composer. When the full-width workspace-activity cap is present, `ChatComposerDock` squares the composer's top corners with a local `:has()` selector so the cap and input read as one card; removing the cap restores the normal composer radius. The composer still paints after the dock regions so its own top outline remains visible at the seam.
 - **Composer command overlays are composer-local, not dock-region inhabitants.** The slash-command tray renders from `ChatInput` in a small host directly above `ChatComposerSurface` while a prompt-leading `/` trigger is active. It is transient editor UI and does not participate in `useComposerDockSlots` precedence.
 
+### Workspace editor behavior
+
+`ComposerCommandEditor` uses the product-client-owned Lexical adapter for the
+workspace prompt body. The editor keeps the existing `ChatComposerDraft` and
+submitted prompt boundary as Markdown; Lexical state is an editing detail and
+must not cross the runtime or server boundary.
+
+While a workspace draft is live, `ChatComposerDraft` may carry a versioned,
+opaque editor snapshot beside its Markdown nodes. The product client uses that
+snapshot only to restore editor-only identity such as whether Markdown link
+syntax came from an HTTPS paste; submission still serializes only Markdown.
+Empty drafts and plain-text compatibility writes discard the snapshot.
+
+The live editor recognizes `*`/`_` emphasis, `**`/`__` strong emphasis, and
+line-leading unordered and ordered list shortcuts. Cmd/Ctrl-B and Cmd/Ctrl-I
+toggle marks through the rich-text command layer. Enter continues or exits a
+list and Tab/Shift-Tab indent or outdent only when the selection is inside a
+list item. Outside lists, plain Enter retains workspace submission and
+Shift-Enter inserts a newline.
+
+Lexical's high-priority Enter and Tab commands own this decision before native
+editor mutation. A list selection stays Lexical-owned; otherwise the workspace,
+Home, or queued-edit surface applies its own submit contract exactly once. The
+same native `beforeinput`, `keydown`, or `paste` event timestamp is forwarded to
+typing measurement when that event changes the document.
+
+Link creation is deliberately paste-only: an exact `https://` clipboard value
+becomes a link, wrapping a non-collapsed selection or inserting the URL when
+the selection is collapsed. Typed URLs, typed Markdown link syntax, `http://`,
+and clipboard values containing surrounding or additional text remain literal
+editor text. The Markdown exporter still serializes an actual pasted link, so
+the existing prompt submission and sent-message Markdown renderer need no
+special link transport.
+
+Slash-command discovery remains prompt-leading and composer-local. IME
+composition bypasses submission and command keyboard handling. The editor root
+retains `data-chat-composer-editor` and `data-telemetry-mask` so focus routing,
+privacy masking, and surface behavior remain shared with the prior input.
+Discovery follows the current caret rather than the end of the document, and a
+selection replaces only the active slash-token range while preserving text and
+formatting around it.
+
 ## 1.1 Model Selector Semantics
 
 The composer model selector presents the model-catalog contract from

@@ -1,11 +1,18 @@
-import { useCallback, type KeyboardEvent } from "react";
+import { useCallback } from "react";
 import { getPreviousSessionModeValue } from "#product/lib/domain/chat/session-controls/session-mode-control";
 import { COMPOSER_SHORTCUTS } from "#product/config/shortcuts/composer-shortcuts";
 import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
 import {
+  type ComposerKeyboardEventLike,
   isComposerSubmitKey,
   isRepeatedComposerSubmitKey,
 } from "#product/lib/domain/chat/composer/composer-keyboard";
+
+export type ChatComposerKeyboardEvent = ComposerKeyboardEventLike & {
+  currentTarget: EventTarget | null;
+  defaultPrevented: boolean;
+  preventDefault(): void;
+};
 
 interface UseChatComposerKeyboardArgs {
   handleSubmit: () => Promise<void> | void;
@@ -28,14 +35,14 @@ export function useChatComposerKeyboard({
   onCancelEdit,
   onEditLastQueued,
 }: UseChatComposerKeyboardArgs) {
-  const handleKeyDown = useCallback((event: KeyboardEvent<HTMLTextAreaElement>) => {
+  const handleKeyDown = useCallback((event: ChatComposerKeyboardEvent) => {
     if (
       event.key === COMPOSER_SHORTCUTS.stopSession.key
       && !event.shiftKey
       && !event.altKey
       && !event.ctrlKey
       && !event.metaKey
-      && !event.nativeEvent.isComposing
+      && !isComposerEventComposing(event)
     ) {
       if (isEditingQueuedPrompt && onCancelEdit) {
         event.preventDefault();
@@ -55,12 +62,12 @@ export function useChatComposerKeyboard({
       && !event.altKey
       && !event.ctrlKey
       && !event.metaKey
-      && !event.nativeEvent.isComposing
+      && !isComposerEventComposing(event)
       && !isEditingQueuedPrompt
       && onEditLastQueued
     ) {
-      const textarea = event.currentTarget;
-      if (textarea.value.length === 0) {
+      const editorText = composerTargetText(event.currentTarget);
+      if (editorText.length === 0) {
         event.preventDefault();
         onEditLastQueued();
         return;
@@ -73,7 +80,7 @@ export function useChatComposerKeyboard({
       && !event.altKey
       && !event.ctrlKey
       && !event.metaKey
-      && !event.nativeEvent.isComposing
+      && !isComposerEventComposing(event)
       && modeControl?.settable
       && modeControl.options.length > 1
     ) {
@@ -111,4 +118,16 @@ export function useChatComposerKeyboard({
   return {
     handleKeyDown,
   };
+}
+
+function isComposerEventComposing(event: ComposerKeyboardEventLike): boolean {
+  return event.isComposing === true || event.nativeEvent?.isComposing === true;
+}
+
+function composerTargetText(target: EventTarget | null): string {
+  if (!target || typeof target !== "object") return "";
+  if ("value" in target && typeof target.value === "string") return target.value;
+  return "textContent" in target && typeof target.textContent === "string"
+    ? target.textContent
+    : "";
 }
