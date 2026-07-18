@@ -57,7 +57,7 @@ import {
   shouldPreserveStagedReplacementShell,
 } from "#product/hooks/sessions/workflows/session-replacement-tombstones";
 import { useProductStorageContext } from "#product/hooks/persistence/facade/use-product-storage-context";
-import { resumePendingEmptySessionCreations } from "#product/hooks/sessions/workflows/pending-empty-session-creation";
+import { resumePendingEmptySessionCreationForBootstrap } from "#product/hooks/workspaces/workflows/workspace-bootstrap-pending-empty-session";
 
 interface BootstrapWorkspaceInput {
   workspaceId: string;
@@ -243,28 +243,15 @@ export function useWorkspaceBootstrapActions() {
     if (!isCurrent()) {
       return { sessions };
     }
-
-    const resumedEmptySessionCreations = await resumePendingEmptySessionCreations(
+    if (await resumePendingEmptySessionCreationForBootstrap({
+      createEmptySession: createEmptySessionWithResolvedConfig,
+      isCurrent,
+      startedAt,
       storageContext,
       workspaceId,
-      isCurrent,
-      createEmptySessionWithResolvedConfig,
-    );
-    if (!isCurrent()) {
+    })) {
       return { sessions };
     }
-    if (resumedEmptySessionCreations > 0) {
-      logLatency("workspace.select.pending_session_creation_resumed", {
-        workspaceId,
-        resumedCount: resumedEmptySessionCreations,
-        totalElapsedMs: elapsedMs(startedAt),
-      });
-      if (isCurrent()) {
-        markWorkspaceBootstrappedInSession(workspaceId);
-      }
-      return { sessions };
-    }
-
     const activeSessionIdAfterLoad = useSessionSelectionStore.getState().activeSessionId;
     const activeSessionRecordAfterLoad = activeSessionIdAfterLoad
       ? getSessionRecord(activeSessionIdAfterLoad)
