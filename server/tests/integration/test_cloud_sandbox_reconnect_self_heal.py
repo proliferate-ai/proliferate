@@ -25,6 +25,7 @@ import uuid
 from typing import Any
 
 import pytest
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.cloud import CloudSandboxStatus
@@ -33,6 +34,9 @@ from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.db.store import cloud_sandboxes as sandbox_store
 from proliferate.integrations.sandbox.base import RuntimeEndpoint, SandboxRuntimeContext
 from proliferate.server.cloud.materialization.sandbox_io import connect as connect_module
+from proliferate.server.cloud.materialization.sandbox_io import (
+    runtime_launch as runtime_launch_module,
+)
 from proliferate.server.cloud.runtime.bootstrap import build_supervised_runtime_stop_command
 from proliferate.server.cloud.runtime.sandbox_exec import build_detached_runtime_launch_command
 
@@ -53,9 +57,17 @@ class _FakeProvider:
 
     template_version = "e2b-template-test"
 
-    def __init__(self) -> None:
+    def __init__(self, db: AsyncSession | None = None) -> None:
+        self.db = db
         self.commands: list[str] = []
         self.written_files: list[str] = []
+        self.runtime_io_transactions: list[bool] = []
+        self.runtime_events: list[str] = []
+
+    def _record_runtime_io(self) -> None:
+        self.runtime_events.append("runtime_io")
+        if self.db is not None:
+            self.runtime_io_transactions.append(self.db.in_transaction())
 
     async def resume_sandbox(self, sandbox_id: str, **_kwargs: Any) -> object:
         return object()
@@ -72,9 +84,11 @@ class _FakeProvider:
         )
 
     async def write_file(self, sandbox: object, path: str, content: bytes | str) -> None:
+        self._record_runtime_io()
         self.written_files.append(path)
 
     async def run_command(self, sandbox: object, command: str, **_kwargs: Any) -> _CommandResult:
+        self._record_runtime_io()
         self.commands.append(command)
         return _CommandResult(exit_code=0)
 
@@ -82,9 +96,11 @@ class _FakeProvider:
 def _install_stubs(monkeypatch: pytest.MonkeyPatch, provider: _FakeProvider) -> None:
     monkeypatch.setattr(connect_module, "get_sandbox_provider", lambda _ref: provider)
     monkeypatch.setattr(
-        connect_module, "build_runtime_launch_script", lambda *a, **k: "#!/bin/bash\ntrue\n"
+        runtime_launch_module,
+        "build_runtime_launch_script",
+        lambda *a, **k: "#!/bin/bash\ntrue\n",
     )
-    monkeypatch.setattr(connect_module, "build_runtime_env", lambda *a, **k: {})
+    monkeypatch.setattr(runtime_launch_module, "build_runtime_env", lambda *a, **k: {})
 
     async def _ok_health(*_a: Any, **_k: Any) -> None:
         return None
@@ -98,9 +114,9 @@ def _install_stubs(monkeypatch: pytest.MonkeyPatch, provider: _FakeProvider) -> 
     async def _resume_allowed(*_a: Any, **_k: Any) -> None:
         return None
 
-    monkeypatch.setattr(connect_module, "wait_for_runtime_health", _ok_health)
-    monkeypatch.setattr(connect_module, "verify_runtime_auth_enforced", _ok_auth)
-    monkeypatch.setattr(connect_module, "launch_worker_sidecar", _ok_sidecar)
+    monkeypatch.setattr(runtime_launch_module, "wait_for_runtime_health", _ok_health)
+    monkeypatch.setattr(runtime_launch_module, "verify_runtime_auth_enforced", _ok_auth)
+    monkeypatch.setattr(runtime_launch_module, "launch_worker_sidecar", _ok_sidecar)
     # Billing resume gate is out of scope for reconnect self-heal.
     monkeypatch.setattr(connect_module, "assert_cloud_sandbox_resume_allowed", _resume_allowed)
 
@@ -138,7 +154,7 @@ async def test_stale_runtime_is_killed_before_relaunch(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The legacy NULL-token row relaunches, and the stale runtime is killed first."""
-    provider = _FakeProvider()
+    provider = _FakeProvider(db_session)
     _install_stubs(monkeypatch, provider)
     sandbox = await _seed_sandbox(
         db_session,
@@ -162,6 +178,8 @@ async def test_stale_runtime_is_killed_before_relaunch(
     assert launch_command in provider.commands, provider.commands
     # Self-heal invariant: kill the stale runtime BEFORE relaunching it.
     assert provider.commands.index(stop_command) < provider.commands.index(launch_command)
+    assert provider.runtime_io_transactions
+    assert not any(provider.runtime_io_transactions)
 
 
 @pytest.mark.asyncio
@@ -170,7 +188,7 @@ async def test_fresh_token_persisted_when_url_unchanged(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A NULL-token row whose URL already matches still persists the minted token."""
-    provider = _FakeProvider()
+    provider = _FakeProvider(db_session)
     _install_stubs(monkeypatch, provider)
     # The row already carries the URL the provider resolves to, but no token.
     sandbox = await _seed_sandbox(
@@ -192,3 +210,50 @@ async def test_fresh_token_persisted_when_url_unchanged(
     assert refreshed.anyharness_bearer_token_ciphertext is not None
     assert refreshed.anyharness_data_key_ciphertext is not None
     assert refreshed.status == "ready"
+
+
+@pytest.mark.asyncio
+async def test_failed_organization_lookup_rolls_back_before_runtime_io(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(runtime_launch_module.settings, "supervisor_owned_runtime", False)
+    provider = _FakeProvider(db_session)
+    _install_stubs(monkeypatch, provider)
+    sandbox = await _seed_sandbox(
+        db_session,
+        anyharness_base_url=None,
+        runtime_token_ciphertext=None,
+    )
+
+    lookup_transactions: list[bool] = []
+    real_rollback = db_session.rollback
+
+    async def _recording_rollback() -> None:
+        await real_rollback()
+        provider.runtime_events.append("rollback")
+
+    monkeypatch.setattr(db_session, "rollback", _recording_rollback)
+
+    async def _failing_lookup(db: AsyncSession, user_id: uuid.UUID) -> None:
+        await db.execute(select(User.id).where(User.id == user_id))
+        lookup_transactions.append(db.in_transaction())
+        raise RuntimeError("identity store unavailable")
+
+    monkeypatch.setattr(
+        runtime_launch_module.organizations_store,
+        "get_current_membership_for_user",
+        _failing_lookup,
+    )
+    value = await sandbox_store.load_personal_cloud_sandbox(db_session, sandbox.owner_user_id)
+    assert value is not None
+
+    await connect_module.connect_ready_sandbox(db_session, sandbox=value)
+
+    assert lookup_transactions == [True]
+    assert provider.runtime_events[0] == "rollback"
+    assert provider.runtime_io_transactions
+    assert not any(provider.runtime_io_transactions)
+    refreshed = await sandbox_store.load_personal_cloud_sandbox(db_session, sandbox.owner_user_id)
+    assert refreshed is not None
+    assert refreshed.status == CloudSandboxStatus.ready

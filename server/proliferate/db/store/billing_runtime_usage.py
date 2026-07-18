@@ -25,6 +25,10 @@ from proliferate.utils.time import utcnow
 T = TypeVar("T")
 
 
+class UsageProviderBindingMismatchError(RuntimeError):
+    """An open segment is attributed to a different concrete provider."""
+
+
 def coerce_utc(value: datetime | None) -> datetime | None:
     if value is None:
         return None
@@ -45,15 +49,16 @@ class WebhookEventClaim:
 async def get_open_usage_segment(
     db: AsyncSession,
     sandbox_id: UUID,
+    *,
+    lock_row: bool = False,
 ) -> UsageSegment | None:
-    return (
-        await db.execute(
-            select(UsageSegment).where(
-                UsageSegment.sandbox_id == sandbox_id,
-                UsageSegment.ended_at.is_(None),
-            )
-        )
-    ).scalar_one_or_none()
+    stmt = select(UsageSegment).where(
+        UsageSegment.sandbox_id == sandbox_id,
+        UsageSegment.ended_at.is_(None),
+    )
+    if lock_row:
+        stmt = stmt.with_for_update()
+    return (await db.execute(stmt)).scalar_one_or_none()
 
 
 async def resolve_organization_id_for_user(
@@ -174,9 +179,11 @@ async def create_usage_segment(
             raise RuntimeError("Usage segment disappeared after creation.")
         return segment
 
-    existing = await get_open_usage_segment(db, sandbox_id)
+    existing = await get_open_usage_segment(db, sandbox_id, lock_row=True)
     if existing is None:
         raise RuntimeError("Usage segment insert conflicted but no open segment was found.")
+    if external_sandbox_id is not None and existing.external_sandbox_id != external_sandbox_id:
+        raise RuntimeError("Open usage segment belongs to a different provider sandbox.")
     return existing
 
 
@@ -186,12 +193,51 @@ async def close_usage_segment(
     sandbox_id: UUID,
     ended_at: datetime,
     closed_by: str,
+    expected_external_sandbox_id: str | None = None,
+    fail_on_provider_mismatch: bool = False,
 ) -> UsageSegment | None:
-    segment = await get_open_usage_segment(db, sandbox_id)
+    segment = await get_open_usage_segment(db, sandbox_id, lock_row=True)
     if segment is None:
         return None
+    if (
+        expected_external_sandbox_id is not None
+        and segment.external_sandbox_id != expected_external_sandbox_id
+    ):
+        if fail_on_provider_mismatch:
+            raise RuntimeError("Open usage segment belongs to a different provider sandbox.")
+        return None
 
-    segment.ended_at = coerce_utc(ended_at) or utcnow()
+    observed_end = coerce_utc(ended_at) or utcnow()
+    segment_start = coerce_utc(segment.started_at) or observed_end
+    segment.ended_at = max(observed_end, segment_start)
+    segment.closed_by = closed_by
+    segment.updated_at = utcnow()
+    await db.flush()
+    return segment
+
+
+async def close_conflicting_provider_usage_segment(
+    db: AsyncSession,
+    *,
+    sandbox_id: UUID,
+    current_provider_sandbox_id: str | None,
+    ended_at: datetime,
+    closed_by: str,
+) -> UsageSegment | None:
+    """Bound legacy null attribution, but preserve concrete conflicts for support."""
+
+    segment = await get_open_usage_segment(db, sandbox_id, lock_row=True)
+    if segment is None:
+        return None
+    if segment.external_sandbox_id is not None:
+        if segment.external_sandbox_id == current_provider_sandbox_id:
+            return None
+        raise UsageProviderBindingMismatchError(
+            "Open usage segment belongs to a different provider sandbox."
+        )
+    observed_end = coerce_utc(ended_at) or utcnow()
+    segment_start = coerce_utc(segment.started_at) or observed_end
+    segment.ended_at = max(observed_end, segment_start)
     segment.closed_by = closed_by
     segment.updated_at = utcnow()
     await db.flush()
@@ -472,19 +518,23 @@ async def ensure_sandbox_usage_stopped(
     source: str,
     event_id: str,
     reason: str,
+    expected_external_sandbox_id: str | None = None,
+    fail_on_provider_mismatch: bool = False,
 ) -> UsageSegment | None:
     await record_sandbox_event_receipt(
         db,
         event_id=f"usage:{event_id}",
         provider="proliferate_usage",
         event_type=source,
-        external_sandbox_id=None,
+        external_sandbox_id=expected_external_sandbox_id,
     )
     return await close_usage_segment(
         db,
         sandbox_id=sandbox_id,
         ended_at=observed_at,
         closed_by=reason,
+        expected_external_sandbox_id=expected_external_sandbox_id,
+        fail_on_provider_mismatch=fail_on_provider_mismatch,
     )
 
 
@@ -540,6 +590,8 @@ async def close_usage_segment_for_sandbox(
     closed_by: str,
     is_billable: bool | None = None,
     event_id: str | None = None,
+    expected_external_sandbox_id: str | None = None,
+    fail_on_provider_mismatch: bool = False,
 ) -> UsageSegment | None:
     segment = await ensure_sandbox_usage_stopped(
         db,
@@ -548,6 +600,8 @@ async def close_usage_segment_for_sandbox(
         source=closed_by,
         event_id=event_id or f"usage-stop:{closed_by}:{sandbox_id}:{ended_at.isoformat()}",
         reason=closed_by,
+        expected_external_sandbox_id=expected_external_sandbox_id,
+        fail_on_provider_mismatch=fail_on_provider_mismatch,
     )
     if segment is not None and is_billable is False:
         segment = await mark_usage_segment_non_billable(
