@@ -109,6 +109,15 @@ export const COVERED_REPO_NAME = "e2e-fixture";
  */
 export const COVERED_REPO_DEFAULT_BRANCH = "main";
 /**
+ * The rich home composer intentionally carries both hooks. A workspace editor
+ * must therefore exclude the home hook; checking the generic chat hook alone
+ * misclassifies the home screen as an already-open workspace.
+ */
+export const HOME_COMPOSER_EDITOR_SELECTOR = "[data-home-composer-editor]";
+export const WORKSPACE_COMPOSER_EDITOR_SELECTOR =
+  "[data-chat-composer-editor]:not([data-home-composer-editor])";
+
+/**
  * Where the product materializes cloud repo checkouts:
  * `SANDBOX_REPOS_ROOT = /home/user/workspace/repos`
  * (server materialization/paths.py). The covered repo lands at
@@ -2292,11 +2301,15 @@ async function ensureCloudLaunchTargetSelected(page: ProductPage): Promise<void>
   const p = page.page;
   const deadline = Date.now() + SANDBOX_READY_TIMEOUT_MS;
   for (;;) {
-    if (await p.locator("[data-chat-composer-editor]").first().isVisible().catch(() => false)) {
-      return;
-    }
-    if (await p.locator("[data-home-composer-editor]").first().isVisible().catch(() => false)) {
+    // Home's rich editor also has data-chat-composer-editor, so classify home
+    // first and use the exclusive workspace selector below. The opposite order
+    // silently skipped Project + Runtime selection after the rich-composer
+    // migration and left the picker on the unavailable local target.
+    if (await p.locator(HOME_COMPOSER_EDITOR_SELECTOR).first().isVisible().catch(() => false)) {
       break;
+    }
+    if (await p.locator(WORKSPACE_COMPOSER_EDITOR_SELECTOR).first().isVisible().catch(() => false)) {
+      return;
     }
     if (Date.now() >= deadline) {
       throw new Error(

@@ -7,8 +7,10 @@ import { test } from "node:test";
 import {
   CLOUD_PROVISION_1_ID,
   DETERMINISTIC_PROMPT,
+  HOME_COMPOSER_EDITOR_SELECTOR,
   REPRESENTATIVE_HARNESS,
   SANDBOX_RUNTIME_PORT,
+  WORKSPACE_COMPOSER_EDITOR_SELECTOR,
   cloudComposerTargetSelectionIsStable,
   coveredRepoSourceRootSelector,
   createCloudProvision1Driver,
@@ -360,6 +362,14 @@ test("cloudComposerTargetSelectionIsStable distinguishes a retained Cloud target
     projectAriaLabel: null,
     runtimeAriaLabel: null,
   }), true, "an already-open workspace has no home target rows to retain");
+});
+
+test("composer surface selectors do not classify the rich home editor as an open workspace", () => {
+  assert.equal(HOME_COMPOSER_EDITOR_SELECTOR, "[data-home-composer-editor]");
+  assert.equal(
+    WORKSPACE_COMPOSER_EDITOR_SELECTOR,
+    "[data-chat-composer-editor]:not([data-home-composer-editor])",
+  );
 });
 
 test("buildWorld writes GITHUB_APP_WEBHOOK_SECRET into the github-app env file (#1318 base-world repair)", async () => {
