@@ -6,6 +6,8 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { pathToFileURL } from "node:url";
 
+import { removeReceiptTempSiblings } from "./finalize-managed-cloud-aws-receipt.mjs";
+
 const execFile = promisify(execFileCallback);
 
 const PURPOSE = "managed-cloud-qualification";
@@ -570,6 +572,7 @@ async function main() {
   let row;
   try {
     receiptPath = receiptPathFromEnv(process.env);
+    if (receiptPath) removeReceiptTempSiblings(receiptPath);
     if (receiptPath && completeReceiptIdentity(identityHint)) {
       writeReceiptAtomically(receiptPath, failedReceipt(
         identityHint,

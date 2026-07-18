@@ -3,6 +3,7 @@ import { spawn, spawnSync } from "node:child_process";
 import {
   chmodSync,
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
@@ -23,6 +24,8 @@ const CLEANUP_SHA = "b".repeat(40);
 const REGION = "us-east-1";
 const ZONE = "Z123ABC";
 const SCRIPT = fileURLToPath(new URL("./reap-managed-cloud-aws.mjs", import.meta.url));
+const FINALIZER = fileURLToPath(new URL("./finalize-managed-cloud-aws-receipt.mjs", import.meta.url));
+const FINALIZER_WRAPPER = fileURLToPath(new URL("./finalize-managed-cloud-aws-receipt.sh", import.meta.url));
 
 function exactTags() {
   return [
@@ -247,6 +250,17 @@ function initialReceipt() {
   };
 }
 
+function finalizerEnv(receiptPath, overrides = {}) {
+  return {
+    ...process.env,
+    TARGET_WORKFLOW_RUN_ID: WORKFLOW_RUN_ID,
+    TARGET_WORKFLOW_RUN_ATTEMPT: WORKFLOW_ATTEMPT,
+    CLEANUP_SHA,
+    RELEASE_E2E_CLOUD_AWS_RECEIPT_PATH: receiptPath,
+    ...overrides,
+  };
+}
+
 async function waitForFile(file) {
   for (let attempt = 0; attempt < 100; attempt += 1) {
     if (existsSync(file)) return;
@@ -308,6 +322,116 @@ test("a completed CLI failure atomically replaces the initialized receipt", () =
   }
 });
 
+test("reaper startup removes only exact canonical receipt temp siblings", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "managed-cloud-aws-startup-sweep-"));
+  const receiptPath = path.join(directory, "report.json");
+  const staleReaper = `${receiptPath}.4321.1700000000000.tmp`;
+  const staleFinalizer = `${receiptPath}.4321.finalize.tmp`;
+  const nearMatch = `${receiptPath}.4321.1700000000000.tmp.extra`;
+  writeFileSync(receiptPath, `${JSON.stringify(initialReceipt())}\n`, { mode: 0o600 });
+  writeFileSync(staleReaper, "partial-reaper", { mode: 0o600 });
+  writeFileSync(staleFinalizer, "partial-finalizer", { mode: 0o600 });
+  writeFileSync(nearMatch, "keep-near-match", { mode: 0o600 });
+  try {
+    const result = runCli([], { RELEASE_E2E_CLOUD_AWS_RECEIPT_PATH: receiptPath });
+    assert.equal(result.status, 2);
+    assert.equal(existsSync(staleReaper), false);
+    assert.equal(existsSync(staleFinalizer), false);
+    assert.equal(readFileSync(nearMatch, "utf8"), "keep-near-match");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("actual finalizer wrapper removes killed-writer residue without using it as evidence", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "managed-cloud-aws-finalizer-"));
+  const receiptPath = path.join(directory, "report.json");
+  const expected = `${JSON.stringify(initialReceipt())}\n`;
+  const scoped = [
+    `${receiptPath}.4321.1700000000000.tmp`,
+    `${receiptPath}.4321.finalize.tmp`,
+  ];
+  const unrelated = new Map([
+    [`${receiptPath}.4321.1700000000000.tmp.extra`, "keep-suffix"],
+    [path.join(directory, "other-report.json.4321.1700000000000.tmp"), "keep-other"],
+    [path.join(directory, `prefix-${path.basename(receiptPath)}.4321.finalize.tmp`), "keep-prefix"],
+  ]);
+  writeFileSync(receiptPath, expected, { mode: 0o600 });
+  for (const file of scoped) writeFileSync(file, "partial", { mode: 0o600 });
+  for (const [file, contents] of unrelated) writeFileSync(file, contents, { mode: 0o600 });
+  try {
+    const result = spawnSync("bash", [FINALIZER_WRAPPER], {
+      encoding: "utf8",
+      env: finalizerEnv(receiptPath),
+    });
+    assert.equal(result.status, 2, result.stderr);
+    assert.equal(readFileSync(receiptPath, "utf8"), expected);
+    assert.deepEqual(JSON.parse(readFileSync(receiptPath, "utf8")), initialReceipt());
+    for (const file of scoped) assert.equal(existsSync(file), false);
+    for (const [file, contents] of unrelated) assert.equal(readFileSync(file, "utf8"), contents);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("finalizer ignores a valid-looking temp beside malformed canonical evidence", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "managed-cloud-aws-finalizer-malformed-"));
+  const receiptPath = path.join(directory, "report.json");
+  const residue = `${receiptPath}.4321.1700000000000.tmp`;
+  writeFileSync(receiptPath, "malformed-canonical", { mode: 0o600 });
+  writeFileSync(residue, `${JSON.stringify({
+    ...initialReceipt(),
+    status: "not_needed",
+    runs: [],
+  })}\n`, { mode: 0o600 });
+  try {
+    const result = spawnSync("bash", [FINALIZER_WRAPPER], {
+      encoding: "utf8",
+      env: finalizerEnv(receiptPath),
+    });
+    const row = JSON.parse(readFileSync(receiptPath, "utf8"));
+    assert.equal(result.status, 2, result.stderr);
+    assert.equal(row.status, "failed");
+    assert.equal(row.reason, "AWS cleanup receipt was missing or malformed.");
+    assert.equal(row.workflow_run_id, WORKFLOW_RUN_ID);
+    assert.equal("runs" in row, false);
+    assert.equal(existsSync(residue), false);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("finalizer wrapper EXIT trap removes its own partial temp on handled failure", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "managed-cloud-aws-finalizer-failure-"));
+  const receiptPath = path.join(directory, "report.json");
+  const fakeBin = path.join(directory, "bin");
+  const fakeNode = path.join(fakeBin, "node");
+  const unrelated = path.join(directory, "report.json.unrelated.tmp");
+  const expected = `${JSON.stringify(initialReceipt())}\n`;
+  mkdirSync(fakeBin, { mode: 0o700 });
+  writeFileSync(receiptPath, expected, { mode: 0o600 });
+  writeFileSync(unrelated, "keep-unrelated", { mode: 0o600 });
+  writeFileSync(fakeNode, [
+    "#!/bin/sh",
+    "printf 'partial-finalizer' > \"${RELEASE_E2E_CLOUD_AWS_FINALIZER_TEMP_PATH}\"",
+    "exit 23",
+    "",
+  ].join("\n"), { mode: 0o700 });
+  chmodSync(fakeNode, 0o700);
+  try {
+    const result = spawnSync("bash", [FINALIZER_WRAPPER], {
+      encoding: "utf8",
+      env: finalizerEnv(receiptPath, { PATH: `${fakeBin}:${process.env.PATH}` }),
+    });
+    assert.equal(result.status, 23, result.stderr);
+    assert.equal(readFileSync(receiptPath, "utf8"), expected);
+    assert.equal(readFileSync(unrelated, "utf8"), "keep-unrelated");
+    assert.deepEqual(readdirSync(directory).filter((name) => name.endsWith(".finalize.tmp")), []);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("the workflow never truncates the initialized receipt before terminal promotion", () => {
   const root = path.resolve(path.dirname(SCRIPT), "../..");
   const workflow = readFileSync(path.join(root, ".github/workflows/release-e2e-hard-cancel-cleanup.yml"), "utf8");
@@ -318,6 +442,12 @@ test("the workflow never truncates the initialized receipt before terminal promo
   assert.match(aws, /RELEASE_E2E_CLOUD_AWS_RECEIPT_PATH:/);
   assert.doesNotMatch(aws, /\|\s*tee [^\n]*managed-cloud-cleanup\/report\.json/);
   assert.match(aws, /AWS cleanup process did not emit a terminal receipt \(timeout, crash, or runner interruption\)/);
-  assert.match(aws, /fs\.renameSync\(temporary, receipt\)/);
+  assert.match(aws, /bash scripts\/ci-cd\/finalize-managed-cloud-aws-receipt\.sh/);
+  const wrapper = readFileSync(FINALIZER_WRAPPER, "utf8");
+  assert.match(wrapper, /trap cleanup_finalizer_temp EXIT/);
+  assert.match(wrapper, /trap 'exit 143' TERM/);
+  const finalizer = readFileSync(FINALIZER, "utf8");
+  assert.match(finalizer, /removeReceiptTempSiblings\(receiptPath\)/);
+  assert.match(finalizer, /renameSync\(temporaryPath, receiptPath\)/);
   assert.match(readFileSync(SCRIPT, "utf8"), /renameSync\(temporary, receiptPath\)/);
 });

@@ -500,6 +500,10 @@ test("the independent workflow runs after Release E2E completion from default-br
   const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
   const workflow = readFileSync(path.join(repoRoot, ".github/workflows/release-e2e-hard-cancel-cleanup.yml"), "utf8");
   const sourceWorkflow = readFileSync(path.join(repoRoot, ".github/workflows/release-e2e.yml"), "utf8");
+  const awsFinalizer = readFileSync(path.join(
+    repoRoot,
+    "scripts/ci-cd/finalize-managed-cloud-aws-receipt.mjs",
+  ), "utf8");
   const classifier = workflow.slice(
     workflow.indexOf("  classify-source:"),
     workflow.indexOf("  managed-cloud-aws:"),
@@ -546,10 +550,12 @@ test("the independent workflow runs after Release E2E completion from default-br
   assert.match(providers, /timeout-minutes: 45/);
   assert.equal(workflow.match(/Initialize bounded failed /g)?.length, 3);
   assert.equal(workflow.match(/Finalize bounded /g)?.length, 3);
-  assert.match(aws, /const structured = common && Array\.isArray\(row\.runs\)/);
-  assert.match(aws, /typeof row\.reason === "string"/);
+  assert.match(aws, /finalize-managed-cloud-aws-receipt\.sh/);
+  assert.match(awsFinalizer, /const structured = common && Array\.isArray\(row\.runs\)/);
+  assert.match(awsFinalizer, /typeof row\.reason === "string"/);
   assert.equal(workflow.match(/if-no-files-found: error/g)?.length, 3);
-  assert.equal(workflow.match(/process\.exitCode = 2/g)?.length, 3);
+  assert.equal(workflow.match(/process\.exitCode = 2/g)?.length, 2);
+  assert.match(awsFinalizer, /process\.exitCode = 2/);
   for (const job of [classifier, aws, providers]) {
     assert.ok(job.indexOf("Initialize bounded failed") < job.indexOf("actions/checkout@"));
     assert.match(job, /Finalize bounded [^\n]+ receipt\s*\n\s*if: always\(\)/);

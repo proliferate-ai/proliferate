@@ -275,52 +275,9 @@ jobs:
         shell: bash
         env:
           CLEANUP_SHA: ${{ needs.classify-source.outputs.cleanup_sha }}
+          RELEASE_E2E_CLOUD_AWS_RECEIPT_PATH: ${{ runner.temp }}/managed-cloud-cleanup/report.json
         run: |
-          node <<'NODE'
-          const fs = require("node:fs");
-          const path = require("node:path");
-          const receipt = path.join(process.env.RUNNER_TEMP, "managed-cloud-cleanup", "report.json");
-          const failed = (reason) => ({
-            kind: "managed_cloud_aws_hard_cancel_cleanup",
-            schema_version: 1,
-            workflow_run_id: process.env.TARGET_WORKFLOW_RUN_ID,
-            workflow_run_attempt: Number(process.env.TARGET_WORKFLOW_RUN_ATTEMPT),
-            cleanup_sha: process.env.CLEANUP_SHA,
-            status: "failed",
-            reason,
-          });
-          let row;
-          try {
-            row = JSON.parse(fs.readFileSync(receipt, "utf8"));
-          } catch {
-            row = failed("AWS cleanup receipt was missing or malformed.");
-          }
-          const common =
-            row?.kind === "managed_cloud_aws_hard_cancel_cleanup" &&
-            row?.schema_version === 1 &&
-            row?.workflow_run_id === process.env.TARGET_WORKFLOW_RUN_ID &&
-            row?.workflow_run_attempt === Number(process.env.TARGET_WORKFLOW_RUN_ATTEMPT) &&
-            row?.cleanup_sha === process.env.CLEANUP_SHA &&
-            ["reconciled", "not_needed", "failed"].includes(row?.status);
-          const structured = common && Array.isArray(row.runs);
-          const success = structured && row.status !== "failed";
-          const failure =
-            common &&
-            row.status === "failed" &&
-            (structured || (
-              typeof row.reason === "string" &&
-              row.reason.length > 0 &&
-              row.reason.length <= 400
-            ));
-          if (!success && !failure) {
-            row = failed("AWS cleanup receipt was missing or malformed.");
-          }
-          fs.mkdirSync(path.dirname(receipt), { recursive: true, mode: 0o700 });
-          const temporary = `${receipt}.${process.pid}.finalize.tmp`;
-          fs.writeFileSync(temporary, `${JSON.stringify(row)}\n`, { mode: 0o600, flag: "wx" });
-          fs.renameSync(temporary, receipt);
-          if (!success) process.exitCode = 2;
-          NODE
+          bash scripts/ci-cd/finalize-managed-cloud-aws-receipt.sh
 
       - name: Upload bounded cleanup receipt
         if: always()
