@@ -4,6 +4,8 @@ import path from "node:path";
 
 import type { Browser } from "playwright";
 
+import { registerCancellationFinalizer } from "../../cli/cancellation-finalizer.js";
+
 import type { CandidateBuildMapV1 } from "../../artifacts/build-map.js";
 import {
   resolveLocalCandidateSet,
@@ -160,8 +162,8 @@ export interface ConstructLocalWorldOptions {
    * Per-world mutable root — runtime home, secrets, extracted renderer,
    * materialized artifact copies, setup token, and the cleanup ledger all live
    * under here, and the `run_directory` cleanup releaser deletes ONLY this
-   * subdir. Defaults to `runDir` (the single-world `LOCAL-WORLD-SMOKE-1` shape,
-   * unchanged). Functional runs pass a scenario-scoped
+   * subdir. Defaults to `runDir` for direct callers that do not select a child
+   * root. Smoke and functional runs pass a scenario-scoped
    * `<runDir>/worlds/<scenario-id-slug>` so world-per-scenario teardown never
    * touches the shared `<runDir>/artifacts` source or a sibling world's subdir.
    */
@@ -214,8 +216,8 @@ export async function constructLocalWorld(options: ConstructLocalWorldOptions): 
   await gateway.preflight();
 
   const runDir = options.runDir;
-  // Per-world mutable root (defaults to runDir for the single-world smoke). All
-  // materialized copies, runtime home, secrets, renderer extraction, setup
+  // Per-world mutable root (defaults to runDir when a caller omits worldRoot).
+  // All materialized copies, runtime home, secrets, renderer extraction, setup
   // token, and ledger live under here; the shared `<runDir>/artifacts` source
   // the map locators point at stays outside it and is never deleted.
   const worldRoot = options.worldRoot ?? runDir;
@@ -235,6 +237,12 @@ export async function constructLocalWorld(options: ConstructLocalWorldOptions): 
     mirror: deps.ledgerMirror,
   });
   const stack = new LocalWorldCleanupStack({ ledger, log });
+  const cancellationFinalizer = registerCancellationFinalizer({
+    world: "local",
+    run: options.run,
+    runDir: worldRoot,
+    finalize: () => stack.runAll(),
+  });
 
   const register = async (
     kind: CleanupResourceKind,
@@ -344,17 +352,17 @@ export async function constructLocalWorld(options: ConstructLocalWorldOptions): 
       gateway,
       // `runDir` here is the per-world root: fixtures read the world's setup
       // token at `<paths.runDir>/setup-token`, which the world copied out under
-      // `worldRoot`. (Same value as `runDir` for the single-world smoke.)
+      // `worldRoot`. It equals `runDir` only when the caller omits worldRoot.
       paths: { runDir: worldRoot, runtimeHome, repositoriesDir },
       db: { databaseUrl: dockerHostDatabaseUrl(options.ports.postgres) },
       registerCleanup: register,
       trackActorSubjects: (actor) => trackActorSubjects(stack, gateway, actor),
-      close: () => stack.runAll(),
+      close: () => cancellationFinalizer.run(),
     };
   } catch (error) {
     // Any startup failure runs every registered cleanup exactly once, reverse
     // order, then rethrows so the caller marks the cell failed.
-    await stack.runAll().catch(() => undefined);
+    await cancellationFinalizer.run().catch(() => undefined);
     throw error;
   }
 }

@@ -15,6 +15,7 @@ import { loadCandidateBuildMap } from "../artifacts/build-map.js";
 import { readLocalWorldPortsFile } from "../worlds/local-workspace/ports.js";
 import { writeReportV4 } from "../evidence/write.js";
 import { armPostReportExitWatchdog } from "./exit-watchdog.js";
+import { installCancellationHandlers } from "./cancellation-finalizer.js";
 
 /**
  * Thin process adapter: supplies the real side-effect dependencies to
@@ -127,6 +128,8 @@ function printEnvManifestReport(): void {
     console.log(`  [${status}] ${entry.spec.name}${shown}`);
   }
 }
+
+installCancellationHandlers();
 
 process.exitCode = await runReleaseCommand(process.argv.slice(2), {
   resolveIdentity: (overrides) => resolveRunIdentity({ overrides }),

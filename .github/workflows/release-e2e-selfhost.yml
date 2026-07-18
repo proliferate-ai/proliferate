@@ -42,10 +42,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: release-e2e-selfhost
-  cancel-in-progress: false
-
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
@@ -54,6 +50,9 @@ jobs:
     name: T4-SH-2 desktop artifact chain (release gate)
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    concurrency:
+      group: release-e2e-tier4
+      cancel-in-progress: false
     steps:
       # fetch-depth 0 + tags: T4-SH-2 verifies the desktop-v<version> tag exists
       # and shares lineage with the release SHA.
@@ -63,6 +62,17 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22"
+      - name: Preflight Tier 4 artifact-chain inputs
+        run: |
+          node scripts/ci-cd/qualification-preflight.mjs \
+            --world tier4 \
+            --source-sha "${GITHUB_SHA}" \
+            --run-id "qt4-${GITHUB_RUN_ID}" \
+            --shard-id artifact-chain \
+            --attempt "${GITHUB_RUN_ATTEMPT}" \
+            --scenarios T4-SH-2 \
+            --artifact-mode external \
+            --output "tests/release/.output/preflight/tier4/qualification-preflight.json"
       - uses: pnpm/action-setup@v6
         with:
           version: 10
@@ -70,11 +80,22 @@ jobs:
         env:
           RELEASE_E2E_RELEASE_DESKTOP_VERSION: ${{ inputs.release_desktop_version }}
         run: make release-e2e LANE=local DESKTOP=web AGENTS=all SCENARIOS=T4-SH-2
+      - name: Upload Tier 4 preflight evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: tier4-preflight-${{ github.run_id }}-${{ github.run_attempt }}
+          path: tests/release/.output/preflight/tier4/
+          retention-days: 7
+          if-no-files-found: error
 
   provisioning:
     name: T3-SH-1 / T4-SH-1 / T3-SH-2 / T3-SH-3 (provisional)
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    concurrency:
+      group: release-e2e-self-host
+      cancel-in-progress: false
     # Never gates a merge (README CI mapping — tier 3 is not a merge gate).
     continue-on-error: true
     steps:

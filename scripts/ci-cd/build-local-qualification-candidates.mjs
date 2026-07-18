@@ -30,7 +30,12 @@ import net from "node:net";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { assembleCandidateBuildMapFromArtifacts, gitHeadSha, repositoryVersion } from "./assemble-candidate-build-map.mjs";
+import {
+  assembleCandidateBuildMapFromArtifacts,
+  gitHeadSha,
+  loadCandidateBuildMapForReuse,
+  repositoryVersion,
+} from "./assemble-candidate-build-map.mjs";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -238,6 +243,23 @@ export async function buildLocalQualificationCandidates(options, deps = {}) {
   if (!/^[0-9a-f]{40}$/.test(sourceSha)) {
     throw new Error(`source SHA must be a lowercase 40-hex commit SHA, got "${sourceSha}"`);
   }
+
+  // An explicit reuse request is fail-closed and happens before port
+  // allocation or any docker/cargo/pnpm build seam. The existing candidate map
+  // remains the authority: every source identity and artifact digest is
+  // re-verified, then the exact bytes are copied into this run's directory and
+  // the local_file locators are rebased. This is the bounded build-once path
+  // shared by the local smoke and functional jobs.
+  if (options.reuseFrom) {
+    return materializeReusableLocalCandidates({
+      sourceDir: path.resolve(options.reuseFrom),
+      runDir,
+      runId,
+      shardId,
+      sourceSha,
+    });
+  }
+
   const version = (options.version ?? repositoryVersion()).trim();
   const target = (options.target ?? resolveRustHostTarget(exec)).trim();
   const dockerPlatform = options.dockerPlatform ?? resolveDockerPlatform(exec);
@@ -300,6 +322,80 @@ export async function buildLocalQualificationCandidates(options, deps = {}) {
   };
 }
 
+export function materializeReusableLocalCandidates({ sourceDir, runDir, runId, shardId, sourceSha }) {
+  const sourceMapPath = path.join(sourceDir, "candidate-build.json");
+  const map = loadCandidateBuildMapForReuse({ mapPath: sourceMapPath, expectedSourceSha: sourceSha });
+  const ids = map.artifacts.map((artifact) => artifact.artifact_id);
+  const compatible =
+    ids.length === 3 &&
+    ids.filter((id) => id.startsWith("server/")).length === 1 &&
+    ids.filter((id) => id.startsWith("anyharness/")).length === 1 &&
+    ids.filter((id) => id === "desktop-renderer/browser").length === 1;
+  if (!compatible) {
+    throw new Error("candidate build map artifact set is incompatible with the local world");
+  }
+
+  const sourcePortsPath = path.join(sourceDir, "local-world-ports.json");
+  const ports = validatePorts(JSON.parse(readFileSync(sourcePortsPath, "utf8")));
+  const destinationMapPath = path.join(runDir, "candidate-build.json");
+  const destinationPortsPath = path.join(runDir, "local-world-ports.json");
+
+  if (path.resolve(sourceDir) === path.resolve(runDir)) {
+    return localCandidateSummary({ runId, shardId, candidateBuildMapPath: destinationMapPath, portsPath: destinationPortsPath, ports, reused: true });
+  }
+
+  const artifactsDir = path.join(runDir, "artifacts");
+  mkdirSync(artifactsDir, { recursive: true });
+  const usedNames = new Set();
+  const rebased = map.artifacts.map((artifact) => {
+    const basename = path.basename(artifact.locator.path);
+    if (usedNames.has(basename)) {
+      throw new Error(`candidate reuse has duplicate artifact basename "${basename}"`);
+    }
+    usedNames.add(basename);
+    const destination = path.join(artifactsDir, basename);
+    copyFileSync(artifact.locator.path, destination);
+    if (artifact.artifact_id.startsWith("anyharness/")) {
+      chmodSync(destination, 0o755);
+    }
+    return { ...artifact, locator: { kind: "local_file", path: destination } };
+  });
+  const rebasedMap = { ...map, artifacts: rebased };
+  writeFileSync(destinationMapPath, `${JSON.stringify(rebasedMap, null, 2)}\n`, "utf8");
+  writeFileSync(destinationPortsPath, `${JSON.stringify(ports, null, 2)}\n`, "utf8");
+  // Re-verify after copying so a partial or modified materialization can never
+  // reach the runner as a cache hit.
+  loadCandidateBuildMapForReuse({ mapPath: destinationMapPath, expectedSourceSha: sourceSha, expectedArtifactIds: ids });
+  return localCandidateSummary({ runId, shardId, candidateBuildMapPath: destinationMapPath, portsPath: destinationPortsPath, ports, reused: true });
+}
+
+function validatePorts(value) {
+  const keys = ["server", "postgres", "redis", "anyharness", "renderer"];
+  if (!value || typeof value !== "object" || Array.isArray(value) || JSON.stringify(Object.keys(value).sort()) !== JSON.stringify([...keys].sort())) {
+    throw new Error("local-world ports sidecar is malformed");
+  }
+  const values = keys.map((key) => value[key]);
+  if (values.some((port) => !Number.isInteger(port) || port < 1 || port > 65535) || new Set(values).size !== values.length) {
+    throw new Error("local-world ports sidecar contains invalid or duplicate ports");
+  }
+  return value;
+}
+
+function localCandidateSummary({ runId, shardId, candidateBuildMapPath, portsPath, ports, reused = false }) {
+  return {
+    run_id: runId,
+    shard_id: shardId,
+    candidate_build_map: candidateBuildMapPath,
+    ports_file: portsPath,
+    ports,
+    urls: {
+      api_base_url: `http://127.0.0.1:${ports.server}`,
+      anyharness_dev_url: `http://127.0.0.1:${ports.anyharness}`,
+    },
+    reused,
+  };
+}
+
 function argValue(flag) {
   const index = process.argv.indexOf(flag);
   return index >= 0 ? process.argv[index + 1] : undefined;
@@ -313,6 +409,7 @@ async function main() {
     sourceSha: argValue("--source-sha"),
     version: argValue("--version"),
     target: argValue("--target"),
+    reuseFrom: argValue("--reuse-from"),
   }, {
     log: (message) => console.error(`[build-local-qualification-candidates] ${message}`),
   });

@@ -180,6 +180,42 @@ Two constraints apply:
   test mode, test GitHub App, test provider accounts) are named in
   `specs/developing/reference/env-vars.yaml`, never hardcoded in scenarios.
 
+Current execution reliability is deliberately bounded:
+
+- `qualification-preflight.mjs` runs before dependency installation, candidate
+  builds, or provider mutation in the current local, managed-cloud, self-host,
+  and Tier-4 artifact-chain entrypoints. It checks required world/scenario
+  inputs and the deterministic prerequisites of an explicitly selected
+  self-host cell,
+  complete supported AWS credential postures, exact candidate-map hashes on a
+  reuse request, and cleanup authorization using local operations plus one
+  bounded remote-default-branch identity lookup. It writes a redacted
+  machine-readable receipt and exits `2` on failure. It does not authenticate
+  to product providers or prove reachability.
+- Managed-cloud preflight validates only the GitHub App inputs the current
+  candidate-world constructor actually consumes. The complete six-field Server
+  gate (including webhook secret instead of the current hard-coded/partial
+  posture) remains owned by #1304/#1318; add those preflight requirements only
+  when that production path consumes them.
+- The manual local Actions job builds the three local candidates once, runs the
+  smoke world in a child directory, then materializes and re-hashes those exact
+  source bytes for the functional cells. `REUSE_CANDIDATES` gives the same
+  fail-closed reuse to a compatible retry in one retained checkout. There is no
+  durable cross-run Actions candidate cache yet: local-file maps bake
+  run-specific ports/origins and cannot be advertised as portable artifacts.
+- Job-level non-cancelling concurrency groups serialize overlapping runs of the
+  same world while allowing unrelated worlds to run concurrently. GitHub does
+  not guarantee FIFO ordering for pending runs, so these groups are collision
+  protection, not an ordered queue.
+- Normal completion, setup failure, and supported `SIGINT`/`SIGTERM`
+  cancellation share each world's memoized cleanup finalizer. Hard runner loss
+  cannot guarantee process-local finalization or receipt upload; only the
+  managed-cloud path currently has the independent trusted-default-branch
+  hard-cancel reaper. Self-host hard-loss reconciliation remains a gap.
+
+This work does not add stable TLS/ingress capacity; worlds continue to consume
+the existing provisioner and ingress contracts.
+
 ---
 
 ## Tier 4 — packaged install and upgrade

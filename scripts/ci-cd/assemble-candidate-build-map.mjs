@@ -74,6 +74,87 @@ function hashFile(filePath) {
 }
 
 /**
+ * Loads and re-verifies an existing CandidateBuildMapV1 before it is reused.
+ * This is the plain-Node companion to the runner's TypeScript loader: CI must
+ * be able to reject a stale/tampered cache before installing dependencies or
+ * invoking an expensive builder. It deliberately accepts only the existing
+ * local_file V1 contract and returns the same map shape; it does not introduce
+ * a second receipt or locator format.
+ */
+export function loadCandidateBuildMapForReuse({ mapPath, expectedSourceSha, expectedArtifactIds }) {
+  if (!mapPath) {
+    throw new Error("candidate build map path is required for reuse");
+  }
+  const sourceSha = resolveSourceSha(expectedSourceSha);
+  let map;
+  try {
+    map = JSON.parse(readFileSync(mapPath, "utf8"));
+  } catch (error) {
+    throw new Error(`candidate build map is unreadable or malformed: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  if (!map || typeof map !== "object" || Array.isArray(map)) {
+    throw new Error("candidate build map must be an object");
+  }
+  const mapKeys = Object.keys(map).sort();
+  if (JSON.stringify(mapKeys) !== JSON.stringify(["artifacts", "kind", "schema_version", "source_sha"])) {
+    throw new Error("candidate build map has unknown or missing fields");
+  }
+  if (map.schema_version !== 1 || map.kind !== "proliferate.candidate-build") {
+    throw new Error("candidate build map has an unsupported schema or kind");
+  }
+  if (map.source_sha !== sourceSha) {
+    throw new Error(`candidate build map source SHA does not match the requested source SHA`);
+  }
+  if (!Array.isArray(map.artifacts) || map.artifacts.length === 0) {
+    throw new Error("candidate build map artifacts must be a non-empty array");
+  }
+
+  const seen = new Set();
+  for (const artifact of map.artifacts) {
+    if (!artifact || typeof artifact !== "object" || Array.isArray(artifact)) {
+      throw new Error("candidate build map artifact must be an object");
+    }
+    const keys = Object.keys(artifact).sort();
+    if (JSON.stringify(keys) !== JSON.stringify(["artifact_id", "locator", "sha256", "version"])) {
+      throw new Error("candidate build map artifact has unknown or missing fields");
+    }
+    checkArtifactId(artifact.artifact_id);
+    if (seen.has(artifact.artifact_id)) {
+      throw new Error(`Duplicate artifact_id "${artifact.artifact_id}".`);
+    }
+    seen.add(artifact.artifact_id);
+    resolveVersion(artifact.version);
+    if (typeof artifact.sha256 !== "string" || !/^[0-9a-f]{64}$/.test(artifact.sha256)) {
+      throw new Error(`candidate artifact ${artifact.artifact_id} has a malformed SHA-256`);
+    }
+    if (
+      !artifact.locator ||
+      typeof artifact.locator !== "object" ||
+      Array.isArray(artifact.locator) ||
+      JSON.stringify(Object.keys(artifact.locator).sort()) !== JSON.stringify(["kind", "path"]) ||
+      artifact.locator.kind !== "local_file" ||
+      typeof artifact.locator.path !== "string" ||
+      artifact.locator.path.trim().length === 0
+    ) {
+      throw new Error(`candidate artifact ${artifact.artifact_id} must use a local_file locator`);
+    }
+    const actual = hashFile(artifact.locator.path);
+    if (actual !== artifact.sha256) {
+      throw new Error(`candidate artifact ${artifact.artifact_id} SHA-256 does not match its bytes`);
+    }
+  }
+
+  if (expectedArtifactIds) {
+    const expected = [...expectedArtifactIds].sort();
+    const actual = [...seen].sort();
+    if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+      throw new Error(`candidate build map artifact set is incompatible with the selected world`);
+    }
+  }
+  return map;
+}
+
+/**
  * Single-binary assembler. Unchanged signature/behavior from PR #1159 so
  * existing callers (`make qualification-candidate-build-map`,
  * `make qualification-candidate-handoff-smoke`) and their tests keep working.

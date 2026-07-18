@@ -271,3 +271,93 @@ test("buildLocalQualificationCandidates rejects unsafe run-id/shard-id and a mis
     ),
   );
 });
+
+test("same-SHA local candidates are materialized without invoking a duplicate build", async () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "build-candidates-reuse-"));
+  try {
+    const sourceDir = path.join(dir, "source");
+    const destinationDir = path.join(dir, "destination");
+    const distDir = path.join(dir, "desktop-dist");
+    mkdirSync(distDir, { recursive: true });
+    writeFileSync(path.join(distDir, "index.html"), "<html></html>");
+    const first = fakeExecFactory();
+    await buildLocalQualificationCandidates(
+      {
+        runId: "build-once",
+        shardId: "1",
+        runDir: sourceDir,
+        sourceSha: SHA,
+        version: "0.3.28",
+        target: "x86_64-unknown-linux-gnu",
+        dockerPlatform: "linux/amd64",
+        desktopDistDir: distDir,
+      },
+      { exec: first.exec, allocatePorts: fakeAllocatePorts() },
+    );
+    assert.ok(first.calls.some((call) => call.command === "cargo"));
+
+    const summary = await buildLocalQualificationCandidates(
+      { runId: "reuse-consumer", shardId: "1", runDir: destinationDir, sourceSha: SHA, reuseFrom: sourceDir },
+      {
+        exec: () => {
+          throw new Error("reuse must not call a build seam");
+        },
+        allocatePorts: async () => {
+          throw new Error("reuse must not allocate fresh ports");
+        },
+      },
+    );
+
+    assert.equal(summary.reused, true);
+    assert.ok(existsSync(summary.candidate_build_map));
+    const sourceMap = JSON.parse(readFileSync(path.join(sourceDir, "candidate-build.json"), "utf8"));
+    const destinationMap = JSON.parse(readFileSync(summary.candidate_build_map, "utf8"));
+    assert.deepEqual(
+      destinationMap.artifacts.map(({ artifact_id, version, sha256 }) => ({ artifact_id, version, sha256 })),
+      sourceMap.artifacts.map(({ artifact_id, version, sha256 }) => ({ artifact_id, version, sha256 })),
+    );
+    assert.ok(destinationMap.artifacts.every((artifact) => artifact.locator.path.startsWith(destinationDir)));
+    assert.deepEqual(summary.ports, JSON.parse(readFileSync(path.join(sourceDir, "local-world-ports.json"), "utf8")));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("local candidate reuse fails closed when the requested source identity changes", async () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "build-candidates-reuse-miss-"));
+  try {
+    const sourceDir = path.join(dir, "source");
+    const distDir = path.join(dir, "desktop-dist");
+    mkdirSync(distDir, { recursive: true });
+    writeFileSync(path.join(distDir, "index.html"), "<html></html>");
+    const { exec } = fakeExecFactory();
+    await buildLocalQualificationCandidates(
+      {
+        runId: "build-once",
+        shardId: "1",
+        runDir: sourceDir,
+        sourceSha: SHA,
+        version: "0.3.28",
+        target: "x86_64-unknown-linux-gnu",
+        dockerPlatform: "linux/amd64",
+        desktopDistDir: distDir,
+      },
+      { exec, allocatePorts: fakeAllocatePorts() },
+    );
+
+    await assert.rejects(
+      () =>
+        buildLocalQualificationCandidates({
+          runId: "reuse-consumer",
+          shardId: "1",
+          runDir: path.join(dir, "destination"),
+          sourceSha: "c".repeat(40),
+          reuseFrom: sourceDir,
+        }),
+      /source SHA does not match/,
+    );
+    assert.equal(existsSync(path.join(dir, "destination", "candidate-build.json")), false);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
