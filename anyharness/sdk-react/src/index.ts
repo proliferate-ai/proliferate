@@ -146,6 +146,7 @@ export {
   useResolveWorkspaceFromPathMutation,
   useCreateWorkspaceMutation,
   useCreateWorktreeWorkspaceMutation,
+  useRestoreWorktreeWorkspaceMutation,
   useRetireWorkspacePreflightQuery,
   usePurgeWorkspacePreflightQuery,
   useRetireWorkspaceMutation,

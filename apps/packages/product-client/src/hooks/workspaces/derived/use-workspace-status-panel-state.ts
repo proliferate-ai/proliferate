@@ -15,7 +15,10 @@ import {
   buildPendingWorkspaceArrivalViewModel,
   summarizeSetupFailure,
 } from "#product/lib/domain/workspaces/creation/arrival";
-import { isWorkspaceDirectoryMissing } from "#product/lib/domain/workspaces/availability";
+import {
+  canRestoreMissingWorktree,
+  isWorkspaceDirectoryMissing,
+} from "#product/lib/domain/workspaces/availability";
 import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
 import { useRepoPreferencesStore } from "#product/stores/preferences/repo-preferences-store";
 import { useWorkspaceArrivalState } from "#product/hooks/workspaces/derived/use-workspace-arrival-state";
@@ -72,7 +75,8 @@ export type WorkspaceStatusPanelState =
     logicalWorkspaceId: string | null;
     workspaceKind: Workspace["kind"];
     workspacePath: string;
-    originalBranch: string | null;
+    currentBranch: string | null;
+    restoreEligible: boolean;
   };
 
 function buildPendingSubtitle(entry: PendingWorkspaceEntry): string {
@@ -234,7 +238,8 @@ export function useWorkspaceStatusPanelState(): WorkspaceStatusPanelState | null
         logicalWorkspaceId: selectedLogicalWorkspaceId,
         workspaceKind: selectedWorkspace.kind,
         workspacePath: selectedWorkspace.path,
-        originalBranch: selectedWorkspace.originalBranch ?? null,
+        currentBranch: selectedWorkspace.currentBranch ?? null,
+        restoreEligible: canRestoreMissingWorktree(selectedWorkspace, selectedRepoRoot),
       };
     }
 

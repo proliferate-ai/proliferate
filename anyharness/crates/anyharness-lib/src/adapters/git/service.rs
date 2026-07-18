@@ -11,7 +11,7 @@ use super::operations::{
 use super::types::{
     CommitError, GitBranch, GitBranchDiffFilesResult, GitDiffError, GitDiffResult, GitDiffScope,
     GitRevertPatchEntry, GitRevertPatchesError, GitRevertPatchesResult, GitStatusSnapshot,
-    GitStatusSummarySnapshot, PushError,
+    GitStatusSummarySnapshot, GitWorktreeRestoreError, GitWorktreeRestoreOutcome, PushError,
 };
 
 pub struct GitService;
@@ -110,6 +110,18 @@ impl GitService {
         exact_ref: &str,
     ) -> anyhow::Result<()> {
         worktrees::create_worktree_at_ref(source_repo_root, target_path, branch_name, exact_ref)
+    }
+
+    pub fn restore_worktree(
+        source_repo_root: &Path,
+        target_path: &Path,
+        branch_name: &str,
+    ) -> Result<GitWorktreeRestoreOutcome, GitWorktreeRestoreError> {
+        super::operations::worktree_restore::restore_worktree(
+            source_repo_root,
+            target_path,
+            branch_name,
+        )
     }
 
     pub fn prune_stale_worktrees_if_possible(cwd: &Path) {
