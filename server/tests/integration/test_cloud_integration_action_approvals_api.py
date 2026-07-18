@@ -572,35 +572,3 @@ async def test_account_credential_rotation_invalidates_prior_approval(
     replacement = await _request_action(client, context, arguments=arguments)
     assert replacement["id"] != approval_id
     assert replacement["integrationAccountAuthVersion"] == rotated.auth_version
-
-
-@pytest.mark.asyncio
-async def test_concurrent_execution_admission_has_exactly_one_winner(
-    client: AsyncClient,
-    db_session: AsyncSession,
-) -> None:
-    context = await _setup_context(client, db_session, prefix="approval-race")
-    arguments = {"message": "once"}
-    approval = await _request_action(client, context, arguments=arguments)
-    approval_id = str(approval["id"])
-    await _approve(client, context, approval_id)
-
-    results = await asyncio.gather(
-        _consume(context, approval_id=approval_id, arguments=arguments),
-        _consume(context, approval_id=approval_id, arguments=arguments),
-    )
-    assert sorted(result.result for result in results) == ["already_consumed", "consumed"]
-
-    await db_session.rollback()
-    events = list(
-        (
-            await db_session.execute(
-                select(CloudIntegrationActionApprovalEvent).where(
-                    CloudIntegrationActionApprovalEvent.approval_id == uuid.UUID(approval_id),
-                    CloudIntegrationActionApprovalEvent.event_type == "consumed",
-                )
-            )
-        ).scalars()
-    )
-    assert len(events) == 1
-    assert (events[0].from_status, events[0].to_status) == ("approved", "consumed")

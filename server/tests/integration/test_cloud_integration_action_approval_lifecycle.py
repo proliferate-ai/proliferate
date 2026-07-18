@@ -338,6 +338,38 @@ async def test_request_vs_terminal_transition_is_race_safe(
 
 
 @pytest.mark.asyncio
+async def test_concurrent_execution_admission_has_exactly_one_winner(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    context = await approval_helpers._setup_context(client, db_session, prefix="approval-race")
+    arguments = {"message": "once"}
+    approval = await approval_helpers._request_action(client, context, arguments=arguments)
+    approval_id = str(approval["id"])
+    await approval_helpers._approve(client, context, approval_id)
+
+    results = await asyncio.gather(
+        approval_helpers._consume(context, approval_id=approval_id, arguments=arguments),
+        approval_helpers._consume(context, approval_id=approval_id, arguments=arguments),
+    )
+    assert sorted(result.result for result in results) == ["already_consumed", "consumed"]
+
+    await db_session.rollback()
+    events = list(
+        (
+            await db_session.execute(
+                select(CloudIntegrationActionApprovalEvent).where(
+                    CloudIntegrationActionApprovalEvent.approval_id == uuid.UUID(approval_id),
+                    CloudIntegrationActionApprovalEvent.event_type == "consumed",
+                )
+            )
+        ).scalars()
+    )
+    assert len(events) == 1
+    assert (events[0].from_status, events[0].to_status) == ("approved", "consumed")
+
+
+@pytest.mark.asyncio
 async def test_audit_identity_survives_account_and_worker_deletion_without_raw_secret(
     client: AsyncClient,
     db_session: AsyncSession,
