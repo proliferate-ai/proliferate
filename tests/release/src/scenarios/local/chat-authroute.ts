@@ -175,6 +175,7 @@ export interface LocalRouteDriver {
     page: ProductPage,
     expectedRoute: LocalRoute,
     repoPath: string,
+    existingSessionIds?: ReadonlySet<string>,
   ): Promise<{ workspaceId: string; sessionId: string; reply: string }>;
 
   reopenAndVerify(
@@ -366,13 +367,24 @@ export const defaultLocalRouteDriver: LocalRouteDriver = {
     return { route, modelId, providerId: directProviderId(modelId) };
   },
   selectModelInUi: (page, modelId) => defaultLocalWorldSmokeDriver.selectModelInUi(page, modelId),
-  async sendBoundedTurn(world, page, _expectedRoute, repoPath) {
+  async sendBoundedTurn(world, page, _expectedRoute, repoPath, existingSessionIds) {
     const p = page.page;
     // Snapshot before Send. LOCAL-6 uses the same concrete workspace for both
     // routes; resolving the "latest" session after the click can otherwise
     // bind the gateway leg to the already-completed user-key session while the
     // new process is still reconciling.
-    const preSendSessionIds = await snapshotLocalWorkspaceSessionIds(world, repoPath);
+    //
+    // For LOCAL-6's gateway leg the caller passes an `existingSessionIds`
+    // snapshot taken BEFORE `switchSelectedRouteToGateway` opens the new chat
+    // tab, because that navigation itself materializes the AnyHarness session
+    // (product's `createSessionWithResolvedConfig` runs unconditionally on
+    // open, prompt or not). Snapshotting here — after that navigation — would
+    // count the just-created session as pre-existing and leave zero new
+    // candidates for `resolveLocalWorkspaceSessionAfter` to find (Actions run
+    // 29628880856, T3-AUTHROUTE-1/local/route=change). Callers that don't pass
+    // one (LOCAL-2/3, whose first turn runs from the home screen and doesn't
+    // pre-create a session) keep taking their own fresh snapshot here.
+    const preSendSessionIds = existingSessionIds ?? (await snapshotLocalWorkspaceSessionIds(world, repoPath));
     // LOCAL-2/3's first turn runs from the home screen (`[data-home-composer-editor]`);
     // LOCAL-6's gateway turn runs from a fresh in-workspace tab
     // (`[data-chat-composer-editor]`, opened by `openNewChat`). Accept either
@@ -867,12 +879,19 @@ async function runLocal6RouteChangeCell(
       // on the user-key session). The workspace/repo binding is retained by the
       // new-tab path — no repo re-selection needed (those "Project:"/"Runtime:"
       // controls exist only on the home screen).
+      // Snapshot the pre-existing sessions BEFORE `switchSelectedRouteToGateway`:
+      // its trailing `openNewChat` navigation materializes the new AnyHarness
+      // session immediately (product's create-session path runs unconditionally
+      // on open), so a snapshot taken after it would wrongly count that session
+      // as pre-existing and leave `sendBoundedTurn` unable to find a "new"
+      // candidate (Actions run 29628880856, T3-AUTHROUTE-1/local/route=change).
+      const preRouteSwitchSessionIds = await snapshotLocalWorkspaceSessionIds(world, repo.path);
       await driver.switchSelectedRouteToGateway(world, page, harness);
       const gatewaySelection = await driver.resolveRouteModel(world, page, harness, "gateway");
       await driver.selectModelInUi(page, gatewaySelection.modelId);
       const before = await driver.snapshotGatewaySpend(world, actor);
       const windowStartedAt = new Date().toISOString();
-      const gatewayTurn = await driver.sendBoundedTurn(world, page, "gateway", repo.path);
+      const gatewayTurn = await driver.sendBoundedTurn(world, page, "gateway", repo.path, preRouteSwitchSessionIds);
       if (!gatewayTurn.reply.trim()) {
         throw new Error("empty assistant reply on the gateway session");
       }
