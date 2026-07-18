@@ -214,6 +214,8 @@ export const cloudProvision1: ScenarioDefinition = {
     "RELEASE_E2E_CLOUD_GITHUB_APP_INSTALLATION_ID",
     "RELEASE_E2E_CLOUD_GITHUB_APP_PRIVATE_KEY",
     "RELEASE_E2E_CLOUD_GITHUB_APP_CLIENT_SECRET",
+    "RELEASE_E2E_QUALIFICATION_TLS_CERTIFICATE_B64",
+    "RELEASE_E2E_QUALIFICATION_TLS_PRIVATE_KEY_B64",
   ],
   expandCells: (): ScenarioCellSpec[] => [{ dimensions: { harness: REPRESENTATIVE_HARNESS } }],
   planCell: (_ctx, cell: PlannedCellV1): ScenarioPlanStep[] => [
@@ -250,6 +252,10 @@ export interface CloudProvision1ConstructionInputs {
   e2bTeamId: string;
   /** Raw secret; only ever handed to `buildWorld`, which writes it to a 0600 file and discards it. */
   e2bApiKey: string;
+  tls: {
+    certificateBase64: string;
+    privateKeyBase64: string;
+  };
   github: {
     appId: string;
     clientId: string;
@@ -914,6 +920,7 @@ export function createCloudProvision1Driver(
         secretsEnvFilePath: githubSecretsPath,
         privateKeyPemPath: githubPrivateKeyPath,
       },
+      tls: inputs.tls,
       runDir: scopedRunDir,
       templateCustody:
         templateCustodyMode === "producer"
@@ -1971,6 +1978,8 @@ export function resolveWorldConstructionInputs(ctx: ScenarioRunContext): WorldCo
     const githubInstallationId = ctx.env.require("RELEASE_E2E_CLOUD_GITHUB_APP_INSTALLATION_ID");
     const githubPrivateKey = ctx.env.require("RELEASE_E2E_CLOUD_GITHUB_APP_PRIVATE_KEY");
     const githubClientSecret = ctx.env.require("RELEASE_E2E_CLOUD_GITHUB_APP_CLIENT_SECRET");
+    const certificateBase64 = ctx.env.require("RELEASE_E2E_QUALIFICATION_TLS_CERTIFICATE_B64");
+    const privateKeyBase64 = ctx.env.require("RELEASE_E2E_QUALIFICATION_TLS_PRIVATE_KEY_B64");
     return {
       ok: true,
       value: {
@@ -1990,6 +1999,7 @@ export function resolveWorldConstructionInputs(ctx: ScenarioRunContext): WorldCo
         },
         e2bTeamId,
         e2bApiKey,
+        tls: { certificateBase64, privateKeyBase64 },
         github: {
           appId: githubAppId,
           clientId: githubClientId,

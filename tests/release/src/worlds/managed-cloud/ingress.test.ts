@@ -100,6 +100,7 @@ function deployOptions(h: Awaited<ReturnType<typeof harness>>, ssh: SshExec, pro
     },
     e2b: { teamId: "team-qual", secretsEnvFilePath: h.e2bSecrets, templateName: "proliferate-runtime-qual-test" },
     qualificationRun: { runId: "run-1", shardId: "1" },
+    tls: { certificatePath: h.githubPrivateKey, privateKeyPath: h.githubPrivateKey },
     publicOrigin: `https://${RECORD.recordName}`,
     rendererOrigin: "http://127.0.0.1:41999",
     secretsDir: h.secretsDir,

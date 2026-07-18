@@ -23,6 +23,16 @@ const LOCAL_ENV = {
   AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL: "https://gateway.qualification.invalid",
   AGENT_GATEWAY_LITELLM_MASTER_KEY: "super-secret-master-value",
 };
+const TEST_TLS_MATERIAL = JSON.parse(
+  readFileSync(
+    new URL("../../tests/release/fixtures/qualification-tls-test-material.json", import.meta.url),
+    "utf8",
+  ),
+);
+const TEST_TLS_ENV = {
+  RELEASE_E2E_QUALIFICATION_TLS_CERTIFICATE_B64: TEST_TLS_MATERIAL.certificateBase64,
+  RELEASE_E2E_QUALIFICATION_TLS_PRIVATE_KEY_B64: TEST_TLS_MATERIAL.privateKeyBase64,
+};
 
 test("invalid preflight fails before any caller can enter build or provider seams", () => {
   let built = false;
@@ -159,6 +169,7 @@ test("managed-cloud preflight requires exact trusted-revision cleanup authorizat
     git("add", "attestations.json");
     git("commit", "-m", "trusted attestation fixture");
     const env = {
+      ...TEST_TLS_ENV,
       AGENT_GATEWAY_LITELLM_BASE_URL: "https://admin.qualification.invalid",
       AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL: "https://gateway.qualification.invalid",
       AGENT_GATEWAY_LITELLM_MASTER_KEY: "master-secret",
@@ -253,6 +264,7 @@ test("self-host preflight scopes BYOK and instance requirements to selected scen
   assert.equal(install.verdict, "failed");
   assert.match(JSON.stringify(install), /RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY is missing/);
   assert.match(JSON.stringify(install), /RELEASE_E2E_SELFHOST_INSTANCE_TYPE is missing/);
+  assert.match(JSON.stringify(install), /RELEASE_E2E_QUALIFICATION_TLS_CERTIFICATE_B64 is missing/);
 });
 
 test("self-host preflight rejects unknown scenario and cell selectors", () => {
@@ -294,6 +306,7 @@ test("AWS preflight rejects partial keys and accepts planned Actions OIDC", () =
 test("self-host optional cell inputs fail early only for an explicit selected cell", () => {
   const options = { ...BASE, world: "self-host", runId: "qs-qual", scenarios: "SELFHOST-QUAL-1" };
   const env = {
+    ...TEST_TLS_ENV,
     RELEASE_E2E_SELFHOST_REGION: "us-west-2",
     RELEASE_E2E_SELFHOST_HOSTED_ZONE_ID: "Z123456789",
     RELEASE_E2E_SELFHOST_INSTANCE_TYPE: "t3.small",

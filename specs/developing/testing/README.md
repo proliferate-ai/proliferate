@@ -213,8 +213,14 @@ Current execution reliability is deliberately bounded:
   managed-cloud path currently has the independent trusted-default-branch
   hard-cancel reaper. Self-host hard-loss reconciliation remains a gap.
 
-This work does not add stable TLS/ingress capacity; worlds continue to consume
-the existing provisioner and ingress contracts.
+Managed-cloud and direct self-host qualification reuse one operator-managed,
+publicly trusted wildcard certificate for `*.qualification.proliferate.com`.
+Preflight validates the current certificate, hostname coverage, and matching
+private key before builds or provider mutation; each run mounts the material
+read-only into Caddy through mode-0600 staging. Disposable worlds therefore do
+not consume production ACME issuance capacity, while browser-facing TLS remains
+strict. The certificate is standing qualification infrastructure and its two
+base64-encoded PEM inputs live only in the protected Qualification secret store.
 
 ---
 

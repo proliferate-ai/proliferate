@@ -342,12 +342,6 @@ impl SessionRuntime {
             elapsed_ms = agent_resolution_started.elapsed().as_millis(),
             "[workspace-latency] session.runtime.start_live_session.agent_resolved"
         );
-        let session_launch_env = build_session_launch_env(
-            &resolved_agent,
-            &self.runtime_home,
-            record.requested_model_id.as_deref(),
-        )
-        .map_err(StartSessionError::Internal)?;
         // Agent-auth render plane: read the declarative state file fresh and
         // render the route layer for this harness. Absent file = empty layer
         // (legacy/native); a scoped file with no selection fails the launch
@@ -368,6 +362,20 @@ impl SessionRuntime {
             );
             StartSessionError::RouteAuth(error)
         })?;
+        // Codex reads authentication from its isolated CODEX_HOME. Pass the
+        // selected direct-route key into that home instead of leaving the key
+        // only in the later route environment layer.
+        let session_launch_env = build_session_launch_env(
+            &resolved_agent,
+            &self.runtime_home,
+            record.requested_model_id.as_deref(),
+            route_auth
+                .set
+                .get("OPENAI_API_KEY")
+                .or_else(|| route_auth.set.get("CODEX_API_KEY"))
+                .map(String::as_str),
+        )
+        .map_err(StartSessionError::Internal)?;
         // Launch-time lazy trigger (spec §2c): if the current revision has no
         // probe row, kick a background probe so the next launch has fresh data.
         // Never blocks this launch — it already used seed data above.

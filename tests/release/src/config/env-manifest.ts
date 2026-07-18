@@ -521,6 +521,32 @@ export const ENV_MANIFEST: readonly EnvVarSpec[] = [
     lanes: ["local"],
   },
   {
+    name: "RELEASE_E2E_QUALIFICATION_TLS_CERTIFICATE_B64",
+    description:
+      "Base64-encoded PEM full chain for a currently valid, publicly trusted wildcard certificate covering " +
+      "*.qualification.proliferate.com. Managed-cloud and direct self-host qualification boxes mount this into " +
+      "Caddy so disposable worlds reuse standing TLS capacity instead of requesting one production ACME " +
+      "certificate per run. Validated with the matching key before AWS mutation; never enters logs or evidence.",
+    whereItLives:
+      "Qualification DNS/TLS operator storage. Local: `~/.proliferate-local/dev/qualification-infra.env` " +
+      "(mode 0600). CI: the protected `Qualification` environment secret. Rotate before expiry and preserve the " +
+      "previous value only outside this repository according to the operator certificate policy.",
+    secret: true,
+    lanes: ["sandbox", "selfhost"],
+  },
+  {
+    name: "RELEASE_E2E_QUALIFICATION_TLS_PRIVATE_KEY_B64",
+    description:
+      "Base64-encoded PEM private key matching RELEASE_E2E_QUALIFICATION_TLS_CERTIFICATE_B64. Written only to " +
+      "run-owned mode-0600 files, copied over SSH, mounted read-only into Caddy, and redacted from receipts.",
+    whereItLives:
+      "The same protected TLS operator storage as the wildcard certificate. Local: " +
+      "`~/.proliferate-local/dev/qualification-infra.env` (mode 0600). CI: the protected `Qualification` " +
+      "environment secret.",
+    secret: true,
+    lanes: ["sandbox", "selfhost"],
+  },
+  {
     name: "RELEASE_E2E_SELFHOST_REGION",
     description:
       "AWS region SELFHOST-INSTALL-1 provisions its run-scoped EC2 box, security group, key pair, and Route53 " +
@@ -535,7 +561,7 @@ export const ENV_MANIFEST: readonly EnvVarSpec[] = [
     name: "RELEASE_E2E_SELFHOST_HOSTED_ZONE_ID",
     description:
       "Route53 hosted-zone id for `qualification.proliferate.com`, the owned zone SELFHOST-INSTALL-1 upserts a " +
-      "collision-free run-subdomain A record into (Caddy then issues real Let's Encrypt TLS for that FQDN).",
+      "collision-free run-subdomain A record into (direct worlds mount the reusable public wildcard certificate into Caddy).",
     whereItLives:
       "Local: `~/.proliferate-local/dev/qualification-infra.env` (mode 0600). CI: the `Qualification` " +
       "environment's `RELEASE_E2E_SELFHOST_HOSTED_ZONE_ID` variable.",

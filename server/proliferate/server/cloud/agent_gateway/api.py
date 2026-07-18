@@ -68,7 +68,7 @@ async def list_agent_api_keys_endpoint(
 @router.post("/keys", response_model=AgentApiKeyResponse)
 async def create_agent_api_key_endpoint(
     body: AgentApiKeyCreateRequest,
-    db: AsyncSession = Depends(get_async_session),
+    db: AsyncSession = Depends(get_async_session, scope="function"),
     user: User = Depends(current_product_user),
 ) -> AgentApiKeyResponse:
     try:

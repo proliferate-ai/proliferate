@@ -16,6 +16,7 @@ import { CLEANUP_LEDGER_FILENAME } from "../local-workspace/cleanup-ledger.js";
 import type { Exec } from "../local-workspace/docker.js";
 import type { ReadinessFetch, SpawnLike } from "../local-workspace/processes.js";
 import type { ChromiumLauncher } from "../local-workspace/renderer.js";
+import { TEST_QUALIFICATION_TLS } from "../qualification-tls.test-fixture.js";
 import type { CandidateE2bConfig, CandidateGithubAppConfig, SshExec } from "./ingress.js";
 import type { Ec2ProvisionConfig, Ec2Provisioner } from "./ec2.js";
 import {
@@ -313,6 +314,7 @@ test("constructManagedCloudWorld runs the ordered startup and returns a ready ha
       aws: AWS,
       e2b: e2bConfig(secrets.e2b),
       github: githubConfig(secrets.github),
+      tls: TEST_QUALIFICATION_TLS,
       runDir,
       deps: h.deps,
     });
@@ -411,6 +413,7 @@ test("a Server /health version mismatch fails startup and runs registered cleanu
         aws: AWS,
         e2b: e2bConfig(secrets.e2b),
         github: githubConfig(secrets.github),
+        tls: TEST_QUALIFICATION_TLS,
         runDir,
         deps: h.deps,
       }),
@@ -475,6 +478,7 @@ test("an empty provider template id fails startup and runs registered cleanup", 
         aws: AWS,
         e2b: e2bConfig(secrets.e2b),
         github: githubConfig(secrets.github),
+        tls: TEST_QUALIFICATION_TLS,
         runDir,
         deps: h.deps,
       }),
@@ -511,6 +515,7 @@ test("an invalid map starts no world (no preflight, no AWS, no ledger)", async (
         aws: AWS,
         e2b: e2bConfig(secrets.e2b),
         github: githubConfig(secrets.github),
+        tls: TEST_QUALIFICATION_TLS,
         runDir,
         deps: h.deps,
       }),
@@ -542,6 +547,7 @@ test("two concurrent runs collide on nothing (subdomains, EC2 keys, templates, l
       aws: AWS,
       e2b: e2bConfig(secretsA.e2b),
       github: githubConfig(secretsA.github),
+      tls: TEST_QUALIFICATION_TLS,
       runDir: runDirA,
       deps: a.deps,
     });
@@ -552,6 +558,7 @@ test("two concurrent runs collide on nothing (subdomains, EC2 keys, templates, l
       aws: AWS,
       e2b: e2bConfig(secretsB.e2b),
       github: githubConfig(secretsB.github),
+      tls: TEST_QUALIFICATION_TLS,
       runDir: runDirB,
       deps: b.deps,
     });
@@ -588,6 +595,7 @@ test("the user's E2B sandbox is NOT pre-created by world construction", async ()
       aws: AWS,
       e2b: e2bConfig(secrets.e2b),
       github: githubConfig(secrets.github),
+      tls: TEST_QUALIFICATION_TLS,
       runDir,
       deps: h.deps,
     });
