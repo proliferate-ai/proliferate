@@ -73,7 +73,11 @@ async def list_cloud_workspaces_endpoint(
 async def create_cloud_workspace_endpoint(
     body: CreateCloudWorkspaceRequest,
     user: User = Depends(current_product_user),
-    db: AsyncSession = Depends(get_async_session),
+    # Workspace provisioning performs remote work before its final Cloud row
+    # write. Commit that final request transaction before the response starts so
+    # a caller disconnect cannot observe success while dependency teardown rolls
+    # the workspace back.
+    db: AsyncSession = Depends(get_async_session, scope="function"),
 ) -> WorkspaceDetail:
     try:
         return await create_cloud_workspace_for_user(db, user, body)
