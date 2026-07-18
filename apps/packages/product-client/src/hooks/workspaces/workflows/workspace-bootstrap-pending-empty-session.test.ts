@@ -43,6 +43,30 @@ describe("resumePendingEmptySessionCreationForBootstrap", () => {
     expect(createEmptySession).toHaveBeenCalledOnce();
     expect(hasWorkspaceBootstrappedInSession(WORKSPACE_ID)).toBe(true);
   });
+
+  it("keeps bootstrap usable and suppresses default creation when the workflow chunk fails", async () => {
+    const context = memoryStorageContext();
+    const loadError = new TypeError("Failed to fetch dynamically imported module");
+    const createEmptySession = vi.fn(async () => "unexpected-session");
+
+    await expect(resumePendingEmptySessionCreationForBootstrap({
+      storageContext: context,
+      workspaceId: WORKSPACE_ID,
+      startedAt: performance.now(),
+      isCurrent: () => true,
+      createEmptySession,
+      loadWorkflow: vi.fn(async () => { throw loadError; }),
+    })).resolves.toBe(true);
+
+    expect(createEmptySession).not.toHaveBeenCalled();
+    expect(hasWorkspaceBootstrappedInSession(WORKSPACE_ID)).toBe(true);
+    expect(context.captureException).toHaveBeenCalledWith(loadError, {
+      tags: {
+        domain: "pending_empty_session_creation",
+        action: "load_workflow",
+      },
+    });
+  });
 });
 
 function memoryStorageContext(): ProductStorageContext {
