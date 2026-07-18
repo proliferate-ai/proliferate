@@ -7,6 +7,7 @@ import { waitForSidebarControlReady } from "./sidebar-control-readiness.js";
 
 interface FakeControlOptions {
   topAtCenter: Array<"overlay" | "target">;
+  clippingAncestorRight?: number;
 }
 
 function fakeCollapsedSidebar(options: FakeControlOptions): {
@@ -15,9 +16,28 @@ function fakeCollapsedSidebar(options: FakeControlOptions): {
   calls: string[];
 } {
   const calls: string[] = [];
+  const clippingAncestorRight = options.clippingAncestorRight;
+  const clippingAncestor = clippingAncestorRight === undefined
+    ? null
+    : {
+        clientHeight: 80,
+        clientLeft: 0,
+        clientTop: 0,
+        clientWidth: clippingAncestorRight - 20,
+        getBoundingClientRect: () => ({
+          left: 20,
+          top: 0,
+          right: clippingAncestorRight,
+          bottom: 80,
+          width: clippingAncestorRight - 20,
+          height: 80,
+        }),
+        parentElement: null,
+      };
   const target = {
     getBoundingClientRect: () => ({ left: 20, top: 20, right: 120, bottom: 60, width: 100, height: 40 }),
     contains: (node: unknown) => node === target,
+    parentElement: clippingAncestor,
   };
   const overlay = {};
   let hitTest = 0;
@@ -34,7 +54,13 @@ function fakeCollapsedSidebar(options: FakeControlOptions): {
       const previousRaf = globalThis.requestAnimationFrame;
       let now = 0;
       Object.assign(globalThis, {
-        window: { innerWidth: 1024, innerHeight: 768 },
+        window: {
+          innerWidth: 1024,
+          innerHeight: 768,
+          getComputedStyle: (element: unknown) => element === clippingAncestor
+            ? { overflowX: "hidden", overflowY: "hidden" }
+            : { overflowX: "visible", overflowY: "visible" },
+        },
         document: {
           elementFromPoint: () => options.topAtCenter[Math.min(hitTest++, options.topAtCenter.length - 1)] === "target"
             ? target
@@ -107,4 +133,16 @@ test("does not accept stable geometry while an overlay owns the hit target", asy
   await waitForSidebarControlReady(page, control);
 
   assert.equal(calls.filter((call) => call === "control.evaluate").length, 1);
+});
+
+test("does not accept a control clipped by an overflow ancestor", async () => {
+  const { page, control } = fakeCollapsedSidebar({
+    topAtCenter: ["target"],
+    clippingAncestorRight: 70,
+  });
+
+  await assert.rejects(
+    waitForSidebarControlReady(page, control),
+    /sidebar control did not settle into an interactable layout/,
+  );
 });
