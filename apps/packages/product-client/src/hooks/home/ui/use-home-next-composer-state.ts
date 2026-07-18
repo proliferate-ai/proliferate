@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import { flushSync } from "react-dom";
-import { HOME_CHAT_COMPOSER_INPUT } from "#product/config/chat";
 import { useHomeNextLaunch } from "#product/hooks/home/workflows/use-home-next-launch";
 import { useHomeDraftHandoffStore } from "#product/stores/home/home-draft-handoff-store";
 import type {
@@ -29,7 +28,6 @@ export function useHomeNextComposerState({
   launchControlValues,
   launchTarget,
 }: UseHomeNextComposerStateArgs) {
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const submitInFlightRef = useRef(false);
   const [draft, setDraft] = useState("");
   const restoredDraftText = useHomeDraftHandoffStore((state) => state.draftText);
@@ -53,42 +51,6 @@ export function useHomeNextComposerState({
     && !!modelSelection
     && !!launchTarget
     && !isLaunching;
-
-  // PERF: `getComputedStyle` twice per keystroke is avoidable work in the hot
-  // typing path — line-height and root font-size only change on theme/UI-scale
-  // edits, so cache them briefly. The `scrollHeight` read below still forces a
-  // reflow; that one is inherent to autosizing.
-  const fontMetricsRef = useRef<{
-    lineHeightPx: number;
-    rootFontSizePx: number;
-    measuredAtMs: number;
-  } | null>(null);
-  useLayoutEffect(() => {
-    const el = textareaRef.current;
-    if (!el) return;
-
-    const nowMs = Date.now();
-    let metrics = fontMetricsRef.current;
-    if (!metrics || nowMs - metrics.measuredAtMs > 1_000) {
-      const lineHeightPx = parseFloat(getComputedStyle(el).lineHeight);
-      if (!Number.isFinite(lineHeightPx) || lineHeightPx <= 0) return;
-      const rootFontSizePx = parseFloat(getComputedStyle(document.documentElement).fontSize);
-      metrics = { lineHeightPx, rootFontSizePx, measuredAtMs: nowMs };
-      fontMetricsRef.current = metrics;
-    }
-    const { lineHeightPx, rootFontSizePx } = metrics;
-
-    const homeMinHeightPx = Number.isFinite(rootFontSizePx)
-      ? rootFontSizePx * HOME_CHAT_COMPOSER_INPUT.minHeightRem
-      : lineHeightPx * HOME_CHAT_COMPOSER_INPUT.minRows;
-    const minPx = Math.max(lineHeightPx * HOME_CHAT_COMPOSER_INPUT.minRows, homeMinHeightPx);
-    const maxPx = lineHeightPx * HOME_CHAT_COMPOSER_INPUT.maxRows;
-    el.style.height = "auto";
-    const contentHeight = el.scrollHeight;
-    const next = Math.min(maxPx, Math.max(minPx, contentHeight));
-    el.style.height = `${next}px`;
-    el.style.overflowY = contentHeight > maxPx ? "auto" : "hidden";
-  }, [draft]);
 
   const submit = useCallback(async () => {
     if (
@@ -143,7 +105,7 @@ export function useHomeNextComposerState({
     }
   }, [isLaunching]);
 
-  const handleKeyDown = useCallback((event: KeyboardEvent<HTMLTextAreaElement>) => {
+  const handleKeyDown = useCallback((event: KeyboardEvent<HTMLElement>) => {
     if (event.nativeEvent.isComposing) return;
     if (
       event.key === "Escape"
@@ -168,7 +130,6 @@ export function useHomeNextComposerState({
   }, [canSubmit, cancel, submit]);
 
   return {
-    textareaRef,
     draft,
     setDraft,
     submitDisabledReason,

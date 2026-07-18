@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import type { ReactNode, TextareaHTMLAttributes } from "react";
+import type { KeyboardEventHandler, ReactNode } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { HomeNextScreen } from "#product/components/home/screen/HomeNextScreen";
@@ -153,9 +153,25 @@ vi.mock("@proliferate/product-ui/chat/composer/ChatComposerSurface", () => ({
   ),
 }));
 
-vi.mock("@proliferate/ui/primitives/ComposerTextarea", () => ({
-  ComposerTextarea: (props: TextareaHTMLAttributes<HTMLTextAreaElement>) => (
-    <textarea aria-label="Prompt" {...props} />
+vi.mock("#product/components/workspace/chat/input/ComposerRichTextEditor", () => ({
+  ComposerRichTextEditor: ({
+    value,
+    onChange,
+    onKeyDown,
+    disabled,
+  }: {
+    value: string;
+    onChange: (value: string) => void;
+    onKeyDown: KeyboardEventHandler<HTMLElement>;
+    disabled: boolean;
+  }) => (
+    <textarea
+      aria-label="Prompt"
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      onKeyDown={onKeyDown}
+      disabled={disabled}
+    />
   ),
 }));
 
@@ -282,7 +298,6 @@ describe("HomeNextScreen model availability notices", () => {
     const expectedMaxHeight =
       `calc(var(--text-composer--line-height) * ${HOME_CHAT_COMPOSER_INPUT.maxRows})`;
 
-    expect(textarea.style.maxHeight).toBe(expectedMaxHeight);
     expect(textarea.parentElement?.style.maxHeight).toBe(expectedMaxHeight);
   });
 

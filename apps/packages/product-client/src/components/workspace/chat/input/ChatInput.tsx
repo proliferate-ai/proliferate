@@ -9,10 +9,6 @@ import {
   type MouseEvent,
 } from "react";
 import type { PromptInputBlock } from "@anyharness/sdk";
-import {
-  CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM,
-  WORKSPACE_CHAT_COMPOSER_INPUT,
-} from "#product/config/chat";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import {
   useActiveSessionId,
@@ -32,7 +28,6 @@ import {
   useEditLastQueuedPrompt,
   useQueuedPromptEdit,
 } from "#product/hooks/chat/ui/use-queued-prompt-edit";
-import { useComposerTextareaAutosize } from "#product/hooks/chat/ui/use-composer-textarea-autosize";
 import { focusChatInput } from "#product/lib/domain/focus-zone";
 import { serializeChatDraftToPrompt } from "#product/lib/domain/chat/composer/file-mention-draft-model";
 import { promptAttachmentSnapshotsToContentParts } from "@proliferate/product-domain/chats/composer/prompt-attachment-snapshot";
@@ -79,7 +74,7 @@ export function ChatInput({
   hasSessionTurns?: boolean;
 }) {
   useDebugRenderCount("chat-composer");
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const textareaRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [composerOverlayHost, setComposerOverlayHost] = useState<HTMLDivElement | null>(null);
   const workspaceSelectionNonce = useSessionSelectionStore((state) => state.workspaceSelectionNonce);
@@ -145,15 +140,6 @@ export function ChatInput({
     && !areRuntimeControlsDisabled
     && !isSubmitting
     && attachments.canAttachFiles;
-  useComposerTextareaAutosize({
-    textareaRef,
-    value: editDraft,
-    lineHeightRem: CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM,
-    minRows: WORKSPACE_CHAT_COMPOSER_INPUT.minRows,
-    maxRows: WORKSPACE_CHAT_COMPOSER_INPUT.maxRows,
-    minHeightRem: WORKSPACE_CHAT_COMPOSER_INPUT.minHeightRem,
-  });
-
   const onSubmit = useCallback(async () => {
     // End the typing burst NOW so the transcript renders urgently: the
     // composer clearing and the sent message appearing must be one frame.

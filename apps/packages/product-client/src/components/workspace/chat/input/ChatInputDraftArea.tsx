@@ -8,7 +8,7 @@ import {
 } from "#product/components/workspace/chat/content/PromptContentRenderer";
 import { useChatDraftValue } from "#product/hooks/chat/ui/use-chat-draft-state";
 import { ComposerCommandEditor } from "#product/components/workspace/chat/input/ComposerCommandEditor";
-import { ComposerTextarea } from "@proliferate/ui/primitives/ComposerTextarea";
+import { ComposerRichTextEditor } from "#product/components/workspace/chat/input/ComposerRichTextEditor";
 import { ComposerTextareaFrame } from "@proliferate/ui/primitives/ComposerTextareaFrame";
 import { QueuedPromptEditBanner } from "#product/components/workspace/chat/input/QueuedPromptEditBanner";
 import type { ChatComposerKeyboardEvent } from "#product/hooks/chat/ui/use-chat-composer-keyboard";
@@ -19,7 +19,7 @@ interface ChatInputDraftAreaProps {
   isEditingQueuedPrompt: boolean;
   editDraft: string;
   onEditDraftChange: (value: string) => void;
-  textareaRef: RefObject<HTMLTextAreaElement | null>;
+  textareaRef: RefObject<HTMLDivElement | null>;
   /**
    * PERF: the draft area subscribes to the live draft itself (by workspace
    * key) so keystrokes re-render only this subtree, not the whole ChatInput.
@@ -64,19 +64,17 @@ export function ChatInputDraftArea({
       <>
         <QueuedPromptEditBanner onCancel={onCancelEdit} />
         <ComposerTextareaFrame topInset="none">
-          <ComposerTextarea
-            data-chat-composer-editor
-            data-telemetry-mask
-            ref={textareaRef}
-            rows={WORKSPACE_CHAT_COMPOSER_INPUT.minRows}
+          <ComposerRichTextEditor
+            rootRef={textareaRef}
             value={editDraft}
-            onChange={(event) => onEditDraftChange(event.target.value)}
-            onKeyDown={(event) => onKeyDown(event)}
+            onChange={(value) => onEditDraftChange(value)}
+            onKeyDown={onKeyDown}
+            submitBehavior="editing"
+            canSubmit={canSubmit}
+            onSubmit={onSubmit}
             placeholder={placeholder}
-            spellCheck={false}
-            autoComplete="off"
-            autoCorrect="off"
-            autoCapitalize="off"
+            disabled={false}
+            className="min-h-[2.5rem]"
           />
         </ComposerTextareaFrame>
       </>

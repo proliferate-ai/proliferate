@@ -4,7 +4,7 @@ import { CHAT_COMPOSER_LABELS } from "#product/copy/chat/chat-copy";
 import { ChatComposerActions } from "#product/components/workspace/chat/input/ChatComposerActions";
 import { ChatComposerControlRowFrame } from "@proliferate/product-ui/chat/composer/ChatComposerControlRowFrame";
 import { ChatComposerSurface } from "@proliferate/product-ui/chat/composer/ChatComposerSurface";
-import { ComposerTextarea } from "@proliferate/ui/primitives/ComposerTextarea";
+import { ComposerRichTextEditor } from "#product/components/workspace/chat/input/ComposerRichTextEditor";
 import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
 import { useHomeNextComposerState } from "#product/hooks/home/ui/use-home-next-composer-state";
 import {
@@ -150,23 +150,14 @@ export function HomeComposerForm({
                 maxHeight: homeComposerInputMaxHeight,
               }}
             >
-              <ComposerTextarea
-                data-telemetry-mask
-                data-home-composer-editor
-                ref={composer.textareaRef}
-                rows={2}
+              <ComposerRichTextEditor
                 value={composer.draft}
-                onChange={(event) => handleDraftChange(event.target.value, event.timeStamp)}
+                onChange={handleDraftChange}
                 onKeyDown={composer.handleKeyDown}
                 placeholder={CHAT_COMPOSER_LABELS.placeholder}
-                spellCheck={false}
-                autoComplete="off"
-                autoCorrect="off"
-                autoCapitalize="off"
-                style={{
-                  minHeight: `${HOME_CHAT_COMPOSER_INPUT.minHeightRem}rem`,
-                  maxHeight: homeComposerInputMaxHeight,
-                }}
+                disabled={false}
+                surface="home"
+                className="min-h-[inherit]"
               />
             </div>
 

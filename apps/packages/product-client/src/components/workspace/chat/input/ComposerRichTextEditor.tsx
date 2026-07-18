@@ -1,4 +1,4 @@
-import { useEffect, useRef, type MutableRefObject } from "react";
+import { useEffect, useRef, type MutableRefObject, type Ref } from "react";
 import {
   $createRangeSelection,
   $createTextNode,
@@ -85,6 +85,8 @@ export interface ComposerRichTextEditorProps {
   canSubmit: boolean;
   onSubmit: () => void;
   editorRef?: (editor: LexicalEditor) => void;
+  rootRef?: Ref<HTMLDivElement>;
+  surface?: "workspace" | "home";
   placeholder: string;
   disabled: boolean;
   className?: string;
@@ -101,6 +103,8 @@ export function ComposerRichTextEditor({
   canSubmit,
   onSubmit,
   editorRef,
+  rootRef,
+  surface = "workspace",
   placeholder,
   disabled,
   className = "",
@@ -131,7 +135,9 @@ export function ComposerRichTextEditor({
         contentEditable={(
           <ContentEditable
             data-chat-composer-editor
+            data-home-composer-editor={surface === "home" ? true : undefined}
             data-telemetry-mask
+            ref={rootRef}
             aria-placeholder={placeholder}
             placeholder={<></>}
             spellCheck={false}

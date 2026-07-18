@@ -70,12 +70,13 @@ Non-negotiable:
 - **The composer surface paints the seam.** There is no `flatTop` prop or alternate composer mode. Ordinary dock-region panels remain narrower attached trays above the composer. When the full-width workspace-activity cap is present, `ChatComposerDock` squares the composer's top corners with a local `:has()` selector so the cap and input read as one card; removing the cap restores the normal composer radius. The composer still paints after the dock regions so its own top outline remains visible at the seam.
 - **Composer command overlays are composer-local, not dock-region inhabitants.** The slash-command tray renders from `ChatInput` in a small host directly above `ChatComposerSurface` while a prompt-leading `/` trigger is active. It is transient editor UI and does not participate in `useComposerDockSlots` precedence.
 
-### Workspace editor behavior
+### Editor behavior
 
-`ComposerCommandEditor` uses the product-client-owned Lexical adapter for the
-workspace prompt body. The editor keeps the existing `ChatComposerDraft` and
-submitted prompt boundary as Markdown; Lexical state is an editing detail and
-must not cross the runtime or server boundary.
+The workspace, Home, and queued-prompt editors use the same
+product-client-owned Lexical adapter. Workspace drafts keep the existing
+`ChatComposerDraft`; Home and queued edits keep their existing Markdown string
+state. Every submitted prompt boundary remains Markdown, and Lexical state is
+an editing detail that must not cross the runtime or server boundary.
 
 While a workspace draft is live, `ChatComposerDraft` may carry a versioned,
 opaque editor snapshot beside its Markdown nodes. The product client uses that
@@ -88,7 +89,9 @@ line-leading unordered and ordered list shortcuts. Cmd/Ctrl-B and Cmd/Ctrl-I
 toggle marks through the rich-text command layer. Enter continues or exits a
 list and Tab/Shift-Tab indent or outdent only when the selection is inside a
 list item. Outside lists, plain Enter retains workspace submission and
-Shift-Enter inserts a newline.
+Shift-Enter inserts a newline. Home retains Cmd/Ctrl-Enter submission and
+ordinary Enter editing. Queued edits retain workspace submission behavior
+outside lists.
 
 Lexical's high-priority Enter and Tab commands own this decision before native
 editor mutation. A list selection stays Lexical-owned; otherwise the workspace,
