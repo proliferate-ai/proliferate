@@ -41,7 +41,7 @@ import {
   setRunningAgentCount,
   setWebviewZoom,
 } from "./window";
-import { fetchServerMeta } from "./connect-server";
+import { fetchServerMeta, isTauriRuntimeAvailable } from "./connect-server";
 import { reportReactRenderError } from "@/lib/integrations/telemetry/native-diagnostics";
 import { setWorkspaceActivityIndicator } from "./dock";
 import {
@@ -103,7 +103,17 @@ export const desktopBridge: DesktopBridge = {
   },
 
   files: {
-    pickDirectory: pickFolder,
+    async pickDirectory() {
+      if (!isTauriRuntimeAvailable()) {
+        return { kind: "unavailable", reason: "native_host_required" };
+      }
+      try {
+        const path = await pickFolder();
+        return path ? { kind: "selected", path } : { kind: "cancelled" };
+      } catch {
+        return { kind: "unavailable", reason: "picker_failed" };
+      }
+    },
     getHomeDirectory: getHomeDir,
     isDirectory: pathIsDirectory,
     listAvailableEditors,

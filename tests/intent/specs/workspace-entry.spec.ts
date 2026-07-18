@@ -64,9 +64,11 @@
 // scenario names is a *runtime* limit, not an option-visibility one: the local
 // "Add an existing folder" option renders, but its native folder picker
 // (pickFolder -> Tauri `invoke("pick_folder")`, shell.ts) is unavailable over a
-// plain browser and resolves to null, so clicking it no-ops safely rather than
-// registering a repo. Picking the cloud option navigates to a real render
-// branch that, on this operator-incomplete deployment (boot.ts seeds no
+// plain browser. The Desktop bridge reports that unavailable transport
+// separately from a normal user cancellation, so clicking it explains that
+// the native Desktop app is required rather than silently doing nothing.
+// Picking the cloud option navigates to a real render branch that, on this
+// operator-incomplete deployment (boot.ts seeds no
 // GITHUB_APP_* config, so /meta serves both cloud capabilities "disabled" per
 // capability-contract.spec.ts's T2-SH-5), surfaces the truthful
 // operator-configuration blocker via AddRepoFlowHost's shared-resolver
@@ -227,28 +229,24 @@ test.describe("T2-WS-2: local + worktree create (desktop-web limits apply)", () 
     await expectEntryStepVisible(page);
   });
 
-  test("desktop-web limit: clicking Add an existing folder is a safe no-op (picker returns null over a plain browser)", async ({ page }) => {
+  test("desktop-web limit: clicking Add an existing folder explains that the native Desktop app is required", async ({ page }) => {
     // The local "Add an existing folder" option is present on this booted
     // Desktop host, but its native folder picker (pickFolder -> Tauri
     // `invoke("pick_folder")`, lib/access/tauri/shell.ts) is unreachable over a
-    // plain browser and resolves to null, so the desktop-web limit is a
-    // runtime no-op, not option-hiding. Actually exercise the click (PR2-TEST-05
-    // — the earlier version only opened the dialog, so it never proved the
-    // no-op it claimed) and assert the safe outcome: no repo registered, no
-    // error toast, and no crash (the entry step stays interactable).
+    // plain browser. The bridge distinguishes that transport gap from a native
+    // user cancellation, so the entry step must explain how to continue.
     await openAddRepoFlow(page);
     await expectEntryStepVisible(page);
 
     await page.getByRole("button", { name: "Add an existing folder" }).click();
 
-    // The Tauri picker resolves to null in a plain browser: addRepoFromPath is
-    // never reached, so nothing is registered and no error toast fires. Settle
-    // a beat so any async pick handler would have had a chance to run.
-    await page.waitForTimeout(500);
-    await expect(page.getByText(/Added |Add repository is unavailable/)).toHaveCount(0);
+    await expect(page.getByRole("alert")).toHaveText(
+      "Open the Desktop app to choose a local folder.",
+    );
+    await expect(page.getByText(/^Added /)).toHaveCount(0);
 
     // No crash: the entry step is still mounted and interactable after the
-    // no-op click (the dialog did not tear itself down or throw).
+    // unavailable-picker result (the dialog did not tear itself down or throw).
     await expect(page.getByRole("heading", { name: "Add a repository" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Set up in Cloud" })).toBeVisible();
   });

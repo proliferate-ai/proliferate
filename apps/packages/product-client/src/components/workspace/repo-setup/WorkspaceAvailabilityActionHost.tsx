@@ -26,6 +26,7 @@ import {
   type WorkspaceAvailabilityIntent,
 } from "#product/stores/cloud/workspace-availability-intent-store";
 import { useToastStore } from "#product/stores/toast/toast-store";
+import { directoryPickerUnavailableCopy } from "#product/copy/workspaces/directory-picker-copy";
 
 const UNLINK_COPY =
   "This removes the association on this Mac. It does not delete either checkout, "
@@ -112,12 +113,16 @@ export function WorkspaceAvailabilityActionHost() {
         showToast("Cloning is only available in Desktop.");
         return;
       }
-      const parent = await files.pickDirectory();
-      if (!parent) {
+      const picked = await files.pickDirectory();
+      if (picked.kind === "cancelled") {
+        return;
+      }
+      if (picked.kind === "unavailable") {
+        showToast(directoryPickerUnavailableCopy(picked.reason));
         return;
       }
       const repoName = cloudWorkspace?.repo?.name ?? "repository";
-      cloneDestinationPath = `${parent.replace(/\/+$/u, "")}/${repoName}`;
+      cloneDestinationPath = `${picked.path.replace(/\/+$/u, "")}/${repoName}`;
     }
     setBusy(true);
     const ok = await openOnThisMac({
