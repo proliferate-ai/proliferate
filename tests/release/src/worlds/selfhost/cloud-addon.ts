@@ -1,6 +1,6 @@
-import type { SshTransport } from "./world.js";
-import { SELFHOST_DEPLOY_DIR } from "./install.js";
 import { scrubSecretText } from "../../fixtures/redact-diagnostics.js";
+import { SELFHOST_DEPLOY_DIR, SELFHOST_PERSISTED_TLS_COMPOSE_OVERRIDE } from "./install.js";
+import type { SshTransport } from "./world.js";
 
 /**
  * Box-side operations for SELFHOST-QUAL-1's `SH-CLOUD-ADDON` cell (frozen tier-3
@@ -243,7 +243,8 @@ export async function configureAndEnableCloudAddonProfile(
     );
     try {
       await ssh.run(
-        `cd ${CLOUD_ADDON_DEPLOY_DIR} && sudo bash bootstrap.sh > /tmp/cloud-addon-bootstrap.log 2>&1`,
+        `cd ${CLOUD_ADDON_DEPLOY_DIR} && sudo env PROLIFERATE_COMPOSE_OVERRIDE_FILE=${SELFHOST_PERSISTED_TLS_COMPOSE_OVERRIDE} ` +
+          `bash bootstrap.sh > /tmp/cloud-addon-bootstrap.log 2>&1`,
         { timeoutMs: BOX_STEP_TIMEOUT_MS },
       );
     } catch (error) {
@@ -283,9 +284,13 @@ export async function disableCloudAddonProfile(ssh: SshTransport, io: CloudAddon
     // Best-effort: the reassert below is the real truth check.
   }
   try {
-    await ssh.run(`cd ${CLOUD_ADDON_DEPLOY_DIR} && sudo bash bootstrap.sh > /tmp/cloud-addon-disable.log 2>&1`, {
-      timeoutMs: BOX_STEP_TIMEOUT_MS,
-    });
+    await ssh.run(
+      `cd ${CLOUD_ADDON_DEPLOY_DIR} && sudo env PROLIFERATE_COMPOSE_OVERRIDE_FILE=${SELFHOST_PERSISTED_TLS_COMPOSE_OVERRIDE} ` +
+        `bash bootstrap.sh > /tmp/cloud-addon-disable.log 2>&1`,
+      {
+        timeoutMs: BOX_STEP_TIMEOUT_MS,
+      },
+    );
   } catch (error) {
     const diag = await captureCloudAddonBootstrapDiag(ssh).catch(() => "(diagnostic capture failed)");
     const base = error instanceof Error ? error.message : String(error);

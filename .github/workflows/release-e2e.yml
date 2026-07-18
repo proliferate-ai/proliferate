@@ -648,7 +648,8 @@ jobs:
   # exact self-host candidate (Server image archive for the box arch +
   # release-shaped proliferate-deploy.tar.gz + controller AnyHarness +
   # renderer), provisions a run-scoped EC2 box behind a Route53 A record +
-  # Caddy/Let's-Encrypt TLS, runs the SHIPPED install.sh on the candidate bytes,
+  # Caddy with the reusable public qualification wildcard certificate, runs the
+  # SHIPPED install.sh on the candidate bytes,
   # and drives the four SELFHOST-INSTALL-1 cells (install/claim, desktop owner,
   # BYOK base turn, invitee). Like the local-world-smoke job it is
   # `workflow_dispatch` only and — deliberately — NOT `continue-on-error`: a red
@@ -700,6 +701,8 @@ jobs:
           RELEASE_E2E_SELFHOST_CLOUD_GITHUB_APP_PRIVATE_KEY: ${{ secrets.RELEASE_E2E_SELFHOST_CLOUD_GITHUB_APP_PRIVATE_KEY }}
           RELEASE_E2E_SELFHOST_CFN_BUCKET: ${{ vars.RELEASE_E2E_SELFHOST_CFN_BUCKET }}
           RELEASE_E2E_SELFHOST_CFN_IMAGE_REPO: ${{ vars.RELEASE_E2E_SELFHOST_CFN_IMAGE_REPO }}
+          RELEASE_E2E_QUALIFICATION_TLS_CERTIFICATE_B64: ${{ secrets.RELEASE_E2E_QUALIFICATION_TLS_CERTIFICATE_B64 }}
+          RELEASE_E2E_QUALIFICATION_TLS_PRIVATE_KEY_B64: ${{ secrets.RELEASE_E2E_QUALIFICATION_TLS_PRIVATE_KEY_B64 }}
           RELEASE_E2E_AWS_ROLE_ARN: ${{ vars.RELEASE_E2E_SELFHOST_AWS_ROLE_ARN }}
           SELFHOST_SCENARIOS_INPUT: ${{ inputs.selfhost_scenarios }}
           SELFHOST_CELLS_INPUT: ${{ inputs.selfhost_cells }}
@@ -769,6 +772,10 @@ jobs:
           # image repo.
           RELEASE_E2E_SELFHOST_CFN_BUCKET: ${{ vars.RELEASE_E2E_SELFHOST_CFN_BUCKET }}
           RELEASE_E2E_SELFHOST_CFN_IMAGE_REPO: ${{ vars.RELEASE_E2E_SELFHOST_CFN_IMAGE_REPO }}
+          # Reused public wildcard certificate capacity: avoids one production
+          # ACME issuance for every disposable qualification box.
+          RELEASE_E2E_QUALIFICATION_TLS_CERTIFICATE_B64: ${{ secrets.RELEASE_E2E_QUALIFICATION_TLS_CERTIFICATE_B64 }}
+          RELEASE_E2E_QUALIFICATION_TLS_PRIVATE_KEY_B64: ${{ secrets.RELEASE_E2E_QUALIFICATION_TLS_PRIVATE_KEY_B64 }}
           # The requested scenario list + optional matrix-cell filter + candidate
           # platform, mapped through env (NOT interpolated into the script) so a
           # crafted workflow_dispatch value cannot inject shell into this
@@ -929,6 +936,8 @@ jobs:
           RELEASE_E2E_CLOUD_GITHUB_APP_CLIENT_SECRET: ${{ secrets.RELEASE_E2E_CLOUD_GITHUB_APP_CLIENT_SECRET }}
           AWS_ACCESS_KEY_ID: ${{ secrets.RELEASE_E2E_CLOUD_AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.RELEASE_E2E_CLOUD_AWS_SECRET_ACCESS_KEY }}
+          RELEASE_E2E_QUALIFICATION_TLS_CERTIFICATE_B64: ${{ secrets.RELEASE_E2E_QUALIFICATION_TLS_CERTIFICATE_B64 }}
+          RELEASE_E2E_QUALIFICATION_TLS_PRIVATE_KEY_B64: ${{ secrets.RELEASE_E2E_QUALIFICATION_TLS_PRIVATE_KEY_B64 }}
         run: |
           node scripts/ci-cd/qualification-preflight.mjs \
             --world managed-cloud \
@@ -1007,6 +1016,10 @@ jobs:
           # SSM bot-seed fallback (box-seeds.ts) shells out with.
           AWS_ACCESS_KEY_ID: ${{ secrets.RELEASE_E2E_CLOUD_AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.RELEASE_E2E_CLOUD_AWS_SECRET_ACCESS_KEY }}
+          # Reused public wildcard certificate capacity: browsers still verify
+          # a publicly trusted chain, while disposable boxes never call ACME.
+          RELEASE_E2E_QUALIFICATION_TLS_CERTIFICATE_B64: ${{ secrets.RELEASE_E2E_QUALIFICATION_TLS_CERTIFICATE_B64 }}
+          RELEASE_E2E_QUALIFICATION_TLS_PRIVATE_KEY_B64: ${{ secrets.RELEASE_E2E_QUALIFICATION_TLS_PRIVATE_KEY_B64 }}
           # Same bounded, secret-free diagnostics convention as local-world-smoke-1.
           MANAGED_CLOUD_SMOKE_DEBUG_DIR: ${{ github.workspace }}/tests/release/.output/managed-cloud-world/qlc-ci-${{ github.run_id }}-${{ github.run_attempt }}/debug/logs
         run: |

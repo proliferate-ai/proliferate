@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { createHash } from "node:crypto";
+import { createHash, createPrivateKey, createPublicKey, X509Certificate } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { mkdirSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -31,6 +31,8 @@ const SECRET_NAMES = new Set([
   "RELEASE_E2E_SELFHOST_CLOUD_E2B_API_KEY",
   "RELEASE_E2E_SELFHOST_CLOUD_GITHUB_APP_CLIENT_SECRET",
   "RELEASE_E2E_SELFHOST_CLOUD_GITHUB_APP_PRIVATE_KEY",
+  "RELEASE_E2E_QUALIFICATION_TLS_CERTIFICATE_B64",
+  "RELEASE_E2E_QUALIFICATION_TLS_PRIVATE_KEY_B64",
   "AWS_ACCESS_KEY_ID",
   "AWS_SECRET_ACCESS_KEY",
   "AWS_SESSION_TOKEN",
@@ -55,6 +57,8 @@ const WORLD_REQUIREMENTS = {
     ["RELEASE_E2E_CLOUD_GITHUB_APP_INSTALLATION_ID", "positive_integer"],
     ["RELEASE_E2E_CLOUD_GITHUB_APP_PRIVATE_KEY", "present"],
     ["RELEASE_E2E_CLOUD_GITHUB_APP_CLIENT_SECRET", "present"],
+    ["RELEASE_E2E_QUALIFICATION_TLS_CERTIFICATE_B64", "present"],
+    ["RELEASE_E2E_QUALIFICATION_TLS_PRIVATE_KEY_B64", "present"],
   ],
   "self-host": [
     ["RELEASE_E2E_SELFHOST_REGION", "aws_region"],
@@ -67,14 +71,20 @@ const SELFHOST_SCENARIO_REQUIREMENTS = {
   "SELFHOST-INSTALL-1": [
     ["RELEASE_E2E_SELFHOST_INSTANCE_TYPE", "safe_reference"],
     ["RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY", "present"],
+    ["RELEASE_E2E_QUALIFICATION_TLS_CERTIFICATE_B64", "present"],
+    ["RELEASE_E2E_QUALIFICATION_TLS_PRIVATE_KEY_B64", "present"],
   ],
   "SELFHOST-QUAL-1": [
     ["RELEASE_E2E_SELFHOST_INSTANCE_TYPE", "safe_reference"],
     ["RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY", "present"],
+    ["RELEASE_E2E_QUALIFICATION_TLS_CERTIFICATE_B64", "present"],
+    ["RELEASE_E2E_QUALIFICATION_TLS_PRIVATE_KEY_B64", "present"],
   ],
   "SELFHOST-ISOLATION-1": [
     ["RELEASE_E2E_SELFHOST_INSTANCE_TYPE", "safe_reference"],
     ["RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY", "present"],
+    ["RELEASE_E2E_QUALIFICATION_TLS_CERTIFICATE_B64", "present"],
+    ["RELEASE_E2E_QUALIFICATION_TLS_PRIVATE_KEY_B64", "present"],
   ],
   "SELFHOST-CFN-1": [],
 };
@@ -148,6 +158,15 @@ export function runQualificationPreflight(options, deps = {}) {
   const requirements = WORLD_REQUIREMENTS[options.world] ?? [];
   for (const [name, shape] of requirements) {
     validateEnv(name, shape, env, pass, fail);
+  }
+  const selfHostNeedsReusableTls =
+    options.world === "self-host" &&
+    (scenarioIds === "all" ||
+      scenarioIds.some((scenario) =>
+        ["SELFHOST-INSTALL-1", "SELFHOST-QUAL-1", "SELFHOST-ISOLATION-1"].includes(scenario),
+      ));
+  if (options.world === "managed-cloud" || selfHostNeedsReusableTls) {
+    validateQualificationTls(env, pass, fail);
   }
   if (options.world === "local") {
     const selected = scenarioIds === "all" ? Object.keys(LOCAL_SCENARIO_REQUIREMENTS) : scenarioIds;
@@ -308,6 +327,53 @@ function validateEnv(name, shape, env, pass, fail) {
     return;
   }
   pass(id, `${name} is present${SECRET_NAMES.has(name) ? " and redacted" : " with valid shape"}.`);
+}
+
+function validateQualificationTls(env, pass, fail) {
+  const certificateValue = env.RELEASE_E2E_QUALIFICATION_TLS_CERTIFICATE_B64?.trim();
+  const privateKeyValue = env.RELEASE_E2E_QUALIFICATION_TLS_PRIVATE_KEY_B64?.trim();
+  if (!certificateValue || !privateKeyValue) {
+    fail("qualification_tls", "The reusable qualification TLS certificate and private key are both required.");
+    return;
+  }
+  try {
+    const certificatePem = decodeCanonicalBase64(certificateValue);
+    const privateKeyPem = decodeCanonicalBase64(privateKeyValue);
+    const certificate = new X509Certificate(certificatePem);
+    const now = Date.now();
+    if (now < Date.parse(certificate.validFrom) || now > Date.parse(certificate.validTo)) {
+      throw new Error("not-current");
+    }
+    if (!certificate.checkHost("probe.qualification.proliferate.com")) {
+      throw new Error("wrong-host");
+    }
+    const certificateKey = certificate.publicKey.export({ type: "spki", format: "der" });
+    const suppliedKey = createPublicKey(createPrivateKey(privateKeyPem)).export({ type: "spki", format: "der" });
+    if (!certificateKey.equals(suppliedKey)) {
+      throw new Error("key-mismatch");
+    }
+  } catch {
+    fail(
+      "qualification_tls",
+      "Reusable qualification TLS material is malformed, expired, wrong-host, or has a mismatched private key.",
+    );
+    return;
+  }
+  pass(
+    "qualification_tls",
+    "Reusable qualification TLS material is current, matches, covers *.qualification.proliferate.com, and is redacted.",
+  );
+}
+
+function decodeCanonicalBase64(value) {
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(value) || value.length % 4 !== 0) {
+    throw new Error("invalid-base64");
+  }
+  const decoded = Buffer.from(value, "base64");
+  if (decoded.toString("base64") !== value) {
+    throw new Error("noncanonical-base64");
+  }
+  return decoded.toString("utf8");
 }
 
 function validateAwsAuthorization(env, pass, fail) {

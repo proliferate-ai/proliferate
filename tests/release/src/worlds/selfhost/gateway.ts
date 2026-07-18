@@ -1,9 +1,9 @@
 import { randomBytes } from "node:crypto";
 
 import type { ApiClient } from "../../fixtures/http.js";
-import type { SshTransport } from "./world.js";
-import { SELFHOST_DEPLOY_DIR } from "./install.js";
 import { scrubSecretText } from "../../fixtures/redact-diagnostics.js";
+import { SELFHOST_DEPLOY_DIR, SELFHOST_PERSISTED_TLS_COMPOSE_OVERRIDE } from "./install.js";
+import type { SshTransport } from "./world.js";
 
 /**
  * Box-side operations for SELFHOST-QUAL-1's `SH-GATEWAY` cell (frozen tier-3
@@ -323,7 +323,8 @@ export async function configureAndEnableGatewayProfile(
       // on-box cause (preflight err/warn lines, compose pull/health errors) is
       // recoverable — the ssh transport otherwise discards the remote stderr.
       await ssh.run(
-        `cd ${GATEWAY_DEPLOY_DIR} && sudo bash bootstrap.sh > /tmp/gw-bootstrap.log 2>&1`,
+        `cd ${GATEWAY_DEPLOY_DIR} && sudo env PROLIFERATE_COMPOSE_OVERRIDE_FILE=${SELFHOST_PERSISTED_TLS_COMPOSE_OVERRIDE} ` +
+          `bash bootstrap.sh > /tmp/gw-bootstrap.log 2>&1`,
         { timeoutMs: BOX_STEP_TIMEOUT_MS },
       );
     } catch (error) {

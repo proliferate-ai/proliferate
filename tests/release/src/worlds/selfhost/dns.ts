@@ -7,7 +7,7 @@ import type { CleanupResourceKind } from "../local-workspace/cleanup-ledger.js";
 /**
  * The run-scoped DNS contract (frozen spec decision 5): a Route53 A record on
  * the owned `qualification.proliferate.com` zone (taggable/ledgerable, matches
- * PR 2), with Caddy/Let's-Encrypt issuing TLS for the run subdomain during the
+ * PR 2), with Caddy serving the reusable public wildcard certificate during the
  * install cell. sslip.io is an implementation-only fallback; the frozen contract
  * is the owned zone. All Route53 access goes through the injectable seam so unit
  * tests run offline. The record name is deterministic (a collision-free run
