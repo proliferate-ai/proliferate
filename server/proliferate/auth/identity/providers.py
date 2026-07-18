@@ -10,7 +10,7 @@ from urllib.parse import urlencode
 
 import httpx
 from fastapi import HTTPException, Request, status
-from httpx_oauth.exceptions import GetIdEmailError
+from httpx_oauth.exceptions import GetIdEmailError, GetProfileError
 from jose import JWTError, jwt
 
 from proliferate.auth.identity.routing import auth_route_path_for_base
@@ -27,6 +27,10 @@ GOOGLE_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo"
 APPLE_AUTHORIZE_URL = "https://appleid.apple.com/auth/authorize"
 APPLE_JWKS_URL = "https://appleid.apple.com/auth/keys"
 APPLE_ISSUER = "https://appleid.apple.com"
+
+
+class OAuthProviderAuthorizationError(Exception):
+    """The callback grant was rejected while resolving provider identity."""
 
 
 def parse_scope_string(value: object) -> frozenset[str]:
@@ -128,7 +132,12 @@ async def verify_oauth_callback(
             # "Email addresses" permission or the grant predates it. The
             # profile endpoint still identifies the account; the email is
             # recovered below.
-            github_profile = await github_oauth_client.get_profile(access_token)
+            try:
+                github_profile = await github_oauth_client.get_profile(access_token)
+            except GetProfileError as exc:
+                if exc.response is not None and exc.response.status_code == 401:
+                    raise OAuthProviderAuthorizationError from exc
+                raise
             account_id = str(github_profile["id"])
             raw_email = github_profile.get("email")
             account_email = raw_email if isinstance(raw_email, str) and raw_email else None
