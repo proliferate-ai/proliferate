@@ -382,6 +382,7 @@ export async function constructManagedCloudWorld(
       litellm: options.litellm,
       github: options.github,
       e2b: options.e2b,
+      qualificationRun: { runId: options.run.run_id, shardId: options.run.shard_id },
       // PR 6 (append-only): forwarded verbatim; both undefined by default, so
       // deployCandidateApi's absent-config path (today's behaviour) runs.
       stripe: options.stripe,

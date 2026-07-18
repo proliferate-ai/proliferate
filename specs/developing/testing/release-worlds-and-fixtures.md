@@ -731,6 +731,52 @@ idempotent provider cleanup after a process or runner crash, and a TTL janitor
 is the final abandoned-run backstop. Later janitor success does not
 retroactively turn a strict run with failed cleanup green.
 
+GitHub Actions cancellation and job timeout are a distinct failure boundary:
+steps on the cancelled runner, including `if: always()` cleanup and artifact
+upload, are not guaranteed to execute. Managed-cloud AWS ingress resources
+therefore carry exact `Purpose`/`RunId`/`ShardId` provider tags and an
+independent `workflow_run` cleanup executes trusted default-branch code after
+the source workflow completes. It derives the single run identity shared by
+the managed-cloud invocations from the immutable Actions run id/attempt,
+validates the exact tags plus deterministic SG/key/DNS names, cleans those resources in
+dependency order, and proves a zero post-sweep. It never checks out the source
+run's branch and never performs account-wide prefix cleanup.
+
+That independent path also reconciles the other externally durable providers.
+E2B ownership is the exact run-derived template family resolved to one
+immutable template id; every running or paused sandbox using that id is killed
+before the template is deleted. Stripe ownership is the exact run/shard tag on
+webhook endpoints, customers, products, and prices plus the exact run-derived
+test-clock name; every list is exhausted and post-cleanup absence/inactivity is
+proved. LiteLLM teams, users, and keys created by a qualification candidate
+carry the exact run and shard in provider-returned metadata; cleanup validates
+the complete key-to-user-to-team graph before deleting child to parent and
+proves absence afterward. Missing credentials, ambiguous attribution,
+incomplete pagination, and accepted deletes whose resources remain are red.
+
+The LiteLLM fields are qualification-only: ordinary deployments leave both
+settings empty and retain their existing enrollment behavior. The independent
+workflow authorizes LiteLLM reconciliation only when the exact candidate source
+SHA appears in the append-only
+`managed-cloud-litellm-attribution-attestations.v1.json` list shipped by the
+trusted default-branch cleanup revision. Candidate-authored contract bytes,
+comments, dead strings, and partial implementation markers cannot opt a source
+in. The list intentionally ships empty; a later reviewed micro-PR may append an
+exact frozen source SHA after its attribution behavior is proven. Every
+unattested candidate remains explicitly non-green rather than treating an
+empty metadata sweep as proof. The exact completed attempt's job inventory is the
+world-start gate: if `cloud-provision-1 (manual, strict)` is absent or skipped,
+the protected provider jobs do not start; any other terminal conclusion is
+cleaned conservatively. Inventory/API/receipt-upload failure stays red and also
+defaults to cleanup-required; only an exhaustive exact absent/skipped result
+suppresses the reapers. Provider calls, CLIs, dependency installs, and each
+reaper command carry internal time budgets below their job timeout so evidence
+finalization retains execution headroom. No provider cleanup uses aliases, random product UUIDs,
+prefix matching, or account-wide sweeps. The ephemeral Actions runner itself
+owns its local browser and renderer processes. The secret-bearing cleanup has
+no manual-dispatch surface: GitHub starts the default-branch workflow only from
+the completed source workflow's `workflow_run` event.
+
 ### Per-cell evidence and result behavior
 
 Each world provisioner returns a typed ready handle only after validating its

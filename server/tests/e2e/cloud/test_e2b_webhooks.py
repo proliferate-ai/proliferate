@@ -17,6 +17,9 @@ from proliferate.db.models.billing import UsageSegment
 from proliferate.db.store.billing_runtime_usage import open_usage_segment_for_sandbox
 from proliferate.server.cloud.webhooks import service as webhook_service
 from proliferate.server.billing.models import utcnow
+from proliferate.server.cloud.materialization.failures import (
+    PROVIDER_SANDBOX_MISSING_RECEIPT,
+)
 from tests.e2e.cloud.helpers import (
     CloudE2ETestError,
     build_signed_e2b_webhook,
@@ -361,7 +364,8 @@ async def test_e2b_webhook_killed_updates_state(
         metadata={"cloud_sandbox_id": str(sandbox.id)},
     )
 
-    # Kill should mark the sandbox destroyed and close the active usage segment.
+    # Provider death is recoverable: preserve the logical row, detach only the
+    # exact missing provider, and close its active usage segment.
     response = await client.post(
         "/v1/cloud/webhooks/e2b",
         content=body,
@@ -372,8 +376,17 @@ async def test_e2b_webhook_killed_updates_state(
     refreshed_sandbox = await db_session.get(type(sandbox), sandbox.id)
     assert refreshed_sandbox is not None
     await db_session.refresh(refreshed_sandbox)
+    usage = (
+        await db_session.execute(select(UsageSegment).where(UsageSegment.sandbox_id == sandbox.id))
+    ).scalar_one()
     assert refreshed_workspace.anyharness_workspace_id == workspace.anyharness_workspace_id
-    assert refreshed_sandbox.status == "destroyed"
+    assert refreshed_sandbox.status == "error"
+    assert refreshed_sandbox.last_error == PROVIDER_SANDBOX_MISSING_RECEIPT
+    assert refreshed_sandbox.provider_sandbox_id is None
+    assert refreshed_sandbox.anyharness_base_url is None
+    assert refreshed_sandbox.runtime_token_ciphertext is None
+    assert refreshed_sandbox.anyharness_data_key_ciphertext is None
+    assert usage.ended_at is not None
 
 
 @pytest.mark.asyncio

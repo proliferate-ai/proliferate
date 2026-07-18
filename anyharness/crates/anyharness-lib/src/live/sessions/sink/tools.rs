@@ -111,14 +111,9 @@ impl SessionEventSink {
                 }
             })
             .or_else(|| previous.and_then(|prev| prev.item.native_tool_name.clone()));
-        let parent_tool_call_id = if self.source_agent_kind == "claude" {
-            meta.claude_code
-                .as_ref()
-                .and_then(|meta| meta.parent_tool_use_id.clone())
-                .or_else(|| previous.and_then(|prev| prev.item.parent_tool_call_id.clone()))
-        } else {
-            previous.and_then(|prev| prev.item.parent_tool_call_id.clone())
-        };
+        let parent_tool_call_id = meta
+            .parent_tool_call_id(&self.source_agent_kind)
+            .or_else(|| previous.and_then(|prev| prev.item.parent_tool_call_id.clone()));
 
         let title = payload
             .title

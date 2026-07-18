@@ -6,7 +6,7 @@ import { toolItem } from "@proliferate/product-domain/chats/transcript/transcrip
 import { SubagentCreationGroupBlock } from "#product/components/workspace/chat/transcript/SubagentCreationGroupBlock";
 
 describe("SubagentCreationGroupBlock", () => {
-  it("renders a quiet done-line for finished subagents", () => {
+  it("renders a quiet done-line for finished creation receipts", () => {
     const transcript = createTranscriptState("session-1");
     transcript.itemsById = {
       "create-1": toolItem("create-1", "turn-1", 1, "subagent"),
@@ -30,7 +30,7 @@ describe("SubagentCreationGroupBlock", () => {
     expect(html).not.toContain("Created");
   });
 
-  it("renders nothing while a subagent is still running (roster owns it)", () => {
+  it("renders nothing while a creation receipt is still running", () => {
     const transcript = createTranscriptState("session-1");
     transcript.itemsById = {
       "create-1": toolItem("create-1", "turn-1", 1, "subagent", "in_progress"),

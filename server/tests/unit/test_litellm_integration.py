@@ -218,6 +218,48 @@ async def test_ensure_team_creates_when_missing(monkeypatch: pytest.MonkeyPatch)
 
 
 @pytest.mark.asyncio
+async def test_ensure_team_persists_and_verifies_ownership_metadata(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ownership = {
+        "proliferate_qualification_run_id": "run-1",
+        "proliferate_qualification_shard_id": "1",
+    }
+    client = _FakeAsyncClient(
+        [
+            _response(200, []),
+            _response(200, {"team_id": "team-created", "team_alias": "org-42"}),
+        ]
+    )
+    _install(monkeypatch, client)
+
+    assert await litellm.ensure_team(alias="org-42", metadata=ownership) == "team-created"
+    assert _request_body(client.requests[1])["metadata"] == ownership
+
+    conflicting = _FakeAsyncClient(
+        [
+            _response(
+                200,
+                [
+                    {
+                        "team_alias": "org-42",
+                        "team_id": "team-existing",
+                        "metadata": {
+                            **ownership,
+                            "proliferate_qualification_run_id": "other-run",
+                        },
+                    }
+                ],
+            )
+        ]
+    )
+    _install(monkeypatch, conflicting)
+    with pytest.raises(litellm.LiteLLMIntegrationError) as excinfo:
+        await litellm.ensure_team(alias="org-42", metadata=ownership)
+    assert excinfo.value.code == "litellm_ownership_conflict"
+
+
+@pytest.mark.asyncio
 async def test_ensure_user_treats_conflict_as_success(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -232,6 +274,37 @@ async def test_ensure_user_treats_conflict_as_success(
     _install(monkeypatch, client)
 
     assert await litellm.ensure_user(user_id="user-1") == "user-1"
+
+
+@pytest.mark.asyncio
+async def test_ensure_user_conflict_requires_matching_ownership_metadata(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ownership = {
+        "proliferate_qualification_run_id": "run-1",
+        "proliferate_qualification_shard_id": "1",
+    }
+    client = _FakeAsyncClient(
+        [
+            _response(409, {"error": {"message": "already exists"}}),
+            _response(200, {"user_info": {"metadata": ownership}}),
+        ]
+    )
+    _install(monkeypatch, client)
+
+    assert await litellm.ensure_user(user_id="user-1", metadata=ownership) == "user-1"
+    assert [request.url.path for request in client.requests] == ["/user/new", "/user/info"]
+
+    conflicting = _FakeAsyncClient(
+        [
+            _response(409, {"error": {"message": "already exists"}}),
+            _response(200, {"user_info": {"metadata": {}}}),
+        ]
+    )
+    _install(monkeypatch, conflicting)
+    with pytest.raises(litellm.LiteLLMIntegrationError) as excinfo:
+        await litellm.ensure_user(user_id="user-1", metadata=ownership)
+    assert excinfo.value.code == "litellm_ownership_conflict"
 
 
 @pytest.mark.asyncio

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { reduceEvents } from "@anyharness/sdk";
 import type { SessionEventEnvelope } from "@anyharness/sdk";
+import claudeNativeSubagentFixture from "../../../../../../../../fixtures/contracts/native-subagent-transcript/claude.json";
+import codexNativeSubagentFixture from "../../../../../../../../fixtures/contracts/native-subagent-transcript/codex.json";
 import {
   appendHistoryTail,
   applyStreamEnvelope,
@@ -8,7 +10,44 @@ import {
   replaySessionHistory,
 } from "#product/lib/domain/sessions/stream/stream-state";
 
+type NativeSubagentFixture = {
+  provider: "claude" | "codex";
+  sessionId: string;
+  events: SessionEventEnvelope[];
+};
+
+const nativeSubagentFixtures = [
+  claudeNativeSubagentFixture,
+  codexNativeSubagentFixture,
+] as unknown as NativeSubagentFixture[];
+
 describe("session-stream-state", () => {
+  describe.each(nativeSubagentFixtures)("$provider native subagent fixture", (fixture) => {
+    it("deduplicates and orders a live batch to match durable replay", () => {
+      const replay = replaySessionHistory(fixture.sessionId, fixture.events);
+      const initial = replaySessionHistory(fixture.sessionId, fixture.events.slice(0, 1));
+      const tail = fixture.events.slice(1);
+      const duplicatedTailEvent = tail[Math.floor(tail.length / 2)];
+
+      const result = applyStreamEnvelopeBatch(initial, [
+        ...[...tail].reverse(),
+        fixture.events[0],
+        duplicatedTailEvent,
+      ]);
+
+      expect(result.gapEnvelope).toBeNull();
+      expect(result.appliedEnvelopes.map((event) => event.seq)).toEqual(
+        tail.map((event) => event.seq),
+      );
+      expect(result.duplicateEnvelopes.map((event) => event.seq)).toEqual([
+        fixture.events[0].seq,
+        duplicatedTailEvent.seq,
+      ]);
+      expect(result.state.events).toEqual(fixture.events);
+      expect(result.state.transcript).toEqual(replay.transcript);
+    });
+  });
+
   it("ignores duplicate stream envelopes", () => {
     const state = replaySessionHistory("session-1", [turnStarted(1)]);
 

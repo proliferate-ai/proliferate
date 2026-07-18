@@ -88,6 +88,30 @@ export interface E2bBuildConfig {
   templateName: string;
 }
 
+export interface E2bTemplateDeleteOptions {
+  env: NodeJS.ProcessEnv;
+  encoding: "utf8";
+  timeout: number;
+  maxBuffer: number;
+  killSignal: "SIGKILL";
+}
+
+export type E2bTemplateDeleteExec = (
+  file: string,
+  args: string[],
+  options: E2bTemplateDeleteOptions,
+) => Promise<unknown>;
+
+async function defaultE2bTemplateDeleteExec(
+  file: string,
+  args: string[],
+  options: E2bTemplateDeleteOptions,
+): Promise<unknown> {
+  const { execFile } = await import("node:child_process");
+  const { promisify } = await import("node:util");
+  return promisify(execFile)(file, args, options);
+}
+
 /**
  * The injectable E2B build seam — the real impl wraps the `e2b` `Template`
  * builder (`Template.build(...)`) exactly like `scripts/build-template.mjs`,
@@ -410,15 +434,23 @@ export class E2bTemplateBuilder implements ManagedCloudTemplateBuilder {
   }
 
   async deleteTemplate(templateId: string, config: E2bBuildConfig): Promise<void> {
-    const apiKey = readE2bApiKey(config.secretsEnvFilePath);
-    // Delete by (globally-unique) template id; no --team, which expects the team
-    // slug not the configured UUID (same mismatch as the build namespace).
-    const { execFile } = await import("node:child_process");
-    const { promisify } = await import("node:util");
-    const run = promisify(execFile);
-    await run("e2b", ["template", "delete", templateId, "--yes"], {
-      env: { ...process.env, E2B_API_KEY: apiKey },
-      encoding: "utf8",
-    });
+    await deleteE2bTemplateWithExec(templateId, config);
   }
+}
+
+export async function deleteE2bTemplateWithExec(
+  templateId: string,
+  config: E2bBuildConfig,
+  run: E2bTemplateDeleteExec = defaultE2bTemplateDeleteExec,
+): Promise<void> {
+  const apiKey = readE2bApiKey(config.secretsEnvFilePath);
+  // Delete by globally unique id. Bound both time and output so a hung CLI can
+  // never consume the workflow job's finalizer/upload budget.
+  await run("e2b", ["template", "delete", templateId, "--yes"], {
+    env: { ...process.env, E2B_API_KEY: apiKey },
+    encoding: "utf8",
+    timeout: 120_000,
+    maxBuffer: 1024 * 1024,
+    killSignal: "SIGKILL",
+  });
 }

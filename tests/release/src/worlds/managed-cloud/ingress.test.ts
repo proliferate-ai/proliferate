@@ -99,6 +99,7 @@ function deployOptions(h: Awaited<ReturnType<typeof harness>>, ssh: SshExec, pro
       privateKeyPemPath: h.githubPrivateKey,
     },
     e2b: { teamId: "team-qual", secretsEnvFilePath: h.e2bSecrets, templateName: "proliferate-runtime-qual-test" },
+    qualificationRun: { runId: "run-1", shardId: "1" },
     publicOrigin: `https://${RECORD.recordName}`,
     rendererOrigin: "http://127.0.0.1:41999",
     secretsDir: h.secretsDir,
@@ -155,6 +156,8 @@ test("secret VALUES travel only via 0600 env files, never in an SSH command", as
     assert.match(envBody, new RegExp(`AGENT_GATEWAY_LITELLM_MASTER_KEY=${MASTER_KEY}`));
     assert.match(envBody, /SINGLE_ORG_MODE=true/);
     assert.match(envBody, /AGENT_GATEWAY_ENABLED=true/);
+    assert.match(envBody, /AGENT_GATEWAY_QUALIFICATION_RUN_ID=run-1/);
+    assert.match(envBody, /AGENT_GATEWAY_QUALIFICATION_SHARD_ID=1/);
     assert.match(envBody, /CORS_ALLOW_ORIGINS=http:\/\/127\.0\.0\.1:41999/);
     assert.equal((await stat(serverEnvLocal)).mode & 0o777, 0o600);
 

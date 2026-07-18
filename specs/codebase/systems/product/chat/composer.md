@@ -249,6 +249,34 @@ Dock panes share one width and one neutral tray treatment. Hierarchy comes from
 state order, copy, and control weight, not from different colors or a width
 staircase.
 
+### Goal lifecycle safety
+
+Fresh goals created from the Desktop/Web product surface request a finite
+50,000-token budget. Engines that implement GoalPort token budgets enforce
+that default; a harness that reports no native token budget remains governed
+by its own native stopping semantics. The product does not fabricate budget
+accounting in the strict goal mirror. Editing an active or paused goal
+preserves the native engine's existing accounting instead of silently
+replacing its budget.
+
+Product goal writes and cancellation share a per-client-session lifecycle
+queue, so a later cancel cannot overtake an earlier goal create or edit. When
+cancel reaches the head of that queue, it re-reads the strict goal mirror and
+also considers the latest confirmed product-side intent while the stream
+catches up. It confirms native pause first when the goal supports pause;
+otherwise it confirms native clear or authoritative absence. Only then does it
+interrupt the current turn. The goal bar's Pause and Clear controls follow the
+same stop-before-cancel order.
+
+A stop failure leaves the turn running and cancellation unrequested, so the
+full safe sequence can be retried. If stopping succeeds but cancellation fails,
+the confirmed stopped intent survives long enough for retry to cancel directly
+without re-running or reversing the stop. A harness that cannot confirm a clear
+for a deferred goal fails closed instead of interrupting and risking re-arm.
+Deliberate Resume remains the only product transition from paused back to
+active, and an active goal does not prevent an idle session from accepting an
+intentional prompt.
+
 Queued user prompts render only in `outboundSlot`; they are not transcript
 rows while they remain pending. The queue supports drag or keyboard reorder,
 steer-next, edit, and delete. A queue entry's `seq` is its immutable runtime

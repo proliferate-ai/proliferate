@@ -88,9 +88,8 @@ export function isSubagentProvisioningAction(item: ToolNameOwner): boolean {
 
 export function isSubagentCreationAction(item: ToolNameOwner): boolean {
   // Only the product-MCP create_subagent receipt collapses into a creation
-  // group. Native Agent calls are now routed dynamically by
-  // isFinishedNativeAgentSubagent() — they MUST NOT match here or they'll be
-  // misclassified while still running.
+  // group. Native subagent calls stay as durable transcript items throughout
+  // their lifecycle and must not match here.
   return normalizeToolName(item.nativeToolName) === "mcp__subagents__create_subagent";
 }
 

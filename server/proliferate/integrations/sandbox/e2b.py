@@ -177,7 +177,11 @@ def _normalize_state(value: object) -> str:
     return str(value or "").strip().lower()
 
 
-def _state_from_payload(payload: dict[str, Any]) -> ProviderSandboxState | None:
+def _state_from_payload(
+    payload: dict[str, Any],
+    *,
+    observed_at: datetime | None = None,
+) -> ProviderSandboxState | None:
     # v2 /sandboxes returns `sandboxID` (capital ID); older payloads used
     # `sandboxId`/`sandbox_id`/`id`. Accept all so this parser is endpoint-agnostic.
     sandbox_id = (
@@ -193,7 +197,7 @@ def _state_from_payload(payload: dict[str, Any]) -> ProviderSandboxState | None:
         state=_normalize_state(payload.get("state")),
         started_at=_coerce_datetime(payload.get("startedAt") or payload.get("started_at")),
         end_at=_coerce_datetime(payload.get("endAt") or payload.get("end_at")),
-        observed_at=utcnow(),
+        observed_at=observed_at or utcnow(),
         metadata=_normalize_metadata(payload.get("metadata")),
     )
 
@@ -281,6 +285,7 @@ class E2BSandboxProvider:
                 ]
                 if next_token:
                     params.append(("nextToken", next_token))
+                request_started_at = utcnow()
                 response = await client.get(
                     "/v2/sandboxes",
                     params=params,
@@ -295,7 +300,7 @@ class E2BSandboxProvider:
                 if isinstance(raw_items, list):
                     for item in raw_items:
                         if isinstance(item, dict):
-                            state = _state_from_payload(item)
+                            state = _state_from_payload(item, observed_at=request_started_at)
                             if state is not None:
                                 states.append(state)
                 next_token = response.headers.get("x-next-token")
@@ -437,6 +442,7 @@ class E2BSandboxProvider:
         get_info = getattr(Sandbox, "get_info", None)
         if get_info is None:
             return None
+        request_started_at = utcnow()
         info = get_info(sandbox_id, api_key=api_key)
         payload: dict[str, Any] = {}
         for key in (
@@ -454,7 +460,7 @@ class E2BSandboxProvider:
                 payload[key] = value
         if not payload:
             return None
-        return _state_from_payload(payload)
+        return _state_from_payload(payload, observed_at=request_started_at)
 
     def _resolve_runtime_endpoint(self, sandbox: Any) -> RuntimeEndpoint:
         return RuntimeEndpoint(runtime_url=f"https://{self._get_host(sandbox, self.runtime_port)}")

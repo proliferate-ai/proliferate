@@ -1,3 +1,5 @@
+from datetime import UTC, datetime, timedelta
+
 import httpx
 import pytest
 from e2b import exceptions as e2b_exceptions
@@ -388,6 +390,56 @@ def test_state_from_payload_accepts_legacy_and_v2_id_keys() -> None:
     assert e2b_runtime._state_from_payload({"sandbox_id": "snake"}).external_sandbox_id == "snake"
     assert e2b_runtime._state_from_payload({"id": "bare"}).external_sandbox_id == "bare"
     assert e2b_runtime._state_from_payload({"state": "running"}) is None
+
+
+def test_direct_state_observation_uses_request_start(monkeypatch) -> None:
+    request_started_at = datetime(2026, 7, 17, 12, 0, tzinfo=UTC)
+    response_arrived_at = request_started_at + timedelta(seconds=30)
+    times = iter((request_started_at, response_arrived_at))
+    monkeypatch.setattr(e2b_runtime, "utcnow", lambda: next(times))
+    monkeypatch.setattr(e2b_runtime.settings, "e2b_api_key", "e2b_test_key")
+
+    class FakeSandbox:
+        @staticmethod
+        def get_info(_sandbox_id: str, **_kwargs):
+            e2b_runtime.utcnow()
+            return type("Info", (), {"sandbox_id": "sbx-slow", "state": "paused"})()
+
+    monkeypatch.setattr(e2b_runtime, "_load_sdk", lambda: FakeSandbox)
+
+    state = e2b_runtime.E2BSandboxProvider()._get_sandbox_state("sbx-slow")
+
+    assert state is not None
+    assert state.observed_at == request_started_at
+
+
+@pytest.mark.asyncio
+async def test_list_state_observation_uses_page_request_start(monkeypatch) -> None:
+    request_started_at = datetime(2026, 7, 17, 12, 0, tzinfo=UTC)
+    response_arrived_at = request_started_at + timedelta(seconds=30)
+    times = iter((request_started_at, response_arrived_at))
+    monkeypatch.setattr(e2b_runtime, "utcnow", lambda: next(times))
+    monkeypatch.setattr(e2b_runtime.settings, "e2b_api_key", "e2b_test_key")
+
+    def _handler(request: httpx.Request) -> httpx.Response:
+        del request
+        e2b_runtime.utcnow()
+        return httpx.Response(
+            200,
+            json=[{"sandboxID": "sbx-slow", "state": "paused"}],
+        )
+
+    real_client = httpx.AsyncClient
+
+    def _fake_client(*args, **kwargs):
+        kwargs["transport"] = httpx.MockTransport(_handler)
+        return real_client(*args, **kwargs)
+
+    monkeypatch.setattr(e2b_runtime.httpx, "AsyncClient", _fake_client)
+
+    states = await e2b_runtime.E2BSandboxProvider().list_sandbox_states()
+
+    assert states[0].observed_at == request_started_at
 
 
 def test_resolve_runtime_context_uses_static_e2b_paths() -> None:

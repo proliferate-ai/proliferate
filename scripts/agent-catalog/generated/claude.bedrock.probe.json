@@ -1,9 +1,9 @@
 {
-  "probedAt": "2026-07-17T05:34:23.802840+00:00",
+  "probedAt": "2026-07-17T20:48:49.740807+00:00",
   "agentKind": "claude",
   "authContext": "bedrock",
   "attestation": {
-    "name": "@agentclientprotocol/claude-agent-acp",
+    "name": "@proliferate/claude-agent-acp",
     "version": "0.59.0-proliferate.1",
     "title": "Claude Agent"
   },

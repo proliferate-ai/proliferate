@@ -222,6 +222,121 @@ export interface ToolCallEvent {
   createdAt: string;
 }
 
+export interface ToolCallAuditCorrelation {
+  baselineEventIds: readonly string[];
+  runtimeWorkerId: string;
+  organizationId: string;
+}
+
+const INTEGRATION_AUDIT_PROBE_SETTINGS_POSTURE = Object.freeze({
+  DEBUG: "true",
+  PROLIFERATE_TELEMETRY_MODE: "local_dev",
+  RUN_BACKGROUND_WORKERS: "false",
+  // The read-only probe owns no provider cleanup identity. Clearing both keeps
+  // an incomplete or malformed parent qualification pair from tripping the
+  // server Settings validator before the query runs.
+  AGENT_GATEWAY_QUALIFICATION_RUN_ID: "",
+  AGENT_GATEWAY_QUALIFICATION_SHARD_ID: "",
+});
+
+const INTEGRATION_AUDIT_PROBE_OWNED_ENV_KEYS = new Set([
+  "DATABASE_URL",
+  "DEBUG",
+  "PROLIFERATE_TELEMETRY_MODE",
+  "TELEMETRY_MODE",
+  "RUN_BACKGROUND_WORKERS",
+  "AGENT_GATEWAY_QUALIFICATION_RUN_ID",
+  "AGENT_GATEWAY_QUALIFICATION_SHARD_ID",
+]);
+
+/**
+ * Pins the read-only probe to an explicit qualification-only Settings posture.
+ * The server's production defaults intentionally fail closed when real secrets
+ * are absent. Case-insensitive collisions are removed because BaseSettings
+ * treats env keys case-insensitively; the resulting override is scoped to the
+ * child process that only imports the DB engine/models and executes the query.
+ */
+export function buildIntegrationAuditProbeEnv(
+  databaseUrl: string,
+  ambient: NodeJS.ProcessEnv = process.env,
+): NodeJS.ProcessEnv {
+  const inherited = Object.fromEntries(
+    Object.entries(ambient).filter(
+      ([key]) => !INTEGRATION_AUDIT_PROBE_OWNED_ENV_KEYS.has(key.toUpperCase()),
+    ),
+  );
+  return {
+    ...inherited,
+    ...INTEGRATION_AUDIT_PROBE_SETTINGS_POSTURE,
+    DATABASE_URL: databaseUrl,
+  };
+}
+
+export function parseIntegrationAuditProbeResult(
+  code: number | null,
+  stdout: string,
+  stderr: string,
+  signal: NodeJS.Signals | null = null,
+): { userId: string; events: ToolCallEvent[]; error?: string } {
+  if (code !== 0) {
+    const exitDescription =
+      code === null ? `was killed by ${signal ?? "an unknown signal"}` : `exited ${code}`;
+    throw new Error(`integration_audit_probe.py ${exitDescription}: ${stderr || stdout}`);
+  }
+  try {
+    const lastLine = stdout.trim().split("\n").pop() ?? "{}";
+    return JSON.parse(lastLine);
+  } catch (error) {
+    throw new Error(`integration_audit_probe.py did not print valid JSON: ${stdout}\n${error}`);
+  }
+}
+
+export function requireIntegrationAuditProbeEvents(
+  result: { userId: string; events: ToolCallEvent[]; error?: string },
+  expectedUserId: string,
+): readonly ToolCallEvent[] {
+  if (result.error) {
+    throw new Error(`integration_audit_probe.py query failed: ${result.error}`);
+  }
+  if (result.userId !== expectedUserId) {
+    throw new Error(
+      `integration_audit_probe.py resolved user ${JSON.stringify(result.userId)}; ` +
+        `expected ${JSON.stringify(expectedUserId)}`,
+    );
+  }
+  if (!Array.isArray(result.events)) {
+    throw new Error("integration_audit_probe.py returned no events array");
+  }
+  return result.events;
+}
+
+/**
+ * Selects only the successful row attributable to this cell's exact gateway
+ * grant and post-baseline tool call. User scoping is enforced by the probe's
+ * email lookup; worker + organization + baseline keep another visible call
+ * from satisfying LOCAL-7.
+ */
+export function findCorrelatedToolCallEvent(
+  events: readonly ToolCallEvent[],
+  expected: {
+    namespace: string;
+    toolName: string;
+    correlation: ToolCallAuditCorrelation;
+  },
+): ToolCallEvent | undefined {
+  const baselineIds = new Set(expected.correlation.baselineEventIds);
+  return events.find(
+    (event) =>
+      !baselineIds.has(event.id) &&
+      event.namespace === expected.namespace &&
+      event.toolName === expected.toolName &&
+      event.ok &&
+      event.errorCode === null &&
+      event.runtimeWorkerId === expected.correlation.runtimeWorkerId &&
+      event.organizationId === expected.correlation.organizationId,
+  );
+}
+
 /**
  * Runs `tests/release/scripts/integration_audit_probe.py` in-process to read
  * back the `cloud_integration_tool_call_event` audit row.
@@ -256,7 +371,7 @@ export async function runIntegrationAuditProbe(
   return new Promise((resolve, reject) => {
     const child = spawn("uv", ["run", "python", ...args], {
       cwd: serverDir,
-      env: { ...process.env, DATABASE_URL: databaseUrl },
+      env: buildIntegrationAuditProbeEnv(databaseUrl),
       stdio: ["ignore", "pipe", "pipe"],
     });
     let stdout = "";
@@ -268,16 +383,11 @@ export async function runIntegrationAuditProbe(
       stderr += String(chunk);
     });
     child.on("error", reject);
-    child.on("exit", (code) => {
-      if (code !== 0) {
-        reject(new Error(`integration_audit_probe.py exited ${code}: ${stderr || stdout}`));
-        return;
-      }
+    child.on("exit", (code, signal) => {
       try {
-        const lastLine = stdout.trim().split("\n").pop() ?? "{}";
-        resolve(JSON.parse(lastLine));
+        resolve(parseIntegrationAuditProbeResult(code, stdout, stderr, signal));
       } catch (error) {
-        reject(new Error(`integration_audit_probe.py did not print valid JSON: ${stdout}\n${error}`));
+        reject(error);
       }
     });
   });

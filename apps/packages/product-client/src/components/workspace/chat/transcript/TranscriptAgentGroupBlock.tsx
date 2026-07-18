@@ -71,27 +71,6 @@ export function TranscriptAgentGroupBlock({
   const [expanded, setExpanded] = useState(false);
   const [workExpanded, setWorkExpanded] = useState(false);
 
-  // Native subagent lifecycle (session-activity-architecture): while a
-  // subagent is still running it lives ONLY in the composer ⑂ roster — the
-  // transcript stays quiet and shows nothing. Once finished, the item is
-  // routed to SubagentCreationGroupBlock (via buildTranscriptDisplayBlocks)
-  // and renders as a quiet done-line there. This block should NEVER receive
-  // finished subagents, but if one leaks through (e.g., stale transcript
-  // state or classification gap), hide it rather than show the old metadata
-  // block.
-  if (isRunning) {
-    return null;
-  }
-
-  // Finished subagents should have been routed to SubagentCreationGroupBlock
-  // by buildTranscriptDisplayBlocks. If one reached here, it's a
-  // classification gap — hide it silently (the roster already showed the live
-  // work, and SubagentCreationGroupBlock will render the done-line if the
-  // transcript re-classifies correctly on next update).
-  if (isWorkComplete) {
-    return null;
-  }
-
   const subagentDisplay = resolveSubagentLaunchDisplay(item);
   const normalizedPrompt = subagentDisplay.prompt?.trim() ?? "";
 
@@ -127,9 +106,8 @@ export function TranscriptAgentGroupBlock({
   const hasWork = childIds.length > 0;
   const hasLaunchLedger = !!normalizedPrompt || hasProvisioningLedger;
   const hasBodyContent = hasWork || hasLaunchLedger || !!normalizedAgentResult;
-  // Only finished subagents render here (running ones return null above and
-  // live in the composer roster), so the work view is always the collapsed
-  // done-state form.
+  // The activity roster is a session-level summary. This durable transcript
+  // item is the canonical place to inspect the native subagent's nested work.
   const renderScopedWork = () => (
     <ScopedTranscriptBlocks
       displayBlocks={scopedDisplayBlocks}
