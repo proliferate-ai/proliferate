@@ -611,6 +611,13 @@ fn every_dual_lock_handler_takes_the_permit_before_the_operation_lease() {
     // reversed order (lease first) each assertion fails; the fix makes the
     // admit_* call outermost.
     let http = "src/api/http";
+    // idempotent create: caller-selected id admission before SessionStart.
+    assert_admit_before_lease(
+        &format!("{http}/sessions.rs"),
+        "create_session",
+        "admit_session_mutation(",
+        ".acquire_shared(",
+    );
     // plans: admit_plan_session before the PlanWrite shared lease.
     for handler in ["approve_plan", "reject_plan", "handoff_plan"] {
         assert_admit_before_lease(

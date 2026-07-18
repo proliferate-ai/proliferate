@@ -8,7 +8,7 @@
 # when the file is under its threshold.
 
 anyharness/crates/anyharness-contract/src/v1/events.rs 1092 existing AnyHarness contract oversized file
-anyharness/crates/anyharness-contract/src/v1/sessions.rs 767 existing AnyHarness contract oversized file
+anyharness/crates/anyharness-contract/src/v1/sessions.rs 779 existing AnyHarness contract oversized file (+caller-selected idempotent create id)
 anyharness/crates/anyharness-lib/src/api/openapi.rs 686 existing AnyHarness oversized file (+hosting schema registration, +agent-auth state response, +gateway catalog endpoints) + enriched gateway-models schema fields (model-table §1) + workflow-runs + local materialization operations + workflow-run-workspaces paths/schemas + agent install progress schemas + worktree restore path/schemas (central OpenAPI registry; per-route path/schema registration only)
 anyharness/crates/anyharness-lib/src/api/router_tests.rs 1364 existing AnyHarness oversized test file (+hosting PR-status route tests, +catalog version + enrichment tests)
 anyharness/crates/anyharness-lib/src/domains/materialization/service.rs 625 local materialization domain service (exact-ref workspace materialization + repo-root acquisition orchestration, in-process keyed operation-lock admission, idempotent replay/failure recording; blocking git mechanics split into acquire.rs) — split into service/ on next growth per guides/domains.md
@@ -19,7 +19,7 @@ anyharness/crates/anyharness-lib/src/api/http/agent_gateway_catalog.rs 632 gatew
 anyharness/crates/anyharness-lib/src/api/http/workspaces_lifecycle.rs 645 workspace retire lifecycle handlers (+PR1227-WORKSPACE-FENCE-01/02 under-exclusive-lease workflow-control re-check with admitted-set fail-closed membership + test-only proof seam module)
 anyharness/crates/anyharness-lib/src/api/http/workspaces_purge.rs 665 workspace purge handlers (+2b fail-closed all-session admission, PR1227-WORKSPACE-FENCE-01/02 admitted-set carry + under-exclusive-lease re-check, test-only purge proof seam module)
 anyharness/crates/anyharness-lib/src/domains/workspaces/retention.rs 823 worktree retention sweep (+PR1227-RETENTION-FENCE-01 permit/lease fencing + test proof seam, +Workflow creator-context exclusion until an explicit cleanup policy exists)
-anyharness/crates/anyharness-lib/src/api/session_admission_tests.rs 667 2b admission conflict-matrix + fail-closed purge/retire/mobility-export/destroy-source proofs + LOCK-01 permit-before-lease deadlock/source-order guards
+anyharness/crates/anyharness-lib/src/api/session_admission_tests.rs 674 2b admission conflict-matrix + fail-closed purge/retire/mobility-export/destroy-source proofs + LOCK-01 permit-before-lease deadlock/source-order guards (+idempotent create)
 anyharness/crates/anyharness-lib/src/domains/agents/catalog/gateway_resolver.rs 704 provider filtering + family normalizer (bedrock/date/version forms) with tests
 anyharness/crates/anyharness-lib/src/domains/agents/catalog/validation.rs 609 existing catalog validator router; unattended-mode invariants live in a focused submodule
 anyharness/crates/anyharness-lib/src/domains/agents/auth/context_tests.rs 645 classifier tests incl. gateway route activation + bedrock flag-only detection

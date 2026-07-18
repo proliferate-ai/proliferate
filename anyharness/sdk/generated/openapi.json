@@ -1897,6 +1897,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Caller-selected session id conflicts with an existing session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -9638,6 +9648,13 @@
                 "$ref": "#/components/schemas/OriginContext"
               }
             ]
+          },
+          "sessionId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional caller-selected canonical lowercase v4 UUID. Repeating a\ncreate request with the same id resumes that exact session instead of\ncreating another one."
           },
           "subagentsEnabled": {
             "type": [

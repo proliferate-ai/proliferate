@@ -9,6 +9,7 @@ use crate::domains::sessions::mcp_bindings::summaries::{
     serialize_binding_summaries, SessionMcpSummaryError,
 };
 use crate::domains::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
+use crate::domains::sessions::service::CreateSessionOutcome;
 use crate::domains::workspaces::access_gate::WorkspaceAccessError;
 use crate::origin::OriginContext;
 
@@ -54,6 +55,37 @@ impl SessionRuntime {
         subagents_enabled: bool,
         origin: OriginContext,
     ) -> Result<SessionRecord, CreateAndStartSessionError> {
+        self.create_and_start_session_with_id(
+            workspace_id,
+            agent_kind,
+            None,
+            model_id,
+            mode_id,
+            system_prompt_append,
+            mcp_servers,
+            mcp_binding_summaries,
+            subagents_enabled,
+            origin,
+        )
+        .await
+    }
+
+    /// Creates or resumes the exact session selected by the caller. The
+    /// caller must serialize requests for `preselected_session_id` across the
+    /// full create/start operation.
+    pub async fn create_and_start_session_with_id(
+        &self,
+        workspace_id: &str,
+        agent_kind: &str,
+        preselected_session_id: Option<&str>,
+        model_id: Option<&str>,
+        mode_id: Option<&str>,
+        system_prompt_append: Option<Vec<String>>,
+        mcp_servers: Vec<SessionMcpServer>,
+        mcp_binding_summaries: Option<Vec<SessionMcpBindingSummary>>,
+        subagents_enabled: bool,
+        origin: OriginContext,
+    ) -> Result<SessionRecord, CreateAndStartSessionError> {
         self.access_gate
             .assert_can_mutate_for_workspace(workspace_id)
             .map_err(|error| CreateAndStartSessionError::Invalid(error.to_string()))?;
@@ -72,10 +104,11 @@ impl SessionRuntime {
             "[workspace-latency] session.runtime.create_and_start.start"
         );
         let durable_create_started = Instant::now();
-        let mut record = self.create_durable_session(
+        let outcome = self.create_durable_session_outcome(
             workspace_id,
             agent_kind,
-            None,
+            preselected_session_id,
+            preselected_session_id.is_some(),
             model_id,
             mode_id,
             system_prompt_append,
@@ -85,13 +118,27 @@ impl SessionRuntime {
             subagents_enabled,
             origin,
         )?;
+        let (mut record, created) = match outcome {
+            CreateSessionOutcome::Created(record) => (record, true),
+            CreateSessionOutcome::Existing(record) => (record, false),
+        };
         tracing::info!(
             workspace_id = %workspace_id,
             session_id = %record.id,
             elapsed_ms = durable_create_started.elapsed().as_millis(),
             "[workspace-latency] session.runtime.durable_session_created"
         );
-        record = self.start_persisted_session(&record).await?;
+        record = if created {
+            self.start_persisted_session(&record).await?
+        } else {
+            self.ensure_live_session_handle(&record, None)
+                .await
+                .map_err(super::startup::map_start_session_error_to_create)?;
+            self.session_service
+                .get_session(&record.id)
+                .map_err(CreateAndStartSessionError::Internal)?
+                .unwrap_or(record)
+        };
         tracing::info!(
             workspace_id = %workspace_id,
             session_id = %record.id,
@@ -117,6 +164,38 @@ impl SessionRuntime {
         subagents_enabled: bool,
         origin: OriginContext,
     ) -> Result<SessionRecord, CreateAndStartSessionError> {
+        self.create_durable_session_outcome(
+            workspace_id,
+            agent_kind,
+            preselected_session_id,
+            false,
+            model_id,
+            mode_id,
+            system_prompt_append,
+            mcp_servers,
+            mcp_binding_summaries,
+            mcp_binding_policy,
+            subagents_enabled,
+            origin,
+        )
+        .map(CreateSessionOutcome::into_record)
+    }
+
+    fn create_durable_session_outcome(
+        &self,
+        workspace_id: &str,
+        agent_kind: &str,
+        preselected_session_id: Option<&str>,
+        reuse_existing: bool,
+        model_id: Option<&str>,
+        mode_id: Option<&str>,
+        system_prompt_append: Option<Vec<String>>,
+        mcp_servers: Vec<SessionMcpServer>,
+        mcp_binding_summaries: Option<Vec<SessionMcpBindingSummary>>,
+        mcp_binding_policy: SessionMcpBindingPolicy,
+        subagents_enabled: bool,
+        origin: OriginContext,
+    ) -> Result<CreateSessionOutcome, CreateAndStartSessionError> {
         let system_prompt_append = join_system_prompt_append(system_prompt_append);
         let mcp_bindings_ciphertext =
             encrypt_bindings(self.session_data_cipher.as_ref(), &mcp_servers)
@@ -128,6 +207,7 @@ impl SessionRuntime {
                 workspace_id,
                 agent_kind,
                 preselected_session_id,
+                reuse_existing,
                 model_id,
                 mode_id,
                 mcp_bindings_ciphertext,
@@ -257,6 +337,9 @@ fn map_create_session_service_error(
             session_id,
             ..
         } => CreateAndStartSessionError::WorkspaceSingleSession { session_id },
+        crate::domains::sessions::service::CreateSessionError::SessionIdConflict { session_id } => {
+            CreateAndStartSessionError::SessionIdConflict { session_id }
+        }
         crate::domains::sessions::service::CreateSessionError::ModelUnsupported {
             agent_kind,
             model_id,

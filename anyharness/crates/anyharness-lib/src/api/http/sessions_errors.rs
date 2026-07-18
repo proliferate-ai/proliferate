@@ -139,6 +139,10 @@ pub(super) fn map_create_session_error(error: CreateAndStartSessionError) -> Api
             format!("workspace only allows a single session; existing session: {session_id}"),
             "WORKSPACE_SINGLE_SESSION",
         ),
+        CreateAndStartSessionError::SessionIdConflict { session_id } => ApiError::conflict(
+            format!("session id is already owned by a different create request: {session_id}"),
+            "SESSION_ID_CONFLICT",
+        ),
         CreateAndStartSessionError::MissingDataKey => {
             ApiError::internal(SessionMcpBindingsError::missing_data_key_detail())
         }

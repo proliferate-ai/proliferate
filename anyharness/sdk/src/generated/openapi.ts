@@ -2569,6 +2569,12 @@ export interface components {
             modeId?: string | null;
             modelId?: string | null;
             origin?: null | components["schemas"]["OriginContext"];
+            /**
+             * @description Optional caller-selected canonical lowercase v4 UUID. Repeating a
+             *     create request with the same id resumes that exact session instead of
+             *     creating another one.
+             */
+            sessionId?: string | null;
             subagentsEnabled?: boolean | null;
             systemPromptAppend?: string[] | null;
             workspaceId: string;
@@ -6890,6 +6896,15 @@ export interface operations {
             };
             /** @description Invalid request */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Caller-selected session id conflicts with an existing session */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
