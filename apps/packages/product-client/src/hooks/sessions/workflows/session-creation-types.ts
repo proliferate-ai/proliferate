@@ -10,14 +10,22 @@ export interface CreateSessionWithResolvedConfigOptions {
   agentKind: string;
   modelId: string;
   modeId?: string;
+  /** Resolved mode frozen before an interrupted empty create; null means none. */
+  resolvedModeId?: string | null;
   unattendedModeId?: string | null;
   launchControlValues?: Record<string, string>;
+  /** Live defaults frozen before an interrupted empty create. */
+  frozenLiveControlValues?: Record<string, string>;
   workspaceId?: string;
   latencyFlowId?: string | null;
   measurementOperationId?: MeasurementOperationId | null;
   promptId?: string | null;
   launchIntentId?: string | null;
   clientSessionId?: string | null;
+  /** Stable server session UUID used to resume an interrupted empty create. */
+  runtimeSessionId?: string | null;
+  /** Subagent preference frozen before an interrupted empty create. */
+  subagentsEnabled?: boolean;
   reuseInFlightEmptySession?: boolean;
   preferExistingCompatibleSession?: boolean;
   preserveProjectedSessionOnCreateFailure?: boolean;
@@ -36,11 +44,16 @@ export interface CreateEmptySessionWithResolvedConfigOptions {
   agentKind: string;
   modelId: string;
   modeId?: string;
+  resolvedModeId?: string | null;
   unattendedModeId?: string | null;
   launchControlValues?: Record<string, string>;
+  frozenLiveControlValues?: Record<string, string>;
   workspaceId?: string;
   latencyFlowId?: string | null;
   clientSessionId?: string | null;
+  /** Stable server session UUID used to resume an interrupted empty create. */
+  runtimeSessionId?: string | null;
+  subagentsEnabled?: boolean;
   reuseInFlightEmptySession?: boolean;
   preserveProjectedSessionOnCreateFailure?: boolean;
   /**

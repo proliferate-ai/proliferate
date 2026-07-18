@@ -22,6 +22,7 @@ pub enum WorkspaceOperationKind {
     CoworkWrite,
     SubagentWrite,
     MobilityWrite,
+    WorktreeRestore,
 }
 
 #[derive(Debug, Clone, Default)]

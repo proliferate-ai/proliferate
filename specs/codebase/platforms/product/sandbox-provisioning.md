@@ -162,8 +162,10 @@ Worker sidecar.
 Delete revokes the active Worker and its integration-gateway token, marks the
 `cloud_sandbox` row destroyed, and schedules best-effort destruction of the
 exact current provider sandbox after the database commit. The after-commit
-callback can be lost if the server process exits; orphan cleanup remains a
-separate backstop. Delete does not:
+callback can be lost if the server process exits; the periodic orphan reaper is
+the backstop for that gap and for a create that reached E2B but lost its local
+binding once the row later provides positive destroyed or superseded evidence.
+An active unbound row remains protected as an in-flight create. Delete does not:
 
 - delete or remap `cloud_workspace` rows;
 - clear their stored AnyHarness workspace ids; or
@@ -174,6 +176,34 @@ Do not present deletion and recreation as a lossless repair.
 If the provider later reports paused, timeout, stopped, killed, or exact target
 absence for the retained binding, the exact attempt's usage is closed while the
 product-owned destroyed state and binding remain unchanged.
+
+### Orphan reaping
+
+Celery Beat schedules `cloud_sandboxes.orphan_reap` every five minutes only
+when Cloud provisioning is configured. The thin task opens a database session
+and delegates to
+[`cloud/worker/service.py`](../../../../server/proliferate/server/cloud/worker/service.py).
+A session advisory lock admits at most one reaper pass across the worker fleet.
+The provider attribution and cleanup decisions live beside that entrypoint in
+`cloud/worker/orphan_sandboxes.py`. `CLOUD_SANDBOX_REAPER_GRACE_SECONDS`
+controls the grace window and defaults to 900 seconds.
+
+The reaper lists both running and paused provider sandboxes and destroys only
+objects whose exact `proliferate_cloud_sandbox_id` creation tag is a canonical
+UUID for a row in the current database. Untagged objects, legacy tags,
+malformed or noncanonical ids, and tags without a local row are not ownership
+evidence and are never destroyed. A provider object is eligible only when:
+
+- its local row is destroyed and any known provider age is past the configured
+  grace window; or
+- its active local row is bound to a different exact provider id, its age is
+  known, and it is past the grace window.
+
+An active row with no binding may be between provider create and local record,
+so it is always preserved. The exact current binding, transitional or terminal
+provider states, and young or unknown-age live-row duplicates are also
+preserved. One provider deletion failure is logged and does not widen
+attribution or abort evaluation of later independently attributed objects.
 
 ### Provider webhooks
 
@@ -237,7 +267,10 @@ The narrow contract tests are:
 - `server/tests/unit/test_cloud_webhook_service.py`
 - `server/tests/unit/test_cloud_webhook_recovery_races.py`
 - `server/tests/unit/test_cloud_sandbox_gateway_access.py`
+- `server/tests/unit/test_cloud_orphan_reaper.py`
+- `server/tests/unit/test_cloud_sandbox_reaper_task.py`
 - `server/tests/integration/test_cloud_sandbox_recovery.py`
+- `server/tests/integration/test_cloud_sandbox_orphan_reaper_lock.py`
 - `server/tests/integration/test_cloud_sandbox_recovery_invariants.py`
 - `server/tests/integration/test_cloud_sandbox_reconciler_recovery.py`
 - `server/tests/integration/test_cloud_sandbox_last_error_migration.py`

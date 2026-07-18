@@ -38,6 +38,7 @@ export interface AnyHarnessRequestOptions {
 export type AnyHarnessTimingCategory =
   | "workspace.get"
   | "workspace.list"
+  | "workspace.worktree.restore"
   | "workspace.detect_setup"
   | "workspace.display_name.update"
   | "workspace.setup_status"

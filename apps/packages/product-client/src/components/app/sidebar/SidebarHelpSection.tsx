@@ -15,7 +15,7 @@ import type { SupportMenuAction } from "#product/lib/domain/support/support-menu
 import { getShortcutDisplayLabel } from "#product/lib/domain/shortcuts/matching";
 
 const PROLIFERATE_CHANGELOG_URL = "https://proliferate.com/changelog";
-const PROLIFERATE_DISCORD_URL = "https://discord.gg/7b5afMTqW";
+const PROLIFERATE_DISCORD_URL = "https://discord.gg/2RVNNzEZnj";
 
 export interface SidebarHelpSectionProps {
   webApp: WebAppTarget;

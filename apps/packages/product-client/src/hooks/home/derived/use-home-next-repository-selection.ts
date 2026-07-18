@@ -95,8 +95,18 @@ export function useHomeNextRepositorySelection({
       repoRootDefaultBranch: selectedRepoRoot?.defaultBranch
         ?? selectedRepository?.defaultBranch
         ?? null,
+      // A cloud-only repository intentionally has no local repo root or branch
+      // query. Its server-validated cloud environment default is therefore the
+      // authoritative base branch instead of a value to cross-check locally.
+      acceptRepoDefaultWithoutLocalBranch: selectedRepositoryIsCloudOnly,
     })
-  ), [branchRefs, repoConfigs, selectedRepoRoot?.defaultBranch, selectedRepository]);
+  ), [
+    branchRefs,
+    repoConfigs,
+    selectedRepoRoot?.defaultBranch,
+    selectedRepository,
+    selectedRepositoryIsCloudOnly,
+  ]);
   const branchOptions = useMemo(() => {
     const localBranches = localBranchNames(branchRefs);
     if (localBranches.length > 0 || !selectedRepositoryIsCloudOnly || !defaultBranchName) {

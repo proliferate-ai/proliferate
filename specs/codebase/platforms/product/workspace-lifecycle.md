@@ -2,8 +2,10 @@
 
 Status: target
 
-Current gap: the target/exposure pruning and runtime reconciliation described
-here are not deployed. Current Cloud workspace behavior is documented in
+Current gap: the target/exposure pruning and automatic runtime reconciliation
+described here are not deployed. Local worktree workspaces do support explicit,
+identity-preserving recovery when an externally deleted checkout is detected.
+Current Cloud workspace behavior is documented in
 [`workspace-provisioning.md`](workspace-provisioning.md).
 
 Date: 2026-05-25
@@ -54,6 +56,13 @@ The implemented V1 slice covers the first end-to-end storage-management path:
 - AnyHarness worktree inventory rows include lightweight git status and
   approximate storage estimates for the checkout plus runtime SQLite history.
   These estimates are advisory UI inputs, not billing-grade accounting.
+- For an active local worktree workspace whose recorded checkout is missing,
+  Desktop offers an explicit restore action. AnyHarness recreates committed
+  branch state at the recorded path while preserving the workspace and chat
+  identity. The operation is retry-safe and fails closed for occupied paths,
+  missing repositories or branches, branches checked out elsewhere, and
+  conflicting or ambiguous worktree registrations. Deleted uncommitted changes
+  cannot be recovered.
 - Explicit workspace deletion from the pruning inventory is a purge operation:
   it removes the checkout, workspace record, sessions, raw runtime events,
   normalized events, and local agent artifacts. This path must stay distinct

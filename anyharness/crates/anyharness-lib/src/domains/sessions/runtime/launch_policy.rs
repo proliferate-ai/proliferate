@@ -162,7 +162,7 @@ fn resolved_parent_native_session_id(facts: &SessionStartupFacts) -> Option<Stri
 
 /// Precondition: a closed session row never launches.
 pub(super) fn session_is_closed(record: &SessionRecord) -> bool {
-    record.closed_at.is_some() || record.status == "closed"
+    record.closed_at.is_some() || record.dismissed_at.is_some() || record.status == "closed"
 }
 
 /// Resolved facts a launch is assembled from. Private to the runtime module:
@@ -423,6 +423,10 @@ mod tests {
 
         record.status = "idle".to_string();
         record.closed_at = Some("2026-03-25T00:00:00Z".to_string());
+        assert!(session_is_closed(&record));
+
+        record.closed_at = None;
+        record.dismissed_at = Some("2026-03-25T00:01:00Z".to_string());
         assert!(session_is_closed(&record));
     }
 }

@@ -3,6 +3,7 @@ use crate::persistence::Db;
 mod attachments;
 mod background_work;
 mod events;
+pub(crate) mod idempotent_create;
 mod links;
 mod live_config;
 mod mobility;

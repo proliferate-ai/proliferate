@@ -114,6 +114,16 @@ jobs:
           : "${WEB_URL:?Set WEB_URL on the GitHub environment.}"
           : "${E2B_TEMPLATE_REF:?Set E2B_TEMPLATE_REF on the GitHub environment.}"
           : "${SUPPORT_FEED_SECRET_ARN:?Set SUPPORT_FEED_SECRET_ARN on the GitHub environment.}"
+          if ! python3 -c '
+          import os
+          import sys
+
+          value = os.environ.get("E2B_TEMPLATE_REF", "")
+          raise SystemExit(0 if value and value == value.strip() else 1)
+          '; then
+            echo "E2B_TEMPLATE_REF must be nonempty and have no leading or trailing whitespace." >&2
+            exit 1
+          fi
 
           contract_fields="$(
             jq -er --arg environment "$DEPLOY_ENVIRONMENT" '
@@ -373,6 +383,13 @@ jobs:
                   raise ValueError
               payload = json.loads(secret_string)
               value = payload.get("REDBEAT_REDIS_URL")
+              e2b_api_key = payload.get("E2B_API_KEY")
+              if (
+                  not isinstance(e2b_api_key, str)
+                  or not e2b_api_key
+                  or e2b_api_key != e2b_api_key.strip()
+              ):
+                  raise ValueError
               if not isinstance(value, str) or value != value.strip():
                   raise ValueError
               parsed = urlsplit(value)
@@ -424,17 +441,17 @@ jobs:
               exit 1
               ;;
             *)
-              echo "The API Redis secret is missing, inaccessible, or has no valid non-loopback REDBEAT_REDIS_URL field." >&2
+              echo "The API runtime secret is missing, inaccessible, or lacks valid REDBEAT_REDIS_URL/E2B_API_KEY fields." >&2
               exit 1
               ;;
           esac
           if [ -z "$REDBEAT_REDIS_SECRET_ARN" ]; then
-            echo "The API Redis secret is missing, inaccessible, or has no valid non-loopback REDBEAT_REDIS_URL field." >&2
+            echo "The API runtime secret is missing, inaccessible, or lacks valid REDBEAT_REDIS_URL/E2B_API_KEY fields." >&2
             exit 1
           fi
           echo "::add-mask::${REDBEAT_REDIS_SECRET_ARN}"
           echo "secret_arn=${REDBEAT_REDIS_SECRET_ARN}" >> "$GITHUB_OUTPUT"
-          echo "API Redis secret reference verified (value not printed or retained)."
+          echo "API Redis and E2B secret fields verified (values not printed or retained)."
 
       - name: Render ECS task definition
         id: task
@@ -633,6 +650,10 @@ jobs:
                 "name":"REDBEAT_REDIS_URL",
                 "valueFrom":($redis_secret_arn + ":REDBEAT_REDIS_URL::")
               },
+              {
+                "name":"E2B_API_KEY",
+                "valueFrom":($redis_secret_arn + ":E2B_API_KEY::")
+              },
               (
                 if $support_github_private_key_parameter == "" then empty else
                 {
@@ -661,7 +682,7 @@ jobs:
           def merge_environment($updates):
             (.environment // []) as $current
             | ($updates[0] | map(.name)) as $updated_names
-            | ["SUPPORT_GITHUB_APP_PRIVATE_KEY", "SUPPORT_LINEAR_API_KEY", "SUPPORT_FEED_BEARER_TOKEN", "REDBEAT_REDIS_URL"] as $secret_names
+            | ["SUPPORT_GITHUB_APP_PRIVATE_KEY", "SUPPORT_LINEAR_API_KEY", "SUPPORT_FEED_BEARER_TOKEN", "REDBEAT_REDIS_URL", "E2B_API_KEY"] as $secret_names
             # Stale runtime-identity overrides the server never re-authors. The
             # task definition is merged from the previous revision, so dropping
             # our own assignments is not enough: any inherited copy must be
@@ -705,6 +726,8 @@ jobs:
           def feed_plain($c): [ $c.environment[]? | select(.name == "SUPPORT_FEED_BEARER_TOKEN") ];
           def redis_secrets($c): [ $c.secrets[]? | select(.name == "REDBEAT_REDIS_URL") ];
           def redis_plain($c): [ $c.environment[]? | select(.name == "REDBEAT_REDIS_URL") ];
+          def e2b_secrets($c): [ $c.secrets[]? | select(.name == "E2B_API_KEY") ];
+          def e2b_plain($c): [ $c.environment[]? | select(.name == "E2B_API_KEY") ];
           def forbidden_names: ["SERVER_VERSION", "ANYHARNESS_VERSION", "ANYHARNESS_GIT_SHA", "E2B_TEMPLATE_VERSION", "CLOUD_RUNTIME_SENTRY_RELEASE", "CLOUD_TARGET_SENTRY_RELEASE", "E2B_RUNTIME_SENTRY_RELEASE"];
           def stale_vars($c): [ $c.environment[]? | select(.name as $n | forbidden_names | index($n)) ];
           def strict_identity($c): [ $c.environment[]? | select(.name == "PROLIFERATE_REQUIRE_RELEASE_IDENTITY" and .value == "1") ];
@@ -719,6 +742,8 @@ jobs:
           | (strict_identity($c)) as $strict
           | (redis_secrets($c)) as $redis_secrets
           | (redis_plain($c)) as $redis_plain
+          | (e2b_secrets($c)) as $e2b_secrets
+          | (e2b_plain($c)) as $e2b_plain
           | if ($secrets | length) != 1 then
               error("expected exactly one SUPPORT_FEED_BEARER_TOKEN ECS secret, found \($secrets | length)")
             elif ($plain | length) != 0 then
@@ -737,6 +762,12 @@ jobs:
               error("REDBEAT_REDIS_URL must not be present as a plaintext environment entry")
             elif (($redis_secrets[0].valueFrom // "") != $redis_value_from) then
               error("REDBEAT_REDIS_URL must match the environment-owned Secrets Manager field reference")
+            elif ($e2b_secrets | length) != 1 then
+              error("expected exactly one E2B_API_KEY ECS secret, found \($e2b_secrets | length)")
+            elif ($e2b_plain | length) != 0 then
+              error("E2B_API_KEY must not be present as a plaintext environment entry")
+            elif (($e2b_secrets[0].valueFrom // "") != $e2b_value_from) then
+              error("E2B_API_KEY must match the environment-owned Secrets Manager field reference")
             else empty end
           ASSERT_JQ
 
@@ -749,11 +780,12 @@ jobs:
             "$task_definition_raw" > "$task_definition_rendered"
 
           # Fail closed before register-task-definition: exactly one secret-backed
-          # SUPPORT_FEED_BEARER_TOKEN and REDBEAT_REDIS_URL, no plaintext
-          # duplicates, and valid AWS secret references.
+          # SUPPORT_FEED_BEARER_TOKEN, REDBEAT_REDIS_URL, and E2B_API_KEY, no
+          # plaintext duplicates, and exact AWS secret references.
           jq \
             --arg container "$ECS_SERVER_CONTAINER_NAME" \
             --arg redis_value_from "${REDBEAT_REDIS_SECRET_ARN}:REDBEAT_REDIS_URL::" \
+            --arg e2b_value_from "${REDBEAT_REDIS_SECRET_ARN}:E2B_API_KEY::" \
             -f "$assert_program_file" \
             "$task_definition_rendered" > /dev/null
 
@@ -877,6 +909,8 @@ jobs:
       - name: Deploy worker and Beat from candidate image
         id: background
         if: ${{ env.ECS_WORKER_SERVICE != '' && env.ECS_BEAT_SERVICE != '' }}
+        env:
+          SERVER_APP_SECRET_ARN: ${{ steps.redis_secret.outputs.secret_arn }}
         run: |
           set -euo pipefail
           # HOSTED_BACKGROUND_SCRATCH_BEGIN
@@ -903,13 +937,13 @@ jobs:
           trap cleanup_background_task_files EXIT
           # HOSTED_BACKGROUND_SCRATCH_END
 
-          # Re-image a celery service in place: take its current task definition,
-          # swap only the container image to the candidate, register, and roll.
-          # Environment/secrets are Terraform-owned and left intact. The candidate
-          # is the IMMUTABLE digest reference (same `repo@sha256:...` the API roll
-          # pins), so worker/Beat run the byte-identical image as the API and a
-          # later tag move cannot change what they run.
+          # Re-image a celery service in place and explicitly author the Cloud
+          # provider pair needed by the orphan reaper. E2B_TEMPLATE_NAME is the
+          # reviewed non-secret deploy input; E2B_API_KEY is an exact ECS field
+          # projection from the environment-owned server-app secret. Inherited
+          # plaintext or stale copies are removed before registration.
           candidate_image="${{ steps.digest.outputs.image_ref }}"
+          : "${SERVER_APP_SECRET_ARN:?The verified server-app secret ARN is required.}"
           case "$candidate_image" in
             *@sha256:*) ;;
             *)
@@ -918,6 +952,7 @@ jobs:
               ;;
           esac
           expected_background_execution_role="arn:aws:iam::${EXPECTED_AWS_ACCOUNT_ID}:role/${EXPECTED_ECS_EXECUTION_ROLE_NAME}"
+          expected_e2b_api_key_reference="${SERVER_APP_SECRET_ARN}:E2B_API_KEY::"
           case "$EXPECTED_BACKGROUND_REDIS_SERVICE" in
             secretsmanager)
               expected_background_redis_prefix="arn:aws:secretsmanager:${AWS_REGION}:${EXPECTED_AWS_ACCOUNT_ID}:secret:${EXPECTED_BACKGROUND_REDIS_NAME}-"
@@ -942,6 +977,12 @@ jobs:
             [$container.secrets[]? | select(.name == "REDBEAT_REDIS_URL")];
           def redis_plain($container):
             [$container.environment[]? | select(.name == "REDBEAT_REDIS_URL")];
+          def e2b_secrets($container):
+            [$container.secrets[]? | select(.name == "E2B_API_KEY")];
+          def e2b_plain($container):
+            [$container.environment[]? | select(.name == "E2B_API_KEY")];
+          def e2b_templates($container):
+            [$container.environment[]? | select(.name == "E2B_TEMPLATE_NAME")];
           def allowed_redis_reference($value):
             if $redis_exact != "" then
               $value == $redis_exact
@@ -956,11 +997,19 @@ jobs:
               $matches[0] as $target
               | (redis_secrets($target)) as $redis
               | (redis_plain($target)) as $plain
+              | (e2b_secrets($target)) as $e2b
+              | (e2b_plain($target)) as $e2b_plaintext
+              | (e2b_templates($target)) as $templates
               | (
                   .executionRoleArn == $execution_role
                   and ($redis | length) == 1
                   and ($plain | length) == 0
                   and allowed_redis_reference(($redis[0].valueFrom // ""))
+                  and ($e2b | length) == 1
+                  and ($e2b_plaintext | length) == 0
+                  and (($e2b[0].valueFrom // "") == $e2b_api_key_reference)
+                  and ($templates | length) == 1
+                  and (($templates[0].value // "") == $e2b_template)
                 )
             end
           BACKGROUND_ASSERT_JQ
@@ -998,27 +1047,46 @@ jobs:
             fi
             jq \
               --arg container "$container" \
-              --arg image "$candidate_image" '
+              --arg image "$candidate_image" \
+              --arg e2b_template "$E2B_TEMPLATE_REF" \
+              --arg e2b_api_key_reference "$expected_e2b_api_key_reference" '
+              def merge_environment($updates):
+                (.environment // [])
+                | map(select(.name as $name | ($updates | map(.name) | index($name) | not)))
+                + $updates;
+              def merge_secrets($updates):
+                (.secrets // [])
+                | map(select(.name as $name | ($updates | map(.name) | index($name) | not)))
+                + $updates;
               del(.taskDefinitionArn, .revision, .status, .requiresAttributes,
                   .compatibilities, .registeredAt, .registeredBy)
               | .containerDefinitions |= map(
-                  if .name == $container then .image = $image else . end
+                  if .name == $container then
+                    .image = $image
+                    | .environment = merge_environment([
+                        {"name":"E2B_TEMPLATE_NAME", "value":$e2b_template}
+                      ])
+                    | .secrets = merge_secrets([
+                        {"name":"E2B_API_KEY", "valueFrom":$e2b_api_key_reference}
+                      ])
+                  else . end
                 )
             ' "$task_raw" > "$task_rendered"
-            # The re-image path preserves secrets, so validate the exact
-            # account/region/environment-bound execution role and the one
-            # allowed direct Redis secret projection on the rendered document
-            # before registration. Any plaintext, duplicate, field selector,
-            # sibling secret, or role mismatch fails closed.
+            # Validate the exact execution role, Redis reference, E2B API-key
+            # projection, and template on the rendered document before any AWS
+            # mutation. Plaintext, duplicate, stale, sibling-environment, or
+            # field-selector drift fails closed.
             if ! jq -e \
                 --arg container "$container" \
                 --arg execution_role "$expected_background_execution_role" \
                 --arg redis_prefix "$expected_background_redis_prefix" \
                 --arg redis_exact "$expected_background_redis_exact" \
+                --arg e2b_api_key_reference "$expected_e2b_api_key_reference" \
+                --arg e2b_template "$E2B_TEMPLATE_REF" \
                 -f "$background_assert_program" \
                 "$task_rendered" \
                 >/dev/null 2>/dev/null; then
-              echo "Background task definition violates the hosted execution-role/Redis contract." >&2
+              echo "Background task definition violates the hosted execution-role/Redis/E2B contract." >&2
               return 1
             fi
             # Assert the rewritten definition carries the candidate image on the
@@ -1040,17 +1108,30 @@ jobs:
               echo "Unable to register the verified hosted background task definition." >&2
               return 1
             }
-            # Confirm the REGISTERED revision (not just the local file) carries the
-            # candidate image on exactly the named container.
-            registered_image="$(
-              aws ecs describe-task-definition --task-definition "$new_arn" \
-                --query "taskDefinition.containerDefinitions[?name=='${container}'].image | [0]" \
-                --output text \
-                2>/dev/null
-            )" || {
+            # Confirm the REGISTERED revision, not just the local render, still
+            # satisfies the complete identity/secret/template contract.
+            if ! aws ecs describe-task-definition --task-definition "$new_arn" \
+                --query taskDefinition > "$task_raw" 2>/dev/null; then
               echo "Unable to verify the registered hosted background task definition." >&2
               return 1
-            }
+            fi
+            if ! jq -e \
+                --arg container "$container" \
+                --arg execution_role "$expected_background_execution_role" \
+                --arg redis_prefix "$expected_background_redis_prefix" \
+                --arg redis_exact "$expected_background_redis_exact" \
+                --arg e2b_api_key_reference "$expected_e2b_api_key_reference" \
+                --arg e2b_template "$E2B_TEMPLATE_REF" \
+                -f "$background_assert_program" \
+                "$task_raw" >/dev/null 2>/dev/null; then
+              echo "Registered background task definition violates the hosted runtime contract." >&2
+              return 1
+            fi
+            registered_image="$(
+              jq -r --arg container "$container" \
+                'first(.containerDefinitions[] | select(.name == $container) | .image)' \
+                "$task_raw"
+            )"
             if [ "$registered_image" != "$candidate_image" ]; then
               echo "Registered ${service} task definition does not carry the candidate image." >&2
               exit 1

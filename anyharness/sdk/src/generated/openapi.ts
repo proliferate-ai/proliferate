@@ -1908,6 +1908,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/workspaces/{workspace_id}/worktree/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["restore_worktree"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/worktrees/inventory": {
         parameters: {
             query?: never;
@@ -2553,6 +2569,12 @@ export interface components {
             modeId?: string | null;
             modelId?: string | null;
             origin?: null | components["schemas"]["OriginContext"];
+            /**
+             * @description Optional caller-selected canonical lowercase v4 UUID. Repeating a
+             *     create request with the same id resumes that exact session instead of
+             *     creating another one.
+             */
+            sessionId?: string | null;
             subagentsEnabled?: boolean | null;
             systemPromptAppend?: string[] | null;
             workspaceId: string;
@@ -3987,6 +4009,12 @@ export interface components {
         };
         ResolveWorkspaceResponse: {
             repoRoot: components["schemas"]["RepoRoot"];
+            workspace: components["schemas"]["Workspace"];
+        };
+        /** @enum {string} */
+        RestoreWorktreeWorkspaceOutcome: "restored" | "already_present";
+        RestoreWorktreeWorkspaceResponse: {
+            outcome: components["schemas"]["RestoreWorktreeWorkspaceOutcome"];
             workspace: components["schemas"]["Workspace"];
         };
         ResumeSessionRequest: Record<string, never>;
@@ -6868,6 +6896,15 @@ export interface operations {
             };
             /** @description Invalid request */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Caller-selected session id conflicts with an existing session */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -10695,6 +10732,47 @@ export interface operations {
             };
             /** @description Terminal creation failed */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    restore_worktree: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace ID */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Restored the recorded worktree */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RestoreWorktreeWorkspaceResponse"];
+                };
+            };
+            /** @description Workspace not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Worktree cannot be restored safely */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
