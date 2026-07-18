@@ -1,5 +1,7 @@
 {
   "kind": "managed_cloud_litellm_attribution_attestations",
   "schema_version": 1,
-  "source_shas": []
+  "source_shas": [
+    "c2de95e19b1892c68d39d2a20014354d3784a021"
+  ]
 }

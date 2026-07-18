@@ -27,8 +27,8 @@ export function SubagentCreationGroupBlock({
     .map((itemId) => transcript.itemsById[itemId])
     .filter((item): item is ToolCallItem => item?.kind === "tool_call");
 
-  // Filter to only show finished subagents in the transcript.
-  // Running subagents appear only in the composer ⑂ roster.
+  // This block receives compact product-MCP creation receipts. Native
+  // subagent calls render through TranscriptAgentGroupBlock instead.
   const finishedItems = items.filter((item) => isSubagentWorkComplete(item));
   const openSession = useTranscriptOpenSession();
   const summary = finishedItems.length === 1 ? "Subagent finished" : `${finishedItems.length} subagents finished`;
@@ -77,8 +77,9 @@ export function SubagentCreationGroupBlock({
 }
 
 /**
- * A quiet, collapsible line for a finished subagent showing the clean result
- * summary the parent agent used. The line reads "⑂ <task title> — done" and
+ * A quiet, collapsible line for a finished product-MCP creation receipt showing
+ * the clean result summary the parent agent used. The line reads
+ * "⑂ <task title> — done" and
  * expands to show the subagent's summary field (never the raw orchestration
  * metadata).
  */

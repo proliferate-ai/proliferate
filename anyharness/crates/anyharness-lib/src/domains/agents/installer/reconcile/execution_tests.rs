@@ -361,6 +361,7 @@ async fn catalog_poke_waits_for_compatible_job_then_uses_latest_pins() {
     use crate::domains::agents::catalog::schema::AgentCatalogArtifactSource;
     use crate::domains::agents::catalog::service::AgentCatalogService;
     use crate::domains::agents::catalog::sync::CatalogSyncService;
+    use crate::domains::agents::installer::install_policy::ResolvedPinSource;
     use crate::domains::agents::installer::seed::AgentSeedStore;
     use crate::domains::agents::runtime::AgentRuntime;
 
@@ -396,7 +397,8 @@ async fn catalog_poke_waits_for_compatible_job_then_uses_latest_pins() {
         assert_eq!(admitted_pin.as_deref(), Some(old_pin.as_str()));
     }
 
-    let latest_ref = "1111111111111111111111111111111111111111";
+    let latest_pin = "catalog-poke-latest";
+    let latest_package = "@proliferate-ai/codex-acp@catalog-poke-latest";
     let mut latest = bundled_agent_catalog_document().clone();
     latest.catalog_version = "2099-01-01.catalog-poke".into();
     let codex = latest
@@ -404,12 +406,12 @@ async fn catalog_poke_waits_for_compatible_job_then_uses_latest_pins() {
         .iter_mut()
         .find(|agent| agent.kind == "codex")
         .expect("codex catalog row");
-    codex.harness.agent_process.version = "catalog-poke-latest".into();
+    codex.harness.agent_process.version = latest_pin.into();
     match codex.harness.agent_process.source.as_mut() {
-        Some(AgentCatalogArtifactSource::Git { git_ref, .. }) => {
-            *git_ref = latest_ref.into();
+        Some(AgentCatalogArtifactSource::Npm { package, .. }) => {
+            *package = latest_package.into();
         }
-        _ => panic!("codex adapter must use a git pin"),
+        _ => panic!("codex adapter must use an npm pin"),
     }
     sync.apply_fetched(
         &serde_json::to_vec(&latest).expect("serialize latest catalog"),
@@ -458,12 +460,16 @@ async fn catalog_poke_waits_for_compatible_job_then_uses_latest_pins() {
     assert!(fresh.installed_only);
     assert!(fresh.agent_kinds.is_empty());
     let job = service.job.lock().await;
-    let used_pin = job
+    let used_pins = job
         .as_ref()
         .and_then(|job| job.catalog.as_ref())
         .and_then(|catalog| catalog.pin_overrides("codex"))
-        .and_then(|pins| pins.agent_process);
-    assert_eq!(used_pin.as_deref(), Some(latest_ref));
+        .expect("fresh job codex pins");
+    assert_eq!(used_pins.agent_process.as_deref(), Some(latest_pin));
+    assert!(matches!(
+        used_pins.agent_process_source,
+        Some(ResolvedPinSource::Npm { package, .. }) if package == latest_package
+    ));
 
     let _ = std::fs::remove_dir_all(home);
 }

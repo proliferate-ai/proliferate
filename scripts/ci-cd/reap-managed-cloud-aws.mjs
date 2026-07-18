@@ -1,8 +1,12 @@
 #!/usr/bin/env node
 
 import { execFile as execFileCallback } from "node:child_process";
+import { mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import path from "node:path";
 import { promisify } from "node:util";
 import { pathToFileURL } from "node:url";
+
+import { removeReceiptTempSiblings } from "./finalize-managed-cloud-aws-receipt.mjs";
 
 const execFile = promisify(execFileCallback);
 
@@ -12,6 +16,11 @@ const ZONE_NAME = "qualification.proliferate.com";
 const TERMINAL_INSTANCE_STATES = new Set(["shutting-down", "terminated"]);
 const ROUTE53_PAGE_SIZE = 100;
 const MAX_ROUTE53_PAGES = 100;
+const ABSENCE_PROBE_DELAYS_MS = [
+  5_000, 10_000, 20_000, 30_000, 60_000, 60_000, 60_000, 60_000, 60_000,
+];
+const REQUIRED_EMPTY_SNAPSHOTS = 3;
+const MIN_EMPTY_WINDOW_MS = 180_000;
 
 function defaultExec(file, args, options = {}) {
   return execFile(file, args, {
@@ -184,22 +193,23 @@ async function discoverKeyPairs(inputs, exec) {
 
 async function listRoute53Records(inputs, startName, exec) {
   const rows = [];
-  const seenTokens = new Set();
-  let token = null;
+  const seenCursors = new Set();
+  let cursor = { name: startName, type: null, identifier: null };
   for (let page = 1; page <= MAX_ROUTE53_PAGES; page += 1) {
-    const args = [
-      "route53", "list-resource-record-sets",
-      "--hosted-zone-id", inputs.hostedZoneId,
-      "--start-record-name", startName,
-    ];
-    if (token !== null) args.push("--starting-token", token);
-    args.push(
-      "--max-items", String(ROUTE53_PAGE_SIZE),
-      "--page-size", String(ROUTE53_PAGE_SIZE),
-      "--output", "json",
-    );
+    const request = {
+      HostedZoneId: inputs.hostedZoneId,
+      StartRecordName: cursor.name,
+      MaxItems: String(ROUTE53_PAGE_SIZE),
+    };
+    if (cursor.type !== null) request.StartRecordType = cursor.type;
+    if (cursor.identifier !== null) request.StartRecordIdentifier = cursor.identifier;
     const payload = asRecord(
-      await awsJson(exec, args, "list-resource-record-sets"),
+      await awsJson(exec, [
+        "route53", "list-resource-record-sets",
+        "--cli-input-json", JSON.stringify(request),
+        "--no-paginate",
+        "--output", "json",
+      ], "list-resource-record-sets"),
       `list-resource-record-sets page ${page}`,
     );
     const pageRows = asArray(payload.ResourceRecordSets, "ResourceRecordSets");
@@ -207,22 +217,43 @@ async function listRoute53Records(inputs, startName, exec) {
       throw new Error(`Route53 page ${page} exceeded its bounded page size.`);
     }
     rows.push(...pageRows);
-    if (payload.NextToken === undefined) return rows;
-    if (typeof payload.NextToken !== "string" || payload.NextToken.length === 0 || payload.NextToken.length > 8192) {
-      throw new Error(`Route53 page ${page} next token is malformed.`);
+    if (typeof payload.IsTruncated !== "boolean") {
+      throw new Error(`Route53 page ${page} truncation flag is malformed.`);
     }
-    if (seenTokens.has(payload.NextToken)) {
-      throw new Error("Route53 pagination token did not advance.");
+    if (!payload.IsTruncated) return rows;
+    const nextName = payload.NextRecordName;
+    const nextType = payload.NextRecordType;
+    const nextIdentifier = payload.NextRecordIdentifier;
+    if (typeof nextName !== "string" || nextName.length === 0 || nextName.length > 1024) {
+      throw new Error(`Route53 page ${page} next record name is malformed.`);
     }
-    seenTokens.add(payload.NextToken);
-    token = payload.NextToken;
+    if (typeof nextType !== "string" || !/^[A-Z][A-Z0-9]{0,31}$/.test(nextType)) {
+      throw new Error(`Route53 page ${page} next record type is malformed.`);
+    }
+    if (
+      nextIdentifier !== undefined &&
+      (typeof nextIdentifier !== "string" || nextIdentifier.length === 0 || nextIdentifier.length > 1024)
+    ) {
+      throw new Error(`Route53 page ${page} next record identifier is malformed.`);
+    }
+    const nextCursor = {
+      name: nextName,
+      type: nextType,
+      identifier: nextIdentifier ?? null,
+    };
+    const cursorKey = JSON.stringify(nextCursor);
+    if (seenCursors.has(cursorKey) || cursorKey === JSON.stringify(cursor)) {
+      throw new Error("Route53 pagination cursor did not advance.");
+    }
+    seenCursors.add(cursorKey);
+    cursor = nextCursor;
   }
   throw new Error("Route53 pagination exceeded its safety bound.");
 }
 
 async function discoverDnsRecords(inputs, exec) {
   const startNames = [
-    `${dnsPrefix(inputs.runId)}-.${ZONE_NAME}`,
+    `${dnsPrefix(inputs.runId)}-0000.${ZONE_NAME}`,
     `mcq-${inputs.runId}-${SHARD_ID}.${ZONE_NAME}`,
   ];
   const rows = [];
@@ -275,87 +306,113 @@ function changeBatch(record) {
 
 async function cleanupOneRun(inputs, deps) {
   const failures = [];
+  const seenFailures = new Set();
+  const fail = (message) => {
+    if (seenFailures.has(message)) return;
+    seenFailures.add(message);
+    failures.push(message);
+  };
   const capture = async (label, task) => {
     try {
       return await task();
     } catch (error) {
-      failures.push(`${label}: ${boundedError(error)}`);
+      fail(`${label}: ${boundedError(error)}`);
       return null;
     }
   };
-  // Discovery is independent per provider category. An ambiguous Route53 read
-  // must make the cleanup red, but it must not prevent positively attributed
-  // EC2/key/SG resources from being reclaimed in the same attempt.
-  const instances = await capture("instances-discovery", () => discoverInstances(inputs, deps.exec));
-  const securityGroups = await capture("security-groups-discovery", () => discoverSecurityGroups(inputs, deps.exec));
-  const keyPairs = await capture("key-pairs-discovery", () => discoverKeyPairs(inputs, deps.exec));
-  const dnsRecords = await capture("dns-discovery", () => discoverDnsRecords(inputs, deps.exec));
-  const liveInstances = (instances ?? []).filter((row) => !TERMINAL_INSTANCE_STATES.has(row.state));
-  if (liveInstances.length > 0) {
-    try {
-      const ids = liveInstances.map((row) => row.id);
-      await deps.exec("aws", [
-        "ec2", "terminate-instances", "--region", inputs.region, "--instance-ids", ...ids,
-      ], { timeoutMs: 60_000 });
-      await deps.exec("aws", [
-        "ec2", "wait", "instance-terminated", "--region", inputs.region, "--instance-ids", ...ids,
-      ], { timeoutMs: 10 * 60_000 });
-    } catch (error) {
-      failures.push(`instances: ${boundedError(error)}`);
+  const ever = {
+    instances: new Set(),
+    securityGroups: new Set(),
+    keyPairs: new Set(),
+    dnsRecords: new Set(),
+  };
+  let stable = false;
+  let emptySnapshots = 0;
+  let emptyWindowMs = 0;
+  let lastObserved = 0;
+  for (let sweep = 0; sweep <= ABSENCE_PROBE_DELAYS_MS.length; sweep += 1) {
+    if (sweep > 0) {
+      const delay = ABSENCE_PROBE_DELAYS_MS[sweep - 1];
+      await deps.sleep(delay);
+      emptyWindowMs += delay;
+    }
+    // Reads remain independent: one ambiguous category makes the receipt red
+    // without preventing deletion of positively attributed siblings.
+    const instances = await capture("instances-discovery", () => discoverInstances(inputs, deps.exec));
+    const securityGroups = await capture("security-groups-discovery", () => discoverSecurityGroups(inputs, deps.exec));
+    const keyPairs = await capture("key-pairs-discovery", () => discoverKeyPairs(inputs, deps.exec));
+    const dnsRecords = await capture("dns-discovery", () => discoverDnsRecords(inputs, deps.exec));
+    const unknown = [instances, securityGroups, keyPairs, dnsRecords].some((rows) => rows === null);
+    const liveInstances = (instances ?? []).filter((row) => !TERMINAL_INSTANCE_STATES.has(row.state));
+    for (const row of liveInstances) ever.instances.add(row.id);
+    for (const row of securityGroups ?? []) ever.securityGroups.add(row.id);
+    for (const row of keyPairs ?? []) ever.keyPairs.add(row.name);
+    for (const row of dnsRecords ?? []) ever.dnsRecords.add(`${row.Name}:${row.Type}`);
+    lastObserved = liveInstances.length +
+      (securityGroups?.length ?? 0) + (keyPairs?.length ?? 0) + (dnsRecords?.length ?? 0);
+    if (!unknown && lastObserved === 0) {
+      emptySnapshots += 1;
+      if (emptySnapshots >= REQUIRED_EMPTY_SNAPSHOTS && emptyWindowMs >= MIN_EMPTY_WINDOW_MS) {
+        stable = true;
+        break;
+      }
+      continue;
+    }
+    emptySnapshots = 0;
+    emptyWindowMs = 0;
+    if (liveInstances.length > 0) {
+      try {
+        const ids = liveInstances.map((row) => row.id);
+        await deps.exec("aws", [
+          "ec2", "terminate-instances", "--region", inputs.region, "--instance-ids", ...ids,
+        ], { timeoutMs: 60_000 });
+        await deps.exec("aws", [
+          "ec2", "wait", "instance-terminated", "--region", inputs.region, "--instance-ids", ...ids,
+        ], { timeoutMs: 10 * 60_000 });
+      } catch (error) {
+        fail(`instances: ${boundedError(error)}`);
+      }
+    }
+    for (const record of dnsRecords ?? []) {
+      try {
+        await deps.exec("aws", [
+          "route53", "change-resource-record-sets", "--hosted-zone-id", inputs.hostedZoneId,
+          "--change-batch", changeBatch(record),
+        ], { timeoutMs: 60_000 });
+      } catch (error) {
+        fail(`dns: ${boundedError(error)}`);
+      }
+    }
+    for (const group of securityGroups ?? []) {
+      try {
+        await deleteSecurityGroup(inputs, group.id, deps.exec, deps.sleep);
+      } catch (error) {
+        fail(`security-group: ${boundedError(error)}`);
+      }
+    }
+    for (const key of keyPairs ?? []) {
+      try {
+        await deps.exec("aws", [
+          "ec2", "delete-key-pair", "--region", inputs.region, "--key-name", key.name,
+        ], { timeoutMs: 60_000 });
+      } catch (error) {
+        fail(`key-pair: ${boundedError(error)}`);
+      }
     }
   }
-  for (const record of dnsRecords ?? []) {
-    try {
-      await deps.exec("aws", [
-        "route53", "change-resource-record-sets",
-        "--hosted-zone-id", inputs.hostedZoneId,
-        "--change-batch", changeBatch(record),
-      ], { timeoutMs: 60_000 });
-    } catch (error) {
-      failures.push(`dns: ${boundedError(error)}`);
-    }
+  const remaining = stable ? 0 : Math.max(1, lastObserved);
+  if (!stable && lastObserved > 0) {
+    fail(`post-sweep: ${lastObserved} exact run-owned resource(s) remain or lack post-delete absence proof`);
+  } else if (!stable) {
+    fail("post-sweep: stable absence was not established within the bounded visibility window");
   }
-  for (const group of securityGroups ?? []) {
-    try {
-      await deleteSecurityGroup(inputs, group.id, deps.exec, deps.sleep);
-    } catch (error) {
-      failures.push(`security-group: ${boundedError(error)}`);
-    }
-  }
-  for (const key of keyPairs ?? []) {
-    try {
-      await deps.exec("aws", [
-        "ec2", "delete-key-pair", "--region", inputs.region, "--key-name", key.name,
-      ], { timeoutMs: 60_000 });
-    } catch (error) {
-      failures.push(`key-pair: ${boundedError(error)}`);
-    }
-  }
-  const afterInstances = instances === null
-    ? null
-    : await capture("instances-post-sweep", () => discoverInstances(inputs, deps.exec));
-  const afterSecurityGroups = securityGroups === null
-    ? null
-    : await capture("security-groups-post-sweep", () => discoverSecurityGroups(inputs, deps.exec));
-  const afterKeyPairs = keyPairs === null
-    ? null
-    : await capture("key-pairs-post-sweep", () => discoverKeyPairs(inputs, deps.exec));
-  const afterDnsRecords = dnsRecords === null
-    ? null
-    : await capture("dns-post-sweep", () => discoverDnsRecords(inputs, deps.exec));
-  const remaining =
-    (afterInstances === null ? 1 : afterInstances.filter((row) => !TERMINAL_INSTANCE_STATES.has(row.state)).length) +
-    (afterSecurityGroups === null ? 1 : afterSecurityGroups.length) +
-    (afterKeyPairs === null ? 1 : afterKeyPairs.length) +
-    (afterDnsRecords === null ? 1 : afterDnsRecords.length);
-  if (remaining > 0) failures.push(`post-sweep: ${remaining} exact run-owned resource(s) remain`);
   return {
     run_id: inputs.runId,
     discovered: {
-      instances: liveInstances.length,
-      security_groups: securityGroups?.length ?? 0,
-      key_pairs: keyPairs?.length ?? 0,
-      dns_records: dnsRecords?.length ?? 0,
+      instances: ever.instances.size,
+      security_groups: ever.securityGroups.size,
+      key_pairs: ever.keyPairs.size,
+      dns_records: ever.dnsRecords.size,
     },
     remaining,
     failures,
@@ -388,67 +445,153 @@ export async function reapManagedCloudAwsForWorkflowAttempt(inputs, deps = {}) {
     reports.push(await cleanupOneRun({ runId, region, hostedZoneId }, { exec, sleep }));
   }
   const failures = reports.flatMap((report) => report.failures.map((failure) => `${report.run_id}: ${failure}`));
-  if (failures.length > 0) {
-    throw new Error(`managed-cloud AWS hard-cancel cleanup failed (${failures.join("; ")})`);
-  }
-  return {
+  const receipt = {
     kind: "managed_cloud_aws_hard_cancel_cleanup",
     schema_version: 1,
     workflow_run_id: String(inputs.workflowRunId),
     workflow_run_attempt: Number(inputs.workflowRunAttempt),
     cleanup_sha: cleanupSha,
-    status: reports.some((report) => Object.values(report.discovered).some((count) => count > 0))
-      ? "reconciled"
-      : "not_needed",
+    status: failures.length > 0
+      ? "failed"
+      : reports.some((report) => Object.values(report.discovered).some((count) => count > 0))
+        ? "reconciled"
+        : "not_needed",
     runs: reports,
     covered_domains: ["aws", "candidate_box_processes"],
     delegated_domains: ["e2b", "stripe", "litellm"],
   };
+  if (failures.length > 0) {
+    const error = new Error(`managed-cloud AWS hard-cancel cleanup failed (${failures.join("; ")})`);
+    receipt.reason = boundedError(error);
+    error.cleanupReceipt = receipt;
+    throw error;
+  }
+  return receipt;
 }
 
-function parseArgs(argv, env = process.env) {
+function parseArgValues(argv) {
+  const allowed = new Set(["--workflow-run-id", "--workflow-run-attempt", "--cleanup-sha"]);
   const values = new Map();
   for (let index = 0; index < argv.length; index += 2) {
     const key = argv[index];
     const value = argv[index + 1];
-    if (!key?.startsWith("--") || value === undefined || values.has(key)) {
-      throw new Error(
-        "Usage: reap-managed-cloud-aws --workflow-run-id <id> " +
-        "--workflow-run-attempt <n> --cleanup-sha <sha>",
-      );
-    }
+    if (!key?.startsWith("--")) throw new Error(`Unexpected positional argument ${key ?? "<missing>"}.`);
+    if (!allowed.has(key)) throw new Error(`Unknown argument ${key}.`);
+    if (values.has(key)) throw new Error(`Duplicate argument ${key}.`);
+    if (value === undefined || value.startsWith("--")) throw new Error(`Missing value for ${key}.`);
     values.set(key, value);
   }
-  const allowed = new Set(["--workflow-run-id", "--workflow-run-attempt", "--cleanup-sha"]);
-  for (const key of values.keys()) if (!allowed.has(key)) throw new Error(`Unknown argument ${key}.`);
+  return values;
+}
+
+function preScanReceiptIdentity(argv) {
+  const specs = [
+    ["--workflow-run-id", "workflow_run_id", (value) => requiredPositiveInteger(value, "workflow run id")],
+    ["--workflow-run-attempt", "workflow_run_attempt", (value) => requiredPositiveInteger(value, "attempt")],
+    ["--cleanup-sha", "cleanup_sha", (value) => requiredString(value, "cleanup sha", /^[0-9a-f]{40}$/)],
+  ];
+  const hint = {};
+  for (const [flag, field, validate] of specs) {
+    const candidates = [];
+    for (let index = 0; index < argv.length; index += 1) {
+      if (argv[index] === flag && typeof argv[index + 1] === "string" && !argv[index + 1].startsWith("--")) {
+        candidates.push(argv[index + 1]);
+      }
+    }
+    if (candidates.length === 0 || new Set(candidates).size !== 1) continue;
+    try {
+      validate(candidates[0]);
+      hint[field] = field === "workflow_run_attempt" ? Number(candidates[0]) : candidates[0];
+    } catch {
+      // A receipt hint is never deletion authority. Ambiguous or malformed
+      // values are omitted while strict parsing still fails the command.
+    }
+  }
+  return hint;
+}
+
+function commandIdentity(values) {
+  const workflowRunId = values.get("--workflow-run-id") ?? "";
+  const workflowRunAttempt = values.get("--workflow-run-attempt") ?? "";
+  const cleanupSha = values.get("--cleanup-sha") ?? "";
+  requiredPositiveInteger(workflowRunId, "workflow run id");
+  requiredPositiveInteger(workflowRunAttempt, "workflow run attempt");
+  requiredString(cleanupSha, "cleanup sha", /^[0-9a-f]{40}$/);
+  return { workflowRunId, workflowRunAttempt, cleanupSha };
+}
+
+function inputsFromValues(values, env) {
+  const identity = commandIdentity(values);
   return {
-    workflowRunId: values.get("--workflow-run-id") ?? "",
-    workflowRunAttempt: values.get("--workflow-run-attempt") ?? "",
-    cleanupSha: values.get("--cleanup-sha") ?? "",
+    ...identity,
     region: env.RELEASE_E2E_CLOUD_AWS_REGION ?? "",
     hostedZoneId: env.RELEASE_E2E_CLOUD_ROUTE53_ZONE_ID ?? "",
   };
 }
 
+function failedReceipt(identity, reason) {
+  return {
+    kind: "managed_cloud_aws_hard_cancel_cleanup",
+    schema_version: 1,
+    ...identity,
+    status: "failed",
+    reason,
+  };
+}
+
+function completeReceiptIdentity(row) {
+  return typeof row?.workflow_run_id === "string" &&
+    Number.isSafeInteger(row?.workflow_run_attempt) &&
+    typeof row?.cleanup_sha === "string";
+}
+
+function receiptPathFromEnv(env) {
+  const value = env.RELEASE_E2E_CLOUD_AWS_RECEIPT_PATH;
+  if (value === undefined || value === "") return null;
+  if (typeof value !== "string" || !path.isAbsolute(value) || /[\0\r\n]/.test(value)) {
+    throw new Error("AWS cleanup receipt path is malformed.");
+  }
+  return value;
+}
+
+function writeReceiptAtomically(receiptPath, row) {
+  mkdirSync(path.dirname(receiptPath), { recursive: true, mode: 0o700 });
+  const temporary = `${receiptPath}.${process.pid}.${Date.now()}.tmp`;
+  try {
+    writeFileSync(temporary, `${JSON.stringify(row)}\n`, { mode: 0o600, flag: "wx" });
+    renameSync(temporary, receiptPath);
+  } finally {
+    rmSync(temporary, { force: true });
+  }
+}
+
 async function main() {
   const argv = process.argv.slice(2);
-  const cleanupIndex = argv.indexOf("--cleanup-sha");
-  const rawCleanupSha = cleanupIndex >= 0 ? argv[cleanupIndex + 1] : undefined;
-  const cleanupSha = typeof rawCleanupSha === "string" && /^[0-9a-f]{40}$/.test(rawCleanupSha)
-    ? rawCleanupSha
-    : null;
+  const identityHint = preScanReceiptIdentity(argv);
+  let receiptPath = null;
+  let row;
   try {
-    console.log(JSON.stringify(await reapManagedCloudAwsForWorkflowAttempt(parseArgs(argv))));
+    receiptPath = receiptPathFromEnv(process.env);
+    if (receiptPath) removeReceiptTempSiblings(receiptPath);
+    if (receiptPath && completeReceiptIdentity(identityHint)) {
+      writeReceiptAtomically(receiptPath, failedReceipt(
+        identityHint,
+        "AWS cleanup process did not emit a terminal receipt (timeout, crash, or runner interruption).",
+      ));
+    }
+    const values = parseArgValues(argv);
+    row = await reapManagedCloudAwsForWorkflowAttempt(inputsFromValues(values, process.env));
   } catch (error) {
-    console.log(JSON.stringify({
-      kind: "managed_cloud_aws_hard_cancel_cleanup",
-      schema_version: 1,
-      cleanup_sha: cleanupSha,
-      status: "failed",
-      reason: boundedError(error),
-    }));
+    row = error?.cleanupReceipt ?? failedReceipt(identityHint, boundedError(error));
+  }
+  try {
+    if (receiptPath && completeReceiptIdentity(row)) writeReceiptAtomically(receiptPath, row);
+  } catch (error) {
+    row = failedReceipt(identityHint, `AWS cleanup terminal receipt write failed: ${boundedError(error)}`);
     process.exitCode = 2;
   }
+  console.log(JSON.stringify(row));
+  if (row.status === "failed") process.exitCode = 2;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await main();
