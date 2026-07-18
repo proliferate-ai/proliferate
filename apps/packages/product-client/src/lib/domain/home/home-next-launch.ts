@@ -201,6 +201,7 @@ export function resolveHomeNextDefaultBranchName(input: {
   branchRefs: GitBranchRef[];
   savedDefaultBranch?: string | null;
   repoRootDefaultBranch?: string | null;
+  acceptRepoDefaultWithoutLocalBranch?: boolean;
 }): string | null {
   const branchNames = localBranchNames(input.branchRefs);
   const branchNameSet = new Set(branchNames);
@@ -210,7 +211,10 @@ export function resolveHomeNextDefaultBranchName(input: {
   }
 
   const repoRootDefaultBranch = input.repoRootDefaultBranch?.trim();
-  if (repoRootDefaultBranch && branchNameSet.has(repoRootDefaultBranch)) {
+  if (
+    repoRootDefaultBranch
+    && (branchNameSet.has(repoRootDefaultBranch) || input.acceptRepoDefaultWithoutLocalBranch)
+  ) {
     return repoRootDefaultBranch;
   }
 
