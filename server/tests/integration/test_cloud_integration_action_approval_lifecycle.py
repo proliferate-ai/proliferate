@@ -247,6 +247,70 @@ async def test_decision_row_lock_crossing_expiry_cannot_approve(
 
 
 @pytest.mark.asyncio
+async def test_expiry_between_precheck_and_decision_cas_is_materialized(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context = await approval_helpers._setup_context(
+        client, db_session, prefix="approval-expiry-between-decision-checks"
+    )
+    approval = await approval_helpers._request_action(
+        client, context, arguments={"message": "crosses between checks"}
+    )
+    approval_id = uuid.UUID(str(approval["id"]))
+    expires_at = (
+        await db_session.execute(
+            update(CloudIntegrationActionApproval)
+            .where(CloudIntegrationActionApproval.id == approval_id)
+            .values(expires_at=func.clock_timestamp() + literal_column("interval '1 second'"))
+            .returning(CloudIntegrationActionApproval.expires_at)
+        )
+    ).scalar_one()
+    await db_session.commit()
+
+    entered_cas = asyncio.Event()
+    release_cas = asyncio.Event()
+    original = approvals_store.transition_if_current
+
+    async def delay_decision_cas(*args: object, **kwargs: object):
+        entered_cas.set()
+        await release_cas.wait()
+        return await original(*args, **kwargs)
+
+    monkeypatch.setattr(approvals_store, "transition_if_current", delay_decision_cas)
+    decision = asyncio.create_task(
+        client.post(
+            f"{approval_helpers.APPROVALS_URL}/{approval_id}/approve",
+            headers=context.auth.headers,
+        )
+    )
+    await asyncio.wait_for(entered_cas.wait(), timeout=2)
+    while (await db_session.scalar(select(func.clock_timestamp()))) <= expires_at:
+        await asyncio.sleep(0.02)
+    release_cas.set()
+
+    response = await decision
+    assert response.status_code == 200
+    assert response.json()["result"] == "expired"
+    assert response.json()["approval"]["status"] == "expired"
+    events = (
+        (
+            await db_session.execute(
+                select(CloudIntegrationActionApprovalEvent).where(
+                    CloudIntegrationActionApprovalEvent.approval_id == approval_id,
+                    CloudIntegrationActionApprovalEvent.event_type == "expired",
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(events) == 1
+    assert (events[0].from_status, events[0].to_status) == ("pending", "expired")
+
+
+@pytest.mark.asyncio
 async def test_consumption_row_lock_crossing_expiry_cannot_admit_execution(
     client: AsyncClient,
     db_session: AsyncSession,

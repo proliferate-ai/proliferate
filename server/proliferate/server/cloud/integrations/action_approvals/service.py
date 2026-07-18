@@ -295,6 +295,14 @@ async def transition_action_approval(
         )
         return ActionApprovalTransition(approval=transitioned.approval, result="applied")
 
+    expired = await approvals_store.mark_expired_if_due(
+        db,
+        approval_id=access.approval.id,
+    )
+    if expired is not None:
+        await _record_expiry(db, expired)
+        return ActionApprovalTransition(approval=expired.approval, result="expired")
+
     current = await approvals_store.get_approval(db, access.approval.id)
     assert current is not None
     if current.status == target:
