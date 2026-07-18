@@ -214,7 +214,7 @@ fn mode_option(current: &str) -> acp::schema::SessionConfigOption {
     let mut option = acp::schema::SessionConfigOption::select(
         "mode",
         "Mode",
-        current,
+        current.to_string(),
         vec![
             acp::schema::SessionConfigSelectOption::new(OLD_MODE, "Default"),
             acp::schema::SessionConfigSelectOption::new(NEW_MODE, "Bypass permissions"),
