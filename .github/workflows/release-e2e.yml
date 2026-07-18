@@ -589,6 +589,16 @@ jobs:
       - uses: pnpm/action-setup@v6
         with:
           version: 10
+      # T3-INT-1's audit-readback probe (tests/release/scripts/integration_audit_probe.py)
+      # runs via `uv run python …` to read the cloud_integration_tool_call_event
+      # row back from the run's own Postgres — the same `spawn("uv", …)` idiom the
+      # tier-2/tier-3/self-host jobs use. Without uv on PATH the probe dies
+      # `spawn uv ENOENT` after a fully successful MCP tool call. Match the sibling
+      # jobs (uv + python 3.12, the script's requires-python).
+      - uses: astral-sh/setup-uv@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -604,6 +614,15 @@ jobs:
           AGENT_GATEWAY_LITELLM_BASE_URL: ${{ vars.AGENT_GATEWAY_LITELLM_BASE_URL }}
           AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL: ${{ vars.AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL }}
           AGENT_GATEWAY_LITELLM_MASTER_KEY: ${{ secrets.AGENT_GATEWAY_LITELLM_MASTER_KEY }}
+          # CI-only server secrets (same throwaway values server-ci.yml + the
+          # tier-3 job above use). T3-INT-1's audit-readback probe
+          # (integration_audit_probe.py) imports `proliferate.config`, which
+          # constructs Settings() at import time and requires both in non-debug
+          # mode — absent, the probe exits 1 (proven: Actions run 29617987951).
+          # Non-secret CI placeholders: the world's candidate Server builds its
+          # own random secrets in buildServerEnv (world.ts), so nothing leaks.
+          JWT_SECRET: release-e2e-ci-jwt-secret
+          CLOUD_SECRET_KEY: release-e2e-ci-cloud-secret
           # BYOK provider keys for the LOCAL-3 user-key route + LOCAL-6 route
           # change (env-manifest.ts). In strict mode an absent required key
           # blocks its selected cells, cancels otherwise-runnable cells, and

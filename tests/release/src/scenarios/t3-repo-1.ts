@@ -57,7 +57,12 @@ export const t3Repo1: ScenarioDefinition = {
   title: "repo settings take effect, both lanes",
   registryFlowRef: "specs/developing/testing/scenarios.md#T3-REPO-1",
   lanes: ["local", "sandbox"],
-  requiredEnv: ["RELEASE_E2E_SERVER_URL", "RELEASE_E2E_DURABLE_USER_EMAIL", "RELEASE_E2E_DURABLE_USER_PASSWORD"],
+  // Empty like every sibling local scenario: the world-backed LOCAL-1 path
+  // needs no pre-run server/durable-user env (the world boots its own), so a
+  // scenario-level requirement here would block the strict world-backed cell
+  // and cancel every sibling via strict preflight. The legacy diagnostic path
+  // guards its own env below and reports blocked when it is absent.
+  requiredEnv: [],
   plan: ({ runtimeLane }) => [
     { description: "seed the durable user's real GitHub App authorization (github_app_seed.py seed; no browser)" },
     {
@@ -85,13 +90,22 @@ export const t3Repo1: ScenarioDefinition = {
       });
       return;
     }
-    await runReal(ctx.env.require("RELEASE_E2E_SERVER_URL"));
+    await runReal();
   },
 };
 
-async function runReal(serverUrl: string): Promise<void> {
-  const durableEmail = process.env.RELEASE_E2E_DURABLE_USER_EMAIL as string;
-  const durablePassword = process.env.RELEASE_E2E_DURABLE_USER_PASSWORD as string;
+async function runReal(): Promise<void> {
+  const serverUrl = process.env.RELEASE_E2E_SERVER_URL;
+  const durableEmail = process.env.RELEASE_E2E_DURABLE_USER_EMAIL;
+  const durablePassword = process.env.RELEASE_E2E_DURABLE_USER_PASSWORD;
+  if (!serverUrl || !durableEmail || !durablePassword) {
+    throw new ScenarioBlockedError(
+      "T3-REPO-1 (legacy repo-environment path): RELEASE_E2E_SERVER_URL / RELEASE_E2E_DURABLE_USER_EMAIL / " +
+        "RELEASE_E2E_DURABLE_USER_PASSWORD are not all set — this path drives a pre-running target server " +
+        "with a durable identity, which the world-backed functional entrypoint does not provide. Supply them " +
+        "(diagnostic staging/local runs) to exercise the legacy PUT .../environment path for real.",
+    );
+  }
   const [owner, repo] = (process.env.RELEASE_E2E_GITHUB_TEST_REPO ?? DEFAULT_GITHUB_TEST_REPO).split("/");
 
   // Seed the durable user's real App authorization (deliverable A). Without it,
