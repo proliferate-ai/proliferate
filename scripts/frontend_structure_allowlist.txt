@@ -31,7 +31,7 @@ apps/packages/product-client/src/components/workspace/shell/sidebar/MainSidebar.
 apps/packages/product-client/src/components/workspace/repo-setup/CloudRepoActionDialogHost.tsx 433 shared ordered-readiness continuation host for Cloud registration and retry-stable local clone; split by intent owner on next growth
 apps/packages/product-client/src/hooks/sessions/lifecycle/session-stream-flush-apply.ts 401 session stream flush/apply pending reducer split
 apps/packages/product-client/src/hooks/sessions/workflows/session-replacement-tombstones.ts 408 async ProductStorage hydration added to the in-memory tombstone model
-apps/packages/product-client/src/hooks/sessions/workflows/use-session-creation-actions.ts 507 session creation orchestrator (+durable empty-create persistence, frozen-input replay, and acknowledgement seam); split deferred
+apps/packages/product-client/src/hooks/sessions/workflows/use-session-creation-actions.ts 508 session creation orchestrator (+durable empty-create persistence, frozen-input replay, and acknowledgement seam); split deferred
 apps/packages/product-client/src/lib/infra/measurement/measurement-port.ts 734 product-owned measurement port barrel (R1 ruling) mirroring the retained measurement surface through a swappable no-op sink; split deferred
 apps/packages/product-client/src/host/product-host.ts 420 WDU slice 04 (G2/G4): host contract grew from getAnonymousInstallId + getSandboxGatewayAccessToken and their doc contracts
 apps/packages/product-client/src/components/playground/WorkspaceStatusPlayground.tsx 450 status-card playground fixtures pending scenario-module split (#1202 debt repair)

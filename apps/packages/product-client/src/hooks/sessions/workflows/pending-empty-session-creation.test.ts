@@ -62,7 +62,7 @@ describe("pending empty-session creation", () => {
       ENTRY.workspaceId,
       () => true,
       create,
-    )).resolves.toBe(1);
+    )).resolves.toEqual({ resumed: 1, unresolved: 0 });
     expect(create).toHaveBeenCalledOnce();
     await expect(loadPendingEmptySessionCreations(context, ENTRY.workspaceId))
       .resolves.toEqual([]);
@@ -72,8 +72,30 @@ describe("pending empty-session creation", () => {
       ENTRY.workspaceId,
       () => true,
       create,
-    )).resolves.toBe(0);
+    )).resolves.toEqual({ resumed: 0, unresolved: 0 });
     expect(create).toHaveBeenCalledOnce();
+  });
+
+  it("keeps bootstrap usable while an ambiguous replay remains pending", async () => {
+    const context = memoryStorageContext();
+    await persistPendingEmptySessionCreation(context, ENTRY);
+    const createError = new TypeError("Failed to fetch");
+    const create = vi.fn(async () => { throw createError; });
+
+    await expect(resumePendingEmptySessionCreations(
+      context,
+      ENTRY.workspaceId,
+      () => true,
+      create,
+    )).resolves.toEqual({ resumed: 0, unresolved: 1 });
+    await expect(loadPendingEmptySessionCreations(context, ENTRY.workspaceId))
+      .resolves.toEqual([ENTRY]);
+    expect(context.captureException).toHaveBeenCalledWith(createError, {
+      tags: {
+        domain: "pending_empty_session_creation",
+        action: "resume",
+      },
+    });
   });
 
   it("serializes concurrent writes so separate empty tabs are not lost", async () => {

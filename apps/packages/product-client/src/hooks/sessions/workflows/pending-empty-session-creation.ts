@@ -18,6 +18,11 @@ export interface PendingEmptySessionCreation {
   createdAt: number;
 }
 
+export interface PendingEmptySessionResumeResult {
+  resumed: number;
+  unresolved: number;
+}
+
 const mutationQueues = new WeakMap<object, Map<string, Promise<void>>>();
 
 function storageKey(workspaceId: string): string {
@@ -27,7 +32,7 @@ function storageKey(workspaceId: string): string {
 function captureStorageFailure(
   context: ProductStorageContext,
   error: unknown,
-  action: "read" | "write" | "remove",
+  action: "read" | "write" | "remove" | "resume",
 ): void {
   try {
     const captured = context.captureException(error, {
@@ -263,28 +268,35 @@ export async function resumePendingEmptySessionCreations(
   createEmptySession: (
     options: CreateEmptySessionWithResolvedConfigOptions,
   ) => Promise<string>,
-): Promise<number> {
+): Promise<PendingEmptySessionResumeResult> {
   const entries = await loadPendingEmptySessionCreations(context, workspaceId);
   let resumed = 0;
   for (const entry of entries) {
     if (!isCurrent()) {
       break;
     }
-    await createEmptySession({
-      workspaceId,
-      clientSessionId: entry.clientSessionId,
-      runtimeSessionId: entry.runtimeSessionId,
-      agentKind: entry.agentKind,
-      modelId: entry.modelId,
-      resolvedModeId: entry.modeId,
-      launchControlValues: entry.launchControlValues,
-      frozenLiveControlValues: entry.frozenLiveControlValues,
-      subagentsEnabled: entry.subagentsEnabled,
-      reuseInFlightEmptySession: false,
-      preserveProjectedSessionOnCreateFailure: true,
-      replacesSessionId: entry.replacesSessionId,
-    });
-    resumed += 1;
+    try {
+      await createEmptySession({
+        workspaceId,
+        clientSessionId: entry.clientSessionId,
+        runtimeSessionId: entry.runtimeSessionId,
+        agentKind: entry.agentKind,
+        modelId: entry.modelId,
+        resolvedModeId: entry.modeId,
+        launchControlValues: entry.launchControlValues,
+        frozenLiveControlValues: entry.frozenLiveControlValues,
+        subagentsEnabled: entry.subagentsEnabled,
+        reuseInFlightEmptySession: false,
+        preserveProjectedSessionOnCreateFailure: true,
+        replacesSessionId: entry.replacesSessionId,
+      });
+      resumed += 1;
+    } catch (error) {
+      // The creation workflow retains only unknown-commit transport failures.
+      // Keep bootstrap usable while the durable entry remains retryable.
+      captureStorageFailure(context, error, "resume");
+    }
   }
-  return resumed;
+  const unresolved = (await loadPendingEmptySessionCreations(context, workspaceId)).length;
+  return { resumed, unresolved };
 }

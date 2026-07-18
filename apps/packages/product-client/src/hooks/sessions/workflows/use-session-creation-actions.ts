@@ -192,9 +192,8 @@ export function useSessionCreationActions() {
     const runtimeSessionId = !hasPrompt && supportsCallerSelectedSessionCreate(workspaceId)
       ? options.runtimeSessionId ?? crypto.randomUUID()
       : null;
-    const emptyCreateSubagentsEnabled = runtimeSessionId
-      ? options.subagentsEnabled ?? preferenceState.subagentsEnabled
-      : null;
+    const emptyCreateSubagentsEnabled = options.subagentsEnabled
+      ?? preferenceState.subagentsEnabled;
     const existingProjectedRecord = getSessionRecord(pendingSessionId);
     annotateLatencyFlow(options.latencyFlowId, {
       targetWorkspaceId: workspaceId,
@@ -384,7 +383,9 @@ export function useSessionCreationActions() {
         ssh,
         cloudClient,
         options: runtimeSessionId
-          ? { ...options, runtimeSessionId, subagentsEnabled: emptyCreateSubagentsEnabled }
+          ? {
+            ...options, runtimeSessionId, subagentsEnabled: emptyCreateSubagentsEnabled,
+          }
           : options,
         pendingSessionId,
         resolvedModeId: resolvedModeId ?? null,

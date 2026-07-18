@@ -695,7 +695,8 @@ Minimum coverage by concern:
   does not create a second fresh session
 - interrupted empty-session creation: persistence precedes the create request,
   cold bootstrap reuses both ids and frozen inputs, pending actor readiness is
-  joined durably, acknowledgement prevents a second resume, and a dismissed or
+  joined durably, an ambiguous replay stays pending without failing workspace
+  bootstrap, acknowledgement prevents a second resume, and a dismissed or
   closed UUID cannot be resurrected by a stale ledger entry
 - session intents: prompts/config/interaction responses preserve order, render
   immediately where visible, and dispatch only after materialized session id

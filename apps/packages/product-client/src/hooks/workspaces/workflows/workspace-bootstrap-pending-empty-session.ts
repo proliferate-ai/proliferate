@@ -22,7 +22,7 @@ export async function resumePendingEmptySessionCreationForBootstrap({
   isCurrent,
   createEmptySession,
 }: ResumePendingEmptySessionCreationInput): Promise<boolean> {
-  const resumed = await resumePendingEmptySessionCreations(
+  const { resumed, unresolved } = await resumePendingEmptySessionCreations(
     storageContext,
     workspaceId,
     isCurrent,
@@ -31,12 +31,13 @@ export async function resumePendingEmptySessionCreationForBootstrap({
   if (!isCurrent()) {
     return true;
   }
-  if (resumed === 0) {
+  if (resumed === 0 && unresolved === 0) {
     return false;
   }
   logLatency("workspace.select.pending_session_creation_resumed", {
     workspaceId,
     resumedCount: resumed,
+    unresolvedCount: unresolved,
     totalElapsedMs: elapsedMs(startedAt),
   });
   markWorkspaceBootstrappedInSession(workspaceId);
