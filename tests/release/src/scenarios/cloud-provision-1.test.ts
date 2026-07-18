@@ -9,6 +9,7 @@ import {
   DETERMINISTIC_PROMPT,
   REPRESENTATIVE_HARNESS,
   SANDBOX_RUNTIME_PORT,
+  cloudComposerTargetSelectionIsStable,
   coveredRepoSourceRootSelector,
   createCloudProvision1Driver,
   resolveBotSeedForAutomation,
@@ -341,6 +342,24 @@ test("coveredRepoSourceRootSelector targets the exact cloud-only repo row (deter
     coveredRepoSourceRootSelector(),
     '[data-repo-source-root="cloud:proliferate-e2e/e2e-fixture"]',
   );
+});
+
+test("cloudComposerTargetSelectionIsStable distinguishes a retained Cloud target from a reset home target", () => {
+  assert.equal(cloudComposerTargetSelectionIsStable({
+    homeComposerVisible: true,
+    projectAriaLabel: "Project: e2e-fixture",
+    runtimeAriaLabel: "Runtime: Cloud",
+  }), true);
+  assert.equal(cloudComposerTargetSelectionIsStable({
+    homeComposerVisible: true,
+    projectAriaLabel: "Project: No project",
+    runtimeAriaLabel: null,
+  }), false);
+  assert.equal(cloudComposerTargetSelectionIsStable({
+    homeComposerVisible: false,
+    projectAriaLabel: null,
+    runtimeAriaLabel: null,
+  }), true, "an already-open workspace has no home target rows to retain");
 });
 
 test("buildWorld writes GITHUB_APP_WEBHOOK_SECRET into the github-app env file (#1318 base-world repair)", async () => {

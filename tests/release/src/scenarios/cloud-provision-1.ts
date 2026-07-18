@@ -2388,11 +2388,11 @@ async function ensureCloudLaunchTargetSelected(page: ProductPage): Promise<void>
  * populates as soon as `GET /v1/agents/catalog` resolves — it does NOT wait on
  * the sandbox runtime. The pre-turn `waitForSandboxLaunchOptions` gate still
  * matters for the SEND (the sandbox must be able to launch the harness), but
- * the picker itself has no sandbox dependency. A persistent empty `[]` here
- * now means the cloud catalog itself never listed the model for this actor —
- * the failure message folds the available `data-model-option` values in so a
- * genuine mismatch names itself (empty ⇒ catalog gap; non-empty without
- * `modelId` ⇒ id-format mismatch, e.g. a dated snapshot id vs the bare alias).
+ * the picker itself has no sandbox dependency. The failure message folds the
+ * available `data-model-option` values and composer state into the error so a
+ * genuine mismatch names itself. `pickerOpened=false` means the trigger never
+ * enabled, which is distinct from an opened picker with zero options and must
+ * not be reported as though the menu was inspected.
  *
  * A bounded periodic reload remains as the safety net for a cold catalog
  * query. IMPORTANT: the home composer's explicit model selection is plain
@@ -2407,6 +2407,8 @@ async function selectModelInCloudComposer(page: ProductPage, modelId: string): P
   const deadline = start + MODEL_PICKER_TIMEOUT_MS;
   const optionSelector = `[data-model-option="${cssAttr(modelId)}"]`;
   let lastAvailable: Array<string | null> = [];
+  let pickerOpened = false;
+  let lastComposerState = await readCloudComposerUiState(page);
   const RELOAD_EVERY_MS = 30_000;
   let lastReloadAt = start;
   let surfacedEmpty = false;
@@ -2416,9 +2418,17 @@ async function selectModelInCloudComposer(page: ProductPage, modelId: string): P
       await trigger.waitFor({ state: "visible", timeout: 5_000 });
       await trigger.click();
     } catch {
+      lastComposerState = await readCloudComposerUiState(page);
+      if (!cloudComposerTargetSelectionIsStable(lastComposerState)) {
+        throw new Error(
+          "selectModelInCloudComposer: the home composer lost its already-verified Cloud launch target before " +
+            `the model trigger enabled. Observed composer state: ${JSON.stringify(lastComposerState)}.`,
+        );
+      }
       await sleep(1_500);
       continue;
     }
+    pickerOpened = true;
     const option = p.locator(optionSelector).first();
     if (await option.count().catch(() => 0)) {
       await option.click();
@@ -2432,6 +2442,7 @@ async function selectModelInCloudComposer(page: ProductPage, modelId: string): P
       .locator("[data-model-option]")
       .evaluateAll((els) => els.map((el) => el.getAttribute("data-model-option")))
       .catch(() => []);
+    lastComposerState = await readCloudComposerUiState(page);
     // Surface an empty picker once to the runner log (make log, NOT evidence):
     // with the Cloud launch target selected this menu comes from the cloud v2
     // catalog, so an [] means the catalog query has not resolved (or lists
@@ -2448,15 +2459,88 @@ async function selectModelInCloudComposer(page: ProductPage, modelId: string): P
       lastReloadAt = Date.now();
       await p.reload({ waitUntil: "domcontentloaded" }).catch(() => undefined);
       // A reload resets the home target selection UI state; re-establish the
-      // Cloud launch target before retrying the picker.
-      await ensureCloudLaunchTargetSelected(page).catch(() => undefined);
+      // Cloud launch target before retrying the picker. A failed reselection is
+      // a more precise product-state boundary than the eventual generic model
+      // timeout, so preserve it instead of swallowing it.
+      try {
+        await ensureCloudLaunchTargetSelected(page);
+      } catch (error) {
+        lastComposerState = await readCloudComposerUiState(page);
+        throw new Error(
+          "selectModelInCloudComposer: after a cold-catalog reload, the Cloud launch target could not be " +
+            `re-established: ${describe(error)} Observed composer state: ` +
+            `${JSON.stringify(lastComposerState)}.`,
+        );
+      }
     }
     await sleep(2_000);
   }
+  lastComposerState = await readCloudComposerUiState(page);
   throw new Error(
     `selectModelInCloudComposer: model "${modelId}" was not offered by the composer picker within ` +
-      `${MODEL_PICKER_TIMEOUT_MS}ms. Last available options: ${JSON.stringify(lastAvailable)}.`,
+      `${MODEL_PICKER_TIMEOUT_MS}ms. Picker opened: ${pickerOpened}. ` +
+      `Last available options: ${JSON.stringify(lastAvailable)}. ` +
+      `Last composer state: ${JSON.stringify(lastComposerState)}.`,
   );
+}
+
+interface CloudComposerUiState {
+  homeComposerVisible: boolean;
+  workspaceComposerVisible: boolean;
+  modelTriggerPresent: boolean;
+  modelTriggerDisabled: boolean | null;
+  modelTriggerText: string | null;
+  selectedModel: string | null;
+  projectAriaLabel: string | null;
+  runtimeAriaLabel: string | null;
+}
+
+export function cloudComposerTargetSelectionIsStable(
+  state: Pick<
+    CloudComposerUiState,
+    "homeComposerVisible" | "projectAriaLabel" | "runtimeAriaLabel"
+  >,
+): boolean {
+  return !state.homeComposerVisible
+    || (
+      state.projectAriaLabel === `Project: ${COVERED_REPO_NAME}`
+      && state.runtimeAriaLabel === "Runtime: Cloud"
+    );
+}
+
+/**
+ * Bounded, secret-free browser-state receipt for model-picker failures. This
+ * intentionally records only stable composer hooks and aria labels: it makes
+ * "trigger never enabled" and "picker opened but model absent" distinguishable
+ * without placing the page body or actor data in runner output/evidence.
+ */
+async function readCloudComposerUiState(page: ProductPage): Promise<CloudComposerUiState> {
+  return page.page.evaluate(() => {
+    const trigger = document.querySelector<HTMLButtonElement>("[data-composer-model-trigger]");
+    const ariaButton = (prefix: string): HTMLButtonElement | null =>
+      Array.from(document.querySelectorAll<HTMLButtonElement>("button[aria-label]"))
+        .find((button) => button.getAttribute("aria-label")?.startsWith(prefix)) ?? null;
+    return {
+      homeComposerVisible: document.querySelector("[data-home-composer-editor]") !== null,
+      workspaceComposerVisible:
+        document.querySelector("[data-chat-composer-editor]:not([data-home-composer-editor])") !== null,
+      modelTriggerPresent: trigger !== null,
+      modelTriggerDisabled: trigger ? trigger.disabled : null,
+      modelTriggerText: trigger?.textContent?.trim().slice(0, 120) || null,
+      selectedModel: trigger?.getAttribute("data-composer-selected-model") || null,
+      projectAriaLabel: ariaButton("Project:")?.getAttribute("aria-label") ?? null,
+      runtimeAriaLabel: ariaButton("Runtime:")?.getAttribute("aria-label") ?? null,
+    };
+  }).catch(() => ({
+    homeComposerVisible: false,
+    workspaceComposerVisible: false,
+    modelTriggerPresent: false,
+    modelTriggerDisabled: null,
+    modelTriggerText: null,
+    selectedModel: null,
+    projectAriaLabel: null,
+    runtimeAriaLabel: null,
+  }));
 }
 
 /**
