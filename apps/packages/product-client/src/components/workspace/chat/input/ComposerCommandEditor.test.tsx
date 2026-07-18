@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render } from "@testing-library/react";
+import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createTextDraft,
@@ -64,6 +64,7 @@ function renderEditor({
     />,
   );
   return {
+    container,
     onSubmit,
     onDraftChange,
     textarea: container.querySelector<HTMLElement>("[data-chat-composer-editor]")!,
@@ -98,7 +99,7 @@ describe("ComposerCommandEditor", () => {
     expect(onSubmit).toHaveBeenCalledTimes(1);
   });
 
-  it("keeps Enter as slash command selection when a slash trigger is active", () => {
+  it("keeps Enter as slash command selection when a slash trigger is active", async () => {
     slashCommandMock.commands = [createSlashCommand("review", "Review the current changes")];
     const onSubmit = vi.fn();
     const onDraftChange = vi.fn();
@@ -112,8 +113,33 @@ describe("ComposerCommandEditor", () => {
 
     expect(onSubmit).not.toHaveBeenCalled();
     expect(slashCommandMock.selectedCount).toBe(1);
-    expect(onDraftChange).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(onDraftChange).toHaveBeenCalledTimes(1));
     expect(serializeChatDraftToPrompt(onDraftChange.mock.calls[0]?.[0])).toBe("/review ");
+  });
+
+  it("uses the caret-local slash trigger without replacing trailing text", async () => {
+    slashCommandMock.commands = [createSlashCommand("review", "Review the current changes")];
+    const onDraftChange = vi.fn();
+    const { container, textarea } = renderEditor({
+      draft: createTextDraft("/rev trailing"),
+      onDraftChange,
+    });
+    const textNode = textarea.querySelector("[data-lexical-text]")?.firstChild;
+    expect(textNode).toBeTruthy();
+    const range = document.createRange();
+    range.setStart(textNode!, 4);
+    range.collapse(true);
+    const selection = window.getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+    fireEvent(document, new Event("selectionchange"));
+    await waitFor(() => expect(container.textContent).toContain("Review the current changes"));
+
+    expect(fireEvent.keyDown(textarea, { key: "Enter" })).toBe(false);
+
+    await waitFor(() => expect(onDraftChange.mock.calls.some(
+      ([draft]) => serializeChatDraftToPrompt(draft) === "/review trailing",
+    )).toBe(true));
   });
 
   it("submits slash text when no slash command matches", () => {

@@ -14,7 +14,7 @@ function keyboardEvent(overrides: Partial<{
   metaKey: boolean;
   defaultPrevented: boolean;
   nativeEvent: { isComposing?: boolean };
-  currentTarget: { value: string; selectionStart: number; selectionEnd: number };
+  currentTarget: EventTarget | { value: string; selectionStart: number; selectionEnd: number };
 }> = {}) {
   const event = {
     key: "Enter",
@@ -130,7 +130,7 @@ describe("useChatComposerKeyboard", () => {
     expect(onEditLastQueued).toHaveBeenCalledTimes(1);
   });
 
-  it("leaves ArrowUp alone when the caret is inside a non-empty draft", () => {
+  it("reads a textarea value before deciding whether ArrowUp edits the queue", () => {
     const onEditLastQueued = vi.fn();
     const { result } = renderHook(() => useChatComposerKeyboard({
       handleSubmit: vi.fn(),
@@ -140,11 +140,30 @@ describe("useChatComposerKeyboard", () => {
       modeControl: null,
       onEditLastQueued,
     }));
-    const event = keyboardEvent({
-      key: "ArrowUp",
-      code: "ArrowUp",
-      currentTarget: { value: "draft", selectionStart: 3, selectionEnd: 3 },
-    });
+    const textarea = document.createElement("textarea");
+    textarea.value = "draft";
+    const event = keyboardEvent({ key: "ArrowUp", code: "ArrowUp", currentTarget: textarea });
+
+    result.current.handleKeyDown(event as never);
+
+    expect(event.preventDefault).not.toHaveBeenCalled();
+    expect(onEditLastQueued).not.toHaveBeenCalled();
+  });
+
+  it("reads contenteditable text before deciding whether ArrowUp edits the queue", () => {
+    const onEditLastQueued = vi.fn();
+    const { result } = renderHook(() => useChatComposerKeyboard({
+      handleSubmit: vi.fn(),
+      handleCancel: vi.fn(),
+      isRunning: true,
+      canSubmit: true,
+      modeControl: null,
+      onEditLastQueued,
+    }));
+    const contenteditable = document.createElement("div");
+    contenteditable.contentEditable = "true";
+    contenteditable.textContent = "draft";
+    const event = keyboardEvent({ key: "ArrowUp", code: "ArrowUp", currentTarget: contenteditable });
 
     result.current.handleKeyDown(event as never);
 
