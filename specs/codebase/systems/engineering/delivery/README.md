@@ -213,7 +213,7 @@ gate.
 | Workflow | Trigger and posture | Role |
 | --- | --- | --- |
 | `agent-runtime-compat.yml` | Manual | Exercise live local AnyHarness compatibility with configured agent credentials. |
-| `catalog-probe.yml` | Scheduled daily or manual | Probe agent/catalog pins and open an update PR when the generated catalog changes. |
+| `catalog-probe.yml` | Scheduled daily or manual | Probe agent/catalog pins through the protected `Catalog Probe` environment, pass sanitized outputs to a separate write-capable PR job, and create or update an owned GitHub issue on scheduled failure. |
 | `ci.yml` | Push to `main`, pull request, or manual | Run repository shape, configuration, candidate-handoff, Rust, SDK, client, and workflow checks. Required-check policy is external to this file. |
 | `cloud-live-webhook.yml` | Manual | Exercise a live E2B webhook through an externally reachable target. |
 | `cloud-tests.yml` | Manual | Run credentialed cloud lifecycle and runtime suites. |
