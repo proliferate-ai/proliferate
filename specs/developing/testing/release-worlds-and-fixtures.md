@@ -696,8 +696,13 @@ and reachability are world-readiness checks.
 
 The current shared preflight is `scripts/ci-cd/qualification-preflight.mjs`.
 Its receipt records names/statuses, exact run/source identity, safe candidate
-artifact identities and digests, and the trusted cleanup revision; it never
-records environment values or locator paths. Self-host requirements are
+artifact identities and digests when a local map is reused, and the trusted
+cleanup revision; it never records environment values or locator paths. Artifact
+mode `external` is accepted only for read-only Tier 4 validation: it records a
+null candidate build and explicitly delegates published-CDN/git artifact
+identity and availability checks to the selected scenario, without claiming a
+local build or cache hit. `T4-SH-2` uses this posture because it validates the
+already-published Desktop release. Self-host requirements are
 scenario-scoped, so `SELFHOST-CFN-1` requires its bucket/image-repository pair
 but not the BYOK or instance-type inputs used by
 install/qualification/isolation cells. Optional `SELFHOST-QUAL-1` inputs become

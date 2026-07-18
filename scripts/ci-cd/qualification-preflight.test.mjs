@@ -92,6 +92,57 @@ test("exact candidate map reuse preserves hashes and rejects a changed source id
   }
 });
 
+test("Tier 4 external mode claims no candidate build or local reuse", () => {
+  const receipt = runQualificationPreflight(
+    {
+      ...BASE,
+      world: "tier4",
+      runId: "qt4-test",
+      shardId: "artifact-chain",
+      scenarios: "T4-SH-2",
+      artifactMode: "external",
+    },
+    { env: {} },
+  );
+
+  assert.equal(receipt.verdict, "passed");
+  assert.equal(receipt.artifact_mode, "external");
+  assert.equal(receipt.candidate_build, null);
+  const artifactCheck = receipt.checks.find((check) => check.id === "artifact_cache");
+  assert.equal(artifactCheck?.status, "passed");
+  assert.match(artifactCheck?.message ?? "", /No local candidate build or reuse is claimed/);
+  assert.doesNotMatch(JSON.stringify(receipt), /one candidate build is required/);
+
+  assert.equal(
+    runQualificationPreflight({ ...BASE, artifactMode: "external" }, { env: LOCAL_ENV }).verdict,
+    "failed",
+    "external mode cannot bypass a world that owns local candidate preparation",
+  );
+  assert.equal(
+    runQualificationPreflight(
+      { ...BASE, world: "tier4", runId: "qt4-other", scenarios: "T4-RUNTIME-1", artifactMode: "external" },
+      { env: {} },
+    ).verdict,
+    "failed",
+    "external mode is bounded to the read-only scenario that validates published artifacts",
+  );
+  assert.equal(
+    runQualificationPreflight(
+      {
+        ...BASE,
+        world: "tier4",
+        runId: "qt4-map",
+        scenarios: "T4-SH-2",
+        artifactMode: "external",
+        candidateBuildMap: "/tmp/false-local-map.json",
+      },
+      { env: {} },
+    ).verdict,
+    "failed",
+    "external mode cannot claim a local candidate-map identity",
+  );
+});
+
 test("managed-cloud preflight requires exact trusted-revision cleanup authorization and a complete AWS posture", () => {
   const dir = mkdtempSync(path.join(os.tmpdir(), "qualification-preflight-attest-"));
   try {

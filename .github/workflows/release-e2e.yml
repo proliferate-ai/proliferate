@@ -550,7 +550,7 @@ jobs:
         with:
           workspaces: "."
 
-      - name: Build once, run the smoke, then reuse the exact candidates for functional cells
+      - name: Build once, run the smoke, then reuse the exact candidates after clean success
         env:
           # Same LiteLLM mapping as local-world-smoke-1 above — one source of
           # truth, the protected `Qualification` environment.
@@ -593,14 +593,19 @@ jobs:
             PROFILE="$profile" \
             BEHAVIOR=strict || smoke_rc=$?
           candidate_dir="${GITHUB_WORKSPACE}/tests/release/.output/local-world/ql-${profile}/1"
+          # A red smoke can include incomplete cleanup. Preserve its candidate
+          # publication for the always-running evidence upload, but do not boot
+          # a second world on the same baked ports unless smoke and cleanup both
+          # completed successfully.
+          if [ "$smoke_rc" -ne 0 ]; then exit "$smoke_rc"; fi
           make qualification-local-functional \
             PROFILE="$profile" \
             BEHAVIOR="$BEHAVIOR" \
             AGENTS="$AGENTS" \
             SCENARIOS="$SCENARIOS" \
             REUSE_CANDIDATES="$candidate_dir" || functional_rc=$?
-          if [ "$smoke_rc" -eq 2 ] || [ "$functional_rc" -eq 2 ]; then exit 2; fi
-          if [ "$smoke_rc" -ne 0 ] || [ "$functional_rc" -ne 0 ]; then exit 1; fi
+          if [ "$functional_rc" -eq 2 ]; then exit 2; fi
+          if [ "$functional_rc" -ne 0 ]; then exit 1; fi
 
       - name: Upload V4 report and bounded diagnostic logs
         if: always()

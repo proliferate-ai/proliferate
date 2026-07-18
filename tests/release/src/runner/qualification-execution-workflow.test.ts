@@ -53,6 +53,43 @@ test("the manual local world builds and publishes once, then reuses exact candid
   assert.doesNotMatch(release, /^  release-e2e-local-world-smoke:/m);
 });
 
+test("the manual local world reuses candidates only after a clean smoke exit", () => {
+  const local = job(release, "release-e2e-local-functional");
+  const smoke = local.indexOf("make qualification-local-workspace");
+  const smokeResult = local.indexOf("BEHAVIOR=strict || smoke_rc=$?");
+  const candidatePublication = local.indexOf('candidate_dir="${GITHUB_WORKSPACE}');
+  const cleanSmokeGate = local.indexOf(
+    'if [ "$smoke_rc" -ne 0 ]; then exit "$smoke_rc"; fi',
+  );
+  const functional = local.indexOf("make qualification-local-functional");
+  const evidenceUpload = local.indexOf("- name: Upload V4 report and bounded diagnostic logs");
+  const alwaysUpload = local.indexOf("if: always()", evidenceUpload);
+  const candidateMapUpload = local.indexOf("candidate-build.json", evidenceUpload);
+
+  assert.ok(smoke >= 0);
+  assert.ok(smokeResult > smoke);
+  assert.ok(candidatePublication > smokeResult);
+  assert.ok(cleanSmokeGate > candidatePublication);
+  assert.ok(functional > cleanSmokeGate);
+  assert.ok(evidenceUpload > functional);
+  assert.ok(alwaysUpload > evidenceUpload);
+  assert.ok(candidateMapUpload > alwaysUpload);
+});
+
+test("the Tier 4 artifact-chain preflight describes read-only published artifacts", () => {
+  const artifactChain = job(selfhost, "artifact-chain");
+  const preflight = artifactChain.indexOf("qualification-preflight.mjs");
+  const scenario = artifactChain.indexOf("make release-e2e");
+
+  assert.ok(preflight >= 0);
+  assert.ok(scenario > preflight);
+  assert.match(artifactChain, /--world tier4/);
+  assert.match(artifactChain, /--scenarios T4-SH-2/);
+  assert.match(artifactChain, /--artifact-mode external/);
+  assert.doesNotMatch(artifactChain, /--artifact-mode build/);
+  assert.doesNotMatch(artifactChain, /--candidate-build-map/);
+});
+
 test("provider-backed jobs run shared preflight before build/provider setup", () => {
   const local = job(release, "release-e2e-local-functional");
   const selfHost = job(release, "release-e2e-selfhost-install");

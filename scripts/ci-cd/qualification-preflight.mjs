@@ -208,8 +208,21 @@ export function runQualificationPreflight(options, deps = {}) {
     } else {
       pass("artifact_cache", "No cache hit is claimed; one candidate build is required.");
     }
+  } else if (options.artifactMode === "external") {
+    if (options.world !== "tier4") {
+      fail("artifact_cache", "External artifact mode is restricted to read-only Tier 4 validation.");
+    } else if (!Array.isArray(scenarioIds) || scenarioIds.length !== 1 || scenarioIds[0] !== "T4-SH-2") {
+      fail("artifact_cache", "External artifact mode currently requires the read-only T4-SH-2 scenario.");
+    } else if (options.candidateBuildMap) {
+      fail("artifact_cache", "External artifact mode cannot also claim a local candidate map.");
+    } else {
+      pass(
+        "artifact_cache",
+        "No local candidate build or reuse is claimed; the selected Tier 4 scenario validates published artifacts.",
+      );
+    }
   } else {
-    fail("artifact_cache", "Artifact mode must be build or reuse.");
+    fail("artifact_cache", "Artifact mode must be build, reuse, or external.");
   }
 
   const cleanupAuthorizationRevision = validateCleanupAuthorization(

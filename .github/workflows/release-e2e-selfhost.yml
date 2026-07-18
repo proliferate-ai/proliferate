@@ -71,7 +71,7 @@ jobs:
             --shard-id artifact-chain \
             --attempt "${GITHUB_RUN_ATTEMPT}" \
             --scenarios T4-SH-2 \
-            --artifact-mode build \
+            --artifact-mode external \
             --output "tests/release/.output/preflight/tier4/qualification-preflight.json"
       - uses: pnpm/action-setup@v6
         with:
