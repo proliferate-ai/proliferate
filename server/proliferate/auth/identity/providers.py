@@ -10,7 +10,7 @@ from urllib.parse import urlencode
 
 import httpx
 from fastapi import HTTPException, Request, status
-from httpx_oauth.exceptions import GetIdEmailError
+from httpx_oauth.exceptions import GetIdEmailError, GetProfileError
 from httpx_oauth.oauth2 import GetAccessTokenError
 from jose import JWTError, jwt
 
@@ -31,7 +31,7 @@ APPLE_ISSUER = "https://appleid.apple.com"
 
 
 class OAuthProviderTokenRejectedError(Exception):
-    """The provider returned a response rejecting an OAuth token exchange."""
+    """The provider rejected the callback grant during identity verification."""
 
 
 def parse_scope_string(value: object) -> frozenset[str]:
@@ -133,7 +133,12 @@ async def verify_oauth_callback(
             # "Email addresses" permission or the grant predates it. The
             # profile endpoint still identifies the account; the email is
             # recovered below.
-            github_profile = await github_oauth_client.get_profile(access_token)
+            try:
+                github_profile = await github_oauth_client.get_profile(access_token)
+            except GetProfileError as exc:
+                if exc.response is not None and exc.response.status_code == 401:
+                    raise OAuthProviderTokenRejectedError from exc
+                raise
             account_id = str(github_profile["id"])
             raw_email = github_profile.get("email")
             account_email = raw_email if isinstance(raw_email, str) and raw_email else None
