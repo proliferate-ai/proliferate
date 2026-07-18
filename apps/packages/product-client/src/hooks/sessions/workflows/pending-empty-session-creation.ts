@@ -1,3 +1,4 @@
+import { AnyHarnessError } from "@anyharness/sdk";
 import type { ProductStorageContext } from "#product/lib/infra/persistence/product-storage";
 import type { CreateEmptySessionWithResolvedConfigOptions } from "#product/hooks/sessions/workflows/session-creation-types";
 import { supportsCallerSelectedSessionCreate } from "#product/lib/access/anyharness/caller-selected-session-create";
@@ -315,10 +316,15 @@ export function acknowledgePendingEmptySessionCreation(
   });
 }
 
-/** Only transport failures have an unknown commit outcome and remain resumable. */
+/**
+ * Transport failures and server failures have an unknown commit outcome and
+ * remain resumable. The create endpoint persists its durable row before live
+ * agent startup, so a 5xx can still mean that the caller-selected id committed.
+ */
 export function isAmbiguousSessionCreateFailure(error: unknown): boolean {
   return error instanceof TypeError
-    || (error instanceof Error && error.name === "AbortError");
+    || (error instanceof Error && error.name === "AbortError")
+    || (error instanceof AnyHarnessError && error.problem.status >= 500);
 }
 
 export async function clearPendingEmptySessionCreationAfterFailure(

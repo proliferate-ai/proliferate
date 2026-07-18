@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { AnyHarnessError } from "@anyharness/sdk";
 import type { ProductStorage } from "@proliferate/product-client/host/product-host";
 import type { ProductStorageContext } from "#product/lib/infra/persistence/product-storage";
 import {
@@ -162,10 +163,18 @@ describe("pending empty-session creation", () => {
       .resolves.toEqual([ENTRY, second]);
   });
 
-  it("retains only ambiguous transport failures for a later resume", () => {
+  it("retains unknown-commit transport and server failures for a later resume", () => {
     expect(isAmbiguousSessionCreateFailure(new TypeError("Failed to fetch"))).toBe(true);
     expect(isAmbiguousSessionCreateFailure(new DOMException("aborted", "AbortError")))
       .toBe(true);
+    expect(isAmbiguousSessionCreateFailure(new AnyHarnessError({
+      title: "Agent startup failed",
+      status: 503,
+    }))).toBe(true);
+    expect(isAmbiguousSessionCreateFailure(new AnyHarnessError({
+      title: "Invalid request",
+      status: 400,
+    }))).toBe(false);
     expect(isAmbiguousSessionCreateFailure(new Error("400 invalid request"))).toBe(false);
   });
 
