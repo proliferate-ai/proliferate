@@ -28,6 +28,8 @@ from tests.integration.test_cloud_integration_gateway_api import (
 )
 
 MCP_SESSION_HEADER = "Mcp-Session-Id"
+WORKSPACE_HEADER = "Proliferate-Workspace-Id"
+ANYHARNESS_SESSION_HEADER = "Proliferate-Session-Id"
 
 
 @pytest.fixture(autouse=True)
@@ -46,7 +48,11 @@ async def _initialized_gateway_headers(
     *,
     bearer: str,
 ) -> dict[str, str]:
-    headers = {"Authorization": f"Bearer {bearer}"}
+    headers = {
+        "Authorization": f"Bearer {bearer}",
+        WORKSPACE_HEADER: "workspace-tool-policy",
+        ANYHARNESS_SESSION_HEADER: "session-tool-policy",
+    }
     initialized = await client.post(
         GATEWAY_URL,
         headers=headers,
@@ -341,16 +347,21 @@ async def test_worker_token_and_gateway_arguments_cannot_bypass_policy(
 
     gateway_authorization = enrolled.json()["integrationGateway"]["authorization"]
     await _seed_ready_slack_account(db_session, user_id=uuid.UUID(auth.user_id))
+    launch_headers = {
+        "Authorization": gateway_authorization,
+        WORKSPACE_HEADER: "workspace-worker-bypass",
+        ANYHARNESS_SESSION_HEADER: "session-worker-bypass",
+    }
     initialized = await client.post(
         GATEWAY_URL,
-        headers={"Authorization": gateway_authorization},
+        headers=launch_headers,
         json={"jsonrpc": "2.0", "id": 1, "method": "initialize"},
     )
     assert initialized.status_code == 200
     result = await _tool_call(
         client,
         {
-            "Authorization": gateway_authorization,
+            **launch_headers,
             MCP_SESSION_HEADER: initialized.headers[MCP_SESSION_HEADER],
         },
         name="integrations.call_tool",

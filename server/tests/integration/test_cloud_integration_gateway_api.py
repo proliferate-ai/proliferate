@@ -139,7 +139,7 @@ async def test_gateway_initialize_and_tools_list(
     )
     assert init.status_code == 200, init.text
     assert init.json()["result"]["serverInfo"]["name"] == "proliferate_integrations"
-    assert init.headers[MCP_SESSION_HEADER].startswith("v1.")
+    assert init.headers[MCP_SESSION_HEADER].startswith("v2.")
 
     tools = await client.post(
         GATEWAY_URL,
@@ -175,7 +175,7 @@ async def test_invalid_gateway_session_returns_reinitialize_signal(
         json={"jsonrpc": "2.0", "id": 2, "method": "initialize"},
     )
     assert recovered.status_code == 200
-    assert recovered.headers[MCP_SESSION_HEADER].startswith("v1.")
+    assert recovered.headers[MCP_SESSION_HEADER].startswith("v2.")
 
 
 @pytest.mark.asyncio
