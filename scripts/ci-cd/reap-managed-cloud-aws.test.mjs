@@ -295,6 +295,8 @@ test("the command preserves structured per-run evidence when one AWS category fa
   const fakeBin = mkdtempSync(path.join(tmpdir(), "managed-cloud-aws-"));
   t.after(() => rmSync(fakeBin, { recursive: true, force: true }));
   const aws = path.join(fakeBin, "aws");
+  const timers = path.join(fakeBin, "fast-timers.mjs");
+  writeFileSync(timers, "globalThis.setTimeout = (fn, _ms, ...args) => { queueMicrotask(() => fn(...args)); return 0; };\n");
   writeFileSync(aws, `#!/bin/sh
 case "$1 $2" in
   "ec2 describe-instances") printf '{"Reservations":[]}' ;;
@@ -315,6 +317,7 @@ esac
     encoding: "utf8",
     env: {
       PATH: `${fakeBin}:${process.env.PATH}`,
+      NODE_OPTIONS: `--import=${timers}`,
       RELEASE_E2E_CLOUD_AWS_REGION: REGION,
       RELEASE_E2E_CLOUD_ROUTE53_ZONE_ID: ZONE,
     },
