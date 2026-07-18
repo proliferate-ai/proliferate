@@ -73,6 +73,46 @@ privileged runtime access.
   broad exposure is suspected.
 - Verify worker/control convergence after revocation.
 
+## Integration external-action approvals
+
+Durable integration approvals are a product-user security boundary. Operators
+must not approve by editing database state, replaying MCP traffic, minting or
+copying Worker/session credentials, changing prompt text, or inserting
+approval-like provider arguments. Worker tokens, gateway bearers, and signed
+MCP session headers authenticate the exact Worker/workspace/AnyHarness-session
+runtime context only; none can perform a human approve, reject, or revoke
+decision.
+
+For Slack today:
+
+- the OAuth definition remains exactly the six read/search scopes documented
+  in the product integration contract; it does not include `chat:write` or any
+  other write scope;
+- known external-action tools may create a durable pending request, but no
+  Slack mutation is delivered in the current slice;
+- unknown Slack tools fail closed; and
+- do not install or reauthorize Slack, invoke live Slack, or test a send, edit,
+  delete, reaction, canvas, conversation, reminder, profile, or file action as
+  an operational verification step.
+
+An approval expires 600 seconds after the PostgreSQL-owned request timestamp.
+Treat its `expires_at` as authoritative even if the stored active status has not yet been materialized
+as `expired`; list/get/decision/admission observation writes the terminal state
+and system audit event. Approval audit evidence includes immutable user,
+organization, account revision, Worker, gateway session, workspace,
+AnyHarness session, decision actor, timestamps,
+and fixed safe action/account/source labels. Target and content presentation
+remain absent until an executable tool owns a canonical typed action parser.
+Do not copy raw provider payloads, credentials, auth headers, or unredacted
+message content into an incident record.
+
+If an approval flow appears stuck or mismatched, preserve the approval id and
+sanitized binding ids, inspect its lifecycle events, account `auth_version`,
+Worker/workspace/session match, and expiry, then let the user create a fresh request.
+Never reset `consumed`, extend the TTL, alter a payload digest, or clone an
+approval to force delivery. Escalate missing product recovery tooling instead
+of bypassing one-time admission.
+
 ## Audit closeout
 
 Every privileged action should leave an incident note with:

@@ -23,6 +23,7 @@ from tests.e2e.cloud.helpers.auth import create_user_and_login
 from tests.e2e.cloud.helpers.github import seed_linked_github_account
 
 GATEWAY_URL = "/v1/cloud/integration-gateway/mcp"
+MCP_SESSION_HEADER = "Mcp-Session-Id"
 
 
 @pytest.fixture(autouse=True)
@@ -138,10 +139,11 @@ async def test_gateway_initialize_and_tools_list(
     )
     assert init.status_code == 200, init.text
     assert init.json()["result"]["serverInfo"]["name"] == "proliferate_integrations"
+    assert init.headers[MCP_SESSION_HEADER].startswith("v1.")
 
     tools = await client.post(
         GATEWAY_URL,
-        headers=headers,
+        headers={**headers, MCP_SESSION_HEADER: init.headers[MCP_SESSION_HEADER]},
         json={"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
     )
     names = {t["name"] for t in tools.json()["result"]["tools"]}
@@ -150,6 +152,30 @@ async def test_gateway_initialize_and_tools_list(
         "integrations.list_tools",
         "integrations.call_tool",
     }
+
+
+@pytest.mark.asyncio
+async def test_invalid_gateway_session_returns_reinitialize_signal(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    bearer = await _gateway_bearer(client, db_session, prefix="gw-session-recovery")
+    headers = {"Authorization": f"Bearer {bearer}"}
+
+    stale = await client.post(
+        GATEWAY_URL,
+        headers={**headers, MCP_SESSION_HEADER: "v1.invalid.invalid"},
+        json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"},
+    )
+    assert stale.status_code == 404
+    assert stale.json()["detail"]["code"] == "integration_gateway_session_not_found"
+
+    recovered = await client.post(
+        GATEWAY_URL,
+        headers=headers,
+        json={"jsonrpc": "2.0", "id": 2, "method": "initialize"},
+    )
+    assert recovered.status_code == 200
+    assert recovered.headers[MCP_SESSION_HEADER].startswith("v1.")
 
 
 @pytest.mark.asyncio

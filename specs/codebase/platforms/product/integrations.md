@@ -22,14 +22,19 @@ runtime enrolls Worker once
 AnyHarness session starts
   -> reads the gateway token
   -> mounts the Cloud integration MCP endpoint
+  -> Cloud mints a signed MCP session header bound to that Worker
   -> agent invokes one of three virtual tools
-  -> Cloud resolves policy + account and calls the provider with Cloud-held credentials
+  -> Cloud resolves the typed tool policy before credentials or provider I/O
+  -> allowed reads call the provider with Cloud-held credentials
+  -> approval-gated actions create a durable, exact, one-time approval request
 ```
 
 ## Integration State
 
 [`db/models/cloud/integrations.py`](../../../../server/proliferate/db/models/cloud/integrations.py)
-owns the current schema:
+and
+[`db/models/cloud/integration_approvals.py`](../../../../server/proliferate/db/models/cloud/integration_approvals.py)
+own the current schema:
 
 | Table | Ownership |
 | --- | --- |
@@ -40,6 +45,8 @@ owns the current schema:
 | `cloud_integration_oauth_flow` | Short-lived OAuth authorization state. Account and user deletion cascade; the definition reference uses the database default action. |
 | `cloud_integration_tool_schema_cache` | Account-keyed `tools/list` cache; account deletion cascades. |
 | `cloud_integration_tool_call_event` | One audit row per proxied call, including failures. User, organization, and Worker deletion set their attribution fields to null. |
+| `cloud_integration_action_approval` | One exact external-action request. Its immutable user, organization, account revision, Worker, and MCP-session identity snapshots deliberately are not foreign keys, so later deletion cannot erase or rewrite the authorization evidence. |
+| `cloud_integration_action_approval_event` | Append-only request, decision, expiry, and consumption evidence with immutable actor-id snapshots and a product-safe action summary. |
 
 Accounts are personal today even though the schema reserves an organization
 owner-scope value. Credential writes increment `auth_version`; the tool cache
@@ -140,6 +147,24 @@ The gateway token's `last_used_at` column is deliberately not updated on the
 request hot path. It remains nullable bookkeeping, not reliable usage
 evidence.
 
+### Gateway execution session
+
+At launch AnyHarness supplies its host-owned workspace and session ids as
+static MCP headers. The MCP initialize response mints an opaque, signed
+`Mcp-Session-Id` header whose signature binds the authenticated Worker plus
+those exact launch ids. Changing or omitting any identity invalidates the
+session; a session minted for one Worker, workspace, or AnyHarness session
+cannot be replayed in another.
+Subsequent approval-gated calls must return that header. Missing or invalid
+session state fails before an approval is requested; the agent cannot choose
+the trusted session id by supplying prompt text or tool arguments.
+
+An older unbound client can still initialize and use read-only gateway tools,
+but cannot request an external-action approval. The signed header narrows an
+approval to one gateway execution session and one exact workspace/session
+launch. It is not an approval credential: only a product-authenticated human
+can approve, reject, or revoke an action.
+
 ### Gateway credential file
 
 A fresh Worker enrollment returns the gateway URL and bearer. The Worker
@@ -222,7 +247,8 @@ slack_search_users
 ```
 
 These known external-action tools require approval and are currently rejected
-as unsupported until a durable approval has been consumed:
+from provider execution after Cloud has created or reused the durable pending
+request for the exact action:
 
 ```text
 slack_add_reaction
@@ -244,16 +270,103 @@ slack_update_user_profile
 ```
 
 Every other Slack tool name fails closed. Matching is case-sensitive and does
-not normalize whitespace or infer behavior from prefixes. A mutation returns
-the typed code `integration_tool_approval_required` with approval status
-`unsupported`; an unknown Slack tool returns `integration_tool_not_allowed`.
-Both are MCP tool errors and audit as failed calls.
+not normalize whitespace or infer behavior from prefixes. A known external
+action returns the typed code `integration_tool_approval_required` with a
+product-safe approval object; an unknown Slack tool returns
+`integration_tool_not_allowed`. Both are MCP tool errors and audit as failed
+calls. No Slack action is delivered in the current slice, including after its
+durable request becomes `approved`.
 
-The pure policy verdict is the seam for the durable one-time external-action
-approval state machine. Until that state exists, neither a Worker token, a
-valid gateway bearer, nor approval-like fields in agent-supplied tool arguments
-can authorize a Slack mutation. There is no process-local or prompt-based
-approval fallback.
+### Durable external-action approvals
+
+The approval service consumes the pure `ToolCallRequiresApproval` verdict; it
+does not accept a provider or tool identity reconstructed from prompt text,
+client claims, or arbitrary approval-like tool arguments. One approval binds:
+
+- the exact authenticated product user and personal-or-organization scope;
+- the integration account UUID and current `auth_version`;
+- the runtime Worker UUID, signed gateway-session UUID, exact AnyHarness
+  workspace id, and exact AnyHarness session id;
+- the verdict's exact canonical provider and tool; and
+- the SHA-256 digest of canonical JSON action arguments.
+
+The combined binding and payload produce a deterministic idempotency key.
+Concurrent identical requests in the same authority and execution session
+converge on one active row. Actor, account, organization, Worker, and session
+identifiers are immutable audit snapshots rather than mutable client claims.
+
+Requests have a 600-second TTL, measured from PostgreSQL
+`clock_timestamp()`, and the explicit states `pending`, `approved`,
+`rejected`, `revoked`, `expired`, and `consumed`. `expires_at` is the
+authoritative time boundary: an approved row cannot be consumed at or after
+that instant even if its stored status has not yet changed. List, get,
+decision, request-reuse, and admission observations materialize a due active
+row as terminal `expired` and append the corresponding system audit event.
+Transitions acquire the approval row lock before evaluating that database
+clock, so waiting on a lock cannot extend approval validity.
+
+Approval, rejection, revocation, expiry, and the `approved -> consumed`
+transition are compare-and-set updates. Consumption matches every bound field
+again and succeeds once; replay and concurrent double consumption return the
+already-observed terminal result. Request creation and execution admission use
+short, independently committed transactions. A future provider delivery may
+continue only after the one-time consumption and its audit event have
+committed, so a crash cannot roll back admission after credentials or network
+I/O begin.
+
+The first-party response contains typed ids, status and timestamps, the payload
+digest, and fixed action/account/source labels. Because this slice has no
+frozen per-tool argument schema, its reserved target, content-preview, and
+character-count fields remain null: guessing among provider aliases or rich
+fields could persist a secret or show a benign value while another field is
+later delivered. The full provider argument object is canonicalized only long
+enough to hash and is never stored or returned. The response never contains
+stored credentials, rendered authorization headers, or the raw provider
+payload.
+Product-user authorization rechecks ownership and active organization
+membership for list, get, approve, reject, and revoke operations. A Worker,
+gateway bearer, or MCP session cannot call those human decision routes or
+bypass them.
+
+### Frozen next Slack delivery slice
+
+The next slice is limited to actual approved delivery of
+`slack_send_message`. Its contract is:
+
+1. Add only `chat:write` to the exact six-scope Slack set above and require an
+   explicit OAuth reauthorization before a Slack account at the new
+   `auth_version` can send. Do not add any other scope.
+2. Define one canonical typed `slack_send_message` action with exactly
+   `channel_id` (a real `C...`, `G...`, or `D...` Slack conversation id) and a
+   non-empty `message` string. Reject aliases, conflicting values, unknown
+   fields, blocks, attachments, and the optional draft/thread/broadcast
+   variants in this slice. Derive the approval binding, safe UI summary, and
+   delivered provider arguments from that same typed object; never select a
+   display value and a delivery value through separate parsing paths.
+3. Add a separate `approvalId` wrapper field to `integrations.call_tool`; it is
+   not part of the provider `arguments` object or its canonical payload digest.
+4. On the delivery retry, recompute the typed Slack policy verdict and recheck
+   the exact user/organization, account UUID plus current `auth_version`,
+   Worker/session, provider/tool, and canonical payload binding.
+5. Commit the atomic one-time consumption and audit event before decrypting or
+   rendering credentials and before any provider network I/O. Only a newly
+   `consumed` result may proceed. Already-consumed, mismatched, expired,
+   rejected, revoked, pending, or missing approvals must not call Slack.
+6. After that commit, load credentials only by the exact bound
+   `(integration_account_id, auth_version)`. Copy that matching ciphertext and
+   provider-config snapshot for this delivery or fail closed; never call a
+   generic launch resolver that can refetch a newer account revision. A
+   reauthorization before the snapshot read therefore prevents delivery, while
+   one after the read cannot change which approved workspace credentials are
+   used.
+7. Provide the first-party confirmation flow over the typed product-user API
+   and preserve at-most-once admission and replay-safe double-submit behavior.
+8. Prove all paths with deterministic mocks; do not install or reauthorize a
+   live Slack account and do not send a live Slack message in tests or rollout
+   preparation.
+
+Every other Slack external-action tool remains non-executable and denied from
+the delivery path, even if an approval record exists.
 
 ## Mounted Routes
 
@@ -281,8 +394,19 @@ POST /v1/cloud/integration-gateway/mcp
 User-authenticated integration routes under `/v1/cloud/integrations` own the
 catalog, health, authentication, account deletion, OAuth flow, and callback
 surfaces. Organization-admin definition and policy routes are under
-`/v1/cloud/integrations/admin`. The mounted router files are
-[`integrations/api.py`](../../../../server/proliferate/server/cloud/integrations/api.py)
+`/v1/cloud/integrations/admin`. Product-user approval routes are:
+
+```text
+GET  /v1/cloud/integrations/action-approvals
+GET  /v1/cloud/integrations/action-approvals/{approval_id}
+POST /v1/cloud/integrations/action-approvals/{approval_id}/approve
+POST /v1/cloud/integrations/action-approvals/{approval_id}/reject
+POST /v1/cloud/integrations/action-approvals/{approval_id}/revoke
+```
+
+The mounted router files are
+[`integrations/api.py`](../../../../server/proliferate/server/cloud/integrations/api.py),
+[`action_approvals/api.py`](../../../../server/proliferate/server/cloud/integrations/action_approvals/api.py),
 [`integration_gateway/api.py`](../../../../server/proliferate/server/cloud/integration_gateway/api.py),
 and [`runtime_workers/api.py`](../../../../server/proliferate/server/cloud/runtime_workers/api.py).
 
@@ -320,7 +444,16 @@ and [`runtime_workers/api.py`](../../../../server/proliferate/server/cloud/runti
   remain within the ceiling; failures store no replacement credentials.
 - Slack gateway calls use an exact read allowlist, a typed approval-required
   result for known external actions, and a deny-by-default result for unknown
-  tools. Agent arguments do not participate in the authorization decision.
+  tools. Known actions persist a narrowly bound request, but this slice never
+  delivers them. Agent arguments do not participate in the authorization
+  decision.
+- The signed MCP session is Worker/workspace/AnyHarness-session bound; missing,
+  forged, unbound, or cross-context session state cannot create an approval
+  request.
+- Approval expiry is governed by `expires_at`, including before its terminal
+  row and audit event have been materialized by an observation.
+- Account reauthorization increments `auth_version`; an approval for an older
+  account revision cannot be consumed.
 
 ## Verification
 
@@ -330,6 +463,7 @@ Focused server tests include:
 - `server/tests/integration/test_cloud_runtime_worker_versions_api.py`
 - `server/tests/integration/test_cloud_integration_gateway_api.py`
 - `server/tests/integration/test_cloud_integration_gateway_tool_policy_api.py`
+- `server/tests/integration/test_cloud_integration_action_approvals_api.py`
 - `server/tests/integration/test_cloud_integrations_api.py`
 - `server/tests/integration/test_cloud_integration_catalog_api.py`
 - `server/tests/integration/test_cloud_integration_health_api.py`
