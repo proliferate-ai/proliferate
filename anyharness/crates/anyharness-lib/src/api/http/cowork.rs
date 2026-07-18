@@ -233,6 +233,12 @@ fn map_create_cowork_thread_error(error: CoworkCreateThreadError) -> ApiError {
                 format!("workspace only allows a single session; existing session: {session_id}"),
                 "WORKSPACE_SINGLE_SESSION",
             ),
+            crate::domains::sessions::runtime::CreateAndStartSessionError::SessionIdConflict {
+                session_id,
+            } => ApiError::conflict(
+                format!("session id is already owned by another create: {session_id}"),
+                "SESSION_ID_CONFLICT",
+            ),
             crate::domains::sessions::runtime::CreateAndStartSessionError::WorkspaceNotFound => {
                 ApiError::bad_request("workspace not found", "WORKSPACE_NOT_FOUND")
             }

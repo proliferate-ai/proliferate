@@ -1,5 +1,6 @@
 use super::attachment_storage::PromptAttachmentStorage;
 use super::deletion::SessionDeleteWorkflow;
+use super::model::SessionRecord;
 use super::store::SessionStore;
 use crate::domains::agents::catalog::service::AgentCatalogService;
 use crate::domains::workspaces::store::WorkspaceStore;
@@ -22,10 +23,27 @@ pub struct SessionService {
 }
 
 #[derive(Debug)]
+pub(crate) enum CreateSessionOutcome {
+    Created(SessionRecord),
+    Existing(SessionRecord),
+}
+
+impl CreateSessionOutcome {
+    pub(crate) fn into_record(self) -> SessionRecord {
+        match self {
+            Self::Created(record) | Self::Existing(record) => record,
+        }
+    }
+}
+
+#[derive(Debug)]
 pub enum CreateSessionError {
     WorkspaceNotFound(String),
     WorkspaceSingleSession {
         workspace_id: String,
+        session_id: String,
+    },
+    SessionIdConflict {
         session_id: String,
     },
     ModelUnsupported {

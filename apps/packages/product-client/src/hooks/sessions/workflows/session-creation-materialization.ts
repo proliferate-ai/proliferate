@@ -78,6 +78,7 @@ interface MaterializeSessionCreationInput {
     session: Session,
   ) => void;
   workspaceId: string;
+  onRuntimeSessionCreated?: (session: Session) => Promise<void> | void;
 }
 
 interface MaterializationLifecycle {
@@ -119,6 +120,7 @@ async function runSessionCreationMaterialization({
   resolvedModeId,
   upsertWorkspaceSessionRecord,
   workspaceId,
+  onRuntimeSessionCreated,
 }: MaterializeSessionCreationInput, lifecycle: MaterializationLifecycle): Promise<string> {
   const materializeStartedAt = Date.now();
   const requestOptions = buildLatencyRequestOptions(options.latencyFlowId);
@@ -200,6 +202,7 @@ async function runSessionCreationMaterialization({
   const subagentsEnabled = useUserPreferencesStore.getState().subagentsEnabled;
   assertDirectSessionCreateSupported(target);
   const session: Session = await createSession(targetConnection, {
+    ...(options.runtimeSessionId ? { sessionId: options.runtimeSessionId } : {}),
     workspaceId: target.anyharnessWorkspaceId,
     agentKind: options.agentKind,
     modelId: options.modelId,
@@ -207,6 +210,7 @@ async function runSessionCreationMaterialization({
     subagentsEnabled,
     origin: DESKTOP_ORIGIN,
   }, requestOptions);
+  await onRuntimeSessionCreated?.(session);
   lifecycle.discardCreatedSession = () => {
     return scheduleCreatedRuntimeSessionCleanup({
       connection: targetConnection,

@@ -59,9 +59,17 @@ import { cleanupSessionCreationFailure } from "#product/hooks/sessions/workflows
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 import { useWorkspaceCollectionsInvalidationActions } from "#product/hooks/workspaces/cache/use-workspace-collections-invalidation";
 import { resolveWorkspaceUiKey } from "#product/lib/domain/workspaces/selection/workspace-ui-key";
+import { useProductStorageContext } from "#product/hooks/persistence/facade/use-product-storage-context";
+import {
+  clearPendingEmptySessionCreation,
+  isAmbiguousSessionCreateFailure,
+  persistPendingEmptySessionCreation,
+  type PendingEmptySessionCreation,
+} from "#product/hooks/sessions/workflows/pending-empty-session-creation";
 
 export function useSessionCreationActions() {
   const host = useProductHost();
+  const storageContext = useProductStorageContext();
   const desktop = host.desktop;
   const localRuntime = desktop?.runtime ?? null;
   const ssh = desktop?.ssh ?? null;
@@ -176,6 +184,9 @@ export function useSessionCreationActions() {
       preferredModeId,
     });
     const pendingSessionId = options.clientSessionId ?? createPendingSessionId(options.agentKind);
+    const runtimeSessionId = !hasPrompt
+      ? options.runtimeSessionId ?? crypto.randomUUID()
+      : null;
     const existingProjectedRecord = getSessionRecord(pendingSessionId);
     annotateLatencyFlow(options.latencyFlowId, {
       targetWorkspaceId: workspaceId,
@@ -272,51 +283,6 @@ export function useSessionCreationActions() {
       }
     }
 
-    if (shouldEnqueueInitialPrompt) {
-      await promptSession({
-        sessionId: pendingSessionId,
-        text: options.text,
-        blocks: options.blocks,
-        attachmentSnapshots: options.attachmentSnapshots,
-        optimisticContentParts: options.optimisticContentParts,
-        workspaceId,
-        latencyFlowId: options.latencyFlowId,
-        measurementOperationId: options.measurementOperationId,
-        promptId,
-        onBeforeOptimisticPrompt: options.onBeforeOptimisticPrompt,
-      });
-      if (options.launchIntentId) {
-        useChatLaunchIntentStore.getState()
-          .markSendAttemptedIfActive(options.launchIntentId);
-      }
-    }
-
-    const unregisterSessionCreation = registerSessionCreation(pendingSessionId);
-    const createPromise = materializeSessionCreation({
-      trackProductEvent: telemetry.track,
-      captureException: telemetry.captureException,
-      ensureCloudAgentCatalog,
-      existingProjectedRecord,
-      frozenDefaultLiveSessionControlValuesByAgentKind,
-      localRuntime,
-      ssh,
-      cloudClient,
-      options,
-      pendingSessionId,
-      resolvedModeId: resolvedModeId ?? null,
-      upsertWorkspaceSessionRecord,
-      workspaceId,
-    }).finally(unregisterSessionCreation);
-
-    if (!hasPrompt && shouldReuseInFlightEmptySession) {
-      inFlightSessionCreatesByWorkspace.set(workspaceId, {
-        sessionId: pendingSessionId,
-        agentKind: options.agentKind,
-        modelId: options.modelId,
-        promise: createPromise,
-      });
-    }
-
     const cleanupCreateFailure = (error: unknown): void => {
       if (isWorkspaceDirectoryMissingError(error)) {
         // The collections cache still says the workspace is available (no
@@ -345,6 +311,100 @@ export function useSessionCreationActions() {
         workspaceId,
       }, { activateSession, captureException: telemetry.captureException });
     };
+
+    if (shouldEnqueueInitialPrompt) {
+      await promptSession({
+        sessionId: pendingSessionId,
+        text: options.text,
+        blocks: options.blocks,
+        attachmentSnapshots: options.attachmentSnapshots,
+        optimisticContentParts: options.optimisticContentParts,
+        workspaceId,
+        latencyFlowId: options.latencyFlowId,
+        measurementOperationId: options.measurementOperationId,
+        promptId,
+        onBeforeOptimisticPrompt: options.onBeforeOptimisticPrompt,
+      });
+      if (options.launchIntentId) {
+        useChatLaunchIntentStore.getState()
+          .markSendAttemptedIfActive(options.launchIntentId);
+      }
+    }
+
+    let pendingEmptyCreation: PendingEmptySessionCreation | null = null;
+    if (runtimeSessionId) {
+      const replacedSession = options.replacesSessionId
+        ? getSessionRecord(options.replacesSessionId)
+        : null;
+      pendingEmptyCreation = {
+        workspaceId,
+        clientSessionId: pendingSessionId,
+        runtimeSessionId,
+        agentKind: options.agentKind,
+        modelId: options.modelId,
+        modeId: resolvedModeId ?? null,
+        ...(options.launchControlValues
+          ? { launchControlValues: { ...options.launchControlValues } }
+          : {}),
+        replacesSessionId: replacedSession?.materializedSessionId
+          ?? options.replacesSessionId
+          ?? null,
+        createdAt: Date.now(),
+      };
+    }
+
+    const unregisterSessionCreation = registerSessionCreation(pendingSessionId);
+    const pendingRuntimeSessionId = pendingEmptyCreation?.runtimeSessionId ?? null;
+    const pendingCreationPersistence = pendingEmptyCreation
+      ? persistPendingEmptySessionCreation(storageContext, pendingEmptyCreation)
+      : Promise.resolve();
+    const createPromise = pendingCreationPersistence.then(() => (
+      // Persistence resolves before materialization can reach the POST. The
+      // composed promise is registered immediately below, preserving the
+      // existing same-workspace in-flight reuse window while storage settles.
+      materializeSessionCreation({
+        trackProductEvent: telemetry.track,
+        captureException: telemetry.captureException,
+        ensureCloudAgentCatalog,
+        existingProjectedRecord,
+        frozenDefaultLiveSessionControlValuesByAgentKind,
+        localRuntime,
+        ssh,
+        cloudClient,
+        options: runtimeSessionId ? { ...options, runtimeSessionId } : options,
+        pendingSessionId,
+        resolvedModeId: resolvedModeId ?? null,
+        upsertWorkspaceSessionRecord,
+        workspaceId,
+        onRuntimeSessionCreated: pendingRuntimeSessionId
+          ? () => clearPendingEmptySessionCreation(
+            storageContext,
+            workspaceId,
+            pendingRuntimeSessionId,
+          )
+          : undefined,
+      })
+    )).then(async (resolvedSessionId) => {
+      // A superseded materializer can settle without issuing the POST. Its
+      // durable intent must not be resurrected by the next bootstrap.
+      if (pendingRuntimeSessionId) {
+        await clearPendingEmptySessionCreation(
+          storageContext,
+          workspaceId,
+          pendingRuntimeSessionId,
+        );
+      }
+      return resolvedSessionId;
+    }).finally(unregisterSessionCreation);
+
+    if (!hasPrompt && shouldReuseInFlightEmptySession) {
+      inFlightSessionCreatesByWorkspace.set(workspaceId, {
+        sessionId: pendingSessionId,
+        agentKind: options.agentKind,
+        modelId: options.modelId,
+        promise: createPromise,
+      });
+    }
 
     const cleanupInFlight = (): void => {
       const currentInFlight = inFlightSessionCreatesByWorkspace.get(workspaceId);
@@ -375,6 +435,13 @@ export function useSessionCreationActions() {
       }
       return resolvedSessionId;
     } catch (error) {
+      if (pendingEmptyCreation && !isAmbiguousSessionCreateFailure(error)) {
+        await clearPendingEmptySessionCreation(
+          storageContext,
+          workspaceId,
+          pendingEmptyCreation.runtimeSessionId,
+        );
+      }
       cleanupCreateFailure(error);
       throw toSessionCreateFailureDisplayError(error);
     } finally {
@@ -398,6 +465,7 @@ export function useSessionCreationActions() {
     showToast,
     telemetry,
     upsertWorkspaceSessionRecord,
+    storageContext,
   ]);
 
   const createEmptySessionWithResolvedConfig = useCallback(async (
@@ -413,6 +481,7 @@ export function useSessionCreationActions() {
       workspaceId: options.workspaceId,
       latencyFlowId: options.latencyFlowId,
       clientSessionId: options.clientSessionId,
+      runtimeSessionId: options.runtimeSessionId,
       reuseInFlightEmptySession: options.reuseInFlightEmptySession,
       preserveProjectedSessionOnCreateFailure: options.preserveProjectedSessionOnCreateFailure,
       replacesSessionId: options.replacesSessionId,

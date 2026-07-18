@@ -1,0 +1,136 @@
+import { describe, expect, it, vi } from "vitest";
+import type { ProductStorage } from "@proliferate/product-client/host/product-host";
+import type { ProductStorageContext } from "#product/lib/infra/persistence/product-storage";
+import {
+  clearPendingEmptySessionCreation,
+  isAmbiguousSessionCreateFailure,
+  loadPendingEmptySessionCreations,
+  persistPendingEmptySessionCreation,
+  resumePendingEmptySessionCreations,
+  type PendingEmptySessionCreation,
+} from "#product/hooks/sessions/workflows/pending-empty-session-creation";
+
+const ENTRY: PendingEmptySessionCreation = {
+  workspaceId: "workspace-1",
+  clientSessionId: "client-session:claude:optimistic-1",
+  runtimeSessionId: "01234567-89ab-4def-8123-456789abcdef",
+  agentKind: "claude",
+  modelId: "sonnet",
+  modeId: "default",
+  launchControlValues: { thinking: "high" },
+  replacesSessionId: null,
+  createdAt: 42,
+};
+
+describe("pending empty-session creation", () => {
+  it("resumes an interrupted create with both original ids and acknowledges it once", async () => {
+    const context = memoryStorageContext();
+
+    // First renderer: the intent is durable, then the POST loses its response
+    // during reload and therefore never acknowledges the entry.
+    await persistPendingEmptySessionCreation(context, ENTRY);
+
+    // Fresh renderer: bootstrap uses the exact same client alias and server
+    // UUID. Its successful create response acknowledges the durable intent.
+    const create = vi.fn(async (options) => {
+      expect(options).toMatchObject({
+        workspaceId: ENTRY.workspaceId,
+        clientSessionId: ENTRY.clientSessionId,
+        runtimeSessionId: ENTRY.runtimeSessionId,
+        agentKind: ENTRY.agentKind,
+        modelId: ENTRY.modelId,
+        modeId: ENTRY.modeId,
+        launchControlValues: ENTRY.launchControlValues,
+        reuseInFlightEmptySession: false,
+        preserveProjectedSessionOnCreateFailure: true,
+      });
+      await clearPendingEmptySessionCreation(
+        context,
+        ENTRY.workspaceId,
+        ENTRY.runtimeSessionId,
+      );
+      return ENTRY.clientSessionId;
+    });
+
+    await expect(resumePendingEmptySessionCreations(
+      context,
+      ENTRY.workspaceId,
+      () => true,
+      create,
+    )).resolves.toBe(1);
+    expect(create).toHaveBeenCalledOnce();
+    await expect(loadPendingEmptySessionCreations(context, ENTRY.workspaceId))
+      .resolves.toEqual([]);
+
+    await expect(resumePendingEmptySessionCreations(
+      context,
+      ENTRY.workspaceId,
+      () => true,
+      create,
+    )).resolves.toBe(0);
+    expect(create).toHaveBeenCalledOnce();
+  });
+
+  it("serializes concurrent writes so separate empty tabs are not lost", async () => {
+    const context = memoryStorageContext();
+    const second: PendingEmptySessionCreation = {
+      ...ENTRY,
+      clientSessionId: "client-session:codex:optimistic-2",
+      runtimeSessionId: "11234567-89ab-4def-8123-456789abcdef",
+      agentKind: "codex",
+      modelId: "gpt-5",
+      createdAt: 43,
+    };
+
+    await Promise.all([
+      persistPendingEmptySessionCreation(context, ENTRY),
+      persistPendingEmptySessionCreation(context, second),
+    ]);
+
+    await expect(loadPendingEmptySessionCreations(context, ENTRY.workspaceId))
+      .resolves.toEqual([ENTRY, second]);
+  });
+
+  it("retains only ambiguous transport failures for a later resume", () => {
+    expect(isAmbiguousSessionCreateFailure(new TypeError("Failed to fetch"))).toBe(true);
+    expect(isAmbiguousSessionCreateFailure(new DOMException("aborted", "AbortError")))
+      .toBe(true);
+    expect(isAmbiguousSessionCreateFailure(new Error("400 invalid request"))).toBe(false);
+  });
+
+  it("fails bootstrap closed when the durable ledger cannot be read", async () => {
+    const readError = new Error("preferences unavailable");
+    const context: ProductStorageContext = {
+      storage: {
+        getItem: async () => { throw readError; },
+        setItem: async () => undefined,
+        removeItem: async () => undefined,
+      },
+      captureException: vi.fn(),
+    };
+    const create = vi.fn(async () => ENTRY.clientSessionId);
+
+    await expect(resumePendingEmptySessionCreations(
+      context,
+      ENTRY.workspaceId,
+      () => true,
+      create,
+    )).rejects.toBe(readError);
+    expect(create).not.toHaveBeenCalled();
+    expect(context.captureException).toHaveBeenCalledOnce();
+  });
+});
+
+function memoryStorageContext(): ProductStorageContext {
+  const values = new Map<string, string>();
+  const storage: ProductStorage = {
+    getItem: async (key) => values.get(key) ?? null,
+    setItem: async (key, value) => {
+      values.set(key, value);
+    },
+    removeItem: async (key) => {
+      values.delete(key);
+    },
+  };
+  return { storage, captureException: vi.fn() };
+}

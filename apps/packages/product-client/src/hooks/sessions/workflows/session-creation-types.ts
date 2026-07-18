@@ -18,6 +18,8 @@ export interface CreateSessionWithResolvedConfigOptions {
   promptId?: string | null;
   launchIntentId?: string | null;
   clientSessionId?: string | null;
+  /** Stable server session UUID used to resume an interrupted empty create. */
+  runtimeSessionId?: string | null;
   reuseInFlightEmptySession?: boolean;
   preferExistingCompatibleSession?: boolean;
   preserveProjectedSessionOnCreateFailure?: boolean;
@@ -41,6 +43,8 @@ export interface CreateEmptySessionWithResolvedConfigOptions {
   workspaceId?: string;
   latencyFlowId?: string | null;
   clientSessionId?: string | null;
+  /** Stable server session UUID used to resume an interrupted empty create. */
+  runtimeSessionId?: string | null;
   reuseInFlightEmptySession?: boolean;
   preserveProjectedSessionOnCreateFailure?: boolean;
   /**

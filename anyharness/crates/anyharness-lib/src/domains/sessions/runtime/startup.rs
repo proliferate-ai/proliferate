@@ -515,7 +515,9 @@ fn map_mcp_launch_assembly_error_to_start(
     }
 }
 
-fn map_start_session_error_to_create(error: StartSessionError) -> CreateAndStartSessionError {
+pub(super) fn map_start_session_error_to_create(
+    error: StartSessionError,
+) -> CreateAndStartSessionError {
     match error {
         StartSessionError::WorkspaceNotFound => CreateAndStartSessionError::WorkspaceNotFound,
         StartSessionError::WorkspaceDirectoryMissing { path } => {

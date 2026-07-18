@@ -8,7 +8,9 @@ use axum::{
 };
 use serde::Deserialize;
 
-use super::access::{assert_session_auth_scope, assert_workspace_auth_scope};
+use super::access::{
+    admit_session_mutation, assert_session_auth_scope, assert_workspace_auth_scope,
+};
 use super::error::ApiError;
 use super::sessions_contract::{
     request_origin_or_api_default, session_to_contract, session_view_to_contract,
@@ -16,6 +18,7 @@ use super::sessions_contract::{
 use super::sessions_errors::map_create_session_error;
 use crate::api::auth::AuthContext;
 use crate::app::AppState;
+use crate::domains::sessions::admission::SessionMutationKind;
 use crate::domains::workspaces::operation_gate::WorkspaceOperationKind;
 use crate::observability::latency::FlowHeaders;
 use tracing::Instrument;
@@ -37,6 +40,7 @@ pub struct ListSessionsQuery {
     responses(
         (status = 200, description = "Created session with live ACP actor", body = Session),
         (status = 400, description = "Invalid request", body = anyharness_contract::v1::ProblemDetails),
+        (status = 409, description = "Caller-selected session id conflicts with an existing session", body = anyharness_contract::v1::ProblemDetails),
     ),
     tag = "sessions"
 )]
@@ -50,6 +54,7 @@ pub async fn create_session(
     async move {
         let started = Instant::now();
         let workspace_id = req.workspace_id.clone();
+        let session_id = req.session_id.clone();
         let agent_kind = req.agent_kind.clone();
         let model_id = req.model_id.clone();
         let mode_id = req.mode_id.clone();
@@ -68,15 +73,25 @@ pub async fn create_session(
             system_prompt_append_count,
             "[workspace-latency] session.http.create.request_received"
         );
+        // A caller-selected id is both the durable idempotency key and the
+        // per-session mutation gate key. Holding this permit across startup
+        // prevents overlapping replays from launching duplicate actors.
+        let _create_permit = match session_id.as_deref() {
+            Some(session_id) => {
+                Some(admit_session_mutation(&state, session_id, SessionMutationKind::Resume).await?)
+            }
+            None => None,
+        };
         let _lease = state
             .workspace_operation_gate
             .acquire_shared(&workspace_id, WorkspaceOperationKind::SessionStart)
             .await;
         let record = state
             .session_runtime
-            .create_and_start_session(
+            .create_and_start_session_with_id(
                 &workspace_id,
                 &agent_kind,
+                session_id.as_deref(),
                 model_id.as_deref(),
                 mode_id.as_deref(),
                 req.system_prompt_append,

@@ -8,7 +8,7 @@
 # when the file is under its threshold.
 
 anyharness/crates/anyharness-contract/src/v1/events.rs 1092 existing AnyHarness contract oversized file
-anyharness/crates/anyharness-contract/src/v1/sessions.rs 767 existing AnyHarness contract oversized file
+anyharness/crates/anyharness-contract/src/v1/sessions.rs 779 existing AnyHarness contract oversized file (+caller-selected idempotent create id)
 anyharness/crates/anyharness-lib/src/api/openapi.rs 682 existing AnyHarness oversized file (+hosting schema registration, +agent-auth state response, +gateway catalog endpoints) + enriched gateway-models schema fields (model-table §1) + workflow-runs + local materialization operations + workflow-run-workspaces paths/schemas + agent install progress schemas (central OpenAPI registry; per-route path/schema registration only)
 anyharness/crates/anyharness-lib/src/api/router_tests.rs 1364 existing AnyHarness oversized test file (+hosting PR-status route tests, +catalog version + enrichment tests)
 anyharness/crates/anyharness-lib/src/domains/materialization/service.rs 625 local materialization domain service (exact-ref workspace materialization + repo-root acquisition orchestration, in-process keyed operation-lock admission, idempotent replay/failure recording; blocking git mechanics split into acquire.rs) — split into service/ on next growth per guides/domains.md

@@ -104,6 +104,9 @@ pub enum CreateAndStartSessionError {
     WorkspaceSingleSession {
         session_id: String,
     },
+    SessionIdConflict {
+        session_id: String,
+    },
     MissingDataKey,
     /// Agent-auth route resolution refused the launch (fail-closed selection
     /// missing, malformed state file, unsupported route, ...). Typed so the
