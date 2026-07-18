@@ -19,7 +19,7 @@ pub enum RestoreWorktreeError {
     WorkspaceKindIneligible { workspace_id: String },
     #[error("workspace {workspace_id} is not active")]
     WorkspaceNotActive { workspace_id: String },
-    #[error("workspace {workspace_id} has no recorded branch")]
+    #[error("workspace {workspace_id} has no recorded attached branch")]
     RecordedBranchMissing { workspace_id: String },
     #[error("repository record is missing for workspace {workspace_id}")]
     RepositoryRecordMissing { workspace_id: String },
@@ -59,10 +59,10 @@ impl WorkspaceRuntime {
             });
         }
         let branch = workspace
-            .original_branch
+            .current_branch
             .as_deref()
             .map(str::trim)
-            .filter(|branch| !branch.is_empty())
+            .filter(|branch| !branch.is_empty() && *branch != "HEAD")
             .ok_or_else(|| RestoreWorktreeError::RecordedBranchMissing {
                 workspace_id: workspace.id.clone(),
             })?;

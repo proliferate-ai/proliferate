@@ -16,6 +16,8 @@ export function worktreeRestoreFailureCopy(
   fallbackDetail?: string | null,
 ): string {
   switch (code) {
+    case "WORKTREE_RESTORE_REPOSITORY_RECORD_MISSING":
+      return "This workspace's source repository is no longer registered in Proliferate. Reconnect that repository, refresh the workspace list, then try again.";
     case "WORKTREE_RESTORE_REPOSITORY_MISSING":
       return "The source repository is no longer available at its recorded location. Restore or reconnect that repository, then try again.";
     case "WORKTREE_RESTORE_BRANCH_MISSING":
@@ -31,7 +33,7 @@ export function worktreeRestoreFailureCopy(
     case "WORKTREE_RESTORE_GIT_AMBIGUOUS":
       return "Git's worktree metadata is ambiguous, so restoration stopped safely. Resolve the conflicting or locked registration, then try again.";
     case "WORKTREE_RESTORE_INELIGIBLE":
-      return "This workspace no longer has enough recorded repository and branch information to restore its worktree safely.";
+      return "This workspace no longer has an attached current branch and cannot be restored safely. Detached worktrees must be recreated explicitly.";
     case "WORKSPACE_NOT_FOUND":
       return "This workspace no longer exists in the runtime. Refresh the workspace list before trying again.";
     case "WORKSPACE_RETIRED":

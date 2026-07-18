@@ -190,17 +190,20 @@ The Git adapter owns the filesystem and Git-registration safety checks. Before
 materializing anything, it requires:
 
 - the recorded repository root to exist and resolve unambiguously
-- the recorded local branch to exist
+- a non-detached recorded current branch to exist locally
 - the recorded destination to be absent
 - no other active runtime workspace to own that path
 - no incompatible, locked, detached, or duplicate Git worktree registration
-- the recorded branch not to be checked out at another path
+- the recorded current branch not to be checked out at another path
 
-An exactly matching stale registration at the recorded path may be pruned and
-recreated. Every other occupied-path or ambiguous-registration state fails
-closed with a typed conflict. Restore never removes or overwrites the
-destination. It reconstructs committed branch state only; files or edits that
-were uncommitted when the checkout was deleted are not recoverable.
+An exactly matching stale registration for the recorded current branch at the
+recorded path may be pruned and recreated. Detached workspaces and legacy
+`HEAD` sentinels are ineligible because silently attaching them to an original
+or base branch would change checkout semantics. Every other occupied-path or
+ambiguous-registration state fails closed with a typed conflict. Restore never
+removes or overwrites the destination. It reconstructs committed branch state
+only; files or edits that were uncommitted when the checkout was deleted are
+not recoverable.
 
 To close the path-occupation race, Git first creates the worktree under a
 private sibling staging directory whose checkout has the recorded target's

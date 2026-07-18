@@ -180,8 +180,20 @@ fn cleanup_staged_worktree(
 }
 
 fn cleanup_empty_staging_path(staged: &StagedWorktreePath) {
-    let _ = fs::remove_dir(&staged.path);
-    let _ = fs::remove_dir(&staged.parent);
+    remove_private_empty_staging_dir(&staged.path);
+    remove_private_empty_staging_dir(&staged.parent);
+}
+
+fn remove_private_empty_staging_dir(path: &Path) {
+    if let Err(error) = fs::remove_dir(path) {
+        if error.kind() != ErrorKind::NotFound {
+            tracing::warn!(
+                path = %path.display(),
+                %error,
+                "private worktree restore staging directory could not be removed"
+            );
+        }
+    }
 }
 
 fn canonical_repository_root(path: &Path) -> Result<PathBuf, GitWorktreeRestoreError> {
@@ -219,6 +231,11 @@ fn canonical_repository_root(path: &Path) -> Result<PathBuf, GitWorktreeRestoreE
             path: canonical.display().to_string(),
         }
     })?;
+    if !output.status.success() {
+        return Err(GitWorktreeRestoreError::RepositoryInvalid {
+            path: canonical.display().to_string(),
+        });
+    }
     let reported = output_text(&output, "repository root")?;
     let reported =
         fs::canonicalize(reported).map_err(|_| GitWorktreeRestoreError::RepositoryInvalid {

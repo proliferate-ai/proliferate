@@ -75,7 +75,7 @@ export type WorkspaceStatusPanelState =
     logicalWorkspaceId: string | null;
     workspaceKind: Workspace["kind"];
     workspacePath: string;
-    originalBranch: string | null;
+    currentBranch: string | null;
     restoreEligible: boolean;
   };
 
@@ -238,7 +238,7 @@ export function useWorkspaceStatusPanelState(): WorkspaceStatusPanelState | null
         logicalWorkspaceId: selectedLogicalWorkspaceId,
         workspaceKind: selectedWorkspace.kind,
         workspacePath: selectedWorkspace.path,
-        originalBranch: selectedWorkspace.originalBranch ?? null,
+        currentBranch: selectedWorkspace.currentBranch ?? null,
         restoreEligible: canRestoreMissingWorktree(selectedWorkspace, selectedRepoRoot),
       };
     }

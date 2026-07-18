@@ -115,6 +115,99 @@ fn repeated_restore_returns_the_same_successful_workspace() {
     assert_eq!(first.workspace.id, fixture.workspace.id);
 }
 
+#[test]
+fn restore_uses_the_recorded_current_branch_after_a_branch_rename() {
+    let fixture = RestoreFixture::new();
+    run_git(
+        &fixture.target_path,
+        ["branch", "-m", "feature/restored-name"],
+    );
+    let refresh = fixture
+        .runtime
+        .refresh_workspace_branches_for_test()
+        .expect("refresh renamed branch");
+    assert_eq!(refresh.updated_count, 1);
+    let recorded = WorkspaceStore::new(fixture.db.clone())
+        .find_by_id(&fixture.workspace.id)
+        .expect("load renamed workspace")
+        .expect("workspace exists");
+    assert_eq!(
+        recorded.original_branch.as_deref(),
+        Some("feature/restore-me")
+    );
+    assert_eq!(
+        recorded.current_branch.as_deref(),
+        Some("feature/restored-name")
+    );
+    fixture.remove_checkout();
+
+    fixture
+        .runtime
+        .restore_worktree(&fixture.workspace.id)
+        .expect("restore renamed branch");
+
+    assert_eq!(
+        git_stdout(&fixture.target_path, ["rev-parse", "--abbrev-ref", "HEAD"]),
+        "feature/restored-name"
+    );
+}
+
+#[test]
+fn restore_rejects_a_detached_worktree_even_when_original_branch_is_recorded() {
+    let fixture = RestoreFixture::new();
+    run_git(&fixture.target_path, ["checkout", "--detach"]);
+    let refresh = fixture
+        .runtime
+        .refresh_workspace_branches_for_test()
+        .expect("refresh detached branch");
+    assert_eq!(refresh.updated_count, 1);
+    let recorded = WorkspaceStore::new(fixture.db.clone())
+        .find_by_id(&fixture.workspace.id)
+        .expect("load detached workspace")
+        .expect("workspace exists");
+    assert_eq!(
+        recorded.original_branch.as_deref(),
+        Some("feature/restore-me")
+    );
+    assert_eq!(recorded.current_branch, None);
+    fixture.remove_checkout();
+
+    let error = fixture
+        .runtime
+        .restore_worktree(&fixture.workspace.id)
+        .expect_err("detached worktree must remain ineligible");
+
+    assert!(matches!(
+        error,
+        RestoreWorktreeError::RecordedBranchMissing { .. }
+    ));
+    assert!(!fixture.target_path.exists());
+}
+
+#[test]
+fn restore_rejects_a_legacy_head_branch_sentinel() {
+    let fixture = RestoreFixture::new();
+    WorkspaceStore::new(fixture.db.clone())
+        .update_current_branch(
+            &fixture.workspace.id,
+            Some("HEAD"),
+            &chrono::Utc::now().to_rfc3339(),
+        )
+        .expect("record legacy detached sentinel");
+    fixture.remove_checkout();
+
+    let error = fixture
+        .runtime
+        .restore_worktree(&fixture.workspace.id)
+        .expect_err("HEAD sentinel must remain ineligible");
+
+    assert!(matches!(
+        error,
+        RestoreWorktreeError::RecordedBranchMissing { .. }
+    ));
+    assert!(!fixture.target_path.exists());
+}
+
 #[tokio::test]
 async fn concurrent_restore_requests_coalesce_under_the_workspace_gate() {
     let fixture = RestoreFixture::new();
@@ -239,6 +332,25 @@ fn restore_rejects_a_missing_source_repository() {
     assert!(matches!(
         error,
         RestoreWorktreeError::Git(GitWorktreeRestoreError::RepositoryMissing { .. })
+    ));
+    assert!(!fixture.target_path.exists());
+}
+
+#[test]
+fn restore_rejects_an_existing_non_repository_source_path() {
+    let fixture = RestoreFixture::new();
+    fixture.remove_checkout();
+    fs::remove_dir_all(fixture.source.path()).expect("remove source repository");
+    fs::create_dir(fixture.source.path()).expect("replace repository with plain directory");
+
+    let error = fixture
+        .runtime
+        .restore_worktree(&fixture.workspace.id)
+        .expect_err("plain source directory must fail as an invalid repository");
+
+    assert!(matches!(
+        error,
+        RestoreWorktreeError::Git(GitWorktreeRestoreError::RepositoryInvalid { .. })
     ));
     assert!(!fixture.target_path.exists());
 }

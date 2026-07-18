@@ -85,7 +85,7 @@ function renderPanel(overrides?: {
       logicalWorkspaceId="logical-1"
       workspaceKind={overrides?.workspaceKind ?? "worktree"}
       workspacePath="/repos/project/worktrees/feature"
-      originalBranch="feature/restore"
+      currentBranch="feature/restore"
       restoreEligible={overrides?.restoreEligible ?? true}
     />,
   );

@@ -20,14 +20,14 @@ export function WorktreeMissingAttachedPanel({
   logicalWorkspaceId,
   workspaceKind,
   workspacePath,
-  originalBranch,
+  currentBranch,
   restoreEligible,
 }: {
   workspaceId: string;
   logicalWorkspaceId: string | null;
   workspaceKind: Workspace["kind"];
   workspacePath: string;
-  originalBranch: string | null;
+  currentBranch: string | null;
   restoreEligible: boolean;
 }) {
   const copy = missingCheckoutCopy(workspaceKind);
@@ -73,13 +73,13 @@ export function WorktreeMissingAttachedPanel({
               {workspacePath}
             </span>
           </ComposerAttachedPanelRow>
-          {originalBranch && (
+          {currentBranch && (
             <ComposerAttachedPanelRow label="Branch">
               <span
                 className="block truncate font-mono text-sm text-muted-foreground"
-                title={originalBranch}
+                title={currentBranch}
               >
-                {originalBranch}
+                {currentBranch}
               </span>
             </ComposerAttachedPanelRow>
           )}

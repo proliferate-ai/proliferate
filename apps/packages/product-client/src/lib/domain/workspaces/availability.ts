@@ -9,13 +9,16 @@ export function isWorkspaceDirectoryMissing(
 export function canRestoreMissingWorktree(
   workspace: Pick<
     Workspace,
-    "availability" | "kind" | "originalBranch" | "repoRootId"
+    "availability" | "kind" | "currentBranch" | "repoRootId"
   > | null | undefined,
   repoRoot: Pick<RepoRoot, "id" | "path"> | null | undefined,
 ): boolean {
   return workspace?.availability === "workspace_directory_missing"
     && workspace.kind === "worktree"
-    && Boolean(workspace.originalBranch?.trim())
+    && Boolean(
+      workspace.currentBranch?.trim()
+      && workspace.currentBranch.trim() !== "HEAD",
+    )
     && repoRoot?.id === workspace.repoRootId
     && Boolean(repoRoot.path.trim());
 }

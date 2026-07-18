@@ -27,9 +27,10 @@ impl From<RestoreWorktreeError> for ApiError {
             error @ RestoreWorktreeError::WorkspaceNotActive { .. } => {
                 ApiError::conflict(error.to_string(), "WORKSPACE_RETIRED")
             }
-            error @ RestoreWorktreeError::RepositoryRecordMissing { .. } => {
-                ApiError::conflict(error.to_string(), "WORKTREE_RESTORE_REPOSITORY_MISSING")
-            }
+            error @ RestoreWorktreeError::RepositoryRecordMissing { .. } => ApiError::conflict(
+                error.to_string(),
+                "WORKTREE_RESTORE_REPOSITORY_RECORD_MISSING",
+            ),
             error @ RestoreWorktreeError::WorkspaceRegistrationConflict { .. } => {
                 ApiError::conflict(error.to_string(), "WORKTREE_RESTORE_REGISTRATION_CONFLICT")
             }
@@ -129,5 +130,19 @@ mod tests {
             assert_eq!(api_error.code(), Some(expected_code));
             assert!(api_error.detail().is_some());
         }
+    }
+
+    #[test]
+    fn distinguishes_a_missing_repository_record_from_a_missing_checkout() {
+        let api_error: ApiError = RestoreWorktreeError::RepositoryRecordMissing {
+            workspace_id: "workspace-1".to_string(),
+        }
+        .into();
+
+        assert_eq!(api_error.status(), StatusCode::CONFLICT);
+        assert_eq!(
+            api_error.code(),
+            Some("WORKTREE_RESTORE_REPOSITORY_RECORD_MISSING")
+        );
     }
 }
