@@ -36,21 +36,24 @@ export function promoteMaterializedSessionIdentity(clientSessionId: string): str
   if (!record || !materializedSessionId || materializedSessionId === clientSessionId) {
     return clientSessionId;
   }
+  const authoritativeRecord = getSessionRecord(materializedSessionId);
 
   batchSessionStoreWrites(() => {
     removeSessionRecord(clientSessionId);
-    putSessionRecord({
-      ...record,
-      sessionId: materializedSessionId,
-      materializedSessionId,
-      transcript: {
-        ...record.transcript,
-        sessionMeta: {
-          ...record.transcript.sessionMeta,
-          sessionId: materializedSessionId,
+    putSessionRecord(
+      authoritativeRecord ?? {
+        ...record,
+        sessionId: materializedSessionId,
+        materializedSessionId,
+        transcript: {
+          ...record.transcript,
+          sessionMeta: {
+            ...record.transcript.sessionMeta,
+            sessionId: materializedSessionId,
+          },
         },
       },
-    });
+    );
     useSessionIntentStore.getState().reassignClientSession(
       clientSessionId,
       materializedSessionId,

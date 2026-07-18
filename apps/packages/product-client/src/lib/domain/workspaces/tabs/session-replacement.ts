@@ -41,12 +41,36 @@ export function replaceSessionIdInManualChatGroups(
   replacedSessionId: string,
   replacementSessionId: string,
 ): ManualChatGroup[] {
-  return groups.map((group) => ({
+  const replacementOwnerIndex = groups.findIndex((group) =>
+    group.sessionIds.includes(replacedSessionId)
+  );
+  const mappedGroups = groups.map((group) => ({
     ...group,
     sessionIds: replaceSessionIdInOrderedList(
       group.sessionIds,
       replacedSessionId,
       replacementSessionId,
     ),
+  }));
+  if (replacementOwnerIndex < 0) {
+    return mappedGroups;
+  }
+
+  const assignedSessionIds = new Set<string>();
+  return mappedGroups.map((group, groupIndex) => ({
+    ...group,
+    sessionIds: group.sessionIds.filter((sessionId) => {
+      if (
+        sessionId === replacementSessionId
+        && groupIndex !== replacementOwnerIndex
+      ) {
+        return false;
+      }
+      if (assignedSessionIds.has(sessionId)) {
+        return false;
+      }
+      assignedSessionIds.add(sessionId);
+      return true;
+    }),
   }));
 }
