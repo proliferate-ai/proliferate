@@ -9,11 +9,16 @@ const loadMaterializationModule = () => import(
 
 /** Load executable create code before allowing durable setup to begin. */
 export async function prepareSessionCreationMaterializer(
-  setupPendingCreation: () => Promise<void>,
+  input: {
+    shouldSetupPendingCreation: boolean;
+    setupPendingCreation: () => Promise<void>;
+  },
   loadModule: () => Promise<SessionCreationMaterializationModule> =
     loadMaterializationModule,
 ): Promise<SessionCreationMaterializationModule["materializeSessionCreation"]> {
   const { materializeSessionCreation } = await loadModule();
-  await setupPendingCreation();
+  if (input.shouldSetupPendingCreation) {
+    await input.setupPendingCreation();
+  }
   return materializeSessionCreation;
 }

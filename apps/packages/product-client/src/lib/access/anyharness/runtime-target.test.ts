@@ -3,8 +3,8 @@ import type { DesktopSshBridge } from "@proliferate/product-client/host/desktop-
 
 import {
   resolveRuntimeTargetForWorkspace,
-  supportsCallerSelectedSessionCreate,
 } from "#product/lib/access/anyharness/runtime-target";
+import { supportsCallerSelectedSessionCreate } from "#product/lib/access/anyharness/caller-selected-session-create";
 
 function makeSshBridge(): DesktopSshBridge {
   return {

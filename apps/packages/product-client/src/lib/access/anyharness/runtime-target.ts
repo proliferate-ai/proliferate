@@ -28,16 +28,6 @@ export interface RuntimeTarget {
   readyAgentKinds?: CloudAgentKind[];
 }
 
-/**
- * Caller-selected create ids require a runtime deployed in lockstep with this
- * client. Only the bundled local runtime has that guarantee; cloud and SSH
- * targets can legitimately lag the shared ProductClient version.
- */
-export function supportsCallerSelectedSessionCreate(workspaceId: string): boolean {
-  return parseCloudWorkspaceSyntheticId(workspaceId) === null
-    && parseTargetWorkspaceSyntheticId(workspaceId) === null;
-}
-
 export async function resolveRuntimeTargetForWorkspace(
   runtimeUrl: string,
   workspaceId: string,

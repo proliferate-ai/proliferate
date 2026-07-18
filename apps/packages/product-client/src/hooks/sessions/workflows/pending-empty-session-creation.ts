@@ -1,6 +1,6 @@
 import type { ProductStorageContext } from "#product/lib/infra/persistence/product-storage";
 import type { CreateEmptySessionWithResolvedConfigOptions } from "#product/hooks/sessions/workflows/session-creation-types";
-import { supportsCallerSelectedSessionCreate } from "#product/lib/access/anyharness/runtime-target";
+import { supportsCallerSelectedSessionCreate } from "#product/lib/access/anyharness/caller-selected-session-create";
 import { getSessionRecord } from "#product/stores/sessions/session-records";
 
 const STORAGE_KEY_PREFIX = "proliferate.pending-empty-session-creations.v1";

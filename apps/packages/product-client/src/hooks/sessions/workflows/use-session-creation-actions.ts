@@ -61,6 +61,7 @@ import { useWorkspaceCollectionsInvalidationActions } from "#product/hooks/works
 import { resolveWorkspaceUiKey } from "#product/lib/domain/workspaces/selection/workspace-ui-key";
 import { useProductStorageContext } from "#product/hooks/persistence/facade/use-product-storage-context";
 import type { PendingEmptySessionCreationLifecycle } from "#product/hooks/sessions/workflows/pending-empty-session-creation";
+import { supportsCallerSelectedSessionCreate } from "#product/lib/access/anyharness/caller-selected-session-create";
 
 export function useSessionCreationActions() {
   const host = useProductHost();
@@ -356,7 +357,11 @@ export function useSessionCreationActions() {
       }
     };
     const createPromise = prepareSessionCreationMaterializer(
-      setupPendingCreation,
+      {
+        shouldSetupPendingCreation: !hasPrompt
+          && supportsCallerSelectedSessionCreate(workspaceId),
+        setupPendingCreation,
+      },
     ).then((materializeSessionCreation) => (
       // Executable code loads before setup begins, and the durable write then
       // resolves before materialization can reach the POST. The composed
