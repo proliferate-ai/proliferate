@@ -181,6 +181,18 @@ test("constructLocalWorld runs the ordered startup and returns a ready handle", 
     assert.ok(cp, "expected a docker cp of the setup token");
     assert.equal(cp!.at(-1), path.join(runDir, "setup-token"));
 
+    // T3-INT-1's host Worker needs the candidate Server's host-mapped origin
+    // for enrollment and integration-gateway calls. Without it the Server
+    // rejects every /v1/cloud/worker/enroll as cloud_worker_misconfigured.
+    const serverRun = h.argv.find(
+      (cmd) => cmd[0] === "docker" && cmd.includes("--name") && cmd.some((arg) => arg.endsWith("-server")),
+    );
+    assert.ok(serverRun, "expected the candidate Server docker run");
+    assert.ok(
+      serverRun!.includes(`API_BASE_URL=http://127.0.0.1:${PORTS.server}`),
+      "expected Server env to publish the host-reachable API base URL",
+    );
+
     // A fresh actor enrolled for cleanup, then a full green teardown.
     await world.trackActorSubjects!({
       userId: "u1",
