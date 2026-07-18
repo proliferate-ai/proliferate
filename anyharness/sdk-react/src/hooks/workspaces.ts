@@ -140,6 +140,34 @@ export function useCreateWorktreeWorkspaceMutation() {
   });
 }
 
+export function useRestoreWorktreeWorkspaceMutation() {
+  const runtime = useAnyHarnessRuntimeContext();
+  const workspace = useAnyHarnessWorkspaceContext();
+  const queryClient = useQueryClient();
+  const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
+  const cacheScopeKey = resolveRuntimeCacheScopeKey(runtime);
+
+  return useMutation({
+    mutationFn: async (workspaceId: string) => {
+      const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
+      const client = getAnyHarnessClient(resolved.connection);
+      return client.workspaces.restoreWorktree(
+        resolved.connection.anyharnessWorkspaceId,
+      );
+    },
+    onSuccess: async (_data, workspaceId) => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: anyHarnessRuntimeWorkspacesKey(runtimeUrl, cacheScopeKey),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: anyHarnessWorkspaceKey(cacheScopeKey, workspaceId),
+        }),
+      ]);
+    },
+  });
+}
+
 export function useUpdateWorkspaceDisplayNameMutation() {
   const runtime = useAnyHarnessRuntimeContext();
   const workspace = useAnyHarnessWorkspaceContext();

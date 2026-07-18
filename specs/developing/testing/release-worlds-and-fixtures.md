@@ -142,6 +142,9 @@ build binaries, publish templates, or decide which feed to use.
 
 - AWS IAM, networking, security groups, Route53 authority, TLS/ingress, and
   artifact storage capacity
+- one publicly trusted wildcard certificate and matching private key for
+  `*.qualification.proliferate.com`, rotated by the qualification operator and
+  mounted read-only into disposable-world Caddy instances
 - a dedicated publicly reachable qualification API ingress; the candidate
   deployment and mutable product/database state behind it remain isolated per
   run or release channel

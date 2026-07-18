@@ -49,6 +49,8 @@ function fakeEnv(vars: Record<string, string> = {}): EnvResolution {
     RELEASE_E2E_SELFHOST_HOSTED_ZONE_ID: "Z123",
     RELEASE_E2E_SELFHOST_INSTANCE_TYPE: "t3.small",
     RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY: "sk-ant-test-key",
+    RELEASE_E2E_QUALIFICATION_TLS_CERTIFICATE_B64: "Y2VydA==",
+    RELEASE_E2E_QUALIFICATION_TLS_PRIVATE_KEY_B64: "a2V5",
     ...vars,
   };
   return {

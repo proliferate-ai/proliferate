@@ -21,6 +21,10 @@ import { resolveWorldConstructionInputs } from "../local-world-smoke-1.js";
 import { bootLocalFunctionalWorld, type LocalFunctionalWorldInputs } from "./world-boot.js";
 import { captureLocalDriverFailure } from "./debug-capture.js";
 import { resolveLocalWorkspaceSessionId } from "./local-session.js";
+import {
+  GATEWAY_UNSUPPORTED_HARNESSES,
+  gatewayUnsupportedMessage,
+} from "../../fixtures/gateway-unsupported-harnesses.js";
 
 /**
  * LOCAL-4 (live configuration matrix, per harness) under `T3-CFG-1/local`, and
@@ -58,11 +62,6 @@ export const BASELINE_PROMPT = "Reply with exactly the word: pong";
 export const SESSION_TABS_START_HARNESS: LocalHarnessKind = "claude";
 export const SESSION_TABS_SWITCH_HARNESS: LocalHarnessKind = "codex";
 
-/** Cursor ships with no gateway auth slot; its LOCAL-4 baseline turn cannot run
- * on the gateway-enrolled world, so its cell is the truthful typed `blocked`
- * (mirroring LOCAL-2's cursor treatment) — never green, never silently dropped. */
-const GATEWAY_UNSUPPORTED_HARNESSES: ReadonlySet<LocalHarnessKind> = new Set(["cursor"]);
-
 /** Bounded waits for the live browser flow (kept generous but finite). */
 const HARNESS_READY_TIMEOUT_MS = 300_000;
 const MODEL_PICKER_TIMEOUT_MS = 60_000;
@@ -82,6 +81,25 @@ export interface LocalConfigDriver {
    * the world's isolated subdir (world-per-scenario, serialized). */
   buildWorld(inputs: LocalFunctionalWorldInputs, worldId: string): Promise<ReadyLocalWorld>;
   createActor(world: ReadyLocalWorld, harness: LocalHarnessKind): Promise<AuthenticatedActor>;
+  /**
+   * Selects the `gateway` route for `harness` through the genuine product
+   * selections API (`PUT /v1/cloud/agent-gateway/selections/{harness}?surface=local`
+   * — the exact call `HarnessSettingsSection` drives, and the one
+   * `authenticatedActor` itself uses for its default harness). LOCAL-4 reuses ONE
+   * owner actor across the whole harness batch, but `authenticatedActor` selects
+   * only the default harness's (claude's) route; without a selection for the
+   * other runnable harnesses the server's local-surface state.json carries no
+   * route for them, so the REAL renderer's `useLocalAuthStateSync` has nothing to
+   * push and their launch-options never populate — the codex/grok/opencode
+   * "never became launchable within 300s" red (run 29628880856). Called for every
+   * runnable harness BEFORE `openPage`, so the renderer boots once with all routes
+   * present and its worker-independent `PUT /v1/agent-auth/state` sync lands them
+   * all at startup (an out-of-band selection made after boot would not trigger the
+   * renderer's own agent-auth-state refetch). The gateway route still reaches
+   * AnyHarness only through the real product renderer path — nothing is seeded
+   * into AnyHarness world-side, and readiness is never synthesized.
+   */
+  selectGatewayRoute(actor: AuthenticatedActor, harness: LocalHarnessKind): Promise<void>;
   prepareRepo(world: ReadyLocalWorld, actor: AuthenticatedActor, cellId: string): Promise<PreparedRepository>;
   openPage(world: ReadyLocalWorld, actor: AuthenticatedActor): Promise<ProductPage>;
   ensureHarnessReady(world: ReadyLocalWorld, page: ProductPage, harness: LocalHarnessKind): Promise<void>;
@@ -173,6 +191,7 @@ export interface LocalSessionTabsDriver {
 export const defaultLocalConfigDriver: LocalConfigDriver = {
   buildWorld: (inputs, worldId) => bootLocalFunctionalWorld(inputs, worldId),
   createActor: (world) => authenticatedActor(world, "owner"),
+  selectGatewayRoute: (actor, harness) => selectGatewayRouteForHarness(actor, harness),
   prepareRepo: (world, actor, cellId) => preparedRepository(world, actor, { cellId }),
   openPage: (world, actor) => productPage(world, actor),
   ensureHarnessReady: (world, page, harness) => ensureHarnessReady(world, page, harness),
@@ -291,6 +310,17 @@ export async function collectLocal4ConfigCells(
     const representative = firstRunnableHarness(cells) ?? SESSION_TABS_START_HARNESS;
     const actor = await driver.createActor(world, representative);
     await world.trackActorSubjects?.(actor.gatewayKey);
+    // Select the gateway route for EVERY runnable harness in this batch before
+    // the page boots. `createActor` selects only the representative harness's
+    // route, but the reused actor drives baseline turns on each assigned kind;
+    // without a per-harness selection the server's local-surface state.json
+    // carries no route for the others, so the real renderer's
+    // `useLocalAuthStateSync` has nothing to sync and their launch-options never
+    // populate (codex/grok/opencode "never became launchable in 300s"). The
+    // representative's selection is idempotent, so re-selecting it is harmless.
+    for (const harness of runnableHarnesses(cells)) {
+      await driver.selectGatewayRoute(actor, harness);
+    }
     const repo = await driver.prepareRepo(world, actor, `${cells[0]?.scenario_id ?? "T3-CFG-1"}/local`);
     page = await driver.openPage(world, actor);
 
@@ -305,7 +335,10 @@ export async function collectLocal4ConfigCells(
           cell,
           outcome: {
             kind: "blocked",
-            message: `[${harness}] ships with no gateway auth slot; its LOCAL-4 baseline turn cannot run on the gateway-enrolled world (typed unsupported)`,
+            message: gatewayUnsupportedMessage(
+              harness,
+              "its LOCAL-4 baseline turn cannot run on the gateway-enrolled world",
+            ),
           },
         });
         continue;
@@ -672,6 +705,34 @@ function firstRunnableHarness(cells: readonly PlannedCellV1[]): LocalHarnessKind
   return undefined;
 }
 
+/** The distinct runnable (gateway-capable) harness kinds this batch drives, in
+ * declaration order. Each needs its gateway route selected before the page boots
+ * so the real renderer syncs them all — see `LocalConfigDriver.selectGatewayRoute`. */
+function runnableHarnesses(cells: readonly PlannedCellV1[]): LocalHarnessKind[] {
+  const seen = new Set<LocalHarnessKind>();
+  for (const cell of cells) {
+    const harness = normalizeHarness(cell.dimensions.harness);
+    if (harness && !GATEWAY_UNSUPPORTED_HARNESSES.has(harness)) {
+      seen.add(harness);
+    }
+  }
+  return LOCAL_HARNESS_KINDS.filter((kind) => seen.has(kind));
+}
+
+/**
+ * Selects the `gateway` route for `harness` through the genuine product
+ * selections API — the exact endpoint `HarnessSettingsSection` and the
+ * `authenticatedActor` fixture drive. Prerequisite product state only: the real
+ * renderer's `useLocalAuthStateSync` is what actually pushes the resulting
+ * local-surface state.json to AnyHarness.
+ */
+async function selectGatewayRouteForHarness(actor: AuthenticatedActor, harness: LocalHarnessKind): Promise<void> {
+  await actor.api.put(
+    `/v1/cloud/agent-gateway/selections/${encodeURIComponent(harness)}?surface=local`,
+    { sources: [{ sourceKind: "gateway", enabled: true }] },
+  );
+}
+
 function worldArtifactIds(world: ReadyLocalWorld): string[] {
   return [
     world.artifacts.server.artifact_id,
@@ -792,6 +853,23 @@ function cssAttr(value: string): string {
   return value.replace(/["\\]/g, "\\$&");
 }
 
+/**
+ * Waits for a locator to report itself enabled (not `disabled`), polling
+ * rather than relying on Playwright's default 30s click-actionability
+ * timeout — used where a trigger's mount can race a preceding reload and the
+ * scenario's own budget is far larger than 30s.
+ */
+async function waitForEnabled(locator: ReturnType<Page["locator"]>, timeoutMs: number, what: string): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await locator.isEnabled().catch(() => false)) {
+      return;
+    }
+    await sleep(250);
+  }
+  throw new Error(`waitForEnabled: ${what} did not become enabled within ${timeoutMs}ms`);
+}
+
 // ── Production UI/runtime driver bodies ──────────────────────────────────────
 //
 // These drive the real Desktop renderer + candidate AnyHarness through the
@@ -806,8 +884,9 @@ async function ensureHarnessReady(world: ReadyLocalWorld, page: ProductPage, har
   const deadline = Date.now() + HARNESS_READY_TIMEOUT_MS;
   let triggeredInstall = false;
   let launchable = false;
+  let last: Awaited<ReturnType<typeof client.getAgent>> | undefined;
   while (Date.now() < deadline) {
-    const last = await client.getAgent(harness).catch(() => undefined);
+    last = await client.getAgent(harness).catch(() => undefined);
     const options = await client.getAgentLaunchOptions().catch(() => []);
     const entry = options.find((agent) => agent.kind === harness);
     if (entry && entry.models.length > 0) {
@@ -821,7 +900,15 @@ async function ensureHarnessReady(world: ReadyLocalWorld, page: ProductPage, har
     await sleep(2_000);
   }
   if (!launchable) {
-    throw new Error(`ensureHarnessReady: agent "${harness}" never became launchable within ${HARNESS_READY_TIMEOUT_MS}ms.`);
+    // Surface the runtime's last-seen readiness triad (as
+    // local-world-smoke-1's `ensureHarnessReady` does) so a launch-options
+    // timeout is diagnosable without a live runtime: `readiness=login_required`
+    // with an unsynced gateway route points at the route-sync path, an
+    // `installing`/`install_required` installState points at the agent build.
+    throw new Error(
+      `ensureHarnessReady: agent "${harness}" never became launchable within ${HARNESS_READY_TIMEOUT_MS}ms ` +
+        `(last: readiness=${last?.readiness}, installState=${last?.installState}, credentialState=${last?.credentialState}).`,
+    );
   }
   await page.page.reload({ waitUntil: "domcontentloaded" });
   // `ensureHarnessReady` is shared by two contexts: LOCAL-4 gates readiness from
@@ -840,7 +927,30 @@ async function ensureHarnessReady(world: ReadyLocalWorld, page: ProductPage, har
 
 async function selectRepoAndWorkLocally(page: ProductPage, repo: PreparedRepository): Promise<void> {
   const p = page.page;
-  await p.getByRole("button", { name: /^Project:/ }).first().click();
+  const projectTrigger = p.getByRole("button", { name: /^Project:/ }).first();
+
+  // LOCAL-4 deliberately reuses one renderer page across the harness matrix.
+  // After the first cell creates a workspace, `ensureHarnessReady` reloads that
+  // active workspace shell; it does not return to Home. The old collector then
+  // waited five minutes for a Project trigger that only exists on Home (run
+  // 29631868610's captured HTML has `data-workspace-shell` and the chat
+  // composer, with no Project trigger). Use the real sidebar navigation before
+  // selecting the next cell's repository. This preserves the real renderer and
+  // Worker/enrollment boundary; it only restores the UI surface the collector
+  // requires.
+  if (!await projectTrigger.isVisible().catch(() => false)) {
+    const newChatNav = p.locator("nav").getByRole("button", { name: "New chat" }).first();
+    await newChatNav.waitFor({ state: "visible", timeout: 30_000 });
+    await newChatNav.click();
+    await p
+      .locator("[data-home-composer-editor]")
+      .first()
+      .waitFor({ state: "visible", timeout: 30_000 });
+  }
+
+  await projectTrigger.waitFor({ state: "visible", timeout: 30_000 });
+  await waitForEnabled(projectTrigger, 30_000, "Project: trigger");
+  await projectTrigger.click();
   const repoRow = p.locator(`[data-repo-source-root="${cssAttr(repo.path)}"]`).first();
   await repoRow.waitFor({ state: "visible", timeout: 20_000 });
   await repoRow.click();

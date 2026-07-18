@@ -160,6 +160,11 @@ pub struct SessionActionCapabilities {
 #[derive(Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CreateSessionRequest {
+    /// Optional caller-selected canonical lowercase v4 UUID. Repeating a
+    /// create request with the same id resumes that exact session instead of
+    /// creating another one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
     pub workspace_id: String,
     pub agent_kind: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -243,6 +248,7 @@ pub struct SessionLinkSummary {
 impl fmt::Debug for CreateSessionRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("CreateSessionRequest")
+            .field("session_id", &self.session_id)
             .field("workspace_id", &self.workspace_id)
             .field("agent_kind", &self.agent_kind)
             .field("model_id", &self.model_id)
@@ -609,6 +615,7 @@ mod tests {
     #[test]
     fn create_session_request_serializes_model_mode_and_prompt() {
         let request = CreateSessionRequest {
+            session_id: Some("01234567-89ab-4def-8123-456789abcdef".to_string()),
             workspace_id: "workspace-1".to_string(),
             agent_kind: "claude".to_string(),
             model_id: Some("default".to_string()),
@@ -622,6 +629,7 @@ mod tests {
         assert_eq!(
             json,
             serde_json::json!({
+                "sessionId": "01234567-89ab-4def-8123-456789abcdef",
                 "workspaceId": "workspace-1",
                 "agentKind": "claude",
                 "modelId": "default",
@@ -633,6 +641,10 @@ mod tests {
         let round_tripped: CreateSessionRequest =
             serde_json::from_value(json).expect("deserialize create request");
         assert_eq!(round_tripped.model_id.as_deref(), Some("default"));
+        assert_eq!(
+            round_tripped.session_id.as_deref(),
+            Some("01234567-89ab-4def-8123-456789abcdef")
+        );
         assert_eq!(round_tripped.mode_id.as_deref(), Some("bypassPermissions"));
         assert_eq!(
             round_tripped.system_prompt_append,

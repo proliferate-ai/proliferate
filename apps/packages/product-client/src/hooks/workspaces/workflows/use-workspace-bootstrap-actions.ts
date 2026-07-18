@@ -56,6 +56,8 @@ import { handleRememberedWorkspaceSessionBootstrap } from "#product/hooks/worksp
 import {
   shouldPreserveStagedReplacementShell,
 } from "#product/hooks/sessions/workflows/session-replacement-tombstones";
+import { useProductStorageContext } from "#product/hooks/persistence/facade/use-product-storage-context";
+import { resumePendingEmptySessionCreationForBootstrap } from "#product/hooks/workspaces/workflows/workspace-bootstrap-pending-empty-session";
 
 interface BootstrapWorkspaceInput {
   workspaceId: string;
@@ -70,6 +72,7 @@ const EMPTY_WORKSPACES = [] as const;
 const WORKSPACE_BOOTSTRAP_SESSION_LIST_TIMEOUT_MS = 8_000;
 
 export function useWorkspaceBootstrapActions() {
+  const storageContext = useProductStorageContext();
   const {
     fetchWorkspaceSessions,
     getWorkspaceSessionsCacheDecision,
@@ -240,7 +243,15 @@ export function useWorkspaceBootstrapActions() {
     if (!isCurrent()) {
       return { sessions };
     }
-
+    if (await resumePendingEmptySessionCreationForBootstrap({
+      createEmptySession: createEmptySessionWithResolvedConfig,
+      isCurrent,
+      startedAt,
+      storageContext,
+      workspaceId,
+    })) {
+      return { sessions };
+    }
     const activeSessionIdAfterLoad = useSessionSelectionStore.getState().activeSessionId;
     const activeSessionRecordAfterLoad = activeSessionIdAfterLoad
       ? getSessionRecord(activeSessionIdAfterLoad)
@@ -379,6 +390,7 @@ export function useWorkspaceBootstrapActions() {
     rehydrateSessionSlotFromHistory,
     loadWorkspaceSessions,
     workspaceCollections,
+    storageContext,
   ]);
 
   return {

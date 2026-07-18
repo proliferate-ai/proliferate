@@ -344,14 +344,22 @@ does the durable validation path.
 
 It:
 
-1. verifies the workspace exists
-2. verifies the requested agent kind exists in the built-in registry
-3. resolves the agent and requires it to be ready
-4. validates the requested model id against the curated provider catalog
-5. creates the durable `SessionRecord` in `starting` state
+1. validates an optional caller-selected canonical lowercase v4 `sessionId`
+2. for an idempotent public replay, returns the nonterminal row already owned
+   by the same workspace and agent or rejects cross-owner, closed, or dismissed
+   reuse with `SESSION_ID_CONFLICT`; the UUID is first-writer resource identity,
+   so the original row remains authoritative for later same-owner replays
+3. verifies the workspace exists
+4. verifies the requested agent kind exists in the built-in registry
+5. resolves the agent and requires it to be ready
+6. validates the requested model id against the curated provider catalog
+7. atomically creates the durable `SessionRecord` in `starting` state, or
+   returns the concurrently inserted row for the same idempotent request
 
 This path does not start ACP directly. It only produces a valid durable session
-record.
+record. Omitting `sessionId` preserves ordinary server-minted identity. Internal
+preselected ids remain strict fresh-create inputs unless their caller explicitly
+uses the idempotent public create seam.
 
 ### Read and History
 
@@ -378,10 +386,14 @@ is the eager live-start path.
 
 It:
 
-1. asks `SessionService` to create the durable row
+1. asks `SessionService` to create the durable row or resume the exact
+   caller-selected row
 2. resolves the workspace
 3. resolves the agent again for launch
-4. asks `LiveSessionManager` to start the live actor
+4. asks `LiveSessionManager` to start the live actor; idempotent create requests
+   hold the session mutation permit across this operation so concurrent replays
+   cannot launch duplicate actors, and a replay that finds a handle still in
+   startup joins its shared readiness result instead of returning early
 5. `LiveSessionManager` reads the last durable event seq inside its start/inject
    critical section
 6. persists the native session id and updates status to `idle`

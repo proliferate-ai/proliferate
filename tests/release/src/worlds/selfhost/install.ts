@@ -12,7 +12,8 @@ import type { SshTransport } from "./world.js";
  *   box → `docker load` the archive → write/confirm `.env.static` with
  *   `PROLIFERATE_SERVER_IMAGE`/`_TAG` pinned to the DOCKER-LOADED candidate image
  *   tag → run the real `install.sh` against the local candidate bundle → Caddy
- *   issues TLS for the run subdomain → `wait-for-health.sh`/HTTPS `/health` →
+ *   serves the reusable public wildcard certificate for the run subdomain →
+ *   `wait-for-health.sh`/HTTPS `/health` →
  *   assert the running container image `RepoDigest` on the box equals the loaded
  *   archive's identity (the digest RECEIPT).
  *
@@ -33,7 +34,7 @@ export interface RunInstallerInputs {
   bundle: MaterializedArtifact;
   /** The bundle's `self-hosted-assets.SHA256SUMS` bytes (or its resolved path). */
   bundleSha256SumsPath: string;
-  /** Public hostname Caddy issues TLS for (the run subdomain FQDN). */
+  /** Public hostname covered by the reusable wildcard certificate. */
   siteAddress: string;
   /** Image repo string pinned into `.env.static` (the loaded candidate repo). */
   candidateImageRepo: string;
@@ -50,6 +51,10 @@ export interface RunInstallerInputs {
   log?: (message: string) => void;
   /** Injectable HTTP readiness seam (real `fetch` in production, fake in tests). */
   fetchImpl?: ReadinessFetch;
+  /** Mode-0600 reusable wildcard certificate, validated before world construction. */
+  tlsCertificatePath: string;
+  /** Mode-0600 private key matching tlsCertificatePath. */
+  tlsPrivateKeyPath: string;
 }
 
 /**
@@ -66,8 +71,13 @@ export const SELFHOST_REMOTE_IMAGE_ARCHIVE = `${SELFHOST_REMOTE_DIR}/server-imag
 export const SELFHOST_REMOTE_BUNDLE = `${SELFHOST_REMOTE_DIR}/proliferate-deploy.tar.gz`;
 export const SELFHOST_REMOTE_SHA256SUMS = `${SELFHOST_REMOTE_DIR}/self-hosted-assets.SHA256SUMS`;
 export const SELFHOST_REMOTE_INSTALLER = `${SELFHOST_REMOTE_DIR}/proliferate-deploy/install.sh`;
+export const SELFHOST_REMOTE_TLS_CERTIFICATE = `${SELFHOST_REMOTE_DIR}/qualification-tls-certificate.pem`;
+export const SELFHOST_REMOTE_TLS_PRIVATE_KEY = `${SELFHOST_REMOTE_DIR}/qualification-tls-private-key.pem`;
+export const SELFHOST_REMOTE_TLS_CADDYFILE = `${SELFHOST_REMOTE_DIR}/qualification-Caddyfile`;
+export const SELFHOST_REMOTE_TLS_COMPOSE_OVERRIDE = `${SELFHOST_REMOTE_DIR}/qualification-tls.compose.yml`;
 /** Default install root (`install.sh` default); the deploy dir hangs off it. */
 export const SELFHOST_DEPLOY_DIR = "/opt/proliferate/server/deploy";
+export const SELFHOST_PERSISTED_TLS_COMPOSE_OVERRIDE = `${SELFHOST_DEPLOY_DIR}/qualification-tls.compose.yml`;
 /** First-run setup token path inside the api container (never served over HTTP). */
 export const SELFHOST_SETUP_TOKEN_PATH = "/var/lib/proliferate/setup/setup-token";
 
@@ -96,6 +106,10 @@ export async function runShippedInstaller(inputs: RunInstallerInputs): Promise<I
   const log = inputs.log ?? (() => {});
   const imageRef = `${inputs.candidateImageRepo}:${inputs.candidateImageTag}`;
   assertNotRollingTag(inputs.candidateImageTag);
+  const remoteTlsComposeOverridePath = qualificationRemotePath(
+    box.sshUser,
+    SELFHOST_REMOTE_TLS_COMPOSE_OVERRIDE,
+  );
 
   // 1. Transport the candidate bytes to the box (home dir; no sudo to write).
   log(`transporting candidate bytes to ${box.instanceId}`);
@@ -103,6 +117,16 @@ export async function runShippedInstaller(inputs: RunInstallerInputs): Promise<I
   await ssh.scp(inputs.serverImageArchive.path, SELFHOST_REMOTE_IMAGE_ARCHIVE);
   await ssh.scp(inputs.bundle.path, SELFHOST_REMOTE_BUNDLE);
   await ssh.scp(inputs.bundleSha256SumsPath, SELFHOST_REMOTE_SHA256SUMS);
+  await ssh.scp(inputs.tlsCertificatePath, SELFHOST_REMOTE_TLS_CERTIFICATE);
+  await ssh.scp(inputs.tlsPrivateKeyPath, SELFHOST_REMOTE_TLS_PRIVATE_KEY);
+  await ssh.run(`chmod 600 ${SELFHOST_REMOTE_TLS_CERTIFICATE} ${SELFHOST_REMOTE_TLS_PRIVATE_KEY}`);
+
+  await writePublicConfigOverSsh(ssh, SELFHOST_REMOTE_TLS_CADDYFILE, qualificationCaddyfile());
+  await writePublicConfigOverSsh(
+    ssh,
+    SELFHOST_REMOTE_TLS_COMPOSE_OVERRIDE,
+    qualificationTlsComposeOverride(box.sshUser),
+  );
 
   // 2. docker-load the candidate server image; verify it restored the pinned ref.
   log(`docker load ${SELFHOST_REMOTE_IMAGE_ARCHIVE}`);
@@ -117,12 +141,13 @@ export async function runShippedInstaller(inputs: RunInstallerInputs): Promise<I
   // --version (never stable/latest). No secret ever rides on argv.
   log(`running shipped install.sh --bundle for ${inputs.siteAddress}`);
   const installArgs = [
-    // Widen the shipped health gate from its 60×2s default: the gate covers
-    // Caddy's cold Let's Encrypt issuance, and 2min is tight under CA load —
-    // run 29631785126 died with `tlsv1 alert internal error` (no cert ever
-    // logged) while the identical flow succeeded hours earlier. 210×2s = 7min.
-    // `sudo VAR=… cmd` passes the assignment through to install.sh/bootstrap.
-    "sudo PROLIFERATE_HEALTHCHECK_ATTEMPTS=210 bash",
+    "sudo env",
+    // Widen the shipped health gate from its 60×2s default. The reusable
+    // wildcard certificate removes per-run ACME issuance, but the first public
+    // Caddy/TLS readiness window can still be cold; 210×2s = 7min.
+    "PROLIFERATE_HEALTHCHECK_ATTEMPTS=210",
+    `PROLIFERATE_COMPOSE_OVERRIDE_FILE=${remoteTlsComposeOverridePath}`,
+    "bash",
     SELFHOST_REMOTE_INSTALLER,
     "--bundle",
     SELFHOST_REMOTE_BUNDLE,
@@ -150,12 +175,8 @@ export async function runShippedInstaller(inputs: RunInstallerInputs): Promise<I
   try {
     await ssh.run(installArgs.join(" "), { timeoutMs: inputs.timeoutMs ?? INSTALL_SSH_TIMEOUT_MS });
   } catch (error) {
-    // The dominant install failure is the health gate timing out on TLS —
-    // curl only ever reports `tlsv1 alert internal error`, which is Caddy
-    // answering WITHOUT a certificate. WHY there is no certificate (ACME
-    // rate limit? DNS? CA outage?) lives only in Caddy's log on the box, so
-    // capture its tail before the world tears down (run 29631785126 was
-    // undiagnosable without it). Best-effort: never mask the real error.
+    // TLS/public-health failures live in Caddy's log on the box, so capture its
+    // tail before the world tears down. Best-effort: never mask the real error.
     if (error instanceof Error) {
       let caddyTail = "(probe failed)";
       try {
@@ -170,8 +191,14 @@ export async function runShippedInstaller(inputs: RunInstallerInputs): Promise<I
     }
     throw error;
   }
+  // Persist the qualification-only overlay for the explicit later bootstrap.sh
+  // calls (gateway/cloud-addon convergence) and control-handle restarts.
+  await ssh.run(
+    `sudo install -o root -g root -m 0600 ${remoteTlsComposeOverridePath} ` +
+      `${SELFHOST_PERSISTED_TLS_COMPOSE_OVERRIDE}`,
+  );
 
-  // 4. Wait for public HTTPS /health (Caddy TLS issuance + stack readiness).
+  // 4. Wait for public HTTPS /health (strict public TLS + stack readiness).
   const apiOrigin = `https://${inputs.siteAddress}`;
   await waitForHealth(apiOrigin, { timeoutMs: inputs.timeoutMs, log, fetchImpl: inputs.fetchImpl });
 
@@ -337,4 +364,43 @@ const defaultReadinessFetch: ReadinessFetch = (url, init) =>
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function qualificationCaddyfile(): string {
+  return `{$SITE_ADDRESS} {
+\ttls /qualification-tls/certificate.pem /qualification-tls/private-key.pem
+\tencode zstd gzip
+
+\thandle_path /llm/* {
+\t\treverse_proxy litellm:4000
+\t}
+
+\thandle {
+\t\treverse_proxy api:8000
+\t}
+}
+`;
+}
+
+function qualificationTlsComposeOverride(sshUser: string): string {
+  const home = qualificationRemotePath(sshUser, "");
+  return `services:
+  caddy:
+    volumes:
+      - ${home}${SELFHOST_REMOTE_TLS_CADDYFILE}:/etc/caddy/Caddyfile:ro
+      - ${home}${SELFHOST_REMOTE_TLS_CERTIFICATE}:/qualification-tls/certificate.pem:ro
+      - ${home}${SELFHOST_REMOTE_TLS_PRIVATE_KEY}:/qualification-tls/private-key.pem:ro
+`;
+}
+
+function qualificationRemotePath(sshUser: string, relativePath: string): string {
+  if (!/^[a-z_][a-z0-9_-]{0,31}$/.test(sshUser)) {
+    throw new Error("self-host SSH user is malformed; refusing to generate qualification TLS mount paths.");
+  }
+  return `/home/${sshUser}/${relativePath}`;
+}
+
+async function writePublicConfigOverSsh(ssh: SshTransport, remotePath: string, contents: string): Promise<void> {
+  const encoded = Buffer.from(contents, "utf8").toString("base64");
+  await ssh.run(`printf '%s' '${encoded}' | base64 -d > ${remotePath} && chmod 600 ${remotePath}`);
 }

@@ -90,7 +90,13 @@ image. Before either worker or Beat task definition is registered, the same
 checked-in hosted contract must match its execution role and its one direct
 `REDBEAT_REDIS_URL` reference by source service, account, region, and
 environment-owned name; duplicate, plaintext, field-projected, or
-sibling-environment references fail closed.
+sibling-environment references fail closed. The re-image also authors and then
+asserts the Cloud provider pair needed by periodic maintenance: exactly one
+`E2B_API_KEY` field projection from the verified environment-owned server-app
+secret and exactly one reviewed `E2B_TEMPLATE_NAME`, with no inherited
+plaintext, duplicate, or sibling-environment key reference. The registered
+revision is re-read and checked against the same complete contract before the
+service is rolled.
 
 `server/infra/background.tf` (Amazon MQ RabbitMQ broker, ElastiCache Serverless
 Valkey scheduler store, and the worker/Beat ECS services, task definitions,
@@ -107,7 +113,11 @@ definitions. `background_services_enabled = true` fails at Terraform plan time
 (a variable validation proven by `server/infra/tests/background_plane.tftest.hcl`
 under a mocked provider) unless either the managed broker/store stage is enabled
 or both external endpoint secret ARNs are supplied, so the services can never be
-created without a reachable broker/store.
+created without a reachable broker/store. The optional Terraform Cloud-provider
+inputs accept only an absent pair or a base Secrets Manager ARN plus a nonempty
+template; partial and pre-projected key inputs fail at plan time. When present,
+the execution role can read only the supplied base secret and ECS performs the
+exact `E2B_API_KEY` field projection at task start.
 
 The hosted API also uses Redis for cross-process Cloud materialization and
 GitHub-refresh leases, independently of whether worker and Beat services are
@@ -204,7 +214,7 @@ gate.
 | `_deploy-e2b.yml` | Reusable only | Build and/or promote one immutable E2B template into a rolling environment tag; the smoke proves the three runtime binaries report the canonical version and carry the stamped source SHA before the rolling tag moves. |
 | `_deploy-litellm.yml` | Reusable only | Build and roll the LiteLLM ECS service when its environment switch is enabled. |
 | `_deploy-mobile.yml` | Reusable only | Run the selected EAS build and optional submit lane when enabled. |
-| `_deploy-server.yml` | Reusable only | Build the exact-SHA server image, migrate, conditionally roll the Celery worker and Beat before the API, roll the API, and verify health. API, worker, and Beat are all pinned to the one candidate image by its **immutable `repo@sha256:` digest** (resolved from the build/push output), never a mutable tag, so all three planes run the byte-identical image and a later tag move cannot change what a rolled service runs. The rendered task enables strict release identity, strips inherited stale runtime-identity variables, preserves the support-feed secret, and explicitly authors the API's checked-in environment-bound Redis field reference after account, region, secret-identity, and DNS-safe value preflights, all asserted before registration. |
+| `_deploy-server.yml` | Reusable only | Build the exact-SHA server image, migrate, conditionally roll the Celery worker and Beat before the API, roll the API, and verify health. API, worker, and Beat are all pinned to the one candidate image by its **immutable `repo@sha256:` digest** (resolved from the build/push output), never a mutable tag, so all three planes run the byte-identical image and a later tag move cannot change what a rolled service runs. The rendered task enables strict release identity, strips inherited stale runtime-identity variables, preserves the support-feed secret, and explicitly authors the API's checked-in environment-bound Redis and E2B-key field references after account, region, secret-identity, DNS-safe Redis, and nonempty-key preflights. The conditional background re-image authors the same exact key projection plus the reviewed template, and asserts the full contract before and after registration. |
 | `_deploy-web.yml` | Reusable only | Deploy and verify the selected Vercel web surface. |
 | `_deploy-workers.yml` | Reusable only | Report the disabled Worker lane, or fail if enabled before a canonical deploy exists. |
 
@@ -213,7 +223,7 @@ gate.
 | Workflow | Trigger and posture | Role |
 | --- | --- | --- |
 | `agent-runtime-compat.yml` | Manual | Exercise live local AnyHarness compatibility with configured agent credentials. |
-| `catalog-probe.yml` | Scheduled daily or manual | Probe agent/catalog pins and open an update PR when the generated catalog changes. |
+| `catalog-probe.yml` | Scheduled daily or manual | Probe agent/catalog pins through the protected `Catalog Probe` environment, pass sanitized outputs to a separate write-capable PR job, and create or update an owned GitHub issue on scheduled failure. |
 | `ci.yml` | Push to `main`, pull request, or manual | Run repository shape, configuration, candidate-handoff, Rust, SDK, client, and workflow checks. Required-check policy is external to this file. |
 | `cloud-live-webhook.yml` | Manual | Exercise a live E2B webhook through an externally reachable target. |
 | `cloud-tests.yml` | Manual | Run credentialed cloud lifecycle and runtime suites. |

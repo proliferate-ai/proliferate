@@ -16,6 +16,7 @@ import type { Exec } from "../local-workspace/docker.js";
 import type { LocalWorldPorts } from "../local-workspace/ports.js";
 import type { ReadinessFetch, SpawnLike } from "../local-workspace/processes.js";
 import type { ChromiumLauncher } from "../local-workspace/renderer.js";
+import { TEST_QUALIFICATION_TLS } from "../qualification-tls.test-fixture.js";
 import type { Ec2Exec } from "./ec2.js";
 import type { Route53Exec } from "./dns.js";
 import {
@@ -161,7 +162,16 @@ test("constructSelfHostWorldPair: A keeps the baked subdomain, B is fully distin
   try {
     const map = await buildMap(src);
     const ec2Calls: string[][] = [];
-    const pair = await constructSelfHostWorldPair({ run: RUN, map, runDir, ports: PORTS, aws: AWS, ssh: SSH, deps: pairDeps(ec2Calls) });
+    const pair = await constructSelfHostWorldPair({
+      run: RUN,
+      map,
+      runDir,
+      ports: PORTS,
+      aws: AWS,
+      ssh: SSH,
+      tls: TEST_QUALIFICATION_TLS,
+      deps: pairDeps(ec2Calls),
+    });
 
     // Server A's API origin is the run/shard-UNCHANGED subdomain (the origin the
     // renderer's baked VITE_PROLIFERATE_API_BASE_URL points at).
@@ -214,7 +224,16 @@ test("constructSelfHostWorldPair: a failure building server B tears down server 
       return okResolve(m);
     };
     await assert.rejects(
-      constructSelfHostWorldPair({ run: RUN, map, runDir, ports: PORTS, aws: AWS, ssh: SSH, deps }),
+      constructSelfHostWorldPair({
+        run: RUN,
+        map,
+        runDir,
+        ports: PORTS,
+        aws: AWS,
+        ssh: SSH,
+        tls: TEST_QUALIFICATION_TLS,
+        deps,
+      }),
       /server B candidate set unresolved/,
     );
     // Server A was built then torn down (its box terminated) before the rethrow.

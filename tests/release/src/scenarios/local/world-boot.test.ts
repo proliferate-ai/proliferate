@@ -16,6 +16,10 @@ import type { CandidateBuildMapV1 } from "../../artifacts/build-map.js";
 import type { EnvResolution } from "../../config/env-resolution.js";
 import type { ReadyLocalWorld } from "../../worlds/local-workspace/world.js";
 import type { LocalWorldCleanupEvidence } from "../../worlds/local-workspace/cleanup.js";
+import { authenticatedActor, __resetAuthenticatedActorClaimCacheForTests } from "../../fixtures/authenticated-actor.js";
+import { ApiClient } from "../../fixtures/http.js";
+import type { AuthenticatedActorTransport } from "../../fixtures/authenticated-actor.js";
+import type { ActorKeyIdentity } from "../../services/qualification-litellm.js";
 
 // ── Fakes (offline: no world, browser, container, or network) ────────────────
 
@@ -246,4 +250,134 @@ test("bootLocalFunctionalWorld: releases the mutex when construction throws", as
   });
   assert.equal(constructed, true);
   await world.close();
+});
+
+// ── claim-cache eviction on close (regression: run 29631868610, T3-AUTHROUTE-1
+//    route=change 401 — stale owner leaking from a torn-down world into a
+//    second world reusing the same worldRoot) ─────────────────────────────────
+
+function fakeAuthTransport(overrides: Partial<AuthenticatedActorTransport> = {}): {
+  transport: AuthenticatedActorTransport;
+  calls: string[];
+} {
+  const calls: string[] = [];
+  const transport: AuthenticatedActorTransport = {
+    readSetupToken: async (setupTokenPath) => {
+      calls.push(`readSetupToken:${setupTokenPath}`);
+      return "the-setup-token";
+    },
+    claimSetup: async (params) => {
+      calls.push(`claimSetup:${params.email}`);
+    },
+    waitForSetupCommitted: async () => {
+      calls.push("waitForSetupCommitted");
+    },
+    loginWithPassword: async (_apiBaseUrl, email) => {
+      calls.push(`loginWithPassword:${email}`);
+      return {
+        access_token: "access-1",
+        refresh_token: "refresh-1",
+        token_type: "bearer",
+        expires_in: 3600,
+        user: { id: "user-1", email, display_name: "Owner", github_login: null, avatar_url: null },
+      };
+    },
+    listOrganizations: async () => {
+      calls.push("listOrganizations");
+      return { organizations: [{ id: "org-1" }] };
+    },
+    getEnrollment: async () => {
+      calls.push("getEnrollment");
+      return {
+        id: "enrollment-1",
+        subjectKind: "user",
+        litellmTeamId: "team-1",
+        syncStatus: "synced",
+        lastErrorCode: null,
+        createdAt: "2026-01-01T00:00:00Z",
+        updatedAt: "2026-01-01T00:00:00Z",
+      };
+    },
+    putGatewaySelection: async (_api, harnessKind, surface) => {
+      calls.push(`putGatewaySelection:${harnessKind}:${surface}`);
+    },
+    ...overrides,
+  };
+  return { transport, calls };
+}
+
+function fakeAuthActorWorld(runDir: string): ReadyLocalWorld {
+  return {
+    kind: "local-workspace",
+    run: {
+      run_id: "local-run-1",
+      shard_id: "local-0",
+      attempt: 1,
+      source_sha: "a".repeat(40),
+      origin: { kind: "local", github_run_id: null, github_job: null },
+    },
+    artifacts: {
+      server: { artifact_id: "server/linux-amd64", version: "1", sha256: "s".repeat(64), path: "/tmp/server" },
+      anyharness: { artifact_id: "anyharness/x86_64", version: "1", sha256: "a".repeat(64), path: "/tmp/anyharness" },
+      desktopRenderer: {
+        artifact_id: "desktop-renderer/browser",
+        version: "1",
+        sha256: "d".repeat(64),
+        path: "/tmp/renderer",
+      },
+    },
+    api: { baseUrl: "http://127.0.0.1:9001", client: new ApiClient({ baseUrl: "http://127.0.0.1:9001" }) },
+    runtime: { baseUrl: "http://127.0.0.1:9002", client: undefined as never },
+    renderer: { baseUrl: "http://127.0.0.1:9003", browser: undefined as never },
+    gateway: {
+      resolveActorKey: async ({ userId, enrollmentId }: { userId: string; enrollmentId: string }) =>
+        ({
+          userId,
+          enrollmentId,
+          teamId: "team-1",
+          litellmUserId: "litellm-user-1",
+          keyAlias: `vk-user-${userId}-${enrollmentId.slice(0, 8)}`,
+          tokenId: "token-1",
+          tokenIdHash: "hash-1",
+        }) satisfies ActorKeyIdentity,
+    } as unknown as ReadyLocalWorld["gateway"],
+    paths: { runDir, runtimeHome: `${runDir}/runtime-home`, repositoriesDir: `${runDir}/repositories` },
+    db: { databaseUrl: "postgresql+asyncpg://proliferate:localdev@127.0.0.1:5599/proliferate" },
+    close: async () => ({}) as LocalWorldCleanupEvidence,
+  };
+}
+
+test("bootLocalFunctionalWorld: closing a world evicts the authenticatedActor claim cache for its worldRoot, so a second world reusing the same runDir claims again instead of reusing the stale owner", async () => {
+  __resetAuthenticatedActorClaimCacheForTests();
+  const runDir = "/tmp/run-shared-authroute";
+  const inputs = fakeWorldInputs(runDir);
+  // T3-AUTHROUTE-1's batch collector, then its route=change collector: two
+  // DIFFERENT scenario ids, but `worldDirSlug` collapses to the same subdir
+  // when both pass the same underlying scenario id (as production code does).
+  const scenarioId = "T3-AUTHROUTE-1";
+
+  const world1 = await bootLocalFunctionalWorld(inputs, scenarioId, async (opts) =>
+    fakeAuthActorWorld(opts.worldRoot!),
+  );
+  const { transport: transport1, calls: calls1 } = fakeAuthTransport();
+  await authenticatedActor(world1, "owner", {}, transport1);
+  await world1.close(); // MUST evict the claim cache entry for this worldRoot
+
+  const world2 = await bootLocalFunctionalWorld(inputs, scenarioId, async (opts) =>
+    fakeAuthActorWorld(opts.worldRoot!),
+  );
+  const { transport: transport2, calls: calls2 } = fakeAuthTransport();
+  await authenticatedActor(world2, "owner", {}, transport2);
+  await world2.close();
+
+  assert.equal(
+    calls1.filter((call) => call.startsWith("claimSetup")).length,
+    1,
+    "the first world claims once",
+  );
+  assert.equal(
+    calls2.filter((call) => call.startsWith("claimSetup")).length,
+    1,
+    "the second world, reusing the same runDir, must claim again rather than reuse world 1's stale owner cache",
+  );
 });

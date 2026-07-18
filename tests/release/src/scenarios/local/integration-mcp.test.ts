@@ -178,8 +178,8 @@ test("runLocal7McpCellsAgainstWorld: a per-cell failure does not affect its sibl
   const driver: LocalMcpDriver = {
     ...base,
     runIntegrationTurn: async (_world, _page, harness) => {
-      if (harness === "cursor") {
-        throw new Error("cursor turn errored");
+      if (harness === "grok") {
+        throw new Error("grok turn errored");
       }
       return {
         workspaceId: `ws-${harness}`,
@@ -190,13 +190,35 @@ test("runLocal7McpCellsAgainstWorld: a per-cell failure does not affect its sibl
       };
     },
   };
-  const cells = [fakeCell("claude"), fakeCell("cursor")];
+  const cells = [fakeCell("claude"), fakeCell("grok")];
 
   const outcomes = await runLocal7McpCellsAgainstWorld(world, cells, driver);
 
   assert.equal(outcomes[0]!.status, "green");
   assert.equal(outcomes[1]!.status, "failed");
-  assert.match(outcomes[1]!.reason!.message, /cursor turn errored/);
+  assert.match(outcomes[1]!.reason!.message, /grok turn errored/);
+});
+
+test("runLocal7McpCellsAgainstWorld: cursor is short-circuited to blocked before any gateway selection PUT (createActor never called)", async () => {
+  const closed = { value: 0 };
+  const world = fakeWorld();
+  const base = greenDriver(closed);
+  let createActorCalled = false;
+  const driver: LocalMcpDriver = {
+    ...base,
+    createActor: async (_world, harness) => {
+      createActorCalled = true;
+      return fakeActor(harness);
+    },
+  };
+  const cells = [fakeCell("cursor")];
+
+  const outcomes = await runLocal7McpCellsAgainstWorld(world, cells, driver);
+
+  assert.equal(outcomes[0]!.status, "blocked");
+  assert.equal(outcomes[0]!.reason!.code, "scenario_blocked");
+  assert.match(outcomes[0]!.reason!.message, /no gateway auth slot/);
+  assert.equal(createActorCalled, false);
 });
 
 test("runLocal7McpCellsAgainstWorld: a real audit query failure stays failed", async () => {

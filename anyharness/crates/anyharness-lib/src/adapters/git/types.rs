@@ -102,6 +102,34 @@ pub enum GitStatusSummaryState {
     Unknown,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GitWorktreeRestoreOutcome {
+    Restored,
+    AlreadyPresent,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum GitWorktreeRestoreError {
+    #[error("repository checkout is missing at {path}")]
+    RepositoryMissing { path: String },
+    #[error("repository checkout at {path} is not a usable Git repository")]
+    RepositoryInvalid { path: String },
+    #[error("recorded branch '{branch}' no longer exists in the repository")]
+    BranchMissing { branch: String },
+    #[error("the parent directory for the recorded worktree path is unavailable: {path}")]
+    DestinationParentUnavailable { path: String },
+    #[error("the recorded worktree path is occupied and will not be overwritten: {path}")]
+    DestinationOccupied { path: String },
+    #[error("Git has a conflicting worktree registration at {path}: {detail}")]
+    RegistrationConflict { path: String, detail: String },
+    #[error("branch '{branch}' is already checked out in another worktree at {path}")]
+    BranchCheckedOutElsewhere { branch: String, path: String },
+    #[error("Git worktree state is ambiguous: {detail}")]
+    AmbiguousState { detail: String },
+    #[error("Git could not restore the worktree: {detail}")]
+    OperationFailed { detail: String },
+}
+
 #[derive(Debug, Clone)]
 pub struct GitStatusSummarySnapshot {
     pub state: GitStatusSummaryState,

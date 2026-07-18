@@ -161,6 +161,56 @@ interface OrganizationsListResponse {
 export const SYNCED_ENROLLMENT_STATUS = "synced";
 
 /**
+ * A `ReadyLocalWorld` boots ONE single-org server and runs its first-run
+ * `/setup` claim exactly once (the server correctly 404s any later claim
+ * attempt). Tier-3 scenarios loop `authenticatedActor` over multiple harness
+ * cells (claude, codex, grok, opencode, cursor) against that same world; only
+ * the first cell may claim. This cache memoizes the claim PROMISE (not just
+ * the resolved credentials) per world identity so that:
+ *
+ *   - the second+ call for the same world skips `claimSetup` /
+ *     `waitForSetupCommitted` entirely and goes straight to
+ *     `loginWithPassword` with the cached owner credentials; and
+ *   - two calls racing for the same world (sequential in practice, but
+ *     defensively guarded) await the SAME in-flight claim rather than issuing
+ *     a second `POST /setup`.
+ *
+ * A failed claim is never cached — the entry is deleted so a later call gets
+ * an honest retry-from-scratch (still surfacing the real failure, never
+ * masking it).
+ */
+const claimedOwnerByWorld = new Map<string, Promise<{ email: string; password: string }>>();
+
+/** Test-only escape hatch: clears the module-level per-world claim cache. */
+export function __resetAuthenticatedActorClaimCacheForTests(): void {
+  claimedOwnerByWorld.clear();
+}
+
+/**
+ * Evicts the claimed-owner cache entry for a world's `runDir`. MUST be called
+ * on every teardown path of a world booted against that `runDir` (see
+ * `bootLocalFunctionalWorld` in `../scenarios/local/world-boot.ts`).
+ *
+ * The cache is keyed by `world.paths.runDir`, and a single scenario can boot
+ * MULTIPLE successive worlds under the same run dir (e.g. `T3-AUTHROUTE-1`
+ * boots one world for its batch collector, then a fresh world for its
+ * `route=change` collector, both deriving the same `worldRoot` from the
+ * shared scenario id). Without eviction, a torn-down world's cached owner
+ * credentials leak into the next world that reuses the same path; that next
+ * world's database has no such owner, so password login 401s. Evicting on
+ * close makes that leak structurally impossible no matter how many worlds a
+ * scenario boots against the same run dir.
+ */
+export function evictClaimedOwner(runDir: string): void {
+  claimedOwnerByWorld.delete(runDir);
+}
+
+/** Stable identity for a world's single-org server (one claim per run dir). */
+function worldIdentity(world: ReadyLocalWorld): string {
+  return world.paths.runDir;
+}
+
+/**
  * Every network/filesystem side effect this fixture performs, factored out so
  * unit tests can fake the transport without a real Server/filesystem. The
  * default (`defaultAuthenticatedActorTransport`) is what production wiring
@@ -281,26 +331,50 @@ export async function authenticatedActor(
     throw new Error(`authenticatedActor: unsupported role "${role}" (only "owner" is implemented).`);
   }
 
-  const setupTokenPath = options.setupTokenPath ?? path.join(world.paths.runDir, "setup-token");
-  const setupToken = await transport.readSetupToken(setupTokenPath);
+  const worldKey = worldIdentity(world);
+  const explicitEmail = options.email;
+  const setupCommitTimeoutMs = options.setupCommitTimeoutMs ?? 10_000;
+  const setupCommitPollMs = options.setupCommitPollMs ?? 250;
 
-  // NOTE: a real, non-reserved TLD is required. `normalize_account_email`
-  // (server/proliferate/server/setup/accounts.py) rejects the special-use TLDs
-  // `.invalid`/`.test`/`.local`/`.localhost` with a 400, so the claim uses a
-  // syntactically valid `example.com` address (no mail is ever sent).
-  const email = options.email ?? `qual-owner-${world.run.run_id}-${world.run.shard_id}@example.com`;
-  const password = randomBytes(24).toString("hex");
-  const organizationName = options.organizationName ?? `local-world-smoke-${world.run.run_id}`;
+  let claim: Promise<{ email: string; password: string }>;
+  if (explicitEmail !== undefined) {
+    // A caller-provided email opts out of the shared per-world owner cache
+    // (it wants its own, distinct claim identity); claim directly.
+    claim = performClaim(
+      world,
+      transport,
+      explicitEmail,
+      options.organizationName,
+      setupCommitTimeoutMs,
+      setupCommitPollMs,
+      options.setupTokenPath,
+    );
+  } else {
+    const cached = claimedOwnerByWorld.get(worldKey);
+    if (cached !== undefined) {
+      claim = cached;
+    } else {
+      claim = performClaim(
+        world,
+        transport,
+        undefined,
+        options.organizationName,
+        setupCommitTimeoutMs,
+        setupCommitPollMs,
+        options.setupTokenPath,
+      );
+      claimedOwnerByWorld.set(worldKey, claim);
+      claim.catch(() => {
+        // Never cache a failed claim: a later call must retry from scratch
+        // and surface the real failure honestly, not a stale rejection.
+        if (claimedOwnerByWorld.get(worldKey) === claim) {
+          claimedOwnerByWorld.delete(worldKey);
+        }
+      });
+    }
+  }
 
-  await transport.claimSetup({ apiBaseUrl: world.api.baseUrl, email, password, setupToken, organizationName });
-  // The setup POST can return before a second connection observes the committed
-  // owner row. Prove visibility explicitly, then make exactly one password-login
-  // attempt. A 401 remains a real red product failure; this is not a retry loop.
-  await transport.waitForSetupCommitted(
-    world.api.baseUrl,
-    options.setupCommitTimeoutMs ?? 10_000,
-    options.setupCommitPollMs ?? 250,
-  );
+  const { email, password } = await claim;
 
   let tokenResponse: DesktopTokenResponse;
   try {
@@ -347,6 +421,42 @@ export async function authenticatedActor(
     session,
     gatewayKey,
   };
+}
+
+/**
+ * Performs the real, one-time first-run claim for a world: read the setup
+ * token, `POST /setup`, then prove the claim is committed/visible on a fresh
+ * connection before any password-login attempt is made. Only ever called
+ * once per world (guarded by `claimedOwnerByWorld` in `authenticatedActor`)
+ * unless the caller passed an explicit `email`, which opts out of sharing.
+ */
+async function performClaim(
+  world: ReadyLocalWorld,
+  transport: AuthenticatedActorTransport,
+  explicitEmail: string | undefined,
+  organizationNameOverride: string | undefined,
+  setupCommitTimeoutMs: number,
+  setupCommitPollMs: number,
+  setupTokenPathOverride: string | undefined,
+): Promise<{ email: string; password: string }> {
+  const setupTokenPath = setupTokenPathOverride ?? path.join(world.paths.runDir, "setup-token");
+  const setupToken = await transport.readSetupToken(setupTokenPath);
+
+  // NOTE: a real, non-reserved TLD is required. `normalize_account_email`
+  // (server/proliferate/server/setup/accounts.py) rejects the special-use TLDs
+  // `.invalid`/`.test`/`.local`/`.localhost` with a 400, so the claim uses a
+  // syntactically valid `example.com` address (no mail is ever sent).
+  const email = explicitEmail ?? `qual-owner-${world.run.run_id}-${world.run.shard_id}@example.com`;
+  const password = randomBytes(24).toString("hex");
+  const organizationName = organizationNameOverride ?? `local-world-smoke-${world.run.run_id}`;
+
+  await transport.claimSetup({ apiBaseUrl: world.api.baseUrl, email, password, setupToken, organizationName });
+  // The setup POST can return before a second connection observes the committed
+  // owner row. Prove visibility explicitly, then make exactly one password-login
+  // attempt. A 401 remains a real red product failure; this is not a retry loop.
+  await transport.waitForSetupCommitted(world.api.baseUrl, setupCommitTimeoutMs, setupCommitPollMs);
+
+  return { email, password };
 }
 
 async function waitForSyncedEnrollment(

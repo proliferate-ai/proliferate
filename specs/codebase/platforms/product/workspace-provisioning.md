@@ -194,7 +194,13 @@ performs the current synchronous flow:
 11. when this is an exact-ref Desktop source flow, require the local descriptor
     to match the independently verified HEAD and record the owned local
     association (a conflict fails the request rather than reporting success);
-12. commit the request transaction after the handler returns successfully.
+12. commit the final request transaction after the handler returns successfully
+    and before the HTTP response starts.
+
+The create route uses a function-scoped request session for that last boundary.
+This matters because repository materialization and AnyHarness creation can
+outlive a caller or proxy connection: a success response is never started until
+the Cloud workspace id and managed materialization are durable.
 
 Desktop clone and open-on-Mac use caller-supplied idempotency ledgers in
 AnyHarness. Clone operation ids are scoped to the chosen destination and reused

@@ -335,6 +335,25 @@ during a restore is queued until the final same-workspace restore fence closes;
 the runtime id actually restored is removed from that queue, while unrelated
 queued cleanup drains immediately in the background.
 
+Empty-session creation also has a small durable pre-acknowledgement phase. The
+client persists the projected `client-session:*` id, a caller-selected runtime
+UUID, workspace, resolved mode (including no mode), frozen live defaults,
+subagent preference, launch selection, and replacement target before sending
+`POST /v1/sessions`. This seam is enabled only for the bundled local runtime,
+which deploys in lockstep with ProductClient; cloud and SSH runtimes can lag and
+retain the pre-existing server-minted create behavior until they advertise an
+equivalent capability. A successful create response strictly acknowledges and
+removes the entry before launch defaults run. If acknowledgement storage fails,
+the materializer retires the created runtime or retains it honestly rather than
+publishing an unowned replay entry. If a reload interrupts the request before
+the response is observed, workspace bootstrap resumes the entry with both
+original ids and frozen inputs before it considers opening a default empty
+session. The runtime UUID is the idempotency identity: resume may repeat that
+exact request, but must never probe by agent/model and must never mint a new
+UUID as a fallback. This ledger is limited to empty session creation;
+prompt-bearing projected sessions retain their existing inspectable
+failure/retry ownership.
+
 ## 7. Begin Flow
 
 All workspace creation entrypoints should converge on this shape:
@@ -651,6 +670,8 @@ Pending failures must preserve enough state to retry or exit cleanly:
 - retry uses the original deterministic request unless the user explicitly
   changes it
 - back/abort clears pending state and does not persist the pending workspace key
+- an interrupted empty-session create remains resumable under its original
+  client id and runtime UUID until the runtime acknowledges that create
 
 If materialization fails after a projected session exists, do not create a new
 session automatically. The user should see the failed workspace shell and keep
@@ -672,6 +693,11 @@ Minimum coverage by concern:
 - finalization: projected sessions materialize before pending state clears
 - home launch: initial prompt remains attached to the projected session and
   does not create a second fresh session
+- interrupted empty-session creation: persistence precedes the create request,
+  cold bootstrap reuses both ids and frozen inputs, pending actor readiness is
+  joined durably, an ambiguous replay stays pending without failing workspace
+  bootstrap, acknowledgement prevents a second resume, and a dismissed or
+  closed UUID cannot be resurrected by a stale ledger entry
 - session intents: prompts/config/interaction responses preserve order, render
   immediately where visible, and dispatch only after materialized session id
 - queued prompt controls: icons reserve immediately while disabled, then enable

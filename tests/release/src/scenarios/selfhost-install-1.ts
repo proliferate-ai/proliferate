@@ -125,6 +125,8 @@ export const SELFHOST_REQUIRED_ENV = [
   "RELEASE_E2E_SELFHOST_HOSTED_ZONE_ID",
   "RELEASE_E2E_SELFHOST_INSTANCE_TYPE",
   "RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY",
+  "RELEASE_E2E_QUALIFICATION_TLS_CERTIFICATE_B64",
+  "RELEASE_E2E_QUALIFICATION_TLS_PRIVATE_KEY_B64",
 ] as const;
 
 export const selfhostInstall1: ScenarioDefinition = {
@@ -190,6 +192,10 @@ export interface SelfHostWorldConstructionInputs {
   ports: LocalWorldPorts;
   aws: SelfHostAwsInputs;
   ssh: SelfHostSshInputs;
+  tls: {
+    certificateBase64: string;
+    privateKeyBase64: string;
+  };
 }
 
 /**
@@ -260,6 +266,7 @@ export const defaultSelfHostInstallDriver: SelfHostInstallDriver = {
       ports: inputs.ports,
       aws: inputs.aws,
       ssh: inputs.ssh,
+      tls: inputs.tls,
     }),
 
   async runInstallClaim(world) {
@@ -274,6 +281,8 @@ export const defaultSelfHostInstallDriver: SelfHostInstallDriver = {
       candidateImageRepo,
       candidateImageTag,
       corsAllowOrigins: browserOriginsForBox(world),
+      tlsCertificatePath: world.paths.tlsCertificatePath,
+      tlsPrivateKeyPath: world.paths.tlsPrivateKeyPath,
     });
 
     // Advertised-version truth (frozen spec: "assert advertised candidate
@@ -987,10 +996,14 @@ export function resolveSelfHostWorldInputs(
   let region: string;
   let hostedZoneId: string;
   let instanceType: string;
+  let certificateBase64: string;
+  let privateKeyBase64: string;
   try {
     region = ctx.env.require("RELEASE_E2E_SELFHOST_REGION");
     hostedZoneId = ctx.env.require("RELEASE_E2E_SELFHOST_HOSTED_ZONE_ID");
     instanceType = ctx.env.require("RELEASE_E2E_SELFHOST_INSTANCE_TYPE");
+    certificateBase64 = ctx.env.require("RELEASE_E2E_QUALIFICATION_TLS_CERTIFICATE_B64");
+    privateKeyBase64 = ctx.env.require("RELEASE_E2E_QUALIFICATION_TLS_PRIVATE_KEY_B64");
   } catch (error) {
     return { ok: false, reason: describe(error) };
   }
@@ -1004,6 +1017,7 @@ export function resolveSelfHostWorldInputs(
       ports: ctx.ports,
       aws: { region, instanceType, hostedZoneId, zone: "qualification.proliferate.com" },
       ssh: { sshUser },
+      tls: { certificateBase64, privateKeyBase64 },
     },
   };
 }

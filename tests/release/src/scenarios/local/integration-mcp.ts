@@ -35,6 +35,10 @@ import type {
   LocalHarnessKind,
   LocalMcpIntegrationEvidenceV1,
 } from "../../evidence/schema.js";
+import {
+  GATEWAY_UNSUPPORTED_HARNESSES,
+  gatewayUnsupportedMessage,
+} from "../../fixtures/gateway-unsupported-harnesses.js";
 
 /**
  * LOCAL-7 (Product MCP integration for every harness) under `T3-INT-1/local/
@@ -381,6 +385,22 @@ export async function runLocal7McpCellsAgainstWorld(
 
   for (const cell of cells) {
     const harness = (cell.dimensions.harness ?? "claude") as LocalHarnessKind;
+    if (GATEWAY_UNSUPPORTED_HARNESSES.has(harness)) {
+      // Short-circuit BEFORE createActor: `authenticatedActor` unconditionally
+      // PUTs a gateway selection for the requested harness, and the server
+      // correctly 400s that PUT for a gateway-unsupported harness (cursor
+      // carries an account key, not a provider key — see
+      // gateway-unsupported-harnesses.ts). That 400 is by design, not a
+      // failure to mask; type this cell blocked the same way LOCAL-2/LOCAL-4
+      // already do for the identical fact.
+      entries.push({
+        cell,
+        ok: false,
+        status: "blocked",
+        message: gatewayUnsupportedMessage(harness, "its LOCAL-7 MCP integration turn cannot run on the gateway-enrolled world"),
+      });
+      continue;
+    }
     try {
       const actor = await driver.createActor(world, harness);
       await world.trackActorSubjects?.(actor.gatewayKey);

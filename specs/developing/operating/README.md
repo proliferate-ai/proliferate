@@ -20,6 +20,7 @@ under [`../deploying/`](../deploying/).
 | Triage Worker enrollment, heartbeat, or version convergence after checking AnyHarness independently | [Worker enrollment failure](worker-enrollment-failure.md) |
 | Prepare for break-glass access, secret rotation, support-bundle handling, or audit closeout | [Operator security posture](operator-security-posture.md) |
 | Understand, reproduce, or roll back the six production Grafana alert-rule identities and the dark issue-tracker webhook contact point | [Production alerts](production-alerts.md) |
+| Provision, rotate, revoke, audit, or manually verify the scheduled agent catalog probe | [Catalog Probe](catalog-probe.md) |
 
 ## Procedure Rules
 

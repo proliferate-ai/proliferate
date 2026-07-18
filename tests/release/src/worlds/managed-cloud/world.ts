@@ -29,6 +29,11 @@ import {
   type ChromiumLauncher,
 } from "../local-workspace/renderer.js";
 import {
+  decodeQualificationTls,
+  materializeQualificationTls,
+  type QualificationTlsInput,
+} from "../qualification-tls.js";
+import {
   ManagedCloudCleanupStack,
   type ManagedCloudCleanupEvidence,
   type ManagedCloudCleanupKind,
@@ -205,6 +210,8 @@ export interface ConstructManagedCloudWorldOptions {
   aws: Ec2ProvisionConfig;
   e2b: E2bBuildConfig & CandidateE2bConfig;
   github: CandidateGithubAppConfig;
+  /** Reusable wildcard certificate capacity for *.qualification.proliferate.com. */
+  tls: QualificationTlsInput;
   /**
    * PR 6 (append-only): Stripe TEST-mode config for the candidate Server,
    * threaded verbatim into `deployCandidateApi`. Absent (the default) keeps the
@@ -214,8 +221,8 @@ export interface ConstructManagedCloudWorldOptions {
   stripe?: CandidateStripeConfig;
   /**
    * PR 6 (append-only): on-box signed-callback relay config, threaded verbatim
-   * into `deployCandidateApi`. Absent (the default) stages no relay and produces
-   * the byte-identical single-proxy Caddyfile.
+   * into `deployCandidateApi`. Absent (the default) stages no relay and preserves
+   * the single-proxy routing shape.
    */
   callbackRelay?: CandidateCallbackRelayConfig;
   /** Run/shard-scoped root; all world state lives under here. */
@@ -272,6 +279,10 @@ export async function constructManagedCloudWorld(
   // Resolve the six required artifacts BEFORE any side effect: an invalid map
   // provisions no AWS box, template, renderer, or browser.
   const candidateSet = resolveCloudCandidateSet(options.map);
+  // Reject malformed, expired, wrong-host, or mismatched TLS material before
+  // any AWS/provider mutation. materializeQualificationTls repeats this check
+  // immediately before writing the mode-0600 files.
+  decodeQualificationTls(options.tls);
 
   const gateway = new QualificationLiteLlmController(options.litellm, { fetch: deps.litellmFetch });
   // Fail fast on unreachable/ineligible gateway access with zero world side
@@ -290,6 +301,7 @@ export async function constructManagedCloudWorld(
   // The secrets directory (run-owned key files + generated 0600 env files) is
   // owner-only (0700 dir; files inside are written 0600).
   await mkdir(secretsDir, { recursive: true, mode: 0o700 });
+  const tls = await materializeQualificationTls(options.tls, secretsDir);
 
   // The subdomain MUST match the one the build baked into the Desktop renderer
   // (VITE_PROLIFERATE_API_BASE_URL) — otherwise the browser calls a host with no
@@ -391,6 +403,7 @@ export async function constructManagedCloudWorld(
       github: options.github,
       e2b: options.e2b,
       qualificationRun: { runId: options.run.run_id, shardId: options.run.shard_id },
+      tls,
       // PR 6 (append-only): forwarded verbatim; both undefined by default, so
       // deployCandidateApi's absent-config path (today's behaviour) runs.
       stripe: options.stripe,

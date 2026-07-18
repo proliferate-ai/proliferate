@@ -106,9 +106,11 @@ Each environment entry also selects the only direct background Redis reference
 service and name that the optional worker/Beat re-image path accepts. The
 workflow verifies the rendered task's exact contract execution role and an
 account-, region-, service-, and name-bound `REDBEAT_REDIS_URL` reference before
-registration. A future external endpoint rebind must first update this
-checked-in identity in the same reviewed change; a GitHub Environment variable
-cannot override it.
+registration. It also projects `E2B_API_KEY` from the same verified server-app
+secret and supplies `E2B_TEMPLATE_NAME` from the reviewed environment variable;
+both worker and Beat must carry exactly that pair. A future external endpoint
+rebind must first update the Redis identity in this checked-in contract in the
+same reviewed change; a GitHub Environment variable cannot override it.
 
 After selecting one exact workflow alias from that contract and assuming its
 role, the deploy verifies the live task definition's exact execution role,
@@ -119,8 +121,9 @@ keep identifier-bearing task JSON in private temporary directories and delete it
 on every exit before the hooks execute. The deploy verifies the ARN's
 account/region/environment identity, parses the JSON `REDBEAT_REDIS_URL` without
 logging it, rejects literal and DNS-resolved loopback or unspecified addresses,
-authors the exact ECS field projection, and removes inherited plaintext or stale
-references. The server's loopback default is not a hosted source.
+and requires a nonempty, whitespace-canonical `E2B_API_KEY` without logging it.
+It authors both exact ECS field projections and removes inherited plaintext or
+stale references. The server's loopback default is not a hosted source.
 
 ## Frontend, Mobile, and Desktop Native Builds
 

@@ -1897,6 +1897,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Caller-selected session id conflicts with an existing session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -7094,6 +7104,57 @@
         }
       }
     },
+    "/v1/workspaces/{workspace_id}/worktree/restore": {
+      "post": {
+        "tags": [
+          "workspaces"
+        ],
+        "operationId": "restore_worktree",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Restored the recorded worktree",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RestoreWorktreeWorkspaceResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Workspace not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Worktree cannot be restored safely",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/worktrees/inventory": {
       "get": {
         "tags": [
@@ -9587,6 +9648,13 @@
                 "$ref": "#/components/schemas/OriginContext"
               }
             ]
+          },
+          "sessionId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional caller-selected canonical lowercase v4 UUID. Repeating a\ncreate request with the same id resumes that exact session instead of\ncreating another one."
           },
           "subagentsEnabled": {
             "type": [
@@ -15163,6 +15231,28 @@
         "properties": {
           "repoRoot": {
             "$ref": "#/components/schemas/RepoRoot"
+          },
+          "workspace": {
+            "$ref": "#/components/schemas/Workspace"
+          }
+        }
+      },
+      "RestoreWorktreeWorkspaceOutcome": {
+        "type": "string",
+        "enum": [
+          "restored",
+          "already_present"
+        ]
+      },
+      "RestoreWorktreeWorkspaceResponse": {
+        "type": "object",
+        "required": [
+          "workspace",
+          "outcome"
+        ],
+        "properties": {
+          "outcome": {
+            "$ref": "#/components/schemas/RestoreWorktreeWorkspaceOutcome"
           },
           "workspace": {
             "$ref": "#/components/schemas/Workspace"

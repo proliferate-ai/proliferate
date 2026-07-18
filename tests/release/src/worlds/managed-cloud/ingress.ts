@@ -4,6 +4,7 @@ import path from "node:path";
 
 import type { MaterializedArtifact } from "../../artifacts/local-candidate-set.js";
 import type { QualificationLiteLlmConfig } from "../../services/qualification-litellm.js";
+import type { QualificationTlsFiles } from "../qualification-tls.js";
 import {
   CALLBACK_RELAY_SCRIPT,
   DEFAULT_RELAY_LISTEN_PORT,
@@ -48,6 +49,8 @@ const REMOTE_GITHUB_KEY_PATH = `${REMOTE_WORKDIR}/github-app-private-key.pem`;
 /** Run-scoped 0600 env files carrying the candidate Server's Stripe/webhook secrets (PR 6, staged only when stripe present). */
 const REMOTE_STRIPE_ENV_PATH = `${REMOTE_WORKDIR}/stripe.env`;
 const REMOTE_STRIPE_WEBHOOK_ENV_PATH = `${REMOTE_WORKDIR}/stripe-webhook.env`;
+const REMOTE_TLS_CERTIFICATE_PATH = "/etc/caddy/qualification-tls-certificate.pem";
+const REMOTE_TLS_PRIVATE_KEY_PATH = "/etc/caddy/qualification-tls-private-key.pem";
 /** On-box signed-callback relay dir + script (PR 6, staged only when callbackRelay present). */
 const REMOTE_RELAY_DIR = `${REMOTE_WORKDIR}/${RELAY_DIRNAME}`;
 const REMOTE_RELAY_SCRIPT_PATH = `${REMOTE_RELAY_DIR}/${RELAY_SCRIPT_FILENAME}`;
@@ -144,9 +147,9 @@ export interface CandidateStripeConfig {
  * present, `deployCandidateApi` stages the single-file relay process under the
  * remote workdir, starts it (pass-through by default), and wires the two signed
  * webhook paths through it in the Caddyfile. When ABSENT, no relay is staged and
- * the Caddyfile is byte-identical to today's (a single `reverse_proxy` to the
- * Server) — behaviour with the option unused is unchanged. The relay never reads
- * a signing secret; it forwards signed bytes byte-identically.
+ * the Caddyfile keeps the single `reverse_proxy` routing shape plus the required
+ * qualification TLS pair. The relay never reads a signing secret; it forwards
+ * signed bytes byte-identically.
  */
 export interface CandidateCallbackRelayConfig {
   /** Loopback port the relay http process binds on the box (default 8899). */
@@ -163,6 +166,8 @@ export interface DeployCandidateApiOptions {
   e2b: CandidateE2bConfig;
   /** Exact qualification ownership stamped onto external LiteLLM resources. */
   qualificationRun: { runId: string; shardId: string };
+  /** Reusable public wildcard certificate; validated and materialized before AWS mutation. */
+  tls: QualificationTlsFiles;
   /**
    * PR 6 (append-only): Stripe TEST-mode config for the candidate Server. Absent
    * (the default) preserves today's no-Stripe 503 checkout posture exactly.
@@ -170,8 +175,8 @@ export interface DeployCandidateApiOptions {
   stripe?: CandidateStripeConfig;
   /**
    * PR 6 (append-only): on-box signed-callback relay in front of the two signed
-   * webhook paths. Absent (the default) produces the byte-identical single-proxy
-   * Caddyfile and stages no relay.
+   * webhook paths. Absent (the default) preserves the single-proxy routing shape
+   * and stages no relay.
    */
   callbackRelay?: CandidateCallbackRelayConfig;
   /** Public origin the receipt records (`https://<record.recordName>`). */
@@ -269,6 +274,14 @@ export async function deployCandidateApi(options: DeployCandidateApiOptions): Pr
   // Install Caddy and load the EXACT Server image.
   log("installing caddy and loading the candidate Server image");
   await ssh.run(dest, key, "sudo apt-get update -y && sudo apt-get install -y debian-keyring debian-archive-keyring caddy");
+  await ssh.copyFile(dest, key, options.tls.certificatePath, `${REMOTE_WORKDIR}/qualification-tls-certificate.pem`);
+  await ssh.copyFile(dest, key, options.tls.privateKeyPath, `${REMOTE_WORKDIR}/qualification-tls-private-key.pem`);
+  await ssh.run(
+    dest,
+    key,
+    `sudo install -o root -g caddy -m 0640 ${REMOTE_WORKDIR}/qualification-tls-certificate.pem ${REMOTE_TLS_CERTIFICATE_PATH} && ` +
+      `sudo install -o root -g caddy -m 0640 ${REMOTE_WORKDIR}/qualification-tls-private-key.pem ${REMOTE_TLS_PRIVATE_KEY_PATH}`,
+  );
   const loaded = await ssh.run(dest, key, `sudo docker load -i ${remoteImagePath}`);
   const imageRef = parseLoadedImage(loaded.stdout);
 
@@ -483,12 +496,13 @@ function requireQualificationIdentity(value: string, label: string): string {
  * Caddyfile that reverse-proxies the run subdomain to the Server container. When
  * a relay port is given (PR 6, callbackRelay present), the two signed webhook
  * paths are routed through the on-box relay instead, with everything else still
- * proxied straight to the Server. When it is undefined the output is
- * byte-identical to today's single-proxy Caddyfile.
+ * proxied straight to the Server. When it is undefined the output keeps the
+ * single-proxy routing shape plus the explicitly provisioned TLS pair.
  */
 function buildCaddyfile(subdomain: string, relayPort?: number): string {
+  const tls = `  tls ${REMOTE_TLS_CERTIFICATE_PATH} ${REMOTE_TLS_PRIVATE_KEY_PATH}\n`;
   if (relayPort === undefined) {
-    return `${subdomain} {\n  reverse_proxy 127.0.0.1:${SERVER_CONTAINER_PORT}\n}\n`;
+    return `${subdomain} {\n${tls}  reverse_proxy 127.0.0.1:${SERVER_CONTAINER_PORT}\n}\n`;
   }
   // `handle` blocks are matched in order; the two signed webhook paths go to the
   // relay, and the trailing catch-all `handle` proxies everything else to the
@@ -498,6 +512,7 @@ function buildCaddyfile(subdomain: string, relayPort?: number): string {
     .join("\n");
   return (
     `${subdomain} {\n` +
+    tls +
     `${relayRoutes}\n` +
     `  handle {\n    reverse_proxy 127.0.0.1:${SERVER_CONTAINER_PORT}\n  }\n` +
     `}\n`

@@ -17,6 +17,7 @@ import type { Exec } from "../local-workspace/docker.js";
 import type { LocalWorldPorts } from "../local-workspace/ports.js";
 import type { ReadinessFetch, SpawnLike } from "../local-workspace/processes.js";
 import type { ChromiumLauncher } from "../local-workspace/renderer.js";
+import { TEST_QUALIFICATION_TLS } from "../qualification-tls.test-fixture.js";
 import type { Ec2Exec } from "./ec2.js";
 import type { Route53Exec } from "./dns.js";
 import { constructSelfHostWorld, type SelfHostWorldDeps, type SshTransport } from "./world.js";
@@ -178,7 +179,16 @@ test("constructSelfHostWorld provisions infra + stands up runtime/renderer/contr
   try {
     const map = await buildMap(src);
     const h = harness();
-    const world = await constructSelfHostWorld({ run: RUN, map, runDir, ports: PORTS, aws: AWS, ssh: SSH, deps: h.deps });
+    const world = await constructSelfHostWorld({
+      run: RUN,
+      map,
+      runDir,
+      ports: PORTS,
+      aws: AWS,
+      ssh: SSH,
+      tls: TEST_QUALIFICATION_TLS,
+      deps: h.deps,
+    });
 
     assert.equal(world.kind, "selfhost");
     // The API base is the deterministic TLS origin of the run subdomain.
@@ -226,7 +236,16 @@ test("an invalid candidate map starts no world (no dirs, no ledger, no AWS side 
       throw new Error("Candidate build map is missing the required selfhost-bundle artifact.");
     };
     await assert.rejects(
-      constructSelfHostWorld({ run: RUN, map, runDir, ports: PORTS, aws: AWS, ssh: SSH, deps: h.deps }),
+      constructSelfHostWorld({
+        run: RUN,
+        map,
+        runDir,
+        ports: PORTS,
+        aws: AWS,
+        ssh: SSH,
+        tls: TEST_QUALIFICATION_TLS,
+        deps: h.deps,
+      }),
       /selfhost-bundle/,
     );
     assert.equal(h.ec2Calls.length, 0); // no AWS touched
@@ -245,7 +264,16 @@ test("an AnyHarness version mismatch fails startup and runs registered cleanup (
     const map = await buildMap(src);
     const h = harness("0.0.0-wrong");
     await assert.rejects(
-      constructSelfHostWorld({ run: RUN, map, runDir, ports: PORTS, aws: AWS, ssh: SSH, deps: h.deps }),
+      constructSelfHostWorld({
+        run: RUN,
+        map,
+        runDir,
+        ports: PORTS,
+        aws: AWS,
+        ssh: SSH,
+        tls: TEST_QUALIFICATION_TLS,
+        deps: h.deps,
+      }),
       /AnyHarness reported version "0.0.0-wrong" does not match/,
     );
     // Cleanup ran: the box was terminated and the SG + key pair deleted.
@@ -269,7 +297,16 @@ test("two concurrent worlds collide on nothing (distinct key names, DNS records,
     const map = await buildMap(src);
     const a = harness();
     const b = harness();
-    const worldA = await constructSelfHostWorld({ run: RUN, map, runDir: runDirA, ports: PORTS, aws: AWS, ssh: SSH, deps: a.deps });
+    const worldA = await constructSelfHostWorld({
+      run: RUN,
+      map,
+      runDir: runDirA,
+      ports: PORTS,
+      aws: AWS,
+      ssh: SSH,
+      tls: TEST_QUALIFICATION_TLS,
+      deps: a.deps,
+    });
     const worldB = await constructSelfHostWorld({
       run: { ...RUN, run_id: "selfhost-run-2" },
       map,
@@ -277,6 +314,7 @@ test("two concurrent worlds collide on nothing (distinct key names, DNS records,
       ports: PORTS,
       aws: AWS,
       ssh: SSH,
+      tls: TEST_QUALIFICATION_TLS,
       deps: b.deps,
     });
 

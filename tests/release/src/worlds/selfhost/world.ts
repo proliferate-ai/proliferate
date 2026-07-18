@@ -27,6 +27,11 @@ import { launchAnyharness, type ReadinessFetch, type SpawnLike } from "../local-
 import { extractRenderer, launchChromium, serveRenderer, type ChromiumLauncher } from "../local-workspace/renderer.js";
 import type { Exec } from "../local-workspace/docker.js";
 import {
+  decodeQualificationTls,
+  materializeQualificationTls,
+  type QualificationTlsInput,
+} from "../qualification-tls.js";
+import {
   provisionEc2Box,
   resolveRunnerPublicIp,
   waitForSshAndCloudInit,
@@ -35,7 +40,7 @@ import {
   type PublicIpResolver,
 } from "./ec2.js";
 import { runSubdomainLabel, upsertRoute53ARecord, type Route53Exec } from "./dns.js";
-import { SELFHOST_DEPLOY_DIR } from "./install.js";
+import { SELFHOST_DEPLOY_DIR, SELFHOST_PERSISTED_TLS_COMPOSE_OVERRIDE } from "./install.js";
 import {
   SelfHostCleanupStack,
   type SelfHostCleanupResourceKind,
@@ -76,7 +81,7 @@ export interface ReadySelfHostWorld {
     desktopRenderer: MaterializedArtifact;
   };
 
-  /** The remote self-host public API, over real Caddy/Let's-Encrypt TLS. */
+  /** The remote self-host public API, over real Caddy/publicly trusted TLS. */
   api: {
     baseUrl: string;
     client: ApiClient;
@@ -103,6 +108,10 @@ export interface ReadySelfHostWorld {
     artifactsDir: string;
     /** 0600 SSH private-key file path (the key material is the secret). */
     keyPath: string;
+    /** Mode-0600 reusable wildcard certificate staged only into qualification Caddy. */
+    tlsCertificatePath: string;
+    /** Mode-0600 matching private key; never logged or stored in evidence. */
+    tlsPrivateKeyPath: string;
   };
 
   /**
@@ -189,6 +198,8 @@ export interface ConstructSelfHostWorldOptions {
    * run-scoped subdomain (every other self-host scenario).
    */
   fixedSubdomain?: string;
+  /** Reusable wildcard certificate capacity for *.qualification.proliferate.com. */
+  tls: QualificationTlsInput;
   /** Injectable seams; all default to the real world (no real AWS/SSH/browser in unit tests). */
   deps?: SelfHostWorldDeps;
 }
@@ -228,7 +239,8 @@ const REMOTE_DEPLOY_DIR = SELFHOST_DEPLOY_DIR;
  * environment, not from `--env-file`.
  */
 const COMPOSE_OVER_SSH =
-  "sudo PROLIFERATE_ENV_FILE=.env.runtime docker compose --env-file .env.runtime -f docker-compose.production.yml";
+  "sudo PROLIFERATE_ENV_FILE=.env.runtime docker compose --env-file .env.runtime " +
+  `-f docker-compose.production.yml -f ${SELFHOST_PERSISTED_TLS_COMPOSE_OVERRIDE}`;
 /** On-box path the api container writes the one-time first-run setup token to. */
 const SETUP_TOKEN_PATH = "/var/lib/proliferate/setup/setup-token";
 
@@ -256,6 +268,7 @@ export async function constructSelfHostWorld(
   // provisions no EC2/DNS, launches no process, creates no ledger.
   const resolveSet = deps.resolveCandidateSet ?? resolveSelfHostCandidateSet;
   const candidateSet = resolveSet(options.map);
+  decodeQualificationTls(options.tls);
 
   const runDir = options.runDir;
   const artifactsDir = path.join(runDir, "artifacts");
@@ -263,9 +276,12 @@ export async function constructSelfHostWorld(
   const runtimeHome = path.join(runDir, "runtime-home");
   const keyDir = path.join(runDir, "ssh");
   const logsDir = path.join(runDir, "logs");
+  const secretsDir = path.join(runDir, "secrets");
   for (const dir of [runDir, artifactsDir, rendererDir, runtimeHome, keyDir, logsDir]) {
     await mkdir(dir, { recursive: true });
   }
+  await mkdir(secretsDir, { recursive: true, mode: 0o700 });
+  const tls = await materializeQualificationTls(options.tls, secretsDir);
 
   const ledger = await openCleanupLedger({
     runDir,
@@ -407,7 +423,14 @@ export async function constructSelfHostWorld(
       runtime: { baseUrl: anyharness.baseUrl, client: new LocalRuntimeClient({ baseUrl: anyharness.baseUrl }) },
       renderer: { baseUrl: served.baseUrl, browser },
       control,
-      paths: { runDir, runtimeHome, artifactsDir, keyPath: box.keyPath },
+      paths: {
+        runDir,
+        runtimeHome,
+        artifactsDir,
+        keyPath: box.keyPath,
+        tlsCertificatePath: tls.certificatePath,
+        tlsPrivateKeyPath: tls.privateKeyPath,
+      },
       registerCleanup: (kind, providerId, release) => register(kind, providerId, release),
       close: () => cancellationFinalizer.run(),
     };

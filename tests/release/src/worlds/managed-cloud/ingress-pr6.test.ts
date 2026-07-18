@@ -12,11 +12,10 @@ import { deployCandidateApi, type SshExec } from "./ingress.js";
 /**
  * Append-only PR-6 coverage for ingress.ts: the `stripe?` + `callbackRelay?`
  * options. The existing ingress.test.ts proves the ABSENT-option path unchanged;
- * this file proves (a) with both absent the Caddyfile is byte-identical to the
- * single-proxy shape and no relay/Stripe files are staged, and (b) with them
- * present the relay is staged + wired and the Stripe secret files ride as their
- * own env files (never argv). Kept in a separate file so ingress.test.ts is
- * untouched (extension contract).
+ * this file proves (a) with both absent the Caddyfile keeps the single-proxy
+ * routing shape, adds the explicit qualification TLS pair, and stages no
+ * relay/Stripe files, and (b) with them present the relay is staged + wired and
+ * the Stripe secret files ride as their own env files (never argv).
  */
 
 const SERVER_VERSION = "1.2.3";
@@ -123,6 +122,7 @@ function baseOptions(h: Awaited<ReturnType<typeof harness>>, ssh: SshExec) {
     },
     e2b: { teamId: "team", secretsEnvFilePath: h.e2bSecrets, templateName: "tmpl" },
     qualificationRun: { runId: "run-1", shardId: "1" },
+    tls: { certificatePath: h.githubPrivateKey, privateKeyPath: h.githubPrivateKey },
     publicOrigin: `https://${RECORD.recordName}`,
     rendererOrigin: "http://127.0.0.1:41999",
     secretsDir: h.secretsDir,
@@ -133,15 +133,19 @@ function baseOptions(h: Awaited<ReturnType<typeof harness>>, ssh: SshExec) {
   };
 }
 
-test("with stripe + callbackRelay ABSENT: byte-identical single-proxy Caddyfile, no relay/Stripe staged", async () => {
+test("with stripe + callbackRelay ABSENT: TLS-pinned single-proxy Caddyfile, no relay/Stripe staged", async () => {
   const h = await harness();
   try {
     const f = fakeSsh();
     await deployCandidateApi(baseOptions(h, f.ssh));
 
     const caddy = await readFile(path.join(h.secretsDir, "Caddyfile"), "utf8");
-    // Exactly the historical single reverse_proxy Caddyfile.
-    assert.equal(caddy, `${RECORD.recordName} {\n  reverse_proxy 127.0.0.1:8000\n}\n`);
+    assert.equal(
+      caddy,
+      `${RECORD.recordName} {\n` +
+        `  tls /etc/caddy/qualification-tls-certificate.pem /etc/caddy/qualification-tls-private-key.pem\n` +
+        `  reverse_proxy 127.0.0.1:8000\n}\n`,
+    );
     // No relay process launched, no Stripe env files copied.
     assert.ok(!f.runs.some((c) => c.includes("relay.py")));
     assert.ok(!f.copies.some((c) => c.remote.includes("stripe")));

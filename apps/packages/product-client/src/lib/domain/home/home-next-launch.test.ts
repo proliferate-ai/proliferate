@@ -113,6 +113,22 @@ describe("home-next branch helpers", () => {
     })).toBe("trunk");
   });
 
+  it("uses the configured cloud-only default when no local branch inventory exists", () => {
+    expect(resolveHomeNextDefaultBranchName({
+      branchRefs: [],
+      savedDefaultBranch: "stale-local-preference",
+      repoRootDefaultBranch: "main",
+      acceptRepoDefaultWithoutLocalBranch: true,
+    })).toBe("main");
+  });
+
+  it("does not trust a configured default without the cloud-only opt-in", () => {
+    expect(resolveHomeNextDefaultBranchName({
+      branchRefs: [],
+      repoRootDefaultBranch: "main",
+    })).toBeNull();
+  });
+
   it("falls back to git default and then the first local branch without inventing main", () => {
     expect(resolveHomeNextDefaultBranchName({
       branchRefs: [branch({ name: "zebra" }), branch({ name: "alpha", isDefault: true })],

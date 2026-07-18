@@ -7,7 +7,6 @@ stores the returned workspace id.
 
 from __future__ import annotations
 
-import re
 from dataclasses import replace
 from typing import Literal, Protocol
 from uuid import UUID
@@ -28,12 +27,9 @@ from proliferate.db.store.repositories import RepoEnvironmentValue
 from proliferate.integrations.anyharness.errors import CloudRuntimeReconnectError
 from proliferate.integrations.anyharness.models import (
     MaterializedRemoteWorkspaceAtRef,
-    ResolvedRemoteWorkspace,
 )
 from proliferate.integrations.anyharness.workspaces import (
-    create_remote_worktree_workspace,
     materialize_workspace_at_ref,
-    resolve_runtime_workspace,
 )
 from proliferate.lib.product.workspace_naming import resolve_generated_branch_name
 from proliferate.server.cloud.cloud_sandboxes import service as cloud_sandboxes_service
@@ -45,9 +41,9 @@ from proliferate.server.cloud.materialization.locks import CloudMaterializationL
 from proliferate.server.cloud.materialization.materialize.repo_environment import (
     CloudRepoCheckoutError,
 )
+from proliferate.server.cloud.provisioning_observability import provisioning_phase
 from proliferate.server.cloud.repos.domain.github_credentials import CloudRepoGitHubCredentials
 from proliferate.server.cloud.repos.service import get_repo_branches_for_credentials
-from proliferate.server.cloud.workspaces.domain.origin import resolve_workspace_origin_entrypoint
 from proliferate.server.cloud.workspaces.materializations.service import (
     validate_cloud_copy_local_source,
 )
@@ -67,10 +63,15 @@ from proliferate.server.cloud.workspaces.models import (
     WorkspaceRuntimeSummary,
     WorkspaceSummary,
 )
+from proliferate.server.cloud.workspaces.provisioning import (
+    create_anyharness_worktree as _create_anyharness_worktree,
+)
+from proliferate.server.cloud.workspaces.provisioning import (
+    resolve_repo_root as _resolve_repo_root,
+)
 from proliferate.utils.time import utcnow
 
 MAX_CLOUD_WORKSPACE_DISPLAY_NAME_CHARS = 160
-_WORKTREE_SEGMENT_PATTERN = re.compile(r"[^A-Za-z0-9._-]+")
 
 # A workspace with no AnyHarness workspace id is "materializing". If it stays
 # that way past this budget (comfortably beyond the 600s repo-clone timeout),
@@ -302,10 +303,15 @@ async def create_cloud_workspace_for_user(
         )
 
     try:
-        await materialization_service.materialize_repo_environment(
-            db,
+        async with provisioning_phase(
+            scope="workspace_create",
+            phase="repository_materialization",
             repo_environment_id=repo_environment.id,
-        )
+        ):
+            await materialization_service.materialize_repo_environment(
+                db,
+                repo_environment_id=repo_environment.id,
+            )
     except CloudRuntimeReconnectError as exc:
         # Waking/relaunching the cloud sandbox runtime failed (e.g. a stale
         # runtime rejected the bearer token). This is a transient runtime
@@ -342,21 +348,35 @@ async def create_cloud_workspace_for_user(
             status_code=503,
         ) from exc
 
-    workspace = await _create_workspace_row_with_branch_retry(
-        db,
-        user_id=user.id,
+    async with provisioning_phase(
+        scope="workspace_create",
+        phase="workspace_row",
         repo_environment_id=repo_environment.id,
-        display_name=display_name,
-        initial_branch_name=final_branch_name,
-        branch_generation_seed=branch_name,
-        git_base_branch=base_branch,
-        generated_name=generated_name,
-        display_name_is_generated=display_name_is_generated,
-        repo_branches=repo_branches.branches,
-    )
+    ):
+        workspace = await _create_workspace_row_with_branch_retry(
+            db,
+            user_id=user.id,
+            repo_environment_id=repo_environment.id,
+            display_name=display_name,
+            initial_branch_name=final_branch_name,
+            branch_generation_seed=branch_name,
+            git_base_branch=base_branch,
+            generated_name=generated_name,
+            display_name_is_generated=display_name_is_generated,
+            repo_branches=repo_branches.branches,
+        )
     final_branch_name = workspace.git_branch
 
-    runtime_url, runtime_token, _data_key = await _load_ready_runtime_access(db, user_id=user.id)
+    async with provisioning_phase(
+        scope="workspace_create",
+        phase="runtime_access",
+        cloud_workspace_id=workspace.id,
+        repo_environment_id=repo_environment.id,
+    ):
+        runtime_url, runtime_token, _data_key = await _load_ready_runtime_access(
+            db,
+            user_id=user.id,
+        )
     repo_path = materialization_paths.repo_path(repo_environment)
     repo_root = await _resolve_repo_root(
         runtime_url,
@@ -378,19 +398,25 @@ async def create_cloud_workspace_for_user(
     # are written together, after AnyHarness returns. A failure before this point
     # fabricates nothing. The sandbox link is the owner's active personal sandbox
     # (implicit workspace<->sandbox linkage today); NULL when none resolves.
-    sandbox = await cloud_sandbox_store.load_personal_cloud_sandbox(db, user.id)
-    workspace = await cloud_workspace_store.update_workspace_anyharness_workspace_id(
-        db,
-        anyharness_workspace_id=anyharness_workspace.workspace_id,
-        workspace=workspace,
-    )
-    await materialization_store.insert_managed_cloud_materialization(
-        db,
+    async with provisioning_phase(
+        scope="workspace_create",
+        phase="workspace_finalize",
         cloud_workspace_id=workspace.id,
-        cloud_sandbox_id=sandbox.id if sandbox is not None else None,
-        anyharness_workspace_id=anyharness_workspace.workspace_id,
-        state="hydrated",
-    )
+        repo_environment_id=repo_environment.id,
+    ):
+        sandbox = await cloud_sandbox_store.load_personal_cloud_sandbox(db, user.id)
+        workspace = await cloud_workspace_store.update_workspace_anyharness_workspace_id(
+            db,
+            anyharness_workspace_id=anyharness_workspace.workspace_id,
+            workspace=workspace,
+        )
+        await materialization_store.insert_managed_cloud_materialization(
+            db,
+            cloud_workspace_id=workspace.id,
+            cloud_sandbox_id=sandbox.id if sandbox is not None else None,
+            anyharness_workspace_id=anyharness_workspace.workspace_id,
+            state="hydrated",
+        )
     return await _workspace_payload(db, workspace, detail=True)
 
 
@@ -710,61 +736,6 @@ async def _load_ready_runtime_access(
     return await cloud_sandboxes_service.load_cloud_sandbox_runtime_access(sandbox)
 
 
-async def _resolve_repo_root(
-    runtime_url: str,
-    runtime_token: str,
-    *,
-    repo_path: str,
-) -> ResolvedRemoteWorkspace:
-    try:
-        return await resolve_runtime_workspace(
-            runtime_url,
-            runtime_token,
-            runtime_workdir=repo_path,
-        )
-    except CloudRuntimeReconnectError as exc:
-        raise CloudApiError(
-            "cloud_runtime_repo_root_failed",
-            str(exc),
-            status_code=502,
-        ) from exc
-
-
-async def _create_anyharness_worktree(
-    runtime_url: str,
-    runtime_token: str,
-    *,
-    workspace_id: UUID,
-    repo_environment: RepoEnvironmentValue,
-    repo_root_id: str,
-    branch_name: str,
-    base_branch: str,
-    setup_script: str,
-    source: str,
-) -> ResolvedRemoteWorkspace:
-    target_path = _worktree_path(repo_environment, branch_name, workspace_id=workspace_id)
-    try:
-        return await create_remote_worktree_workspace(
-            runtime_url,
-            runtime_token,
-            repo_root_id=repo_root_id,
-            target_path=target_path,
-            new_branch_name=branch_name,
-            base_branch=base_branch,
-            setup_script=setup_script or None,
-            origin={
-                "kind": "human",
-                "entrypoint": resolve_workspace_origin_entrypoint(source),
-            },
-        )
-    except CloudRuntimeReconnectError as exc:
-        raise CloudApiError(
-            "cloud_workspace_create_failed",
-            str(exc),
-            status_code=502,
-        ) from exc
-
-
 async def _create_workspace_row_with_branch_retry(
     db: AsyncSession,
     *,
@@ -1067,22 +1038,3 @@ def _runtime_status(sandbox: CloudSandboxValue | None) -> CloudRuntimeStatus:
     if sandbox.status in {"error", "destroyed"}:
         return "error"
     return "pending"
-
-
-def _worktree_path(
-    repo_environment: RepoEnvironmentValue,
-    branch_name: str,
-    *,
-    workspace_id: UUID,
-) -> str:
-    return (
-        f"{materialization_paths.SANDBOX_WORKSPACE_ROOT}/worktrees/"
-        f"{repo_environment.git_owner}/{repo_environment.git_repo_name}/"
-        f"{_branch_path_segment(branch_name)}-{str(workspace_id)[:8]}"
-    )
-
-
-def _branch_path_segment(branch_name: str) -> str:
-    cleaned = branch_name.strip().replace("/", "-")
-    cleaned = _WORKTREE_SEGMENT_PATTERN.sub("-", cleaned).strip(".-")
-    return cleaned[:96] or "workspace"

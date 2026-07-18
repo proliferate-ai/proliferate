@@ -211,3 +211,64 @@ test("pre-send snapshot propagates a workspace query failure", async () => {
     /workspace snapshot failed/,
   );
 });
+
+// ── Ordering contract (fix round: LOCAL-6 route-change, run 29628880856) ─────
+//
+// `openNewChat`/`switchSelectedRouteToGateway` materializes a new AnyHarness
+// session as a SIDE EFFECT of the navigation itself, before any prompt is
+// sent. `snapshotLocalWorkspaceSessionIds` must be called BEFORE that
+// navigation; calling it after (i.e. treating the just-created session as
+// pre-existing) makes `resolveLocalWorkspaceSessionAfter` unable to find any
+// "new" candidate and it times out, which is exactly the observed failure
+// (`pre-send sessions=2, new candidates=0`).
+
+test("ordering contract: a snapshot taken BEFORE session creation lets resolution find the new session", async () => {
+  // Snapshot taken while only the pre-existing (user-key) session exists.
+  const preNavigationWorld = fakeWorld(
+    [{ id: RAW_WORKSPACE_ID, kind: "local", path: REPO_PATH }],
+    [{ id: "session-user-key", workspaceId: RAW_WORKSPACE_ID }],
+  );
+  const existingSessionIds = await snapshotLocalWorkspaceSessionIds(preNavigationWorld, REPO_PATH);
+  assert.deepEqual(existingSessionIds, new Set(["session-user-key"]));
+
+  // The navigation (openNewChat) has since materialized the gateway session.
+  const postNavigationWorld = fakeWorld(
+    [{ id: RAW_WORKSPACE_ID, kind: "local", path: REPO_PATH }],
+    [
+      { id: "session-user-key", workspaceId: RAW_WORKSPACE_ID },
+      { id: "session-gateway", workspaceId: RAW_WORKSPACE_ID },
+    ],
+  );
+
+  assert.equal(
+    await resolveLocalWorkspaceSessionAfter(postNavigationWorld, REPO_PATH, 2_000, {
+      existingSessionIds,
+      activeSessionAlias: null,
+    }),
+    "session-gateway",
+  );
+});
+
+test("ordering contract: a snapshot taken AFTER session creation makes the new session invisible (the reported bug)", async () => {
+  // The navigation has ALREADY materialized the gateway session by the time
+  // the snapshot is taken (the bug: snapshotting after `openNewChat`).
+  const postNavigationWorld = fakeWorld(
+    [{ id: RAW_WORKSPACE_ID, kind: "local", path: REPO_PATH }],
+    [
+      { id: "session-user-key", workspaceId: RAW_WORKSPACE_ID },
+      { id: "session-gateway", workspaceId: RAW_WORKSPACE_ID },
+    ],
+  );
+  const existingSessionIds = await snapshotLocalWorkspaceSessionIds(postNavigationWorld, REPO_PATH);
+  // Both sessions are now (wrongly) captured as "pre-existing".
+  assert.deepEqual(existingSessionIds, new Set(["session-user-key", "session-gateway"]));
+
+  await assert.rejects(
+    () =>
+      resolveLocalWorkspaceSessionAfter(postNavigationWorld, REPO_PATH, 1, {
+        existingSessionIds,
+        activeSessionAlias: null,
+      }),
+    /no unambiguous new AnyHarness session/,
+  );
+});

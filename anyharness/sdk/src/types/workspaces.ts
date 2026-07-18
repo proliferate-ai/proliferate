@@ -27,6 +27,10 @@ export type SetupScriptStatus = components["schemas"]["SetupScriptStatus"];
 export type SetupScriptExecution = components["schemas"]["SetupScriptExecution"];
 export type CreateWorktreeWorkspaceResponse =
   components["schemas"]["CreateWorktreeWorkspaceResponse"];
+export type RestoreWorktreeWorkspaceOutcome =
+  components["schemas"]["RestoreWorktreeWorkspaceOutcome"];
+export type RestoreWorktreeWorkspaceResponse =
+  components["schemas"]["RestoreWorktreeWorkspaceResponse"];
 export type SetupHintCategory = components["schemas"]["SetupHintCategory"];
 export type SetupHint = components["schemas"]["SetupHint"];
 export type DetectProjectSetupResponse =

@@ -2,6 +2,39 @@ use super::*;
 use crate::origin::OriginContext;
 
 #[test]
+fn insert_or_find_by_id_reuses_the_original_session_row() {
+    let db = Db::open_in_memory().expect("open db");
+    seed_workspace(&db);
+
+    let store = SessionStore::new(db);
+    let original = session_record();
+    assert!(matches!(
+        store
+            .insert_or_find_by_id(&original)
+            .expect("insert original session"),
+        super::super::idempotent_create::InsertSessionByIdOutcome::Inserted
+    ));
+
+    let mut replay = original.clone();
+    replay.agent_kind = "codex".to_string();
+    let existing = store
+        .insert_or_find_by_id(&replay)
+        .expect("find original session");
+    let super::super::idempotent_create::InsertSessionByIdOutcome::Existing(existing) = existing
+    else {
+        panic!("replay should return the original row");
+    };
+    assert_eq!(existing.agent_kind, "claude");
+    assert_eq!(
+        store
+            .list_by_workspace("workspace-1")
+            .expect("list sessions")
+            .len(),
+        1
+    );
+}
+
+#[test]
 fn stores_and_loads_session_origin() {
     let db = Db::open_in_memory().expect("open db");
     seed_workspace(&db);

@@ -185,6 +185,8 @@ export const SELFHOST_QUAL_REQUIRED_ENV = [
   "RELEASE_E2E_SELFHOST_HOSTED_ZONE_ID",
   "RELEASE_E2E_SELFHOST_INSTANCE_TYPE",
   "RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY",
+  "RELEASE_E2E_QUALIFICATION_TLS_CERTIFICATE_B64",
+  "RELEASE_E2E_QUALIFICATION_TLS_PRIVATE_KEY_B64",
 ] as const;
 
 export const selfhostQual1: ScenarioDefinition = {
@@ -302,6 +304,7 @@ export const defaultSelfHostQualDriver: SelfHostQualDriver = {
       aws: inputs.aws,
       ssh: inputs.ssh,
       fixedSubdomain,
+      tls: inputs.tls,
     }),
 
   async installAndClaim(world, opts) {
@@ -318,6 +321,8 @@ export const defaultSelfHostQualDriver: SelfHostQualDriver = {
         candidateImageRepo: repo,
         candidateImageTag: tag,
         corsAllowOrigins: browserOriginsForBox(world),
+        tlsCertificatePath: world.paths.tlsCertificatePath,
+        tlsPrivateKeyPath: world.paths.tlsPrivateKeyPath,
       });
     } catch (error) {
       return { ok: false, reason: describeSelfHostSetupFailure("install", error) };
