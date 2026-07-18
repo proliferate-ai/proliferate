@@ -1,47 +1,35 @@
 import {
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   type KeyboardEvent,
 } from "react";
 import { createPortal } from "react-dom";
-import {
-  CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM,
-  WORKSPACE_CHAT_COMPOSER_INPUT,
-} from "#product/config/chat";
+import type { LexicalEditor } from "lexical";
+import { WORKSPACE_CHAT_COMPOSER_INPUT } from "#product/config/chat";
 import { useChatSlashCommandMenu } from "#product/hooks/chat/ui/use-chat-slash-command-menu";
-import { useSlashCommandHighlight } from "#product/hooks/chat/ui/use-slash-command-highlight";
-import { useComposerTextareaAutosize } from "#product/hooks/chat/ui/use-composer-textarea-autosize";
-import { useRunnableSlashCommands } from "#product/hooks/chat/ui/use-runnable-slash-commands";
-import {
-  isComposerOverlaySelectKey,
-  isRawComposerSubmitKey,
-  isRepeatedComposerSubmitKey,
-} from "#product/lib/domain/chat/composer/composer-keyboard";
 import {
   createTextDraft,
   serializeChatDraftToPrompt,
   type ChatComposerDraft,
 } from "#product/lib/domain/chat/composer/file-mention-draft-model";
-import {
-  findSlashCommandTrigger,
-  type SlashCommandTrigger,
-} from "#product/lib/domain/chat/composer/slash-command-draft-edits";
+import { findSlashCommandTrigger } from "#product/lib/domain/chat/composer/slash-command-draft-edits";
 import type { SessionSlashCommandViewModel } from "#product/lib/domain/chat/composer/session-slash-command-policy";
 import {
   finishOrCancelMeasurementOperation,
   markOperationForNextCommit,
+  recordTypingKeystrokeLatency,
   startMeasurementOperation,
 } from "#product/lib/infra/measurement/measurement-port";
-import { recordTypingKeystrokeLatency } from "#product/lib/infra/measurement/measurement-port";
 import { markTypingActivity } from "#product/lib/infra/interaction/typing-activity-store";
 import type { MeasurementOperationId } from "#product/lib/domain/telemetry/debug-measurement-catalog";
 import { ComposerSlashCommandSearch } from "#product/components/workspace/chat/input/ComposerSlashCommandSearch";
-import { ComposerSlashHighlight } from "#product/components/workspace/chat/input/ComposerSlashHighlight";
-import { ComposerTextarea } from "@proliferate/ui/primitives/ComposerTextarea";
+import {
+  ComposerRichTextEditor,
+  replaceComposerMarkdown,
+} from "#product/components/workspace/chat/input/ComposerRichTextEditor";
 import { ComposerTextareaFrame, type ComposerTextareaFrameTopInset } from "@proliferate/ui/primitives/ComposerTextareaFrame";
 
 interface ComposerCommandEditorProps {
@@ -51,10 +39,17 @@ interface ComposerCommandEditorProps {
   canSubmit: boolean;
   disabled: boolean;
   onSubmit: () => void;
-  onKeyDown?: (event: KeyboardEvent<HTMLTextAreaElement>) => void;
+  onKeyDown?: (event: KeyboardEvent<HTMLElement>) => void;
   topInset: ComposerTextareaFrameTopInset;
   overlayHostElement?: HTMLElement | null;
 }
+
+const TYPING_SURFACES = [
+  "chat-composer", "chat-composer-dock", "chat-composer-dock-region",
+  "chat-composer-dock-slots", "chat-composer-dock-input",
+  "chat-composer-dock-footer", "chat-surface", "transcript-list",
+  "header-tabs", "workspace-sidebar",
+];
 
 export function ComposerCommandEditor({
   draft,
@@ -67,103 +62,39 @@ export function ComposerCommandEditor({
   topInset,
   overlayHostElement,
 }: ComposerCommandEditorProps) {
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const pendingSelectionRef = useRef<number | null>(null);
+  const editorRef = useRef<LexicalEditor | null>(null);
   const typingOperationRef = useRef<MeasurementOperationId | null>(null);
-  const text = serializeChatDraftToPrompt(draft);
-  const [selectionOffset, setSelectionOffset] = useState(text.length);
+  const markdown = serializeChatDraftToPrompt(draft);
+  const [plainText, setPlainText] = useState(markdown);
   const [searchSuppressed, setSearchSuppressed] = useState(false);
-  // IME composition renders in-progress glyphs inside the textarea itself; a
-  // transparent text color would hide them, so the highlight yields while
-  // composing.
-  const [isComposing, setIsComposing] = useState(false);
-  const trigger = useMemo(() => {
-    if (searchSuppressed || disabled) {
-      return null;
-    }
-    return findSlashCommandTrigger(text, selectionOffset);
-  }, [disabled, searchSuppressed, selectionOffset, text]);
+  const trigger = useMemo(() => (
+    searchSuppressed || disabled
+      ? null
+      : findSlashCommandTrigger(plainText, plainText.length)
+  ), [disabled, plainText, searchSuppressed]);
 
-  const updateSelection = useCallback(() => {
-    const next = textareaRef.current?.selectionStart ?? text.length;
-    setSelectionOffset((current) => current === next ? current : next);
-    setSearchSuppressed((current) => current ? false : current);
-    return next;
-  }, [text.length]);
-  useComposerTextareaAutosize({
-    textareaRef,
-    value: text,
-    lineHeightRem: CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM,
-    minRows: WORKSPACE_CHAT_COMPOSER_INPUT.minRows,
-    maxRows: WORKSPACE_CHAT_COMPOSER_INPUT.maxRows,
-    minHeightRem: WORKSPACE_CHAT_COMPOSER_INPUT.minHeightRem,
-  });
-
-  useLayoutEffect(() => {
-    const next = pendingSelectionRef.current;
-    const el = textareaRef.current;
-    if (next === null || !el) {
-      return;
-    }
-    el.setSelectionRange(next, next);
-    setSelectionOffset(next);
-    pendingSelectionRef.current = null;
-  }, [text]);
-
-  const replaceText = useCallback((nextText: string, nextSelection: number) => {
-    pendingSelectionRef.current = nextSelection;
-    onDraftChange(createTextDraft(nextText));
-  }, [onDraftChange]);
-
-  const handleChange = useCallback((value: string, eventTimeStampMs?: number) => {
-    // Flip the transcript into deferred (input-priority) rendering for the
-    // duration of this typing burst — see typing-activity-store.
+  const handleChange = useCallback((value: string) => {
     markTypingActivity();
     const operationId = startMeasurementOperation({
       kind: "composer_typing",
       sampleKey: "composer",
-      surfaces: [
-        "chat-composer",
-        "chat-composer-dock",
-        "chat-composer-dock-region",
-        "chat-composer-dock-slots",
-        "chat-composer-dock-input",
-        "chat-composer-dock-footer",
-        "chat-surface",
-        "transcript-list",
-        "header-tabs",
-        "workspace-sidebar",
-      ],
+      surfaces: TYPING_SURFACES,
       idleTimeoutMs: 1500,
       maxDurationMs: 8000,
       cooldownMs: 2000,
     });
     if (operationId) {
       typingOperationRef.current = operationId;
-      markOperationForNextCommit(operationId, [
-        "chat-composer",
-        "chat-composer-dock",
-        "chat-composer-dock-region",
-        "chat-composer-dock-slots",
-        "chat-composer-dock-input",
-        "chat-composer-dock-footer",
-        "chat-surface",
-        "transcript-list",
-        "header-tabs",
-        "workspace-sidebar",
-      ]);
+      markOperationForNextCommit(operationId, TYPING_SURFACES);
     }
     recordTypingKeystrokeLatency({
       operationId,
       surface: "chat-composer",
-      eventTimeStampMs,
+      eventTimeStampMs: null,
     });
     onDraftChange(createTextDraft(value));
     setSearchSuppressed(false);
-    window.requestAnimationFrame(() => {
-      updateSelection();
-    });
-  }, [onDraftChange, updateSelection]);
+  }, [onDraftChange]);
 
   useEffect(() => () => {
     finishOrCancelMeasurementOperation(typingOperationRef.current, "unmount");
@@ -171,28 +102,16 @@ export function ComposerCommandEditor({
   }, []);
 
   const handleSelectSearchResult = useCallback((command: SessionSlashCommandViewModel) => {
-    if (!trigger) {
-      return;
-    }
-
+    if (!trigger || !editorRef.current) return;
     const replacement = `${command.displayName} `;
-    const { start, end } = slashTriggerOffsets(trigger);
-    const replaceEnd = /\s/u.test(text[end] ?? "") ? end + 1 : end;
-    replaceText(
-      `${text.slice(0, start)}${replacement}${text.slice(replaceEnd)}`,
-      start + replacement.length,
-    );
+    const replaceEnd = /\s/u.test(plainText[trigger.end] ?? "") ? trigger.end + 1 : trigger.end;
+    const next = `${plainText.slice(0, trigger.start)}${replacement}${plainText.slice(replaceEnd)}`;
+    replaceComposerMarkdown(editorRef.current, next);
+    onDraftChange(createTextDraft(next));
+    setPlainText(next);
     setSearchSuppressed(true);
-    textareaRef.current?.focus({ preventScroll: true });
-  }, [replaceText, text, trigger]);
-
-  const runnableCommands = useRunnableSlashCommands();
-  // Highlight a recognized command only when the popup is NOT open (the popup
-  // handles the active-typing state; the highlight is for the settled state).
-  const recognition = useSlashCommandHighlight(
-    !trigger && !isComposing ? text : "",
-    runnableCommands,
-  );
+    editorRef.current.focus();
+  }, [onDraftChange, plainText, trigger]);
 
   const search = useChatSlashCommandMenu({
     open: !!trigger,
@@ -200,24 +119,15 @@ export function ComposerCommandEditor({
     onSelect: handleSelectSearchResult,
   });
 
-  const handleKeyDown = useCallback((event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.nativeEvent.isComposing) {
-      return;
-    }
-
+  const handleKeyDown = useCallback((event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.nativeEvent.isComposing) return;
     if (trigger) {
-      if (event.key === "ArrowDown") {
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
         event.preventDefault();
-        search.moveHighlight(1);
+        search.moveHighlight(event.key === "ArrowDown" ? 1 : -1);
         return;
       }
-      if (event.key === "ArrowUp") {
-        event.preventDefault();
-        search.moveHighlight(-1);
-        return;
-      }
-      // Empty slash results should leave Enter available for normal prompt submit.
-      if (isComposerOverlaySelectKey(event) && search.commands.length > 0) {
+      if ((event.key === "Enter" || (event.key === "Tab" && !event.shiftKey)) && search.commands.length > 0) {
         event.preventDefault();
         search.selectHighlighted();
         return;
@@ -230,31 +140,18 @@ export function ComposerCommandEditor({
       }
     }
 
-    onKeyDown?.(event);
-    if (event.defaultPrevented) {
-      return;
-    }
-
-    if (isRepeatedComposerSubmitKey(event)) {
-      event.preventDefault();
-      return;
-    }
-
     if (
-      isRawComposerSubmitKey(event)
+      event.key === "Enter"
+      && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey
     ) {
+      if (event.currentTarget.closest("li") || selectionIsInsideList()) return;
       event.preventDefault();
-      if (canSubmit) {
-        onSubmit();
-      }
+      if (!event.repeat && canSubmit) onSubmit();
+      return;
     }
-  }, [
-    canSubmit,
-    onKeyDown,
-    onSubmit,
-    search,
-    trigger,
-  ]);
+
+    onKeyDown?.(event);
+  }, [canSubmit, onKeyDown, onSubmit, search, trigger]);
 
   const searchTray = trigger ? (
     <ComposerSlashCommandSearch
@@ -269,51 +166,32 @@ export function ComposerCommandEditor({
 
   return (
     <>
-      {searchTray && overlayHostElement
-        ? createPortal(searchTray, overlayHostElement)
-        : searchTray}
+      {searchTray && overlayHostElement ? createPortal(searchTray, overlayHostElement) : searchTray}
       <ComposerTextareaFrame topInset={topInset}>
-        <div className="relative">
-          <ComposerTextarea
-            data-chat-composer-editor
-            data-telemetry-mask
-            ref={textareaRef}
-            rows={WORKSPACE_CHAT_COMPOSER_INPUT.minRows}
-            value={text}
-            onChange={(event) => handleChange(event.target.value, event.timeStamp)}
+        <div
+          className="relative overflow-y-auto"
+          style={{
+            minHeight: `${WORKSPACE_CHAT_COMPOSER_INPUT.minHeightRem}rem`,
+            maxHeight: `calc(var(--text-composer--line-height) * ${WORKSPACE_CHAT_COMPOSER_INPUT.maxRows})`,
+          }}
+        >
+          <ComposerRichTextEditor
+            value={markdown}
+            onChange={handleChange}
+            onPlainTextChange={setPlainText}
             onKeyDown={handleKeyDown}
-            onSelect={updateSelection}
-            onClick={updateSelection}
-            onKeyUp={updateSelection}
-            onCompositionStart={() => setIsComposing(true)}
-            onCompositionEnd={() => setIsComposing(false)}
+            editorRef={(editor) => { editorRef.current = editor; }}
             placeholder={placeholder}
-            readOnly={disabled}
-            aria-disabled={disabled}
-            spellCheck={false}
-            autoComplete="off"
-            autoCorrect="off"
-            autoCapitalize="off"
-            className={`${disabled ? "opacity-60" : ""} ${recognition ? "text-transparent caret-foreground" : ""}`}
+            disabled={disabled}
           />
-          {/* Rendered after the textarea so it paints on top — the layer is
-              pointer-events-none except the command span (tooltip hover). */}
-          {recognition ? (
-            <ComposerSlashHighlight
-              recognition={recognition}
-              text={text}
-              textareaRef={textareaRef}
-            />
-          ) : null}
         </div>
       </ComposerTextareaFrame>
     </>
   );
 }
 
-function slashTriggerOffsets(trigger: SlashCommandTrigger): { start: number; end: number } {
-  return {
-    start: trigger.start,
-    end: trigger.end,
-  };
+function selectionIsInsideList(): boolean {
+  const anchor = document.getSelection()?.anchorNode;
+  const element = anchor instanceof Element ? anchor : anchor?.parentElement;
+  return element?.closest("li") !== null && element?.closest("li") !== undefined;
 }

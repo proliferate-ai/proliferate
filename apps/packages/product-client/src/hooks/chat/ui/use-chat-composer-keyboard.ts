@@ -28,7 +28,7 @@ export function useChatComposerKeyboard({
   onCancelEdit,
   onEditLastQueued,
 }: UseChatComposerKeyboardArgs) {
-  const handleKeyDown = useCallback((event: KeyboardEvent<HTMLTextAreaElement>) => {
+  const handleKeyDown = useCallback((event: KeyboardEvent<HTMLElement>) => {
     if (
       event.key === COMPOSER_SHORTCUTS.stopSession.key
       && !event.shiftKey
@@ -59,8 +59,10 @@ export function useChatComposerKeyboard({
       && !isEditingQueuedPrompt
       && onEditLastQueued
     ) {
-      const textarea = event.currentTarget;
-      if (textarea.value.length === 0) {
+      const editorText = event.currentTarget instanceof HTMLTextAreaElement
+        ? event.currentTarget.value
+        : event.currentTarget.textContent ?? "";
+      if (editorText.length === 0) {
         event.preventDefault();
         onEditLastQueued();
         return;

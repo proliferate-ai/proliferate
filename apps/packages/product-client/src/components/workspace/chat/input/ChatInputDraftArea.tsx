@@ -28,7 +28,7 @@ interface ChatInputDraftAreaProps {
   canSubmit: boolean;
   isDisabled: boolean;
   onSubmit: () => void;
-  onKeyDown: KeyboardEventHandler<HTMLTextAreaElement>;
+  onKeyDown: KeyboardEventHandler<HTMLElement>;
   hasDraftAttachments: boolean;
   draftAttachments: DraftAttachmentPreviewListProps["attachments"];
   onRemoveDraftAttachment: DraftAttachmentPreviewListProps["onRemove"];
