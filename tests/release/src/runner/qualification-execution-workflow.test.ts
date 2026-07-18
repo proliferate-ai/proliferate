@@ -35,11 +35,24 @@ test("release qualification has stable independent concurrency groups by world",
   assert.match(job(selfhost, "artifact-chain"), /group: release-e2e-tier4/);
   assert.match(job(selfhost, "provisioning"), /group: release-e2e-self-host/);
   assert.match(job(release, "release-e2e-local"), /if: github\.event_name == 'schedule'/);
-  assert.match(job(release, "release-e2e-local-functional"), /if: github\.event_name == 'workflow_dispatch'/);
+  assert.match(job(release, "release-e2e-local-functional"), /inputs\.manual_world == 'local'/);
 
   for (const source of [release, selfhost]) {
     assert.doesNotMatch(source, /cancel-in-progress: true/);
   }
+});
+
+test("manual dispatch can isolate one qualification world", () => {
+  const workflowHeader = release.slice(0, release.indexOf("\njobs:"));
+  assert.match(workflowHeader, /manual_world:/);
+  for (const world of ["all", "local", "managed-cloud", "tier2", "staging"]) {
+    assert.match(workflowHeader, new RegExp(`- ${world}`));
+  }
+
+  assert.match(job(release, "release-e2e-local-functional"), /inputs\.manual_world == 'local'/);
+  assert.match(job(release, "release-e2e-managed-cloud"), /inputs\.manual_world == 'managed-cloud'/);
+  assert.match(job(release, "qualification-tier2"), /inputs\.manual_world == 'tier2'/);
+  assert.match(job(release, "release-e2e-staging"), /inputs\.manual_world == 'staging'/);
 });
 
 test("the manual local world builds and publishes once, then reuses exact candidates", () => {

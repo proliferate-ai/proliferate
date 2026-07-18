@@ -1,13 +1,20 @@
 // @vitest-environment jsdom
 
 import { cleanup, render } from "@testing-library/react";
+import type { ReactNode } from "react";
 import type { ContentPart } from "@anyharness/sdk";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   PLAN_IMPLEMENT_HERE_PROMPT,
   PLAN_IMPLEMENT_HERE_ROW_LABEL,
 } from "#product/copy/plans/plan-prompts";
 import { UserMessage } from "#product/components/workspace/chat/transcript/UserMessage";
+
+vi.mock("#product/components/content/ui/FilePathLink", () => ({
+  FilePathLink: ({ rawPath, children }: { rawPath: string; children?: ReactNode }) => (
+    <span data-file-path-link={rawPath}>{children ?? rawPath}</span>
+  ),
+}));
 
 afterEach(() => {
   cleanup();
@@ -60,6 +67,36 @@ describe("UserMessage", () => {
 
     expect(container.querySelector("[data-carry-out-plan-row]")).toBeNull();
     expect(container.querySelector("[data-chat-user-message]")).toBeTruthy();
+  });
+
+  it("renders sent user prose as Markdown while preserving workspace file links", () => {
+    const { container } = render(
+      <UserMessage
+        sessionId="session-1"
+        content={"**Bold** and _italic_\n\n- first\n- second\n\n[Docs](https://example.com) and [file](src/main.ts)"}
+        contentParts={[]}
+      />,
+    );
+
+    expect(container.querySelector("strong")?.textContent).toBe("Bold");
+    expect(container.querySelector("em")?.textContent).toBe("italic");
+    expect(container.querySelectorAll("li")).toHaveLength(2);
+    expect(container.querySelector('a[href="https://example.com"]')).toBeTruthy();
+    expect(container.querySelector("[data-file-path-link]")?.textContent).toContain("file");
+  });
+
+  it("does not execute raw HTML or unsafe Markdown links", () => {
+    const { container } = render(
+      <UserMessage
+        sessionId="session-1"
+        content={'<script>alert("no")</script> [unsafe](javascript:alert(1))'}
+        contentParts={[]}
+      />,
+    );
+
+    expect(container.querySelector("script")).toBeNull();
+    expect(container.querySelector('a[href^="javascript:"]')).toBeNull();
+    expect(container.textContent).toContain("<script>");
   });
 });
 

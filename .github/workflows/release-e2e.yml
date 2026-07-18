@@ -31,6 +31,20 @@ name: Release E2E (tier 3)
 on:
   workflow_dispatch:
     inputs:
+      manual_world:
+        description: >-
+          Manual qualification world to run. "all" preserves the historical
+          fan-out; choose one world to prevent unrelated jobs from consuming
+          credentials, providers, and incompatible scenario selectors.
+        default: all
+        required: false
+        type: choice
+        options:
+          - all
+          - local
+          - managed-cloud
+          - tier2
+          - staging
       lane:
         description: Runtime target lane the runner points at.
         default: local
@@ -315,6 +329,10 @@ jobs:
   # it never runs Tier-2, controller-local, self-host, or Tier-4 bodies here.
   release-e2e-staging:
     name: tier-3 staging lane (provisional)
+    if: >-
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' &&
+      (inputs.manual_world == 'all' || inputs.manual_world == 'staging'))
     runs-on: ubuntu-latest
     timeout-minutes: 60
     concurrency:
@@ -401,7 +419,9 @@ jobs:
   # `BootedStack` machinery.
   qualification-tier2:
     name: tier-2 billing/auth (manual, strict)
-    if: github.event_name == 'workflow_dispatch'
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      (inputs.manual_world == 'all' || inputs.manual_world == 'tier2')
     runs-on: ubuntu-latest
     timeout-minutes: 60
     concurrency:
@@ -508,7 +528,9 @@ jobs:
   # unrelated managed-cloud, self-host, Tier-2, or Tier-4 run cannot replace it.
   release-e2e-local-functional:
     name: local smoke + functional (manual, build once)
-    if: github.event_name == 'workflow_dispatch'
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      (inputs.manual_world == 'all' || inputs.manual_world == 'local')
     runs-on: ubuntu-latest
     timeout-minutes: 90
     concurrency:
@@ -900,7 +922,9 @@ jobs:
   # step.
   release-e2e-managed-cloud:
     name: cloud-provision-1 (manual, strict)
-    if: github.event_name == 'workflow_dispatch'
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      (inputs.manual_world == 'all' || inputs.manual_world == 'managed-cloud')
     runs-on: ubuntu-latest
     timeout-minutes: 90
     concurrency:

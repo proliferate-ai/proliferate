@@ -73,6 +73,16 @@ path.
 
 ## Markdown File Mentions And Code Blocks
 
+Committed user-message prose renders through the shared `MarkdownBody` GFM
+surface rather than as plain pre-wrapped text. Bold, italic, lists, links, and
+other supported Markdown therefore render after submission. Raw HTML remains
+text and unsafe URL protocols remain blocked. Product-client injects the same
+workspace-aware link renderer used by assistant prose, so serialized workspace
+file links continue to open in the file viewer while external links retain the
+shared web-link presentation. User prose opts into transcript content-search
+painting and removes only the outer first/last Markdown margins so the existing
+message-bubble rhythm remains authoritative.
+
 Assistant markdown renders file references as clickable file mentions and code
 blocks as bordered highlighted cards. Ownership is split by package law:
 
