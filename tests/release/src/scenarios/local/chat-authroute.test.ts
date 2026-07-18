@@ -126,7 +126,13 @@ function fakeWorld(overrides: Partial<ReadyLocalWorld> = {}): ReadyLocalWorld {
       desktopRenderer: { artifact_id: "desktop-renderer/browser", version: "1", sha256: "d".repeat(64), path: "/tmp/renderer" },
     },
     api: undefined as never,
-    runtime: undefined as never,
+    // LOCAL-6's orchestrator (`runLocal6RouteChangeCell`) calls
+    // `snapshotLocalWorkspaceSessionIds` directly (not through the mocked
+    // driver) immediately before `switchSelectedRouteToGateway`, so the fake
+    // world needs a minimal runtime client: no workspace exists yet, so the
+    // real resolver returns an empty pre-existing-sessions snapshot, matching
+    // what a fresh world would report.
+    runtime: { client: { listWorkspaces: async () => [], listSessions: async () => [] } } as never,
     renderer: undefined as never,
     gateway: undefined as never,
     paths: undefined as never,
