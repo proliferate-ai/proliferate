@@ -36,10 +36,27 @@ test("release qualification has stable independent concurrency groups by world",
   assert.match(job(selfhost, "artifact-chain"), /group: release-e2e-tier4/);
   assert.match(job(selfhost, "provisioning"), /group: release-e2e-self-host/);
   assert.match(job(release, "release-e2e-local"), /if: github\.event_name == 'schedule'/);
-  assert.match(job(release, "release-e2e-local-functional"), /if: github\.event_name == 'workflow_dispatch'/);
+  assert.match(
+    job(release, "release-e2e-local-functional"),
+    /if: github\.event_name == 'workflow_dispatch' && !inputs\.selfhost/,
+  );
 
   for (const source of [release, selfhost]) {
     assert.doesNotMatch(source, /cancel-in-progress: true/);
+  }
+});
+
+test("a self-host dispatch cannot launch unrelated release worlds", () => {
+  assert.match(
+    job(release, "release-e2e-selfhost-install"),
+    /if: github\.event_name == 'workflow_dispatch' && inputs\.selfhost/,
+  );
+  for (const id of ["qualification-tier2", "release-e2e-local-functional", "release-e2e-managed-cloud"]) {
+    assert.match(
+      job(release, id),
+      /if: github\.event_name == 'workflow_dispatch' && !inputs\.selfhost/,
+      `${id} must stay out of a self-host-only dispatch`,
+    );
   }
 });
 
