@@ -13,7 +13,6 @@ from proliferate.db.store import repositories as repositories_store
 from proliferate.server.cloud.materialization import operation
 from proliferate.server.cloud.materialization.materialize import (
     agent_auth,
-    github_credentials,
     secret_set,
 )
 from proliferate.server.cloud.materialization.materialize import (
@@ -41,12 +40,6 @@ async def _materialize_sandbox(
     db: AsyncSession,
     user_id: UUID,
 ) -> None:
-    await github_credentials.materialize_github_credentials(
-        db,
-        target=ctx.target,
-        operation_id=ctx.sandbox.id,
-        user_id=user_id,
-    )
     await secret_set.materialize_global_secrets_for_user(
         db,
         ctx=ctx,

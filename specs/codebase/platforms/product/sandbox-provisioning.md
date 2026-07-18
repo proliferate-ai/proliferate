@@ -145,6 +145,13 @@ finishes with an exact-binding ready-state write. This refreshes health
 evidence and clears `last_error` without fabricating a newer provider lifecycle
 observation, even when the runtime URL and credentials were reused.
 
+Sandbox bootstrap applies global secrets and agent-auth state independently of
+repository configuration. A user with no Cloud repository environments does
+not need GitHub App authorization for that bootstrap. Each configured
+repository attempt owns its GitHub authority check and credential
+materialization, and remains best-effort so one repository failure cannot
+prevent the non-repository state from converging.
+
 The E2B launch path does not launch Proliferate Supervisor. A missing or
 unhealthy Worker does not make direct AnyHarness access unavailable. Reusing an
 already-healthy AnyHarness does not currently restart or self-heal a missing
