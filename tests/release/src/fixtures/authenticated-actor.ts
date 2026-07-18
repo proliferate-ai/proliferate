@@ -186,6 +186,25 @@ export function __resetAuthenticatedActorClaimCacheForTests(): void {
   claimedOwnerByWorld.clear();
 }
 
+/**
+ * Evicts the claimed-owner cache entry for a world's `runDir`. MUST be called
+ * on every teardown path of a world booted against that `runDir` (see
+ * `bootLocalFunctionalWorld` in `../scenarios/local/world-boot.ts`).
+ *
+ * The cache is keyed by `world.paths.runDir`, and a single scenario can boot
+ * MULTIPLE successive worlds under the same run dir (e.g. `T3-AUTHROUTE-1`
+ * boots one world for its batch collector, then a fresh world for its
+ * `route=change` collector, both deriving the same `worldRoot` from the
+ * shared scenario id). Without eviction, a torn-down world's cached owner
+ * credentials leak into the next world that reuses the same path; that next
+ * world's database has no such owner, so password login 401s. Evicting on
+ * close makes that leak structurally impossible no matter how many worlds a
+ * scenario boots against the same run dir.
+ */
+export function evictClaimedOwner(runDir: string): void {
+  claimedOwnerByWorld.delete(runDir);
+}
+
 /** Stable identity for a world's single-org server (one claim per run dir). */
 function worldIdentity(world: ReadyLocalWorld): string {
   return world.paths.runDir;

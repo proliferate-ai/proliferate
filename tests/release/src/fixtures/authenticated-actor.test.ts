@@ -4,6 +4,7 @@ import { beforeEach, test } from "node:test";
 import {
   authenticatedActor,
   toStoredSession,
+  evictClaimedOwner,
   __resetAuthenticatedActorClaimCacheForTests,
   type AuthenticatedActorTransport,
 } from "./authenticated-actor.js";
@@ -294,6 +295,52 @@ test("authenticatedActor does not cache a failed claim: a later call for the sam
   assert.equal(claimAttempts, 2);
   assert.equal(actor.role, "owner");
   assert.equal(calls.filter((call) => call.startsWith("claimSetup")).length, 2);
+});
+
+test("evictClaimedOwner: after eviction, a new actor for the same runDir claims again instead of logging in with stale credentials", async () => {
+  // Regression for run 29631868610 (T3-AUTHROUTE-1, route=change 401): two
+  // successive worlds sharing the same worldRoot/runDir must never share a
+  // cached owner. Simulates world close (which evicts) followed by a fresh
+  // world reusing the same runDir.
+  const world = fakeWorld();
+  const { transport, calls } = fakeTransport();
+
+  const first = await authenticatedActor(world, "owner", {}, transport);
+  evictClaimedOwner(world.paths.runDir);
+
+  const { transport: secondTransport, calls: secondCalls } = fakeTransport();
+  const second = await authenticatedActor(world, "owner", {}, secondTransport);
+
+  assert.equal(
+    calls.filter((call) => call.startsWith("claimSetup")).length,
+    1,
+    "the first world claims once",
+  );
+  assert.equal(
+    secondCalls.filter((call) => call.startsWith("claimSetup")).length,
+    1,
+    "after eviction, the next call for the same runDir claims again rather than reusing the stale cache",
+  );
+  assert.equal(first.role, "owner");
+  assert.equal(second.role, "owner");
+});
+
+test("evictClaimedOwner: claim-once-per-world behavior still holds within one world's lifetime (no eviction call)", async () => {
+  const world = fakeWorld();
+  const { transport, calls } = fakeTransport();
+
+  await authenticatedActor(world, "owner", { harnessKind: "claude" }, transport);
+  await authenticatedActor(world, "owner", { harnessKind: "codex" }, transport);
+
+  assert.equal(
+    calls.filter((call) => call.startsWith("claimSetup")).length,
+    1,
+    "without eviction, the cache still serves the second call from the same world",
+  );
+});
+
+test("evictClaimedOwner: evicting an unknown runDir is a harmless no-op", () => {
+  assert.doesNotThrow(() => evictClaimedOwner("/tmp/never-cached"));
 });
 
 test("authenticatedActor: an explicit email opts out of the shared per-world claim cache and always claims directly", async () => {

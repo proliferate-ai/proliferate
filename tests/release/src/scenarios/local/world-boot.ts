@@ -10,6 +10,7 @@ import {
   type ReadyLocalWorld,
 } from "../../worlds/local-workspace/world.js";
 import { resolveWorldConstructionInputs, type QualificationLiteLlmConfigLike } from "../local-world-smoke-1.js";
+import { evictClaimedOwner } from "../../fixtures/authenticated-actor.js";
 
 /**
  * Shared local-functional world boot (BRIEF §"World lifecycle").
@@ -143,6 +144,7 @@ export async function bootLocalFunctionalWorld(
   construct: ConstructLocalWorldFn = constructLocalWorld,
 ): Promise<ReadyLocalWorld> {
   const release = await worldBootMutex.acquire();
+  const worldRoot = path.join(inputs.runDir, "worlds", worldDirSlug(worldId));
   let world: ReadyLocalWorld;
   try {
     // Identical world construction to `LOCAL-WORLD-SMOKE-1`'s `buildWorld`
@@ -155,7 +157,7 @@ export async function bootLocalFunctionalWorld(
       map: inputs.map,
       litellm: inputs.litellm,
       runDir: inputs.runDir,
-      worldRoot: path.join(inputs.runDir, "worlds", worldDirSlug(worldId)),
+      worldRoot,
       ports: inputs.ports,
     });
   } catch (error) {
@@ -166,12 +168,19 @@ export async function bootLocalFunctionalWorld(
   }
 
   // Hold the mutex until this world is fully torn down. Wrap `close()` so the
-  // release happens exactly once, whether close resolves or throws.
+  // release happens exactly once, whether close resolves or throws. Also
+  // evict the claim-once cache entry for this world's run dir on every
+  // teardown path: a scenario may boot a SECOND, freshly-constructed world
+  // against this exact same `worldRoot` (e.g. T3-AUTHROUTE-1's batch
+  // collector followed by its route=change collector), and without eviction
+  // that next world would inherit this world's now-stale owner credentials
+  // from `authenticatedActor`'s per-world claim cache and 401 on login.
   const realClose = world.close.bind(world);
   let released = false;
   const releaseOnce = (): void => {
     if (!released) {
       released = true;
+      evictClaimedOwner(worldRoot);
       release();
     }
   };
