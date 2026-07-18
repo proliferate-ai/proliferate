@@ -286,6 +286,19 @@ export function correlateGatewaySpend(
 const BOX_STEP_TIMEOUT_MS = 5 * 60_000;
 
 /**
+ * Bounded timeout for the full bootstrap.sh re-run that enables the
+ * agent-gateway profile. This single ssh call nests a cold litellm image pull
+ * (first time the profiled service is touched on the box — minutes on a
+ * t3.small's baseline network credits) PLUS compose's own
+ * `up -d --wait --wait-timeout 300` health wait with litellm's 180s
+ * start_period. The outer ssh budget must exceed that inner 300s wait or the
+ * local timeout SIGTERMs ssh mid-pull with an empty, content-free error
+ * (observed on run 29622211632: bare "Command failed: ssh ..." and an empty
+ * compose-states diag because the containers were never created).
+ */
+const BOOTSTRAP_TIMEOUT_MS = 12 * 60_000;
+
+/**
  * Writes the gateway env block into the instance `.env.static` and enables the
  * operator profile the documented way: a 0600 file scp'd to the box (secrets
  * never on argv), appended to `.env.static`, then the shipped `bootstrap.sh`
@@ -324,7 +337,7 @@ export async function configureAndEnableGatewayProfile(
       // recoverable — the ssh transport otherwise discards the remote stderr.
       await ssh.run(
         `cd ${GATEWAY_DEPLOY_DIR} && sudo bash bootstrap.sh > /tmp/gw-bootstrap.log 2>&1`,
-        { timeoutMs: BOX_STEP_TIMEOUT_MS },
+        { timeoutMs: BOOTSTRAP_TIMEOUT_MS },
       );
     } catch (error) {
       // bootstrap.sh runs `up -d --wait litellm`; if litellm never reaches
@@ -349,42 +362,39 @@ export async function configureAndEnableGatewayProfile(
  * the master key) are intentionally excluded.
  */
 async function captureGatewayBootstrapDiag(ssh: SshTransport): Promise<string> {
-  const composePs = (
-    await ssh
-      .run(
-        `cd ${GATEWAY_DEPLOY_DIR} && sudo docker compose --env-file .env.runtime ` +
-          `-f docker-compose.production.yml --profile agent-gateway ps ` +
-          `--format '{{.Service}}:{{.State}}:{{.Health}}' 2>/dev/null | tr '\\n' ' '`,
-        { timeoutMs: 60_000 },
-      )
-      .catch(() => "")
-  ).trim();
-  const litellmInspect = (
-    await ssh
-      .run(
-        "sudo docker ps -a --filter label=com.docker.compose.service=litellm " +
-          "--format '{{.Names}}:{{.Status}}' 2>/dev/null | head -n1",
-        { timeoutMs: 60_000 },
-      )
-      .catch(() => "")
-  ).trim();
+  // A probe that errors is reported "(probe failed)" — distinct from a probe
+  // that ran and genuinely had nothing to show ("none"). Collapsing both to the
+  // same empty string made run 29622211632's failure undiagnosable.
+  const probe = (cmd: string): Promise<string> =>
+    ssh
+      .run(cmd, { timeoutMs: 60_000 })
+      .then((out) => out.trim() || "none")
+      .catch(() => "(probe failed)");
+  const composePs = await probe(
+    `cd ${GATEWAY_DEPLOY_DIR} && sudo docker compose --env-file .env.runtime ` +
+      `-f docker-compose.production.yml --profile agent-gateway ps ` +
+      `--format '{{.Service}}:{{.State}}:{{.Health}}' 2>/dev/null | tr '\\n' ' '`,
+  );
+  const litellmInspect = await probe(
+    "sudo docker ps -a --filter label=com.docker.compose.service=litellm " +
+      "--format '{{.Names}}:{{.Status}}' 2>/dev/null | head -n1",
+  );
   // Allowlisted, secret-scrubbed tail of bootstrap's own output. grep -E keeps
   // only diagnostic marker lines (preflight err/warn/ok, compose/pull/health
   // errors) — never arbitrary lines that might echo a resolved secret value —
   // and every survivor still passes through scrubSecretText.
-  const bootstrapTail = (
-    await ssh
-      .run(
-        "grep -aiE 'error|err:|warn|preflight|litellm|health|cannot|failed|denied|manifest|" +
-          "pull|no space|unhealthy|exited|dependency' /tmp/gw-bootstrap.log 2>/dev/null | tail -n 20 | tr '\\n' '|'",
-        { timeoutMs: 60_000 },
-      )
-      .catch(() => "")
-  ).trim();
-  const scrubbedTail = bootstrapTail ? scrubSecretText(bootstrapTail) : "";
+  const bootstrapTail = await probe(
+    "grep -aiE 'error|err:|warn|preflight|litellm|health|cannot|failed|denied|manifest|" +
+      "pull|no space|unhealthy|exited|dependency' /tmp/gw-bootstrap.log 2>/dev/null | tail -n 20 | tr '\\n' '|'",
+  );
+  // Unconditional raw tail (bounded + scrubbed): when the allowlist grep finds
+  // nothing (e.g. compose's buffered pull-progress output), the last bytes of
+  // the log still say how far bootstrap got before it died.
+  const rawTail = await probe("tail -c 2000 /tmp/gw-bootstrap.log 2>/dev/null | tr '\\n' '|'");
+  const scrub = (s: string) => (s === "none" || s === "(probe failed)" ? s : scrubSecretText(s));
   return (
-    `compose states: [${composePs || "none"}]; litellm container: [${litellmInspect || "none"}]` +
-    (scrubbedTail ? `; bootstrap tail: [${scrubbedTail}]` : "")
+    `compose states: [${composePs}]; litellm container: [${litellmInspect}]; ` +
+    `bootstrap tail: [${scrub(bootstrapTail)}]; raw tail: [${scrub(rawTail)}]`
   );
 }
 
