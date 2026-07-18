@@ -45,6 +45,25 @@ test("workspace secret proof rejects a missing secret file", () => {
   );
 });
 
+test("workspace secret proof rejects bytes that differ from the created secret", () => {
+  assert.throws(
+    () =>
+      assertWorkspaceSecretMaterialized({
+        workspaceEnvPath,
+        workspaceEnvRead: { content: "", error: null },
+        secretPath,
+        secretRead: { content: "different", error: null },
+        secretContent,
+        manifestPath,
+        manifestRead: {
+          content: JSON.stringify({ env: {}, files: { [secretPath]: secretSha256 }, versions: {} }),
+          error: null,
+        },
+      }),
+    /must match the workspace file secret/,
+  );
+});
+
 test("workspace secret proof rejects a stale manifest checksum", () => {
   assert.throws(
     () =>
