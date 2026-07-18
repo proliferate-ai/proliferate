@@ -69,14 +69,19 @@ ${shadowLines}
   }
 }
 
-.proliferate-spinner {
-  animation: proliferate-spinner-rotate 1.1s linear infinite;
+/* Keep the inline layout box stationary. Rotating it changes its transformed
+   bounding box throughout the cycle and makes compact tab/sidebar spinners
+   appear to orbit instead of spinning in place. */
+.proliferate-spinner > svg {
+  display: block;
+  animation: proliferate-spinner-rotate 1.4s linear infinite;
+  transform-box: view-box;
   transform-origin: center;
   will-change: transform;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .proliferate-spinner {
+  .proliferate-spinner > svg {
     animation: none;
     transform: rotate(22deg);
   }

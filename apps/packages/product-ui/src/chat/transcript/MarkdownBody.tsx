@@ -6,17 +6,11 @@ import {
   memo,
   useContext,
   useMemo,
+  type ContextType,
   type HTMLAttributes,
   type ReactElement,
   type ReactNode,
 } from "react";
-import {
-  type HastNode,
-  type MarkdownRevealState,
-  MarkdownRevealContext,
-  REVEAL_DISABLED,
-  revealChildren,
-} from "./MarkdownRevealText";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ProviderLinkMention } from "./ProviderLinkMention";
@@ -27,6 +21,12 @@ import {
   type ChatContentSearchPaint,
 } from "./ChatContentSearchContext";
 import { markSearchChildren } from "./MarkdownContentSearchMarks";
+import { stabilizeStreamingMarkdown } from "./streaming-markdown";
+import {
+  type HastNode,
+  MarkdownRevealContext,
+  revealChildren,
+} from "./MarkdownRevealText";
 
 interface MarkdownBodyProps {
   content: string;
@@ -35,8 +35,11 @@ interface MarkdownBodyProps {
   renderInlineCode?: MarkdownInlineCodeRenderer;
   renderCodeBlock?: MarkdownCodeBlockRenderer;
   taskListItems?: MarkdownTaskListItemPresentation;
+  /** Parse an incomplete live tail defensively while source text is streaming. */
+  isStreaming?: boolean;
+  /** Fade words in the live source suffix independently. */
   revealText?: boolean;
-  /** Character offset into the source string: text before this was already rendered. */
+  /** Live-source offset before which word fades have completed. */
   revealedUpTo?: number;
   /**
    * Opt this body into the chat content-search paint layer. Only the
@@ -88,6 +91,8 @@ type MdElementProps = HTMLAttributes<HTMLElement> & {
 
 type MdTag =
   | "blockquote"
+  | "del"
+  | "em"
   | "h1"
   | "h2"
   | "h3"
@@ -97,6 +102,7 @@ type MdTag =
   | "li"
   | "ol"
   | "p"
+  | "strong"
   | "table"
   | "td"
   | "th"
@@ -123,18 +129,15 @@ const LI_CLASSNAME = `pl-0.5 ${PROSE_TEXT}`;
 // rendered node. They must be referentially stable across renders: a fresh
 // arrow function per render is a new component type, which makes React
 // unmount and remount the whole markdown DOM (visible as transcript jumps
-// while streams/sends re-render rows). The reveal context is read inside each
-// component via useContext — the component identity stays stable, and the
-// context value flows from MarkdownBody's provider without rebuilding the map.
+// while streams/sends re-render rows).
 
-// Factory: creates a stable component that reads reveal + search context and
-// delegates. Both are read via useContext so the component identity stays
-// stable across renders (see the identity comment above).
+// Factory: creates a stable component that reads the search context and
+// delegates without rebuilding the components map (see the identity comment).
 function mdComponent(tag: MdTag, className: string) {
   return (props: MdElementProps) => {
-    const ctx = useContext(MarkdownRevealContext);
+    const revealState = useContext(MarkdownRevealContext);
     const searchPaint = useChatContentSearchPaint();
-    return mdHtmlElement(tag, className, props, ctx, searchPaint);
+    return mdHtmlElement(tag, className, props, revealState, searchPaint);
   };
 }
 
@@ -145,6 +148,9 @@ const STATIC_MARKDOWN_COMPONENTS = {
   h4: mdComponent("h4", "mb-2 mt-4 text-[15px] font-semibold leading-[1.3] text-foreground"),
   h5: mdComponent("h5", "mb-1.5 mt-4 text-[13px] font-semibold uppercase tracking-wide text-muted-foreground"),
   h6: mdComponent("h6", "mb-1.5 mt-4 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground"),
+  strong: mdComponent("strong", "font-semibold"),
+  em: mdComponent("em", "italic"),
+  del: mdComponent("del", "line-through"),
   p: mdComponent("p", `mb-[0.6875rem] mt-0 ${PROSE_TEXT} text-foreground`),
   ul: mdComponent("ul", `mb-[0.6875rem] mt-0 list-disc pl-[1.3125rem] ${PROSE_TEXT} text-foreground [&>li+li]:mt-2`),
   ol: mdComponent("ol", `mb-[0.6875rem] mt-0 list-decimal pl-[1.3125rem] ${PROSE_TEXT} text-foreground [&>li+li]:mt-2`),
@@ -315,10 +321,15 @@ export const MarkdownBody = memo(function MarkdownBody({
   renderInlineCode,
   renderCodeBlock,
   taskListItems = "inline",
+  isStreaming = false,
   revealText = false,
   revealedUpTo = 0,
   enableContentSearch = false,
 }: MarkdownBodyProps) {
+  const parsedContent = useMemo(
+    () => (isStreaming ? stabilizeStreamingMarkdown(content) : content),
+    [content, isStreaming],
+  );
   const markdownClassName = [
     `${PROSE_TEXT} text-foreground break-words`,
     "[&_li>p]:my-0",
@@ -346,11 +357,8 @@ export const MarkdownBody = memo(function MarkdownBody({
     ),
   }), [renderCodeBlock, renderInlineCode, renderLink, taskListItems]);
 
-  // Build reveal context value. Memoized so a re-render that changes neither
-  // flag nor offset doesn't push a fresh object through context; the disabled
-  // case shares one module-level reference.
-  const revealState: MarkdownRevealState | null = useMemo(
-    () => (revealText ? { enabled: true, revealedUpTo } : REVEAL_DISABLED),
+  const revealState = useMemo(
+    () => revealText ? { enabled: true, revealedUpTo } : null,
     [revealText, revealedUpTo],
   );
 
@@ -362,7 +370,7 @@ export const MarkdownBody = memo(function MarkdownBody({
           urlTransform={markdownUrlTransform}
           components={components}
         >
-          {content}
+          {parsedContent}
         </ReactMarkdown>
       </div>
     </MarkdownRevealContext.Provider>
@@ -435,14 +443,12 @@ function markdownUrlTransform(value: string): string {
 export { MarkdownCodeBlockShell } from "./MarkdownCodeBlock";
 
 // mdHtmlElement is called from within STATIC_MARKDOWN_COMPONENTS entries,
-// which ARE React component functions (hooks-valid call site). Each entry
-// calls useContext(MarkdownRevealContext) and passes the context state so
-// word spans can be applied without rebuilding the components map per render.
+// which ARE React component functions (hooks-valid call site).
 function mdHtmlElement(
   tag: MdTag,
   baseClassName: string,
   props: MdElementProps,
-  ctx: MarkdownRevealState | null = null,
+  revealState: ContextType<typeof MarkdownRevealContext> = null,
   searchPaint: ChatContentSearchPaint | null = null,
 ) {
   const {
@@ -461,13 +467,8 @@ function mdHtmlElement(
       dangerouslySetInnerHTML,
     });
   }
-  // Content-search highlighting takes precedence over the streaming reveal:
-  // search runs on settled content, so the reveal fade is irrelevant while a
-  // query is active.
   const finalChildren = searchPaint
     ? markSearchChildren(children, searchPaint.query, searchPaint.rowUnitId)
-    : ctx?.enabled
-      ? revealChildren(children, node as HastNode | undefined, ctx)
-      : children;
+    : revealChildren(children, node as HastNode | undefined, revealState);
   return createElement(tag, { ...rest, className: mergedClassName }, finalChildren);
 }

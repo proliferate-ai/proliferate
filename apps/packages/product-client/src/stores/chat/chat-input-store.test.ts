@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   createFileMentionNode,
+  createTextDraft,
   serializeChatDraftToPrompt,
 } from "#product/lib/domain/chat/composer/file-mention-draft-model";
 import { useChatInputStore } from "#product/stores/chat/chat-input-store";
@@ -21,6 +22,21 @@ describe("chat input store", () => {
     expect(serializeChatDraftToPrompt(
       useChatInputStore.getState().draftByWorkspaceId["workspace-1"]!,
     )).toBe("hello");
+  });
+
+  it("preserves an opaque editor snapshot across clear and draft restoration", () => {
+    const snapshot = { version: 1 as const, payload: '{"root":{"children":[]}}' };
+    const draft = createTextDraft("[Docs](https://example.com)", snapshot);
+
+    useChatInputStore.getState().setDraft("workspace-1", draft);
+    useChatInputStore.getState().clearDraft("workspace-1");
+    useChatInputStore.getState().setDraft("workspace-1", draft);
+
+    expect(useChatInputStore.getState().draftByWorkspaceId["workspace-1"]?.editorSnapshot)
+      .toEqual(snapshot);
+    useChatInputStore.getState().setDraftText("workspace-1", "externally replaced");
+    expect(useChatInputStore.getState().draftByWorkspaceId["workspace-1"]?.editorSnapshot)
+      .toBeUndefined();
   });
 
   it("stores structured drafts and preserves duplicate mention ids", () => {

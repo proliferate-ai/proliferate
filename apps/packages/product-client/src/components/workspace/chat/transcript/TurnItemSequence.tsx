@@ -30,6 +30,7 @@ import {
   formatCollapsedSummary,
 } from "#product/components/workspace/chat/transcript/TranscriptToolGroupUtils";
 import { TURN_ITEM_GAP_CLASS } from "#product/components/workspace/chat/transcript/TranscriptTurnChrome";
+import type { AssistantMessageRevealState } from "#product/components/workspace/chat/transcript/AssistantMessage";
 
 type PlanHandoffHandler = (plan: PromptPlanAttachmentDescriptor) => void;
 
@@ -42,6 +43,8 @@ export function TurnItemSequence({
   tailAssistantProseRootId,
   completedHistoryLabel,
   animateActivityEntry,
+  animateAssistantRevealItemId,
+  onAssistantRevealStateChange,
   showCompletedArtifactFallback,
   workspaceId,
   onOpenArtifact,
@@ -55,23 +58,32 @@ export function TurnItemSequence({
   tailAssistantProseRootId: string | null;
   completedHistoryLabel?: string | null;
   animateActivityEntry: boolean;
+  animateAssistantRevealItemId: string | null;
+  onAssistantRevealStateChange?: (
+    itemId: string,
+    state: AssistantMessageRevealState,
+  ) => void;
   showCompletedArtifactFallback: boolean;
   workspaceId: string | null;
   onOpenArtifact: (workspaceId: string, artifactId: string) => void;
   onHandOffPlanToNewSession?: PlanHandoffHandler;
 }) {
+  const visiblePresentation = constrainTurnItemSequencePresentation(
+    presentation,
+    animateAssistantRevealItemId,
+  );
   const artifactToolCalls = collectTurnCoworkArtifactToolCalls(turn, transcript);
   const animateCompletedHistory = useCompletedHistoryTransition(
-    isTurnComplete && presentation.completedHistorySummary !== null,
+    isTurnComplete && visiblePresentation.completedHistorySummary !== null,
   );
   const completedArtifactToolCalls = isTurnComplete
     ? artifactToolCalls.filter((item) => item.status === "completed")
     : [];
-  const completedHistoryRootIdSet = new Set(presentation.completedHistoryRootIds);
-  const frontierBlockKey = resolveTurnItemFrontierBlockKey(presentation);
+  const completedHistoryRootIdSet = new Set(visiblePresentation.completedHistoryRootIds);
+  const frontierBlockKey = resolveTurnItemFrontierBlockKey(visiblePresentation);
   const shouldRenderCompletedArtifacts = shouldRenderCompletedArtifactCards({
     completedArtifactCount: completedArtifactToolCalls.length,
-    presentation,
+    presentation: visiblePresentation,
     tailAssistantProseRootId,
     showCompletedArtifactFallback,
   });
@@ -87,7 +99,7 @@ export function TurnItemSequence({
     )
     : null;
   const completedHistoryOwnsPrelude = frontierPrelude !== null
-    && presentation.completedHistorySummary !== null
+    && visiblePresentation.completedHistorySummary !== null
     && tailAssistantProseRootId !== null;
   const standaloneFrontierPrelude = frontierPrelude && !completedHistoryOwnsPrelude
     ? (
@@ -105,11 +117,11 @@ export function TurnItemSequence({
 
   return (
     <>
-      {presentation.displayBlocks.map((block) => {
+      {visiblePresentation.displayBlocks.map((block) => {
         const blockKey = getTurnDisplayBlockKey(block);
         let renderedBlock: ReactNode;
         if (
-          presentation.completedHistorySummary
+          visiblePresentation.completedHistorySummary
           && blockBelongsToCompletedHistory(block, completedHistoryRootIdSet)
         ) {
           if (hasRenderedCompletedHistory) {
@@ -119,13 +131,13 @@ export function TurnItemSequence({
           renderedBlock = (
             <ToolCallSummary
               label={resolveCompletedHistoryDisclosureLabel(turn, completedHistoryLabel)}
-              summary={formatCollapsedSummary(presentation.completedHistorySummary)}
+              summary={formatCollapsedSummary(visiblePresentation.completedHistorySummary)}
               showWorkDivider={tailAssistantProseRootId !== null}
               completionContent={completedHistoryOwnsPrelude ? frontierPrelude : null}
               animateCompletion={animateCompletedHistory}
               renderChildren={() => (
                 <CompletedHistorySequence>
-                  {presentation.displayBlocks
+                  {visiblePresentation.displayBlocks
                     .filter((historyBlock) =>
                       blockBelongsToCompletedHistory(historyBlock, completedHistoryRootIdSet)
                     )
@@ -140,8 +152,10 @@ export function TurnItemSequence({
                           <TranscriptFragment
                             itemId={itemId}
                             transcript={transcript}
-                            childrenByParentId={presentation.childrenByParentId}
+                            childrenByParentId={visiblePresentation.childrenByParentId}
                             animateActivityEntry={false}
+                            animateAssistantRevealItemId={null}
+                            onAssistantRevealStateChange={onAssistantRevealStateChange}
                             workspaceId={workspaceId}
                             onOpenArtifact={onOpenArtifact}
                             onHandOffPlanToNewSession={onHandOffPlanToNewSession}
@@ -164,8 +178,10 @@ export function TurnItemSequence({
                 <TranscriptFragment
                   itemId={itemId}
                   transcript={transcript}
-                  childrenByParentId={presentation.childrenByParentId}
+                  childrenByParentId={visiblePresentation.childrenByParentId}
                   animateActivityEntry={animateActivityEntry}
+                  animateAssistantRevealItemId={animateAssistantRevealItemId}
+                  onAssistantRevealStateChange={onAssistantRevealStateChange}
                   workspaceId={workspaceId}
                   onOpenArtifact={onOpenArtifact}
                   onHandOffPlanToNewSession={onHandOffPlanToNewSession}
@@ -185,6 +201,28 @@ export function TurnItemSequence({
       {frontierBlockKey === null ? standaloneFrontierPrelude : null}
     </>
   );
+}
+
+export function constrainTurnItemSequencePresentation(
+  presentation: TurnPresentation,
+  assistantRevealItemId: string | null,
+): TurnPresentation {
+  if (!assistantRevealItemId) {
+    return presentation;
+  }
+  const frontierIndex = presentation.displayBlocks.findIndex(
+    (block) => block.kind === "item" && block.itemId === assistantRevealItemId,
+  );
+  if (
+    frontierIndex < 0
+    || frontierIndex === presentation.displayBlocks.length - 1
+  ) {
+    return presentation;
+  }
+  return {
+    ...presentation,
+    displayBlocks: presentation.displayBlocks.slice(0, frontierIndex + 1),
+  };
 }
 
 function useCompletedHistoryTransition(eligible: boolean): boolean {
@@ -271,6 +309,8 @@ function TranscriptFragment({
   transcript,
   childrenByParentId,
   animateActivityEntry,
+  animateAssistantRevealItemId,
+  onAssistantRevealStateChange,
   workspaceId,
   onOpenArtifact,
   onHandOffPlanToNewSession,
@@ -279,6 +319,11 @@ function TranscriptFragment({
   transcript: TranscriptState;
   childrenByParentId: Map<string, string[]>;
   animateActivityEntry: boolean;
+  animateAssistantRevealItemId: string | null;
+  onAssistantRevealStateChange?: (
+    itemId: string,
+    state: AssistantMessageRevealState,
+  ) => void;
   workspaceId: string | null;
   onOpenArtifact: (workspaceId: string, artifactId: string) => void;
   onHandOffPlanToNewSession?: PlanHandoffHandler;
@@ -290,6 +335,8 @@ function TranscriptFragment({
         transcript={transcript}
         childrenByParentId={childrenByParentId}
         animateActivityEntry={animateActivityEntry}
+        animateAssistantReveal={itemId === animateAssistantRevealItemId}
+        onAssistantRevealStateChange={onAssistantRevealStateChange}
         workspaceId={workspaceId}
         onOpenArtifact={onOpenArtifact}
         onHandOffPlanToNewSession={onHandOffPlanToNewSession}

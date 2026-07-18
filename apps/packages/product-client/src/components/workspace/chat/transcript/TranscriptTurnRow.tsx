@@ -2,7 +2,7 @@ import type {
   TranscriptState,
   TurnRecord,
 } from "@anyharness/sdk";
-import { useCallback, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRevertGitPatchesMutation } from "@anyharness/sdk-react";
 import { TurnDiffPanel } from "#product/components/workspace/chat/transcript/TurnDiffPanel";
 import { TranscriptPatchTurnDiffPanel } from "#product/components/workspace/chat/transcript/TranscriptPatchTurnDiffPanel";
@@ -42,8 +42,19 @@ import type { TurnDisplayBlock } from "@proliferate/product-domain/chats/transcr
 import type { PromptPlanAttachmentDescriptor } from "@proliferate/product-domain/chats/composer/prompt-plan-attachments";
 import type { SessionViewState } from "@proliferate/product-domain/sessions/activity";
 import { useToastStore } from "#product/stores/toast/toast-store";
+import type { AssistantMessageRevealState } from "#product/components/workspace/chat/transcript/AssistantMessage";
+import {
+  getAssistantRevealProgress,
+} from "#product/components/workspace/chat/transcript/assistant-reveal-progress";
+import { logDevAssistantRevealState } from "#product/lib/infra/debug/dev-assistant-reveal-log";
 
 type PlanHandoffHandler = (plan: PromptPlanAttachmentDescriptor) => void;
+type AssistantRevealClaim = {
+  itemId: string;
+  targetLength: number;
+};
+
+export const RECENT_ASSISTANT_REVEAL_WINDOW_MS = 60_000;
 
 export function TranscriptTurnRow({
   row,
@@ -82,24 +93,7 @@ export function TranscriptTurnRow({
     () => latestCompletedTurn(transcript)?.turnId ?? null,
     [transcript],
   );
-  const diffPanelKind = resolveTranscriptTurnDiffPanelKind({
-    rowIsLastTurnRow: row.isLastTurnRow,
-    turnCompleted: !!turn.completedAt,
-    turnId: turn.turnId,
-    latestCompletedTurnId,
-    hasFileBadges: turn.fileBadges.length > 0,
-  });
-  const isLatestCompletedTurnRow = diffPanelKind === "current";
-  // Fix 2/3: the transcript's single final completed AI message. Its action
-  // row is sticky (not hover-gated) and hosts the inline goal-met marker.
-  const isFinalCompletedTurn = row.isLastTurnRow
-    && !!turn.completedAt
-    && turn.turnId === latestCompletedTurnId;
   const sessionGoal = useSessionGoal();
-  const metMarker = isFinalCompletedTurn
-    && sessionGoal?.goal?.status === "met"
-    ? <TurnGoalMetMarker label={goalMetMarkerLabel(sessionGoal.goal)} />
-    : null;
   const presentation = row.presentation;
   const renderPresentation = row.renderPresentation;
   const liveExplorationBlock = isLatestTurn ? latestLiveExplorationBlock : null;
@@ -113,6 +107,82 @@ export function TranscriptTurnRow({
   );
   const tailAssistantItem = tailAssistantProseRootId
     ? transcript.itemsById[tailAssistantProseRootId]
+    : null;
+  const revealOriginRef = useRef({
+    turnId: turn.turnId,
+    wasLive: !turn.completedAt,
+  });
+  if (revealOriginRef.current.turnId !== turn.turnId) {
+    revealOriginRef.current = {
+      turnId: turn.turnId,
+      wasLive: !turn.completedAt,
+    };
+  } else if (!turn.completedAt) {
+    revealOriginRef.current.wasLive = true;
+  }
+  const [assistantRevealClaim, setAssistantRevealClaim] =
+    useState<AssistantRevealClaim | null>(null);
+  const cachedAssistantReveal = getAssistantRevealProgress(
+    tailAssistantProseRootId,
+  );
+  const claimedVisibleLength =
+    assistantRevealClaim?.itemId === tailAssistantProseRootId
+      ? assistantRevealClaim.targetLength
+      : cachedAssistantReveal?.visibleLength ?? 0;
+  const tailAssistantTextLength = tailAssistantCopyContent?.length ?? 0;
+  const hasUnrevealedAssistantText = tailAssistantTextLength > claimedVisibleLength;
+  const shouldAnimateAssistantReveal = shouldHoldAssistantRevealFrontier({
+    itemId: tailAssistantProseRootId,
+    hasUnrevealedText: hasUnrevealedAssistantText,
+    cachedRevealComplete: cachedAssistantReveal?.complete ?? null,
+    eligibleOrigin: (
+      revealOriginRef.current.wasLive
+      || cachedAssistantReveal !== null
+      || (
+        isLatestTurn
+        && isRecentAssistantCompletion(turn.completedAt)
+      )
+    ),
+  });
+  const animateAssistantRevealItemId = shouldAnimateAssistantReveal
+    ? tailAssistantProseRootId
+    : null;
+  const assistantRevealComplete = !shouldAnimateAssistantReveal;
+  const handleAssistantRevealStateChange = useCallback((
+    itemId: string,
+    state: AssistantMessageRevealState,
+  ) => {
+    logDevAssistantRevealState({ turnId: turn.turnId, itemId, state });
+    if (!state.complete) {
+      return;
+    }
+    setAssistantRevealClaim((current) => {
+      if (
+        current?.itemId === itemId
+        && current.targetLength >= state.targetLength
+      ) {
+        return current;
+      }
+      return { itemId, targetLength: state.targetLength };
+    });
+  }, [turn.turnId]);
+  const visualTurnCompleted = !!turn.completedAt && assistantRevealComplete;
+  const diffPanelKind = resolveTranscriptTurnDiffPanelKind({
+    rowIsLastTurnRow: row.isLastTurnRow,
+    turnCompleted: visualTurnCompleted,
+    turnId: turn.turnId,
+    latestCompletedTurnId,
+    hasFileBadges: turn.fileBadges.length > 0,
+  });
+  const isLatestCompletedTurnRow = diffPanelKind === "current";
+  // Completion chrome follows the assistant handoff point. The final word can
+  // still be finishing its opacity settle while the next transcript item starts.
+  const isFinalCompletedTurn = row.isLastTurnRow
+    && visualTurnCompleted
+    && turn.turnId === latestCompletedTurnId;
+  const metMarker = isFinalCompletedTurn
+    && sessionGoal?.goal?.status === "met"
+    ? <TurnGoalMetMarker label={goalMetMarkerLabel(sessionGoal.goal)} />
     : null;
   const tailAssistantActionTime = resolveAssistantTurnActionTime({
     assistantItem: tailAssistantItem?.kind === "assistant_prose" ? tailAssistantItem : null,
@@ -154,6 +224,7 @@ export function TranscriptTurnRow({
     rowIsLastTurnRow: row.isLastTurnRow,
     turnCompleted: !!turn.completedAt,
     hasAssistantCopyContent: !!tailAssistantCopyContent,
+    assistantRevealComplete,
   });
   const revertPatchesMutation = useRevertGitPatchesMutation({ workspaceId: selectedWorkspaceId });
   const showToast = useToastStore((state) => state.show);
@@ -226,15 +297,18 @@ export function TranscriptTurnRow({
           tailAssistantProseRootId={tailAssistantProseRootId}
           completedHistoryLabel={stoppedNotice}
           animateActivityEntry={isLatestTurnInProgress}
+          animateAssistantRevealItemId={animateAssistantRevealItemId}
+          onAssistantRevealStateChange={handleAssistantRevealStateChange}
           showCompletedArtifactFallback={row.isLastTurnRow}
           workspaceId={selectedWorkspaceId}
           onOpenArtifact={onOpenArtifact}
           onHandOffPlanToNewSession={onHandOffPlanToNewSession}
         />
-        {trailingStatus && (
+        {assistantRevealComplete && trailingStatus && (
           <div data-turn-frontier-status>{trailingStatus}</div>
         )}
-        {shouldRenderStandaloneStoppedNotice(stoppedNotice, hasCompletedHistoryDisclosure) && (
+        {assistantRevealComplete
+          && shouldRenderStandaloneStoppedNotice(stoppedNotice, hasCompletedHistoryDisclosure) && (
           <div className="flex flex-col items-start gap-2 text-chat text-foreground/60">
             <span>{stoppedNotice}</span>
             <div className="w-full border-t border-current/20" />
@@ -275,18 +349,50 @@ export function resolveTurnAssistantFooterMode({
   rowIsLastTurnRow,
   turnCompleted,
   hasAssistantCopyContent,
+  assistantRevealComplete,
 }: {
   rowIsLastTurnRow: boolean;
   turnCompleted: boolean;
   hasAssistantCopyContent: boolean;
+  assistantRevealComplete: boolean;
 }): "none" | "reserved" | "copy" {
   if (!rowIsLastTurnRow) {
     return "none";
   }
-  if (turnCompleted && hasAssistantCopyContent) {
+  if (turnCompleted && hasAssistantCopyContent && assistantRevealComplete) {
     return "copy";
   }
   return "reserved";
+}
+
+export function isRecentAssistantCompletion(
+  completedAt: string | null | undefined,
+  nowMs = Date.now(),
+): boolean {
+  if (!completedAt) {
+    return false;
+  }
+  const completedAtMs = Date.parse(completedAt);
+  const ageMs = nowMs - completedAtMs;
+  return Number.isFinite(completedAtMs)
+    && ageMs >= 0
+    && ageMs <= RECENT_ASSISTANT_REVEAL_WINDOW_MS;
+}
+
+export function shouldHoldAssistantRevealFrontier({
+  itemId,
+  hasUnrevealedText,
+  cachedRevealComplete,
+  eligibleOrigin,
+}: {
+  itemId: string | null;
+  hasUnrevealedText: boolean;
+  cachedRevealComplete: boolean | null;
+  eligibleOrigin: boolean;
+}): boolean {
+  return itemId !== null
+    && eligibleOrigin
+    && (hasUnrevealedText || cachedRevealComplete === false);
 }
 
 export function shouldRenderStandaloneStoppedNotice(

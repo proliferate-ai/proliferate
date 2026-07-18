@@ -1,7 +1,5 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { KeyboardEvent } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
-import { HOME_CHAT_COMPOSER_INPUT } from "#product/config/chat";
 import { useHomeNextLaunch } from "#product/hooks/home/workflows/use-home-next-launch";
 import { useHomeDraftHandoffStore } from "#product/stores/home/home-draft-handoff-store";
 import type {
@@ -9,6 +7,8 @@ import type {
   HomeNextModelSelection,
   ModelAvailabilityState,
 } from "#product/lib/domain/home/home-next-launch";
+import type { ChatComposerEditorSnapshot } from "#product/lib/domain/chat/composer/file-mention-draft-model";
+import type { ChatComposerKeyboardEvent } from "#product/hooks/chat/ui/use-chat-composer-keyboard";
 
 interface UseHomeNextComposerStateArgs {
   targetDisabledReason: string | null;
@@ -29,16 +29,19 @@ export function useHomeNextComposerState({
   launchControlValues,
   launchTarget,
 }: UseHomeNextComposerStateArgs) {
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const submitInFlightRef = useRef(false);
-  const [draft, setDraft] = useState("");
+  const [draftState, setDraftState] = useState<{
+    value: string;
+    snapshot?: ChatComposerEditorSnapshot;
+  }>({ value: "" });
+  const draft = draftState.value;
   const restoredDraftText = useHomeDraftHandoffStore((state) => state.draftText);
   const clearRestoredDraftText = useHomeDraftHandoffStore((state) => state.clearDraftText);
   const { isLaunching, launch } = useHomeNextLaunch();
 
   useEffect(() => {
     if (restoredDraftText !== null) {
-      setDraft(restoredDraftText);
+      setDraftState({ value: restoredDraftText });
       clearRestoredDraftText();
     }
   }, [clearRestoredDraftText, restoredDraftText]);
@@ -54,41 +57,12 @@ export function useHomeNextComposerState({
     && !!launchTarget
     && !isLaunching;
 
-  // PERF: `getComputedStyle` twice per keystroke is avoidable work in the hot
-  // typing path — line-height and root font-size only change on theme/UI-scale
-  // edits, so cache them briefly. The `scrollHeight` read below still forces a
-  // reflow; that one is inherent to autosizing.
-  const fontMetricsRef = useRef<{
-    lineHeightPx: number;
-    rootFontSizePx: number;
-    measuredAtMs: number;
-  } | null>(null);
-  useLayoutEffect(() => {
-    const el = textareaRef.current;
-    if (!el) return;
-
-    const nowMs = Date.now();
-    let metrics = fontMetricsRef.current;
-    if (!metrics || nowMs - metrics.measuredAtMs > 1_000) {
-      const lineHeightPx = parseFloat(getComputedStyle(el).lineHeight);
-      if (!Number.isFinite(lineHeightPx) || lineHeightPx <= 0) return;
-      const rootFontSizePx = parseFloat(getComputedStyle(document.documentElement).fontSize);
-      metrics = { lineHeightPx, rootFontSizePx, measuredAtMs: nowMs };
-      fontMetricsRef.current = metrics;
-    }
-    const { lineHeightPx, rootFontSizePx } = metrics;
-
-    const homeMinHeightPx = Number.isFinite(rootFontSizePx)
-      ? rootFontSizePx * HOME_CHAT_COMPOSER_INPUT.minHeightRem
-      : lineHeightPx * HOME_CHAT_COMPOSER_INPUT.minRows;
-    const minPx = Math.max(lineHeightPx * HOME_CHAT_COMPOSER_INPUT.minRows, homeMinHeightPx);
-    const maxPx = lineHeightPx * HOME_CHAT_COMPOSER_INPUT.maxRows;
-    el.style.height = "auto";
-    const contentHeight = el.scrollHeight;
-    const next = Math.min(maxPx, Math.max(minPx, contentHeight));
-    el.style.height = `${next}px`;
-    el.style.overflowY = contentHeight > maxPx ? "auto" : "hidden";
-  }, [draft]);
+  const setDraft = useCallback((
+    value: string,
+    snapshot?: ChatComposerEditorSnapshot,
+  ) => {
+    setDraftState(snapshot ? { value, snapshot } : { value });
+  }, []);
 
   const submit = useCallback(async () => {
     if (
@@ -99,19 +73,19 @@ export function useHomeNextComposerState({
     ) return;
 
     submitInFlightRef.current = true;
-    const submittedDraft = draft;
+    const submittedDraft = draftState;
     const restoreSubmittedDraft = () => {
-      setDraft((currentDraft) => (
-        currentDraft.length === 0 ? submittedDraft : currentDraft
+      setDraftState((currentDraft) => (
+        currentDraft.value.length === 0 ? submittedDraft : currentDraft
       ));
     };
     flushSync(() => {
-      setDraft("");
+      setDraftState({ value: "" });
     });
 
     try {
       const succeeded = await launch({
-        text: submittedDraft,
+        text: submittedDraft.value,
         modelSelection,
         modeId,
         launchControlValues,
@@ -129,7 +103,7 @@ export function useHomeNextComposerState({
     }
   }, [
     canSubmit,
-    draft,
+    draftState,
     launch,
     launchControlValues,
     launchTarget,
@@ -139,12 +113,12 @@ export function useHomeNextComposerState({
 
   const cancel = useCallback(() => {
     if (!isLaunching) {
-      setDraft("");
+      setDraftState({ value: "" });
     }
   }, [isLaunching]);
 
-  const handleKeyDown = useCallback((event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.nativeEvent.isComposing) return;
+  const handleKeyDown = useCallback((event: ChatComposerKeyboardEvent) => {
+    if (event.isComposing || event.nativeEvent?.isComposing) return;
     if (
       event.key === "Escape"
       && !event.shiftKey
@@ -153,23 +127,12 @@ export function useHomeNextComposerState({
       && !event.metaKey
     ) {
       cancel();
-      return;
     }
-    if (
-      event.key === "Enter"
-      && (event.metaKey || event.ctrlKey)
-      && !event.shiftKey
-      && !event.altKey
-      && canSubmit
-    ) {
-      event.preventDefault();
-      void submit();
-    }
-  }, [canSubmit, cancel, submit]);
+  }, [cancel]);
 
   return {
-    textareaRef,
     draft,
+    editorSnapshot: draftState.snapshot,
     setDraft,
     submitDisabledReason,
     canSubmit,

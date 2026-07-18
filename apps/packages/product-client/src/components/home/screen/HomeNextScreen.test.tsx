@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import type { ReactNode, TextareaHTMLAttributes } from "react";
+import type { ReactNode } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { HomeNextScreen } from "#product/components/home/screen/HomeNextScreen";
@@ -153,9 +153,9 @@ vi.mock("@proliferate/product-ui/chat/composer/ChatComposerSurface", () => ({
   ),
 }));
 
-vi.mock("@proliferate/ui/primitives/ComposerTextarea", () => ({
-  ComposerTextarea: (props: TextareaHTMLAttributes<HTMLTextAreaElement>) => (
-    <textarea aria-label="Prompt" {...props} />
+vi.mock("#product/components/workspace/chat/input/ComposerRichTextEditor", () => ({
+  ComposerRichTextEditor: ({ value, snapshot, onChange, onKeyDown, disabled }: any) => (
+    <textarea aria-label="Prompt" data-editor-snapshot={snapshot?.payload} value={value} onChange={(event) => onChange(event.target.value, event.timeStamp, { version: 1, payload: "home-editor-snapshot" })} onKeyDown={onKeyDown} disabled={disabled} />
   ),
 }));
 
@@ -282,7 +282,6 @@ describe("HomeNextScreen model availability notices", () => {
     const expectedMaxHeight =
       `calc(var(--text-composer--line-height) * ${HOME_CHAT_COMPOSER_INPUT.maxRows})`;
 
-    expect(textarea.style.maxHeight).toBe(expectedMaxHeight);
     expect(textarea.parentElement?.style.maxHeight).toBe(expectedMaxHeight);
   });
 
@@ -347,6 +346,7 @@ describe("HomeNextScreen model availability notices", () => {
     fail();
     const prompt = submitPrompt("keep this draft");
     await waitFor(() => expect(prompt.value).toBe("keep this draft"));
+    expect(prompt.dataset.editorSnapshot).toBe("home-editor-snapshot");
     expect(document.querySelector("[data-home-submit-preview]")).toBeNull();
   });
 

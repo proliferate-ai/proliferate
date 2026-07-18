@@ -7,6 +7,12 @@ import {
 
 export interface ChatComposerDraft {
   nodes: ChatComposerDraftNode[];
+  editorSnapshot?: ChatComposerEditorSnapshot;
+}
+
+export interface ChatComposerEditorSnapshot {
+  version: 1;
+  payload: string;
 }
 
 export type ChatComposerDraftNode =
@@ -49,9 +55,13 @@ export function createChatFileMentionId(): string {
   return `file-mention:${Date.now()}:${mentionIdSequence.toString(36)}`;
 }
 
-export function createTextDraft(text: string): ChatComposerDraft {
+export function createTextDraft(
+  text: string,
+  editorSnapshot?: ChatComposerEditorSnapshot,
+): ChatComposerDraft {
   return normalizeChatDraft({
     nodes: text.length > 0 ? [{ type: "text", text }] : [],
+    editorSnapshot,
   });
 }
 
@@ -107,7 +117,17 @@ export function normalizeChatDraft(draft: ChatComposerDraft): ChatComposerDraft 
     }
   }
 
-  return nodes.length === 0 ? EMPTY_CHAT_DRAFT : { nodes };
+  if (nodes.length === 0) return EMPTY_CHAT_DRAFT;
+  const editorSnapshot = isComposerEditorSnapshot(draft.editorSnapshot)
+    ? draft.editorSnapshot
+    : undefined;
+  return editorSnapshot ? { nodes, editorSnapshot } : { nodes };
+}
+
+function isComposerEditorSnapshot(
+  value: ChatComposerEditorSnapshot | undefined,
+): value is ChatComposerEditorSnapshot {
+  return value?.version === 1 && typeof value.payload === "string";
 }
 
 export function isChatDraftEmpty(draft: ChatComposerDraft): boolean {

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { memo, type ReactNode } from "react";
 import { FileReferenceBadge } from "#product/components/workspace/file-references/FileReferenceBadge";
 
 interface FilePathLinkProps {
@@ -21,8 +21,11 @@ interface FilePathLinkProps {
  * Style: Codex-style local file/doc link in `text-link-foreground`, no pill,
  * no border, underline on hover only.
  */
-export function FilePathLink({ rawPath, children }: FilePathLinkProps) {
+export const FilePathLink = memo(function FilePathLink({
+  rawPath,
+  children,
+}: FilePathLinkProps) {
   return (
     <FileReferenceBadge rawPath={rawPath} label={children} variant="inline" />
   );
-}
+});

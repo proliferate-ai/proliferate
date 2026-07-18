@@ -7,13 +7,14 @@ export interface ComposerKeyboardEventLike {
   altKey: boolean;
   ctrlKey: boolean;
   metaKey: boolean;
-  nativeEvent: {
+  isComposing?: boolean;
+  nativeEvent?: {
     isComposing?: boolean;
   };
 }
 
 function isComposing(event: ComposerKeyboardEventLike): boolean {
-  return event.nativeEvent.isComposing === true;
+  return event.isComposing === true || event.nativeEvent?.isComposing === true;
 }
 
 function isPlainModifierState(event: ComposerKeyboardEventLike): boolean {

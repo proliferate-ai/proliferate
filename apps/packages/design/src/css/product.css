@@ -1624,27 +1624,6 @@ body {
 .animate-snake-11 { opacity: 0; animation: snake-n11 2.08s linear infinite; }
 .animate-snake-12 { opacity: 0; animation: snake-n12 2.08s linear infinite; }
 
-/* ---- Compact spinner ----
-   Shared current-color spinner for small controls. */
-@keyframes proliferate-spinner-rotate {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.proliferate-spinner {
-  animation: proliferate-spinner-rotate 1.4s linear infinite;
-  transform-origin: center;
-  will-change: transform;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .proliferate-spinner {
-    animation: none;
-    transform: rotate(22deg);
-  }
-}
-
 /* ---- Braille sweep loading text ----
    Retained as a CSS-driven auth-only mark. */
 @keyframes braille-sweep-content {

@@ -40,6 +40,8 @@ export function renderComposerSurfaceForScenario(scenario: ScenarioKey): ReactNo
       return <PlaygroundComposerSurface ultra />;
     case "workspace-status-card":
       return <PlaygroundComposerSurface statusControl={<PlaygroundWorkspaceStatusControl />} />;
+    case "status-live-stream":
+      return <PlaygroundComposerSurface interactive />;
     case "slash-command-search":
       return <PlaygroundSlashCommandComposerSurface commands={PLAYGROUND_SLASH_COMMANDS} />;
     case "slash-command-empty":
@@ -51,11 +53,14 @@ export function renderComposerSurfaceForScenario(scenario: ScenarioKey): ReactNo
 
 export function PlaygroundComposerSurface({
   ultra = false,
+  interactive = false,
   statusControl,
 }: {
   ultra?: boolean;
+  interactive?: boolean;
   statusControl?: ReactNode;
 }) {
+  const [draft, setDraft] = useState("");
   return (
     <ChatComposerSurface>
       <form className="relative flex flex-col">
@@ -64,11 +69,14 @@ export function PlaygroundComposerSurface({
           style={{ minHeight: "3.5rem" }}
         >
           <Textarea
+            data-chat-composer-editor
             variant="ghost"
             rows={2}
-            placeholder="Playground composer (read-only)"
+            value={draft}
+            onChange={interactive ? (event) => setDraft(event.target.value) : undefined}
+            placeholder={interactive ? "Type while the response renders" : "Playground composer (read-only)"}
             spellCheck={false}
-            readOnly
+            readOnly={!interactive}
             className="min-h-0 px-0 py-0 text-base leading-relaxed text-foreground placeholder:text-muted-foreground/70"
           />
         </div>

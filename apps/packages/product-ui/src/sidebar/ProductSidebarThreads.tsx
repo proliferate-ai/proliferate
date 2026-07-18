@@ -79,7 +79,7 @@ export function ProductSidebarThreadRow({
 
         <div className="flex shrink-0 items-center gap-1">
           {trailingStatus ? (
-            <div className="flex size-5 items-center justify-center transition-opacity duration-150 group-focus-within:opacity-0 group-hover:opacity-0">
+            <div className="flex h-5 items-center justify-end transition-opacity duration-150 group-focus-within:opacity-0 group-hover:opacity-0">
               {trailingStatus}
             </div>
           ) : trailingLabel && !active && !expandControl ? (
