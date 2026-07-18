@@ -6,6 +6,7 @@ use anyharness_contract::v1::{SessionActionCapabilities, SessionExecutionPhase};
 use tokio::sync::{mpsc, Mutex};
 
 use crate::domains::sessions::model::serialize_action_capabilities;
+use crate::domains::sessions::model::RequestedModeApplyError as ModeApplyError;
 use crate::domains::sessions::prompt::capabilities::capabilities_from_acp;
 use crate::live::sessions::actor::config::apply::restore_persisted_live_config_if_needed;
 use crate::live::sessions::actor::config::handle::apply_requested_session_preferences;
@@ -213,7 +214,6 @@ impl SessionActor {
             &source_agent_kind,
             startup_strategy.resumes_durable_history(),
         )?;
-
         {
             let mut sink = event_sink.lock().await;
             if startup_disposition == NativeSessionStartupDisposition::CreatedFresh {
@@ -221,7 +221,6 @@ impl SessionActor {
             }
             emit_startup_state(&mut sink, &startup_state);
         }
-
         let initial_live_config_started = Instant::now();
         if let Err(error) = emit_live_config_update(
             &source_agent_kind,
@@ -250,7 +249,6 @@ impl SessionActor {
                 "[workspace-latency] session.actor.initial_live_config.completed"
             );
         }
-
         let apply_preferences_started = Instant::now();
         if let Err(error) = apply_requested_session_preferences(
             &conn,
@@ -268,6 +266,8 @@ impl SessionActor {
                 elapsed_ms = apply_preferences_started.elapsed().as_millis(),
                 "[workspace-latency] session.actor.apply_preferences.failed"
             );
+            let _ = ready_tx.send(Err(ModeApplyError::clone_for_readiness(&error)));
+            return Err(error);
         } else {
             tracing::info!(
                 session_id = %session_id,

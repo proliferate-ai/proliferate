@@ -1,7 +1,7 @@
 use agent_client_protocol as acp;
 use anyharness_contract::v1::ConfigApplyState;
 
-use crate::domains::sessions::model::SessionRecord;
+use crate::domains::sessions::model::{RequestedModeApplyError, SessionRecord};
 use crate::live::sessions::actor::config::apply::{
     apply_mode_via_direct_setter_legacy, apply_specific_config_option, try_apply_config_option,
     try_apply_model_preference,
@@ -53,7 +53,7 @@ pub(in crate::live::sessions::actor) async fn apply_requested_session_preference
         }
     }
     if let Some(mode_id) = session.requested_mode_id.as_deref() {
-        let outcome = try_apply_config_option(
+        let mut outcome = try_apply_config_option(
             conn,
             native_session_id,
             startup_state,
@@ -62,7 +62,7 @@ pub(in crate::live::sessions::actor) async fn apply_requested_session_preference
         )
         .await?;
         if outcome == ConfigApplyOutcome::NotApplied {
-            let _ = apply_mode_via_direct_setter_legacy(
+            outcome = apply_mode_via_direct_setter_legacy(
                 conn,
                 native_session_id,
                 startup_state,
@@ -70,9 +70,23 @@ pub(in crate::live::sessions::actor) async fn apply_requested_session_preference
             )
             .await?;
         }
+        validate_requested_mode_outcome(&session.agent_kind, mode_id, outcome)?;
     }
 
     Ok(())
+}
+
+pub(in crate::live::sessions::actor) fn validate_requested_mode_outcome(
+    agent_kind: &str,
+    mode_id: &str,
+    outcome: ConfigApplyOutcome,
+) -> Result<(), RequestedModeApplyError> {
+    match outcome {
+        ConfigApplyOutcome::NoChange | ConfigApplyOutcome::AppliedAuthoritative => Ok(()),
+        ConfigApplyOutcome::AppliedRequested | ConfigApplyOutcome::NotApplied => {
+            Err(RequestedModeApplyError::new(agent_kind, mode_id))
+        }
+    }
 }
 
 fn live_model_ids(startup_state: &SessionStartupState) -> Vec<String> {
