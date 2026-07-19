@@ -10,9 +10,11 @@ import {
   NoEligibleGatewayModelError,
   assertOpencodeProviderSource,
   buildLocalRouteTurnEvidence,
+  classifyTurnErrorForEvidence,
   collectLocal2GatewayCells,
   collectLocal3UserKeyCells,
   collectLocal6RouteChangeCell,
+  turnErrorEvidenceMessage,
   type LocalRouteDriver,
   type RouteModelSelection,
 } from "./chat-authroute.js";
@@ -273,6 +275,21 @@ function fakeDriver(options: FakeDriverOptions = {}): { driver: LocalRouteDriver
 }
 
 // ── LOCAL-2 (gateway per harness) ─────────────────────────────────────────────
+
+test("turn errors retain only a fixed route and safe class in evidence", () => {
+  const raw = "LiteLLM 429: Budget has been exceeded; current=5 max=5 key=sk-secret";
+  assert.equal(classifyTurnErrorForEvidence(raw), "budget_exceeded");
+  const message = turnErrorEvidenceMessage("gateway", raw);
+  assert.equal(message, "sendBoundedTurn route=gateway error_class=budget_exceeded");
+  assert.doesNotMatch(message, /(?:sk-secret|current|\b5\b)/);
+});
+
+test("turn error classification is conservative and bounded", () => {
+  assert.equal(classifyTurnErrorForEvidence("HTTP 429 from upstream"), "rate_limited");
+  assert.equal(classifyTurnErrorForEvidence("provider returned 401 unauthorized"), "authentication_failed");
+  assert.equal(classifyTurnErrorForEvidence("upstream service unavailable (503)"), "provider_unavailable");
+  assert.equal(classifyTurnErrorForEvidence("opaque provider detail secret=abc"), "unclassified");
+});
 
 test("LOCAL-2: a non-cursor harness produces a green local_route_turn (route=gateway) with folded cleanup", async () => {
   const { driver } = fakeDriver();
