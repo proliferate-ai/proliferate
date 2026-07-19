@@ -103,7 +103,7 @@ export function PromptAttachmentCard({
             event.stopPropagation();
             onRemove(part.id);
           }}
-          className="prompt-attachment-remove pointer-events-none absolute top-1 right-1 z-20 size-5 rounded-full border border-border bg-background/95 p-0 text-foreground opacity-0 shadow-sm transition-opacity"
+          className="prompt-card-remove pointer-events-none absolute top-1 right-1 z-20 size-5 rounded-full border border-border bg-background/95 p-0 text-foreground opacity-0 shadow-sm transition-opacity"
           aria-label={`Remove ${part.name}`}
         >
           <X className="size-3" />
@@ -234,13 +234,13 @@ function promptAttachmentCardClassName(args: {
   if (args.isImage) {
     const size = args.isDraft ? "size-20" : args.isCompact ? "size-10" : "size-14";
     const border = args.isDraft ? "border-border" : "border-border/60";
-    return `prompt-attachment-card relative inline-flex ${size} shrink-0 overflow-visible rounded-lg border ${border} bg-card text-foreground`;
+    return `prompt-card relative inline-flex ${size} shrink-0 overflow-visible rounded-lg border ${border} bg-card text-foreground`;
   }
   if (args.isDraft) {
-    return "prompt-attachment-card prompt-attachment-card-draft-file relative inline-flex max-w-full shrink-0 overflow-visible rounded-lg border border-border bg-card text-foreground";
+    return "prompt-card prompt-card-file relative inline-flex max-w-full shrink-0 overflow-visible rounded-lg border border-border bg-card text-foreground";
   }
   if (args.isCompact) {
-    return "prompt-attachment-card relative inline-flex h-10 w-44 max-w-full shrink-0 overflow-visible rounded-lg border border-border/50 bg-card/70 text-foreground";
+    return "prompt-card relative inline-flex h-10 w-44 max-w-full shrink-0 overflow-visible rounded-lg border border-border/50 bg-card/70 text-foreground";
   }
-  return "prompt-attachment-card relative inline-flex h-11 w-48 max-w-full shrink-0 overflow-visible rounded-lg border border-border/60 bg-card/80 text-foreground";
+  return "prompt-card relative inline-flex h-11 w-48 max-w-full shrink-0 overflow-visible rounded-lg border border-border/60 bg-card/80 text-foreground";
 }

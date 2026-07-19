@@ -28,16 +28,13 @@ describe("PromptAttachmentCard style ownership", () => {
     expect(componentSource).not.toContain("h-[52px]");
     expect(componentSource).not.toContain("w-[210px]");
     expect(componentCss).toMatch(
-      /\.prompt-attachment-card-draft-file\s*\{[^}]*width:\s*210px;[^}]*height:\s*52px;/su,
+      /\.prompt-card-file\s*\{[^}]*width:\s*210px;[^}]*height:\s*52px;/su,
     );
-    expect(componentCss).toContain(
-      ".prompt-attachment-card:hover .prompt-attachment-remove,",
-    );
-    expect(componentCss).toContain(".prompt-attachment-remove:focus-visible");
+    expect(componentCss).toContain(".prompt-card:hover .prompt-card-remove,");
+    expect(componentCss).toContain(".prompt-card-remove:focus-visible");
     expect(componentCss).toContain("pointer-events: auto;");
     expect(componentCss).toContain("opacity: 1;");
-    expect(authenticatedCss).not.toContain("prompt-attachment-card");
-    expect(authenticatedCss).not.toContain("prompt-attachment-remove");
+    expect(authenticatedCss).not.toContain("prompt-card");
 
     const html = renderToStaticMarkup(
       <PromptAttachmentCard
@@ -56,9 +53,9 @@ describe("PromptAttachmentCard style ownership", () => {
         onRemove={vi.fn()}
       />,
     );
-    expect(html).toContain("prompt-attachment-card-draft-file");
+    expect(html).toContain("prompt-card-file");
     expect(html).toContain("max-w-full");
-    expect(html).toContain("prompt-attachment-remove");
+    expect(html).toContain("prompt-card-remove");
     expect(html).toContain("pointer-events-none");
     expect(html).toContain("opacity-0");
     expect(html).not.toContain("style=");
