@@ -68,7 +68,7 @@ beforeAll(async () => {
     throw new Error("Markdown cascade fixture did not receive a Vite URL.");
   }
   fixtureUrl = new URL("__markdown-cascade", baseUrl).href;
-  browser = await chromium.launch({ headless: true });
+  browser = await chromium.launch({ channel: "chrome", headless: true });
 }, 60_000);
 
 afterAll(async () => {
