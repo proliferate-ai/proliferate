@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "app": "proliferate",
+  "appVersion": "web-dev@c91d6f9275cd",
+  "feature": "integrated-crash-recovery",
+  "interaction": "render error boundary states, details disclosure, retry",
+  "capturedAt": "2026-07-18T21:15:59-07:00",
+  "timezone": "PDT",
+  "sourceSurface": "web-dev",
+  "targetUrl": "http://127.0.0.1:5433/playground/crash-recovery",
+  "theme": "system",
+  "provenance": "live",
+  "viewport": {
+    "width": 1280,
+    "height": 720,
+    "deviceScaleFactor": 2
+  },
+  "environment": {
+    "branch": "codex/ui-crash-recovery",
+    "baseSha": "c91d6f9275cd6e21723f9b83388df2ac8a697389",
+    "captureSha": "c91d6f9275cd6e21723f9b83388df2ac8a697389+working-tree",
+    "profile": "ui-08-crash-recovery",
+    "deliverySurface": "web-dev (real ProductClient web host; not packaged Desktop)",
+    "port": 5433,
+    "hmr": "Vite HMR enabled; server restarted and captures taken after pending updates settled"
+  },
+  "artifacts": {
+    "screenshot": [
+      "before-generic.png",
+      "after-reporting.png",
+      "after-reported.png",
+      "after-failed.png",
+      "after-unavailable.png",
+      "after-reported-details-expanded.png",
+      "after-retry-before.png",
+      "after-retry-success.png"
+    ],
+    "dom": [
+      "before-dom.html",
+      "after-reported-dom.html",
+      "after-reported-details-expanded-dom.html",
+      "after-retry-success-dom.html"
+    ],
+    "computedStyles": [
+      "before-computed-styles.json",
+      "after-computed-styles.json"
+    ],
+    "styles": null,
+    "recording": "after-interaction.mp4",
+    "contactSheet": "state-contact-sheet.png",
+    "trace": null
+  },
+  "contactSheetOrder": [
+    "reporting",
+    "reported",
+    "failed",
+    "unavailable",
+    "details expanded",
+    "retry succeeded"
+  ],
+  "limitations": [
+    "No fresh Codex or Conductor crash-recovery artifact existed under reference/codex or reference/conductor; the frozen specification and Proliferate's current shell, theme, and mark were the visual authority.",
+    "The focused route is self-contained because the local API server environment was unavailable; it still renders inside the real web ProductClient host. Desktop native acknowledgment is validated by focused bridge tests rather than a packaged Desktop capture."
+  ]
+}

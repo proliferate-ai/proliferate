@@ -40,3 +40,20 @@ export function deriveSupportMenuAction(support: SupportCapability): SupportMenu
   }
   return { kind: "none" };
 }
+
+/**
+ * The normal vendor action opens the in-app feedback modal, but that product
+ * subtree is unavailable after a root render crash. Recovery therefore uses a
+ * narrow external mail fallback for hosted vendor support, preserves an
+ * operator's configured destination, and still renders nothing for `none`.
+ */
+export function crashRecoverySupportDestination(
+  action: SupportMenuAction,
+  vendorEmail: string,
+): string | null {
+  if (action.kind === "operator") return action.url;
+  if (action.kind === "vendor") {
+    return `mailto:${vendorEmail}?subject=Proliferate%20crash%20recovery`;
+  }
+  return null;
+}

@@ -27,6 +27,7 @@ import { useSessionIntentDispatcher } from "#product/hooks/sessions/lifecycle/us
 import { useSessionSelectionLifecycle } from "#product/hooks/sessions/lifecycle/use-session-selection-lifecycle"
 import { useShortcutDispatcher } from "#product/hooks/shortcuts/lifecycle/use-shortcut-dispatcher"
 import { useSupportReportUploadQueue } from "#product/hooks/support/lifecycle/use-support-report-upload-queue"
+import { useCrashRecoverySupportAction } from "#product/hooks/support/workflows/use-crash-recovery-support-action"
 import { useTurnEndSound } from "#product/hooks/sessions/lifecycle/use-turn-end-sound"
 import { useWorkspaceGitStatusPersistence } from "#product/hooks/workspaces/lifecycle/use-workspace-git-status-persistence"
 import {
@@ -75,10 +76,24 @@ function recordAppRendererEvent(
  * boundary also covers the product route/UI tree passed as `children`.
  */
 export function ProductLifecycleRoot({ children }: { children: ReactNode }) {
-  const diagnostics = useProductHost().desktop?.diagnostics ?? null
+  const productHost = useProductHost()
+  const diagnostics = productHost.desktop?.diagnostics ?? null
+  const contactSupport = useCrashRecoverySupportAction()
+  let clientReleaseId: string | null = null
+  try {
+    clientReleaseId = productHost.telemetry.getSupportContext().clientReleaseId
+  } catch {
+    // Recovery identity is diagnostic-only. A broken accessor must not prevent
+    // the boundary itself from mounting.
+  }
   return (
     <AppErrorBoundary
-      onRenderError={(report) => diagnostics?.reportRenderError(report)}
+      onRenderError={diagnostics
+        ? (report) => diagnostics.reportRenderError(report)
+        : undefined}
+      clientReleaseId={clientReleaseId}
+      onCopyDetails={(details) => productHost.clipboard.writeText(details)}
+      onContactSupport={contactSupport ?? undefined}
     >
       <ProductLifecycles>{children}</ProductLifecycles>
     </AppErrorBoundary>

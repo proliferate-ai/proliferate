@@ -5,6 +5,7 @@ const DEDUPE_WINDOW_MS = 3_000;
 
 const seenObjects = new WeakSet<object>();
 const seenFingerprints = new Map<string, number>();
+const inFlightDiagnostics = new Map<string, Promise<boolean>>();
 let listenersInstalled = false;
 
 const STACKLESS_NETWORK_REJECTION_MESSAGES = new Set([
@@ -99,30 +100,51 @@ async function sendDiagnostic(
   error: unknown,
   dedupeKey: unknown,
   componentStack?: string | null,
-) {
+): Promise<boolean> {
   const message = messageFromUnknown(error);
   const stack = stackFromUnknown(error);
   if (shouldSuppressDiagnostic(source, error, message, stack, componentStack ?? null)) {
-    return;
+    return false;
   }
 
   const fingerprint = buildFingerprint(source, message, stack, componentStack ?? null);
+  const inFlight = inFlightDiagnostics.get(fingerprint);
+  if (inFlight) {
+    return inFlight;
+  }
   if (!shouldLogDiagnostic(dedupeKey, fingerprint)) {
-    return;
+    // An identical diagnostic was already persisted inside the dedupe window.
+    return true;
   }
 
-  try {
-    await logRendererDiagnostic({
-      source,
-      message,
-      stack,
-      componentStack: componentStack ?? null,
-      route: currentRoute(),
-    });
-  } catch (invokeError) {
-    if (import.meta.env.DEV) {
-      console.warn("Failed to persist renderer diagnostic", invokeError);
+  const persistence = (async () => {
+    try {
+      await logRendererDiagnostic({
+        source,
+        message,
+        stack,
+        componentStack: componentStack ?? null,
+        route: currentRoute(),
+      });
+      return true;
+    } catch (invokeError) {
+      // A failed attempt is not a dedupe hit: a later attempt must be allowed
+      // to retry, and concurrent callers must receive this same false result.
+      seenFingerprints.delete(fingerprint);
+      if (dedupeKey && typeof dedupeKey === "object") {
+        seenObjects.delete(dedupeKey);
+      }
+      if (import.meta.env.DEV) {
+        console.warn("Failed to persist renderer diagnostic", invokeError);
+      }
+      return false;
     }
+  })();
+  inFlightDiagnostics.set(fingerprint, persistence);
+  try {
+    return await persistence;
+  } finally {
+    inFlightDiagnostics.delete(fingerprint);
   }
 }
 
@@ -146,6 +168,6 @@ export function initializeDesktopNativeDiagnostics(): void {
 export function reportReactRenderError(
   error: Error,
   componentStack?: string | null,
-): void {
-  void sendDiagnostic("react.render", error, error, componentStack);
+): Promise<boolean> {
+  return sendDiagnostic("react.render", error, error, componentStack);
 }

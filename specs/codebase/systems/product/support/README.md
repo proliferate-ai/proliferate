@@ -34,6 +34,13 @@ a self-managed user to vendor support. The sidebar and command/menu action use
 `deriveSupportMenuAction`; any direct modal opening outside that boundary is a
 migration exception.
 
+The root render-crash recovery surface also derives this capability. Because a
+root crash makes the ordinary in-app vendor feedback subtree unavailable, its
+`Contact support` action uses a narrow hosted-vendor email fallback. Operator
+deployments keep their configured URL or email, and `none` renders no support
+action. The recovery surface never substitutes Proliferate vendor support for a
+self-managed deployment.
+
 Hosted Desktop has two private in-app modals:
 
 - **Send feedback** for bugs and operational feedback.

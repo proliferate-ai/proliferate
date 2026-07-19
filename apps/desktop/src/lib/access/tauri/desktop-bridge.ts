@@ -250,7 +250,7 @@ export const desktopBridge: DesktopBridge = {
 
   diagnostics: {
     logEvent: logRendererEvent,
-    reportRenderError(report: RenderErrorReport): void {
+    reportRenderError(report: RenderErrorReport): Promise<boolean> {
       // Dedup/fingerprint/suppression stays host-owned in reportReactRenderError.
       const error =
         report.error instanceof Error
@@ -260,7 +260,7 @@ export const desktopBridge: DesktopBridge = {
                 ? report.error
                 : String(report.error),
             );
-      reportReactRenderError(error, report.componentStack ?? null);
+      return reportReactRenderError(error, report.componentStack ?? null);
     },
     collectSupportBundle: collectSupportDiagnostics,
     saveJson(input) {

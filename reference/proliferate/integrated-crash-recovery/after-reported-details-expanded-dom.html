@@ -1,0 +1,33 @@
+- main:
+  - paragraph: Proliferate recovery
+  - heading "The app needs a quick reload" [level=1]
+  - paragraph: Sorry about that. Something unexpected interrupted this view, but the recovery tools below are still working.
+  - status:
+    - paragraph: Reported
+    - paragraph: We've been notified and are investigating.
+  - button "Reload app":
+    - text: Reload app
+  - button "Try again":
+    - text: Try again
+  - button "Copy details":
+    - text: Copy details
+  - button "Contact support":
+    - text: Contact support
+  - generic "Technical details" [active]:
+    - generic: Technical details
+  - term: Error message
+  - definition: Workspace panel failed to render
+  - term: Component stack
+  - definition:
+    - generic: at CrashRecoveryProbe (http://127.0.0.1:5433/@fs[private path]) at AppErrorBoundary (http://127.0.0.1:5433/@fs[private path]) at CrashRecoveryPlaygroundPage (<anonymous>) at Suspense (<anonymous>) at RenderedRoute (http://127.0.0.1:5433/node_modules/.vite/deps/react-router-dom.js?v=59e3f23f:6669:26) at Routes (http://127.0.0.1:5433/node_modules/.vite/deps/react-router-dom.js?v=59e3f23f:7604:3) at ShortcutRevealProvider (http://127.0.0.1:5433/@fs[private path]) at App (http://127.0.0.1:5433/@fs[private path]) at AppCommandActionsProvider (http://127.0.0.1:5433/@fs[private path]) at ProductLifecycles (http://127.0.0.1:5433/@fs[private path]) at AppErrorBoundary (http://127.0.0.1:5433/@fs[private path]) at ProductLifecycleRoot (http://127.0.0.1:5433/@fs[private path]) at TelemetryProvider (http://127.0.0.1:5433/@fs[private path]) at AnyHarnessWorkspace (http://127.0.0.1:5433/@fs[private path]) at [redacted] (http://127.0.0.1:5433/@fs[private path]) at AnyHarnessRuntime (http://127.0.0.1:5433/@fs[private path]) at WorkspaceProviders (http://127.0.0.1:5433/@fs[private path]) at ProductProviderRoot (http://127.0.0.1:5433/@fs[private path]) at ProductClient (http://127.0.0.1:5433/@fs[private path]) at RenderedRoute (http://127.0.0.1:5433/node_modules/.vite/deps/react-router-dom.js?v=59e3f23f:6669:26) at Routes (http://127.0.0.1:5433/node_modules/.vite/deps/react-router-dom.js?v=59e3f23f:7604:3) at ProductHostProvider (http://127.0.0.1:5433/@fs[private path]) at WebProductHostBoundary (http://127.0.0.1:5433/src/WebHostApp.tsx?t=1784434314993:147:35) at CloudClientProvider (http://127.0.0.1:5433/@fs[private path]) at QueryClientProvider (http://127.0.0.1:5433/node_modules/.vite/deps/@tanstack_react-query.js?v=59e3f23f:3239:3) at WebCloudRoot (http://127.0.0.1:5433/src/browser/cloud/WebCloudRoot.tsx?t=1784434294410:47:32) at Router (http://127.0.0.1:5433/node_modules/.vite/deps/react-router-dom.js?v=59e3f23f:7543:13) at BrowserRouter (http://127.0.0.1:5433/node_modules/.vite/deps/react-router-dom.js?v=59e3f23f:10859:3) at WebHostApp (<anonymous>)
+  - term: App
+  - definition: proliferate-web
+  - term: Version
+  - definition: 0.1.0
+  - term: Release
+  - definition: proliferate-web@0.1.0+ui08proof
+  - term: Build
+  - definition: ui08proof
+  - term: Report
+  - definition: Reported
+- region "Notifications alt+T"

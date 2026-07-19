@@ -390,6 +390,13 @@ methods beyond that inventory remain demand-driven: add one only when an
 actual consumer needs it, and preserve the concrete Desktop behavior and
 return shape at that boundary. The embedded browser is removed, not bridged.
 
+Root render-error reporting is one diagnostics operation with an acknowledged
+result: Desktop resolves success only after its native renderer diagnostic was
+persisted (or an identical event was already persisted inside the host-owned
+dedupe window). ProductClient keeps neutral sending copy until that result,
+reports failure or absence honestly, and contains reporter throws/rejections so
+the recovery surface cannot recursively fail.
+
 ## Styling and assets
 
 Web renders the Desktop product visual system. The shared CSS boundary is:

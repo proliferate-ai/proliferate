@@ -1,0 +1,26 @@
+{
+  "viewport": {
+    "width": 1280,
+    "height": 720,
+    "scale": 2
+  },
+  "root": {
+    "display": "flex",
+    "backgroundColor": "rgb(24, 24, 24)",
+    "color": "rgb(255, 255, 255)",
+    "gap": "16px",
+    "padding": "32px"
+  },
+  "title": {
+    "fontFamily": "-apple-system, system-ui, Segoe UI, sans-serif",
+    "fontSize": "12px",
+    "fontWeight": "500",
+    "lineHeight": "18px"
+  },
+  "errorDetails": {
+    "backgroundColor": "rgb(33, 33, 33)",
+    "borderRadius": "8px",
+    "maxWidth": "672px",
+    "padding": "16px"
+  }
+}

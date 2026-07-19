@@ -26,6 +26,7 @@ describe("native diagnostics", () => {
   beforeEach(() => {
     listeners = new Map();
     vi.stubEnv("DEV", true);
+    vi.spyOn(console, "warn").mockImplementation(() => {});
     mocks.logRendererDiagnosticMock.mockReset();
     mocks.logRendererDiagnosticMock.mockResolvedValue(undefined);
     vi.stubGlobal("window", {
@@ -82,10 +83,11 @@ describe("native diagnostics", () => {
     const diagnostics = await loadNativeDiagnostics();
     const error = new Error("same render failure");
 
-    diagnostics.reportReactRenderError(error, "at App");
-    diagnostics.reportReactRenderError(error, "at App");
-    await flushMicrotasks();
+    const first = diagnostics.reportReactRenderError(error, "at App");
+    const duplicate = diagnostics.reportReactRenderError(error, "at App");
 
+    await expect(first).resolves.toBe(true);
+    await expect(duplicate).resolves.toBe(true);
     expect(mocks.logRendererDiagnosticMock).toHaveBeenCalledTimes(1);
     expect(mocks.logRendererDiagnosticMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -94,5 +96,42 @@ describe("native diagnostics", () => {
         componentStack: "at App",
       }),
     );
+  });
+
+  it("confirms persistence success and reports native write failure honestly", async () => {
+    const diagnostics = await loadNativeDiagnostics();
+    await expect(
+      diagnostics.reportReactRenderError(new Error("persisted"), "at App"),
+    ).resolves.toBe(true);
+
+    mocks.logRendererDiagnosticMock.mockRejectedValueOnce(new Error("native log unavailable"));
+    await expect(
+      diagnostics.reportReactRenderError(new Error("not persisted"), "at App"),
+    ).resolves.toBe(false);
+  });
+
+  it("shares an in-flight result and permits retry after persistence fails", async () => {
+    const diagnostics = await loadNativeDiagnostics();
+    const error = new Error("retryable persistence");
+    let rejectPersistence: ((reason: Error) => void) | undefined;
+    mocks.logRendererDiagnosticMock.mockImplementationOnce(
+      () => new Promise((_resolve, reject) => {
+        rejectPersistence = reject;
+      }),
+    );
+
+    const first = diagnostics.reportReactRenderError(error, "at App");
+    const duplicate = diagnostics.reportReactRenderError(error, "at App");
+    rejectPersistence?.(new Error("native log unavailable"));
+
+    await expect(first).resolves.toBe(false);
+    await expect(duplicate).resolves.toBe(false);
+    expect(mocks.logRendererDiagnosticMock).toHaveBeenCalledTimes(1);
+
+    mocks.logRendererDiagnosticMock.mockResolvedValueOnce(undefined);
+    await expect(
+      diagnostics.reportReactRenderError(error, "at App"),
+    ).resolves.toBe(true);
+    expect(mocks.logRendererDiagnosticMock).toHaveBeenCalledTimes(2);
   });
 });

@@ -372,9 +372,12 @@ export interface DesktopDiagnosticsBridge {
    * Report a product render-phase error to the native renderer diagnostic log.
    * The host applies the same dedup/fingerprint/suppression the pre-move
    * renderer diagnostics did; the product boundary just forwards the error.
-   * Fire-and-forget: never rejects into the render path.
+   * Resolves true only after the diagnostic was persisted (or an identical
+   * diagnostic was already persisted inside the dedupe window). A host should
+   * resolve false rather than reject when persistence fails, though the product
+   * recovery boundary still guards both throws and rejections.
    */
-  reportRenderError(report: RenderErrorReport): void;
+  reportRenderError(report: RenderErrorReport): Promise<boolean>;
   collectSupportBundle(): Promise<SupportBundle | null>;
   saveJson(input: SaveJsonInput): Promise<string | null>;
 
