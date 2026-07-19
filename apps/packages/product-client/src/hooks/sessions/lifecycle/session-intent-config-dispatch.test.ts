@@ -125,7 +125,54 @@ describe("dispatchConfigIntent", () => {
     expect(onFailure).not.toHaveBeenCalled();
     expect(mocks.mutateAsync).toHaveBeenCalledWith(expect.objectContaining({
       requestOptions: { signal: expect.any(AbortSignal) },
+      awaitInvalidations: false,
     }));
+  });
+
+  it("accepts the POST acknowledgement without timing out on later invalidations", async () => {
+    vi.useFakeTimers();
+    const intent = useSessionIntentStore.getState().enqueueConfig({
+      intentId: "config-plan",
+      clientSessionId: "session-1",
+      materializedSessionId: "runtime-session-1",
+      workspaceId: "workspace-1",
+      configId: "collaboration_mode",
+      value: "plan",
+    });
+    const invalidation = deferred<void>();
+    const onFailure = vi.fn();
+    const deps = createDeps(onFailure);
+    let signal: AbortSignal | undefined;
+    mocks.mutateAsync.mockImplementation(async (input) => {
+      signal = input.requestOptions?.signal;
+      if (input.awaitInvalidations !== false) {
+        await invalidation.promise;
+      }
+      return configResponse("plan");
+    });
+
+    const dispatch = dispatchConfigIntent(intent, deps);
+    await vi.advanceTimersByTimeAsync(0);
+    await dispatch;
+
+    expect(useSessionIntentStore.getState().entriesById[intent.intentId]).toMatchObject({
+      status: "accepted",
+      applyState: "applied",
+    });
+    expect(signal?.aborted).toBe(false);
+    expect(onFailure).not.toHaveBeenCalled();
+    expect(deps.upsertWorkspaceSessionRecord).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(CONFIG_INTENT_DISPATCH_TIMEOUT_MS);
+    invalidation.resolve();
+    await Promise.resolve();
+
+    expect(signal?.aborted).toBe(false);
+    expect(useSessionIntentStore.getState().entriesById[intent.intentId]).toMatchObject({
+      status: "accepted",
+    });
+    expect(onFailure).not.toHaveBeenCalled();
+    expect(deps.upsertWorkspaceSessionRecord).toHaveBeenCalledTimes(1);
   });
 });
 

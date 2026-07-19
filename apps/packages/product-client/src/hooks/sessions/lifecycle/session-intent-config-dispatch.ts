@@ -59,23 +59,30 @@ export async function dispatchConfigIntent(
     dispatchedAt,
   });
   try {
-    const { workspaceId, materializedSessionId } = await getSessionClientAndWorkspace(
-      intent.clientSessionId,
-      deps.ssh ?? null,
-      deps.cloudClient,
-    );
-    useSessionIntentStore.getState().bindMaterializedSession(
-      intent.clientSessionId,
-      materializedSessionId,
-    );
-    const response = await runConfigMutationWithTimeout(
+    const { response, workspaceId } = await runConfigDispatchWithTimeout(
       deps.timeoutMs ?? CONFIG_INTENT_DISPATCH_TIMEOUT_MS,
-      (signal) => deps.setSessionConfigOptionMutation.mutateAsync({
-        workspaceId,
-        sessionId: materializedSessionId,
-        request: { configId: intent.configId, value: intent.value },
-        requestOptions: { signal },
-      }),
+      async (signal) => {
+        const target = await getSessionClientAndWorkspace(
+          intent.clientSessionId,
+          deps.ssh ?? null,
+          deps.cloudClient,
+        );
+        if (signal.aborted || !isCurrentConfigDispatch(intent.intentId, dispatchedAt)) {
+          throw new Error(signal.aborted ? "request timed out" : "config dispatch superseded");
+        }
+        useSessionIntentStore.getState().bindMaterializedSession(
+          intent.clientSessionId,
+          target.materializedSessionId,
+        );
+        const response = await deps.setSessionConfigOptionMutation.mutateAsync({
+          workspaceId: target.workspaceId,
+          sessionId: target.materializedSessionId,
+          request: { configId: intent.configId, value: intent.value },
+          requestOptions: { signal },
+          awaitInvalidations: false,
+        });
+        return { response, workspaceId: target.workspaceId };
+      },
     );
     if (!isCurrentConfigDispatch(intent.intentId, dispatchedAt)) {
       return;
@@ -184,7 +191,7 @@ function isCurrentConfigDispatch(intentId: string, dispatchedAt: string): boolea
     && current.dispatchedAt === dispatchedAt;
 }
 
-async function runConfigMutationWithTimeout<T>(
+async function runConfigDispatchWithTimeout<T>(
   timeoutMs: number,
   run: (signal: AbortSignal) => Promise<T>,
 ): Promise<T> {
@@ -193,8 +200,8 @@ async function runConfigMutationWithTimeout<T>(
   const timeoutError = new Error("request timed out");
   const timeout = new Promise<never>((_, reject) => {
     timeoutId = globalThis.setTimeout(() => {
-      reject(timeoutError);
       controller.abort(timeoutError);
+      reject(timeoutError);
     }, timeoutMs);
   });
   try {

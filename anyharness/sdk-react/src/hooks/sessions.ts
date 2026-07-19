@@ -43,6 +43,7 @@ type SetSessionConfigOptionMutationInput = WorkspaceMutationInput & {
   sessionId: string;
   request: SetSessionConfigOptionRequest;
   requestOptions?: AnyHarnessRequestOptions;
+  awaitInvalidations?: boolean;
 };
 
 type TimedWorkspaceQueryOptions = WorkspaceQueryOptions & AnyHarnessQueryTimingOptions;
@@ -282,17 +283,16 @@ export function useSetSessionConfigOptionMutation(options?: { workspaceId?: stri
     },
     onSuccess: async (_response, variables) => {
       const workspaceId = variables.workspaceId ?? options?.workspaceId ?? workspace.workspaceId;
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: anyHarnessSessionKey(cacheScopeKey, workspaceId, variables.sessionId),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: anyHarnessSessionLiveConfigKey(cacheScopeKey, workspaceId, variables.sessionId),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: anyHarnessSessionsKey(cacheScopeKey, workspaceId),
-        }),
-      ]);
+      const invalidations = Promise.all([
+        anyHarnessSessionKey(cacheScopeKey, workspaceId, variables.sessionId),
+        anyHarnessSessionLiveConfigKey(cacheScopeKey, workspaceId, variables.sessionId),
+        anyHarnessSessionsKey(cacheScopeKey, workspaceId),
+      ].map((queryKey) => queryClient.invalidateQueries({ queryKey })));
+      if (variables.awaitInvalidations === false) {
+        void invalidations.catch(() => undefined);
+        return;
+      }
+      await invalidations;
     },
   });
 }

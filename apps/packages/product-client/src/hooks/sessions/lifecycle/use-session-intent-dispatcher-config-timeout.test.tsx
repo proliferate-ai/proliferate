@@ -183,6 +183,73 @@ describe("useSessionIntentDispatcher config timeout", () => {
     expect(mocks.persistDefaultSessionModePreference).toHaveBeenCalledTimes(1);
     expect(mocks.upsertWorkspaceSessionRecord).toHaveBeenCalledTimes(1);
   });
+
+  it("times out stalled target resolution, releases the queue, and blocks a late request", async () => {
+    const firstTarget = deferred<{
+      workspaceId: string;
+      materializedSessionId: string;
+    }>();
+    mocks.getSessionClientAndWorkspace
+      .mockImplementationOnce(() => firstTarget.promise)
+      .mockResolvedValueOnce({
+        workspaceId: "workspace-1",
+        materializedSessionId: "runtime-session-1",
+      });
+    mocks.mutateAsync.mockResolvedValue(configResponse("bypass", 3));
+
+    renderHook(() => useSessionIntentDispatcher());
+
+    act(() => {
+      enqueueMode("config-plan", "plan");
+    });
+    await vi.waitFor(() => {
+      expect(mocks.getSessionClientAndWorkspace).toHaveBeenCalledTimes(1);
+    });
+
+    act(() => {
+      enqueueMode("config-bypass", "bypass");
+    });
+    expect(mocks.mutateAsync).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(CONFIG_INTENT_DISPATCH_TIMEOUT_MS);
+    });
+    await vi.waitFor(() => {
+      expect(mocks.getSessionClientAndWorkspace).toHaveBeenCalledTimes(2);
+      expect(mocks.mutateAsync).toHaveBeenCalledTimes(1);
+    });
+    await vi.waitFor(() => {
+      expect(useSessionIntentStore.getState().entriesById["config-bypass"]).toMatchObject({
+        status: "accepted",
+        applyState: "applied",
+      });
+    });
+
+    expect(useSessionIntentStore.getState().entriesById["config-plan"]).toMatchObject({
+      status: "failed",
+      errorMessage: "request timed out",
+    });
+    expect(mocks.showToast).toHaveBeenCalledTimes(1);
+    expect(mocks.showToast).toHaveBeenCalledWith(
+      "Failed to update session config: request timed out",
+    );
+    expect(getSessionRecord("session-1")?.modeId).toBe("bypass");
+
+    await act(async () => {
+      firstTarget.resolve({
+        workspaceId: "workspace-1",
+        materializedSessionId: "late-runtime-session",
+      });
+      await firstTarget.promise;
+      await Promise.resolve();
+    });
+
+    expect(mocks.mutateAsync).toHaveBeenCalledTimes(1);
+    expect(mocks.showToast).toHaveBeenCalledTimes(1);
+    expect(getSessionRecord("session-1")?.modeId).toBe("bypass");
+    expect(mocks.persistDefaultSessionModePreference).toHaveBeenCalledTimes(1);
+    expect(mocks.upsertWorkspaceSessionRecord).toHaveBeenCalledTimes(1);
+  });
 });
 
 function enqueueMode(intentId: string, value: string): void {
