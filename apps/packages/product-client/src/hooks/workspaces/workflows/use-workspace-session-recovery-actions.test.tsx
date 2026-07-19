@@ -27,7 +27,7 @@ describe("useWorkspaceSessionRecoveryActions", () => {
     useSessionSelectionStore.setState({
       workspaceSessionRecovery: {
         logicalWorkspaceId: "logical:workspace-1",
-        materializedWorkspaceId: "workspace-1",
+        workspaceId: "workspace-1",
         reason: "session-list-failed",
       },
     });

@@ -156,7 +156,7 @@ function createArchiveHarness(input: {
       resolveNextActiveSessionId?: () => string | null;
     },
   ) => {
-    const pending = deferred<void>();
+    const pending = deferred();
     deferredDismissals.set(sessionId, pending);
     await pending.promise;
     records.delete(sessionId);
@@ -224,9 +224,9 @@ function createArchiveHarness(input: {
   };
 }
 
-function deferred<T>() {
-  let resolve!: (value: T | PromiseLike<T>) => void;
-  const promise = new Promise<T>((complete) => {
+function deferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>((complete) => {
     resolve = complete;
   });
   return { promise, resolve };
