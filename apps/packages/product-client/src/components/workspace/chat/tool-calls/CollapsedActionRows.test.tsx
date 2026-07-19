@@ -79,8 +79,9 @@ describe("CollapsedActionRows read rows", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: /Read files/i }));
 
-    const readRow = screen.getByText("Read").parentElement;
-    const badge = readRow?.querySelector("[data-file-reference-badge='inline']");
+    const badge = screen.getByText("Read").parentElement
+      ?.querySelector("[data-file-reference-badge='inline']");
+    const readRow = badge?.closest("[title]");
     expect(badge?.textContent).toContain("read.ts");
     expect(badge?.className).toContain("decoration-dotted");
     expect(badge?.className).toContain("[&>span:first-child]:hidden");

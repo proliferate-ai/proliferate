@@ -7,6 +7,7 @@ import type { ProductHost } from "@proliferate/product-client/host/product-host"
 import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
 import { DiffViewer } from "#product/components/content/ui/DiffViewer";
 import { FileDiffCard } from "#product/components/content/ui/FileDiffCard";
+import { TurnDiffFileRow } from "#product/components/workspace/chat/transcript/TurnDiffFileRow";
 import {
   CHAT_DIFF_PREFERENCES_STORAGE_KEY,
   resetChatDiffPreferencesForTests,
@@ -96,6 +97,33 @@ describe("ChatDiffLineWrapContextMenu", () => {
           variant: "chat",
         }),
       ),
+    );
+
+    const header = container.querySelector(
+      '[data-chat-diff-wrap-context-trigger="file-header"]',
+    );
+    expect(header).not.toBeNull();
+
+    fireEvent.contextMenu(header!);
+    fireEvent.click(screen.getByRole("button", { name: "Turn line wrapping on" }));
+
+    expect(useChatDiffPreferencesStore.getState().wrapLongLines).toBe(true);
+    expect(container.innerHTML).toContain("overflow-x-hidden");
+  });
+
+  it("keeps the wrap menu on compact turn-diff file rows", () => {
+    const { container } = renderWithProductHost(
+      <TurnDiffFileRow
+        filePath="src/long.ts"
+        additions={1}
+        deletions={1}
+        showStats
+        isExpanded
+        onToggleExpand={() => {}}
+        onOpenFile={() => {}}
+      >
+        <DiffViewer patch={LONG_LINE_PATCH} filePath="src/long.ts" variant="chat" />
+      </TurnDiffFileRow>,
     );
 
     const header = container.querySelector(

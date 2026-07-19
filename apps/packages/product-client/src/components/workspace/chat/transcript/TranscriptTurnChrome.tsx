@@ -77,7 +77,7 @@ export function TurnAssistantActionRow({
     : "opacity-0 group-hover/turn:opacity-100";
 
   return (
-    <div className="flex justify-start relative" data-turn-assistant-footer>
+    <div className="relative -mt-2.5 flex justify-start" data-turn-assistant-footer>
       <div
         className={`flex items-center gap-2 pt-0.5 ${ASSISTANT_ACTION_SLOT_HEIGHT}`}
         data-turn-assistant-footer-slot

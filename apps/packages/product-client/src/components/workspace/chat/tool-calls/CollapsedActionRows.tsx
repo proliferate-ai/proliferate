@@ -137,12 +137,14 @@ function FileActionRow({
       }`}
     >
       <ActionRowIcon>{icon}</ActionRowIcon>
-      <span className="shrink-0 text-inherit">{verb}</span>
-      <ActionFileLink
-        pathLabel={pathLabel}
-        workspacePath={workspacePath}
-        displayName={displayName}
-      />
+      <span className="inline-flex min-w-0 items-center gap-1">
+        <span className="shrink-0 text-inherit">{verb}</span>
+        <ActionFileLink
+          pathLabel={pathLabel}
+          workspacePath={workspacePath}
+          displayName={displayName}
+        />
+      </span>
     </div>
   );
 }

@@ -63,6 +63,7 @@ export type ScenarioKey =
   | "tool-file-change-running"
   | "tool-file-change-failed"
   | "tool-file-change-diff"
+  | "tool-activity-ledger"
   | "tool-reasoning"
   | "tool-cowork-artifact"
   | "tool-generic-result"
@@ -175,6 +176,7 @@ export const SCENARIOS: Record<ScenarioKey, Scenario> = {
   "tool-file-change-running": { label: "Tool file running" },
   "tool-file-change-failed": { label: "Tool file failed" },
   "tool-file-change-diff": { label: "Tool file diff" },
+  "tool-activity-ledger": { label: "Activity ledger" },
   "tool-reasoning": { label: "Tool reasoning" },
   "tool-cowork-artifact": { label: "Tool artifact" },
   "tool-generic-result": { label: "Tool generic result" },

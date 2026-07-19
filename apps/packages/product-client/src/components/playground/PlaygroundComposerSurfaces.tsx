@@ -4,6 +4,7 @@ import { Textarea } from "@proliferate/ui/primitives/Textarea";
 import { ArrowRight } from "@proliferate/ui/icons";
 import { ChatComposerSurface } from "@proliferate/product-ui/chat/composer/ChatComposerSurface";
 import { ChatInputControlRow } from "#product/components/workspace/chat/input/ChatInputControlRow";
+import { ComposerRichTextEditor } from "#product/components/workspace/chat/input/ComposerRichTextEditor";
 import { ComposerSlashCommandSearch } from "#product/components/workspace/chat/input/ComposerSlashCommandSearch";
 import { ComposerTextarea } from "@proliferate/ui/primitives/ComposerTextarea";
 import { ComposerTextareaFrame } from "@proliferate/ui/primitives/ComposerTextareaFrame";
@@ -27,6 +28,7 @@ import { noop } from "#product/components/playground/PlaygroundComposerActions";
 import { WorkspaceStatusComposerControl } from "#product/components/workspace/chat/input/workspace-status/WorkspaceStatusComposerControl";
 import { createPlaygroundWorkspaceStatusModel } from "#product/lib/domain/chat/__fixtures__/playground/workspace-status-fixtures";
 import { RuntimePressureDetailsDialog } from "#product/components/workspace/chat/input/RuntimePressureDetailsDialog";
+import type { ChatComposerEditorSnapshot } from "#product/lib/domain/chat/composer/file-mention-draft-model";
 import {
   createPlaygroundEnvironmentAdvancedControls,
   createPlaygroundEnvironmentTargetState,
@@ -61,6 +63,7 @@ export function PlaygroundComposerSurface({
   statusControl?: ReactNode;
 }) {
   const [draft, setDraft] = useState("");
+  const [editorSnapshot, setEditorSnapshot] = useState<ChatComposerEditorSnapshot>();
   return (
     <ChatComposerSurface>
       <form className="relative flex flex-col">
@@ -68,17 +71,32 @@ export function PlaygroundComposerSurface({
           className="mb-2 flex-grow select-text overflow-y-auto px-5 pt-3.5"
           style={{ minHeight: "3.5rem" }}
         >
-          <Textarea
-            data-chat-composer-editor
-            variant="ghost"
-            rows={2}
-            value={draft}
-            onChange={interactive ? (event) => setDraft(event.target.value) : undefined}
-            placeholder={interactive ? "Type while the response renders" : "Playground composer (read-only)"}
-            spellCheck={false}
-            readOnly={!interactive}
-            className="min-h-0 px-0 py-0 text-base leading-relaxed text-foreground placeholder:text-muted-foreground/70"
-          />
+          {interactive ? (
+            <ComposerRichTextEditor
+              value={draft}
+              snapshot={editorSnapshot}
+              onChange={(value, _eventTimeStampMs, snapshot) => {
+                setDraft(value);
+                setEditorSnapshot(snapshot);
+              }}
+              submitBehavior="workspace"
+              canSubmit={false}
+              onSubmit={noop}
+              placeholder="Type while the response renders"
+              disabled={false}
+            />
+          ) : (
+            <Textarea
+              data-chat-composer-editor
+              variant="ghost"
+              rows={2}
+              value={draft}
+              placeholder="Playground composer (read-only)"
+              spellCheck={false}
+              readOnly
+              className="min-h-0 px-0 py-0 text-base leading-relaxed text-foreground placeholder:text-muted-foreground/70"
+            />
+          )}
         </div>
         <PlaygroundComposerControlRow ultra={ultra} statusControl={statusControl} />
       </form>

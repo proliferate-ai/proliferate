@@ -8,11 +8,17 @@ import {
   PASTE_COMMAND,
 } from "lexical";
 import { $createLinkNode, $toggleLink } from "@lexical/link";
+import {
+  $generateNodesFromMarkdownString,
+  type Transformer,
+} from "@lexical/markdown";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 
 const EXACT_HTTPS_URL = /^https:\/\/[^\s]+$/u;
 const MARKDOWN_HTTPS_LINK =
   /\[([^\]\r\n]+)\]\((https:\/\/[^\s)\r\n]+)\)/gu;
+const MARKDOWN_LIST_ITEM =
+  /(?:^|\r?\n)[\t ]{0,3}(?:[-+*]|\d+\.)[\t ]+\S/gu;
 
 type ComposerPastePart =
   | { kind: "text"; value: string }
@@ -56,42 +62,95 @@ export function isComposerLinkPaste(value: string): boolean {
     || parseMarkdownHttpsComposerPaste(value) !== null;
 }
 
-export function ComposerLinkPastePlugin() {
+export function isComposerMarkdownListPaste(value: string): boolean {
+  MARKDOWN_LIST_ITEM.lastIndex = 0;
+  return MARKDOWN_LIST_ITEM.test(value);
+}
+
+export function isComposerFormattedPaste(value: string): boolean {
+  return isComposerLinkPaste(value) || isComposerMarkdownListPaste(value);
+}
+
+export function ComposerLinkPastePlugin({
+  markdownTransformers,
+}: {
+  markdownTransformers: Transformer[];
+}) {
   const [editor] = useLexicalComposerContext();
 
-  useEffect(() => editor.registerCommand(PASTE_COMMAND, (event) => {
-    const clipboard = "clipboardData" in event ? event.clipboardData : null;
-    const value = clipboard?.getData("text/plain") ?? "";
-    const markdownParts = parseMarkdownHttpsComposerPaste(value);
-    const isExactUrl = isExactHttpsComposerPaste(value);
-    if (!isExactUrl && markdownParts === null) return false;
+  useEffect(() => {
+    const unregisterCommand = editor.registerCommand(PASTE_COMMAND, (event) => {
+      if (event.defaultPrevented) return false;
+      const clipboard = "clipboardData" in event ? event.clipboardData : null;
+      const value = clipboard?.getData("text/plain") ?? "";
+      const markdownParts = parseMarkdownHttpsComposerPaste(value);
+      const isExactUrl = isExactHttpsComposerPaste(value);
+      const isMarkdownList = isComposerMarkdownListPaste(value);
+      if (!isExactUrl && markdownParts === null && !isMarkdownList) return false;
 
-    const selection = $getSelection();
-    if (!$isRangeSelection(selection)) return false;
-    event.preventDefault();
+      const selection = $getSelection();
+      if (!$isRangeSelection(selection)) return false;
+      event.preventDefault();
 
-    if (isExactUrl) {
-      if (!selection.isCollapsed()) {
-        $toggleLink(value);
+      if (isExactUrl) {
+        if (!selection.isCollapsed()) {
+          $toggleLink(value);
+          return true;
+        }
+        const link = $createLinkNode(value);
+        link.append($createTextNode(value));
+        $insertNodes([link]);
+        link.selectEnd();
         return true;
       }
-      const link = $createLinkNode(value);
-      link.append($createTextNode(value));
-      $insertNodes([link]);
-      link.selectEnd();
-      return true;
-    }
 
-    const nodes = markdownParts!.map((part) => {
-      if (part.kind === "text") return $createTextNode(part.value);
-      const link = $createLinkNode(part.url);
-      link.append($createTextNode(part.label));
-      return link;
+      // A pasted Markdown list is an authored block, not a typed shortcut in
+      // progress. Import the complete fragment so list structure and any inline
+      // emphasis/links arrive together. Typed Markdown still follows the normal
+      // shortcut contract because this path is paste-only.
+      if (isMarkdownList) {
+        const nodes = $generateNodesFromMarkdownString(
+          value,
+          markdownTransformers,
+        );
+        $insertNodes(nodes);
+        nodes[nodes.length - 1]?.selectEnd();
+        return true;
+      }
+
+      const nodes = markdownParts!.map((part) => {
+        if (part.kind === "text") return $createTextNode(part.value);
+        const link = $createLinkNode(part.url);
+        link.append($createTextNode(part.label));
+        return link;
+      });
+      $insertNodes(nodes);
+      nodes[nodes.length - 1]?.selectEnd();
+      return true;
+    }, COMMAND_PRIORITY_HIGH);
+
+    // WebKit does not consistently route a native contenteditable paste
+    // through Lexical's command bridge. Dispatch the same command from the
+    // editor root as a fallback; defaultPrevented keeps this idempotent when
+    // Lexical already handled the event.
+    const handleNativePaste = (event: ClipboardEvent) => {
+      if (event.defaultPrevented) return;
+      const value = event.clipboardData?.getData("text/plain") ?? "";
+      if (!isComposerFormattedPaste(value)) return;
+      if (editor.dispatchCommand(PASTE_COMMAND, event)) {
+        event.stopPropagation();
+      }
+    };
+    const unregisterRootListener = editor.registerRootListener((root, previousRoot) => {
+      previousRoot?.removeEventListener("paste", handleNativePaste);
+      root?.addEventListener("paste", handleNativePaste);
     });
-    $insertNodes(nodes);
-    nodes[nodes.length - 1]?.selectEnd();
-    return true;
-  }, COMMAND_PRIORITY_HIGH), [editor]);
+
+    return () => {
+      unregisterRootListener();
+      unregisterCommand();
+    };
+  }, [editor, markdownTransformers]);
 
   return null;
 }

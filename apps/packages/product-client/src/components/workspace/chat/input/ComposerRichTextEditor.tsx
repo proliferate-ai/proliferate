@@ -39,10 +39,7 @@ import { MarkdownShortcutPlugin } from "@lexical/react/LexicalMarkdownShortcutPl
 import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { ComposerCaretPlugin } from "#product/components/workspace/chat/input/ComposerCaretPlugin";
-import {
-  ComposerLinkPastePlugin,
-  isComposerLinkPaste,
-} from "#product/components/workspace/chat/input/ComposerLinkPastePlugin";
+import { ComposerLinkPastePlugin } from "#product/components/workspace/chat/input/ComposerLinkPastePlugin";
 import type { ComposerKeyboardEventLike } from "#product/lib/domain/chat/composer/composer-keyboard";
 import type { ChatComposerEditorSnapshot } from "#product/lib/domain/chat/composer/file-mention-draft-model";
 
@@ -143,11 +140,6 @@ export function ComposerRichTextEditor({
                 if (event.key === "Enter" || event.key === "Tab" || event.defaultPrevented) return;
                 onKeyDown?.(event);
               }}
-              onPaste={(event) => {
-                if (isComposerLinkPaste(event.clipboardData.getData("text/plain"))) {
-                  event.stopPropagation();
-                }
-              }}
               className={`relative w-full resize-none bg-transparent text-[length:var(--text-composer)] leading-[var(--text-composer--line-height)] text-foreground outline-none ${disabled ? "opacity-60" : ""} ${className}`}
             />
           )}
@@ -169,7 +161,7 @@ export function ComposerRichTextEditor({
         onKeyDown={onKeyDown}
         onCommandKey={onCommandKey}
       />
-      <ComposerLinkPastePlugin />
+      <ComposerLinkPastePlugin markdownTransformers={OUTPUT_TRANSFORMERS} />
       <ComposerCaretPlugin />
       <ComposerNativeEventTimestampPlugin eventTimeStampRef={eventTimeStampRef} />
       <ComposerEditorBridge

@@ -117,6 +117,11 @@ Rules:
 
 - Detection happens at render time from raw markdown; do not store parsed file
   references in transcript items.
+- Once the assistant reveal frontier settles, the final unique Markdown file
+  reference also renders as a compact end-resource card after prose. Its
+  default subtitle identifies `Document · MD`; hover/focus changes that
+  subtitle to `Open preview`. It remains completion chrome: never expose it
+  while transport text is still buffered or its final opacity is settling.
 - While prose is streaming, a trailing incomplete local-file link is closed
   only in the Markdown render copy so its file mention appears as soon as the
   destination begins. Never persist the synthetic delimiter or expose the raw
@@ -255,6 +260,33 @@ Every row revealed inside an activity ledger repeats its own semantic glyph
 inherited ink as its label. Completed command details use `Ran …`; only the
 active command uses `Running …`. An edit detail shows one pen glyph followed by
 an inherited-color, dotted-underlined filename, not a second file-type glyph.
+When a transcript patch is available, clicking the edit row toggles its inline
+diff; clicking the trailing open-file arrow opens the file without changing the
+row's expanded state. The row retains the file-reference context menu. Edit
+counts remain neutral beside the filename until row hover or focus within the
+row gives additions and deletions their semantic colors.
+
+The completed-turn changed-files card uses one aggregate header and flat file
+rows. Multi-file cards show the first three paths, then a `Show N more files`
+row; each path splits muted directories from the foreground basename and keeps
+its `+`/`-` totals right-aligned. Do not add a per-file disclosure chevron or a
+second visible disclosure control: clicking the file row itself toggles its
+inline diff, while the trailing arrow opens that file without toggling. The
+aggregate `Edited N files` header opens Changes and immediately swaps aggregate
+stats for `Review changes` on hover/focus. File headers retain the shared diff
+line-wrap context menu. Aggregate and file-row stats use the semantic dark-theme
+Codex green/red tokens (`#40c977` and `#fa423e`) and roll changed digits over 300ms
+with the Codex enter curve; reduced-motion users receive no digit transition.
+Single-file cards put the filename in the header and do not duplicate a file
+row underneath. Expanded multi-file cards collapse through `Collapse files`.
+The shell follows Codex's restrained three-level surface hierarchy: its header
+and show-more row share a low-contrast raised surface, the file rows use the
+main transcript surface at partial opacity, and one standard hairline separates
+the header from the rows. Do not substitute higher-contrast stacked bands.
+Only the row under hover or keyboard focus gains the stronger list tint.
+The header's 40px secondary tile uses the filled plus/minus file glyph at 24px,
+matching the completed-diff summary rather than the pen glyph used by live edit
+activity.
 
 New activity blocks may use one compositor-only opacity/short horizontal
 entrance. The motion is claimed once by stable item identity in the latest
@@ -417,6 +449,9 @@ Additional dependencies:
 - `TurnAssistantActionRow` renders its fixed footer when `reserveSlot` is true
   even before assistant prose exists. The latest materialized turn and pending
   prompt both reserve it; a completion without copyable prose keeps it reserved.
+  The reserved frame remains `h-6`, but the row uses a `-mt-2.5` offset against
+  the ordinary 16px transcript sibling gap, yielding Codex's 6px visual gap
+  between final content and assistant actions without changing handoff height.
 - Completion-only surfaces such as file-diff and artifact cards mount before
   the frontier item. They may grow upward as data arrives, but must never be
   inserted between final prose and its fixed footer. When completed-history UI

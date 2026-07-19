@@ -122,6 +122,11 @@ literal editor text. The Markdown exporter still serializes an actual pasted
 link, so the existing prompt submission and sent-message Markdown renderer
 need no special link transport.
 
+Pasted complete Markdown lists are also imported as editable list blocks,
+including inline emphasis and links within their items. This path is paste-only:
+typing list-shaped Markdown remains governed by the normal live shortcut
+contract, and an incomplete or bare list marker remains literal text.
+
 Slash-command discovery remains prompt-leading and composer-local. IME
 composition bypasses submission and command keyboard handling. The editor root
 retains `data-chat-composer-editor` and `data-telemetry-mask` so focus routing,

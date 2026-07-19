@@ -1,6 +1,9 @@
+// @vitest-environment jsdom
+
 import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup as renderReactToStaticMarkup } from "react-dom/server";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ProductHost } from "@proliferate/product-client/host/product-host";
 import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
 import {
@@ -11,6 +14,8 @@ import { toolCallItem } from "#product/lib/domain/chat/__fixtures__/playground/t
 import { TurnDiffPanel } from "#product/components/workspace/chat/transcript/TurnDiffPanel";
 
 const webTestHost = { desktop: null } as ProductHost;
+
+afterEach(cleanup);
 
 function renderToStaticMarkup(ui: ReactElement) {
   return renderReactToStaticMarkup(
@@ -116,14 +121,18 @@ describe("TurnDiffPanel", () => {
     );
 
     expect(html).toContain("Edited 2 files");
-    expect(html).toContain("bg-[var(--color-diff-panel-surface)]");
+    expect(html).toContain("bg-foreground/[0.0475]");
     expect(html).toContain("data-chat-diff-wrap-context-trigger=\"turn-header\"");
-    expect(html).toContain("bg-[var(--color-diff-chat-turn-header-surface)]");
-    expect(html).toContain("hover:bg-[var(--color-diff-chat-turn-header-hover-surface)]");
+    expect(html).toContain("group/turn-diff-header relative focus-within:[&amp;_.turn-diff-default-subtitle]:hidden");
     expect(html).toContain("bg-[var(--color-diff-chat-turn-icon-surface)]");
-    expect(html).toContain("border border-border");
-    expect(html).toContain(">+2</span>");
-    expect(html).toContain(">-1</span>");
+    expect(html).toContain("border border-border bg-foreground/[0.0475]");
+    expect(html).toContain("group/turn-diff-file relative flex h-9 w-full min-w-0 items-center bg-background/70");
+    expect(html).toContain("hover:bg-list-hover/60");
+    expect(html).toContain("flex flex-col border-t border-border");
+    expect(html).toContain('text-git-green">+<span aria-label="4" class="diff-stat-rolling-number"');
+    expect(html).toContain('text-git-red">-<span aria-label="2" class="diff-stat-rolling-number"');
+    expect(html.match(/aria-label="2" class="diff-stat-rolling-number"/g)).toHaveLength(3);
+    expect(html.match(/aria-label="1" class="diff-stat-rolling-number"/g)).toHaveLength(2);
     expect(html).toContain("data-diff-surface=\"chat\"");
     expect(html).toContain("thread-diff-virtualized");
     expect(html).toContain("data-app-action-review-file-expanded=\"false\"");
@@ -155,12 +164,50 @@ describe("TurnDiffPanel", () => {
 
     expect(html).not.toContain("Open changes review");
     expect(html).toContain(">Review</button>");
-    expect(html).toContain(">Undo</button>");
+    expect(html).toContain(">Undo<svg");
     expect(html).toContain("Review changes");
-    expect(html).toContain("Show file in review");
-    expect(html).toContain("group-hover/turn-diff-header:opacity-100");
-    expect(html).not.toContain("hover:[&amp;_.turn-diff-default-subtitle]:hidden");
+    expect(html).toContain("aria-label=\"Review changed files\"");
+    expect(html).not.toContain("Show file in review");
+    expect(html).toContain("group-hover/turn-diff-header:bg-list-hover/30");
+    expect(html).toContain("hover:[&amp;_.turn-diff-default-subtitle]:hidden");
+    expect(html).toContain("hover:[&amp;_.turn-diff-hover-subtitle]:inline-flex");
+    expect(html).toContain("turn-diff-default-subtitle inline-flex");
+    expect(html).toContain("turn-diff-hover-subtitle pointer-events-none absolute inset-0 hidden");
     expect(html).toContain("data-app-action-review-file-toggle");
+    expect(html).toContain("aria-label=\"Open README.md\"");
+    expect(html).not.toContain("Toggle file diff");
+  });
+
+  it("keeps aggregate review, file toggling, and file opening as distinct actions", () => {
+    const turn = PLAYGROUND_END_TURN_DIFF_TRANSCRIPT.turnsById["turn-end-diff"];
+    const onOpenReviewPane = vi.fn();
+    const onOpenFile = vi.fn();
+
+    render(
+      <ProductHostProvider host={webTestHost}>
+        <TurnDiffPanel
+          turn={turn}
+          transcript={PLAYGROUND_END_TURN_DIFF_TRANSCRIPT}
+          workspaceId="workspace-1"
+          onOpenFile={onOpenFile}
+          onOpenReviewPane={onOpenReviewPane}
+        />
+      </ProductHostProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Review changed files" }));
+    expect(onOpenReviewPane).toHaveBeenCalledOnce();
+
+    const toggle = screen.getByRole("button", { name: "Toggle diff for README.md" });
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+
+    fireEvent.click(screen.getByRole("button", { name: "Open README.md" }));
+    expect(onOpenFile).toHaveBeenCalledWith("README.md");
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
   });
 
   it("uses file-specific single-file end-turn copy without repeating row stats", () => {
@@ -188,12 +235,65 @@ describe("TurnDiffPanel", () => {
 
     expect(html).toContain("Edited README.md");
     expect(html).not.toContain("Edited 1 file");
-    expect(html).toContain(">Details</span>");
-    expect(html.match(/>\+2<\/span>/g)).toHaveLength(1);
-    expect(html.match(/>-1<\/span>/g)).toHaveLength(1);
-    expect(html).toContain("data-app-action-review-file-expanded=\"false\"");
+    expect(html).not.toContain(">Details</span>");
+    expect(html.match(/aria-label="2" class="diff-stat-rolling-number"/g)).toHaveLength(1);
+    expect(html.match(/aria-label="1" class="diff-stat-rolling-number"/g)).toHaveLength(1);
+    expect(html).not.toContain("data-app-action-review-file-expanded");
+    expect(html).not.toContain("flex flex-col border-t border-border");
     expect(html).not.toContain("data-gutter=\"\"");
     expect(html).not.toContain("data-content=\"\"");
+  });
+
+  it("uses transcript badge stats when the live git projection is unavailable", () => {
+    turnCurrentDiffs.state = currentDiffState([
+      touchedFile("apps/packages/product-client/src/components/workspace/chat/transcript/TranscriptPatchTurnDiffPanel.tsx"),
+      touchedFile("apps/packages/product-client/src/components/workspace/chat/transcript/TurnDiffFileRow.tsx"),
+    ]);
+    const turn = PLAYGROUND_END_TURN_DIFF_TRANSCRIPT.turnsById["turn-end-diff"];
+
+    const html = renderToStaticMarkup(
+      createElement(TurnDiffPanel, {
+        turn,
+        transcript: PLAYGROUND_END_TURN_DIFF_TRANSCRIPT,
+        workspaceId: "workspace-1",
+        onOpenFile: () => {},
+      }),
+    );
+
+    expect(html).toContain("Edited 2 files");
+    expect(html.match(/aria-label="4" class="diff-stat-rolling-number"/g)).toHaveLength(2);
+    expect(html.match(/aria-label="2" class="diff-stat-rolling-number"/g)).toHaveLength(2);
+    expect(html.match(/aria-label="1" class="diff-stat-rolling-number"/g)).toHaveLength(2);
+  });
+
+  it("falls back to the transcript patch card when current git has no rows", () => {
+    turnCurrentDiffs.state = currentDiffState([]);
+    const turn = PLAYGROUND_END_TURN_DIFF_TRANSCRIPT.turnsById["turn-end-diff"];
+
+    const html = renderToStaticMarkup(
+      createElement(TurnDiffPanel, {
+        turn,
+        transcript: PLAYGROUND_END_TURN_DIFF_TRANSCRIPT,
+        workspaceId: "workspace-1",
+        onOpenFile: () => {},
+        onOpenReviewPane: () => {},
+        onUndoTurnChanges: () => {},
+      }),
+    );
+
+    expect(html).toContain("Edited 8 files");
+    expect(html).toContain('text-git-green">+<span aria-label="25" class="diff-stat-rolling-number"');
+    expect(html).toContain('text-git-red">-<span aria-label="15" class="diff-stat-rolling-number"');
+    expect(html).toContain("TranscriptPatchTurnDiffPanel.tsx");
+    expect(html).toContain("TurnDiffFileRow.tsx");
+    expect(html).toContain("TurnDiffPanel.test.tsx");
+    expect(html).not.toContain("chat/transcript/TurnDiffPanel.tsx");
+    expect(html).toContain("Show 5 more files");
+    expect(html).toContain("hover:bg-list-hover/30");
+    expect(html).toContain("aria-expanded=\"false\"");
+    expect(html).toContain("aria-label=\"Review changed files\"");
+    expect(html).toContain(">Undo<svg");
+    expect(html).toContain(">Review</button>");
   });
 
   it("keeps current git diff rows when transcript patches are blank", () => {
@@ -266,6 +366,26 @@ describe("TurnDiffPanel", () => {
     expect(html).toContain("src/file-2.ts");
     expect(html).not.toContain("src/file-3.ts");
     expect(html).toContain("Show 2 more files");
+
+    render(
+      <ProductHostProvider host={webTestHost}>
+        <TurnDiffPanel
+          turn={transcript.turnsById["turn-end-diff"]}
+          transcript={transcript}
+          workspaceId="workspace-1"
+          onOpenFile={() => {}}
+        />
+      </ProductHostProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Show 2 more files" }));
+    expect(screen.getByText("file-4.ts")).toBeTruthy();
+    const collapseButton = screen.getByRole("button", { name: "Collapse files" });
+    expect(collapseButton.getAttribute("aria-expanded")).toBe("true");
+
+    fireEvent.click(collapseButton);
+    expect(screen.queryByText("file-4.ts")).toBeNull();
+    expect(screen.getByRole("button", { name: "Show 2 more files" })).toBeTruthy();
   });
 });
 
@@ -301,6 +421,24 @@ function currentFile(path: string, additions: number, deletions: number) {
     currentDiff,
     touched: {
       key: currentDiff.key,
+      path,
+      oldPath: null,
+      displayPath: path,
+      operation: "edit",
+      topLevel: true,
+    },
+  };
+}
+
+function touchedFile(path: string) {
+  return {
+    key: `:${path}:modified`,
+    path,
+    oldPath: null,
+    displayPath: path,
+    currentDiff: null,
+    touched: {
+      key: `:${path}:modified`,
       path,
       oldPath: null,
       displayPath: path,

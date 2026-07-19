@@ -87,6 +87,21 @@ index 1111111..2222222 100644
     expect(parsed.allCodeLines).toEqual(["old", "new"]);
   });
 
+  it("does not expose Git file metadata as rendered diff content", () => {
+    const parsed = parsePatch(`diff --git a/empty.md b/empty.md
+new file mode 100644
+index 0000000..e69de29
+similarity index 100%
+rename from old.md
+rename to empty.md
+Binary files a/image.png and b/image.png differ
+GIT binary patch
+\\ No newline at end of file`);
+
+    expect(parsed.hunks).toEqual([]);
+    expect(parsed.allCodeLines).toEqual([]);
+  });
+
   it("uses one-based line numbers when a patch has no hunk header", () => {
     const parsed = parsePatch(`-old first
 +new first
