@@ -2,10 +2,8 @@ import { Suspense, lazy } from "react"
 import { Navigate, Route } from "react-router-dom"
 import { BootstrappedRoute, PublicOnlyRoute } from "#product/components/auth/AuthGate"
 import { UserPreferencesGate } from "#product/components/app/UserPreferencesGate"
-import { KeyboardShortcutsDialog } from "#product/components/workspace/shell/sidebar/KeyboardShortcutsDialog"
 import { UpdateRestartDialog } from "#product/components/feedback/UpdateRestartDialog"
 import { UpdateToastPresenter } from "#product/components/feedback/UpdateToastPresenter"
-import { HarnessUpdateToastPresenter } from "#product/components/feedback/HarnessUpdateToastPresenter"
 import { Toaster } from "@proliferate/ui/kit/Sonner"
 import { MacWindowControlsSafeArea } from "#product/components/app/chrome/MacWindowControlsSafeArea"
 import { useLocalWorktreeSettingsTarget } from "#product/hooks/workspaces/facade/use-local-worktree-settings-target"
@@ -218,8 +216,6 @@ export function App({ RoutesComponent }: AppProps) {
             toast-store call sites, which now delegate to Sonner). */}
         <Toaster />
         <UpdateToastPresenter />
-        <HarnessUpdateToastPresenter />
-        <KeyboardShortcutsDialog />
       </ShortcutRevealProvider>
   )
 }

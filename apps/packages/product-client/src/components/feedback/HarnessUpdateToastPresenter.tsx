@@ -1,23 +1,82 @@
-import { useEffect, useRef } from "react";
+import { lazy, Suspense, useEffect, useRef } from "react";
 import type { ReconcileAgentsResponse } from "@anyharness/sdk";
-import { useAnyHarnessWorkspaceContext } from "@anyharness/sdk-react";
 import { toast } from "@proliferate/ui/kit/Sonner";
-import { Badge } from "@proliferate/ui/primitives/Badge";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { ProgressBar } from "@proliferate/ui/primitives/ProgressBar";
+import { Spinner } from "@proliferate/ui/primitives/Spinner";
+import { X } from "lucide-react";
 import { useAgentCatalog } from "#product/hooks/agents/derived/use-agent-catalog";
-import { useWorkspaceAgentCatalog } from "#product/hooks/agents/derived/use-workspace-agent-catalog";
 import {
   byteProgressPercent,
   formatByteProgress,
 } from "#product/lib/domain/updates/byte-progress";
 import { getProviderDisplayName } from "#product/lib/domain/agents/provider-display";
+import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
+
+const LazyCloudAnyHarnessRuntimeProvider = lazy(() =>
+  import("#product/providers/CloudAnyHarnessRuntimeProvider").then((module) => ({
+    default: module.CloudAnyHarnessRuntimeProvider,
+  }))
+);
 
 export const HARNESS_UPDATE_TOAST_ID = "harness-update:local";
+export const CLOUD_HARNESS_UPDATE_TOAST_ID = "harness-update:cloud";
 
 interface HarnessProgressToastOptions {
   snapshot: ReconcileAgentsResponse | null;
   targetLabel: string;
   toastId: string;
+}
+
+interface HarnessProgressToastCardProps {
+  byteLabel: string;
+  displayName: string;
+  percent: number | null;
+  targetLabel: string;
+  onDismiss: () => void;
+}
+
+function HarnessProgressToastCard({
+  byteLabel,
+  displayName,
+  percent,
+  targetLabel,
+  onDismiss,
+}: HarnessProgressToastCardProps) {
+  return (
+    <div className="w-full rounded-xl border border-border bg-popover p-3 text-foreground shadow-md">
+      <div className="flex items-start gap-3">
+        <Spinner className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center justify-between gap-3">
+            <p className="truncate text-ui-sm font-medium">Updating {displayName}</p>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Dismiss agent update"
+              className="-mr-1 -mt-1 shrink-0"
+              onClick={onDismiss}
+            >
+              <X className="size-3.5" aria-hidden="true" />
+            </Button>
+          </div>
+          <p className="mt-0.5 text-ui-xs tabular-nums text-muted-foreground">
+            {targetLabel} · {byteLabel}
+          </p>
+          {percent !== null ? (
+            <ProgressBar
+              aria-label={`${targetLabel} agent tools download progress`}
+              aria-valuetext={byteLabel}
+              value={percent}
+              className="mt-2 h-1 w-full overflow-hidden rounded-full bg-accent"
+              indicatorClassName="h-full rounded-full bg-special transition-[width] duration-300"
+            />
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function useHarnessProgressToast({
@@ -73,7 +132,9 @@ function useHarnessProgressToast({
     );
     const currentAgent = current?.agent ?? snapshot?.currentAgent ?? null;
     const currentAgentLabel = currentAgent
-      ? getProviderDisplayName(currentAgent)
+      ? currentAgent === "claude"
+        ? "Claude Code"
+        : getProviderDisplayName(currentAgent)
       : "agent tools";
     const totalBytes = progress.downloadSizeBytes ?? null;
     const byteLabel = progress.downloadedBytes > 0 || totalBytes !== null
@@ -81,59 +142,61 @@ function useHarnessProgressToast({
       : `${progress.completedComponents} of ${progress.totalComponents} components`;
     const percent = byteProgressPercent(progress.downloadedBytes, totalBytes);
 
-    toast(
-      <span className="flex min-w-0 flex-col items-start gap-1.5">
-        <Badge className="shrink-0">AGENTS</Badge>
-        <span>Updating {currentAgentLabel}</span>
-      </span>,
+    toast.custom(
+      () => (
+        <HarnessProgressToastCard
+          byteLabel={byteLabel}
+          displayName={currentAgentLabel}
+          percent={percent}
+          targetLabel={targetLabel}
+          onDismiss={() => {
+            dismissedJobId.current = jobId;
+            toast.dismiss(toastId);
+          }}
+        />
+      ),
       {
         id: toastId,
-        description: (
-          <span className="block">
-            <span className="block text-xs tabular-nums text-muted-foreground">
-              {targetLabel} · {byteLabel}
-            </span>
-            {percent !== null ? (
-              <ProgressBar
-                aria-label={`${targetLabel} agent tools download progress`}
-                aria-valuetext={byteLabel}
-                value={percent}
-                className="mt-1.5 h-0.5 w-full overflow-hidden rounded-full bg-accent"
-                indicatorClassName="h-full rounded-full bg-special transition-[width] duration-300"
-              />
-            ) : null}
-          </span>
-        ),
         duration: Infinity,
-        closeButton: true,
+        unstyled: true,
         onDismiss: () => {
           dismissedJobId.current = jobId;
         },
-        action: undefined,
-        cancel: undefined,
       },
     );
   }, [isActive, progress, snapshot, targetLabel, toastId]);
 }
 
-export function HarnessUpdateToastPresenter() {
-  const { workspaceId } = useAnyHarnessWorkspaceContext();
+export function HarnessUpdateToastPresenter({
+  includeCloud = true,
+}: {
+  includeCloud?: boolean;
+}) {
   const localCatalog = useAgentCatalog();
-  const workspaceCatalog = useWorkspaceAgentCatalog({ enabled: !!workspaceId });
-  const workspaceSnapshot = workspaceCatalog.reconcileSnapshot?.jobId
-      && workspaceCatalog.reconcileSnapshot.jobId === localCatalog.reconcileSnapshot?.jobId
-    ? null
-    : workspaceCatalog.reconcileSnapshot;
+  const { cloudActive } = useCloudAvailabilityState();
 
   useHarnessProgressToast({
     snapshot: localCatalog.reconcileSnapshot,
-    targetLabel: "Local runtime",
+    targetLabel: "This machine",
     toastId: HARNESS_UPDATE_TOAST_ID,
   });
+
+  return includeCloud && cloudActive ? (
+    <Suspense fallback={null}>
+      <LazyCloudAnyHarnessRuntimeProvider>
+        <CloudHarnessUpdateToast />
+      </LazyCloudAnyHarnessRuntimeProvider>
+    </Suspense>
+  ) : null;
+}
+
+function CloudHarnessUpdateToast() {
+  const cloudCatalog = useAgentCatalog();
+
   useHarnessProgressToast({
-    snapshot: workspaceSnapshot,
-    targetLabel: "Selected workspace runtime",
-    toastId: `harness-update:workspace:${workspaceId ?? "none"}`,
+    snapshot: cloudCatalog.reconcileSnapshot,
+    targetLabel: "Proliferate Cloud",
+    toastId: CLOUD_HARNESS_UPDATE_TOAST_ID,
   });
 
   return null;

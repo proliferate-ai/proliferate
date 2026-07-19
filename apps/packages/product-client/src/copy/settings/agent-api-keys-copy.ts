@@ -5,6 +5,8 @@ export const AGENT_API_KEYS_COPY = {
   keysSection: "Keys",
   loading: "Loading API keys...",
   loadError: "Could not load API keys. Check your connection and try again.",
+  retryAction: "Retry",
+  retryingAction: "Retrying…",
   emptyTitle: "No API keys yet",
   emptyDescription: "Add a key below to wire it into a harness later.",
   signInRequired: "Sign in to Proliferate Cloud to manage your API key vault.",

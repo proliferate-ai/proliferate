@@ -1,12 +1,10 @@
+import type { AgentSummary } from "@anyharness/sdk";
+import type { AgentAuthSurface } from "@proliferate/cloud-sdk";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
-import { SegmentedControl } from "@proliferate/ui/primitives/SegmentedControl";
-import { Laptop, Server } from "lucide-react";
-import {
-  useAnyHarnessRuntimeContext,
-  useAnyHarnessWorkspaceContext,
-} from "@anyharness/sdk-react";
-import { useEffect, useState } from "react";
+import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
+import { Badge } from "@proliferate/ui/primitives/Badge";
+import { ProviderIcon } from "@proliferate/ui/provider-icons";
 import { CloudGuard } from "#product/components/cloud/CloudGuard";
 import { useAgentCatalog } from "#product/hooks/agents/derived/use-agent-catalog";
 import { getProviderDisplayName } from "#product/lib/domain/agents/provider-display";
@@ -19,95 +17,110 @@ import { HarnessConfigIssueBanner } from "#product/components/settings/panes/age
 import { HarnessSettingsSection } from "#product/components/settings/panes/agents/harness/HarnessSettingsSection";
 import { useHarnessAuthEditor } from "#product/hooks/agents/workflows/use-harness-auth-editor";
 import { useHarnessInstallAction } from "#product/hooks/agents/workflows/use-harness-install-action";
-import { HarnessUpdateProgress } from "#product/components/settings/panes/agents/harness/HarnessUpdateProgress";
-import { useWorkspaceAgentCatalog } from "#product/hooks/agents/derived/use-workspace-agent-catalog";
+import { getAgentStatusDisplay } from "#product/lib/domain/agents/status-presentation";
+import { HarnessInstallGate } from "#product/components/settings/panes/agents/harness/HarnessInstallGate";
+import { CloudAnyHarnessRuntimeProvider } from "#product/providers/CloudAnyHarnessRuntimeProvider";
 
 interface HarnessPaneProps {
   harnessKind: string;
 }
 
+const SETTINGS_HARNESS_DISPLAY_NAMES: Record<string, string> = {
+  claude: "Claude Code",
+  codex: "Codex",
+  grok: "Grok",
+  opencode: "OpenCode",
+};
+
 export function HarnessPane({ harnessKind }: HarnessPaneProps) {
   const surface = useAgentSurfaceStore((state) => state.surface);
-  const { workspaceId } = useAnyHarnessWorkspaceContext();
-  const { runtimeUrl } = useAnyHarnessRuntimeContext();
-  const hasLocalRuntime = (runtimeUrl?.trim().length ?? 0) > 0;
-  const [installTarget, setInstallTarget] = useState<"runtime" | "workspace">(
-    () => hasLocalRuntime || !workspaceId ? "runtime" : "workspace",
+  const displayName = SETTINGS_HARNESS_DISPLAY_NAMES[harnessKind]
+    ?? getProviderDisplayName(harnessKind);
+
+  return (
+    <section className="space-y-6">
+      <SettingsPageHeader
+        title={displayName}
+        description={HARNESS_PANE_COPY.surfaceDescription(surface, displayName)}
+      />
+
+      {surface === "cloud" ? (
+        <CloudGuard>
+          <CloudAnyHarnessRuntimeProvider>
+            <HarnessRuntimeSurface harnessKind={harnessKind} surface="cloud" />
+          </CloudAnyHarnessRuntimeProvider>
+        </CloudGuard>
+      ) : (
+        <HarnessRuntimeSurface harnessKind={harnessKind} surface="local" />
+      )}
+    </section>
   );
-  useEffect(() => {
-    if (!hasLocalRuntime && workspaceId && installTarget === "runtime") {
-      setInstallTarget("workspace");
-    } else if (!workspaceId && hasLocalRuntime && installTarget === "workspace") {
-      setInstallTarget("runtime");
-    }
-  }, [hasLocalRuntime, installTarget, workspaceId]);
-  const localCatalog = useAgentCatalog();
-  const workspaceCatalog = useWorkspaceAgentCatalog({
-    enabled: installTarget === "workspace" && !!workspaceId,
-  });
-  const runtimeCatalog = installTarget === "workspace" ? workspaceCatalog : localCatalog;
+}
+
+function HarnessRuntimeSurface({
+  harnessKind,
+  surface,
+}: {
+  harnessKind: string;
+  surface: AgentAuthSurface;
+}) {
+  const runtimeCatalog = useAgentCatalog();
   const {
     agentsByKind,
     agentsNeedingSetup,
+    isError: runtimeCatalogIsError,
+    isLoading: runtimeCatalogIsLoading,
     isReconciling,
     reconcileSnapshot,
   } = runtimeCatalog;
 
-  const displayName =
-    agentsByKind.get(harnessKind)?.displayName ?? getProviderDisplayName(harnessKind);
+  const runtimeAgent = agentsByKind.get(harnessKind);
+  const displayName = runtimeAgent?.displayName ?? getProviderDisplayName(harnessKind);
   const issueAgent = agentsNeedingSetup.find((agent) => agent.kind === harnessKind);
-  const installAction = useHarnessInstallAction(
-    issueAgent ?? null,
-    installTarget,
-  );
+  const installAction = useHarnessInstallAction(issueAgent ?? null, surface);
   const updateComponents = isReconciling
     ? reconcileSnapshot?.progress?.components.filter(
       (component) => component.agent === harnessKind,
     ) ?? []
     : [];
+  const showRuntimeStatus = runtimeCatalogIsLoading
+    || runtimeCatalogIsError
+    || !runtimeAgent
+    || runtimeAgent.readiness !== "ready"
+    || runtimeAgent.installState === "installing";
+
+  if (updateComponents.length > 0 || installAction) {
+    return (
+      <HarnessInstallGate
+        harnessKind={harnessKind}
+        displayName={displayName}
+        surface={surface}
+        installAction={installAction}
+        installing={updateComponents.length > 0}
+      />
+    );
+  }
 
   return (
-    <section className="space-y-6">
-      <SettingsPageHeader title={displayName} />
-
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-foreground/[0.02] p-3">
-        <div>
-          <p className="text-ui-sm font-medium text-foreground">Harness update target</p>
-          <p className="text-ui-xs text-muted-foreground">
-            Choose the runtime whose CLI and ACP adapter are installed on disk.
-          </p>
-        </div>
-        <SegmentedControl
-          ariaLabel="Harness update target"
-          value={installTarget}
-          items={[
-            {
-              id: "runtime",
-              label: "Local runtime",
-              icon: <Laptop />,
-              disabled: !hasLocalRuntime,
-            },
-            {
-              id: "workspace",
-              label: "Selected workspace",
-              icon: <Server />,
-              disabled: !workspaceId,
-            },
-          ]}
-          onChange={setInstallTarget}
-        />
-      </div>
-
-      {updateComponents.length > 0 ? (
-        <HarnessUpdateProgress
-          components={updateComponents}
-          displayName={displayName}
-          targetLabel={installTarget === "workspace" ? "Selected workspace runtime" : "Local runtime"}
-        />
-      ) : null}
-
-      {issueAgent && updateComponents.length === 0 ? (
-        <HarnessConfigIssueBanner agent={issueAgent} installAction={installAction} />
+    <>
+      {showRuntimeStatus ? (
+        <SettingsSection
+          title={HARNESS_PANE_COPY.runtimeTitle}
+          description={HARNESS_PANE_COPY.runtimeDescription(surface)}
+        >
+          {issueAgent ? (
+            <HarnessConfigIssueBanner agent={issueAgent} />
+          ) : (
+            <HarnessRuntimeStatusRow
+              harnessKind={harnessKind}
+              displayName={displayName}
+              agent={runtimeAgent}
+              surface={surface}
+              loading={runtimeCatalogIsLoading}
+              error={runtimeCatalogIsError}
+            />
+          )}
+        </SettingsSection>
       ) : null}
 
       {surface === "cloud" ? (
@@ -115,7 +128,65 @@ export function HarnessPane({ harnessKind }: HarnessPaneProps) {
       ) : (
         <HarnessSurfaceLocal harnessKind={harnessKind} displayName={displayName} />
       )}
-    </section>
+    </>
+  );
+}
+
+function HarnessRuntimeStatusRow({
+  harnessKind,
+  displayName,
+  agent,
+  surface,
+  loading,
+  error,
+}: {
+  harnessKind: string;
+  displayName: string;
+  agent: AgentSummary | undefined;
+  surface: AgentAuthSurface;
+  loading: boolean;
+  error: boolean;
+}) {
+  const status = agent ? getAgentStatusDisplay(agent) : null;
+  const tone = status?.tone === "success"
+    ? "success"
+    : status?.tone === "warning"
+      ? "warning"
+      : status?.tone === "destructive"
+        ? "destructive"
+        : "neutral";
+  const label = loading
+    ? HARNESS_PANE_COPY.runtimeChecking
+    : error
+      ? HARNESS_PANE_COPY.runtimeUnavailable
+      : status?.label ?? HARNESS_PANE_COPY.runtimeNotReported;
+  const description = loading
+    ? HARNESS_PANE_COPY.runtimeCheckingDescription(surface)
+    : error
+      ? HARNESS_PANE_COPY.runtimeUnavailableDescription(surface)
+      : !agent
+        ? HARNESS_PANE_COPY.runtimeNotReportedDescription(surface)
+        : agent.readiness === "ready" && agent.installState !== "installing"
+          ? HARNESS_PANE_COPY.runtimeReadyDescription(surface)
+          : agent.readiness === "unsupported"
+            ? HARNESS_PANE_COPY.runtimeUnsupportedDescription(surface)
+            : HARNESS_PANE_COPY.runtimeStatusDescription(label, surface);
+
+  return (
+    <SettingsRow
+      data-harness-runtime-state={loading ? "loading" : error ? "error" : agent?.readiness ?? "missing"}
+      label={(
+        <span className="flex min-w-0 items-center gap-2.5">
+          <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-md bg-foreground/5 text-muted-foreground">
+            <ProviderIcon kind={harnessKind} className="size-4" />
+          </span>
+          <span className="truncate">{displayName}</span>
+        </span>
+      )}
+      description={description}
+    >
+      <Badge tone={tone}>{label}</Badge>
+    </SettingsRow>
   );
 }
 
@@ -130,27 +201,25 @@ function HarnessSurfaceCloud({
   const selectedMethod = deriveSelectedMethod(editor);
 
   return (
-    <CloudGuard>
-      <SettingsSection title={HARNESS_PANE_COPY.signInTitle}>
-        <div className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-foreground/[0.02]">
-          <HarnessAuthSection
-            harnessKind={harnessKind}
-            displayName={displayName}
-            surface="cloud"
-            editor={editor}
-            variant="panel"
-          />
+    <>
+      <div className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-foreground/[0.02]">
+        <HarnessAuthSection
+          harnessKind={harnessKind}
+          displayName={displayName}
+          surface="cloud"
+          editor={editor}
+          variant="panel"
+        />
 
-          <HarnessAuthDetailsSection
-            harnessKind={harnessKind}
-            displayName={displayName}
-            surface="cloud"
-            selectedMethod={selectedMethod}
-            editor={editor}
-            variant="panel"
-          />
-        </div>
-      </SettingsSection>
+        <HarnessAuthDetailsSection
+          harnessKind={harnessKind}
+          displayName={displayName}
+          surface="cloud"
+          selectedMethod={selectedMethod}
+          editor={editor}
+          variant="panel"
+        />
+      </div>
 
       <HarnessSettingsSection harnessKind={harnessKind} surface="cloud" variant="section" />
 
@@ -159,7 +228,7 @@ function HarnessSurfaceCloud({
         displayName={displayName}
         surface="cloud"
       />
-    </CloudGuard>
+    </>
   );
 }
 
@@ -175,26 +244,24 @@ function HarnessSurfaceLocal({
 
   return (
     <>
-      <SettingsSection title={HARNESS_PANE_COPY.signInTitle}>
-        <div className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-foreground/[0.02]">
-          <HarnessAuthSection
-            harnessKind={harnessKind}
-            displayName={displayName}
-            surface="local"
-            editor={editor}
-            variant="panel"
-          />
+      <div className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-foreground/[0.02]">
+        <HarnessAuthSection
+          harnessKind={harnessKind}
+          displayName={displayName}
+          surface="local"
+          editor={editor}
+          variant="panel"
+        />
 
-          <HarnessAuthDetailsSection
-            harnessKind={harnessKind}
-            displayName={displayName}
-            surface="local"
-            selectedMethod={selectedMethod}
-            editor={editor}
-            variant="panel"
-          />
-        </div>
-      </SettingsSection>
+        <HarnessAuthDetailsSection
+          harnessKind={harnessKind}
+          displayName={displayName}
+          surface="local"
+          selectedMethod={selectedMethod}
+          editor={editor}
+          variant="panel"
+        />
+      </div>
 
       <HarnessSettingsSection harnessKind={harnessKind} surface="local" variant="section" />
 
