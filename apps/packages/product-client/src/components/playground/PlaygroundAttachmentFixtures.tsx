@@ -187,7 +187,10 @@ export function PlaygroundAttachmentPreviewAside() {
   }, []);
 
   return (
-    <aside className="flex w-[26rem] shrink-0 flex-col border-l border-sidebar-border bg-sidebar-background">
+    <aside
+      className="flex shrink-0 flex-col border-l border-sidebar-border bg-sidebar-background"
+      style={{ width: "26rem" }}
+    >
       {target?.kind === "promptAttachment" ? (
         <>
           <div className="right-panel-tab-system flex h-10 shrink-0 items-stretch border-b border-sidebar-border">

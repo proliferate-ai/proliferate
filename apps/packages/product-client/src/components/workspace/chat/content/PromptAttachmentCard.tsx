@@ -50,7 +50,12 @@ export function PromptAttachmentCard({
   const className = promptAttachmentCardClassName({ isCompact, isDraft, isImage });
 
   return (
-    <div className={className} data-telemetry-mask title={title}>
+    <div
+      className={className}
+      data-telemetry-mask
+      style={isDraft && !isImage ? { height: 52, width: 210 } : undefined}
+      title={title}
+    >
       {canPreview && onOpenAttachment ? (
         <Button
           type="button"
@@ -102,7 +107,7 @@ export function PromptAttachmentCard({
             event.stopPropagation();
             onRemove(part.id);
           }}
-          className="pointer-events-none absolute top-1 right-1 z-20 size-5 rounded-full border border-border bg-background/95 p-0 text-foreground opacity-0 shadow-sm transition-opacity group-hover/attachment:pointer-events-auto group-hover/attachment:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100"
+          className="prompt-attachment-remove pointer-events-none absolute top-1 right-1 z-20 size-5 rounded-full border border-border bg-background/95 p-0 text-foreground opacity-0 shadow-sm transition-opacity"
           aria-label={`Remove ${part.name}`}
         >
           <X className="size-3" />
@@ -233,13 +238,13 @@ function promptAttachmentCardClassName(args: {
   if (args.isImage) {
     const size = args.isDraft ? "size-20" : args.isCompact ? "size-10" : "size-14";
     const border = args.isDraft ? "border-border" : "border-border/60";
-    return `group/attachment relative inline-flex ${size} shrink-0 overflow-visible rounded-lg border ${border} bg-card text-foreground`;
+    return `prompt-attachment-card relative inline-flex ${size} shrink-0 overflow-visible rounded-lg border ${border} bg-card text-foreground`;
   }
   if (args.isDraft) {
-    return "group/attachment relative inline-flex h-[52px] w-[210px] max-w-full shrink-0 overflow-visible rounded-lg border border-border bg-card text-foreground";
+    return "prompt-attachment-card relative inline-flex max-w-full shrink-0 overflow-visible rounded-lg border border-border bg-card text-foreground";
   }
   if (args.isCompact) {
-    return "group/attachment relative inline-flex h-10 w-44 max-w-full shrink-0 overflow-visible rounded-lg border border-border/50 bg-card/70 text-foreground";
+    return "prompt-attachment-card relative inline-flex h-10 w-44 max-w-full shrink-0 overflow-visible rounded-lg border border-border/50 bg-card/70 text-foreground";
   }
-  return "group/attachment relative inline-flex h-11 w-48 max-w-full shrink-0 overflow-visible rounded-lg border border-border/60 bg-card/80 text-foreground";
+  return "prompt-attachment-card relative inline-flex h-11 w-48 max-w-full shrink-0 overflow-visible rounded-lg border border-border/60 bg-card/80 text-foreground";
 }
