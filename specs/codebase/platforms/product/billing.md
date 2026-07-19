@@ -157,8 +157,9 @@ and
 [`OrganizationLimitsEditor.tsx`](../../../../apps/packages/product-client/src/components/settings/panes/OrganizationLimitsEditor.tsx).
 
 When the user is authenticated and usage metering is enabled, the app sidebar
-footer exposes independent **Compute** and **LLM** meter triggers outside the
-account popover. Each trigger opens the compact
+footer exposes one usage trigger outside the account popover. Its concentric
+rings show **Compute** on the outside and **LLM** on the inside, and the trigger's
+accessible name reports both states. The trigger opens the compact
 [`SidebarConsumptionCard`](../../../../apps/packages/product-client/src/components/app/sidebar/SidebarConsumptionCard.tsx).
 The concern preserves explicit loading and unavailable states while the summary
 is absent, then renders each ready meter from its own returned units and limit
