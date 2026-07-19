@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { HarnessPane } from "#product/components/settings/panes/agents/harness/HarnessPane";
 
 const readyAgent = {
@@ -64,6 +64,11 @@ vi.mock("#product/components/settings/panes/agents/harness/HarnessAllModelsSecti
   HarnessAllModelsSection: () => null,
 }));
 
+afterEach(() => {
+  cleanup();
+  readyCatalog.agentsByKind.set("claude", readyAgent);
+});
+
 describe("HarnessPane visual hierarchy", () => {
   it("presents runtime status before a single authentication heading", () => {
     const { container } = render(<HarnessPane harnessKind="claude" />);
@@ -79,5 +84,20 @@ describe("HarnessPane visual hierarchy", () => {
     expect(
       screen.getByText("Configure how Claude Code runs and authenticates on this machine."),
     ).toBeTruthy();
+  });
+
+  it("describes an unsupported harness without claiming it is installed", () => {
+    readyCatalog.agentsByKind.set("claude", {
+      ...readyAgent,
+      readiness: "unsupported",
+    });
+
+    render(<HarnessPane harnessKind="claude" />);
+
+    expect(screen.getByText("Unsupported")).toBeTruthy();
+    expect(
+      screen.getByText("This harness is not supported on Local runtime."),
+    ).toBeTruthy();
+    expect(screen.queryByText("Installed and available on Local runtime.")).toBeNull();
   });
 });

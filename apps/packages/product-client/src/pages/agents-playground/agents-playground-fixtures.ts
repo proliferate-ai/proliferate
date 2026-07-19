@@ -18,6 +18,10 @@ import {
 import type { ProductHost } from "@proliferate/product-client/host/product-host";
 import { QueryClient } from "@tanstack/react-query";
 import { serverCapabilitiesKey } from "#product/hooks/access/cloud/server-capabilities/query-keys";
+import {
+  createAgentsPlaygroundCloudTransport,
+  type AgentsPlaygroundCloudTransport,
+} from "#product/pages/agents-playground/agents-playground-cloud-client";
 
 export const PLAYGROUND_RUNTIME_URL = "http://agents-playground.runtime";
 export const PLAYGROUND_CACHE_SCOPE = "agents-playground";
@@ -27,6 +31,7 @@ export type AgentsPlaygroundScenarioId =
   | "install-required"
   | "updating"
   | "runtime-error"
+  | "unsupported"
   | "opencode-multi-source"
   | "cloud-signed-out"
   | "cloud-ready"
@@ -49,6 +54,7 @@ export const SCENARIOS: readonly AgentsPlaygroundScenario[] = [
   { id: "install-required", label: "Install required", harnessKind: "claude", pane: "harness", surface: "local" },
   { id: "updating", label: "Updating", harnessKind: "claude", pane: "harness", surface: "local" },
   { id: "runtime-error", label: "Runtime error", harnessKind: "claude", pane: "harness", surface: "local" },
+  { id: "unsupported", label: "Unsupported", harnessKind: "claude", pane: "harness", surface: "local" },
   { id: "opencode-multi-source", label: "Multiple auth", harnessKind: "opencode", pane: "harness", surface: "local" },
   { id: "cloud-signed-out", label: "Cloud signed out", harnessKind: "claude", pane: "harness", surface: "cloud" },
   { id: "cloud-ready", label: "Cloud ready", harnessKind: "claude", pane: "harness", surface: "cloud" },
@@ -142,7 +148,9 @@ function buildFixtureState(scenario: AgentsPlaygroundScenario): FixtureState {
       ? "install_required"
       : scenario.id === "runtime-error"
         ? "error"
-        : "ready";
+        : scenario.id === "unsupported"
+          ? "unsupported"
+          : "ready";
   const hasKeys = scenario.id === "api-keys-ready"
     || scenario.id === "opencode-multi-source";
   const apiKeys: AgentApiKey[] = hasKeys
@@ -207,25 +215,6 @@ function buildFixtureState(scenario: AgentsPlaygroundScenario): FixtureState {
       : { status: "idle", reinstall: false, results: [] },
     selections,
     apiKeys,
-  };
-}
-
-export function buildPlaygroundHost(
-  parentHost: ProductHost,
-  authenticated: boolean,
-): ProductHost {
-  return {
-    ...parentHost,
-    auth: {
-      ...parentHost.auth,
-      state: authenticated
-        ? {
-            status: "authenticated",
-            user: { id: "agents-playground", displayName: "Agents Playground" },
-            readiness: { status: "ready" },
-          }
-        : { status: "anonymous", methods: ["password"] },
-    },
   };
 }
 
@@ -377,8 +366,17 @@ function seedCloudQueries(
 export function buildMockQueryClient(
   parentHost: ProductHost,
   scenario: AgentsPlaygroundScenario,
-): { client: QueryClient; fixture: FixtureState } {
+): {
+  client: QueryClient;
+  fixture: FixtureState;
+  cloudTransport: AgentsPlaygroundCloudTransport;
+} {
   const fixture = buildFixtureState(scenario);
+  const cloudTransport = createAgentsPlaygroundCloudTransport({
+    harnessKind: scenario.harnessKind,
+    apiKeys: fixture.apiKeys,
+    selections: fixture.selections,
+  });
   const client = new QueryClient({
     defaultOptions: {
       queries: {
@@ -393,5 +391,5 @@ export function buildMockQueryClient(
   });
   seedHarnessQueries(client, scenario, fixture);
   seedCloudQueries(client, parentHost, scenario, fixture);
-  return { client, fixture };
+  return { client, fixture, cloudTransport };
 }

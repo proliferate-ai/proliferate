@@ -166,9 +166,13 @@ function HarnessRuntimeStatusRow({
     ? HARNESS_PANE_COPY.runtimeCheckingDescription
     : error
       ? HARNESS_PANE_COPY.runtimeUnavailableDescription
-      : agent
-        ? HARNESS_PANE_COPY.runtimeReadyDescription(targetLabel)
-        : HARNESS_PANE_COPY.runtimeNotReportedDescription(targetLabel);
+      : !agent
+        ? HARNESS_PANE_COPY.runtimeNotReportedDescription(targetLabel)
+        : agent.readiness === "ready" && agent.installState !== "installing"
+          ? HARNESS_PANE_COPY.runtimeReadyDescription(targetLabel)
+          : agent.readiness === "unsupported"
+            ? HARNESS_PANE_COPY.runtimeUnsupportedDescription(targetLabel)
+            : HARNESS_PANE_COPY.runtimeStatusDescription(label, targetLabel);
 
   return (
     <SettingsRow

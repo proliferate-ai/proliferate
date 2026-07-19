@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { AnyHarnessRuntime, AnyHarnessWorkspace } from "@anyharness/sdk-react";
+import { CloudClientProvider } from "@proliferate/cloud-sdk-react";
 import { ProductHostProvider, useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { SegmentedControl } from "@proliferate/ui/primitives/SegmentedControl";
@@ -12,10 +13,10 @@ import {
   PLAYGROUND_RUNTIME_URL,
   SCENARIOS,
   buildMockQueryClient,
-  buildPlaygroundHost,
   type AgentsPlaygroundScenario,
   type AgentsPlaygroundScenarioId,
 } from "#product/pages/agents-playground/agents-playground-fixtures";
+import { buildPlaygroundHost } from "#product/pages/agents-playground/agents-playground-cloud-client";
 import { useAgentSurfaceStore } from "#product/stores/ui/agent-surface-store";
 
 export function AgentsPlaygroundPage() {
@@ -24,13 +25,13 @@ export function AgentsPlaygroundPage() {
   const surface = useAgentSurfaceStore((state) => state.surface);
   const setSurface = useAgentSurfaceStore((state) => state.setSurface);
   const scenario = SCENARIOS.find((candidate) => candidate.id === activeScenario) ?? SCENARIOS[0];
-  const { client, fixture } = useMemo(
+  const { client, fixture, cloudTransport } = useMemo(
     () => buildMockQueryClient(parentHost, scenario),
     [parentHost, scenario],
   );
   const playgroundHost = useMemo(
-    () => buildPlaygroundHost(parentHost, fixture.authenticated),
-    [fixture.authenticated, parentHost],
+    () => buildPlaygroundHost(parentHost, fixture.authenticated, cloudTransport.client),
+    [cloudTransport.client, fixture.authenticated, parentHost],
   );
 
   useEffect(() => {
@@ -79,25 +80,27 @@ export function AgentsPlaygroundPage() {
       <main className="flex-1 overflow-y-auto p-6">
         <div className="mx-auto max-w-2xl">
           <QueryClientProvider client={client}>
-            <ProductHostProvider host={playgroundHost}>
-              <AnyHarnessRuntime
-                runtimeUrl={PLAYGROUND_RUNTIME_URL}
-                cacheScopeKey={PLAYGROUND_CACHE_SCOPE}
-              >
-                <AnyHarnessWorkspace
-                  workspaceId={null}
-                  resolveConnection={() => Promise.reject(
-                    new Error("No playground workspace selected."),
-                  )}
+            <CloudClientProvider client={cloudTransport.client}>
+              <ProductHostProvider host={playgroundHost}>
+                <AnyHarnessRuntime
+                  runtimeUrl={PLAYGROUND_RUNTIME_URL}
+                  cacheScopeKey={PLAYGROUND_CACHE_SCOPE}
                 >
-                  {scenario.pane === "harness" ? (
-                    <HarnessPane key={activeScenario} harnessKind={scenario.harnessKind} />
-                  ) : (
-                    <ApiKeysPane key={activeScenario} />
-                  )}
-                </AnyHarnessWorkspace>
-              </AnyHarnessRuntime>
-            </ProductHostProvider>
+                  <AnyHarnessWorkspace
+                    workspaceId={null}
+                    resolveConnection={() => Promise.reject(
+                      new Error("No playground workspace selected."),
+                    )}
+                  >
+                    {scenario.pane === "harness" ? (
+                      <HarnessPane key={activeScenario} harnessKind={scenario.harnessKind} />
+                    ) : (
+                      <ApiKeysPane key={activeScenario} />
+                    )}
+                  </AnyHarnessWorkspace>
+                </AnyHarnessRuntime>
+              </ProductHostProvider>
+            </CloudClientProvider>
           </QueryClientProvider>
         </div>
       </main>

@@ -12,6 +12,10 @@ export const HARNESS_PANE_COPY = {
   runtimeUnavailableDescription: "Could not read harness readiness from the selected runtime.",
   runtimeReadyDescription: (targetLabel: string) =>
     `Installed and available on ${targetLabel}.`,
+  runtimeUnsupportedDescription: (targetLabel: string) =>
+    `This harness is not supported on ${targetLabel}.`,
+  runtimeStatusDescription: (statusLabel: string, targetLabel: string) =>
+    `${statusLabel} on ${targetLabel}.`,
   runtimeNotReportedDescription: (targetLabel: string) =>
     `${targetLabel} has not reported this harness yet.`,
   surfaceDescription: (surface: "cloud" | "local", displayName: string) =>
