@@ -1,16 +1,16 @@
 import { Suspense, lazy } from "react"
-import { Navigate, Route } from "react-router-dom"
+import { Navigate, Route, useLocation } from "react-router-dom"
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider"
+import type { AuthState } from "@proliferate/product-client/host/product-host"
 import { BootstrappedRoute, PublicOnlyRoute } from "#product/components/auth/AuthGate"
 import { UserPreferencesGate } from "#product/components/app/UserPreferencesGate"
-import { KeyboardShortcutsDialog } from "#product/components/workspace/shell/sidebar/KeyboardShortcutsDialog"
 import { UpdateRestartDialog } from "#product/components/feedback/UpdateRestartDialog"
 import { UpdateToastPresenter } from "#product/components/feedback/UpdateToastPresenter"
-import { HarnessUpdateToastPresenter } from "#product/components/feedback/HarnessUpdateToastPresenter"
+import { KeyboardShortcutsDialog } from "#product/components/workspace/shell/sidebar/KeyboardShortcutsDialog"
 import { Toaster } from "@proliferate/ui/kit/Sonner"
 import { MacWindowControlsSafeArea } from "#product/components/app/chrome/MacWindowControlsSafeArea"
 import { useLocalWorktreeSettingsTarget } from "#product/hooks/workspaces/facade/use-local-worktree-settings-target"
 import { useWorktreeCleanupPolicySync } from "#product/hooks/workspaces/lifecycle/use-worktree-cleanup-policy-sync"
-import { SupportModalHost } from "#product/components/support/SupportModalHost"
 import { LoginPage } from "#product/pages/LoginPage"
 import { SettingsCloudRedirect } from "#product/pages/SettingsCloudRedirect"
 import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store"
@@ -22,6 +22,13 @@ import type { ProductRoutesComponent } from "#product/ProductClient"
 // eagerly pulls the authenticated-only chunks (editor/terminal/etc.).
 const AuthenticatedProductClient = lazy(
   () => import("#product/app/AuthenticatedProductClient"),
+)
+
+// Product utility hosts are useful only once a Web user can enter the product.
+// Keep them available during Desktop's native/local startup, but do not make an
+// anonymous Web /login fetch their workspace, agent-catalog, and support trees.
+const ProductUtilityHosts = lazy(
+  () => import("#product/app/ProductUtilityHosts"),
 )
 
 // Dev-only playground. Lazy-loaded with a DEV guard so neither this file
@@ -213,15 +220,46 @@ export function App({ RoutesComponent }: AppProps) {
           )}
           <Route path="*" element={<Navigate to="/" replace />} />
         </RoutesComponent>
-        <SupportModalHost />
         {/* Kit Sonner toaster: all toasts (update lifecycle + legacy
             toast-store call sites, which now delegate to Sonner). */}
         <Toaster />
         <UpdateToastPresenter />
-        <HarnessUpdateToastPresenter />
         <KeyboardShortcutsDialog />
+        <ProductUtilityHostsGate />
       </ShortcutRevealProvider>
   )
+}
+
+function ProductUtilityHostsGate() {
+  const { auth, desktop } = useProductHost()
+  const location = useLocation()
+  const shouldLoad = shouldLoadProductUtilityHosts({
+    hasDesktop: desktop !== null,
+    authStatus: auth.state.status,
+    pathname: location.pathname,
+  })
+
+  if (!shouldLoad) {
+    return null
+  }
+
+  return (
+    <Suspense fallback={null}>
+      <ProductUtilityHosts />
+    </Suspense>
+  )
+}
+
+export function shouldLoadProductUtilityHosts({
+  hasDesktop,
+  authStatus,
+  pathname,
+}: {
+  hasDesktop: boolean
+  authStatus: AuthState["status"]
+  pathname: string
+}): boolean {
+  return hasDesktop || authStatus === "authenticated" || pathname !== "/login"
 }
 
 function WorktreeCleanupPolicySyncGate() {
