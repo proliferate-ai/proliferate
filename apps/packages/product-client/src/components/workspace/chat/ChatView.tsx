@@ -1,5 +1,7 @@
 import {
+  lazy,
   memo,
+  Suspense,
   useCallback,
   useMemo,
   useRef,
@@ -18,7 +20,6 @@ import { NoWorkspaceState } from "#product/components/workspace/chat/surface/NoW
 import { SessionTranscriptPane } from "#product/components/workspace/chat/surface/SessionTranscriptPane";
 import { SessionContentSearchOverlay } from "#product/components/workspace/chat/surface/SessionContentSearchOverlay";
 import { TranscriptSwitchingPlaceholder } from "#product/components/workspace/chat/surface/TranscriptSwitchingPlaceholder";
-import { WorkspaceSessionRecoveryInlinePanel } from "#product/components/workspace/chat/surface/WorkspaceSessionRecoveryInlinePanel";
 import { type ChatSurfaceState, useChatSurfaceState } from "#product/hooks/chat/derived/use-chat-surface-state";
 import {
   useActiveSessionId,
@@ -45,6 +46,10 @@ import {
 import type { WorkspaceRenderSurface } from "#product/lib/domain/workspaces/tabs/shell-activation";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { usePromptAttachmentPreviewActions } from "#product/hooks/chat/workflows/use-prompt-attachment-preview-actions";
+
+const WorkspaceSessionRecoveryInlinePanel = lazy(() =>
+  import("#product/components/workspace/chat/surface/WorkspaceSessionRecoveryInlinePanel")
+);
 
 function ChatContent({
   dockSafeAreaPx,
@@ -275,7 +280,13 @@ export const ChatView = memo(function ChatView({
           outboundSlot={composerDockSlots.outboundSlot}
           activeSlot={composerDockSlots.activeSlot}
           attachedSlot={activeWorkspaceSessionRecovery
-            ? <WorkspaceSessionRecoveryInlinePanel recovery={activeWorkspaceSessionRecovery} />
+            ? (
+                <Suspense fallback={null}>
+                  <WorkspaceSessionRecoveryInlinePanel
+                    recovery={activeWorkspaceSessionRecovery}
+                  />
+                </Suspense>
+              )
             : composerDockSlots.attachedSlot}
           lowerBackdropTopPx={lowerBackdropTopPx}
           shellClassName="pointer-events-none absolute inset-x-0 bottom-0"

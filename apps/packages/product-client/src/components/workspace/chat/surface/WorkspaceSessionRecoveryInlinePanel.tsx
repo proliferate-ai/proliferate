@@ -18,7 +18,7 @@ import { buildSettingsHref } from "#product/lib/domain/settings/navigation";
 const RECOVERY_TITLE_ID = "workspace-session-inline-recovery-title";
 const RECOVERY_BODY_ID = "workspace-session-inline-recovery-body";
 
-export function WorkspaceSessionRecoveryInlinePanel({
+export default function WorkspaceSessionRecoveryInlinePanel({
   recovery,
 }: {
   recovery: WorkspaceSessionRecovery;
