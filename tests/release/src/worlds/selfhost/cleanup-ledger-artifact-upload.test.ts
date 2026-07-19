@@ -164,6 +164,14 @@ test("the selfhost job's upload-artifact step path globs cover the cleanup ledge
     globs.some((glob) => uploadGlobIncludes(glob, cfnDiagnosticPath)),
     `no upload glob (${JSON.stringify(globs)}) matches the CFN diagnostic "${cfnDiagnosticPath}".`,
   );
+
+  const cfnCancellationReceiptPath =
+    "tests/release/.output/selfhost-world/qs-ci-12345-1/1/cfn-cancellation-finalization.json";
+  assert.ok(
+    globs.some((glob) => matchesGlob(glob, cfnCancellationReceiptPath)),
+    `no upload glob (${JSON.stringify(globs)}) matches the CFN cancellation receipt ` +
+      `"${cfnCancellationReceiptPath}".`,
+  );
 });
 
 test("matchesGlob: single-level `*` never crosses a `/` boundary", () => {

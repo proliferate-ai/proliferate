@@ -767,7 +767,12 @@ the parent run evidence, and then runs the ordinary registered cleanup. Raw log
 lines, command text, URLs, environment values, and provider payloads are not
 evidence. An unavailable SSM path remains red and does not excuse stack
 cleanup. This diagnostic posture is qualification-only and does not change the
-production template or operator launch path.
+production template or operator launch path. Supported `SIGINT`/`SIGTERM`
+cancellation enters the shared memoized world finalizer: it submits one bounded
+stack deletion and observes its immediate status without entering the ordinary
+long waiter. A deletion not yet proved complete remains unreconciled in the
+durable ledger, produces red cancellation custody, and is left for idempotent
+follow-up verification.
 
 Self-hosted Web, when supported, is the instance's same-origin Web application.
 It reuses product assertions but has no server picker, config rewrite, relaunch,

@@ -67,6 +67,7 @@ export type RegisterCfnCleanup = (
   kind: Extract<CleanupResourceKind, "cloudformation_stack" | "s3_object" | "ghcr_package_version">,
   providerId: string,
   release: () => Promise<void>,
+  cancellationRelease?: () => Promise<CfnCancellationReleaseOutcome>,
 ) => Promise<void>;
 
 /** The owned Route53 zone the run subdomain lives under (matches `dns.ts`). */
@@ -77,6 +78,8 @@ export const SELFHOST_QUALIFICATION_PURPOSE = "self-hosting-qualification";
 export const PRESIGN_EXPIRY_SECONDS = 3600;
 /** Bounded stack create/delete wait (a t4g bootstrap has a PT20M CreationPolicy). */
 export const STACK_WAIT_TIMEOUT_MS = 30 * 60_000;
+/** Each cancellation delete/observe call must leave headroom in the 25s process bridge. */
+export const CFN_CANCELLATION_CALL_TIMEOUT_MS = 5_000;
 /** Bounded describe-stack-events tail on a create failure. */
 export const MAX_STACK_EVENT_TAIL = 8;
 const MAX_EVENT_REASON_CHARS = 240;
@@ -166,6 +169,9 @@ export interface CfnBootstrapDiagnosticArtifactV1 {
   };
   diagnostic: CfnBootstrapDiagnostic;
 }
+
+/** A signal cleanup reconciles only observed absence; initiation stays in durable custody. */
+export type CfnCancellationReleaseOutcome = "reconciled" | "delete_initiated";
 
 // ── Pure, offline-testable helpers ──────────────────────────────────────────
 
@@ -894,8 +900,11 @@ export async function createCfnStackAndWait(input: {
   const log = input.log ?? (() => undefined);
   const waitTimeoutMs = input.waitTimeoutMs ?? STACK_WAIT_TIMEOUT_MS;
 
-  await input.registerCleanup("cloudformation_stack", stackName, () =>
-    deleteCfnStackAndWait(exec, stackName, region, { waitTimeoutMs }),
+  await input.registerCleanup(
+    "cloudformation_stack",
+    stackName,
+    () => deleteCfnStackAndWait(exec, stackName, region, { waitTimeoutMs }),
+    () => initiateCfnStackDeletionForCancellation(exec, stackName, region),
   );
 
   log(`create-stack ${stackName}`);
@@ -1019,6 +1028,61 @@ export async function deleteCfnStackAndWait(
   await exec.run(["cloudformation", "wait", "stack-delete-complete", "--stack-name", stackName, "--region", region], {
     timeoutMs: waitTimeoutMs,
   });
+}
+
+/**
+ * Signal-safe stack cleanup: submit one exact `delete-stack`, then make one
+ * bounded status observation. It never enters the ordinary 30-minute waiter.
+ * A successfully submitted but still-running deletion remains unreconciled in
+ * the durable ledger so the cancellation receipt is red and follow-up cleanup
+ * can verify absence idempotently.
+ */
+export async function initiateCfnStackDeletionForCancellation(
+  exec: CfnAwsExec,
+  stackName: string,
+  region: string,
+  options: { callTimeoutMs?: number } = {},
+): Promise<CfnCancellationReleaseOutcome> {
+  const callTimeoutMs = options.callTimeoutMs ?? CFN_CANCELLATION_CALL_TIMEOUT_MS;
+  try {
+    await exec.run(
+      ["cloudformation", "delete-stack", "--stack-name", stackName, "--region", region],
+      { timeoutMs: callTimeoutMs },
+    );
+  } catch (error) {
+    if (cfnStackAbsentError(error)) {
+      return "reconciled";
+    }
+    throw new Error("CFN cancellation cleanup could not confirm that delete-stack was accepted.");
+  }
+
+  try {
+    const status = (
+      await exec.run(
+        [
+          "cloudformation",
+          "describe-stacks",
+          "--stack-name",
+          stackName,
+          "--region",
+          region,
+          "--query",
+          "Stacks[0].StackStatus",
+          "--output",
+          "text",
+        ],
+        { timeoutMs: callTimeoutMs },
+      )
+    ).trim();
+    return status === "DELETE_COMPLETE" ? "reconciled" : "delete_initiated";
+  } catch (error) {
+    return cfnStackAbsentError(error) ? "reconciled" : "delete_initiated";
+  }
+}
+
+function cfnStackAbsentError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /(?:does not exist|not exist|not found)/i.test(message);
 }
 
 // ── Failed-bootstrap SSM diagnostics (qualification only) ──────────────────
@@ -1359,6 +1423,7 @@ interface CfnCleanupRegistration {
   entryId: string;
   kind: SelfHostCfnCleanupResourceKind;
   release: () => Promise<void>;
+  cancellationRelease?: () => Promise<CfnCancellationReleaseOutcome>;
 }
 
 /**
@@ -1394,10 +1459,14 @@ export class SelfHostCfnCleanupStack {
   }
 
   /** Writes an `intent` record and returns the entry id to acquire. */
-  async register(kind: SelfHostCfnCleanupResourceKind, release: () => Promise<void>): Promise<string> {
+  async register(
+    kind: SelfHostCfnCleanupResourceKind,
+    release: () => Promise<void>,
+    cancellationRelease?: () => Promise<CfnCancellationReleaseOutcome>,
+  ): Promise<string> {
     const entryId = randomUUID();
     await this.ledger.registerIntent(kind, entryId);
-    this.registrations.push({ entryId, kind, release });
+    this.registrations.push({ entryId, kind, release, cancellationRelease });
     return entryId;
   }
 
@@ -1411,8 +1480,9 @@ export class SelfHostCfnCleanupStack {
     kind: SelfHostCfnCleanupResourceKind,
     providerId: string,
     release: () => Promise<void>,
+    cancellationRelease?: () => Promise<CfnCancellationReleaseOutcome>,
   ): Promise<void> {
-    const entryId = await this.register(kind, release);
+    const entryId = await this.register(kind, release, cancellationRelease);
     await this.acquired(entryId, providerId);
   }
 
@@ -1479,6 +1549,56 @@ export class SelfHostCfnCleanupStack {
       ghcrVersionDeleted: this.categoryClean("ghcrVersionDeleted", succeeded),
       route53RecordDeleted,
       localPathsRemoved: this.categoryClean("localPathsRemoved", succeeded),
+    };
+  }
+
+  /**
+   * Bounded SIGINT/SIGTERM posture. Only the stack has a signal-specific
+   * releaser: submit its exact delete request and observe once, leaving every
+   * unverified/deferred entry acquired. The run directory and ledger therefore
+   * survive for upload and replay, and the returned summary stays red until an
+   * observed-absent follow-up performs ordinary reconciliation.
+   */
+  async runForCancellation(): Promise<SelfHostCfnWorldCleanupEvidence> {
+    const succeeded = new Set<string>();
+    let failed = this.registrations.length;
+    for (const registration of [...this.registrations].reverse()) {
+      if (registration.kind !== "cloudformation_stack") {
+        continue;
+      }
+      if (!registration.cancellationRelease) {
+        this.log("CFN cancellation cleanup has no bounded stack releaser; preserving durable custody");
+        continue;
+      }
+      try {
+        const outcome = await registration.cancellationRelease();
+        if (outcome !== "reconciled") {
+          this.log("CFN cancellation delete was initiated but absence is not yet proven; preserving durable custody");
+          continue;
+        }
+        try {
+          await this.ledger.markReconciled(registration.entryId);
+          succeeded.add(registration.entryId);
+          failed -= 1;
+        } catch {
+          this.log("CFN cancellation observed stack absence but could not persist reconciliation; preserving custody");
+        }
+      } catch {
+        this.log("CFN cancellation delete initiation failed; preserving durable custody");
+      }
+    }
+    return {
+      ledgerIdHash: hashLedgerId(this.ledger.ledgerId),
+      registered: this.registrations.length,
+      reconciled: succeeded.size,
+      failed,
+      stackDeleted: this.categoryClean("stackDeleted", succeeded),
+      s3ObjectsDeleted: false,
+      ghcrVersionDeleted: false,
+      // Signal cleanup intentionally avoids an extra Route53 provider call.
+      // Even observed stack absence remains fail-closed for DNS until replay.
+      route53RecordDeleted: false,
+      localPathsRemoved: false,
     };
   }
 
