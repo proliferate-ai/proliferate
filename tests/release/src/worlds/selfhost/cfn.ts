@@ -1085,6 +1085,102 @@ function cfnStackAbsentError(error: unknown): boolean {
   return /(?:does not exist|not exist|not found)/i.test(message);
 }
 
+/**
+ * Parses the bounded `describe-stack-events` projection used when a failed
+ * EC2 resource has no `describe-stack-resource` physical id. CloudFormation's
+ * CreationPolicy failure event carries the signaling instance as either the
+ * physical id or the exact `UniqueId i-...` token. Ambiguous projections fail
+ * closed instead of selecting an instance from an earlier attempt.
+ */
+export function parseCfnInstanceIdEventProjection(raw: string): string | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (!Array.isArray(parsed)) {
+    return null;
+  }
+
+  const candidates = new Set<string>();
+  for (const row of parsed) {
+    if (
+      !Array.isArray(row)
+      || row.length !== 2
+      || row.some((field) => field !== null && typeof field !== "string")
+    ) {
+      return null;
+    }
+    const physicalId = typeof row[0] === "string" ? row[0].trim() : "";
+    if (/^i-[0-9a-f]+$/i.test(physicalId)) {
+      candidates.add(physicalId.toLowerCase());
+    }
+    const reason = typeof row[1] === "string" ? row[1] : "";
+    for (const match of reason.matchAll(/\bUniqueId\s+(i-[0-9a-f]+)\b/gi)) {
+      candidates.add(match[1].toLowerCase());
+    }
+  }
+  return candidates.size === 1 ? [...candidates][0] : null;
+}
+
+async function resolveCfnBootstrapInstanceId(
+  exec: CfnAwsExec,
+  stackName: string,
+  region: string,
+): Promise<string | null> {
+  try {
+    const direct = (
+      await exec.run(
+        [
+          "cloudformation",
+          "describe-stack-resource",
+          "--stack-name",
+          stackName,
+          "--logical-resource-id",
+          "ProliferateInstance",
+          "--region",
+          region,
+          "--query",
+          "StackResourceDetail.PhysicalResourceId",
+          "--output",
+          "text",
+        ],
+        { timeoutMs: 15_000 },
+      )
+    ).trim();
+    if (/^i-[0-9a-f]+$/i.test(direct)) {
+      return direct.toLowerCase();
+    }
+  } catch {
+    // A CreationPolicy failure may omit StackResourceDetail even though its
+    // matching failure event retains the signaling EC2 UniqueId.
+  }
+
+  try {
+    const projectedEvents = await exec.run(
+      [
+        "cloudformation",
+        "describe-stack-events",
+        "--stack-name",
+        stackName,
+        "--region",
+        region,
+        "--max-items",
+        "32",
+        "--query",
+        "StackEvents[?LogicalResourceId=='ProliferateInstance'].[PhysicalResourceId,ResourceStatusReason]",
+        "--output",
+        "json",
+      ],
+      { timeoutMs: 15_000 },
+    );
+    return parseCfnInstanceIdEventProjection(projectedEvents);
+  } catch {
+    return null;
+  }
+}
+
 // ── Failed-bootstrap SSM diagnostics (qualification only) ──────────────────
 
 /**
@@ -1109,31 +1205,8 @@ export async function captureCfnBootstrapDiagnostic(input: {
   const sleepFn = input.sleep ?? sleep;
   const stackNameHash = createHash("sha256").update(stackName).digest("hex");
 
-  let instanceId: string;
-  try {
-    instanceId = (
-      await exec.run(
-        [
-          "cloudformation",
-          "describe-stack-resource",
-          "--stack-name",
-          stackName,
-          "--logical-resource-id",
-          "ProliferateInstance",
-          "--region",
-          region,
-          "--query",
-          "StackResourceDetail.PhysicalResourceId",
-          "--output",
-          "text",
-        ],
-        { timeoutMs: 15_000 },
-      )
-    ).trim();
-  } catch {
-    instanceId = "";
-  }
-  if (!/^i-[0-9a-f]+$/i.test(instanceId)) {
+  const instanceId = await resolveCfnBootstrapInstanceId(exec, stackName, region);
+  if (instanceId === null) {
     return emptyCfnBootstrapDiagnostic(stackNameHash, null, "instance_unavailable", "instance_not_found");
   }
   const instanceIdHash = createHash("sha256").update(instanceId).digest("hex");
