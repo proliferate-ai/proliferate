@@ -63,6 +63,15 @@ puts only a bounded stage and exit-code reason in the stack event. Inspect
 detail rather than copying those potentially secret-bearing logs into
 CloudFormation events.
 
+`bootstrap.sh` emits fixed, secret-free start/completion markers for its
+material substeps (secret resolution, preflight, registry login, runtime
+installation, database start/migration, API+Caddy start, optional profiles,
+and health wait). Qualification diagnostics accept only those allowlisted
+tokens. A timeout can therefore identify the last started substep without
+persisting command output, environment values, URLs, or provider payloads;
+absence of a completion marker is reported as unfinished rather than guessed
+as a command failure.
+
 ## Required Inputs
 
 The base stack needs:

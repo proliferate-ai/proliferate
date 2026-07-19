@@ -10,6 +10,23 @@ LEGACY_ENV_FILE="$SCRIPT_DIR/.env"
 RUNTIME_ENV_FILE="$SCRIPT_DIR/.env.runtime"
 EXAMPLE_ENV_FILE="$SCRIPT_DIR/.env.production.example"
 
+# Fixed, secret-free progress markers consumed by the bounded CloudFormation
+# failure diagnostic. Keep both token allowlists in sync; never place command
+# output, paths, hostnames, or environment values in this protocol.
+bootstrap_substep_marker() {
+  local substep="$1"
+  local status="$2"
+  case "$substep" in
+    ensure-secrets|preflight|registry-login|runtime-install|db-up|migrate|api-caddy-up|optional-profiles|health-wait) ;;
+    *) return 2 ;;
+  esac
+  case "$status" in
+    started|completed) ;;
+    *) return 2 ;;
+  esac
+  printf '__PROLIFERATE_BOOTSTRAP_SUBSTEP__:%s:%s\n' "$substep" "$status"
+}
+
 if [[ -f "$STATIC_ENV_FILE" ]]; then
   ENV_FILE="$STATIC_ENV_FILE"
 else
@@ -36,15 +53,23 @@ fi
 export PROLIFERATE_STATIC_ENV_FILE="$ENV_FILE"
 export PROLIFERATE_ENV_FILE="$RUNTIME_ENV_FILE"
 
+bootstrap_substep_marker ensure-secrets started
 "$SCRIPT_DIR/ensure-secrets.sh"
+bootstrap_substep_marker ensure-secrets completed
 
 # Validate the resolved config before touching containers, so a dangerous
 # partial config (e.g. E2B_API_KEY without E2B_TEMPLATE_NAME, which crash-loops
 # the api) fails here instead of after we have replaced a running stack.
+bootstrap_substep_marker preflight started
 "$SCRIPT_DIR/preflight.sh" "$RUNTIME_ENV_FILE"
+bootstrap_substep_marker preflight completed
 
+bootstrap_substep_marker registry-login started
 "$SCRIPT_DIR/registry-login.sh"
+bootstrap_substep_marker registry-login completed
+bootstrap_substep_marker runtime-install started
 "$SCRIPT_DIR/install-runtime.sh"
+bootstrap_substep_marker runtime-install completed
 
 COMPOSE_ARGS=(--env-file "$RUNTIME_ENV_FILE" -f "$SCRIPT_DIR/docker-compose.production.yml")
 
@@ -68,9 +93,15 @@ while IFS= read -r _profile_service; do
   [[ -n "$_profile_service" ]] && PROFILE_SERVICES+=("$_profile_service")
 done < <(proliferate_profile_services "$RUNTIME_ENV_FILE")
 
+bootstrap_substep_marker db-up started
 docker compose "${COMPOSE_ARGS[@]}" up -d db
+bootstrap_substep_marker db-up completed
+bootstrap_substep_marker migrate started
 docker compose "${COMPOSE_ARGS[@]}" run --rm migrate
+bootstrap_substep_marker migrate completed
+bootstrap_substep_marker api-caddy-up started
 docker compose "${COMPOSE_ARGS[@]}" up -d api caddy
+bootstrap_substep_marker api-caddy-up completed
 
 # Bring up any enabled optional-profile services (agent-gateway litellm +
 # litellm-db, cloud-workspaces redis) and WAIT for their healthchecks before
@@ -82,10 +113,14 @@ docker compose "${COMPOSE_ARGS[@]}" up -d api caddy
 # a bare `up -d --wait` across the whole compose file): otherwise it would
 # also try to reconcile the one-shot `migrate` job, which always exits after
 # running and would make --wait report a false failure.
+bootstrap_substep_marker optional-profiles started
 if ((${#PROFILE_SERVICES[@]})); then
   docker compose "${COMPOSE_ARGS[@]}" "${PROFILE_ARGS[@]}" up -d --wait --wait-timeout "${PROLIFERATE_PROFILE_WAIT_TIMEOUT_SECONDS:-300}" "${PROFILE_SERVICES[@]}"
 fi
+bootstrap_substep_marker optional-profiles completed
 
 # Waits for /health, then prints the first-run setup token and claim URL when
 # the instance is still unclaimed.
+bootstrap_substep_marker health-wait started
 "$SCRIPT_DIR/wait-for-health.sh"
+bootstrap_substep_marker health-wait completed

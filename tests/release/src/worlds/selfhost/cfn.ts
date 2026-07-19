@@ -91,12 +91,35 @@ export const CFN_DIAGNOSTIC_TIMEOUT_MS = 90_000;
 export const CFN_BOOTSTRAP_DIAGNOSTIC_FILENAME = "cfn-bootstrap-diagnostic.json";
 const CFN_DIAGNOSTIC_MAX_OBSERVATIONS = 24;
 const CFN_DIAGNOSTIC_COMMAND_TIMEOUT_SECONDS = 30;
+/** SSM returns at most 24,000 stdout characters; stay below that hard provider cap. */
+export const CFN_DIAGNOSTIC_OUTPUT_BYTE_BUDGET = 20_000;
 const CFN_DIAGNOSTIC_COMMAND = [
-  "for f in /var/log/cfn-init.log /var/log/cfn-init-cmd.log; do",
-  "  [ -r \"$f\" ] || continue",
+  "{",
+  // Authoritative/fixed tokens come first. Even if verbose context exhausts
+  // the global cap below, terminal stage, substep, and outer-timeout truth is
+  // retained by SSM's bounded StandardOutputContent response.
+  "f=/var/log/cfn-init.log",
+  "if sudo test -r \"$f\"; then",
   "  printf '__PROLIFERATE_CFN_LOG__:%s\\n' \"${f##*/}\"",
-  "  sudo grep -aiE 'Command [0-9]{2}-[A-Za-z0-9_-]+|exit(ed)?( with)? (error )?(code|status)|return code|timed out|timeout|failed|error|unhealthy|checksum|sha256|no space|permission denied|access denied|curl|download|docker compose|health' \"$f\" 2>/dev/null | tail -n 60 | cut -c1-500",
+  "  sudo grep -aiE 'Running Command [0-9]{2}-[A-Za-z0-9_-]+|Command [0-9]{2}-[A-Za-z0-9_-]+ (succeeded|successfully completed|completed successfully|failed)([^A-Za-z]|$)|exit(ed)?( with)? (error )?(code|status)|return code' \"$f\" 2>/dev/null | tail -n 36 | cut -c1-240",
+  "fi",
+  "f=/var/log/cfn-init-cmd.log",
+  "if sudo test -r \"$f\"; then",
+  "  printf '__PROLIFERATE_CFN_LOG__:%s\\n' \"${f##*/}\"",
+  "  sudo grep -aiE '__PROLIFERATE_BOOTSTRAP_SUBSTEP__:(ensure-secrets|preflight|registry-login|runtime-install|db-up|migrate|api-caddy-up|optional-profiles|health-wait):(started|completed)' \"$f\" 2>/dev/null | tail -n 24 | cut -c1-160",
+  "fi",
+  "f=/var/log/cloud-init-output.log",
+  "if sudo test -r \"$f\"; then",
+  "  printf '__PROLIFERATE_CFN_LOG__:%s\\n' \"${f##*/}\"",
+  "  sudo grep -aiE '__PROLIFERATE_CFN_OUTER__:(timeout|command_failure)|cfn-init bootstrap exceeded the 18-minute limit' \"$f\" 2>/dev/null | tail -n 4 | cut -c1-240",
+  "fi",
+  // Coarse allowlisted context is useful only after fixed truth is secured.
+  "for f in /var/log/cfn-init.log /var/log/cfn-init-cmd.log; do",
+  "  sudo test -r \"$f\" || continue",
+  "  printf '__PROLIFERATE_CFN_LOG__:%s\\n' \"${f##*/}\"",
+  "  sudo grep -aiE 'Command [0-9]{2}-[A-Za-z0-9_-]+|timed out|timeout|failed|error|unhealthy|checksum|sha256|no space|permission denied|access denied|curl|download|docker compose|health' \"$f\" 2>/dev/null | tail -n 16 | cut -c1-240",
   "done",
+  `} | head -c ${CFN_DIAGNOSTIC_OUTPUT_BYTE_BUDGET}`,
 ].join("\n");
 
 export type CfnBootstrapDiagnosticCaptureStatus =
@@ -106,7 +129,11 @@ export type CfnBootstrapDiagnosticCaptureStatus =
   | "command_failed"
   | "no_allowlisted_observations";
 
-export type CfnBootstrapDiagnosticSource = "cfn-init.log" | "cfn-init-cmd.log";
+export type CfnBootstrapDiagnosticSource =
+  | "cfn-init.log"
+  | "cfn-init-cmd.log"
+  | "cloud-init-output.log"
+  | "bootstrap.sh";
 
 export type CfnBootstrapStage =
   | "01-install-base"
@@ -130,12 +157,31 @@ export type CfnBootstrapFailureCategory =
   | "command_failed"
   | "other";
 
+export type CfnBootstrapSubstep =
+  | "ensure-secrets"
+  | "preflight"
+  | "registry-login"
+  | "runtime-install"
+  | "db-up"
+  | "migrate"
+  | "api-caddy-up"
+  | "optional-profiles"
+  | "health-wait";
+
+export type CfnBootstrapTerminalCause = "outer_timeout" | "command_failure" | "unknown";
+
 export interface CfnBootstrapDiagnosticObservation {
   source: CfnBootstrapDiagnosticSource;
   stage: CfnBootstrapStage;
-  outcome: "failed" | "completed" | "observed";
+  substep: CfnBootstrapSubstep | null;
+  outcome: "failed" | "completed" | "started";
   exit_code: number | null;
   category: CfnBootstrapFailureCategory;
+}
+
+export interface CfnBootstrapDiagnosticParseResult {
+  terminal_cause: CfnBootstrapTerminalCause;
+  observations: CfnBootstrapDiagnosticObservation[];
 }
 
 /**
@@ -159,11 +205,12 @@ export interface CfnBootstrapDiagnostic {
     | "command_terminal"
     | "no_allowlisted_observations";
   ssm_status: "Online" | "Success" | "Failed" | "TimedOut" | "Unavailable";
+  terminal_cause: CfnBootstrapTerminalCause;
   observations: CfnBootstrapDiagnosticObservation[];
 }
 
-export interface CfnBootstrapDiagnosticArtifactV1 {
-  schema_version: 1;
+export interface CfnBootstrapDiagnosticArtifactV2 {
+  schema_version: 2;
   kind: "proliferate.selfhost-cfn-bootstrap-diagnostic";
   run: {
     run_id: string;
@@ -509,24 +556,51 @@ const ALLOWED_CFN_BOOTSTRAP_STAGES = new Set<CfnBootstrapStage>([
   "03-enable-cfn-hup",
 ]);
 
+const ALLOWED_CFN_BOOTSTRAP_SUBSTEPS = new Set<CfnBootstrapSubstep>([
+  "ensure-secrets",
+  "preflight",
+  "registry-login",
+  "runtime-install",
+  "db-up",
+  "migrate",
+  "api-caddy-up",
+  "optional-profiles",
+  "health-wait",
+]);
+
 /**
- * Reduces bounded raw SSM output to a fixed-token diagnostic. Raw lines are
- * never returned or persisted: only allowlisted template stage names, numeric
- * exit codes, and coarse failure categories survive.
+ * Reduces bounded raw SSM output to a resolved fixed-token diagnostic. An
+ * explicit cfn-init command terminal status is authoritative for its template
+ * stage: tolerated stderr/stdout keywords cannot turn a succeeded command red.
+ * Started stages/substeps without a completion marker remain `started`, and
+ * the bounded outer-timeout marker is recorded separately. Raw lines are never
+ * returned or persisted.
  */
-export function parseCfnBootstrapDiagnosticOutput(raw: string): CfnBootstrapDiagnosticObservation[] {
-  let source: CfnBootstrapDiagnosticSource = "cfn-init.log";
-  const observations: CfnBootstrapDiagnosticObservation[] = [];
-  const seen = new Set<string>();
-  const activeStage: Record<CfnBootstrapDiagnosticSource, CfnBootstrapStage> = {
+export function parseCfnBootstrapDiagnosticOutput(raw: string): CfnBootstrapDiagnosticParseResult {
+  type ResolvedState = CfnBootstrapDiagnosticObservation & { order: number; terminal: boolean };
+
+  let source: Exclude<CfnBootstrapDiagnosticSource, "bootstrap.sh"> = "cfn-init.log";
+  let order = 0;
+  let terminalCause: CfnBootstrapTerminalCause = "unknown";
+  let commandFailureMarker = false;
+  const stages = new Map<CfnBootstrapStage, ResolvedState>();
+  const substeps = new Map<CfnBootstrapSubstep, ResolvedState>();
+  const activeStage: Record<Exclude<CfnBootstrapDiagnosticSource, "bootstrap.sh">, CfnBootstrapStage> = {
     "cfn-init.log": "unknown",
     "cfn-init-cmd.log": "unknown",
+    "cloud-init-output.log": "unknown",
   };
 
   for (const rawLine of raw.split(/\r?\n/)) {
-    const marker = rawLine.match(/^__PROLIFERATE_CFN_LOG__:(cfn-init(?:-cmd)?\.log)$/);
+    order += 1;
+    const marker = rawLine.match(
+      /^__PROLIFERATE_CFN_LOG__:(cfn-init\.log|cfn-init-cmd\.log|cloud-init-output\.log)$/,
+    );
     if (marker) {
-      source = marker[1] as CfnBootstrapDiagnosticSource;
+      source = marker[1] as Exclude<CfnBootstrapDiagnosticSource, "bootstrap.sh">;
+      // The bounded command emits a priority pass and then a context pass.
+      // Never carry active-stage context across repeated source sections.
+      activeStage[source] = "unknown";
       continue;
     }
     const line = rawLine.slice(0, 500);
@@ -534,50 +608,145 @@ export function parseCfnBootstrapDiagnosticOutput(raw: string): CfnBootstrapDiag
       continue;
     }
 
+    if (
+      /__PROLIFERATE_CFN_OUTER__:timeout\b/i.test(line) ||
+      /cfn-init bootstrap exceeded the 18-minute limit/i.test(line)
+    ) {
+      terminalCause = "outer_timeout";
+    } else if (/__PROLIFERATE_CFN_OUTER__:command_failure\b/i.test(line)) {
+      commandFailureMarker = true;
+    }
+
+    const substepMatch = line.match(
+      /__PROLIFERATE_BOOTSTRAP_SUBSTEP__:([a-z0-9-]{1,48}):(started|completed)\b/i,
+    );
+    const candidateSubstep = substepMatch?.[1]?.toLowerCase() as CfnBootstrapSubstep | undefined;
+    if (candidateSubstep && ALLOWED_CFN_BOOTSTRAP_SUBSTEPS.has(candidateSubstep)) {
+      const outcome = substepMatch?.[2]?.toLowerCase() as "started" | "completed";
+      const prior = substeps.get(candidateSubstep);
+      // The same command output can appear in both cfn-init logs. A later copy
+      // of STARTED must not regress an already observed completion.
+      if (!prior?.terminal || outcome === "completed") {
+        substeps.set(candidateSubstep, {
+          source: "bootstrap.sh",
+          stage: "02-bootstrap",
+          substep: candidateSubstep,
+          outcome,
+          exit_code: outcome === "completed" ? 0 : null,
+          category: "other",
+          order,
+          terminal: outcome === "completed",
+        });
+      }
+    }
+
     const stageMatch = line.match(/\bCommand\s+([0-9]{2}-[A-Za-z0-9_-]{1,64})\b/i);
     const candidateStage = stageMatch?.[1]?.toLowerCase() as CfnBootstrapStage | undefined;
     if (candidateStage && ALLOWED_CFN_BOOTSTRAP_STAGES.has(candidateStage)) {
       activeStage[source] = candidateStage;
+      if (!stages.has(candidateStage)) {
+        stages.set(candidateStage, {
+          source,
+          stage: candidateStage,
+          substep: null,
+          outcome: "started",
+          exit_code: null,
+          category: "other",
+          order,
+          terminal: false,
+        });
+      }
     }
-    // cfn-init commonly logs the command name and its error/exit on adjacent
-    // lines. Carry only the last allowlisted stage token within the same file;
-    // no arbitrary prior text survives.
     const stage = activeStage[source];
+    if (stage === "unknown") {
+      continue;
+    }
+    const current = stages.get(stage);
+    if (!current) {
+      continue;
+    }
     const exitMatch = line.match(
       /\b(?:exit(?:ed)?(?:\s+with)?(?:\s+(?:error\s+)?(?:code|status))?|return\s+code)\s*[:=]?\s*(\d{1,3})\b/i,
     );
     const exitCode = exitMatch ? Number.parseInt(exitMatch[1], 10) : null;
     const lower = line.toLowerCase();
-    const outcome: CfnBootstrapDiagnosticObservation["outcome"] =
-      /failed|error|denied|unhealthy|no space|timed out|timeout/.test(lower)
-        ? "failed"
-        : /completed|succeeded|success/.test(lower)
-          ? "completed"
-          : "observed";
-    const category = cfnBootstrapFailureCategory(lower);
+    const lineCategory = cfnBootstrapFailureCategory(lower);
+    const authoritativeCfnStatus = source === "cfn-init.log";
+    const namedTerminalSuccess =
+      authoritativeCfnStatus &&
+      /\bCommand\s+[0-9]{2}-[A-Za-z0-9_-]{1,64}\s+(?:succeeded|successfully completed|completed successfully)\b/i
+        .test(line);
+    const namedTerminalFailure =
+      authoritativeCfnStatus &&
+      /\bCommand\s+[0-9]{2}-[A-Za-z0-9_-]{1,64}\s+failed\b/i.test(line);
+    // Bare adjacent exit-status lines are accepted only from cfn-init's own
+    // log and only until a named terminal status resolves the command. Output
+    // copied into cfn-init-cmd.log can describe a tolerated inner failure.
+    const exitTerminal = authoritativeCfnStatus && exitCode !== null && !current.terminal;
 
-    // A stage-heading line updates `activeStage` but is not itself a failure
-    // observation. Lines without an exit/outcome/category carry no result.
-    if (exitCode === null && category === "other" && outcome === "observed") {
+    if (namedTerminalSuccess || (exitTerminal && exitCode === 0)) {
+      stages.set(stage, {
+        source,
+        stage,
+        substep: null,
+        outcome: "completed",
+        exit_code: exitCode ?? 0,
+        category: "other",
+        order,
+        terminal: true,
+      });
       continue;
     }
-    const observation: CfnBootstrapDiagnosticObservation = {
-      source,
-      stage,
-      outcome,
-      exit_code: exitCode,
-      category,
-    };
-    const key = JSON.stringify(observation);
-    if (!seen.has(key)) {
-      seen.add(key);
-      observations.push(observation);
+
+    if (namedTerminalFailure || (exitTerminal && exitCode !== 0)) {
+      const priorCategory = current.category;
+      const category =
+        lineCategory === "command_failed" && priorCategory !== "other" ? priorCategory : lineCategory;
+      stages.set(stage, {
+        source,
+        stage,
+        substep: null,
+        outcome: "failed",
+        exit_code: exitCode,
+        category,
+        order,
+        terminal: true,
+      });
+      continue;
     }
-    if (observations.length >= CFN_DIAGNOSTIC_MAX_OBSERVATIONS) {
-      break;
+
+    // Keep a coarse category only as context for a genuinely unfinished or
+    // later explicitly failed command. It must never override a terminal
+    // success, even when tolerated tool stderr says "Error" or "failed".
+    if (!current.terminal && lineCategory !== "other") {
+      stages.set(stage, { ...current, category: lineCategory, order });
     }
   }
-  return observations;
+
+  if (
+    terminalCause !== "outer_timeout" &&
+    (commandFailureMarker || [...stages.values()].some((item) => item.outcome === "failed"))
+  ) {
+    terminalCause = "command_failure";
+  }
+
+  if (terminalCause === "outer_timeout") {
+    const lastUnfinishedStage = [...stages.values()]
+      .filter((item) => item.outcome === "started")
+      .sort((left, right) => right.order - left.order)[0];
+    if (lastUnfinishedStage) {
+      stages.set(lastUnfinishedStage.stage, {
+        ...lastUnfinishedStage,
+        category: "timeout",
+      });
+    }
+  }
+
+  const observations = [...stages.values(), ...substeps.values()]
+    .sort((left, right) => left.order - right.order)
+    .slice(-CFN_DIAGNOSTIC_MAX_OBSERVATIONS)
+    .map(({ order: _order, terminal: _terminal, ...observation }) => observation);
+  return { terminal_cause: terminalCause, observations };
 }
 
 function cfnBootstrapFailureCategory(lower: string): CfnBootstrapFailureCategory {
@@ -600,7 +769,7 @@ export function cfnBootstrapDiagnosticArtifactPath(runDir: string): string {
 /** Atomically writes the already-reduced diagnostic before stack cleanup. */
 export async function writeCfnBootstrapDiagnosticArtifact(
   artifactPath: string,
-  artifact: CfnBootstrapDiagnosticArtifactV1,
+  artifact: CfnBootstrapDiagnosticArtifactV2,
 ): Promise<void> {
   const serialized = `${JSON.stringify(artifact, null, 2)}\n`;
   // Defense in depth: the structured type cannot carry raw output, and this
@@ -622,11 +791,14 @@ export async function writeCfnBootstrapDiagnosticArtifact(
 /** Safe one-line summary for the ordinary failed-cell reason. */
 export function summarizeCfnBootstrapDiagnostic(diagnostic: CfnBootstrapDiagnostic): string {
   const observations = diagnostic.observations
-    .slice(0, 4)
-    .map((item) => `${item.stage}:${item.outcome}:exit=${item.exit_code ?? "unknown"}:${item.category}`)
+    .slice(-4)
+    .map((item) => {
+      const location = item.substep === null ? item.stage : `${item.stage}/${item.substep}`;
+      return `${location}:${item.outcome}:exit=${item.exit_code ?? "unknown"}:${item.category}`;
+    })
     .join(",");
   return observations
-    ? `${diagnostic.capture_status}(${observations})`
+    ? `${diagnostic.capture_status}(terminal=${diagnostic.terminal_cause};${observations})`
     : `${diagnostic.capture_status}(${diagnostic.detail})`;
 }
 
@@ -1344,9 +1516,10 @@ export async function captureCfnBootstrapDiagnostic(input: {
     }
     lastStatus = typeof parsed.Status === "string" ? parsed.Status : lastStatus;
     if (lastStatus === "Success") {
-      const observations = parseCfnBootstrapDiagnosticOutput(
+      const parsedDiagnostic = parseCfnBootstrapDiagnosticOutput(
         typeof parsed.StandardOutputContent === "string" ? parsed.StandardOutputContent : "",
       );
+      const { observations } = parsedDiagnostic;
       if (observations.length === 0) {
         return emptyCfnBootstrapDiagnostic(
           stackNameHash,
@@ -1354,6 +1527,7 @@ export async function captureCfnBootstrapDiagnostic(input: {
           "no_allowlisted_observations",
           "no_allowlisted_observations",
           "Success",
+          parsedDiagnostic.terminal_cause,
         );
       }
       return {
@@ -1362,6 +1536,7 @@ export async function captureCfnBootstrapDiagnostic(input: {
         capture_status: "captured",
         detail: "captured",
         ssm_status: "Success",
+        terminal_cause: parsedDiagnostic.terminal_cause,
         observations,
       };
     }
@@ -1390,6 +1565,7 @@ function emptyCfnBootstrapDiagnostic(
   captureStatus: CfnBootstrapDiagnosticCaptureStatus,
   detail: CfnBootstrapDiagnostic["detail"],
   ssmStatus: CfnBootstrapDiagnostic["ssm_status"] = "Unavailable",
+  terminalCause: CfnBootstrapTerminalCause = "unknown",
 ): CfnBootstrapDiagnostic {
   return {
     stack_name_hash: stackNameHash,
@@ -1397,6 +1573,7 @@ function emptyCfnBootstrapDiagnostic(
     capture_status: captureStatus,
     detail,
     ssm_status: ssmStatus,
+    terminal_cause: terminalCause,
     observations: [],
   };
 }

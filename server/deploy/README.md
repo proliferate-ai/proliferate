@@ -38,7 +38,7 @@ flags (`--version`, `--eval`, `--no-start`, `--dry-run`, `--yes`).
 | `docker-compose.production.yml` | The stack: `caddy`, `db`, `migrate`, `api`, and the profiled `litellm`/`litellm-db` (agent-gateway) and `redis` (cloud-workspaces). |
 | `Caddyfile` | Public HTTPS via Caddy (Let's Encrypt), plus the `/llm` route to the agent gateway when enabled. |
 | `.env.production.example` | Copy to `.env.static` and fill in; the installer does this for you. |
-| `bootstrap.sh` | First-run: generate secrets, migrate, boot, wait for health, print the claim token. |
+| `bootstrap.sh` | First-run: generate secrets, migrate, boot, wait for health, print the claim token, and emit fixed secret-free substep progress markers for bounded AWS diagnostics. |
 | `update.sh` | Pull + migrate + restart, including any enabled optional profile. |
 | `preflight.sh` | Validate config before replacing a running stack. |
 | `doctor.sh` | Redacting diagnostics for the running instance. |
