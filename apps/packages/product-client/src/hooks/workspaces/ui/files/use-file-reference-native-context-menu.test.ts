@@ -5,6 +5,7 @@ import { buildFileReferenceNativeContextMenuItems } from "#product/hooks/workspa
 describe("buildFileReferenceNativeContextMenuItems", () => {
   it("models the native file reference menu with app icons and an Open with submenu", () => {
     const onOpenDefault = vi.fn();
+    const onOpenInSidebar = vi.fn();
     const onOpenTarget = vi.fn();
     const onCopyPath = vi.fn();
     const onReveal = vi.fn();
@@ -18,14 +19,23 @@ describe("buildFileReferenceNativeContextMenuItems", () => {
     const items = buildFileReferenceNativeContextMenuItems({
       openTargets: targets,
       defaultOpenTarget: targets[0],
+      pathKind: "file",
+      canOpenInSidebar: true,
       canOpenExternal: true,
+      canReveal: true,
       copyPath: onCopyPath,
+      openInSidebar: onOpenInSidebar,
       openDefault: onOpenDefault,
       openWithTarget: onOpenTarget,
       reveal: onReveal,
     });
 
     expect(items).toMatchObject([
+      {
+        id: "open-viewer",
+        label: "Open in viewer",
+        enabled: true,
+      },
       {
         id: "open-default",
         label: "Open in Cursor",
@@ -67,20 +77,50 @@ describe("buildFileReferenceNativeContextMenuItems", () => {
     ]);
 
     if ("id" in items[0]) items[0].onSelect?.();
-    const submenu = items[1];
+    if ("id" in items[1]) items[1].onSelect?.();
+    const submenu = items[2];
     if ("kind" in submenu && submenu.kind === "submenu") {
       const firstChild = submenu.items[0];
       const thirdChild = submenu.items[2];
       if ("id" in firstChild) firstChild.onSelect?.();
       if ("id" in thirdChild) thirdChild.onSelect?.();
     }
-    if ("id" in items[3]) items[3].onSelect?.();
     if ("id" in items[4]) items[4].onSelect?.();
+    if ("id" in items[5]) items[5].onSelect?.();
 
+    expect(onOpenInSidebar).toHaveBeenCalledTimes(1);
     expect(onOpenDefault).toHaveBeenCalledTimes(1);
     expect(onOpenTarget).toHaveBeenNthCalledWith(1, "cursor");
     expect(onOpenTarget).toHaveBeenNthCalledWith(2, "terminal");
     expect(onCopyPath).toHaveBeenCalledTimes(1);
     expect(onReveal).toHaveBeenCalledTimes(1);
+  });
+
+  it("omits the viewer action for folders and keeps Finder capability explicit", () => {
+    const items = buildFileReferenceNativeContextMenuItems({
+      openTargets: [],
+      defaultOpenTarget: null,
+      pathKind: "directory",
+      canOpenInSidebar: false,
+      canOpenExternal: false,
+      canReveal: false,
+      copyPath: vi.fn(),
+      openInSidebar: vi.fn(),
+      openDefault: vi.fn(),
+      openWithTarget: vi.fn(),
+      reveal: vi.fn(),
+    });
+
+    expect(items).toMatchObject([
+      { id: "open-default", label: "Open externally", enabled: false },
+      { kind: "separator" },
+      { id: "copy-path", label: "Copy path" },
+      {
+        id: "reveal-in-finder",
+        label: "Reveal folder in Finder",
+        enabled: false,
+      },
+    ]);
+    expect(items).not.toContainEqual(expect.objectContaining({ id: "open-viewer" }));
   });
 });

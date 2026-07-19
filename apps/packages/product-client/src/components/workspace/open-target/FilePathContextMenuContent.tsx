@@ -1,11 +1,12 @@
 import {
   useState,
 } from "react";
-import { ChevronRight, ExternalLink } from "@proliferate/ui/icons";
+import { ChevronRight, ExternalLink, FileText } from "@proliferate/ui/icons";
 import { OpenTargetIcon } from "#product/components/workspace/open-target/OpenTargetIcon";
 import { POPOVER_SURFACE_CLASS } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import type { OpenTarget } from "@proliferate/product-client/host/desktop-bridge";
+import type { FileReferencePathKind } from "#product/lib/domain/files/path-references";
 
 export type FilePathContextMenuTarget = Pick<OpenTarget, "id" | "label" | "iconId" | "kind">;
 
@@ -17,20 +18,28 @@ const FILE_PATH_MENU_ITEM_PROPS = {
 } as const;
 
 export function FilePathContextMenuContent({
-  canOpen,
+  pathKind,
+  canOpenInViewer,
+  canOpenExternal,
+  canReveal,
   targets,
   defaultTarget,
   close,
+  onOpenInViewer,
   onOpenDefault,
   onOpenTarget,
   onCopyPath,
   onRevealInFinder,
   ignoreChatTranscript = false,
 }: {
-  canOpen: boolean;
+  pathKind: FileReferencePathKind | null;
+  canOpenInViewer: boolean;
+  canOpenExternal: boolean;
+  canReveal: boolean;
   targets: readonly FilePathContextMenuTarget[];
   defaultTarget?: FilePathContextMenuTarget | null;
   close: () => void;
+  onOpenInViewer: () => void;
   onOpenDefault: () => void;
   onOpenTarget: (targetId: string) => void;
   onCopyPath: () => void;
@@ -44,12 +53,25 @@ export function FilePathContextMenuContent({
 
   return (
     <div className="relative flex flex-col gap-px">
+      {pathKind !== "directory" && (
+        <PopoverMenuItem
+          {...FILE_PATH_MENU_ITEM_PROPS}
+          {...transcriptProps}
+          icon={<FileText className="size-3.5 shrink-0" />}
+          label="Open in viewer"
+          disabled={!canOpenInViewer}
+          onClick={() => {
+            onOpenInViewer();
+            close();
+          }}
+        />
+      )}
       <PopoverMenuItem
         {...FILE_PATH_MENU_ITEM_PROPS}
         {...transcriptProps}
         icon={<OpenMenuTargetIcon target={defaultTarget ?? null} />}
-        label={defaultTarget ? `Open in ${defaultTarget.label}` : "Open"}
-        disabled={!canOpen}
+        label={defaultTarget ? `Open in ${defaultTarget.label}` : "Open externally"}
+        disabled={!canOpenExternal}
         onClick={() => {
           onOpenDefault();
           close();
@@ -66,7 +88,7 @@ export function FilePathContextMenuContent({
             {...FILE_PATH_MENU_ITEM_PROPS}
             {...transcriptProps}
             label="Open with"
-            disabled={!canOpen}
+            disabled={!canOpenExternal}
             trailing={<ChevronRight className="size-3.5" />}
             className={openWithActive
               ? "bg-[var(--color-link-foreground)] text-white hover:bg-[var(--color-link-foreground)] focus:bg-[var(--color-link-foreground)] [&_*]:text-white"
@@ -84,7 +106,7 @@ export function FilePathContextMenuContent({
                   {...transcriptProps}
                   icon={<OpenMenuTargetIcon target={target} />}
                   label={target.label}
-                  disabled={!canOpen}
+                  disabled={!canOpenExternal}
                   onClick={() => {
                     onOpenTarget(target.id);
                     close();
@@ -108,8 +130,8 @@ export function FilePathContextMenuContent({
       <PopoverMenuItem
         {...FILE_PATH_MENU_ITEM_PROPS}
         {...transcriptProps}
-        label="Reveal in Finder"
-        disabled={!canOpen}
+        label={pathKind === "directory" ? "Reveal folder in Finder" : "Reveal in Finder"}
+        disabled={!canReveal}
         onClick={() => {
           onRevealInFinder();
           close();

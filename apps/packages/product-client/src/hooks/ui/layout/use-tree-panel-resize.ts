@@ -1,4 +1,4 @@
-import { useCallback, useState, type RefObject } from "react";
+import { useCallback, useState, type KeyboardEvent, type RefObject } from "react";
 import {
   FILE_TREE_MAX_WIDTH_RATIO,
   FILE_TREE_MIN_WIDTH,
@@ -20,6 +20,15 @@ export function useTreePanelResize({
 }) {
   const [resizing, setResizing] = useState(false);
 
+  const clampWidth = useCallback((nextWidth: number) => {
+    const measuredPaneWidth = panelRef.current?.parentElement?.clientWidth ?? 0;
+    const paneWidth = measuredPaneWidth > 0 ? measuredPaneWidth : 1000;
+    return Math.min(
+      paneWidth * FILE_TREE_MAX_WIDTH_RATIO,
+      Math.max(FILE_TREE_MIN_WIDTH, nextWidth),
+    );
+  }, [panelRef]);
+
   const handleResizeStart = useCallback(
     (event: React.PointerEvent) => {
       event.preventDefault();
@@ -28,14 +37,8 @@ export function useTreePanelResize({
       const startWidth = width;
 
       const handleMove = (moveEvent: PointerEvent) => {
-        const paneWidth = panelRef.current?.parentElement?.clientWidth ?? 1000;
-        const maxWidth = paneWidth * FILE_TREE_MAX_WIDTH_RATIO;
         // Panel is right-anchored, so dragging left grows it.
-        const newWidth = Math.min(
-          maxWidth,
-          Math.max(FILE_TREE_MIN_WIDTH, startWidth + (startX - moveEvent.clientX)),
-        );
-        setWidth(newWidth);
+        setWidth(clampWidth(startWidth + (startX - moveEvent.clientX)));
       };
 
       const handleUp = () => {
@@ -47,8 +50,27 @@ export function useTreePanelResize({
       window.addEventListener("pointermove", handleMove);
       window.addEventListener("pointerup", handleUp);
     },
-    [panelRef, width, setWidth],
+    [clampWidth, width, setWidth],
   );
 
-  return { resizing, handleResizeStart };
+  const handleResizeKeyDown = useCallback((event: KeyboardEvent<HTMLElement>) => {
+    const step = event.shiftKey ? 48 : 16;
+    let nextWidth: number | null = null;
+    if (event.key === "ArrowLeft") {
+      nextWidth = width + step;
+    } else if (event.key === "ArrowRight") {
+      nextWidth = width - step;
+    } else if (event.key === "Home") {
+      nextWidth = FILE_TREE_MIN_WIDTH;
+    } else if (event.key === "End") {
+      nextWidth = Number.POSITIVE_INFINITY;
+    }
+    if (nextWidth === null) {
+      return;
+    }
+    event.preventDefault();
+    setWidth(clampWidth(nextWidth));
+  }, [clampWidth, setWidth, width]);
+
+  return { resizing, handleResizeStart, handleResizeKeyDown };
 }

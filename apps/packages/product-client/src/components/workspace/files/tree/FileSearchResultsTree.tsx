@@ -33,9 +33,21 @@ export function FileSearchResultsTree({
   const groups = useMemo(() => buildFileSearchTree(results), [results]);
 
   if (results.length === 0) {
+    const message = !workspaceId
+      ? "Search is unavailable for this workspace."
+      : searchQuery.isLoading
+        ? "Searching…"
+        : searchQuery.error
+          ? "Search could not be completed."
+          : "No matching files";
     return (
-      <p className="px-3 py-3 text-[length:var(--text-message)] text-sidebar-muted-foreground">
-        {searchQuery.isLoading ? "Searching…" : "No matching files"}
+      <p
+        role="status"
+        className={searchQuery.error
+          ? "px-3 py-3 text-[length:var(--text-message)] text-destructive"
+          : "px-3 py-3 text-[length:var(--text-message)] text-sidebar-muted-foreground"}
+      >
+        {message}
       </p>
     );
   }
@@ -53,7 +65,7 @@ export function FileSearchResultsTree({
   };
 
   return (
-    <div role="tree" className="file-tree-scroll min-h-0 flex-1 overflow-y-auto px-1.5 py-1">
+    <div role="tree" className="file-tree-scroll min-h-0 flex-1 overflow-y-auto px-2 py-1">
       {groups.map((group) => {
         const collapsed = collapsedGroups.has(group.path);
         return (

@@ -54,6 +54,9 @@ export function FileReferenceBadge({
     if (stopPropagation) {
       event.stopPropagation();
     }
+    if (!actions.canOpenPrimary) {
+      return;
+    }
     void actions.openPrimary();
   }, [actions, stopPropagation]);
 
@@ -64,9 +67,13 @@ export function FileReferenceBadge({
       size="unstyled"
       data-chat-transcript-ignore
       data-file-reference-badge={variant}
+      data-path-kind={actions.pathKind ?? "unknown"}
+      aria-busy={actions.pathKindPending || undefined}
+      aria-disabled={!actions.canOpenPrimary}
+      title={actions.primaryUnavailableReason ?? rawPath}
       onClick={handleClick}
       onContextMenuCapture={onContextMenuCapture}
-      className={resolveBadgeClassName(variant, className)}
+      className={`${resolveBadgeClassName(variant, className)} ${!actions.canOpenPrimary ? "cursor-not-allowed opacity-60 hover:no-underline" : ""}`}
     >
       <span className={iconShellClassName}>
         {useExternalInlineIcon ? (
@@ -81,7 +88,7 @@ export function FileReferenceBadge({
           <FileTreeEntryIcon
             name={resolvedBasename}
             path={iconPath}
-            kind="file"
+            kind={actions.pathKind === "directory" ? "directory" : "file"}
             className={variant === "inline"
               ? "absolute left-0 top-1/2 size-3.5 -translate-y-1/2 opacity-95"
               : "size-2.5 opacity-90"}
