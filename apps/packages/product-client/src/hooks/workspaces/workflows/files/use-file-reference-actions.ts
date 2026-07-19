@@ -1,10 +1,15 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useStatWorkspaceFileQuery } from "@anyharness/sdk-react";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useOpenInDefaultEditor } from "#product/hooks/editor/workflows/use-open-in-default-editor";
 import { useFuzzyFileResolver } from "#product/hooks/workspaces/workflows/files/use-fuzzy-file-resolver";
 import { useWorkspaceShellActivation } from "#product/hooks/workspaces/workflows/tabs/use-workspace-shell-activation";
 import { useWorkspacePath } from "#product/providers/WorkspacePathProvider";
-import { resolveFileReference } from "#product/lib/domain/files/path-references";
+import {
+  resolveFileReference,
+  resolveFileReferencePrimaryAction,
+  type FileReferencePathKind,
+} from "#product/lib/domain/files/path-references";
 import { resolveSelectedWorkspaceIdentity } from "#product/lib/domain/workspaces/selection/workspace-ui-key";
 import { fileViewerTarget } from "#product/lib/domain/workspaces/viewer/viewer-target";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
@@ -27,11 +32,15 @@ export function useFileReferenceActions({
     (state) => state.selectedLogicalWorkspaceId,
   );
   const { activateViewerTarget } = useWorkspaceShellActivation();
-  const {
-    defaultTarget: defaultOpenTarget,
-    openInDefaultEditor,
-    targets,
-  } = useOpenInDefaultEditor();
+  const selectedWorkspaceIdentity = useMemo(
+    () => resolveSelectedWorkspaceIdentity({
+      selectedLogicalWorkspaceId,
+      materializedWorkspaceId: selectedWorkspaceId,
+    }),
+    [selectedLogicalWorkspaceId, selectedWorkspaceId],
+  );
+  const materializedWorkspaceId = selectedWorkspaceIdentity.materializedWorkspaceId;
+  const workspaceUiKey = selectedWorkspaceIdentity.workspaceUiKey;
   const { workspacePath: workspaceRoot, resolveAbsolute } = useWorkspacePath();
   const fuzzyResolveFilePath = useFuzzyFileResolver();
 
@@ -42,8 +51,75 @@ export function useFileReferenceActions({
     workspacePathOverride: workspacePath,
   }), [rawPath, resolveAbsolute, workspacePath, workspaceRoot]);
 
-  const canOpenInSidebar = Boolean(reference.workspacePath);
-  const canOpenExternal = Boolean(reference.absolutePath);
+  const statQuery = useStatWorkspaceFileQuery({
+    workspaceId: materializedWorkspaceId,
+    path: reference.workspacePath,
+    enabled: Boolean(materializedWorkspaceId && reference.workspacePath),
+  });
+  const [externalPathKind, setExternalPathKind] = useState<FileReferencePathKind | null>(null);
+  const [externalPathKindPending, setExternalPathKindPending] = useState(false);
+  const workspacePathKind = resolveWorkspaceStatPathKind(statQuery.data);
+  const pathKind = reference.workspacePath ? workspacePathKind : externalPathKind;
+
+  useEffect(() => {
+    let cancelled = false;
+    if (reference.workspacePath || !reference.absolutePath || !files) {
+      setExternalPathKind(null);
+      setExternalPathKindPending(false);
+      return;
+    }
+
+    setExternalPathKind(null);
+    setExternalPathKindPending(true);
+    void files.isDirectory(reference.absolutePath).then((isDirectory) => {
+      if (!cancelled) {
+        setExternalPathKind(isDirectory ? "directory" : "file");
+      }
+    }).catch(() => {
+      if (!cancelled) {
+        setExternalPathKind(null);
+      }
+    }).finally(() => {
+      if (!cancelled) {
+        setExternalPathKindPending(false);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [files, reference.absolutePath, reference.workspacePath]);
+
+  const {
+    defaultTarget: defaultOpenTarget,
+    openInDefaultEditor,
+    targets,
+  } = useOpenInDefaultEditor(pathKind ?? "file");
+
+  const canOpenInSidebar = pathKind === "file" && Boolean(reference.workspacePath);
+  const canOpenExternal = Boolean(files && reference.absolutePath && pathKind);
+  const canReveal = Boolean(files && reference.absolutePath);
+  const resolvedPrimaryAction = resolveFileReferencePrimaryAction({
+    pathKind,
+    canOpenViewer: canOpenInSidebar,
+    canReveal,
+  });
+  const canResolvePathKind = Boolean(
+    (reference.workspacePath && materializedWorkspaceId)
+    || (reference.absolutePath && files),
+  );
+  const canOpenPrimary = resolvedPrimaryAction !== "unavailable"
+    || (pathKind === null && canResolvePathKind);
+  const pathKindPending = externalPathKindPending || statQuery.isFetching;
+  const primaryUnavailableReason = pathKindPending
+    ? "Checking whether this path is a file or folder…"
+    : pathKind === "directory" && !canReveal
+      ? "Reveal in Finder is available in the Desktop app."
+      : pathKind === "file" && !canOpenInSidebar
+        ? "This file is outside the current workspace."
+        : pathKind === null
+          ? "This path is unavailable."
+          : null;
   const openTargets = useMemo(
     () => targets.filter((target) => target.kind !== "copy"),
     [targets],
@@ -57,10 +133,6 @@ export function useFileReferenceActions({
     if (!reference.workspacePath) {
       return;
     }
-    const { workspaceUiKey, materializedWorkspaceId } = resolveSelectedWorkspaceIdentity({
-      selectedLogicalWorkspaceId,
-      materializedWorkspaceId: selectedWorkspaceId,
-    });
     const openViewer = (path: string) => {
       const target = fileViewerTarget(path);
       openTarget(target);
@@ -90,8 +162,8 @@ export function useFileReferenceActions({
     fuzzyResolveFilePath,
     openTarget,
     reference.workspacePath,
-    selectedLogicalWorkspaceId,
-    selectedWorkspaceId,
+    materializedWorkspaceId,
+    workspaceUiKey,
   ]);
 
   const openDefault = useCallback(async () => {
@@ -112,19 +184,41 @@ export function useFileReferenceActions({
   }, [files, reference.absolutePath]);
 
   const openPrimary = useCallback(async () => {
-    // Directories open in Finder; the sidebar viewer only renders files.
-    if (reference.absolutePath && files && await files.isDirectory(reference.absolutePath)) {
-      await reveal();
-      return;
+    let resolvedPathKind = pathKind;
+    if (!resolvedPathKind && reference.workspacePath && materializedWorkspaceId) {
+      const result = await statQuery.refetch();
+      resolvedPathKind = resolveWorkspaceStatPathKind(result.data);
     }
-    if (reference.workspacePath) {
+    if (!resolvedPathKind && reference.absolutePath && files) {
+      resolvedPathKind = await files.isDirectory(reference.absolutePath)
+        ? "directory"
+        : "file";
+    }
+
+    const action = resolveFileReferencePrimaryAction({
+      pathKind: resolvedPathKind,
+      canOpenViewer: Boolean(reference.workspacePath),
+      canReveal: Boolean(files && reference.absolutePath),
+    });
+    if (action === "reveal") {
+      await reveal();
+      return action;
+    }
+    if (action === "open-viewer") {
       await openInSidebar();
-      return;
+      return action;
     }
-    if (reference.absolutePath) {
-      await reveal();
-    }
-  }, [files, openInSidebar, reference.absolutePath, reference.workspacePath, reveal]);
+    return action;
+  }, [
+    files,
+    materializedWorkspaceId,
+    openInSidebar,
+    pathKind,
+    reference.absolutePath,
+    reference.workspacePath,
+    reveal,
+    statQuery,
+  ]);
 
   const openWithTarget = useCallback(async (targetId: string) => {
     if (!reference.absolutePath) {
@@ -140,8 +234,13 @@ export function useFileReferenceActions({
     reference,
     openTargets,
     defaultOpenTarget,
+    pathKind,
+    pathKindPending,
     canOpenInSidebar,
     canOpenExternal,
+    canOpenPrimary,
+    canReveal,
+    primaryUnavailableReason,
     copyPath,
     openInSidebar,
     openDefault,
@@ -149,4 +248,19 @@ export function useFileReferenceActions({
     openWithTarget,
     reveal,
   };
+}
+
+function resolveWorkspaceStatPathKind(stat: {
+  kind: "file" | "directory" | "symlink";
+  sizeBytes?: number | null;
+} | undefined): FileReferencePathKind | null {
+  if (!stat) {
+    return null;
+  }
+  if (stat.kind !== "symlink") {
+    return stat.kind;
+  }
+  // AnyHarness stats symlinks after following the target: file targets carry
+  // a byte size (including zero), while directory targets do not.
+  return typeof stat.sizeBytes === "number" ? "file" : "directory";
 }

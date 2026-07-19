@@ -9,6 +9,28 @@ export interface ResolvedFileReference {
   workspacePath: string | null;
 }
 
+export type FileReferencePathKind = "file" | "directory";
+export type FileReferencePrimaryAction = "open-viewer" | "reveal" | "unavailable";
+
+/**
+ * Keep primary file-reference behavior host-independent and fail closed while
+ * the path kind is unknown. A directory must never be routed through the file
+ * viewer, and a file must never silently fall back to Finder.
+ */
+export function resolveFileReferencePrimaryAction(args: {
+  pathKind: FileReferencePathKind | null;
+  canOpenViewer: boolean;
+  canReveal: boolean;
+}): FileReferencePrimaryAction {
+  if (args.pathKind === "file") {
+    return args.canOpenViewer ? "open-viewer" : "unavailable";
+  }
+  if (args.pathKind === "directory") {
+    return args.canReveal ? "reveal" : "unavailable";
+  }
+  return "unavailable";
+}
+
 export function resolveFileReference(args: {
   rawPath: string;
   workspaceRoot: string | null;

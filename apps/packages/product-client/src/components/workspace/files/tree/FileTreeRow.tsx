@@ -26,7 +26,7 @@ export function FileTreeRow({
   onClick,
 }: FileTreeRowProps) {
   const isDirectory = kind === "directory";
-  const paddingLeft = isDirectory ? 6 + level * 12 : 18 + level * 12;
+  const paddingLeft = isDirectory ? 6 + level * 14 : 28 + level * 14;
   const iconTone = fileTreeIconToneClass(name, path, kind);
 
   return (
@@ -42,10 +42,9 @@ export function FileTreeRow({
       className={twMerge(
         // Codex tree rows read at chat-body size; ours follows --text-message
         // so the tree tracks transcript prose across appearance presets.
-        "flex h-7 w-full items-center gap-1.5 rounded-md px-1.5 text-left text-[length:var(--text-message)] leading-none transition-colors duration-150",
-        "hover:bg-sidebar-accent",
-        isDirectory ? "text-sidebar-muted-foreground" : "text-sidebar-foreground",
-        selected && "bg-sidebar-accent text-sidebar-foreground",
+        "group/file-tree-row flex h-7 w-full items-center gap-2.5 rounded-md px-1.5 text-left text-[length:var(--text-message)] leading-none text-sidebar-foreground transition-colors duration-150",
+        "hover:bg-sidebar-accent/70",
+        selected && "bg-sidebar-accent text-sidebar-accent-foreground hover:bg-sidebar-accent",
       )}
       style={{ paddingLeft }}
       onClick={onClick}
@@ -53,7 +52,7 @@ export function FileTreeRow({
       {isDirectory && (
         <ChevronRight
           className={twMerge(
-            "size-3 shrink-0 text-sidebar-muted-foreground/50 transition-transform duration-150",
+            "size-3 shrink-0 text-sidebar-muted-foreground/65 transition-transform duration-150",
             expanded && "rotate-90",
           )}
         />
@@ -71,9 +70,11 @@ export function FileTreeRow({
       </span>
       {changed && (
         <span
-          className="inline-flex size-1.5 shrink-0 rounded-full bg-accent"
+          className="shrink-0 pr-1 text-[10px] font-medium leading-none text-git-yellow"
           aria-label="Modified"
-        />
+        >
+          M
+        </span>
       )}
     </Button>
   );
