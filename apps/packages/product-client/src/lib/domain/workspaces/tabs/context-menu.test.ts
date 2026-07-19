@@ -112,6 +112,33 @@ describe("workspace tab context menu", () => {
     ]);
   });
 
+  it("removes direct close and dismiss commands for the last visible session", () => {
+    expect(buildChatTabContextMenuItems({
+      canRename: true,
+      canClose: false,
+      canDismiss: false,
+    })).toEqual([
+      {
+        kind: "action",
+        command: "rename",
+        label: "Rename Session",
+        shortcutKey: "renameSession",
+      },
+      { kind: "separator", id: "close-separator" },
+      {
+        kind: "action",
+        command: "close-others",
+        label: "Close Other Tabs",
+        shortcutKey: "closeOtherTabs",
+      },
+      {
+        kind: "action",
+        command: "close-right",
+        label: "Close Tabs to the Right",
+      },
+    ]);
+  });
+
   it("builds different manual and subagent pill menus", () => {
     expect(buildGroupPillContextMenuItems({
       groupKind: "subagent",

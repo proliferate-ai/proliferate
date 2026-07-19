@@ -1,9 +1,12 @@
 import { useCallback } from "react";
 import { useSessionRestoreActions } from "#product/hooks/sessions/workflows/use-session-restore-actions";
+import { useChatSessionArchiveAction } from "#product/hooks/workspaces/workflows/tabs/use-chat-session-archive-action";
 import {
   collectGroupIds,
   resolveFallbackAfterHidingChatTabs,
   resolveMostRecentHiddenChatTab,
+  preservesVisibleChatSession,
+  resolveChatSessionIdsToHide,
   uniqueIds,
 } from "#product/lib/domain/workspaces/tabs/visibility";
 import { resolveSessionErrorAttentionKey } from "@proliferate/product-domain/sessions/activity";
@@ -60,6 +63,12 @@ export function useChatTabVisibilityActions(context: ChatTabVisibilityContext) {
   const showToast = useToastStore((state) => state.show);
   const { restoreLastDismissedSession } = useSessionRestoreActions();
   const { activateChatShell, activateChatTab } = useWorkspaceShellActivation();
+  const archiveChatSessionTab = useChatSessionArchiveAction({
+    childToParent,
+    liveIds,
+    materializedWorkspaceId,
+    workspaceUiKey,
+  });
 
   const selectSessionId = useCallback((sessionId: string, source: string) => {
     if (!materializedWorkspaceId) {
@@ -134,17 +143,15 @@ export function useChatTabVisibilityActions(context: ChatTabVisibilityContext) {
       return false;
     }
 
-    const expandedHideSet = new Set(sessionIds);
-    for (const sessionId of sessionIds) {
-      if (!childToParent.has(sessionId)) {
-        for (const [childId, parentId] of childToParent) {
-          if (parentId === sessionId) {
-            expandedHideSet.add(childId);
-          }
-        }
-      }
+    const idsToHide = resolveChatSessionIdsToHide({ sessionIds, childToParent });
+    if (!preservesVisibleChatSession({
+      visibleSessionIds: visibleIds,
+      sessionIdsToHide: idsToHide,
+      childToParent,
+    })) {
+      return false;
     }
-    const idsToHide = [...expandedHideSet];
+    const expandedHideSet = new Set(idsToHide);
     const nextVisible = visibleIds.filter((id) => !expandedHideSet.has(id));
     markErroredSessionsViewedBeforeHide(idsToHide);
     setVisibleChatSessionIdsForWorkspace(workspaceUiKey, nextVisible);
@@ -180,6 +187,14 @@ export function useChatTabVisibilityActions(context: ChatTabVisibilityContext) {
     visibleIds,
     workspaceUiKey,
   ]);
+
+  const canHideChatSessionTabs = useCallback((sessionIds: string[]) => {
+    return Boolean(workspaceUiKey && materializedWorkspaceId) && preservesVisibleChatSession({
+      visibleSessionIds: visibleIds,
+      sessionIdsToHide: sessionIds,
+      childToParent,
+    });
+  }, [childToParent, materializedWorkspaceId, visibleIds, workspaceUiKey]);
 
   const closeOtherChatSessionTabs = useCallback((anchorSessionId: string) => {
     if (!workspaceUiKey) {
@@ -302,6 +317,8 @@ export function useChatTabVisibilityActions(context: ChatTabVisibilityContext) {
 
   return {
     showChatSessionTab,
+    archiveChatSessionTab,
+    canHideChatSessionTabs,
     hideChatSessionTabs,
     closeOtherChatSessionTabs,
     closeChatSessionTabsToRight,

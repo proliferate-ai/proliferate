@@ -89,6 +89,17 @@ describe("useWorkspaceContentShortcuts", () => {
     expect(actions.closeActiveWorkspaceTab).toHaveBeenCalledTimes(1);
   });
 
+  it("consumes a blocked close shortcut without falling through to another action", () => {
+    const actions = createActions({
+      closeActiveWorkspaceTab: vi.fn(() => "blocked" as const),
+    });
+
+    renderHook(() => useWorkspaceContentShortcuts(actions));
+
+    expect(runShortcutHandler("workspace.close-active-tab", { source: "keyboard" })).toBe(true);
+    expect(actions.closeActiveWorkspaceTab).toHaveBeenCalledOnce();
+  });
+
   it("routes close-tab shortcuts to the right panel when focus is in the right panel", () => {
     const actions = createActions();
     const zone = document.createElement("div");

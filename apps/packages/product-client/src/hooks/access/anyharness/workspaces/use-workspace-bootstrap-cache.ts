@@ -26,6 +26,7 @@ export type CacheDecision = "hit" | "stale" | "miss";
 interface LoadWorkspaceSessionsInput {
   workspaceConnection: AnyHarnessResolvedConnection;
   workspaceId: string;
+  isCurrent?: () => boolean;
   requestOptions?: AnyHarnessRequestOptions;
   forceRefresh?: boolean;
   timeoutMs?: number;
@@ -37,6 +38,7 @@ interface FetchWorkspaceSessionsInput {
   includeDismissed?: boolean;
   requestOptions?: AnyHarnessRequestOptions;
   timeoutMs?: number;
+  isResultOwned?: () => boolean;
 }
 
 function requestOptionsWithSignal(
@@ -94,11 +96,13 @@ async function fetchWorkspaceSessionsWithConnection(
     },
   );
   const visibleSessions = filterReplacedSessionTombstones(input.workspaceId, sessions) ?? [];
-  reconcileReplacedSessionTombstones(
-    input,
-    sessions,
-    tombstoneGenerationAtRequestStart,
-  );
+  if (input.isResultOwned?.() !== false) {
+    reconcileReplacedSessionTombstones(
+      input,
+      sessions,
+      tombstoneGenerationAtRequestStart,
+    );
+  }
   return visibleSessions.map((session) => ({
     ...session,
     workspaceId: input.workspaceId,
@@ -180,7 +184,11 @@ export function useWorkspaceBootstrapCache() {
       workspaceId: input.workspaceId,
       requestOptions: input.requestOptions,
       timeoutMs: input.timeoutMs,
+      isResultOwned: input.isCurrent,
     });
+    if (input.isCurrent?.() === false) {
+      return sessions;
+    }
     queryClient.setQueryData(queryKey, sessions);
     return sessions;
   }, [cacheScopeKey, queryClient]);

@@ -35,6 +35,7 @@ export function useHeaderTabsCloseActions({
   buffersByPath,
   closeTarget,
   showChatSessionTab,
+  canHideChatSessionTabs,
   hideChatSessionTabs,
 }: {
   selectedWorkspaceId: string | null;
@@ -47,6 +48,7 @@ export function useHeaderTabsCloseActions({
     sessionId: string,
     options?: { select?: boolean },
   ) => boolean;
+  canHideChatSessionTabs: (sessionIds: string[]) => boolean;
   hideChatSessionTabs: (
     sessionIds: string[],
     options?: { selectFallback?: boolean },
@@ -150,13 +152,16 @@ export function useHeaderTabsCloseActions({
   }, [activateFallbackAfterClosingTabs, closeViewerTabsOnly]);
 
   const closeWorkspaceTabs = useCallback((tabs: WorkspaceShellTab[]) => {
+    const chatSessionIds = tabs
+      .filter((tab): tab is Extract<WorkspaceShellTab, { kind: "chat" }> => tab.kind === "chat")
+      .map((tab) => tab.sessionId);
+    if (chatSessionIds.length > 0 && !canHideChatSessionTabs(chatSessionIds)) {
+      return false;
+    }
     if (!closeViewerTabsOnly(tabs)) {
       return false;
     }
 
-    const chatSessionIds = tabs
-      .filter((tab): tab is Extract<WorkspaceShellTab, { kind: "chat" }> => tab.kind === "chat")
-      .map((tab) => tab.sessionId);
     if (chatSessionIds.length > 0) {
       const hidden = hideChatSessionTabs(chatSessionIds, { selectFallback: false });
       if (!hidden) {
@@ -165,7 +170,12 @@ export function useHeaderTabsCloseActions({
     }
     activateFallbackAfterClosingTabs(tabs);
     return true;
-  }, [activateFallbackAfterClosingTabs, closeViewerTabsOnly, hideChatSessionTabs]);
+  }, [
+    activateFallbackAfterClosingTabs,
+    canHideChatSessionTabs,
+    closeViewerTabsOnly,
+    hideChatSessionTabs,
+  ]);
 
   const closeOtherWorkspaceTabs = useCallback((anchorTab: WorkspaceShellTab) => {
     return closeWorkspaceTabs(

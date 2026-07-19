@@ -17,6 +17,7 @@ interface ChromeWorkspaceTabProps extends Omit<HTMLAttributes<HTMLDivElement>, "
   label: string;
   onSelect: (event: MouseEvent<HTMLButtonElement>) => void;
   onSelectPointerDownCapture?: (event: PointerEvent<HTMLButtonElement>) => void;
+  canClose?: boolean;
   onClose: () => void;
   badge?: ReactNode;
   shortcutLabel?: string | null;
@@ -36,6 +37,7 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
     label,
     onSelect,
     onSelectPointerDownCapture,
+    canClose = true,
     onClose,
     badge,
     shortcutLabel = null,
@@ -86,21 +88,23 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
               <span className="workspace-shell-tab__icon flex size-4 shrink-0 items-center justify-center group-hover/tab:hidden group-focus-within/tab:hidden">
                 {icon}
               </span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                data-tab-drag-ignore="true"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onClose();
-                }}
-                title="Close tab"
-                aria-label="Close tab"
-                className="workspace-shell-tab__close hidden size-4 shrink-0 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground group-hover/tab:inline-flex group-focus-within/tab:inline-flex focus-visible:inline-flex"
-              >
-                <X className="size-2.5" />
-              </Button>
+              {canClose && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  data-tab-drag-ignore="true"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onClose();
+                  }}
+                  title="Close tab"
+                  aria-label="Close tab"
+                  className="workspace-shell-tab__close hidden size-4 shrink-0 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground group-hover/tab:inline-flex group-focus-within/tab:inline-flex focus-visible:inline-flex"
+                >
+                  <X className="size-2.5" />
+                </Button>
+              )}
             </span>
           ) : (
             <span className="workspace-shell-tab__icon relative z-20 flex size-4 shrink-0 items-center justify-center">
@@ -148,7 +152,7 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
               }`}
             />
           ) : null}
-          {!isMini && (
+          {!isMini && canClose && (
             <Button
               type="button"
               variant="ghost"

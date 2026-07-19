@@ -19,6 +19,30 @@ describe("resolveChatDraftWorkspaceId", () => {
 });
 
 describe("resolveChatInputAvailability", () => {
+  it("blocks send but keeps editing and harness controls available during inline recovery", () => {
+    expect(resolveChatInputAvailability({
+      selectedWorkspaceId: "workspace-1",
+      isCloudWorkspaceSelected: false,
+      connectionState: "healthy",
+      selectedCloudWorkspaceStatus: null,
+      selectedCloudWorkspaceActionBlockReason: null,
+      selectedCloudRuntimePhase: null,
+      selectedCloudRuntimeActionBlockReason: null,
+      activeSessionId: "client-session:claude:1",
+      isConfiguredLaunchLoading: false,
+      hasReadyConfiguredLaunch: true,
+      configuredLaunchDisabledReason: null,
+      sessionRecoverySendReason: "Retry this chat before sending.",
+      pendingWorkspaceEntry: null,
+    })).toEqual({
+      isDisabled: false,
+      disabledReason: null,
+      sendBlockedReason: "Retry this chat before sending.",
+      areRuntimeControlsDisabled: false,
+      selectedWorkspaceKind: "local",
+    });
+  });
+
   it("keeps the composer enabled while an active session transcript is still loading", () => {
     expect(resolveChatInputAvailability({
       selectedWorkspaceId: "workspace-1",

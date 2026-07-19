@@ -7,6 +7,10 @@ import { getSessionClientAndWorkspace } from "#product/lib/access/anyharness/ses
 import { getSessionRecord } from "#product/stores/sessions/session-records";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { useToastStore } from "#product/stores/toast/toast-store";
+import type {
+  VisibleChatSessionDismissOptions,
+} from "#product/lib/workflows/workspaces/chat-session-archive";
+import { isWorkspaceSetupSessionId } from "#product/lib/domain/workspaces/selection/setup-session";
 
 export function useSessionDismissActions() {
   const host = useProductHost();
@@ -17,7 +21,13 @@ export function useSessionDismissActions() {
   const cleanupDismissedSession = useDismissedSessionCleanup();
   const dismissSessionMutation = useDismissSessionMutation();
 
-  const dismissSession = useCallback(async (sessionId: string) => {
+  const dismissSession = useCallback(async (
+    sessionId: string,
+    options?: VisibleChatSessionDismissOptions,
+  ) => {
+    if (isWorkspaceSetupSessionId(sessionId)) {
+      return;
+    }
     const state = useSessionSelectionStore.getState();
     const closingSlot = getSessionRecord(sessionId);
     const workspaceId = closingSlot?.workspaceId ?? state.selectedWorkspaceId;
@@ -39,7 +49,7 @@ export function useSessionDismissActions() {
       // Dismiss failed.
     }
 
-    cleanupDismissedSession(sessionId, workspaceId);
+    cleanupDismissedSession(sessionId, workspaceId, options);
   }, [
     cleanupDismissedSession,
     dismissSessionMutation,

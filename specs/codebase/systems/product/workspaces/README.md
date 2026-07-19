@@ -7,4 +7,6 @@
   orchestration plus the retained AnyHarness runtime substrate boundary.
 - [Pending Shell](pending-shell.md) — current pending workspace and optimistic
   session handoff.
+- [Session Selection](session-selection.md) — active-session restoration, the
+  visible-session tab invariant, and bounded empty-workspace recovery.
 - [Terminals](terminals.md) — current user-facing terminal behavior.

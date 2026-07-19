@@ -12,6 +12,7 @@ describe("session selection store invariants", () => {
       selectedWorkspaceId: null,
       workspaceSelectionNonce: 0,
       workspaceArrivalEvent: null,
+      workspaceSessionRecovery: null,
       activeSessionId: null,
       activeSessionVersion: 0,
       sessionActivationIntentEpochByWorkspace: {},
@@ -176,6 +177,26 @@ describe("session selection store invariants", () => {
 
     useSessionSelectionStore.getState().clearHotPaintGate(12);
     expect(useSessionSelectionStore.getState().hotPaintGate).toBeNull();
+  });
+
+  it("keeps inline recovery when the retained shell is reactivated", () => {
+    useSessionSelectionStore.setState({
+      workspaceSessionRecovery: {
+        workspaceId: "workspace-a",
+        logicalWorkspaceId: "logical-a",
+        sessionId: "session-recovery",
+        reason: "session-list-failed",
+      },
+    });
+
+    useSessionSelectionStore.getState().setActiveSessionId("session-recovery");
+
+    expect(useSessionSelectionStore.getState().workspaceSessionRecovery?.sessionId)
+      .toBe("session-recovery");
+
+    useSessionSelectionStore.getState().setActiveSessionId("session-a");
+
+    expect(useSessionSelectionStore.getState().workspaceSessionRecovery).toBeNull();
   });
 });
 
