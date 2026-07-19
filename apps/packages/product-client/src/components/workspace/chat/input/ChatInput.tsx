@@ -51,6 +51,8 @@ import { ChatInputDraftArea } from "./ChatInputDraftArea";
 import { ChatComposerSurface } from "@proliferate/product-ui/chat/composer/ChatComposerSurface";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-count";
+import { usePromptAttachmentPreviewActions } from "#product/hooks/chat/workflows/use-prompt-attachment-preview-actions";
+import { handlePromptAttachmentPaste } from "#product/lib/domain/chat/composer/prompt-attachment-paste";
 
 const CHAT_INPUT_ATTACHMENT_ACCEPT =
   "image/*,text/*,.md,.json,.ts,.tsx,.js,.jsx,.py,.rs,.go,.java,.css,.html,.xml,.yaml,.yml,.toml,.sql,.sh";
@@ -106,6 +108,7 @@ export function ChatInput({
       ?? modeControl
       ?? null;
   const { handleSubmit, handleCancel } = useChatPromptActions();
+  const { closeDraftAttachmentPreview } = usePromptAttachmentPreviewActions();
   const { isSubmitting, run: runSubmit } = useComposerSubmitGate();
   const {
     isEditing: isEditingQueuedPrompt,
@@ -185,12 +188,14 @@ export function ChatInput({
       // A harness switch can temporarily make an existing attachment
       // unsupported. Clear only attachments that were eligible for this send,
       // leaving visible incompatible drafts available for another harness.
+      attachmentSnapshots.forEach((snapshot) => closeDraftAttachmentPreview(snapshot.id));
       attachments.clearSubmittedAttachments(attachmentSnapshots);
       planAttachments.clearPlans();
     });
   }, [
     attachments,
     commitEdit,
+    closeDraftAttachmentPreview,
     effectiveIsEditingQueuedPrompt,
     getDraft,
     handleSubmit,
@@ -236,27 +241,24 @@ export function ChatInput({
   }, [attachments]);
 
   const handleRemoveDraftAttachment = useCallback((id: string) => {
+    closeDraftAttachmentPreview(id);
     attachments.removeAttachment(id);
     planAttachments.removePlan(id);
-  }, [attachments, planAttachments]);
+  }, [attachments, closeDraftAttachmentPreview, planAttachments]);
 
   const handlePaste = useCallback((event: ClipboardEvent<HTMLDivElement>) => {
     // The editor owns formatted Markdown paste first. Once it has imported a
     // list or link, do not reinterpret the same clipboard text as an
     // attachment at the composer surface.
-    if (event.defaultPrevented) {
-      return;
-    }
-    if (!canAcceptPastedAttachments) {
-      return;
-    }
-    if (event.clipboardData.files.length > 0) {
-      attachments.addFiles(event.clipboardData.files);
-      event.preventDefault();
-      return;
-    }
-    const text = event.clipboardData.getData("text/plain");
-    if (text && attachments.addTextPaste(text)) {
+    const shouldPreventDefault = handlePromptAttachmentPaste({
+      defaultPrevented: event.defaultPrevented,
+      canAcceptAttachments: canAcceptPastedAttachments,
+      fileCount: event.clipboardData.files.length,
+      plainText: event.clipboardData.getData("text/plain"),
+      addFiles: () => attachments.addFiles(event.clipboardData.files),
+      addTextPaste: attachments.addTextPaste,
+    });
+    if (shouldPreventDefault) {
       event.preventDefault();
     }
   }, [attachments, canAcceptPastedAttachments]);

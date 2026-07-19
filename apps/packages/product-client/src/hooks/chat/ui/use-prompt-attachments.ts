@@ -103,7 +103,7 @@ export function usePromptAttachments(
             size: file.size,
             kind: "text_resource",
             source: "upload",
-            objectUrl: null,
+            objectUrl: URL.createObjectURL(file),
           },
         });
         remainingSlots -= 1;
@@ -139,7 +139,7 @@ export function usePromptAttachments(
         size: file.size,
         kind: "text_resource",
         source: "paste",
-        objectUrl: null,
+        objectUrl: URL.createObjectURL(file),
       },
     };
     const updated = [...entriesRef.current, entry].slice(0, MAX_PROMPT_ATTACHMENTS);

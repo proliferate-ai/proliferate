@@ -9,6 +9,9 @@ export type FileViewerMode = "source" | "rendered" | "diff" | "edit";
 export type DiffViewerLayout = "unified" | "split";
 export type FileDiffViewerScope = Exclude<GitDiffScope, "working_tree" | "base_worktree">;
 export type AllChangesViewerScope = FileDiffViewerScope | "working_tree_composite";
+export type PromptAttachmentViewerOrigin = "draft" | "session";
+export type PromptAttachmentViewerKind = "image" | "text_resource";
+export type PromptAttachmentViewerSource = "upload" | "paste";
 
 export type ViewerTarget =
   | { kind: "file"; path: string }
@@ -27,6 +30,18 @@ export type ViewerTarget =
     baseRef: string | null;
     baseOid: string | null;
     headOid: string | null;
+  }
+  | {
+    kind: "promptAttachment";
+    origin: PromptAttachmentViewerOrigin;
+    sessionId: string | null;
+    attachmentId: string;
+    name: string;
+    mimeType: string;
+    size: number | null;
+    attachmentKind: PromptAttachmentViewerKind;
+    attachmentSource: PromptAttachmentViewerSource;
+    objectUrl: string | null;
   };
 
 export type ViewerTargetKey = `viewer:${string}`;
@@ -73,6 +88,31 @@ export function allChangesViewerTarget(args: {
     baseRef: args.baseRef ?? null,
     baseOid: args.baseOid ?? null,
     headOid: args.headOid ?? null,
+  });
+}
+
+export function promptAttachmentViewerTarget(args: {
+  origin: PromptAttachmentViewerOrigin;
+  sessionId?: string | null;
+  attachmentId: string;
+  name: string;
+  mimeType: string;
+  size?: number | null;
+  attachmentKind: PromptAttachmentViewerKind;
+  attachmentSource: PromptAttachmentViewerSource;
+  objectUrl?: string | null;
+}): ViewerTarget {
+  return canonicalizeViewerTarget({
+    kind: "promptAttachment",
+    origin: args.origin,
+    sessionId: args.sessionId ?? null,
+    attachmentId: args.attachmentId,
+    name: args.name,
+    mimeType: args.mimeType,
+    size: args.size ?? null,
+    attachmentKind: args.attachmentKind,
+    attachmentSource: args.attachmentSource,
+    objectUrl: args.objectUrl ?? null,
   });
 }
 
@@ -125,6 +165,48 @@ export function canonicalizeViewerTarget(target: ViewerTarget): ViewerTarget {
       headOid: normalizeNullableTargetPart(target.headOid),
     };
   }
+  if (target.kind === "promptAttachment") {
+    const origin = target.origin === "draft" || target.origin === "session"
+      ? target.origin
+      : null;
+    const attachmentKind = target.attachmentKind === "image"
+      || target.attachmentKind === "text_resource"
+      ? target.attachmentKind
+      : null;
+    const attachmentSource = target.attachmentSource === "upload"
+      || target.attachmentSource === "paste"
+      ? target.attachmentSource
+      : null;
+    const attachmentId = normalizeRequiredTargetPart(target.attachmentId);
+    const name = normalizeRequiredTargetPart(target.name);
+    const mimeType = normalizeRequiredTargetPart(target.mimeType);
+    const sessionId = normalizeNullableTargetPart(target.sessionId);
+    const objectUrl = normalizeNullableTargetPart(target.objectUrl);
+    if (
+      !origin
+      || !attachmentKind
+      || !attachmentSource
+      || !attachmentId
+      || !name
+      || !mimeType
+      || (origin === "draft" && sessionId)
+      || (origin === "session" && objectUrl)
+    ) {
+      throw new Error("Invalid prompt attachment viewer target");
+    }
+    return {
+      kind: "promptAttachment",
+      origin,
+      sessionId,
+      attachmentId,
+      name,
+      mimeType,
+      size: normalizeNullableTargetSize(target.size),
+      attachmentKind,
+      attachmentSource,
+      objectUrl,
+    };
+  }
   return {
     kind: "allChanges",
     scope: normalizeAllChangesScope(target.scope),
@@ -138,6 +220,10 @@ export function isFileViewerTarget(
   target: ViewerTarget,
 ): target is Extract<ViewerTarget, { kind: "file" }> {
   return target.kind === "file";
+}
+
+export function isPersistableViewerTarget(target: ViewerTarget): boolean {
+  return target.kind !== "promptAttachment";
 }
 
 export function viewerTargetEditablePath(target: ViewerTarget): string | null {
@@ -203,6 +289,9 @@ export function viewerTargetLabel(target: ViewerTarget): string {
   if (target.kind === "allChanges") {
     return target.scope === "working_tree_composite" ? "All changes" : "All branch changes";
   }
+  if (target.kind === "promptAttachment") {
+    return target.name;
+  }
   return "Viewer";
 }
 
@@ -227,4 +316,12 @@ function normalizeAllChangesScope(
 function normalizeNullableTargetPart(value: string | null | undefined): string | null {
   const trimmed = value?.trim();
   return trimmed ? trimmed : null;
+}
+
+function normalizeRequiredTargetPart(value: string | null | undefined): string | null {
+  return normalizeNullableTargetPart(value);
+}
+
+function normalizeNullableTargetSize(value: number | null | undefined): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
 }

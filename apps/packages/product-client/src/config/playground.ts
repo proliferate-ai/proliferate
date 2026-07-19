@@ -20,6 +20,7 @@ export type ScenarioKey =
   | "pending-prompts-with-approval"
   | "composer-long-input"
   | "composer-ultra"
+  | "attachment-previews"
   | "workspace-activity-card"
   | "workspace-status-card"
   | "slash-command-search"
@@ -133,6 +134,7 @@ export const SCENARIOS: Record<ScenarioKey, Scenario> = {
   "pending-prompts-with-approval": { label: "Queue + approval" },
   "composer-long-input": { label: "Composer long input" },
   "composer-ultra": { label: "Composer ultra tier" },
+  "attachment-previews": { label: "Attachment previews" },
   "workspace-activity-card": { label: "Workspace activity cap" },
   "workspace-status-card": { label: "Workspace status (new)" },
   "slash-command-search": { label: "Slash commands" },

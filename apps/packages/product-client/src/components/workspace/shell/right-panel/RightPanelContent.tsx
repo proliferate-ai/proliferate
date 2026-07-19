@@ -1,4 +1,5 @@
 import { FileEditorView } from "#product/components/workspace/files/FileEditorView";
+import { PromptAttachmentViewer } from "#product/components/workspace/files/PromptAttachmentViewer";
 import { GitPanel } from "#product/components/workspace/git/GitPanel";
 import { ScratchPadPanel } from "#product/components/workspace/scratch/ScratchPadPanel";
 import { RightPanelPlaceholder } from "#product/components/workspace/shell/right-panel/RightPanelPlaceholder";
@@ -83,7 +84,9 @@ export function RightPanelContent({
           )}
           {activeViewerTarget && (
             <div className="absolute inset-0">
-              {activeViewerTarget.kind === "file" ? (
+              {activeViewerTarget.kind === "promptAttachment" ? (
+                <PromptAttachmentViewer target={activeViewerTarget} />
+              ) : activeViewerTarget.kind === "file" ? (
                 <FileEditorView
                   filePath={activeViewerTarget.path}
                   targetKey={viewerTargetKey(activeViewerTarget)}

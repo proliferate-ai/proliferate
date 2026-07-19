@@ -18,7 +18,7 @@ describe("usePromptAttachments", () => {
   beforeEach(() => {
     Object.defineProperty(URL, "createObjectURL", {
       configurable: true,
-      value: vi.fn(() => "blob:prompt-attachment"),
+      value: vi.fn((blob: Blob) => `blob:prompt-attachment:${blob.size}`),
     });
     Object.defineProperty(URL, "revokeObjectURL", {
       configurable: true,
@@ -75,6 +75,45 @@ describe("usePromptAttachments", () => {
     expect(result.current.snapshotForSubmit()).toEqual([]);
   });
 
+  it("creates preview URLs for image, file, and pasted-text drafts", () => {
+    const { result } = renderHook(() =>
+      usePromptAttachments("session-1", promptCapabilities)
+    );
+    const image = new File(["image-bytes"], "image.png", { type: "image/png" });
+    const textFile = new File(["const ok = true;"], "example.ts", { type: "text/plain" });
+    const pastedText = Array.from({ length: 25 }, (_, index) => `line ${index}`).join("\n");
+
+    act(() => {
+      result.current.addFiles([image, textFile]);
+      result.current.addTextPaste(pastedText);
+    });
+
+    expect(URL.createObjectURL).toHaveBeenCalledTimes(3);
+    expect(result.current.attachments).toHaveLength(3);
+    expect(result.current.attachments.every((attachment) => attachment.objectUrl)).toBe(true);
+  });
+
+  it("revokes owned preview URLs when an attachment is removed or the hook unmounts", () => {
+    const { result, unmount } = renderHook(() =>
+      usePromptAttachments("session-1", promptCapabilities)
+    );
+    const first = new File(["one"], "one.txt", { type: "text/plain" });
+    const second = new File(["two-two"], "two.txt", { type: "text/plain" });
+    act(() => {
+      result.current.addFiles([first, second]);
+    });
+    const [firstAttachment, secondAttachment] = result.current.attachments;
+
+    act(() => {
+      result.current.removeAttachment(firstAttachment!.id);
+    });
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith(firstAttachment!.objectUrl);
+
+    unmount();
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith(secondAttachment!.objectUrl);
+    expect(URL.revokeObjectURL).toHaveBeenCalledTimes(2);
+  });
+
   it("keeps attachments across same-workspace harness capability changes", () => {
     const { result, rerender } = renderHook(
       ({ capabilities }: { capabilities: PromptCapabilities | null }) =>
@@ -124,5 +163,6 @@ describe("usePromptAttachments", () => {
 
     expect(result.current.attachments).toEqual([]);
     expect(result.current.snapshotForSubmit()).toEqual([]);
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:prompt-attachment:11");
   });
 });

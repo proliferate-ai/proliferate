@@ -1,11 +1,15 @@
 import {
   clampRightPanelWidth,
   normalizeRightPanelDurableState,
+  parseRightPanelHeaderEntryKey,
   type RightPanelDurableState,
   type RightPanelMaterializedState,
 } from "#product/lib/domain/workspaces/shell/right-panel-model";
 import { normalizeRightPanelMaterializedState } from "#product/lib/domain/workspaces/shell/right-panel-state-normalization";
 import { migrateLegacyRightPanelWorkspaceState } from "#product/lib/domain/workspaces/shell/right-panel-migration";
+import {
+  isPersistableViewerTarget,
+} from "#product/lib/domain/workspaces/viewer/viewer-target";
 
 export function migrateLegacyRightPanelPreferences(args: {
   rightPanelByWorkspace?: Record<string, unknown>;
@@ -71,12 +75,25 @@ export function sanitizeRightPanelMaterializedByWorkspace(
     if (typeof rawState !== "object" || rawState === null) {
       continue;
     }
+    const input = rawState as Partial<RightPanelMaterializedState>;
+    const headerOrder = Array.isArray(input.headerOrder)
+      ? input.headerOrder.filter(isPersistableRightPanelEntry)
+      : undefined;
+    const activeEntryKey = input.activeEntryKey
+      && isPersistableRightPanelEntry(input.activeEntryKey)
+      ? input.activeEntryKey
+      : undefined;
     next[workspaceId] = normalizeRightPanelMaterializedState(
-      rawState as Partial<RightPanelMaterializedState>,
+      { ...input, activeEntryKey, headerOrder },
       { isCloudWorkspaceSelected: true },
     );
   }
   return next;
+}
+
+function isPersistableRightPanelEntry(value: unknown): boolean {
+  const entry = parseRightPanelHeaderEntryKey(value);
+  return !!entry && (entry.kind !== "viewer" || isPersistableViewerTarget(entry.target));
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

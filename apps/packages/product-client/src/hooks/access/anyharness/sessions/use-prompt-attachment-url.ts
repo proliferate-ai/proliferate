@@ -46,6 +46,7 @@ export function usePromptAttachmentUrl(
   return {
     ...query,
     data: objectUrl,
+    blob: query.data ?? null,
     isLoading: query.isLoading || (query.isSuccess && !objectUrl),
   };
 }
