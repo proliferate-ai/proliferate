@@ -93,7 +93,8 @@ export function PlaygroundAttachmentComposerSurface({
   controlRow: ReactNode;
 }) {
   const [attachments, setAttachments] = useState(INITIAL_DRAFT_ATTACHMENTS);
-  const { closeDraftAttachmentPreview } = usePromptAttachmentPreviewActions();
+  const { openAttachmentPreview, closeDraftAttachmentPreview } =
+    usePromptAttachmentPreviewActions();
   return (
     <ChatComposerSurface overflowMode="clip">
       <form className="relative flex flex-col" data-focus-zone="chat">
@@ -105,6 +106,11 @@ export function PlaygroundAttachmentComposerSurface({
               current.filter((attachment) => attachment.id !== id)
             ));
           }}
+          onOpenAttachment={(part) => openAttachmentPreview({
+            part,
+            origin: "draft",
+            sessionId: null,
+          })}
         />
         <ComposerTextareaFrame topInset="none">
           <ComposerTextarea

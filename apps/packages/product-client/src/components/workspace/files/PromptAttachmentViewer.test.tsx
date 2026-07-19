@@ -60,7 +60,10 @@ describe("PromptAttachmentViewer", () => {
     }) as Extract<ReturnType<typeof promptAttachmentViewerTarget>, { kind: "promptAttachment" }>} />);
 
     await waitFor(() => expect(screen.queryByText(/alpha\s+beta/u)).not.toBeNull());
-    expect(fetch).toHaveBeenCalledWith("blob:pasted-text");
+    expect(fetch).toHaveBeenCalledWith(
+      "blob:pasted-text",
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
   });
 
   it("shows a clear unavailable state when a draft resource was removed", () => {

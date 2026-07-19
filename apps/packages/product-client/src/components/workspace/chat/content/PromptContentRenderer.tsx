@@ -10,10 +10,14 @@ import {
 import type { PromptDraftAttachmentDescriptor } from "@proliferate/product-domain/chats/composer/prompt-attachment-rules";
 import { MarkdownBody } from "@proliferate/product-ui/chat/transcript/MarkdownBody";
 import { renderTranscriptLink } from "#product/components/workspace/chat/transcript/transcript-markdown";
-import { usePromptAttachmentPreviewActions } from "#product/hooks/chat/workflows/use-prompt-attachment-preview-actions";
 
 type PromptContentRendererVariant = "transcript" | "compact";
 type PromptContentRendererLayout = "stack" | "wrap" | "auto";
+export type PromptAttachmentPreviewPart = Exclude<
+  PromptDisplayAttachmentPart,
+  { type: "link" | "plan_reference" }
+>;
+export type PromptAttachmentPreviewHandler = (part: PromptAttachmentPreviewPart) => void;
 
 export interface PromptContentRendererProps {
   sessionId: string | null;
@@ -24,6 +28,7 @@ export interface PromptContentRendererProps {
   includeText?: boolean;
   includeAttachments?: boolean;
   layout?: PromptContentRendererLayout;
+  onOpenAttachment?: PromptAttachmentPreviewHandler;
 }
 
 export function PromptContentRenderer({
@@ -35,8 +40,8 @@ export function PromptContentRenderer({
   includeText = true,
   includeAttachments = true,
   layout = "stack",
+  onOpenAttachment,
 }: PromptContentRendererProps) {
-  const { openAttachmentPreview } = usePromptAttachmentPreviewActions();
   const displayParts = normalizeContentParts(parts, fallbackText);
   const visibleParts = displayParts.filter((part) => (
     part.type === "text" ? includeText : includeAttachments
@@ -56,11 +61,7 @@ export function PromptContentRenderer({
           sessionId={sessionId}
           part={part}
           variant={resolvedVariant}
-          onOpenAttachment={(attachment) => openAttachmentPreview({
-            part: attachment,
-            origin: "session",
-            sessionId,
-          })}
+          onOpenAttachment={onOpenAttachment}
         />
       ))}
     </div>
@@ -70,13 +71,14 @@ export function PromptContentRenderer({
 export interface DraftAttachmentPreviewListProps {
   attachments: readonly PromptDraftAttachmentDescriptor[];
   onRemove: (id: string) => void;
+  onOpenAttachment?: PromptAttachmentPreviewHandler;
 }
 
 export function DraftAttachmentPreviewList({
   attachments,
   onRemove,
+  onOpenAttachment,
 }: DraftAttachmentPreviewListProps) {
-  const { openAttachmentPreview } = usePromptAttachmentPreviewActions();
   const displayParts = normalizeDraftAttachments(attachments);
 
   if (displayParts.length === 0) {
@@ -92,11 +94,7 @@ export function DraftAttachmentPreviewList({
           part={part}
           variant="draft"
           onRemove={onRemove}
-          onOpenAttachment={(attachment) => openAttachmentPreview({
-            part: attachment,
-            origin: "draft",
-            sessionId: null,
-          })}
+          onOpenAttachment={onOpenAttachment}
         />
       ))}
     </div>
@@ -112,10 +110,7 @@ function PromptDisplayPartView({
   sessionId: string | null;
   part: PromptDisplayPart;
   variant: PromptContentRendererVariant;
-  onOpenAttachment: (part: Exclude<
-    PromptDisplayAttachmentPart,
-    { type: "link" | "plan_reference" }
-  >) => void;
+  onOpenAttachment?: PromptAttachmentPreviewHandler;
 }) {
   if (part.type === "text") {
     return <FileLinkedText text={part.text} />;

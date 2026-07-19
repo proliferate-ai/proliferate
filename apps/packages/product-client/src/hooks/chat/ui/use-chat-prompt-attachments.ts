@@ -3,6 +3,7 @@ import type { PromptCapabilities } from "@anyharness/sdk";
 import { canAttachPromptContent } from "@proliferate/product-domain/chats/composer/prompt-attachment-rules";
 import { usePromptAttachments } from "#product/hooks/chat/ui/use-prompt-attachments";
 import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
+import type { PromptAttachmentDescriptor } from "@proliferate/product-domain/chats/composer/prompt-attachment-rules";
 
 export type PromptAttachmentController = ReturnType<typeof usePromptAttachments> & {
   canAttachFiles: boolean;
@@ -13,12 +14,18 @@ export function useChatPromptAttachments({
   scopeKey,
   promptCapabilities,
   canAttachFiles,
+  onBeforeReleaseAttachments,
 }: {
   scopeKey: string | null;
   promptCapabilities: PromptCapabilities | null;
   canAttachFiles: boolean;
+  onBeforeReleaseAttachments?: (
+    attachments: readonly PromptAttachmentDescriptor[],
+  ) => void;
 }): PromptAttachmentController {
-  const attachments = usePromptAttachments(scopeKey, promptCapabilities);
+  const attachments = usePromptAttachments(scopeKey, promptCapabilities, {
+    onBeforeReleaseAttachments,
+  });
   const supportsAttachments = canAttachPromptContent(promptCapabilities);
   const pasteAttachmentsEnabled = useUserPreferencesStore((state) => state.pasteAttachmentsEnabled);
   const addFiles = useCallback((files: Iterable<File>) => {

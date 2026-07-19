@@ -8,7 +8,6 @@ import {
   type ClipboardEvent,
   type MouseEvent,
 } from "react";
-import type { PromptInputBlock } from "@anyharness/sdk";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import {
   useActiveSessionId,
@@ -53,6 +52,7 @@ import { Input } from "@proliferate/ui/primitives/Input";
 import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-count";
 import { usePromptAttachmentPreviewActions } from "#product/hooks/chat/workflows/use-prompt-attachment-preview-actions";
 import { handlePromptAttachmentPaste } from "#product/lib/domain/chat/composer/prompt-attachment-paste";
+import type { PromptAttachmentPreviewHandler } from "#product/components/workspace/chat/content/PromptContentRenderer";
 
 const CHAT_INPUT_ATTACHMENT_ACCEPT =
   "image/*,text/*,.md,.json,.ts,.tsx,.js,.jsx,.py,.rs,.go,.java,.css,.html,.xml,.yaml,.yml,.toml,.sql,.sh";
@@ -108,7 +108,7 @@ export function ChatInput({
       ?? modeControl
       ?? null;
   const { handleSubmit, handleCancel } = useChatPromptActions();
-  const { closeDraftAttachmentPreview } = usePromptAttachmentPreviewActions();
+  const { openAttachmentPreview } = usePromptAttachmentPreviewActions();
   const { isSubmitting, run: runSubmit } = useComposerSubmitGate();
   const {
     isEditing: isEditingQueuedPrompt,
@@ -159,7 +159,7 @@ export function ChatInput({
       const blockPrepareStartedAt = performance.now();
       const attachmentSnapshots = attachments.snapshotForSubmit();
       const blocks = [
-        ...buildTextPromptBlocks(trimmedPromptText),
+        ...(trimmedPromptText ? [{ type: "text" as const, text: trimmedPromptText }] : []),
         ...planAttachments.blocks,
       ];
       recordMeasurementWorkflowStep({
@@ -188,14 +188,12 @@ export function ChatInput({
       // A harness switch can temporarily make an existing attachment
       // unsupported. Clear only attachments that were eligible for this send,
       // leaving visible incompatible drafts available for another harness.
-      attachmentSnapshots.forEach((snapshot) => closeDraftAttachmentPreview(snapshot.id));
       attachments.clearSubmittedAttachments(attachmentSnapshots);
       planAttachments.clearPlans();
     });
   }, [
     attachments,
     commitEdit,
-    closeDraftAttachmentPreview,
     effectiveIsEditingQueuedPrompt,
     getDraft,
     handleSubmit,
@@ -241,10 +239,14 @@ export function ChatInput({
   }, [attachments]);
 
   const handleRemoveDraftAttachment = useCallback((id: string) => {
-    closeDraftAttachmentPreview(id);
     attachments.removeAttachment(id);
     planAttachments.removePlan(id);
-  }, [attachments, closeDraftAttachmentPreview, planAttachments]);
+  }, [attachments, planAttachments]);
+
+  const handleOpenDraftAttachment = useCallback<PromptAttachmentPreviewHandler>(
+    (part) => openAttachmentPreview({ part, origin: "draft", sessionId: null }),
+    [openAttachmentPreview],
+  );
 
   const handlePaste = useCallback((event: ClipboardEvent<HTMLDivElement>) => {
     // The editor owns formatted Markdown paste first. Once it has imported a
@@ -356,6 +358,7 @@ export function ChatInput({
               hasDraftAttachments={hasDraftAttachments}
               draftAttachments={[...attachments.attachments, ...planAttachments.attachments]}
               onRemoveDraftAttachment={handleRemoveDraftAttachment}
+              onOpenDraftAttachment={handleOpenDraftAttachment}
               overlayHostElement={composerOverlayHost}
               onCancelEdit={cancelEdit}
             />
@@ -393,8 +396,4 @@ export function ChatInput({
       </div>
     </DebugProfiler>
   );
-}
-
-function buildTextPromptBlocks(text: string): PromptInputBlock[] {
-  return text ? [{ type: "text", text }] : [];
 }

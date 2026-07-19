@@ -8,15 +8,6 @@ import {
   PromptContentRenderer,
 } from "#product/components/workspace/chat/content/PromptContentRenderer";
 
-const previewActions = vi.hoisted(() => ({
-  openAttachmentPreview: vi.fn(),
-  closeDraftAttachmentPreview: vi.fn(),
-}));
-
-vi.mock("#product/hooks/chat/workflows/use-prompt-attachment-preview-actions", () => ({
-  usePromptAttachmentPreviewActions: () => previewActions,
-}));
-
 vi.mock("#product/hooks/access/anyharness/sessions/use-prompt-attachment-url", () => ({
   usePromptAttachmentUrl: () => ({
     data: null,
@@ -35,15 +26,13 @@ vi.mock("#product/components/workspace/chat/content/PlanReferenceAttachmentCard"
 }));
 
 describe("PromptContentRenderer attachment cards", () => {
-  beforeEach(() => {
-    previewActions.openAttachmentPreview.mockReset();
-    previewActions.closeDraftAttachmentPreview.mockReset();
-  });
+  beforeEach(() => vi.clearAllMocks());
 
   afterEach(cleanup);
 
   it("shows useful draft thumbnails and compact file metadata", () => {
     const onRemove = vi.fn();
+    const onOpenAttachment = vi.fn();
     render(<DraftAttachmentPreviewList
       attachments={[
         {
@@ -66,6 +55,7 @@ describe("PromptContentRenderer attachment cards", () => {
         },
       ]}
       onRemove={onRemove}
+      onOpenAttachment={onOpenAttachment}
     />);
 
     expect(screen.getByRole("img", { name: "reference.png" }).classList.contains("size-full"))
@@ -73,25 +63,24 @@ describe("PromptContentRenderer attachment cards", () => {
     expect(screen.queryByText("Pasted text · 3 KB")).not.toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Preview reference.png" }));
-    expect(previewActions.openAttachmentPreview).toHaveBeenCalledWith(expect.objectContaining({
-      origin: "draft",
-      sessionId: null,
-      part: expect.objectContaining({ id: "attachment:image", type: "image" }),
+    expect(onOpenAttachment).toHaveBeenCalledWith(expect.objectContaining({
+      id: "attachment:image",
+      type: "image",
     }));
 
     fireEvent.click(screen.getByRole("button", { name: "Preview paste.txt" }));
-    expect(previewActions.openAttachmentPreview).toHaveBeenCalledWith(expect.objectContaining({
-      origin: "draft",
-      sessionId: null,
-      part: expect.objectContaining({ id: "attachment:paste", type: "file" }),
+    expect(onOpenAttachment).toHaveBeenCalledWith(expect.objectContaining({
+      id: "attachment:paste",
+      type: "file",
     }));
 
     fireEvent.click(screen.getByRole("button", { name: "Remove paste.txt" }));
     expect(onRemove).toHaveBeenCalledWith("attachment:paste");
-    expect(previewActions.openAttachmentPreview).toHaveBeenCalledTimes(2);
+    expect(onOpenAttachment).toHaveBeenCalledTimes(2);
   });
 
   it("opens a submitted resource through a session-backed preview target", () => {
+    const onOpenAttachment = vi.fn();
     const parts: ContentPart[] = [
       {
         type: "image",
@@ -117,26 +106,29 @@ describe("PromptContentRenderer attachment cards", () => {
       includeText={false}
       variant="transcript"
       layout="wrap"
+      onOpenAttachment={onOpenAttachment}
     />);
 
     expect(screen.queryByText("MD · 1.5 KB")).not.toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Preview reference.png" }));
-    expect(previewActions.openAttachmentPreview).toHaveBeenCalledWith(expect.objectContaining({
-      origin: "session",
-      sessionId: "session-1",
-      part: expect.objectContaining({
-        attachmentId: "attachment:image-sent",
-        type: "image",
-      }),
+    expect(onOpenAttachment).toHaveBeenCalledWith(expect.objectContaining({
+      attachmentId: "attachment:image-sent",
+      type: "image",
     }));
     fireEvent.click(screen.getByRole("button", { name: "Preview notes.md" }));
-    expect(previewActions.openAttachmentPreview).toHaveBeenCalledWith(expect.objectContaining({
-      origin: "session",
-      sessionId: "session-1",
-      part: expect.objectContaining({
-        attachmentId: "attachment:sent",
-        type: "file",
-      }),
+    expect(onOpenAttachment).toHaveBeenCalledWith(expect.objectContaining({
+      attachmentId: "attachment:sent",
+      type: "file",
     }));
+  });
+
+  it("renders text without a ProductHost or preview workflow", () => {
+    render(<PromptContentRenderer
+      sessionId={null}
+      parts={[{ type: "text", text: "text-only renderer" }]}
+    />);
+
+    expect(screen.queryByText("text-only renderer")).not.toBeNull();
+    expect(screen.queryByRole("button", { name: /Preview/u })).toBeNull();
   });
 });

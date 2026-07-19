@@ -2,6 +2,10 @@ import { useEffect, useState, type ReactNode } from "react";
 import { FileIcon, FileText, Spinner } from "@proliferate/ui/icons";
 import { formatPromptFileSize } from "@proliferate/product-domain/chats/composer/prompt-attachment-rules";
 import { usePromptAttachmentUrl } from "#product/hooks/access/anyharness/sessions/use-prompt-attachment-url";
+import {
+  usePromptAttachmentBlobText,
+  usePromptAttachmentObjectUrlText,
+} from "#product/hooks/access/prompt-attachments/use-prompt-attachment-text";
 import type { ViewerTarget } from "#product/lib/domain/workspaces/viewer/viewer-target";
 
 type PromptAttachmentTarget = Extract<ViewerTarget, { kind: "promptAttachment" }>;
@@ -13,7 +17,7 @@ export function PromptAttachmentViewer({ target }: { target: PromptAttachmentTar
 }
 
 function DraftPromptAttachmentViewer({ target }: { target: PromptAttachmentTarget }) {
-  const text = useObjectUrlText(
+  const text = usePromptAttachmentObjectUrlText(
     target.attachmentKind === "text_resource" ? target.objectUrl : null,
   );
   return (
@@ -29,7 +33,7 @@ function DraftPromptAttachmentViewer({ target }: { target: PromptAttachmentTarge
 
 function SessionPromptAttachmentViewer({ target }: { target: PromptAttachmentTarget }) {
   const resource = usePromptAttachmentUrl(target.sessionId, target.attachmentId);
-  const text = useBlobText(
+  const text = usePromptAttachmentBlobText(
     target.attachmentKind === "text_resource" ? resource.blob : null,
   );
   return (
@@ -129,76 +133,4 @@ function PreviewStatus({
       </div>
     </div>
   );
-}
-
-function useObjectUrlText(objectUrl: string | null) {
-  const [state, setState] = useState<{
-    data: string | null;
-    isLoading: boolean;
-    isError: boolean;
-  }>({ data: null, isLoading: false, isError: false });
-
-  useEffect(() => {
-    let cancelled = false;
-    if (!objectUrl) {
-      setState({ data: null, isLoading: false, isError: false });
-      return;
-    }
-    setState({ data: null, isLoading: true, isError: false });
-    void fetch(objectUrl)
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error(`Attachment preview failed with ${response.status}`);
-        }
-        return response.text();
-      })
-      .then((data) => {
-        if (!cancelled) {
-          setState({ data, isLoading: false, isError: false });
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setState({ data: null, isLoading: false, isError: true });
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [objectUrl]);
-
-  return state;
-}
-
-function useBlobText(blob: Blob | null) {
-  const [state, setState] = useState<{
-    data: string | null;
-    isLoading: boolean;
-    isError: boolean;
-  }>({ data: null, isLoading: false, isError: false });
-
-  useEffect(() => {
-    let cancelled = false;
-    if (!blob) {
-      setState({ data: null, isLoading: false, isError: false });
-      return;
-    }
-    setState({ data: null, isLoading: true, isError: false });
-    void blob.text()
-      .then((data) => {
-        if (!cancelled) {
-          setState({ data, isLoading: false, isError: false });
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setState({ data: null, isLoading: false, isError: true });
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [blob]);
-
-  return state;
 }

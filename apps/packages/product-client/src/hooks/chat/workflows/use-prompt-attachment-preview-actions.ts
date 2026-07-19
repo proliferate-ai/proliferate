@@ -5,10 +5,13 @@ import type {
 import { focusChatInput } from "#product/lib/domain/focus-zone";
 import { useWorkspaceShellActivation } from "#product/hooks/workspaces/workflows/tabs/use-workspace-shell-activation";
 import { removeViewerTargetFromRightPanelState } from "#product/lib/domain/workspaces/shell/right-panel-state";
+import { parseRightPanelHeaderEntryKey } from "#product/lib/domain/workspaces/shell/right-panel-model";
 import { resolveSelectedWorkspaceIdentity } from "#product/lib/domain/workspaces/selection/workspace-ui-key";
 import {
   promptAttachmentViewerTarget,
   viewerTargetKey,
+  type ViewerTarget,
+  type ViewerTargetKey,
 } from "#product/lib/domain/workspaces/viewer/viewer-target";
 import { useWorkspaceViewerTabsStore } from "#product/stores/editor/workspace-viewer-tabs-store";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
@@ -64,33 +67,78 @@ export function usePromptAttachmentPreviewActions() {
     focusChatInput();
   }, [activateViewerTarget, materializedWorkspaceId, openViewerTarget, workspaceUiKey]);
 
-  const closeDraftAttachmentPreview = useCallback((attachmentId: string) => {
-    const targets = useWorkspaceViewerTabsStore.getState().openTargets.filter((target) => (
-      target.kind === "promptAttachment"
-      && target.origin === "draft"
-      && target.attachmentId === attachmentId
-    ));
-    for (const target of targets) {
-      const targetKey = viewerTargetKey(target);
-      closeViewerTarget(targetKey);
-      if (materializedWorkspaceId) {
-        setRightPanelMaterializedForWorkspace(
-          materializedWorkspaceId,
-          (previous) => removeViewerTargetFromRightPanelState(previous, targetKey, true),
-        );
+  const closeDraftAttachmentPreviews = useCallback((attachmentIds: readonly string[]) => {
+    const outgoingIds = new Set(attachmentIds);
+    if (outgoingIds.size === 0) {
+      return;
+    }
+    const targetKeys = new Set<ViewerTargetKey>();
+    for (const target of useWorkspaceViewerTabsStore.getState().openTargets) {
+      if (isOutgoingDraftAttachmentTarget(target, outgoingIds)) {
+        targetKeys.add(viewerTargetKey(target));
       }
     }
-    if (targets.length > 0) {
+    const materializedByWorkspace = useWorkspaceUiStore.getState()
+      .rightPanelMaterializedByWorkspace;
+    for (const panelState of Object.values(materializedByWorkspace)) {
+      for (const entryKey of new Set([
+        panelState.activeEntryKey,
+        ...panelState.headerOrder,
+      ])) {
+        const entry = parseRightPanelHeaderEntryKey(entryKey);
+        if (entry?.kind === "viewer"
+          && isOutgoingDraftAttachmentTarget(entry.target, outgoingIds)) {
+          targetKeys.add(entry.targetKey);
+        }
+      }
+    }
+    if (targetKeys.size === 0) {
+      return;
+    }
+    for (const targetKey of targetKeys) {
+      closeViewerTarget(targetKey);
+    }
+    for (const [workspaceId, panelState] of Object.entries(materializedByWorkspace)) {
+      if (!panelState.headerOrder.some((entryKey) => targetKeys.has(
+        entryKey as ViewerTargetKey,
+      )) && !targetKeys.has(panelState.activeEntryKey as ViewerTargetKey)) {
+        continue;
+      }
+      setRightPanelMaterializedForWorkspace(workspaceId, (previous) => (
+        [...targetKeys].reduce(
+          (next, targetKey) => removeViewerTargetFromRightPanelState(
+            next,
+            targetKey,
+            true,
+          ),
+          previous,
+        )
+      ));
+    }
+    if (targetKeys.size > 0) {
       focusChatInput();
     }
   }, [
     closeViewerTarget,
-    materializedWorkspaceId,
     setRightPanelMaterializedForWorkspace,
   ]);
+
+  const closeDraftAttachmentPreview = useCallback((attachmentId: string) => {
+    closeDraftAttachmentPreviews([attachmentId]);
+  }, [closeDraftAttachmentPreviews]);
 
   return {
     openAttachmentPreview,
     closeDraftAttachmentPreview,
+    closeDraftAttachmentPreviews,
   };
+}
+
+function isOutgoingDraftAttachmentTarget(
+  target: ViewerTarget,
+  attachmentIds: ReadonlySet<string>,
+): boolean {
+  return target.kind === "promptAttachment"
+    && target.origin === "draft"
+    && attachmentIds.has(target.attachmentId);
 }

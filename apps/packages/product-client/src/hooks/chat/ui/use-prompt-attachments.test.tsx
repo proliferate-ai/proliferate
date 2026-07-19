@@ -114,6 +114,35 @@ describe("usePromptAttachments", () => {
     expect(URL.revokeObjectURL).toHaveBeenCalledTimes(2);
   });
 
+  it("notifies the lifetime owner before remove and submit revocation", () => {
+    const onBeforeReleaseAttachments = vi.fn();
+    const { result } = renderHook(() =>
+      usePromptAttachments("session-1", promptCapabilities, {
+        onBeforeReleaseAttachments,
+      })
+    );
+    act(() => {
+      result.current.addFiles([
+        new File(["one"], "one.txt", { type: "text/plain" }),
+        new File(["two"], "two.txt", { type: "text/plain" }),
+      ]);
+    });
+    const [first, second] = result.current.attachments;
+
+    act(() => result.current.removeAttachment(first!.id));
+    expect(onBeforeReleaseAttachments).toHaveBeenNthCalledWith(1, [first]);
+    expect(onBeforeReleaseAttachments.mock.invocationCallOrder[0])
+      .toBeLessThan(vi.mocked(URL.revokeObjectURL).mock.invocationCallOrder[0]!);
+
+    act(() => result.current.clearSubmittedAttachments([
+      { id: second!.id },
+    ]));
+    expect(onBeforeReleaseAttachments).toHaveBeenNthCalledWith(2, [second]);
+    expect(onBeforeReleaseAttachments.mock.invocationCallOrder[1])
+      .toBeLessThan(vi.mocked(URL.revokeObjectURL).mock.invocationCallOrder[1]!);
+    expect(URL.revokeObjectURL).toHaveBeenCalledTimes(2);
+  });
+
   it("keeps attachments across same-workspace harness capability changes", () => {
     const { result, rerender } = renderHook(
       ({ capabilities }: { capabilities: PromptCapabilities | null }) =>
