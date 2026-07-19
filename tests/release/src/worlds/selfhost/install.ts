@@ -64,6 +64,9 @@ export interface RunInstallerInputs {
  * candidate bundle so the exact shipped script runs — never a checkout copy.
  */
 export const SELFHOST_REMOTE_DIR = "proliferate-candidate";
+
+/** Outer ssh budget for the shipped install.sh run (see call site). */
+const INSTALL_SSH_TIMEOUT_MS = 25 * 60_000;
 export const SELFHOST_REMOTE_IMAGE_ARCHIVE = `${SELFHOST_REMOTE_DIR}/server-image.tar`;
 export const SELFHOST_REMOTE_BUNDLE = `${SELFHOST_REMOTE_DIR}/proliferate-deploy.tar.gz`;
 export const SELFHOST_REMOTE_SHA256SUMS = `${SELFHOST_REMOTE_DIR}/self-hosted-assets.SHA256SUMS`;
@@ -139,6 +142,10 @@ export async function runShippedInstaller(inputs: RunInstallerInputs): Promise<I
   log(`running shipped install.sh --bundle for ${inputs.siteAddress}`);
   const installArgs = [
     "sudo env",
+    // Widen the shipped health gate from its 60×2s default. The reusable
+    // wildcard certificate removes per-run ACME issuance, but the first public
+    // Caddy/TLS readiness window can still be cold; 210×2s = 7min.
+    "PROLIFERATE_HEALTHCHECK_ATTEMPTS=210",
     `PROLIFERATE_COMPOSE_OVERRIDE_FILE=${remoteTlsComposeOverridePath}`,
     "bash",
     SELFHOST_REMOTE_INSTALLER,
@@ -161,7 +168,29 @@ export async function runShippedInstaller(inputs: RunInstallerInputs): Promise<I
     installArgs.push("--cors-allow-origins", inputs.corsAllowOrigins.trim());
   }
   installArgs.push("--yes");
-  await ssh.run(installArgs.join(" "), { timeoutMs: inputs.timeoutMs });
+  // Bounded: callers historically passed no timeoutMs, which execFile treats
+  // as NO timeout — a hung install.sh would then ride the whole 120min job
+  // budget. 25min covers the slowest observed cold install (all compose image
+  // pulls on a t3.small) with generous headroom while still failing a hang.
+  try {
+    await ssh.run(installArgs.join(" "), { timeoutMs: inputs.timeoutMs ?? INSTALL_SSH_TIMEOUT_MS });
+  } catch (error) {
+    // TLS/public-health failures live in Caddy's log on the box, so capture its
+    // tail before the world tears down. Best-effort: never mask the real error.
+    if (error instanceof Error) {
+      let caddyTail = "(probe failed)";
+      try {
+        caddyTail = await ssh.run(
+          `cd /opt/proliferate/server/deploy && sudo docker compose -f docker-compose.production.yml logs --no-color --tail 40 caddy 2>&1 | grep -iE 'acme|certificate|rate|error|obtain' | tail -20`,
+          { timeoutMs: 60_000 },
+        );
+      } catch {
+        // keep "(probe failed)"
+      }
+      error.message = `${error.message}\n--- caddy log tail (ACME diagnosis) ---\n${caddyTail.trim() || "none"}`;
+    }
+    throw error;
+  }
   // Persist the qualification-only overlay for the explicit later bootstrap.sh
   // calls (gateway/cloud-addon convergence) and control-handle restarts.
   await ssh.run(

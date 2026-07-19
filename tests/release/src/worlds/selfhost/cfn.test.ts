@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { test } from "node:test";
 
 import {
@@ -6,7 +9,11 @@ import {
   SelfHostCfnCleanupStack,
   boundedStackEventsTail,
   buildCfnParameters,
+  buildCfnStackTags,
   bundleDigestBound,
+  captureCfnBootstrapDiagnostic,
+  cfnBootstrapDiagnosticArtifactPath,
+  runtimeDigestBound,
   cfnSiteAddress,
   cfnStackName,
   createCfnStackAndWait,
@@ -16,6 +23,7 @@ import {
   ghcrVersionIdForTag,
   imageDigestBound,
   outputsWellFormed,
+  parseCfnBootstrapDiagnosticOutput,
   parseGhcrRepo,
   parseGhcrVersions,
   parseStackOutputs,
@@ -28,6 +36,8 @@ import {
   templateFileSha256,
   uploadBundleAndPresign,
   validateTemplate,
+  writeCfnBootstrapDiagnosticArtifact,
+  type CfnBootstrapDiagnosticArtifactV1,
   type CfnAwsExec,
   type DockerExec,
   type GhExec,
@@ -82,6 +92,12 @@ function fakeLedger(): CleanupLedger {
   };
 }
 
+const TEST_CFN_TAGS = buildCfnStackTags({
+  stackName: "proliferate-sh-cfn-x",
+  runId: "run-1",
+  shardId: "shard-0",
+});
+
 // ── Pure helpers ─────────────────────────────────────────────────────────────
 
 test("cfnStackName: deterministic, CFN-safe, ≤128, collision-free digest suffix", () => {
@@ -92,6 +108,22 @@ test("cfnStackName: deterministic, CFN-safe, ≤128, collision-free digest suffi
   assert.notEqual(a, c);
   assert.match(a, /^[A-Za-z][-A-Za-z0-9]*$/);
   assert.ok(a.length <= 128);
+});
+
+test("buildCfnStackTags: emits the bounded IAM/run-ownership tag set and rejects unsafe identity", () => {
+  assert.deepEqual(
+    buildCfnStackTags({ stackName: "proliferate-sh-cfn-run-1", runId: "run-1", shardId: "shard-0" }),
+    [
+      { key: "Purpose", value: "self-hosting-qualification" },
+      { key: "Name", value: "proliferate-sh-cfn-run-1" },
+      { key: "RunId", value: "run-1" },
+      { key: "ShardId", value: "shard-0" },
+    ],
+  );
+  assert.throws(
+    () => buildCfnStackTags({ stackName: "proliferate-sh-cfn-run-1", runId: "run,other", shardId: "1" }),
+    /unsafe RunId ownership tag value/,
+  );
 });
 
 test("runScopedImageTag: never rolling, docker-tag-safe", () => {
@@ -114,10 +146,12 @@ test("parseGhcrRepo: splits org + package name; rejects a bare repo", () => {
   assert.throws(() => parseGhcrRepo("ghcr.io/onlyorg"), /ghcr\.io/);
 });
 
-test("buildCfnParameters: emits all 7 candidate parameters as JSON (file:// form, not argv)", () => {
+test("buildCfnParameters: emits all 9 candidate parameters as JSON (file:// form, not argv)", () => {
   const params = buildCfnParameters({
     releaseVersion: "1.2.3",
     serverImageRepository: "ghcr.io/proliferate-ai/proliferate-server-qualification",
+    runtimeBinaryUrl: "https://s3/presigned-runtime",
+    runtimeBinaryChecksumUrl: "https://s3/presigned-sums",
     deployBundleUrl: "https://s3/presigned-bundle",
     deployBundleChecksumUrl: "https://s3/presigned-sums",
     siteAddress: "sh-x.qualification.proliferate.com",
@@ -128,7 +162,9 @@ test("buildCfnParameters: emits all 7 candidate parameters as JSON (file:// form
   assert.equal(byKey.get("CreateRoute53Record"), "true");
   assert.equal(byKey.get("HostedZoneId"), "Z123");
   assert.equal(byKey.get("DeployBundleChecksumUrl"), "https://s3/presigned-sums");
-  assert.equal(params.length, 7);
+  assert.equal(byKey.get("RuntimeBinaryUrl"), "https://s3/presigned-runtime");
+  assert.equal(byKey.get("RuntimeBinaryChecksumUrl"), "https://s3/presigned-sums");
+  assert.equal(params.length, 9);
 });
 
 test("scrubCfnParameterUrls: redacts presigned S3 URLs from a diagnostic (PR7-CONTROL-003)", () => {
@@ -189,6 +225,13 @@ test("bundleDigestBound: true iff the sums list the candidate bundle sha for pro
   assert.equal(bundleDigestBound("garbage", sha), false);
 });
 
+test("runtimeDigestBound: true iff the sums list the exact arm64 runtime archive", () => {
+  const sha = "c".repeat(64);
+  assert.equal(runtimeDigestBound(`${sha}  anyharness-aarch64-unknown-linux-musl.tar.gz\n`, sha), true);
+  assert.equal(runtimeDigestBound(`${sha}  anyharness-x86_64-unknown-linux-musl.tar.gz\n`, sha), false);
+  assert.equal(runtimeDigestBound(`${"d".repeat(64)}  anyharness-aarch64-unknown-linux-musl.tar.gz\n`, sha), false);
+});
+
 test("boundedStackEventsTail: only FAILED events, bounded count, secret-free formatting", () => {
   const events = Array.from({ length: 20 }, (_, i) => ({
     LogicalResourceId: `R${i}`,
@@ -201,6 +244,29 @@ test("boundedStackEventsTail: only FAILED events, bounded count, secret-free for
   assert.ok(parts.length <= MAX_STACK_EVENT_TAIL);
   assert.equal(boundedStackEventsTail("not json"), "(stack events unavailable)");
   assert.equal(boundedStackEventsTail(JSON.stringify({ StackEvents: [] })), "(no FAILED stack events)");
+});
+
+test("parseCfnBootstrapDiagnosticOutput: emits only allowlisted tokens and drops raw secrets", () => {
+  const raw = [
+    "__PROLIFERATE_CFN_LOG__:cfn-init-cmd.log",
+    "2026-07-19 Running Command 02-bootstrap",
+    "2026-07-19 Exited with error code 17: https://bucket/x?X-Amz-Signature=deadbeef",
+    "Bearer eyJsecret.payload.signature vk-super-secret-value",
+    "download error from https://example.invalid/private?token=secret",
+  ].join("\n");
+  const observations = parseCfnBootstrapDiagnosticOutput(raw);
+
+  assert.deepEqual(observations[0], {
+    source: "cfn-init-cmd.log",
+    stage: "02-bootstrap",
+    outcome: "failed",
+    exit_code: 17,
+    category: "download",
+  });
+  const serialized = JSON.stringify(observations);
+  for (const secret of ["X-Amz-Signature", "deadbeef", "Bearer", "eyJsecret", "vk-super", "https://"]) {
+    assert.ok(!serialized.includes(secret), `structured evidence leaked ${secret}`);
+  }
 });
 
 test("parseGhcrVersions + ghcrVersionIdForTag: finds the version whose tags include the run tag", () => {
@@ -217,7 +283,7 @@ test("parseGhcrVersions + ghcrVersionIdForTag: finds the version whose tags incl
 
 // ── S3 upload / presign ──────────────────────────────────────────────────────
 
-test("uploadBundleAndPresign: registers s3_object BEFORE each cp, returns presigned URLs", async () => {
+test("uploadBundleAndPresign: registers bundle, runtime, and sums BEFORE each cp and returns presigned URLs", async () => {
   const log: string[] = [];
   const exec = new FakeExec((args) => {
     if (args[0] === "s3" && args[1] === "cp") {
@@ -235,6 +301,7 @@ test("uploadBundleAndPresign: registers s3_object BEFORE each cp, returns presig
     bucket: "bkt",
     keyPrefix: "qualification/run-1/shard-0/",
     bundlePath: "/tmp/proliferate-deploy.tar.gz",
+    runtimePath: "/tmp/anyharness-aarch64-unknown-linux-musl.tar.gz",
     sumsPath: "/tmp/self-hosted-assets.SHA256SUMS",
     registerCleanup: async (kind, providerId) => {
       log.push(`register:${kind}:${providerId}`);
@@ -244,9 +311,20 @@ test("uploadBundleAndPresign: registers s3_object BEFORE each cp, returns presig
   const bundleReg = log.indexOf("register:s3_object:s3://bkt/qualification/run-1/shard-0/proliferate-deploy.tar.gz");
   const bundleCp = log.indexOf("cp:s3://bkt/qualification/run-1/shard-0/proliferate-deploy.tar.gz");
   assert.ok(bundleReg >= 0 && bundleReg < bundleCp, `register precedes cp (${JSON.stringify(log)})`);
+  const runtimeProvider =
+    "s3://bkt/qualification/run-1/shard-0/anyharness-aarch64-unknown-linux-musl.tar.gz";
+  assert.ok(
+    log.indexOf(`register:s3_object:${runtimeProvider}`) < log.indexOf(`cp:${runtimeProvider}`),
+    `runtime register precedes cp (${JSON.stringify(log)})`,
+  );
   assert.ok(result.deployBundleUrl.startsWith("https://s3/presigned/"));
+  assert.ok(result.runtimeBinaryUrl.startsWith("https://s3/presigned/"));
   assert.ok(result.deployBundleChecksumUrl.startsWith("https://s3/presigned/"));
   assert.equal(result.bundleKey, "qualification/run-1/shard-0/proliferate-deploy.tar.gz");
+  assert.equal(
+    result.runtimeKey,
+    "qualification/run-1/shard-0/anyharness-aarch64-unknown-linux-musl.tar.gz",
+  );
 });
 
 // ── Image push + GHCR delete ─────────────────────────────────────────────────
@@ -423,11 +501,14 @@ test("createCfnStackAndWait: registers stack BEFORE create, passes params, retur
     parameters: buildCfnParameters({
       releaseVersion: "1.2.3",
       serverImageRepository: "ghcr.io/x/y",
+      runtimeBinaryUrl: "https://s3/r?X-Amz-Signature=SECRET",
+      runtimeBinaryChecksumUrl: "https://s3/s?X-Amz-Signature=SECRET",
       deployBundleUrl: "https://s3/b?X-Amz-Signature=SECRET",
       deployBundleChecksumUrl: "https://s3/s?X-Amz-Signature=SECRET",
       siteAddress: site,
       hostedZoneId: "Z1",
     }),
+    tags: TEST_CFN_TAGS,
     region: "us-east-1",
     writeParameterFile: async (json) => {
       writtenJson = json;
@@ -442,6 +523,17 @@ test("createCfnStackAndWait: registers stack BEFORE create, passes params, retur
   // PR7-CONTROL-003: params go through a file, NOT argv — and the presigned
   // bearer signature never appears in the create-stack argv.
   assert.ok(createArgs.includes("file:///tmp/params.json"), "parameters must be passed as file://");
+  const onFailureAt = createArgs.indexOf("--on-failure");
+  assert.ok(onFailureAt >= 0, "qualification create must retain a failed stack for bounded diagnostics");
+  assert.equal(createArgs[onFailureAt + 1], "DO_NOTHING");
+  const tagsAt = createArgs.indexOf("--tags");
+  assert.ok(tagsAt >= 0, "create-stack must carry positive run-ownership tags");
+  assert.deepEqual(createArgs.slice(tagsAt + 1, tagsAt + 5), [
+    "Key=Purpose,Value=self-hosting-qualification",
+    "Key=Name,Value=proliferate-sh-cfn-x",
+    "Key=RunId,Value=run-1",
+    "Key=ShardId,Value=shard-0",
+  ]);
   assert.ok(!createArgs.some((a) => a.includes("X-Amz-Signature")), "no presigned signature in argv");
   assert.ok(!createArgs.some((a) => a.startsWith("ParameterKey=")), "no ParameterKey=... argv pairs");
   assert.ok(writtenJson.includes("DeployBundleUrl"), "the parameter JSON carries the bundle params");
@@ -476,11 +568,14 @@ test("createCfnStackAndWait: a parameter-file removal failure is NON-GREEN, not 
       parameters: buildCfnParameters({
         releaseVersion: "run-1",
         serverImageRepository: "ghcr.io/x/y",
+        runtimeBinaryUrl: "https://s3/r?X-Amz-Signature=SECRET",
+        runtimeBinaryChecksumUrl: "https://s3/s?X-Amz-Signature=SECRET",
         deployBundleUrl: "https://s3/b?X-Amz-Signature=SECRET",
         deployBundleChecksumUrl: "https://s3/s?X-Amz-Signature=SECRET",
         siteAddress: site,
         hostedZoneId: "Z1",
       }),
+      tags: TEST_CFN_TAGS,
       region: "us-east-1",
       writeParameterFile: async () => ({
         path: "/tmp/leaky-params.json",
@@ -524,12 +619,212 @@ test("createCfnStackAndWait: a create-complete wait failure tails describe-stack
       stackName: "stk",
       templatePath: "/t.yaml",
       parameters: [],
+      tags: TEST_CFN_TAGS,
       region: "us-east-1",
       writeParameterFile: async () => ({ path: "/tmp/p.json", remove: async () => undefined }),
       registerCleanup: async () => undefined,
     }),
     /ProliferateInstance CREATE_FAILED/,
   );
+});
+
+test("create failure: registered retention captures bounded SSM evidence before artifact then delete", async () => {
+  const runDir = await mkdtemp(path.join(tmpdir(), "selfhost-cfn-diagnostic-"));
+  const artifactPath = cfnBootstrapDiagnosticArtifactPath(runDir);
+  const order: string[] = [];
+  let releaseStack: (() => Promise<void>) | undefined;
+  const exec = new FakeExec((args) => {
+    if (args[0] === "cloudformation" && args[1] === "create-stack") {
+      order.push("create");
+      return "";
+    }
+    if (args[0] === "cloudformation" && args[1] === "wait" && args[2] === "stack-create-complete") {
+      order.push("wait-create");
+      throw new Error("waiter observed CREATE_FAILED");
+    }
+    if (args[0] === "cloudformation" && args[1] === "describe-stack-events") {
+      return JSON.stringify({
+        StackEvents: [{
+          LogicalResourceId: "ProliferateInstance",
+          ResourceStatus: "CREATE_FAILED",
+          ResourceStatusReason: "Received FAILURE signal",
+        }],
+      });
+    }
+    if (args[0] === "cloudformation" && args[1] === "describe-stack-resource") {
+      order.push("describe-instance");
+      return "i-0abc\n";
+    }
+    if (args[0] === "ssm" && args[1] === "describe-instance-information") {
+      order.push("ssm-online");
+      return "Online\n";
+    }
+    if (args[0] === "ssm" && args[1] === "send-command") {
+      order.push("ssm-send");
+      return "command-1\n";
+    }
+    if (args[0] === "ssm" && args[1] === "get-command-invocation") {
+      order.push("ssm-read");
+      return JSON.stringify({
+        Status: "Success",
+        StandardOutputContent: [
+          "__PROLIFERATE_CFN_LOG__:cfn-init-cmd.log",
+          "Running Command 02-bootstrap",
+          "Exited with error code 17: https://s3/x?X-Amz-Signature=secret",
+        ].join("\n"),
+      });
+    }
+    if (args[0] === "cloudformation" && args[1] === "delete-stack") {
+      order.push("delete");
+      return "";
+    }
+    if (args[0] === "cloudformation" && args[1] === "wait" && args[2] === "stack-delete-complete") {
+      order.push("wait-delete");
+      return "";
+    }
+    return "";
+  });
+
+  try {
+    await assert.rejects(
+      createCfnStackAndWait({
+        exec,
+        stackName: "stk",
+        templatePath: "/t.yaml",
+        parameters: [],
+        tags: TEST_CFN_TAGS,
+        region: "us-east-1",
+        writeParameterFile: async () => ({ path: "/tmp/p.json", remove: async () => undefined }),
+        registerCleanup: async (_kind, _providerId, release) => {
+          order.push("register");
+          releaseStack = release;
+        },
+        onCreateFailure: async ({ stackName, region }) => {
+          const diagnostic = await captureCfnBootstrapDiagnostic({
+            exec,
+            stackName,
+            region,
+            pollTimeoutMs: 100,
+            pollIntervalMs: 0,
+            now: () => 0,
+            sleep: async () => undefined,
+          });
+          const artifact: CfnBootstrapDiagnosticArtifactV1 = {
+            schema_version: 1,
+            kind: "proliferate.selfhost-cfn-bootstrap-diagnostic",
+            run: { run_id: "run-1", shard_id: "shard-0", attempt: 1, source_sha: "a".repeat(40) },
+            diagnostic,
+          };
+          await writeCfnBootstrapDiagnosticArtifact(artifactPath, artifact);
+          order.push("artifact");
+          return diagnostic;
+        },
+      }),
+      /Bootstrap diagnostic: captured\(02-bootstrap:failed:exit=17:download\)/,
+    );
+
+    assert.ok(releaseStack, "stack cleanup must be registered before create");
+    await releaseStack();
+    const persisted = await readFile(artifactPath, "utf8");
+    const parsed = JSON.parse(persisted) as CfnBootstrapDiagnosticArtifactV1;
+    assert.equal(parsed.diagnostic.capture_status, "captured");
+    assert.equal(parsed.diagnostic.observations[0]?.stage, "02-bootstrap");
+    for (const secret of ["X-Amz-Signature", "secret", "https://", "i-0abc", "stk"]) {
+      assert.ok(!persisted.includes(secret), `diagnostic artifact leaked ${secret}`);
+    }
+    assert.ok(order.indexOf("register") < order.indexOf("create"), `registered before create: ${order}`);
+    assert.ok(order.indexOf("ssm-read") < order.indexOf("artifact"), `SSM capture before artifact: ${order}`);
+    assert.ok(order.indexOf("artifact") < order.indexOf("delete"), `artifact before delete: ${order}`);
+    assert.ok(order.indexOf("delete") < order.indexOf("wait-delete"), `delete is awaited: ${order}`);
+  } finally {
+    await rm(runDir, { recursive: true, force: true });
+  }
+});
+
+test("create failure: SSM unavailable remains red, persists fixed evidence, and leaves no stack orphan", async () => {
+  const runDir = await mkdtemp(path.join(tmpdir(), "selfhost-cfn-no-ssm-"));
+  const artifactPath = cfnBootstrapDiagnosticArtifactPath(runDir);
+  const order: string[] = [];
+  let releaseStack: (() => Promise<void>) | undefined;
+  let clock = 0;
+  const exec = new FakeExec((args) => {
+    if (args[0] === "cloudformation" && args[1] === "create-stack") {
+      order.push("create");
+      return "";
+    }
+    if (args[0] === "cloudformation" && args[1] === "wait" && args[2] === "stack-create-complete") {
+      throw new Error("waiter observed CREATE_FAILED");
+    }
+    if (args[0] === "cloudformation" && args[1] === "describe-stack-events") {
+      return JSON.stringify({ StackEvents: [] });
+    }
+    if (args[0] === "cloudformation" && args[1] === "describe-stack-resource") {
+      return "i-0abc\n";
+    }
+    if (args[0] === "ssm" && args[1] === "describe-instance-information") {
+      order.push("ssm-offline");
+      return "Offline\n";
+    }
+    if (args[0] === "cloudformation" && args[1] === "delete-stack") {
+      order.push("delete");
+      return "";
+    }
+    if (args[0] === "cloudformation" && args[1] === "wait" && args[2] === "stack-delete-complete") {
+      order.push("wait-delete");
+      return "";
+    }
+    return "";
+  });
+
+  try {
+    await assert.rejects(
+      createCfnStackAndWait({
+        exec,
+        stackName: "stk",
+        templatePath: "/t.yaml",
+        parameters: [],
+        tags: TEST_CFN_TAGS,
+        region: "us-east-1",
+        writeParameterFile: async () => ({ path: "/tmp/p.json", remove: async () => undefined }),
+        registerCleanup: async (_kind, _providerId, release) => {
+          order.push("register");
+          releaseStack = release;
+        },
+        onCreateFailure: async ({ stackName, region }) => {
+          const diagnostic = await captureCfnBootstrapDiagnostic({
+            exec,
+            stackName,
+            region,
+            pollTimeoutMs: 2,
+            pollIntervalMs: 1,
+            now: () => clock,
+            sleep: async (ms) => { clock += ms; },
+          });
+          await writeCfnBootstrapDiagnosticArtifact(artifactPath, {
+            schema_version: 1,
+            kind: "proliferate.selfhost-cfn-bootstrap-diagnostic",
+            run: { run_id: "run-1", shard_id: "shard-0", attempt: 1, source_sha: "a".repeat(40) },
+            diagnostic,
+          });
+          order.push("artifact");
+          return diagnostic;
+        },
+      }),
+      /Bootstrap diagnostic: ssm_unavailable\(ssm_not_online\)/,
+    );
+
+    assert.ok(releaseStack, "stack cleanup must still be registered");
+    await releaseStack();
+    const persisted = JSON.parse(await readFile(artifactPath, "utf8")) as CfnBootstrapDiagnosticArtifactV1;
+    assert.equal(persisted.diagnostic.capture_status, "ssm_unavailable");
+    assert.equal(persisted.diagnostic.detail, "ssm_not_online");
+    assert.equal(exec.calls.some((call) => call[0] === "ssm" && call[1] === "send-command"), false);
+    assert.ok(order.indexOf("register") < order.indexOf("create"), `registered before create: ${order}`);
+    assert.ok(order.indexOf("artifact") < order.indexOf("delete"), `artifact before cleanup: ${order}`);
+    assert.ok(order.includes("wait-delete"), `stack delete must be awaited: ${order}`);
+  } finally {
+    await rm(runDir, { recursive: true, force: true });
+  }
 });
 
 test("describeStackEventsTail: returns the bounded formatter output", async () => {
@@ -590,14 +885,23 @@ test("SelfHostCfnCleanupStack: reverse-order teardown, route53 rides the stack, 
   await stack.registerAcquire("run_directory", "/run/cfn", async () => void order.push("run_directory"));
   await stack.registerAcquire("extracted_artifacts", "/run/cfn/artifacts", async () => void order.push("extracted_artifacts"));
   await stack.registerAcquire("s3_object", "s3://b/bundle", async () => void order.push("s3_bundle"));
+  await stack.registerAcquire("s3_object", "s3://b/runtime", async () => void order.push("s3_runtime"));
   await stack.registerAcquire("s3_object", "s3://b/sums", async () => void order.push("s3_sums"));
   await stack.registerAcquire("ghcr_package_version", "ghcr:tag", async () => void order.push("ghcr"));
   await stack.registerAcquire("cloudformation_stack", "stk", async () => void order.push("stack"));
 
   const evidence = await stack.runAll();
-  assert.deepEqual(order, ["stack", "ghcr", "s3_sums", "s3_bundle", "extracted_artifacts", "run_directory"]);
-  assert.equal(evidence.registered, 6);
-  assert.equal(evidence.reconciled, 6);
+  assert.deepEqual(order, [
+    "stack",
+    "ghcr",
+    "s3_sums",
+    "s3_runtime",
+    "s3_bundle",
+    "extracted_artifacts",
+    "run_directory",
+  ]);
+  assert.equal(evidence.registered, 7);
+  assert.equal(evidence.reconciled, 7);
   assert.equal(evidence.failed, 0);
   assert.equal(evidence.stackDeleted, true);
   assert.equal(evidence.s3ObjectsDeleted, true);

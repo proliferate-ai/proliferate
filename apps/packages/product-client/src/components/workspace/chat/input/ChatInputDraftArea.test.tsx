@@ -40,6 +40,7 @@ describe("ChatInputDraftArea", () => {
         hasDraftAttachments={false}
         draftAttachments={[]}
         onRemoveDraftAttachment={vi.fn()}
+        onOpenDraftAttachment={vi.fn()}
         overlayHostElement={null}
         onCancelEdit={vi.fn()}
       />,

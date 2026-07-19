@@ -754,9 +754,25 @@ healthy and removes cloud capability truthfully.
 
 #### `SH-CFN-WRAPPER` — shallow infrastructure wrapper proof
 
-When CloudFormation is a supported install entry point, verify candidate input
-digests, stack outputs, DNS/TLS, and `/meta` version. Do not repeat the owner,
-invite, and Desktop authentication journey already proved above.
+When CloudFormation is a supported install entry point, verify candidate server
+image, deploy-bundle, and platform runtime input digests, stack outputs,
+DNS/TLS, and `/meta` version. Do not repeat the owner, invite, and Desktop
+authentication journey already proved above.
+
+The qualification controller may retain a failed, disposable run-scoped stack
+only long enough to capture one bounded SSM bootstrap diagnostic. It registers
+stack cleanup before creation, reduces `cfn-init` output to allowlisted
+stage/exit/category observations, persists that secret-free companion beside
+the parent run evidence, and then runs the ordinary registered cleanup. Raw log
+lines, command text, URLs, environment values, and provider payloads are not
+evidence. An unavailable SSM path remains red and does not excuse stack
+cleanup. This diagnostic posture is qualification-only and does not change the
+production template or operator launch path. Supported `SIGINT`/`SIGTERM`
+cancellation enters the shared memoized world finalizer: it submits one bounded
+stack deletion and observes its immediate status without entering the ordinary
+long waiter. A deletion not yet proved complete remains unreconciled in the
+durable ledger, produces red cancellation custody, and is left for idempotent
+follow-up verification.
 
 Self-hosted Web, when supported, is the instance's same-origin Web application.
 It reuses product assertions but has no server picker, config rewrite, relaunch,

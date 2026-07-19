@@ -641,14 +641,40 @@ function defaultSshFactory(box: Ec2Box, keyPath: string): SshTransport {
     "UserKnownHostsFile=/dev/null",
     "-o",
     "ConnectTimeout=15",
+    // Keepalive so a long *silent* remote command (e.g. the gateway bootstrap,
+    // which redirects all output to a file and blocks on `up -d --wait`) does
+    // not get its idle TCP connection dropped by NAT — a dropped connection
+    // SIGHUPs the foreground remote process and kills it mid-bootstrap
+    // (observed as `client_loop: send disconnect: Broken pipe`).
+    "-o",
+    "ServerAliveInterval=15",
+    "-o",
+    "ServerAliveCountMax=8",
   ];
   return {
     async run(command, runOptions) {
-      const { stdout } = await execFileAsync("ssh", [...sshOpts, target, command], {
-        timeout: runOptions?.timeoutMs,
-        maxBuffer: 32 * 1024 * 1024,
-      });
-      return stdout.toString();
+      try {
+        const { stdout } = await execFileAsync("ssh", [...sshOpts, target, command], {
+          timeout: runOptions?.timeoutMs,
+          maxBuffer: 32 * 1024 * 1024,
+        });
+        return stdout.toString();
+      } catch (error) {
+        // execFile's message is just "Command failed: <cmd>\n<stderr>" — it
+        // does not say WHY (nonzero exit vs local-timeout SIGTERM vs signal).
+        // Stamp that identity on the message so evidence can distinguish a
+        // remote failure from the harness killing its own ssh (observed:
+        // three separate multi-hour diagnoses all started from a bare
+        // "Command failed: ssh ...").
+        if (error instanceof Error) {
+          const meta = error as Error & { code?: unknown; signal?: unknown; killed?: boolean };
+          const kind = meta.killed
+            ? `harness killed ssh (timeoutMs=${runOptions?.timeoutMs ?? "none"}, signal=${String(meta.signal)})`
+            : `exit=${String(meta.code ?? "unknown")}${meta.signal ? `, signal=${String(meta.signal)}` : ""}`;
+          error.message = `[ssh ${kind}] ${error.message}`;
+        }
+        throw error;
+      }
     },
     async scp(localPath, remotePath) {
       await execFileAsync("scp", [...sshOpts, localPath, `${target}:${remotePath}`], {

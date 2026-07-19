@@ -1,10 +1,11 @@
-# Harness ↔ LiteLLM Compatibility Matrix (live-verified, LiteLLM main-stable)
+# Harness ↔ LiteLLM Compatibility Matrix (live-verified 2026-07-03)
 
 ## Re-verification — 2026-07-03 (P4, agent-auth cleanup, REAL upstreams)
 
 Re-ran `scripts/agent-gateway-smoke/run.sh` (proxy-health, mint-key,
 models-list, chat-completion, spend-log, then all four per-harness runners)
-against a fresh local `litellm` + `litellm-db` (main-stable image, remapped
+against a fresh local `litellm` + `litellm-db` (the then-current `main-stable`
+image, remapped
 to host port 14001 — 14000 was held by an unrelated stale `litellm-probe`
 container) with **real** Anthropic/OpenAI/xAI provider keys (not mocks, not
 the invalid dev key the prior pass hit). Added one manual tool-call check
@@ -86,7 +87,10 @@ Recipe:
     wire_api = "responses"
   env: PROLIFERATE_GATEWAY_KEY=<vk>; sanitize OPENAI_API_KEY/ANTHROPIC_API_KEY.
   codex exec -m claude-haiku-4-5-20251001 --skip-git-repo-check "..."
-- LiteLLM main-stable SERVES /v1/responses and translates it to anthropic upstream: plain completion AND a shell tool call both succeeded (verified "codex_tool_ok" run → DONE; endpoints: POST /v1/responses 200s).
+- The then-current LiteLLM `main-stable` image served `/v1/responses` and
+  translated it to the Anthropic upstream: plain completion and a shell tool
+  call both succeeded (verified `codex_tool_ok` run → `DONE`; endpoints:
+  `POST /v1/responses` returned 200s).
 - The spec's feared "Unsupported tool type: namespace"/client_metadata errors did NOT reproduce on current LiteLLM — the /v1/responses bridge appears to have matured. Codex-on-gateway is NOT OpenAI-only.
 - codex exec without --skip-git-repo-check hangs outside a git repo — adapters must pass it or run in a repo.
 - gpt-5-mini upstream test blocked by an invalid OPENAI_API_KEY in the dev .env (upstream 401) — openai-family path unverified here, but it's the native wire format (low risk).

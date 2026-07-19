@@ -44,6 +44,7 @@ import {
 } from "#product/lib/domain/chat/composer/prompt-attachment-drag";
 import type { WorkspaceRenderSurface } from "#product/lib/domain/workspaces/tabs/shell-activation";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { usePromptAttachmentPreviewActions } from "#product/hooks/chat/workflows/use-prompt-attachment-preview-actions";
 
 function ChatContent({
   dockSafeAreaPx,
@@ -162,10 +163,14 @@ export const ChatView = memo(function ChatView({
     hasActiveSession: !suppressComposerActiveSessionState && !!activeSessionId,
     supportsAttachments,
   });
+  const { closeDraftAttachmentPreviews } = usePromptAttachmentPreviewActions();
   const promptAttachments = useChatPromptAttachments({
     scopeKey: workspaceUiKey,
     promptCapabilities,
     canAttachFiles: canAcceptFileDrop,
+    onBeforeReleaseAttachments: (attachments) => {
+      closeDraftAttachmentPreviews(attachments.map((attachment) => attachment.id));
+    },
   });
   const [fileDragOver, setFileDragOver] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);

@@ -4,7 +4,8 @@ Coarse operations only, per the agent-auth-litellm spec (section 2.2). This is
 the single module that knows LiteLLM endpoint paths; product services call the
 public functions re-exported from ``proliferate.integrations.litellm``.
 
-Verified against ghcr.io/berriai/litellm:main-stable:
+Verified against the upstream LiteLLM v1.93.0 image pinned in
+``server/litellm/Dockerfile``:
 
 - ``/team/new`` does NOT enforce unique ``team_alias``. The pinned image also
   ignores the ``team_alias`` query param on ``/team/list`` and returns *all*

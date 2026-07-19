@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
-import { createHash } from "node:crypto";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { createHash, randomUUID } from "node:crypto";
+import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -10,7 +10,6 @@ import {
   type CleanupLedger,
   type CleanupResourceKind,
 } from "../local-workspace/cleanup-ledger.js";
-import { randomUUID } from "node:crypto";
 
 /**
  * The self-host CloudFormation-WRAPPER controller (frozen tier-3 contract
@@ -68,20 +67,111 @@ export type RegisterCfnCleanup = (
   kind: Extract<CleanupResourceKind, "cloudformation_stack" | "s3_object" | "ghcr_package_version">,
   providerId: string,
   release: () => Promise<void>,
+  cancellationRelease?: () => Promise<CfnCancellationReleaseOutcome>,
 ) => Promise<void>;
 
 /** The owned Route53 zone the run subdomain lives under (matches `dns.ts`). */
 export const QUALIFICATION_ZONE = "qualification.proliferate.com";
+export const CFN_RUNTIME_ARCHIVE_NAME = "anyharness-aarch64-unknown-linux-musl.tar.gz";
+export const SELFHOST_QUALIFICATION_PURPOSE = "self-hosting-qualification";
 /** Presigned-URL lifetime: long enough for a bounded stack bootstrap, no longer. */
 export const PRESIGN_EXPIRY_SECONDS = 3600;
 /** Bounded stack create/delete wait (a t4g bootstrap has a PT20M CreationPolicy). */
 export const STACK_WAIT_TIMEOUT_MS = 30 * 60_000;
+/** Each cancellation delete/observe call must leave headroom in the 25s process bridge. */
+export const CFN_CANCELLATION_CALL_TIMEOUT_MS = 5_000;
 /** Bounded describe-stack-events tail on a create failure. */
 export const MAX_STACK_EVENT_TAIL = 8;
 const MAX_EVENT_REASON_CHARS = 240;
 /** Bounded SSM command poll (docker-inspect the running api image RepoDigest). */
 export const SSM_POLL_TIMEOUT_MS = 120_000;
 const SSM_POLL_INTERVAL_MS = 3_000;
+/** Failure-diagnostic SSM acquisition stays well below the outer stack/cleanup budget. */
+export const CFN_DIAGNOSTIC_TIMEOUT_MS = 90_000;
+export const CFN_BOOTSTRAP_DIAGNOSTIC_FILENAME = "cfn-bootstrap-diagnostic.json";
+const CFN_DIAGNOSTIC_MAX_OBSERVATIONS = 24;
+const CFN_DIAGNOSTIC_COMMAND_TIMEOUT_SECONDS = 30;
+const CFN_DIAGNOSTIC_COMMAND = [
+  "for f in /var/log/cfn-init.log /var/log/cfn-init-cmd.log; do",
+  "  [ -r \"$f\" ] || continue",
+  "  printf '__PROLIFERATE_CFN_LOG__:%s\\n' \"${f##*/}\"",
+  "  sudo grep -aiE 'Command [0-9]{2}-[A-Za-z0-9_-]+|exit(ed)?( with)? (error )?(code|status)|return code|timed out|timeout|failed|error|unhealthy|checksum|sha256|no space|permission denied|access denied|curl|download|docker compose|health' \"$f\" 2>/dev/null | tail -n 60 | cut -c1-500",
+  "done",
+].join("\n");
+
+export type CfnBootstrapDiagnosticCaptureStatus =
+  | "captured"
+  | "instance_unavailable"
+  | "ssm_unavailable"
+  | "command_failed"
+  | "no_allowlisted_observations";
+
+export type CfnBootstrapDiagnosticSource = "cfn-init.log" | "cfn-init-cmd.log";
+
+export type CfnBootstrapStage =
+  | "01-install-base"
+  | "02-install-compose-plugin"
+  | "03-enable-docker"
+  | "04-create-directories"
+  | "01-fetch-verify-extract"
+  | "01-daemon-reload"
+  | "02-bootstrap"
+  | "03-enable-cfn-hup"
+  | "unknown";
+
+export type CfnBootstrapFailureCategory =
+  | "timeout"
+  | "no_space"
+  | "permission_denied"
+  | "checksum"
+  | "download"
+  | "compose"
+  | "health"
+  | "command_failed"
+  | "other";
+
+export interface CfnBootstrapDiagnosticObservation {
+  source: CfnBootstrapDiagnosticSource;
+  stage: CfnBootstrapStage;
+  outcome: "failed" | "completed" | "observed";
+  exit_code: number | null;
+  category: CfnBootstrapFailureCategory;
+}
+
+/**
+ * Evidence-safe failure diagnostic. It deliberately carries no raw log line,
+ * provider payload, hostname, URL, command text, or secret-shaped value.
+ */
+export interface CfnBootstrapDiagnostic {
+  stack_name_hash: string;
+  instance_id_hash: string | null;
+  capture_status: CfnBootstrapDiagnosticCaptureStatus;
+  detail:
+    | "captured"
+    | "instance_not_found"
+    | "ssm_not_online"
+    | "send_command_failed"
+    | "command_poll_timeout"
+    | "command_terminal"
+    | "no_allowlisted_observations";
+  ssm_status: "Online" | "Success" | "Failed" | "TimedOut" | "Unavailable";
+  observations: CfnBootstrapDiagnosticObservation[];
+}
+
+export interface CfnBootstrapDiagnosticArtifactV1 {
+  schema_version: 1;
+  kind: "proliferate.selfhost-cfn-bootstrap-diagnostic";
+  run: {
+    run_id: string;
+    shard_id: string;
+    attempt: number;
+    source_sha: string;
+  };
+  diagnostic: CfnBootstrapDiagnostic;
+}
+
+/** A signal cleanup reconciles only observed absence; initiation stays in durable custody. */
+export type CfnCancellationReleaseOutcome = "reconciled" | "delete_initiated";
 
 // ── Pure, offline-testable helpers ──────────────────────────────────────────
 
@@ -100,6 +190,35 @@ export function cfnStackName(runId: string, shardId: string): string {
     .slice(0, 100)
     .replace(/-$/g, "");
   return `${base}-${digest}`;
+}
+
+export interface CfnStackTag {
+  key: "Purpose" | "Name" | "RunId" | "ShardId";
+  value: string;
+}
+
+/**
+ * Positive ownership tags for the stack and every CloudFormation resource that
+ * supports stack-tag propagation. These are also the request tags required by
+ * the bounded qualification IAM policy; an untagged create must never be sent.
+ */
+export function buildCfnStackTags(input: {
+  stackName: string;
+  runId: string;
+  shardId: string;
+}): CfnStackTag[] {
+  const tags: CfnStackTag[] = [
+    { key: "Purpose", value: SELFHOST_QUALIFICATION_PURPOSE },
+    { key: "Name", value: input.stackName },
+    { key: "RunId", value: input.runId },
+    { key: "ShardId", value: input.shardId },
+  ];
+  for (const tag of tags) {
+    if (!tag.value || tag.value.length > 256 || !/^[A-Za-z0-9_.:/=+@-]+$/.test(tag.value)) {
+      throw new Error(`CFN: unsafe ${tag.key} ownership tag value.`);
+    }
+  }
+  return tags;
 }
 
 /**
@@ -146,8 +265,8 @@ export interface CfnParameter {
  * Builds the CloudFormation parameter list in the JSON form
  * (`[{ParameterKey, ParameterValue}, ...]`) that is written to a permission-
  * restricted file and passed as `--parameters file://<path>` — NOT as argv
- * (PR7-CONTROL-003). The two DeployBundle values are presigned S3 URLs carrying
- * a bearer signature (`X-Amz-*`); keeping them out of argv keeps them out of the
+ * (PR7-CONTROL-003). The deploy/runtime override values are presigned S3 URLs
+ * carrying a bearer signature (`X-Amz-*`); keeping them out of argv keeps them out of the
  * process table, shell history, and any argv-echoing error. NoEcho template
  * params (Postgres/JWT/CloudSecret) are left to the template's auto-generate
  * default and never supplied here. Pure so param construction is asserted offline.
@@ -155,6 +274,8 @@ export interface CfnParameter {
 export function buildCfnParameters(input: {
   releaseVersion: string;
   serverImageRepository: string;
+  runtimeBinaryUrl: string;
+  runtimeBinaryChecksumUrl: string;
   deployBundleUrl: string;
   deployBundleChecksumUrl: string;
   siteAddress: string;
@@ -163,6 +284,8 @@ export function buildCfnParameters(input: {
   return [
     { ParameterKey: "ReleaseVersion", ParameterValue: input.releaseVersion },
     { ParameterKey: "ServerImageRepository", ParameterValue: input.serverImageRepository },
+    { ParameterKey: "RuntimeBinaryUrl", ParameterValue: input.runtimeBinaryUrl },
+    { ParameterKey: "RuntimeBinaryChecksumUrl", ParameterValue: input.runtimeBinaryChecksumUrl },
     { ParameterKey: "DeployBundleUrl", ParameterValue: input.deployBundleUrl },
     { ParameterKey: "DeployBundleChecksumUrl", ParameterValue: input.deployBundleChecksumUrl },
     { ParameterKey: "SiteAddress", ParameterValue: input.siteAddress },
@@ -310,7 +433,16 @@ export function imageDigestBound(pushedRef: string, observedRef: string): boolea
  * path-suffixed entries are accepted.
  */
 export function bundleDigestBound(sumsContent: string, candidateBundleSha256: string): boolean {
-  const want = candidateBundleSha256.trim().toLowerCase();
+  return namedAssetDigestBound(sumsContent, candidateBundleSha256, "proliferate-deploy.tar.gz");
+}
+
+/** True only when SHA256SUMS binds the exact arm64 runtime archive bytes. */
+export function runtimeDigestBound(sumsContent: string, candidateRuntimeSha256: string): boolean {
+  return namedAssetDigestBound(sumsContent, candidateRuntimeSha256, CFN_RUNTIME_ARCHIVE_NAME);
+}
+
+function namedAssetDigestBound(sumsContent: string, candidateSha256: string, basename: string): boolean {
+  const want = candidateSha256.trim().toLowerCase();
   if (!/^[0-9a-f]{64}$/.test(want)) {
     return false;
   }
@@ -320,7 +452,8 @@ export function bundleDigestBound(sumsContent: string, candidateBundleSha256: st
       continue;
     }
     const [, sha, name] = match;
-    if (sha.toLowerCase() === want && /(^|\/)proliferate-deploy\.tar\.gz$/.test(name.trim())) {
+    const normalizedName = name.trim().replace(/^\.\//, "");
+    if (sha.toLowerCase() === want && (normalizedName === basename || normalizedName.endsWith(`/${basename}`))) {
       return true;
     }
   }
@@ -361,11 +494,144 @@ export function boundedStackEventsTail(describeStackEventsJson: string, max: num
   return failures.length > 0 ? failures.join(" | ") : "(no FAILED stack events)";
 }
 
+const ALLOWED_CFN_BOOTSTRAP_STAGES = new Set<CfnBootstrapStage>([
+  "01-install-base",
+  "02-install-compose-plugin",
+  "03-enable-docker",
+  "04-create-directories",
+  "01-fetch-verify-extract",
+  "01-daemon-reload",
+  "02-bootstrap",
+  "03-enable-cfn-hup",
+]);
+
+/**
+ * Reduces bounded raw SSM output to a fixed-token diagnostic. Raw lines are
+ * never returned or persisted: only allowlisted template stage names, numeric
+ * exit codes, and coarse failure categories survive.
+ */
+export function parseCfnBootstrapDiagnosticOutput(raw: string): CfnBootstrapDiagnosticObservation[] {
+  let source: CfnBootstrapDiagnosticSource = "cfn-init.log";
+  const observations: CfnBootstrapDiagnosticObservation[] = [];
+  const seen = new Set<string>();
+  const activeStage: Record<CfnBootstrapDiagnosticSource, CfnBootstrapStage> = {
+    "cfn-init.log": "unknown",
+    "cfn-init-cmd.log": "unknown",
+  };
+
+  for (const rawLine of raw.split(/\r?\n/)) {
+    const marker = rawLine.match(/^__PROLIFERATE_CFN_LOG__:(cfn-init(?:-cmd)?\.log)$/);
+    if (marker) {
+      source = marker[1] as CfnBootstrapDiagnosticSource;
+      continue;
+    }
+    const line = rawLine.slice(0, 500);
+    if (!line.trim()) {
+      continue;
+    }
+
+    const stageMatch = line.match(/\bCommand\s+([0-9]{2}-[A-Za-z0-9_-]{1,64})\b/i);
+    const candidateStage = stageMatch?.[1]?.toLowerCase() as CfnBootstrapStage | undefined;
+    if (candidateStage && ALLOWED_CFN_BOOTSTRAP_STAGES.has(candidateStage)) {
+      activeStage[source] = candidateStage;
+    }
+    // cfn-init commonly logs the command name and its error/exit on adjacent
+    // lines. Carry only the last allowlisted stage token within the same file;
+    // no arbitrary prior text survives.
+    const stage = activeStage[source];
+    const exitMatch = line.match(
+      /\b(?:exit(?:ed)?(?:\s+with)?(?:\s+(?:error\s+)?(?:code|status))?|return\s+code)\s*[:=]?\s*(\d{1,3})\b/i,
+    );
+    const exitCode = exitMatch ? Number.parseInt(exitMatch[1], 10) : null;
+    const lower = line.toLowerCase();
+    const outcome: CfnBootstrapDiagnosticObservation["outcome"] =
+      /failed|error|denied|unhealthy|no space|timed out|timeout/.test(lower)
+        ? "failed"
+        : /completed|succeeded|success/.test(lower)
+          ? "completed"
+          : "observed";
+    const category = cfnBootstrapFailureCategory(lower);
+
+    // A stage-heading line updates `activeStage` but is not itself a failure
+    // observation. Lines without an exit/outcome/category carry no result.
+    if (exitCode === null && category === "other" && outcome === "observed") {
+      continue;
+    }
+    const observation: CfnBootstrapDiagnosticObservation = {
+      source,
+      stage,
+      outcome,
+      exit_code: exitCode,
+      category,
+    };
+    const key = JSON.stringify(observation);
+    if (!seen.has(key)) {
+      seen.add(key);
+      observations.push(observation);
+    }
+    if (observations.length >= CFN_DIAGNOSTIC_MAX_OBSERVATIONS) {
+      break;
+    }
+  }
+  return observations;
+}
+
+function cfnBootstrapFailureCategory(lower: string): CfnBootstrapFailureCategory {
+  if (/timed out|timeout/.test(lower)) return "timeout";
+  if (/no space/.test(lower)) return "no_space";
+  if (/permission denied|access denied/.test(lower)) return "permission_denied";
+  if (/checksum|sha256/.test(lower)) return "checksum";
+  if (/curl|download|fetch|http/.test(lower)) return "download";
+  if (/docker compose|\bcompose\b/.test(lower)) return "compose";
+  if (/unhealthy|\bhealth\b/.test(lower)) return "health";
+  if (/failed|error|exit|return code/.test(lower)) return "command_failed";
+  return "other";
+}
+
+/** The artifact lives outside `<runDir>/cfn`, which cleanup removes on success. */
+export function cfnBootstrapDiagnosticArtifactPath(runDir: string): string {
+  return path.join(runDir, "logs", CFN_BOOTSTRAP_DIAGNOSTIC_FILENAME);
+}
+
+/** Atomically writes the already-reduced diagnostic before stack cleanup. */
+export async function writeCfnBootstrapDiagnosticArtifact(
+  artifactPath: string,
+  artifact: CfnBootstrapDiagnosticArtifactV1,
+): Promise<void> {
+  const serialized = `${JSON.stringify(artifact, null, 2)}\n`;
+  // Defense in depth: the structured type cannot carry raw output, and this
+  // guard prevents a future widening from persisting common secret shapes.
+  if (/X-Amz-|Bearer\s+|\b(?:sk|vk)-[A-Za-z0-9._-]{6,}|\beyJ[A-Za-z0-9._-]{10,}/i.test(serialized)) {
+    throw new Error("CFN: refusing to persist a secret-shaped bootstrap diagnostic.");
+  }
+  await mkdir(path.dirname(artifactPath), { recursive: true });
+  const tmpPath = `${artifactPath}.tmp-${process.pid}-${randomUUID()}`;
+  try {
+    await writeFile(tmpPath, serialized, { mode: 0o600 });
+    await rename(tmpPath, artifactPath);
+  } catch (error) {
+    await rm(tmpPath, { force: true }).catch(() => undefined);
+    throw error;
+  }
+}
+
+/** Safe one-line summary for the ordinary failed-cell reason. */
+export function summarizeCfnBootstrapDiagnostic(diagnostic: CfnBootstrapDiagnostic): string {
+  const observations = diagnostic.observations
+    .slice(0, 4)
+    .map((item) => `${item.stage}:${item.outcome}:exit=${item.exit_code ?? "unknown"}:${item.category}`)
+    .join(",");
+  return observations
+    ? `${diagnostic.capture_status}(${observations})`
+    : `${diagnostic.capture_status}(${diagnostic.detail})`;
+}
+
 // ── S3 upload / presign ─────────────────────────────────────────────────────
 
 /**
- * Uploads the candidate deploy bundle + its SHA256SUMS to the run-scoped S3
- * prefix and returns presigned (bounded-expiry) GET URLs for each. Registers an
+ * Uploads the candidate deploy bundle, arm64 runtime archive, and their shared
+ * SHA256SUMS to the run-scoped S3 prefix and returns presigned (bounded-expiry)
+ * GET URLs for each. Registers an
  * `s3_object` cleanup intent BEFORE each `s3 cp` (registered-before-create), so
  * an interrupted run always has a durable delete releaser.
  */
@@ -375,16 +641,25 @@ export async function uploadBundleAndPresign(input: {
   bucket: string;
   keyPrefix: string;
   bundlePath: string;
+  runtimePath: string;
   sumsPath: string;
   expirySeconds?: number;
   registerCleanup: RegisterCfnCleanup;
   timeoutMs?: number;
   log?: (message: string) => void;
-}): Promise<{ deployBundleUrl: string; deployBundleChecksumUrl: string; bundleKey: string; sumsKey: string }> {
+}): Promise<{
+  deployBundleUrl: string;
+  deployBundleChecksumUrl: string;
+  runtimeBinaryUrl: string;
+  runtimeKey: string;
+  bundleKey: string;
+  sumsKey: string;
+}> {
   const { exec, region, bucket, keyPrefix } = input;
   const log = input.log ?? (() => undefined);
   const expiry = input.expirySeconds ?? PRESIGN_EXPIRY_SECONDS;
   const bundleKey = `${keyPrefix}proliferate-deploy.tar.gz`;
+  const runtimeKey = `${keyPrefix}${CFN_RUNTIME_ARCHIVE_NAME}`;
   const sumsKey = `${keyPrefix}self-hosted-assets.SHA256SUMS`;
 
   await input.registerCleanup("s3_object", `s3://${bucket}/${bundleKey}`, () =>
@@ -392,6 +667,14 @@ export async function uploadBundleAndPresign(input: {
   );
   log(`s3 cp bundle -> s3://${bucket}/${bundleKey}`);
   await exec.run(["s3", "cp", input.bundlePath, `s3://${bucket}/${bundleKey}`, "--region", region], {
+    timeoutMs: input.timeoutMs,
+  });
+
+  await input.registerCleanup("s3_object", `s3://${bucket}/${runtimeKey}`, () =>
+    deleteS3Object(exec, region, bucket, runtimeKey),
+  );
+  log(`s3 cp runtime -> s3://${bucket}/${runtimeKey}`);
+  await exec.run(["s3", "cp", input.runtimePath, `s3://${bucket}/${runtimeKey}`, "--region", region], {
     timeoutMs: input.timeoutMs,
   });
 
@@ -406,13 +689,16 @@ export async function uploadBundleAndPresign(input: {
   const deployBundleUrl = (
     await exec.run(["s3", "presign", `s3://${bucket}/${bundleKey}`, "--expires-in", String(expiry), "--region", region])
   ).trim();
+  const runtimeBinaryUrl = (
+    await exec.run(["s3", "presign", `s3://${bucket}/${runtimeKey}`, "--expires-in", String(expiry), "--region", region])
+  ).trim();
   const deployBundleChecksumUrl = (
     await exec.run(["s3", "presign", `s3://${bucket}/${sumsKey}`, "--expires-in", String(expiry), "--region", region])
   ).trim();
-  if (!deployBundleUrl || !deployBundleChecksumUrl) {
+  if (!deployBundleUrl || !runtimeBinaryUrl || !deployBundleChecksumUrl) {
     throw new Error("CFN: aws s3 presign returned an empty URL.");
   }
-  return { deployBundleUrl, deployBundleChecksumUrl, bundleKey, sumsKey };
+  return { deployBundleUrl, deployBundleChecksumUrl, runtimeBinaryUrl, runtimeKey, bundleKey, sumsKey };
 }
 
 /** Deletes one S3 object (idempotent — an already-absent object is a clean outcome). */
@@ -582,15 +868,18 @@ export async function validateTemplate(
 /**
  * Registers the stack cleanup BEFORE `create-stack`, submits the create with the
  * candidate parameters, waits (bounded) for `stack-create-complete`, and returns
- * the parsed Outputs. On a create failure it appends a bounded, secret-free
- * `describe-stack-events` tail to the thrown error. The Route53 record is
- * stack-owned (`CreateRoute53Record=true`), so its deletion rides `delete-stack`.
+ * the parsed Outputs. Qualification alone asks CloudFormation to retain a failed
+ * create (`DO_NOTHING`) just long enough for the optional bounded diagnostic
+ * callback, then the already-registered cleanup owns deletion. On a create
+ * failure it appends bounded, secret-free event + diagnostic summaries to the
+ * thrown error. The production template/launch path is unchanged.
  */
 export async function createCfnStackAndWait(input: {
   exec: CfnAwsExec;
   stackName: string;
   templatePath: string;
   parameters: readonly CfnParameter[];
+  tags: readonly CfnStackTag[];
   region: string;
   registerCleanup: RegisterCfnCleanup;
   /**
@@ -599,6 +888,11 @@ export async function createCfnStackAndWait(input: {
    * disk; the production impl (`tmpParameterFileIo`) uses mkdtemp + 0600.
    */
   writeParameterFile: (json: string) => Promise<{ path: string; remove: () => Promise<void> }>;
+  onCreateFailure?: (context: {
+    stackName: string;
+    region: string;
+    eventTail: string;
+  }) => Promise<CfnBootstrapDiagnostic>;
   waitTimeoutMs?: number;
   log?: (message: string) => void;
 }): Promise<CfnStackOutputs> {
@@ -606,8 +900,11 @@ export async function createCfnStackAndWait(input: {
   const log = input.log ?? (() => undefined);
   const waitTimeoutMs = input.waitTimeoutMs ?? STACK_WAIT_TIMEOUT_MS;
 
-  await input.registerCleanup("cloudformation_stack", stackName, () =>
-    deleteCfnStackAndWait(exec, stackName, region, { waitTimeoutMs }),
+  await input.registerCleanup(
+    "cloudformation_stack",
+    stackName,
+    () => deleteCfnStackAndWait(exec, stackName, region, { waitTimeoutMs }),
+    () => initiateCfnStackDeletionForCancellation(exec, stackName, region),
   );
 
   log(`create-stack ${stackName}`);
@@ -628,6 +925,13 @@ export async function createCfnStackAndWait(input: {
       `file://${paramFile.path}`,
       "--capabilities",
       "CAPABILITY_IAM",
+      // Qualification-only retention: the durable cleanup was registered
+      // before create, so a failed stack remains only for bounded diagnostics
+      // and is still deleted by the ordinary reverse-order finalizer.
+      "--on-failure",
+      "DO_NOTHING",
+      "--tags",
+      ...input.tags.map((tag) => `Key=${tag.key},Value=${tag.value}`),
       "--region",
       region,
     ]);
@@ -665,9 +969,21 @@ export async function createCfnStackAndWait(input: {
     });
   } catch (error) {
     const tail = await describeStackEventsTail(exec, stackName, region).catch(() => "(stack events unavailable)");
+    let diagnosticSummary = "not_requested";
+    if (input.onCreateFailure) {
+      try {
+        const diagnostic = await input.onCreateFailure({ stackName, region, eventTail: tail });
+        diagnosticSummary = summarizeCfnBootstrapDiagnostic(diagnostic);
+      } catch {
+        // Keep the original create failure authoritative and fail closed. The
+        // fixed marker cannot leak a callback/provider/filesystem error.
+        diagnosticSummary = "capture_failed";
+      }
+    }
     throw new Error(
       scrubCfnParameterUrls(
-        `CFN: stack ${stackName} did not reach CREATE_COMPLETE (${errText(error)}). Recent failures: ${tail}`,
+        `CFN: stack ${stackName} did not reach CREATE_COMPLETE (${errText(error)}). ` +
+          `Recent failures: ${tail}. Bootstrap diagnostic: ${diagnosticSummary}`,
       ),
     );
   }
@@ -712,6 +1028,270 @@ export async function deleteCfnStackAndWait(
   await exec.run(["cloudformation", "wait", "stack-delete-complete", "--stack-name", stackName, "--region", region], {
     timeoutMs: waitTimeoutMs,
   });
+}
+
+/**
+ * Signal-safe stack cleanup: submit one exact `delete-stack`, then make one
+ * bounded status observation. It never enters the ordinary 30-minute waiter.
+ * A successfully submitted but still-running deletion remains unreconciled in
+ * the durable ledger so the cancellation receipt is red and follow-up cleanup
+ * can verify absence idempotently.
+ */
+export async function initiateCfnStackDeletionForCancellation(
+  exec: CfnAwsExec,
+  stackName: string,
+  region: string,
+  options: { callTimeoutMs?: number } = {},
+): Promise<CfnCancellationReleaseOutcome> {
+  const callTimeoutMs = options.callTimeoutMs ?? CFN_CANCELLATION_CALL_TIMEOUT_MS;
+  try {
+    await exec.run(
+      ["cloudformation", "delete-stack", "--stack-name", stackName, "--region", region],
+      { timeoutMs: callTimeoutMs },
+    );
+  } catch (error) {
+    if (cfnStackAbsentError(error)) {
+      return "reconciled";
+    }
+    throw new Error("CFN cancellation cleanup could not confirm that delete-stack was accepted.");
+  }
+
+  try {
+    const status = (
+      await exec.run(
+        [
+          "cloudformation",
+          "describe-stacks",
+          "--stack-name",
+          stackName,
+          "--region",
+          region,
+          "--query",
+          "Stacks[0].StackStatus",
+          "--output",
+          "text",
+        ],
+        { timeoutMs: callTimeoutMs },
+      )
+    ).trim();
+    return status === "DELETE_COMPLETE" ? "reconciled" : "delete_initiated";
+  } catch (error) {
+    return cfnStackAbsentError(error) ? "reconciled" : "delete_initiated";
+  }
+}
+
+function cfnStackAbsentError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /(?:does not exist|not exist|not found)/i.test(message);
+}
+
+// ── Failed-bootstrap SSM diagnostics (qualification only) ──────────────────
+
+/**
+ * Captures a bounded, allowlisted diagnostic from a retained CREATE_FAILED
+ * stack. Every provider call and the total poll are bounded. Provider errors
+ * become a fixed non-green diagnostic status; arbitrary error/output text is
+ * never serialized.
+ */
+export async function captureCfnBootstrapDiagnostic(input: {
+  exec: CfnAwsExec;
+  stackName: string;
+  region: string;
+  pollTimeoutMs?: number;
+  pollIntervalMs?: number;
+  now?: () => number;
+  sleep?: (ms: number) => Promise<void>;
+}): Promise<CfnBootstrapDiagnostic> {
+  const { exec, stackName, region } = input;
+  const pollTimeoutMs = input.pollTimeoutMs ?? CFN_DIAGNOSTIC_TIMEOUT_MS;
+  const pollIntervalMs = input.pollIntervalMs ?? SSM_POLL_INTERVAL_MS;
+  const now = input.now ?? Date.now;
+  const sleepFn = input.sleep ?? sleep;
+  const stackNameHash = createHash("sha256").update(stackName).digest("hex");
+
+  let instanceId: string;
+  try {
+    instanceId = (
+      await exec.run(
+        [
+          "cloudformation",
+          "describe-stack-resource",
+          "--stack-name",
+          stackName,
+          "--logical-resource-id",
+          "ProliferateInstance",
+          "--region",
+          region,
+          "--query",
+          "StackResourceDetail.PhysicalResourceId",
+          "--output",
+          "text",
+        ],
+        { timeoutMs: 15_000 },
+      )
+    ).trim();
+  } catch {
+    instanceId = "";
+  }
+  if (!/^i-[0-9a-f]+$/i.test(instanceId)) {
+    return emptyCfnBootstrapDiagnostic(stackNameHash, null, "instance_unavailable", "instance_not_found");
+  }
+  const instanceIdHash = createHash("sha256").update(instanceId).digest("hex");
+
+  const deadline = now() + pollTimeoutMs;
+  let online = false;
+  do {
+    try {
+      const ping = (
+        await exec.run(
+          [
+            "ssm",
+            "describe-instance-information",
+            "--filters",
+            `Key=InstanceIds,Values=${instanceId}`,
+            "--region",
+            region,
+            "--query",
+            "InstanceInformationList[0].PingStatus",
+            "--output",
+            "text",
+          ],
+          { timeoutMs: 15_000 },
+        )
+      ).trim();
+      if (ping === "Online") {
+        online = true;
+        break;
+      }
+    } catch {
+      // Keep polling until the shared deadline. The final artifact records only
+      // the fixed ssm_not_online code, never raw provider errors.
+    }
+    if (now() >= deadline) break;
+    await sleepFn(pollIntervalMs);
+  } while (now() < deadline);
+  if (!online) {
+    return emptyCfnBootstrapDiagnostic(stackNameHash, instanceIdHash, "ssm_unavailable", "ssm_not_online");
+  }
+
+  let commandId: string;
+  try {
+    commandId = (
+      await exec.run(
+        [
+          "ssm",
+          "send-command",
+          "--instance-ids",
+          instanceId,
+          "--document-name",
+          "AWS-RunShellScript",
+          "--timeout-seconds",
+          String(CFN_DIAGNOSTIC_COMMAND_TIMEOUT_SECONDS),
+          "--parameters",
+          JSON.stringify({ commands: [CFN_DIAGNOSTIC_COMMAND] }),
+          "--region",
+          region,
+          "--query",
+          "Command.CommandId",
+          "--output",
+          "text",
+        ],
+        { timeoutMs: 15_000 },
+      )
+    ).trim();
+  } catch {
+    commandId = "";
+  }
+  if (!commandId || commandId === "None") {
+    return emptyCfnBootstrapDiagnostic(stackNameHash, instanceIdHash, "ssm_unavailable", "send_command_failed");
+  }
+
+  let lastStatus = "Pending";
+  while (now() < deadline) {
+    await sleepFn(pollIntervalMs);
+    let raw = "";
+    try {
+      raw = await exec.run(
+        [
+          "ssm",
+          "get-command-invocation",
+          "--command-id",
+          commandId,
+          "--instance-id",
+          instanceId,
+          "--region",
+          region,
+          "--output",
+          "json",
+        ],
+        { timeoutMs: 15_000 },
+      );
+    } catch {
+      continue;
+    }
+    let parsed: { Status?: unknown; StandardOutputContent?: unknown };
+    try {
+      parsed = JSON.parse(raw) as { Status?: unknown; StandardOutputContent?: unknown };
+    } catch {
+      continue;
+    }
+    lastStatus = typeof parsed.Status === "string" ? parsed.Status : lastStatus;
+    if (lastStatus === "Success") {
+      const observations = parseCfnBootstrapDiagnosticOutput(
+        typeof parsed.StandardOutputContent === "string" ? parsed.StandardOutputContent : "",
+      );
+      if (observations.length === 0) {
+        return emptyCfnBootstrapDiagnostic(
+          stackNameHash,
+          instanceIdHash,
+          "no_allowlisted_observations",
+          "no_allowlisted_observations",
+          "Success",
+        );
+      }
+      return {
+        stack_name_hash: stackNameHash,
+        instance_id_hash: instanceIdHash,
+        capture_status: "captured",
+        detail: "captured",
+        ssm_status: "Success",
+        observations,
+      };
+    }
+    if (["Failed", "Cancelled", "TimedOut", "Undeliverable", "Terminated"].includes(lastStatus)) {
+      return emptyCfnBootstrapDiagnostic(
+        stackNameHash,
+        instanceIdHash,
+        "command_failed",
+        "command_terminal",
+        lastStatus === "TimedOut" ? "TimedOut" : "Failed",
+      );
+    }
+  }
+  return emptyCfnBootstrapDiagnostic(
+    stackNameHash,
+    instanceIdHash,
+    "ssm_unavailable",
+    "command_poll_timeout",
+    "Unavailable",
+  );
+}
+
+function emptyCfnBootstrapDiagnostic(
+  stackNameHash: string,
+  instanceIdHash: string | null,
+  captureStatus: CfnBootstrapDiagnosticCaptureStatus,
+  detail: CfnBootstrapDiagnostic["detail"],
+  ssmStatus: CfnBootstrapDiagnostic["ssm_status"] = "Unavailable",
+): CfnBootstrapDiagnostic {
+  return {
+    stack_name_hash: stackNameHash,
+    instance_id_hash: instanceIdHash,
+    capture_status: captureStatus,
+    detail,
+    ssm_status: ssmStatus,
+    observations: [],
+  };
 }
 
 // ── SSM image-digest readback (the image-digest binding proof) ───────────────
@@ -843,6 +1423,7 @@ interface CfnCleanupRegistration {
   entryId: string;
   kind: SelfHostCfnCleanupResourceKind;
   release: () => Promise<void>;
+  cancellationRelease?: () => Promise<CfnCancellationReleaseOutcome>;
 }
 
 /**
@@ -878,10 +1459,14 @@ export class SelfHostCfnCleanupStack {
   }
 
   /** Writes an `intent` record and returns the entry id to acquire. */
-  async register(kind: SelfHostCfnCleanupResourceKind, release: () => Promise<void>): Promise<string> {
+  async register(
+    kind: SelfHostCfnCleanupResourceKind,
+    release: () => Promise<void>,
+    cancellationRelease?: () => Promise<CfnCancellationReleaseOutcome>,
+  ): Promise<string> {
     const entryId = randomUUID();
     await this.ledger.registerIntent(kind, entryId);
-    this.registrations.push({ entryId, kind, release });
+    this.registrations.push({ entryId, kind, release, cancellationRelease });
     return entryId;
   }
 
@@ -895,8 +1480,9 @@ export class SelfHostCfnCleanupStack {
     kind: SelfHostCfnCleanupResourceKind,
     providerId: string,
     release: () => Promise<void>,
+    cancellationRelease?: () => Promise<CfnCancellationReleaseOutcome>,
   ): Promise<void> {
-    const entryId = await this.register(kind, release);
+    const entryId = await this.register(kind, release, cancellationRelease);
     await this.acquired(entryId, providerId);
   }
 
@@ -963,6 +1549,56 @@ export class SelfHostCfnCleanupStack {
       ghcrVersionDeleted: this.categoryClean("ghcrVersionDeleted", succeeded),
       route53RecordDeleted,
       localPathsRemoved: this.categoryClean("localPathsRemoved", succeeded),
+    };
+  }
+
+  /**
+   * Bounded SIGINT/SIGTERM posture. Only the stack has a signal-specific
+   * releaser: submit its exact delete request and observe once, leaving every
+   * unverified/deferred entry acquired. The run directory and ledger therefore
+   * survive for upload and replay, and the returned summary stays red until an
+   * observed-absent follow-up performs ordinary reconciliation.
+   */
+  async runForCancellation(): Promise<SelfHostCfnWorldCleanupEvidence> {
+    const succeeded = new Set<string>();
+    let failed = this.registrations.length;
+    for (const registration of [...this.registrations].reverse()) {
+      if (registration.kind !== "cloudformation_stack") {
+        continue;
+      }
+      if (!registration.cancellationRelease) {
+        this.log("CFN cancellation cleanup has no bounded stack releaser; preserving durable custody");
+        continue;
+      }
+      try {
+        const outcome = await registration.cancellationRelease();
+        if (outcome !== "reconciled") {
+          this.log("CFN cancellation delete was initiated but absence is not yet proven; preserving durable custody");
+          continue;
+        }
+        try {
+          await this.ledger.markReconciled(registration.entryId);
+          succeeded.add(registration.entryId);
+          failed -= 1;
+        } catch {
+          this.log("CFN cancellation observed stack absence but could not persist reconciliation; preserving custody");
+        }
+      } catch {
+        this.log("CFN cancellation delete initiation failed; preserving durable custody");
+      }
+    }
+    return {
+      ledgerIdHash: hashLedgerId(this.ledger.ledgerId),
+      registered: this.registrations.length,
+      reconciled: succeeded.size,
+      failed,
+      stackDeleted: this.categoryClean("stackDeleted", succeeded),
+      s3ObjectsDeleted: false,
+      ghcrVersionDeleted: false,
+      // Signal cleanup intentionally avoids an extra Route53 provider call.
+      // Even observed stack absence remains fail-closed for DNS until replay.
+      route53RecordDeleted: false,
+      localPathsRemoved: false,
     };
   }
 

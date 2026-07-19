@@ -375,6 +375,15 @@ test("validateReport requires exit 2 whenever runner/integrity errors exist", ()
 test("boundMessage caps at 4096 code points; redactSecrets replaces exact values", () => {
   assert.equal(boundMessage("short"), "short");
   assert.equal([...boundMessage("x".repeat(5000))].length, 4096);
+  // Head AND tail survive: a failed remote command's message is
+  // "Command failed: <cmd>\n<chatty stderr>\n<the actual error line>" — the
+  // final line is the diagnosis and must not be truncated away.
+  const long = `Command failed: ssh box install.sh\n${"pull progress\n".repeat(1000)}ERROR: the real reason`;
+  const bounded = boundMessage(long);
+  assert.equal([...bounded].length, 4096);
+  assert.ok(bounded.startsWith("Command failed: ssh box install.sh"));
+  assert.ok(bounded.endsWith("ERROR: the real reason"));
+  assert.ok(bounded.includes("…"));
   assert.equal(redactSecrets("key=abc123 done", ["abc123"]), "key=[REDACTED] done");
   assert.equal(redactSecrets("nothing here", ["abc123"]), "nothing here");
 });

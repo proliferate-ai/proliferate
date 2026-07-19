@@ -427,6 +427,7 @@ export interface SelfHostCfnWrapperEvidenceV1 {
   template_sha256: string;
   template_validated: true;
   bundle_digest_bound: true;
+  runtime_digest_bound: true;
   image_digest_bound: true;
   outputs_valid: true;
   dns_tls_verified: true;
@@ -762,13 +763,24 @@ export class ReportValidationError extends Error {
 
 export const MAX_MESSAGE_CODE_POINTS = 4096;
 
-/** Bounds a message to 4,096 Unicode code points. */
+/**
+ * Bounds a message to 4,096 Unicode code points, keeping the head AND the
+ * tail. Failed remote commands reject with "Command failed: <cmd>\n<stderr>",
+ * and chatty stderr (docker pull/compose progress) pushes the actual die()/
+ * exit line past a head-only cap — run 29630784953's SH-INSTALL-CLAIM evidence
+ * was 4096 points of pull progress with the real failure line truncated away.
+ * The head keeps the command identity; the tail keeps the reason it failed.
+ */
 export function boundMessage(message: string): string {
   const codePoints = [...message];
   if (codePoints.length <= MAX_MESSAGE_CODE_POINTS) {
     return message;
   }
-  return `${codePoints.slice(0, MAX_MESSAGE_CODE_POINTS - 1).join("")}…`;
+  const headLength = 1024;
+  const tailLength = MAX_MESSAGE_CODE_POINTS - headLength - 1;
+  const head = codePoints.slice(0, headLength).join("");
+  const tail = codePoints.slice(codePoints.length - tailLength).join("");
+  return `${head}…${tail}`;
 }
 
 /** Replaces exact resolved secret values anywhere in the string with [REDACTED]. */
@@ -2296,6 +2308,7 @@ const SELFHOST_CFN_WRAPPER_EVIDENCE_KEYS = [
   "template_sha256",
   "template_validated",
   "bundle_digest_bound",
+  "runtime_digest_bound",
   "image_digest_bound",
   "outputs_valid",
   "dns_tls_verified",
@@ -2603,6 +2616,7 @@ function validateSelfHostCfnWrapperEvidence(
   requireSafeEvidenceToken(`${where}.template_sha256`, evidence.template_sha256);
   requireTrue(`${where}.template_validated`, evidence.template_validated);
   requireTrue(`${where}.bundle_digest_bound`, evidence.bundle_digest_bound);
+  requireTrue(`${where}.runtime_digest_bound`, evidence.runtime_digest_bound);
   requireTrue(`${where}.image_digest_bound`, evidence.image_digest_bound);
   requireTrue(`${where}.outputs_valid`, evidence.outputs_valid);
   requireTrue(`${where}.dns_tls_verified`, evidence.dns_tls_verified);

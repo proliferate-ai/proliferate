@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { fileViewerTarget } from "#product/lib/domain/workspaces/viewer/viewer-target";
+import {
+  fileViewerTarget,
+  promptAttachmentViewerTarget,
+  viewerTargetKey,
+} from "#product/lib/domain/workspaces/viewer/viewer-target";
 import { fileWorkspaceShellTabKey } from "#product/lib/domain/workspaces/tabs/shell-tabs";
 import { deriveWorkspaceFileTabSeed } from "#product/lib/domain/workspaces/tabs/shell-file-seed";
 
@@ -35,5 +39,28 @@ describe("deriveWorkspaceFileTabSeed", () => {
         activeShellTabKey,
       }).initialActiveTargetKey).toBeNull();
     }
+  });
+
+  it("does not restore session-local attachment preview targets", () => {
+    const attachmentKey = viewerTargetKey(promptAttachmentViewerTarget({
+      origin: "draft",
+      attachmentId: "attachment:one",
+      name: "notes.txt",
+      mimeType: "text/plain",
+      attachmentKind: "text_resource",
+      attachmentSource: "paste",
+      objectUrl: "blob:attachment-one",
+    }));
+
+    expect(deriveWorkspaceFileTabSeed({
+      shellOrderKeys: ["chat:s1", attachmentKey, "file:README.md"],
+      activeShellTabKey: attachmentKey,
+      rightPanelHeaderOrderKeys: [attachmentKey],
+      rightPanelActiveEntryKey: attachmentKey,
+    })).toEqual({
+      shellOrderKeys: ["chat:s1", fileWorkspaceShellTabKey("README.md")],
+      initialOpenTargets: [fileViewerTarget("README.md")],
+      initialActiveTargetKey: null,
+    });
   });
 });

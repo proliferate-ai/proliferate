@@ -10,6 +10,10 @@ name: Self-Host Smoke
 # day, so this is the check that keeps it from regressing silently. Designed
 # to be a blocking required check on PRs to main.
 #
+# Before the heavy image/Compose smoke, this same required Ubuntu job runs the
+# no-network deploy/template suite, including the rendered GNU timeout proof
+# that a TERM-resistant CloudFormation bootstrap is hard-bounded and signaled.
+#
 # No on.*.paths filter: a path-skipped run of a required check never reports a
 # conclusion, so unrelated PRs would sit on a Pending check forever and be
 # unmergeable. Instead a cheap changes job always runs, diffs against the merge
@@ -119,6 +123,9 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Test self-host deploy and CloudFormation controls
+        run: server/deploy/tests/run.sh
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:

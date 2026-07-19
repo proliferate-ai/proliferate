@@ -8,6 +8,7 @@ import type {
 import {
   DraftAttachmentPreviewList,
   type DraftAttachmentPreviewListProps,
+  type PromptAttachmentPreviewHandler,
 } from "#product/components/workspace/chat/content/PromptContentRenderer";
 import { useChatDraftValue } from "#product/hooks/chat/ui/use-chat-draft-state";
 import { ComposerCommandEditor } from "#product/components/workspace/chat/input/ComposerCommandEditor";
@@ -37,6 +38,7 @@ interface ChatInputDraftAreaProps {
   hasDraftAttachments: boolean;
   draftAttachments: DraftAttachmentPreviewListProps["attachments"];
   onRemoveDraftAttachment: DraftAttachmentPreviewListProps["onRemove"];
+  onOpenDraftAttachment: PromptAttachmentPreviewHandler;
   overlayHostElement: HTMLElement | null;
   onCancelEdit: () => void;
 }
@@ -57,6 +59,7 @@ export function ChatInputDraftArea({
   hasDraftAttachments,
   draftAttachments,
   onRemoveDraftAttachment,
+  onOpenDraftAttachment,
   overlayHostElement,
   onCancelEdit,
 }: ChatInputDraftAreaProps) {
@@ -111,6 +114,7 @@ export function ChatInputDraftArea({
       <DraftAttachmentPreviewList
         attachments={draftAttachments}
         onRemove={onRemoveDraftAttachment}
+        onOpenAttachment={onOpenDraftAttachment}
       />
       <ComposerCommandEditor
         draft={draft}

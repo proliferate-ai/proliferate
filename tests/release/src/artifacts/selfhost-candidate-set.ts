@@ -9,6 +9,7 @@ import { BuildMapError, type CandidateBuildArtifactV1, type CandidateBuildMapV1 
  *
  *   server/linux/<arch>          — `docker save` archive of the candidate image
  *   selfhost-bundle/<platform>   — proliferate-deploy.tar.gz (+ its SHA256SUMS)
+ *   selfhost-runtime/<platform>  — optional release-shaped box runtime archive
  *   anyharness/<host-target>     — release AnyHarness (reused PR 1 build)
  *   desktop-renderer/browser     — apps/desktop dist archive (reused PR 1 build)
  *
@@ -26,6 +27,7 @@ import { BuildMapError, type CandidateBuildArtifactV1, type CandidateBuildMapV1 
 
 export const SERVER_IMAGE_ARTIFACT_PREFIX = "server/";
 export const SELFHOST_BUNDLE_ARTIFACT_PREFIX = "selfhost-bundle/";
+export const SELFHOST_RUNTIME_ARTIFACT_PREFIX = "selfhost-runtime/";
 export const ANYHARNESS_ARTIFACT_PREFIX = "anyharness/";
 export const DESKTOP_RENDERER_ARTIFACT_ID = "desktop-renderer/browser";
 
@@ -33,6 +35,7 @@ export const DESKTOP_RENDERER_ARTIFACT_ID = "desktop-renderer/browser";
 export interface SelfHostCandidateSet {
   serverImage: CandidateBuildArtifactV1;
   bundle: CandidateBuildArtifactV1;
+  runtimeBundle?: CandidateBuildArtifactV1;
   anyharness: CandidateBuildArtifactV1;
   desktopRenderer: CandidateBuildArtifactV1;
 }
@@ -47,16 +50,20 @@ export interface SelfHostCandidateSet {
 export function resolveSelfHostCandidateSet(map: CandidateBuildMapV1): SelfHostCandidateSet {
   const serverImage = selectOne(map, "server image", (id) => id.startsWith(SERVER_IMAGE_ARTIFACT_PREFIX));
   const bundle = selectOne(map, "self-host bundle", (id) => id.startsWith(SELFHOST_BUNDLE_ARTIFACT_PREFIX));
+  const runtimeBundle = selectOptionalOne(map, "self-host runtime bundle", (id) =>
+    id.startsWith(SELFHOST_RUNTIME_ARTIFACT_PREFIX),
+  );
   const anyharness = selectOne(map, "anyharness", (id) => id.startsWith(ANYHARNESS_ARTIFACT_PREFIX));
   const desktopRenderer = selectOne(map, "desktop renderer", (id) => id === DESKTOP_RENDERER_ARTIFACT_ID);
 
-  // The four slots are disjoint by construction (`server/`, `selfhost-bundle/`,
-  // and `anyharness/` are distinct prefixes; the renderer id shares none of
+  // The slots are disjoint by construction (`server/`, `selfhost-bundle/`,
+  // `selfhost-runtime/`, and `anyharness/` are distinct prefixes; the renderer id shares none of
   // them), so an artifact this world does not expect is one that matched no
   // slot. Reject it before any world side effect.
   const expected = new Set([
     serverImage.artifact_id,
     bundle.artifact_id,
+    ...(runtimeBundle ? [runtimeBundle.artifact_id] : []),
     anyharness.artifact_id,
     desktopRenderer.artifact_id,
   ]);
@@ -68,7 +75,22 @@ export function resolveSelfHostCandidateSet(map: CandidateBuildMapV1): SelfHostC
     );
   }
 
-  return { serverImage, bundle, anyharness, desktopRenderer };
+  return { serverImage, bundle, runtimeBundle, anyharness, desktopRenderer };
+}
+
+function selectOptionalOne(
+  map: CandidateBuildMapV1,
+  slot: string,
+  matches: (artifactId: string) => boolean,
+): CandidateBuildArtifactV1 | undefined {
+  const found = map.artifacts.filter((artifact) => matches(artifact.artifact_id));
+  if (found.length > 1) {
+    throw new BuildMapError(
+      `Candidate build map has ${found.length} ${slot} artifacts; at most one is allowed ` +
+        `(${found.map((artifact) => artifact.artifact_id).join(", ")}).`,
+    );
+  }
+  return found[0];
 }
 
 function selectOne(

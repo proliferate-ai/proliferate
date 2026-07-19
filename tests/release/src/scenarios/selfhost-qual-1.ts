@@ -24,6 +24,7 @@ import { runShippedInstaller, waitForHealth } from "../worlds/selfhost/install.j
 import {
   correlateGatewaySpend,
   resolveGatewayConfig,
+  waitForGatewaySpendRows,
   type GatewayEnvBlock,
   type GatewayEnvSource,
   type LitellmSpendRow,
@@ -129,8 +130,9 @@ export type SelfHostQualCellName = (typeof SELFHOST_QUAL_CELL_ORDER)[number];
  * real path) while their absence stays a fail-closed cell red — never a
  * runner-blocked cell, and SH-GATEWAY stays runnable without SH-GITHUB-AUTH's
  * OAuth app. Every name is manifest-declared. `RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY`
- * is scenario-level required already; the `_B_` upstream key is the gateway's
- * preferred (optional) separate-spend key.
+ * is scenario-level required already and is SH-GATEWAY's bounded upstream key;
+ * `_B_` remains an optional fallback owned separately by the local harness
+ * matrix.
  */
 export const SELFHOST_QUAL_CELL_OPTIONAL_ENV: Record<SelfHostQualCellName, readonly string[]> = {
   [SH_GITHUB_AUTH]: [
@@ -165,6 +167,13 @@ export const GATEWAY_TURN_PROMPT = "Reply with exactly the word: pong";
  */
 export const EXPECTED_INVITED_ROLE = "member";
 const RESTART_HEALTH_TIMEOUT_MS = 180_000;
+/**
+ * Bounded re-gate on `/health` immediately before the owner claim: the shipped
+ * installer returns on the first healthy probe, but a just-booted stack can
+ * still 502 through Caddy briefly, and `POST /setup` is deliberately never
+ * retried (non-idempotent — see fixtures/http.ts).
+ */
+const CLAIM_HEALTH_TIMEOUT_MS = 120_000;
 
 /**
  * The world-level env the shared self-host world needs (AWS/SSH provisioning
@@ -332,6 +341,14 @@ export const defaultSelfHostQualDriver: SelfHostQualDriver = {
     }
 
     try {
+      // The installer returns on the FIRST healthy probe, but a just-booted
+      // stack can still serve 502 through Caddy for a short window. The claim
+      // chain starts with the non-idempotent `POST /setup`, which must never be
+      // blind-retried (a partially-applied first claim would make a retry read
+      // as a second claimant) — so re-gate on health here instead, mirroring
+      // SELFHOST-INSTALL-1's post-restart wait (observed: runs 29577489307 and
+      // 29624904514 both died in this window).
+      await waitForHealth(world.api.baseUrl, { timeoutMs: CLAIM_HEALTH_TIMEOUT_MS });
       const owner = await claimSelfHostOwner(world, opts.ownerEmail ? { email: opts.ownerEmail } : {});
       return { ok: true, owner };
     } catch (error) {
@@ -568,7 +585,7 @@ export interface GatewayCellOps {
     owner: SelfHostOwnerActor,
   ): Promise<{ actorUserId: string; virtualKeyTokenId: string; turn: { ended: boolean; error?: string; modelId: string } }>;
   /** Snapshot the instance LiteLLM per-request spend rows for correlation. */
-  snapshotSpendRows(world: ReadySelfHostWorld): Promise<LitellmSpendRow[]>;
+  snapshotSpendRows(world: ReadySelfHostWorld, virtualKeyTokenId: string): Promise<LitellmSpendRow[]>;
   /** Restart the stack and re-assert capability truth + gateway health persist. */
   restartAndReassert(world: ReadySelfHostWorld): Promise<{ capabilityStillTrue: boolean; healthy: boolean }>;
 }
@@ -625,7 +642,7 @@ export async function runGatewayCell(
     };
   }
 
-  const rows = await ops.snapshotSpendRows(world);
+  const rows = await ops.snapshotSpendRows(world, enrolled.virtualKeyTokenId);
   const correlation = correlateGatewaySpend(rows, enrolled.virtualKeyTokenId);
   if (!correlation.correlated) {
     return {
@@ -695,8 +712,9 @@ const defaultGatewayCellOps: GatewayCellOps = {
   async enrollActorAndRunTurn(world, owner) {
     return enrollActorAndRunGatewayTurn(world, owner);
   },
-  async snapshotSpendRows(world) {
-    return litellmSpendRows(world.control.ssh, spendWindowUtc());
+  async snapshotSpendRows(world, virtualKeyTokenId) {
+    const window = spendWindowUtc();
+    return waitForGatewaySpendRows(virtualKeyTokenId, () => litellmSpendRows(world.control.ssh, window));
   },
   async restartAndReassert(world) {
     await world.control.restartStack();

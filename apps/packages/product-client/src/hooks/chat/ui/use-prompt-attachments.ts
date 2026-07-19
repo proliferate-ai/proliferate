@@ -20,6 +20,12 @@ interface AttachmentEntry {
 
 const MAX_PROMPT_ATTACHMENTS = 10;
 
+export interface PromptAttachmentLifetimeOptions {
+  onBeforeReleaseAttachments?: (
+    attachments: readonly PromptAttachmentDescriptor[],
+  ) => void;
+}
+
 function createAttachmentId(): string {
   return `attachment:${Date.now()}:${Math.random().toString(36).slice(2, 10)}`;
 }
@@ -33,29 +39,47 @@ function revokeAttachmentObjectUrl(entry: AttachmentEntry): void {
 export function usePromptAttachments(
   scopeKey: string | null | undefined,
   capabilities: PromptCapabilities | null | undefined,
+  lifetimeOptions: PromptAttachmentLifetimeOptions = {},
 ) {
   const canAttachImages = capabilities?.image === true;
   const canAttachEmbeddedContext = capabilities?.embeddedContext === true;
   const [entries, setEntries] = useState<AttachmentEntry[]>([]);
   const entriesRef = useRef<AttachmentEntry[]>([]);
+  const onBeforeReleaseAttachmentsRef = useRef(
+    lifetimeOptions.onBeforeReleaseAttachments,
+  );
 
-  useEffect(() => () => {
-    for (const entry of entriesRef.current) {
+  useEffect(() => {
+    onBeforeReleaseAttachmentsRef.current = lifetimeOptions.onBeforeReleaseAttachments;
+  }, [lifetimeOptions.onBeforeReleaseAttachments]);
+
+  const releaseEntries = useCallback((released: readonly AttachmentEntry[]) => {
+    if (released.length === 0) {
+      return;
+    }
+    onBeforeReleaseAttachmentsRef.current?.(
+      released.map((entry) => entry.descriptor),
+    );
+    for (const entry of released) {
       revokeAttachmentObjectUrl(entry);
     }
-    entriesRef.current = [];
   }, []);
+
+  useEffect(() => () => {
+    const outgoing = entriesRef.current;
+    entriesRef.current = [];
+    releaseEntries(outgoing);
+  }, [releaseEntries]);
 
   useEffect(() => {
     if (entriesRef.current.length === 0) {
       return;
     }
-    for (const entry of entriesRef.current) {
-      revokeAttachmentObjectUrl(entry);
-    }
+    const outgoing = entriesRef.current;
     entriesRef.current = [];
     setEntries([]);
-  }, [scopeKey]);
+    releaseEntries(outgoing);
+  }, [releaseEntries, scopeKey]);
 
   const descriptors = useMemo(
     () => entries.map((entry) => entry.descriptor),
@@ -103,7 +127,7 @@ export function usePromptAttachments(
             size: file.size,
             kind: "text_resource",
             source: "upload",
-            objectUrl: null,
+            objectUrl: URL.createObjectURL(file),
           },
         });
         remainingSlots -= 1;
@@ -139,7 +163,7 @@ export function usePromptAttachments(
         size: file.size,
         kind: "text_resource",
         source: "paste",
-        objectUrl: null,
+        objectUrl: URL.createObjectURL(file),
       },
     };
     const updated = [...entriesRef.current, entry].slice(0, MAX_PROMPT_ATTACHMENTS);
@@ -153,22 +177,21 @@ export function usePromptAttachments(
     if (!removed) {
       return;
     }
-    revokeAttachmentObjectUrl(removed);
     const updated = entriesRef.current.filter((entry) => entry.descriptor.id !== id);
     entriesRef.current = updated;
     setEntries(updated);
-  }, []);
+    releaseEntries([removed]);
+  }, [releaseEntries]);
 
   const clearAttachments = useCallback(() => {
     if (entriesRef.current.length === 0) {
       return;
     }
-    for (const entry of entriesRef.current) {
-      revokeAttachmentObjectUrl(entry);
-    }
+    const outgoing = entriesRef.current;
     entriesRef.current = [];
     setEntries([]);
-  }, []);
+    releaseEntries(outgoing);
+  }, [releaseEntries]);
 
   const clearSubmittedAttachments = useCallback((
     submitted: readonly Pick<PromptAttachmentSnapshot, "id">[],
@@ -178,16 +201,18 @@ export function usePromptAttachments(
       return;
     }
     const retained: AttachmentEntry[] = [];
+    const released: AttachmentEntry[] = [];
     for (const entry of entriesRef.current) {
       if (submittedIds.has(entry.descriptor.id)) {
-        revokeAttachmentObjectUrl(entry);
+        released.push(entry);
       } else {
         retained.push(entry);
       }
     }
     entriesRef.current = retained;
     setEntries(retained);
-  }, []);
+    releaseEntries(released);
+  }, [releaseEntries]);
 
   const snapshotForSubmit = useCallback((): PromptAttachmentSnapshot[] => {
     return entriesRef.current.flatMap((entry) => {

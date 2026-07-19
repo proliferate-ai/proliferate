@@ -3,14 +3,14 @@ import path from "node:path";
 
 import type { RunIdentityV1 } from "../runner/identity.js";
 
-type SupportedSignal = "SIGINT" | "SIGTERM";
+export type SupportedSignal = "SIGINT" | "SIGTERM";
 
 interface RegisteredFinalizer {
   id: string;
   world: "local" | "managed-cloud" | "self-host";
   run: RunIdentityV1;
   receiptPath: string;
-  runOnce: () => Promise<unknown>;
+  runOnce: (signal?: SupportedSignal) => Promise<unknown>;
 }
 
 export interface CancellationFinalizerHandle<T> {
@@ -33,14 +33,22 @@ export function registerCancellationFinalizer<T>(options: {
   run: RunIdentityV1;
   runDir: string;
   finalize: () => Promise<T>;
+  /**
+   * Optional cleanup posture whose entire provider interaction fits inside the
+   * process signal deadline. It shares the same single-flight promise as the
+   * ordinary finalizer; whichever path starts first owns the one invocation.
+   */
+  finalizeForSignal?: (signal: SupportedSignal) => Promise<T>;
 }): CancellationFinalizerHandle<T> {
   const id = `${options.world}:${options.run.run_id}:${options.run.shard_id}:${options.run.attempt}`;
   if (registered.has(id)) {
     throw new Error(`Cancellation finalizer is already registered for ${id}.`);
   }
   let inFlight: Promise<T> | undefined;
-  const runOnce = (): Promise<T> => {
-    inFlight ??= options.finalize();
+  const runOnce = (signal?: SupportedSignal): Promise<T> => {
+    inFlight ??= signal && options.finalizeForSignal
+      ? options.finalizeForSignal(signal)
+      : options.finalize();
     return inFlight;
   };
   const receiptPath = path.join(
@@ -66,7 +74,7 @@ export async function finalizeRegisteredForSignal(signal: SupportedSignal): Prom
     let status: "reconciled" | "failed" = "reconciled";
     let reason: string | null = null;
     try {
-      const result = await entry.runOnce();
+      const result = await entry.runOnce(signal);
       if (cleanupResultFailed(result)) {
         status = "failed";
         reason = "The registered cleanup finalizer reported failures; inspect the identity-bound cleanup ledger.";

@@ -8,7 +8,6 @@ import {
   type ClipboardEvent,
   type MouseEvent,
 } from "react";
-import type { PromptInputBlock } from "@anyharness/sdk";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import {
   useActiveSessionId,
@@ -51,6 +50,9 @@ import { ChatInputDraftArea } from "./ChatInputDraftArea";
 import { ChatComposerSurface } from "@proliferate/product-ui/chat/composer/ChatComposerSurface";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-count";
+import { usePromptAttachmentPreviewActions } from "#product/hooks/chat/workflows/use-prompt-attachment-preview-actions";
+import { handlePromptAttachmentPaste } from "#product/lib/domain/chat/composer/prompt-attachment-paste";
+import type { PromptAttachmentPreviewHandler } from "#product/components/workspace/chat/content/PromptContentRenderer";
 
 const CHAT_INPUT_ATTACHMENT_ACCEPT =
   "image/*,text/*,.md,.json,.ts,.tsx,.js,.jsx,.py,.rs,.go,.java,.css,.html,.xml,.yaml,.yml,.toml,.sql,.sh";
@@ -108,6 +110,7 @@ export function ChatInput({
       ?? modeControl
       ?? null;
   const { handleSubmit, handleCancel } = useChatPromptActions();
+  const { openAttachmentPreview } = usePromptAttachmentPreviewActions();
   const { isSubmitting, run: runSubmit } = useComposerSubmitGate();
   const {
     isEditing: isEditingQueuedPrompt,
@@ -158,7 +161,7 @@ export function ChatInput({
       const blockPrepareStartedAt = performance.now();
       const attachmentSnapshots = attachments.snapshotForSubmit();
       const blocks = [
-        ...buildTextPromptBlocks(trimmedPromptText),
+        ...(trimmedPromptText ? [{ type: "text" as const, text: trimmedPromptText }] : []),
         ...planAttachments.blocks,
       ];
       recordMeasurementWorkflowStep({
@@ -242,23 +245,24 @@ export function ChatInput({
     planAttachments.removePlan(id);
   }, [attachments, planAttachments]);
 
+  const handleOpenDraftAttachment = useCallback<PromptAttachmentPreviewHandler>(
+    (part) => openAttachmentPreview({ part, origin: "draft", sessionId: null }),
+    [openAttachmentPreview],
+  );
+
   const handlePaste = useCallback((event: ClipboardEvent<HTMLDivElement>) => {
     // The editor owns formatted Markdown paste first. Once it has imported a
     // list or link, do not reinterpret the same clipboard text as an
     // attachment at the composer surface.
-    if (event.defaultPrevented) {
-      return;
-    }
-    if (!canAcceptPastedAttachments) {
-      return;
-    }
-    if (event.clipboardData.files.length > 0) {
-      attachments.addFiles(event.clipboardData.files);
-      event.preventDefault();
-      return;
-    }
-    const text = event.clipboardData.getData("text/plain");
-    if (text && attachments.addTextPaste(text)) {
+    const shouldPreventDefault = handlePromptAttachmentPaste({
+      defaultPrevented: event.defaultPrevented,
+      canAcceptAttachments: canAcceptPastedAttachments,
+      fileCount: event.clipboardData.files.length,
+      plainText: event.clipboardData.getData("text/plain"),
+      addFiles: () => attachments.addFiles(event.clipboardData.files),
+      addTextPaste: attachments.addTextPaste,
+    });
+    if (shouldPreventDefault) {
       event.preventDefault();
     }
   }, [attachments, canAcceptPastedAttachments]);
@@ -351,6 +355,7 @@ export function ChatInput({
               hasDraftAttachments={hasDraftAttachments}
               draftAttachments={[...attachments.attachments, ...planAttachments.attachments]}
               onRemoveDraftAttachment={handleRemoveDraftAttachment}
+              onOpenDraftAttachment={handleOpenDraftAttachment}
               overlayHostElement={composerOverlayHost}
               onCancelEdit={cancelEdit}
             />
@@ -388,8 +393,4 @@ export function ChatInput({
       </div>
     </DebugProfiler>
   );
-}
-
-function buildTextPromptBlocks(text: string): PromptInputBlock[] {
-  return text ? [{ type: "text", text }] : [];
 }

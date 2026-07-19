@@ -63,7 +63,9 @@ curl -fsSL "$RUNTIME_URL" -o "$archive_path"
 
 if [[ -z "$RUNTIME_SHA256" && -n "$RUNTIME_SHA256_URL" ]]; then
   checksum_path="$temp_dir/SHA256SUMS"
-  runtime_filename="$(basename "$RUNTIME_URL")"
+  # Presigned S3 URLs carry their authorization in the query string. Match the
+  # checksum entry against the path basename, not the bearer query/fragment.
+  runtime_filename="$(basename "${RUNTIME_URL%%[?#]*}")"
   curl -fsSL "$RUNTIME_SHA256_URL" -o "$checksum_path"
   RUNTIME_SHA256="$(
     awk -v filename="$runtime_filename" '$2 == filename { print $1; exit }' "$checksum_path"
