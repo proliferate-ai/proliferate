@@ -23,13 +23,21 @@ import {
 } from "#product/hooks/workspaces/workflows/tabs/workspace-shell-intent-writer";
 import { chatWorkspaceShellTabKey } from "#product/lib/domain/workspaces/tabs/shell-tabs";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
+import type {
+  VisibleChatSessionDismissOptions,
+} from "#product/lib/workflows/workspaces/chat-session-archive";
 
 export function useDismissedSessionCleanup() {
   const { activateSession, closeSessionSlotStream } = useSessionRuntimeActions();
   const { removeWorkspaceSessionRecord } = useWorkspaceSessionCache();
 
-  return useCallback((sessionId: string, workspaceIdHint?: string | null) => {
+  return useCallback((
+    sessionId: string,
+    workspaceIdHint?: string | null,
+    options?: VisibleChatSessionDismissOptions,
+  ) => {
     const selection = useSessionSelectionStore.getState();
+    const activeSessionId = selection.activeSessionId;
     const closingSlot = getSessionRecord(sessionId);
     const workspaceId = closingSlot?.workspaceId
       ?? workspaceIdHint
@@ -49,17 +57,29 @@ export function useDismissedSessionCleanup() {
         workspaceId,
       ).value ?? null
       : null;
+    const replacesActiveSession = activeSessionId !== null
+      && (
+        activeSessionId === sessionId
+        || options?.replacedActiveSessionIds.includes(activeSessionId)
+      );
     const shouldUpdateShellIntent = previousShellIntent === null
-      || previousShellIntent === chatWorkspaceShellTabKey(sessionId);
+      || previousShellIntent === chatWorkspaceShellTabKey(sessionId)
+      || (
+        activeSessionId !== null
+        && replacesActiveSession
+        && previousShellIntent === chatWorkspaceShellTabKey(activeSessionId)
+      );
 
     closeSessionSlotStream(sessionId);
     removeSessionRecord(sessionId);
     clearViewedSessionErrors([sessionId]);
 
-    if (selection.activeSessionId === sessionId) {
-      const nextActiveId = Object.values(getWorkspaceSessionRecords(workspaceId))
-        .filter((slot) => sessionSlotBelongsToWorkspace(slot, workspaceId ?? null))
-        .map((slot) => slot.sessionId)[0] ?? null;
+    if (replacesActiveSession) {
+      const nextActiveId = options?.resolveNextActiveSessionId
+        ? options.resolveNextActiveSessionId()
+        : Object.values(getWorkspaceSessionRecords(workspaceId))
+          .filter((slot) => sessionSlotBelongsToWorkspace(slot, workspaceId ?? null))
+          .map((slot) => slot.sessionId)[0] ?? null;
 
       if (nextActiveId) {
         activateSession(nextActiveId);

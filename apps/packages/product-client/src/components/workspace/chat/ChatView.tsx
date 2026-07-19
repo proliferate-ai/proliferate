@@ -1,5 +1,7 @@
 import {
+  lazy,
   memo,
+  Suspense,
   useCallback,
   useMemo,
   useRef,
@@ -42,7 +44,12 @@ import {
   readFileDragInput,
 } from "#product/lib/domain/chat/composer/prompt-attachment-drag";
 import type { WorkspaceRenderSurface } from "#product/lib/domain/workspaces/tabs/shell-activation";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { usePromptAttachmentPreviewActions } from "#product/hooks/chat/workflows/use-prompt-attachment-preview-actions";
+
+const WorkspaceSessionRecoveryInlinePanel = lazy(() =>
+  import("#product/components/workspace/chat/surface/WorkspaceSessionRecoveryInlinePanel")
+);
 
 function ChatContent({
   dockSafeAreaPx,
@@ -133,6 +140,12 @@ export const ChatView = memo(function ChatView({
     ? shellRenderSurface.sessionId
     : null;
   const activeSessionId = useActiveSessionId();
+  const workspaceSessionRecovery = useSessionSelectionStore(
+    (state) => state.workspaceSessionRecovery,
+  );
+  const activeWorkspaceSessionRecovery = workspaceSessionRecovery?.sessionId === activeSessionId
+    ? workspaceSessionRecovery
+    : null;
   const workspaceUiKey = useSelectedWorkspaceUiKey();
   const activePromptCapabilities = useActiveSessionPromptCapabilities();
   const availability = useChatAvailabilityState();
@@ -185,11 +198,13 @@ export const ChatView = memo(function ChatView({
     <ChatInput
       attachments={promptAttachments}
       suppressActiveSessionState={suppressComposerActiveSessionState}
+      suppressAutoFocus={activeWorkspaceSessionRecovery !== null}
       replacementSessionId={replacementSessionId}
       hasSessionTurns={hasSessionTurns}
     />
   ), [
     hasSessionTurns,
+    activeWorkspaceSessionRecovery,
     promptAttachments,
     replacementSessionId,
     suppressComposerActiveSessionState,
@@ -264,7 +279,15 @@ export const ChatView = memo(function ChatView({
           backdrop={isSessionMode}
           outboundSlot={composerDockSlots.outboundSlot}
           activeSlot={composerDockSlots.activeSlot}
-          attachedSlot={composerDockSlots.attachedSlot}
+          attachedSlot={activeWorkspaceSessionRecovery
+            ? (
+                <Suspense fallback={null}>
+                  <WorkspaceSessionRecoveryInlinePanel
+                    recovery={activeWorkspaceSessionRecovery}
+                  />
+                </Suspense>
+              )
+            : composerDockSlots.attachedSlot}
           lowerBackdropTopPx={lowerBackdropTopPx}
           shellClassName="pointer-events-none absolute inset-x-0 bottom-0"
           data-telemetry-block

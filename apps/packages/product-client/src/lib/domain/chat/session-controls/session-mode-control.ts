@@ -62,6 +62,19 @@ export function getPreviousSessionModeValue(
   return options[currentIndex - 1]?.value ?? null;
 }
 
+export function getNextSessionModeValue(
+  options: ReadonlyArray<{ value: string }>,
+  currentValue: string | null,
+): string | null {
+  if (options.length < 2) {
+    return null;
+  }
+
+  const currentIndex = options.findIndex((option) => option.value === currentValue);
+  const nextIndex = currentIndex < 0 ? 0 : (currentIndex + 1) % options.length;
+  return options[nextIndex]?.value ?? null;
+}
+
 export {
   inferSessionControlPresentation,
   isConfiguredSessionControlKey,

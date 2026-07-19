@@ -29,12 +29,26 @@ interface LevelBarsButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonEleme
 // "wave" (see composer-level-bar-wave in product.css) used to force a
 // repaint of the whole icon every frame. Plain <span> bars with
 // currentColor backgrounds pick up the same scaleY/opacity keyframes on
-// the compositor instead. Geometry mirrors the old SVG rendering: 2px-wide
-// pill bars (rx=1 on a 2px rect is effectively a full round-cap), 2px gaps,
-// heights stepping up to the container's 14px (size-3.5) box, bottom-aligned
-// and horizontally centered the way preserveAspectRatio="xMidYMid meet"
-// centered the old viewBox.
+// the compositor instead. Every ladder owns the same 14px icon slot. Bar
+// width adapts to the number of runtime-provided levels: short ladders get
+// heavier bars, while longer ladders stay inside the slot instead of
+// consuming the icon-to-label gap.
 const LEVEL_BAR_CONTAINER_PX = 14;
+const LEVEL_BAR_GAP_PX = 1;
+const LEVEL_BAR_MAX_WIDTH_PX = 4;
+
+function resolveLevelBarGeometry(barCount: number): { barGapPx: number; barWidthPx: number } {
+  const safeBarCount = Math.max(1, barCount);
+  const barGapPx = safeBarCount <= 1
+    ? 0
+    : Math.min(LEVEL_BAR_GAP_PX, LEVEL_BAR_CONTAINER_PX / (safeBarCount * 2));
+  const availableWidth = LEVEL_BAR_CONTAINER_PX
+    - (Math.max(0, safeBarCount - 1) * barGapPx);
+  return {
+    barGapPx,
+    barWidthPx: Math.min(LEVEL_BAR_MAX_WIDTH_PX, availableWidth / safeBarCount),
+  };
+}
 
 function LevelBarsIcon({
   levels,
@@ -48,6 +62,7 @@ function LevelBarsIcon({
   levelOptionAttribute?: string;
 }) {
   const barCount = levels.length;
+  const { barGapPx, barWidthPx } = resolveLevelBarGeometry(barCount);
 
   const bars = Array.from({ length: barCount }, (_, i) => {
     const heightPx = Math.max(2, Math.round(((i + 1) / barCount) * LEVEL_BAR_CONTAINER_PX));
@@ -61,9 +76,10 @@ function LevelBarsIcon({
       <span
         key={i}
         {...optionAttr}
-        className={`block w-[2px] shrink-0 rounded-full bg-current${wave ? " composer-level-bar-wave" : ""}`}
+        className={`block shrink-0 rounded-full bg-current${wave ? " composer-level-bar-wave" : ""}`}
         style={{
           height: `${heightPx}px`,
+          width: `${barWidthPx}px`,
           opacity: lit ? 1 : 0.3,
           animationDelay: wave ? `${i * 110}ms` : undefined,
         }}
@@ -79,9 +95,11 @@ function LevelBarsIcon({
 
   return (
     <span
-      className={`inline-flex size-3.5 shrink-0 items-end justify-center gap-[2px] ${emphasisClass}`}
+      className={`inline-flex size-3.5 shrink-0 items-end justify-center ${emphasisClass}`}
+      style={{ gap: `${barGapPx}px` }}
       aria-hidden="true"
       data-level-bars-icon
+      data-level-bars-count={barCount}
     >
       {bars}
     </span>

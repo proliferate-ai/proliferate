@@ -6,7 +6,11 @@ import {
 } from "#product/lib/domain/workspaces/tabs/manual-groups";
 import {
   clearHiddenChatSessionIds,
+  preservesVisibleChatSession,
   rememberHiddenChatSessionId,
+  resolveChatSessionIdsToHide,
+  resolveFallbackAfterHidingChatTabs,
+  resolveVisibleChatSessionIds,
   uniqueIds,
 } from "#product/lib/domain/workspaces/tabs/visibility";
 import { sameStringArray } from "#product/lib/domain/workspaces/selection/workspace-keyed-preferences";
@@ -19,6 +23,8 @@ type WorkspaceUiChatTabActions = Pick<
   | "setVisibleChatSessionIdsForWorkspace"
   | "rememberHiddenChatSessionForWorkspace"
   | "clearHiddenChatSessionsForWorkspace"
+  | "reserveChatSessionArchiveForWorkspace"
+  | "completeChatSessionArchiveForWorkspace"
   | "toggleChatGroupCollapsedForWorkspace"
   | "clearChatGroupCollapsedForWorkspace"
   | "setManualChatGroupsForWorkspace"
@@ -102,6 +108,113 @@ export function createWorkspaceUiChatTabActions(
           ...get().recentlyHiddenChatSessionIdsByWorkspace,
           [workspaceId]: next,
         },
+      });
+    },
+
+    reserveChatSessionArchiveForWorkspace: (input) => {
+      let reservation: ReturnType<
+        WorkspaceUiState["reserveChatSessionArchiveForWorkspace"]
+      > = { kind: "blocked" };
+      set((state) => {
+        const childToParent = new Map(
+          input.liveSessions
+            .filter((session) => !!session.parentSessionId)
+            .map((session) => [session.sessionId, session.parentSessionId!]),
+        );
+        const sessionIds = resolveChatSessionIdsToHide({
+          sessionIds: [input.sessionId],
+          childToParent,
+        });
+        const inFlight = new Set(
+          state.archivingChatSessionIdsByWorkspace[input.workspaceId] ?? [],
+        );
+        if (sessionIds.some((sessionId) => inFlight.has(sessionId))) {
+          return state;
+        }
+
+        const hasPersistedVisible = Object.prototype.hasOwnProperty.call(
+          state.visibleChatSessionIdsByWorkspace,
+          input.workspaceId,
+        );
+        const visibleSessionIds = resolveVisibleChatSessionIds({
+          activeSessionId: input.activeSessionId,
+          liveSessions: input.liveSessions,
+          persistedVisibleIds: hasPersistedVisible
+            ? state.visibleChatSessionIdsByWorkspace[input.workspaceId]
+            : undefined,
+          recentlyHiddenIds:
+            state.recentlyHiddenChatSessionIdsByWorkspace[input.workspaceId] ?? [],
+        }).visibleSessionIds;
+        const visibleArchiveIds = sessionIds.filter((sessionId) =>
+          visibleSessionIds.includes(sessionId)
+        );
+        if (
+          visibleArchiveIds.length > 0
+          && !preservesVisibleChatSession({
+            visibleSessionIds,
+            sessionIdsToHide: sessionIds,
+            childToParent,
+          })
+        ) {
+          return state;
+        }
+
+        const replacesActiveSession = input.activeSessionId !== null
+          && sessionIds.includes(input.activeSessionId);
+        const fallbackSessionId = replacesActiveSession
+          ? resolveFallbackAfterHidingChatTabs({
+              activeSessionId: input.activeSessionId,
+              idsToHide: sessionIds,
+              visibleIdsBeforeHide: visibleSessionIds,
+            })
+          : null;
+        const hideSet = new Set(sessionIds);
+        const nextVisible = visibleSessionIds.filter((sessionId) => !hideSet.has(sessionId));
+        const currentHidden =
+          state.recentlyHiddenChatSessionIdsByWorkspace[input.workspaceId] ?? [];
+        const nextHidden = sessionIds.reduce(
+          (hidden, sessionId) => rememberHiddenChatSessionId(hidden, sessionId),
+          currentHidden,
+        );
+        reservation = {
+          kind: "reserved",
+          fallbackSessionId,
+          replacesActiveSession,
+          sessionIds,
+        };
+        return {
+          archivingChatSessionIdsByWorkspace: {
+            ...state.archivingChatSessionIdsByWorkspace,
+            [input.workspaceId]: uniqueIds([...inFlight, ...sessionIds]),
+          },
+          recentlyHiddenChatSessionIdsByWorkspace: {
+            ...state.recentlyHiddenChatSessionIdsByWorkspace,
+            [input.workspaceId]: nextHidden,
+          },
+          visibleChatSessionIdsByWorkspace: {
+            ...state.visibleChatSessionIdsByWorkspace,
+            [input.workspaceId]: nextVisible,
+          },
+        };
+      });
+      return reservation;
+    },
+
+    completeChatSessionArchiveForWorkspace: (workspaceId, sessionIds) => {
+      set((state) => {
+        const current = state.archivingChatSessionIdsByWorkspace[workspaceId] ?? [];
+        if (current.length === 0) {
+          return state;
+        }
+        const completed = new Set(sessionIds);
+        const next = current.filter((sessionId) => !completed.has(sessionId));
+        const byWorkspace = { ...state.archivingChatSessionIdsByWorkspace };
+        if (next.length > 0) {
+          byWorkspace[workspaceId] = next;
+        } else {
+          delete byWorkspace[workspaceId];
+        }
+        return { archivingChatSessionIdsByWorkspace: byWorkspace };
       });
     },
 
@@ -204,15 +317,18 @@ export function createWorkspaceUiChatTabActions(
     clearWorkspaceChatTabState: (workspaceId) => {
       const visible = { ...get().visibleChatSessionIdsByWorkspace };
       const hidden = { ...get().recentlyHiddenChatSessionIdsByWorkspace };
+      const archiving = { ...get().archivingChatSessionIdsByWorkspace };
       const collapsed = { ...get().collapsedChatGroupsByWorkspace };
       const manualGroups = { ...get().manualChatGroupsByWorkspace };
       delete visible[workspaceId];
       delete hidden[workspaceId];
+      delete archiving[workspaceId];
       delete collapsed[workspaceId];
       delete manualGroups[workspaceId];
       set({
         visibleChatSessionIdsByWorkspace: visible,
         recentlyHiddenChatSessionIdsByWorkspace: hidden,
+        archivingChatSessionIdsByWorkspace: archiving,
         collapsedChatGroupsByWorkspace: collapsed,
         manualChatGroupsByWorkspace: manualGroups,
       });

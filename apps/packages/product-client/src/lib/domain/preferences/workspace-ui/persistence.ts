@@ -98,6 +98,7 @@ export function getChangedWorkspaceUiStateKeys(
     "dismissedSetupFailures",
     "visibleChatSessionIdsByWorkspace",
     "recentlyHiddenChatSessionIdsByWorkspace",
+    "archivingChatSessionIdsByWorkspace",
     "collapsedChatGroupsByWorkspace",
     "manualChatGroupsByWorkspace",
     "gitStatusSnapshotByWorkspace",
@@ -108,7 +109,8 @@ export function getChangedWorkspaceUiStateKeys(
 }
 
 export function isNonPersistedWorkspaceUiStateKey(key: string): boolean {
-  return key === "pendingChatActivationByWorkspace"
+  return key === "archivingChatSessionIdsByWorkspace"
+    || key === "pendingChatActivationByWorkspace"
     || key === "shellActivationEpochByWorkspace"
     || key === "urgentHighlightedChatSessionByWorkspace";
 }

@@ -51,6 +51,7 @@ describe("handleRememberedWorkspaceSessionBootstrap", () => {
       getSessionRecord: vi.fn(),
       patchSessionRecord,
       rehydrateSessionSlotFromHistory: rehydrateSessionSlotFromHistory as never,
+      removeSessionRecord: vi.fn(),
       selectSession: vi.fn() as never,
       setActiveSessionId: vi.fn(),
     });
@@ -62,5 +63,43 @@ describe("handleRememberedWorkspaceSessionBootstrap", () => {
     }));
     expect(rehydrateSessionSlotFromHistory).not.toHaveBeenCalled();
     expect(patchSessionRecord).not.toHaveBeenCalled();
+  });
+
+  it("replaces a setup surface with an authoritative real session without clearing first", async () => {
+    vi.mocked(selectSessionWithShellIntentRollback).mockImplementationOnce(async () => {
+      expect(setActiveSessionId).not.toHaveBeenCalledWith(null);
+      setActiveSessionId("session-1");
+      return undefined;
+    });
+    const setupSessionId = "client-session:workspace-setup:workspace-1";
+    const setActiveSessionId = vi.fn();
+    const removeSessionRecord = vi.fn();
+
+    const result = await handleRememberedWorkspaceSessionBootstrap({
+      lastViewedSessionByWorkspace: {},
+      latencyFlowId: null,
+      logicalWorkspaceId: "logical-workspace-1",
+      measurementOperationId: null,
+      sessions: [session("session-1")],
+      startedAt: performance.now(),
+      workspaceId: "workspace-1",
+      isCurrent: () => true,
+    }, {
+      clearLastViewedSession: vi.fn(),
+      getActiveSessionId: () => setupSessionId,
+      getSessionRecord: vi.fn(() => ({
+        sessionId: setupSessionId,
+        workspaceId: "workspace-1",
+      })) as never,
+      patchSessionRecord: vi.fn(),
+      rehydrateSessionSlotFromHistory: vi.fn() as never,
+      removeSessionRecord,
+      selectSession: vi.fn() as never,
+      setActiveSessionId,
+    });
+
+    expect(result.shouldReturn).toBe(false);
+    expect(setActiveSessionId).not.toHaveBeenCalledWith(null);
+    expect(removeSessionRecord).toHaveBeenCalledWith(setupSessionId);
   });
 });

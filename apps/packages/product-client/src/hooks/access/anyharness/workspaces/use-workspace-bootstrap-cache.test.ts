@@ -108,6 +108,64 @@ describe("replacement tombstone reconciliation", () => {
     expect(mocks.dismissSession).not.toHaveBeenCalled();
   });
 
+  it("does not cache a forced response after its selection ownership becomes stale", async () => {
+    const listGate = deferred<Array<{ id: string }>>();
+    mocks.listWorkspaceSessions.mockReturnValueOnce(listGate.promise);
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const queryKey = anyHarnessSessionsKey(CACHE_SCOPE_KEY, "workspace-1");
+    const wrapper = createWrapper(queryClient, "http://runtime.test");
+    const { result } = renderHook(() => useWorkspaceBootstrapCache(), { wrapper });
+    let current = true;
+    commitReplacedSessionTombstone("workspace-1", "retired");
+
+    const staleLoad = result.current.loadWorkspaceSessions({
+      forceRefresh: true,
+      isCurrent: () => current,
+      workspaceConnection: {} as never,
+      workspaceId: "workspace-1",
+    });
+    await vi.waitFor(() => expect(mocks.listWorkspaceSessions).toHaveBeenCalledTimes(1));
+    current = false;
+    listGate.resolve([{ id: "stale" }]);
+    await expect(staleLoad).resolves.toEqual([
+      { id: "stale", workspaceId: "workspace-1" },
+    ]);
+    expect(queryClient.getQueryData(queryKey)).toBeUndefined();
+    expect(committedReplacedSessionTombstonesForWorkspace("workspace-1"))
+      .toEqual(["retired"]);
+
+    mocks.listWorkspaceSessions.mockResolvedValueOnce([{ id: "later" }]);
+    await expect(result.current.loadWorkspaceSessions({
+      workspaceConnection: {} as never,
+      workspaceId: "workspace-1",
+    })).resolves.toEqual([{ id: "later", workspaceId: "workspace-1" }]);
+    expect(mocks.listWorkspaceSessions).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    { label: "non-empty", listed: [{ id: "new" }] },
+    { label: "empty", listed: [] },
+  ])("caches a current forced $label response", async ({ listed }) => {
+    mocks.listWorkspaceSessions.mockResolvedValueOnce(listed);
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const queryKey = anyHarnessSessionsKey(CACHE_SCOPE_KEY, "workspace-1");
+    const wrapper = createWrapper(queryClient, "http://runtime.test");
+    const { result } = renderHook(() => useWorkspaceBootstrapCache(), { wrapper });
+
+    const sessions = await result.current.loadWorkspaceSessions({
+      forceRefresh: true,
+      isCurrent: () => true,
+      workspaceConnection: {} as never,
+      workspaceId: "workspace-1",
+    });
+
+    expect(queryClient.getQueryData(queryKey)).toEqual(sessions);
+  });
+
   it("does not clear a tombstone committed after the list request began", async () => {
     const listGate = deferred<Array<{ id: string }>>();
     mocks.listWorkspaceSessions.mockReturnValueOnce(listGate.promise);

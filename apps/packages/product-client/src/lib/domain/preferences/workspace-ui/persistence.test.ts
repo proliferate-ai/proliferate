@@ -28,6 +28,7 @@ describe("workspace UI state persistence", () => {
         "workspace-1": [
           "session-1",
           "client-session:tmp",
+          "client-session:workspace-setup:workspace-1",
           "session-1",
           "pending-session:tmp",
         ],
@@ -53,8 +54,15 @@ describe("workspace UI state persistence", () => {
         }],
       },
       shellActivationEpochByWorkspace: { "workspace-1": 2 },
+      activeShellTabKeyByWorkspace: {
+        "workspace-1": "chat:client-session:workspace-setup:workspace-1",
+      },
+      shellTabOrderByWorkspace: {
+        "workspace-1": ["chat:client-session:workspace-setup:workspace-1"],
+      },
       pendingChatActivationByWorkspace: { "workspace-1": { kind: "chat" } },
       urgentHighlightedChatSessionByWorkspace: { "workspace-1": "session-1" },
+      archivingChatSessionIdsByWorkspace: { "workspace-1": ["session-1"] },
     } as WorkspaceUiChangeTrackedState);
 
     expect(selected.migrationVersion).toBe(WORKSPACE_UI_MIGRATION_VERSION);
@@ -78,9 +86,12 @@ describe("workspace UI state persistence", () => {
         sessionIds: ["session-1", "session-2"],
       }],
     });
+    expect(selected.activeShellTabKeyByWorkspace).toEqual({});
+    expect(selected.shellTabOrderByWorkspace).toEqual({});
     expect(selected).not.toHaveProperty("shellActivationEpochByWorkspace");
     expect(selected).not.toHaveProperty("pendingChatActivationByWorkspace");
     expect(selected).not.toHaveProperty("urgentHighlightedChatSessionByWorkspace");
+    expect(selected).not.toHaveProperty("archivingChatSessionIdsByWorkspace");
   });
 
   it("tracks persisted and runtime-only keys separately", () => {
@@ -89,19 +100,23 @@ describe("workspace UI state persistence", () => {
       shellActivationEpochByWorkspace: {},
       pendingChatActivationByWorkspace: {},
       urgentHighlightedChatSessionByWorkspace: {},
+      archivingChatSessionIdsByWorkspace: {},
     } satisfies WorkspaceUiChangeTrackedState;
     const next = {
       ...previous,
       sidebarOpen: true,
       shellActivationEpochByWorkspace: { "workspace-1": 1 },
       urgentHighlightedChatSessionByWorkspace: { "workspace-1": "session-1" },
+      archivingChatSessionIdsByWorkspace: { "workspace-1": ["session-1"] },
     } satisfies WorkspaceUiChangeTrackedState;
 
     expect(getChangedWorkspaceUiStateKeys(previous, next)).toEqual([
       "sidebarOpen",
       "shellActivationEpochByWorkspace",
       "urgentHighlightedChatSessionByWorkspace",
+      "archivingChatSessionIdsByWorkspace",
     ]);
+    expect(isNonPersistedWorkspaceUiStateKey("archivingChatSessionIdsByWorkspace")).toBe(true);
     expect(isNonPersistedWorkspaceUiStateKey("shellActivationEpochByWorkspace")).toBe(true);
     expect(isNonPersistedWorkspaceUiStateKey("pendingChatActivationByWorkspace")).toBe(true);
     expect(isNonPersistedWorkspaceUiStateKey("urgentHighlightedChatSessionByWorkspace")).toBe(true);

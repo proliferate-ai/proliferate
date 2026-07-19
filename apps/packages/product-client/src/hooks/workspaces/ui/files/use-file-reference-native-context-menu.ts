@@ -5,12 +5,17 @@ import type {
   NativeMenuItem,
   OpenTarget,
 } from "@proliferate/product-client/host/desktop-bridge";
+import type { FileReferencePathKind } from "#product/lib/domain/files/path-references";
 
 interface FileReferenceNativeContextMenuActions {
   openTargets: OpenTarget[];
   defaultOpenTarget?: OpenTarget | null;
+  pathKind: FileReferencePathKind | null;
+  canOpenInSidebar: boolean;
   canOpenExternal: boolean;
+  canReveal: boolean;
   copyPath: () => void;
+  openInSidebar: () => void;
   openDefault: () => void;
   openWithTarget: (targetId: string) => void;
   reveal: () => void;
@@ -27,22 +32,36 @@ export function useFileReferenceNativeContextMenu(
 export function buildFileReferenceNativeContextMenuItems({
   openTargets,
   defaultOpenTarget,
+  pathKind,
+  canOpenInSidebar,
   canOpenExternal,
+  canReveal,
   copyPath,
+  openInSidebar,
   openDefault,
   openWithTarget,
   reveal,
 }: FileReferenceNativeContextMenuActions): NativeMenuItem[] {
   const targets = filterFileReferenceOpenTargets(openTargets);
-  const items: NativeMenuItem[] = [
-    {
-      id: "open-default",
-      label: defaultOpenTarget ? `Open in ${defaultOpenTarget.label}` : "Open",
-      enabled: canOpenExternal,
-      icon: nativeMenuIconForOpenTarget(defaultOpenTarget) ?? { kind: "native", name: "open" },
-      onSelect: openDefault,
-    },
-  ];
+  const items: NativeMenuItem[] = [];
+
+  if (pathKind !== "directory") {
+    items.push({
+      id: "open-viewer",
+      label: "Open in viewer",
+      enabled: canOpenInSidebar,
+      icon: { kind: "native", name: "document" },
+      onSelect: openInSidebar,
+    });
+  }
+
+  items.push({
+    id: "open-default",
+    label: defaultOpenTarget ? `Open in ${defaultOpenTarget.label}` : "Open externally",
+    enabled: canOpenExternal,
+    icon: nativeMenuIconForOpenTarget(defaultOpenTarget) ?? { kind: "native", name: "open" },
+    onSelect: openDefault,
+  });
 
   if (targets.length > 0) {
     items.push({
@@ -69,8 +88,8 @@ export function buildFileReferenceNativeContextMenuItems({
     },
     {
       id: "reveal-in-finder",
-      label: "Reveal in Finder",
-      enabled: canOpenExternal,
+      label: pathKind === "directory" ? "Reveal folder in Finder" : "Reveal in Finder",
+      enabled: canReveal,
       onSelect: reveal,
     },
   );

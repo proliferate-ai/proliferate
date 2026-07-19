@@ -23,6 +23,7 @@ import {
   buildChatTabContextMenuItems,
   type WorkspaceTabContextMenuCommand,
 } from "#product/lib/domain/workspaces/tabs/context-menu";
+import { isWorkspaceSetupSessionId } from "#product/lib/domain/workspaces/selection/setup-session";
 
 export function ChatTabWithMenu({
   tab,
@@ -40,6 +41,8 @@ export function ChatTabWithMenu({
   onCreateGroup,
   onContextMenuTarget,
   onFork,
+  canClose,
+  canDismiss,
   onClose,
   onCloseOthers,
   onCloseRight,
@@ -63,6 +66,8 @@ export function ChatTabWithMenu({
   onCreateGroup?: () => void;
   onContextMenuTarget?: (anchorRect: ManualChatGroupEditorAnchorRect) => void;
   onFork?: () => void;
+  canClose: boolean;
+  canDismiss: boolean;
   onClose: () => void;
   onCloseOthers: () => void;
   onCloseRight: () => void;
@@ -73,10 +78,12 @@ export function ChatTabWithMenu({
   stripIndex?: number;
 }) {
   const isReviewAgentChild = tab.isReviewAgentChild;
+  const isSetupSession = isWorkspaceSetupSessionId(tab.id);
   const menuItems = buildChatTabContextMenuItems({
-    canRename: !isReviewAgentChild,
+    canRename: !isReviewAgentChild && !isSetupSession,
     canFork: tab.canFork && !tab.isChild && !isReviewAgentChild,
-    canDismiss: !isReviewAgentChild,
+    canClose: canClose && !isSetupSession,
+    canDismiss: canDismiss && !isReviewAgentChild && !isSetupSession,
     canCreateGroup: !isReviewAgentChild && canCreateGroup,
     isChild: tab.isChild,
   });
@@ -130,6 +137,7 @@ export function ChatTabWithMenu({
       groupColor={tab.groupColor}
       onSelect={onSelect}
       onSelectPointerDownCapture={onSelectPointerDownCapture}
+      canClose={canClose}
       onClose={onClose}
       badge={renderChatTabStatusBadge(tab)}
       shortcutLabel={shortcutLabel}

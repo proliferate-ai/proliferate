@@ -6,6 +6,10 @@ import type { SidebarWorkspaceVariant } from "#product/lib/domain/workspaces/sid
 import type { ManualChatGroup } from "#product/lib/domain/workspaces/tabs/manual-groups";
 import type { PendingChatActivation } from "#product/lib/domain/workspaces/tabs/shell-activation";
 import type { WorkspaceShellIntentKey, WorkspaceShellTabKey } from "#product/lib/domain/workspaces/tabs/shell-tabs";
+import type {
+  ChatSessionArchiveReservation,
+  ChatVisibilityCandidate,
+} from "#product/lib/domain/workspaces/tabs/visibility";
 
 export interface WorkspaceUiState {
   _hydrated: boolean;
@@ -33,6 +37,7 @@ export interface WorkspaceUiState {
   dismissedSetupFailures: Record<string, boolean>;
   visibleChatSessionIdsByWorkspace: Record<string, string[]>;
   recentlyHiddenChatSessionIdsByWorkspace: Record<string, string[]>;
+  archivingChatSessionIdsByWorkspace: Record<string, string[]>;
   collapsedChatGroupsByWorkspace: Record<string, string[]>;
   manualChatGroupsByWorkspace: Record<string, ManualChatGroup[]>;
   gitStatusSnapshotByWorkspace: Record<string, PersistedWorkspaceGitStatusSnapshot>;
@@ -125,6 +130,16 @@ export interface WorkspaceUiState {
   setVisibleChatSessionIdsForWorkspace: (workspaceId: string, sessionIds: string[]) => void;
   rememberHiddenChatSessionForWorkspace: (workspaceId: string, sessionId: string) => void;
   clearHiddenChatSessionsForWorkspace: (workspaceId: string, sessionIds: string[]) => void;
+  reserveChatSessionArchiveForWorkspace: (input: {
+    activeSessionId: string | null;
+    liveSessions: ChatVisibilityCandidate[];
+    sessionId: string;
+    workspaceId: string;
+  }) => ChatSessionArchiveReservation;
+  completeChatSessionArchiveForWorkspace: (
+    workspaceId: string,
+    sessionIds: string[],
+  ) => void;
   toggleChatGroupCollapsedForWorkspace: (workspaceId: string, parentSessionId: string) => void;
   clearChatGroupCollapsedForWorkspace: (workspaceId: string, parentSessionIds: string[]) => void;
   setManualChatGroupsForWorkspace: (workspaceId: string, groups: ManualChatGroup[]) => void;

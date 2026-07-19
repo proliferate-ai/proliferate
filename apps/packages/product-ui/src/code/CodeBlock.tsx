@@ -49,7 +49,10 @@ export function CodeBlock({
   }
 
   return (
-    <div className="relative my-[14px] w-full min-w-0 overflow-clip rounded-lg border border-transparent bg-[var(--color-code-block-background,var(--color-card))]">
+    <div
+      className="relative my-[14px] w-full min-w-0 overflow-clip rounded-lg border border-transparent bg-[var(--color-code-block-background,var(--color-card))]"
+      data-markdown-code-block="true"
+    >
       <div className="flex select-none items-center justify-between gap-2 py-1 pl-2 pr-1.5 text-[length:var(--text-chat-meta,11px)] text-muted-foreground">
         {label ? (
           <span className="min-w-0 flex-1 truncate">{label}</span>
@@ -67,7 +70,10 @@ export function CodeBlock({
           {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
         </Button>
       </div>
-      <div className="overflow-x-auto overflow-y-auto p-2 font-mono text-[length:var(--text-chat)] font-normal leading-[1.5]">
+      <div
+        className="overflow-x-auto overflow-y-auto p-3 font-mono text-[length:var(--text-chat)] font-normal leading-[1.5]"
+        data-markdown-code-content="true"
+      >
         {children ?? (tokens ? (
           <CodeBlockTokenContent
             lines={tokens}

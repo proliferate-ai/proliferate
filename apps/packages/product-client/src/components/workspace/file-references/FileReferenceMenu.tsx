@@ -18,10 +18,14 @@ export function FileReferenceMenuContent({
 
   return (
     <FilePathContextMenuContent
-      canOpen={actions.canOpenExternal}
+      pathKind={actions.pathKind}
+      canOpenInViewer={actions.canOpenInSidebar}
+      canOpenExternal={actions.canOpenExternal}
+      canReveal={actions.canReveal}
       targets={openTargets}
       defaultTarget={actions.defaultOpenTarget}
       close={close}
+      onOpenInViewer={() => void actions.openInSidebar()}
       onOpenDefault={() => void actions.openDefault()}
       onOpenTarget={(targetId) => void actions.openWithTarget(targetId)}
       onCopyPath={() => void actions.copyPath()}

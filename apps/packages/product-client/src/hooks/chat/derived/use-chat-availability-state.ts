@@ -14,6 +14,9 @@ import { useHarnessConnectionStore } from "#product/stores/sessions/harness-conn
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { useConfiguredLaunchReadiness } from "#product/hooks/chat/derived/use-configured-launch-readiness";
 import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
+import {
+  resolveWorkspaceSessionRecoverySendBlockedReason,
+} from "#product/lib/domain/workspaces/selection/session-recovery";
 
 export type ChatAvailabilityState = ChatInputAvailabilityState;
 
@@ -26,6 +29,9 @@ export function useChatAvailabilityState(options?: {
   const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
   const connectionState = useHarnessConnectionStore((state) => state.connectionState);
   const storedActiveSessionId = useSessionSelectionStore((state) => state.activeSessionId);
+  const workspaceSessionRecovery = useSessionSelectionStore(
+    (state) => state.workspaceSessionRecovery,
+  );
   const activeSessionId = options && "activeSessionId" in options
     ? options.activeSessionId ?? null
     : storedActiveSessionId;
@@ -65,6 +71,12 @@ export function useChatAvailabilityState(options?: {
     isConfiguredLaunchLoading: configuredLaunch.isLoading,
     hasReadyConfiguredLaunch: configuredLaunch.isReady,
     configuredLaunchDisabledReason: configuredLaunch.disabledReason,
+    sessionRecoverySendReason:
+      workspaceSessionRecovery?.sessionId === activeSessionId
+        ? resolveWorkspaceSessionRecoverySendBlockedReason(
+          workspaceSessionRecovery.reason,
+        )
+        : null,
     pendingWorkspaceEntry,
     pendingInteractionKind: primaryPendingInteractionKind,
   }), [
@@ -82,6 +94,8 @@ export function useChatAvailabilityState(options?: {
     selectedLocalWorkspace,
     selectedWorkspaceId,
     selectedCloudWorkspaceId,
+    workspaceSessionRecovery?.sessionId,
+    workspaceSessionRecovery?.reason,
   ]);
   return availability;
 }

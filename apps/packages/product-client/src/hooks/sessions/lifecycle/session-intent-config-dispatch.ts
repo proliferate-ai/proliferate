@@ -27,6 +27,8 @@ import { logLatency } from "#product/lib/infra/measurement/measurement-port";
 
 type SetSessionConfigOptionMutation = ReturnType<typeof useSetSessionConfigOptionMutation>;
 
+export const CONFIG_INTENT_DISPATCH_TIMEOUT_MS = 15_000;
+
 export interface ConfigIntentDispatchDeps {
   ssh?: DesktopSshBridge | null;
   cloudClient: CloudSandboxGatewayUrlSource | null;
@@ -38,6 +40,8 @@ export interface ConfigIntentDispatchDeps {
     workspaceId: string,
     session: Session,
   ) => void;
+  timeoutMs?: number;
+  onFailure?: (message: string) => void;
 }
 
 export async function dispatchConfigIntent(
@@ -48,26 +52,41 @@ export async function dispatchConfigIntent(
   if (!current || current.kind !== "update_config" || current.status !== "queued") {
     return;
   }
+  const dispatchedAt = new Date().toISOString();
   useSessionIntentStore.getState().patchIntent(intent.intentId, {
     status: "dispatching",
     errorMessage: null,
-    dispatchedAt: new Date().toISOString(),
+    dispatchedAt,
   });
   try {
-    const { workspaceId, materializedSessionId } = await getSessionClientAndWorkspace(
-      intent.clientSessionId,
-      deps.ssh ?? null,
-      deps.cloudClient,
+    const { response, workspaceId } = await runConfigDispatchWithTimeout(
+      deps.timeoutMs ?? CONFIG_INTENT_DISPATCH_TIMEOUT_MS,
+      async (signal) => {
+        const target = await getSessionClientAndWorkspace(
+          intent.clientSessionId,
+          deps.ssh ?? null,
+          deps.cloudClient,
+        );
+        if (signal.aborted || !isCurrentConfigDispatch(intent.intentId, dispatchedAt)) {
+          throw new Error(signal.aborted ? "request timed out" : "config dispatch superseded");
+        }
+        useSessionIntentStore.getState().bindMaterializedSession(
+          intent.clientSessionId,
+          target.materializedSessionId,
+        );
+        const response = await deps.setSessionConfigOptionMutation.mutateAsync({
+          workspaceId: target.workspaceId,
+          sessionId: target.materializedSessionId,
+          request: { configId: intent.configId, value: intent.value },
+          requestOptions: { signal },
+          awaitInvalidations: false,
+        });
+        return { response, workspaceId: target.workspaceId };
+      },
     );
-    useSessionIntentStore.getState().bindMaterializedSession(
-      intent.clientSessionId,
-      materializedSessionId,
-    );
-    const response = await deps.setSessionConfigOptionMutation.mutateAsync({
-      workspaceId,
-      sessionId: materializedSessionId,
-      request: { configId: intent.configId, value: intent.value },
-    });
+    if (!isCurrentConfigDispatch(intent.intentId, dispatchedAt)) {
+      return;
+    }
     if (workspaceId) {
       deps.upsertWorkspaceSessionRecord(workspaceId, response.session);
     }
@@ -153,9 +172,45 @@ export async function dispatchConfigIntent(
       applyState: response.applyState,
     });
   } catch (error) {
+    if (!isCurrentConfigDispatch(intent.intentId, dispatchedAt)) {
+      return;
+    }
+    const message = error instanceof Error ? error.message : String(error);
     useSessionIntentStore.getState().patchIntent(intent.intentId, {
       status: "failed",
-      errorMessage: error instanceof Error ? error.message : String(error),
+      errorMessage: message,
     });
+    deps.onFailure?.(message);
+  }
+}
+
+function isCurrentConfigDispatch(intentId: string, dispatchedAt: string): boolean {
+  const current = useSessionIntentStore.getState().entriesById[intentId];
+  return current?.kind === "update_config"
+    && current.status === "dispatching"
+    && current.dispatchedAt === dispatchedAt;
+}
+
+async function runConfigDispatchWithTimeout<T>(
+  timeoutMs: number,
+  run: (signal: AbortSignal) => Promise<T>,
+): Promise<T> {
+  const controller = new AbortController();
+  let timeoutId: ReturnType<typeof globalThis.setTimeout> | null = null;
+  const timeoutError = new Error("request timed out");
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = globalThis.setTimeout(() => {
+      controller.abort(timeoutError);
+      reject(timeoutError);
+    }, timeoutMs);
+  });
+  try {
+    const request = run(controller.signal);
+    request.catch(() => undefined);
+    return await Promise.race([request, timeout]);
+  } finally {
+    if (timeoutId !== null) {
+      globalThis.clearTimeout(timeoutId);
+    }
   }
 }

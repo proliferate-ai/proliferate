@@ -11,6 +11,7 @@ import type { CloudSandboxGatewayUrlSource } from "#product/lib/access/cloud/clo
 export interface WorkspaceSelectionOptions {
   force?: boolean;
   forceCold?: boolean;
+  forceSessionDirectoryRefresh?: boolean;
   preservePending?: boolean;
   initialActiveSessionId?: string | null;
   latencyFlowId?: string | null;
@@ -70,6 +71,7 @@ export interface WorkspaceSelectionDeps {
     workspaceConnection: AnyHarnessResolvedConnection;
     startedAt: number;
     latencyFlowId?: string | null;
+    forceSessionDirectoryRefresh?: boolean;
     isCurrent: () => boolean;
   }) => Promise<{ sessions: WorkspaceSession[] }>;
   reconcileHotWorkspace: (input: {

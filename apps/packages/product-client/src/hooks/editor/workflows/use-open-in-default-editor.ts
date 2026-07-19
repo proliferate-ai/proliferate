@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type {
   DesktopFilesBridge,
   OpenTarget,
+  PathKind,
 } from "@proliferate/product-client/host/desktop-bridge";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { resolvePreferredOpenTarget } from "#product/lib/domain/chat/composer/preference-resolvers";
@@ -12,14 +13,22 @@ import { splitPathLineSuffix } from "#product/lib/domain/files/path-detection";
  * Per-bridge cache so every chat message doesn't re-query the installed editor
  * list. The concrete Desktop bridge is stable for the host session.
  */
-const cachedTargetsPromises = new WeakMap<DesktopFilesBridge, Promise<OpenTarget[]>>();
+const cachedTargetsPromises = new WeakMap<
+  DesktopFilesBridge,
+  Map<PathKind, Promise<OpenTarget[]>>
+>();
 const EMPTY_OPEN_TARGETS: OpenTarget[] = [];
 
-function loadFileTargets(files: DesktopFilesBridge): Promise<OpenTarget[]> {
-  let targetsPromise = cachedTargetsPromises.get(files);
+function loadTargets(files: DesktopFilesBridge, pathKind: PathKind): Promise<OpenTarget[]> {
+  let targetsByKind = cachedTargetsPromises.get(files);
+  if (!targetsByKind) {
+    targetsByKind = new Map();
+    cachedTargetsPromises.set(files, targetsByKind);
+  }
+  let targetsPromise = targetsByKind.get(pathKind);
   if (!targetsPromise) {
-    targetsPromise = files.listOpenTargets("file").catch(() => [] as OpenTarget[]);
-    cachedTargetsPromises.set(files, targetsPromise);
+    targetsPromise = files.listOpenTargets(pathKind).catch(() => [] as OpenTarget[]);
+    targetsByKind.set(pathKind, targetsPromise);
   }
   return targetsPromise;
 }
@@ -53,7 +62,7 @@ interface UseOpenInDefaultEditorResult {
  *  - Strips any `:line[:col]` suffix before invoking the shell command,
  *    because Desktop open-target commands take a plain path.
  */
-export function useOpenInDefaultEditor(): UseOpenInDefaultEditorResult {
+export function useOpenInDefaultEditor(pathKind: PathKind = "file"): UseOpenInDefaultEditorResult {
   const host = useProductHost();
   const files = host.desktop?.files ?? null;
   const [targets, setTargets] = useState<OpenTarget[] | null>(null);
@@ -72,26 +81,27 @@ export function useOpenInDefaultEditor(): UseOpenInDefaultEditorResult {
       setTargets([]);
       return;
     }
-    void loadFileTargets(files).then((loaded) => {
+    setTargets(null);
+    void loadTargets(files, pathKind).then((loaded) => {
       if (!cancelled) setTargets(loaded);
     });
     return () => {
       cancelled = true;
     };
-  }, [files]);
+  }, [files, pathKind]);
 
   const openInDefaultEditor = useCallback(
     async (absolutePath: string) => {
       if (!files) {
         throw new Error("Local file access is not available.");
       }
-      const list = targets ?? (await loadFileTargets(files));
+      const list = targets ?? (await loadTargets(files, pathKind));
       const preferred = resolvePreferredOpenTarget(openableTargets(list), { defaultOpenInTargetId });
       if (!preferred) return;
       const { path } = splitPathLineSuffix(absolutePath);
       await files.openTarget(preferred.id, path).catch(() => {});
     },
-    [files, targets, defaultOpenInTargetId],
+    [files, pathKind, targets, defaultOpenInTargetId],
   );
 
   const copyPath = useCallback(async (path: string) => {

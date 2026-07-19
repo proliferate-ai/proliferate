@@ -15,6 +15,7 @@ interface ChatInputAvailabilityArgs {
   isConfiguredLaunchLoading: boolean;
   hasReadyConfiguredLaunch: boolean;
   configuredLaunchDisabledReason: string | null;
+  sessionRecoverySendReason?: string | null;
   pendingWorkspaceEntry: ChatInputPendingWorkspaceEntry | null;
   pendingInteractionKind?: ChatInputPendingInteractionKind | null;
 }
@@ -85,6 +86,7 @@ export function resolveChatInputAvailability({
   isConfiguredLaunchLoading,
   hasReadyConfiguredLaunch,
   configuredLaunchDisabledReason,
+  sessionRecoverySendReason = null,
   pendingWorkspaceEntry,
   pendingInteractionKind = null,
 }: ChatInputAvailabilityArgs): ChatInputAvailabilityState {
@@ -165,6 +167,16 @@ export function resolveChatInputAvailability({
       disabledReason: "AnyHarness runtime is still starting.",
       sendBlockedReason: null,
       areRuntimeControlsDisabled: true,
+      selectedWorkspaceKind,
+    };
+  }
+
+  if (sessionRecoverySendReason) {
+    return {
+      isDisabled: false,
+      disabledReason: null,
+      sendBlockedReason: sessionRecoverySendReason,
+      areRuntimeControlsDisabled: false,
       selectedWorkspaceKind,
     };
   }

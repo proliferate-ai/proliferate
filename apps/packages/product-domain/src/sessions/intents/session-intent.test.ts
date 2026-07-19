@@ -149,6 +149,45 @@ describe("session intents", () => {
     expect(pendingConfigChangesForSessionIntents([reconciled]).mode).toBeUndefined();
   });
 
+  it("projects only the latest rapid selection for the same config", () => {
+    const first = {
+      ...createUpdateConfigIntent({
+        intentId: "config-default",
+        clientSessionId: "session-1",
+        configId: "mode",
+        value: "default",
+      }),
+      status: "accepted" as const,
+      applyState: "applied" as const,
+    };
+    const latest = createUpdateConfigIntent({
+      intentId: "config-plan",
+      clientSessionId: "session-1",
+      configId: "mode",
+      value: "plan",
+    });
+
+    expect(pendingConfigChangesForSessionIntents([first, latest]).mode).toMatchObject({
+      value: "plan",
+      status: "submitting",
+    });
+  });
+
+  it("drops a failed optimistic selection so authority can roll the control back", () => {
+    const failed = {
+      ...createUpdateConfigIntent({
+        intentId: "config-plan",
+        clientSessionId: "session-1",
+        configId: "mode",
+        value: "plan",
+      }),
+      status: "failed" as const,
+      errorMessage: "request timed out",
+    };
+
+    expect(pendingConfigChangesForSessionIntents([failed]).mode).toBeUndefined();
+  });
+
   it("does not queue a prompt solely because stale session metadata says busy", () => {
     expect(resolvePromptOutboxPlacement({
       isSessionBusy: isPromptOutboxPlacementBusy({

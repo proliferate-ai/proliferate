@@ -1,5 +1,6 @@
 export type ScenarioKey =
   | "clean"
+  | "markdown-presentation"
   | "todos-short"
   | "todos-mid"
   | "todos-long"
@@ -114,6 +115,7 @@ interface Scenario {
 
 export const SCENARIOS: Record<ScenarioKey, Scenario> = {
   "clean": { label: "Clean" },
+  "markdown-presentation": { label: "Markdown presentation" },
   "todos-short": { label: "Todos (3)" },
   "todos-mid": { label: "Todos (5)" },
   "todos-long": { label: "Todos (12)" },
