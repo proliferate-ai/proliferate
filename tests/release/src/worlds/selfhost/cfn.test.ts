@@ -645,6 +645,20 @@ test("create failure: registered retention captures bounded SSM evidence before 
     }
     if (args[0] === "cloudformation" && args[1] === "describe-stack-events" && args.includes("--query")) {
       order.push("describe-instance-events");
+      assert.deepEqual(args, [
+        "cloudformation",
+        "describe-stack-events",
+        "--stack-name",
+        "stk",
+        "--region",
+        "us-east-1",
+        "--max-items",
+        "32",
+        "--query",
+        "StackEvents[?LogicalResourceId=='ProliferateInstance'].[PhysicalResourceId,ResourceStatusReason]",
+        "--output",
+        "json",
+      ]);
       return JSON.stringify([[null, "Received FAILURE signal with UniqueId i-0abc"]]);
     }
     if (args[0] === "cloudformation" && args[1] === "describe-stack-events") {
@@ -862,6 +876,13 @@ test("parseCfnInstanceIdEventProjection: accepts one signaling instance and reje
     ),
     null,
   );
+  for (const malformed of [
+    [["i-0abc", null], { corrupt: true }],
+    [["i-0abc", null, null]],
+    [["i-0abc", 7]],
+  ]) {
+    assert.equal(parseCfnInstanceIdEventProjection(JSON.stringify(malformed)), null);
+  }
   assert.equal(parseCfnInstanceIdEventProjection("not-json"), null);
 });
 

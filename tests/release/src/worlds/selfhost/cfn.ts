@@ -1105,7 +1105,13 @@ export function parseCfnInstanceIdEventProjection(raw: string): string | null {
 
   const candidates = new Set<string>();
   for (const row of parsed) {
-    if (!Array.isArray(row)) continue;
+    if (
+      !Array.isArray(row)
+      || row.length !== 2
+      || row.some((field) => field !== null && typeof field !== "string")
+    ) {
+      return null;
+    }
     const physicalId = typeof row[0] === "string" ? row[0].trim() : "";
     if (/^i-[0-9a-f]+$/i.test(physicalId)) {
       candidates.add(physicalId.toLowerCase());
