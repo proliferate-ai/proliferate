@@ -754,9 +754,10 @@ healthy and removes cloud capability truthfully.
 
 #### `SH-CFN-WRAPPER` — shallow infrastructure wrapper proof
 
-When CloudFormation is a supported install entry point, verify candidate input
-digests, stack outputs, DNS/TLS, and `/meta` version. Do not repeat the owner,
-invite, and Desktop authentication journey already proved above.
+When CloudFormation is a supported install entry point, verify candidate server
+image, deploy-bundle, and platform runtime input digests, stack outputs,
+DNS/TLS, and `/meta` version. Do not repeat the owner, invite, and Desktop
+authentication journey already proved above.
 
 Self-hosted Web, when supported, is the instance's same-origin Web application.
 It reuses product assertions but has no server picker, config rewrite, relaunch,

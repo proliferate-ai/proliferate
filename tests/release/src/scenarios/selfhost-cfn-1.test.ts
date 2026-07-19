@@ -6,6 +6,7 @@ import {
   SH_CFN_WRAPPER,
   attachCfnCleanup,
   cleanupIsClean,
+  constructSelfHostCfnWorld,
   resolveCfnWorldInputs,
   runCfnWrapperCell,
   runSelfHostCfnCells,
@@ -127,6 +128,7 @@ interface FakeWorldOptions {
   observedDigest?: string;
   ssmThrows?: boolean;
   bundleDigestBound?: boolean;
+  runtimeDigestBound?: boolean;
   templateValidated?: boolean;
   outputsSiteAddress?: string;
   cleanup?: SelfHostCfnWorldCleanupEvidence;
@@ -144,6 +146,7 @@ function fakeWorld(options: FakeWorldOptions = {}): { world: ReadySelfHostCfnWor
     templateSha256: "t".repeat(64),
     templateValidated: options.templateValidated ?? true,
     bundleDigestBound: options.bundleDigestBound ?? true,
+    runtimeDigestBound: options.runtimeDigestBound ?? true,
     pushedImageDigest: PUSHED_DIGEST,
     releaseVersionTag: "local-run-1-local-0",
     outputs: {
@@ -220,6 +223,7 @@ test("runCfnWrapperCell: green when every shallow check passes", async () => {
   assert.equal(result.status, "green");
   assert.ok(result.evidence);
   assert.equal(result.evidence?.image_digest_bound, true);
+  assert.equal(result.evidence?.runtime_digest_bound, true);
 });
 
 test("runCfnWrapperCell: an unreadable SSM image digest FAILS CLOSED (no version-only fallback, PR7-CONTROL-006)", async () => {
@@ -262,6 +266,7 @@ test("runCfnWrapperCell: unhealthy TLS, bad outputs, unbound bundle, and hosted-
   assert.equal((await runCfnWrapperCell(fakeWorld({ healthy: false }).world)).status, "failed");
   assert.equal((await runCfnWrapperCell(fakeWorld({ outputsSiteAddress: "other.example.com" }).world)).status, "failed");
   assert.equal((await runCfnWrapperCell(fakeWorld({ bundleDigestBound: false }).world)).status, "failed");
+  assert.equal((await runCfnWrapperCell(fakeWorld({ runtimeDigestBound: false }).world)).status, "failed");
   assert.equal((await runCfnWrapperCell(fakeWorld({ templateValidated: false }).world)).status, "failed");
   assert.equal((await runCfnWrapperCell(fakeWorld({ cloudWorkspaces: true }).world)).status, "failed");
   assert.equal((await runCfnWrapperCell(fakeWorld({ agentGateway: true }).world)).status, "failed");
@@ -292,6 +297,22 @@ test("resolveCfnWorldInputs: green resolution + typed failures for absent inputs
   assert.equal(resolveCfnWorldInputs(fakeCtx({ candidateBuildMap: null })).ok, false);
   const missingRegion = resolveCfnWorldInputs(fakeCtx({ env: fakeEnv({ RELEASE_E2E_SELFHOST_REGION: undefined }) }));
   assert.equal(missingRegion.ok, false);
+});
+
+test("constructSelfHostCfnWorld rejects a CFN map without the exact arm64 runtime before provider work", async () => {
+  const ctx = fakeCtx();
+  await assert.rejects(
+    constructSelfHostCfnWorld({
+      map: fakeCandidateMap(),
+      run: ctx.runIdentity!,
+      runDir: ctx.runDir ?? "/tmp/selfhost-cfn-missing-runtime",
+      region: "us-east-1",
+      hostedZoneId: "Z123",
+      bucket: "qual-bundle-bucket",
+      imageRepo: "ghcr.io/proliferate-ai/proliferate-server-qualification",
+    }),
+    /missing the required selfhost-runtime\/linux\/arm64 artifact/,
+  );
 });
 
 // ── Build / close failure semantics ───────────────────────────────────────────
@@ -364,6 +385,7 @@ test("cleanupIsClean + attachCfnCleanup: clean requires all deletions; block is 
     template_sha256: "f".repeat(64),
     template_validated: true,
     bundle_digest_bound: true,
+    runtime_digest_bound: true,
     image_digest_bound: true,
     outputs_valid: true,
     dns_tls_verified: true,

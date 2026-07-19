@@ -690,10 +690,10 @@ jobs:
     # dispatch that ticks `selfhost` fires this job.
     if: github.event_name == 'workflow_dispatch' && inputs.selfhost
     runs-on: ubuntu-latest
-    # 120 (was 90): the SELFHOST-CFN-1 arm64 candidate builds under QEMU
-    # emulation on the amd64 runner, which is materially slower than a native
-    # build; the bound stays hard (a hung run still dies).
-    timeout-minutes: 120
+    # 150: SELFHOST-CFN-1 builds both the arm64 server image under QEMU and the
+    # exact arm64 runtime archive before the real stack lifecycle. The bound
+    # stays hard (a hung run still dies).
+    timeout-minutes: 150
     concurrency:
       group: release-e2e-self-host
       cancel-in-progress: false
@@ -762,6 +762,14 @@ jobs:
       # (the shipped CloudFormation wrapper only offers Graviton t4g instance
       # types); QEMU binfmt makes that cross-platform buildx build possible.
       - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
+      # The CFN template installs an aarch64 musl runtime bundle. A run-scoped
+      # server image tag has no matching GitHub release, so the qualification
+      # builder cross-compiles the exact current-head runtime and passes it via
+      # RuntimeBinaryUrl/RuntimeBinaryChecksumUrl instead of falling back to a
+      # stale or nonexistent release asset.
+      - name: Install cross for exact arm64 self-host runtime
+        if: inputs.selfhost_candidate_platform == 'linux/arm64'
+        run: cargo install cross --git https://github.com/cross-rs/cross --locked
       # GHCR auth for the SELFHOST-CFN-1 candidate-image push/cleanup. The
       # repo-scoped GITHUB_TOKEN (packages: write above) is the credential; no
       # PAT is introduced.

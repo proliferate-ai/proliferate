@@ -426,6 +426,7 @@ export interface SelfHostCfnWrapperEvidenceV1 {
   template_sha256: string;
   template_validated: true;
   bundle_digest_bound: true;
+  runtime_digest_bound: true;
   image_digest_bound: true;
   outputs_valid: true;
   dns_tls_verified: true;
@@ -2080,6 +2081,7 @@ const SELFHOST_CFN_WRAPPER_EVIDENCE_KEYS = [
   "template_sha256",
   "template_validated",
   "bundle_digest_bound",
+  "runtime_digest_bound",
   "image_digest_bound",
   "outputs_valid",
   "dns_tls_verified",
@@ -2387,6 +2389,7 @@ function validateSelfHostCfnWrapperEvidence(
   requireSafeEvidenceToken(`${where}.template_sha256`, evidence.template_sha256);
   requireTrue(`${where}.template_validated`, evidence.template_validated);
   requireTrue(`${where}.bundle_digest_bound`, evidence.bundle_digest_bound);
+  requireTrue(`${where}.runtime_digest_bound`, evidence.runtime_digest_bound);
   requireTrue(`${where}.image_digest_bound`, evidence.image_digest_bound);
   requireTrue(`${where}.outputs_valid`, evidence.outputs_valid);
   requireTrue(`${where}.dns_tls_verified`, evidence.dns_tls_verified);

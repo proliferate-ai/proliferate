@@ -8,6 +8,7 @@ import {
   buildCfnParameters,
   buildCfnStackTags,
   bundleDigestBound,
+  runtimeDigestBound,
   cfnSiteAddress,
   cfnStackName,
   createCfnStackAndWait,
@@ -137,10 +138,12 @@ test("parseGhcrRepo: splits org + package name; rejects a bare repo", () => {
   assert.throws(() => parseGhcrRepo("ghcr.io/onlyorg"), /ghcr\.io/);
 });
 
-test("buildCfnParameters: emits all 7 candidate parameters as JSON (file:// form, not argv)", () => {
+test("buildCfnParameters: emits all 9 candidate parameters as JSON (file:// form, not argv)", () => {
   const params = buildCfnParameters({
     releaseVersion: "1.2.3",
     serverImageRepository: "ghcr.io/proliferate-ai/proliferate-server-qualification",
+    runtimeBinaryUrl: "https://s3/presigned-runtime",
+    runtimeBinaryChecksumUrl: "https://s3/presigned-sums",
     deployBundleUrl: "https://s3/presigned-bundle",
     deployBundleChecksumUrl: "https://s3/presigned-sums",
     siteAddress: "sh-x.qualification.proliferate.com",
@@ -151,7 +154,9 @@ test("buildCfnParameters: emits all 7 candidate parameters as JSON (file:// form
   assert.equal(byKey.get("CreateRoute53Record"), "true");
   assert.equal(byKey.get("HostedZoneId"), "Z123");
   assert.equal(byKey.get("DeployBundleChecksumUrl"), "https://s3/presigned-sums");
-  assert.equal(params.length, 7);
+  assert.equal(byKey.get("RuntimeBinaryUrl"), "https://s3/presigned-runtime");
+  assert.equal(byKey.get("RuntimeBinaryChecksumUrl"), "https://s3/presigned-sums");
+  assert.equal(params.length, 9);
 });
 
 test("scrubCfnParameterUrls: redacts presigned S3 URLs from a diagnostic (PR7-CONTROL-003)", () => {
@@ -212,6 +217,13 @@ test("bundleDigestBound: true iff the sums list the candidate bundle sha for pro
   assert.equal(bundleDigestBound("garbage", sha), false);
 });
 
+test("runtimeDigestBound: true iff the sums list the exact arm64 runtime archive", () => {
+  const sha = "c".repeat(64);
+  assert.equal(runtimeDigestBound(`${sha}  anyharness-aarch64-unknown-linux-musl.tar.gz\n`, sha), true);
+  assert.equal(runtimeDigestBound(`${sha}  anyharness-x86_64-unknown-linux-musl.tar.gz\n`, sha), false);
+  assert.equal(runtimeDigestBound(`${"d".repeat(64)}  anyharness-aarch64-unknown-linux-musl.tar.gz\n`, sha), false);
+});
+
 test("boundedStackEventsTail: only FAILED events, bounded count, secret-free formatting", () => {
   const events = Array.from({ length: 20 }, (_, i) => ({
     LogicalResourceId: `R${i}`,
@@ -240,7 +252,7 @@ test("parseGhcrVersions + ghcrVersionIdForTag: finds the version whose tags incl
 
 // ── S3 upload / presign ──────────────────────────────────────────────────────
 
-test("uploadBundleAndPresign: registers s3_object BEFORE each cp, returns presigned URLs", async () => {
+test("uploadBundleAndPresign: registers bundle, runtime, and sums BEFORE each cp and returns presigned URLs", async () => {
   const log: string[] = [];
   const exec = new FakeExec((args) => {
     if (args[0] === "s3" && args[1] === "cp") {
@@ -258,6 +270,7 @@ test("uploadBundleAndPresign: registers s3_object BEFORE each cp, returns presig
     bucket: "bkt",
     keyPrefix: "qualification/run-1/shard-0/",
     bundlePath: "/tmp/proliferate-deploy.tar.gz",
+    runtimePath: "/tmp/anyharness-aarch64-unknown-linux-musl.tar.gz",
     sumsPath: "/tmp/self-hosted-assets.SHA256SUMS",
     registerCleanup: async (kind, providerId) => {
       log.push(`register:${kind}:${providerId}`);
@@ -267,9 +280,20 @@ test("uploadBundleAndPresign: registers s3_object BEFORE each cp, returns presig
   const bundleReg = log.indexOf("register:s3_object:s3://bkt/qualification/run-1/shard-0/proliferate-deploy.tar.gz");
   const bundleCp = log.indexOf("cp:s3://bkt/qualification/run-1/shard-0/proliferate-deploy.tar.gz");
   assert.ok(bundleReg >= 0 && bundleReg < bundleCp, `register precedes cp (${JSON.stringify(log)})`);
+  const runtimeProvider =
+    "s3://bkt/qualification/run-1/shard-0/anyharness-aarch64-unknown-linux-musl.tar.gz";
+  assert.ok(
+    log.indexOf(`register:s3_object:${runtimeProvider}`) < log.indexOf(`cp:${runtimeProvider}`),
+    `runtime register precedes cp (${JSON.stringify(log)})`,
+  );
   assert.ok(result.deployBundleUrl.startsWith("https://s3/presigned/"));
+  assert.ok(result.runtimeBinaryUrl.startsWith("https://s3/presigned/"));
   assert.ok(result.deployBundleChecksumUrl.startsWith("https://s3/presigned/"));
   assert.equal(result.bundleKey, "qualification/run-1/shard-0/proliferate-deploy.tar.gz");
+  assert.equal(
+    result.runtimeKey,
+    "qualification/run-1/shard-0/anyharness-aarch64-unknown-linux-musl.tar.gz",
+  );
 });
 
 // ── Image push + GHCR delete ─────────────────────────────────────────────────
@@ -446,6 +470,8 @@ test("createCfnStackAndWait: registers stack BEFORE create, passes params, retur
     parameters: buildCfnParameters({
       releaseVersion: "1.2.3",
       serverImageRepository: "ghcr.io/x/y",
+      runtimeBinaryUrl: "https://s3/r?X-Amz-Signature=SECRET",
+      runtimeBinaryChecksumUrl: "https://s3/s?X-Amz-Signature=SECRET",
       deployBundleUrl: "https://s3/b?X-Amz-Signature=SECRET",
       deployBundleChecksumUrl: "https://s3/s?X-Amz-Signature=SECRET",
       siteAddress: site,
@@ -508,6 +534,8 @@ test("createCfnStackAndWait: a parameter-file removal failure is NON-GREEN, not 
       parameters: buildCfnParameters({
         releaseVersion: "run-1",
         serverImageRepository: "ghcr.io/x/y",
+        runtimeBinaryUrl: "https://s3/r?X-Amz-Signature=SECRET",
+        runtimeBinaryChecksumUrl: "https://s3/s?X-Amz-Signature=SECRET",
         deployBundleUrl: "https://s3/b?X-Amz-Signature=SECRET",
         deployBundleChecksumUrl: "https://s3/s?X-Amz-Signature=SECRET",
         siteAddress: site,
@@ -624,14 +652,23 @@ test("SelfHostCfnCleanupStack: reverse-order teardown, route53 rides the stack, 
   await stack.registerAcquire("run_directory", "/run/cfn", async () => void order.push("run_directory"));
   await stack.registerAcquire("extracted_artifacts", "/run/cfn/artifacts", async () => void order.push("extracted_artifacts"));
   await stack.registerAcquire("s3_object", "s3://b/bundle", async () => void order.push("s3_bundle"));
+  await stack.registerAcquire("s3_object", "s3://b/runtime", async () => void order.push("s3_runtime"));
   await stack.registerAcquire("s3_object", "s3://b/sums", async () => void order.push("s3_sums"));
   await stack.registerAcquire("ghcr_package_version", "ghcr:tag", async () => void order.push("ghcr"));
   await stack.registerAcquire("cloudformation_stack", "stk", async () => void order.push("stack"));
 
   const evidence = await stack.runAll();
-  assert.deepEqual(order, ["stack", "ghcr", "s3_sums", "s3_bundle", "extracted_artifacts", "run_directory"]);
-  assert.equal(evidence.registered, 6);
-  assert.equal(evidence.reconciled, 6);
+  assert.deepEqual(order, [
+    "stack",
+    "ghcr",
+    "s3_sums",
+    "s3_runtime",
+    "s3_bundle",
+    "extracted_artifacts",
+    "run_directory",
+  ]);
+  assert.equal(evidence.registered, 7);
+  assert.equal(evidence.reconciled, 7);
   assert.equal(evidence.failed, 0);
   assert.equal(evidence.stackDeleted, true);
   assert.equal(evidence.s3ObjectsDeleted, true);

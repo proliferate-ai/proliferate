@@ -193,6 +193,17 @@ test("the self-host execution step authenticates run-scoped GHCR cleanup without
   );
 });
 
+test("the arm64 self-host job installs cross before AWS and keeps a hard runtime-aware timeout", () => {
+  const selfHost = job(release, "release-e2e-selfhost-install");
+  const crossInstall = selfHost.indexOf("Install cross for exact arm64 self-host runtime");
+  const aws = selfHost.indexOf("Configure AWS credentials");
+  assert.ok(crossInstall >= 0 && crossInstall < aws);
+  assert.match(selfHost, /if: inputs\.selfhost_candidate_platform == 'linux\/arm64'/);
+  assert.match(selfHost, /cargo install cross --git https:\/\/github\.com\/cross-rs\/cross --locked/);
+  assert.match(selfHost, /timeout-minutes: 150/);
+  assert.match(selfHost, /role-duration-seconds: 7200/);
+});
+
 test("supported cancellation keeps local receipts and hard cancellation keeps the trusted managed reaper", () => {
   for (const id of ["release-e2e-local-functional", "release-e2e-selfhost-install", "release-e2e-managed-cloud"]) {
     const body = job(release, id);

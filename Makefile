@@ -1204,7 +1204,7 @@ export SELFHOST_API_BASE_URL
 # INSTALL-1/QUAL-1/ISOLATION-1). SELFHOST-CFN-1's CloudFormation template
 # defaults to a Graviton (arm64) t4g instance, so run it with
 # SELFHOST_CANDIDATE_PLATFORM=linux/arm64 so the docker-load candidate image
-# matches the box arch.
+# and exact runtime archive match the box arch.
 SELFHOST_CANDIDATE_PLATFORM ?= linux/amd64
 # Optional matrix-cell filter passed verbatim to run.ts --cells (e.g. SH-GATEWAY
 # to run SELFHOST-QUAL-1's gateway cell alone on a run-scoped origin). Empty =

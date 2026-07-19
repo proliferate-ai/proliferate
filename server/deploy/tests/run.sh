@@ -429,6 +429,65 @@ echo "$members" | grep -q 'proliferate-deploy/tests/' && no "bundle should NOT c
 ( cd "$SCRATCH" && sha256sum proliferate-deploy.tar.gz >sums && sha256sum -c --ignore-missing sums >/dev/null 2>&1 ) \
   && ok "checksum round-trips (sha256sum -c)" || no "checksum round-trip failed"
 
+# The CloudFormation qualification transports unreleased runtime bytes through
+# private-S3 presigned URLs. install-runtime must match the checksum against the
+# URL path basename, not its X-Amz query string.
+RUNTIME_FIXTURE_DIR="$SCRATCH/runtime-fixture"
+RUNTIME_FIXTURE_ARCHIVE="$SCRATCH/anyharness-aarch64-unknown-linux-musl.tar.gz"
+RUNTIME_FIXTURE_SUMS="$SCRATCH/runtime.SHA256SUMS"
+RUNTIME_INSTALL_DIR="$SCRATCH/runtime-installed"
+RUNTIME_ENV="$SCRATCH/runtime.env"
+RUNTIME_FAKE_BIN="$SCRATCH/runtime-fake-bin"
+mkdir -p "$RUNTIME_FIXTURE_DIR" "$RUNTIME_INSTALL_DIR" "$RUNTIME_FAKE_BIN"
+for binary in anyharness proliferate-worker proliferate-supervisor; do
+  printf '#!/bin/sh\nprintf "%s\\n"\n' "$binary" >"$RUNTIME_FIXTURE_DIR/$binary"
+  chmod +x "$RUNTIME_FIXTURE_DIR/$binary"
+done
+tar czf "$RUNTIME_FIXTURE_ARCHIVE" -C "$RUNTIME_FIXTURE_DIR" anyharness proliferate-worker proliferate-supervisor
+( cd "$SCRATCH" && sha256sum "$(basename "$RUNTIME_FIXTURE_ARCHIVE")" >"$RUNTIME_FIXTURE_SUMS" )
+cat >"$RUNTIME_FAKE_BIN/curl" <<'EOF'
+#!/bin/sh
+set -eu
+url=""
+output=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -o) output="$2"; shift 2 ;;
+    -*) shift ;;
+    *) url="$1"; shift ;;
+  esac
+done
+case "$url" in
+  *anyharness-aarch64-unknown-linux-musl.tar.gz*) cp "$RUNTIME_FIXTURE_ARCHIVE" "$output" ;;
+  *self-hosted-assets.SHA256SUMS*) cp "$RUNTIME_FIXTURE_SUMS" "$output" ;;
+  *) exit 2 ;;
+esac
+EOF
+chmod +x "$RUNTIME_FAKE_BIN/curl"
+cat >"$RUNTIME_ENV" <<EOF
+CLOUD_RUNTIME_SOURCE_BINARY_PATH=$RUNTIME_INSTALL_DIR/anyharness
+CLOUD_WORKER_SOURCE_BINARY_PATH=$RUNTIME_INSTALL_DIR/proliferate-worker
+CLOUD_SUPERVISOR_SOURCE_BINARY_PATH=$RUNTIME_INSTALL_DIR/proliferate-supervisor
+RUNTIME_BINARY_URL=https://qualification-bucket.s3.us-east-2.amazonaws.com/qualification/run/anyharness-aarch64-unknown-linux-musl.tar.gz?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Signature=test
+RUNTIME_BINARY_SHA256_URL=https://qualification-bucket.s3.us-east-2.amazonaws.com/qualification/run/self-hosted-assets.SHA256SUMS?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Signature=test
+EOF
+if PATH="$RUNTIME_FAKE_BIN:$PATH" \
+  RUNTIME_FIXTURE_ARCHIVE="$RUNTIME_FIXTURE_ARCHIVE" \
+  RUNTIME_FIXTURE_SUMS="$RUNTIME_FIXTURE_SUMS" \
+  PROLIFERATE_ENV_FILE="$RUNTIME_ENV" \
+  "$DEPLOY_DIR/install-runtime.sh" >"$SCRATCH/install-runtime.log" 2>&1; then
+  runtime_install_complete=true
+  for binary in anyharness proliferate-worker proliferate-supervisor; do
+    [[ -x "$RUNTIME_INSTALL_DIR/$binary" ]] || runtime_install_complete=false
+  done
+  [[ "$runtime_install_complete" == "true" ]] \
+    && ok "install-runtime verifies presigned runtime URL against the path basename" \
+    || no "install-runtime did not install every presigned runtime binary"
+else
+  no "install-runtime should accept a checksum entry for a presigned runtime URL"
+  sed 's/^/      /' "$SCRATCH/install-runtime.log"
+fi
+
 # Executable-bit invariant on the checked-in scripts (the bundle preserves the
 # git mode, so this is what makes ./bootstrap.sh runnable after extraction).
 for s in bootstrap.sh update.sh ensure-secrets.sh install-runtime.sh registry-login.sh wait-for-health.sh preflight.sh doctor.sh install.sh; do

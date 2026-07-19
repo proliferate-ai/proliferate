@@ -203,5 +203,7 @@ The stack also supports advanced override parameters:
   - use this with `RuntimeBinaryUrl` when you also have a matching `SHA256SUMS` file for the unreleased tarball
 
 Those overrides exist so the stack can be validated before the first tagged
-self-hosted release is cut. The normal release path should leave both at their
-defaults.
+self-hosted release is cut. `SH-CFN-WRAPPER` uses both runtime overrides with
+the exact current-head arm64 runtime archive and its run-scoped checksum file;
+it never derives a nonexistent `server-v<qualification-run-id>` runtime URL.
+The normal release path should leave both at their defaults.
