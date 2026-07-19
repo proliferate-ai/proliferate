@@ -17,6 +17,7 @@ import {
 } from "../local-world-smoke-1.js";
 import { bootLocalFunctionalWorld, isWorldBackedRun, resolveLocalFunctionalWorldInputs } from "./world-boot.js";
 import { captureLocalDriverFailure } from "./debug-capture.js";
+import { waitForComposerModelSelection } from "./composer-model-option.js";
 import {
   resolveLocalWorkspaceSessionAfter,
   resolveLocalWorkspaceSessionId,
@@ -490,13 +491,14 @@ export const defaultLocalRouteDriver: LocalRouteDriver = {
     if (!reply.trim()) {
       throw new Error("reopenAndVerify: the transcript did not re-render an assistant reply after reopen.");
     }
-    await p
-      .locator(`[data-composer-model-trigger][data-composer-selected-model="${cssAttr(expect.modelId)}"]`)
-      .first()
-      .waitFor({ state: "attached", timeout: 15_000 })
-      .catch(() => {
-        throw new Error(`reopenAndVerify: composer no longer reflects model "${expect.modelId}" after reopen.`);
-      });
+    const modelTrigger = p.locator("[data-composer-model-trigger]").first();
+    await waitForComposerModelSelection(
+      () => modelTrigger.getAttribute("data-composer-selected-model"),
+      expect.modelId,
+      15_000,
+    ).catch(() => {
+      throw new Error(`reopenAndVerify: composer no longer reflects model "${expect.modelId}" after reopen.`);
+    });
   },
   async correlateGatewaySpend(world, params) {
     const correlated = await world.gateway.correlateTurn({
