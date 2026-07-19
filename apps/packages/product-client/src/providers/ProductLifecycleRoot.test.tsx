@@ -45,6 +45,9 @@ vi.mock("#product/hooks/sessions/lifecycle/use-session-intent-dispatcher", () =>
 vi.mock("#product/hooks/sessions/lifecycle/use-session-selection-lifecycle", () => ({ useSessionSelectionLifecycle: vi.fn() }));
 vi.mock("#product/hooks/shortcuts/lifecycle/use-shortcut-dispatcher", () => ({ useShortcutDispatcher: vi.fn() }));
 vi.mock("#product/hooks/support/lifecycle/use-support-report-upload-queue", () => ({ useSupportReportUploadQueue: vi.fn() }));
+vi.mock("#product/hooks/support/workflows/use-crash-recovery-support-action", () => ({
+  useCrashRecoverySupportAction: () => null,
+}));
 vi.mock("#product/hooks/sessions/lifecycle/use-turn-end-sound", () => ({ useTurnEndSound: vi.fn() }));
 vi.mock("#product/hooks/workspaces/lifecycle/use-workspace-git-status-persistence", () => ({ useWorkspaceGitStatusPersistence: vi.fn() }));
 vi.mock("#product/hooks/auth/facade/use-product-auth", () => ({ useProductAuthStatus: () => "loading" }));
@@ -106,7 +109,7 @@ describe("ProductLifecycleRoot", () => {
     await waitFor(() => expect(restoreSession).toHaveBeenCalled());
   });
 
-  it("contains a render-phase throw from a shared lifecycle hook in the error boundary", () => {
+  it("contains a render-phase throw from a shared lifecycle hook in the error boundary", async () => {
     lifecycleThrow.value = true;
     // React logs the caught render error to console.error; silence it so the
     // test output stays clean while still asserting the boundary caught it.
@@ -125,7 +128,7 @@ describe("ProductLifecycleRoot", () => {
 
     // The boundary shows its fallback instead of letting the lifecycle throw
     // escape the product lifecycle root; the product tree does not render.
-    expect(screen.getByText("Something went wrong")).toBeTruthy();
+    expect(await screen.findByText("The app needs a quick reload")).toBeTruthy();
     expect(screen.queryByTestId("app-tree")).toBeNull();
 
     consoleError.mockRestore();

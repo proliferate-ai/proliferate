@@ -1,0 +1,35 @@
+{
+  "viewport": {
+    "width": 1280,
+    "height": 720,
+    "scale": 2
+  },
+  "root": {
+    "display": "flex",
+    "backgroundColor": "rgb(24, 24, 24)",
+    "color": "rgb(255, 255, 255)",
+    "padding": "48px 24px"
+  },
+  "content": {
+    "maxWidth": "576px",
+    "gap": "24px"
+  },
+  "heading": {
+    "fontSize": "24px",
+    "fontWeight": "600",
+    "lineHeight": "32px"
+  },
+  "status": {
+    "borderRadius": "8px",
+    "padding": "12px 16px"
+  },
+  "primaryAction": {
+    "height": "36px",
+    "borderRadius": "6px",
+    "padding": "0 16px"
+  },
+  "technicalDetails": {
+    "borderRadius": "8px",
+    "summaryPadding": "12px 16px"
+  }
+}

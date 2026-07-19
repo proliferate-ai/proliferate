@@ -1,0 +1,15 @@
+file 'after-reporting.png'
+duration 2
+file 'after-reported.png'
+duration 2
+file 'after-failed.png'
+duration 2
+file 'after-unavailable.png'
+duration 2
+file 'after-reported-details-expanded.png'
+duration 3
+file 'after-retry-before.png'
+duration 2
+file 'after-retry-success.png'
+duration 3
+file 'after-retry-success.png'
