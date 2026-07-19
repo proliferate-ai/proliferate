@@ -5,6 +5,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { CLEANUP_LEDGER_FILENAME } from "../local-workspace/cleanup-ledger.js";
+import { CFN_BOOTSTRAP_DIAGNOSTIC_FILENAME } from "./cfn.js";
 
 /**
  * SHR-006: the self-host cleanup ledger must be Actions-durable — it must
@@ -61,6 +62,24 @@ function matchesGlob(glob: string, candidate: string): boolean {
     .split(" DS ")
     .join(".*");
   return new RegExp(`^${escaped}$`).test(candidate);
+}
+
+/** `upload-artifact` includes a directory entry's descendants recursively. */
+function uploadGlobIncludes(glob: string, candidate: string): boolean {
+  if (matchesGlob(glob, candidate)) {
+    return true;
+  }
+  if (!glob.endsWith("/")) {
+    return false;
+  }
+  let parent = path.posix.dirname(candidate);
+  while (parent !== "." && parent !== "/") {
+    if (matchesGlob(glob, `${parent}/`)) {
+      return true;
+    }
+    parent = path.posix.dirname(parent);
+  }
+  return false;
 }
 
 /** Isolates the `release-e2e-selfhost-install` job's upload-step `path:` block from the real workflow file. */
@@ -136,6 +155,15 @@ test("the selfhost job's upload-artifact step path globs cover the cleanup ledge
       `no upload glob (${JSON.stringify(globs)}) matches the nested ledger "${nested}".`,
     );
   }
+
+  // Failed CFN bootstrap diagnostics are written before nested-world cleanup
+  // beside the parent run evidence, so they must also survive the red job.
+  const cfnDiagnosticPath =
+    `tests/release/.output/selfhost-world/qs-ci-12345-1/1/logs/${CFN_BOOTSTRAP_DIAGNOSTIC_FILENAME}`;
+  assert.ok(
+    globs.some((glob) => uploadGlobIncludes(glob, cfnDiagnosticPath)),
+    `no upload glob (${JSON.stringify(globs)}) matches the CFN diagnostic "${cfnDiagnosticPath}".`,
+  );
 });
 
 test("matchesGlob: single-level `*` never crosses a `/` boundary", () => {

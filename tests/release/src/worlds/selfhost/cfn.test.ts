@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { test } from "node:test";
 
 import {
@@ -8,6 +11,8 @@ import {
   buildCfnParameters,
   buildCfnStackTags,
   bundleDigestBound,
+  captureCfnBootstrapDiagnostic,
+  cfnBootstrapDiagnosticArtifactPath,
   runtimeDigestBound,
   cfnSiteAddress,
   cfnStackName,
@@ -18,6 +23,7 @@ import {
   ghcrVersionIdForTag,
   imageDigestBound,
   outputsWellFormed,
+  parseCfnBootstrapDiagnosticOutput,
   parseGhcrRepo,
   parseGhcrVersions,
   parseStackOutputs,
@@ -30,6 +36,8 @@ import {
   templateFileSha256,
   uploadBundleAndPresign,
   validateTemplate,
+  writeCfnBootstrapDiagnosticArtifact,
+  type CfnBootstrapDiagnosticArtifactV1,
   type CfnAwsExec,
   type DockerExec,
   type GhExec,
@@ -236,6 +244,29 @@ test("boundedStackEventsTail: only FAILED events, bounded count, secret-free for
   assert.ok(parts.length <= MAX_STACK_EVENT_TAIL);
   assert.equal(boundedStackEventsTail("not json"), "(stack events unavailable)");
   assert.equal(boundedStackEventsTail(JSON.stringify({ StackEvents: [] })), "(no FAILED stack events)");
+});
+
+test("parseCfnBootstrapDiagnosticOutput: emits only allowlisted tokens and drops raw secrets", () => {
+  const raw = [
+    "__PROLIFERATE_CFN_LOG__:cfn-init-cmd.log",
+    "2026-07-19 Running Command 02-bootstrap",
+    "2026-07-19 Exited with error code 17: https://bucket/x?X-Amz-Signature=deadbeef",
+    "Bearer eyJsecret.payload.signature vk-super-secret-value",
+    "download error from https://example.invalid/private?token=secret",
+  ].join("\n");
+  const observations = parseCfnBootstrapDiagnosticOutput(raw);
+
+  assert.deepEqual(observations[0], {
+    source: "cfn-init-cmd.log",
+    stage: "02-bootstrap",
+    outcome: "failed",
+    exit_code: 17,
+    category: "download",
+  });
+  const serialized = JSON.stringify(observations);
+  for (const secret of ["X-Amz-Signature", "deadbeef", "Bearer", "eyJsecret", "vk-super", "https://"]) {
+    assert.ok(!serialized.includes(secret), `structured evidence leaked ${secret}`);
+  }
 });
 
 test("parseGhcrVersions + ghcrVersionIdForTag: finds the version whose tags include the run tag", () => {
@@ -492,6 +523,9 @@ test("createCfnStackAndWait: registers stack BEFORE create, passes params, retur
   // PR7-CONTROL-003: params go through a file, NOT argv — and the presigned
   // bearer signature never appears in the create-stack argv.
   assert.ok(createArgs.includes("file:///tmp/params.json"), "parameters must be passed as file://");
+  const onFailureAt = createArgs.indexOf("--on-failure");
+  assert.ok(onFailureAt >= 0, "qualification create must retain a failed stack for bounded diagnostics");
+  assert.equal(createArgs[onFailureAt + 1], "DO_NOTHING");
   const tagsAt = createArgs.indexOf("--tags");
   assert.ok(tagsAt >= 0, "create-stack must carry positive run-ownership tags");
   assert.deepEqual(createArgs.slice(tagsAt + 1, tagsAt + 5), [
@@ -592,6 +626,205 @@ test("createCfnStackAndWait: a create-complete wait failure tails describe-stack
     }),
     /ProliferateInstance CREATE_FAILED/,
   );
+});
+
+test("create failure: registered retention captures bounded SSM evidence before artifact then delete", async () => {
+  const runDir = await mkdtemp(path.join(tmpdir(), "selfhost-cfn-diagnostic-"));
+  const artifactPath = cfnBootstrapDiagnosticArtifactPath(runDir);
+  const order: string[] = [];
+  let releaseStack: (() => Promise<void>) | undefined;
+  const exec = new FakeExec((args) => {
+    if (args[0] === "cloudformation" && args[1] === "create-stack") {
+      order.push("create");
+      return "";
+    }
+    if (args[0] === "cloudformation" && args[1] === "wait" && args[2] === "stack-create-complete") {
+      order.push("wait-create");
+      throw new Error("waiter observed CREATE_FAILED");
+    }
+    if (args[0] === "cloudformation" && args[1] === "describe-stack-events") {
+      return JSON.stringify({
+        StackEvents: [{
+          LogicalResourceId: "ProliferateInstance",
+          ResourceStatus: "CREATE_FAILED",
+          ResourceStatusReason: "Received FAILURE signal",
+        }],
+      });
+    }
+    if (args[0] === "cloudformation" && args[1] === "describe-stack-resource") {
+      order.push("describe-instance");
+      return "i-0abc\n";
+    }
+    if (args[0] === "ssm" && args[1] === "describe-instance-information") {
+      order.push("ssm-online");
+      return "Online\n";
+    }
+    if (args[0] === "ssm" && args[1] === "send-command") {
+      order.push("ssm-send");
+      return "command-1\n";
+    }
+    if (args[0] === "ssm" && args[1] === "get-command-invocation") {
+      order.push("ssm-read");
+      return JSON.stringify({
+        Status: "Success",
+        StandardOutputContent: [
+          "__PROLIFERATE_CFN_LOG__:cfn-init-cmd.log",
+          "Running Command 02-bootstrap",
+          "Exited with error code 17: https://s3/x?X-Amz-Signature=secret",
+        ].join("\n"),
+      });
+    }
+    if (args[0] === "cloudformation" && args[1] === "delete-stack") {
+      order.push("delete");
+      return "";
+    }
+    if (args[0] === "cloudformation" && args[1] === "wait" && args[2] === "stack-delete-complete") {
+      order.push("wait-delete");
+      return "";
+    }
+    return "";
+  });
+
+  try {
+    await assert.rejects(
+      createCfnStackAndWait({
+        exec,
+        stackName: "stk",
+        templatePath: "/t.yaml",
+        parameters: [],
+        tags: TEST_CFN_TAGS,
+        region: "us-east-1",
+        writeParameterFile: async () => ({ path: "/tmp/p.json", remove: async () => undefined }),
+        registerCleanup: async (_kind, _providerId, release) => {
+          order.push("register");
+          releaseStack = release;
+        },
+        onCreateFailure: async ({ stackName, region }) => {
+          const diagnostic = await captureCfnBootstrapDiagnostic({
+            exec,
+            stackName,
+            region,
+            pollTimeoutMs: 100,
+            pollIntervalMs: 0,
+            now: () => 0,
+            sleep: async () => undefined,
+          });
+          const artifact: CfnBootstrapDiagnosticArtifactV1 = {
+            schema_version: 1,
+            kind: "proliferate.selfhost-cfn-bootstrap-diagnostic",
+            run: { run_id: "run-1", shard_id: "shard-0", attempt: 1, source_sha: "a".repeat(40) },
+            diagnostic,
+          };
+          await writeCfnBootstrapDiagnosticArtifact(artifactPath, artifact);
+          order.push("artifact");
+          return diagnostic;
+        },
+      }),
+      /Bootstrap diagnostic: captured\(02-bootstrap:failed:exit=17:download\)/,
+    );
+
+    assert.ok(releaseStack, "stack cleanup must be registered before create");
+    await releaseStack();
+    const persisted = await readFile(artifactPath, "utf8");
+    const parsed = JSON.parse(persisted) as CfnBootstrapDiagnosticArtifactV1;
+    assert.equal(parsed.diagnostic.capture_status, "captured");
+    assert.equal(parsed.diagnostic.observations[0]?.stage, "02-bootstrap");
+    for (const secret of ["X-Amz-Signature", "secret", "https://", "i-0abc", "stk"]) {
+      assert.ok(!persisted.includes(secret), `diagnostic artifact leaked ${secret}`);
+    }
+    assert.ok(order.indexOf("register") < order.indexOf("create"), `registered before create: ${order}`);
+    assert.ok(order.indexOf("ssm-read") < order.indexOf("artifact"), `SSM capture before artifact: ${order}`);
+    assert.ok(order.indexOf("artifact") < order.indexOf("delete"), `artifact before delete: ${order}`);
+    assert.ok(order.indexOf("delete") < order.indexOf("wait-delete"), `delete is awaited: ${order}`);
+  } finally {
+    await rm(runDir, { recursive: true, force: true });
+  }
+});
+
+test("create failure: SSM unavailable remains red, persists fixed evidence, and leaves no stack orphan", async () => {
+  const runDir = await mkdtemp(path.join(tmpdir(), "selfhost-cfn-no-ssm-"));
+  const artifactPath = cfnBootstrapDiagnosticArtifactPath(runDir);
+  const order: string[] = [];
+  let releaseStack: (() => Promise<void>) | undefined;
+  let clock = 0;
+  const exec = new FakeExec((args) => {
+    if (args[0] === "cloudformation" && args[1] === "create-stack") {
+      order.push("create");
+      return "";
+    }
+    if (args[0] === "cloudformation" && args[1] === "wait" && args[2] === "stack-create-complete") {
+      throw new Error("waiter observed CREATE_FAILED");
+    }
+    if (args[0] === "cloudformation" && args[1] === "describe-stack-events") {
+      return JSON.stringify({ StackEvents: [] });
+    }
+    if (args[0] === "cloudformation" && args[1] === "describe-stack-resource") {
+      return "i-0abc\n";
+    }
+    if (args[0] === "ssm" && args[1] === "describe-instance-information") {
+      order.push("ssm-offline");
+      return "Offline\n";
+    }
+    if (args[0] === "cloudformation" && args[1] === "delete-stack") {
+      order.push("delete");
+      return "";
+    }
+    if (args[0] === "cloudformation" && args[1] === "wait" && args[2] === "stack-delete-complete") {
+      order.push("wait-delete");
+      return "";
+    }
+    return "";
+  });
+
+  try {
+    await assert.rejects(
+      createCfnStackAndWait({
+        exec,
+        stackName: "stk",
+        templatePath: "/t.yaml",
+        parameters: [],
+        tags: TEST_CFN_TAGS,
+        region: "us-east-1",
+        writeParameterFile: async () => ({ path: "/tmp/p.json", remove: async () => undefined }),
+        registerCleanup: async (_kind, _providerId, release) => {
+          order.push("register");
+          releaseStack = release;
+        },
+        onCreateFailure: async ({ stackName, region }) => {
+          const diagnostic = await captureCfnBootstrapDiagnostic({
+            exec,
+            stackName,
+            region,
+            pollTimeoutMs: 2,
+            pollIntervalMs: 1,
+            now: () => clock,
+            sleep: async (ms) => { clock += ms; },
+          });
+          await writeCfnBootstrapDiagnosticArtifact(artifactPath, {
+            schema_version: 1,
+            kind: "proliferate.selfhost-cfn-bootstrap-diagnostic",
+            run: { run_id: "run-1", shard_id: "shard-0", attempt: 1, source_sha: "a".repeat(40) },
+            diagnostic,
+          });
+          order.push("artifact");
+          return diagnostic;
+        },
+      }),
+      /Bootstrap diagnostic: ssm_unavailable\(ssm_not_online\)/,
+    );
+
+    assert.ok(releaseStack, "stack cleanup must still be registered");
+    await releaseStack();
+    const persisted = JSON.parse(await readFile(artifactPath, "utf8")) as CfnBootstrapDiagnosticArtifactV1;
+    assert.equal(persisted.diagnostic.capture_status, "ssm_unavailable");
+    assert.equal(persisted.diagnostic.detail, "ssm_not_online");
+    assert.equal(exec.calls.some((call) => call[0] === "ssm" && call[1] === "send-command"), false);
+    assert.ok(order.indexOf("register") < order.indexOf("create"), `registered before create: ${order}`);
+    assert.ok(order.indexOf("artifact") < order.indexOf("delete"), `artifact before cleanup: ${order}`);
+    assert.ok(order.includes("wait-delete"), `stack delete must be awaited: ${order}`);
+  } finally {
+    await rm(runDir, { recursive: true, force: true });
+  }
 });
 
 test("describeStackEventsTail: returns the bounded formatter output", async () => {

@@ -27,6 +27,8 @@ import {
   buildCfnParameters,
   buildCfnStackTags,
   bundleDigestBound,
+  captureCfnBootstrapDiagnostic,
+  cfnBootstrapDiagnosticArtifactPath,
   cfnSiteAddress,
   cfnStackName,
   createCfnStackAndWait,
@@ -45,6 +47,8 @@ import {
   tmpParameterFileIo,
   uploadBundleAndPresign,
   validateTemplate,
+  writeCfnBootstrapDiagnosticArtifact,
+  type CfnBootstrapDiagnosticArtifactV1,
   type CfnStackOutputs,
   type SelfHostCfnWorldCleanupEvidence,
 } from "../worlds/selfhost/cfn.js";
@@ -543,6 +547,33 @@ export async function constructSelfHostCfnWorld(inputs: CfnWorldInputs): Promise
       region: inputs.region,
       registerCleanup: (kind, providerId, release) => stack.registerAcquire(kind, providerId, release),
       writeParameterFile: tmpParameterFileIo(),
+      onCreateFailure: async ({ stackName: failedStackName, region }) => {
+        const diagnostic = await captureCfnBootstrapDiagnostic({
+          exec: aws,
+          stackName: failedStackName,
+          region,
+        });
+        const artifact: CfnBootstrapDiagnosticArtifactV1 = {
+          schema_version: 1,
+          kind: "proliferate.selfhost-cfn-bootstrap-diagnostic",
+          run: {
+            run_id: inputs.run.run_id,
+            shard_id: inputs.run.shard_id,
+            attempt: inputs.run.attempt,
+            source_sha: inputs.run.source_sha,
+          },
+          diagnostic,
+        };
+        // This path is deliberately a sibling of `<runDir>/cfn`, not inside
+        // it: the nested run-directory releaser may delete `cfn/` after the
+        // callback returns, while the workflow's existing `**/logs/` glob must
+        // retain this bounded artifact on the red run.
+        await writeCfnBootstrapDiagnosticArtifact(
+          cfnBootstrapDiagnosticArtifactPath(inputs.runDir),
+          artifact,
+        );
+        return diagnostic;
+      },
       log,
     });
 
