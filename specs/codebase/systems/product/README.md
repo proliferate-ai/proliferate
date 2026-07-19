@@ -21,7 +21,7 @@ restating folder rules or low-level reusable contracts.
 | Automations | Scheduled/manual automations and the parked Slack bot contract. | [automations/README.md](automations/README.md) |
 | Engagement | Customer.io transport, code-owned profile attributes and lifecycle events, and current enable/no-op gates. | [engagement/README.md](engagement/README.md) |
 | Delegated work and artifacts | Delegated-work UX and cowork artifact lifecycle. | [agents/README.md](agents/README.md) |
-| Settings and admin IA | Settings/admin information architecture, billing/account/team/config surfaces, filtering, origins, and admin-facing state. | [settings/information-architecture.md](settings/information-architecture.md) |
+| Settings and appearance | Settings/admin information architecture, Appearance scaling, billing/account/team/config surfaces, filtering, origins, and admin-facing state. | [settings/README.md](settings/README.md) |
 | Support reporting | Currently shipped private support capture. | [support/README.md](support/README.md) |
 | Web/Desktop client unification | Shared client ownership, thin Desktop/Web hosts, capability policy, and migration governance. | [clients/web-desktop-unification/README.md](clients/web-desktop-unification/README.md) |
 
