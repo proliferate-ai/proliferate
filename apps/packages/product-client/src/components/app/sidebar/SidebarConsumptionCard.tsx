@@ -4,9 +4,11 @@ import { Button } from "@proliferate/ui/primitives/Button";
 
 type ConsumptionMeterTone = "default" | "warning" | "destructive";
 
+type ConsumptionMeterKind = "unlimited" | "available" | "blocked" | "exhausted";
+
 interface ConsumptionMeterState {
+  kind: ConsumptionMeterKind;
   percent: number | null;
-  blocked: boolean;
   tone: ConsumptionMeterTone;
 }
 
@@ -16,6 +18,11 @@ export type SidebarConsumptionState =
   | { kind: "ready"; usageSummary: UsageSummary };
 
 export type SidebarConsumptionMeter = "compute" | "llm";
+
+export type SidebarConsumptionActions =
+  | { kind: "self-serve"; onTopUp: () => void; onBilling: () => void }
+  | { kind: "admin-managed"; onBilling: () => void }
+  | { kind: "unavailable"; message: string };
 
 const CONSUMPTION_NEAR_LIMIT_PERCENT = 80;
 const RING_RADIUS = 8;
@@ -32,30 +39,36 @@ function resolveConsumptionMeterState(
   remainingValue: number | null,
   limit: UsageSummary["computeLimit"],
 ): ConsumptionMeterState {
-  let percent: number | null;
-  let blocked: boolean;
-
   if (limit) {
-    percent = limit.capValue > 0
-      ? Math.min(100, (limit.usedValue / limit.capValue) * 100)
-      : 100;
-    blocked = limit.blocked;
-  } else if (remainingValue !== null) {
-    const total = usedValue + remainingValue;
-    percent = total > 0 ? Math.min(100, (usedValue / total) * 100) : 0;
-    blocked = remainingValue <= 0;
-  } else {
-    percent = null;
-    blocked = false;
+    if (limit.capValue <= 0) {
+      return { kind: "exhausted", percent: 100, tone: "destructive" };
+    }
+    const percent = Math.min(100, (limit.usedValue / limit.capValue) * 100);
+    if (limit.blocked) {
+      return { kind: "blocked", percent, tone: "destructive" };
+    }
+    return {
+      kind: "available",
+      percent,
+      tone: percent >= CONSUMPTION_NEAR_LIMIT_PERCENT ? "warning" : "default",
+    };
   }
 
-  const tone: ConsumptionMeterTone = blocked
-    ? "destructive"
-    : percent !== null && percent >= CONSUMPTION_NEAR_LIMIT_PERCENT
-      ? "warning"
-      : "default";
+  if (remainingValue === null) {
+    return { kind: "unlimited", percent: null, tone: "default" };
+  }
 
-  return { percent, blocked, tone };
+  const total = usedValue + remainingValue;
+  if (total <= 0 || remainingValue <= 0) {
+    return { kind: "exhausted", percent: 100, tone: "destructive" };
+  }
+
+  const percent = Math.min(100, (usedValue / total) * 100);
+  return {
+    kind: "available",
+    percent,
+    tone: percent >= CONSUMPTION_NEAR_LIMIT_PERCENT ? "warning" : "default",
+  };
 }
 
 function formatRemainingHours(seconds: number | null): string {
@@ -111,13 +124,18 @@ export const SidebarUsageMeterTrigger = forwardRef<
   const label = meter === "compute" ? "Compute" : "LLM";
   const shortLabel = meter === "compute" ? "C" : "L";
   const percent = meters?.[meter].percent ?? null;
+  const meterKind = meters?.[meter].kind ?? null;
   const tone = meters?.[meter].tone ?? fallbackTone;
   const percentLabel = percent === null ? null : `${Math.round(percent)}% used`;
   const statusLabel = state.kind === "loading"
     ? "loading"
     : state.kind === "unavailable"
       ? "unavailable"
-      : percentLabel ?? "unlimited";
+      : meterKind === "exhausted"
+        ? "exhausted"
+        : meterKind === "blocked"
+          ? `${percentLabel}, blocked`
+          : percentLabel ?? "unlimited";
   const dashOffset = percent === null
     ? RING_CIRCUMFERENCE
     : RING_CIRCUMFERENCE * (1 - Math.max(0, Math.min(100, percent)) / 100);
@@ -178,7 +196,11 @@ function ConsumptionDetailRow({
   state: ConsumptionMeterState;
   remainingLabel: string;
 }) {
-  const usedLabel = state.percent === null ? "No limit" : `${Math.round(state.percent)}% used`;
+  const usedLabel = state.kind === "exhausted"
+    ? "No allocation"
+    : state.percent === null
+      ? "No limit"
+      : `${Math.round(state.percent)}% used`;
   return (
     <div className="flex items-center justify-between gap-3 px-2.5 py-1.5">
       <div>
@@ -198,13 +220,11 @@ function ConsumptionDetailRow({
 export function ConsumptionCard({
   state,
   onRetry,
-  onTopUp,
-  onBilling,
+  actions,
 }: {
   state: SidebarConsumptionState;
   onRetry?: () => void;
-  onTopUp?: () => void;
-  onBilling?: () => void;
+  actions?: SidebarConsumptionActions;
 }) {
   if (state.kind === "loading") {
     return (
@@ -229,7 +249,10 @@ export function ConsumptionCard({
   }
 
   const meters = metersForState(state)!;
-  const blocked = meters.compute.blocked || meters.llm.blocked;
+  const blocked = meters.compute.kind === "blocked"
+    || meters.compute.kind === "exhausted"
+    || meters.llm.kind === "blocked"
+    || meters.llm.kind === "exhausted";
 
   return (
     <div className="py-1">
@@ -246,23 +269,26 @@ export function ConsumptionCard({
         state={meters.llm}
         remainingLabel={formatRemainingUsd(state.usageSummary.llmRemainingUsd)}
       />
-      {blocked && !onTopUp ? (
+      {blocked && actions?.kind === "admin-managed" ? (
         <div className="px-2.5 py-1.5 text-ui-sm text-destructive">
           Ask your admin to raise your limit.
         </div>
       ) : null}
-      {onTopUp || onBilling ? (
+      {blocked && actions?.kind === "unavailable" ? (
+        <div className="px-2.5 py-1.5 text-ui-sm text-sidebar-muted-foreground">
+          {actions.message}
+        </div>
+      ) : null}
+      {actions?.kind === "self-serve" || actions?.kind === "admin-managed" ? (
         <div className="mt-1 flex gap-2 border-t border-border-light px-2 py-2">
-          {onTopUp ? (
-            <Button type="button" variant="secondary" size="sm" className="flex-1" onClick={onTopUp}>
+          {actions.kind === "self-serve" ? (
+            <Button type="button" variant="secondary" size="sm" className="flex-1" onClick={actions.onTopUp}>
               Top up
             </Button>
           ) : null}
-          {onBilling ? (
-            <Button type="button" variant="secondary" size="sm" className="flex-1" onClick={onBilling}>
-              Billing
-            </Button>
-          ) : null}
+          <Button type="button" variant="secondary" size="sm" className="flex-1" onClick={actions.onBilling}>
+            Billing
+          </Button>
         </div>
       ) : null}
     </div>

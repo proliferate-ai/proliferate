@@ -1,14 +1,12 @@
 import type { Workspace } from "@anyharness/sdk";
-import { createContext, useContext, useEffect, useMemo, type ReactNode } from "react";
+import { createContext, useContext, useMemo, type ReactNode } from "react";
 import { useLocation } from "react-router-dom";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useCoworkThreadWorkflow } from "#product/hooks/cowork/workflows/use-cowork-thread-workflow";
 import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
+import { useShortcutHandler } from "#product/hooks/shortcuts/lifecycle/use-shortcut-handler";
 import { resolveWorkspaceShellSurface } from "#product/lib/domain/workspaces/shell/shell-surface";
-import {
-  ownsCoworkNewThreadShortcut,
-  registerCoworkNewThreadShortcut,
-} from "#product/lib/domain/cowork/new-thread-shortcut";
+import { ownsCoworkNewThreadShortcut } from "#product/lib/domain/cowork/new-thread-shortcut";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 
 type CreateCoworkThreadFromSelection = ReturnType<
@@ -56,14 +54,13 @@ function DesktopCoworkThreadLaunchProvider({ children }: { children: ReactNode }
     resolveWorkspaceShellSurface(selectedWorkspace, pendingWorkspaceEntry),
   );
 
-  useEffect(() => {
-    if (!ownsNewThreadShortcut) {
-      return undefined;
-    }
-    return registerCoworkNewThreadShortcut(() => {
+  useShortcutHandler(
+    "workspace.new-default",
+    () => {
       void createThread();
-    });
-  }, [createThread, ownsNewThreadShortcut]);
+    },
+    { enabled: ownsNewThreadShortcut, allowOverride: true },
+  );
 
   const value = useMemo(
     () => ({ desktopTargetsAvailable: true, createThreadFromSelection }),

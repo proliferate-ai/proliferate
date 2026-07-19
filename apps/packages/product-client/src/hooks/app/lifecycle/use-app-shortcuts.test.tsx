@@ -4,6 +4,7 @@ import { cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AppCommandActions } from "#product/hooks/app/workflows/app-command-action-types";
 import { useAppShortcuts } from "#product/hooks/app/lifecycle/use-app-shortcuts";
+import { useShortcutHandler } from "#product/hooks/shortcuts/lifecycle/use-shortcut-handler";
 import {
   clearShortcutHandlerRegistryForTests,
   runShortcutHandler,
@@ -11,10 +12,6 @@ import {
 import { USER_PREFERENCE_DEFAULTS } from "#product/lib/domain/preferences/user/model";
 import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 import { requestRightPanelTabByIndex } from "#product/lib/workflows/workspaces/right-panel-shortcut-requests";
-import {
-  clearCoworkNewThreadShortcutForTests,
-  registerCoworkNewThreadShortcut,
-} from "#product/lib/domain/cowork/new-thread-shortcut";
 
 const navigationMocks = vi.hoisted(() => ({
   selectWorkspaceFromSurface: vi.fn(),
@@ -59,7 +56,6 @@ describe("useAppShortcuts", () => {
     harnessState.selectedLogicalWorkspaceId = null;
     harnessState.sidebarShortcutTargets = [];
     clearShortcutHandlerRegistryForTests();
-    clearCoworkNewThreadShortcutForTests();
     useUserPreferencesStore.setState({
       ...USER_PREFERENCE_DEFAULTS,
       _hydrated: true,
@@ -70,7 +66,6 @@ describe("useAppShortcuts", () => {
   afterEach(() => {
     cleanup();
     clearShortcutHandlerRegistryForTests();
-    clearCoworkNewThreadShortcutForTests();
     document.body.innerHTML = "";
     vi.clearAllMocks();
   });
@@ -167,16 +162,29 @@ describe("useAppShortcuts", () => {
     expect(actions.openWebApp.execute).toHaveBeenCalledWith("shortcut");
   });
 
-  it("lets the active Cowork context consume Cmd-N exactly once", () => {
+  it("lets active Cowork temporarily own Cmd-N, then restores the normal fallback", () => {
     const actions = commandActions();
     const createCoworkThread = vi.fn();
-    registerCoworkNewThreadShortcut(createCoworkThread);
-    renderHook(() => useAppShortcuts(actions));
+    const { rerender } = renderHook(
+      ({ cowork }) => {
+        useAppShortcuts(actions);
+        useShortcutHandler("workspace.new-default", createCoworkThread, {
+          enabled: cowork,
+          allowOverride: true,
+        });
+      },
+      { initialProps: { cowork: true } },
+    );
 
     expect(runShortcutHandler("workspace.new-default", { source: "keyboard" })).toBe(true);
     expect(createCoworkThread).toHaveBeenCalledTimes(1);
     expect(actions.newLocalWorkspace.execute).not.toHaveBeenCalled();
     expect(actions.newWorktreeWorkspace.execute).not.toHaveBeenCalled();
+
+    rerender({ cowork: false });
+    expect(runShortcutHandler("workspace.new-default", { source: "keyboard" })).toBe(true);
+    expect(createCoworkThread).toHaveBeenCalledTimes(1);
+    expect(actions.newWorktreeWorkspace.execute).toHaveBeenCalledTimes(1);
   });
 
   it("preserves the normal Cmd-N action outside Cowork", () => {

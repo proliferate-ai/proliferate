@@ -156,9 +156,15 @@ UTC window. Its principal owners are
 and
 [`OrganizationLimitsEditor.tsx`](../../../../apps/packages/product-client/src/components/settings/panes/OrganizationLimitsEditor.tsx).
 
-When usage metering is enabled and a usage summary exists, the compact
-[`SidebarConsumptionCard`](../../../../apps/packages/product-client/src/components/app/sidebar/SidebarConsumptionCard.tsx)
-renders above the account footer. It is not part of an account popover.
+When the user is authenticated and usage metering is enabled, the app sidebar
+footer exposes independent **Compute** and **LLM** meter triggers outside the
+account popover. Each trigger opens the compact
+[`SidebarConsumptionCard`](../../../../apps/packages/product-client/src/components/app/sidebar/SidebarConsumptionCard.tsx).
+The concern preserves explicit loading and unavailable states while the summary
+is absent, then renders each ready meter from its own returned units and limit
+state. Billing actions are gated independently by the billing capability; a
+billing-disabled deployment does not imply that an administrator can raise a
+limit.
 
 ## Known Gaps
 

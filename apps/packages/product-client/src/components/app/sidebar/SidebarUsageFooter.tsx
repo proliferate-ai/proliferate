@@ -9,6 +9,7 @@ import {
   SidebarUsageMeterTrigger,
   type SidebarConsumptionMeter,
   type SidebarConsumptionState,
+  type SidebarConsumptionActions,
 } from "#product/components/app/sidebar/SidebarConsumptionCard";
 import { useProductAuthStatus } from "#product/hooks/auth/facade/use-product-auth";
 import { useAppCapabilities } from "#product/hooks/capabilities/derived/use-app-capabilities";
@@ -33,9 +34,10 @@ export function SidebarUsageFooter() {
         kind: "unavailable",
         message: "We couldn't load current usage.",
       };
-  const canTopUp = state.kind === "ready"
-    && state.usageSummary.canSelfServeTopUp
-    && capabilities.billingEnabled;
+  const openBilling = (close: () => void) => {
+    navigate("/settings?section=billing");
+    close();
+  };
 
   const meterPopover = (meter: SidebarConsumptionMeter) => (
     <PopoverButton
@@ -52,18 +54,11 @@ export function SidebarUsageFooter() {
           onRetry={state.kind === "unavailable"
             ? () => { void usageQuery.refetch(); }
             : undefined}
-          onTopUp={canTopUp
-            ? () => {
-              navigate("/settings?section=billing");
-              close();
-            }
-            : undefined}
-          onBilling={capabilities.billingEnabled
-            ? () => {
-              navigate("/settings?section=billing");
-              close();
-            }
-            : undefined}
+          actions={resolveConsumptionActions(
+            state,
+            capabilities.billingEnabled,
+            () => openBilling(close),
+          )}
         />
       )}
     </PopoverButton>
@@ -80,4 +75,24 @@ export function SidebarUsageFooter() {
       {meterPopover("llm")}
     </div>
   );
+}
+
+function resolveConsumptionActions(
+  state: SidebarConsumptionState,
+  billingEnabled: boolean,
+  openBilling: () => void,
+): SidebarConsumptionActions | undefined {
+  if (state.kind !== "ready") {
+    return undefined;
+  }
+  if (!billingEnabled) {
+    return {
+      kind: "unavailable",
+      message: "Billing actions aren't available on this deployment.",
+    };
+  }
+  if (state.usageSummary.canSelfServeTopUp) {
+    return { kind: "self-serve", onTopUp: openBilling, onBilling: openBilling };
+  }
+  return { kind: "admin-managed", onBilling: openBilling };
 }

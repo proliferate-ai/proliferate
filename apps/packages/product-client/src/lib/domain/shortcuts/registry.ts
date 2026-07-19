@@ -16,6 +16,10 @@ interface RegisteredShortcutHandler {
   handler: ShortcutHandler;
 }
 
+interface RegisterShortcutHandlerOptions {
+  allowOverride?: boolean;
+}
+
 const shortcutHandlers = new Map<ShortcutId, RegisteredShortcutHandler[]>();
 const VALID_SHORTCUT_IDS = new Set<ShortcutId>(
   Object.values(SHORTCUTS).map((shortcut) => shortcut.id),
@@ -24,6 +28,7 @@ const VALID_SHORTCUT_IDS = new Set<ShortcutId>(
 export function registerShortcutHandler(
   id: ShortcutId,
   handler: ShortcutHandler,
+  options?: RegisterShortcutHandlerOptions,
 ): () => void {
   if (!VALID_SHORTCUT_IDS.has(id)) {
     const message = `Unknown shortcut handler registration for ${id}`;
@@ -37,7 +42,7 @@ export function registerShortcutHandler(
 
   const token = Symbol(id);
   const handlers = shortcutHandlers.get(id) ?? [];
-  if (handlers.length > 0) {
+  if (handlers.length > 0 && !options?.allowOverride) {
     console.warn(`Duplicate shortcut handler registration for ${id}; using latest handler`);
   }
 

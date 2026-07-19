@@ -7,6 +7,7 @@ import {
 
 interface UseShortcutHandlerOptions {
   enabled?: boolean;
+  allowOverride?: boolean;
 }
 
 // Owns registering a mounted shortcut handler while keeping the latest callback.
@@ -28,6 +29,10 @@ export function useShortcutHandler(
       return undefined;
     }
 
-    return registerShortcutHandler(id, (trigger) => handlerRef.current(trigger));
-  }, [enabled, id]);
+    return registerShortcutHandler(
+      id,
+      (trigger) => handlerRef.current(trigger),
+      { allowOverride: options?.allowOverride },
+    );
+  }, [enabled, id, options?.allowOverride]);
 }

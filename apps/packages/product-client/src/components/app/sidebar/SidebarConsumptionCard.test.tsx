@@ -63,7 +63,7 @@ describe("sidebar consumption", () => {
           kind: "ready",
           usageSummary: usage({ llmRemainingUsd: 0, canSelfServeTopUp: false }),
         }}
-        onBilling={onBilling}
+        actions={{ kind: "admin-managed", onBilling }}
       />,
     );
 
@@ -71,6 +71,34 @@ describe("sidebar consumption", () => {
     expect(screen.getByText("Ask your admin to raise your limit.")).not.toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Billing" }));
     expect(onBilling).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders zero allocations as exhausted instead of zero percent used", () => {
+    const state = {
+      kind: "ready",
+      usageSummary: usage({
+        computeUsedSecondsMtd: 0,
+        computeRemainingSeconds: 0,
+        llmUsedUsdMtd: 0,
+        llmRemainingUsd: 0,
+      }),
+    } as const;
+    render(
+      <>
+        <SidebarUsageMeterTrigger meter="compute" state={state} />
+        <ConsumptionCard
+          state={state}
+          actions={{ kind: "unavailable", message: "Billing unavailable." }}
+        />
+      </>,
+    );
+
+    const compute = screen.getByRole("button", { name: /Compute usage, exhausted/ });
+    expect(compute).not.toBeNull();
+    expect(compute.querySelectorAll("circle")[1]?.getAttribute("stroke-dashoffset")).toBe("0");
+    expect(screen.queryByText("0% used")).toBeNull();
+    expect(screen.getAllByText("No allocation")).toHaveLength(2);
+    expect(screen.getByText("Billing unavailable.")).not.toBeNull();
   });
 });
 

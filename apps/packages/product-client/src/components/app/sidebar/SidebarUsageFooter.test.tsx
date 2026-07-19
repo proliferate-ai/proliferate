@@ -3,6 +3,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactElement, ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { UsageSummary } from "@proliferate/cloud-sdk";
 import { SidebarUsageFooter } from "#product/components/app/sidebar/SidebarUsageFooter";
 
 const state = vi.hoisted(() => ({
@@ -100,9 +101,28 @@ describe("SidebarUsageFooter", () => {
     expect(screen.queryByRole("button", { name: "Top up" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Billing" })).toBeNull();
   });
+
+  it("does not direct billing-disabled users to an admin when usage is exhausted", () => {
+    state.billingEnabled = false;
+    state.query = {
+      data: usage({
+        computeUsedSecondsMtd: 0,
+        computeRemainingSeconds: 0,
+        llmUsedUsdMtd: 0,
+        llmRemainingUsd: 0,
+      }),
+      isLoading: false,
+      refetch: vi.fn(),
+    };
+    render(<SidebarUsageFooter />);
+
+    expect(screen.queryByText(/Ask your admin/)).toBeNull();
+    expect(screen.getByText("Billing actions aren't available on this deployment.")).not.toBeNull();
+    expect(screen.getByRole("button", { name: /Compute usage, exhausted/ })).not.toBeNull();
+  });
 });
 
-function usage() {
+function usage(overrides: Partial<UsageSummary> = {}): UsageSummary {
   return {
     computeUsedSecondsMtd: 1,
     computeRemainingSeconds: 9,
@@ -111,5 +131,6 @@ function usage() {
     computeLimit: null,
     llmLimit: null,
     canSelfServeTopUp: true,
+    ...overrides,
   };
 }

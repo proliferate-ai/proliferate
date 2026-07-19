@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 
 import type { ReactNode } from "react";
-import { act, renderHook } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { act, cleanup, renderHook } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderableOutboxEntriesForTranscript } from "@proliferate/product-domain/sessions/intents/session-intent-selectors";
 import {
   buildPendingWorkspaceUiKey,
@@ -43,7 +43,9 @@ const mocks = vi.hoisted(() => {
   };
 });
 
-vi.mock("react-router-dom", () => ({
+vi.mock("react-router-dom", async (importOriginal) => ({
+  ...await importOriginal<typeof import("react-router-dom")>(),
+  useLocation: () => ({ pathname: "/" }),
   useNavigate: () => mocks.navigate,
 }));
 
@@ -77,6 +79,10 @@ vi.mock("#product/hooks/workspaces/workflows/selection/use-workspace-selection",
   useWorkspaceSelection: () => ({
     selectWorkspace: mocks.selectWorkspace,
   }),
+}));
+
+vi.mock("#product/hooks/workspaces/cache/use-workspaces", () => ({
+  useWorkspaces: () => ({ data: { workspaces: [] } }),
 }));
 
 vi.mock("#product/hooks/sessions/workflows/use-session-creation-actions", () => ({
@@ -120,6 +126,8 @@ describe("useHomeNextLaunch", () => {
     useChatLaunchIntentStore.setState({ activeIntent: null });
     useDeferredHomeLaunchStore.setState({ launches: {} });
   });
+
+  afterEach(cleanup);
 
   it("projects one destination prompt for a Home worktree launch", async () => {
     const sessionId = "client-session:codex:home-worktree";
