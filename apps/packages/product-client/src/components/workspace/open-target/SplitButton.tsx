@@ -25,7 +25,7 @@ export function SplitButton({
   preferredTarget,
 }: SplitButtonProps) {
   const displayIcon = preferredTarget
-    ? <OpenTargetIcon iconId={preferredTarget.iconId} className="size-3.5" variant="menu" />
+    ? <OpenTargetIcon iconId={preferredTarget.iconId} className="icon-paired" variant="menu" />
     : icon;
   const content = (
     <>
@@ -80,7 +80,7 @@ export function SplitButton({
             aria-label={`Choose ${label}`}
             className="workspace-shell-icon-button workspace-shell-split-button-right inline-flex items-center justify-center whitespace-nowrap"
           >
-            <ChevronDown className="size-3" />
+            <ChevronDown className="icon-compact" />
           </Button>
         )}
       />

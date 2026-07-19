@@ -142,7 +142,7 @@ export function TranscriptPatchTurnDiffPanel({
               {showAllFiles ? "Collapse files" : `Show ${hiddenFileCount} more files`}
               <ChevronDown
                 aria-hidden="true"
-                className={`size-3.5 shrink-0 text-muted-foreground ${showAllFiles ? "rotate-180" : ""}`}
+                className={`icon-paired shrink-0 text-muted-foreground ${showAllFiles ? "rotate-180" : ""}`}
               />
             </Button>
           )}

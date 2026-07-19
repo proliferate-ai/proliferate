@@ -91,7 +91,7 @@ export function SessionErrorItem({
   return (
     <div className="rounded-lg border border-destructive/20 bg-destructive/[0.04] px-3 py-2 text-sm">
       <div className="flex min-w-0 items-start gap-2">
-        <CircleAlert className="mt-0.5 size-4 shrink-0 text-destructive/80" />
+        <CircleAlert className="mt-0.5 icon-paired shrink-0 text-destructive/80" />
         <div className="min-w-0 flex-1">
           <div className="font-[520] text-destructive">{presentation.title}</div>
           <div className="mt-0.5 text-muted-foreground">{presentation.description}</div>
@@ -109,7 +109,7 @@ export function SessionErrorItem({
               onClick={handleRetryNetworkError}
               className="px-2.5 text-sm"
             >
-              <RefreshCw className="size-3.5" />
+              <RefreshCw className="icon-paired" />
               Retry
             </Button>
           )}
@@ -122,7 +122,7 @@ export function SessionErrorItem({
               onClick={handleFallback}
               className="px-2.5 text-sm"
             >
-              <RefreshCw className="size-3.5" />
+              <RefreshCw className="icon-paired" />
               Switch to {presentation.fallbackModelLabel ?? "fallback model"}
             </Button>
           )}
@@ -137,7 +137,7 @@ export function SessionErrorItem({
             >
               <CircleQuestion
                 aria-hidden="true"
-                className={`size-3 transition-colors ${detailsExpanded ? "text-foreground/70" : "text-faint"}`}
+                className={`icon-compact transition-colors ${detailsExpanded ? "text-foreground/70" : "text-faint"}`}
               />
               Details
             </Button>

@@ -70,7 +70,7 @@ export function Notice({
           : "border-warning/30 bg-warning/10 text-warning"
       }`}
     >
-      <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+      <AlertTriangle className="mt-0.5 icon-paired shrink-0" />
       <div className="min-w-0">
         <div className="font-medium">{title}</div>
         <div className="mt-1 leading-5 opacity-90">{description}</div>

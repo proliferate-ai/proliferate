@@ -24,7 +24,7 @@ export function HarnessConfigIssueBanner({
       data-harness-runtime-state={agent.readiness}
     >
       <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-md bg-warning/10 text-warning">
-        <ProviderIcon kind={agent.kind} className="size-4" />
+        <ProviderIcon kind={agent.kind} className="icon-control" />
       </span>
       <div className="min-w-0 flex-1 space-y-1">
         <div className="flex flex-wrap items-center gap-2">

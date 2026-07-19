@@ -11,7 +11,7 @@ import {
 type GitReviewTargetMode = "working_tree_composite" | "branch" | "last_turn";
 
 const GIT_REVIEW_SELECTOR_TRIGGER_CLASS =
-  "h-6 min-w-0 gap-1 rounded-lg border border-transparent bg-transparent px-1.5 py-0 text-ui leading-[16px] text-sidebar-foreground hover:bg-surface-elevated-secondary hover:text-sidebar-foreground data-[state=open]:bg-surface-elevated-secondary data-[state=open]:text-sidebar-foreground";
+  "h-6 min-w-0 gap-1 rounded-lg border border-transparent bg-transparent px-1.5 py-0 text-ui leading-[var(--text-ui--line-height)] text-sidebar-foreground hover:bg-surface-elevated-secondary hover:text-sidebar-foreground data-[state=open]:bg-surface-elevated-secondary data-[state=open]:text-sidebar-foreground";
 
 export function GitReviewBaseSelector({
   activeMode,
@@ -41,7 +41,7 @@ export function GitReviewBaseSelector({
               {changedCount}
             </span>
           )}
-          <ChevronDown className="size-3 shrink-0 text-sidebar-muted-foreground" />
+          <ChevronDown className="icon-compact shrink-0 text-sidebar-muted-foreground" />
         </Button>
       }
       align="start"
@@ -63,7 +63,7 @@ export function GitReviewBaseSelector({
                       </span>
                     )}
                     <Check
-                      className={`size-3.5 ${selected ? "" : "opacity-0"}`}
+                      className={`icon-paired ${selected ? "" : "opacity-0"}`}
                       aria-hidden={selected ? undefined : true}
                     />
                   </span>

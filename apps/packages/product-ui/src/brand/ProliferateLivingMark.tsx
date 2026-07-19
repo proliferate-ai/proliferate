@@ -49,12 +49,12 @@ export function ProliferateLivingMark({
     >
       <span
         className={twMerge(
-          "flex",
+          "flex text-hero",
           complete ? "animate-brand-mark-settle" : "animate-brand-mark-breathe",
         )}
         data-testid={testIds?.iconLayer}
       >
-        <ProliferateIcon className={twMerge("size-12 text-foreground", className)} />
+        <ProliferateIcon className={twMerge("icon-display text-foreground", className)} />
       </span>
     </div>
   );

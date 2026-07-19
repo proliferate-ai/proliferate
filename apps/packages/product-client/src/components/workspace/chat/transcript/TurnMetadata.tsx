@@ -35,7 +35,7 @@ export function TurnMetadata({
           title="Copy"
           className="opacity-0 group-hover/meta:opacity-100 transition-opacity"
         >
-          <Copy className="h-3.5 w-3.5" />
+          <Copy className="icon-paired" />
         </IconButton>
       )}
 
@@ -45,7 +45,7 @@ export function TurnMetadata({
           title="Fork"
           className="opacity-0 group-hover/meta:opacity-100 transition-opacity"
         >
-          <Fork className="h-3 w-3" />
+          <Fork className="icon-compact" />
         </IconButton>
       )}
 
@@ -55,7 +55,7 @@ export function TurnMetadata({
           title="Undo"
           className="opacity-0 group-hover/meta:opacity-100 transition-opacity"
         >
-          <Undo className="size-3" />
+          <Undo className="icon-compact" />
         </IconButton>
       )}
 
@@ -68,7 +68,7 @@ export function TurnMetadata({
             size="unstyled"
             className="inline-flex items-center gap-1.5 rounded-md border border-border/50 bg-muted/50 px-2 py-0.5 text-base font-medium text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
           >
-            <FileIcon className="size-3" />
+            <FileIcon className="icon-compact [font-size:var(--text-chat)]" />
             <span>{badge.filename}</span>
             <span className="text-git-green">+{badge.additions}</span>
             <span className="text-git-red">-{badge.deletions}</span>

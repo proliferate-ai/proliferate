@@ -83,26 +83,26 @@ export function TurnDiffFileCard({
     >
       {!isRuntimeReady ? (
         <TurnDiffInlineState
-          icon={<RefreshCw className="size-4" />}
+          icon={<RefreshCw className="icon-paired" />}
           title="Diff unavailable"
           description={runtimeBlockedReason ?? "The workspace runtime is not ready."}
         />
       ) : metadataLoading && !currentDiff ? (
         <TurnDiffInlineState
-          icon={<RefreshCw className="size-3.5 animate-spin" />}
+          icon={<RefreshCw className="icon-paired animate-spin" />}
           title="Loading diff"
           description="Fetching the latest file patch."
         />
       ) : metadataErrorMessage && !currentDiff ? (
         <TurnDiffInlineState
-          icon={<CircleAlert className="size-4" />}
+          icon={<CircleAlert className="icon-paired" />}
           title="Diff unavailable"
           description={metadataErrorMessage}
           onOpenFile={onOpenFile}
         />
       ) : !currentDiff ? (
         <TurnDiffInlineState
-          icon={<FileIcon className="size-4" />}
+          icon={<FileIcon className="icon-paired" />}
           title="No current diff"
           description="This file was touched, but there are no current changes to review against the selected base."
           onOpenFile={onOpenFile}
@@ -114,13 +114,13 @@ export function TurnDiffFileCard({
         />
       ) : diffQuery.isLoading ? (
         <TurnDiffInlineState
-          icon={<RefreshCw className="size-3.5 animate-spin" />}
+          icon={<RefreshCw className="icon-paired animate-spin" />}
           title="Loading diff"
           description="Fetching the latest file patch."
         />
       ) : diffErrorMessage ? (
         <TurnDiffInlineState
-          icon={<CircleAlert className="size-4" />}
+          icon={<CircleAlert className="icon-paired" />}
           title="Diff unavailable"
           description={diffErrorMessage}
           onOpenFile={onOpenFile}
@@ -224,14 +224,14 @@ function formatEmptyDiffState({
     return {
       title: "Binary file changed",
       description: "Open the file to inspect this change.",
-      icon: <FileCode className="size-3.5" />,
+      icon: <FileCode className="icon-paired" />,
     };
   }
   if (truncated) {
     return {
       title: "Diff too large",
       description: "Open the file to inspect the full change.",
-      icon: <CircleAlert className="size-3.5" />,
+      icon: <CircleAlert className="icon-paired" />,
     };
   }
   return null;

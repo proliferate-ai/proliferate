@@ -87,7 +87,7 @@ export function CloudEnvironmentList({
                 onClick={onAddCloudEnvironment}
                 className="mt-1 flex w-full items-center gap-2 rounded-md border border-dashed border-border px-2.5 py-2 text-ui-sm font-medium text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground"
               >
-                <Plus className="size-4" />
+                <Plus className="icon-paired" />
                 Add cloud environment
               </Button>
             ) : null}
@@ -106,7 +106,7 @@ export function CloudEnvironmentList({
             description="Add a GitHub repo to run it in Proliferate Cloud."
             action={onAddCloudEnvironment ? (
               <Button type="button" variant="secondary" onClick={onAddCloudEnvironment}>
-                <Plus size={14} />
+                <Plus className="icon-paired" />
                 Add cloud environment
               </Button>
             ) : undefined}
@@ -128,7 +128,7 @@ function EnvironmentRow({
     <SettingsRow
       label={(
         <span className="flex min-w-0 items-center gap-2">
-          <Cloud size={14} className="shrink-0 text-muted-foreground" />
+          <Cloud className="icon-paired shrink-0 text-muted-foreground" />
           <span className="truncate">{environment.fullName}</span>
         </span>
       )}

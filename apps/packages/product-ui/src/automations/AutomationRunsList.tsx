@@ -75,7 +75,7 @@ function AutomationRunRow({
   const inner = (
     <>
       <span className="inline-flex shrink-0 items-center justify-center">
-        <AutomationStatusGlyph status={run.statusKind} size={14} />
+        <AutomationStatusGlyph status={run.statusKind} className="icon-paired" />
       </span>
 
       <span className="min-w-0" title={run.errorLabel ?? run.title}>
@@ -105,7 +105,7 @@ function AutomationRunRow({
             className="pointer-events-none absolute right-0 flex size-7 items-center justify-center text-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
             aria-hidden
           >
-            <ExternalLink className="size-3.5" />
+            <ExternalLink className="icon-paired" />
           </span>
         ) : null}
       </span>

@@ -67,7 +67,7 @@ export function AutomationSurface({
       description={description}
       actions={onNew ? (
         <Button type="button" onClick={onNew}>
-          <Plus className="size-4" aria-hidden />
+          <Plus className="icon-paired" aria-hidden />
           New workflow
         </Button>
       ) : null}
@@ -100,7 +100,7 @@ export function AutomationSurface({
           description="Refresh the page or sign in again."
           action={onRetry ? (
             <Button type="button" size="sm" variant="secondary" onClick={onRetry}>
-              <RotateCcw size={13} aria-hidden />
+              <RotateCcw aria-hidden className="icon-paired" />
               Retry
             </Button>
           ) : null}
@@ -113,7 +113,7 @@ export function AutomationSurface({
             : "Workflows created from supported clients appear here."}
           action={onNew ? (
             <Button type="button" size="sm" variant="secondary" onClick={onNew}>
-              <Plus size={13} aria-hidden />
+              <Plus aria-hidden className="icon-paired" />
               New workflow
             </Button>
           ) : null}
@@ -171,7 +171,7 @@ function ViewModeTabs({
                 : "text-muted-foreground hover:bg-foreground/[0.04] hover:text-foreground",
             )}
           >
-            <Icon className="size-3.5" aria-hidden />
+            <Icon className="icon-paired" aria-hidden />
             {item.label}
           </Button>
         );

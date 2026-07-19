@@ -64,9 +64,9 @@ export function CloudWorkspaceList({
         <article key={workspace.id} className="rounded-lg border border-border bg-card p-4">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="min-w-0">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 text-sm">
                 <span className="flex size-8 items-center justify-center rounded-md bg-accent text-foreground">
-                  <Cloud size={15} />
+                  <Cloud className="icon-paired" />
                 </span>
                 <div className="min-w-0">
                   <h2 className="truncate text-sm font-semibold">{workspace.name}</h2>
@@ -78,7 +78,7 @@ export function CloudWorkspaceList({
           </div>
           <div className="mt-4 flex flex-wrap gap-2 text-xs text-muted-foreground">
             <span className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1">
-              <GitBranchIcon className="size-[13px]" />
+              <GitBranchIcon className="icon-paired" />
               {workspace.branchLabel}
             </span>
             <span className="rounded-md border border-border px-2 py-1">

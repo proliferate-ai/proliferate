@@ -18,7 +18,7 @@ describe("SidebarNavRow", () => {
 
     const icon = container.querySelector('[data-testid="nav-icon"]');
     const well = icon?.parentElement;
-    expect(well?.className).toContain("w-[var(--sidebar-primary-icon-size)]");
-    expect(well?.className).toContain("[&>svg]:size-[var(--sidebar-primary-icon-size)]");
+    expect(well?.className).toContain("w-[var(--icon-paired)]");
+    expect(well?.className).toContain("[&>svg]:icon-paired");
   });
 });

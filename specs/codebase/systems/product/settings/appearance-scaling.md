@@ -105,6 +105,10 @@ and greater than their font sizes; they do not need to equal prose line height.
 - Every owned vector mark resolves through a semantic optical tier, including
   icons, chevrons, close controls, disclosure glyphs, status symbols, dirty
   markers, provider marks, and icon-font characters.
+- `body` inherits the primary `--text-ui` role as the safety net for otherwise
+  untyped owned strings and icon-only controls. Role-specific utilities still
+  override that fallback, and the unchanged `html` root keeps rem-based layout
+  geometry independent from the UI font preference.
 - Paired row/button icons default to `1.15em` of their owning label. Compact,
   large, and display tiers remain proportional to a semantic text owner.
 - Visible glyphs scale inside their existing accessible target. Pointer hit
@@ -122,8 +126,9 @@ targets are not glyph icons and do not become font-relative.
 
 - `apps/packages/product-client/src/lib/domain/preferences/appearance.ts`
   owns UI, readable-code, window-zoom, and semantic glyph ladders.
-- `apps/packages/product-client/src/config/theme.ts` applies the resolved root
-  variables through `applyAppearancePreference`.
+- `apps/packages/product-client/src/config/theme.ts` applies the resolved text
+  and readable-code root variables through `applyAppearancePreference`; the
+  stable `em` glyph ratios resolve from design CSS against those text owners.
 - `apps/packages/design/src/css/dom.css` and `product.css` own Default CSS
   fallbacks and global semantic utilities.
 - `apps/packages/ui/src/utils/tw-merge.ts` preserves custom semantic utilities
@@ -134,11 +139,22 @@ targets are not glyph icons and do not become font-relative.
 - Focused appearance/drift tests and a repository source guard own regression
   enforcement.
 
+The glyph ladder is exposed as `--icon-status`, `--icon-compact`,
+`--icon-paired`, `--icon-control`, `--icon-large`, and `--icon-display`.
+The matching `icon-*` utilities size only the visible vector through those
+properties; wrappers keep owning fixed pointer-target and row geometry.
+
 ## Repository enforcement
 
 Repo checks must reject raw fixed production text or glyph sizing at product
 call sites. The migration inventory is generated from the final PR head and
 must reach zero.
+
+`scripts/check_appearance_scaling.py` is the no-allowlist production guard. It
+runs in the repo-shape CI job and from the Desktop design-system check; its
+focused unit test locks fixed text, imported/custom/inline SVG, descendant
+selectors, component-local glyph props/aliases/defaults, status-dot, and global
+CSS-alias failure cases.
 
 Allowed numeric definitions are limited to:
 

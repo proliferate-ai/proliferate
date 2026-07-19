@@ -170,18 +170,18 @@ export function DetailStateGlyph({
   if (state === "failing") {
     return (
       <CircleAlert
-        className={`size-4 ${emphasizeFailing ? "text-destructive" : "text-muted-foreground"}`}
+        className={`icon-paired ${emphasizeFailing ? "text-destructive" : "text-muted-foreground"}`}
       />
     );
   }
   if (state === "working") {
-    return <Spinner className="size-3.5 text-muted-foreground" />;
+    return <Spinner className="icon-paired text-muted-foreground" />;
   }
   if (state === "pending") {
-    return <Circle className="size-3.5 text-muted-foreground" />;
+    return <Circle className="icon-paired text-muted-foreground" />;
   }
   if (state === "passing" || state === "done") {
-    return <Check className="size-3.5 text-muted-foreground" />;
+    return <Check className="icon-paired text-muted-foreground" />;
   }
   return null;
 }

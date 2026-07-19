@@ -53,7 +53,7 @@ export function ProviderPickerModal({
     >
       <div className="flex flex-col gap-2">
         <div className="relative">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 icon-paired -translate-y-1/2 text-muted-foreground" />
           <Input
             aria-label="Search providers"
             placeholder="Search providers..."

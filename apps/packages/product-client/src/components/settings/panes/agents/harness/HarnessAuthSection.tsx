@@ -186,7 +186,7 @@ function HarnessAuthMethods({
         <MethodCard
           label={HARNESS_PANE_COPY.methodGateway}
           description={HARNESS_PANE_COPY.methodGatewayDescription}
-          icon={<CloudIcon className="size-5" />}
+          icon={<CloudIcon className="icon-large" />}
           selected={selectedMethods.has("gateway")}
           disabled={editor.gatewayLocked || editor.busy || gatewayCardDisallowed}
           disabledReason={
@@ -202,7 +202,7 @@ function HarnessAuthMethods({
         <MethodCard
           label={HARNESS_PANE_COPY.methodApiKey}
           description={HARNESS_PANE_COPY.methodApiKeyDescription}
-          icon={<KeyRound className="size-5" />}
+          icon={<KeyRound className="icon-large" />}
           selected={selectedMethods.has("api_key")}
           disabled={editor.busy || apiKeyCardDisallowed}
           disabledReason={apiKeyCardDisallowed ? POLICY_TOOLTIP : undefined}
@@ -212,7 +212,7 @@ function HarnessAuthMethods({
         <MethodCard
           label={HARNESS_PANE_COPY.methodCli}
           description={HARNESS_PANE_COPY.methodCliDescription}
-          icon={<SquareTerminal className="size-5" />}
+          icon={<SquareTerminal className="icon-large" />}
           selected={selectedMethods.has("cli")}
           disabled={multiSource || editor.busy || nativeCardDisallowed}
           disabledReason={
@@ -354,7 +354,7 @@ function MethodCard({
         onClick={onClick}
       >
         {selected ? (
-          <Check className="absolute right-2.5 top-2.5 size-4 text-foreground" />
+          <Check className="absolute right-2.5 top-2.5 icon-paired text-foreground" />
         ) : null}
         <span className="mb-auto inline-flex size-8 items-center justify-center rounded-md bg-foreground/5">
           {icon}
@@ -365,7 +365,7 @@ function MethodCard({
         </span>
       </Button>
       {disabled && disabledReason ? (
-        <p className="px-1 text-[11px] leading-tight text-muted-foreground">
+        <p className="px-1 text-[length:var(--text-ui-sm)] leading-[var(--text-ui-sm--line-height)] text-muted-foreground">
           {disabledReason}
         </p>
       ) : null}

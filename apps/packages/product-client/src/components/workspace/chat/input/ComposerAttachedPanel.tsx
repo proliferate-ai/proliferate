@@ -44,13 +44,13 @@ export function ComposerAttachedPanel({
   // blur: the dock bans blur over the transcript (see the PERF note in
   // ChatComposerDock) and the panel sits on that same stack.
   //
-  // Header grammar shared by every interaction card: optional 16px leading
+  // Header grammar shared by every interaction card: optional paired leading
   // icon + text-ui medium title + optional text-ui-sm muted context line.
   const headerContent = title != null
     ? (
       <>
         {icon && (
-          <span className="flex size-4 shrink-0 items-center justify-center text-muted-foreground [&_svg]:size-4">
+          <span className="icon-paired flex shrink-0 items-center justify-center text-muted-foreground [&_svg]:size-full">
             {icon}
           </span>
         )}
@@ -95,7 +95,7 @@ export function ComposerAttachedPanel({
                 aria-label={expanded ? "Collapse panel" : "Expand panel"}
               >
                 <ChevronDown
-                  className={`size-3.5 transition-transform ${expanded ? "" : "-rotate-90"}`}
+                  className={`icon-paired transition-transform ${expanded ? "" : "-rotate-90"}`}
                 />
               </Button>
             </div>

@@ -144,7 +144,7 @@ function FileTreeBody({
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="shrink-0 px-2 pt-2 pb-1">
         <div className="flex h-7 items-center gap-2 rounded-md bg-sidebar-accent px-2 text-sidebar-muted-foreground focus-within:ring-1 focus-within:ring-sidebar-ring">
-          <Search className="size-4 shrink-0" />
+          <Search className="icon-paired shrink-0" />
           <Input
             value={filter}
             onChange={(event: React.ChangeEvent<HTMLInputElement>) => setFilter(event.target.value)}
@@ -161,7 +161,7 @@ function FileTreeBody({
               className="flex size-5 shrink-0 items-center justify-center rounded text-sidebar-muted-foreground hover:bg-sidebar-background hover:text-sidebar-foreground focus-visible:outline focus-visible:outline-1 focus-visible:outline-sidebar-ring"
               onClick={() => setFilter("")}
             >
-              <X className="size-3.5" />
+              <X className="icon-paired" />
             </Button>
           )}
         </div>

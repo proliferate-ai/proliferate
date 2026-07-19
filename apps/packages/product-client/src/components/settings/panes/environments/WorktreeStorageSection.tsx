@@ -151,7 +151,7 @@ export function WorktreePolicyRow({
             className="h-8 w-8 rounded-none text-muted-foreground hover:bg-foreground/10 hover:text-foreground"
             onClick={() => step(-1)}
           >
-            <Minus className="size-3.5" />
+            <Minus className="icon-paired" />
           </Button>
           <Label className="mb-0 flex h-8 min-w-16 cursor-text items-center justify-center gap-1.5 border-x border-border-light px-2">
             <WorktreeCountInput
@@ -171,7 +171,7 @@ export function WorktreePolicyRow({
             className="h-8 w-8 rounded-none text-muted-foreground hover:bg-foreground/10 hover:text-foreground"
             onClick={() => step(1)}
           >
-            <Plus className="size-3.5" />
+            <Plus className="icon-paired" />
           </Button>
         </div>
         {helperText ? (

@@ -35,7 +35,7 @@ export function WorkspaceSidebarHeaderControls({
         title={toggleTitle}
         className="rounded-md"
       >
-        <SplitPanelLeft className="size-4" />
+        <SplitPanelLeft className="icon-paired" />
       </IconButton>
       {/* The update pill's single home is the top-left, next to the sidebar
           toggle — it covers every updater phase whether the sidebar is open

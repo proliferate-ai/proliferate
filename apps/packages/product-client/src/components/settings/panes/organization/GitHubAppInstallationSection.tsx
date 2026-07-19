@@ -40,7 +40,7 @@ export function GitHubAppInstallationSection({
           <div className="flex min-w-0 items-center gap-3">
             <ProviderBrandIcon
               provider="github"
-              className="size-5 shrink-0 text-muted-foreground"
+              className="icon-large shrink-0 text-muted-foreground"
             />
             <div className="min-w-0">
               <div className="font-medium text-foreground">GitHub App</div>

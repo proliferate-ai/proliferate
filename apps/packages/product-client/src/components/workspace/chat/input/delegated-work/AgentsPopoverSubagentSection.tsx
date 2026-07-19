@@ -37,7 +37,7 @@ export function AgentsPopoverSubagentSection({
               {subagents.parent.label}
             </span>
           </span>
-          <ExternalLink className="size-3.5 shrink-0 text-muted-foreground" />
+          <ExternalLink className="icon-paired shrink-0 text-muted-foreground" />
         </Button>
       )}
       <div className="space-y-0.5">

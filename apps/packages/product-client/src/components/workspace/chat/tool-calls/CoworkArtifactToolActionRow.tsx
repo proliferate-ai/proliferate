@@ -33,7 +33,7 @@ export function CoworkArtifactToolActionRow({
       icon={presentation.running ? (
         <ArtifactRunningIcon />
       ) : (
-        <FileText className="size-3 text-faint" />
+        <FileText className="icon-compact text-faint" />
       )}
       label={label}
       status={status}
@@ -56,7 +56,7 @@ export function CoworkArtifactToolActionRow({
 function ArtifactRunningIcon() {
   return (
     <span className="inline-flex size-3 items-center justify-center" style={{ color: ARTIFACT_SPINNER_COLOR }}>
-      <Spinner className="size-3 opacity-80" />
+      <Spinner className="icon-compact opacity-80" />
     </span>
   );
 }
@@ -76,7 +76,7 @@ function ArtifactChip({
         name={basename}
         path={pathLabel}
         kind="file"
-        className="size-2.5 shrink-0 text-muted-foreground"
+        className="icon-compact shrink-0 text-muted-foreground [font-size:var(--text-chat)]"
       />
       <span className="truncate">{basename}</span>
     </>

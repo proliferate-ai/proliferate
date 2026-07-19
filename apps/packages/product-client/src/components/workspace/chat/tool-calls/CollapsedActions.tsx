@@ -72,7 +72,7 @@ export function CollapsedActions({
           <span className="inline-flex min-w-0 shrink items-center gap-1.5 truncate">
             <span
               aria-hidden="true"
-              className="flex size-[1.143em] shrink-0 items-center justify-center text-current [&_svg]:size-[1.143em] [&_svg]:text-current"
+              className="icon-paired flex shrink-0 items-center justify-center text-current [&_svg]:size-full [&_svg]:text-current"
             >
               {summaryIcon}
             </span>
@@ -90,7 +90,7 @@ export function CollapsedActions({
           {!summaryOpensChanges && (
             <ChevronRightActivity
               aria-hidden="true"
-              className={`size-[1em] shrink-0 text-current transition-transform duration-300 ${
+              className={`icon-compact shrink-0 text-current transition-transform duration-300 ${
                 expanded
                   ? "rotate-90 opacity-100"
                   : "opacity-0 group-hover/collapsed-actions:opacity-100 group-focus-visible/collapsed-actions:opacity-100"
@@ -111,7 +111,7 @@ export function CollapsedActions({
           >
             <ChevronRightActivity
               aria-hidden="true"
-              className={`size-[1em] text-current transition-transform duration-300 ${
+              className={`icon-compact text-current transition-transform duration-300 ${
                 expanded
                   ? "rotate-90 opacity-100"
                   : "opacity-0 group-hover/collapsed-actions:opacity-100 group-focus-visible/collapsed-actions:opacity-100"

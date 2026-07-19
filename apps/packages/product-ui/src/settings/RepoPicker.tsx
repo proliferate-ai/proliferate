@@ -47,7 +47,7 @@ export function RepoPicker({
           <span className="min-w-0 flex-1 truncate text-left">
             {selected?.name ?? "Select repository"}
           </span>
-          <ChevronsUpDown className="size-3 shrink-0 text-faint" />
+          <ChevronsUpDown className="icon-paired shrink-0 text-faint" />
         </Button>
       }
     >
@@ -59,7 +59,7 @@ export function RepoPicker({
               icon={<RepoChip kind={item.kind} />}
               label={item.name}
               trailing={item.id === selected?.id
-                ? <Check className="size-3 text-special" />
+                ? <Check className="icon-paired text-special" />
                 : undefined}
               onClick={() => {
                 onSelect(item.id);
@@ -71,7 +71,7 @@ export function RepoPicker({
           ))}
           <div className="mx-2 my-1 h-px shrink-0 bg-border-light" />
           <PopoverMenuItem
-            icon={<Plus className="size-3.5" />}
+            icon={<Plus className="icon-paired" />}
             label="Add repository…"
             onClick={() => {
               onAddRepository();
@@ -89,7 +89,7 @@ function RepoChip({ kind }: { kind: RepoPickerItem["kind"] }) {
   // glyph. Neutral chip, not the old blue folder.
   const Icon = kind === "cloud" ? Cloud : GitHub;
   return (
-    <span className="flex size-[15px] shrink-0 items-center justify-center rounded bg-surface-control text-muted-foreground [&>svg]:size-[10px]">
+    <span className="flex size-[15px] shrink-0 items-center justify-center rounded bg-surface-control text-ui-sm text-muted-foreground [&>svg]:icon-compact">
       <Icon />
     </span>
   );

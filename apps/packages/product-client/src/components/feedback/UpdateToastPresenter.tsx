@@ -175,7 +175,7 @@ export function UpdateToastPresenter() {
         description: checkFailed
           ? "Check your connection and try again."
           : humanizeDownloadError(errorMessage),
-        icon: <CircleAlert className="size-4 text-destructive" />,
+        icon: <CircleAlert className="icon-paired text-destructive" />,
         duration: 8000,
         action: undefined,
         cancel: undefined,

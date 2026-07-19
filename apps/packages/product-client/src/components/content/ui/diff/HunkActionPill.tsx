@@ -52,7 +52,7 @@ export function HunkActionPill({
             }}
             aria-label="Revert hunk"
           >
-            <Undo className="size-3" />
+            <Undo className="icon-compact" />
           </Button>
         </Tooltip>
       )}
@@ -73,7 +73,7 @@ export function HunkActionPill({
           }}
           aria-label={isUnstaged ? "Stage hunk" : "Unstage hunk"}
         >
-          {isUnstaged ? <Plus className="size-3" /> : <Minus className="size-3" />}
+          {isUnstaged ? <Plus className="icon-compact" /> : <Minus className="icon-compact" />}
         </Button>
       </Tooltip>
     </div>

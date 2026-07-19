@@ -44,7 +44,7 @@ export function GoalTranscriptEventRow({ event }: { event: GoalTranscriptEvent }
               vertical center when the objective wraps. */}
           <presentation.Icon
             aria-hidden="true"
-            className={`mt-[0.2em] size-3 shrink-0 ${presentation.iconClassName}`}
+            className={`mt-[0.2em] icon-compact shrink-0 [font-size:var(--text-chat)] ${presentation.iconClassName}`}
           />
           <span className="truncate">
             {presentation.label}
@@ -71,7 +71,7 @@ export function GoalTranscriptEventRow({ event }: { event: GoalTranscriptEvent }
       >
         <presentation.Icon
           aria-hidden="true"
-          className={`mt-[0.2em] size-3 shrink-0 ${presentation.iconClassName}`}
+          className={`mt-[0.2em] icon-compact shrink-0 [font-size:var(--text-chat)] ${presentation.iconClassName}`}
         />
         <span className="min-w-0 truncate">
           {presentation.label}

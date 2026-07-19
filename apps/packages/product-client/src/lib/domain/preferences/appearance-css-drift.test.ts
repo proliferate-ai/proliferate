@@ -4,7 +4,12 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { TEXT_SIZE_TOKEN_IDS, twMerge } from "@proliferate/ui/utils/tw-merge";
 import { typography } from "@proliferate/design/tokens";
-import { DEFAULT_UI_TEXT_SCALE_CSS_VARIABLES } from "#product/lib/domain/preferences/appearance";
+import {
+  DEFAULT_APPEARANCE_SIZE_ID,
+  DEFAULT_UI_GLYPH_SCALE_CSS_VARIABLES,
+  DEFAULT_UI_TEXT_SCALE_CSS_VARIABLES,
+  READABLE_CODE_FONT_SCALES,
+} from "#product/lib/domain/preferences/appearance";
 
 /**
  * Drift lock between UI_FONT_SCALES (appearance.ts) and the design-package
@@ -163,12 +168,45 @@ describe("right-panel tab typography", () => {
     expect(rightPanelRule).not.toContain("--workspace-shell-tab-font-size");
     expect(rightPanelRule).not.toContain("--workspace-shell-tab-line-height");
     expect(rightPanelRule).not.toContain("--workspace-shell-tab-font-weight");
-    expect(rightPanelRule).toContain("--right-panel-tab-icon-size: 1.27em;");
+    expect(productCss).toContain("width: var(--icon-paired);");
+    expect(productCss).toContain("width: var(--icon-status);");
     expect(rightPanelRule).toContain(
-      "--right-panel-tab-close-size: calc(var(--text-ui-sm) * 1.45);",
+      "--right-panel-tab-close-target-size: 1rem;",
     );
     expect(productCss).not.toContain("--right-panel-tab-font-size");
     expect(productCss).not.toContain("--right-panel-tab-line-height");
     expect(productCss).not.toContain("--right-panel-tab-font-weight");
+  });
+});
+
+describe("appearance scaling CSS defaults", () => {
+  const domCss = stripCssComments(
+    readFileSync(resolve(designCssDir, "dom.css"), "utf8"),
+  );
+  const productCss = stripCssComments(
+    readFileSync(resolve(designCssDir, "product.css"), "utf8"),
+  );
+  const defaultCodeScale = READABLE_CODE_FONT_SCALES[DEFAULT_APPEARANCE_SIZE_ID];
+
+  function readDeclaration(css: string, property: string): string | undefined {
+    return css.match(new RegExp(`${property.replaceAll("-", "\\-")}\\s*:\\s*([^;]+);`))?.[1]?.trim();
+  }
+
+  it("keeps default code CSS aligned with the readable-code ladder", () => {
+    expect(readDeclaration(productCss, "--diffs-font-size")).toBe(defaultCodeScale.diffsFontSize);
+    expect(readDeclaration(productCss, "--readable-code-font-size")).toBe(defaultCodeScale.codeFontSize);
+  });
+
+  it("declares the approved semantic vector-glyph tiers", () => {
+    for (const [property, value] of Object.entries(DEFAULT_UI_GLYPH_SCALE_CSS_VARIABLES)) {
+      expect(readDeclaration(domCss, property)).toBe(value);
+      expect(domCss).toContain(`@utility ${property.replace("--", "")}`);
+    }
+  });
+
+  it("gives untyped product text and icon-only controls the primary UI fallback", () => {
+    const bodyRule = domCss.match(/body\s*\{([\s\S]*?)\}/)?.[1];
+    expect(bodyRule).toContain("font-size: var(--text-ui);");
+    expect(bodyRule).toContain("line-height: var(--text-ui--line-height);");
   });
 });

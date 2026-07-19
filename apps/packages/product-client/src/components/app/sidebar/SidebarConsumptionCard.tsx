@@ -239,7 +239,7 @@ export const SidebarUsageTrigger = forwardRef<
       title="Usage"
       className={`relative flex size-10 shrink-0 items-center justify-center rounded-lg text-sidebar-muted-foreground outline-none hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-sidebar-ring data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-foreground ${className}`}
     >
-      <svg viewBox="0 0 28 28" className="size-6 -rotate-90" aria-hidden="true">
+      <svg viewBox="0 0 28 28" className="icon-large -rotate-90 [font-size:var(--text-sidebar-row)]" aria-hidden="true">
         <ConcentricMeterRing
           meter="compute"
           meterState={meters?.compute ?? null}
@@ -252,7 +252,7 @@ export const SidebarUsageTrigger = forwardRef<
         />
       </svg>
       {state.kind === "unavailable" ? (
-        <span className="pointer-events-none absolute text-[8px] font-semibold leading-none text-destructive" aria-hidden="true">
+        <span className="pointer-events-none absolute text-[length:var(--text-ui-sm)] font-semibold leading-none text-destructive" aria-hidden="true">
           !
         </span>
       ) : null}

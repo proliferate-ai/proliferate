@@ -126,7 +126,7 @@ export function SecretManagementPanel({
       <SettingsRow
         label={(
           <span className="flex items-center gap-2">
-            <KeyRound size={14} className="text-muted-foreground" />
+            <KeyRound className="icon-paired text-muted-foreground" />
             {title}
           </span>
         )}
@@ -143,7 +143,7 @@ export function SecretManagementPanel({
               size="sm"
               onClick={() => setEditorState({ mode: "create", kind: "env" })}
             >
-              <Plus size={14} />
+              <Plus className="icon-paired" />
               Add secret
             </Button>
           ) : null}

@@ -30,7 +30,7 @@ export function ActionRowIcon({ children }: { children: ReactNode }) {
   return (
     <span
       aria-hidden="true"
-      className="flex size-[1.143em] shrink-0 items-center justify-center text-current [&_svg]:size-[1.143em] [&_svg]:text-current"
+      className="icon-paired flex shrink-0 items-center justify-center text-current [&_svg]:size-full [&_svg]:text-current"
     >
       {children}
     </span>

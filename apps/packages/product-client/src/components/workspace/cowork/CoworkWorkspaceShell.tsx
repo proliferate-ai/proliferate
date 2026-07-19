@@ -137,7 +137,7 @@ export function CoworkWorkspaceShell({
                 title="Hide sidebar"
                 className="rounded-md"
               >
-                <SplitPanelLeft className="size-4" />
+                <SplitPanelLeft className="icon-paired" />
               </IconButton>
               {/* The update pill's single home is the top-left, next to the
                   sidebar toggle. */}
@@ -180,7 +180,7 @@ export function CoworkWorkspaceShell({
                   title="Show sidebar"
                   className="rounded-md"
                 >
-                  <SplitPanelLeft className="size-4" />
+                  <SplitPanelLeft className="icon-paired" />
                 </IconButton>
                 <SidebarUpdatePill
                   phase={updaterPhase}

@@ -69,45 +69,11 @@ check 'tracking-\[0.06em\]' "raw eyebrow tracking (use SettingsSection)"
 TYPE_ROOTS=(src ../packages/ui/src ../packages/product-ui/src)
 ARBITRARY_TYPE_PATTERN='text-\[[0-9.]+(px|rem|em)\]|leading-\[[0-9.]+(px|rem|em)\]'
 
-# Justified raw-px survivors. Every entry states why it cannot ride a token
-# yet; anything not listed fails. "content scale, round 2" = will key off
-# --text-chat / --diffs-font-size / --readable-code-font-size in the
-# content-scale pass rather than the UI scale.
-TYPE_ALLOWLIST=(
-  "src/components/content/ui/MarkdownRenderer.tsx"                # content scale, round 2: markdown prose headings key off --text-chat
-  "src/components/content/ui/HighlightedCodePanel.tsx"            # content scale, round 2: code-panel gutter keys off --readable-code-font-size
-  "src/components/content/ui/diff/ChatDiffViewer.tsx"             # content scale, round 2: diff labels key off --diffs-font-size
-  "src/components/content/ui/diff/SplitDiffViewer.tsx"            # content scale, round 2: diff labels key off --diffs-font-size
-  "src/components/content/ui/diff/UnifiedDiffViewer.tsx"          # content scale, round 2: diff line numbers/markers key off --diffs-font-size
-  "../packages/product-ui/src/chat/transcript/MarkdownBody.tsx"   # content scale, round 2: markdown prose headings key off --text-chat
-  "src/components/brand/ProliferateLogo.tsx"                      # 32px brand logotype; scale tops out at text-hero (28px)
-  "src/components/feedback/UpdateDialogContent.tsx"               # 15px dialog headline sits between text-lg (14) and text-title (20); no token
-  "src/components/workspace/git/GitReviewStatusBadge.tsx"         # 9px review-state badge; nothing below text-sm (10px) on the scale
-  "src/components/workspace/git/GitReviewTargetSelector.tsx"      # 9px badge (no token below text-sm) + 18px leading centering 10px label in h-6 trigger
-  "src/components/workspace/git/GitReviewBaseSelector.tsx"        # 18px leading centering 10px label in h-6 trigger; no token pairs text-sm with 18px
-  "src/components/workspace/pane/PaneFileTree.tsx"                # 9px count badge; nothing below text-sm (10px) on the scale
-  "src/components/workspace/shell/tabs/TabGroupPill.tsx"          # 13px leading centering 10px label in h-5 pill; no 13px leading token
-  "../packages/product-ui/src/repos/AddRepoFlow.tsx"              # 15px dialog titles sit between text-lg (14) and text-title (20); no token
-  "../packages/product-ui/src/sidebar/ProductSidebarShowToggleRow.tsx" # 18px leading on 10px toggle pill; no token pairs text-sm with 18px
-  "../packages/ui/src/primitives/CommandPalette.tsx"              # palette input 21px leading on text-base; no token pairs 11px with 21px
-  "../packages/product-ui/src/chat/transcript/CloudTranscriptActionRow.tsx" # 9.6px (0.6rem) mono badge sits between text-xs (8px) and text-sm (10px); no token
-)
-
-type_token_allowed() {
-  local f=$1 a
-  for a in "${TYPE_ALLOWLIST[@]}"; do
-    [[ "$f" == "$a" ]] && return 0
-  done
-  return 1
-}
-
 TYPE_HITS=$(grep -rEln --exclude='*.test.*' "$ARBITRARY_TYPE_PATTERN" "${TYPE_ROOTS[@]}" 2>/dev/null || true)
 for f in $TYPE_HITS; do
-  if ! type_token_allowed "$f"; then
-    echo "FAIL [arbitrary type utility]: $f"
-    grep -En "$ARBITRARY_TYPE_PATTERN" "$f"
-    FAIL=1
-  fi
+  echo "FAIL [arbitrary type utility]: $f"
+  grep -En "$ARBITRARY_TYPE_PATTERN" "$f"
+  FAIL=1
 done
 
 # tailwind-merge must be imported via the configured wrapper: the stock config
@@ -134,5 +100,11 @@ if [[ $FAIL -eq 1 ]]; then
   echo "relevant allowlist in $0."
   exit 1
 fi
+
+# The focused repository guard also covers fixed display utilities, numeric
+# third-party font adapters, Lucide/custom SVG dimensions, and status dots in
+# every shared Desktop/Web production package. It intentionally has no
+# callsite allowlist.
+python3 ../../scripts/check_appearance_scaling.py
 
 echo "Design-system check passed."

@@ -68,7 +68,7 @@ export function PromptRecoveryPanel({
                 onClick={() => onDismiss(recovery.id)}
                 aria-label={`Dismiss unsent message: ${label}`}
               >
-                <X className="size-3.5" />
+                <X className="icon-paired" />
               </Button>
             </div>
           );

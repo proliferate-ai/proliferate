@@ -25,7 +25,7 @@ export const AuthProviderButton = forwardRef<HTMLButtonElement, AuthProviderButt
         type={type}
         disabled={disabled || loading}
         className={twMerge(
-          "relative flex h-11 w-full items-center justify-center gap-2.5 rounded-lg border px-4 text-sm font-semibold transition-colors disabled:pointer-events-none disabled:opacity-60",
+          "relative flex h-11 w-full items-center justify-center gap-2.5 rounded-lg border px-4 text-ui font-semibold transition-colors disabled:pointer-events-none disabled:opacity-60",
           variant === "primary"
             ? "border-transparent bg-foreground text-background hover:bg-foreground/90"
             : "border-border bg-card text-foreground hover:bg-accent",
@@ -34,7 +34,7 @@ export const AuthProviderButton = forwardRef<HTMLButtonElement, AuthProviderButt
         {...props}
       >
         <span className="flex size-5 shrink-0 items-center justify-center">
-          {loading ? <Spinner className="size-4" /> : icon}
+          {loading ? <Spinner className="icon-paired" /> : icon}
         </span>
         <span>{children}</span>
       </button>

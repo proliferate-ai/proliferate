@@ -34,7 +34,7 @@ export function TurnSeparator({
         <span className="min-w-0 truncate">{label}</span>
         <ChevronRight
           aria-hidden="true"
-          className={`size-3 shrink-0 text-current transition-[transform,opacity] ${
+          className={`icon-compact shrink-0 text-current transition-[transform,opacity] ${
             expanded
               ? "rotate-90 opacity-100"
               : "opacity-0 group-hover/turn-separator:opacity-100 group-focus-visible/turn-separator:opacity-100"

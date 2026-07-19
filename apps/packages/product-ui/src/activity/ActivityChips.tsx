@@ -61,7 +61,7 @@ function ActivityChip({
   const label = (
     <>
       <Icon
-        className={twMerge("size-3.5 shrink-0", chip.liveCount > 0 && "text-foreground")}
+        className={twMerge("icon-paired shrink-0", chip.liveCount > 0 && "text-foreground")}
         aria-hidden
       />
       <span>{chip.label}</span>

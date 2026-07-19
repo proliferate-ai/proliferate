@@ -215,7 +215,7 @@ function PendingPromptRow({
           onPointerDown={handlePointerDown}
           onKeyDown={handleReorderKeyDown}
         >
-          <GripVertical className="size-3.5 text-muted-foreground" />
+          <GripVertical className="icon-paired text-muted-foreground" />
         </Button>
       )}
 
@@ -243,7 +243,7 @@ function PendingPromptRow({
                 className={ROW_ACTION_CLASSNAME}
                 aria-label="Send next — interrupts the current turn"
               >
-                <ArrowUpRight className="size-3.5" />
+                <ArrowUpRight className="icon-paired" />
               </Button>
             </Tooltip>
           )}
@@ -258,7 +258,7 @@ function PendingPromptRow({
                 className={ROW_ACTION_CLASSNAME}
                 aria-label="Edit queued message"
               >
-                <Pencil className="size-3.5" />
+                <Pencil className="icon-paired" />
               </Button>
             </Tooltip>
           )}
@@ -273,7 +273,7 @@ function PendingPromptRow({
                 className={ROW_ACTION_CLASSNAME}
                 aria-label="Delete queued message"
               >
-                <X className="size-3.5" />
+                <X className="icon-paired" />
               </Button>
             </Tooltip>
           )}

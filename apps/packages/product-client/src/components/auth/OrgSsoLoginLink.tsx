@@ -74,7 +74,7 @@ export function OrgSsoLoginLink() {
         loading={submitting}
         disabled={submitting || !slug.trim()}
       >
-        {!submitting && <ProviderBrandIcon provider="sso" className="h-4 w-4 shrink-0" />}
+        {!submitting && <ProviderBrandIcon provider="sso" className="icon-paired shrink-0" />}
         Continue with SSO
       </Button>
       {error ? <p className="text-sm text-destructive">{error}</p> : null}

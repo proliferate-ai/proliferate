@@ -50,7 +50,7 @@ export function ChatComposerActions({
           aria-label={`${CHAT_COMPOSER_LABELS.send} to queue`}
           data-chat-send-button
         >
-          <ArrowUp className="size-3.5" />
+          <ArrowUp className="icon-paired" />
         </ComposerActionButton>
       );
     }
@@ -64,7 +64,7 @@ export function ChatComposerActions({
         aria-label={CHAT_COMPOSER_LABELS.stop}
         data-chat-stop-button
       >
-        <StopSquare className="size-3.5" />
+        <StopSquare className="icon-paired" />
       </ComposerActionButton>
     );
   }
@@ -87,7 +87,7 @@ export function ChatComposerActions({
       aria-label={title}
       data-chat-send-button
     >
-      <ArrowUp className="size-3.5" />
+      <ArrowUp className="icon-paired" />
     </ComposerActionButton>
   );
 }

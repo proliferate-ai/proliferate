@@ -98,14 +98,14 @@ export function FileViewerFrame({
             disabled={!canOpenExternal}
             onClick={onOpenExternal}
           >
-            <ExternalLink className="size-3.5" />
+            <ExternalLink className="icon-paired" />
           </FileViewerToolbarButton>
           {canFindInFile && (
             <FileViewerToolbarButton
               label="Find in file"
               onClick={onOpenContentSearch}
             >
-              <Search className="size-3.5" />
+              <Search className="icon-paired" />
             </FileViewerToolbarButton>
           )}
           <FileViewerToolbarButton
@@ -113,7 +113,7 @@ export function FileViewerFrame({
             active={browserOpen}
             onClick={onToggleBrowser}
           >
-            <FolderTree className="size-3.5" />
+            <FolderTree className="icon-paired" />
           </FileViewerToolbarButton>
         </div>
       </div>
@@ -164,8 +164,8 @@ function FileViewerContentContextMenu({
 }
 
 const FILE_VIEWER_TOOLBAR_BUTTON_CLASS =
-  // Icons match the right-panel tab glyph size (--workspace-shell-tab-icon-size, 14px).
-  "size-7 rounded-lg text-muted-foreground hover:bg-list-hover hover:text-foreground data-[state=open]:bg-list-hover data-[state=open]:text-foreground [&_svg]:size-3.5";
+  // Icons match the right-panel tab's text-relative paired-glyph tier.
+  "size-7 rounded-lg text-muted-foreground hover:bg-list-hover hover:text-foreground data-[state=open]:bg-list-hover data-[state=open]:text-foreground [&_svg]:icon-paired";
 
 function FileBreadcrumbs({
   filePath,
@@ -201,7 +201,7 @@ function FileBreadcrumbs({
             : parts.slice(0, Math.max(0, index - workspaceOffset + 1)).join("/");
           return (
             <li key={`${part}-${index}`} className="flex min-w-0 items-center gap-1">
-              {index > 0 && <ChevronRight className="size-3 shrink-0 text-muted-foreground/50" />}
+              {index > 0 && <ChevronRight className="icon-compact shrink-0 text-muted-foreground/50" />}
               {browsable ? (
                 <Button
                   type="button"
@@ -347,7 +347,7 @@ function FileViewerOptionsMenu(actions: FileViewerNativeMenuActions) {
           className={FILE_VIEWER_TOOLBAR_BUTTON_CLASS}
           onClick={handleTriggerClick}
         >
-          <MoreHorizontal className="size-3.5" />
+          <MoreHorizontal className="icon-paired" />
         </PaneIconButton>
       )}
     >

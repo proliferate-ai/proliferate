@@ -54,8 +54,8 @@ describe("TodoTrackerPanel", () => {
     expect(rows).toHaveLength(3);
     // Numbered prefixes are gone — the state icons carry the grid line.
     expect(container.textContent).not.toContain("1.");
-    // One 14px (size-3.5) status icon per row, all on the same grid.
-    expect(container.querySelectorAll('[data-todo-status] [class*="size-3.5"]')).toHaveLength(3);
+    // One appearance-scaled status icon per row, all on the same grid.
+    expect(container.querySelectorAll('[data-todo-status] [class*="icon-paired"]')).toHaveLength(3);
     // Completed rows strike through and fade.
     const completedRow = container.querySelector('[data-todo-status="completed"]');
     expect(completedRow?.textContent).toContain("Land the panel");

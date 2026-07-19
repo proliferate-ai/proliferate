@@ -57,11 +57,11 @@ export function EnvironmentSearchSelect({
           variant="outline"
           size="sm"
           disabled={disabled}
-          className={`h-8 justify-between rounded-xl border-transparent bg-accent px-3 text-sm font-[430] leading-4 text-foreground shadow-none hover:bg-accent/80 data-[state=open]:bg-accent/80 ${className}`}
+          className={`h-8 justify-between rounded-xl border-transparent bg-accent px-3 text-ui font-[430] leading-4 text-foreground shadow-none hover:bg-accent/80 data-[state=open]:bg-accent/80 ${className}`}
         >
           {leading}
           <span className="min-w-0 flex-1 truncate text-left">{label}</span>
-          <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
+          <ChevronDown className="icon-paired shrink-0 text-muted-foreground" />
         </Button>
       )}
       className={`${menuClassName} ${POPOVER_SURFACE_CLASS}`}
@@ -81,7 +81,7 @@ export function EnvironmentSearchSelect({
               key={option.id}
               label={option.label}
               disabled={option.disabled}
-              trailing={option.selected ? <Check className="size-3.5" /> : undefined}
+              trailing={option.selected ? <Check className="icon-paired" /> : undefined}
               onClick={() => {
                 option.onSelect();
                 if (closeOnSelect) {
@@ -90,7 +90,7 @@ export function EnvironmentSearchSelect({
               }}
             >
               {option.detail ? (
-                <span className="block truncate text-sm leading-4 text-muted-foreground">
+                <span className="block truncate text-ui-sm leading-4 text-muted-foreground">
                   {option.detail}
                 </span>
               ) : null}

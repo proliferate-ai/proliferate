@@ -36,7 +36,7 @@ function CommandInput({
       )}
       cmdk-input-wrapper=""
     >
-      <Search className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+      <Search className="icon-paired shrink-0 text-muted-foreground" aria-hidden />
       <CommandPrimitive.Input
         data-slot="command-input"
         className={cn(

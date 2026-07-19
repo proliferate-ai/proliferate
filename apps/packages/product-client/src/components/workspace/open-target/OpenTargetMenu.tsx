@@ -5,7 +5,7 @@ import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import { POPOVER_FRAME_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import type { OpenTarget } from "@proliferate/product-client/host/desktop-bridge";
 
-export function TargetIcon({ target, size = "size-3.5" }: { target: OpenTarget; size?: string }) {
+export function TargetIcon({ target, size = "icon-paired" }: { target: OpenTarget; size?: string }) {
   if (target.kind === "copy") {
     return <Copy className={size} />;
   }
@@ -29,7 +29,7 @@ function DropdownItem({
       role="menuitem"
       onClick={onClick}
       icon={icon}
-      iconClassName="size-4 text-current"
+      iconClassName="icon-paired text-current"
       label={label}
       trailing={shortcut ? (
         <span className="inline-flex shrink-0 items-center pl-1">

@@ -35,13 +35,13 @@ export function InventoryGroup({
         {canToggle && (
           <ChevronRight
             className={twMerge(
-              "size-4 shrink-0 text-muted-foreground/36 transition-transform",
+              "icon-paired shrink-0 text-muted-foreground/36 transition-transform",
               collapsed ? "" : "rotate-90",
             )}
             aria-hidden
           />
         )}
-        {group.statusKind && <StatusGlyph status={group.statusKind} size={14} />}
+        {group.statusKind && <StatusGlyph status={group.statusKind} className="icon-paired" />}
         <span
           id={headingId}
           className="text-sm font-medium leading-5 text-foreground"
@@ -56,7 +56,7 @@ export function InventoryGroup({
   );
 
   const headerClass =
-    "group mt-3 flex h-9 w-full justify-start items-center gap-2 rounded-[10px] bg-foreground/[0.042] px-3";
+    "group mt-3 flex h-9 w-full justify-start items-center gap-2 rounded-[10px] bg-foreground/[0.042] px-3 text-sm";
 
   return (
     <section aria-labelledby={headingId}>

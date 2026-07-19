@@ -28,7 +28,7 @@ const SESSION_CONTROL_ICONS: Record<SessionControlIconKey, ComponentType<IconPro
 
 export function SessionControlIcon({
   icon,
-  className = "size-3.5",
+  className = "icon-paired",
 }: SessionControlIconProps) {
   const Icon = icon ? SESSION_CONTROL_ICONS[icon] : CircleQuestion;
   return <Icon className={className} />;

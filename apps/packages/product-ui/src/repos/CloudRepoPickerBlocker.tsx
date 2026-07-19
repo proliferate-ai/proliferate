@@ -12,7 +12,7 @@ export function CloudRepoPickerBlocker({
     <div>
       <div className="flex items-start gap-3 py-1">
         <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-control text-muted-foreground">
-          <ShieldAlert size={15} aria-hidden />
+          <ShieldAlert aria-hidden className="icon-paired" />
         </span>
         <span className="min-w-0 flex-1">
           <h3 className="text-ui font-medium leading-5 text-foreground">{blocker.title}</h3>
@@ -31,7 +31,7 @@ export function CloudRepoPickerBlocker({
             >
               <span
                 className={[
-                  "flex size-5 shrink-0 items-center justify-center rounded-full text-[11px] font-medium",
+                  "flex size-5 shrink-0 items-center justify-center rounded-full text-ui-sm font-medium",
                   step.status === "complete"
                     ? "bg-success-subtle text-success"
                     : step.status === "current"
@@ -40,7 +40,7 @@ export function CloudRepoPickerBlocker({
                 ].join(" ")}
                 aria-hidden
               >
-                {step.status === "complete" ? <Check size={12} /> : index + 1}
+                {step.status === "complete" ? <Check className="icon-paired" /> : index + 1}
               </span>
               <span className="min-w-0">
                 <span className="block text-ui font-medium text-foreground">{step.label}</span>

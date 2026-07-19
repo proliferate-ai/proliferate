@@ -132,7 +132,7 @@ export function NewChatSurface({
       <main className={`web-scrollbar flex min-h-0 flex-1 items-center justify-center overflow-y-auto py-16 ${CHAT_SURFACE_GUTTER_CLASSNAME}`}>
         <div className={CHAT_COLUMN_CLASSNAME}>
           <header className="mb-5 flex flex-col items-center text-center">
-            <h1 className="max-w-[34rem] text-2xl font-medium leading-tight text-foreground">
+            <h1 className="max-w-[34rem] text-hero font-medium leading-tight text-foreground">
               {heading}
             </h1>
           </header>
@@ -356,7 +356,7 @@ function RecentWorkRow({
         <span className="min-w-6 text-right text-xs tabular-nums">
           {item.lastActivityLabel}
         </span>
-        <ChevronRight className="size-3.5 transition-colors group-hover:text-foreground" />
+        <ChevronRight className="icon-paired transition-colors group-hover:text-foreground" />
       </span>
     </Button>
   );

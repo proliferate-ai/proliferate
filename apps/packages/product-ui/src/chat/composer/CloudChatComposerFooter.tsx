@@ -103,11 +103,11 @@ export function CloudChatComposerFooter({
               type="button"
               disabled={control.disabled || control.pending}
               active={control.active}
-              icon={copied ? <Check size={14} /> : <Icon size={14} />}
+              icon={copied ? <Check className="icon-paired" /> : <Icon className="icon-paired" />}
               label={control.label}
               detail={control.detail}
               trailing={control.pending ? (
-                <Loader2 size={12} className="shrink-0 animate-spin text-muted-foreground/70" />
+                <Loader2 className="icon-paired shrink-0 animate-spin text-muted-foreground/70" />
               ) : undefined}
               aria-label={copied ? copiedFeedbackLabel(control) : undefined}
               className={tooltip ? "w-full max-w-full" : "max-w-full shrink-0 sm:max-w-[18rem]"}

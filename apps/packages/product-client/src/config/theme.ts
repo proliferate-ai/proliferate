@@ -71,7 +71,6 @@ export function applyAppearancePreference({
   for (const [property, value] of Object.entries(buildUiTextScaleCssVariables(uiScale))) {
     root.style.setProperty(property, value);
   }
-
   root.style.setProperty("--diffs-font-size", readableCodeScale.diffsFontSize);
   root.style.setProperty("--diffs-line-height", readableCodeScale.diffsLineHeight);
   root.style.setProperty("--readable-code-font-size", readableCodeScale.codeFontSize);

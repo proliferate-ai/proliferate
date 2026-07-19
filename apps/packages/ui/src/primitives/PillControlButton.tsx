@@ -39,7 +39,7 @@ export const PillControlButton = forwardRef<
 ) {
   const resolvedTrailing = trailing ?? (
     disclosure ? (
-      <ChevronDown className="size-3.5 shrink-0 text-[color:var(--color-muted-foreground)]" />
+      <ChevronDown className="icon-paired shrink-0 text-[color:var(--color-muted-foreground)]" />
     ) : null
   );
   const baseClassName = iconOnly

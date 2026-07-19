@@ -144,7 +144,7 @@ export function ChatTabsMenu({
                   <span className="flex shrink-0 items-center gap-1.5">
                     {renderStatus(row)}
                     {children.length > 0 && (
-                      <ChevronRight className="size-3 text-muted-foreground/70" />
+                      <ChevronRight className="icon-compact text-muted-foreground/70" />
                     )}
                   </span>
                 )}
@@ -263,7 +263,7 @@ function renderSubagentTrailing(child: HeaderSubagentChildRow): ReactNode {
     return <span className="text-xs text-foreground">Working</span>;
   }
   if (child.isActive) {
-    return <span className="size-1.5 rounded-full bg-foreground/70" />;
+    return <span className="icon-status rounded-full bg-foreground/70 [font-size:var(--text-sidebar-row)]" />;
   }
   return <span className="text-xs leading-4 text-muted-foreground">{child.statusLabel}</span>;
 }

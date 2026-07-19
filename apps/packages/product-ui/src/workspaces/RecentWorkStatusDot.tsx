@@ -21,7 +21,7 @@ export function RecentWorkStatusDot({
     >
       <span
         aria-hidden="true"
-        className={`size-1.5 shrink-0 rounded-full ${
+        className={`icon-status shrink-0 rounded-full ${
           indicator.hollow ? "border border-current bg-transparent" : "bg-current"
         } ${indicator.live ? "animate-pulse motion-reduce:animate-none" : ""}`}
       />

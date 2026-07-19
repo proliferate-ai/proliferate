@@ -50,7 +50,7 @@ export function SubagentCreationGroupBlock({
       >
         <Robot
           aria-hidden="true"
-          className={`size-3 shrink-0 transition-colors ${
+          className={`icon-compact shrink-0 transition-colors ${
             expanded
               ? "text-foreground/70"
               : "text-faint group-hover/collapsed-actions:text-muted-foreground group-focus-visible/collapsed-actions:text-muted-foreground"

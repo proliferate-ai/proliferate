@@ -168,7 +168,7 @@ export function RightPanelNewTabMenu({
           data-autofocus={defaultKind === "terminal" || undefined}
           onSelect={handleSelectTerminal}
         >
-          <AppShellTerminalIcon className="size-4" />
+          <AppShellTerminalIcon className="icon-paired [font-size:var(--text-ui-sm)]" />
           Terminal
         </DropdownMenuItem>
       </DropdownMenuContent>

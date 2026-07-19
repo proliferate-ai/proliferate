@@ -57,19 +57,19 @@ interface EntryOption {
 const ENTRY_OPTION_DEFS: Record<AddRepoFlowOption, EntryOption> = {
   "add-existing-folder": {
     option: "add-existing-folder",
-    icon: <FolderOpen size={16} aria-hidden />,
+    icon: <FolderOpen aria-hidden className="icon-paired" />,
     label: "Add an existing folder",
     description: "Register a repository folder from this machine.",
   },
   "clone-from-github": {
     option: "clone-from-github",
-    icon: <GitBranch size={16} aria-hidden />,
+    icon: <GitBranch aria-hidden className="icon-paired" />,
     label: "Clone from GitHub",
     description: "Clone an authorized GitHub repository to this machine.",
   },
   cloud: {
     option: "cloud",
-    icon: <Cloud size={16} aria-hidden />,
+    icon: <Cloud aria-hidden className="icon-paired" />,
     label: "Set up in Cloud",
     description: "Pick a GitHub repository to run in Proliferate Cloud.",
   },
@@ -157,7 +157,7 @@ function AddRepoEntryStep({
   return (
     <div onKeyDown={handleKeyDown}>
       <DialogHeader>
-        <DialogTitle className="text-[15px] font-semibold leading-5">
+        <DialogTitle className="text-workspace-title font-semibold">
           Add a repository
         </DialogTitle>
       </DialogHeader>
@@ -219,9 +219,9 @@ function AddRepoPickerStep({
             aria-label="Back"
             onClick={onBack}
           >
-            <ArrowLeft size={14} aria-hidden />
+            <ArrowLeft aria-hidden className="icon-paired" />
           </Button>
-          <DialogTitle className="text-[15px] font-semibold leading-5">
+          <DialogTitle className="text-workspace-title font-semibold">
             {title}
           </DialogTitle>
         </div>
@@ -234,4 +234,3 @@ function AddRepoPickerStep({
     </div>
   );
 }
-

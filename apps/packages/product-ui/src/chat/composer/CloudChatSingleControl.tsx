@@ -29,7 +29,10 @@ export function CloudChatSingleControl({
   const rootRef = useRef<HTMLDivElement | null>(null);
   const selected = useMemo(() => selectedComposerOption(control), [control]);
   const disabled = composerDisabled || isControlDisabled(control);
-  const icon = iconNodeForComposerControl(selected?.icon ?? control.icon, "size-3.5");
+  const icon = iconNodeForComposerControl(
+    selected?.icon ?? control.icon,
+    "icon-paired",
+  );
   const displayLabel = selected?.label ?? control.label;
   const displayDetail = control.detail && control.detail !== displayLabel
     ? control.detail
@@ -68,10 +71,7 @@ export function CloudChatSingleControl({
         trailing={(
           <span className="flex items-center gap-1">
             <PendingComposerConfigIndicator pendingState={control.pendingState ?? null} />
-            <ChevronDown
-              size={12}
-              className="shrink-0 text-[color:var(--color-composer-control-muted-foreground)]"
-            />
+            <ChevronDown className="icon-paired shrink-0 text-[color:var(--color-composer-control-muted-foreground)]" />
           </span>
         )}
         aria-haspopup="menu"

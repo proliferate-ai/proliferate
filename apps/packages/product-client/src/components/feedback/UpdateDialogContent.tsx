@@ -38,10 +38,10 @@ export function UpdateDialogContent({
     <div className="flex h-full flex-col gap-5 px-6 pb-5 pt-4">
       <div className="flex items-start gap-4">
         <div className="flex size-14 shrink-0 items-center justify-center rounded-[22%] border border-border/60 bg-foreground/5">
-          <ProliferateIcon className="size-8 text-foreground" />
+          <ProliferateIcon className="icon-display text-foreground [font-size:var(--text-sidebar-brand)]" />
         </div>
         <div className="min-w-0 pt-0.5">
-          <h2 className="text-[15px] font-semibold leading-6 text-foreground">
+          <h2 className="text-[length:var(--text-workspace-title)] font-semibold leading-[var(--text-workspace-title--line-height)] text-foreground">
             Update available
           </h2>
           <p className="mt-1 text-ui leading-5 text-muted-foreground">

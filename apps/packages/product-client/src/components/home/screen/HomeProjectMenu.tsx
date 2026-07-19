@@ -66,9 +66,9 @@ export function HomeProjectMenu({
                 <PopoverMenuItem
                   key={repository.sourceRoot}
                   data-repo-source-root={repository.sourceRoot}
-                  icon={<ProjectNotebook className="size-4" />}
+                  icon={<ProjectNotebook className="icon-paired" />}
                   label={repository.name}
-                  trailing={isSelected ? <Check className="size-4" /> : null}
+                  trailing={isSelected ? <Check className="icon-paired" /> : null}
                   onClick={() => {
                     onSelectRepository(repository.sourceRoot);
                     setSearchValue("");
@@ -84,9 +84,9 @@ export function HomeProjectMenu({
           <div className="mx-1 my-1 border-t border-border/70" />
           <div className="pb-1">
             <PopoverMenuItem
-              icon={<FolderPlus className="size-4" />}
+              icon={<FolderPlus className="icon-paired" />}
               label="New project"
-              trailing={<ChevronRight className="size-3.5" />}
+              trailing={<ChevronRight className="icon-paired" />}
               onClick={() => {
                 onAddRepository();
                 setSearchValue("");
@@ -95,9 +95,9 @@ export function HomeProjectMenu({
             />
             {coworkAvailable ? (
               <PopoverMenuItem
-                icon={<X className="size-4" />}
+                icon={<X className="icon-paired" />}
                 label="Don't work in a project"
-                trailing={destination === "cowork" ? <Check className="size-4" /> : null}
+                trailing={destination === "cowork" ? <Check className="icon-paired" /> : null}
                 onClick={() => {
                   onSelectCowork();
                   setSearchValue("");

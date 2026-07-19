@@ -45,8 +45,6 @@ export function useAgentLoginTerminalViewport({
     onResize: handleTerminalResize,
     logPrefix: "AgentLoginTerminal",
     scrollback: 2000,
-    fontSize: 9,
-    lineHeight: 1,
   });
 
   useEffect(() => {

@@ -96,7 +96,7 @@ export function ApiKeyDetails({
               disabled={editor.busy}
               onClick={() => editor.setAddKeyModalOpen(true)}
             >
-              <Plus className="size-3.5" />
+              <Plus className="icon-paired" />
               {HARNESS_PANE_COPY.addApiKey}
             </Button>
             {editor.multiSource ? (
@@ -108,7 +108,7 @@ export function ApiKeyDetails({
                 disabled={editor.busy}
                 onClick={() => setProviderModalOpen(true)}
               >
-                <Plus className="size-3.5" />
+                <Plus className="icon-paired" />
                 {HARNESS_PANE_COPY.addProvider}
               </Button>
             ) : null}
@@ -128,7 +128,7 @@ export function ApiKeyDetails({
               disabled={editor.busy}
               onClick={() => editor.setAddKeyModalOpen(true)}
             >
-              <Plus className="size-3.5" />
+              <Plus className="icon-paired" />
               {HARNESS_PANE_COPY.addApiKey}
             </Button>
           </div>

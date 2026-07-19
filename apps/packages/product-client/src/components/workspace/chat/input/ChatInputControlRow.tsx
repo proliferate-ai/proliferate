@@ -128,7 +128,7 @@ export function ComposerLeadingControls({
       {canSetGoal && (
         <ComposerControlButton
           iconOnly
-          icon={<Target className="size-4" />}
+          icon={<Target className="icon-paired" />}
           label="Set goal"
           aria-label="Set goal"
           title="Give the agent an objective to keep pursuing."
@@ -194,7 +194,7 @@ export function ComposerTrailingControls({
       {!isEditingQueuedPrompt && (
         <ComposerControlButton
           iconOnly
-          icon={<Plus className="size-4" />}
+          icon={<Plus className="icon-paired" />}
           label="Add file"
           title={attachFileDetail}
           aria-label="Add file"

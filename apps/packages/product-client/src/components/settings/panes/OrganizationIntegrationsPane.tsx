@@ -144,7 +144,7 @@ export function OrganizationIntegrationsPane() {
                 className="grid grid-cols-[minmax(0,1.6fr)_minmax(0,0.6fr)_minmax(0,0.6fr)_minmax(0,10rem)_auto] items-center gap-3 border-b border-border py-3 last:border-b-0"
               >
                 <div className="flex min-w-0 items-center gap-3">
-                  <IntegrationIcon namespace={definition.namespace} className="size-8" />
+                  <IntegrationIcon namespace={definition.namespace} className="icon-display [font-size:var(--text-sidebar-brand)]" />
                   <div className="min-w-0">
                     <div className="truncate text-sm font-medium text-foreground">
                       {definition.displayName}

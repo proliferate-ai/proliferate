@@ -72,7 +72,7 @@ export function AutomationDetailSurface({
     >
       <div className="pb-8">
         <Button variant="ghost" size="sm" onClick={onBack} className="-ml-2 mb-4">
-          <ArrowLeft className="size-4" aria-hidden />
+          <ArrowLeft className="icon-paired" aria-hidden />
           Workflows
         </Button>
 
@@ -218,7 +218,7 @@ function AutomationDetailActions({
           softDisabledReason={runDisabledReason}
           onClick={() => onRunNow(automation.id)}
         >
-          <Zap className="size-4" aria-hidden />
+          <Zap className="icon-paired" aria-hidden />
           Run now
         </DetailActionButton>
       ) : null}
@@ -229,7 +229,7 @@ function AutomationDetailActions({
           onClick={() => onEdit(automation.id)}
           disabled={busy}
         >
-          <Pencil className="size-4" aria-hidden />
+          <Pencil className="icon-paired" aria-hidden />
           Edit
         </Button>
       ) : null}
@@ -241,7 +241,7 @@ function AutomationDetailActions({
             onClick={() => onPause(automation.id)}
             disabled={busy}
           >
-            <Pause className="size-4" aria-hidden />
+            <Pause className="icon-paired" aria-hidden />
             Pause
           </Button>
         ) : null
@@ -252,7 +252,7 @@ function AutomationDetailActions({
           onClick={() => onResume(automation.id)}
           disabled={busy}
         >
-          <Play className="size-4" aria-hidden />
+          <Play className="icon-paired" aria-hidden />
           Resume
         </Button>
       ) : null}

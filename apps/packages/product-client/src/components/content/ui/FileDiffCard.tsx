@@ -192,7 +192,7 @@ export function FileDiffCard({
                   aria-label={openActionLabel ?? `Open ${filePath}`}
                   title={openActionTitle ?? "Open file"}
                 >
-                  <ArrowUpRight className="size-3.5" />
+                  <ArrowUpRight className="icon-paired" />
                 </Button>
               </div>
             )}
@@ -212,7 +212,7 @@ export function FileDiffCard({
                 data-app-action-review-file-toggle=""
               >
                 <ChevronDown
-                  className={`size-3.5 transition-transform duration-200 ${
+                  className={`icon-paired transition-transform duration-200 ${
                     isExpanded ? "rotate-180" : "rotate-0"
                   }`}
                 />

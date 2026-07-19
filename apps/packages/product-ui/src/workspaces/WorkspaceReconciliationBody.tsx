@@ -47,7 +47,7 @@ export function WorkspaceReconciliationBody({ view }: { view: WorkspaceReconcili
             className="rounded-lg bg-surface-control px-3 py-2.5"
           >
             <dt className="flex items-center gap-1.5 text-ui-sm font-medium text-foreground">
-              <GitBranch size={13} className="text-muted-foreground" aria-hidden />
+              <GitBranch className="icon-paired text-muted-foreground" aria-hidden />
               {column.title}
             </dt>
             <dd className="mt-1.5 space-y-1">

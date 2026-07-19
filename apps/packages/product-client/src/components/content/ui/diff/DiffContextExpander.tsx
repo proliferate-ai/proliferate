@@ -57,7 +57,7 @@ export function DiffGapGutterControls({
           title={`Expand ${label}`}
           className={ICON_BUTTON_CLASS}
         >
-          <ChevronsUpDown className="h-3 w-3" />
+          <ChevronsUpDown className="icon-compact [font-size:var(--readable-code-font-size)]" />
         </Button>
       ) : (
         <>
@@ -70,7 +70,7 @@ export function DiffGapGutterControls({
             title="Expand down"
             className={ICON_BUTTON_CLASS}
           >
-            <ChevronDown className="h-3 w-3" />
+            <ChevronDown className="icon-compact [font-size:var(--readable-code-font-size)]" />
           </Button>
           <Button
             variant="unstyled"
@@ -81,7 +81,7 @@ export function DiffGapGutterControls({
             title="Expand up"
             className={ICON_BUTTON_CLASS}
           >
-            <ChevronUp className="h-3 w-3" />
+            <ChevronUp className="icon-compact [font-size:var(--readable-code-font-size)]" />
           </Button>
         </>
       )}
@@ -144,7 +144,7 @@ export function DiffCollapsedGutterIcon() {
         aria-hidden="true"
         className="flex shrink-0 items-center justify-center rounded p-0.5 text-muted-foreground/60"
       >
-        <ChevronsUpDown className="h-3 w-3" />
+        <ChevronsUpDown className="icon-compact [font-size:var(--readable-code-font-size)]" />
       </span>
     </div>
   );
@@ -214,7 +214,7 @@ export function DiffContextExpander({
             title={`Expand ${label}`}
             className={ICON_BUTTON_CLASS}
           >
-            <ChevronsUpDown className="h-3 w-3" />
+            <ChevronsUpDown className="icon-compact [font-size:var(--readable-code-font-size)]" />
           </Button>
         ) : (
           <div className="flex flex-col items-center gap-0">
@@ -227,7 +227,7 @@ export function DiffContextExpander({
               title="Expand down"
               className={ICON_BUTTON_CLASS}
             >
-              <ChevronDown className="h-3 w-3" />
+              <ChevronDown className="icon-compact [font-size:var(--readable-code-font-size)]" />
             </Button>
             <Button
               variant="unstyled"
@@ -238,7 +238,7 @@ export function DiffContextExpander({
               title="Expand up"
               className={ICON_BUTTON_CLASS}
             >
-              <ChevronUp className="h-3 w-3" />
+              <ChevronUp className="icon-compact [font-size:var(--readable-code-font-size)]" />
             </Button>
           </div>
         )}
@@ -293,7 +293,7 @@ export function DiffCollapsedContextCluster({
         aria-hidden="true"
         className="flex shrink-0 items-center justify-center rounded p-0.5"
       >
-        <ChevronsUpDown className="h-3 w-3" />
+        <ChevronsUpDown className="icon-compact [font-size:var(--readable-code-font-size)]" />
       </span>
       <span className="shrink-0 pl-1">
         {formatUnmodifiedLinesLabel(lineCount)}

@@ -20,7 +20,7 @@ export function CloudChatComposerControlRow({ composer }: { composer: CloudChatC
         <>
           <ComposerControlButton
             type="button"
-            icon={<Plus size={17} />}
+            icon={<Plus className="icon-paired" />}
             iconOnly
             label="Add context"
             disabled={composer.disabled}
@@ -51,7 +51,7 @@ export function CloudChatComposerControlRow({ composer }: { composer: CloudChatC
           loading={composer.isSubmitting}
           data-chat-send-button
         >
-          {composer.isSubmitting ? null : <ArrowUp size={14} />}
+          {composer.isSubmitting ? null : <ArrowUp className="icon-paired" />}
         </ComposerActionButton>
       )}
     />

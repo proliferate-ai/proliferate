@@ -85,10 +85,10 @@ export function GoalBarObjectiveEditor({
         onKeyDown={handleKeyDown}
       />
       <span className="absolute right-0 top-0 flex shrink-0 items-center gap-0.5">
-        <GoalBarIconAction label="Cancel" icon={<X className="size-3.5" />} onClick={onCancel} />
+        <GoalBarIconAction label="Cancel" icon={<X className="icon-paired" />} onClick={onCancel} />
         <GoalBarIconAction
           label="Save goal"
-          icon={<Check className="size-3.5" />}
+          icon={<Check className="icon-paired" />}
           positive
           onClick={commit}
         />

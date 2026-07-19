@@ -103,7 +103,7 @@ export function HarnessAuthApiKeyRow({
               disabled={busy}
               onClick={() => setEditing(true)}
             >
-              <Pencil className="size-3" />
+              <Pencil className="icon-compact" />
             </IconButton>
           </div>
         )}
@@ -129,7 +129,7 @@ export function HarnessAuthApiKeyRow({
           disabled={busy}
           onClick={() => onRemove(row.uid)}
         >
-          <Trash className="size-3.5" />
+          <Trash className="icon-paired" />
         </IconButton>
       </div>
     </div>

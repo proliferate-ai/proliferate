@@ -132,7 +132,7 @@ export function WorkspacesCommandList({
             onSelect={() => onCreate()}
             className="mt-2 w-full gap-2 border border-dashed border-border px-2.5 py-2 font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground data-[selected=true]:text-foreground"
           >
-            <FolderPlus className="size-4 shrink-0" aria-hidden />
+            <FolderPlus className="icon-paired shrink-0" aria-hidden />
             <span>Create</span>
             <span className="ml-auto text-base text-faint opacity-0 transition-opacity group-hover:opacity-100 group-data-[selected=true]:opacity-100">
               {createShortcutLabel}
@@ -177,7 +177,7 @@ function WorkspaceCommandRow({
               <span className="w-36 flex-shrink-0 truncate">{item.title}</span>
               {branch ? (
                 <>
-                  <ChevronRight className="!size-3 flex-shrink-0 text-faint" aria-hidden />
+                  <ChevronRight className="!icon-paired flex-shrink-0 text-faint" aria-hidden />
                   <span className="truncate font-normal text-muted-foreground">{branch}</span>
                 </>
               ) : null}
@@ -229,13 +229,13 @@ function WorkspaceRowGlyph({
   branch: string | null;
 }) {
   if (item.running) {
-    return <Spinner className="!size-3" />;
+    return <Spinner className="!icon-paired" />;
   }
   if (item.prStatus) {
-    return <GitPullRequest className="!size-3" aria-hidden />;
+    return <GitPullRequest className="!icon-paired" aria-hidden />;
   }
   if (branch) {
-    return <GitBranchIcon className="!size-3" aria-hidden />;
+    return <GitBranchIcon className="!icon-paired" aria-hidden />;
   }
   return null;
 }

@@ -57,7 +57,7 @@ export function FilePathContextMenuContent({
         <PopoverMenuItem
           {...FILE_PATH_MENU_ITEM_PROPS}
           {...transcriptProps}
-          icon={<FileText className="size-3.5 shrink-0" />}
+          icon={<FileText className="icon-paired shrink-0" />}
           label="Open in viewer"
           disabled={!canOpenInViewer}
           onClick={() => {
@@ -89,7 +89,7 @@ export function FilePathContextMenuContent({
             {...transcriptProps}
             label="Open with"
             disabled={!canOpenExternal}
-            trailing={<ChevronRight className="size-3.5" />}
+            trailing={<ChevronRight className="icon-paired" />}
             className={openWithActive
               ? "bg-[var(--color-link-foreground)] text-white hover:bg-[var(--color-link-foreground)] focus:bg-[var(--color-link-foreground)] [&_*]:text-white"
               : ""}
@@ -147,7 +147,7 @@ function OpenMenuTargetIcon({
   target: FilePathContextMenuTarget | null;
 }) {
   if (!target?.iconId) {
-    return <ExternalLink className="size-3.5 shrink-0" />;
+    return <ExternalLink className="icon-paired shrink-0" />;
   }
-  return <OpenTargetIcon iconId={target.iconId} className="size-3.5 shrink-0" variant="menu" />;
+  return <OpenTargetIcon iconId={target.iconId} className="icon-paired shrink-0" variant="menu" />;
 }

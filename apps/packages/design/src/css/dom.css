@@ -32,6 +32,36 @@
   --text-sidebar-brand--line-height: 23px; /* font size + 7px */
 }
 
+@utility icon-status {
+  width: var(--icon-status);
+  height: var(--icon-status);
+}
+
+@utility icon-compact {
+  width: var(--icon-compact);
+  height: var(--icon-compact);
+}
+
+@utility icon-paired {
+  width: var(--icon-paired);
+  height: var(--icon-paired);
+}
+
+@utility icon-control {
+  width: var(--icon-control);
+  height: var(--icon-control);
+}
+
+@utility icon-large {
+  width: var(--icon-large);
+  height: var(--icon-large);
+}
+
+@utility icon-display {
+  width: var(--icon-display);
+  height: var(--icon-display);
+}
+
 :root {
   color-scheme: dark;
   font-family:
@@ -56,8 +86,17 @@
   --color-composer-send-foreground: var(--color-background);
   --color-composer-shadow: var(--shadow-subtle);
   --color-composer-backdrop-filter: none;
-  /* One optical size for repo folders and all primary sidebar actions. */
-  --sidebar-primary-icon-size: 1.15em;
+  /* Semantic vector-glyph tiers. These use em so the visible glyph follows
+     its owning UI text role while the surrounding row/button geometry and
+     pointer target stay fixed. Paired label icons use the approved 1.15em
+     optical ratio; larger tiers are reserved for icon-only controls and
+     display glyphs. */
+  --icon-status: 0.45em;
+  --icon-compact: 1em;
+  --icon-paired: 1.15em;
+  --icon-control: 1.333333em;
+  --icon-large: 1.666667em;
+  --icon-display: 2em;
   /* Meta text (message timestamps, code-block language labels) tracks the
      chat font size — including runtime text-scale changes — but always sits
      one step below it. */
@@ -89,6 +128,12 @@ body {
   min-width: 320px;
   overflow: hidden;
   background: var(--color-background);
+  /* The primary UI role is the inherited fallback for otherwise-untyped text
+     and icon-only controls. Semantic role utilities still override it, while
+     rem-based layout geometry continues to resolve against the unchanged html
+     root and therefore stays independent from the UI font preference. */
+  font-size: var(--text-ui);
+  line-height: var(--text-ui--line-height);
 }
 
 /*

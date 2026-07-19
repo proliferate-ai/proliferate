@@ -153,7 +153,7 @@ function MemberRow({
               <MenuSeparator />
               <PopoverMenuItem
                 label="Remove"
-                icon={<Trash className="size-4" />}
+                icon={<Trash className="icon-paired" />}
                 disabled={removeDisabled || updating}
                 onClick={() => {
                   onRemove(member.membershipId);
@@ -204,7 +204,7 @@ function InvitationRow({
     <div className={`${PEOPLE_GRID_CLASS} min-h-[5.25rem] border-b border-border py-5 last:border-b-0`}>
       <div className="flex min-w-0 items-center gap-3">
         <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-foreground/10 text-muted-foreground">
-          <Mail className="size-4" />
+          <Mail className="icon-paired" />
         </span>
         <div className="min-w-0">
           <div className="truncate text-ui font-medium leading-5 text-foreground" title={row.name}>
@@ -233,7 +233,7 @@ function InvitationRow({
 <>
               <PopoverMenuItem
                 label="Copy invite link"
-                icon={<Copy className="size-4" />}
+                icon={<Copy className="icon-paired" />}
                 onClick={() => {
                   void handleCopyInviteLink();
                   close();
@@ -241,7 +241,7 @@ function InvitationRow({
               />
               <PopoverMenuItem
                 label="Revoke invitation"
-                icon={<Trash className="size-4" />}
+                icon={<Trash className="icon-paired" />}
                 disabled={!onRevokeInvitation || updating}
                 onClick={() => {
                   onRevokeInvitation?.(invitation.id);
@@ -291,7 +291,7 @@ function RoleMenuItems({
           key={role}
           label={`Make ${roleLabel(role).toLowerCase()}`}
           disabled={disabled || role === currentRole || (role === "owner" && !canManageOwners)}
-          trailing={role === currentRole ? <Check className="size-3.5" /> : null}
+          trailing={role === currentRole ? <Check className="icon-paired" /> : null}
           onClick={() => {
             onSelect(role);
           }}
@@ -324,7 +324,7 @@ function RowActionMenu({
           aria-label={label}
           disabled={disabled}
         >
-          <MoreHorizontal className="size-4" />
+          <MoreHorizontal className="icon-paired" />
         </Button>
       )}
       className={`w-48 ${POPOVER_SURFACE_CLASS}`}

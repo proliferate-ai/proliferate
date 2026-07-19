@@ -85,8 +85,8 @@ export function GitPanelHeader({
             onClick={onToggleAllFiles}
           >
             {allFilesCollapsed
-              ? <ExpandAll className="size-3.5" />
-              : <CollapseAll className="size-3.5" />}
+              ? <ExpandAll className="icon-paired" />
+              : <CollapseAll className="icon-paired" />}
           </PaneIconButton>
           <GitReviewJumpToFileMenu
             reviewEntries={reviewEntries}
@@ -127,7 +127,7 @@ function GitReviewJumpToFileMenu({
     <PopoverButton
       trigger={(
         <PaneIconButton label="Jump to file" disabled={reviewEntries.length === 0}>
-          <Search className="size-3.5" />
+          <Search className="icon-paired" />
         </PaneIconButton>
       )}
       align="end"

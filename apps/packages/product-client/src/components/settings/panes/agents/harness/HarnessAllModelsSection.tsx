@@ -266,7 +266,7 @@ export function HarnessAllModelsSection({
             onClick={handleRefresh}
           >
             <RefreshCw
-              className={`size-3.5 ${isRefreshing ? "animate-spin" : ""}`}
+              className={`icon-paired ${isRefreshing ? "animate-spin" : ""}`}
             />
             {isRefreshing
               ? HARNESS_PANE_COPY.allModelsRefreshing
@@ -279,7 +279,7 @@ export function HarnessAllModelsSection({
           // magnifier + borderless transparent input — no boxed field — with a
           // hairline divider between the row and the table below.
           <div className="flex items-center gap-2 border-b border-border px-2.5 py-[7px]">
-            <Search className="size-3.5 shrink-0 text-muted-foreground/75" />
+            <Search className="icon-paired shrink-0 text-muted-foreground/75" />
             <Input
               aria-label="Filter models"
               placeholder="Filter models..."
@@ -288,7 +288,7 @@ export function HarnessAllModelsSection({
               onChange={(event) => setFilterText(event.target.value)}
             />
             {filterText ? (
-              <span className="flex shrink-0 items-center gap-1.5 text-[10px] text-muted-foreground">
+              <span className="flex shrink-0 items-center gap-1.5 text-[length:var(--text-ui-sm)] leading-[var(--text-ui-sm--line-height)] text-muted-foreground">
                 {filteredRows.length} of {rows.length}
                 <Button
                   variant="unstyled"
@@ -298,7 +298,7 @@ export function HarnessAllModelsSection({
                   className="rounded p-0.5 hover:bg-accent"
                   onClick={() => setFilterText("")}
                 >
-                  <X className="size-3" />
+                  <X className="icon-compact" />
                 </Button>
               </span>
             ) : null}
@@ -311,7 +311,7 @@ export function HarnessAllModelsSection({
           </p>
         ) : isProbingEmpty ? (
           <p className="flex items-center gap-2 text-sm text-muted-foreground">
-            <RefreshCw className="size-3.5 animate-spin" />
+            <RefreshCw className="icon-paired animate-spin" />
             {HARNESS_PANE_COPY.allModelsProbing}
           </p>
         ) : models.length === 0 ? (

@@ -199,7 +199,7 @@ function SplitGapCells({
         ) : (
           <span
             style={{ position: "sticky", left: "var(--diffs-column-number-width)" }}
-            className="w-max px-2 text-[10px] leading-none text-muted-foreground/50"
+            className="w-max px-2 text-[length:var(--readable-code-font-size)] leading-[var(--diffs-line-height)] text-muted-foreground/50"
           >
             {formatUnmodifiedLinesLabel(gap.lineCount)}
           </span>

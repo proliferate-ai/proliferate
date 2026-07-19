@@ -16,7 +16,7 @@ export function DiffDisplayPolicyPlaceholder({
 }) {
   return (
     <GitReviewInlineEmptyState
-      icon={<CircleAlert className="size-3.5" />}
+      icon={<CircleAlert className="icon-paired" />}
       title={title}
       description={description}
       onOpenFile={onOpenFile}
@@ -65,14 +65,14 @@ export function formatEmptyDiffState({
     return {
       title: "Binary file changed",
       description: "Open the file to inspect this change.",
-      icon: <FileCode className="size-3.5" />,
+      icon: <FileCode className="icon-paired" />,
     };
   }
   if (truncated) {
     return {
       title: "Diff too large",
       description: "Open the file to inspect the full change.",
-      icon: <CircleAlert className="size-3.5" />,
+      icon: <CircleAlert className="icon-paired" />,
     };
   }
   return null;

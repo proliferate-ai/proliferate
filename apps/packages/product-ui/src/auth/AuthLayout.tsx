@@ -27,7 +27,7 @@ export function AuthLayout({
         <div className="space-y-5">
           {mark ? <div className="flex size-12 items-center justify-start">{mark}</div> : null}
           <div className="space-y-2.5">
-            <h1 className="text-3xl font-semibold leading-tight text-foreground">{title}</h1>
+            <h1 className="text-hero font-semibold leading-tight text-foreground">{title}</h1>
             {subtitle ? <p className="text-sm leading-6 text-muted-foreground">{subtitle}</p> : null}
           </div>
         </div>

@@ -64,7 +64,7 @@ export function ChatPlaygroundPage() {
             <ChromeWorkspaceTab
               isActive
               width={256}
-              icon={<MessageSquare className="size-3.5" />}
+              icon={<MessageSquare className="icon-paired" />}
               label="Typography hierarchy review"
               onSelect={() => {}}
               onClose={() => {}}

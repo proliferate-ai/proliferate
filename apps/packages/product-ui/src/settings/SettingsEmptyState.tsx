@@ -33,7 +33,7 @@ export function SettingsEmptyState({
       )}
     >
       {icon ? (
-        <div className="mb-1 flex items-center justify-center text-muted-foreground [&>svg]:size-[22px]">
+        <div className="mb-1 flex items-center justify-center text-title text-muted-foreground [&>svg]:icon-paired">
           {icon}
         </div>
       ) : null}

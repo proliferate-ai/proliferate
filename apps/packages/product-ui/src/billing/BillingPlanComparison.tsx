@@ -104,7 +104,7 @@ function PlanSummaryCard({
             {current ? <Badge tone="success">Current</Badge> : plan.featured ? <Badge tone="info">Popular</Badge> : null}
           </div>
           <div>
-            <div className="text-3xl font-semibold text-foreground">{plan.price}</div>
+            <div className="text-hero font-semibold text-foreground">{plan.price}</div>
             <div className="mt-1 text-xs text-muted-foreground">{plan.suffix}</div>
             <div className="mt-1 text-xs text-muted-foreground">{plan.billing}</div>
           </div>
@@ -117,7 +117,7 @@ function PlanSummaryCard({
           <ul className="space-y-2">
             {plan.highlights.map((highlight) => (
               <li key={highlight} className="flex gap-2 text-xs leading-5 text-muted-foreground">
-                <Check className="mt-0.5 size-3.5 shrink-0 text-foreground" />
+                <Check className="mt-0.5 icon-paired shrink-0 text-foreground" />
                 <span>{highlight}</span>
               </li>
             ))}
@@ -141,9 +141,9 @@ function PlanSummaryCard({
 export function CheckoutReturnNotice({ state }: { state: "success" | "cancel" }) {
   if (state === "success") {
     return (
-      <div className="rounded-lg border border-success/40 bg-success/10 p-4 text-foreground">
+      <div className="rounded-lg border border-success/40 bg-success/10 p-4 text-sm text-foreground">
         <div className="flex items-start gap-3">
-          <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-success" />
+          <CheckCircle2 className="mt-0.5 icon-paired shrink-0 text-success" />
           <div className="min-w-0">
             <div className="text-sm font-medium">Stripe checkout completed</div>
             <p className="mt-1 text-sm leading-5 text-muted-foreground">
@@ -178,7 +178,7 @@ function PlanHeader({
     >
       <div className="text-sm font-medium text-foreground">{plan.name}</div>
       <div className="mt-1 text-xs leading-5 text-muted-foreground">{plan.tagline}</div>
-      <div className="mt-4 text-2xl font-semibold text-foreground">{plan.price}</div>
+      <div className="mt-4 text-title font-semibold text-foreground">{plan.price}</div>
       <div className="mt-1 text-xs text-muted-foreground">{plan.suffix}</div>
       <div className="mt-4 border-t border-border-light pt-3 text-xs text-muted-foreground">
         {plan.billing}
@@ -223,7 +223,7 @@ function PlanValue({
   featured: boolean;
 }) {
   if (value === true) {
-    return <Check className="size-4 text-foreground" aria-label="Included" />;
+    return <Check className="icon-paired text-foreground" aria-label="Included" />;
   }
   if (value === false) {
     return <span className="text-sm text-muted-foreground" aria-label="Not included">-</span>;

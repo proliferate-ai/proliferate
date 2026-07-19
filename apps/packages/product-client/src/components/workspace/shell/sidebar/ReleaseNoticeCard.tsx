@@ -37,7 +37,7 @@ export function ReleaseNoticeCard({
           className="-mr-1 -mt-1 ml-auto shrink-0"
           onClick={onDismiss}
         >
-          <X className="size-3.5" />
+          <X className="icon-paired" />
         </IconButton>
       </div>
 
@@ -57,7 +57,7 @@ export function ReleaseNoticeCard({
         onClick={onOpenChangelog}
       >
         Changelog
-        <ArrowRight className="size-3.5" />
+        <ArrowRight className="icon-paired" />
       </Button>
     </aside>
   );

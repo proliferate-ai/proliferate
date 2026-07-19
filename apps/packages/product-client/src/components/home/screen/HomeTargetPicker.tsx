@@ -124,7 +124,7 @@ export function HomeTargetPicker({
       <HomeProjectMenu
         trigger={(
           <HomeTargetRowItem
-            icon={<ProjectNotebook className="size-4" />}
+            icon={<ProjectNotebook className="icon-paired" />}
             value={homeTargetProjectLabel({ destination, selectedRepository })}
             disclosure={false}
             aria-label={homeTargetProjectAriaLabel({ destination, selectedRepository })}
@@ -167,7 +167,7 @@ export function HomeTargetPicker({
                       cloudAction: selectedRepositoryCloudAction,
                     })}
                     disabled={cloudLoading || cloudHidden}
-                    trailing={isSelected ? <Check className="size-3.5" /> : null}
+                    trailing={isSelected ? <Check className="icon-paired" /> : null}
                     onClick={() => {
                       if (cloudConfigure) {
                         onConfigureCloud(selectedRepository);
@@ -200,7 +200,7 @@ export function HomeTargetPicker({
                       label={target.label}
                       disabled={target.disabledReason !== null}
                       title={target.disabledReason ?? undefined}
-                      trailing={isSelected ? <Check className="size-3.5" /> : null}
+                      trailing={isSelected ? <Check className="icon-paired" /> : null}
                       onClick={() => {
                         onSelectRuntime("ssh", target.id);
                         clearSearch();
@@ -219,7 +219,7 @@ export function HomeTargetPicker({
         <PopoverButton
           trigger={(
             <HomeTargetRowItem
-              icon={<GitBranchIcon className="size-4" />}
+              icon={<GitBranchIcon className="icon-paired" />}
               value={selectedBranchName ?? "base branch"}
               aria-label={`Branch: ${selectedBranchName ?? "base branch"}`}
             />
@@ -240,9 +240,9 @@ export function HomeTargetPicker({
                 filteredBranches.map((branch) => (
                   <PopoverMenuItem
                     key={branch}
-                    icon={<GitBranchIcon className="size-4" />}
+                    icon={<GitBranchIcon className="icon-paired" />}
                     label={branch}
-                    trailing={selectedBranchName === branch ? <Check className="size-3.5" /> : null}
+                    trailing={selectedBranchName === branch ? <Check className="icon-paired" /> : null}
                     onClick={() => {
                       onSelectBranch(branch);
                       clearSearch();

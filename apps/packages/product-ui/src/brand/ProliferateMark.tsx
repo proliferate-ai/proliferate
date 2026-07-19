@@ -15,24 +15,19 @@ const PROLIFERATE_ORBIT_NODES: ProliferateNode[] = [
   { x: 346.33, y: 346.33, size: 24.67 },
 ];
 
-interface ProliferateMarkProps extends Omit<SVGProps<SVGSVGElement>, "height" | "width"> {
-  size?: number;
-}
+type ProliferateMarkProps = Omit<SVGProps<SVGSVGElement>, "height" | "width">;
 
 export function ProliferateMark({
-  size = 18,
   className,
   ...props
 }: ProliferateMarkProps) {
   return (
     <svg
       aria-hidden="true"
-      className={className}
+      className={`icon-paired text-sidebar-brand ${className ?? ""}`}
       fill="none"
-      height={size}
       shapeRendering="crispEdges"
       viewBox={PROLIFERATE_VIEW_BOX}
-      width={size}
       xmlns="http://www.w3.org/2000/svg"
       {...props}
     >

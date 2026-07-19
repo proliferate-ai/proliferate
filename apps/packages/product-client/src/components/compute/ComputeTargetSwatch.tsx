@@ -26,18 +26,11 @@ const ICONS: Record<ComputeTargetIconId, ComponentType<SVGProps<SVGSVGElement>>>
   folder: Folder,
 };
 
-const SIZE_CLASSES: Record<SwatchSize, string> = {
+const SWATCH_SIZE_CLASSES: Record<SwatchSize, string> = {
   inherit: "size-full rounded-[0.25em]",
-  xs: "size-4 rounded-[4px]",
-  sm: "size-7 rounded-md",
-  md: "size-8 rounded-lg",
-};
-
-const ICON_SIZE_CLASSES: Record<SwatchSize, string> = {
-  inherit: "size-[62.5%]",
-  xs: "size-2.5",
-  sm: "size-4",
-  md: "size-4",
+  xs: "icon-paired rounded-[4px]",
+  sm: "icon-large rounded-md",
+  md: "icon-display rounded-lg",
 };
 
 export function ComputeTargetSwatch({
@@ -58,19 +51,19 @@ export function ComputeTargetSwatch({
       aria-label={`${appearance.iconLabel} target`}
       className={twMerge(
         "inline-flex shrink-0 items-center justify-center bg-[var(--compute-target-color)] text-foreground",
-        SIZE_CLASSES[size],
+        SWATCH_SIZE_CLASSES[size],
         className,
       )}
       style={style}
     >
-      <Icon className={ICON_SIZE_CLASSES[size]} aria-hidden="true" />
+      <Icon className="size-[62.5%]" aria-hidden="true" />
     </span>
   );
 }
 
 export function ComputeTargetIconGlyph({
   iconId,
-  className = "size-4",
+  className = "icon-paired",
 }: {
   iconId: ComputeTargetIconId;
   className?: string;

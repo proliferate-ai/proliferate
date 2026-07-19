@@ -57,7 +57,7 @@ export function WorkspaceArrivalAttachedPanelView({
           {onDismiss && (
             <div className="ml-auto shrink-0">
               <IconButton title="Dismiss" size="sm" onClick={onDismiss}>
-                <X className="size-3.5" />
+                <X className="icon-paired" />
               </IconButton>
             </div>
           )}
@@ -70,7 +70,7 @@ export function WorkspaceArrivalAttachedPanelView({
         <ComposerAttachedPanelRow label="Setup">
           <div className="flex items-center gap-2 text-base">
             {isSetupRunning && (
-              <Spinner className="size-3 text-muted-foreground" />
+              <Spinner className="icon-compact text-muted-foreground" />
             )}
             <span className={`shrink-0 whitespace-nowrap ${setupToneColor}`}>{viewModel.setupStatusLabel}</span>
             <span className="text-muted-foreground/40">·</span>
@@ -90,7 +90,7 @@ export function WorkspaceArrivalAttachedPanelView({
               className="ml-auto h-6 shrink-0 px-1.5"
             >
               {viewModel.setupActionLabel}
-              {viewModel.setupTone !== "destructive" && <ArrowUpRight className="size-3" />}
+              {viewModel.setupTone !== "destructive" && <ArrowUpRight className="icon-compact" />}
             </Button>
           </div>
         </ComposerAttachedPanelRow>
@@ -223,7 +223,7 @@ export function WorkspaceArrivalAttachedPanel() {
                 size="sm"
                 onClick={() => dismissSetupFailure(panelState.workspaceUiKey)}
               >
-                <X className="size-3.5" />
+                <X className="icon-paired" />
               </IconButton>
             </div>
           </>
@@ -256,7 +256,7 @@ export function WorkspaceArrivalAttachedPanel() {
           <>
             <Badge className="shrink-0 rounded-full px-2 py-0.5 text-base">
               <span className="inline-flex items-center gap-1">
-                {isBusy && <Spinner className="size-3" />}
+                {isBusy && <Spinner className="icon-compact" />}
                 <span>{panelState.badgeLabel}</span>
               </span>
             </Badge>

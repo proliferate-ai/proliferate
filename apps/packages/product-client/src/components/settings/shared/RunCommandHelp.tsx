@@ -27,7 +27,7 @@ export function RunCommandHelp({
         onClick={() => { void openExternal(COMMAND_ENVIRONMENT_DOCS_URL); }}
       >
         Command environment docs
-        <ExternalLink className="size-3" />
+        <ExternalLink className="icon-compact" />
       </Button>
     </p>
   );

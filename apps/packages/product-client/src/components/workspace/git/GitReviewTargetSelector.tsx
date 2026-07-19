@@ -12,7 +12,7 @@ import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives
 import type { GitPanelMode } from "#product/lib/domain/workspaces/changes/git-panel-diff";
 
 const GIT_REVIEW_TARGET_TRIGGER_CLASS =
-  "h-6 min-w-0 w-fit max-w-[9rem] shrink-0 gap-1 rounded-lg border border-transparent bg-transparent px-1.5 py-0 text-ui leading-[16px] text-sidebar-foreground hover:bg-surface-elevated-secondary hover:text-sidebar-foreground data-[state=open]:bg-surface-elevated-secondary data-[state=open]:text-sidebar-foreground";
+  "h-6 min-w-0 w-fit max-w-[9rem] shrink-0 gap-1 rounded-lg border border-transparent bg-transparent px-1.5 py-0 text-ui leading-[var(--text-ui--line-height)] text-sidebar-foreground hover:bg-surface-elevated-secondary hover:text-sidebar-foreground data-[state=open]:bg-surface-elevated-secondary data-[state=open]:text-sidebar-foreground";
 
 export function GitReviewTargetSelector({
   mode,
@@ -72,7 +72,7 @@ export function GitReviewTargetSelector({
           className={GIT_REVIEW_TARGET_TRIGGER_CLASS}
         >
           <span className="min-w-0 truncate text-sidebar-foreground">{activeRef}</span>
-          <ChevronDown className="size-3 shrink-0 text-sidebar-muted-foreground" />
+          <ChevronDown className="icon-compact shrink-0 text-sidebar-muted-foreground" />
         </Button>
       }
       align="start"
@@ -81,7 +81,7 @@ export function GitReviewTargetSelector({
       {(close) => (
         <div className="flex flex-col gap-1">
           <div className="flex h-7 items-center gap-1.5 rounded-lg bg-surface-control px-2 text-muted-foreground">
-            <Search className="size-3 shrink-0" />
+            <Search className="icon-compact shrink-0" />
             <Input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
@@ -108,7 +108,7 @@ export function GitReviewTargetSelector({
                   }`}
                 >
                   <span className="flex min-w-0 flex-1 items-center gap-2 text-left">
-                    <GitBranchIcon className="size-3 shrink-0" />
+                    <GitBranchIcon className="icon-compact shrink-0" />
                     <span className="min-w-0 truncate">{branch.name}</span>
                   </span>
                   <span className="ml-2 flex shrink-0 items-center gap-2">
@@ -118,7 +118,7 @@ export function GitReviewTargetSelector({
                       </span>
                     )}
                     {branch.name === activeRef && (
-                      <Check className="size-3 shrink-0 text-foreground" />
+                      <Check className="icon-compact shrink-0 text-foreground" />
                     )}
                   </span>
                 </Button>

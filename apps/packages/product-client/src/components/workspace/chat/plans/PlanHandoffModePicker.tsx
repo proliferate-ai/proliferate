@@ -35,9 +35,9 @@ export function PlanHandoffModePicker({
           <ComposerControlButton
             type="button"
             disabled={disabled}
-            icon={<SessionControlIcon icon={selected?.icon} className="size-3.5 shrink-0 text-muted-foreground" />}
+            icon={<SessionControlIcon icon={selected?.icon} className="icon-paired shrink-0 text-muted-foreground [font-size:var(--text-chat)]" />}
             label={selectedLabel}
-            trailing={<ChevronDown className="size-3 shrink-0 text-muted-foreground" />}
+            trailing={<ChevronDown className="icon-compact shrink-0 text-muted-foreground" />}
             className="max-w-full"
             aria-label={`Handoff mode: ${selectedLabel}`}
           />
@@ -63,7 +63,7 @@ export function PlanHandoffModePicker({
                   }}
                   className="h-auto w-full justify-start rounded-lg px-2.5 py-2 text-left"
                 >
-                  <SessionControlIcon icon={option.icon} className="size-3.5 shrink-0 text-muted-foreground" />
+                  <SessionControlIcon icon={option.icon} className="icon-paired shrink-0 text-muted-foreground [font-size:var(--text-chat)]" />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm text-foreground">
                       {option.shortLabel ?? option.label}
@@ -74,7 +74,7 @@ export function PlanHandoffModePicker({
                       </span>
                     )}
                   </span>
-                  {selectedOption && <Check className="size-3.5 shrink-0 text-foreground/60" />}
+                  {selectedOption && <Check className="icon-paired shrink-0 text-foreground/60" />}
                 </Button>
               );
             })}

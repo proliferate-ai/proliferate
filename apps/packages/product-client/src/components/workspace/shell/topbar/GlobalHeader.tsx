@@ -136,12 +136,12 @@ export const GlobalHeader = memo(function GlobalHeader({
               title={runTitle}
               className={HEADER_RUN_BUTTON_CLASS}
             >
-              <Play className="size-3.5" />
+              <Play className="icon-paired" />
               <span>{runLabel}</span>
             </Button>
             {workspacePath && files && (
               <SplitButton
-                icon={<FilePen className="size-4" />}
+                icon={<FilePen className="icon-paired" />}
                 label={preferredTarget?.label ?? "Open"}
                 showLabel={false}
                 onClick={handleDefaultOpen}
@@ -159,7 +159,7 @@ export const GlobalHeader = memo(function GlobalHeader({
                 title="Toggle side panel"
                 className={HEADER_ICON_BUTTON_CLASS}
               >
-                <SplitPanel className="size-3.5" />
+                <SplitPanel className="icon-paired" />
               </Button>
             )}
           </div>

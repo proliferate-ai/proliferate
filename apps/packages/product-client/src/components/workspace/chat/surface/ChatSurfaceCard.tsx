@@ -37,7 +37,7 @@ export function ChatSurfaceCard({
               {icon}
             </div>
           )}
-          <h2 className="mt-4 text-2xl font-semibold tracking-[-0.02em] text-foreground">
+          <h2 className="mt-4 text-[length:var(--text-title)] font-semibold leading-[var(--text-title--line-height)] tracking-[-0.02em] text-foreground">
             {title}
           </h2>
           <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-muted-foreground">

@@ -32,9 +32,9 @@ function shouldExpandByDefault(mode: CloudWorkspaceStatusScreenMode): boolean {
 
 function cloudStatusIcon(model: CloudWorkspaceStatusScreenModel) {
   if (model.mode === "pending") {
-    return <Spinner className="size-3" />;
+    return <Spinner className="icon-compact" />;
   }
-  return <CircleAlert className="size-3" />;
+  return <CircleAlert className="icon-compact" />;
 }
 
 interface WorkspaceArrivalCloudPanelProps {

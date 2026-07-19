@@ -26,7 +26,7 @@ export function PaneOptionsMenuItem({
       variant="ghost"
       size="sm"
       className={twMerge(
-        "group/menu-item min-h-8 w-full justify-start gap-1.5 rounded-lg px-2 py-1.5 text-sm font-normal leading-4 text-popover-foreground hover:bg-list-hover hover:text-popover-foreground focus:bg-list-hover",
+        "group/menu-item min-h-8 w-full justify-start gap-1.5 rounded-lg px-2 py-1.5 text-ui-sm font-normal leading-4 text-popover-foreground hover:bg-list-hover hover:text-popover-foreground focus:bg-list-hover",
         className,
       )}
       {...props}
@@ -34,7 +34,7 @@ export function PaneOptionsMenuItem({
       {reserveIconSlot && (
         // Color-token hover promotion, not opacity — partial-opacity hover
         // transitions re-rasterize glyphs and read as shimmer (styling.md).
-        <span className="flex size-3.5 shrink-0 items-center justify-center text-muted-foreground/75 transition-colors group-hover/menu-item:text-muted-foreground group-focus/menu-item:text-muted-foreground [&>svg]:size-3.5 [&>svg]:shrink-0">
+        <span className="flex size-3.5 shrink-0 items-center justify-center text-muted-foreground/75 transition-colors group-hover/menu-item:text-muted-foreground group-focus/menu-item:text-muted-foreground [&>svg]:icon-paired [&>svg]:shrink-0">
           {icon}
         </span>
       )}

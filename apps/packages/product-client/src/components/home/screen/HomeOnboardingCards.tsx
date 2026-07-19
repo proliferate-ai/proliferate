@@ -13,11 +13,11 @@ import type {
 function resolveOnboardingIcon(icon: HomeOnboardingIcon) {
   switch (icon) {
     case "github":
-      return <GitHub className="size-4" />;
+      return <GitHub className="icon-paired" />;
     case "settings":
-      return <Settings className="size-4" />;
+      return <Settings className="icon-paired" />;
     case "sliders":
-      return <SlidersHorizontal className="size-4" />;
+      return <SlidersHorizontal className="icon-paired" />;
   }
 }
 
@@ -83,7 +83,7 @@ function OnboardingCard({
           }}
           className="absolute right-3 top-3 z-20 flex size-4 transform-gpu items-center justify-center rounded-full text-muted-foreground opacity-0 transition-opacity duration-150 will-change-[opacity] hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
         >
-          <X className="size-3.5" />
+          <X className="icon-paired" />
         </Button>
       ) : null}
       <span className="pointer-events-none z-10 flex min-w-0 flex-col gap-0.5">
@@ -118,8 +118,8 @@ function ModelProbeCard({
       <OnboardingCard
         icon={
           state.harnessKinds[0]
-            ? <ProviderIcon kind={state.harnessKinds[0]} className="size-4" />
-            : <Spinner className="size-3.5" />
+            ? <ProviderIcon kind={state.harnessKinds[0]} className="icon-paired" />
+            : <Spinner className="icon-paired" />
         }
         title={(
           <ThinkingText
@@ -127,7 +127,7 @@ function ModelProbeCard({
             className="text-ui font-medium"
           />
         )}
-        trailing={<Spinner className="size-3.5 text-muted-foreground" />}
+        trailing={<Spinner className="icon-paired text-muted-foreground" />}
         selectLabel={HOME_SCREEN_LABELS.modelProbeProbingTitle}
       />
     );
@@ -141,8 +141,8 @@ function ModelProbeCard({
       <OnboardingCard
         icon={
           state.harnessKinds[0]
-            ? <ProviderIcon kind={state.harnessKinds[0]} className="size-4" />
-            : <Settings className="size-4" />
+            ? <ProviderIcon kind={state.harnessKinds[0]} className="icon-paired" />
+            : <Settings className="icon-paired" />
         }
         title={title}
         description={HOME_SCREEN_LABELS.modelProbeDoneDescription}
@@ -150,7 +150,7 @@ function ModelProbeCard({
           state.harnessKinds.length > 1 ? (
             <span className="flex items-center gap-1 text-muted-foreground">
               {state.harnessKinds.slice(1, 4).map((kind) => (
-                <ProviderIcon key={kind} kind={kind} className="size-3.5" />
+                <ProviderIcon key={kind} kind={kind} className="icon-paired" />
               ))}
             </span>
           ) : null
@@ -164,7 +164,7 @@ function ModelProbeCard({
 
   return (
     <OnboardingCard
-      icon={<Settings className="size-4" />}
+      icon={<Settings className="icon-paired" />}
       title={HOME_SCREEN_LABELS.modelProbeNoneTitle}
       description={HOME_SCREEN_LABELS.modelProbeNoneDescription}
       onSelect={onOpenAgents}

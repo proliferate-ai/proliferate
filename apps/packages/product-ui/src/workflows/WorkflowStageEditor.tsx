@@ -69,7 +69,7 @@ export function WorkflowStageEditor({
           disabled={disabled || stageCount === 1}
           onClick={onRemove}
         >
-          <Trash2 className="size-4" aria-hidden />
+          <Trash2 className="icon-paired" aria-hidden />
         </Button>
       </div>
 
@@ -199,7 +199,7 @@ export function WorkflowStageEditor({
           steps: [...stage.steps, createPromptStep()],
         })}
       >
-        <Plus className="size-3.5" aria-hidden />
+        <Plus className="icon-paired" aria-hidden />
         Add prompt
       </Button>
     </section>
@@ -243,7 +243,7 @@ function PromptStepEditor({
           disabled={disabled || stepCount === 1}
           onClick={onRemove}
         >
-          <Trash2 className="size-3.5" aria-hidden />
+          <Trash2 className="icon-paired" aria-hidden />
         </Button>
       </div>
       <Label htmlFor={`workflow-stage-${stageIndex}-step-${stepIndex}-prompt`}>
@@ -300,7 +300,7 @@ function PromptStepEditor({
           title={supportsGoals ? undefined : "The selected harness does not support goals."}
           onClick={() => onChange({ ...step, goal: { objective: "" } })}
         >
-          <Plus className="size-3.5" aria-hidden />
+          <Plus className="icon-paired" aria-hidden />
           Add goal
         </Button>
       )}

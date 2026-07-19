@@ -103,7 +103,7 @@ export function AutomationSelectPopover({
                 onChange(option.value);
                 close();
               }}
-              trailing={option.value === value ? <Check className="size-3.5 text-foreground/70" /> : null}
+              trailing={option.value === value ? <Check className="icon-paired text-foreground/70" /> : null}
             >
               {option.description && (
                 <span className="mt-0.5 block truncate text-xs text-muted-foreground">
@@ -148,7 +148,7 @@ export function AutomationSchedulePopover({
       trigger={(
         <PillControlButton
           aria-label="Schedule"
-          icon={<Clock className="size-3.5 shrink-0 text-muted-foreground" />}
+          icon={<Clock className="icon-paired shrink-0 text-muted-foreground" />}
           label={scheduleLabel}
           disclosure
           className="max-w-[15rem]"
@@ -165,13 +165,13 @@ export function AutomationSchedulePopover({
                 key={option.value}
                 label={option.label}
                 onClick={() => selectPreset(option.value)}
-                trailing={schedulePreset === option.value ? <Check className="size-3.5 text-foreground/70" /> : null}
+                trailing={schedulePreset === option.value ? <Check className="icon-paired text-foreground/70" /> : null}
               />
             ))}
             <PopoverMenuItem
               label="Custom"
               onClick={() => selectPreset("custom")}
-              trailing={schedulePreset === "custom" ? <Check className="size-3.5 text-foreground/70" /> : null}
+              trailing={schedulePreset === "custom" ? <Check className="icon-paired text-foreground/70" /> : null}
             >
               <span className="mt-0.5 block truncate text-xs text-muted-foreground">
                 Edit the RRULE directly
@@ -235,7 +235,7 @@ export function AutomationTemplatePopover({ onSelectTemplate }: AutomationTempla
           size="sm"
           className="shrink-0 bg-card/80"
         >
-          <ClipboardList className="size-3.5" />
+          <ClipboardList className="icon-paired" />
           Use template
         </Button>
       )}
@@ -281,5 +281,5 @@ function automationTemplateIcon(template: AutomationTemplateOption) {
 }
 
 export function reasoningIcon() {
-  return <Brain className="size-3.5" />;
+  return <Brain className="icon-paired" />;
 }

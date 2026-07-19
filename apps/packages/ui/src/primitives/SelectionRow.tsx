@@ -39,9 +39,9 @@ export function SelectionRow({
     >
       {icon && <span className="flex shrink-0 items-center">{icon}</span>}
       <span className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate text-sm text-foreground">{label}</span>
+        <span className="truncate text-ui text-foreground">{label}</span>
         {subtitle && (
-          <span className="truncate text-xs text-muted-foreground">{subtitle}</span>
+          <span className="truncate text-ui-sm text-muted-foreground">{subtitle}</span>
         )}
       </span>
       <span
@@ -52,7 +52,7 @@ export function SelectionRow({
             : "border-border bg-transparent",
         ].join(" ")}
       >
-        {selected && <Check className="size-3" />}
+        {selected && <Check className="icon-compact" />}
       </span>
     </button>
   );

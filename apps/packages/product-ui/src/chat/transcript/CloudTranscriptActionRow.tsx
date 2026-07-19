@@ -124,7 +124,7 @@ function CloudTranscriptActionLeadingAffordance({
   expanded: boolean;
 }) {
   return (
-    <span className="relative flex size-3.5 shrink-0 items-center justify-center text-current">
+    <span className="relative flex icon-paired shrink-0 items-center justify-center text-current">
       <span
         className={`absolute inset-0 flex items-center justify-center transition-all duration-150 ${
           expandable
@@ -134,7 +134,7 @@ function CloudTranscriptActionLeadingAffordance({
             : "scale-100 opacity-100"
         }`}
       >
-        <span className="flex size-3.5 items-center justify-center text-xs leading-none text-current [&_svg]:size-3.5 [&_svg]:text-current">
+        <span className="flex icon-paired items-center justify-center text-xs leading-none text-current [&_svg]:icon-paired [&_svg]:text-current">
           {icon}
         </span>
       </span>
@@ -149,7 +149,7 @@ function CloudTranscriptActionLeadingAffordance({
       >
         <ChevronRight
           aria-hidden="true"
-          className={`size-3 shrink-0 text-current transition-transform ${
+          className={`icon-paired shrink-0 text-current transition-transform ${
             expanded ? "rotate-90" : ""
           }`}
         />
@@ -195,7 +195,7 @@ export function CloudTurnSeparator({
         <span className="min-w-0 truncate">{label}</span>
         <ChevronRight
           aria-hidden="true"
-          className={`size-3 shrink-0 text-current transition-[transform,opacity] ${
+          className={`icon-paired shrink-0 text-current transition-[transform,opacity] ${
             expanded
               ? "rotate-90 opacity-100"
               : "opacity-0 group-hover/turn-separator:opacity-100 group-focus-visible/turn-separator:opacity-100"

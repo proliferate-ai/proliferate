@@ -21,7 +21,7 @@ export function PaneOptionsMenu({
     <PopoverButton
       trigger={(
         <PaneIconButton label={label} className={triggerClassName}>
-          <MoreHorizontal className="size-3.5" />
+          <MoreHorizontal className="icon-paired" />
         </PaneIconButton>
       )}
       align={align}

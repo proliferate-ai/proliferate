@@ -116,7 +116,7 @@ export function SubagentToolActionRow({
             onClick={() => setExpanded((next) => !next)}
           >
             <Robot
-              className={`size-3 shrink-0 transition-colors ${
+              className={`icon-compact shrink-0 transition-colors ${
                 expanded ? "text-foreground/70" : "text-faint hover:text-muted-foreground"
               }`}
             />

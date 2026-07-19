@@ -23,7 +23,7 @@ export function OrganizationBillingLinkSection() {
               onClick={() => navigate(buildSettingsHref({ section: "billing" }))}
             >
               Open billing
-              <ChevronRight className="size-4" />
+              <ChevronRight className="icon-paired" />
             </Button>
           </div>
         </div>

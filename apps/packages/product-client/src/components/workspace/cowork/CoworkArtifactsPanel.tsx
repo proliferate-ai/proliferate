@@ -52,7 +52,7 @@ export function CoworkArtifactsPanel({
               onClick={() => setSelectedArtifactId(workspaceId, null)}
               className="-ml-2 shrink-0"
             >
-              <ArrowLeft className="size-4" />
+              <ArrowLeft className="icon-paired" />
               Back
             </Button>
             {selectedArtifact.description && (

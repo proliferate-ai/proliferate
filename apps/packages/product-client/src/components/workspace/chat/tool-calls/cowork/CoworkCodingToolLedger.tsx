@@ -100,7 +100,7 @@ function CodingWorkspaceActionRow({
       onClick={onOpen}
     >
       <span className="min-w-0 truncate">Created coding workspace</span>
-      <ExternalLink className="size-2.5 shrink-0 text-faint opacity-0 transition-opacity duration-200 group-hover/action-row:opacity-100 group-focus-visible/action-row:opacity-100" />
+      <ExternalLink className="icon-compact shrink-0 text-faint opacity-0 transition-opacity duration-200 group-hover/action-row:opacity-100 group-focus-visible/action-row:opacity-100" />
     </Button>
   );
 }
@@ -127,7 +127,7 @@ function PromptActionRow({
       >
         <MessageSquare
           aria-hidden="true"
-          className={`size-2.5 shrink-0 transition-colors ${
+          className={`icon-compact shrink-0 transition-colors ${
             expanded ? "text-foreground/70" : "text-faint"
           }`}
         />
@@ -183,7 +183,7 @@ function CodingSessionActionRow({
       onClick={onOpen}
     >
       <span className="min-w-0 truncate">Created coding session</span>
-      <ExternalLink className="size-2.5 shrink-0 text-faint opacity-0 transition-opacity duration-200 group-hover/action-row:opacity-100 group-focus-visible/action-row:opacity-100" />
+      <ExternalLink className="icon-compact shrink-0 text-faint opacity-0 transition-opacity duration-200 group-hover/action-row:opacity-100 group-focus-visible/action-row:opacity-100" />
     </Button>
   );
 }

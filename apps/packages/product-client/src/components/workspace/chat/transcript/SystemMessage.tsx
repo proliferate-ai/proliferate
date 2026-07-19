@@ -20,7 +20,7 @@ export function SystemMessage({ content }: SystemMessageProps) {
       >
         <Settings
           aria-hidden="true"
-          className={`size-3 shrink-0 transition-colors ${
+          className={`icon-compact shrink-0 transition-colors ${
             systemExpanded ? "text-foreground/70" : "text-faint"
           }`}
         />

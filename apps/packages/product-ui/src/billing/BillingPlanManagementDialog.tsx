@@ -172,7 +172,7 @@ function PlanOptionCard({
         </div>
 
         <div className="space-y-1">
-          <h3 className="text-2xl font-semibold tracking-tight text-foreground">{title}</h3>
+          <h3 className="text-title font-semibold tracking-tight text-foreground">{title}</h3>
           <p className="text-sm leading-5 text-muted-foreground">{description}</p>
         </div>
 
@@ -182,7 +182,7 @@ function PlanOptionCard({
       <div className="mt-5 space-y-3">
         {features.map((feature) => (
           <div key={feature} className="flex gap-2 text-sm leading-5 text-foreground">
-            <Check className="mt-0.5 size-4 shrink-0 text-success" />
+            <Check className="mt-0.5 icon-paired shrink-0 text-success" />
             <span>{feature}</span>
           </div>
         ))}

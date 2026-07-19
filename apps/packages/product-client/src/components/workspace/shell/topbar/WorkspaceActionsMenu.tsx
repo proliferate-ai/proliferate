@@ -61,7 +61,7 @@ export function WorkspaceActions({ session }: WorkspaceActionsMenuProps) {
           title="Chat actions"
           className="workspace-shell-icon-button workspace-shell-icon-button--flat focus-ring app-region-no-drag shrink-0"
         >
-          <MoreHorizontal className="size-3.5" />
+          <MoreHorizontal className="icon-paired" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start">
@@ -69,7 +69,7 @@ export function WorkspaceActions({ session }: WorkspaceActionsMenuProps) {
           disabled={!session.canRename}
           onSelect={session.onRename}
         >
-          <Pencil className="size-4" />
+          <Pencil className="icon-paired" />
           Rename chat
           <DropdownMenuShortcut>
             {getShortcutDisplayLabel(SHORTCUTS.renameSession)}
@@ -79,7 +79,7 @@ export function WorkspaceActions({ session }: WorkspaceActionsMenuProps) {
           disabled={!session.canFork}
           onSelect={session.onFork}
         >
-          <Fork className="size-4" />
+          <Fork className="icon-paired" />
           Fork chat
         </DropdownMenuItem>
         <DropdownMenuItem
@@ -87,7 +87,7 @@ export function WorkspaceActions({ session }: WorkspaceActionsMenuProps) {
           disabled={!session.canDismiss}
           onSelect={session.onDismiss}
         >
-          <Trash className="size-4" />
+          <Trash className="icon-paired" />
           Archive chat
         </DropdownMenuItem>
 

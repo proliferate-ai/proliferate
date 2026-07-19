@@ -58,7 +58,7 @@ export function OrganizationInvitationsSection({
               onClick={onCopyInviteLink}
               disabled={!inviteLinkUrl && !copyingInviteLink}
             >
-              <Copy className="size-4" />
+              <Copy className="icon-paired" />
               Copy link
             </Button>
           </div>
@@ -99,7 +99,7 @@ export function OrganizationInvitationsSection({
             disabled={!inviteEmail.trim()}
             loading={creatingInvitation}
           >
-            <Plus className="size-4" />
+            <Plus className="icon-paired" />
             Send invitation
           </Button>
         </form>

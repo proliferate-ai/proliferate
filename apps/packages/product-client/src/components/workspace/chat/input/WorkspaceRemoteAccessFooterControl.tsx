@@ -14,7 +14,7 @@ export function WorkspaceRemoteAccessFooterControl() {
 
   return (
     <ComposerControlButton
-      icon={isPending ? <Spinner className="size-3.5" /> : <Smartphone className="size-3.5" />}
+      icon={isPending ? <Spinner className="icon-paired" /> : <Smartphone className="icon-paired" />}
       label={isPending ? "Updating access" : label}
       active={isEnabled}
       disabled={disabled}

@@ -51,7 +51,7 @@ export function CloudChatThoughtRow({ row }: { row: CloudChatTranscriptRowView }
   return (
     <article className="flex justify-start">
       <CloudTranscriptActionRow
-        icon={<Brain size={12} />}
+        icon={<Brain className="icon-paired" />}
         label={
           status === "running" ? (
             // Live reasoning: the label carries the shared thinking sweep
@@ -92,7 +92,7 @@ export function CloudChatToolRow({ row }: { row: CloudChatTranscriptRowView }) {
   return (
     <article className="flex justify-start">
       <CloudTranscriptActionRow
-        icon={<Icon className="size-3.5 text-current" />}
+        icon={<Icon className="icon-paired text-current" />}
         label={isActionActivelyRunning(row)
           ? (
             <ThinkingText
@@ -138,7 +138,7 @@ export function CloudChatToolGroupRow({
   return (
     <article className="flex justify-start py-0.5">
       <CloudTranscriptActionRow
-        icon={<Icon className="size-3.5 text-current" />}
+        icon={<Icon className="icon-paired text-current" />}
         label={isActionActivelyRunning(row)
           ? <ThinkingText text={label} className="block max-w-full truncate font-normal" />
           : label}
@@ -286,7 +286,7 @@ export function CloudChatSystemRow({
       >
         <ChevronRight
           aria-hidden="true"
-          className={`size-3 shrink-0 transition-transform duration-150 ${
+          className={`icon-paired shrink-0 transition-transform duration-150 ${
             expanded ? "rotate-90" : ""
           }`}
         />
@@ -324,7 +324,7 @@ export function CloudChatErrorRow({ row }: { row: CloudChatTranscriptRowView }) 
   return (
     <article className="rounded-lg border border-destructive/20 bg-destructive/[0.04] px-3 py-2 text-sm">
       <div className="flex min-w-0 items-start gap-2">
-        <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive/80" />
+        <AlertTriangle className="mt-0.5 icon-paired shrink-0 text-destructive/80" />
         <div className="min-w-0 flex-1">
           <div className="font-[520] text-destructive">{row.title ?? "Error"}</div>
           {description ? (
@@ -351,7 +351,7 @@ export function CloudChatErrorRow({ row }: { row: CloudChatTranscriptRowView }) 
             >
               <ChevronRight
                 aria-hidden="true"
-                className={`size-3 transition-transform ${detailsExpanded ? "rotate-90" : ""}`}
+                className={`icon-paired transition-transform ${detailsExpanded ? "rotate-90" : ""}`}
               />
               Details
             </Button>

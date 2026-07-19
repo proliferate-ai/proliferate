@@ -22,7 +22,7 @@ export const TARGET_PICKER_DIVIDER_CLASS = "mx-1 my-1.5 h-px scale-y-50 bg-foreg
 
 const TARGET_PICKER_SECTION_CLASS =
   "flex min-h-6 items-center truncate px-2.5 py-1 text-ui-sm text-muted-foreground";
-const TARGET_PICKER_TRIGGER_ICON_CLASS = "size-3.5";
+const TARGET_PICKER_TRIGGER_ICON_CLASS = "icon-paired";
 const TARGET_PICKER_MENU_ICON_CLASS = "size-full";
 
 export function homeTargetLaunchKindIcon(
@@ -128,7 +128,7 @@ export const HomeTargetRowItem = forwardRef<HTMLButtonElement, HomeTargetRowItem
           <span className="min-w-0 max-w-60 truncate font-normal">{value}</span>
         </span>
         {disclosure ? (
-          <ChevronDown className="size-3 shrink-0 text-faint" />
+          <ChevronDown className="icon-compact shrink-0 text-faint" />
         ) : null}
       </Button>
     );

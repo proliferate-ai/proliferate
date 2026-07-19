@@ -57,7 +57,7 @@ export function PaneFileTree<TData = unknown>({
       {hasSearch && (
         <div className="border-b border-sidebar-border/70 p-2">
           <div className="flex h-7 items-center gap-1.5 rounded-lg bg-sidebar-accent px-2 text-sidebar-muted-foreground">
-            <Search className="size-3 shrink-0" />
+            <Search className="icon-compact shrink-0" />
             <Input
               value={searchValue ?? ""}
               onChange={(event) => onSearchChange?.(event.target.value)}
@@ -142,7 +142,7 @@ function PaneFileTreeNodeRow<TData>({
         {isDirectory && (
           <ChevronRight
             className={twMerge(
-              "size-3 shrink-0 transition-transform",
+              "icon-compact shrink-0 transition-transform",
               expanded && "rotate-90",
             )}
           />
@@ -152,7 +152,7 @@ function PaneFileTreeNodeRow<TData>({
           path={node.path}
           kind={node.kind}
           isExpanded={isDirectory ? expanded : undefined}
-          className="size-3 shrink-0"
+          className="icon-compact shrink-0 [font-size:var(--text-sidebar-row)]"
         />
         <span className="min-w-0 flex-1 truncate text-left [direction:ltr] [unicode-bidi:plaintext]">
           {node.label ?? node.name}
@@ -184,7 +184,7 @@ export function PaneFileTreeBadge({
   return (
     <span
       className={twMerge(
-        "rounded bg-sidebar-accent px-1 py-px text-[9px] font-medium leading-none text-sidebar-muted-foreground",
+        "rounded bg-sidebar-accent px-1 py-px text-[length:var(--text-ui-sm)] font-medium leading-none text-sidebar-muted-foreground",
         className,
       )}
     >

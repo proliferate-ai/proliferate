@@ -148,7 +148,7 @@ function HunkView({
         />
       )}
       {hunk.contextLabel && (
-        <div className="px-3 py-0.5 text-[10px] italic text-muted-foreground/50">
+        <div className="px-3 py-0.5 text-[length:var(--readable-code-font-size)] italic text-muted-foreground/50">
           {hunk.contextLabel}
         </div>
       )}

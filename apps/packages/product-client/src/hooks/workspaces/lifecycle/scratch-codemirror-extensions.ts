@@ -37,7 +37,7 @@ export const scratchHighlightStyle = HighlightStyle.define([
     tag: tags.monospace,
     color: "var(--color-foreground)",
     fontFamily: "var(--scratch-code-font-family)",
-    fontSize: "0.9em",
+    fontSize: "var(--readable-code-font-size)",
   },
 ]);
 
@@ -79,13 +79,13 @@ export const scratchEditorTheme = EditorView.theme({
   ".cm-content > .cm-line:first-child.scratch-heading": {
     paddingTop: "0",
   },
-  ".cm-line.scratch-heading-1": { fontSize: "1.5em", lineHeight: "1.3" },
-  ".cm-line.scratch-heading-2": { fontSize: "1.28em", lineHeight: "1.3" },
-  ".cm-line.scratch-heading-3": { fontSize: "1.14em", lineHeight: "1.35" },
-  ".cm-line.scratch-heading-4": { fontSize: "1.05em", lineHeight: "1.4" },
-  ".cm-line.scratch-heading-5": { fontSize: "1em", lineHeight: "1.45" },
+  ".cm-line.scratch-heading-1": { fontSize: "calc(var(--scratch-font-size) * 1.5)", lineHeight: "1.3" },
+  ".cm-line.scratch-heading-2": { fontSize: "calc(var(--scratch-font-size) * 1.28)", lineHeight: "1.3" },
+  ".cm-line.scratch-heading-3": { fontSize: "calc(var(--scratch-font-size) * 1.14)", lineHeight: "1.35" },
+  ".cm-line.scratch-heading-4": { fontSize: "calc(var(--scratch-font-size) * 1.05)", lineHeight: "1.4" },
+  ".cm-line.scratch-heading-5": { fontSize: "var(--scratch-font-size)", lineHeight: "1.45" },
   ".cm-line.scratch-heading-6": {
-    fontSize: "0.95em",
+    fontSize: "calc(var(--scratch-font-size) * 0.95)",
     lineHeight: "1.45",
     color: "var(--color-muted-foreground)",
   },

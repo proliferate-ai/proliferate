@@ -69,7 +69,7 @@ export function AutomationCalendarView({
                 </span>
                 <span
                   className={twMerge(
-                    "size-1 rounded-full",
+                    "icon-status rounded-full text-sm",
                     day.hasOccurrences ? "bg-muted-foreground" : "bg-transparent",
                   )}
                   aria-hidden
@@ -122,7 +122,7 @@ function CalendarDaySection({
           active ? "text-foreground" : "text-muted-foreground",
         )}
       >
-        {active ? <span className="size-1.5 rounded-full bg-foreground" aria-hidden /> : null}
+        {active ? <span className="icon-status rounded-full bg-foreground" aria-hidden /> : null}
         {day.sectionLabel}
       </h3>
       {day.occurrences.length > 0 ? (
@@ -172,7 +172,7 @@ function OccurrenceRow({
           {occurrence.timeLabel}
         </span>
         <span className="inline-flex shrink-0 items-center">
-          <AutomationStatusGlyph status={occurrence.statusKind} size={12} />
+          <AutomationStatusGlyph status={occurrence.statusKind} className="icon-paired" />
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-medium leading-5 text-foreground">

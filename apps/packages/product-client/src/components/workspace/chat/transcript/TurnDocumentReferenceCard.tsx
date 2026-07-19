@@ -24,7 +24,7 @@ export function TurnDocumentReferenceCard({
         aria-label={`Open preview for ${resource.displayName}`}
       >
         <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-[var(--color-diff-chat-turn-icon-surface)] text-secondary-foreground">
-          <FileText className="size-6" />
+          <FileText className="icon-display" />
         </span>
         <span className="flex min-w-0 flex-1 flex-col">
           <span className="truncate text-chat font-medium leading-[var(--text-chat--line-height)] text-foreground">

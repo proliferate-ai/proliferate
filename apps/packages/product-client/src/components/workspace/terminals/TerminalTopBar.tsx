@@ -73,9 +73,9 @@ export function TerminalTopBar({
             size="sm"
             className="min-w-0 flex-1 justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
           >
-            <TerminalIcon className="size-3.5 shrink-0" />
+            <TerminalIcon className="icon-paired shrink-0 [font-size:var(--text-sidebar-row)]" />
             <span className="min-w-0 truncate text-left">{activeTitle}</span>
-            <ChevronDown className="size-3.5 shrink-0 text-sidebar-muted-foreground" />
+            <ChevronDown className="icon-paired shrink-0 text-sidebar-muted-foreground" />
           </Button>
         }
         className="w-72 rounded-md border border-sidebar-border bg-sidebar-background p-1 shadow-floating"
@@ -142,13 +142,13 @@ export function TerminalTopBar({
                             close();
                           }}
                         >
-                          <TerminalIcon className="size-3.5 shrink-0 text-sidebar-muted-foreground" />
+                          <TerminalIcon className="icon-paired shrink-0 text-sidebar-muted-foreground [font-size:var(--text-sidebar-row)]" />
                           <span className="min-w-0 flex-1 truncate text-left">
                             {displayTitle}
                           </span>
                           {unreadByTerminal[terminal.id] && (
                             <span
-                              className="size-1.5 rounded-full bg-sidebar-foreground"
+                              className="icon-status rounded-full bg-sidebar-foreground [font-size:var(--text-sidebar-row)]"
                               aria-hidden="true"
                             />
                           )}

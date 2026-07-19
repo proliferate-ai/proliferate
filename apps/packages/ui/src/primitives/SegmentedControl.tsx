@@ -40,7 +40,7 @@ export function SegmentedControl<Id extends string>({
             disabled={item.disabled}
             data-active={active ? "" : undefined}
             className={twMerge(
-              "inline-flex h-[30px] items-center gap-1.5 border-l border-input px-3 text-xs font-medium transition-colors first:border-l-0 disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-[13px]",
+              "inline-flex h-[30px] items-center gap-1.5 border-l border-input px-3 text-ui font-medium transition-colors first:border-l-0 disabled:pointer-events-none disabled:opacity-50 [&_svg]:icon-paired",
               active
                 ? "bg-foreground/10 text-foreground"
                 : "bg-background text-muted-foreground hover:bg-accent hover:text-foreground",

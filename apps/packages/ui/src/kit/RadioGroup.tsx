@@ -34,7 +34,7 @@ function RadioGroupItem({
         className="flex items-center justify-center"
       >
         <svg
-          className="size-2 fill-primary text-primary"
+          className="icon-compact fill-primary text-primary"
           viewBox="0 0 24 24"
           aria-hidden="true"
         >

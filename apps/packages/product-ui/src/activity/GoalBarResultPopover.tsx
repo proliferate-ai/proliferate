@@ -63,7 +63,7 @@ export function GoalBarResultPopover({ state, onDismiss, onSetNewGoal }: GoalBar
         </Button>
         {onSetNewGoal && (
           <Button type="button" variant="secondary" size="sm" onClick={onSetNewGoal}>
-            <Pencil className="size-3.5" />
+            <Pencil className="icon-paired" />
             Set new goal
           </Button>
         )}

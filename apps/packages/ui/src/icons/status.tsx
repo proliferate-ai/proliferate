@@ -2,7 +2,7 @@ import type { IconProps } from "./types";
 
 export function CheckCircleFilled({ className, ...props }: IconProps) {
   return (
-    <svg className={className} width="20" height="21" viewBox="0 0 20 21" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
+    <svg className={className} width="var(--icon-large)" height="var(--icon-large)" viewBox="0 0 20 21" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
       <path
         fillRule="evenodd"
         clipRule="evenodd"
@@ -15,7 +15,7 @@ export function CheckCircleFilled({ className, ...props }: IconProps) {
 
 export function Circle({ className, ...props }: IconProps) {
   return (
-    <svg className={className} width="20" height="21" viewBox="0 0 20 21" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
+    <svg className={className} width="var(--icon-large)" height="var(--icon-large)" viewBox="0 0 20 21" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
       <path
         fillRule="evenodd"
         clipRule="evenodd"

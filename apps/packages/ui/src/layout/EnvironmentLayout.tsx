@@ -45,13 +45,13 @@ export function EnvironmentSection({
         <div className="flex min-w-0 items-start gap-3">
           {Icon ? (
             <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md bg-foreground/5 text-muted-foreground">
-              <Icon className="size-4" />
+              <Icon className="icon-control" />
             </span>
           ) : null}
           <div className="min-w-0 space-y-1">
-            <h2 className="text-lg font-medium text-foreground">{title}</h2>
+            <h2 className="text-title font-medium text-foreground">{title}</h2>
             {description ? (
-              <p className="text-sm text-muted-foreground">{description}</p>
+              <p className="text-ui text-muted-foreground">{description}</p>
             ) : null}
           </div>
         </div>
@@ -72,9 +72,9 @@ export function EnvironmentField({
   return (
     <div className="flex flex-col gap-3">
       <div className="space-y-1">
-        <div className="text-sm font-medium text-foreground">{label}</div>
+        <div className="text-ui font-medium text-foreground">{label}</div>
         {description ? (
-          <div className="text-sm text-muted-foreground">{description}</div>
+          <div className="text-ui text-muted-foreground">{description}</div>
         ) : null}
       </div>
       {children}
@@ -103,12 +103,12 @@ export function EnvironmentAdvancedDisclosure({
     <details className="group rounded-lg border border-border bg-foreground/5">
       <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 text-left [&::-webkit-details-marker]:hidden">
         <span className="min-w-0 space-y-0.5">
-          <span className="block text-sm font-medium text-foreground">{title}</span>
+          <span className="block text-ui font-medium text-foreground">{title}</span>
           {description ? (
-            <span className="block text-sm text-muted-foreground">{description}</span>
+            <span className="block text-ui-sm text-muted-foreground">{description}</span>
           ) : null}
         </span>
-        <ChevronDown className="size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
+        <ChevronDown className="icon-paired shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
       </summary>
       <div className="border-t border-border/40 p-3">{children}</div>
     </details>

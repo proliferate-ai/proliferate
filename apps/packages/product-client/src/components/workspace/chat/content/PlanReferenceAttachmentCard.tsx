@@ -52,7 +52,7 @@ export function PlanReferenceAttachmentCard({
           className="flex h-auto min-w-0 flex-1 items-center gap-1 rounded-full bg-transparent px-0 py-0 text-left hover:bg-transparent"
         >
           <span className="grid size-6 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground">
-            <FileText className="size-3.5" />
+            <FileText className="icon-paired" />
           </span>
           <span className="relative min-w-0 flex-1 truncate pr-1 font-medium">
             {plan.title}
@@ -71,7 +71,7 @@ export function PlanReferenceAttachmentCard({
             className="pointer-events-none absolute inset-y-0 right-0 h-full w-7 rounded-full bg-card/95 px-0 opacity-0 transition-opacity hover:bg-accent group-hover:pointer-events-auto group-hover:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100"
             aria-label={`Remove ${plan.title}`}
           >
-            <X className="size-3" />
+            <X className="icon-compact" />
           </Button>
         )}
       </div>

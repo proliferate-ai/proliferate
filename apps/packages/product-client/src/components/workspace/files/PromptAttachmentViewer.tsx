@@ -79,18 +79,18 @@ function PromptAttachmentViewerSurface({
     >
       <div className="flex h-8 shrink-0 items-center gap-2 border-b border-border/60 px-3 text-xs text-muted-foreground">
         {target.attachmentKind === "image" ? (
-          <FileIcon className="size-3.5 shrink-0" />
+          <FileIcon className="icon-paired shrink-0 [font-size:var(--text-sidebar-row)]" />
         ) : (
-          <FileText className="size-3.5 shrink-0" />
+          <FileText className="icon-paired shrink-0" />
         )}
         <span className="truncate">{metadata}</span>
       </div>
       <div className="relative min-h-0 flex-1">
         {isLoading ? (
-          <PreviewStatus icon={<Spinner className="size-5" />} label="Loading attachment preview…" />
+          <PreviewStatus icon={<Spinner className="icon-large" />} label="Loading attachment preview…" />
         ) : isError || (target.attachmentKind === "image" ? !src || imageFailed : text === null) ? (
           <PreviewStatus
-            icon={<FileIcon className="size-5" />}
+            icon={<FileIcon className="icon-large" />}
             label="Attachment preview unavailable"
             detail="The attachment was removed or could not be read."
           />

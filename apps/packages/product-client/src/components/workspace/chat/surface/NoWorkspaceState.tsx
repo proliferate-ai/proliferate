@@ -13,7 +13,7 @@ export function NoWorkspaceState({ bottomInsetPx }: NoWorkspaceStateProps) {
       bottomInsetPx={bottomInsetPx}
       title={WORKSPACE_ARRIVAL_LABELS.noWorkspaceTitle}
       description={WORKSPACE_ARRIVAL_LABELS.noWorkspaceBody}
-      icon={<Folder className="size-6" />}
+      icon={<Folder className="icon-display" />}
     />
   );
 }

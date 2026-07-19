@@ -38,15 +38,15 @@ export function SidebarStatusGlyph({
 }: SidebarStatusGlyphProps): ReactNode {
   switch (indicator.kind) {
     case "error":
-      return <CircleAlert className="size-3.5 text-destructive" />;
+      return <CircleAlert className="icon-paired text-destructive" />;
     case "worktree_missing":
-      return <CircleAlert className="size-3.5 text-warning-foreground" />;
+      return <CircleAlert className="icon-paired text-warning-foreground" />;
     case "waiting_input":
     case "waiting_plan":
-      return <Clock className="size-3.5 text-info" />;
+      return <Clock className="icon-paired text-info" />;
     case "iterating":
     case "queued_prompt":
-      return <Spinner className="size-3.5 text-sidebar-foreground" />;
+      return <Spinner className="icon-paired text-sidebar-foreground" />;
   }
 }
 
@@ -125,7 +125,7 @@ function SidebarDetailIndicatorView({
         <SidebarWorkspaceVariantIcon
           variant={indicator.variant}
           targetAppearance={indicator.targetAppearance ?? null}
-          className={`size-3 ${className}`}
+          className={`icon-compact [font-size:var(--text-sidebar-row)] ${className}`}
         />
       </Tooltip>
     );
@@ -133,8 +133,8 @@ function SidebarDetailIndicatorView({
 
   if (indicator.kind === "cloud_access" || indicator.kind === "cloud_exposure") {
     const glyph = indicator.kind === "cloud_access"
-      ? <CircleUser className="size-3" />
-      : <Globe className="size-3" />;
+      ? <CircleUser className="icon-compact" />
+      : <Globe className="icon-compact" />;
     return (
       <Tooltip content={indicator.tooltip} className="inline-flex shrink-0 items-center justify-center">
         <span className={detailToneClass(indicator.tone, className)}>
@@ -145,10 +145,10 @@ function SidebarDetailIndicatorView({
   }
 
   const glyph = indicator.kind === "automation"
-    ? <BotMessageSquare className="size-3" />
+    ? <BotMessageSquare className="icon-compact" />
     : indicator.kind === "agent"
-      ? <MessageSquare className="size-3" />
-      : <ArrowRight className="size-3" />;
+      ? <MessageSquare className="icon-compact" />
+      : <ArrowRight className="icon-compact" />;
   const action = "action" in indicator ? indicator.action ?? null : null;
 
   return (

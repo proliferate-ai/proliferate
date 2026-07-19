@@ -83,7 +83,7 @@ export function WorkflowDefinitionEditor({
               Cancel
             </Button>
             <Button type="submit" form="workflow-definition-form" loading={saving} disabled={deleting}>
-              <Save className="size-3.5" aria-hidden />
+              <Save className="icon-paired" aria-hidden />
               {mode === "create" ? "Create" : "Save"}
             </Button>
           </div>
@@ -226,7 +226,7 @@ export function WorkflowDefinitionEditor({
                 stages: [...draft.stages, createStage(catalog)],
               })}
             >
-              <Plus className="size-3.5" aria-hidden />
+              <Plus className="icon-paired" aria-hidden />
               Add stage
             </Button>
             {mode === "edit" && onDelete ? (
@@ -237,7 +237,7 @@ export function WorkflowDefinitionEditor({
                 disabled={busy}
                 onClick={() => setDeleteConfirmationOpen(true)}
               >
-                <Trash2 className="size-3.5" aria-hidden />
+                <Trash2 className="icon-paired" aria-hidden />
                 Delete workflow
               </Button>
             ) : null}

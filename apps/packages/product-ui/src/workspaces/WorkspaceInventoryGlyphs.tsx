@@ -33,7 +33,7 @@ export function SourceGlyph({
   source: WorkspaceInventorySourceKind;
   label: string;
 }) {
-  const iconClass = "size-3.5";
+  const iconClass = "icon-paired text-sm";
   const icon = (() => {
     switch (source) {
       case "desktop_exposed":
@@ -69,10 +69,10 @@ export function SourceGlyph({
 
 export function StatusGlyph({
   status,
-  size = 14,
+  className,
 }: {
   status: WorkspaceInventoryStatusKind;
-  size?: number;
+  className?: string;
 }) {
   const cx = 7;
   const cy = 7;
@@ -93,10 +93,12 @@ export function StatusGlyph({
   if (status === "waiting") {
     return (
       <svg
-        height={size}
-        width={size}
         viewBox="0 0 14 14"
-        className={twMerge("shrink-0", STATUS_GLYPH_CLASSES[status])}
+        className={twMerge(
+          "icon-paired shrink-0 text-sm",
+          STATUS_GLYPH_CLASSES[status],
+          className,
+        )}
         style={style}
         aria-hidden
       >
@@ -116,10 +118,12 @@ export function StatusGlyph({
   if (status === "done") {
     return (
       <svg
-        width={size}
-        height={size}
         viewBox="0 0 14 14"
-        className={twMerge("shrink-0", STATUS_GLYPH_CLASSES[status])}
+        className={twMerge(
+          "icon-paired shrink-0 text-sm",
+          STATUS_GLYPH_CLASSES[status],
+          className,
+        )}
         style={style}
         aria-hidden
       >
@@ -130,10 +134,12 @@ export function StatusGlyph({
 
   return (
     <svg
-      width={size}
-      height={size}
       viewBox="0 0 14 14"
-      className={twMerge("shrink-0", STATUS_GLYPH_CLASSES[status])}
+      className={twMerge(
+        "icon-paired shrink-0 text-sm",
+        STATUS_GLYPH_CLASSES[status],
+        className,
+      )}
       style={style}
       aria-hidden
     >

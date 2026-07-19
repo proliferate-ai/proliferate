@@ -111,9 +111,9 @@ export function CoworkThreadsSection() {
               variant="section"
             >
               {threadsCollapsed ? (
-                <ChevronUpDown className="size-3" />
+                <ChevronUpDown className="icon-compact" />
               ) : (
-                <ChevronDownUp className="size-3" />
+                <ChevronDownUp className="icon-compact" />
               )}
             </SidebarActionButton>
           )}
@@ -123,7 +123,7 @@ export function CoworkThreadsSection() {
             title="Start a new thread"
             variant="section"
           >
-            <Plus className="size-3" />
+            <Plus className="icon-compact" />
           </SidebarActionButton>
           </>
         )}

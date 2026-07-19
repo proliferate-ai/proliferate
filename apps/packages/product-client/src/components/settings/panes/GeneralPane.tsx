@@ -86,7 +86,7 @@ export function GeneralPane() {
           >
             <SettingsMenu
               label={currentTargetLabel}
-              leading={<OpenTargetIcon iconId={currentTarget?.iconId} className="size-4 rounded-sm" />}
+              leading={<OpenTargetIcon iconId={currentTarget?.iconId} className="icon-paired rounded-sm" />}
               className={SETTINGS_CONTROL_WIDTH_CLASS}
               menuClassName={SETTINGS_CONTROL_WIDTH_CLASS}
               groups={[{
@@ -94,7 +94,7 @@ export function GeneralPane() {
                 options: targets.map((target) => ({
                   id: target.id,
                   label: target.label,
-                  icon: <OpenTargetIcon iconId={target.iconId} className="size-4 rounded-sm" />,
+                  icon: <OpenTargetIcon iconId={target.iconId} className="icon-paired rounded-sm" />,
                   selected: currentTarget?.id === target.id,
                   onSelect: () => preferences.set("defaultOpenInTargetId", target.id),
                 })),

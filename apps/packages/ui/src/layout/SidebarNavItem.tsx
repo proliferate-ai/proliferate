@@ -21,7 +21,7 @@ export const SidebarNavItem = forwardRef<HTMLButtonElement, SidebarNavItemProps>
         type={type}
         aria-current={active ? "page" : undefined}
         className={twMerge(
-          "flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-sm font-medium transition-colors",
+          "flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-sidebar-nav font-medium transition-colors",
           active
             ? "bg-sidebar-accent text-sidebar-accent-foreground"
             : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
@@ -30,7 +30,7 @@ export const SidebarNavItem = forwardRef<HTMLButtonElement, SidebarNavItemProps>
         {...props}
       >
         {icon && (
-          <span className="flex size-[1.125em] shrink-0 items-center justify-center text-sidebar-muted-foreground [&>svg]:size-full [&>svg]:shrink-0">
+          <span className="flex icon-paired shrink-0 items-center justify-center text-sidebar-muted-foreground [&>svg]:size-full [&>svg]:shrink-0">
             {icon}
           </span>
         )}

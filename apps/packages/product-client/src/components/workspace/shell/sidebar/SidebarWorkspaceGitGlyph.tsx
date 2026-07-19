@@ -24,11 +24,11 @@ export function SidebarWorkspaceGitGlyph({ glyph, status }: SidebarWorkspaceGitG
   const icon = (
     <span role="img" aria-label={glyph.tooltip ?? "Pull request"}>
       {status.kind === "merged" ? (
-        <PrMergedGlyph className="size-3.5 text-pr-merged" />
+        <PrMergedGlyph className="icon-paired text-pr-merged [font-size:var(--text-sidebar-row)]" />
       ) : (
         <PrBranchGlyph
           dot={hasIssue}
-          className="size-3.5 text-sidebar-muted-foreground [--pr-status-dot-color:var(--color-destructive)]"
+          className="icon-paired text-sidebar-muted-foreground [--pr-status-dot-color:var(--color-destructive)] [font-size:var(--text-sidebar-row)]"
         />
       )}
     </span>
