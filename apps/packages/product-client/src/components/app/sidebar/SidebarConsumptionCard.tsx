@@ -26,8 +26,8 @@ export type SidebarConsumptionState =
 export type SidebarConsumptionMeter = "compute" | "llm";
 
 export type SidebarConsumptionActions =
-  | { kind: "self-serve"; onTopUp: () => void; onBilling: () => void }
-  | { kind: "admin-managed"; onBilling: () => void }
+  | { kind: "billing"; onBilling: () => void }
+  | { kind: "admin-managed"; message: string; onBilling: () => void }
   | { kind: "unavailable"; message: string };
 
 const CONSUMPTION_NEAR_LIMIT_PERCENT = 80;
@@ -310,18 +310,18 @@ export function ConsumptionCard({
           Ask your admin to raise your limit.
         </div>
       ) : null}
-      {blocked && actions?.kind === "unavailable" ? (
+      {!blocked && actions?.kind === "admin-managed" ? (
         <div className="px-2.5 py-1.5 text-ui-sm text-sidebar-muted-foreground">
           {actions.message}
         </div>
       ) : null}
-      {actions?.kind === "self-serve" || actions?.kind === "admin-managed" ? (
+      {actions?.kind === "unavailable" ? (
+        <div className="px-2.5 py-1.5 text-ui-sm text-sidebar-muted-foreground">
+          {actions.message}
+        </div>
+      ) : null}
+      {actions?.kind === "billing" || actions?.kind === "admin-managed" ? (
         <div className="mt-1 flex gap-2 border-t border-border-light px-2 py-2">
-          {actions.kind === "self-serve" ? (
-            <Button type="button" variant="secondary" size="sm" className="flex-1" onClick={actions.onTopUp}>
-              Top up
-            </Button>
-          ) : null}
           <Button type="button" variant="secondary" size="sm" className="flex-1" onClick={actions.onBilling}>
             Billing
           </Button>

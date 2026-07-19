@@ -57,22 +57,54 @@ describe("sidebar consumption", () => {
     expect(onRetry).toHaveBeenCalledTimes(1);
   });
 
-  it("shows only supported billing actions and a truthful admin limit message", () => {
+  it("shows one supported Billing action without a duplicate Top up label", () => {
     const onBilling = vi.fn();
     render(
+      <ConsumptionCard
+        state={{ kind: "ready", usageSummary: usage() }}
+        actions={{ kind: "billing", onBilling }}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: "Top up" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Billing" }));
+    expect(onBilling).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps admin-managed billing singular and explains the limit owner", () => {
+    const onBilling = vi.fn();
+    const { rerender } = render(
+      <ConsumptionCard
+        state={{ kind: "ready", usageSummary: usage({ canSelfServeTopUp: false }) }}
+        actions={{
+          kind: "admin-managed",
+          message: "Billing is managed by your organization admins.",
+          onBilling,
+        }}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: "Top up" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Billing" }));
+    expect(onBilling).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("Billing is managed by your organization admins.")).not.toBeNull();
+
+    rerender(
       <ConsumptionCard
         state={{
           kind: "ready",
           usageSummary: usage({ llmRemainingUsd: 0, canSelfServeTopUp: false }),
         }}
-        actions={{ kind: "admin-managed", onBilling }}
+        actions={{
+          kind: "admin-managed",
+          message: "Billing is managed by your organization admins.",
+          onBilling,
+        }}
       />,
     );
-
-    expect(screen.queryByRole("button", { name: "Top up" })).toBeNull();
     expect(screen.getByText("Ask your admin to raise your limit.")).not.toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Billing" }));
-    expect(onBilling).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText("Billing is managed by your organization admins.")).toBeNull();
+    expect(screen.getByRole("button", { name: "Billing" })).not.toBeNull();
   });
 
   describe.each([

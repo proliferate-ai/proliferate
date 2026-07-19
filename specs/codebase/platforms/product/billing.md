@@ -164,7 +164,12 @@ The concern preserves explicit loading and unavailable states while the summary
 is absent, then renders each ready meter from its own returned units and limit
 state. Billing actions are gated independently by the billing capability; a
 billing-disabled deployment does not imply that an administrator can raise a
-limit.
+limit. A ready, self-service organization owner exposes one **Billing** action
+whose settings URL preserves that exact organization. Organization members use
+the same owner-preserving destination with admin-managed copy. Personal owners
+expose no billing action because Desktop has no owner-correct personal billing
+destination; the card explains why instead of falling back to an unrelated
+active organization.
 
 ## Known Gaps
 

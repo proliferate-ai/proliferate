@@ -5,6 +5,9 @@ import type { ReactElement, ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { UsageSummary } from "@proliferate/cloud-sdk";
 import { SidebarUsageFooter } from "#product/components/app/sidebar/SidebarUsageFooter";
+import { useOrganizationStore } from "#product/stores/organizations/organization-store";
+
+const useUsageSummary = vi.hoisted(() => vi.fn());
 
 const state = vi.hoisted(() => ({
   authStatus: "authenticated" as "loading" | "anonymous" | "authenticated",
@@ -24,7 +27,7 @@ vi.mock("react-router-dom", async (importOriginal) => ({
 }));
 
 vi.mock("@proliferate/cloud-sdk-react", () => ({
-  useUsageSummary: () => state.query,
+  useUsageSummary,
 }));
 
 vi.mock("#product/hooks/auth/facade/use-product-auth", () => ({
@@ -63,6 +66,12 @@ describe("SidebarUsageFooter", () => {
     state.billingEnabled = true;
     state.query = { data: undefined, isLoading: true, refetch: vi.fn() };
     state.navigate.mockClear();
+    useUsageSummary.mockReset();
+    useUsageSummary.mockImplementation(() => state.query);
+    useOrganizationStore.setState({
+      activeOrganizationId: null,
+      activeOrganizationValidated: false,
+    });
   });
 
   afterEach(cleanup);
@@ -90,16 +99,85 @@ describe("SidebarUsageFooter", () => {
     expect(state.query.refetch).toHaveBeenCalledTimes(1);
   });
 
-  it("exposes top-up and billing only when the server supports them", () => {
+  it("reads personal usage explicitly and explains why its unsupported route has no action", () => {
     state.query = { data: usage(), isLoading: false, refetch: vi.fn() };
-    const { rerender } = render(<SidebarUsageFooter />);
-    expect(screen.getByRole("button", { name: "Top up" })).not.toBeNull();
-    expect(screen.getByRole("button", { name: "Billing" })).not.toBeNull();
+    render(<SidebarUsageFooter />);
 
-    state.billingEnabled = false;
-    rerender(<SidebarUsageFooter />);
+    expect(useUsageSummary).toHaveBeenLastCalledWith(
+      { ownerScope: "personal", organizationId: null },
+      true,
+    );
     expect(screen.queryByRole("button", { name: "Top up" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Billing" })).toBeNull();
+    expect(screen.getByText(
+      "Billing for personal usage isn't available from this sidebar.",
+    )).not.toBeNull();
+  });
+
+  it("preserves the selected organization owner in the single Billing destination", () => {
+    useOrganizationStore.setState({
+      activeOrganizationId: "org-1",
+      activeOrganizationValidated: true,
+    });
+    state.query = { data: usage(), isLoading: false, refetch: vi.fn() };
+    render(<SidebarUsageFooter />);
+
+    expect(useUsageSummary).toHaveBeenLastCalledWith(
+      { ownerScope: "organization", organizationId: "org-1" },
+      true,
+    );
+    expect(screen.queryByRole("button", { name: "Top up" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Billing" }));
+    expect(state.navigate).toHaveBeenCalledWith(
+      "/settings?section=billing&billingOwnerScope=organization&billingOrganizationId=org-1",
+    );
+  });
+
+  it("keeps organization-member billing admin-managed and owner-correct", () => {
+    useOrganizationStore.setState({
+      activeOrganizationId: "org-member",
+      activeOrganizationValidated: true,
+    });
+    state.query = {
+      data: usage({ canSelfServeTopUp: false }),
+      isLoading: false,
+      refetch: vi.fn(),
+    };
+    render(<SidebarUsageFooter />);
+
+    expect(screen.getByText("Billing is managed by your organization admins.")).not.toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Billing" }));
+    expect(state.navigate).toHaveBeenCalledWith(
+      "/settings?section=billing&billingOwnerScope=organization&billingOrganizationId=org-member",
+    );
+  });
+
+  it("does not invent an organization admin for a non-self-service personal owner", () => {
+    state.query = {
+      data: usage({ canSelfServeTopUp: false }),
+      isLoading: false,
+      refetch: vi.fn(),
+    };
+    render(<SidebarUsageFooter />);
+
+    expect(screen.queryByText(/organization admins/)).toBeNull();
+    expect(screen.getByText(
+      "Billing for personal usage isn't available from this sidebar.",
+    )).not.toBeNull();
+  });
+
+  it("hides billing actions when the deployment capability is disabled", () => {
+    useOrganizationStore.setState({
+      activeOrganizationId: "org-1",
+      activeOrganizationValidated: true,
+    });
+    state.query = { data: usage(), isLoading: false, refetch: vi.fn() };
+    state.billingEnabled = false;
+    render(<SidebarUsageFooter />);
+
+    expect(screen.queryByRole("button", { name: "Top up" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Billing" })).toBeNull();
+    expect(screen.getByText("Billing actions aren't available on this deployment.")).not.toBeNull();
   });
 
   it("does not direct billing-disabled users to an admin when usage has no allocation", () => {

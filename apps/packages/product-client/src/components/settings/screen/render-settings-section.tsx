@@ -88,7 +88,7 @@ export function renderSettingsSection(
     return renderCloudGatedPane(authGate, () => <UserIntegrationsPane focus={focus} />);
   }
   if (activeSection === "billing") {
-    return <BillingPane />;
+    return <BillingPane focus={focus} />;
   }
   if (activeSection === "organization") {
     return <OrganizationPane />;

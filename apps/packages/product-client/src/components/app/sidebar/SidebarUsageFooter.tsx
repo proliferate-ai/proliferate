@@ -13,14 +13,17 @@ import {
 } from "#product/components/app/sidebar/SidebarConsumptionCard";
 import { useProductAuthStatus } from "#product/hooks/auth/facade/use-product-auth";
 import { useAppCapabilities } from "#product/hooks/capabilities/derived/use-app-capabilities";
+import { useSelectedCloudOwner } from "#product/hooks/organizations/derived/use-selected-cloud-owner";
+import { buildBillingSettingsHref } from "#product/lib/domain/settings/navigation";
 
 /** Capability-gated usage concern with independently focusable Compute/LLM rings. */
 export function SidebarUsageFooter() {
   const navigate = useNavigate();
   const authStatus = useProductAuthStatus();
   const capabilities = useAppCapabilities();
+  const usageOwner = useSelectedCloudOwner();
   const enabled = authStatus === "authenticated" && capabilities.usageMeteringEnabled;
-  const usageQuery = useUsageSummary(undefined, enabled);
+  const usageQuery = useUsageSummary(usageOwner, enabled);
 
   if (!enabled) {
     return null;
@@ -34,8 +37,9 @@ export function SidebarUsageFooter() {
         kind: "unavailable",
         message: "We couldn't load current usage.",
       };
-  const openBilling = (close: () => void) => {
-    navigate("/settings?section=billing");
+  const billingHref = buildBillingSettingsHref(usageOwner);
+  const openBilling = (href: string, close: () => void) => {
+    navigate(href);
     close();
   };
 
@@ -57,7 +61,8 @@ export function SidebarUsageFooter() {
           actions={resolveConsumptionActions(
             state,
             capabilities.billingEnabled,
-            () => openBilling(close),
+            billingHref,
+            billingHref ? () => openBilling(billingHref, close) : undefined,
           )}
         />
       )}
@@ -80,7 +85,8 @@ export function SidebarUsageFooter() {
 function resolveConsumptionActions(
   state: SidebarConsumptionState,
   billingEnabled: boolean,
-  openBilling: () => void,
+  billingHref: string | null,
+  openBilling: (() => void) | undefined,
 ): SidebarConsumptionActions | undefined {
   if (state.kind !== "ready") {
     return undefined;
@@ -91,8 +97,24 @@ function resolveConsumptionActions(
       message: "Billing actions aren't available on this deployment.",
     };
   }
-  if (state.usageSummary.canSelfServeTopUp) {
-    return { kind: "self-serve", onTopUp: openBilling, onBilling: openBilling };
+  if (!state.usageSummary.canSelfServeTopUp) {
+    if (billingHref && openBilling) {
+      return {
+        kind: "admin-managed",
+        message: "Billing is managed by your organization admins.",
+        onBilling: openBilling,
+      };
+    }
+    return {
+      kind: "unavailable",
+      message: "Billing for personal usage isn't available from this sidebar.",
+    };
   }
-  return { kind: "admin-managed", onBilling: openBilling };
+  if (billingHref && openBilling) {
+    return { kind: "billing", onBilling: openBilling };
+  }
+  return {
+    kind: "unavailable",
+    message: "Billing for personal usage isn't available from this sidebar.",
+  };
 }

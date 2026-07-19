@@ -291,7 +291,10 @@ Compute and LLM meter triggers render in the app sidebar footer outside the
 account popover. Each trigger opens `SidebarConsumptionCard`, which preserves
 truthful loading, unavailable, and ready states for the usage summary. Billing
 actions are a separate capability-gated concern rather than a prerequisite for
-showing usage.
+showing usage. A supported self-service organization owner gets one Billing
+action with that owner preserved in the settings route. When Desktop cannot
+guarantee a destination for the same personal or organization owner represented
+by the meters, the card renders no action and explains the unavailability.
 
 Personal Integrations and Workflows are top-level app pages rather than
 Settings sections. Rows outside the target list are marked with a small
