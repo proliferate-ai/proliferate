@@ -421,6 +421,44 @@ describe("runWorkspaceSelection", () => {
     expect(useSessionSelectionStore.getState().activeSessionId).toBe("session-explicit");
   });
 
+  it("threads an authoritative recovery read through cold workspace bootstrap", async () => {
+    vi.mocked(resolveCloudWorkspaceReadiness).mockResolvedValueOnce({ kind: "local" });
+    vi.mocked(resolveSelectionConnection).mockResolvedValueOnce({
+      runtimeUrl: "http://runtime.test",
+      workspaceConnection: {
+        runtimeUrl: "http://runtime.test",
+        anyharnessWorkspaceId: "ah-workspace-1",
+      },
+    });
+    const bootstrapWorkspace = vi.fn().mockResolvedValue({ sessions: [] });
+
+    await runWorkspaceSelection({
+      localRuntime: null,
+      cloudClient: null,
+      cache: selectionCache(),
+      logicalWorkspaces,
+      rawWorkspaces: [],
+      setSelectedLogicalWorkspaceId: vi.fn(),
+      setSelectedWorkspace,
+      removeWorkspaceSlots: vi.fn(),
+      clearSelection: vi.fn(),
+      bootstrapWorkspace,
+      reconcileHotWorkspace: vi.fn(),
+    }, {
+      workspaceId: "workspace-1",
+      options: {
+        force: true,
+        forceCold: true,
+        forceSessionDirectoryRefresh: true,
+        initialActiveSessionId: null,
+      },
+    });
+
+    expect(bootstrapWorkspace).toHaveBeenCalledWith(expect.objectContaining({
+      forceSessionDirectoryRefresh: true,
+    }));
+  });
+
   it("does not materialize a pending projected client session during workspace selection", async () => {
     vi.mocked(resolveCloudWorkspaceReadiness).mockResolvedValueOnce({ kind: "local" });
     vi.mocked(resolveSelectionConnection).mockResolvedValueOnce({

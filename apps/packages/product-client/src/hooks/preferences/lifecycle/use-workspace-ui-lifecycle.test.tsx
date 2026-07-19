@@ -55,6 +55,7 @@ function resetWorkspaceUiStore(): void {
     shellActivationEpochByWorkspace: {},
     pendingChatActivationByWorkspace: {},
     urgentHighlightedChatSessionByWorkspace: {},
+    archivingChatSessionIdsByWorkspace: {},
   }, true);
 }
 

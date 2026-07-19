@@ -340,6 +340,7 @@ describe("workspace ui tab persistence", () => {
       _hydrated: true,
       visibleChatSessionIdsByWorkspace: { w1: ["a"] },
       recentlyHiddenChatSessionIdsByWorkspace: { w1: ["b"] },
+      archivingChatSessionIdsByWorkspace: { w1: ["a"] },
       collapsedChatGroupsByWorkspace: { w1: ["parent-a"] },
       manualChatGroupsByWorkspace: {
         w1: [
@@ -357,6 +358,7 @@ describe("workspace ui tab persistence", () => {
 
     expect(useWorkspaceUiStore.getState().visibleChatSessionIdsByWorkspace.w1).toBeUndefined();
     expect(useWorkspaceUiStore.getState().recentlyHiddenChatSessionIdsByWorkspace.w1).toBeUndefined();
+    expect(useWorkspaceUiStore.getState().archivingChatSessionIdsByWorkspace.w1).toBeUndefined();
     expect(useWorkspaceUiStore.getState().collapsedChatGroupsByWorkspace.w1).toBeUndefined();
     expect(useWorkspaceUiStore.getState().manualChatGroupsByWorkspace.w1).toBeUndefined();
   });

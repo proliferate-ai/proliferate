@@ -126,6 +126,7 @@ export async function runWorkspaceSelection(
         workspaceConnection: connectionResult.workspaceConnection,
         startedAt: context.selectionStartedAt,
         latencyFlowId: request.options?.latencyFlowId,
+        forceSessionDirectoryRefresh: request.options?.forceSessionDirectoryRefresh,
         isCurrent: () => isWorkspaceSelectionCurrent(context.workspaceId, context.selectionNonce),
       });
       if (!isWorkspaceSelectionCurrent(context.workspaceId, context.selectionNonce)) {
@@ -234,6 +235,7 @@ export async function runWorkspaceSelection(
         workspaceConnection: connectionResult.workspaceConnection,
         startedAt: context.selectionStartedAt,
         latencyFlowId: request.options?.latencyFlowId,
+        forceSessionDirectoryRefresh: request.options?.forceSessionDirectoryRefresh,
         isCurrent: () => isWorkspaceSelectionCurrent(context.workspaceId, context.selectionNonce),
       });
       if (!isWorkspaceSelectionCurrent(context.workspaceId, context.selectionNonce)) {
@@ -366,6 +368,7 @@ export async function runWorkspaceSelection(
     workspaceConnection: connectionResult.workspaceConnection,
     startedAt: context.selectionStartedAt,
     latencyFlowId: request.options?.latencyFlowId,
+    forceSessionDirectoryRefresh: request.options?.forceSessionDirectoryRefresh,
     isCurrent: () => isWorkspaceSelectionCurrent(context.workspaceId, context.selectionNonce),
   });
   if (!isWorkspaceSelectionCurrent(context.workspaceId, context.selectionNonce)) {

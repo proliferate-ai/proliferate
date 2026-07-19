@@ -45,6 +45,7 @@ export function useWorkspaceSelection() {
       options?: {
         force?: boolean;
         forceCold?: boolean;
+        forceSessionDirectoryRefresh?: boolean;
         preservePending?: boolean;
         initialActiveSessionId?: string | null;
         latencyFlowId?: string | null;

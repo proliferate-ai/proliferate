@@ -15,6 +15,10 @@ before the workspace is treated as empty. A confirmed empty workspace uses the
 existing default empty-session bootstrap. This check prevents a delayed cache
 or directory result from being mistaken for a new workspace.
 
+Recovery Retry starts with an authoritative session-directory read rather than
+accepting a previously populated list cache. A stale remembered session can
+therefore resolve only against the fresh directory result.
+
 ## Visible-session invariant
 
 An open workspace must retain at least one visible chat session. The invariant
@@ -26,6 +30,11 @@ operations.
 The only visible session does not expose direct close or archive actions.
 Closing a proper subset of multiple sessions continues to use the existing
 deterministic adjacent fallback and activates that survivor once.
+
+Visible-session archive reserves its parent-plus-child visibility change as one
+transaction. Each reservation recomputes the live visible set, so concurrent
+archives cannot together remove every visible session; cleanup resolves the
+captured adjacent survivor against the remaining reserved set before activation.
 
 This invariant concerns product visibility and selection only. Runtime session
 deletion, empty-session replacement, harness switching, and Add New composition
@@ -43,7 +52,8 @@ The recovery card leaves the surrounding workspace shell available and offers
 three user-driven exits: Retry starts a new cold workspace-open attempt, Reload
 reloads the client, and Back to workspaces returns to the workspace list.
 Selecting a session, changing workspaces, or leaving the shell clears the
-recovery state.
+recovery state. The recovery surface is announced as an alert and moves focus
+to Retry whenever it enters or re-enters after a failed attempt.
 
 ## Code ownership
 

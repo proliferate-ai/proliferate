@@ -58,6 +58,7 @@ export interface PersistedWorkspaceUiState {
 }
 
 export interface WorkspaceUiChangeTrackedState extends PersistedWorkspaceUiState {
+  archivingChatSessionIdsByWorkspace: Record<string, string[]>;
   shellActivationEpochByWorkspace: Record<string, number>;
   pendingChatActivationByWorkspace: Record<string, unknown>;
   urgentHighlightedChatSessionByWorkspace: Record<string, string | null>;

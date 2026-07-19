@@ -21,6 +21,7 @@ export function useWorkspaceSessionRecoveryActions() {
       await selectWorkspace(recovery.logicalWorkspaceId, {
         force: true,
         forceCold: true,
+        forceSessionDirectoryRefresh: true,
         initialActiveSessionId: null,
       });
     } catch (error) {

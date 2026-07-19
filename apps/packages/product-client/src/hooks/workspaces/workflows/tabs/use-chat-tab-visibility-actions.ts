@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import { useSessionRestoreActions } from "#product/hooks/sessions/workflows/use-session-restore-actions";
+import { useChatSessionArchiveAction } from "#product/hooks/workspaces/workflows/tabs/use-chat-session-archive-action";
 import {
   collectGroupIds,
   resolveFallbackAfterHidingChatTabs,
@@ -62,6 +63,12 @@ export function useChatTabVisibilityActions(context: ChatTabVisibilityContext) {
   const showToast = useToastStore((state) => state.show);
   const { restoreLastDismissedSession } = useSessionRestoreActions();
   const { activateChatShell, activateChatTab } = useWorkspaceShellActivation();
+  const archiveChatSessionTab = useChatSessionArchiveAction({
+    childToParent,
+    liveIds,
+    materializedWorkspaceId,
+    workspaceUiKey,
+  });
 
   const selectSessionId = useCallback((sessionId: string, source: string) => {
     if (!materializedWorkspaceId) {
@@ -310,6 +317,7 @@ export function useChatTabVisibilityActions(context: ChatTabVisibilityContext) {
 
   return {
     showChatSessionTab,
+    archiveChatSessionTab,
     canHideChatSessionTabs,
     hideChatSessionTabs,
     closeOtherChatSessionTabs,

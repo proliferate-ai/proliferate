@@ -11,6 +11,15 @@ export interface VisibleChatSessionResolution {
   prunedRecentlyHiddenIds: string[];
 }
 
+export type ChatSessionArchiveReservation =
+  | { kind: "blocked" }
+  | {
+      kind: "reserved";
+      fallbackSessionId: string | null;
+      replacesActiveSession: boolean;
+      sessionIds: string[];
+    };
+
 export function uniqueIds(ids: string[]): string[] {
   const seen = new Set<string>();
   const next: string[] = [];

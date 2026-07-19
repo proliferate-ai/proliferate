@@ -1,4 +1,3 @@
-import type { AnyHarnessResolvedConnection } from "@anyharness/sdk-react";
 import { useCallback } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useWorkspaceBootstrapCache } from "#product/hooks/access/anyharness/workspaces/use-workspace-bootstrap-cache";
@@ -64,15 +63,9 @@ import {
   loadWorkspaceSessionDirectory,
 } from "#product/hooks/workspaces/workflows/workspace-bootstrap-session-directory";
 import { enterWorkspaceSessionRecovery } from "#product/hooks/workspaces/workflows/workspace-session-recovery-state";
+import type { WorkspaceSelectionDeps } from "#product/hooks/workspaces/workflows/selection/types";
 
-interface BootstrapWorkspaceInput {
-  workspaceId: string;
-  logicalWorkspaceId: string;
-  workspaceConnection: AnyHarnessResolvedConnection;
-  startedAt: number;
-  latencyFlowId?: string | null;
-  isCurrent: () => boolean;
-}
+type BootstrapWorkspaceInput = Parameters<WorkspaceSelectionDeps["bootstrapWorkspace"]>[0];
 
 const EMPTY_WORKSPACES = [] as const;
 const WORKSPACE_BOOTSTRAP_SESSION_LIST_TIMEOUT_MS = 8_000;
@@ -124,6 +117,7 @@ export function useWorkspaceBootstrapActions() {
     workspaceConnection,
     startedAt,
     latencyFlowId,
+    forceSessionDirectoryRefresh,
     isCurrent,
   }: BootstrapWorkspaceInput): Promise<{ sessions: WorkspaceSession[] }> => {
     const measurementOperationId = startMeasurementOperation({
@@ -217,6 +211,7 @@ export function useWorkspaceBootstrapActions() {
         logicalWorkspaceId,
         measurementOperationId,
         requestOptions: sessionRequestOptions,
+        forceInitialRefresh: forceSessionDirectoryRefresh,
         sessionsStartedAt,
         timeoutMs: WORKSPACE_BOOTSTRAP_SESSION_LIST_TIMEOUT_MS,
         workspaceConnection,

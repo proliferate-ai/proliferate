@@ -14,7 +14,6 @@ import { WorkspaceTabStrip } from "#product/components/workspace/shell/tabs/Work
 import { NewChatButton, ClosedSessionsTrigger } from "#product/components/workspace/shell/topbar/HeaderTabsActions";
 import { HeaderTabsStripRows } from "#product/components/workspace/shell/topbar/HeaderTabsStripRows";
 import { useShortcutHandler } from "#product/hooks/shortcuts/lifecycle/use-shortcut-handler";
-import { useSessionDismissActions } from "#product/hooks/sessions/workflows/use-session-dismiss-actions";
 import { useSessionForkActions } from "#product/hooks/sessions/workflows/use-session-fork-actions";
 import { useSessionTitleActions } from "#product/hooks/sessions/workflows/use-session-title-actions";
 import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-count";
@@ -37,7 +36,6 @@ import { useWorkspaceTabActions } from "#product/hooks/workspaces/workflows/tabs
 import { useHeaderTabsUrgentHighlight } from "#product/hooks/workspaces/ui/use-header-tabs-urgent-highlight";
 import type { ManualChatGroupId } from "#product/lib/domain/workspaces/tabs/manual-groups";
 import { useWorkspaceViewerTabsStore } from "#product/stores/editor/workspace-viewer-tabs-store";
-import { useToastStore } from "#product/stores/toast/toast-store";
 import { startMeasurementOperation } from "#product/lib/infra/measurement/measurement-port";
 import { useShortcutRevealVisible } from "#product/providers/ShortcutRevealProvider";
 
@@ -73,13 +71,10 @@ const HeaderTabsInner = memo(function HeaderTabsInner({
   });
   const tabGroupActions = useTabGroupActions();
   const tabActions = useWorkspaceTabActions(viewModel);
-  const { dismissSession } = useSessionDismissActions();
   const { updateSessionTitle } = useSessionTitleActions();
-  const showToast = useToastStore((state) => state.show);
   const shortcutRevealVisible = useShortcutRevealVisible();
   const {
     deleteGroup: deleteManualChatGroup,
-    removeSessions: removeSessionsFromManualChatGroups,
   } = useManualChatGroupActions();
 
   const closeTarget = useWorkspaceViewerTabsStore((state) => state.closeTarget);
@@ -156,26 +151,14 @@ const HeaderTabsInner = memo(function HeaderTabsInner({
   }, [activeTabIndex, layout.positions, layout.widths]);
 
   const dismissChatSession = useCallback((sessionId: string) => {
-    if (!chatVisibilityActions.canHideChatSessionTabs([sessionId])) {
-      return;
-    }
-    void dismissSession(sessionId).then(() => {
-      if (viewModel.selectedWorkspaceId) {
-        removeSessionsFromManualChatGroups(viewModel.workspaceUiKey ?? viewModel.selectedWorkspaceId, [sessionId]);
+    void chatVisibilityActions.archiveChatSessionTab(sessionId).then((archived) => {
+      if (archived) {
+        multiSelect.clearSelection();
       }
-      multiSelect.clearSelection();
-    }).catch((error) => {
-      const message = error instanceof Error ? error.message : String(error);
-      showToast(message);
     });
   }, [
-    chatVisibilityActions.canHideChatSessionTabs,
-    dismissSession,
+    chatVisibilityActions.archiveChatSessionTab,
     multiSelect.clearSelection,
-    removeSessionsFromManualChatGroups,
-    showToast,
-    viewModel.selectedWorkspaceId,
-    viewModel.workspaceUiKey,
   ]);
 
   const {

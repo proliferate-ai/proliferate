@@ -4,11 +4,8 @@ import {
   useOptionalWorkspaceHeaderTabsViewModelContext,
 } from "#product/components/workspace/shell/providers/WorkspaceHeaderTabsViewModelContext";
 import { useChatTabVisibilityActions } from "#product/hooks/workspaces/workflows/tabs/use-chat-tab-visibility-actions";
-import { useSessionDismissActions } from "#product/hooks/sessions/workflows/use-session-dismiss-actions";
 import { useSessionForkActions } from "#product/hooks/sessions/workflows/use-session-fork-actions";
-import { useManualChatGroupActions } from "#product/hooks/workspaces/workflows/tabs/use-manual-chat-group-actions";
 import { runShortcutHandler } from "#product/lib/domain/shortcuts/registry";
-import { useToastStore } from "#product/stores/toast/toast-store";
 
 /**
  * Wires the workspace three-dot menu to session tab actions. Git and publish
@@ -18,11 +15,6 @@ import { useToastStore } from "#product/stores/toast/toast-store";
  */
 export function WorkspaceActionsMenuContainer() {
   const viewModel = useOptionalWorkspaceHeaderTabsViewModelContext();
-  const showToast = useToastStore((state) => state.show);
-  const { dismissSession } = useSessionDismissActions();
-  const {
-    removeSessions: removeSessionsFromManualChatGroups,
-  } = useManualChatGroupActions();
 
   const chatVisibilityActions = useChatTabVisibilityActions({
     workspaceUiKey: viewModel?.workspaceUiKey,
@@ -60,20 +52,11 @@ export function WorkspaceActionsMenuContainer() {
     if (!activeSessionId || !viewModel || !canDismissActiveSession) {
       return;
     }
-    const workspaceGroupKey = viewModel.workspaceUiKey ?? viewModel.selectedWorkspaceId;
-    void dismissSession(activeSessionId).then(() => {
-      if (workspaceGroupKey) {
-        removeSessionsFromManualChatGroups(workspaceGroupKey, [activeSessionId]);
-      }
-    }).catch((error) => {
-      showToast(error instanceof Error ? error.message : String(error));
-    });
+    void chatVisibilityActions.archiveChatSessionTab(activeSessionId);
   }, [
     activeSessionId,
     canDismissActiveSession,
-    dismissSession,
-    removeSessionsFromManualChatGroups,
-    showToast,
+    chatVisibilityActions.archiveChatSessionTab,
     viewModel,
   ]);
   if (!viewModel) {

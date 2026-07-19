@@ -50,6 +50,7 @@ describe("workspace UI state persistence", () => {
       shellActivationEpochByWorkspace: { "workspace-1": 2 },
       pendingChatActivationByWorkspace: { "workspace-1": { kind: "chat" } },
       urgentHighlightedChatSessionByWorkspace: { "workspace-1": "session-1" },
+      archivingChatSessionIdsByWorkspace: { "workspace-1": ["session-1"] },
     } as WorkspaceUiChangeTrackedState);
 
     expect(selected.migrationVersion).toBe(WORKSPACE_UI_MIGRATION_VERSION);
@@ -76,6 +77,7 @@ describe("workspace UI state persistence", () => {
     expect(selected).not.toHaveProperty("shellActivationEpochByWorkspace");
     expect(selected).not.toHaveProperty("pendingChatActivationByWorkspace");
     expect(selected).not.toHaveProperty("urgentHighlightedChatSessionByWorkspace");
+    expect(selected).not.toHaveProperty("archivingChatSessionIdsByWorkspace");
   });
 
   it("tracks persisted and runtime-only keys separately", () => {
@@ -84,19 +86,23 @@ describe("workspace UI state persistence", () => {
       shellActivationEpochByWorkspace: {},
       pendingChatActivationByWorkspace: {},
       urgentHighlightedChatSessionByWorkspace: {},
+      archivingChatSessionIdsByWorkspace: {},
     } satisfies WorkspaceUiChangeTrackedState;
     const next = {
       ...previous,
       sidebarOpen: true,
       shellActivationEpochByWorkspace: { "workspace-1": 1 },
       urgentHighlightedChatSessionByWorkspace: { "workspace-1": "session-1" },
+      archivingChatSessionIdsByWorkspace: { "workspace-1": ["session-1"] },
     } satisfies WorkspaceUiChangeTrackedState;
 
     expect(getChangedWorkspaceUiStateKeys(previous, next)).toEqual([
       "sidebarOpen",
       "shellActivationEpochByWorkspace",
       "urgentHighlightedChatSessionByWorkspace",
+      "archivingChatSessionIdsByWorkspace",
     ]);
+    expect(isNonPersistedWorkspaceUiStateKey("archivingChatSessionIdsByWorkspace")).toBe(true);
     expect(isNonPersistedWorkspaceUiStateKey("shellActivationEpochByWorkspace")).toBe(true);
     expect(isNonPersistedWorkspaceUiStateKey("pendingChatActivationByWorkspace")).toBe(true);
     expect(isNonPersistedWorkspaceUiStateKey("urgentHighlightedChatSessionByWorkspace")).toBe(true);

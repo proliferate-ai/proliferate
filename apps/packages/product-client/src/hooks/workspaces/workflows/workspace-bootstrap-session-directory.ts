@@ -23,6 +23,7 @@ export type WorkspaceSessionDirectoryResult =
 export async function loadWorkspaceSessionDirectory(
   input: {
     isCurrent: () => boolean;
+    forceInitialRefresh?: boolean;
     logicalWorkspaceId: string;
     measurementOperationId: MeasurementOperationId | null;
     requestOptions: AnyHarnessRequestOptions | undefined;
@@ -39,6 +40,7 @@ export async function loadWorkspaceSessionDirectory(
 ): Promise<WorkspaceSessionDirectoryResult> {
   const result = await loadSessionsWithBoundedRecovery({
     isCurrent: input.isCurrent,
+    forceInitialRefresh: input.forceInitialRefresh,
     load: (forceRefresh) => deps.loadWorkspaceSessions({
       workspaceConnection: input.workspaceConnection,
       workspaceId: input.workspaceId,

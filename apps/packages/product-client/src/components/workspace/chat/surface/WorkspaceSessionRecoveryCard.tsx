@@ -9,6 +9,8 @@ import type {
   WorkspaceSessionRecoveryReason,
 } from "#product/lib/domain/workspaces/selection/session-recovery";
 
+const RECOVERY_TITLE_ID = "workspace-session-recovery-title";
+
 export function WorkspaceSessionRecoveryCard({
   bottomInsetPx,
   isRetrying,
@@ -32,10 +34,14 @@ export function WorkspaceSessionRecoveryCard({
       description={WORKSPACE_SESSION_RECOVERY_BODY[reason]}
       icon={<CircleAlert className="size-6 text-warning-foreground" />}
       surfaceId="workspace-session-recovery"
+      surfaceRole="alert"
+      surfaceLabelledBy={RECOVERY_TITLE_ID}
+      titleId={RECOVERY_TITLE_ID}
       actions={(
         <>
           <Button
             type="button"
+            autoFocus
             variant="primary"
             size="sm"
             loading={isRetrying}

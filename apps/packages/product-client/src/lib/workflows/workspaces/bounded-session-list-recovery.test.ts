@@ -19,6 +19,40 @@ describe("loadSessionsWithBoundedRecovery", () => {
     expect(load).toHaveBeenCalledWith(false);
   });
 
+  it("forces the first read when recovery must bypass a stale non-empty cache", async () => {
+    const load = vi.fn(async (force: boolean) => (
+      force ? [{ id: "new" }] : [{ id: "gone" }]
+    ));
+
+    await expect(loadSessionsWithBoundedRecovery({
+      forceInitialRefresh: true,
+      isCurrent: () => true,
+      load,
+    })).resolves.toEqual({
+      kind: "loaded",
+      sessions: [{ id: "new" }],
+      recovered: false,
+    });
+    expect(load.mock.calls).toEqual([[true]]);
+  });
+
+  it("never reuses a stale non-empty cache when the authoritative retry is empty", async () => {
+    const load = vi.fn(async (force: boolean) => (
+      force ? [] : [{ id: "gone" }]
+    ));
+
+    await expect(loadSessionsWithBoundedRecovery({
+      forceInitialRefresh: true,
+      isCurrent: () => true,
+      load,
+    })).resolves.toEqual({
+      kind: "loaded",
+      sessions: [],
+      recovered: true,
+    });
+    expect(load.mock.calls).toEqual([[true], [true]]);
+  });
+
   it("runs exactly one forced retry after a transient lookup failure", async () => {
     const load = vi.fn()
       .mockRejectedValueOnce(new Error("directory delayed"))

@@ -8,11 +8,12 @@ export type BoundedSessionListRecoveryResult<T> =
  * caller owns the explicit recovery UI after the bounded attempt is exhausted.
  */
 export async function loadSessionsWithBoundedRecovery<T>(input: {
+  forceInitialRefresh?: boolean;
   isCurrent: () => boolean;
   load: (forceRefresh: boolean) => Promise<T[]>;
 }): Promise<BoundedSessionListRecoveryResult<T>> {
   try {
-    const sessions = await input.load(false);
+    const sessions = await input.load(input.forceInitialRefresh ?? false);
     if (sessions.length > 0) {
       return {
         kind: "loaded",

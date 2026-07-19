@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { AriaRole, ReactNode } from "react";
 import { Badge } from "@proliferate/ui/primitives/Badge";
 import { CHAT_COLUMN_CLASSNAME, CHAT_SURFACE_GUTTER_CLASSNAME } from "#product/config/chat-layout";
 
@@ -10,6 +10,9 @@ interface ChatSurfaceCardProps {
   icon?: ReactNode;
   actions?: ReactNode;
   surfaceId?: string;
+  surfaceRole?: AriaRole;
+  surfaceLabelledBy?: string;
+  titleId?: string;
 }
 
 export function ChatSurfaceCard({
@@ -20,10 +23,15 @@ export function ChatSurfaceCard({
   icon,
   actions,
   surfaceId,
+  surfaceRole,
+  surfaceLabelledBy,
+  titleId,
 }: ChatSurfaceCardProps) {
   return (
     <div
       data-chat-surface={surfaceId}
+      role={surfaceRole}
+      aria-labelledby={surfaceLabelledBy}
       className={`flex flex-1 min-h-0 ${CHAT_SURFACE_GUTTER_CLASSNAME}`}
       style={{ paddingBottom: bottomInsetPx }}
     >
@@ -39,7 +47,10 @@ export function ChatSurfaceCard({
               {icon}
             </div>
           )}
-          <h2 className="mt-4 text-2xl font-semibold tracking-[-0.02em] text-foreground">
+          <h2
+            id={titleId}
+            className="mt-4 text-2xl font-semibold tracking-[-0.02em] text-foreground"
+          >
             {title}
           </h2>
           <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-muted-foreground">
