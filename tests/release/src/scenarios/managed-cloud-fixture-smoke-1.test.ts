@@ -5,6 +5,7 @@ import path from "node:path";
 import { test } from "node:test";
 
 import {
+  CALLBACK_PROVIDER_DELIVERY_TIMEOUT_MS,
   FIXTURE_SMOKE_CELL_NAMES,
   FIXTURE_SMOKE_WORLD_SUBDIR,
   MANAGED_CLOUD_FIXTURE_SMOKE_1_ID,
@@ -73,6 +74,10 @@ const REQUIRED_ENV_VARS: Record<string, string> = {
   RELEASE_E2E_QUALIFICATION_TLS_PRIVATE_KEY_B64: TEST_QUALIFICATION_TLS.privateKeyBase64,
   STRIPE_TEST_SECRET_KEY: "sk_test_abc123",
 };
+
+test("callback relay gives provider delivery a dedicated five-minute exact-event window", () => {
+  assert.equal(CALLBACK_PROVIDER_DELIVERY_TIMEOUT_MS, 300_000);
+});
 
 function fakeCandidateMap(): CandidateBuildMapV1 {
   return { schema_version: 1, kind: "proliferate.candidate-build", source_sha: "a".repeat(40), artifacts: [] };

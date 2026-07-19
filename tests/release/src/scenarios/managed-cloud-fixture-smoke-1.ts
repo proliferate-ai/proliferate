@@ -149,6 +149,8 @@ export type FixtureSmokeCellName = (typeof FIXTURE_SMOKE_CELL_NAMES)[number];
 /** Bounded waits (overridable in tests via runtime deps). */
 const CALLBACK_POLL_TIMEOUT_MS = 120_000;
 const CALLBACK_POLL_INTERVAL_MS = 3_000;
+/** Stripe may acknowledge the event before its webhook reaches the held relay. */
+export const CALLBACK_PROVIDER_DELIVERY_TIMEOUT_MS = 300_000;
 const CLOCK_READY_TIMEOUT_MS = 120_000;
 const CLOCK_READY_INTERVAL_MS = 3_000;
 const RENEWAL_EVENT_TIMEOUT_MS = 120_000;
@@ -1300,7 +1302,7 @@ async function runCallbackRelayCellLive(
   const held = await pollUntil(
     async () => (await relay.manifest("stripe")).find((row) => row.providerEventId === evt.id) ?? null,
     (v) => v !== null,
-    CALLBACK_POLL_TIMEOUT_MS,
+    CALLBACK_PROVIDER_DELIVERY_TIMEOUT_MS,
     CALLBACK_POLL_INTERVAL_MS,
   );
   if (!held) {

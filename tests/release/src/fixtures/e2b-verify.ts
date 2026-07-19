@@ -145,12 +145,49 @@ async function runProbe<T>(args: readonly string[], env: NodeJS.ProcessEnv, stdi
   });
 }
 
+const E2B_READ_RATE_LIMIT_DELAYS_MS = [2_000, 4_000, 8_000] as const;
+
+export interface E2BReadRateLimitRetryOptions {
+  delaysMs?: readonly number[];
+  sleep?: (ms: number) => Promise<void>;
+}
+
+function isE2bRateLimitError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /RateLimitException/i.test(message) && /(?:\b429\b|rate limit)/i.test(message);
+}
+
+/**
+ * Retries only idempotent E2B inventory reads after the provider's explicit
+ * 429 signal. The bounded fourth attempt remains fail-closed, and all other
+ * errors surface immediately.
+ */
+export async function retryE2bReadAfterRateLimit<T>(
+  operation: () => Promise<T>,
+  options: E2BReadRateLimitRetryOptions = {},
+): Promise<T> {
+  const delaysMs = options.delaysMs ?? E2B_READ_RATE_LIMIT_DELAYS_MS;
+  const sleep = options.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+  let retryIndex = 0;
+  for (;;) {
+    try {
+      return await operation();
+    } catch (error) {
+      if (!isE2bRateLimitError(error) || retryIndex >= delaysMs.length) {
+        throw error;
+      }
+      await sleep(delaysMs[retryIndex]!);
+      retryIndex += 1;
+    }
+  }
+}
+
 /** Resolves a cloud sandbox's provider (E2B) sandbox id purely via E2B metadata -- no DB access. */
 export async function findProviderSandbox(
   cloudSandboxId: string,
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<E2BFindResult> {
-  return runProbe<E2BFindResult>(["find", cloudSandboxId], env);
+  return retryE2bReadAfterRateLimit(() => runProbe<E2BFindResult>(["find", cloudSandboxId], env));
 }
 
 /** Exhaustively lists live sandboxes whose observed template id exactly matches. */
@@ -158,7 +195,7 @@ export async function listProviderSandboxesByTemplate(
   templateId: string,
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<E2BTemplateSweepResult> {
-  return runProbe<E2BTemplateSweepResult>(["list-template", templateId], env);
+  return retryE2bReadAfterRateLimit(() => runProbe<E2BTemplateSweepResult>(["list-template", templateId], env));
 }
 
 /** Lists strict immutable template identities and aliases through the authenticated E2B CLI. */
