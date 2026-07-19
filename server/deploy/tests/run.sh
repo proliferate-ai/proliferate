@@ -327,7 +327,10 @@ if PATH="$FAKE_BIN:$PATH" PROLIFERATE_INSTALL_ROOT="$BADBUNDLE" \
 else
   ok "--bundle install dies when the SUMS omits the bundle line"
 fi
-grep -qi "did not cover proliferate-deploy.tar.gz" "$SCRATCH/badbundle.log" \
+# GNU coreutils exits non-zero itself when --ignore-missing verifies no files,
+# while Darwin's sha256sum returns zero and reaches our explicit coverage guard.
+# Both safe paths must name the bundle/checksum failure and refuse extraction.
+grep -Eqi "did not cover proliferate-deploy.tar.gz|checksum verification FAILED for proliferate-deploy.tar.gz" "$SCRATCH/badbundle.log" \
   && ok "missing-bundle-line failure is reported" || no "missing-bundle-line failure not reported"
 [[ ! -f "$BADBUNDLE/server/deploy/bootstrap.sh" ]] \
   && ok "no files extracted when the bundle line is absent" || no "files were extracted despite an unverified bundle"
@@ -503,6 +506,137 @@ grep -q "fetch_bundle:" "$AWS_TEMPLATE" && ok "template fetches the deploy bundl
 grep -q "sha256sum -c --ignore-missing" "$AWS_TEMPLATE" && ok "template verifies the bundle checksum" || no "template missing checksum verification"
 grep -q "docker-compose.production.yml:" "$AWS_TEMPLATE" && no "template still embeds docker-compose (drift)" || ok "template no longer embeds docker-compose"
 grep -q "DeployBundleUrl" "$AWS_TEMPLATE" && ok "template exposes DeployBundleUrl override" || no "template missing DeployBundleUrl override"
+
+# Execute the template's exact UserData body with fake cfn tools. The failure
+# path must preserve cfn-init's exit code and invoke cfn-signal with a bounded,
+# secret-free reason; `bash -e` would exit before the signal and fail this test.
+user_data="$SCRATCH/cfn-user-data.sh"
+awk '
+  /Fn::Base64: !Sub \|/ { in_user_data = 1; next }
+  in_user_data && /^  ProliferateDnsRecord:/ { exit }
+  in_user_data { sub(/^          /, ""); print }
+' "$AWS_TEMPLATE" \
+  | sed \
+      -e 's|/opt/aws/bin/cfn-init|"$FAKE_CFN_BIN/cfn-init"|g' \
+      -e 's|/opt/aws/bin/cfn-signal|"$FAKE_CFN_BIN/cfn-signal"|g' \
+      -e 's|dnf install|"$FAKE_CFN_BIN/dnf" install|g' \
+      -e 's|timeout --signal=TERM --kill-after=30s 18m|"$FAKE_CFN_BIN/timeout"|g' \
+      -e 's|${AWS::StackName}|test-stack|g' \
+      -e 's|${AWS::Region}|us-east-1|g' \
+  >"$user_data"
+
+FAKE_CFN_BIN="$SCRATCH/fake-cfn-bin"
+mkdir -p "$FAKE_CFN_BIN"
+cat >"$FAKE_CFN_BIN/dnf" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+cat >"$FAKE_CFN_BIN/cfn-init" <<'EOF'
+#!/usr/bin/env bash
+exit "${FAKE_CFN_INIT_EXIT:-0}"
+EOF
+cat >"$FAKE_CFN_BIN/timeout" <<'EOF'
+#!/usr/bin/env bash
+if [[ -n "${FAKE_TIMEOUT_EXIT:-}" ]]; then
+  exit "$FAKE_TIMEOUT_EXIT"
+fi
+exec "$@"
+EOF
+cat >"$FAKE_CFN_BIN/cfn-signal" <<'EOF'
+#!/usr/bin/env bash
+{
+  printf 'CALL\n'
+  printf '%s\n' "$@"
+} >>"$CFN_SIGNAL_ARGS_FILE"
+EOF
+chmod +x "$FAKE_CFN_BIN/dnf" "$FAKE_CFN_BIN/cfn-init" "$FAKE_CFN_BIN/timeout" "$FAKE_CFN_BIN/cfn-signal"
+
+signal_args="$SCRATCH/cfn-signal.args"
+FAKE_CFN_BIN="$FAKE_CFN_BIN" FAKE_CFN_INIT_EXIT=23 CFN_SIGNAL_ARGS_FILE="$signal_args" \
+  bash "$user_data" >/dev/null 2>&1
+user_data_status=$?
+[[ "$user_data_status" -eq 23 ]] && ok "template UserData preserves failed cfn-init exit code" || no "template UserData returned $user_data_status instead of cfn-init exit 23"
+grep -qx -- '-e' "$signal_args" \
+  && grep -qx -- '23' "$signal_args" \
+  && grep -qx -- 'cfn-init bootstrap failed with exit code 23; inspect /var/log/cfn-init.log and /var/log/cfn-init-cmd.log through SSM.' "$signal_args" \
+  && ok "template UserData failure invokes cfn-signal with bounded diagnostics" \
+  || no "template UserData failure did not invoke cfn-signal with the expected bounded reason"
+
+timeout_signal_args="$SCRATCH/cfn-timeout-signal.args"
+FAKE_CFN_BIN="$FAKE_CFN_BIN" FAKE_TIMEOUT_EXIT=124 CFN_SIGNAL_ARGS_FILE="$timeout_signal_args" \
+  bash "$user_data" >/dev/null 2>&1
+user_data_status=$?
+[[ "$user_data_status" -eq 124 ]] && ok "template UserData bounds an overlong cfn-init before the CreationPolicy timeout" || no "template UserData returned $user_data_status instead of timeout exit 124"
+grep -qx -- 'cfn-init bootstrap exceeded the 18-minute limit; inspect /var/log/cfn-init.log and /var/log/cfn-init-cmd.log through SSM.' "$timeout_signal_args" \
+  && ok "template UserData timeout invokes cfn-signal with bounded diagnostics" \
+  || no "template UserData timeout did not invoke cfn-signal with the expected bounded reason"
+
+kill_timeout_signal_args="$SCRATCH/cfn-kill-timeout-signal.args"
+FAKE_CFN_BIN="$FAKE_CFN_BIN" FAKE_TIMEOUT_EXIT=137 CFN_SIGNAL_ARGS_FILE="$kill_timeout_signal_args" \
+  bash "$user_data" >/dev/null 2>&1
+user_data_status=$?
+[[ "$user_data_status" -eq 124 ]] && ok "template UserData normalizes kill-after exit 137 to timeout exit 124" || no "template UserData returned $user_data_status instead of normalized timeout exit 124"
+grep -qx -- '124' "$kill_timeout_signal_args" \
+  && grep -qx -- 'cfn-init bootstrap exceeded the 18-minute limit; inspect /var/log/cfn-init.log and /var/log/cfn-init-cmd.log through SSM.' "$kill_timeout_signal_args" \
+  && ok "template UserData kill-after invokes cfn-signal with timeout diagnostics" \
+  || no "template UserData kill-after did not invoke cfn-signal with normalized timeout diagnostics"
+
+# On Linux, execute a short-duration rendering of the production GNU timeout
+# semantics against a child that ignores TERM. An independent five-second KILL
+# guard prevents the regression itself from hanging if the hard deadline ever
+# regresses. Reaching exactly one cfn-signal proves the real TERM -> KILL path,
+# not merely the synthetic status plumbing above.
+if [[ "$(uname -s)" == "Linux" ]]; then
+  if timeout --version 2>/dev/null | grep -q 'GNU coreutils'; then
+    term_resistant_init="$FAKE_CFN_BIN/cfn-init-term-resistant"
+    cat >"$term_resistant_init" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$$" >"$CFN_INIT_PID_FILE"
+trap '' TERM
+while :; do :; done
+EOF
+    chmod +x "$term_resistant_init"
+
+    hard_deadline_user_data="$SCRATCH/cfn-hard-deadline-user-data.sh"
+    awk '
+      /Fn::Base64: !Sub \|/ { in_user_data = 1; next }
+      in_user_data && /^  ProliferateDnsRecord:/ { exit }
+      in_user_data { sub(/^          /, ""); print }
+    ' "$AWS_TEMPLATE" \
+      | sed \
+          -e 's|/opt/aws/bin/cfn-init|"$FAKE_CFN_BIN/cfn-init-term-resistant"|g' \
+          -e 's|/opt/aws/bin/cfn-signal|"$FAKE_CFN_BIN/cfn-signal"|g' \
+          -e 's|dnf install|"$FAKE_CFN_BIN/dnf" install|g' \
+          -e 's|timeout --signal=TERM --kill-after=30s 18m|timeout --signal=TERM --kill-after=0.2s 0.2s|g' \
+          -e 's|${AWS::StackName}|test-stack|g' \
+          -e 's|${AWS::Region}|us-east-1|g' \
+      >"$hard_deadline_user_data"
+
+    hard_deadline_signal_args="$SCRATCH/cfn-hard-deadline-signal.args"
+    term_resistant_pid_file="$SCRATCH/cfn-term-resistant.pid"
+    timeout --signal=KILL 5s env \
+      FAKE_CFN_BIN="$FAKE_CFN_BIN" \
+      CFN_INIT_PID_FILE="$term_resistant_pid_file" \
+      CFN_SIGNAL_ARGS_FILE="$hard_deadline_signal_args" \
+      bash "$hard_deadline_user_data" >/dev/null 2>&1
+    hard_deadline_status=$?
+    if [[ -f "$term_resistant_pid_file" ]]; then
+      kill -KILL "$(cat "$term_resistant_pid_file")" 2>/dev/null || true
+    fi
+    signal_call_count="$(grep -c '^CALL$' "$hard_deadline_signal_args" 2>/dev/null || true)"
+    [[ "$hard_deadline_status" -eq 124 ]] \
+      && [[ "$signal_call_count" -eq 1 ]] \
+      && grep -qx -- '124' "$hard_deadline_signal_args" \
+      && grep -qx -- 'cfn-init bootstrap exceeded the 18-minute limit; inspect /var/log/cfn-init.log and /var/log/cfn-init-cmd.log through SSM.' "$hard_deadline_signal_args" \
+      && ok "template UserData hard-kills a TERM-resistant cfn-init and signals one bounded timeout" \
+      || no "template UserData did not hard-bound and signal the TERM-resistant cfn-init (status=$hard_deadline_status calls=$signal_call_count)"
+  else
+    no "Linux template regression requires GNU coreutils timeout"
+  fi
+else
+  printf '  skip  GNU timeout TERM-resistant UserData regression (runs on Linux CI)\n'
+fi
+
 if [[ "${PROLIFERATE_TEST_AWS:-0}" == "1" ]] && command -v aws >/dev/null 2>&1; then
   if aws cloudformation validate-template --template-body "file://$AWS_TEMPLATE" >/dev/null 2>&1; then
     ok "aws cloudformation validate-template passed"
