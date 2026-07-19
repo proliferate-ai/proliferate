@@ -19,12 +19,16 @@
   line-height: var(--markdown-line-height);
 }
 
-.chat-markdown h1 { font-size: var(--markdown-h1-font-size); }
-.chat-markdown h2 { font-size: var(--markdown-h2-font-size); }
-.chat-markdown h3 { font-size: var(--markdown-h3-font-size); }
-.chat-markdown h4 { font-size: var(--markdown-h4-font-size); }
-.chat-markdown h5 { font-size: var(--markdown-h5-font-size); }
-.chat-markdown h6 { font-size: var(--markdown-h6-font-size); }
+/* Keep semantic hierarchy as the default, while allowing proposal/editor/plan
+   surfaces with an explicit heading utility contract to win the cascade. */
+@layer components {
+  :where(.chat-markdown) :where(h1) { font-size: var(--markdown-h1-font-size); }
+  :where(.chat-markdown) :where(h2) { font-size: var(--markdown-h2-font-size); }
+  :where(.chat-markdown) :where(h3) { font-size: var(--markdown-h3-font-size); }
+  :where(.chat-markdown) :where(h4) { font-size: var(--markdown-h4-font-size); }
+  :where(.chat-markdown) :where(h5) { font-size: var(--markdown-h5-font-size); }
+  :where(.chat-markdown) :where(h6) { font-size: var(--markdown-h6-font-size); }
+}
 
 .chat-markdown blockquote {
   border-color: var(--color-prose-border, var(--color-border));
