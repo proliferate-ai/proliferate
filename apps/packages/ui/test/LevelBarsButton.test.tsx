@@ -30,6 +30,34 @@ describe("LevelBarsButton", () => {
     expect(icon?.children.length).toBe(3);
   });
 
+  it("keeps one icon slot while adapting bar width to short and long ladders", () => {
+    const onStep = vi.fn();
+    const twoLevels = levels.slice(0, 2);
+    const sixLevels = [
+      ...levels,
+      { value: "extra-high", label: "Extra High" },
+      { value: "max", label: "Max" },
+      { value: "ultra", label: "Ultra" },
+    ];
+    const { container, rerender } = render(
+      <LevelBarsButton levels={twoLevels} currentIndex={0} onStep={onStep} />,
+    );
+
+    const twoLevelIcon = container.querySelector<HTMLElement>("[data-level-bars-icon]");
+    const twoLevelBars = twoLevelIcon?.querySelectorAll<HTMLElement>(":scope > span");
+    expect(twoLevelIcon?.className).toContain("size-3.5");
+    expect(twoLevelIcon?.dataset.levelBarsCount).toBe("2");
+    expect(twoLevelBars?.[0]?.style.width).toBe("4px");
+
+    rerender(<LevelBarsButton levels={sixLevels} currentIndex={5} onStep={onStep} />);
+
+    const sixLevelIcon = container.querySelector<HTMLElement>("[data-level-bars-icon]");
+    const sixLevelBars = sixLevelIcon?.querySelectorAll<HTMLElement>(":scope > span");
+    expect(sixLevelIcon?.className).toContain("size-3.5");
+    expect(sixLevelIcon?.dataset.levelBarsCount).toBe("6");
+    expect(sixLevelBars?.[0]?.style.width).toBe("1.5px");
+  });
+
   it("can render the bars without visible level text", () => {
     const onStep = vi.fn();
     render(
