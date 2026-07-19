@@ -113,8 +113,11 @@ export function createAgentsPlaygroundCloudTransport(
       }
     }
 
-    if (input.method === "DELETE" && input.path.startsWith("/v1/cloud/agent-gateway/keys/")) {
-      const keyId = decodeURIComponent(input.path.split("/").pop() ?? "");
+    const apiKeyMatch = input.path.match(
+      /^\/v1\/cloud\/agent-gateway\/keys\/([^/]+)$/,
+    );
+    if (input.method === "DELETE" && apiKeyMatch) {
+      const keyId = decodeURIComponent(apiKeyMatch[1] ?? "");
       const index = apiKeys.findIndex((key) => key.id === keyId);
       if (index < 0) throw new Error(`Unknown playground API key: ${keyId}`);
       const [revoked] = apiKeys.splice(index, 1);
@@ -129,8 +132,11 @@ export function createAgentsPlaygroundCloudTransport(
       return clone(rows) as TResponse;
     }
 
-    if (input.method === "PUT" && input.path.startsWith("/v1/cloud/agent-gateway/selections/")) {
-      const harnessKind = decodeURIComponent(input.path.split("/").pop() ?? "");
+    const selectionMatch = input.path.match(
+      /^\/v1\/cloud\/agent-gateway\/selections\/([^/]+)$/,
+    );
+    if (input.method === "PUT" && selectionMatch) {
+      const harnessKind = decodeURIComponent(selectionMatch[1] ?? "");
       const surface = input.query?.surface as AgentAuthSurface;
       const body = input.body as PutAuthSelectionsRequest;
       selections = selections.filter(

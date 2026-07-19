@@ -80,7 +80,7 @@ export function AgentsPlaygroundPage() {
       <main className="flex-1 overflow-y-auto p-6">
         <div className="mx-auto max-w-2xl">
           <QueryClientProvider client={client}>
-            <CloudClientProvider client={cloudTransport.client}>
+            <CloudClientProvider client={cloudTransport.client} syncGlobalClient={false}>
               <ProductHostProvider host={playgroundHost}>
                 <AnyHarnessRuntime
                   runtimeUrl={PLAYGROUND_RUNTIME_URL}

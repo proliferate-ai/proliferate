@@ -16,12 +16,15 @@ const CloudClientContext = createContext<ProliferateCloudClient | null>(null);
 export interface CloudClientProviderProps {
   client?: ProliferateCloudClient | null;
   clientFactory?: (() => ProliferateCloudClient) | null;
+  /** Keep false for nested context-only scopes that must not replace the host default client. */
+  syncGlobalClient?: boolean;
   children: ReactNode;
 }
 
 export function CloudClientProvider({
   client,
   clientFactory,
+  syncGlobalClient = true,
   children,
 }: CloudClientProviderProps) {
   const resolvedClient = useMemo(() => {
@@ -35,10 +38,10 @@ export function CloudClientProvider({
   }, [client, clientFactory]);
 
   useEffect(() => {
-    if (resolvedClient) {
+    if (syncGlobalClient && resolvedClient) {
       setProliferateClient(resolvedClient);
     }
-  }, [resolvedClient]);
+  }, [resolvedClient, syncGlobalClient]);
 
   return (
     <CloudClientContext.Provider value={resolvedClient}>
