@@ -7,6 +7,7 @@ import { test } from "node:test";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
 const release = readFileSync(path.join(REPO_ROOT, ".github/workflows/release-e2e.yml"), "utf8");
+const makefile = readFileSync(path.join(REPO_ROOT, "Makefile"), "utf8");
 const selfhost = readFileSync(path.join(REPO_ROOT, ".github/workflows/release-e2e-selfhost.yml"), "utf8");
 const hardCancel = readFileSync(
   path.join(REPO_ROOT, ".github/workflows/release-e2e-hard-cancel-cleanup.yml"),
@@ -176,7 +177,7 @@ test("provider-backed jobs run shared preflight before build/provider setup", ()
 test("the self-host execution step authenticates run-scoped GHCR cleanup without argv exposure", () => {
   const selfHost = job(release, "release-e2e-selfhost-install");
   const executionStart = selfHost.indexOf(
-    "- name: Build the self-host candidate and run the selected self-host scenarios (strict)",
+    "- name: Run the selected self-host scenarios and cleanup (strict, credential-bounded)",
   );
   const executionEnd = selfHost.indexOf(
     "- name: Upload V4 report and bounded diagnostic logs",
@@ -193,15 +194,46 @@ test("the self-host execution step authenticates run-scoped GHCR cleanup without
   );
 });
 
-test("the arm64 self-host job installs cross before AWS and keeps a hard runtime-aware timeout", () => {
+test("the self-host job finishes long local builds before AWS and bounds provider cleanup below the session", () => {
   const selfHost = job(release, "release-e2e-selfhost-install");
   const crossInstall = selfHost.indexOf("Install cross for exact arm64 self-host runtime");
+  const dependencies = selfHost.indexOf("Install workspace dependencies");
+  const candidateBuild = selfHost.indexOf("Validate inputs and build exact self-host candidates before AWS credentials");
+  const ghcrLogin = selfHost.indexOf("Log in to GHCR (SELFHOST-CFN-1 candidate image push)");
   const aws = selfHost.indexOf("Configure AWS credentials");
-  assert.ok(crossInstall >= 0 && crossInstall < aws);
+  const provider = selfHost.indexOf("Run the selected self-host scenarios and cleanup (strict, credential-bounded)");
+  assert.ok(crossInstall >= 0 && crossInstall < dependencies);
+  assert.ok(dependencies < candidateBuild && candidateBuild < ghcrLogin);
+  assert.ok(ghcrLogin < aws && aws < provider);
   assert.match(selfHost, /if: inputs\.selfhost_candidate_platform == 'linux\/arm64'/);
   assert.match(selfHost, /cargo install cross --git https:\/\/github\.com\/cross-rs\/cross --locked/);
   assert.match(selfHost, /timeout-minutes: 150/);
-  assert.match(selfHost, /role-duration-seconds: 7200/);
+  assert.match(selfHost.slice(candidateBuild, ghcrLogin), /QUALIFICATION_SELFHOST_PHASE=build/);
+  assert.match(selfHost.slice(provider), /QUALIFICATION_SELFHOST_PHASE=run/);
+
+  const roleSeconds = Number(/role-duration-seconds: (\d+)/.exec(selfHost)?.[1]);
+  const providerMinutes = Number(/timeout-minutes: (\d+)/.exec(selfHost.slice(provider))?.[1]);
+  assert.equal(roleSeconds, 7200);
+  assert.equal(providerMinutes, 110);
+  assert.ok(providerMinutes * 60 < roleSeconds, "provider execution+cleanup must expire before AWS credentials");
+  assert.doesNotMatch(
+    selfHost.slice(aws, provider),
+    /pnpm install|cargo install cross|build-selfhost-qualification-candidates|QUALIFICATION_SELFHOST_PHASE=build/,
+    "no long local build may consume the AWS credential window",
+  );
+});
+
+test("the self-host Make split revalidates the exact candidate map before the provider phase", () => {
+  const start = makefile.indexOf("qualification-selfhost:");
+  const end = makefile.indexOf("\n# \"Prove One Real Managed-Cloud Workspace\"", start);
+  assert.ok(start >= 0 && end > start);
+  const target = makefile.slice(start, end);
+  assert.match(makefile, /QUALIFICATION_SELFHOST_PHASE \?= all/);
+  assert.match(target, /all\|build\|run/);
+  assert.match(target, /candidate_map="\$\$run_dir\/candidate-build\.json"/);
+  assert.match(target, /--artifact-mode reuse/);
+  assert.match(target, /--candidate-build-map "\$\$candidate_map"/);
+  assert.match(target, /if \[ "\$\$phase" = "build" \]; then exit 0; fi/);
 });
 
 test("supported cancellation keeps local receipts and hard cancellation keeps the trusted managed reaper", () => {
