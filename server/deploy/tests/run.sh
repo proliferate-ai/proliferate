@@ -517,6 +517,7 @@ awk '
       -e 's|/opt/aws/bin/cfn-init|"$FAKE_CFN_BIN/cfn-init"|g' \
       -e 's|/opt/aws/bin/cfn-signal|"$FAKE_CFN_BIN/cfn-signal"|g' \
       -e 's|dnf install|"$FAKE_CFN_BIN/dnf" install|g' \
+      -e 's|timeout --signal=TERM 18m|"$FAKE_CFN_BIN/timeout"|g' \
       -e 's|${AWS::StackName}|test-stack|g' \
       -e 's|${AWS::Region}|us-east-1|g' \
   >"$user_data"
@@ -531,11 +532,18 @@ cat >"$FAKE_CFN_BIN/cfn-init" <<'EOF'
 #!/usr/bin/env bash
 exit "${FAKE_CFN_INIT_EXIT:-0}"
 EOF
+cat >"$FAKE_CFN_BIN/timeout" <<'EOF'
+#!/usr/bin/env bash
+if [[ -n "${FAKE_TIMEOUT_EXIT:-}" ]]; then
+  exit "$FAKE_TIMEOUT_EXIT"
+fi
+exec "$@"
+EOF
 cat >"$FAKE_CFN_BIN/cfn-signal" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$@" >"$CFN_SIGNAL_ARGS_FILE"
 EOF
-chmod +x "$FAKE_CFN_BIN/dnf" "$FAKE_CFN_BIN/cfn-init" "$FAKE_CFN_BIN/cfn-signal"
+chmod +x "$FAKE_CFN_BIN/dnf" "$FAKE_CFN_BIN/cfn-init" "$FAKE_CFN_BIN/timeout" "$FAKE_CFN_BIN/cfn-signal"
 
 signal_args="$SCRATCH/cfn-signal.args"
 FAKE_CFN_BIN="$FAKE_CFN_BIN" FAKE_CFN_INIT_EXIT=23 CFN_SIGNAL_ARGS_FILE="$signal_args" \
@@ -547,6 +555,15 @@ grep -qx -- '-e' "$signal_args" \
   && grep -qx -- 'cfn-init bootstrap failed with exit code 23; inspect /var/log/cfn-init.log and /var/log/cfn-init-cmd.log through SSM.' "$signal_args" \
   && ok "template UserData failure invokes cfn-signal with bounded diagnostics" \
   || no "template UserData failure did not invoke cfn-signal with the expected bounded reason"
+
+timeout_signal_args="$SCRATCH/cfn-timeout-signal.args"
+FAKE_CFN_BIN="$FAKE_CFN_BIN" FAKE_TIMEOUT_EXIT=124 CFN_SIGNAL_ARGS_FILE="$timeout_signal_args" \
+  bash "$user_data" >/dev/null 2>&1
+user_data_status=$?
+[[ "$user_data_status" -eq 124 ]] && ok "template UserData bounds an overlong cfn-init before the CreationPolicy timeout" || no "template UserData returned $user_data_status instead of timeout exit 124"
+grep -qx -- 'cfn-init bootstrap exceeded the 18-minute limit; inspect /var/log/cfn-init.log and /var/log/cfn-init-cmd.log through SSM.' "$timeout_signal_args" \
+  && ok "template UserData timeout invokes cfn-signal with bounded diagnostics" \
+  || no "template UserData timeout did not invoke cfn-signal with the expected bounded reason"
 
 if [[ "${PROLIFERATE_TEST_AWS:-0}" == "1" ]] && command -v aws >/dev/null 2>&1; then
   if aws cloudformation validate-template --template-body "file://$AWS_TEMPLATE" >/dev/null 2>&1; then

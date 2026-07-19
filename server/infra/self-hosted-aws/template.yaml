@@ -552,9 +552,9 @@ Resources:
           #!/bin/bash -x
           set -o pipefail
 
-          # Do not enable `errexit` here. A failed cfn-init must still reach
-          # cfn-signal so CloudFormation reports the bounded stage/exit reason
-          # immediately instead of waiting for the CreationPolicy timeout.
+          # Do not enable `errexit` here. A failed or overlong cfn-init must
+          # still reach cfn-signal so CloudFormation reports the bounded
+          # stage/exit reason before the 20-minute CreationPolicy timeout.
           EXIT_CODE=0
           FAILURE_REASON="CloudFormation bootstrap completed."
           dnf install -y aws-cfn-bootstrap || {
@@ -562,9 +562,13 @@ Resources:
             FAILURE_REASON="aws-cfn-bootstrap installation failed with exit code $EXIT_CODE."
           }
           if [ "$EXIT_CODE" -eq 0 ]; then
-            /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource ProliferateInstance --region ${AWS::Region} --configsets bootstrap || {
+            timeout --signal=TERM 18m /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource ProliferateInstance --region ${AWS::Region} --configsets bootstrap || {
               EXIT_CODE=$?
-              FAILURE_REASON="cfn-init bootstrap failed with exit code $EXIT_CODE; inspect /var/log/cfn-init.log and /var/log/cfn-init-cmd.log through SSM."
+              if [ "$EXIT_CODE" -eq 124 ]; then
+                FAILURE_REASON="cfn-init bootstrap exceeded the 18-minute limit; inspect /var/log/cfn-init.log and /var/log/cfn-init-cmd.log through SSM."
+              else
+                FAILURE_REASON="cfn-init bootstrap failed with exit code $EXIT_CODE; inspect /var/log/cfn-init.log and /var/log/cfn-init-cmd.log through SSM."
+              fi
             }
           fi
           if [ -x /opt/aws/bin/cfn-signal ]; then
