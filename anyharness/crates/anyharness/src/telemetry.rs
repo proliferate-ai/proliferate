@@ -128,9 +128,10 @@ where
         return sentry_tracing::EventMapping::Ignore;
     }
 
-    // Ordinary events retain sentry-tracing's existing behavior. Only the
-    // incident target inherits active request/flow span fields, which keeps
-    // the new correlation context bounded to the canonical incident.
+    // The prior event-filter layer left span-attribute inheritance disabled,
+    // so ordinary events continue without parent span fields; Sentry's active
+    // scope still supplies their trace context. Only the incident target opts
+    // into bounded request/flow fields from active spans.
     let is_runtime_incident = event.metadata().target() == RUNTIME_INCIDENT_TRACING_TARGET;
     let span_context = is_runtime_incident.then_some(&context);
     let mut mappings = Vec::new();

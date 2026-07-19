@@ -190,6 +190,10 @@ const MAX_ERROR_CAUSE_CHAIN_DEPTH = 8;
  * The receipt is correlation only: its exact namespace and canonical UUID
  * shape identify the runtime as the exception owner, without claiming that a
  * telemetry vendor accepted the corresponding event.
+ *
+ * Validation covers the entire bounded cause chain and fails closed if any
+ * later cause is not an Error, repeats, cannot be read, or exceeds the depth
+ * limit, even when an earlier error carries a valid receipt.
  */
 export function hasAnyHarnessRuntimeIncidentReceipt(error: unknown): boolean {
   let current = error;

@@ -1,11 +1,11 @@
 use std::{collections::BTreeMap, sync::Arc};
 
-use sentry::protocol::{Breadcrumb, Context as SentryContext, User, Value};
+use sentry::protocol::{Breadcrumb, Context as SentryContext, SpanId, TraceId, User, Value};
 
 use super::{
     default_release, log_path_for_command, runtime_home_from_install, runtime_home_from_serve,
-    scrub, sentry_event_filter_for_target, sentry_event_mapper, sentry_scope_tags,
-    sentry_user_from_id, stamped_git_sha, RUNTIME_INCIDENT_FINGERPRINT,
+    scrub, sentry_event_filter, sentry_event_filter_for_target, sentry_event_mapper,
+    sentry_scope_tags, sentry_user_from_id, stamped_git_sha, RUNTIME_INCIDENT_FINGERPRINT,
 };
 use crate::{
     cli::Commands,
@@ -63,6 +63,83 @@ fn tracing_error_reaches_the_sentry_client() {
         .fingerprint
         .iter()
         .all(|part| part.as_ref() != RUNTIME_INCIDENT_FINGERPRINT));
+}
+
+fn emit_ordinary_error_inside_span() -> (TraceId, SpanId) {
+    let request_span = tracing::info_span!("ordinary_request", request_id = "request-1");
+    let _request_guard = request_span.enter();
+    let operation_span = tracing::info_span!("ordinary_operation", operation_id = "operation-1");
+    let _operation_guard = operation_span.enter();
+
+    let active_span = sentry::configure_scope(|scope| scope.get_span())
+        .expect("tracing span must install an active Sentry span");
+    let trace_context = active_span.get_trace_context();
+    let span_id = match &active_span {
+        sentry::TransactionOrSpan::Transaction(_) => trace_context.span_id,
+        sentry::TransactionOrSpan::Span(span) => span.get_span_id(),
+    };
+    let active_identity = (trace_context.trace_id, span_id);
+
+    tracing::error!(error_code = "ORDINARY_FAILURE", "ordinary runtime failure");
+    active_identity
+}
+
+#[test]
+fn ordinary_error_retains_pre_mapper_span_attribute_behavior() {
+    use tracing_subscriber::layer::SubscriberExt;
+
+    let old_filter_subscriber = tracing_subscriber::registry()
+        .with(sentry_tracing::layer().event_filter(sentry_event_filter));
+    let mut old_active_identity = None;
+    let old_events = sentry::test::with_captured_events_options(
+        || {
+            tracing::subscriber::with_default(old_filter_subscriber, || {
+                old_active_identity = Some(emit_ordinary_error_inside_span());
+            });
+        },
+        sentry_test_options(),
+    );
+
+    let mapper_subscriber = tracing_subscriber::registry()
+        .with(sentry_tracing::layer().event_mapper(sentry_event_mapper));
+    let mut mapper_active_identity = None;
+    let mapper_events = sentry::test::with_captured_events_options(
+        || {
+            tracing::subscriber::with_default(mapper_subscriber, || {
+                mapper_active_identity = Some(emit_ordinary_error_inside_span());
+            });
+        },
+        sentry_test_options(),
+    );
+
+    assert_eq!(old_events.len(), 1);
+    assert_eq!(mapper_events.len(), 1);
+    let old_trace = match old_events[0].contexts.get("trace") {
+        Some(SentryContext::Trace(trace)) => trace,
+        other => panic!("expected old-filter trace context, got {other:?}"),
+    };
+    let mapper_trace = match mapper_events[0].contexts.get("trace") {
+        Some(SentryContext::Trace(trace)) => trace,
+        other => panic!("expected mapper trace context, got {other:?}"),
+    };
+    assert_eq!(
+        (old_trace.trace_id, old_trace.span_id),
+        old_active_identity.expect("old-filter active identity")
+    );
+    assert_eq!(
+        (mapper_trace.trace_id, mapper_trace.span_id),
+        mapper_active_identity.expect("mapper active identity")
+    );
+    let old_fields = old_events[0].contexts.get("Rust Tracing Fields");
+    let mapper_fields = mapper_events[0].contexts.get("Rust Tracing Fields");
+    assert_eq!(mapper_fields, old_fields);
+    let fields = match mapper_fields {
+        Some(SentryContext::Other(fields)) => fields,
+        other => panic!("expected ordinary event fields, got {other:?}"),
+    };
+    assert_eq!(string_field(fields, "error_code"), "ORDINARY_FAILURE");
+    assert!(!fields.contains_key("ordinary_request:request_id"));
+    assert!(!fields.contains_key("ordinary_operation:operation_id"));
 }
 
 #[test]

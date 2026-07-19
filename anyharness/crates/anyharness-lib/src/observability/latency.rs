@@ -112,6 +112,7 @@ fn looks_like_secret(value: &str) -> bool {
         "xoxp-",
         "npm_",
         "akia",
+        "eyj",
         "bearer",
         "basic",
     ]
@@ -198,6 +199,24 @@ mod tests {
         assert!(flow.flow_source.is_none());
         assert!(flow.prompt_id.is_none());
         assert!(flow.measurement_operation_id.is_none());
+    }
+
+    #[test]
+    fn rejects_jwt_like_flow_header_values_case_insensitively() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "x-anyharness-flow-id",
+            HeaderValue::from_static("eyJhbGciOiJIUzI1NiJ9.payload.signature"),
+        );
+        headers.insert(
+            "x-anyharness-prompt-id",
+            HeaderValue::from_static("eyjhbGciOiJIUzI1NiJ9.payload.signature"),
+        );
+
+        let flow = FlowHeaders::from_headers(&headers);
+
+        assert!(flow.flow_id.is_none());
+        assert!(flow.prompt_id.is_none());
     }
 
     #[test]
