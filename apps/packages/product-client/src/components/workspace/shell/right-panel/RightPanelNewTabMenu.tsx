@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,6 +20,8 @@ interface RightPanelNewTabMenuProps {
   onCreateTerminal: () => void;
 }
 
+type MenuCloseReason = "escape" | "selection" | "outside-pointer";
+
 export function RightPanelNewTabMenu({
   open,
   defaultKind,
@@ -28,7 +30,46 @@ export function RightPanelNewTabMenu({
   onCreateTerminal,
 }: RightPanelNewTabMenuProps) {
   const createButtonRef = useRef<HTMLButtonElement>(null);
-  const closeReasonRef = useRef<"escape" | "selection" | "outside-pointer" | null>(null);
+  const closeReasonRef = useRef<MenuCloseReason | null>(null);
+  const pendingRestoreFrameRef = useRef<number | null>(null);
+  const restoreGenerationRef = useRef(0);
+  const isMountedRef = useRef(false);
+  const isOpenRef = useRef(open);
+  isOpenRef.current = open;
+
+  const cancelPendingRestore = useCallback(() => {
+    const pendingFrame = pendingRestoreFrameRef.current;
+    if (pendingFrame !== null) {
+      window.cancelAnimationFrame(pendingFrame);
+      pendingRestoreFrameRef.current = null;
+    }
+  }, []);
+
+  const invalidatePendingRestore = useCallback(() => {
+    restoreGenerationRef.current += 1;
+    cancelPendingRestore();
+  }, [cancelPendingRestore]);
+
+  const registerCloseReason = (reason: MenuCloseReason) => {
+    invalidatePendingRestore();
+    closeReasonRef.current = reason;
+  };
+
+  useLayoutEffect(() => {
+    if (open) {
+      closeReasonRef.current = null;
+      invalidatePendingRestore();
+    }
+  }, [invalidatePendingRestore, open]);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      closeReasonRef.current = null;
+      invalidatePendingRestore();
+    };
+  }, [invalidatePendingRestore]);
 
   const handleMenuOpenChange = (isOpen: boolean) => {
     // A direct click owns primary terminal creation. The controlled menu only
@@ -44,7 +85,7 @@ export function RightPanelNewTabMenu({
   };
 
   const handleSelectTerminal = () => {
-    closeReasonRef.current = "selection";
+    registerCloseReason("selection");
     handleCreateTerminal();
   };
 
@@ -57,16 +98,37 @@ export function RightPanelNewTabMenu({
       return;
     }
 
-    requestAnimationFrame(() => {
+    if (closeReason === null) {
+      invalidatePendingRestore();
+    }
+    const restoreGeneration = restoreGenerationRef.current;
+    const restoreFrame = window.requestAnimationFrame(() => {
+      if (pendingRestoreFrameRef.current !== restoreFrame) {
+        return;
+      }
+      pendingRestoreFrameRef.current = null;
+      if (
+        !isMountedRef.current
+        || restoreGenerationRef.current !== restoreGeneration
+        || isOpenRef.current
+      ) {
+        return;
+      }
+
+      const createButton = createButtonRef.current;
+      if (!createButton?.isConnected) {
+        return;
+      }
       const activeElement = document.activeElement;
       const shouldRestoreFocus = closeReason === "escape"
         || activeElement === document.body
         || !(activeElement instanceof HTMLElement)
         || !activeElement.isConnected;
       if (shouldRestoreFocus) {
-        createButtonRef.current?.focus();
+        createButton.focus();
       }
     });
+    pendingRestoreFrameRef.current = restoreFrame;
   };
 
   const trigger = (
@@ -94,10 +156,10 @@ export function RightPanelNewTabMenu({
         align="end"
         className="min-w-40 shadow-popover"
         onEscapeKeyDown={() => {
-          closeReasonRef.current = "escape";
+          registerCloseReason("escape");
         }}
         onPointerDownOutside={() => {
-          closeReasonRef.current = "outside-pointer";
+          registerCloseReason("outside-pointer");
         }}
         onCloseAutoFocus={handleCloseAutoFocus}
       >

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -15,6 +15,7 @@ function ProgrammaticPickerHarness({
 
   return (
     <>
+      <button type="button" onClick={() => setOpen(true)}>Open picker</button>
       <button type="button">Outside target</button>
       <RightPanelNewTabMenu
         open={open}
@@ -27,8 +28,39 @@ function ProgrammaticPickerHarness({
   );
 }
 
+function installAnimationFrameController() {
+  let nextFrameId = 1;
+  const callbacks = new Map<number, FrameRequestCallback>();
+  const cancelledFrameIds = new Set<number>();
+
+  vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+    const frameId = nextFrameId;
+    nextFrameId += 1;
+    callbacks.set(frameId, callback);
+    return frameId;
+  });
+  vi.spyOn(window, "cancelAnimationFrame").mockImplementation((frameId) => {
+    cancelledFrameIds.add(frameId);
+  });
+
+  return {
+    cancelledFrameIds,
+    frameIds: () => [...callbacks.keys()],
+    run(frameId: number) {
+      const callback = callbacks.get(frameId);
+      if (!callback) {
+        throw new Error(`Unknown animation frame ${frameId}`);
+      }
+      callback(performance.now());
+    },
+  };
+}
+
 describe("RightPanelNewTabMenu", () => {
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
 
   it("creates exactly one terminal for each direct plus click", async () => {
     const user = userEvent.setup();
@@ -147,6 +179,91 @@ describe("RightPanelNewTabMenu", () => {
       expect(screen.queryByRole("menuitem", { name: "Terminal" })).toBeNull();
     });
     expect(document.activeElement).not.toBe(createButton);
+  });
+
+  it("invalidates an Escape restore across rapid reopen and outside dismissal", async () => {
+    const user = userEvent.setup();
+    render(<ProgrammaticPickerHarness />);
+
+    const outsideTarget = screen.getByText("Outside target").closest("button")!;
+    const terminalItem = await screen.findByRole("menuitem", { name: "Terminal" });
+    await waitFor(() => expect(document.activeElement).toBe(terminalItem));
+    const frames = installAnimationFrameController();
+
+    await user.keyboard("{Escape}");
+    const escapeFrameIds = frames.frameIds();
+    const escapeFrameId = escapeFrameIds[escapeFrameIds.length - 1];
+    expect(escapeFrameId).toBeDefined();
+
+    await user.click(screen.getByRole("button", { name: "Open picker" }));
+    const reopenedTerminalItem = await screen.findByRole("menuitem", { name: "Terminal" });
+    reopenedTerminalItem.focus();
+    expect(document.activeElement).toBe(reopenedTerminalItem);
+
+    fireEvent.pointerDown(outsideTarget);
+    outsideTarget.focus();
+    await waitFor(() => {
+      expect(screen.queryByRole("menuitem", { name: "Terminal" })).toBeNull();
+    });
+
+    expect(frames.cancelledFrameIds).toContain(escapeFrameId!);
+    act(() => frames.run(escapeFrameId!));
+    expect(document.activeElement).toBe(outsideTarget);
+  });
+
+  it("makes an Escape restore harmless after rapid reopen and unmount", async () => {
+    const user = userEvent.setup();
+    const rendered = render(<ProgrammaticPickerHarness />);
+
+    const terminalItem = await screen.findByRole("menuitem", { name: "Terminal" });
+    await waitFor(() => expect(document.activeElement).toBe(terminalItem));
+    const frames = installAnimationFrameController();
+
+    await user.keyboard("{Escape}");
+    const escapeFrameIds = frames.frameIds();
+    const escapeFrameId = escapeFrameIds[escapeFrameIds.length - 1];
+    expect(escapeFrameId).toBeDefined();
+
+    await user.click(screen.getByRole("button", { name: "Open picker" }));
+    const reopenedTerminalItem = await screen.findByRole("menuitem", { name: "Terminal" });
+    reopenedTerminalItem.focus();
+    rendered.unmount();
+
+    expect(frames.cancelledFrameIds).toContain(escapeFrameId!);
+    expect(() => act(() => frames.run(escapeFrameId!))).not.toThrow();
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it("allows only the latest Escape generation to restore focus", async () => {
+    const user = userEvent.setup();
+    render(<ProgrammaticPickerHarness />);
+
+    const terminalItem = await screen.findByRole("menuitem", { name: "Terminal" });
+    await waitFor(() => expect(document.activeElement).toBe(terminalItem));
+    const frames = installAnimationFrameController();
+
+    await user.keyboard("{Escape}");
+    const firstEscapeFrameIds = frames.frameIds();
+    const firstEscapeFrameId = firstEscapeFrameIds[firstEscapeFrameIds.length - 1];
+    expect(firstEscapeFrameId).toBeDefined();
+
+    await user.click(screen.getByRole("button", { name: "Open picker" }));
+    const reopenedTerminalItem = await screen.findByRole("menuitem", { name: "Terminal" });
+    reopenedTerminalItem.focus();
+    expect(document.activeElement).toBe(reopenedTerminalItem);
+    await user.keyboard("{Escape}");
+
+    const secondEscapeFrameIds = frames.frameIds();
+    const secondEscapeFrameId = secondEscapeFrameIds[secondEscapeFrameIds.length - 1];
+    expect(secondEscapeFrameId).toBeDefined();
+    const createButton = screen.getByRole("button", { name: "New terminal" });
+
+    expect(frames.cancelledFrameIds).toContain(firstEscapeFrameId!);
+    act(() => frames.run(firstEscapeFrameId!));
+    expect(document.activeElement).not.toBe(createButton);
+
+    act(() => frames.run(secondEscapeFrameId!));
+    expect(document.activeElement).toBe(createButton);
   });
 
   it("disables terminal creation until the workspace is ready", () => {

@@ -1,5 +1,6 @@
 import {
   useCallback,
+  useRef,
   useState,
   type SetStateAction,
 } from "react";
@@ -78,6 +79,7 @@ export function useRightPanelEntryActions({
   const showToast = useToastStore((store) => store.show);
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
   const [terminalFocusNonce, setTerminalFocusNonce] = useState(0);
+  const activationApplicationQueueRef = useRef<Promise<void>>(Promise.resolve());
   const { selectViewer, handleCloseViewer } = useRightPanelViewerActions({
     state,
     isCloudWorkspaceSelected,
@@ -118,25 +120,47 @@ export function useRightPanelEntryActions({
       return null;
     }
     const activate = options?.activate ?? true;
-    try {
-      const terminalId = await createTab(workspaceId);
-      const terminalKey = rightPanelTerminalHeaderKey(terminalId);
-      updateState((previous) => ({
-        ...previous,
-        activeEntryKey: activate ? terminalKey : previous.activeEntryKey,
-        headerOrder: previous.headerOrder.includes(terminalKey)
-          ? previous.headerOrder
-          : [...previous.headerOrder, terminalKey],
-      }));
-      if (activate) {
-        setTerminalFocusNonce((nonce) => nonce + 1);
+    // Launch every creation immediately, but apply activating results in click
+    // order so reverse promise resolution cannot give an older click final
+    // ownership of selection or focus.
+    const creationResult = createTab(workspaceId).then(
+      (terminalId) => ({ status: "created" as const, terminalId }),
+      (error: unknown) => ({ status: "failed" as const, error }),
+    );
+    const applyCreation = async () => {
+      try {
+        const result = await creationResult;
+        if (result.status === "failed") {
+          throw result.error;
+        }
+        const terminalKey = rightPanelTerminalHeaderKey(result.terminalId);
+        updateState((previous) => ({
+          ...previous,
+          activeEntryKey: activate ? terminalKey : previous.activeEntryKey,
+          headerOrder: previous.headerOrder.includes(terminalKey)
+            ? previous.headerOrder
+            : [...previous.headerOrder, terminalKey],
+        }));
+        if (activate) {
+          setTerminalFocusNonce((nonce) => nonce + 1);
+        }
+        return result.terminalId;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        showToast(`Failed to create terminal tab: ${message}`);
+        return null;
       }
-      return terminalId;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      showToast(`Failed to create terminal tab: ${message}`);
-      return null;
+    };
+
+    if (!activate) {
+      return applyCreation();
     }
+    const activationResult = activationApplicationQueueRef.current.then(applyCreation);
+    activationApplicationQueueRef.current = activationResult.then(
+      () => undefined,
+      () => undefined,
+    );
+    return activationResult;
   }, [
     createTab,
     getWorkspaceRuntimeBlockReason,
