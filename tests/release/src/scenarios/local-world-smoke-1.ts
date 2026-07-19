@@ -25,6 +25,10 @@ import {
   type LocalWorldPorts,
   type ReadyLocalWorld,
 } from "../worlds/local-workspace/world.js";
+import {
+  resolveVisibleComposerModelOptionId,
+  waitForComposerModelSelection,
+} from "./local/composer-model-option.js";
 import { resolveLocalWorkspaceSessionId } from "./local/local-session.js";
 
 /**
@@ -172,7 +176,7 @@ export interface LocalWorldSmokeDriver {
   liveProbeModels(world: ReadyLocalWorld, harnessKind: string): Promise<string[]>;
   /** The qualification allowlist, cheapest-first (from controller preflight). */
   allowlistModels(world: ReadyLocalWorld): Promise<string[]>;
-  /** Selects `modelId` in the home composer's model picker and asserts the picker reflects it. */
+  /** Selects canonical `modelId` through its unique exact/known-alias option and asserts it sticks. */
   selectModelInUi(page: ProductPage, modelId: string): Promise<void>;
   /**
    * Sends the bounded prompt from the home composer. This materializes the
@@ -345,7 +349,6 @@ export const defaultLocalWorldSmokeDriver: LocalWorldSmokeDriver = {
     // ready (Desktop refetches agents on an interval). Retry opening the picker
     // until the model option appears.
     const deadline = Date.now() + MODEL_PICKER_TIMEOUT_MS;
-    const optionSelector = `[data-model-option="${cssAttr(modelId)}"]`;
     let lastAvailable: Array<string | null> = [];
     while (Date.now() < deadline) {
       const trigger = p.locator("[data-composer-model-trigger]:not([disabled])").first();
@@ -356,20 +359,26 @@ export const defaultLocalWorldSmokeDriver: LocalWorldSmokeDriver = {
         await sleep(1_500);
         continue;
       }
-      const option = p.locator(optionSelector).first();
-      if (await option.count().catch(() => 0)) {
-        await option.click();
-        // Assert the composer now reflects the selection (spec step 7).
-        await p
-          .locator(`[data-composer-model-trigger][data-composer-selected-model="${cssAttr(modelId)}"]`)
-          .first()
-          .waitFor({ state: "attached", timeout: 10_000 });
-        return;
-      }
       lastAvailable = await p
         .locator("[data-model-option]")
         .evaluateAll((els) => els.map((el) => el.getAttribute("data-model-option")))
         .catch(() => []);
+      const visibleModelId = resolveVisibleComposerModelOptionId(
+        modelId,
+        lastAvailable.filter((candidate): candidate is string => candidate !== null),
+      );
+      if (visibleModelId) {
+        const option = p.locator(`[data-model-option="${cssAttr(visibleModelId)}"]`).first();
+        await option.click();
+        // The runtime/LiteLLM id remains canonical evidence, while Claude's
+        // live selector may reflect the equivalent agent alias (`haiku`).
+        await waitForComposerModelSelection(
+          () => trigger.getAttribute("data-composer-selected-model"),
+          modelId,
+          10_000,
+        );
+        return;
+      }
       // Close the popover and retry after a beat.
       await p.keyboard.press("Escape").catch(() => undefined);
       await sleep(2_000);
@@ -443,17 +452,16 @@ export const defaultLocalWorldSmokeDriver: LocalWorldSmokeDriver = {
       throw new Error("reopenAndVerify: the transcript did not re-render an assistant reply after reopen.");
     }
     // The selected model (and thus harness) must remain visible in the composer.
-    await p
-      .locator(
-        `[data-composer-model-trigger][data-composer-selected-model="${cssAttr(expectations.modelId)}"]`,
-      )
-      .first()
-      .waitFor({ state: "attached", timeout: 15_000 })
-      .catch(() => {
-        throw new Error(
-          `reopenAndVerify: composer no longer reflects model "${expectations.modelId}" after reopen.`,
-        );
-      });
+    const modelTrigger = p.locator("[data-composer-model-trigger]").first();
+    await waitForComposerModelSelection(
+      () => modelTrigger.getAttribute("data-composer-selected-model"),
+      expectations.modelId,
+      15_000,
+    ).catch(() => {
+      throw new Error(
+        `reopenAndVerify: composer no longer reflects model "${expectations.modelId}" after reopen.`,
+      );
+    });
   },
   snapshotSpend: (world, actor) => world.gateway.snapshotSpend(actor.gatewayKey),
   correlateTurn: (world, params) =>
