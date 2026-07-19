@@ -45,6 +45,16 @@ beforeEach(() => {
 });
 
 describe("ComposerRichTextEditor", () => {
+  it("anchors the placeholder to the editor's local positioning frame", async () => {
+    const harness = renderEditor({ value: "" });
+    await harness.ready();
+
+    const frame = harness.root.closest<HTMLElement>("[data-chat-composer-editor-frame]");
+    expect(frame).toBeTruthy();
+    expect(frame?.classList.contains("relative")).toBe(true);
+    expect(frame?.textContent).toBe("Message");
+  });
+
   it("toggles bold and italic for future typing from command-key shortcuts", async () => {
     const harness = renderEditor();
     await harness.ready();

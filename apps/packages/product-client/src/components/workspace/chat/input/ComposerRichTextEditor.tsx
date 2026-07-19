@@ -125,38 +125,40 @@ export function ComposerRichTextEditor({
   };
   return (
     <LexicalComposer initialConfig={initialConfig}>
-      <RichTextPlugin
-        contentEditable={(
-          <ContentEditable
-            data-chat-composer-editor
-            data-home-composer-editor={surface === "home" ? true : undefined}
-            data-telemetry-mask
-            ref={rootRef}
-            aria-placeholder={placeholder}
-            placeholder={<></>}
-            spellCheck={false}
-            autoComplete="off"
-            autoCorrect="off"
-            autoCapitalize="off"
-            onKeyDown={(event) => {
-              if (event.key === "Enter" || event.key === "Tab" || event.defaultPrevented) return;
-              onKeyDown?.(event);
-            }}
-            onPaste={(event) => {
-              if (isComposerLinkPaste(event.clipboardData.getData("text/plain"))) {
-                event.stopPropagation();
-              }
-            }}
-            className={`relative w-full resize-none bg-transparent text-[length:var(--text-composer)] leading-[var(--text-composer--line-height)] text-foreground outline-none ${disabled ? "opacity-60" : ""} ${className}`}
-          />
-        )}
-        placeholder={(
-          <div className="pointer-events-none absolute inset-x-0 top-0 truncate text-[length:var(--text-composer)] leading-[var(--text-composer--line-height)] text-muted-foreground">
-            {placeholder}
-          </div>
-        )}
-        ErrorBoundary={LexicalErrorBoundary}
-      />
+      <div data-chat-composer-editor-frame className="relative min-h-[inherit]">
+        <RichTextPlugin
+          contentEditable={(
+            <ContentEditable
+              data-chat-composer-editor
+              data-home-composer-editor={surface === "home" ? true : undefined}
+              data-telemetry-mask
+              ref={rootRef}
+              aria-placeholder={placeholder}
+              placeholder={<></>}
+              spellCheck={false}
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === "Tab" || event.defaultPrevented) return;
+                onKeyDown?.(event);
+              }}
+              onPaste={(event) => {
+                if (isComposerLinkPaste(event.clipboardData.getData("text/plain"))) {
+                  event.stopPropagation();
+                }
+              }}
+              className={`relative w-full resize-none bg-transparent text-[length:var(--text-composer)] leading-[var(--text-composer--line-height)] text-foreground outline-none ${disabled ? "opacity-60" : ""} ${className}`}
+            />
+          )}
+          placeholder={(
+            <div className="pointer-events-none absolute inset-x-0 top-0 truncate text-[length:var(--text-composer)] leading-[var(--text-composer--line-height)] text-muted-foreground">
+              {placeholder}
+            </div>
+          )}
+          ErrorBoundary={LexicalErrorBoundary}
+        />
+      </div>
       <HistoryPlugin />
       <ListPlugin />
       <MarkdownShortcutPlugin transformers={INPUT_TRANSFORMERS} />
