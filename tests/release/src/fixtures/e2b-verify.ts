@@ -220,7 +220,7 @@ export async function getProviderSandboxState(
   return runProbe<E2BStateResult>(["state", providerSandboxId], env);
 }
 
-/** Idempotent provider-sandbox kill for run cleanup (an absent sandbox counts as killed). */
+/** Idempotent provider-sandbox kill (`killed: false` means the exact id was already absent). */
 export async function killProviderSandbox(
   providerSandboxId: string,
   env: NodeJS.ProcessEnv = process.env,

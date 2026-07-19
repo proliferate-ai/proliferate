@@ -998,7 +998,7 @@ test("Cell D in-memory cleanup treats pre-return registration failure as no-prov
   );
 });
 
-test("Cell D in-memory cleanup retains the known provider across fresh-replay deletion", async () => {
+test("Cell D in-memory cleanup accepts an already-absent known provider only with empty inventory", async () => {
   const world = fakeWorld();
   let release!: () => Promise<void>;
   const promoted: string[] = [];
@@ -1012,7 +1012,7 @@ test("Cell D in-memory cleanup retains the known provider across fresh-replay de
   const killed: string[] = [];
   const cleanup = await registerFailureInjectionSandboxIntent(world, "cloud-1", {
     find: async () => ({ providerSandboxId: null, state: null, matches: [], count: 0 }),
-    kill: async (providerId) => { killed.push(providerId); return { killed: true }; },
+    kill: async (providerId) => { killed.push(providerId); return { killed: false }; },
   });
   await cleanup.markAcquired("e2b-1");
   await release();

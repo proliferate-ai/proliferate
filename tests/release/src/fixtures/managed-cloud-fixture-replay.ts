@@ -289,10 +289,10 @@ export function managedCloudFixtureReplayHandlers(
         await inputs.ledger.markAcquired(entry.entryId, promoted);
       }
       for (const providerSandboxId of providerIds) {
-        const result = await providers.killSandbox(providerSandboxId, env);
-        if (result.killed !== true) {
-          throw new Error(`E2B did not positively affirm cleanup of sandbox ${providerSandboxId}.`);
-        }
+        // E2B returns `killed: false` when the exact sandbox is already absent.
+        // That is idempotently clean, but the return value alone is not our
+        // proof: the exhaustive logical-id inventory below must still be empty.
+        await providers.killSandbox(providerSandboxId, env);
       }
       const remaining = await providers.findSandbox(identity.cloudSandboxId, env);
       const remainingCount = exactE2bMatches(remaining).length;

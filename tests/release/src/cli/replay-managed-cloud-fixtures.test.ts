@@ -532,8 +532,9 @@ test("E2B cleanup persists discovered provider ids before delete and survives re
       },
       async killSandbox(providerSandboxId: string) {
         killed.push(providerSandboxId);
+        const wasVisible = providerVisible;
         providerVisible = false;
-        return { killed: true };
+        return { killed: wasVisible };
       },
     };
     const handlers = managedCloudFixtureReplayHandlers({

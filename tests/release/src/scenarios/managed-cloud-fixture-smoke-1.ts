@@ -2229,12 +2229,10 @@ export async function registerFailureInjectionSandboxIntent(
       knownProviderIds.clear();
       for (const providerId of sortedProviderIds) knownProviderIds.add(providerId);
       for (const providerId of providerIds) {
-        const killed = await kill(providerId);
-        if (killed.killed !== true) {
-          throw new Error(
-            `failure-injection: E2B did not positively affirm cleanup of sandbox ${providerId}.`,
-          );
-        }
+        // E2B reports `killed: false` when this exact id is already absent.
+        // Accept that idempotent result only with the exhaustive post-kill
+        // logical-id inventory proof below.
+        await kill(providerId);
       }
       const remaining = await find(cloudSandboxId);
       if (

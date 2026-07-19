@@ -153,7 +153,7 @@ def cmd_pause(provider_sandbox_id: str) -> dict[str, object]:
 
 
 def cmd_kill(provider_sandbox_id: str) -> dict[str, object]:
-    """Idempotent provider-sandbox kill for run cleanup (absent counts as killed)."""
+    """Idempotent provider-sandbox kill (`killed=False` means already absent)."""
     from e2b import Sandbox
     from e2b.exceptions import NotFoundException
 
