@@ -5,12 +5,19 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Layer};
 use crate::{
     app_config::logs_dir_path,
     desktop_telemetry_mode::{resolve_desktop_telemetry_mode, DesktopTelemetryMode},
-    telemetry_file_logging::create_file_log_sink,
+    telemetry_file_logging::{create_file_log_sink, RendererDiagnosticLog},
 };
 
 pub struct TelemetryGuards {
     _sentry: Option<sentry::ClientInitGuard>,
     _file_log: Option<tracing_appender::non_blocking::WorkerGuard>,
+    renderer_diagnostic_log: RendererDiagnosticLog,
+}
+
+impl TelemetryGuards {
+    pub fn renderer_diagnostic_log(&self) -> RendererDiagnosticLog {
+        self.renderer_diagnostic_log.clone()
+    }
 }
 
 fn baked_env(key: &str) -> Option<&'static str> {
@@ -142,9 +149,15 @@ pub fn init() -> TelemetryGuards {
         tracing::info!(log_path = %sink.path.display(), "Desktop native file logging enabled");
     }
 
+    let renderer_diagnostic_log = file_sink
+        .as_ref()
+        .map(RendererDiagnosticLog::from_file_log_sink)
+        .unwrap_or_default();
+
     TelemetryGuards {
         _sentry: telemetry,
         _file_log: file_sink.map(|sink| sink.guard),
+        renderer_diagnostic_log,
     }
 }
 

@@ -187,7 +187,8 @@ fn build_macos_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<tauri::menu
 }
 
 pub fn run() {
-    let _telemetry = telemetry::init();
+    let telemetry = telemetry::init();
+    let renderer_diagnostic_log = telemetry.renderer_diagnostic_log();
     let sc = sidecar::create_sidecar_with_auto_port();
     let cloud_worker_state = cloud_worker::create_cloud_worker_state();
 
@@ -213,6 +214,7 @@ pub fn run() {
         .manage(sc.clone())
         .manage(cloud_worker_state)
         .manage(QuitFlowState::default())
+        .manage(renderer_diagnostic_log)
         .manage(workspace_activity_indicator::WorkspaceActivityIndicatorStore::default())
         .manage(ssh_tunnel::SshTunnelState::default())
         .invoke_handler(tauri::generate_handler![

@@ -3,8 +3,7 @@ import { getRuntimeDesktopAppConfig } from "@/lib/infra/proliferate-api";
 
 const DEDUPE_WINDOW_MS = 3_000;
 
-const seenObjects = new WeakSet<object>();
-const seenFingerprints = new Map<string, number>();
+const successfulDiagnostics = new Map<string, number>();
 const inFlightDiagnostics = new Map<string, Promise<boolean>>();
 let listenersInstalled = false;
 
@@ -53,31 +52,15 @@ function buildFingerprint(
   return [source, message, stack ?? "", componentStack ?? ""].join("\n::\n");
 }
 
-function shouldLogDiagnostic(
-  dedupeKey: unknown,
-  fingerprint: string,
-): boolean {
+function hasRecentSuccessfulDiagnostic(fingerprint: string): boolean {
   const now = Date.now();
-  for (const [entry, timestamp] of seenFingerprints) {
-    if (now - timestamp > DEDUPE_WINDOW_MS) {
-      seenFingerprints.delete(entry);
+  for (const [entry, completedAt] of successfulDiagnostics) {
+    if (now - completedAt >= DEDUPE_WINDOW_MS) {
+      successfulDiagnostics.delete(entry);
     }
   }
 
-  if (dedupeKey && typeof dedupeKey === "object") {
-    if (seenObjects.has(dedupeKey)) {
-      return false;
-    }
-    seenObjects.add(dedupeKey);
-  }
-
-  const previous = seenFingerprints.get(fingerprint);
-  if (previous && now - previous < DEDUPE_WINDOW_MS) {
-    return false;
-  }
-
-  seenFingerprints.set(fingerprint, now);
-  return true;
+  return successfulDiagnostics.has(fingerprint);
 }
 
 function shouldSuppressDiagnostic(
@@ -95,16 +78,15 @@ function shouldSuppressDiagnostic(
     && STACKLESS_NETWORK_REJECTION_MESSAGES.has(message);
 }
 
-async function sendDiagnostic(
+function sendDiagnostic(
   source: string,
   error: unknown,
-  dedupeKey: unknown,
   componentStack?: string | null,
 ): Promise<boolean> {
   const message = messageFromUnknown(error);
   const stack = stackFromUnknown(error);
   if (shouldSuppressDiagnostic(source, error, message, stack, componentStack ?? null)) {
-    return false;
+    return Promise.resolve(false);
   }
 
   const fingerprint = buildFingerprint(source, message, stack, componentStack ?? null);
@@ -112,40 +94,44 @@ async function sendDiagnostic(
   if (inFlight) {
     return inFlight;
   }
-  if (!shouldLogDiagnostic(dedupeKey, fingerprint)) {
+  if (hasRecentSuccessfulDiagnostic(fingerprint)) {
     // An identical diagnostic was already persisted inside the dedupe window.
-    return true;
+    return Promise.resolve(true);
   }
 
-  const persistence = (async () => {
-    try {
-      await logRendererDiagnostic({
-        source,
-        message,
-        stack,
-        componentStack: componentStack ?? null,
-        route: currentRoute(),
-      });
+  let nativePersistence: Promise<void>;
+  try {
+    nativePersistence = Promise.resolve(logRendererDiagnostic({
+      source,
+      message,
+      stack,
+      componentStack: componentStack ?? null,
+      route: currentRoute(),
+    }));
+  } catch (invokeError) {
+    nativePersistence = Promise.reject(invokeError);
+  }
+
+  const persistence = nativePersistence.then(
+    () => {
+      successfulDiagnostics.set(fingerprint, Date.now());
       return true;
-    } catch (invokeError) {
-      // A failed attempt is not a dedupe hit: a later attempt must be allowed
-      // to retry, and concurrent callers must receive this same false result.
-      seenFingerprints.delete(fingerprint);
-      if (dedupeKey && typeof dedupeKey === "object") {
-        seenObjects.delete(dedupeKey);
-      }
+    },
+    (invokeError) => {
+      // Failed attempts never create a successful marker, so later callers
+      // can retry regardless of object identity.
       if (import.meta.env.DEV) {
         console.warn("Failed to persist renderer diagnostic", invokeError);
       }
       return false;
+    },
+  ).finally(() => {
+    if (inFlightDiagnostics.get(fingerprint) === persistence) {
+      inFlightDiagnostics.delete(fingerprint);
     }
-  })();
+  });
   inFlightDiagnostics.set(fingerprint, persistence);
-  try {
-    return await persistence;
-  } finally {
-    inFlightDiagnostics.delete(fingerprint);
-  }
+  return persistence;
 }
 
 export function initializeDesktopNativeDiagnostics(): void {
@@ -157,11 +143,11 @@ export function initializeDesktopNativeDiagnostics(): void {
 
   window.addEventListener("error", (event) => {
     const error = event.error ?? new Error(event.message);
-    void sendDiagnostic("window.error", error, event.error ?? event.message);
+    void sendDiagnostic("window.error", error);
   });
 
   window.addEventListener("unhandledrejection", (event) => {
-    void sendDiagnostic("unhandledrejection", event.reason, event.reason);
+    void sendDiagnostic("unhandledrejection", event.reason);
   });
 }
 
@@ -169,5 +155,5 @@ export function reportReactRenderError(
   error: Error,
   componentStack?: string | null,
 ): Promise<boolean> {
-  return sendDiagnostic("react.render", error, error, componentStack);
+  return sendDiagnostic("react.render", error, componentStack);
 }

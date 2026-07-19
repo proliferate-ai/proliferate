@@ -1,12 +1,13 @@
 const UNAVAILABLE = "Unavailable";
 
-const SENSITIVE_ASSIGNMENT = /\b(prompt|transcript|token|authorization|cookie|password|secret|api[_-]?key)\b\s*[:=]\s*(?:"[^"\n]*"|'[^'\n]*'|[^\n]*)/giu;
-const BEARER_VALUE = /\bbearer\s+[A-Za-z0-9._~+\-/]+=*/giu;
-const SENSITIVE_QUERY_VALUE = /([?&](?:token|key|secret|signature|code)=)[^&#\s]*/giu;
-const FILE_URL = /file:\/{2,3}[^\n)]+/giu;
-const POSIX_PRIVATE_PATH = /\/(?:Users|home|private|Volumes|tmp|var\/folders)\/[^\n)]+/gu;
-const WINDOWS_PRIVATE_PATH = /\b[A-Za-z]:\\[^\n)]+/gu;
-const LONG_OPAQUE_VALUE = /\b[A-Za-z0-9_-]{40,}\b/gu;
+const SENSITIVE_MARKER = /\b(?:prompt|transcript|credential|credentials|token|authorization|cookie|password|passwd|secret|session|jwt|oauth|api[_ -]?key|(?:access|refresh|id|session|client|private)[_ -]?(?:token|secret|key)|bearer)\b/iu;
+const SENSITIVE_QUERY_KEY = /[?&](?:auth|authorization|code|credential|key|password|signature|secret|session|token|api[_-]?key|(?:access|refresh|id|session|client|private)[_-]?(?:token|secret|key))=/iu;
+const URL_CREDENTIALS = /\bhttps?:\/\/[^\s/:\x40]+:[^\s/\x40]+\x40/iu;
+const FILE_URL = /\bfile:\/{2,3}/iu;
+const ABSOLUTE_POSIX_PATH = /(?:^|[\s([{"'=])\/(?!\/)[^\s]/u;
+const ABSOLUTE_WINDOWS_PATH = /(?:^|[\s([{"'=])[A-Za-z]:\\/u;
+const UNC_PATH = /(?:^|[\s([{"'=])\\\\[^\\\s]+\\[^\\\s]+/u;
+const LONG_OPAQUE_VALUE = /\b[A-Za-z0-9_-]{40,}\b/u;
 const CONTROL_CHARACTERS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/gu;
 
 export type RenderErrorReportStatus =
@@ -45,16 +46,19 @@ export function sanitizeRenderErrorText(
   maxLength: number,
 ): string {
   if (typeof value !== "string") return fallback;
-  const normalized = value
-    .replace(CONTROL_CHARACTERS, "")
-    .replace(SENSITIVE_ASSIGNMENT, (_match, label: string) => `${label}=[redacted]`)
-    .replace(BEARER_VALUE, "Bearer [redacted]")
-    .replace(SENSITIVE_QUERY_VALUE, "$1[redacted]")
-    .replace(FILE_URL, "[private path]")
-    .replace(POSIX_PRIVATE_PATH, "[private path]")
-    .replace(WINDOWS_PRIVATE_PATH, "[private path]")
-    .replace(LONG_OPAQUE_VALUE, "[redacted]")
-    .trim();
+  const normalized = value.replace(CONTROL_CHARACTERS, "").trim();
+  if (
+    SENSITIVE_MARKER.test(normalized)
+    || SENSITIVE_QUERY_KEY.test(normalized)
+    || URL_CREDENTIALS.test(normalized)
+    || FILE_URL.test(normalized)
+    || ABSOLUTE_POSIX_PATH.test(normalized)
+    || ABSOLUTE_WINDOWS_PATH.test(normalized)
+    || UNC_PATH.test(normalized)
+    || LONG_OPAQUE_VALUE.test(normalized)
+  ) {
+    return fallback;
+  }
   return normalized ? truncate(normalized, maxLength) : fallback;
 }
 

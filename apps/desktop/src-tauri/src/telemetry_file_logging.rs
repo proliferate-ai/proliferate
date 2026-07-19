@@ -1,4 +1,5 @@
-use std::fs;
+use std::fs::{self, OpenOptions};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use file_rotate::{compression::Compression, suffix::AppendCount, ContentLimit, FileRotate};
@@ -15,6 +16,59 @@ pub struct FileLogSink {
     pub writer: NonBlocking,
     pub guard: WorkerGuard,
     pub path: PathBuf,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct RendererDiagnosticLog {
+    path: Option<PathBuf>,
+}
+
+impl RendererDiagnosticLog {
+    pub fn from_file_log_sink(sink: &FileLogSink) -> Self {
+        Self {
+            path: Some(sink.path.clone()),
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn from_path(path: PathBuf) -> Self {
+        Self { path: Some(path) }
+    }
+
+    pub fn persist(&self, line: &str) -> Result<(), String> {
+        let path = self
+            .path
+            .as_ref()
+            .ok_or_else(|| "Desktop native file log sink is unavailable".to_string())?;
+        let mut file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)
+            .map_err(|error| {
+                format!(
+                    "Failed to open renderer diagnostic log {}: {error}",
+                    path.display()
+                )
+            })?;
+        write_and_flush(&mut file, line).map_err(|error| {
+            format!(
+                "Failed to write renderer diagnostic log {}: {error}",
+                path.display()
+            )
+        })?;
+        file.sync_data().map_err(|error| {
+            format!(
+                "Failed to sync renderer diagnostic log {}: {error}",
+                path.display()
+            )
+        })
+    }
+}
+
+fn write_and_flush(writer: &mut impl Write, line: &str) -> std::io::Result<()> {
+    writer.write_all(line.as_bytes())?;
+    writer.write_all(b"\n")?;
+    writer.flush()
 }
 
 fn build_rotating_writer(log_path: &Path) -> Result<FileRotate<AppendCount>, String> {
@@ -50,7 +104,7 @@ pub fn create_file_log_sink(log_path: &Path) -> Result<FileLogSink, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Write;
+    use std::io::{self, Write};
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn temp_path(file_name: &str) -> PathBuf {
@@ -148,5 +202,70 @@ mod tests {
 
         fs::remove_dir_all(parent.parent().expect("temp dir should exist"))
             .expect("cleanup should succeed");
+    }
+
+    #[test]
+    fn renderer_diagnostic_log_errors_when_file_sink_is_unavailable() {
+        let error = RendererDiagnosticLog::default()
+            .persist("renderer diagnostic")
+            .expect_err("unavailable sink must fail");
+
+        assert!(error.contains("file log sink is unavailable"));
+    }
+
+    #[test]
+    fn renderer_diagnostic_log_writes_flushes_and_syncs_before_success() {
+        let path = temp_path("desktop-native.log");
+        fs::create_dir_all(path.parent().expect("temp dir should exist"))
+            .expect("parent should be created");
+        RendererDiagnosticLog::from_path(path.clone())
+            .persist("renderer diagnostic")
+            .expect("durable persistence should succeed");
+
+        assert_eq!(
+            fs::read_to_string(&path).expect("diagnostic should be readable"),
+            "renderer diagnostic\n"
+        );
+        fs::remove_dir_all(path.parent().expect("temp dir should exist"))
+            .expect("cleanup should succeed");
+    }
+
+    struct FailingWriter {
+        fail_flush: bool,
+    }
+
+    impl Write for FailingWriter {
+        fn write(&mut self, buffer: &[u8]) -> io::Result<usize> {
+            if self.fail_flush {
+                Ok(buffer.len())
+            } else {
+                Err(io::Error::other("write failed"))
+            }
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            if self.fail_flush {
+                Err(io::Error::other("flush failed"))
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    #[test]
+    fn renderer_diagnostic_write_and_flush_failures_are_observable() {
+        let write_error = write_and_flush(
+            &mut FailingWriter { fail_flush: false },
+            "renderer diagnostic",
+        )
+        .expect_err("write failure must be returned");
+        assert_eq!(write_error.to_string(), "write failed");
+
+        let flush_error = write_and_flush(
+            &mut FailingWriter { fail_flush: true },
+            "renderer diagnostic",
+        )
+        .expect_err("flush failure must be returned");
+        assert_eq!(flush_error.to_string(), "flush failed");
     }
 }

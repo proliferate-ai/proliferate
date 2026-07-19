@@ -109,7 +109,7 @@ describe("ProductLifecycleRoot", () => {
     await waitFor(() => expect(restoreSession).toHaveBeenCalled());
   });
 
-  it("contains a render-phase throw from a shared lifecycle hook in the error boundary", () => {
+  it("contains a render-phase throw from a shared lifecycle hook in the error boundary", async () => {
     lifecycleThrow.value = true;
     // React logs the caught render error to console.error; silence it so the
     // test output stays clean while still asserting the boundary caught it.
@@ -128,7 +128,7 @@ describe("ProductLifecycleRoot", () => {
 
     // The boundary shows its fallback instead of letting the lifecycle throw
     // escape the product lifecycle root; the product tree does not render.
-    expect(screen.getByText("The app needs a quick reload")).toBeTruthy();
+    expect(await screen.findByText("The app needs a quick reload")).toBeTruthy();
     expect(screen.queryByTestId("app-tree")).toBeNull();
 
     consoleError.mockRestore();

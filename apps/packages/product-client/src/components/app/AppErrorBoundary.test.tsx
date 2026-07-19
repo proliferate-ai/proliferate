@@ -75,7 +75,7 @@ describe("AppErrorBoundary", () => {
 
   it("states honestly when reporting is unavailable or fails", async () => {
     const unavailable = renderCrash();
-    expect(screen.getByText("Automatic reporting isn't available here. Copy the technical details if you need help.")).toBeTruthy();
+    expect(await screen.findByText("Automatic reporting isn't available here. Copy the technical details if you need help.")).toBeTruthy();
     unavailable.unmount();
 
     renderCrash({ onRenderError: async () => false });
@@ -108,13 +108,16 @@ describe("AppErrorBoundary", () => {
     const contactSupport = vi.fn().mockResolvedValue(undefined);
     const privatePrompt = "private roadmap prompt";
     const privateTranscript = "private customer transcript";
+    const privateCredential = "tiny-credential";
+    const privateQuerySecret = "short-query-secret";
     const privatePath = "/Users/pablohansen/private-client/App.tsx:8:3";
+    const privateUncPath = "\\\\corp-server\\private-share\\App.tsx";
     let shouldCrash = true;
 
     function MaybeCrash() {
       if (shouldCrash) {
         throw new Error(
-          `prompt=${privatePrompt}\ntranscript=${privateTranscript}\n${privatePath}`,
+          `prompt=${privatePrompt}\ntranscript=${privateTranscript}\ntoken=${privateCredential}\nhttps://api.example.test/jobs?client_secret=${privateQuerySecret}\n${privatePath}\n${privateUncPath}`,
         );
       }
       return <p>View restored</p>;
@@ -131,24 +134,38 @@ describe("AppErrorBoundary", () => {
       </AppErrorBoundary>,
     );
 
-    const reloadButton = screen.getByRole("button", { name: "Reload app" });
+    const reloadButton = await screen.findByRole("button", { name: "Reload app" });
     expect(document.activeElement).toBe(reloadButton);
     fireEvent.click(reloadButton);
     expect(reload).toHaveBeenCalledTimes(1);
 
     fireEvent.click(screen.getByText("Technical details"));
     expect(container.textContent).toContain("proliferate-desktop@1.4.2+abcdef123456");
-    expect(container.textContent).not.toContain(privatePrompt);
-    expect(container.textContent).not.toContain(privateTranscript);
-    expect(container.textContent).not.toContain(privatePath);
+    for (const privateValue of [
+      privatePrompt,
+      privateTranscript,
+      privateCredential,
+      privateQuerySecret,
+      privatePath,
+      privateUncPath,
+    ]) {
+      expect(container.textContent).not.toContain(privateValue);
+    }
 
     fireEvent.click(screen.getByRole("button", { name: "Copy details" }));
     await waitFor(() => expect(copyDetails).toHaveBeenCalledTimes(1));
     const copied = copyDetails.mock.calls[0][0] as string;
     expect(copied).toContain("Report status: Unavailable");
-    expect(copied).not.toContain(privatePrompt);
-    expect(copied).not.toContain(privateTranscript);
-    expect(copied).not.toContain(privatePath);
+    for (const privateValue of [
+      privatePrompt,
+      privateTranscript,
+      privateCredential,
+      privateQuerySecret,
+      privatePath,
+      privateUncPath,
+    ]) {
+      expect(copied).not.toContain(privateValue);
+    }
 
     fireEvent.click(screen.getByRole("button", { name: "Contact support" }));
     await waitFor(() => expect(contactSupport).toHaveBeenCalledTimes(1));

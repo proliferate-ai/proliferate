@@ -38,6 +38,7 @@ describe("native diagnostics", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
@@ -98,6 +99,22 @@ describe("native diagnostics", () => {
     );
   });
 
+  it("expires only completed successful diagnostics after three seconds", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-19T00:00:00.000Z"));
+    const diagnostics = await loadNativeDiagnostics();
+    const error = new Error("expiring render failure");
+
+    await expect(diagnostics.reportReactRenderError(error, "at App")).resolves.toBe(true);
+    vi.advanceTimersByTime(2_999);
+    await expect(diagnostics.reportReactRenderError(error, "at App")).resolves.toBe(true);
+    expect(mocks.logRendererDiagnosticMock).toHaveBeenCalledTimes(1);
+
+    vi.advanceTimersByTime(1);
+    await expect(diagnostics.reportReactRenderError(error, "at App")).resolves.toBe(true);
+    expect(mocks.logRendererDiagnosticMock).toHaveBeenCalledTimes(2);
+  });
+
   it("confirms persistence success and reports native write failure honestly", async () => {
     const diagnostics = await loadNativeDiagnostics();
     await expect(
@@ -133,5 +150,38 @@ describe("native diagnostics", () => {
       diagnostics.reportReactRenderError(error, "at App"),
     ).resolves.toBe(true);
     expect(mocks.logRendererDiagnosticMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not dedupe different fingerprints that share an object", async () => {
+    const diagnostics = await loadNativeDiagnostics();
+    const error = new Error("same object, distinct render location");
+    let rejectFirst: ((reason: Error) => void) | undefined;
+    let resolveSecond: (() => void) | undefined;
+    mocks.logRendererDiagnosticMock
+      .mockImplementationOnce(
+        () => new Promise((_resolve, reject) => {
+          rejectFirst = reject;
+        }),
+      )
+      .mockImplementationOnce(
+        () => new Promise<void>((resolve) => {
+          resolveSecond = resolve;
+        }),
+      );
+
+    const first = diagnostics.reportReactRenderError(error, "at FirstPane");
+    const second = diagnostics.reportReactRenderError(error, "at SecondPane");
+    expect(mocks.logRendererDiagnosticMock).toHaveBeenCalledTimes(2);
+
+    rejectFirst?.(new Error("first persistence failed"));
+    resolveSecond?.();
+    await expect(first).resolves.toBe(false);
+    await expect(second).resolves.toBe(true);
+
+    mocks.logRendererDiagnosticMock.mockResolvedValueOnce(undefined);
+    await expect(
+      diagnostics.reportReactRenderError(error, "at FirstPane"),
+    ).resolves.toBe(true);
+    expect(mocks.logRendererDiagnosticMock).toHaveBeenCalledTimes(3);
   });
 });
