@@ -96,4 +96,41 @@ describe("useRightPanelEntryActions terminal creation", () => {
     expect(terminalActions.createTab).toHaveBeenNthCalledWith(1, "workspace-1");
     expect(terminalActions.createTab).toHaveBeenNthCalledWith(2, "workspace-1");
   });
+
+  it("does not materialize or focus a phantom terminal when creation fails", async () => {
+    terminalActions.createTab.mockRejectedValueOnce(new Error("runtime unavailable"));
+    let rightPanelState: RightPanelWorkspaceState = {
+      ...DEFAULT_RIGHT_PANEL_WORKSPACE_STATE,
+      headerOrder: [...DEFAULT_RIGHT_PANEL_WORKSPACE_STATE.headerOrder],
+    };
+    const initialState = rightPanelState;
+    const updateState = vi.fn((value: SetStateAction<RightPanelWorkspaceState>) => {
+      rightPanelState = typeof value === "function" ? value(rightPanelState) : value;
+    });
+    const { result } = renderHook(() => useRightPanelEntryActions({
+      workspaceId: "workspace-1",
+      shouldRenderContent: true,
+      isCloudWorkspaceSelected: false,
+      state: rightPanelState,
+      repoSettingsHref: "/settings",
+      terminalsQuery: { refetch: vi.fn(async () => ({ data: [] })) },
+      activeTerminalId: null,
+      openViewerTargets: [],
+      buffersByPath: {},
+      updateState,
+      setActiveTerminalForWorkspace: vi.fn(),
+      closeViewerTarget: vi.fn(),
+      reorderViewerTargets: vi.fn(),
+      setActiveViewerTarget: vi.fn(),
+      clearBuffer: vi.fn(),
+    }));
+
+    await act(async () => {
+      expect(await result.current.createTerminal()).toBeNull();
+    });
+
+    expect(rightPanelState).toBe(initialState);
+    expect(updateState).not.toHaveBeenCalled();
+    expect(result.current.terminalFocusNonce).toBe(0);
+  });
 });
