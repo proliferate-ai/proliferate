@@ -27,6 +27,18 @@ describe("WorkspaceActionsMenu", () => {
     nativeMenuState.show.mockReset();
   });
 
+  it("keeps the chat actions hit area flat with a keyboard-visible focus ring", () => {
+    nativeMenuState.show.mockResolvedValue(true);
+    render(<WorkspaceActions session={session} />);
+
+    const trigger = screen.getByRole("button", { name: "Chat actions" });
+    expect(trigger.className).toContain("workspace-shell-icon-button");
+    expect(trigger.className).toContain("workspace-shell-icon-button--flat");
+    expect(trigger.className).toContain("focus-ring");
+    expect(trigger.className).toContain("app-region-no-drag");
+    expect(trigger.className).not.toContain("workspace-shell-icon-button--hover-rim");
+  });
+
   it("keeps the DOM menu closed when the native menu opens", async () => {
     nativeMenuState.show.mockResolvedValue(true);
     render(<WorkspaceActions session={session} />);

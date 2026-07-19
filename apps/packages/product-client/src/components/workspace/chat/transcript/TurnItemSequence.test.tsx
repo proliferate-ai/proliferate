@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
 
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { createTranscriptState } from "@anyharness/sdk";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   assistantItem,
+  terminalItem,
   toolItem,
   turnRecord,
 } from "@proliferate/product-domain/chats/transcript/transcript-presentation-test-fixtures";
@@ -24,7 +26,18 @@ vi.mock("./TranscriptTreeNode", () => ({
   ),
 }));
 
-afterEach(cleanup);
+beforeEach(() => {
+  vi.stubGlobal("ResizeObserver", class ResizeObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  });
+});
+
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 describe("CompletedHistorySequence", () => {
   it("restores the full conversation gap between top-level history items", () => {
@@ -39,6 +52,50 @@ describe("CompletedHistorySequence", () => {
     const sequence = container.querySelector("[data-completed-history-sequence]");
     expect(sequence?.className).toContain("flex flex-col gap-4");
     expect(sequence?.className).not.toContain("space-y-1");
+  });
+
+  it("removes only the completed-work border box and preserves ledger detail chrome", async () => {
+    const user = userEvent.setup();
+    const transcript = createTranscriptState("session-1");
+    const turn = turnRecord(["command", "command-2", "answer"], "2026-04-04T00:00:10Z");
+    transcript.itemsById = {
+      command: terminalItem("command", turn.turnId, 1, "printf proof"),
+      "command-2": terminalItem("command-2", turn.turnId, 2, "printf more"),
+      answer: assistantItem("answer", turn.turnId, 3),
+    };
+    const { container } = renderTurnItemSequence({ turn, transcript });
+
+    const completedWorkDisclosure = screen.getByRole("button", {
+      name: /Worked for 10s/,
+    });
+    expect(completedWorkDisclosure.className).toContain("border-0");
+    expect(completedWorkDisclosure.className).toContain("rounded-none");
+    expect(completedWorkDisclosure.className).not.toMatch(/(?:^|\s)border(?:\s|$)/);
+    expect(completedWorkDisclosure.className).not.toContain("rounded-md");
+
+    await user.click(completedWorkDisclosure);
+    const sequence = container.querySelector<HTMLElement>("[data-completed-history-sequence]");
+    expect(sequence).not.toBeNull();
+
+    const actionSummary = within(sequence!).getByRole("button", { expanded: false });
+    await user.click(actionSummary);
+    const ledger = container.querySelector<HTMLElement>("[data-collapsed-actions-ledger]");
+    expect(ledger).not.toBeNull();
+    expect(ledger?.className).toContain("max-h-56");
+    expect(ledger?.className).toContain("overflow-y-auto");
+    expect(ledger?.className).toContain("overflow-x-hidden");
+
+    const commandDisclosure = within(ledger!).getAllByRole("button", { expanded: false })[0]!;
+    await user.click(commandDisclosure);
+    const nestedDetailPanel = Array.from(ledger!.querySelectorAll<HTMLElement>("div"))
+      .find((node) =>
+        node.className.includes("overflow-hidden")
+        && node.className.includes("rounded-lg")
+        && node.className.includes("border-border/60")
+      );
+    expect(nestedDetailPanel).not.toBeUndefined();
+    expect(nestedDetailPanel?.className).toMatch(/(?:^|\s)border(?:\s|$)/);
+    expect(nestedDetailPanel?.className).toContain("rounded-lg");
   });
 });
 

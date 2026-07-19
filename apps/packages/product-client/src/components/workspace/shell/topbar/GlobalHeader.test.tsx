@@ -88,6 +88,14 @@ afterEach(() => {
 });
 
 describe("GlobalHeader", () => {
+  it("renders the workspace title one restrained type step above surrounding header controls", () => {
+    renderHeader();
+
+    const title = screen.getByTitle("repo");
+    expect(title.className.split(" ")).toContain("text-sidebar-nav");
+    expect(title.className.split(" ")).not.toContain("text-ui");
+  });
+
   it("does not offer a native open action without a Desktop file bridge", () => {
     renderHeader();
 

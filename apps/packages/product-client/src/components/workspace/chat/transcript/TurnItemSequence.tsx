@@ -137,6 +137,7 @@ export function TurnItemSequence({
               showWorkDivider={tailAssistantProseRootId !== null}
               completionContent={completedHistoryOwnsPrelude ? frontierPrelude : null}
               animateCompletion={animateCompletedHistory}
+              borderless
               renderChildren={() => (
                 <CompletedHistorySequence>
                   {visiblePresentation.displayBlocks

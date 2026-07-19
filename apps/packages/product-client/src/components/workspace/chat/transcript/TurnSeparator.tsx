@@ -6,6 +6,8 @@ interface TurnSeparatorProps {
   interactive?: boolean;
   expanded?: boolean;
   onClick?: () => void;
+  /** Removes the disclosure's own border box without changing its focus ring. */
+  borderless?: boolean;
 }
 
 /** Left-aligned transcript disclosure used for nested or completed work. */
@@ -14,6 +16,7 @@ export function TurnSeparator({
   interactive = false,
   expanded = false,
   onClick,
+  borderless = false,
 }: TurnSeparatorProps) {
   if (interactive) {
     return (
@@ -23,7 +26,9 @@ export function TurnSeparator({
         size="sm"
         data-chat-transcript-ignore
         onClick={onClick}
-        className="group/turn-separator h-auto max-w-full justify-start gap-1 whitespace-normal rounded-md border border-transparent bg-transparent px-0 py-0 text-chat leading-[var(--text-chat--line-height)] font-normal text-muted-foreground hover:bg-transparent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className={`group/turn-separator h-auto max-w-full justify-start gap-1 whitespace-normal bg-transparent px-0 py-0 text-chat leading-[var(--text-chat--line-height)] font-normal text-muted-foreground hover:bg-transparent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+          borderless ? "rounded-none border-0" : "rounded-md border border-transparent"
+        }`}
         aria-expanded={expanded}
       >
         <span className="min-w-0 truncate">{label}</span>
