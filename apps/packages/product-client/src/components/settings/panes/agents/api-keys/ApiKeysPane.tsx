@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import type { AgentApiKey } from "@proliferate/cloud-sdk";
 import { ProliferateClientError } from "@proliferate/cloud-sdk";
 import {
@@ -42,6 +42,8 @@ export function ApiKeysPane() {
   const [title, setTitle] = useState("");
   const [value, setValue] = useState("");
   const [pendingRevoke, setPendingRevoke] = useState<AgentApiKey | null>(null);
+  const [isRetrying, setIsRetrying] = useState(false);
+  const retryInFlight = useRef(false);
 
   const keys = keysQuery.data ?? [];
   const canSubmit =
@@ -85,6 +87,18 @@ export function ApiKeysPane() {
             : error.message || AGENT_API_KEYS_COPY.revokeError,
         );
       },
+    });
+  }
+
+  function handleRetry() {
+    if (retryInFlight.current) {
+      return;
+    }
+    retryInFlight.current = true;
+    setIsRetrying(true);
+    void keysQuery.refetch().finally(() => {
+      retryInFlight.current = false;
+      setIsRetrying(false);
     });
   }
 
@@ -141,7 +155,19 @@ export function ApiKeysPane() {
           <SettingsRow
             label={AGENT_API_KEYS_COPY.keysSection}
             description={AGENT_API_KEYS_COPY.loadError}
-          />
+          >
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              loading={isRetrying}
+              onClick={handleRetry}
+            >
+              {isRetrying
+                ? AGENT_API_KEYS_COPY.retryingAction
+                : AGENT_API_KEYS_COPY.retryAction}
+            </Button>
+          </SettingsRow>
         ) : keys.length === 0 ? (
           <SettingsRow
             label={AGENT_API_KEYS_COPY.emptyTitle}
