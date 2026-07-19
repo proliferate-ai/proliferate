@@ -190,6 +190,20 @@ describe("FileTreeOverlay", () => {
     fireEvent.keyDown(window, { key: "Escape" });
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+
+  it("shows a visible focus indicator on the keyboard resize handle", () => {
+    queryMocks.root.data = { entries: [] };
+    renderOverlay();
+
+    const separator = screen.getByRole("separator", { name: "Resize file browser" });
+    separator.focus();
+
+    expect(document.activeElement).toBe(separator);
+    expect(separator.classList).toContain("focus-visible:outline");
+    expect(separator.classList).toContain("focus-visible:outline-1");
+    expect(separator.classList).toContain("focus-visible:outline-sidebar-ring");
+    expect(separator.classList).not.toContain("outline-none");
+  });
 });
 
 function renderOverlay(overrides: Partial<ComponentProps<typeof FileTreeOverlay>> = {}) {

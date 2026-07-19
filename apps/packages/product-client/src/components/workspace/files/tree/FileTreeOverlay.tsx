@@ -93,10 +93,7 @@ export function FileTreeOverlay({
           aria-valuenow={Math.round(width)}
           tabIndex={0}
           data-file-tree-resize-handle
-          className={twMerge(
-            "absolute bottom-0 left-0 top-0 z-10 w-2 cursor-col-resize outline-none",
-            resizing && "bg-sidebar-accent",
-          )}
+          className={`absolute bottom-0 left-0 top-0 z-10 w-2 cursor-col-resize focus-visible:outline focus-visible:outline-1 focus-visible:outline-sidebar-ring${resizing ? " bg-sidebar-accent" : ""}`}
           onPointerDown={handleResizeStart}
           onKeyDown={handleResizeKeyDown}
         >
