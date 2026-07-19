@@ -444,8 +444,7 @@ describe("CollapsedActions", () => {
     const stats = editRow?.querySelector("[data-thread-find-skip='true']");
     expect(stats?.textContent).toBe("+1-1");
     expect(stats?.querySelector("span")?.className).toContain("text-inherit");
-    expect(stats?.querySelector("span")?.className).toContain("group-hover/action-row:text-git-green");
-    expect(stats?.querySelector("span")?.className).toContain("group-focus-within/action-row:text-git-green");
+    expect(stats?.querySelector("span")?.className).toContain("activity-file-change-stat-additions");
 
     const toggle = screen.getByRole("button", { name: "Toggle diff for edit-1.ts" });
     fireEvent.click(toggle);

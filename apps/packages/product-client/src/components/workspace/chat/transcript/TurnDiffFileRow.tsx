@@ -29,7 +29,7 @@ export function TurnDiffFileRow({
   const header = (
     <div
       data-chat-diff-wrap-context-trigger="file-header"
-      className="group/turn-diff-file relative flex h-9 w-full min-w-0 items-center bg-background/70 text-chat leading-[var(--text-chat--line-height)] text-foreground hover:bg-list-hover/60"
+      className="relative flex h-9 w-full min-w-0 items-center bg-background/70 text-chat leading-[var(--text-chat--line-height)] text-foreground hover:bg-list-hover/60"
     >
       <Button
         type="button"
@@ -71,7 +71,7 @@ export function TurnDiffFileRow({
               event.stopPropagation();
               onOpenFile();
             }}
-            className="pointer-events-auto size-6 shrink-0 rounded-md border-0 bg-transparent p-0 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground focus-visible:opacity-100 focus-visible:ring-1 group-hover/turn-diff-file:opacity-100 group-focus-within/turn-diff-file:opacity-100"
+            className="turn-diff-file-open pointer-events-auto size-6 shrink-0 rounded-md border-0 bg-transparent p-0 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground focus-visible:opacity-100 focus-visible:ring-1"
           >
             <ArrowUpRight className="size-3.5" />
           </Button>
