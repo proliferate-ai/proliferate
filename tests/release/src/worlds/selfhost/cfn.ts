@@ -72,6 +72,8 @@ export type RegisterCfnCleanup = (
 
 /** The owned Route53 zone the run subdomain lives under (matches `dns.ts`). */
 export const QUALIFICATION_ZONE = "qualification.proliferate.com";
+export const CFN_RUNTIME_ARCHIVE_NAME = "anyharness-aarch64-unknown-linux-musl.tar.gz";
+export const SELFHOST_QUALIFICATION_PURPOSE = "self-hosting-qualification";
 /** Presigned-URL lifetime: long enough for a bounded stack bootstrap, no longer. */
 export const PRESIGN_EXPIRY_SECONDS = 3600;
 /** Bounded stack create/delete wait (a t4g bootstrap has a PT20M CreationPolicy). */
@@ -100,6 +102,35 @@ export function cfnStackName(runId: string, shardId: string): string {
     .slice(0, 100)
     .replace(/-$/g, "");
   return `${base}-${digest}`;
+}
+
+export interface CfnStackTag {
+  key: "Purpose" | "Name" | "RunId" | "ShardId";
+  value: string;
+}
+
+/**
+ * Positive ownership tags for the stack and every CloudFormation resource that
+ * supports stack-tag propagation. These are also the request tags required by
+ * the bounded qualification IAM policy; an untagged create must never be sent.
+ */
+export function buildCfnStackTags(input: {
+  stackName: string;
+  runId: string;
+  shardId: string;
+}): CfnStackTag[] {
+  const tags: CfnStackTag[] = [
+    { key: "Purpose", value: SELFHOST_QUALIFICATION_PURPOSE },
+    { key: "Name", value: input.stackName },
+    { key: "RunId", value: input.runId },
+    { key: "ShardId", value: input.shardId },
+  ];
+  for (const tag of tags) {
+    if (!tag.value || tag.value.length > 256 || !/^[A-Za-z0-9_.:/=+@-]+$/.test(tag.value)) {
+      throw new Error(`CFN: unsafe ${tag.key} ownership tag value.`);
+    }
+  }
+  return tags;
 }
 
 /**
@@ -146,8 +177,8 @@ export interface CfnParameter {
  * Builds the CloudFormation parameter list in the JSON form
  * (`[{ParameterKey, ParameterValue}, ...]`) that is written to a permission-
  * restricted file and passed as `--parameters file://<path>` — NOT as argv
- * (PR7-CONTROL-003). The two DeployBundle values are presigned S3 URLs carrying
- * a bearer signature (`X-Amz-*`); keeping them out of argv keeps them out of the
+ * (PR7-CONTROL-003). The deploy/runtime override values are presigned S3 URLs
+ * carrying a bearer signature (`X-Amz-*`); keeping them out of argv keeps them out of the
  * process table, shell history, and any argv-echoing error. NoEcho template
  * params (Postgres/JWT/CloudSecret) are left to the template's auto-generate
  * default and never supplied here. Pure so param construction is asserted offline.
@@ -155,6 +186,8 @@ export interface CfnParameter {
 export function buildCfnParameters(input: {
   releaseVersion: string;
   serverImageRepository: string;
+  runtimeBinaryUrl: string;
+  runtimeBinaryChecksumUrl: string;
   deployBundleUrl: string;
   deployBundleChecksumUrl: string;
   siteAddress: string;
@@ -163,6 +196,8 @@ export function buildCfnParameters(input: {
   return [
     { ParameterKey: "ReleaseVersion", ParameterValue: input.releaseVersion },
     { ParameterKey: "ServerImageRepository", ParameterValue: input.serverImageRepository },
+    { ParameterKey: "RuntimeBinaryUrl", ParameterValue: input.runtimeBinaryUrl },
+    { ParameterKey: "RuntimeBinaryChecksumUrl", ParameterValue: input.runtimeBinaryChecksumUrl },
     { ParameterKey: "DeployBundleUrl", ParameterValue: input.deployBundleUrl },
     { ParameterKey: "DeployBundleChecksumUrl", ParameterValue: input.deployBundleChecksumUrl },
     { ParameterKey: "SiteAddress", ParameterValue: input.siteAddress },
@@ -310,7 +345,16 @@ export function imageDigestBound(pushedRef: string, observedRef: string): boolea
  * path-suffixed entries are accepted.
  */
 export function bundleDigestBound(sumsContent: string, candidateBundleSha256: string): boolean {
-  const want = candidateBundleSha256.trim().toLowerCase();
+  return namedAssetDigestBound(sumsContent, candidateBundleSha256, "proliferate-deploy.tar.gz");
+}
+
+/** True only when SHA256SUMS binds the exact arm64 runtime archive bytes. */
+export function runtimeDigestBound(sumsContent: string, candidateRuntimeSha256: string): boolean {
+  return namedAssetDigestBound(sumsContent, candidateRuntimeSha256, CFN_RUNTIME_ARCHIVE_NAME);
+}
+
+function namedAssetDigestBound(sumsContent: string, candidateSha256: string, basename: string): boolean {
+  const want = candidateSha256.trim().toLowerCase();
   if (!/^[0-9a-f]{64}$/.test(want)) {
     return false;
   }
@@ -320,7 +364,8 @@ export function bundleDigestBound(sumsContent: string, candidateBundleSha256: st
       continue;
     }
     const [, sha, name] = match;
-    if (sha.toLowerCase() === want && /(^|\/)proliferate-deploy\.tar\.gz$/.test(name.trim())) {
+    const normalizedName = name.trim().replace(/^\.\//, "");
+    if (sha.toLowerCase() === want && (normalizedName === basename || normalizedName.endsWith(`/${basename}`))) {
       return true;
     }
   }
@@ -364,8 +409,9 @@ export function boundedStackEventsTail(describeStackEventsJson: string, max: num
 // ── S3 upload / presign ─────────────────────────────────────────────────────
 
 /**
- * Uploads the candidate deploy bundle + its SHA256SUMS to the run-scoped S3
- * prefix and returns presigned (bounded-expiry) GET URLs for each. Registers an
+ * Uploads the candidate deploy bundle, arm64 runtime archive, and their shared
+ * SHA256SUMS to the run-scoped S3 prefix and returns presigned (bounded-expiry)
+ * GET URLs for each. Registers an
  * `s3_object` cleanup intent BEFORE each `s3 cp` (registered-before-create), so
  * an interrupted run always has a durable delete releaser.
  */
@@ -375,16 +421,25 @@ export async function uploadBundleAndPresign(input: {
   bucket: string;
   keyPrefix: string;
   bundlePath: string;
+  runtimePath: string;
   sumsPath: string;
   expirySeconds?: number;
   registerCleanup: RegisterCfnCleanup;
   timeoutMs?: number;
   log?: (message: string) => void;
-}): Promise<{ deployBundleUrl: string; deployBundleChecksumUrl: string; bundleKey: string; sumsKey: string }> {
+}): Promise<{
+  deployBundleUrl: string;
+  deployBundleChecksumUrl: string;
+  runtimeBinaryUrl: string;
+  runtimeKey: string;
+  bundleKey: string;
+  sumsKey: string;
+}> {
   const { exec, region, bucket, keyPrefix } = input;
   const log = input.log ?? (() => undefined);
   const expiry = input.expirySeconds ?? PRESIGN_EXPIRY_SECONDS;
   const bundleKey = `${keyPrefix}proliferate-deploy.tar.gz`;
+  const runtimeKey = `${keyPrefix}${CFN_RUNTIME_ARCHIVE_NAME}`;
   const sumsKey = `${keyPrefix}self-hosted-assets.SHA256SUMS`;
 
   await input.registerCleanup("s3_object", `s3://${bucket}/${bundleKey}`, () =>
@@ -392,6 +447,14 @@ export async function uploadBundleAndPresign(input: {
   );
   log(`s3 cp bundle -> s3://${bucket}/${bundleKey}`);
   await exec.run(["s3", "cp", input.bundlePath, `s3://${bucket}/${bundleKey}`, "--region", region], {
+    timeoutMs: input.timeoutMs,
+  });
+
+  await input.registerCleanup("s3_object", `s3://${bucket}/${runtimeKey}`, () =>
+    deleteS3Object(exec, region, bucket, runtimeKey),
+  );
+  log(`s3 cp runtime -> s3://${bucket}/${runtimeKey}`);
+  await exec.run(["s3", "cp", input.runtimePath, `s3://${bucket}/${runtimeKey}`, "--region", region], {
     timeoutMs: input.timeoutMs,
   });
 
@@ -406,13 +469,16 @@ export async function uploadBundleAndPresign(input: {
   const deployBundleUrl = (
     await exec.run(["s3", "presign", `s3://${bucket}/${bundleKey}`, "--expires-in", String(expiry), "--region", region])
   ).trim();
+  const runtimeBinaryUrl = (
+    await exec.run(["s3", "presign", `s3://${bucket}/${runtimeKey}`, "--expires-in", String(expiry), "--region", region])
+  ).trim();
   const deployBundleChecksumUrl = (
     await exec.run(["s3", "presign", `s3://${bucket}/${sumsKey}`, "--expires-in", String(expiry), "--region", region])
   ).trim();
-  if (!deployBundleUrl || !deployBundleChecksumUrl) {
+  if (!deployBundleUrl || !runtimeBinaryUrl || !deployBundleChecksumUrl) {
     throw new Error("CFN: aws s3 presign returned an empty URL.");
   }
-  return { deployBundleUrl, deployBundleChecksumUrl, bundleKey, sumsKey };
+  return { deployBundleUrl, deployBundleChecksumUrl, runtimeBinaryUrl, runtimeKey, bundleKey, sumsKey };
 }
 
 /** Deletes one S3 object (idempotent — an already-absent object is a clean outcome). */
@@ -591,6 +657,7 @@ export async function createCfnStackAndWait(input: {
   stackName: string;
   templatePath: string;
   parameters: readonly CfnParameter[];
+  tags: readonly CfnStackTag[];
   region: string;
   registerCleanup: RegisterCfnCleanup;
   /**
@@ -628,6 +695,8 @@ export async function createCfnStackAndWait(input: {
       `file://${paramFile.path}`,
       "--capabilities",
       "CAPABILITY_IAM",
+      "--tags",
+      ...input.tags.map((tag) => `Key=${tag.key},Value=${tag.value}`),
       "--region",
       region,
     ]);

@@ -42,10 +42,13 @@ import {
   enrollmentIsSynced,
   gatewayAuthSelectionBody,
   GATEWAY_ENV_KEYS,
+  QUALIFICATION_GATEWAY_USER_BUDGET_USD,
   renderGatewayEnvLines,
   resolveGatewayConfig,
   selectPersonalEnrollmentKeyToken,
+  spendWindowUtc,
   stripGatewayKeysSedProgram,
+  waitForGatewaySpendRows,
   type GatewayEnvSource,
 } from "../worlds/selfhost/gateway.js";
 import {
@@ -815,35 +818,61 @@ test("correlateGatewaySpend: a zero-token row does not count as spend", () => {
   assert.deepEqual(correlateGatewaySpend(rows, "vk"), { correlated: false, masterKeyNotUsed: false });
 });
 
+test("spendWindowUtc: advances LiteLLM's midnight end bound so same-day rows are included", () => {
+  assert.deepEqual(spendWindowUtc(new Date("2026-07-18T23:59:59.000Z")), {
+    startDate: "2026-07-18",
+    endDate: "2026-07-19",
+  });
+});
+
+test("waitForGatewaySpendRows: waits for LiteLLM's batched exact-key spend row", async () => {
+  let reads = 0;
+  const sleeps: number[] = [];
+  const rows = await waitForGatewaySpendRows(
+    "vk",
+    async () => {
+      reads += 1;
+      return reads === 1 ? [] : [{ api_key: "vk", total_tokens: 4 }];
+    },
+    { timeoutMs: 1_000, pollMs: 7, sleep: async (ms) => void sleeps.push(ms) },
+  );
+
+  assert.deepEqual(rows, [{ api_key: "vk", total_tokens: 4 }]);
+  assert.equal(reads, 2);
+  assert.deepEqual(sleeps, [7]);
+});
+
 /** A gateway env source with a pinned (immutable) LiteLLM tag + the given extras. */
 function gatewayEnvGet(extra: Record<string, string>): (name: string) => string | undefined {
   const base: Record<string, string> = { RELEASE_E2E_SELFHOST_LITELLM_IMAGE_TAG: "v1.2.3-abcdef", ...extra };
   return (name) => base[name];
 }
 
-test("resolveGatewayConfig: prefers the B upstream key, generates a fresh master key + public /llm url", () => {
+test("resolveGatewayConfig: uses the required A upstream key, generates a fresh master key + public /llm url", () => {
   const result = resolveGatewayConfig(
     { get: gatewayEnvGet({ RELEASE_E2E_BYOK_ANTHROPIC_B_API_KEY: "sk-b", RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY: "sk-a" }) },
     "https://box.qualification.proliferate.com",
   );
   assert.equal(result.ok, true);
   if (result.ok) {
-    assert.equal(result.value.upstreamKeyEnvVar, "RELEASE_E2E_BYOK_ANTHROPIC_B_API_KEY");
-    assert.equal(result.value.block.upstreamAnthropicKey, "sk-b");
+    assert.equal(result.value.upstreamKeyEnvVar, "RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY");
+    assert.equal(result.value.block.upstreamAnthropicKey, "sk-a");
     assert.equal(result.value.block.litellmPublicBaseUrl, "https://box.qualification.proliferate.com/llm");
+    assert.equal(result.value.block.agentGatewayDefaultUserBudgetUsd, QUALIFICATION_GATEWAY_USER_BUDGET_USD);
     assert.match(result.value.block.litellmMasterKey, /^sk-[0-9a-f]{64}$/);
     assert.equal(result.value.imageTag, "v1.2.3-abcdef");
   }
 });
 
-test("resolveGatewayConfig: falls back to the A upstream key", () => {
+test("resolveGatewayConfig: falls back to the optional B upstream key", () => {
   const result = resolveGatewayConfig(
-    { get: gatewayEnvGet({ RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY: "sk-a" }) },
+    { get: gatewayEnvGet({ RELEASE_E2E_BYOK_ANTHROPIC_B_API_KEY: "sk-b" }) },
     "https://box.example.com",
   );
   assert.equal(result.ok, true);
   if (result.ok) {
-    assert.equal(result.value.upstreamKeyEnvVar, "RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY");
+    assert.equal(result.value.upstreamKeyEnvVar, "RELEASE_E2E_BYOK_ANTHROPIC_B_API_KEY");
+    assert.equal(result.value.block.upstreamAnthropicKey, "sk-b");
   }
 });
 
@@ -899,6 +928,7 @@ test("stripGatewayKeysSedProgram + append overrides a shipped AGENT_GATEWAY_ENAB
   ].join("\n");
   const block = renderGatewayEnvLines({
     agentGatewayEnabled: true,
+    agentGatewayDefaultUserBudgetUsd: QUALIFICATION_GATEWAY_USER_BUDGET_USD,
     litellmMasterKey: "MASTER",
     litellmPostgresPassword: "PGPW",
     litellmPublicBaseUrl: "https://box.example.com/gateway",
@@ -916,6 +946,7 @@ test("stripGatewayKeysSedProgram + append overrides a shipped AGENT_GATEWAY_ENAB
     return match?.slice(key.length + 1);
   };
   assert.equal(firstValue("AGENT_GATEWAY_ENABLED"), "true");
+  assert.equal(firstValue("AGENT_GATEWAY_DEFAULT_USER_BUDGET_USD"), "10");
   assert.equal(firstValue("LITELLM_MASTER_KEY"), "MASTER");
   assert.equal(firstValue("PROLIFERATE_LITELLM_IMAGE_TAG"), "pinned");
   // Unrelated shipped keys are preserved.

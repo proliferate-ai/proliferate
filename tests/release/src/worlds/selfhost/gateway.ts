@@ -33,6 +33,17 @@ export const GATEWAY_DEPLOY_DIR = SELFHOST_DEPLOY_DIR;
 /** The default LiteLLM image tag when `RELEASE_E2E_SELFHOST_LITELLM_IMAGE_TAG` is unset. */
 export const DEFAULT_LITELLM_IMAGE_TAG = "stable";
 
+/**
+ * Qualification-only headroom for the one bounded gateway turn. LiteLLM's
+ * pre-call budget reservation prices Claude's maximum possible response at
+ * $5.00. A key capped at the product fallback of exactly $5 is first reserved
+ * to $5 and then rejected by LiteLLM's `spend >= max_budget` auth check before
+ * any provider call. The disposable qualification actor therefore uses a $10
+ * cap: enough to clear that reservation edge while remaining bounded and
+ * leaving the shipped product default unchanged.
+ */
+export const QUALIFICATION_GATEWAY_USER_BUDGET_USD = "10";
+
 /** The public Caddy inference route the instance serves LiteLLM under (`handle_path /llm/*`). */
 export function gatewayPublicBaseUrl(apiOrigin: string): string {
   return `${apiOrigin.replace(/\/+$/, "")}/llm`;
@@ -47,6 +58,7 @@ export function gatewayPublicBaseUrl(apiOrigin: string): string {
  */
 export interface GatewayEnvBlock {
   agentGatewayEnabled: true;
+  agentGatewayDefaultUserBudgetUsd: typeof QUALIFICATION_GATEWAY_USER_BUDGET_USD;
   litellmMasterKey: string;
   litellmPostgresPassword: string;
   litellmPublicBaseUrl: string;
@@ -79,10 +91,13 @@ export function generateLitellmPostgresPassword(): string {
 
 /**
  * Resolves the SH-GATEWAY env block from the controller env + the box's public
- * API origin. The upstream provider credential prefers the `_B_` BYOK manifest
- * key (so gateway spend separates from the SH-BASE-TURN BYOK-regression cell's
- * `_A_` key) and falls back to `_A_`; when neither exists the cell fails closed.
- * The master key and postgres password are freshly generated here.
+ * API origin. The upstream provider credential uses the scenario-required
+ * `_A_` BYOK key (the same bounded self-host provider capacity already proven
+ * by SH-BASE-TURN) and falls back to optional `_B_` only when `_A_` is absent.
+ * Gateway spend is correlated to the actor's INSTANCE LiteLLM virtual key, so
+ * sharing upstream provider capacity cannot create a false correlation. When
+ * neither key exists the cell fails closed. The master key and postgres
+ * password are freshly generated here.
  */
 export function resolveGatewayConfig(
   env: GatewayEnvSource,
@@ -90,18 +105,18 @@ export function resolveGatewayConfig(
 ): { ok: true; value: GatewayConfig } | { ok: false; reason: string } {
   const bKey = env.get("RELEASE_E2E_BYOK_ANTHROPIC_B_API_KEY")?.trim();
   const aKey = env.get("RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY")?.trim();
-  const upstreamKeyEnvVar = bKey
-    ? "RELEASE_E2E_BYOK_ANTHROPIC_B_API_KEY"
-    : aKey
-      ? "RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY"
+  const upstreamKeyEnvVar = aKey
+    ? "RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY"
+    : bKey
+      ? "RELEASE_E2E_BYOK_ANTHROPIC_B_API_KEY"
       : undefined;
-  const upstreamAnthropicKey = bKey || aKey;
+  const upstreamAnthropicKey = aKey || bKey;
   if (!upstreamKeyEnvVar || !upstreamAnthropicKey) {
     return {
       ok: false,
       reason:
-        "SH-GATEWAY: no upstream provider key configured — set RELEASE_E2E_BYOK_ANTHROPIC_B_API_KEY " +
-        "(preferred) or RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY so the operator LiteLLM profile has a real backend.",
+        "SH-GATEWAY: no upstream provider key configured — set RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY " +
+        "(preferred) or RELEASE_E2E_BYOK_ANTHROPIC_B_API_KEY so the operator LiteLLM profile has a real backend.",
     };
   }
   // The LiteLLM image MUST be pinned to an immutable tag (PR7-CONTROL-010):
@@ -131,6 +146,7 @@ export function resolveGatewayConfig(
       upstreamKeyEnvVar,
       block: {
         agentGatewayEnabled: true,
+        agentGatewayDefaultUserBudgetUsd: QUALIFICATION_GATEWAY_USER_BUDGET_USD,
         litellmMasterKey: generateGatewayMasterKey(),
         litellmPostgresPassword: generateLitellmPostgresPassword(),
         litellmPublicBaseUrl: gatewayPublicBaseUrl(apiOrigin),
@@ -208,6 +224,7 @@ export async function selectGatewayRouteForHarness(
 export function renderGatewayEnvLines(block: GatewayEnvBlock): string {
   return [
     "AGENT_GATEWAY_ENABLED=true",
+    `AGENT_GATEWAY_DEFAULT_USER_BUDGET_USD=${block.agentGatewayDefaultUserBudgetUsd}`,
     "AGENT_GATEWAY_LITELLM_BASE_URL=http://litellm:4000",
     `AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL=${block.litellmPublicBaseUrl}`,
     `AGENT_GATEWAY_LITELLM_MASTER_KEY=${block.litellmMasterKey}`,
@@ -230,6 +247,7 @@ export function renderGatewayEnvLines(block: GatewayEnvBlock): string {
  */
 export const GATEWAY_ENV_KEYS = [
   "AGENT_GATEWAY_ENABLED",
+  "AGENT_GATEWAY_DEFAULT_USER_BUDGET_USD",
   "AGENT_GATEWAY_LITELLM_BASE_URL",
   "AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL",
   "AGENT_GATEWAY_LITELLM_MASTER_KEY",
@@ -280,10 +298,58 @@ export function correlateGatewaySpend(
   return { correlated, masterKeyNotUsed: correlated && !spentUnderOtherKey };
 }
 
+/** LiteLLM can batch its spend-log write after returning the model response. */
+export const DEFAULT_GATEWAY_SPEND_CORRELATION_TIMEOUT_MS = 2 * 60_000;
+const DEFAULT_GATEWAY_SPEND_CORRELATION_POLL_MS = 5_000;
+
+/**
+ * Polls the instance spend log until the actor's exact virtual-key token hash
+ * is observable. A completed provider response can precede LiteLLM's batched
+ * spend-log write, so a single immediate snapshot is not sufficient evidence.
+ * The caller still applies `correlateGatewaySpend` to the returned full row set
+ * and rejects any token-consuming row under a different key.
+ */
+export async function waitForGatewaySpendRows(
+  virtualKeyTokenId: string,
+  readRows: () => Promise<LitellmSpendRow[]>,
+  options: {
+    timeoutMs?: number;
+    pollMs?: number;
+    sleep?: (ms: number) => Promise<void>;
+  } = {},
+): Promise<LitellmSpendRow[]> {
+  const timeoutMs = options.timeoutMs ?? DEFAULT_GATEWAY_SPEND_CORRELATION_TIMEOUT_MS;
+  const pollMs = options.pollMs ?? DEFAULT_GATEWAY_SPEND_CORRELATION_POLL_MS;
+  const sleep = options.sleep ?? gatewaySleep;
+  const deadline = Date.now() + timeoutMs;
+  let rows: LitellmSpendRow[] = [];
+
+  for (;;) {
+    rows = await readRows();
+    if (correlateGatewaySpend(rows, virtualKeyTokenId).correlated || Date.now() >= deadline) {
+      return rows;
+    }
+    await sleep(pollMs);
+  }
+}
+
 // ── SSH-touching box operations (faked in unit tests) ───────────────────────
 
 /** Bounded default timeout for a single on-box compose/docker step. */
 const BOX_STEP_TIMEOUT_MS = 5 * 60_000;
+
+/**
+ * Bounded timeout for the full bootstrap.sh re-run that enables the
+ * agent-gateway profile. This single ssh call nests a cold litellm image pull
+ * (first time the profiled service is touched on the box — minutes on a
+ * t3.small's baseline network credits) PLUS compose's own
+ * `up -d --wait --wait-timeout 300` health wait with litellm's 180s
+ * start_period. The outer ssh budget must exceed that inner 300s wait or the
+ * local timeout SIGTERMs ssh mid-pull with an empty, content-free error
+ * (observed on run 29622211632: bare "Command failed: ssh ..." and an empty
+ * compose-states diag because the containers were never created).
+ */
+const BOOTSTRAP_TIMEOUT_MS = 12 * 60_000;
 
 /**
  * Writes the gateway env block into the instance `.env.static` and enables the
@@ -325,7 +391,7 @@ export async function configureAndEnableGatewayProfile(
       await ssh.run(
         `cd ${GATEWAY_DEPLOY_DIR} && sudo env PROLIFERATE_COMPOSE_OVERRIDE_FILE=${SELFHOST_PERSISTED_TLS_COMPOSE_OVERRIDE} ` +
           `bash bootstrap.sh > /tmp/gw-bootstrap.log 2>&1`,
-        { timeoutMs: BOX_STEP_TIMEOUT_MS },
+        { timeoutMs: BOOTSTRAP_TIMEOUT_MS },
       );
     } catch (error) {
       // bootstrap.sh runs `up -d --wait litellm`; if litellm never reaches
@@ -350,42 +416,39 @@ export async function configureAndEnableGatewayProfile(
  * the master key) are intentionally excluded.
  */
 async function captureGatewayBootstrapDiag(ssh: SshTransport): Promise<string> {
-  const composePs = (
-    await ssh
-      .run(
-        `cd ${GATEWAY_DEPLOY_DIR} && sudo docker compose --env-file .env.runtime ` +
-          `-f docker-compose.production.yml --profile agent-gateway ps ` +
-          `--format '{{.Service}}:{{.State}}:{{.Health}}' 2>/dev/null | tr '\\n' ' '`,
-        { timeoutMs: 60_000 },
-      )
-      .catch(() => "")
-  ).trim();
-  const litellmInspect = (
-    await ssh
-      .run(
-        "sudo docker ps -a --filter label=com.docker.compose.service=litellm " +
-          "--format '{{.Names}}:{{.Status}}' 2>/dev/null | head -n1",
-        { timeoutMs: 60_000 },
-      )
-      .catch(() => "")
-  ).trim();
+  // A probe that errors is reported "(probe failed)" — distinct from a probe
+  // that ran and genuinely had nothing to show ("none"). Collapsing both to the
+  // same empty string made run 29622211632's failure undiagnosable.
+  const probe = (cmd: string): Promise<string> =>
+    ssh
+      .run(cmd, { timeoutMs: 60_000 })
+      .then((out) => out.trim() || "none")
+      .catch(() => "(probe failed)");
+  const composePs = await probe(
+    `cd ${GATEWAY_DEPLOY_DIR} && sudo docker compose --env-file .env.runtime ` +
+      `-f docker-compose.production.yml --profile agent-gateway ps ` +
+      `--format '{{.Service}}:{{.State}}:{{.Health}}' 2>/dev/null | tr '\\n' ' '`,
+  );
+  const litellmInspect = await probe(
+    "sudo docker ps -a --filter label=com.docker.compose.service=litellm " +
+      "--format '{{.Names}}:{{.Status}}' 2>/dev/null | head -n1",
+  );
   // Allowlisted, secret-scrubbed tail of bootstrap's own output. grep -E keeps
   // only diagnostic marker lines (preflight err/warn/ok, compose/pull/health
   // errors) — never arbitrary lines that might echo a resolved secret value —
   // and every survivor still passes through scrubSecretText.
-  const bootstrapTail = (
-    await ssh
-      .run(
-        "grep -aiE 'error|err:|warn|preflight|litellm|health|cannot|failed|denied|manifest|" +
-          "pull|no space|unhealthy|exited|dependency' /tmp/gw-bootstrap.log 2>/dev/null | tail -n 20 | tr '\\n' '|'",
-        { timeoutMs: 60_000 },
-      )
-      .catch(() => "")
-  ).trim();
-  const scrubbedTail = bootstrapTail ? scrubSecretText(bootstrapTail) : "";
+  const bootstrapTail = await probe(
+    "grep -aiE 'error|err:|warn|preflight|litellm|health|cannot|failed|denied|manifest|" +
+      "pull|no space|unhealthy|exited|dependency' /tmp/gw-bootstrap.log 2>/dev/null | tail -n 20 | tr '\\n' '|'",
+  );
+  // Unconditional raw tail (bounded + scrubbed): when the allowlist grep finds
+  // nothing (e.g. compose's buffered pull-progress output), the last bytes of
+  // the log still say how far bootstrap got before it died.
+  const rawTail = await probe("tail -c 2000 /tmp/gw-bootstrap.log 2>/dev/null | tr '\\n' '|'");
+  const scrub = (s: string) => (s === "none" || s === "(probe failed)" ? s : scrubSecretText(s));
   return (
-    `compose states: [${composePs || "none"}]; litellm container: [${litellmInspect || "none"}]` +
-    (scrubbedTail ? `; bootstrap tail: [${scrubbedTail}]` : "")
+    `compose states: [${composePs}]; litellm container: [${litellmInspect}]; ` +
+    `bootstrap tail: [${scrub(bootstrapTail)}]; raw tail: [${scrub(rawTail)}]`
   );
 }
 
@@ -544,10 +607,16 @@ export async function litellmSpendRows(
   }));
 }
 
-/** The inclusive UTC day window (`YYYY-MM-DD`) covering a turn, for a spend-log query. */
+/**
+ * The UTC date window (`YYYY-MM-DD`) covering a turn for a spend-log query.
+ * LiteLLM parses `end_date` at midnight and applies `startTime <= end_date`, so
+ * an end bound equal to today excludes every request made after 00:00 today.
+ * Match the production usage importer and advance the end bound by one day.
+ */
 export function spendWindowUtc(now = new Date()): { startDate: string; endDate: string } {
   const day = now.toISOString().slice(0, 10);
-  return { startDate: day, endDate: day };
+  const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1_000).toISOString().slice(0, 10);
+  return { startDate: day, endDate: tomorrow };
 }
 
 // ── Actor enrollment sync (server-side virtual-key mint) ────────────────────

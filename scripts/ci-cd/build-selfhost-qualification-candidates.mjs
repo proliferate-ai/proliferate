@@ -6,10 +6,14 @@
 //   -> build the candidate Server image for the BOX arch and docker-save it
 //   -> build the release-shaped proliferate-deploy.tar.gz + its SHA256SUMS
 //      EXACTLY the way server-ci.yml `self-hosted-release-assets` builds them
+//   -> for the arm64 CFN posture, build the exact aarch64 musl runtime archive
+//      and add it to that same SHA256SUMS (the shipped template consumes it
+//      through RuntimeBinaryUrl/RuntimeBinaryChecksumUrl overrides)
 //   -> reuse the PR 1 release AnyHarness build (controller host, not the box)
 //   -> reuse the PR 1 Desktop renderer build (connected to the box at runtime
 //      through the Connect-Server trust flow)
-//   -> assemble one four-artifact candidate map (all local_file; no schema change)
+//   -> assemble the four common artifacts plus the arm64 runtime artifact when
+//      selected (all local_file; no build-map schema change)
 //
 // `make qualification-selfhost` and the release-e2e selfhost job both call this
 // same script; there is no second implementation of these build steps. The
@@ -45,6 +49,7 @@
 //   {"run_id":...,"shard_id":...,"candidate_build_map":"<path>",
 //    "bundle_sha256sums":"<path>","ports_file":"<path>",
 //    "ports":{...},"platform":"linux/amd64"}
+//   An arm64 build additionally carries `"runtime_bundle":"<path>"`.
 //   plus, only when --second-ports is passed:
 //   {..., "second_ports_file":"<path>","second_ports":{...}}
 //
@@ -54,7 +59,7 @@
 // and scp's it to the box for the shipped installer's checksum-verify.
 
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -73,6 +78,9 @@ const SAFE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 // The default EC2 instance type (t3.small) is x86_64, so the box image defaults
 // to linux/amd64; --platform selects an arm64 box (e.g. t4g.*).
 const DEFAULT_BOX_PLATFORM = "linux/amd64";
+const CFN_RUNTIME_PLATFORM = "linux/arm64";
+const CFN_RUNTIME_TARGET = "aarch64-unknown-linux-musl";
+const CFN_RUNTIME_ARCHIVE_NAME = "anyharness-aarch64-unknown-linux-musl.tar.gz";
 
 /** Default exec seam: real execFileSync. The unit test injects a fake that
  * records argv and materializes canned output files instead of doing a real
@@ -223,9 +231,95 @@ export function buildSelfHostDeployBundle({
 }
 
 /**
+ * Builds the release-shaped arm64 runtime archive the shipped CloudFormation
+ * template installs. The CFN qualification uses a run-scoped image tag, so it
+ * cannot let the template derive a GitHub-release runtime URL from that tag:
+ * there is intentionally no `server-v<run-id>` release. Build the exact source
+ * bytes instead and pass them through the template's existing unreleased-build
+ * override parameters.
+ *
+ * `cross` is installed by the trusted Actions job for the arm64 posture. Local
+ * qualification must not select linux/arm64 unless the operator has provided
+ * the same qualified builder prerequisite.
+ */
+export function buildSelfHostRuntimeArchive({
+  outputPath,
+  version,
+  sourceSha,
+  targetDir,
+  exec = defaultExec,
+  log = () => {},
+}) {
+  log(`cross build --release --target ${CFN_RUNTIME_TARGET} -p anyharness -p proliferate-worker -p proliferate-supervisor`);
+  exec(
+    "cross",
+    [
+      "build",
+      "--release",
+      "--target",
+      CFN_RUNTIME_TARGET,
+      "-p",
+      "anyharness",
+      "-p",
+      "proliferate-worker",
+      "-p",
+      "proliferate-supervisor",
+    ],
+    {
+      env: {
+        ...process.env,
+        CARGO_TARGET_DIR: targetDir,
+        PROLIFERATE_BUILD_VERSION: version,
+        PROLIFERATE_BUILD_SHA: sourceSha,
+      },
+    },
+  );
+
+  const releaseDir = path.join(targetDir, CFN_RUNTIME_TARGET, "release");
+  for (const binary of ["anyharness", "proliferate-worker", "proliferate-supervisor"]) {
+    requireRegularFile(path.join(releaseDir, binary), `arm64 runtime ${binary} binary`);
+  }
+  mkdirSync(path.dirname(outputPath), { recursive: true });
+  exec("tar", [
+    "czf",
+    outputPath,
+    "--owner=0",
+    "--group=0",
+    "--numeric-owner",
+    "-C",
+    releaseDir,
+    "anyharness",
+    "proliferate-worker",
+    "proliferate-supervisor",
+  ]);
+  requireRegularFile(outputPath, "arm64 self-host runtime archive");
+  return outputPath;
+}
+
+/** Adds the runtime archive to the release-shaped checksum file. */
+export function appendSelfHostRuntimeChecksum({ runtimePath, sumsOutputPath, exec = defaultExec }) {
+  const artifactsDir = path.dirname(runtimePath);
+  const runtimeBasename = path.basename(runtimePath);
+  const checksumLine = exec("sha256sum", [runtimeBasename], { cwd: artifactsDir });
+  const checksumFields = checksumLine.trim().split(/\s+/);
+  if (
+    checksumFields.length < 2 ||
+    !/^[0-9a-f]{64}$/.test(checksumFields[0]) ||
+    checksumFields[1].replace(/^\*/, "") !== runtimeBasename
+  ) {
+    throw new Error(`sha256sum did not return a checksum for ${runtimeBasename}`);
+  }
+  const existing = readFileSync(sumsOutputPath, "utf8");
+  writeFileSync(sumsOutputPath, `${existing.replace(/\s*$/, "\n")}${checksumLine.replace(/^\s+/, "")}`);
+  requireRegularFile(sumsOutputPath, "self-host asset SHA256SUMS");
+  return sumsOutputPath;
+}
+
+/**
  * Orchestrates the full self-host build: allocates the controller-local ports,
- * builds the four candidates, assembles + writes the candidate build map, the
- * bundle checksum sibling, and the ports file, and returns the machine-readable
+ * builds the common candidates plus the arm64 CFN runtime when selected,
+ * assembles + writes the candidate build map, the asset checksum sibling, and
+ * the ports file, and returns the machine-readable
  * summary this script prints. Every side-effecting step is behind an injectable
  * `exec`/`allocatePorts` seam so the unit test fakes all of docker/cargo/pnpm/
  * tar and exercises this orchestration deterministically and offline.
@@ -262,6 +356,7 @@ export async function buildSelfHostQualificationCandidates(options, deps = {}) {
   const serverImageArchivePath = path.join(artifactsDir, "server-image.tar");
   const bundlePath = path.join(artifactsDir, "proliferate-deploy.tar.gz");
   const sumsPath = path.join(artifactsDir, "self-hosted-assets.SHA256SUMS");
+  const runtimeArchivePath = path.join(artifactsDir, CFN_RUNTIME_ARCHIVE_NAME);
   const anyharnessBinaryPath = path.join(artifactsDir, "anyharness");
   const rendererArchivePath = path.join(artifactsDir, "renderer.tar.gz");
   const anyharnessTargetDir = path.join(runDir, "cargo-target");
@@ -276,6 +371,20 @@ export async function buildSelfHostQualificationCandidates(options, deps = {}) {
     exec,
     log,
   });
+
+  let runtimeBundle;
+  if (platform === CFN_RUNTIME_PLATFORM) {
+    buildSelfHostRuntimeArchive({
+      outputPath: runtimeArchivePath,
+      version,
+      sourceSha,
+      targetDir: anyharnessTargetDir,
+      exec,
+      log,
+    });
+    appendSelfHostRuntimeChecksum({ runtimePath: runtimeArchivePath, sumsOutputPath: sumsPath, exec });
+    runtimeBundle = { artifactId: `selfhost-runtime/${platform}`, path: runtimeArchivePath };
+  }
 
   // Controller-local AnyHarness (reused PR 1 build) — runs on the runner host,
   // NOT the box, pointed at the remote self-host API at runtime.
@@ -316,6 +425,7 @@ export async function buildSelfHostQualificationCandidates(options, deps = {}) {
     artifacts: [
       { artifactId: `server/${platform}`, path: serverImageArchivePath },
       { artifactId: `selfhost-bundle/${platform}`, path: bundlePath },
+      ...(runtimeBundle ? [runtimeBundle] : []),
       { artifactId: `anyharness/${target}`, path: anyharnessBinaryPath },
       { artifactId: "desktop-renderer/browser", path: rendererArchivePath },
     ],
@@ -346,6 +456,7 @@ export async function buildSelfHostQualificationCandidates(options, deps = {}) {
     shard_id: shardId,
     candidate_build_map: candidateBuildMapPath,
     bundle_sha256sums: sumsPath,
+    ...(runtimeBundle ? { runtime_bundle: runtimeArchivePath } : {}),
     ports_file: portsPath,
     ports,
     platform,

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -6,6 +7,7 @@ import { test } from "node:test";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
 const release = readFileSync(path.join(REPO_ROOT, ".github/workflows/release-e2e.yml"), "utf8");
+const makefile = readFileSync(path.join(REPO_ROOT, "Makefile"), "utf8");
 const selfhost = readFileSync(path.join(REPO_ROOT, ".github/workflows/release-e2e-selfhost.yml"), "utf8");
 const hardCancel = readFileSync(
   path.join(REPO_ROOT, ".github/workflows/release-e2e-hard-cancel-cleanup.yml"),
@@ -40,6 +42,25 @@ test("release qualification has stable independent concurrency groups by world",
   for (const source of [release, selfhost]) {
     assert.doesNotMatch(source, /cancel-in-progress: true/);
   }
+});
+
+test("a self-host dispatch cannot launch unrelated release worlds", () => {
+  assert.match(
+    job(release, "release-e2e-selfhost-install"),
+    /if: github\.event_name == 'workflow_dispatch' && inputs\.selfhost/,
+  );
+  for (const id of ["qualification-tier2", "release-e2e-local-functional", "release-e2e-managed-cloud"]) {
+    assert.match(
+      job(release, id),
+      /github\.event_name == 'workflow_dispatch' &&\s+!inputs\.selfhost &&/,
+      `${id} must stay out of a self-host-only dispatch`,
+    );
+  }
+  assert.match(
+    job(release, "release-e2e-staging"),
+    /github\.event_name == 'schedule' \|\|\s+\(github\.event_name == 'workflow_dispatch' &&\s+!inputs\.selfhost &&/,
+    "release-e2e-staging must stay out of a self-host-only dispatch while retaining its schedule",
+  );
 });
 
 test("manual dispatch can isolate one qualification world", () => {
@@ -165,6 +186,68 @@ test("provider-backed jobs run shared preflight before build/provider setup", ()
   }
 });
 
+test("the self-host execution step authenticates run-scoped GHCR cleanup without argv exposure", () => {
+  const selfHost = job(release, "release-e2e-selfhost-install");
+  const executionStart = selfHost.indexOf(
+    "- name: Run the selected self-host scenarios and cleanup (strict, credential-bounded)",
+  );
+  const executionEnd = selfHost.indexOf(
+    "- name: Upload V4 report and bounded diagnostic logs",
+    executionStart,
+  );
+  assert.ok(executionStart >= 0 && executionEnd > executionStart, "self-host execution step boundary missing");
+  const executionStep = selfHost.slice(executionStart, executionEnd);
+
+  assert.match(executionStep, /GH_TOKEN: \$\{\{ github\.token \}\}/);
+  assert.doesNotMatch(
+    executionStep,
+    /(?:make qualification-selfhost|gh api)[^\n]*GH_TOKEN/,
+    "the token must be inherited from the step environment, never placed on argv",
+  );
+});
+
+test("the self-host job finishes long local builds before AWS and bounds provider cleanup below the session", () => {
+  const selfHost = job(release, "release-e2e-selfhost-install");
+  const crossInstall = selfHost.indexOf("Install cross for exact arm64 self-host runtime");
+  const dependencies = selfHost.indexOf("Install workspace dependencies");
+  const candidateBuild = selfHost.indexOf("Validate inputs and build exact self-host candidates before AWS credentials");
+  const ghcrLogin = selfHost.indexOf("Log in to GHCR (SELFHOST-CFN-1 candidate image push)");
+  const aws = selfHost.indexOf("Configure AWS credentials");
+  const provider = selfHost.indexOf("Run the selected self-host scenarios and cleanup (strict, credential-bounded)");
+  assert.ok(crossInstall >= 0 && crossInstall < dependencies);
+  assert.ok(dependencies < candidateBuild && candidateBuild < ghcrLogin);
+  assert.ok(ghcrLogin < aws && aws < provider);
+  assert.match(selfHost, /if: inputs\.selfhost_candidate_platform == 'linux\/arm64'/);
+  assert.match(selfHost, /cargo install cross --git https:\/\/github\.com\/cross-rs\/cross --locked/);
+  assert.match(selfHost, /timeout-minutes: 150/);
+  assert.match(selfHost.slice(candidateBuild, ghcrLogin), /QUALIFICATION_SELFHOST_PHASE=build/);
+  assert.match(selfHost.slice(provider), /QUALIFICATION_SELFHOST_PHASE=run/);
+
+  const roleSeconds = Number(/role-duration-seconds: (\d+)/.exec(selfHost)?.[1]);
+  const providerMinutes = Number(/timeout-minutes: (\d+)/.exec(selfHost.slice(provider))?.[1]);
+  assert.equal(roleSeconds, 7200);
+  assert.equal(providerMinutes, 110);
+  assert.ok(providerMinutes * 60 < roleSeconds, "provider execution+cleanup must expire before AWS credentials");
+  assert.doesNotMatch(
+    selfHost.slice(aws, provider),
+    /pnpm install|cargo install cross|build-selfhost-qualification-candidates|QUALIFICATION_SELFHOST_PHASE=build/,
+    "no long local build may consume the AWS credential window",
+  );
+});
+
+test("the self-host Make split revalidates the exact candidate map before the provider phase", () => {
+  const start = makefile.indexOf("qualification-selfhost:");
+  const end = makefile.indexOf("\n# \"Prove One Real Managed-Cloud Workspace\"", start);
+  assert.ok(start >= 0 && end > start);
+  const target = makefile.slice(start, end);
+  assert.match(makefile, /QUALIFICATION_SELFHOST_PHASE \?= all/);
+  assert.match(target, /all\|build\|run/);
+  assert.match(target, /candidate_map="\$\$run_dir\/candidate-build\.json"/);
+  assert.match(target, /--artifact-mode reuse/);
+  assert.match(target, /--candidate-build-map "\$\$candidate_map"/);
+  assert.match(target, /if \[ "\$\$phase" = "build" \]; then exit 0; fi/);
+});
+
 test("supported cancellation keeps local receipts and hard cancellation keeps the trusted managed reaper", () => {
   for (const id of ["release-e2e-local-functional", "release-e2e-selfhost-install", "release-e2e-managed-cloud"]) {
     const body = job(release, id);
@@ -175,4 +258,53 @@ test("supported cancellation keeps local receipts and hard cancellation keeps th
   assert.match(hardCancel, /Reconcile exact run-owned managed-cloud AWS resources/);
   assert.match(hardCancel, /Reconcile exact run-owned E2B, Stripe, and LiteLLM resources/);
   assert.doesNotMatch(hardCancel, /workflow_dispatch/);
+});
+
+// The self-host cell selector's literal "all" must mean "no cell filter" — the
+// same contract qualification-preflight.mjs's parseSelector applies (and the
+// preflight step in this very job defaults to `--cells all`). Run 29630600180
+// failed closed in 49s on `selfhost_cells=all`; these tests EXECUTE the job's
+// real validator shell (everything before the make invocation) so the workflow
+// and runner contracts cannot drift apart silently again.
+function selfHostValidatorScript(): string {
+  const body = job(release, "release-e2e-selfhost-install");
+  const runStart = body.indexOf("set -euo pipefail");
+  const runEnd = body.indexOf("make qualification-selfhost");
+  assert.ok(runStart >= 0 && runEnd > runStart, "self-host validator shell not found");
+  return body
+    .slice(runStart, runEnd)
+    .split("\n")
+    .map((line) => line.replace(/^ {10}/, ""))
+    .join("\n");
+}
+
+function runSelfHostValidator(env: Record<string, string>): {
+  status: number | null;
+  stdout: string;
+  stderr: string;
+} {
+  const script = `${selfHostValidatorScript()}\nprintf 'CELLS_ARG=%s\\n' "$cells_arg"\n`;
+  const result = spawnSync("bash", ["-c", script], {
+    env: { ...process.env, ...env },
+    encoding: "utf8",
+  });
+  return { status: result.status, stdout: result.stdout, stderr: result.stderr };
+}
+
+test('self-host cell selector treats literal "all" as no cell filter (runner/preflight contract)', () => {
+  for (const value of ["all", " all "]) {
+    const run = runSelfHostValidator({ SELFHOST_CELLS_INPUT: value });
+    assert.equal(run.status, 0, `selfhost_cells=${JSON.stringify(value)} must not fail closed: ${run.stdout}${run.stderr}`);
+    assert.match(run.stdout, /CELLS_ARG=\n/, "literal all must normalize to an empty (unfiltered) cell selector");
+  }
+});
+
+test("self-host cell selector still fails closed on unknown cells and keeps real filters", () => {
+  const unknown = runSelfHostValidator({ SELFHOST_CELLS_INPUT: "SH-NOT-A-CELL" });
+  assert.equal(unknown.status, 2, "unknown cells must fail closed");
+  const blank = runSelfHostValidator({ SELFHOST_CELLS_INPUT: " , ," });
+  assert.equal(blank.status, 2, "explicit-but-empty selector must fail closed (PR7-CONTROL-005)");
+  const gateway = runSelfHostValidator({ SELFHOST_CELLS_INPUT: "SH-GATEWAY" });
+  assert.equal(gateway.status, 0);
+  assert.match(gateway.stdout, /CELLS_ARG=SH-GATEWAY\n/);
 });

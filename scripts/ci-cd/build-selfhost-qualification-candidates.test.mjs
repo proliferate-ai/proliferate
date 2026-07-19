@@ -6,8 +6,10 @@ import { test } from "node:test";
 
 import {
   allocateSecondLocalWorldPorts,
+  appendSelfHostRuntimeChecksum,
   buildSelfHostDeployBundle,
   buildSelfHostQualificationCandidates,
+  buildSelfHostRuntimeArchive,
   buildServerImageArchive,
 } from "./build-selfhost-qualification-candidates.mjs";
 
@@ -40,6 +42,16 @@ function fakeExecFactory() {
       writeFileSync(path.join(targetDir, "release", "anyharness"), "fake-anyharness-binary-bytes");
       return "";
     }
+    if (command === "cross") {
+      const targetDir = options.env.CARGO_TARGET_DIR;
+      const target = args[args.indexOf("--target") + 1];
+      const releaseDir = path.join(targetDir, target, "release");
+      mkdirSync(releaseDir, { recursive: true });
+      for (const binary of ["anyharness", "proliferate-worker", "proliferate-supervisor"]) {
+        writeFileSync(path.join(releaseDir, binary), `fake-${binary}-arm64-bytes`);
+      }
+      return "";
+    }
     if (command === "pnpm") {
       return "";
     }
@@ -50,7 +62,7 @@ function fakeExecFactory() {
       return "";
     }
     if (command === "sha256sum") {
-      return `${"d".repeat(64)}  ${args[0]}\n`;
+      return args.map((name, index) => `${String(index + 1).repeat(64).slice(0, 64)}  ${name}\n`).join("");
     }
     throw new Error(`fakeExec: unexpected command "${command}" ${JSON.stringify(args)}`);
   };
@@ -128,6 +140,41 @@ test("buildSelfHostDeployBundle mirrors the server-ci release bundle build (drop
   }
 });
 
+test("buildSelfHostRuntimeArchive builds the exact arm64 trio and binds it into the shared SHA256SUMS", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "selfhost-runtime-"));
+  try {
+    const { exec, calls } = fakeExecFactory();
+    const artifactsDir = path.join(dir, "artifacts");
+    mkdirSync(artifactsDir, { recursive: true });
+    const outputPath = path.join(artifactsDir, "anyharness-aarch64-unknown-linux-musl.tar.gz");
+    const sumsOutputPath = path.join(artifactsDir, "self-hosted-assets.SHA256SUMS");
+    writeFileSync(sumsOutputPath, `${"a".repeat(64)}  proliferate-deploy.tar.gz\n`);
+
+    buildSelfHostRuntimeArchive({
+      outputPath,
+      version: "0.3.28",
+      sourceSha: SHA,
+      targetDir: path.join(dir, "cargo-target"),
+      exec,
+    });
+    appendSelfHostRuntimeChecksum({ runtimePath: outputPath, sumsOutputPath, exec });
+
+    const crossCall = calls.find((call) => call.command === "cross");
+    assert.ok(crossCall);
+    assert.deepEqual(crossCall.args.slice(0, 4), ["build", "--release", "--target", "aarch64-unknown-linux-musl"]);
+    assert.equal(crossCall.options.env.PROLIFERATE_BUILD_VERSION, "0.3.28");
+    assert.equal(crossCall.options.env.PROLIFERATE_BUILD_SHA, SHA);
+    const tarCall = calls.find((call) => call.command === "tar");
+    assert.ok(tarCall.args.includes("anyharness"));
+    assert.ok(tarCall.args.includes("proliferate-worker"));
+    assert.ok(tarCall.args.includes("proliferate-supervisor"));
+    assert.ok(tarCall.args.includes("--owner=0"));
+    assert.match(readFileSync(sumsOutputPath, "utf8"), /anyharness-aarch64-unknown-linux-musl\.tar\.gz/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("buildSelfHostQualificationCandidates: full offline orchestration produces a valid four-artifact map", async () => {
   const dir = mkdtempSync(path.join(os.tmpdir(), "selfhost-full-"));
   try {
@@ -191,6 +238,45 @@ test("buildSelfHostQualificationCandidates: full offline orchestration produces 
     assert.equal(calls.some((c) => c.command === "rustc"), false);
     // The server image was built via buildx --load for the box platform.
     assert.ok(calls.some((c) => c.command === "docker" && c.args[0] === "buildx" && c.args.includes("linux/amd64")));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("buildSelfHostQualificationCandidates: arm64 CFN build adds the exact runtime candidate and checksum", async () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "selfhost-arm64-"));
+  try {
+    const { exec, calls } = fakeExecFactory();
+    const deployDir = path.join(dir, "server", "deploy");
+    mkdirSync(deployDir, { recursive: true });
+    writeFileSync(path.join(deployDir, "install.sh"), "#!/usr/bin/env bash\n");
+    const distDir = path.join(dir, "desktop-dist");
+    mkdirSync(distDir, { recursive: true });
+    writeFileSync(path.join(distDir, "index.html"), "<html></html>");
+
+    const summary = await buildSelfHostQualificationCandidates(
+      {
+        runId: "qs-run-arm64",
+        shardId: "1",
+        runDir: path.join(dir, "run"),
+        sourceSha: SHA,
+        version: "0.3.28",
+        target: "x86_64-unknown-linux-gnu",
+        platform: "linux/arm64",
+        deployDir,
+        desktopDistDir: distDir,
+      },
+      { exec, allocatePorts: fakeAllocatePorts(), log: () => {} },
+    );
+
+    assert.ok(summary.runtime_bundle);
+    const map = JSON.parse(readFileSync(summary.candidate_build_map, "utf8"));
+    assert.equal(map.artifacts.length, 5);
+    assert.ok(map.artifacts.some((artifact) => artifact.artifact_id === "selfhost-runtime/linux/arm64"));
+    assert.ok(calls.some((call) => call.command === "cross"));
+    const sums = readFileSync(summary.bundle_sha256sums, "utf8");
+    assert.match(sums, /proliferate-deploy\.tar\.gz/);
+    assert.match(sums, /anyharness-aarch64-unknown-linux-musl\.tar\.gz/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

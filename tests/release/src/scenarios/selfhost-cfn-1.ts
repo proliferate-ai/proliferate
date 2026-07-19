@@ -25,6 +25,7 @@ import {
   QUALIFICATION_ZONE,
   SelfHostCfnCleanupStack,
   buildCfnParameters,
+  buildCfnStackTags,
   bundleDigestBound,
   cfnSiteAddress,
   cfnStackName,
@@ -37,6 +38,7 @@ import {
   pushCandidateServerImage,
   runScopedImageTag,
   route53RecordAbsent,
+  runtimeDigestBound,
   s3KeyPrefix,
   ssmInspectRunningImageDigest,
   templateFileSha256,
@@ -77,6 +79,9 @@ import {
  *   the EXACT candidate `proliferate-deploy.tar.gz` + its SHA256SUMS; the stack
  *   `sha256sum -c`s them on the box. `bundle_digest_bound` = the uploaded sums
  *   list the candidate bundle sha256.
+ * - runtime: the same run-scoped SHA256SUMS binds the EXACT arm64 runtime
+ *   archive built from this source head; `RuntimeBinaryUrl` prevents the
+ *   run-scoped server-image tag from being misread as a GitHub release tag.
  * - template: the bundle does NOT ship the template (`proliferate-deploy.tar.gz`
  *   is built from `server/deploy/**`; the template lives under
  *   `server/infra/self-hosted-aws/`), so the receipt is the REPO template's byte
@@ -173,6 +178,7 @@ export interface ReadySelfHostCfnWorld {
   templateSha256: string;
   templateValidated: boolean;
   bundleDigestBound: boolean;
+  runtimeDigestBound: boolean;
   /** `sha256:<hex>` digest of the pushed candidate image. */
   pushedImageDigest: string;
   /** The run-scoped tag the candidate image was pushed under + passed as ReleaseVersion. */
@@ -315,6 +321,12 @@ export async function runCfnWrapperCell(world: ReadySelfHostCfnWorld): Promise<S
         "the stack would install an unverified bundle.",
     );
   }
+  if (!world.runtimeDigestBound) {
+    return fail(
+      "SH-CFN-WRAPPER: the uploaded SHA256SUMS did not bind the candidate arm64 runtime digest; " +
+        "the stack would install an unverified runtime.",
+    );
+  }
 
   // Outputs well-formed: BaseUrl == https://<SiteAddress>, SiteAddress == the
   // requested run subdomain, InstanceId present.
@@ -392,6 +404,7 @@ export async function runCfnWrapperCell(world: ReadySelfHostCfnWorld): Promise<S
     template_sha256: world.templateSha256,
     template_validated: true,
     bundle_digest_bound: true,
+    runtime_digest_bound: true,
     image_digest_bound: true,
     outputs_valid: true,
     dns_tls_verified: true,
@@ -413,6 +426,20 @@ export async function runCfnWrapperCell(world: ReadySelfHostCfnWorld): Promise<S
 export async function constructSelfHostCfnWorld(inputs: CfnWorldInputs): Promise<ReadySelfHostCfnWorld> {
   const log = (message: string): void => void message;
   const candidateSet = resolveSelfHostCandidateSet(inputs.map);
+  const expectedPlatformSuffix = "/linux/arm64";
+  const runtimeBundle = candidateSet.runtimeBundle;
+  if (!runtimeBundle) {
+    throw new Error("SH-CFN-WRAPPER: candidate map is missing the required selfhost-runtime/linux/arm64 artifact.");
+  }
+  for (const [name, artifactId] of [
+    ["server image", candidateSet.serverImage.artifact_id],
+    ["deploy bundle", candidateSet.bundle.artifact_id],
+    ["runtime bundle", runtimeBundle.artifact_id],
+  ] as const) {
+    if (!artifactId.endsWith(expectedPlatformSuffix)) {
+      throw new Error(`SH-CFN-WRAPPER: ${name} artifact ${artifactId} does not match the template's linux/arm64 instance architecture.`);
+    }
+  }
 
   const cfnDir = path.join(inputs.runDir, "cfn");
   const artifactsDir = path.join(cfnDir, "artifacts");
@@ -449,10 +476,12 @@ export async function constructSelfHostCfnWorld(inputs: CfnWorldInputs): Promise
     // Materialize (re-hash) the exact candidate bytes into run storage; the
     // SHA256SUMS sits next to the ORIGINAL bundle (builder sibling).
     const bundlePath = await materializeLocalArtifact(candidateSet.bundle, artifactsDir);
+    const runtimePath = await materializeLocalArtifact(runtimeBundle, artifactsDir);
     const serverImagePath = await materializeLocalArtifact(candidateSet.serverImage, artifactsDir);
     const sumsPath = path.join(path.dirname(candidateSet.bundle.locator.path), "self-hosted-assets.SHA256SUMS");
     const sumsContent = await readFile(sumsPath, "utf8");
     const digestBound = bundleDigestBound(sumsContent, candidateSet.bundle.sha256);
+    const runtimeBound = runtimeDigestBound(sumsContent, runtimeBundle.sha256);
 
     const templatePath = resolveRepoTemplatePath();
     const templateValidated = await validateTemplate(aws, templatePath, inputs.region);
@@ -465,6 +494,7 @@ export async function constructSelfHostCfnWorld(inputs: CfnWorldInputs): Promise
       bucket: inputs.bucket,
       keyPrefix: s3KeyPrefix(inputs.run.run_id, inputs.run.shard_id),
       bundlePath,
+      runtimePath,
       sumsPath,
       registerCleanup: (kind, providerId, release) => stack.registerAcquire(kind, providerId, release),
       log,
@@ -493,6 +523,8 @@ export async function constructSelfHostCfnWorld(inputs: CfnWorldInputs): Promise
     const parameters = buildCfnParameters({
       releaseVersion: tag,
       serverImageRepository: inputs.imageRepo,
+      runtimeBinaryUrl: presigned.runtimeBinaryUrl,
+      runtimeBinaryChecksumUrl: presigned.deployBundleChecksumUrl,
       deployBundleUrl: presigned.deployBundleUrl,
       deployBundleChecksumUrl: presigned.deployBundleChecksumUrl,
       siteAddress,
@@ -503,6 +535,11 @@ export async function constructSelfHostCfnWorld(inputs: CfnWorldInputs): Promise
       stackName,
       templatePath,
       parameters,
+      tags: buildCfnStackTags({
+        stackName,
+        runId: inputs.run.run_id,
+        shardId: inputs.run.shard_id,
+      }),
       region: inputs.region,
       registerCleanup: (kind, providerId, release) => stack.registerAcquire(kind, providerId, release),
       writeParameterFile: tmpParameterFileIo(),
@@ -515,6 +552,7 @@ export async function constructSelfHostCfnWorld(inputs: CfnWorldInputs): Promise
       artifactIds: [
         candidateSet.serverImage.artifact_id,
         candidateSet.bundle.artifact_id,
+        runtimeBundle.artifact_id,
         candidateSet.anyharness.artifact_id,
         candidateSet.desktopRenderer.artifact_id,
       ],
@@ -525,6 +563,7 @@ export async function constructSelfHostCfnWorld(inputs: CfnWorldInputs): Promise
       templateSha256,
       templateValidated,
       bundleDigestBound: digestBound,
+      runtimeDigestBound: runtimeBound,
       pushedImageDigest: pushed.pushedDigest,
       releaseVersionTag: tag,
       outputs,
