@@ -29,8 +29,10 @@ export function TurnDiffPanelHeader({
       className={`group/turn-diff-header relative focus-within:[&_.turn-diff-default-subtitle]:hidden hover:[&_.turn-diff-default-subtitle]:hidden focus-within:[&_.turn-diff-hover-subtitle]:inline-flex hover:[&_.turn-diff-hover-subtitle]:inline-flex ${onOpenReviewPane ? "cursor-pointer" : ""}`}
     >
       {onOpenReviewPane && (
-        <button
+        <Button
           type="button"
+          variant="unstyled"
+          size="unstyled"
           data-chat-transcript-ignore
           aria-label="Review changed files"
           onClick={onOpenReviewPane}
