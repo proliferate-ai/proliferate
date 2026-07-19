@@ -6,6 +6,7 @@ import {
   type ReactNode,
 } from "react";
 import type { RenderErrorReport } from "@proliferate/product-client/host/desktop-bridge";
+import { Button } from "@proliferate/ui/primitives/Button";
 
 import type { RenderErrorReportStatus } from "#product/lib/domain/app/render-error-recovery";
 
@@ -105,21 +106,22 @@ function EmergencyRecoveryShell({
             : " The remaining recovery tools couldn't load."}
         </p>
         <div className="flex flex-col gap-2 sm:flex-row">
-          <button
+          <Button
             type="button"
             onClick={handleReload}
             autoFocus
-            className="h-9 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground"
+            size="md"
           >
             Reload app
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
             onClick={onTryAgain}
-            className="h-9 rounded-md border border-border bg-card px-4 text-sm text-card-foreground"
+            variant="secondary"
+            size="md"
           >
             Try again
-          </button>
+          </Button>
         </div>
       </div>
     </main>
