@@ -85,6 +85,26 @@ export function turnErrorEvidenceMessage(route: LocalRoute, raw: string): string
   return `sendBoundedTurn route=${route} error_class=${classifyTurnErrorForEvidence(raw)}`;
 }
 
+/** Carries only the fixed-vocabulary turn failure; the raw provider payload is discarded. */
+export class SafeTurnFailure extends Error {
+  constructor(route: LocalRoute, raw: string) {
+    super(turnErrorEvidenceMessage(route, raw));
+    this.name = "SafeTurnFailure";
+  }
+}
+
+/** Provider turn failures must not persist the rendered/raw browser diagnostics. */
+export async function captureLocalRouteFailure(
+  page: ProductPage | undefined,
+  label: string,
+  error: unknown,
+): Promise<void> {
+  if (error instanceof SafeTurnFailure) {
+    return;
+  }
+  await captureLocalDriverFailure(page, label);
+}
+
 /**
  * BYOK env mapping (BRIEF §"BYOK input mapping"). Each user-key harness reads a
  * dedicated bounded provider key from the controller's secret environment and
@@ -445,7 +465,7 @@ export const defaultLocalRouteDriver: LocalRouteDriver = {
     );
     const completion = await waitForTurnCompletion(world, sessionId, TURN_TIMEOUT_MS);
     if (completion.error) {
-      throw new Error(turnErrorEvidenceMessage(expectedRoute, completion.error));
+      throw new SafeTurnFailure(expectedRoute, completion.error);
     }
     if (!completion.ended) {
       throw new Error(`sendBoundedTurn: assistant turn did not end within ${TURN_TIMEOUT_MS}ms.`);
@@ -764,7 +784,7 @@ async function runLocal2GatewayCell(
         },
       };
     } catch (uiError) {
-      await captureLocalDriverFailure(page, `${cell.cell_id}-ui-failure`);
+      await captureLocalRouteFailure(page, `${cell.cell_id}-ui-failure`, uiError);
       throw uiError;
     } finally {
       await page.close().catch(() => undefined);
@@ -845,7 +865,7 @@ async function runLocal3UserKeyCell(
         },
       };
     } catch (uiError) {
-      await captureLocalDriverFailure(page, `${cell.cell_id}-ui-failure`);
+      await captureLocalRouteFailure(page, `${cell.cell_id}-ui-failure`, uiError);
       throw uiError;
     } finally {
       await page.close().catch(() => undefined);
@@ -961,7 +981,7 @@ async function runLocal6RouteChangeCell(
         },
       };
     } catch (uiError) {
-      await captureLocalDriverFailure(page, `${cell.cell_id}-ui-failure`);
+      await captureLocalRouteFailure(page, `${cell.cell_id}-ui-failure`, uiError);
       throw uiError;
     } finally {
       await page.close().catch(() => undefined);
