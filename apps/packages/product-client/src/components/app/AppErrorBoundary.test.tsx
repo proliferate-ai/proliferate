@@ -49,13 +49,24 @@ describe("AppErrorBoundary", () => {
 
     renderCrash({ onRenderError });
 
-    expect(document.querySelector('[data-report-status="reporting"]')).toBeTruthy();
-    expect(screen.queryByText("We've been notified and are investigating.")).toBeNull();
+    await screen.findByRole("button", { name: "Reload app" });
+    expect(
+      document.querySelector('[data-report-status="reporting"]'),
+    ).toBeTruthy();
+    expect(screen.getByRole("status").textContent).not.toContain(
+      "we've been notified",
+    );
     expect(onRenderError).toHaveBeenCalledTimes(1);
 
     await act(async () => confirmReport?.(true));
-    expect(await screen.findByText("We've been notified and are investigating.")).toBeTruthy();
-    expect(document.querySelector('[data-report-status="reported"]')).toBeTruthy();
+    await waitFor(() => {
+      expect(screen.getByRole("status").textContent).toBe(
+        "Reported — we've been notified and are investigating.",
+      );
+    });
+    expect(
+      document.querySelector('[data-report-status="reported"]'),
+    ).toBeTruthy();
   });
 
   it("shows confirmed success when the host acknowledgment is already resolved", async () => {
@@ -70,17 +81,69 @@ describe("AppErrorBoundary", () => {
     await waitFor(() => {
       expect(document.querySelector('[data-report-status="reported"]')).toBeTruthy();
     });
-    expect(screen.getByText("We've been notified and are investigating.")).toBeTruthy();
+    await screen.findByRole("button", { name: "Reload app" });
+    expect(screen.getByRole("status").textContent).toBe(
+      "Reported — we've been notified and are investigating.",
+    );
   });
 
   it("states honestly when reporting is unavailable or fails", async () => {
     const unavailable = renderCrash();
-    expect(await screen.findByText("Automatic reporting isn't available here. Copy the technical details if you need help.")).toBeTruthy();
+    await screen.findByRole("button", { name: "Reload app" });
+    expect(screen.getByRole("status").textContent).toBe(
+      "Reporting unavailable — automatic reporting isn't available here. Copy the technical details if you need help.",
+    );
     unavailable.unmount();
 
     renderCrash({ onRenderError: async () => false });
-    expect(await screen.findByText("We couldn't send the diagnostic report. Copy the technical details if you need help.")).toBeTruthy();
-    expect(screen.queryByText("We've been notified and are investigating.")).toBeNull();
+    await waitFor(() => {
+      expect(screen.getByRole("status").textContent).toBe(
+        "Report failed — we couldn't send the diagnostic report. Copy the technical details if you need help.",
+      );
+    });
+    expect(screen.getByRole("status").textContent).not.toContain(
+      "we've been notified",
+    );
+  });
+
+  it("keeps completed states neutral, compact, and free of decorative icons", async () => {
+    renderCrash({
+      onRenderError: async () => true,
+      onContactSupport: vi.fn(),
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("status").textContent).toBe(
+        "Reported — we've been notified and are investigating.",
+      );
+    });
+    const surface = document.querySelector('[data-crash-recovery]');
+    const status = screen.getByRole("status");
+
+    expect(status.getAttribute("data-report-appearance")).toBe("neutral");
+    expect(status.className).not.toMatch(
+      /(?:bg|border)-(?:success|green|destructive|red)/u,
+    );
+    expect(surface?.querySelectorAll("svg")).toHaveLength(0);
+    for (const name of [
+      "Reload app",
+      "Try again",
+      "Copy details",
+      "Contact support",
+    ]) {
+      expect(screen.getByRole("button", { name }).querySelector("svg")).toBeNull();
+    }
+
+    const details = screen.getByText("Technical details").closest("details");
+    expect(details?.open).toBe(false);
+  });
+
+  it("uses only the functional progress affordance while reporting", async () => {
+    renderCrash({ onRenderError: () => new Promise<boolean>(() => {}) });
+
+    await screen.findByRole("button", { name: "Reload app" });
+    expect(document.querySelectorAll("[data-loading-spinner]")).toHaveLength(1);
+    expect(document.querySelectorAll('[data-crash-recovery] svg')).toHaveLength(1);
   });
 
   it("keeps the recovery surface usable when reporting throws or rejects", async () => {
