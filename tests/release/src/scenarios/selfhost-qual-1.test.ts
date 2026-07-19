@@ -48,6 +48,7 @@ import {
   selectPersonalEnrollmentKeyToken,
   spendWindowUtc,
   stripGatewayKeysSedProgram,
+  waitForGatewaySpendRows,
   type GatewayEnvSource,
 } from "../worlds/selfhost/gateway.js";
 import {
@@ -822,6 +823,23 @@ test("spendWindowUtc: advances LiteLLM's midnight end bound so same-day rows are
     startDate: "2026-07-18",
     endDate: "2026-07-19",
   });
+});
+
+test("waitForGatewaySpendRows: waits for LiteLLM's batched exact-key spend row", async () => {
+  let reads = 0;
+  const sleeps: number[] = [];
+  const rows = await waitForGatewaySpendRows(
+    "vk",
+    async () => {
+      reads += 1;
+      return reads === 1 ? [] : [{ api_key: "vk", total_tokens: 4 }];
+    },
+    { timeoutMs: 1_000, pollMs: 7, sleep: async (ms) => void sleeps.push(ms) },
+  );
+
+  assert.deepEqual(rows, [{ api_key: "vk", total_tokens: 4 }]);
+  assert.equal(reads, 2);
+  assert.deepEqual(sleeps, [7]);
 });
 
 /** A gateway env source with a pinned (immutable) LiteLLM tag + the given extras. */

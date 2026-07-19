@@ -24,6 +24,7 @@ import { runShippedInstaller, waitForHealth } from "../worlds/selfhost/install.j
 import {
   correlateGatewaySpend,
   resolveGatewayConfig,
+  waitForGatewaySpendRows,
   type GatewayEnvBlock,
   type GatewayEnvSource,
   type LitellmSpendRow,
@@ -584,7 +585,7 @@ export interface GatewayCellOps {
     owner: SelfHostOwnerActor,
   ): Promise<{ actorUserId: string; virtualKeyTokenId: string; turn: { ended: boolean; error?: string; modelId: string } }>;
   /** Snapshot the instance LiteLLM per-request spend rows for correlation. */
-  snapshotSpendRows(world: ReadySelfHostWorld): Promise<LitellmSpendRow[]>;
+  snapshotSpendRows(world: ReadySelfHostWorld, virtualKeyTokenId: string): Promise<LitellmSpendRow[]>;
   /** Restart the stack and re-assert capability truth + gateway health persist. */
   restartAndReassert(world: ReadySelfHostWorld): Promise<{ capabilityStillTrue: boolean; healthy: boolean }>;
 }
@@ -641,7 +642,7 @@ export async function runGatewayCell(
     };
   }
 
-  const rows = await ops.snapshotSpendRows(world);
+  const rows = await ops.snapshotSpendRows(world, enrolled.virtualKeyTokenId);
   const correlation = correlateGatewaySpend(rows, enrolled.virtualKeyTokenId);
   if (!correlation.correlated) {
     return {
@@ -711,8 +712,9 @@ const defaultGatewayCellOps: GatewayCellOps = {
   async enrollActorAndRunTurn(world, owner) {
     return enrollActorAndRunGatewayTurn(world, owner);
   },
-  async snapshotSpendRows(world) {
-    return litellmSpendRows(world.control.ssh, spendWindowUtc());
+  async snapshotSpendRows(world, virtualKeyTokenId) {
+    const window = spendWindowUtc();
+    return waitForGatewaySpendRows(virtualKeyTokenId, () => litellmSpendRows(world.control.ssh, window));
   },
   async restartAndReassert(world) {
     await world.control.restartStack();

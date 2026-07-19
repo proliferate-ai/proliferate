@@ -298,6 +298,41 @@ export function correlateGatewaySpend(
   return { correlated, masterKeyNotUsed: correlated && !spentUnderOtherKey };
 }
 
+/** LiteLLM can batch its spend-log write after returning the model response. */
+export const DEFAULT_GATEWAY_SPEND_CORRELATION_TIMEOUT_MS = 2 * 60_000;
+const DEFAULT_GATEWAY_SPEND_CORRELATION_POLL_MS = 5_000;
+
+/**
+ * Polls the instance spend log until the actor's exact virtual-key token hash
+ * is observable. A completed provider response can precede LiteLLM's batched
+ * spend-log write, so a single immediate snapshot is not sufficient evidence.
+ * The caller still applies `correlateGatewaySpend` to the returned full row set
+ * and rejects any token-consuming row under a different key.
+ */
+export async function waitForGatewaySpendRows(
+  virtualKeyTokenId: string,
+  readRows: () => Promise<LitellmSpendRow[]>,
+  options: {
+    timeoutMs?: number;
+    pollMs?: number;
+    sleep?: (ms: number) => Promise<void>;
+  } = {},
+): Promise<LitellmSpendRow[]> {
+  const timeoutMs = options.timeoutMs ?? DEFAULT_GATEWAY_SPEND_CORRELATION_TIMEOUT_MS;
+  const pollMs = options.pollMs ?? DEFAULT_GATEWAY_SPEND_CORRELATION_POLL_MS;
+  const sleep = options.sleep ?? gatewaySleep;
+  const deadline = Date.now() + timeoutMs;
+  let rows: LitellmSpendRow[] = [];
+
+  for (;;) {
+    rows = await readRows();
+    if (correlateGatewaySpend(rows, virtualKeyTokenId).correlated || Date.now() >= deadline) {
+      return rows;
+    }
+    await sleep(pollMs);
+  }
+}
+
 // ── SSH-touching box operations (faked in unit tests) ───────────────────────
 
 /** Bounded default timeout for a single on-box compose/docker step. */
