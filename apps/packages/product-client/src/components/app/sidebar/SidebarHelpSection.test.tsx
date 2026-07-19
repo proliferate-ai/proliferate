@@ -20,7 +20,6 @@ function renderSection(overrides: {
   const openSupport = vi.fn();
   const openPrompt = vi.fn();
   const openExternalUrl = vi.fn();
-  const onShowKeyboardShortcuts = vi.fn();
   const onClose = vi.fn();
 
   render(
@@ -31,12 +30,11 @@ function renderSection(overrides: {
       openSupport={openSupport}
       openPrompt={openPrompt}
       openExternalUrl={openExternalUrl}
-      onShowKeyboardShortcuts={onShowKeyboardShortcuts}
       onClose={onClose}
     />,
   );
 
-  return { openSupport, openPrompt, openExternalUrl, onShowKeyboardShortcuts, onClose };
+  return { openSupport, openPrompt, openExternalUrl, onClose };
 }
 
 describe("SidebarHelpSection", () => {
@@ -44,11 +42,11 @@ describe("SidebarHelpSection", () => {
     cleanup();
   });
 
-  it("Docs/Changelog/Discord are always rendered regardless of support kind", () => {
+  it("Documentation/Changelog/Discord are always rendered regardless of support kind", () => {
     renderSection({ supportAction: { kind: "none" } });
 
     // getByRole throws if absent, which is itself the presence assertion.
-    expect(screen.getByRole("button", { name: "Docs" })).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Documentation" })).not.toBeNull();
     expect(screen.getByRole("button", { name: "Changelog" })).not.toBeNull();
     expect(screen.getByRole("button", { name: "Discord" })).not.toBeNull();
   });

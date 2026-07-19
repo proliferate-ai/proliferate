@@ -10,6 +10,7 @@ import {
   type SettingsRepositoryEntry,
 } from "#product/lib/domain/settings/repositories";
 import { isRepoSettingsContext } from "#product/lib/domain/settings/repo-scope-selection";
+import type { CloudOwnerSelection } from "#product/lib/domain/cloud/billing";
 
 const FOCUS_PARAM_NAMES = [
   "focus",
@@ -22,6 +23,8 @@ const FOCUS_PARAM_NAMES = [
   "flowId",
   "status",
   "failureCode",
+  "billingOwnerScope",
+  "billingOrganizationId",
 ] as const;
 
 type SettingsFocusParam = (typeof FOCUS_PARAM_NAMES)[number];
@@ -119,6 +122,25 @@ export function buildCloudRepoSettingsHref(
 }
 
 /**
+ * Billing settings currently support an owner-preserving destination only for
+ * an explicitly identified organization. Personal billing has no dedicated
+ * Desktop route, so callers must fail closed instead of linking there.
+ */
+export function buildBillingSettingsHref(owner: CloudOwnerSelection): string | null {
+  const organizationId = owner.organizationId?.trim() ?? "";
+  if (owner.ownerScope !== "organization" || !organizationId) {
+    return null;
+  }
+  return buildSettingsHref({
+    section: "billing",
+    focus: {
+      billingOwnerScope: "organization",
+      billingOrganizationId: organizationId,
+    },
+  });
+}
+
+/**
  * Repository settings link for a workspace: cloud repos deep-link into the
  * cloud environment entry; local workspaces fall back to the repo root path
  * (or the workspace path) and resolve to null when neither is known.
@@ -159,6 +181,8 @@ export interface SettingsSelectionInput {
   rawFlowId?: string | null;
   rawStatus?: string | null;
   rawFailureCode?: string | null;
+  rawBillingOwnerScope?: string | null;
+  rawBillingOrganizationId?: string | null;
   repositories: SettingsRepositoryEntry[];
 }
 
@@ -182,6 +206,8 @@ export function resolveSettingsSelection({
   rawFlowId = null,
   rawStatus = null,
   rawFailureCode = null,
+  rawBillingOwnerScope = null,
+  rawBillingOrganizationId = null,
   repositories,
 }: SettingsSelectionInput): SettingsSelection {
   const repositoryRoots = new Set(repositories.map((repository) => repository.sourceRoot));
@@ -211,6 +237,8 @@ export function resolveSettingsSelection({
     flowId: rawFlowId,
     status: rawStatus,
     failureCode: rawFailureCode,
+    billingOwnerScope: rawBillingOwnerScope,
+    billingOrganizationId: rawBillingOrganizationId,
   });
   let repoSourceRoot: string | null = isRepoScopeSection(section) ? rawRepo : null;
 
@@ -295,7 +323,14 @@ function sanitizeFocusForSection(
     });
   }
   if (section === "billing") {
-    return pickFocus({ checkout: focus.checkout });
+    const organizationFocus = focus.billingOwnerScope === "organization"
+      && focus.billingOrganizationId
+      ? {
+        billingOwnerScope: focus.billingOwnerScope,
+        billingOrganizationId: focus.billingOrganizationId,
+      }
+      : {};
+    return pickFocus({ checkout: focus.checkout, ...organizationFocus });
   }
   if (section === "account") {
     return pickFocus({ joinOrganizationId: focus.joinOrganizationId });

@@ -58,6 +58,23 @@ describe("useNativeMenuCommandDispatcher", () => {
     window.removeEventListener(SHORTCUT_REVEAL_RESET_EVENT, onRevealReset);
   });
 
+  it("dispatches native New Chat to the contextual owner even when global registers later", () => {
+    const subscription = makeSubscription();
+    const contextualHandler = vi.fn();
+    const globalHandler = vi.fn();
+    registerShortcutHandler("workspace.new-default", contextualHandler, {
+      priority: "contextual",
+    });
+    registerShortcutHandler("workspace.new-default", globalHandler);
+
+    renderHook(() => useNativeMenuCommandDispatcher(subscription.subscribe));
+    subscription.emit("workspace.new-default");
+
+    expect(contextualHandler).toHaveBeenCalledWith({ source: "menu" });
+    expect(contextualHandler).toHaveBeenCalledTimes(1);
+    expect(globalHandler).not.toHaveBeenCalled();
+  });
+
   it("ignores invalid commands and does not reset reveal state when unconsumed", () => {
     const subscription = makeSubscription();
     const handler = vi.fn(() => false);
