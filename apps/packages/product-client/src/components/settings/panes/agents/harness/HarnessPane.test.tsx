@@ -308,6 +308,32 @@ afterEach(() => {
 });
 
 describe("HarnessPane authentication", () => {
+  it("presents runtime status before a single authentication heading", () => {
+    state.agentsByKind = new Map([[
+      "claude",
+      {
+        kind: "claude",
+        displayName: "Claude Code",
+        readiness: "ready",
+        supportsLogin: true,
+      },
+    ]]);
+    const { container } = renderPane("claude");
+
+    const runtime = container.querySelector('[data-harness-runtime-state="ready"]');
+    const authentication = screen.getByText("Authentication");
+
+    expect(runtime).not.toBeNull();
+    if (!runtime) {
+      throw new Error("Expected the ready runtime row.");
+    }
+    expect(screen.getAllByText("Authentication")).toHaveLength(1);
+    expect(
+      runtime.compareDocumentPosition(authentication) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(screen.getByText("Configure how Claude Code runs and authenticates on this machine.")).toBeTruthy();
+  });
+
   it("persists an enabled gateway source when the toggle is switched on", () => {
     renderPane("claude");
 
@@ -716,6 +742,23 @@ describe("HarnessPane authentication", () => {
 
     expect(screen.queryAllByText(/Sign in to Proliferate Cloud/).length).toBeGreaterThan(0);
     expect(screen.queryByRole("button", { name: "Proliferate gateway" })).toBeNull();
+  });
+
+  it("keeps local model discovery useful while signed out", () => {
+    state.authStatus = "anonymous";
+    state.cloudActive = false;
+    state.launchOptions.data = {
+      agents: [{
+        kind: "claude",
+        displayName: "Claude Code",
+        defaultModelId: "sonnet",
+        models: [{ id: "sonnet", displayName: "Sonnet local", isDefault: true }],
+      }],
+    };
+
+    renderPane("claude");
+
+    expect(screen.queryByText("Sonnet local")).not.toBeNull();
   });
 
   // The founder ruling for PR 5f: model-auth (BYOK/api_key + gateway route) is

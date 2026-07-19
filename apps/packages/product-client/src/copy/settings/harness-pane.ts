@@ -1,8 +1,23 @@
 export const HARNESS_PANE_COPY = {
   surfaceCloud: "Cloud",
   surfaceLocal: "Local",
-  authenticationTitle: "Method",
+  authenticationTitle: "Authentication",
   signInTitle: "Authentication",
+  runtimeTitle: "Runtime",
+  runtimeDescription: "Installation and readiness for the selected runtime.",
+  runtimeChecking: "Checking",
+  runtimeUnavailable: "Unavailable",
+  runtimeNotReported: "Not reported",
+  runtimeCheckingDescription: "Checking the selected runtime for this harness.",
+  runtimeUnavailableDescription: "Could not read harness readiness from the selected runtime.",
+  runtimeReadyDescription: (targetLabel: string) =>
+    `Installed and available on ${targetLabel}.`,
+  runtimeNotReportedDescription: (targetLabel: string) =>
+    `${targetLabel} has not reported this harness yet.`,
+  surfaceDescription: (surface: "cloud" | "local", displayName: string) =>
+    surface === "local"
+      ? `Configure how ${displayName} runs and authenticates on this machine.`
+      : `Configure how ${displayName} authenticates in managed Cloud workspaces.`,
   gatewayLabel: "Proliferate gateway",
   apiKeysTitle: "API keys",
   envVarPlaceholder: "ENV_VAR_NAME",
@@ -42,8 +57,11 @@ export const HARNESS_PANE_COPY = {
   recommendedBadge: "Recommended",
   // Method card labels.
   methodGateway: "Proliferate gateway",
+  methodGatewayDescription: "Use managed model access.",
   methodApiKey: "API key",
+  methodApiKeyDescription: "Use a saved provider key.",
   methodCli: "CLI login",
+  methodCliDescription: "Use the harness's own session.",
   // Detail section titles.
   detailsGateway: "Gateway",
   detailsApiKey: "API keys",

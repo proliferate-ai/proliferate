@@ -83,6 +83,27 @@ describe("ApiKeysPane", () => {
     expect(screen.queryByText("Work key")).not.toBeNull();
     expect(screen.queryByText("sk-...abcd")).not.toBeNull();
     expect(screen.queryByText("Backup")).not.toBeNull();
+    expect(screen.queryByText("2 keys")).not.toBeNull();
+  });
+
+  it("labels the empty visual state without changing the existing form focus order", () => {
+    const { container } = render(<ApiKeysPane />);
+
+    expect(screen.queryByText(AGENT_API_KEYS_COPY.emptyTitle)).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "Add first key" })).toBeNull();
+    expect(container.querySelector('[data-api-keys-state="ready"]')).not.toBeNull();
+  });
+
+  it("exposes loading and error states for visual validation", () => {
+    state.keys.isLoading = true;
+    const loading = render(<ApiKeysPane />);
+    expect(loading.container.querySelector('[data-api-keys-state="loading"]')).not.toBeNull();
+    loading.unmount();
+
+    state.keys.isLoading = false;
+    state.keys.isError = true;
+    const error = render(<ApiKeysPane />);
+    expect(error.container.querySelector('[data-api-keys-state="error"]')).not.toBeNull();
   });
 
   it("creates a key from title + value only", () => {

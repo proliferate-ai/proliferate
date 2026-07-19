@@ -7,6 +7,7 @@ import {
   useRevokeAgentApiKey,
 } from "@proliferate/cloud-sdk-react";
 import { Button } from "@proliferate/ui/primitives/Button";
+import { Badge } from "@proliferate/ui/primitives/Badge";
 import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@proliferate/ui/primitives/Label";
@@ -95,7 +96,7 @@ export function ApiKeysPane() {
       ? AGENT_API_KEYS_COPY.cloudNotConfigured
       : AGENT_API_KEYS_COPY.signInRequired;
     return (
-      <section className="space-y-5" data-api-keys-pane="">
+      <section className="space-y-5" data-api-keys-pane="" data-api-keys-state="gated">
         <SettingsPageHeader
           title={AGENT_API_KEYS_COPY.title}
           description={AGENT_API_KEYS_COPY.description}
@@ -110,14 +111,27 @@ export function ApiKeysPane() {
     );
   }
 
+  const keysState = keysQuery.isLoading
+    ? "loading"
+    : keysQuery.isError
+      ? "error"
+      : "ready";
+
   return (
-    <section className="space-y-5" data-api-keys-pane="">
+    <section className="space-y-6" data-api-keys-pane="" data-api-keys-state={keysState}>
       <SettingsPageHeader
         title={AGENT_API_KEYS_COPY.title}
         description={AGENT_API_KEYS_COPY.description}
       />
 
-      <SettingsSection title={AGENT_API_KEYS_COPY.keysSection}>
+      <SettingsSection
+        title={AGENT_API_KEYS_COPY.keysSection}
+        action={keysQuery.isLoading || keysQuery.isError ? null : (
+          <Badge tone={keys.length > 0 ? "success" : "neutral"}>
+            {keys.length} {keys.length === 1 ? "key" : "keys"}
+          </Badge>
+        )}
+      >
         {keysQuery.isLoading ? (
           <SettingsRow
             label={AGENT_API_KEYS_COPY.keysSection}
@@ -163,7 +177,10 @@ export function ApiKeysPane() {
         title={AGENT_API_KEYS_COPY.addSection}
         description={AGENT_API_KEYS_COPY.addSectionDescription}
       >
-        <form className="flex flex-col gap-2 pt-2 sm:flex-row" onSubmit={handleSubmit}>
+        <form
+          className="flex flex-col gap-2 rounded-lg border border-border bg-foreground/[0.02] p-3.5 sm:flex-row"
+          onSubmit={handleSubmit}
+        >
           <div className="sm:flex-1">
             <Label htmlFor="agent-api-key-title" className="sr-only">
               {AGENT_API_KEYS_COPY.titleLabel}
@@ -187,7 +204,7 @@ export function ApiKeysPane() {
           />
           <Button
             type="submit"
-            variant="secondary"
+            variant="primary"
             size="md"
             disabled={!canSubmit}
             loading={createKey.isPending}

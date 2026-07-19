@@ -108,7 +108,7 @@ export function CliDetails({
           <div>
             <Button
               type="button"
-              variant="secondary"
+              variant="primary"
               size="sm"
               disabled={loginSession?.isStarting ?? false}
               onClick={() => {
