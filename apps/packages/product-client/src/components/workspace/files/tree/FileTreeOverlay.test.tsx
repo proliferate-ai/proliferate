@@ -21,6 +21,11 @@ const queryMocks = vi.hoisted(() => ({
     isLoading: boolean;
     error: Error | null;
   }>(),
+  stat: new Map<string, {
+    data?: { kind: "file" | "directory" | "symlink"; sizeBytes?: number };
+    isFetching: boolean;
+    refetch: ReturnType<typeof vi.fn>;
+  }>(),
   search: {
     data: undefined as { results: Array<{ name: string; path: string }> } | undefined,
     isLoading: false,
@@ -34,6 +39,12 @@ vi.mock("@anyharness/sdk-react", () => ({
       data: { entries: [] },
       isLoading: false,
       error: null,
+    },
+  useStatWorkspaceFileQuery: ({ path }: { path: string }) =>
+    queryMocks.stat.get(path) ?? {
+      data: undefined,
+      isFetching: false,
+      refetch: vi.fn(async () => ({ data: undefined })),
     },
   useSearchWorkspaceFilesQuery: () => queryMocks.search,
 }));
@@ -58,6 +69,7 @@ afterEach(() => {
   queryMocks.root.isLoading = false;
   queryMocks.root.error = null;
   queryMocks.nested.clear();
+  queryMocks.stat.clear();
   queryMocks.search.data = undefined;
   queryMocks.search.isLoading = false;
   queryMocks.search.error = null;
@@ -86,9 +98,13 @@ describe("FileTreeOverlay", () => {
       name: "apps-link",
       path: "apps-link",
       kind: "symlink",
-      hasChildren: true,
     });
     queryMocks.root.data = { entries: rootEntries };
+    queryMocks.stat.set("apps-link", {
+      data: { kind: "symlink" },
+      isFetching: false,
+      refetch: vi.fn(),
+    });
     queryMocks.nested.set("apps-link", {
       data: {
         entries: [{ name: "deep.ts", path: "apps-link/deep.ts", kind: "file" }],
@@ -108,6 +124,45 @@ describe("FileTreeOverlay", () => {
     expect(screen.getByLabelText("Modified").textContent).toBe("M");
     expect(screen.getByRole("treeitem", { name: /apps-link/ }).getAttribute("aria-expanded"))
       .toBe("true");
+  });
+
+  it("stats symlinks before expanding directory targets or opening file targets", async () => {
+    queryMocks.root.data = {
+      entries: [
+        { name: "folder-link", path: "folder-link", kind: "symlink" },
+        { name: "file-link.ts", path: "file-link.ts", kind: "symlink" },
+      ],
+    };
+    queryMocks.nested.set("folder-link", {
+      data: {
+        entries: [{ name: "child.ts", path: "folder-link/child.ts", kind: "file" }],
+      },
+      isLoading: false,
+      error: null,
+    });
+    queryMocks.stat.set("folder-link", {
+      data: undefined,
+      isFetching: false,
+      refetch: vi.fn(async () => ({ data: { kind: "symlink" } })),
+    });
+    queryMocks.stat.set("file-link.ts", {
+      data: undefined,
+      isFetching: false,
+      refetch: vi.fn(async () => ({ data: { kind: "symlink", sizeBytes: 0 } })),
+    });
+    const onOpenFile = vi.fn();
+    renderOverlay({ selectedPath: "", onOpenFile });
+
+    fireEvent.click(screen.getByRole("treeitem", { name: /folder-link/ }));
+    await waitFor(() => {
+      expect(screen.getByRole("treeitem", { name: /folder-link/ }).getAttribute("aria-expanded"))
+        .toBe("true");
+    });
+    expect(await screen.findByRole("treeitem", { name: /child\.ts/ })).not.toBeNull();
+    expect(onOpenFile).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("treeitem", { name: /file-link\.ts/ }));
+    await waitFor(() => expect(onOpenFile).toHaveBeenCalledWith("file-link.ts"));
   });
 
   it("supports filter clearing, keyboard resize, and Escape dismissal", async () => {

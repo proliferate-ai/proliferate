@@ -1,9 +1,13 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { WorkspaceFileEntry } from "@anyharness/sdk";
-import { useWorkspaceFilesQuery } from "@anyharness/sdk-react";
+import {
+  useStatWorkspaceFileQuery,
+  useWorkspaceFilesQuery,
+} from "@anyharness/sdk-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { twMerge } from "@proliferate/ui/utils/tw-merge";
 import { FileTreeRow } from "#product/components/workspace/files/tree/FileTreeRow";
+import { resolveWorkspaceStatPathKind } from "#product/lib/domain/files/path-references";
 import { useFileTreeStore } from "#product/stores/editor/file-tree-store";
 
 interface FileTreeDirectoryProps {
@@ -200,16 +204,7 @@ function FileTreeStatus({
   );
 }
 
-function FileTreeEntryRow({
-  entry,
-  workspaceId,
-  selectedPath,
-  onOpenFile,
-  changedPaths,
-  expandedPaths,
-  toggleExpanded,
-  level,
-}: {
+interface FileTreeEntryRowProps {
   entry: WorkspaceFileEntry;
   workspaceId: string | null;
   selectedPath: string;
@@ -218,9 +213,89 @@ function FileTreeEntryRow({
   expandedPaths: Set<string>;
   toggleExpanded: (path: string) => void;
   level: number;
+}
+
+function FileTreeEntryRow(props: FileTreeEntryRowProps) {
+  if (props.entry.kind === "symlink") {
+    return <SymlinkFileTreeEntryRow {...props} />;
+  }
+  return <ResolvedFileTreeEntryRow {...props} kind={props.entry.kind} />;
+}
+
+function SymlinkFileTreeEntryRow({
+  entry,
+  workspaceId,
+  selectedPath,
+  onOpenFile,
+  changedPaths,
+  expandedPaths,
+  toggleExpanded,
+  level,
+}: FileTreeEntryRowProps) {
+  const shouldResolveSymlink = (
+    expandedPaths.has(entry.path)
+    || selectedPath.startsWith(`${entry.path}/`)
+  );
+  const symlinkStatQuery = useStatWorkspaceFileQuery({
+    workspaceId,
+    path: entry.path,
+    enabled: Boolean(workspaceId && shouldResolveSymlink),
+  });
+  const [resolvedSymlinkKind, setResolvedSymlinkKind] = useState<"file" | "directory" | null>(
+    null,
+  );
+  const symlinkTargetKind = resolveWorkspaceStatPathKind(symlinkStatQuery.data)
+    ?? resolvedSymlinkKind;
+
+  const handleEntryClick = async () => {
+    let targetKind = symlinkTargetKind;
+    if (!targetKind) {
+      const result = await symlinkStatQuery.refetch();
+      targetKind = resolveWorkspaceStatPathKind(result.data);
+      setResolvedSymlinkKind(targetKind);
+    }
+    if (targetKind === "directory") {
+      toggleExpanded(entry.path);
+    } else if (targetKind === "file") {
+      onOpenFile(entry.path);
+    }
+  };
+
+  return (
+    <ResolvedFileTreeEntryRow
+      entry={entry}
+      workspaceId={workspaceId}
+      selectedPath={selectedPath}
+      onOpenFile={onOpenFile}
+      changedPaths={changedPaths}
+      expandedPaths={expandedPaths}
+      toggleExpanded={toggleExpanded}
+      level={level}
+      kind={symlinkTargetKind ?? "symlink"}
+      busy={symlinkStatQuery.isFetching}
+      onClick={() => void handleEntryClick()}
+    />
+  );
+}
+
+function ResolvedFileTreeEntryRow({
+  entry,
+  workspaceId,
+  selectedPath,
+  onOpenFile,
+  changedPaths,
+  expandedPaths,
+  toggleExpanded,
+  level,
+  kind,
+  busy = false,
+  onClick,
+}: FileTreeEntryRowProps & {
+  kind: "file" | "directory" | "symlink";
+  busy?: boolean;
+  onClick?: () => void;
 }) {
-  const isDirectory = entry.kind === "directory"
-    || (entry.kind === "symlink" && entry.hasChildren === true);
+  const isDirectory = kind === "directory";
   const expanded = isDirectory && expandedPaths.has(entry.path);
 
   return (
@@ -228,18 +303,19 @@ function FileTreeEntryRow({
       <FileTreeRow
         name={entry.name}
         path={entry.path}
-        kind={isDirectory ? "directory" : "file"}
+        kind={kind}
         level={level}
         selected={!isDirectory && entry.path === selectedPath}
         expanded={isDirectory ? expanded : undefined}
         changed={changedPaths?.has(entry.path)}
-        onClick={() => {
+        busy={busy}
+        onClick={onClick ?? (() => {
           if (isDirectory) {
             toggleExpanded(entry.path);
           } else {
             onOpenFile(entry.path);
           }
-        }}
+        })}
       />
       {isDirectory && expanded && (
         <FileTreeDirectory

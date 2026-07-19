@@ -79,6 +79,11 @@ vi.mock("@anyharness/sdk-react", () => ({
   useGitDiffQuery: (options: unknown) => gitDiffQuery(options),
   useWorkspaceFilesQuery: (options: unknown) => workspaceFilesQuery(options),
   useSearchWorkspaceFilesQuery: (options: unknown) => searchWorkspaceFilesQuery(options),
+  useStatWorkspaceFileQuery: () => ({
+    data: undefined,
+    isFetching: false,
+    refetch: vi.fn(async () => ({ data: undefined })),
+  }),
   useGitStatusQuery: (options: unknown) => gitStatusQuery(options),
 }));
 

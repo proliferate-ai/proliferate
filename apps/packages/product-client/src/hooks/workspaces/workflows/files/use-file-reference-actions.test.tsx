@@ -14,7 +14,26 @@ const statMocks = vi.hoisted(() => ({
   kind: "file" as "file" | "directory" | "symlink" | null,
   sizeBytes: undefined as number | undefined,
   isFetching: false,
-  refetch: vi.fn(async () => ({ data: { kind: "file" as "file" | "directory" } })),
+  error: null as Error | null,
+  refetch: vi.fn(async (): Promise<{
+    data?: { kind: "file" | "directory" | "symlink"; sizeBytes?: number };
+  }> => ({ data: { kind: "file" } })),
+}));
+
+const fuzzyMocks = vi.hoisted(() => ({
+  resolve: vi.fn(async (): Promise<string | null> => null),
+}));
+
+const anyHarnessMocks = vi.hoisted(() => ({
+  stat: vi.fn(async (_workspaceId: string, path: string) => ({
+    path,
+    kind: "file" as const,
+    sizeBytes: 1,
+  })),
+  resolveWorkspaceConnection: vi.fn(async () => ({
+    runtimeUrl: "http://runtime.test",
+    anyharnessWorkspaceId: "runtime-workspace-1",
+  })),
 }));
 
 const viewerMocks = vi.hoisted(() => ({
@@ -50,9 +69,22 @@ vi.mock("#product/hooks/editor/workflows/use-open-in-default-editor", () => ({
 }));
 
 vi.mock("@anyharness/sdk-react", () => ({
+  getAnyHarnessClient: () => ({ files: { stat: anyHarnessMocks.stat } }),
+  resolveWorkspaceConnectionFromContext: async () => ({
+    workspaceId: "workspace-1",
+    connection: {
+      runtimeUrl: "http://runtime.test",
+      anyharnessWorkspaceId: "runtime-workspace-1",
+    },
+  }),
+  useAnyHarnessWorkspaceContext: () => ({
+    workspaceId: "workspace-1",
+    resolveConnection: anyHarnessMocks.resolveWorkspaceConnection,
+  }),
   useStatWorkspaceFileQuery: () => ({
     data: statMocks.kind ? { kind: statMocks.kind, sizeBytes: statMocks.sizeBytes } : undefined,
     isFetching: statMocks.isFetching,
+    error: statMocks.error,
     refetch: statMocks.refetch,
   }),
 }));
@@ -88,7 +120,7 @@ vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
 }));
 
 vi.mock("#product/hooks/workspaces/workflows/files/use-fuzzy-file-resolver", () => ({
-  useFuzzyFileResolver: () => async () => null,
+  useFuzzyFileResolver: () => fuzzyMocks.resolve,
 }));
 
 afterEach(() => {
@@ -97,7 +129,14 @@ afterEach(() => {
   statMocks.kind = "file";
   statMocks.sizeBytes = undefined;
   statMocks.isFetching = false;
+  statMocks.error = null;
   statMocks.refetch.mockResolvedValue({ data: { kind: "file" } });
+  fuzzyMocks.resolve.mockResolvedValue(null);
+  anyHarnessMocks.stat.mockImplementation(async (_workspaceId, path) => ({
+    path,
+    kind: "file",
+    sizeBytes: 1,
+  }));
   vi.clearAllMocks();
 });
 
@@ -181,6 +220,53 @@ describe("useFileReferenceActions", () => {
 
     expect(viewerMocks.openTarget).toHaveBeenCalledWith({ kind: "file", path: "README.md" });
     expect(hostMocks.reveal).not.toHaveBeenCalled();
+  });
+
+  it("opens the uniquely corrected viewer target after an exact stat miss", async () => {
+    statMocks.kind = null;
+    statMocks.error = new Error("not found");
+    statMocks.refetch.mockResolvedValue({ data: undefined });
+    fuzzyMocks.resolve.mockResolvedValue("apps/product/src/App.tsx");
+    const { result } = renderHook(
+      () => useFileReferenceActions({ rawPath: "src/App.tsx" }),
+      { wrapper: workspaceWrapper("/repo") },
+    );
+
+    await act(async () => {
+      await result.current.openPrimary();
+    });
+
+    expect(fuzzyMocks.resolve).toHaveBeenCalledWith({
+      workspacePath: "src/App.tsx",
+      materializedWorkspaceId: "workspace-1",
+    });
+    expect(anyHarnessMocks.stat).toHaveBeenCalledWith(
+      "runtime-workspace-1",
+      "apps/product/src/App.tsx",
+    );
+    expect(viewerMocks.openTarget).toHaveBeenCalledWith({
+      kind: "file",
+      path: "apps/product/src/App.tsx",
+    });
+  });
+
+  it("disables primary opening after exact stat and unique correction both fail", async () => {
+    statMocks.kind = null;
+    statMocks.error = new Error("not found");
+    statMocks.refetch.mockResolvedValue({ data: undefined });
+    const { result } = renderHook(
+      () => useFileReferenceActions({ rawPath: "missing/App.tsx" }),
+      { wrapper: workspaceWrapper("/repo") },
+    );
+
+    expect(result.current.canOpenPrimary).toBe(true);
+    await act(async () => {
+      await expect(result.current.openPrimary()).resolves.toBe("unavailable");
+    });
+
+    await waitFor(() => expect(result.current.canOpenPrimary).toBe(false));
+    expect(result.current.primaryUnavailableReason).toBe("This path is unavailable.");
+    expect(viewerMocks.openTarget).not.toHaveBeenCalled();
   });
 
   it.each([

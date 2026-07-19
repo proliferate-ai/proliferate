@@ -7,11 +7,12 @@ import { fileTreeIconToneClass } from "#product/lib/domain/files/file-tree-icon-
 interface FileTreeRowProps {
   name: string;
   path: string;
-  kind: "file" | "directory";
+  kind: "file" | "directory" | "symlink";
   level: number;
   selected?: boolean;
   expanded?: boolean;
   changed?: boolean;
+  busy?: boolean;
   onClick: () => void;
 }
 
@@ -23,6 +24,7 @@ export function FileTreeRow({
   selected = false,
   expanded,
   changed = false,
+  busy = false,
   onClick,
 }: FileTreeRowProps) {
   const isDirectory = kind === "directory";
@@ -38,13 +40,13 @@ export function FileTreeRow({
       aria-expanded={isDirectory ? expanded : undefined}
       aria-selected={selected}
       aria-level={level + 1}
+      aria-busy={busy || undefined}
       title={path}
       className={twMerge(
         // Codex tree rows read at chat-body size; ours follows --text-message
         // so the tree tracks transcript prose across appearance presets.
-        "group/file-tree-row flex h-7 w-full items-center gap-2.5 rounded-md px-1.5 text-left text-[length:var(--text-message)] leading-none text-sidebar-foreground transition-colors duration-150",
-        "hover:bg-sidebar-accent/70",
-        selected && "bg-sidebar-accent text-sidebar-accent-foreground hover:bg-sidebar-accent",
+        "flex h-7 w-full items-center gap-2.5 rounded-md px-1.5 text-left text-[length:var(--text-message)] leading-none text-sidebar-foreground transition-colors duration-150 hover:bg-sidebar-accent",
+        selected && "bg-sidebar-accent",
       )}
       style={{ paddingLeft }}
       onClick={onClick}
@@ -52,7 +54,7 @@ export function FileTreeRow({
       {isDirectory && (
         <ChevronRight
           className={twMerge(
-            "size-3 shrink-0 text-sidebar-muted-foreground/65 transition-transform duration-150",
+            "size-3 shrink-0 text-sidebar-muted-foreground transition-transform duration-150",
             expanded && "rotate-90",
           )}
         />

@@ -12,6 +12,21 @@ export interface ResolvedFileReference {
 export type FileReferencePathKind = "file" | "directory";
 export type FileReferencePrimaryAction = "open-viewer" | "reveal" | "unavailable";
 
+export function resolveWorkspaceStatPathKind(stat: {
+  kind: "file" | "directory" | "symlink";
+  sizeBytes?: number | null;
+} | undefined): FileReferencePathKind | null {
+  if (!stat) {
+    return null;
+  }
+  if (stat.kind !== "symlink") {
+    return stat.kind;
+  }
+  // AnyHarness stats symlinks after following the target: file targets carry
+  // a byte size (including zero), while directory targets do not.
+  return typeof stat.sizeBytes === "number" ? "file" : "directory";
+}
+
 /**
  * Keep primary file-reference behavior host-independent and fail closed while
  * the path kind is unknown. A directory must never be routed through the file
