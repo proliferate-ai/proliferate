@@ -3,6 +3,9 @@ import { PlaygroundComposer } from "#product/components/playground/PlaygroundCom
 import { PlaygroundScenarioBar } from "#product/components/playground/PlaygroundScenarioBar";
 import { PlaygroundSidebarGitDiff } from "#product/components/playground/PlaygroundSidebarGitDiff";
 import { PlaygroundTranscript } from "#product/components/playground/transcript/PlaygroundTranscript";
+// This dev-only route sits outside AuthenticatedProductClient, so load the
+// authenticated presentation rules explicitly for direct playground URLs.
+import "../app/authenticated.css";
 import {
   resolvePlaygroundScenarioSelection,
   type ScenarioKey,

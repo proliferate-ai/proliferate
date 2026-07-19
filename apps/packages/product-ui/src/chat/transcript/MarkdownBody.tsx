@@ -119,11 +119,9 @@ type MdCodeProps = MdElementProps & {
 // wrappers set to --text-message (the composer size). Every other MarkdownBody
 // context — tool-row detail bodies, plan cards, work history — leaves the var
 // unset, so the fallback keeps that secondary chrome on --text-chat while
-// conversation bodies grow to match the composer.
-const PROSE_TEXT =
-  "text-[length:var(--markdown-font-size,var(--prose-text-size,var(--text-chat)))] leading-[var(--markdown-line-height,var(--prose-text-line-height,var(--text-chat--line-height)))]";
-
-const LI_CLASSNAME = `pl-0.5 ${PROSE_TEXT}`;
+// conversation bodies grow to match the composer. Authenticated CSS owns the
+// scoped font-size and line-height so chat rules stay out of the login bundle.
+const LI_CLASSNAME = "pl-0.5";
 
 // Markdown component overrides are the React element *types* for every
 // rendered node. They must be referentially stable across renders: a fresh
@@ -142,24 +140,24 @@ function mdComponent(tag: MdTag, className: string) {
 }
 
 const STATIC_MARKDOWN_COMPONENTS = {
-  h1: mdComponent("h1", "mb-2.5 mt-5 text-[length:var(--markdown-h1-font-size)] font-semibold leading-[1.25] text-foreground"),
-  h2: mdComponent("h2", "mb-2.5 mt-5 text-[length:var(--markdown-h2-font-size)] font-semibold leading-[1.3] text-foreground"),
-  h3: mdComponent("h3", "mb-2.5 mt-5 text-[length:var(--markdown-h3-font-size)] font-semibold leading-[1.35] text-foreground"),
-  h4: mdComponent("h4", "mb-2 mt-4 text-[length:var(--markdown-h4-font-size)] font-semibold leading-[1.4] text-foreground"),
-  h5: mdComponent("h5", "mb-1.5 mt-4 text-[length:var(--markdown-h5-font-size)] font-semibold uppercase tracking-wide text-muted-foreground"),
-  h6: mdComponent("h6", "mb-1.5 mt-4 text-[length:var(--markdown-h6-font-size)] font-semibold uppercase tracking-wide text-muted-foreground"),
+  h1: mdComponent("h1", "mb-2.5 mt-5 font-semibold leading-[1.25] text-foreground"),
+  h2: mdComponent("h2", "mb-2.5 mt-5 font-semibold leading-[1.3] text-foreground"),
+  h3: mdComponent("h3", "mb-2.5 mt-5 font-semibold leading-[1.35] text-foreground"),
+  h4: mdComponent("h4", "mb-2 mt-4 font-semibold leading-[1.4] text-foreground"),
+  h5: mdComponent("h5", "mb-1.5 mt-4 font-semibold uppercase tracking-wide text-muted-foreground"),
+  h6: mdComponent("h6", "mb-1.5 mt-4 font-semibold uppercase tracking-wide text-muted-foreground"),
   strong: mdComponent("strong", "font-semibold"),
   em: mdComponent("em", "italic"),
   del: mdComponent("del", "line-through"),
-  p: mdComponent("p", `mb-[0.6875rem] mt-0 ${PROSE_TEXT} text-foreground`),
-  ul: mdComponent("ul", `mb-[0.6875rem] mt-0 list-disc pl-[1.3125rem] ${PROSE_TEXT} text-foreground [&>li+li]:mt-2`),
-  ol: mdComponent("ol", `mb-[0.6875rem] mt-0 list-decimal pl-[1.3125rem] ${PROSE_TEXT} text-foreground [&>li+li]:mt-2`),
+  p: mdComponent("p", "mb-[0.6875rem] mt-0 text-foreground"),
+  ul: mdComponent("ul", "mb-[0.6875rem] mt-0 list-disc pl-[1.3125rem] text-foreground [&>li+li]:mt-2"),
+  ol: mdComponent("ol", "mb-[0.6875rem] mt-0 list-decimal pl-[1.3125rem] text-foreground [&>li+li]:mt-2"),
   li: mdComponent("li", LI_CLASSNAME),
-  blockquote: mdComponent("blockquote", `my-3 border-l-[3px] border-[var(--color-prose-border,var(--color-border))] py-1 pl-4 ${PROSE_TEXT} text-foreground`),
+  blockquote: mdComponent("blockquote", "my-3 border-l pl-4 text-foreground"),
   hr: () => <hr className="my-3 border-border" />,
   table: (props: MdElementProps) => (
     <div
-      className="my-4 min-w-0 max-w-full overflow-hidden rounded-lg border border-[var(--color-prose-border,var(--color-border))]"
+      className="my-4 min-w-0 max-w-full overflow-hidden rounded-lg border"
       data-markdown-table-shell="true"
       data-wide-markdown-block="true"
       data-wide-markdown-block-kind="table"
@@ -170,14 +168,14 @@ const STATIC_MARKDOWN_COMPONENTS = {
       >
         {mdHtmlElement(
           "table",
-          `w-max min-w-full max-w-none border-collapse ${PROSE_TEXT} [&_tbody_tr:nth-child(2n)]:bg-foreground/[0.018] [&_tbody_tr:last-child_td]:border-b-0`,
+          "w-max min-w-full max-w-none border-collapse [&_tbody_tr:nth-child(2n)]:bg-foreground/[0.018] [&_tbody_tr:last-child_td]:border-b-0",
           props,
         )}
       </div>
     </div>
   ),
-  th: mdComponent("th", `border-b border-[var(--color-prose-border,var(--color-border))] bg-foreground/[0.035] px-3 py-2 text-left ${PROSE_TEXT} font-medium text-foreground`),
-  td: mdComponent("td", `border-b border-[var(--color-prose-border,var(--color-border))] px-3 py-2 align-top ${PROSE_TEXT}`),
+  th: mdComponent("th", "border-b bg-foreground/[0.035] px-3 py-2 text-left font-medium text-foreground"),
+  td: mdComponent("td", "border-b px-3 py-2 align-top"),
   pre: ({ children, dangerouslySetInnerHTML, node: _node, ...rest }: MdElementProps & { children?: ReactNode }) => {
     if (dangerouslySetInnerHTML) {
       return <pre {...rest} dangerouslySetInnerHTML={dangerouslySetInnerHTML} />;
@@ -335,7 +333,7 @@ export const MarkdownBody = memo(function MarkdownBody({
     [content, isStreaming],
   );
   const markdownClassName = [
-    `chat-markdown ${PROSE_TEXT} min-w-0 max-w-full text-foreground break-words`,
+    "chat-markdown min-w-0 max-w-full text-foreground break-words",
     "[&_li>p]:my-0",
     "[&_li>ol]:mt-2 [&_li>ol]:mb-0",
     "[&_li>ul]:mt-2 [&_li>ul]:mb-0",
@@ -345,7 +343,6 @@ export const MarkdownBody = memo(function MarkdownBody({
     "[&_ul.contains-task-list]:list-none [&>ul.contains-task-list]:pl-0",
     "[&_li.task-list-item]:pl-0",
     "[&_li.task-list-item_input]:mr-2 [&_li.task-list-item_input]:size-3.5 [&_li.task-list-item_input]:align-middle [&_li.task-list-item_input]:accent-link-foreground",
-    "[&_blockquote>p:last-child]:mb-0",
     className,
   ].filter(Boolean).join(" ");
 
@@ -408,7 +405,7 @@ function MarkdownCode({
     return (
       <code
         {...rest}
-        className="rounded-sm bg-[var(--color-code-block-background,var(--color-muted))] px-1 py-[0.125rem] align-baseline font-mono text-[length:var(--markdown-font-size,var(--prose-text-size,var(--text-chat)))] leading-[inherit] text-foreground"
+        className="rounded-sm bg-[var(--color-code-block-background,var(--color-muted))] px-1 align-baseline font-mono text-foreground"
         data-markdown-inline-code="true"
         dangerouslySetInnerHTML={dangerouslySetInnerHTML}
       />
@@ -431,7 +428,7 @@ function MarkdownCode({
   return (
     <code
       {...rest}
-      className="rounded-sm bg-[var(--color-code-block-background,var(--color-muted))] px-1 py-[0.125rem] align-baseline font-mono text-[length:var(--markdown-font-size,var(--prose-text-size,var(--text-chat)))] leading-[inherit] text-foreground"
+      className="rounded-sm bg-[var(--color-code-block-background,var(--color-muted))] px-1 align-baseline font-mono text-foreground"
       data-markdown-inline-code="true"
     >
       {children}

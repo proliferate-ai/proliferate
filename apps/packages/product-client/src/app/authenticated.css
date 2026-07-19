@@ -1,6 +1,71 @@
 /* Authenticated-only interaction styles stay behind the lazy product boundary
  * so chat affordances do not consume the public login shell's CSS budget. */
 
+/* Transcript Markdown owns one scoped semantic type contract. The body scale
+   comes from its surrounding message (or the secondary-chat fallback), while
+   the hierarchy derives from runtime appearance tokens instead of frozen px
+   values. This keeps prose, inline code, and fenced code synchronized at every
+   UI size without leaking presentation rules into plan/editor surfaces. */
+.chat-markdown {
+  --markdown-font-size: var(--prose-text-size, var(--text-chat));
+  --markdown-line-height: var(--prose-text-line-height, var(--text-chat--line-height));
+  --markdown-h1-font-size: var(--text-title);
+  --markdown-h2-font-size: calc((var(--text-title) + var(--markdown-font-size)) / 2);
+  --markdown-h3-font-size: calc(var(--markdown-font-size) * 1.1667);
+  --markdown-h4-font-size: calc(var(--markdown-font-size) * 1.0833);
+  --markdown-h5-font-size: var(--markdown-font-size);
+  --markdown-h6-font-size: var(--markdown-font-size);
+  font-size: var(--markdown-font-size);
+  line-height: var(--markdown-line-height);
+}
+
+.chat-markdown h1 { font-size: var(--markdown-h1-font-size); }
+.chat-markdown h2 { font-size: var(--markdown-h2-font-size); }
+.chat-markdown h3 { font-size: var(--markdown-h3-font-size); }
+.chat-markdown h4 { font-size: var(--markdown-h4-font-size); }
+.chat-markdown h5 { font-size: var(--markdown-h5-font-size); }
+.chat-markdown h6 { font-size: var(--markdown-h6-font-size); }
+
+.chat-markdown blockquote {
+  border-color: var(--color-prose-border, var(--color-border));
+  border-left-width: 3px;
+  padding-block: 0.25rem;
+}
+
+.chat-markdown blockquote > p:last-child {
+  margin-bottom: 0;
+}
+
+.chat-markdown [data-markdown-inline-code="true"] {
+  font-size: var(--markdown-font-size);
+  line-height: inherit;
+  padding-block: 0.125rem;
+}
+
+.chat-markdown [data-markdown-code-block="true"],
+.chat-markdown [data-markdown-table-shell="true"],
+.chat-markdown [data-markdown-table-shell="true"] :is(th, td) {
+  border-color: var(--color-prose-border, var(--color-border));
+}
+
+.chat-markdown [data-markdown-code-content="true"] {
+  font-size: var(--markdown-font-size);
+  line-height: 1.55;
+}
+
+.chat-markdown [data-markdown-code-content="true"] :is(pre, code) {
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.chat-markdown ul ul {
+  list-style-type: circle;
+}
+
+.chat-markdown ul ul ul {
+  list-style-type: square;
+}
+
 @property --top-fade {
   syntax: "<length>";
   inherits: false;

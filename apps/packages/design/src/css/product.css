@@ -11,30 +11,6 @@
   font-display: swap;
 }
 
-/* Transcript Markdown owns one scoped semantic type contract. The body scale
-   comes from its surrounding message (or the secondary-chat fallback), while
-   the hierarchy derives from runtime appearance tokens instead of frozen px
-   values. This keeps prose, inline code, and fenced code synchronized at every
-   UI size without leaking presentation rules into plan/editor surfaces. */
-.chat-markdown {
-  --markdown-font-size: var(--prose-text-size, var(--text-chat));
-  --markdown-line-height: var(--prose-text-line-height, var(--text-chat--line-height));
-  --markdown-h1-font-size: var(--text-title);
-  --markdown-h2-font-size: calc((var(--text-title) + var(--markdown-font-size)) / 2);
-  --markdown-h3-font-size: calc(var(--markdown-font-size) * 1.1667);
-  --markdown-h4-font-size: calc(var(--markdown-font-size) * 1.0833);
-  --markdown-h5-font-size: var(--markdown-font-size);
-  --markdown-h6-font-size: var(--markdown-font-size);
-}
-
-.chat-markdown ul ul {
-  list-style-type: circle;
-}
-
-.chat-markdown ul ul ul {
-  list-style-type: square;
-}
-
 @font-face {
   font-family: "Geist Mono";
   src: url("/node_modules/geist/dist/fonts/geist-mono/GeistMono-Variable.woff2") format("woff2");

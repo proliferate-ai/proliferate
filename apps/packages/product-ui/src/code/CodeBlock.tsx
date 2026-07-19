@@ -50,7 +50,7 @@ export function CodeBlock({
 
   return (
     <div
-      className="relative my-[14px] w-full min-w-0 overflow-clip rounded-lg border border-[var(--color-prose-border,var(--color-border))] bg-[var(--color-code-block-background,var(--color-card))]"
+      className="relative my-[14px] w-full min-w-0 overflow-clip rounded-lg border border-transparent bg-[var(--color-code-block-background,var(--color-card))]"
       data-markdown-code-block="true"
     >
       <div className="flex select-none items-center justify-between gap-2 py-1 pl-2 pr-1.5 text-[length:var(--text-chat-meta,11px)] text-muted-foreground">
@@ -70,18 +70,21 @@ export function CodeBlock({
           {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
         </Button>
       </div>
-      <div className="overflow-x-auto overflow-y-auto p-3 font-mono text-[length:var(--markdown-font-size,var(--prose-text-size,var(--text-chat)))] font-normal leading-[1.55]">
+      <div
+        className="overflow-x-auto overflow-y-auto p-3 font-mono text-[length:var(--text-chat)] font-normal leading-[1.5]"
+        data-markdown-code-content="true"
+      >
         {children ?? (tokens ? (
           <CodeBlockTokenContent
             lines={tokens}
             renderToken={renderToken}
             showLineNumbers={showLineNumbers}
             lineNumberStart={lineNumberStart}
-            className="text-[length:var(--markdown-font-size,var(--prose-text-size,var(--text-chat)))] leading-[1.55] text-foreground"
+            className="text-[length:var(--text-chat)] leading-[1.5] text-foreground"
           />
         ) : (
           <pre className="m-0 p-0">
-            <code className="whitespace-pre font-mono text-[length:var(--markdown-font-size,var(--prose-text-size,var(--text-chat)))] font-normal leading-[1.55] text-foreground">
+            <code className="whitespace-pre font-mono text-[length:var(--text-chat)] font-normal leading-[1.5] text-foreground">
               {code}
             </code>
           </pre>

@@ -80,9 +80,9 @@ describe("MarkdownBody presentation", () => {
       tokens: [[{ content: "const value = true;" }]],
     }));
 
-    expect(html).toContain("--markdown-font-size");
+    expect(html).toContain('data-markdown-code-content="true"');
     expect(html).not.toContain("calc(var(--text-chat)-1px)");
-    expect(highlightedHtml).toContain("--markdown-font-size");
+    expect(highlightedHtml).toContain('data-markdown-code-content="true"');
   });
 
   it("preserves injected workspace links while stabilizing only the render copy", () => {
