@@ -28,6 +28,13 @@ import {
 } from "#product/lib/domain/workspaces/selection/workspace-bootstrap-selection";
 import type { PendingWorkspaceEntry } from "#product/lib/domain/workspaces/creation/pending-entry";
 import { enterWorkspaceSessionRecovery } from "#product/hooks/workspaces/workflows/workspace-session-recovery-state";
+import type { SessionRuntimeRecord } from "#product/stores/sessions/session-types";
+import {
+  ensureWorkspaceSetupSessionSurface,
+} from "#product/hooks/workspaces/workflows/workspace-setup-session-state";
+import {
+  isWorkspaceSetupSessionId,
+} from "#product/lib/domain/workspaces/selection/setup-session";
 
 export async function handleEmptyWorkspaceBootstrap(
   input: {
@@ -54,9 +61,10 @@ export async function handleEmptyWorkspaceBootstrap(
       typeof useCloudAgentCatalogCache
     >["ensureCloudAgentCatalog"];
     fetchWorkspaceSessions: ReturnType<typeof useWorkspaceBootstrapCache>["fetchWorkspaceSessions"];
+    getActiveSessionId: () => string | null;
     getPendingWorkspaceEntry: () => PendingWorkspaceEntry | null;
+    getSessionRecord: (sessionId: string) => SessionRuntimeRecord | null;
     markWorkspaceBootstrappedInSession: (workspaceId: string) => void;
-    setActiveSessionId: (sessionId: string | null) => void;
   },
 ): Promise<{ shouldReturn: boolean }> {
   if (input.shouldClearLastViewedSession) {
@@ -155,31 +163,55 @@ export async function handleEmptyWorkspaceBootstrap(
     launchAgents,
     input.preferences,
   );
+  const activeSessionId = deps.getActiveSessionId();
+  const activeSession = activeSessionId
+    ? deps.getSessionRecord(activeSessionId)
+    : null;
+  const reusableProjectedSession = activeSession
+    && activeSession.workspaceId === input.workspaceId
+    && !activeSession.materializedSessionId
+      ? activeSession
+      : null;
+  const projectedModelId = reusableProjectedSession?.requestedModelId
+    ?? reusableProjectedSession?.modelId
+    ?? null;
+  const projectedLaunch = reusableProjectedSession?.agentKind && projectedModelId
+    ? {
+      kind: reusableProjectedSession.agentKind,
+      modelId: projectedModelId,
+    }
+    : null;
+  const launchSelection = projectedLaunch ?? defaultLaunch;
   logLatency("workspace.select.default_launch_resolved", {
     workspaceId: input.workspaceId,
-    hasDefaultLaunch: !!defaultLaunch,
-    agentKind: defaultLaunch?.kind ?? null,
-    modelId: defaultLaunch?.modelId ?? null,
+    hasDefaultLaunch: !!launchSelection,
+    reusedProjectedSessionId: reusableProjectedSession?.sessionId ?? null,
+    agentKind: launchSelection?.kind ?? null,
+    modelId: launchSelection?.modelId ?? null,
     totalElapsedMs: elapsedMs(input.startedAt),
   });
 
-  if (defaultLaunch) {
+  if (launchSelection) {
     logLatency("workspace.select.initial_session_open.start", {
       workspaceId: input.workspaceId,
-      agentKind: defaultLaunch.kind,
-      modelId: defaultLaunch.modelId,
+      agentKind: launchSelection.kind,
+      modelId: launchSelection.modelId,
+      reusedProjectedSessionId: reusableProjectedSession?.sessionId ?? null,
       totalElapsedMs: elapsedMs(input.startedAt),
     });
     const sessionDispatchStartedAt = startLatencyTimer();
     await deps.createEmptySessionWithResolvedConfig({
       workspaceId: input.workspaceId,
-      agentKind: defaultLaunch.kind,
-      modelId: defaultLaunch.modelId,
+      agentKind: launchSelection.kind,
+      modelId: launchSelection.modelId,
+      clientSessionId: reusableProjectedSession?.sessionId ?? null,
+      resolvedModeId: reusableProjectedSession?.modeId ?? undefined,
       unattendedModeId: resolveUnattendedModeId({
-        agent: launchAgents.find((candidate) => candidate.kind === defaultLaunch.kind),
-        modelId: defaultLaunch.modelId,
+        agent: launchAgents.find((candidate) => candidate.kind === launchSelection.kind),
+        modelId: launchSelection.modelId,
       }),
       latencyFlowId: input.latencyFlowId,
+      preserveProjectedSessionOnCreateFailure: true,
       reuseInFlightEmptySession: true,
     });
     recordMeasurementWorkflowStep({
@@ -189,15 +221,17 @@ export async function handleEmptyWorkspaceBootstrap(
     });
     logLatency("workspace.select.initial_session_open.dispatched", {
       workspaceId: input.workspaceId,
-      agentKind: defaultLaunch.kind,
-      modelId: defaultLaunch.modelId,
+      agentKind: launchSelection.kind,
+      modelId: launchSelection.modelId,
+      reusedProjectedSessionId: reusableProjectedSession?.sessionId ?? null,
       dispatchElapsedMs: elapsedMs(sessionDispatchStartedAt),
       totalElapsedMs: elapsedMs(input.startedAt),
     });
     logLatency("workspace.select.initial_session_open.success", {
       workspaceId: input.workspaceId,
-      agentKind: defaultLaunch.kind,
-      modelId: defaultLaunch.modelId,
+      agentKind: launchSelection.kind,
+      modelId: launchSelection.modelId,
+      reusedProjectedSessionId: reusableProjectedSession?.sessionId ?? null,
       totalElapsedMs: elapsedMs(input.startedAt),
     });
   }
@@ -207,32 +241,52 @@ export async function handleEmptyWorkspaceBootstrap(
 
 export async function handleEmptyWorkspaceBootstrapWithRecovery(
   input: Parameters<typeof handleEmptyWorkspaceBootstrap>[0],
-  deps: Parameters<typeof handleEmptyWorkspaceBootstrap>[1] & {
-    getActiveSessionId: () => string | null;
-  },
+  deps: Parameters<typeof handleEmptyWorkspaceBootstrap>[1],
 ): Promise<{ shouldReturn: boolean; enteredRecovery: boolean }> {
   let result: { shouldReturn: boolean };
   try {
     result = await handleEmptyWorkspaceBootstrap(input, deps);
   } catch {
-    if (input.isCurrent()) {
-      enterWorkspaceSessionRecovery(
+    const recoverySessionId = deps.getActiveSessionId()
+      ?? ensureWorkspaceSetupSessionSurface(
+        input.workspaceId,
+        input.logicalWorkspaceId,
+      );
+    const enteredRecovery = input.isCurrent()
+      ? enterWorkspaceSessionRecovery(
         input.workspaceId,
         input.logicalWorkspaceId,
         "session-create-failed",
-      );
-    }
-    return { shouldReturn: true, enteredRecovery: true };
+        recoverySessionId,
+      )
+      : false;
+    return { shouldReturn: true, enteredRecovery };
   }
 
-  if (result.shouldReturn || !input.isCurrent() || deps.getActiveSessionId()) {
+  if (result.shouldReturn || !input.isCurrent()) {
     return { shouldReturn: result.shouldReturn, enteredRecovery: false };
   }
 
-  enterWorkspaceSessionRecovery(
+  const activeSessionId = deps.getActiveSessionId();
+  const activeSession = activeSessionId
+    ? deps.getSessionRecord(activeSessionId)
+    : null;
+  if (activeSession?.materializedSessionId) {
+    return { shouldReturn: false, enteredRecovery: false };
+  }
+
+  const recoverySessionId = activeSessionId
+    ?? ensureWorkspaceSetupSessionSurface(
+      input.workspaceId,
+      input.logicalWorkspaceId,
+    );
+  const enteredRecovery = enterWorkspaceSessionRecovery(
     input.workspaceId,
     input.logicalWorkspaceId,
-    "no-visible-session",
+    isWorkspaceSetupSessionId(recoverySessionId)
+      ? "launch-configuration-unavailable"
+      : "no-visible-session",
+    recoverySessionId,
   );
-  return { shouldReturn: true, enteredRecovery: true };
+  return { shouldReturn: true, enteredRecovery };
 }

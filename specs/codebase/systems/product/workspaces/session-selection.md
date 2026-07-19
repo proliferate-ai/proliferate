@@ -17,7 +17,10 @@ or directory result from being mistaken for a new workspace.
 
 Recovery Retry starts with an authoritative session-directory read rather than
 accepting a previously populated list cache. A stale remembered session can
-therefore resolve only against the fresh directory result.
+therefore resolve only against the fresh directory result. If the selection
+attempt loses ownership while that forced read is in flight, its response is
+discarded before classification and is not committed to the shared session
+cache.
 
 ## Visible-session invariant
 
@@ -43,24 +46,49 @@ retain their existing owners and semantics.
 ## Bounded recovery
 
 Session-directory lookup receives at most one forced retry per workspace-open
-attempt. A failed retry, failed empty-session bootstrap, failed remembered
-session selection, or confirmed no-visible-session state records an explicit
-workspace recovery state instead of presenting an empty composer or repeating
-session creation.
+attempt. A confirmed empty directory reuses the selected projected empty
+session when one exists; otherwise it performs one materialization through the
+normal session-creation workflow. That workflow publishes the optimistic
+session shell before runtime materialization and preserves it on failure, so
+the workspace never transitions to a selected-session-null canvas.
 
-The recovery card leaves the surrounding workspace shell available and offers
-three user-driven exits: Retry starts a new cold workspace-open attempt, Reload
-reloads the client, and Back to workspaces returns to the workspace list.
-Selecting a session, changing workspaces, or leaving the shell clears the
-recovery state. The recovery surface is announced as an alert and moves focus
-to Retry whenever it enters or re-enters after a failed attempt.
+A failed directory read, failed empty-session materialization, failed
+remembered-session selection, or confirmed no-visible-session state is shown as
+a compact inline alert attached to the retained selected session composer. The
+normal workspace shell, session tab, ready composition, model selector, and Add
+New affordance stay mounted. Sending is blocked only for that recovery session
+until a usable runtime session exists; editing and harness controls remain
+available.
+
+Retry starts one new cold workspace-open attempt with an authoritative
+directory read while carrying the retained client session id. If the directory
+is still empty, the same projected record is rematerialized through the normal
+creation owner instead of allocating another shell. The alert is announced and
+focuses Retry on entry and re-entry. Selecting a different session, changing
+workspaces, or completing materialization clears recovery.
+
+If there is neither an existing session shell nor a complete configured
+agent/model launch identity, recovery creates one deterministic client-only
+setup-session surface. It does not guess launch configuration, call a runtime
+create API, or enable sending. The inline alert links to Agent settings and
+keeps Retry focused. After configuration becomes available, Retry carries the
+same client id into the normal session-creation owner, so materialization or
+selection of an authoritative existing session replaces the setup surface
+without a selected-session-null frame.
+
+Setup-session ids use the existing transient `client-session:` namespace and
+are removed by the canonical workspace-UI persistence sanitizers, including
+visible-session, last-viewed, active-shell, and tab-order state. They count as
+the live visible surface for the last-tab invariant, but archive/dismiss owners
+reject them before any runtime request.
 
 ## Code ownership
 
-- `lib/domain/workspaces/selection` owns recovery state types and selection
-  ordering.
+- `lib/domain/workspaces/selection` owns session-scoped recovery/setup identity
+  types and selection ordering.
 - `lib/domain/workspaces/tabs` owns the pure visible-session preservation rule.
 - `hooks/workspaces/workflows` owns bounded bootstrap and user recovery actions.
 - `stores/sessions/session-selection-store.ts` owns the ephemeral recovery
   state alongside workspace and session selection.
-- `components/workspace/chat/surface` owns the explicit recovery presentation.
+- `components/workspace/chat/surface` owns the inline composer-attached recovery
+  presentation.

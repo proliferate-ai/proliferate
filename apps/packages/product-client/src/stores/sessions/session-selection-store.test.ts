@@ -179,14 +179,20 @@ describe("session selection store invariants", () => {
     expect(useSessionSelectionStore.getState().hotPaintGate).toBeNull();
   });
 
-  it("clears exhausted workspace recovery when a session becomes active", () => {
+  it("keeps inline recovery when the retained shell is reactivated", () => {
     useSessionSelectionStore.setState({
       workspaceSessionRecovery: {
         workspaceId: "workspace-a",
         logicalWorkspaceId: "logical-a",
+        sessionId: "session-recovery",
         reason: "session-list-failed",
       },
     });
+
+    useSessionSelectionStore.getState().setActiveSessionId("session-recovery");
+
+    expect(useSessionSelectionStore.getState().workspaceSessionRecovery?.sessionId)
+      .toBe("session-recovery");
 
     useSessionSelectionStore.getState().setActiveSessionId("session-a");
 

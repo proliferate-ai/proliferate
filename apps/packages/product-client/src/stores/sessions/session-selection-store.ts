@@ -197,7 +197,11 @@ export const useSessionSelectionStore = create<SessionSelectionState>((set, get)
   setActiveSessionId: (activeSessionId) => set((state) => {
     return {
       activeSessionId,
-      workspaceSessionRecovery: activeSessionId ? null : state.workspaceSessionRecovery,
+      workspaceSessionRecovery:
+        activeSessionId
+        && activeSessionId !== state.workspaceSessionRecovery?.sessionId
+          ? null
+          : state.workspaceSessionRecovery,
       activeSessionVersion: bumpVersionIfChanged(
         state.activeSessionVersion,
         state.activeSessionId,
@@ -209,7 +213,11 @@ export const useSessionSelectionStore = create<SessionSelectionState>((set, get)
   activateHotSession: (options) => set((state) => {
     return {
       activeSessionId: options.sessionId,
-      workspaceSessionRecovery: options.sessionId ? null : state.workspaceSessionRecovery,
+      workspaceSessionRecovery:
+        options.sessionId
+        && options.sessionId !== state.workspaceSessionRecovery?.sessionId
+          ? null
+          : state.workspaceSessionRecovery,
       activeSessionVersion: bumpVersionIfChanged(
         state.activeSessionVersion,
         state.activeSessionId,

@@ -8,11 +8,17 @@ export function enterWorkspaceSessionRecovery(
   workspaceId: string,
   logicalWorkspaceId: string,
   reason: WorkspaceSessionRecoveryReason,
-): void {
+  sessionId = useSessionSelectionStore.getState().activeSessionId,
+): boolean {
+  markWorkspaceBootstrappedInSession(workspaceId);
+  if (!sessionId) {
+    return false;
+  }
   useSessionSelectionStore.getState().setWorkspaceSessionRecovery({
     workspaceId,
     logicalWorkspaceId,
+    sessionId,
     reason,
   });
-  markWorkspaceBootstrappedInSession(workspaceId);
+  return true;
 }

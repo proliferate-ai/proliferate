@@ -18,6 +18,7 @@ import {
   resolveLastViewedSessionForWorkspace,
 } from "#product/lib/domain/workspaces/selection/workspace-bootstrap-selection";
 import type { SessionRuntimeRecord } from "#product/stores/sessions/session-types";
+import { isWorkspaceSetupSessionId } from "#product/lib/domain/workspaces/selection/setup-session";
 
 export async function handleRememberedWorkspaceSessionBootstrap(
   input: {
@@ -39,6 +40,7 @@ export async function handleRememberedWorkspaceSessionBootstrap(
     rehydrateSessionSlotFromHistory: ReturnType<
       typeof useSessionHistoryHydration
     >["rehydrateSessionSlotFromHistory"];
+    removeSessionRecord: (sessionId: string) => void;
     selectSession: ReturnType<typeof useSessionSelectionActions>["selectSession"];
     setActiveSessionId: (sessionId: string | null) => void;
   },
@@ -62,6 +64,9 @@ export async function handleRememberedWorkspaceSessionBootstrap(
   }
 
   const currentActiveSessionId = deps.getActiveSessionId();
+  const currentActiveIsSetupSession = currentActiveSessionId
+    ? isWorkspaceSetupSessionId(currentActiveSessionId)
+    : false;
   if (currentActiveSessionId && currentActiveSessionId !== targetSession.id) {
     const currentActiveSession = deps.getSessionRecord(currentActiveSessionId);
     if (!currentActiveSession || currentActiveSession.workspaceId !== input.workspaceId) {
@@ -74,7 +79,7 @@ export async function handleRememberedWorkspaceSessionBootstrap(
         reason: currentActiveSession ? "workspace_mismatch" : "missing_slot",
         totalElapsedMs: elapsedMs(input.startedAt),
       });
-    } else {
+    } else if (!currentActiveIsSetupSession) {
       logLatency("workspace.select.session_select.skipped", {
         workspaceId: input.workspaceId,
         sessionId: targetSession.id,
@@ -99,6 +104,9 @@ export async function handleRememberedWorkspaceSessionBootstrap(
   });
   if (selectionOutcome?.result === "stale" || !input.isCurrent()) {
     return { shouldReturn: true };
+  }
+  if (currentActiveIsSetupSession && currentActiveSessionId) {
+    deps.removeSessionRecord(currentActiveSessionId);
   }
   recordMeasurementWorkflowStep({
     operationId: input.measurementOperationId,

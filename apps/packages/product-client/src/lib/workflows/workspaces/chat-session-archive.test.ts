@@ -80,6 +80,29 @@ describe("archiveVisibleChatSession", () => {
     expect(harness.runtimeBlockNotifications).toEqual(["Workspace is unavailable."]);
   });
 
+  it("never reserves or sends a setup surface to runtime dismissal", async () => {
+    const harness = createArchiveHarness({
+      activeSessionId: "client-session:workspace-setup:workspace-1",
+      liveSessions: candidates(
+        "client-session:workspace-setup:workspace-1",
+        "session-1",
+      ),
+      visibleSessionIds: [
+        "client-session:workspace-setup:workspace-1",
+        "session-1",
+      ],
+    });
+
+    await expect(harness.archive("client-session:workspace-setup:workspace-1"))
+      .resolves.toBe(false);
+
+    expect(harness.dismissSession).not.toHaveBeenCalled();
+    expect(harness.visibleSessionIds()).toEqual([
+      "client-session:workspace-setup:workspace-1",
+      "session-1",
+    ]);
+  });
+
   it("selects the adjacent visible fallback instead of a hidden older record", async () => {
     const harness = createArchiveHarness({
       activeSessionId: "B",

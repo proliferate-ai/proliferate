@@ -38,6 +38,7 @@ import type { ManualChatGroupId } from "#product/lib/domain/workspaces/tabs/manu
 import { useWorkspaceViewerTabsStore } from "#product/stores/editor/workspace-viewer-tabs-store";
 import { startMeasurementOperation } from "#product/lib/infra/measurement/measurement-port";
 import { useShortcutRevealVisible } from "#product/providers/ShortcutRevealProvider";
+import { isWorkspaceSetupSessionId } from "#product/lib/domain/workspaces/selection/setup-session";
 
 type HeaderTabsViewModel = NonNullable<
   ReturnType<typeof useOptionalWorkspaceHeaderTabsViewModelContext>
@@ -329,7 +330,8 @@ const HeaderTabsInner = memo(function HeaderTabsInner({
               onActivateChatTab={activateHeaderChatTab}
               onSuppressChatTabSelect={clearUrgentChatHighlight}
               canCloseChatTab={(sessionId) =>
-                chatVisibilityActions.canHideChatSessionTabs([sessionId])}
+                !isWorkspaceSetupSessionId(sessionId)
+                && chatVisibilityActions.canHideChatSessionTabs([sessionId])}
               onCloseChatTab={handleCloseChatTab}
               onCloseOtherChatTabs={handleCloseOtherChatTabs}
               onCloseChatTabsToRight={handleCloseChatTabsToRight}

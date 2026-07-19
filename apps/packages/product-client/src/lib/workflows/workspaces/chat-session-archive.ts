@@ -1,6 +1,9 @@
 import type {
   ChatSessionArchiveReservation,
 } from "#product/lib/domain/workspaces/tabs/visibility";
+import {
+  isWorkspaceSetupSessionId,
+} from "#product/lib/domain/workspaces/selection/setup-session";
 
 export interface VisibleChatSessionDismissOptions {
   replacedActiveSessionIds: readonly string[];
@@ -22,6 +25,9 @@ export async function archiveVisibleChatSession(
     resolveReservedFallback: (capturedFallbackSessionId: string | null) => string | null;
   },
 ): Promise<boolean> {
+  if (isWorkspaceSetupSessionId(sessionId)) {
+    return false;
+  }
   const blockedReason = deps.getRuntimeBlockReason();
   if (blockedReason) {
     deps.notifyRuntimeBlocked(blockedReason);

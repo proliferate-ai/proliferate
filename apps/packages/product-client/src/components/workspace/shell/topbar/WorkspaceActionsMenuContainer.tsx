@@ -6,6 +6,7 @@ import {
 import { useChatTabVisibilityActions } from "#product/hooks/workspaces/workflows/tabs/use-chat-tab-visibility-actions";
 import { useSessionForkActions } from "#product/hooks/sessions/workflows/use-session-fork-actions";
 import { runShortcutHandler } from "#product/lib/domain/shortcuts/registry";
+import { isWorkspaceSetupSessionId } from "#product/lib/domain/workspaces/selection/setup-session";
 
 /**
  * Wires the workspace three-dot menu to session tab actions. Git and publish
@@ -38,6 +39,7 @@ export function WorkspaceActionsMenuContainer() {
   const activeSessionId = viewModel?.activeSessionId ?? null;
   const canDismissActiveSession = activeTab !== null
     && !activeTab.isReviewAgentChild
+    && !isWorkspaceSetupSessionId(activeTab.id)
     && chatVisibilityActions.canHideChatSessionTabs([activeTab.id]);
 
   const handleRename = useCallback(() => {
@@ -66,7 +68,9 @@ export function WorkspaceActionsMenuContainer() {
   return (
     <WorkspaceActions
       session={{
-        canRename: activeTab !== null && !activeTab.isReviewAgentChild,
+        canRename: activeTab !== null
+          && !activeTab.isReviewAgentChild
+          && !isWorkspaceSetupSessionId(activeTab.id),
         canFork: activeTab !== null
           && activeTab.canFork
           && !activeTab.isChild

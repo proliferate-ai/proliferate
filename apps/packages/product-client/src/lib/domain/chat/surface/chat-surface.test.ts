@@ -12,8 +12,6 @@ function surfaceInput(
 ): ResolveChatSurfaceStateInput {
   return {
     selectedWorkspaceId: "workspace-1",
-    selectedLogicalWorkspaceId: "workspace-1",
-    workspaceSessionRecovery: null,
     hasPendingWorkspaceEntry: false,
     activeLaunchIntentId: null,
     launchIntentSessionId: null,
@@ -100,21 +98,6 @@ describe("chat surface", () => {
       activeSessionId: null,
       hasContent: false,
     }))).toEqual({ kind: "no-workspace" });
-  });
-
-  it("shows explicit recovery after bounded workspace session recovery is exhausted", () => {
-    expect(resolveChatSurfaceState(surfaceInput({
-      activeSessionId: null,
-      hasContent: false,
-      workspaceSessionRecovery: {
-        workspaceId: "workspace-1",
-        logicalWorkspaceId: "workspace-1",
-        reason: "session-list-failed",
-      },
-    }))).toEqual({
-      kind: "workspace-recovery",
-      reason: "session-list-failed",
-    });
   });
 
   it("scopes chat shell render surfaces away from the active transcript", () => {

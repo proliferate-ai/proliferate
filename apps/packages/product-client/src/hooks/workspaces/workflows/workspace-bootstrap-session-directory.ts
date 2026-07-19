@@ -2,7 +2,6 @@ import type { AnyHarnessRequestOptions } from "@anyharness/sdk";
 import type { AnyHarnessResolvedConnection } from "@anyharness/sdk-react";
 import type { WorkspaceSession } from "#product/hooks/access/anyharness/sessions/use-workspace-session-cache";
 import type { useWorkspaceBootstrapCache } from "#product/hooks/access/anyharness/workspaces/use-workspace-bootstrap-cache";
-import { enterWorkspaceSessionRecovery } from "#product/hooks/workspaces/workflows/workspace-session-recovery-state";
 import type {
   MeasurementOperationId,
 } from "#product/lib/domain/telemetry/debug-measurement-catalog";
@@ -14,11 +13,43 @@ import {
 import {
   loadSessionsWithBoundedRecovery,
 } from "#product/lib/workflows/workspaces/bounded-session-list-recovery";
+import {
+  handleEmptyWorkspaceBootstrapWithRecovery,
+} from "#product/hooks/workspaces/workflows/workspace-bootstrap-empty-session";
+import { enterWorkspaceSessionRecovery } from "#product/hooks/workspaces/workflows/workspace-session-recovery-state";
 
 export type WorkspaceSessionDirectoryResult =
   | { kind: "loaded"; sessions: WorkspaceSession[] }
   | { kind: "failed" }
   | { kind: "stale" };
+
+type EmptyWorkspaceBootstrapInput = Parameters<
+  typeof handleEmptyWorkspaceBootstrapWithRecovery
+>[0];
+type EmptyWorkspaceBootstrapDeps = Parameters<
+  typeof handleEmptyWorkspaceBootstrapWithRecovery
+>[1];
+
+export async function recoverFailedWorkspaceSessionDirectory(
+  input: EmptyWorkspaceBootstrapInput,
+  deps: EmptyWorkspaceBootstrapDeps,
+): Promise<void> {
+  if (!input.isCurrent()) {
+    return;
+  }
+  if (deps.getActiveSessionId()) {
+    enterWorkspaceSessionRecovery(
+      input.workspaceId,
+      input.logicalWorkspaceId,
+      "session-list-failed",
+    );
+    return;
+  }
+  const recovery = await handleEmptyWorkspaceBootstrapWithRecovery(input, deps);
+  if (!recovery.shouldReturn && input.isCurrent()) {
+    deps.markWorkspaceBootstrappedInSession(input.workspaceId);
+  }
+}
 
 export async function loadWorkspaceSessionDirectory(
   input: {
@@ -65,11 +96,6 @@ export async function loadWorkspaceSessionDirectory(
       sessionCount: 0,
       fallback: "bounded_recovery_failed",
     });
-    enterWorkspaceSessionRecovery(
-      input.workspaceId,
-      input.logicalWorkspaceId,
-      "session-list-failed",
-    );
     return result;
   }
 

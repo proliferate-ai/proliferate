@@ -22,12 +22,6 @@ export function useChatSurfaceState(shellRenderSurface?: WorkspaceRenderSurface 
   selectedWorkspaceId: string | null;
 } {
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
-  const selectedLogicalWorkspaceId = useSessionSelectionStore(
-    (state) => state.selectedLogicalWorkspaceId,
-  );
-  const workspaceSessionRecovery = useSessionSelectionStore(
-    (state) => state.workspaceSessionRecovery,
-  );
   const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
   const workspaceArrivalEvent = useSessionSelectionStore((state) => state.workspaceArrivalEvent);
   const activeLaunchIntent = useChatLaunchIntentStore((state) => state.activeIntent);
@@ -88,8 +82,6 @@ export function useChatSurfaceState(shellRenderSurface?: WorkspaceRenderSurface 
     count: (value) => (value.kind ? 1 : 0),
   }, () => resolveChatSurfaceState({
     selectedWorkspaceId,
-    selectedLogicalWorkspaceId,
-    workspaceSessionRecovery,
     hasPendingWorkspaceEntry: pendingWorkspaceEntry !== null,
     activeLaunchIntentId: activeLaunchIntent?.id ?? null,
     launchIntentSessionId:
@@ -125,13 +117,11 @@ export function useChatSurfaceState(shellRenderSurface?: WorkspaceRenderSurface 
     selectedCloudRuntime.state?.preserveVisibleContent,
     selectedCloudWorkspace,
     selectedLocalWorkspace,
-    selectedLogicalWorkspaceId,
     selectedWorkspaceId,
     shellRenderScope,
     streamConnectionState,
     transcriptHydrated,
     workspaceArrivalEvent?.workspaceId,
-    workspaceSessionRecovery,
   ]);
 
   return useMemo(() => ({ mode, selectedWorkspaceId }), [mode, selectedWorkspaceId]);

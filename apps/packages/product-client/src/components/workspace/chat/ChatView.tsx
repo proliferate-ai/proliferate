@@ -18,7 +18,7 @@ import { NoWorkspaceState } from "#product/components/workspace/chat/surface/NoW
 import { SessionTranscriptPane } from "#product/components/workspace/chat/surface/SessionTranscriptPane";
 import { SessionContentSearchOverlay } from "#product/components/workspace/chat/surface/SessionContentSearchOverlay";
 import { TranscriptSwitchingPlaceholder } from "#product/components/workspace/chat/surface/TranscriptSwitchingPlaceholder";
-import { WorkspaceSessionRecoveryState } from "#product/components/workspace/chat/surface/WorkspaceSessionRecoveryState";
+import { WorkspaceSessionRecoveryInlinePanel } from "#product/components/workspace/chat/surface/WorkspaceSessionRecoveryInlinePanel";
 import { type ChatSurfaceState, useChatSurfaceState } from "#product/hooks/chat/derived/use-chat-surface-state";
 import {
   useActiveSessionId,
@@ -43,6 +43,7 @@ import {
   readFileDragInput,
 } from "#product/lib/domain/chat/composer/prompt-attachment-drag";
 import type { WorkspaceRenderSurface } from "#product/lib/domain/workspaces/tabs/shell-activation";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 
 function ChatContent({
   dockSafeAreaPx,
@@ -63,13 +64,6 @@ function ChatContent({
         <ChatLaunchIntentPane
           bottomInsetPx={stickyBottomInsetPx}
           nonDisplacingBottomInsetPx={stickyNonDisplacingBottomInsetPx}
-        />
-      );
-    case "workspace-recovery":
-      return (
-        <WorkspaceSessionRecoveryState
-          bottomInsetPx={dockSafeAreaPx}
-          reason={mode.reason}
         />
       );
     case "workspace-status":
@@ -114,7 +108,6 @@ function shouldShowSessionInputChrome(mode: ChatSurfaceState): boolean {
     case "session-transcript":
       return true;
     case "no-workspace":
-    case "workspace-recovery":
       return false;
     case "launch-intent":
       return true;
@@ -122,7 +115,7 @@ function shouldShowSessionInputChrome(mode: ChatSurfaceState): boolean {
 }
 
 function shouldEnableContentSearchOverlay(mode: ChatSurfaceState): boolean {
-  return mode.kind !== "no-workspace" && mode.kind !== "workspace-recovery";
+  return mode.kind !== "no-workspace";
 }
 
 export const ChatView = memo(function ChatView({
@@ -141,6 +134,12 @@ export const ChatView = memo(function ChatView({
     ? shellRenderSurface.sessionId
     : null;
   const activeSessionId = useActiveSessionId();
+  const workspaceSessionRecovery = useSessionSelectionStore(
+    (state) => state.workspaceSessionRecovery,
+  );
+  const activeWorkspaceSessionRecovery = workspaceSessionRecovery?.sessionId === activeSessionId
+    ? workspaceSessionRecovery
+    : null;
   const workspaceUiKey = useSelectedWorkspaceUiKey();
   const activePromptCapabilities = useActiveSessionPromptCapabilities();
   const availability = useChatAvailabilityState();
@@ -189,11 +188,13 @@ export const ChatView = memo(function ChatView({
     <ChatInput
       attachments={promptAttachments}
       suppressActiveSessionState={suppressComposerActiveSessionState}
+      suppressAutoFocus={activeWorkspaceSessionRecovery !== null}
       replacementSessionId={replacementSessionId}
       hasSessionTurns={hasSessionTurns}
     />
   ), [
     hasSessionTurns,
+    activeWorkspaceSessionRecovery,
     promptAttachments,
     replacementSessionId,
     suppressComposerActiveSessionState,
@@ -262,23 +263,23 @@ export const ChatView = memo(function ChatView({
         />
       )}
       <SessionContentSearchOverlay enabled={contentSearchEnabled} surface="chat" />
-      {mode.kind !== "workspace-recovery" && (
-        <DebugProfiler id="chat-composer-dock-region">
-          <ChatComposerDock
-            ref={dockRef}
-            backdrop={isSessionMode}
-            outboundSlot={composerDockSlots.outboundSlot}
-            activeSlot={composerDockSlots.activeSlot}
-            attachedSlot={composerDockSlots.attachedSlot}
-            lowerBackdropTopPx={lowerBackdropTopPx}
-            shellClassName="pointer-events-none absolute inset-x-0 bottom-0"
-            data-telemetry-block
-            data-focus-zone="chat"
-          >
-            {chatInput}
-          </ChatComposerDock>
-        </DebugProfiler>
-      )}
+      <DebugProfiler id="chat-composer-dock-region">
+        <ChatComposerDock
+          ref={dockRef}
+          backdrop={isSessionMode}
+          outboundSlot={composerDockSlots.outboundSlot}
+          activeSlot={composerDockSlots.activeSlot}
+          attachedSlot={activeWorkspaceSessionRecovery
+            ? <WorkspaceSessionRecoveryInlinePanel recovery={activeWorkspaceSessionRecovery} />
+            : composerDockSlots.attachedSlot}
+          lowerBackdropTopPx={lowerBackdropTopPx}
+          shellClassName="pointer-events-none absolute inset-x-0 bottom-0"
+          data-telemetry-block
+          data-focus-zone="chat"
+        >
+          {chatInput}
+        </ChatComposerDock>
+      </DebugProfiler>
       </div>
     </DebugProfiler>
   );

@@ -58,11 +58,13 @@ const CHAT_INPUT_ATTACHMENT_ACCEPT =
 export function ChatInput({
   attachments,
   suppressActiveSessionState = false,
+  suppressAutoFocus = false,
   replacementSessionId = null,
   hasSessionTurns = false,
 }: {
   attachments: PromptAttachmentController;
   suppressActiveSessionState?: boolean;
+  suppressAutoFocus?: boolean;
   replacementSessionId?: string | null;
   /** Flips the placeholder to the follow-up variant once the transcript has turns. */
   hasSessionTurns?: boolean;
@@ -276,7 +278,7 @@ export function ChatInput({
   }, [effectiveIsEditingQueuedPrompt]);
 
   useEffect(() => {
-    if (!workspaceUiKey && !activeSessionIdForUi) {
+    if (suppressAutoFocus || (!workspaceUiKey && !activeSessionIdForUi)) {
       return;
     }
 
@@ -284,12 +286,7 @@ export function ChatInput({
       focusComposer();
     }, 50);
     return () => window.clearTimeout(timer);
-  }, [
-    activeSessionIdForUi,
-    focusComposer,
-    workspaceUiKey,
-    workspaceSelectionNonce,
-  ]);
+  }, [activeSessionIdForUi, focusComposer, suppressAutoFocus, workspaceUiKey, workspaceSelectionNonce]);
 
   useEffect(() => {
     if (focusRequestNonce === 0) {

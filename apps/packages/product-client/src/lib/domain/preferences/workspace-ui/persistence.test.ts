@@ -23,6 +23,7 @@ describe("workspace UI state persistence", () => {
         "workspace-1": [
           "session-1",
           "client-session:tmp",
+          "client-session:workspace-setup:workspace-1",
           "session-1",
           "pending-session:tmp",
         ],
@@ -48,6 +49,12 @@ describe("workspace UI state persistence", () => {
         }],
       },
       shellActivationEpochByWorkspace: { "workspace-1": 2 },
+      activeShellTabKeyByWorkspace: {
+        "workspace-1": "chat:client-session:workspace-setup:workspace-1",
+      },
+      shellTabOrderByWorkspace: {
+        "workspace-1": ["chat:client-session:workspace-setup:workspace-1"],
+      },
       pendingChatActivationByWorkspace: { "workspace-1": { kind: "chat" } },
       urgentHighlightedChatSessionByWorkspace: { "workspace-1": "session-1" },
       archivingChatSessionIdsByWorkspace: { "workspace-1": ["session-1"] },
@@ -74,6 +81,8 @@ describe("workspace UI state persistence", () => {
         sessionIds: ["session-1", "session-2"],
       }],
     });
+    expect(selected.activeShellTabKeyByWorkspace).toEqual({});
+    expect(selected.shellTabOrderByWorkspace).toEqual({});
     expect(selected).not.toHaveProperty("shellActivationEpochByWorkspace");
     expect(selected).not.toHaveProperty("pendingChatActivationByWorkspace");
     expect(selected).not.toHaveProperty("urgentHighlightedChatSessionByWorkspace");

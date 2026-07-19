@@ -10,6 +10,7 @@ import { useToastStore } from "#product/stores/toast/toast-store";
 import type {
   VisibleChatSessionDismissOptions,
 } from "#product/lib/workflows/workspaces/chat-session-archive";
+import { isWorkspaceSetupSessionId } from "#product/lib/domain/workspaces/selection/setup-session";
 
 export function useSessionDismissActions() {
   const host = useProductHost();
@@ -24,6 +25,9 @@ export function useSessionDismissActions() {
     sessionId: string,
     options?: VisibleChatSessionDismissOptions,
   ) => {
+    if (isWorkspaceSetupSessionId(sessionId)) {
+      return;
+    }
     const state = useSessionSelectionStore.getState();
     const closingSlot = getSessionRecord(sessionId);
     const workspaceId = closingSlot?.workspaceId ?? state.selectedWorkspaceId;

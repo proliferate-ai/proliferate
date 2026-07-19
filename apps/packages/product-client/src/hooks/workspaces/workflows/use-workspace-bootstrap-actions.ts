@@ -12,33 +12,26 @@ import { useSessionSelectionActions } from "#product/hooks/sessions/facade/use-s
 import { useSessionSummaryActions } from "#product/hooks/sessions/workflows/use-session-summary-actions";
 import { workspaceFileTreeStateKey } from "#product/lib/domain/workspaces/cloud/collections";
 import {
-  elapsedMs,
-  logLatency,
-  startLatencyTimer,
-} from "#product/lib/infra/measurement/measurement-port";
-import { getLatencyFlowRequestHeaders } from "#product/lib/infra/measurement/measurement-port";
-import {
   bindMeasurementCategories,
+  elapsedMs,
   finishOrCancelMeasurementOperation,
+  getLatencyFlowRequestHeaders,
+  getMeasurementRequestOptions,
+  hashMeasurementScope,
+  logLatency,
   markOperationForNextCommit,
   recordMeasurementMetric,
   recordMeasurementWorkflowStep,
+  startLatencyTimer,
   startMeasurementOperation,
 } from "#product/lib/infra/measurement/measurement-port";
-import { getMeasurementRequestOptions } from "#product/lib/infra/measurement/measurement-port";
-import { hashMeasurementScope } from "#product/lib/infra/measurement/measurement-port";
-import type {
-  MeasurementFinishReason,
-} from "#product/lib/domain/telemetry/debug-measurement-catalog";
+import type { MeasurementFinishReason } from "#product/lib/domain/telemetry/debug-measurement-catalog";
 import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 import {
   clearLastViewedSession,
   useWorkspaceUiStore,
 } from "#product/stores/preferences/workspace-ui-store";
-import {
-  getSessionRecord,
-  patchSessionRecord,
-} from "#product/stores/sessions/session-records";
+import { getSessionRecord, patchSessionRecord, removeSessionRecord } from "#product/stores/sessions/session-records";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { markWorkspaceBootstrappedInSession } from "#product/hooks/workspaces/lifecycle/workspace-bootstrap-memory";
 import { useDeferredWorkspaceFileTreePrefetch } from "#product/hooks/workspaces/lifecycle/files/use-deferred-workspace-file-tree-prefetch";
@@ -47,20 +40,15 @@ import {
   clearInvalidOptimisticActiveSession,
   findLoadedSessionForClientSession,
 } from "#product/hooks/workspaces/workflows/workspace-bootstrap-session-state";
-import {
-  isOptimisticWorkspaceSessionPlaceholder,
-} from "#product/lib/domain/workspaces/selection/optimistic-session-shell";
-import {
-  handleEmptyWorkspaceBootstrapWithRecovery,
-} from "#product/hooks/workspaces/workflows/workspace-bootstrap-empty-session";
+import { isOptimisticWorkspaceSessionPlaceholder } from "#product/lib/domain/workspaces/selection/optimistic-session-shell";
+import { handleEmptyWorkspaceBootstrapWithRecovery } from "#product/hooks/workspaces/workflows/workspace-bootstrap-empty-session";
 import { handleRememberedWorkspaceSessionBootstrap } from "#product/hooks/workspaces/workflows/workspace-bootstrap-remembered-session";
-import {
-  shouldPreserveStagedReplacementShell,
-} from "#product/hooks/sessions/workflows/session-replacement-tombstones";
+import { shouldPreserveStagedReplacementShell } from "#product/hooks/sessions/workflows/session-replacement-tombstones";
 import { useProductStorageContext } from "#product/hooks/persistence/facade/use-product-storage-context";
 import { resumePendingEmptySessionCreationForBootstrap } from "#product/hooks/workspaces/workflows/workspace-bootstrap-pending-empty-session";
 import {
   loadWorkspaceSessionDirectory,
+  recoverFailedWorkspaceSessionDirectory,
 } from "#product/hooks/workspaces/workflows/workspace-bootstrap-session-directory";
 import { enterWorkspaceSessionRecovery } from "#product/hooks/workspaces/workflows/workspace-session-recovery-state";
 import type { WorkspaceSelectionDeps } from "#product/hooks/workspaces/workflows/selection/types";
@@ -206,6 +194,16 @@ export function useWorkspaceBootstrapActions() {
         category: "session.list",
         headers: requestHeaders,
       });
+      const emptyWorkspaceBootstrapDeps = {
+        clearLastViewedSession,
+        createEmptySessionWithResolvedConfig,
+        ensureCloudAgentCatalog,
+        fetchWorkspaceSessions,
+        getActiveSessionId: () => useSessionSelectionStore.getState().activeSessionId,
+        getSessionRecord,
+        getPendingWorkspaceEntry: () => useSessionSelectionStore.getState().pendingWorkspaceEntry,
+        markWorkspaceBootstrappedInSession,
+      };
       const sessionsLoadResult = await loadWorkspaceSessionDirectory({
         isCurrent,
         logicalWorkspaceId,
@@ -224,6 +222,21 @@ export function useWorkspaceBootstrapActions() {
       }
       if (sessionsLoadResult.kind === "failed") {
         measurementFinishReason = "error_sanitized";
+        await recoverFailedWorkspaceSessionDirectory({
+          agentsByKind,
+          latencyFlowId,
+          logicalWorkspaceId,
+          measurementOperationId,
+          preferences,
+          requestOptions: sessionRequestOptions,
+          sessions,
+          shouldClearLastViewedSession: false,
+          startedAt,
+          timeoutMs: WORKSPACE_BOOTSTRAP_SESSION_LIST_TIMEOUT_MS,
+          workspaceConnection,
+          workspaceId,
+          isCurrent,
+        }, emptyWorkspaceBootstrapDeps);
         return { sessions };
       }
       sessions = sessionsLoadResult.sessions;
@@ -298,17 +311,7 @@ export function useWorkspaceBootstrapActions() {
           workspaceConnection,
           workspaceId,
           isCurrent,
-        }, {
-          clearLastViewedSession,
-          createEmptySessionWithResolvedConfig,
-          ensureCloudAgentCatalog,
-          fetchWorkspaceSessions,
-          getActiveSessionId: () => useSessionSelectionStore.getState().activeSessionId,
-          getPendingWorkspaceEntry: () => useSessionSelectionStore.getState().pendingWorkspaceEntry,
-          markWorkspaceBootstrappedInSession,
-          setActiveSessionId: (sessionId) =>
-            useSessionSelectionStore.getState().setActiveSessionId(sessionId),
-        });
+        }, emptyWorkspaceBootstrapDeps);
         if (emptyBootstrap.enteredRecovery) {
           measurementFinishReason = "error_sanitized";
         }
@@ -332,6 +335,7 @@ export function useWorkspaceBootstrapActions() {
           getSessionRecord,
           patchSessionRecord,
           rehydrateSessionSlotFromHistory,
+          removeSessionRecord,
           selectSession,
           setActiveSessionId: (sessionId) =>
             useSessionSelectionStore.getState().setActiveSessionId(sessionId),

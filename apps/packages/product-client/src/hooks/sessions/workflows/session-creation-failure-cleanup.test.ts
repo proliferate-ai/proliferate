@@ -234,3 +234,42 @@ describe("prompt-bearing session creation failure", () => {
     ]);
   });
 });
+
+describe("projected empty-session materialization failure", () => {
+  it("retains the selected shell when the caller owns inline recovery", () => {
+    putSessionRecord(createEmptySessionRecord("client-session:claude:recovery", "claude", {
+      workspaceId: "workspace-1",
+      materializedSessionId: null,
+      modelId: "sonnet",
+    }));
+    useSessionSelectionStore.getState().setActiveSessionId(
+      "client-session:claude:recovery",
+    );
+
+    cleanupSessionCreationFailure({
+      agentKind: "claude",
+      currentOwnedSessionId: "client-session:claude:recovery",
+      error: new Error("materialization failed"),
+      hadExistingProjectedRecord: false,
+      hasPrompt: false,
+      modeId: null,
+      modelId: "sonnet",
+      pendingSessionId: "client-session:claude:recovery",
+      preserveProjectedSessionOnCreateFailure: true,
+      previousActiveSessionId: null,
+      recoveryWorkspaceUiKey: "workspace-1",
+      replacementShellPreferences: null,
+      replacementTransaction: null,
+      rollbackOwnedShellIntent: vi.fn(() => true),
+      workspaceId: "workspace-1",
+    }, { activateSession: vi.fn(), captureException: vi.fn() });
+
+    expect(getSessionRecord("client-session:claude:recovery")).toMatchObject({
+      materializedSessionId: null,
+      status: "errored",
+      workspaceId: "workspace-1",
+    });
+    expect(useSessionSelectionStore.getState().activeSessionId)
+      .toBe("client-session:claude:recovery");
+  });
+});

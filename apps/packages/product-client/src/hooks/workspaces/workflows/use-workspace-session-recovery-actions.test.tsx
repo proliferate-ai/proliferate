@@ -6,7 +6,6 @@ import { useWorkspaceSessionRecoveryActions } from "#product/hooks/workspaces/wo
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 
 const mocks = vi.hoisted(() => ({
-  goToTopLevelRoute: vi.fn(),
   selectWorkspace: vi.fn(),
 }));
 
@@ -14,20 +13,15 @@ vi.mock("#product/hooks/workspaces/workflows/selection/use-workspace-selection",
   useWorkspaceSelection: () => ({ selectWorkspace: mocks.selectWorkspace }),
 }));
 
-vi.mock("#product/hooks/workspaces/workflows/use-workspace-navigation-workflow", () => ({
-  useWorkspaceNavigationWorkflow: () => ({
-    goToTopLevelRoute: mocks.goToTopLevelRoute,
-  }),
-}));
-
 describe("useWorkspaceSessionRecoveryActions", () => {
   beforeEach(() => {
-    mocks.goToTopLevelRoute.mockReset();
     mocks.selectWorkspace.mockReset().mockResolvedValue(undefined);
     useSessionSelectionStore.setState({
+      activeSessionId: "client-session:claude:recovery",
       workspaceSessionRecovery: {
         logicalWorkspaceId: "logical:workspace-1",
         workspaceId: "workspace-1",
+        sessionId: "client-session:claude:recovery",
         reason: "session-list-failed",
       },
     });
@@ -44,7 +38,26 @@ describe("useWorkspaceSessionRecoveryActions", () => {
       force: true,
       forceCold: true,
       forceSessionDirectoryRefresh: true,
-      initialActiveSessionId: null,
+      initialActiveSessionId: "client-session:claude:recovery",
+    });
+  });
+
+  it("restores inline recovery against the same selected shell after Retry rejects", async () => {
+    mocks.selectWorkspace.mockImplementationOnce(async () => {
+      useSessionSelectionStore.getState().setWorkspaceSessionRecovery(null);
+      throw new Error("runtime unavailable");
+    });
+    const { result } = renderHook(() => useWorkspaceSessionRecoveryActions());
+
+    await act(async () => {
+      await result.current.retry();
+    });
+
+    expect(useSessionSelectionStore.getState().workspaceSessionRecovery).toEqual({
+      logicalWorkspaceId: "logical:workspace-1",
+      workspaceId: "workspace-1",
+      sessionId: "client-session:claude:recovery",
+      reason: "session-selection-failed",
     });
   });
 });

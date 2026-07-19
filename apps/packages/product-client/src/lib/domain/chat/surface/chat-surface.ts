@@ -1,13 +1,8 @@
 import type { Workspace } from "@anyharness/sdk";
-import type {
-  WorkspaceSessionRecovery,
-  WorkspaceSessionRecoveryReason,
-} from "#product/lib/domain/workspaces/selection/session-recovery";
 
 export type ChatSurfaceState =
   | { kind: "no-workspace" }
   | { kind: "launch-intent"; intentId: string }
-  | { kind: "workspace-recovery"; reason: WorkspaceSessionRecoveryReason }
   | { kind: "workspace-status" }
   | { kind: "session-loading"; sessionId: string | null }
   | { kind: "session-hydrating"; sessionId: string }
@@ -31,8 +26,6 @@ export interface ChatSessionPendingRenderScope {
 
 export interface ResolveChatSurfaceStateInput {
   selectedWorkspaceId: string | null;
-  selectedLogicalWorkspaceId: string | null;
-  workspaceSessionRecovery: WorkspaceSessionRecovery | null;
   hasPendingWorkspaceEntry: boolean;
   activeLaunchIntentId: string | null;
   launchIntentSessionId: string | null;
@@ -105,19 +98,6 @@ export function resolveChatSurfaceState(input: ResolveChatSurfaceStateInput): Ch
     && !input.activeLaunchIntentId
   ) {
     return { kind: "no-workspace" };
-  }
-
-  if (
-    input.workspaceSessionRecovery
-    && (
-      input.workspaceSessionRecovery.workspaceId === input.selectedWorkspaceId
-      || input.workspaceSessionRecovery.logicalWorkspaceId === input.selectedLogicalWorkspaceId
-    )
-  ) {
-    return {
-      kind: "workspace-recovery",
-      reason: input.workspaceSessionRecovery.reason,
-    };
   }
 
   if (input.hasPendingWorkspaceEntry && scopedActiveSessionId) {

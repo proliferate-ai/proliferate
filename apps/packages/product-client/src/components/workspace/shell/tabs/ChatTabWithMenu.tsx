@@ -23,6 +23,7 @@ import {
   buildChatTabContextMenuItems,
   type WorkspaceTabContextMenuCommand,
 } from "#product/lib/domain/workspaces/tabs/context-menu";
+import { isWorkspaceSetupSessionId } from "#product/lib/domain/workspaces/selection/setup-session";
 
 export function ChatTabWithMenu({
   tab,
@@ -77,11 +78,12 @@ export function ChatTabWithMenu({
   stripIndex?: number;
 }) {
   const isReviewAgentChild = tab.isReviewAgentChild;
+  const isSetupSession = isWorkspaceSetupSessionId(tab.id);
   const menuItems = buildChatTabContextMenuItems({
-    canRename: !isReviewAgentChild,
+    canRename: !isReviewAgentChild && !isSetupSession,
     canFork: tab.canFork && !tab.isChild && !isReviewAgentChild,
-    canClose,
-    canDismiss: canDismiss && !isReviewAgentChild,
+    canClose: canClose && !isSetupSession,
+    canDismiss: canDismiss && !isReviewAgentChild && !isSetupSession,
     canCreateGroup: !isReviewAgentChild && canCreateGroup,
     isChild: tab.isChild,
   });
