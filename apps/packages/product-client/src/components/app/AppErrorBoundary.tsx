@@ -10,6 +10,16 @@ import type { RenderErrorReport } from "@proliferate/product-client/host/desktop
 import type { RenderErrorReportStatus } from "#product/lib/domain/app/render-error-recovery";
 
 const AppErrorRecoverySurface = lazy(async () => {
+  if (
+    import.meta.env.DEV
+    && window.location.pathname === "/playground/crash-recovery"
+  ) {
+    const proofState = new URLSearchParams(window.location.search).get(
+      "recovery-enhancement",
+    );
+    if (proofState === "pending") await new Promise<never>(() => {});
+    if (proofState === "rejected") throw new Error("Recovery enhancement proof rejection");
+  }
   const module = await import("#product/components/app/AppErrorRecoverySurface");
   return { default: module.AppErrorRecoverySurface };
 });
@@ -27,24 +37,122 @@ export interface AppErrorBoundaryProps {
 }
 
 interface State {
-  error: Error | null;
+  hasError: boolean;
+  error: unknown;
   componentStack: string | null;
   reportResult: "reported" | "failed" | null;
 }
 
 const INITIAL_STATE: State = {
+  hasError: false,
   error: null,
   componentStack: null,
   reportResult: null,
 };
+
+interface EmergencyRecoveryShellProps {
+  enhancementStatus: "loading" | "unavailable";
+  reportStatus: RenderErrorReportStatus;
+  onReload?: AppErrorBoundaryProps["onReload"];
+  onTryAgain: () => void;
+}
+
+function emergencyReportCopy(status: RenderErrorReportStatus): string {
+  switch (status) {
+    case "reporting":
+      return "Sending a diagnostic report…";
+    case "reported":
+      return "Reported — we've been notified and are investigating.";
+    case "failed":
+      return "Report failed — we couldn't send the diagnostic report.";
+    case "unavailable":
+      return "Reporting unavailable — automatic reporting isn't available here.";
+  }
+}
+
+function EmergencyRecoveryShell({
+  enhancementStatus,
+  reportStatus,
+  onReload,
+  onTryAgain,
+}: EmergencyRecoveryShellProps) {
+  function handleReload(): void {
+    try {
+      void Promise.resolve(
+        onReload ? onReload() : window.location.reload(),
+      ).catch(() => {});
+    } catch {
+      // The emergency shell must remain available even if reload integration fails.
+    }
+  }
+
+  return (
+    <main
+      className="flex min-h-screen w-screen items-center justify-center bg-background px-6 text-foreground"
+      data-crash-recovery
+      data-recovery-enhancement-status={enhancementStatus}
+      data-report-status={reportStatus}
+    >
+      <div className="w-full max-w-lg space-y-4">
+        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+          Proliferate recovery
+        </p>
+        <h1 className="text-2xl font-semibold">The app needs a quick reload</h1>
+        <p className="text-sm text-muted-foreground" role="status" aria-live="polite">
+          {emergencyReportCopy(reportStatus)}
+          {enhancementStatus === "loading"
+            ? " Loading the remaining recovery tools…"
+            : " The remaining recovery tools couldn't load."}
+        </p>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <button
+            type="button"
+            onClick={handleReload}
+            autoFocus
+            className="h-9 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground"
+          >
+            Reload app
+          </button>
+          <button
+            type="button"
+            onClick={onTryAgain}
+            className="h-9 rounded-md border border-border bg-card px-4 text-sm text-card-foreground"
+          >
+            Try again
+          </button>
+        </div>
+      </div>
+    </main>
+  );
+}
+
+interface RecoveryEnhancementBoundaryProps {
+  children: ReactNode;
+  fallback: ReactNode;
+}
+
+class RecoveryEnhancementBoundary extends Component<
+  RecoveryEnhancementBoundaryProps,
+  { failed: boolean }
+> {
+  state = { failed: false };
+
+  static getDerivedStateFromError(): { failed: boolean } {
+    return { failed: true };
+  }
+
+  render() {
+    return this.state.failed ? this.props.fallback : this.props.children;
+  }
+}
 
 export class AppErrorBoundary extends Component<AppErrorBoundaryProps, State> {
   state: State = INITIAL_STATE;
   private reportAttempt = 0;
   private acceptingUpdates = true;
 
-  static getDerivedStateFromError(error: Error): State {
-    return { ...INITIAL_STATE, error };
+  static getDerivedStateFromError(error: unknown): State {
+    return { ...INITIAL_STATE, hasError: true, error };
   }
 
   componentDidMount(): void {
@@ -58,7 +166,7 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, State> {
     this.acceptingUpdates = false;
   }
 
-  componentDidCatch(error: Error, info: ErrorInfo): void {
+  componentDidCatch(error: unknown, info: ErrorInfo): void {
     const attempt = ++this.reportAttempt;
     this.setState({ componentStack: info.componentStack ?? null });
 
@@ -76,15 +184,17 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, State> {
       }
     }
 
-    console.error("[AppErrorBoundary] Uncaught render error:", error);
+    // Do not inspect or stringify an arbitrary thrown value here. The lazy
+    // recovery projection normalizes it without invoking hostile accessors.
+    console.error("[AppErrorBoundary] Uncaught render error captured");
     console.error("[AppErrorBoundary] Component stack:", info.componentStack);
   }
 
-  private finishReport(attempt: number, error: Error, reported: boolean): void {
+  private finishReport(attempt: number, error: unknown, reported: boolean): void {
     if (
       !this.acceptingUpdates
       || attempt !== this.reportAttempt
-      || this.state.error !== error
+      || !Object.is(this.state.error, error)
     ) {
       return;
     }
@@ -102,32 +212,40 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, State> {
   };
 
   render() {
-    if (!this.state.error) return this.props.children;
+    if (!this.state.hasError) return this.props.children;
 
     const reportStatus = this.reportStatus();
+    const loadingFallback = (
+      <EmergencyRecoveryShell
+        enhancementStatus="loading"
+        reportStatus={reportStatus}
+        onReload={this.props.onReload}
+        onTryAgain={this.handleTryAgain}
+      />
+    );
+    const unavailableFallback = (
+      <EmergencyRecoveryShell
+        enhancementStatus="unavailable"
+        reportStatus={reportStatus}
+        onReload={this.props.onReload}
+        onTryAgain={this.handleTryAgain}
+      />
+    );
     return (
-      <Suspense
-        fallback={(
-          <main
-            className="flex min-h-screen w-screen items-center justify-center bg-background px-6 text-foreground"
-            data-crash-recovery
-            data-report-status={reportStatus}
-          >
-            <p className="text-sm text-muted-foreground">Loading recovery tools…</p>
-          </main>
-        )}
-      >
-        <AppErrorRecoverySurface
-          error={this.state.error}
-          componentStack={this.state.componentStack}
-          reportStatus={reportStatus}
-          clientReleaseId={this.props.clientReleaseId}
-          onReload={this.props.onReload}
-          onTryAgain={this.handleTryAgain}
-          onCopyDetails={this.props.onCopyDetails}
-          onContactSupport={this.props.onContactSupport}
-        />
-      </Suspense>
+      <RecoveryEnhancementBoundary fallback={unavailableFallback}>
+        <Suspense fallback={loadingFallback}>
+          <AppErrorRecoverySurface
+            error={this.state.error}
+            componentStack={this.state.componentStack}
+            reportStatus={reportStatus}
+            clientReleaseId={this.props.clientReleaseId}
+            onReload={this.props.onReload}
+            onTryAgain={this.handleTryAgain}
+            onCopyDetails={this.props.onCopyDetails}
+            onContactSupport={this.props.onContactSupport}
+          />
+        </Suspense>
+      </RecoveryEnhancementBoundary>
     );
   }
 }

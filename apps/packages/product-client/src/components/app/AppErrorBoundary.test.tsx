@@ -14,13 +14,13 @@ import {
   type AppErrorBoundaryProps,
 } from "#product/components/app/AppErrorBoundary";
 
-function Crash({ error }: { error: Error }): never {
+function Crash({ error }: { error: unknown }): never {
   throw error;
 }
 
 function renderCrash(
   props: Omit<AppErrorBoundaryProps, "children"> = {},
-  error = new Error("Workspace panel failed to render"),
+  error: unknown = new Error("Workspace panel failed to render"),
 ) {
   return render(
     <AppErrorBoundary {...props}>
@@ -163,6 +163,25 @@ describe("AppErrorBoundary", () => {
       expect(document.querySelector('[data-report-status="failed"]')).toBeTruthy();
     });
     expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
+  });
+
+  it.each([
+    ["falsy zero", 0],
+    ["falsy false", false],
+    ["non-Error string", "private unlabeled customer transcript"],
+  ])("recovers safely from a %s thrown value", async (_name, thrownValue) => {
+    const onRenderError = vi.fn(async () => true);
+    renderCrash({ onRenderError }, thrownValue);
+
+    await screen.findByRole("button", { name: "Reload app" });
+    fireEvent.click(screen.getByText("Technical details"));
+    expect(screen.getByText("Unexpected render error")).toBeTruthy();
+    expect(document.body.textContent).not.toContain(
+      "private unlabeled customer transcript",
+    );
+    expect(onRenderError).toHaveBeenCalledWith(
+      expect.objectContaining({ error: thrownValue }),
+    );
   });
 
   it("reloads, retries, copies sanitized details, contacts support, and focuses the primary action", async () => {

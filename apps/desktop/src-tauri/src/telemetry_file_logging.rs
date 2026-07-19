@@ -1,6 +1,8 @@
-use std::fs::{self, OpenOptions};
-use std::io::Write;
+use std::fmt;
+use std::fs::{self, File, OpenOptions};
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 
 use file_rotate::{compression::Compression, suffix::AppendCount, ContentLimit, FileRotate};
 use tracing_appender::{
@@ -10,6 +12,7 @@ use tracing_appender::{
 
 const MAX_LOG_BYTES: usize = 10 * 1024 * 1024;
 const MAX_ROTATED_FILES: usize = 5;
+pub const RENDERER_DIAGNOSTIC_TARGET: &str = "proliferate.renderer_diagnostic";
 
 #[derive(Debug)]
 pub struct FileLogSink {
@@ -18,51 +21,179 @@ pub struct FileLogSink {
     pub path: PathBuf,
 }
 
-#[derive(Clone, Debug, Default)]
+pub(crate) trait RendererDiagnosticWriter: Send {
+    fn persist(&mut self, line: &str) -> io::Result<()>;
+}
+
+struct RotatingRendererDiagnosticWriter {
+    path: PathBuf,
+    file: Option<File>,
+    bytes_written: usize,
+    max_log_bytes: usize,
+    max_rotated_files: usize,
+}
+
+impl RotatingRendererDiagnosticWriter {
+    fn open(path: PathBuf, max_log_bytes: usize, max_rotated_files: usize) -> io::Result<Self> {
+        let Some(parent) = path.parent() else {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("Log path {} has no parent directory", path.display()),
+            ));
+        };
+        fs::create_dir_all(parent)?;
+        let file = open_append_file(&path)?;
+        let bytes_written = file.metadata()?.len() as usize;
+        Ok(Self {
+            path,
+            file: Some(file),
+            bytes_written,
+            max_log_bytes,
+            max_rotated_files,
+        })
+    }
+
+    fn ensure_open(&mut self) -> io::Result<()> {
+        if self.file.is_none() {
+            let file = open_append_file(&self.path)?;
+            self.bytes_written = file.metadata()?.len() as usize;
+            self.file = Some(file);
+        }
+        Ok(())
+    }
+
+    fn rotate(&mut self) -> io::Result<()> {
+        if let Some(mut file) = self.file.take() {
+            file.flush()?;
+            file.sync_data()?;
+        }
+        rotate_renderer_diagnostic_files(&self.path, self.max_rotated_files)?;
+        self.ensure_open()
+    }
+}
+
+impl RendererDiagnosticWriter for RotatingRendererDiagnosticWriter {
+    fn persist(&mut self, line: &str) -> io::Result<()> {
+        self.ensure_open()?;
+        let record_bytes = line.len().saturating_add(1);
+        if self.bytes_written > 0
+            && self.bytes_written.saturating_add(record_bytes) > self.max_log_bytes
+        {
+            self.rotate()?;
+        }
+
+        let file = self
+            .file
+            .as_mut()
+            .ok_or_else(|| io::Error::other("renderer diagnostic file is unavailable"))?;
+        file.write_all(line.as_bytes())?;
+        file.write_all(b"\n")?;
+        file.flush()?;
+        file.sync_data()?;
+        self.bytes_written = self.bytes_written.saturating_add(record_bytes);
+        Ok(())
+    }
+}
+
+type SharedRendererDiagnosticWriter = Arc<Mutex<Box<dyn RendererDiagnosticWriter>>>;
+
+#[derive(Clone, Default)]
 pub struct RendererDiagnosticLog {
-    path: Option<PathBuf>,
+    writer: Option<SharedRendererDiagnosticWriter>,
+}
+
+impl fmt::Debug for RendererDiagnosticLog {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("RendererDiagnosticLog")
+            .field("available", &self.writer.is_some())
+            .finish()
+    }
 }
 
 impl RendererDiagnosticLog {
-    pub fn from_file_log_sink(sink: &FileLogSink) -> Self {
-        Self {
-            path: Some(sink.path.clone()),
-        }
+    pub fn open(path: PathBuf) -> Result<Self, String> {
+        Self::open_with_limits(path, MAX_LOG_BYTES, MAX_ROTATED_FILES)
+    }
+
+    fn open_with_limits(
+        path: PathBuf,
+        max_log_bytes: usize,
+        max_rotated_files: usize,
+    ) -> Result<Self, String> {
+        let display_path = path.display().to_string();
+        let writer = RotatingRendererDiagnosticWriter::open(path, max_log_bytes, max_rotated_files)
+            .map_err(|error| {
+                format!("Failed to open renderer diagnostic log {display_path}: {error}")
+            })?;
+        Ok(Self {
+            writer: Some(Arc::new(Mutex::new(Box::new(writer)))),
+        })
     }
 
     #[cfg(test)]
-    pub(crate) fn from_path(path: PathBuf) -> Self {
-        Self { path: Some(path) }
+    pub(crate) fn from_path(path: PathBuf) -> Result<Self, String> {
+        Self::open(path)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn from_writer(writer: impl RendererDiagnosticWriter + 'static) -> Self {
+        Self {
+            writer: Some(Arc::new(Mutex::new(Box::new(writer)))),
+        }
     }
 
     pub fn persist(&self, line: &str) -> Result<(), String> {
-        let path = self
-            .path
+        let writer = self
+            .writer
             .as_ref()
-            .ok_or_else(|| "Desktop native file log sink is unavailable".to_string())?;
-        let mut file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(path)
-            .map_err(|error| {
-                format!(
-                    "Failed to open renderer diagnostic log {}: {error}",
-                    path.display()
-                )
-            })?;
-        write_and_flush(&mut file, line).map_err(|error| {
-            format!(
-                "Failed to write renderer diagnostic log {}: {error}",
-                path.display()
-            )
-        })?;
-        file.sync_data().map_err(|error| {
-            format!(
-                "Failed to sync renderer diagnostic log {}: {error}",
-                path.display()
-            )
-        })
+            .ok_or_else(|| "Renderer diagnostic file log sink is unavailable".to_string())?;
+        let mut writer = writer
+            .lock()
+            .map_err(|_| "Renderer diagnostic log lock is poisoned".to_string())?;
+        writer
+            .persist(line)
+            .map_err(|error| format!("Failed to persist renderer diagnostic: {error}"))
     }
+}
+
+fn open_append_file(path: &Path) -> io::Result<File> {
+    OpenOptions::new().create(true).append(true).open(path)
+}
+
+fn rotated_renderer_path(path: &Path, index: usize) -> PathBuf {
+    let mut rotated = path.as_os_str().to_os_string();
+    rotated.push(format!(".{index}"));
+    PathBuf::from(rotated)
+}
+
+fn rotate_renderer_diagnostic_files(path: &Path, max_rotated_files: usize) -> io::Result<()> {
+    if max_rotated_files == 0 {
+        if path.exists() {
+            fs::remove_file(path)?;
+        }
+        return Ok(());
+    }
+
+    let oldest = rotated_renderer_path(path, max_rotated_files);
+    if oldest.exists() {
+        fs::remove_file(&oldest)?;
+    }
+    for index in (1..=max_rotated_files).rev() {
+        let source = if index == 1 {
+            path.to_path_buf()
+        } else {
+            rotated_renderer_path(path, index - 1)
+        };
+        if source.exists() {
+            fs::rename(source, rotated_renderer_path(path, index))?;
+        }
+    }
+    Ok(())
+}
+
+pub fn is_renderer_diagnostic_event(metadata: &tracing::Metadata<'_>) -> bool {
+    metadata.target() == RENDERER_DIAGNOSTIC_TARGET
 }
 
 fn write_and_flush(writer: &mut impl Write, line: &str) -> std::io::Result<()> {
@@ -105,15 +236,22 @@ pub fn create_file_log_sink(log_path: &Path) -> Result<FileLogSink, String> {
 mod tests {
     use super::*;
     use std::io::{self, Write};
+    use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    static TEMP_PATH_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
     fn temp_path(file_name: &str) -> PathBuf {
         let unique = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("system time should be valid")
             .as_nanos();
+        let sequence = TEMP_PATH_SEQUENCE.fetch_add(1, Ordering::Relaxed);
         std::env::temp_dir()
-            .join(format!("desktop-file-logging-{unique}"))
+            .join(format!(
+                "desktop-file-logging-{}-{unique}-{sequence}",
+                std::process::id()
+            ))
             .join(file_name)
     }
 
@@ -219,6 +357,7 @@ mod tests {
         fs::create_dir_all(path.parent().expect("temp dir should exist"))
             .expect("parent should be created");
         RendererDiagnosticLog::from_path(path.clone())
+            .expect("renderer diagnostic log should open")
             .persist("renderer diagnostic")
             .expect("durable persistence should succeed");
 
@@ -267,5 +406,67 @@ mod tests {
         )
         .expect_err("flush failure must be returned");
         assert_eq!(flush_error.to_string(), "flush failed");
+    }
+
+    #[test]
+    fn renderer_diagnostic_log_rotates_whole_records_and_caps_retention() {
+        let path = temp_path("renderer-diagnostics.log");
+        let log = RendererDiagnosticLog::open_with_limits(path.clone(), 12, 2)
+            .expect("renderer diagnostic log should open");
+
+        for line in ["first", "second", "third", "fourth"] {
+            log.persist(line).expect("record should persist durably");
+        }
+
+        assert_eq!(
+            fs::read_to_string(&path).expect("current log should exist"),
+            "fourth\n"
+        );
+        assert_eq!(
+            fs::read_to_string(rotated_renderer_path(&path, 1))
+                .expect("first rotated log should exist"),
+            "third\n"
+        );
+        assert_eq!(
+            fs::read_to_string(rotated_renderer_path(&path, 2))
+                .expect("second rotated log should exist"),
+            "second\n"
+        );
+        assert!(!rotated_renderer_path(&path, 3).exists());
+
+        fs::remove_dir_all(path.parent().expect("temp dir should exist"))
+            .expect("cleanup should succeed");
+    }
+
+    #[test]
+    fn renderer_diagnostic_log_serializes_concurrent_records() {
+        let path = temp_path("renderer-diagnostics.log");
+        let log = RendererDiagnosticLog::open_with_limits(path.clone(), usize::MAX, 1)
+            .expect("renderer diagnostic log should open");
+        let mut workers = Vec::new();
+
+        for worker in 0..8 {
+            let worker_log = log.clone();
+            workers.push(std::thread::spawn(move || {
+                for record in 0..20 {
+                    worker_log
+                        .persist(&format!(r#"{{"worker":{worker},"record":{record}}}"#))
+                        .expect("concurrent record should persist");
+                }
+            }));
+        }
+        for worker in workers {
+            worker.join().expect("worker should finish");
+        }
+
+        let contents = fs::read_to_string(&path).expect("diagnostic log should be readable");
+        let records = contents
+            .lines()
+            .map(|line| serde_json::from_str::<serde_json::Value>(line).expect("whole JSON record"))
+            .collect::<Vec<_>>();
+        assert_eq!(records.len(), 160);
+
+        fs::remove_dir_all(path.parent().expect("temp dir should exist"))
+            .expect("cleanup should succeed");
     }
 }

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildRenderErrorTechnicalDetails,
   formatRenderErrorDetails,
+  normalizeRenderError,
   parseRenderErrorReleaseIdentity,
   sanitizeRenderErrorText,
 } from "#product/lib/domain/app/render-error-recovery";
@@ -100,6 +101,69 @@ describe("render error recovery privacy projection", () => {
     ).toBe(
       "at WorkspacePane (WorkspacePane.tsx:41:9)\nat renderWithHooks (react-dom.js:120:4)",
     );
+    expect(
+      sanitizeRenderErrorText(
+        "Unexpected token '<' in JSON.",
+        "Unexpected render error",
+        1_000,
+      ),
+    ).toBe("Unexpected token '<' in JSON.");
+    expect(
+      sanitizeRenderErrorText(
+        "Cannot read properties of undefined (reading 'map')",
+        "Unexpected render error",
+        1_000,
+      ),
+    ).toBe("Cannot read properties of undefined (reading 'map')");
+    expect(
+      sanitizeRenderErrorText(
+        "Cannot read properties of undefined (reading 'token')",
+        "Unexpected render error",
+        1_000,
+      ),
+    ).toBe("Unexpected render error");
+  });
+
+  it.each([
+    "Discuss the quiet acquisition before launch",
+    "x7q9",
+    "cHJpdmF0ZS9jdXN0b21lcit0cmFuc2NyaXB0PQ==",
+    "eyJwcm9tcHQiOiJwcml2YXRlIn0=/+/=",
+  ])("fails closed for unlabelled or opaque private text: %s", (value) => {
+    expect(
+      sanitizeRenderErrorText(value, "Unexpected render error", 1_000),
+    ).toBe("Unexpected render error");
+  });
+
+  it("normalizes hostile and non-Error thrown values without invoking accessors", () => {
+    const throwingMessage = Object.create(null, {
+      message: {
+        get(): never {
+          throw new Error("private getter value");
+        },
+      },
+    });
+    const target = {};
+    const revoked = Proxy.revocable(target, {});
+    revoked.revoke();
+
+    for (const value of [throwingMessage, revoked.proxy, null, undefined, false, 0]) {
+      expect(() => normalizeRenderError(value)).not.toThrow();
+      expect(normalizeRenderError(value).message).toBe("Unexpected render error");
+    }
+    expect(normalizeRenderError("Unexpected token '<' in JSON.").message).toBe(
+      "Unexpected token '<' in JSON.",
+    );
+  });
+
+  it("rejects an entire component stack when any frame is not relative and structured", () => {
+    expect(
+      sanitizeRenderErrorText(
+        "at WorkspacePane (WorkspacePane.tsx:41:9)\nat SecretPane (/opt/acme/App.tsx:4:2)",
+        "Unavailable",
+        8_000,
+      ),
+    ).toBe("Unavailable");
   });
 
   it("splits the canonical release into app, version, release, and build", () => {
@@ -123,5 +187,11 @@ describe("render error recovery privacy projection", () => {
         release: "Unavailable",
         build: "Unavailable",
       });
+    expect(parseRenderErrorReleaseIdentity("desktop@/Users/private")).toEqual({
+      app: "Unavailable",
+      version: "Unavailable",
+      release: "Unavailable",
+      build: "Unavailable",
+    });
   });
 });

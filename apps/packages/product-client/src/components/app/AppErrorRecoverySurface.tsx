@@ -12,7 +12,7 @@ import {
 } from "#product/lib/domain/app/render-error-recovery";
 
 interface AppErrorRecoverySurfaceProps {
-  error: Error;
+  error: unknown;
   componentStack: string | null;
   reportStatus: RenderErrorReportStatus;
   clientReleaseId?: string | null;
