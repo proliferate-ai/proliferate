@@ -1894,18 +1894,10 @@ body {
   --tab-stable-end-margin: 0px;
   --tab-gap: 3px;
   --tab-bar-mask-size: 28px;
-  --right-panel-tab-leading-inset: 0px;
-  --right-panel-tab-radius: 8px;
-  --right-panel-tab-overlay-radius: 8px;
   --right-panel-tab-surface: transparent;
   /* Matches the surface painted behind the header (workspace shell bg-sidebar)
      so the sticky new-tab trigger masks tabs scrolling underneath it. */
   --right-panel-tab-sticky-surface: color-mix(in srgb, var(--color-sidebar-background) 88%, transparent);
-  --right-panel-tab-hover-bg: color-mix(
-    in srgb,
-    var(--color-sidebar-foreground) 4%,
-    transparent
-  );
   --right-panel-tab-active-bg: color-mix(
     in srgb,
     var(--color-sidebar-foreground) 5%,
@@ -1914,35 +1906,25 @@ body {
   --right-panel-tab-text-primary: var(--color-sidebar-foreground);
   --right-panel-tab-text-secondary: color-mix(in srgb, var(--color-sidebar-foreground) 65%, transparent);
   --right-panel-tab-text-tertiary: var(--color-sidebar-muted-foreground);
-  --right-panel-tab-focus: var(--color-sidebar-ring);
-  --right-panel-tab-font-size: var(--workspace-shell-tab-font-size);
-  --right-panel-tab-line-height: var(--workspace-shell-tab-line-height);
-  --right-panel-tab-font-weight: var(--workspace-shell-tab-font-weight);
-  --right-panel-tab-icon-size: var(--workspace-shell-tab-icon-size);
-  --right-panel-tab-content-gap: var(--workspace-shell-tab-content-gap);
-  --right-panel-tab-dot-size: 5px;
-  --right-panel-tab-dot-gap: 2px;
-  --right-panel-tab-close-size: 1rem;
-  --right-panel-tab-close-offset: calc(
-    8px - ((var(--right-panel-tab-close-size) - var(--right-panel-tab-icon-size)) / 2)
-  );
+  --right-panel-tab-icon-size: 1.27em;
+  --right-panel-tab-dot-size: 0.45em;
+  --right-panel-tab-close-size: calc(var(--text-ui-sm) * 1.45);
   display: flex;
   flex-direction: column;
   width: 100%;
   height: var(--tab-system-height);
-  box-sizing: border-box;
   flex-shrink: 0;
   min-width: 0;
   background-color: var(--right-panel-tab-surface);
   color: var(--right-panel-tab-text-secondary);
-  font-size: var(--right-panel-tab-font-size);
-  line-height: var(--right-panel-tab-line-height);
+  font-size: var(--text-ui-sm);
+  line-height: var(--text-ui-sm--line-height);
+  font-weight: 500;
 }
 
 :root[data-mode="light"] .right-panel-tab-system {
   --right-panel-tab-surface: var(--color-surface);
   --right-panel-tab-sticky-surface: color-mix(in srgb, var(--color-surface) 88%, transparent);
-  --right-panel-tab-hover-bg: color-mix(in oklab, var(--color-foreground) 5%, transparent);
   --right-panel-tab-active-bg: color-mix(in oklab, var(--color-foreground) 5%, transparent);
   --right-panel-tab-text-secondary: color-mix(in oklab, var(--color-foreground) 65%, transparent);
 }
@@ -1951,14 +1933,12 @@ body {
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 0;
   height: 100%;
   width: 100%;
   min-width: 0;
   padding: 0 8px;
   background-color: var(--right-panel-tab-surface);
   flex-shrink: 0;
-  box-sizing: border-box;
   /* Tab drag-reorder is pointer-event driven; without this WebKit starts a
      text selection mid-drag and paints the whole bar (and anything the sweep
      crosses) blue. */
@@ -1972,8 +1952,6 @@ body {
   height: 100%;
   min-width: 0;
   width: 100%;
-  box-sizing: border-box;
-  padding-left: var(--right-panel-tab-leading-inset);
 }
 
 .right-panel-tab-system .ui-tab-system-section {
@@ -1985,7 +1963,6 @@ body {
   height: 100%;
   padding: var(--tab-container-padding) 0;
   color: var(--right-panel-tab-text-tertiary);
-  box-sizing: border-box;
 }
 
 .right-panel-tab-system .ui-tab-system-tabs__scrollable {
@@ -1993,7 +1970,6 @@ body {
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 0;
   flex: 1;
   min-width: 0;
   height: 100%;
@@ -2126,13 +2102,9 @@ body {
   border: none;
   margin: 0;
   font: inherit;
-  font-size: var(--right-panel-tab-font-size);
-  line-height: var(--right-panel-tab-line-height);
-  font-weight: var(--right-panel-tab-font-weight);
   letter-spacing: 0;
   color: inherit;
   cursor: pointer;
-  box-sizing: border-box;
   touch-action: manipulation;
   outline: none;
   position: relative;
@@ -2144,7 +2116,7 @@ body {
   padding: 4px 8px;
   color: var(--right-panel-tab-text-secondary);
   flex-shrink: 0;
-  border-radius: var(--right-panel-tab-radius);
+  border-radius: 8px;
   overflow: hidden;
   transition-property: color;
   transition-duration: 100ms;
@@ -2156,7 +2128,7 @@ body {
   position: absolute;
   inset: 0;
   z-index: 0;
-  border-radius: var(--right-panel-tab-overlay-radius);
+  border-radius: 8px;
   background-color: transparent;
   pointer-events: none;
   transition: background-color 100ms ease;
@@ -2212,7 +2184,7 @@ body {
 }
 
 .right-panel-tab-system .ui-tab-system-tab:focus-visible {
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--right-panel-tab-focus) 34%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-sidebar-ring) 34%, transparent);
 }
 
 .right-panel-tab-system .ui-tab-system-tab:disabled {
@@ -2225,16 +2197,13 @@ body {
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: var(--right-panel-tab-content-gap);
+  gap: var(--workspace-shell-tab-content-gap);
   flex: 1;
   height: 100%;
   min-width: 0;
   overflow: hidden;
   position: relative;
   z-index: 1;
-  font-size: var(--right-panel-tab-font-size);
-  line-height: var(--right-panel-tab-line-height);
-  font-weight: var(--right-panel-tab-font-weight);
 }
 
 .right-panel-tab-system .ui-tab-system-tab__content[data-shortcut-reveal="true"] {
@@ -2278,9 +2247,6 @@ body {
   height: 100%;
   min-width: 0;
   text-align: left;
-  font-size: var(--right-panel-tab-font-size);
-  line-height: var(--right-panel-tab-line-height);
-  font-weight: var(--right-panel-tab-font-weight);
 }
 
 .right-panel-tab-system .ui-tab-system-tab__label-primary {
@@ -2290,9 +2256,6 @@ body {
   white-space: nowrap;
   flex: 1;
   min-width: 0;
-  font-weight: inherit;
-  font-size: var(--right-panel-tab-font-size);
-  line-height: var(--right-panel-tab-line-height);
 }
 
 .right-panel-tab-system .ui-tab-system-tab__dirty-indicator {
@@ -2300,7 +2263,7 @@ body {
   flex-shrink: 0;
   width: var(--right-panel-tab-dot-size);
   height: var(--right-panel-tab-dot-size);
-  margin-left: var(--right-panel-tab-dot-gap);
+  margin-left: 0.18em;
   border-radius: 9999px;
   background-color: var(--right-panel-tab-text-tertiary);
 }
@@ -2331,7 +2294,7 @@ body {
 
 .right-panel-tab-system .right-panel-terminal-tab-shell .ui-tab-system-tab__close-container {
   position: absolute;
-  left: var(--right-panel-tab-close-offset);
+  left: 0.64em;
   top: 0;
   bottom: 0;
   width: var(--right-panel-tab-close-size);
@@ -2361,7 +2324,6 @@ body {
 
 .right-panel-tab-system .ui-tab-system-tab__close,
 .right-panel-tab-system .right-panel-terminal-edit-action {
-  box-sizing: border-box;
   width: var(--right-panel-tab-close-size);
   height: var(--right-panel-tab-close-size);
   min-width: var(--right-panel-tab-close-size);
