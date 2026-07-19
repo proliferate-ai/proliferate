@@ -26,6 +26,14 @@ describe("ToolCallSummary", () => {
     fireEvent.click(disclosure);
     expect(screen.getByText("Work ledger")).toBeTruthy();
     const ledger = screen.getByText("Work ledger");
+    const summaryShell = container.querySelector("[data-completed-work-summary]");
+    const ledgerShell = container.querySelector("[data-completed-work-ledger]");
+    expect(summaryShell).not.toBeNull();
+    expect(ledgerShell).not.toBeNull();
+    expect(summaryShell?.className).not.toMatch(/(?:^|\s)(?:border|rounded)(?:\s|$)/);
+    expect(ledgerShell?.className).toContain("border-0");
+    expect(ledgerShell?.className).not.toMatch(/(?:^|\s)border(?:\s|$)/);
+    expect(ledgerShell?.className).not.toMatch(/(?:^|\s)rounded(?:\s|$)/);
     expect(ledger.parentElement?.className).toContain("mt-1");
     expect(ledger.parentElement?.className).not.toContain("mt-2");
     const completion = screen.getByText("Edited files");

@@ -39,6 +39,7 @@ export function ToolCallSummary({
   return (
     <div
       className={`min-w-0 ${animateCompletion ? "motion-safe:animate-status-crossfade" : ""}`}
+      data-completed-work-summary
       data-completed-work-transition={animateCompletion ? "true" : undefined}
     >
       <TurnSeparator
@@ -48,7 +49,10 @@ export function ToolCallSummary({
         onClick={() => setExpanded(!expanded)}
       />
       {expanded && (
-        <div className="mt-1 space-y-1.5">
+        <div
+          className="mt-1 space-y-1.5 border-0 bg-transparent"
+          data-completed-work-ledger
+        >
           {renderedChildren}
         </div>
       )}

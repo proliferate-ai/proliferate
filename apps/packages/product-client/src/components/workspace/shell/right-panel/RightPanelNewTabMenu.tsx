@@ -26,23 +26,40 @@ export function RightPanelNewTabMenu({
   onOpenChange,
   onCreateTerminal,
 }: RightPanelNewTabMenuProps) {
+  const handleMenuOpenChange = (isOpen: boolean) => {
+    // A direct click owns primary terminal creation. The controlled menu only
+    // opens for explicit programmatic requests routed through the header.
+    if (!isOpen) {
+      onOpenChange(false);
+    }
+  };
+
+  const handleCreateTerminal = () => {
+    onOpenChange(false);
+    onCreateTerminal();
+  };
+
   return (
-    <DropdownMenu open={open} onOpenChange={onOpenChange}>
+    <DropdownMenu open={open} onOpenChange={handleMenuOpenChange}>
       <DropdownMenuTrigger asChild>
         <IconButton
+          type="button"
           size="xs"
           tone="sidebar"
+          disabled={!isWorkspaceReady}
+          aria-label="New terminal"
+          title="New terminal"
+          onClick={handleCreateTerminal}
           className="ui-icon-button workspace-shell-icon-button glass-editor-panel-new-tab-menu-trigger relative"
         >
           <AppShellPlusIcon className="ui-icon" />
-          <span className="sr-only">Open new tab menu</span>
         </IconButton>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-40 shadow-popover">
         <DropdownMenuItem
           disabled={!isWorkspaceReady}
           data-autofocus={defaultKind === "terminal" || undefined}
-          onSelect={onCreateTerminal}
+          onSelect={handleCreateTerminal}
         >
           <AppShellTerminalIcon className="size-4" />
           Terminal

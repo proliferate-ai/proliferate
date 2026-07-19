@@ -59,7 +59,7 @@ export function WorkspaceActions({ session }: WorkspaceActionsMenuProps) {
           size="icon-sm"
           aria-label="Chat actions"
           title="Chat actions"
-          className="workspace-shell-icon-button workspace-shell-icon-button--hover-rim app-region-no-drag shrink-0"
+          className="workspace-shell-icon-button workspace-shell-icon-button--flat focus-ring app-region-no-drag shrink-0"
         >
           <MoreHorizontal className="size-3.5" />
         </Button>
