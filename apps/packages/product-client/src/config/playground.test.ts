@@ -114,6 +114,10 @@ function visibleText(html: string): string {
 }
 
 describe("playground scenarios", () => {
+  it("includes the complete Markdown presentation fixture", () => {
+    expect(Object.keys(SCENARIOS)).toContain("markdown-presentation");
+  });
+
   it("includes user-input card scenarios for visual iteration", () => {
     expect(Object.keys(SCENARIOS)).toEqual(expect.arrayContaining(USER_INPUT_SCENARIOS));
   });

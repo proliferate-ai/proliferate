@@ -3,6 +3,9 @@ import { PlaygroundComposer } from "#product/components/playground/PlaygroundCom
 import { PlaygroundScenarioBar } from "#product/components/playground/PlaygroundScenarioBar";
 import { PlaygroundSidebarGitDiff } from "#product/components/playground/PlaygroundSidebarGitDiff";
 import { PlaygroundTranscript } from "#product/components/playground/transcript/PlaygroundTranscript";
+// This dev-only route sits outside AuthenticatedProductClient, so load the
+// authenticated presentation rules explicitly for direct playground URLs.
+import "../app/authenticated.css";
 import {
   resolvePlaygroundScenarioSelection,
   type ScenarioKey,
@@ -28,6 +31,10 @@ export function ChatPlaygroundPage() {
     selection.kind === "fixture" && selection.key === "git-diff-panel";
   const showAttachmentPreview =
     selection.kind === "fixture" && selection.key === "attachment-previews";
+  const focusMarkdownPresentation =
+    selection.kind === "fixture"
+    && selection.key === "markdown-presentation"
+    && params.get("focus") === "1";
 
   const handleSelectFixture = (key: ScenarioKey) => {
     const next = new URLSearchParams(params);
@@ -43,12 +50,14 @@ export function ChatPlaygroundPage() {
 
   return (
     <div className="chat-selection-root flex h-screen flex-col bg-background text-foreground">
-      <PlaygroundScenarioBar
-        selection={selection}
-        replay={replay}
-        onSelectFixture={handleSelectFixture}
-        onSelectRecording={handleSelectRecording}
-      />
+      {!focusMarkdownPresentation && (
+        <PlaygroundScenarioBar
+          selection={selection}
+          replay={replay}
+          onSelectFixture={handleSelectFixture}
+          onSelectRecording={handleSelectRecording}
+        />
+      )}
       <main className="relative flex flex-1 overflow-hidden">
         <div
           className="flex-1 overflow-y-auto pt-6"
@@ -80,11 +89,13 @@ export function ChatPlaygroundPage() {
         )}
         {showAttachmentPreview && <PlaygroundAttachmentPreviewAside />}
       </main>
-      <footer className="border-t border-border px-4 py-2 text-xs text-muted-foreground">
-        <code className="font-mono">?s={selection.raw}</code>
-        <span className="mx-2">·</span>
-        Dev only · import.meta.env.DEV
-      </footer>
+      {!focusMarkdownPresentation && (
+        <footer className="border-t border-border px-4 py-2 text-xs text-muted-foreground">
+          <code className="font-mono">?s={selection.raw}</code>
+          <span className="mx-2">·</span>
+          Dev only · import.meta.env.DEV
+        </footer>
+      )}
     </div>
   );
 }

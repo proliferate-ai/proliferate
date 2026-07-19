@@ -2,6 +2,7 @@ import type { PlaygroundScenarioSelection } from "#product/config/playground";
 import type { PlaygroundReplayState } from "#product/hooks/playground/lifecycle/use-replay-session";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { PlaygroundRecordingTranscript } from "#product/components/playground/transcript/PlaygroundRecordingTranscript";
+import { renderPlaygroundMarkdownTranscript } from "#product/components/playground/transcript/PlaygroundMarkdownTranscript";
 import { renderPlaygroundPlanTranscript } from "#product/components/playground/transcript/PlaygroundPlanTranscript";
 import { renderPlaygroundStatusTranscript } from "#product/components/playground/transcript/PlaygroundStatusTranscript";
 import { renderPlaygroundToolTranscript } from "#product/components/playground/transcript/PlaygroundToolTranscript";
@@ -37,6 +38,11 @@ export function PlaygroundTranscript({
   }
   if (scenario === "attachment-previews") {
     return <PlaygroundAttachmentTranscript />;
+  }
+
+  const markdownTranscript = renderPlaygroundMarkdownTranscript(scenario);
+  if (markdownTranscript) {
+    return markdownTranscript;
   }
 
   const planTranscript = renderPlaygroundPlanTranscript(scenario);
