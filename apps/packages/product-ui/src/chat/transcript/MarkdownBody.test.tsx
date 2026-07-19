@@ -70,6 +70,8 @@ describe("MarkdownBody presentation", () => {
     expect(html).toContain('data-markdown-code-block="true"');
     expect(html).toContain('data-markdown-table-shell="true"');
     expect(html).toContain('data-markdown-table-scroll="true"');
+    expect(html).toContain("overflow-x-auto overscroll-x-none");
+    expect(html).not.toContain("overscroll-x-contain");
   });
 
   it("keeps inline, fallback fenced, and highlighted code on the prose-size contract", () => {

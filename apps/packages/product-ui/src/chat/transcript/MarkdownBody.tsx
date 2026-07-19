@@ -163,7 +163,7 @@ const STATIC_MARKDOWN_COMPONENTS = {
       data-wide-markdown-block-kind="table"
     >
       <div
-        className="max-w-full overflow-x-auto overscroll-x-contain"
+        className="max-w-full overflow-x-auto overscroll-x-none"
         data-markdown-table-scroll="true"
       >
         {mdHtmlElement(

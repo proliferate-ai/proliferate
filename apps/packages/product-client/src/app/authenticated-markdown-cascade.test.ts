@@ -136,6 +136,7 @@ describe("authenticated Markdown stylesheet cascade", () => {
             clientWidth: tableScroller.clientWidth,
             scrollWidth: tableScroller.scrollWidth,
             overflowX: getComputedStyle(tableScroller).overflowX,
+            overscrollBehaviorX: getComputedStyle(tableScroller).overscrollBehaviorX,
           },
         };
       });
@@ -158,6 +159,7 @@ describe("authenticated Markdown stylesheet cascade", () => {
       expect(result.table.shellWidth).toBeLessThanOrEqual(result.table.rootWidth);
       expect(result.table.scrollWidth).toBeGreaterThan(result.table.clientWidth);
       expect(result.table.overflowX).toBe("auto");
+      expect(result.table.overscrollBehaviorX).toBe("none");
     } finally {
       await page.close();
     }
