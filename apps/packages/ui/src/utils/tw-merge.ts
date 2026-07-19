@@ -12,6 +12,7 @@ export const TEXT_SIZE_TOKEN_IDS = [
   "ui",
   "ui-sm",
   "composer",
+  "session-title",
   "title",
   "hero",
   "chat",

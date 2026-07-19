@@ -377,7 +377,7 @@ move upward when its controls appear.
 | Frontier sibling gap | `TURN_ITEM_GAP_CLASS` in `TranscriptTurnChrome.tsx` | `gap-4` (16px) |
 | Pending/materialized working-status frame | `renderWorkingTrailingStatus` in `TranscriptTurnChrome.tsx` | `flex h-6 items-center` |
 | Empty/completed assistant footer | `TurnAssistantActionRow` in `TranscriptTurnChrome.tsx` | `h-6` (24px) |
-| Message/status line-height | `--text-message--line-height` (aliases the appearance composer scale) | Dynamic; `20px` by default |
+| Message/status line-height | `--text-message--line-height` (aliases the appearance composer scale) | Dynamic; `21px` by default |
 
 Additional dependencies:
 

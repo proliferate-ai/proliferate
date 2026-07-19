@@ -1,4 +1,5 @@
 import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
+import { CHAT_COLUMN_CLASSNAME } from "@proliferate/product-ui/chat/ChatColumn";
 
 function AssistantMessageSkeleton() {
   return (
@@ -36,7 +37,7 @@ export function TranscriptSwitchingPlaceholder({
         data-chat-switching-placeholder
       >
         <div
-          className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 motion-safe:animate-pulse"
+          className={`${CHAT_COLUMN_CLASSNAME} flex flex-1 flex-col gap-6 motion-safe:animate-pulse`}
           aria-hidden="true"
         >
           <UserMessageSkeleton />

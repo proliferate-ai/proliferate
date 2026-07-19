@@ -16,6 +16,7 @@ import {
   CloudChatTranscriptState,
   type CloudChatTranscriptStateView,
 } from "./CloudChatTranscriptState";
+import { CHAT_COLUMN_CLASSNAME } from "./ChatColumn";
 
 export type {
   CloudChatHeaderActionView,
@@ -71,7 +72,7 @@ export function CloudChatSurface({
         />
       ) : (
         <div className="web-scrollbar min-h-0 flex-1 overflow-y-auto">
-          <div className="mx-auto flex w-full max-w-3xl flex-col px-6 py-6">
+          <div className={`${CHAT_COLUMN_CLASSNAME} flex flex-col px-6 py-6`}>
             <CloudChatTranscript
               rows={transcriptRows}
               emptyTitle={emptyTitle}
@@ -83,9 +84,9 @@ export function CloudChatSurface({
       )}
 
       <footer className="relative z-20 shrink-0 border-t border-border/40 py-4">
-        {/* Mirror the transcript column (mx-auto max-w-3xl px-6) so the composer
+        {/* Mirror the transcript column and gutter so the composer
             edges line up with the message text and both read as one column. */}
-        <div className="mx-auto w-full max-w-3xl px-6">
+        <div className={`${CHAT_COLUMN_CLASSNAME} px-6`}>
           <CloudChatComposer composer={composer} />
           {commandMessage ? (
             <p className="mt-2 text-xs text-muted-foreground">

@@ -7,7 +7,10 @@ import {
   resolvePlaygroundScenarioSelection,
   type ScenarioKey,
 } from "#product/config/playground";
-import { CHAT_COLUMN_CLASSNAME, CHAT_SURFACE_GUTTER_CLASSNAME } from "#product/config/chat-layout";
+import {
+  CHAT_COLUMN_CLASSNAME,
+  CHAT_SURFACE_GUTTER_CLASSNAME,
+} from "@proliferate/product-ui/chat/ChatColumn";
 import { useChatDockInset } from "#product/hooks/chat/ui/use-chat-dock-inset";
 import { useReplaySession } from "#product/hooks/playground/lifecycle/use-replay-session";
 

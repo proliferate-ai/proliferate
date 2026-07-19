@@ -8,7 +8,10 @@ import {
   TurnShell,
   resolvePendingPromptTrailingStatus,
 } from "#product/components/workspace/chat/transcript/TranscriptTurnChrome";
-import { CHAT_COLUMN_CLASSNAME, CHAT_SURFACE_GUTTER_CLASSNAME } from "#product/config/chat-layout";
+import {
+  CHAT_COLUMN_CLASSNAME,
+  CHAT_SURFACE_GUTTER_CLASSNAME,
+} from "@proliferate/product-ui/chat/ChatColumn";
 import { useChatLaunchIntentActions } from "#product/hooks/chat/workflows/use-chat-launch-intent-actions";
 import { resolveChatLaunchIntentView } from "#product/lib/domain/chat/launch/launch-intent";
 import { useChatLaunchIntentStore } from "#product/stores/chat/chat-launch-intent-store";

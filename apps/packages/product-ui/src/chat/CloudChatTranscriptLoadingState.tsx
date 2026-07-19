@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 import { SkeletonBlock } from "@proliferate/ui/primitives/Skeleton";
+import { CHAT_COLUMN_CLASSNAME } from "./ChatColumn";
 
 /** Stagger each row's shimmer sweep so the fake conversation reads top-down. */
 function rowDelay(row: number): CSSProperties {
@@ -9,7 +10,7 @@ function rowDelay(row: number): CSSProperties {
 export function CloudChatTranscriptLoadingState() {
   return (
     <div className="web-scrollbar min-h-0 flex-1 overflow-y-auto">
-      <div className="mx-auto flex w-full max-w-3xl flex-col px-6 py-6">
+      <div className={`${CHAT_COLUMN_CLASSNAME} flex flex-col px-6 py-6`}>
         <div
           role="status"
           aria-label="Loading session content"

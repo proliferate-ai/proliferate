@@ -12,11 +12,13 @@ import { ChatTranscriptRowProvider } from "./ChatContentSearchContext";
 import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
 import type { TranscriptVirtualizationMode } from "@proliferate/product-domain/chats/transcript/transcript-virtualization-config";
 import {
+  CHAT_COLUMN_CLASSNAME,
+  CHAT_SURFACE_GUTTER_CLASSNAME,
+} from "../ChatColumn";
+import {
   HISTORY_PREFETCH_TOP_THRESHOLD_PX,
   logHistoryPrefetchDecisionOnce,
   TRANSCRIPT_TOP_PADDING_PX,
-  DEFAULT_CHAT_COLUMN_CLASSNAME,
-  DEFAULT_CHAT_SURFACE_GUTTER_CLASSNAME,
   TranscriptHistoryLoadingRow,
   TranscriptScrollToBottomButton,
   resolveTranscriptBottomInsets,
@@ -53,8 +55,8 @@ export function FullTranscriptRowList({
   onLoadOlderHistory,
   onScrollSample,
   renderRow,
-  columnClassName = DEFAULT_CHAT_COLUMN_CLASSNAME,
-  gutterClassName = DEFAULT_CHAT_SURFACE_GUTTER_CLASSNAME,
+  columnClassName = CHAT_COLUMN_CLASSNAME,
+  gutterClassName = CHAT_SURFACE_GUTTER_CLASSNAME,
   fallbackReason,
   virtualizationMode,
   scrollHandleRef,

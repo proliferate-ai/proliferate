@@ -1,6 +1,3 @@
-export const CHAT_COLUMN_CLASSNAME = "mx-auto w-full max-w-3xl";
-export const CHAT_SURFACE_GUTTER_CLASSNAME = "px-4";
-
 export const CHAT_SCROLL_BASE_BOTTOM_PADDING_PX = 40;
 // True visual clearance between the pinned live tail and the dock's top edge.
 // Added on top of the measured dock height (which already includes the dock's

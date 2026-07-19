@@ -40,7 +40,7 @@ export function SidebarNavRow({
           The well matches the icon exactly — a fixed w-4 well leaves more
           slack around smaller icons, silently widening the icon→label gap on
           smaller-text surfaces (settings) vs the main sidebar. */}
-      <div className="flex w-[1.15em] shrink-0 items-center justify-center text-current [&>svg]:size-[1.15em] [&>svg]:shrink-0">
+      <div className="flex w-[var(--sidebar-primary-icon-size)] shrink-0 items-center justify-center text-current [&>svg]:size-[var(--sidebar-primary-icon-size)] [&>svg]:shrink-0">
         {icon}
       </div>
       <div className="flex min-w-0 flex-1 items-center text-current">

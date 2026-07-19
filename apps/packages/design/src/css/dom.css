@@ -12,22 +12,24 @@
       defaults MUST match that table's default preset — drift-locked by
       appearance-css-drift.test.ts in apps/desktop. -- */
 @theme {
-  --text-ui: 11px;                    /* rows, pills, controls, popover items, menus, card titles */
-  --text-ui--line-height: 16px;       /* font size + 5px */
-  --text-ui-sm: 10px;                 /* descriptions, secondary labels, notices, meta */
-  --text-ui-sm--line-height: 14px;    /* font size + 4px */
-  --text-composer: 12px;              /* composer input and message text */
-  --text-composer--line-height: 20px; /* font size + 8px */
-  --text-title: 18px;                 /* page/settings titles (SettingsPageHeader pairing) */
-  --text-title--line-height: 22px;    /* 1.2 × font size */
-  --text-hero: 25px;                  /* home hero heading */
-  --text-hero--line-height: 33px;     /* font size + 8px */
-  --text-sidebar-nav: 12px;           /* sidebar primary nav + repo-group labels (codex --text-base tier) */
-  --text-sidebar-nav--line-height: 17px;   /* font size + 5px */
-  --text-sidebar-row: 12px;           /* sidebar workspace rows + section headers (codex --text-sm tier) */
-  --text-sidebar-row--line-height: 17px;   /* font size + 5px */
-  --text-sidebar-brand: 15px;         /* sidebar brand wordmark */
-  --text-sidebar-brand--line-height: 22px; /* font size + 7px */
+  --text-ui: 12px;                    /* rows, pills, controls, popover items, menus, card titles */
+  --text-ui--line-height: 17px;       /* font size + 5px */
+  --text-ui-sm: 11px;                 /* descriptions, secondary labels, notices, meta */
+  --text-ui-sm--line-height: 15px;    /* font size + 4px */
+  --text-composer: 13px;              /* composer input and message text */
+  --text-composer--line-height: 21px; /* font size + 8px */
+  --text-session-title: 13px;         /* visible workspace session/chat titles */
+  --text-session-title--line-height: 21px;
+  --text-title: 19px;                 /* page/settings titles (SettingsPageHeader pairing) */
+  --text-title--line-height: 23px;    /* font size + 4px */
+  --text-hero: 26.5px;                /* home hero heading */
+  --text-hero--line-height: 34.5px;   /* font size + 8px */
+  --text-sidebar-nav: 13px;           /* sidebar primary nav + repo-group labels (codex --text-base tier) */
+  --text-sidebar-nav--line-height: 18px;   /* font size + 5px */
+  --text-sidebar-row: 13px;           /* sidebar workspace rows + section headers (codex --text-sm tier) */
+  --text-sidebar-row--line-height: 18px;   /* font size + 5px */
+  --text-sidebar-brand: 16px;         /* sidebar brand wordmark */
+  --text-sidebar-brand--line-height: 23px; /* font size + 7px */
 }
 
 :root {
@@ -54,10 +56,12 @@
   --color-composer-send-foreground: var(--color-background);
   --color-composer-shadow: var(--shadow-subtle);
   --color-composer-backdrop-filter: none;
+  /* One optical size for repo folders and all primary sidebar actions. */
+  --sidebar-primary-icon-size: 1.15em;
   /* Meta text (message timestamps, code-block language labels) tracks the
      chat font size — including runtime text-scale changes — but always sits
      one step below it. */
-  --text-chat-meta: calc(var(--text-chat, 10px) - 2px);
+  --text-chat-meta: calc(var(--text-chat, 11px) - 2px);
   /* Message body prose (assistant + user transcript bodies) reads at the
      composer size, so typed text and sent text match. Secondary chrome
      (tool/action rows, plans, work history) stays on --text-chat. Declared as

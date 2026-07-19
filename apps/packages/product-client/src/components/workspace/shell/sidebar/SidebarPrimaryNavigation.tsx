@@ -39,20 +39,20 @@ export function SidebarPrimaryNavigation({
     {
       id: "new-chat",
       active: homeActive,
-      icon: <SquarePen className="size-4" />,
+      icon: <SquarePen className="size-[var(--sidebar-primary-icon-size)]" />,
       label: "New chat",
       shortcutLabel: shortcutLabels.newChat,
     },
     {
       id: "workspaces",
       active: workspacesActive,
-      icon: <LayoutGrid className="size-4" />,
+      icon: <LayoutGrid className="size-[var(--sidebar-primary-icon-size)]" />,
       label: "Workspaces",
     },
     {
       id: "workflows",
       active: workflowsActive,
-      icon: <Zap className="size-4" />,
+      icon: <Zap className="size-[var(--sidebar-primary-icon-size)]" />,
       label: "Workflows",
       status: (
         <span className="font-mono text-ui-sm uppercase tracking-[0.06em] text-sidebar-muted-foreground">
@@ -63,7 +63,7 @@ export function SidebarPrimaryNavigation({
     {
       id: "support",
       active: supportActive,
-      icon: <LifeBuoy className="size-4" />,
+      icon: <LifeBuoy className="size-[var(--sidebar-primary-icon-size)]" />,
       label: "Support",
       shortcutLabel: shortcutLabels.support,
     },

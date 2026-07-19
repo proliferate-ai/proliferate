@@ -39,6 +39,8 @@ export interface UiFontScale {
   chat: TextTokenScale;
   /** Composer input text only. */
   composer: TextTokenScale;
+  /** Visible workspace session/chat titles. */
+  sessionTitle: TextTokenScale;
   lg: TextTokenScale;
   xl: TextTokenScale;
   /** Page/settings titles (SettingsPageHeader pairing). */
@@ -68,6 +70,8 @@ export type UiTextScaleCssVariables = {
   "--text-chat--line-height": string;
   "--text-composer": string;
   "--text-composer--line-height": string;
+  "--text-session-title": string;
+  "--text-session-title--line-height": string;
   "--text-lg": string;
   "--text-lg--line-height": string;
   "--text-xl": string;
@@ -101,53 +105,24 @@ export interface WindowZoomScale {
 export const DEFAULT_APPEARANCE_SIZE_ID: AppearanceSizeId = "default";
 export const DEFAULT_WINDOW_ZOOM_ID: WindowZoomId = "default";
 export const CHAT_LINE_HEIGHTS: Record<UiFontSizeId, string> = {
-  xxsmall: "16.5px",
-  xsmall: "17px",
-  small: "17.5px",
-  default: "18px",
-  large: "19px",
-  xlarge: "20px",
-  xxlarge: "21px",
-  xxxlarge: "22px",
+  xxsmall: "17px", xsmall: "17.5px", small: "18px", default: "19px",
+  large: "20px", xlarge: "21px", xxlarge: "22px", xxxlarge: "23px",
 };
 
 /**
- * Preset stepping for the semantic slots (shifted -2 from original ladder):
- * - chat deltas from default anchor: -2, -1.5, -1, 0, +1, +1.5, +2, +3 px
- *   (at the small end deltas taper by -1px then -0.5px).
- * - ui / uiSm / composer mirror the chat column's per-preset deltas.
- * - title / hero scale proportionally with the heading-class tokens
- *   (factor = xl px / 16px at each preset), rounded to 0.5px, so the
- *   heading-to-body visual ratio holds across presets.
- * - Line heights keep the default anchor's delta from the font size:
- *   ui +5px, uiSm +4px, composer +8px, title +4px, hero +8px.
- * - rem-based xs/sm/base/lg/xl continue their per-step decrements.
+ * Advances each persisted preset one rung (`small` = former `default`) and
+ * extends the upper bound. Session titles use Codex's 1:1 message-size ratio.
  */
 export const UI_FONT_SCALES: Record<UiFontSizeId, UiFontScale> = {
   xxsmall: {
-    xs: { fontSize: "0.375rem", lineHeight: "0.6875rem" },
-    sm: { fontSize: "0.4375rem", lineHeight: "0.8125rem" },
-    base: { fontSize: "0.46875rem", lineHeight: "0.78125rem" },
-    uiSm: { fontSize: "8.5px", lineHeight: "12.5px" },
-    ui: { fontSize: "9.5px", lineHeight: "14.5px" },
-    chat: { fontSize: "8.5px", lineHeight: CHAT_LINE_HEIGHTS.xxsmall },
-    composer: { fontSize: "10.5px", lineHeight: "18.5px" },
-    lg: { fontSize: "0.65625rem", lineHeight: "1.03125rem" },
-    xl: { fontSize: "0.90625rem", lineHeight: "1.3125rem" },
-    title: { fontSize: "15px", lineHeight: "19px" },
-    hero: { fontSize: "22px", lineHeight: "30px" },
-    sidebarNav: { fontSize: "10.5px", lineHeight: "15.5px" },
-    sidebarRow: { fontSize: "10.5px", lineHeight: "15.5px" },
-    sidebarBrand: { fontSize: "13.5px", lineHeight: "20.5px" },
-  },
-  xsmall: {
     xs: { fontSize: "0.40625rem", lineHeight: "0.6875rem" },
     sm: { fontSize: "0.46875rem", lineHeight: "0.8125rem" },
     base: { fontSize: "0.5rem", lineHeight: "0.8125rem" },
     uiSm: { fontSize: "9px", lineHeight: "13px" },
     ui: { fontSize: "10px", lineHeight: "15px" },
-    chat: { fontSize: "9px", lineHeight: CHAT_LINE_HEIGHTS.xsmall },
+    chat: { fontSize: "9px", lineHeight: CHAT_LINE_HEIGHTS.xxsmall },
     composer: { fontSize: "11px", lineHeight: "19px" },
+    sessionTitle: { fontSize: "11px", lineHeight: "19px" },
     lg: { fontSize: "0.6875rem", lineHeight: "1.0625rem" },
     xl: { fontSize: "0.9375rem", lineHeight: "1.375rem" },
     title: { fontSize: "16px", lineHeight: "20px" },
@@ -156,14 +131,15 @@ export const UI_FONT_SCALES: Record<UiFontSizeId, UiFontScale> = {
     sidebarRow: { fontSize: "11px", lineHeight: "16px" },
     sidebarBrand: { fontSize: "14px", lineHeight: "21px" },
   },
-  small: {
+  xsmall: {
     xs: { fontSize: "0.4375rem", lineHeight: "0.6875rem" },
     sm: { fontSize: "0.5rem", lineHeight: "0.8125rem" },
     base: { fontSize: "0.53125rem", lineHeight: "0.84375rem" },
     uiSm: { fontSize: "9.5px", lineHeight: "13.5px" },
     ui: { fontSize: "10.5px", lineHeight: "15.5px" },
-    chat: { fontSize: "9.5px", lineHeight: CHAT_LINE_HEIGHTS.small },
+    chat: { fontSize: "9.5px", lineHeight: CHAT_LINE_HEIGHTS.xsmall },
     composer: { fontSize: "11.5px", lineHeight: "19.5px" },
+    sessionTitle: { fontSize: "11.5px", lineHeight: "19.5px" },
     lg: { fontSize: "0.71875rem", lineHeight: "1.09375rem" },
     xl: { fontSize: "0.96875rem", lineHeight: "1.4375rem" },
     title: { fontSize: "17px", lineHeight: "21px" },
@@ -172,14 +148,15 @@ export const UI_FONT_SCALES: Record<UiFontSizeId, UiFontScale> = {
     sidebarRow: { fontSize: "11.5px", lineHeight: "16.5px" },
     sidebarBrand: { fontSize: "14.5px", lineHeight: "21.5px" },
   },
-  default: {
+  small: {
     xs: { fontSize: "0.4375rem", lineHeight: "0.6875rem" },
     sm: { fontSize: "0.5rem", lineHeight: "0.8125rem" },
     base: { fontSize: "0.5625rem", lineHeight: "0.875rem" },
     uiSm: { fontSize: "10px", lineHeight: "14px" },
     ui: { fontSize: "11px", lineHeight: "16px" },
-    chat: { fontSize: "10px", lineHeight: CHAT_LINE_HEIGHTS.default },
+    chat: { fontSize: "10px", lineHeight: CHAT_LINE_HEIGHTS.small },
     composer: { fontSize: "12px", lineHeight: "20px" },
+    sessionTitle: { fontSize: "12px", lineHeight: "20px" },
     lg: { fontSize: "0.75rem", lineHeight: "1.125rem" },
     xl: { fontSize: "1rem", lineHeight: "1.5rem" },
     title: { fontSize: "18px", lineHeight: "22px" },
@@ -188,14 +165,15 @@ export const UI_FONT_SCALES: Record<UiFontSizeId, UiFontScale> = {
     sidebarRow: { fontSize: "12px", lineHeight: "17px" },
     sidebarBrand: { fontSize: "15px", lineHeight: "22px" },
   },
-  large: {
+  default: {
     xs: { fontSize: "0.46875rem", lineHeight: "0.75rem" },
     sm: { fontSize: "0.5625rem", lineHeight: "0.9375rem" },
     base: { fontSize: "0.625rem", lineHeight: "0.9375rem" },
     uiSm: { fontSize: "11px", lineHeight: "15px" },
     ui: { fontSize: "12px", lineHeight: "17px" },
-    chat: { fontSize: "11px", lineHeight: CHAT_LINE_HEIGHTS.large },
+    chat: { fontSize: "11px", lineHeight: CHAT_LINE_HEIGHTS.default },
     composer: { fontSize: "13px", lineHeight: "21px" },
+    sessionTitle: { fontSize: "13px", lineHeight: "21px" },
     lg: { fontSize: "0.8125rem", lineHeight: "1.1875rem" },
     xl: { fontSize: "1.0625rem", lineHeight: "1.625rem" },
     title: { fontSize: "19px", lineHeight: "23px" },
@@ -204,14 +182,15 @@ export const UI_FONT_SCALES: Record<UiFontSizeId, UiFontScale> = {
     sidebarRow: { fontSize: "13px", lineHeight: "18px" },
     sidebarBrand: { fontSize: "16px", lineHeight: "23px" },
   },
-  xlarge: {
+  large: {
     xs: { fontSize: "0.5rem", lineHeight: "0.75rem" },
     sm: { fontSize: "0.625rem", lineHeight: "1rem" },
     base: { fontSize: "0.6875rem", lineHeight: "1rem" },
     uiSm: { fontSize: "12px", lineHeight: "16px" },
     ui: { fontSize: "13px", lineHeight: "18px" },
-    chat: { fontSize: "12px", lineHeight: CHAT_LINE_HEIGHTS.xlarge },
+    chat: { fontSize: "12px", lineHeight: CHAT_LINE_HEIGHTS.large },
     composer: { fontSize: "14px", lineHeight: "22px" },
+    sessionTitle: { fontSize: "14px", lineHeight: "22px" },
     lg: { fontSize: "0.875rem", lineHeight: "1.25rem" },
     xl: { fontSize: "1.125rem", lineHeight: "1.75rem" },
     title: { fontSize: "20px", lineHeight: "24px" },
@@ -220,14 +199,15 @@ export const UI_FONT_SCALES: Record<UiFontSizeId, UiFontScale> = {
     sidebarRow: { fontSize: "14px", lineHeight: "19px" },
     sidebarBrand: { fontSize: "17px", lineHeight: "24px" },
   },
-  xxlarge: {
+  xlarge: {
     xs: { fontSize: "0.5625rem", lineHeight: "0.875rem" },
     sm: { fontSize: "0.6875rem", lineHeight: "1.0625rem" },
     base: { fontSize: "0.75rem", lineHeight: "1.125rem" },
     uiSm: { fontSize: "13px", lineHeight: "17px" },
     ui: { fontSize: "14px", lineHeight: "19px" },
-    chat: { fontSize: "13px", lineHeight: CHAT_LINE_HEIGHTS.xxlarge },
+    chat: { fontSize: "13px", lineHeight: CHAT_LINE_HEIGHTS.xlarge },
     composer: { fontSize: "15px", lineHeight: "23px" },
+    sessionTitle: { fontSize: "15px", lineHeight: "23px" },
     lg: { fontSize: "0.9375rem", lineHeight: "1.375rem" },
     xl: { fontSize: "1.1875rem", lineHeight: "1.875rem" },
     title: { fontSize: "21px", lineHeight: "25px" },
@@ -236,14 +216,15 @@ export const UI_FONT_SCALES: Record<UiFontSizeId, UiFontScale> = {
     sidebarRow: { fontSize: "15px", lineHeight: "20px" },
     sidebarBrand: { fontSize: "18px", lineHeight: "25px" },
   },
-  xxxlarge: {
+  xxlarge: {
     xs: { fontSize: "0.625rem", lineHeight: "1rem" },
     sm: { fontSize: "0.75rem", lineHeight: "1.125rem" },
     base: { fontSize: "0.8125rem", lineHeight: "1.25rem" },
     uiSm: { fontSize: "14px", lineHeight: "18px" },
     ui: { fontSize: "15px", lineHeight: "20px" },
-    chat: { fontSize: "14px", lineHeight: CHAT_LINE_HEIGHTS.xxxlarge },
+    chat: { fontSize: "14px", lineHeight: CHAT_LINE_HEIGHTS.xxlarge },
     composer: { fontSize: "16px", lineHeight: "24px" },
+    sessionTitle: { fontSize: "16px", lineHeight: "24px" },
     lg: { fontSize: "1rem", lineHeight: "1.5rem" },
     xl: { fontSize: "1.25rem", lineHeight: "2rem" },
     title: { fontSize: "22px", lineHeight: "26px" },
@@ -252,18 +233,27 @@ export const UI_FONT_SCALES: Record<UiFontSizeId, UiFontScale> = {
     sidebarRow: { fontSize: "16px", lineHeight: "21px" },
     sidebarBrand: { fontSize: "19px", lineHeight: "26px" },
   },
+  xxxlarge: {
+    xs: { fontSize: "0.6875rem", lineHeight: "1.125rem" },
+    sm: { fontSize: "0.8125rem", lineHeight: "1.1875rem" },
+    base: { fontSize: "0.875rem", lineHeight: "1.375rem" },
+    uiSm: { fontSize: "15px", lineHeight: "19px" },
+    ui: { fontSize: "16px", lineHeight: "21px" },
+    chat: { fontSize: "15px", lineHeight: CHAT_LINE_HEIGHTS.xxxlarge },
+    composer: { fontSize: "17px", lineHeight: "25px" },
+    sessionTitle: { fontSize: "17px", lineHeight: "25px" },
+    lg: { fontSize: "1.0625rem", lineHeight: "1.625rem" },
+    xl: { fontSize: "1.3125rem", lineHeight: "2.125rem" },
+    title: { fontSize: "23px", lineHeight: "27px" },
+    hero: { fontSize: "32.5px", lineHeight: "40.5px" },
+    sidebarNav: { fontSize: "17px", lineHeight: "22px" },
+    sidebarRow: { fontSize: "17px", lineHeight: "22px" },
+    sidebarBrand: { fontSize: "20px", lineHeight: "27px" },
+  },
 };
 
 export const READABLE_CODE_FONT_SCALES: Record<ReadableCodeFontSizeId, ReadableCodeFontScale> = {
   xxsmall: {
-    monacoFontSize: 7.5,
-    monacoLineHeight: 14,
-    diffsFontSize: "7.5px",
-    diffsLineHeight: "calc(var(--diffs-font-size) * 1.8)",
-    codeFontSize: "0.46875rem",
-    codeLineHeight: "1.625",
-  },
-  xsmall: {
     monacoFontSize: 8,
     monacoLineHeight: 14.5,
     diffsFontSize: "8px",
@@ -271,7 +261,7 @@ export const READABLE_CODE_FONT_SCALES: Record<ReadableCodeFontSizeId, ReadableC
     codeFontSize: "0.5rem",
     codeLineHeight: "1.625",
   },
-  small: {
+  xsmall: {
     monacoFontSize: 8.5,
     monacoLineHeight: 15.5,
     diffsFontSize: "8.5px",
@@ -279,7 +269,7 @@ export const READABLE_CODE_FONT_SCALES: Record<ReadableCodeFontSizeId, ReadableC
     codeFontSize: "0.53125rem",
     codeLineHeight: "1.625",
   },
-  default: {
+  small: {
     monacoFontSize: 9,
     monacoLineHeight: 16,
     diffsFontSize: "9px",
@@ -287,7 +277,7 @@ export const READABLE_CODE_FONT_SCALES: Record<ReadableCodeFontSizeId, ReadableC
     codeFontSize: "0.5625rem",
     codeLineHeight: "1.625",
   },
-  large: {
+  default: {
     monacoFontSize: 10,
     monacoLineHeight: 17,
     diffsFontSize: "10px",
@@ -295,7 +285,7 @@ export const READABLE_CODE_FONT_SCALES: Record<ReadableCodeFontSizeId, ReadableC
     codeFontSize: "0.625rem",
     codeLineHeight: "1.625",
   },
-  xlarge: {
+  large: {
     monacoFontSize: 11,
     monacoLineHeight: 18,
     diffsFontSize: "11px",
@@ -303,7 +293,7 @@ export const READABLE_CODE_FONT_SCALES: Record<ReadableCodeFontSizeId, ReadableC
     codeFontSize: "0.6875rem",
     codeLineHeight: "1.625",
   },
-  xxlarge: {
+  xlarge: {
     monacoFontSize: 12,
     monacoLineHeight: 20,
     diffsFontSize: "12px",
@@ -311,12 +301,20 @@ export const READABLE_CODE_FONT_SCALES: Record<ReadableCodeFontSizeId, ReadableC
     codeFontSize: "0.75rem",
     codeLineHeight: "1.625",
   },
-  xxxlarge: {
+  xxlarge: {
     monacoFontSize: 13,
     monacoLineHeight: 21,
     diffsFontSize: "13px",
     diffsLineHeight: "calc(var(--diffs-font-size) * 1.8)",
     codeFontSize: "0.8125rem",
+    codeLineHeight: "1.625",
+  },
+  xxxlarge: {
+    monacoFontSize: 14,
+    monacoLineHeight: 22,
+    diffsFontSize: "14px",
+    diffsLineHeight: "calc(var(--diffs-font-size) * 1.8)",
+    codeFontSize: "0.875rem",
     codeLineHeight: "1.625",
   },
 };
@@ -365,6 +363,8 @@ export function buildUiTextScaleCssVariables(scale: UiFontScale): UiTextScaleCss
     "--text-chat--line-height": scale.chat.lineHeight,
     "--text-composer": scale.composer.fontSize,
     "--text-composer--line-height": scale.composer.lineHeight,
+    "--text-session-title": scale.sessionTitle.fontSize,
+    "--text-session-title--line-height": scale.sessionTitle.lineHeight,
     "--text-lg": scale.lg.fontSize,
     "--text-lg--line-height": scale.lg.lineHeight,
     "--text-xl": scale.xl.fontSize,

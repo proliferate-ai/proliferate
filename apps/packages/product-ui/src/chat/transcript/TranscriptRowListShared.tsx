@@ -30,9 +30,6 @@ export const GLUE_STABLE_FRAMES = 3;
 export const GLUE_MAX_FRAMES = 12;
 export const HISTORY_PREFETCH_TOP_THRESHOLD_PX = 480;
 export const HISTORY_LOADING_ROW_KEY = "history-loader";
-export const DEFAULT_CHAT_COLUMN_CLASSNAME = "mx-auto w-full max-w-3xl";
-export const DEFAULT_CHAT_SURFACE_GUTTER_CLASSNAME = "px-4";
-
 const ESTIMATED_TURN_HEIGHT_PX = 360;
 const ESTIMATED_HISTORY_LOADING_ROW_HEIGHT_PX = 32;
 // Goal lifecycle rows are quiet single-line system rows, not turn content —
