@@ -39,6 +39,11 @@ interface WorkspaceQueryOptions {
 interface WorkspaceMutationInput {
   workspaceId?: string | null;
 }
+type SetSessionConfigOptionMutationInput = WorkspaceMutationInput & {
+  sessionId: string;
+  request: SetSessionConfigOptionRequest;
+  requestOptions?: AnyHarnessRequestOptions;
+};
 
 type TimedWorkspaceQueryOptions = WorkspaceQueryOptions & AnyHarnessQueryTimingOptions;
 
@@ -269,21 +274,11 @@ export function useSetSessionConfigOptionMutation(options?: { workspaceId?: stri
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (
-      input: WorkspaceMutationInput & {
-        sessionId: string;
-        request: SetSessionConfigOptionRequest;
-        requestOptions?: AnyHarnessRequestOptions;
-      },
-    ) => {
+    mutationFn: async (input: SetSessionConfigOptionMutationInput) => {
       const workspaceId = input.workspaceId ?? options?.workspaceId ?? workspace.workspaceId;
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
       const client = getAnyHarnessClient(resolved.connection);
-      return client.sessions.setConfigOption(
-        input.sessionId,
-        input.request,
-        input.requestOptions,
-      );
+      return client.sessions.setConfigOption(input.sessionId, input.request, input.requestOptions);
     },
     onSuccess: async (_response, variables) => {
       const workspaceId = variables.workspaceId ?? options?.workspaceId ?? workspace.workspaceId;
