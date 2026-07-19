@@ -127,6 +127,8 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
               <span
                 className="workspace-shell-tab__label min-w-0 flex-1 overflow-hidden whitespace-nowrap text-left"
                 style={{
+                  fontSize: "var(--text-ui-sm)",
+                  lineHeight: "var(--text-ui-sm--line-height)",
                   WebkitMaskImage: titleMask,
                   maskImage: titleMask,
                 }}

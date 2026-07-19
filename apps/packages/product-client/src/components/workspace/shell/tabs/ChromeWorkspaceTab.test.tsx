@@ -23,6 +23,9 @@ describe("ChromeWorkspaceTab", () => {
     );
 
     expect(screen.getByRole("tab", { name: "Session one" })).toBeTruthy();
+    const sessionTitle = screen.getByText("Session one");
+    expect(sessionTitle.style.fontSize).toBe("var(--text-ui-sm)");
+    expect(sessionTitle.style.lineHeight).toBe("var(--text-ui-sm--line-height)");
     expect(screen.getByText("⌘1").className).toContain("opacity-100");
   });
 });

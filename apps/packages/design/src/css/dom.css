@@ -18,8 +18,8 @@
   --text-ui-sm--line-height: 15px;    /* font size + 4px */
   --text-composer: 13px;              /* composer input and message text */
   --text-composer--line-height: 21px; /* font size + 8px */
-  --text-session-title: 14px;         /* visible workspace session/chat titles */
-  --text-session-title--line-height: 22px;
+  --text-workspace-title: 14px;       /* workspace name in the global header */
+  --text-workspace-title--line-height: 22px;
   --text-title: 19px;                 /* page/settings titles (SettingsPageHeader pairing) */
   --text-title--line-height: 23px;    /* font size + 4px */
   --text-hero: 26.5px;                /* home hero heading */

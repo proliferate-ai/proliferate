@@ -39,8 +39,8 @@ export interface UiFontScale {
   chat: TextTokenScale;
   /** Composer input text only. */
   composer: TextTokenScale;
-  /** Visible workspace session/chat titles. */
-  sessionTitle: TextTokenScale;
+  /** Workspace name in the global header. */
+  workspaceTitle: TextTokenScale;
   lg: TextTokenScale;
   xl: TextTokenScale;
   /** Page/settings titles (SettingsPageHeader pairing). */
@@ -70,8 +70,8 @@ export type UiTextScaleCssVariables = {
   "--text-chat--line-height": string;
   "--text-composer": string;
   "--text-composer--line-height": string;
-  "--text-session-title": string;
-  "--text-session-title--line-height": string;
+  "--text-workspace-title": string;
+  "--text-workspace-title--line-height": string;
   "--text-lg": string;
   "--text-lg--line-height": string;
   "--text-xl": string;
@@ -109,7 +109,7 @@ export const CHAT_LINE_HEIGHTS: Record<UiFontSizeId, string> = {
   large: "20px", xlarge: "21px", xxlarge: "22px", xxxlarge: "23px",
 };
 
-/** Every session-title rung stays 1px above message/composer after preset advancement. */
+/** Every workspace-title rung stays 1px above message/composer after preset advancement. */
 export const UI_FONT_SCALES: Record<UiFontSizeId, UiFontScale> = {
   xxsmall: {
     xs: { fontSize: "0.40625rem", lineHeight: "0.6875rem" },
@@ -119,7 +119,7 @@ export const UI_FONT_SCALES: Record<UiFontSizeId, UiFontScale> = {
     ui: { fontSize: "10px", lineHeight: "15px" },
     chat: { fontSize: "9px", lineHeight: CHAT_LINE_HEIGHTS.xxsmall },
     composer: { fontSize: "11px", lineHeight: "19px" },
-    sessionTitle: { fontSize: "12px", lineHeight: "20px" },
+    workspaceTitle: { fontSize: "12px", lineHeight: "20px" },
     lg: { fontSize: "0.6875rem", lineHeight: "1.0625rem" },
     xl: { fontSize: "0.9375rem", lineHeight: "1.375rem" },
     title: { fontSize: "16px", lineHeight: "20px" },
@@ -136,7 +136,7 @@ export const UI_FONT_SCALES: Record<UiFontSizeId, UiFontScale> = {
     ui: { fontSize: "10.5px", lineHeight: "15.5px" },
     chat: { fontSize: "9.5px", lineHeight: CHAT_LINE_HEIGHTS.xsmall },
     composer: { fontSize: "11.5px", lineHeight: "19.5px" },
-    sessionTitle: { fontSize: "12.5px", lineHeight: "20.5px" },
+    workspaceTitle: { fontSize: "12.5px", lineHeight: "20.5px" },
     lg: { fontSize: "0.71875rem", lineHeight: "1.09375rem" },
     xl: { fontSize: "0.96875rem", lineHeight: "1.4375rem" },
     title: { fontSize: "17px", lineHeight: "21px" },
@@ -153,7 +153,7 @@ export const UI_FONT_SCALES: Record<UiFontSizeId, UiFontScale> = {
     ui: { fontSize: "11px", lineHeight: "16px" },
     chat: { fontSize: "10px", lineHeight: CHAT_LINE_HEIGHTS.small },
     composer: { fontSize: "12px", lineHeight: "20px" },
-    sessionTitle: { fontSize: "13px", lineHeight: "21px" },
+    workspaceTitle: { fontSize: "13px", lineHeight: "21px" },
     lg: { fontSize: "0.75rem", lineHeight: "1.125rem" },
     xl: { fontSize: "1rem", lineHeight: "1.5rem" },
     title: { fontSize: "18px", lineHeight: "22px" },
@@ -170,7 +170,7 @@ export const UI_FONT_SCALES: Record<UiFontSizeId, UiFontScale> = {
     ui: { fontSize: "12px", lineHeight: "17px" },
     chat: { fontSize: "11px", lineHeight: CHAT_LINE_HEIGHTS.default },
     composer: { fontSize: "13px", lineHeight: "21px" },
-    sessionTitle: { fontSize: "14px", lineHeight: "22px" },
+    workspaceTitle: { fontSize: "14px", lineHeight: "22px" },
     lg: { fontSize: "0.8125rem", lineHeight: "1.1875rem" },
     xl: { fontSize: "1.0625rem", lineHeight: "1.625rem" },
     title: { fontSize: "19px", lineHeight: "23px" },
@@ -187,7 +187,7 @@ export const UI_FONT_SCALES: Record<UiFontSizeId, UiFontScale> = {
     ui: { fontSize: "13px", lineHeight: "18px" },
     chat: { fontSize: "12px", lineHeight: CHAT_LINE_HEIGHTS.large },
     composer: { fontSize: "14px", lineHeight: "22px" },
-    sessionTitle: { fontSize: "15px", lineHeight: "23px" },
+    workspaceTitle: { fontSize: "15px", lineHeight: "23px" },
     lg: { fontSize: "0.875rem", lineHeight: "1.25rem" },
     xl: { fontSize: "1.125rem", lineHeight: "1.75rem" },
     title: { fontSize: "20px", lineHeight: "24px" },
@@ -204,7 +204,7 @@ export const UI_FONT_SCALES: Record<UiFontSizeId, UiFontScale> = {
     ui: { fontSize: "14px", lineHeight: "19px" },
     chat: { fontSize: "13px", lineHeight: CHAT_LINE_HEIGHTS.xlarge },
     composer: { fontSize: "15px", lineHeight: "23px" },
-    sessionTitle: { fontSize: "16px", lineHeight: "24px" },
+    workspaceTitle: { fontSize: "16px", lineHeight: "24px" },
     lg: { fontSize: "0.9375rem", lineHeight: "1.375rem" },
     xl: { fontSize: "1.1875rem", lineHeight: "1.875rem" },
     title: { fontSize: "21px", lineHeight: "25px" },
@@ -221,7 +221,7 @@ export const UI_FONT_SCALES: Record<UiFontSizeId, UiFontScale> = {
     ui: { fontSize: "15px", lineHeight: "20px" },
     chat: { fontSize: "14px", lineHeight: CHAT_LINE_HEIGHTS.xxlarge },
     composer: { fontSize: "16px", lineHeight: "24px" },
-    sessionTitle: { fontSize: "17px", lineHeight: "25px" },
+    workspaceTitle: { fontSize: "17px", lineHeight: "25px" },
     lg: { fontSize: "1rem", lineHeight: "1.5rem" },
     xl: { fontSize: "1.25rem", lineHeight: "2rem" },
     title: { fontSize: "22px", lineHeight: "26px" },
@@ -238,7 +238,7 @@ export const UI_FONT_SCALES: Record<UiFontSizeId, UiFontScale> = {
     ui: { fontSize: "16px", lineHeight: "21px" },
     chat: { fontSize: "15px", lineHeight: CHAT_LINE_HEIGHTS.xxxlarge },
     composer: { fontSize: "17px", lineHeight: "25px" },
-    sessionTitle: { fontSize: "18px", lineHeight: "26px" },
+    workspaceTitle: { fontSize: "18px", lineHeight: "26px" },
     lg: { fontSize: "1.0625rem", lineHeight: "1.625rem" },
     xl: { fontSize: "1.3125rem", lineHeight: "2.125rem" },
     title: { fontSize: "23px", lineHeight: "27px" },
@@ -360,8 +360,8 @@ export function buildUiTextScaleCssVariables(scale: UiFontScale): UiTextScaleCss
     "--text-chat--line-height": scale.chat.lineHeight,
     "--text-composer": scale.composer.fontSize,
     "--text-composer--line-height": scale.composer.lineHeight,
-    "--text-session-title": scale.sessionTitle.fontSize,
-    "--text-session-title--line-height": scale.sessionTitle.lineHeight,
+    "--text-workspace-title": scale.workspaceTitle.fontSize,
+    "--text-workspace-title--line-height": scale.workspaceTitle.lineHeight,
     "--text-lg": scale.lg.fontSize,
     "--text-lg--line-height": scale.lg.lineHeight,
     "--text-xl": scale.xl.fontSize,

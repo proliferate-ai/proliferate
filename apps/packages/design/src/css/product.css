@@ -59,7 +59,7 @@
      --text-* token on :root at boot from UI_FONT_SCALES (appearance.ts), so
      these MUST equal that table's "default" preset — drift-locked by
      appearance-css-drift.test.ts in apps/desktop. The semantic tokens
-     (--text-ui, --text-ui-sm, --text-composer, --text-session-title,
+     (--text-ui, --text-ui-sm, --text-composer, --text-workspace-title,
      --text-title, --text-hero)
      are declared in dom.css, which this file imports. */
   --text-xs: 0.46875rem;              /* 7.5px — badges, counters */
@@ -1790,16 +1790,6 @@ body {
 .workspace-shell-tab[data-active="true"] .workspace-shell-tab__surface {
   background-color: var(--workspace-shell-tab-active-background);
   border-color: var(--workspace-shell-tab-active-border);
-}
-
-.workspace-shell-tab__button {
-  font-size: var(--text-ui-sm);
-  line-height: var(--text-ui-sm--line-height);
-}
-
-.workspace-shell-tab__label {
-  font-size: var(--text-session-title);
-  line-height: var(--text-session-title--line-height);
 }
 
 .workspace-shell-tab__icon {

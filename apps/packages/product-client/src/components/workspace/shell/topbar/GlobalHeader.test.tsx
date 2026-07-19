@@ -88,6 +88,14 @@ afterEach(() => {
 });
 
 describe("GlobalHeader", () => {
+  it("applies the workspace-title scale to the workspace name", () => {
+    renderHeader();
+
+    const workspaceTitle = screen.getByTitle("repo");
+    expect(workspaceTitle.style.fontSize).toBe("var(--text-workspace-title)");
+    expect(workspaceTitle.style.lineHeight).toBe("var(--text-workspace-title--line-height)");
+  });
+
   it("does not offer a native open action without a Desktop file bridge", () => {
     renderHeader();
 
