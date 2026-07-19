@@ -16,10 +16,10 @@ export function PlaygroundLoadingStates() {
   return (
     <div className="flex flex-col gap-8" data-playground-loading-states>
       <section className="grid gap-4 md:grid-cols-2">
-        <div className="h-[22rem] overflow-hidden rounded-md border border-border">
+        <div className="overflow-hidden rounded-md border border-border" style={{ height: "22rem" }}>
           <TranscriptSwitchingPlaceholder label="Desktop switching alignment" />
         </div>
-        <div className="flex h-[22rem] flex-col overflow-hidden rounded-md border border-border">
+        <div className="flex flex-col overflow-hidden rounded-md border border-border" style={{ height: "22rem" }}>
           <CloudChatSurface
             header={{
               workspaceLabel: "Typography",
