@@ -150,7 +150,11 @@ export interface CfnBootstrapDiagnostic {
     | "captured"
     | "instance_not_found"
     | "ssm_not_online"
+    | "send_command_target_or_permission_unavailable"
+    | "send_command_unauthorized"
     | "send_command_failed"
+    | "command_poll_unauthorized"
+    | "command_poll_failed"
     | "command_poll_timeout"
     | "command_terminal"
     | "no_allowlisted_observations";
@@ -1085,6 +1089,23 @@ function cfnStackAbsentError(error: unknown): boolean {
   return /(?:does not exist|not exist|not found)/i.test(message);
 }
 
+function ssmAuthorizationError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /(?:AccessDenied|UnauthorizedOperation|not authorized to perform)/i.test(message);
+}
+
+function ssmTargetNotReadyError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /(?:InvalidInstanceId|TargetNotConnected|not (?:in a valid state|connected|online|registered)|does not exist in the current account)/i
+    .test(message);
+}
+
+function ssmCommandPollRetryableError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /(?:InvocationDoesNotExist|Throttl|TooManyRequests|InternalServerError|ServiceUnavailable|RequestTimeout)/i
+    .test(message);
+}
+
 /**
  * Parses the bounded `describe-stack-events` projection used when a failed
  * EC2 resource has no `describe-stack-resource` physical id. CloudFormation's
@@ -1212,71 +1233,70 @@ export async function captureCfnBootstrapDiagnostic(input: {
   const instanceIdHash = createHash("sha256").update(instanceId).digest("hex");
 
   const deadline = now() + pollTimeoutMs;
-  let online = false;
+  let commandId = "";
+  let sendUnavailableDetail: CfnBootstrapDiagnostic["detail"] = "ssm_not_online";
   do {
     try {
-      const ping = (
+      const candidate = (
         await exec.run(
           [
             "ssm",
-            "describe-instance-information",
-            "--filters",
-            `Key=InstanceIds,Values=${instanceId}`,
+            "send-command",
+            "--instance-ids",
+            instanceId,
+            "--document-name",
+            "AWS-RunShellScript",
+            "--timeout-seconds",
+            String(CFN_DIAGNOSTIC_COMMAND_TIMEOUT_SECONDS),
+            "--parameters",
+            JSON.stringify({ commands: [CFN_DIAGNOSTIC_COMMAND] }),
             "--region",
             region,
             "--query",
-            "InstanceInformationList[0].PingStatus",
+            "Command.CommandId",
             "--output",
             "text",
           ],
           { timeoutMs: 15_000 },
         )
       ).trim();
-      if (ping === "Online") {
-        online = true;
-        break;
+      if (!candidate || candidate === "None") {
+        return emptyCfnBootstrapDiagnostic(
+          stackNameHash,
+          instanceIdHash,
+          "ssm_unavailable",
+          "send_command_failed",
+        );
       }
-    } catch {
-      // Keep polling until the shared deadline. The final artifact records only
-      // the fixed ssm_not_online code, never raw provider errors.
+      commandId = candidate;
+      break;
+    } catch (error) {
+      if (ssmAuthorizationError(error)) {
+        return emptyCfnBootstrapDiagnostic(
+          stackNameHash,
+          instanceIdHash,
+          "ssm_unavailable",
+          "send_command_unauthorized",
+        );
+      }
+      if (!ssmTargetNotReadyError(error)) {
+        return emptyCfnBootstrapDiagnostic(
+          stackNameHash,
+          instanceIdHash,
+          "ssm_unavailable",
+          "send_command_failed",
+        );
+      }
+      const message = error instanceof Error ? error.message : String(error);
+      if (/InvalidInstanceId/i.test(message)) {
+        sendUnavailableDetail = "send_command_target_or_permission_unavailable";
+      }
     }
     if (now() >= deadline) break;
     await sleepFn(pollIntervalMs);
   } while (now() < deadline);
-  if (!online) {
-    return emptyCfnBootstrapDiagnostic(stackNameHash, instanceIdHash, "ssm_unavailable", "ssm_not_online");
-  }
-
-  let commandId: string;
-  try {
-    commandId = (
-      await exec.run(
-        [
-          "ssm",
-          "send-command",
-          "--instance-ids",
-          instanceId,
-          "--document-name",
-          "AWS-RunShellScript",
-          "--timeout-seconds",
-          String(CFN_DIAGNOSTIC_COMMAND_TIMEOUT_SECONDS),
-          "--parameters",
-          JSON.stringify({ commands: [CFN_DIAGNOSTIC_COMMAND] }),
-          "--region",
-          region,
-          "--query",
-          "Command.CommandId",
-          "--output",
-          "text",
-        ],
-        { timeoutMs: 15_000 },
-      )
-    ).trim();
-  } catch {
-    commandId = "";
-  }
-  if (!commandId || commandId === "None") {
-    return emptyCfnBootstrapDiagnostic(stackNameHash, instanceIdHash, "ssm_unavailable", "send_command_failed");
+  if (!commandId) {
+    return emptyCfnBootstrapDiagnostic(stackNameHash, instanceIdHash, "ssm_unavailable", sendUnavailableDetail);
   }
 
   let lastStatus = "Pending";
@@ -1299,8 +1319,22 @@ export async function captureCfnBootstrapDiagnostic(input: {
         ],
         { timeoutMs: 15_000 },
       );
-    } catch {
-      continue;
+    } catch (error) {
+      if (ssmAuthorizationError(error)) {
+        return emptyCfnBootstrapDiagnostic(
+          stackNameHash,
+          instanceIdHash,
+          "ssm_unavailable",
+          "command_poll_unauthorized",
+        );
+      }
+      if (ssmCommandPollRetryableError(error)) continue;
+      return emptyCfnBootstrapDiagnostic(
+        stackNameHash,
+        instanceIdHash,
+        "command_failed",
+        "command_poll_failed",
+      );
     }
     let parsed: { Status?: unknown; StandardOutputContent?: unknown };
     try {
