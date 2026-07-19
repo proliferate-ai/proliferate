@@ -63,7 +63,7 @@ function TechnicalDetails({
 }) {
   return (
     <details className="border-t border-border/50 pt-3 text-xs text-muted-foreground">
-      <summary className="w-fit cursor-pointer rounded-sm py-1 pr-1 text-xs outline-none transition-colors marker:text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background">
+      <summary className="w-fit cursor-pointer rounded-sm py-1 pr-1 text-xs outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background">
         Technical details
       </summary>
       <dl className="mt-3 space-y-3 border-l border-border/50 pl-3 text-[11px] leading-relaxed">
@@ -74,12 +74,12 @@ function TechnicalDetails({
         <div>
           <dt className="font-medium text-foreground/90">Component stack</dt>
           <dd>
-            <pre className="mt-1 max-h-28 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed">
+            <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed">
               {details.componentStack}
             </pre>
           </dd>
         </div>
-        <div className="grid grid-cols-[4rem_minmax(0,1fr)] gap-x-3 gap-y-1">
+        <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1">
           <dt className="text-foreground/90">App</dt>
           <dd className="break-words">{details.identity.app}</dd>
           <dt className="text-foreground/90">Version</dt>
@@ -167,10 +167,10 @@ export function AppErrorRecoverySurface({
     >
       <div className="w-full max-w-lg space-y-5">
         <header className="space-y-2">
-          <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
             Proliferate recovery
           </p>
-          <h1 className="text-2xl font-semibold leading-tight tracking-[-0.02em]">
+          <h1 className="text-2xl font-semibold leading-tight tracking-tight">
             The app needs a quick reload
           </h1>
           <p className="text-sm leading-relaxed text-muted-foreground">
@@ -218,7 +218,7 @@ export function AppErrorRecoverySurface({
             variant="unstyled"
             size="unstyled"
             onClick={handleCopyDetails}
-            className="rounded-sm text-xs text-muted-foreground underline decoration-border underline-offset-4 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            className="rounded-sm text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
             {copyState === "copied" ? "Copied" : "Copy details"}
           </Button>
@@ -228,7 +228,7 @@ export function AppErrorRecoverySurface({
               variant="unstyled"
               size="unstyled"
               onClick={handleContactSupport}
-              className="rounded-sm text-xs text-muted-foreground underline decoration-border underline-offset-4 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+              className="rounded-sm text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             >
               Contact support
             </Button>
