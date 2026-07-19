@@ -633,6 +633,7 @@ test("create failure: registered retention captures bounded SSM evidence before 
   const runDir = await mkdtemp(path.join(tmpdir(), "selfhost-cfn-diagnostic-"));
   const artifactPath = cfnBootstrapDiagnosticArtifactPath(runDir);
   const order: string[] = [];
+  let sendAttempts = 0;
   let releaseStack: (() => Promise<void>) | undefined;
   const exec = new FakeExec((args) => {
     if (args[0] === "cloudformation" && args[1] === "create-stack") {
@@ -674,12 +675,12 @@ test("create failure: registered retention captures bounded SSM evidence before 
       order.push("describe-instance");
       return "None\n";
     }
-    if (args[0] === "ssm" && args[1] === "describe-instance-information") {
-      order.push("ssm-online");
-      return "Online\n";
-    }
     if (args[0] === "ssm" && args[1] === "send-command") {
       order.push("ssm-send");
+      sendAttempts += 1;
+      if (sendAttempts === 1) {
+        throw new Error("InvalidInstanceId: target is not in a valid state");
+      }
       return "command-1\n";
     }
     if (args[0] === "ssm" && args[1] === "get-command-invocation") {
@@ -748,6 +749,11 @@ test("create failure: registered retention captures bounded SSM evidence before 
     const parsed = JSON.parse(persisted) as CfnBootstrapDiagnosticArtifactV1;
     assert.equal(parsed.diagnostic.capture_status, "captured");
     assert.equal(parsed.diagnostic.observations[0]?.stage, "02-bootstrap");
+    assert.equal(sendAttempts, 2, "a transient not-ready target retries through send-command");
+    assert.equal(
+      exec.calls.some((call) => call[0] === "ssm" && call[1] === "describe-instance-information"),
+      false,
+    );
     for (const secret of ["X-Amz-Signature", "secret", "https://", "i-0abc", "stk"]) {
       assert.ok(!persisted.includes(secret), `diagnostic artifact leaked ${secret}`);
     }
@@ -784,9 +790,9 @@ test("create failure: SSM unavailable remains red, persists fixed evidence, and 
     if (args[0] === "cloudformation" && args[1] === "describe-stack-resource") {
       return "i-0abc\n";
     }
-    if (args[0] === "ssm" && args[1] === "describe-instance-information") {
-      order.push("ssm-offline");
-      return "Offline\n";
+    if (args[0] === "ssm" && args[1] === "send-command") {
+      order.push("ssm-not-ready");
+      throw new Error("InvalidInstanceId: target is not in a valid state");
     }
     if (args[0] === "cloudformation" && args[1] === "delete-stack") {
       order.push("delete");
@@ -841,13 +847,80 @@ test("create failure: SSM unavailable remains red, persists fixed evidence, and 
     const persisted = JSON.parse(await readFile(artifactPath, "utf8")) as CfnBootstrapDiagnosticArtifactV1;
     assert.equal(persisted.diagnostic.capture_status, "ssm_unavailable");
     assert.equal(persisted.diagnostic.detail, "ssm_not_online");
-    assert.equal(exec.calls.some((call) => call[0] === "ssm" && call[1] === "send-command"), false);
+    assert.ok(order.filter((item) => item === "ssm-not-ready").length > 1, "not-ready dispatch is retried");
+    assert.equal(
+      exec.calls.some((call) => call[0] === "ssm" && call[1] === "describe-instance-information"),
+      false,
+    );
     assert.ok(order.indexOf("register") < order.indexOf("create"), `registered before create: ${order}`);
     assert.ok(order.indexOf("artifact") < order.indexOf("delete"), `artifact before cleanup: ${order}`);
     assert.ok(order.includes("wait-delete"), `stack delete must be awaited: ${order}`);
   } finally {
     await rm(runDir, { recursive: true, force: true });
   }
+});
+
+test("captureCfnBootstrapDiagnostic: authorization failure is distinct and never retried", async () => {
+  let sleeps = 0;
+  const exec = new FakeExec((args) => {
+    if (args[0] === "cloudformation" && args[1] === "describe-stack-resource") {
+      return "i-0abc\n";
+    }
+    if (args[0] === "ssm" && args[1] === "send-command") {
+      throw new Error("AccessDeniedException: not authorized to perform ssm:SendCommand");
+    }
+    return "";
+  });
+
+  const diagnostic = await captureCfnBootstrapDiagnostic({
+    exec,
+    stackName: "stk",
+    region: "us-east-1",
+    pollTimeoutMs: 30_000,
+    pollIntervalMs: 1_000,
+    now: () => 0,
+    sleep: async () => { sleeps += 1; },
+  });
+
+  assert.equal(diagnostic.capture_status, "ssm_unavailable");
+  assert.equal(diagnostic.detail, "send_command_unauthorized");
+  assert.equal(sleeps, 0);
+  assert.equal(
+    exec.calls.filter((call) => call[0] === "ssm" && call[1] === "send-command").length,
+    1,
+  );
+});
+
+test("captureCfnBootstrapDiagnostic: command-read authorization failure is distinct", async () => {
+  const exec = new FakeExec((args) => {
+    if (args[0] === "cloudformation" && args[1] === "describe-stack-resource") {
+      return "i-0abc\n";
+    }
+    if (args[0] === "ssm" && args[1] === "send-command") {
+      return "command-1\n";
+    }
+    if (args[0] === "ssm" && args[1] === "get-command-invocation") {
+      throw new Error("AccessDeniedException: not authorized to perform ssm:GetCommandInvocation");
+    }
+    return "";
+  });
+
+  const diagnostic = await captureCfnBootstrapDiagnostic({
+    exec,
+    stackName: "stk",
+    region: "us-east-1",
+    pollTimeoutMs: 30_000,
+    pollIntervalMs: 0,
+    now: () => 0,
+    sleep: async () => undefined,
+  });
+
+  assert.equal(diagnostic.capture_status, "ssm_unavailable");
+  assert.equal(diagnostic.detail, "command_poll_unauthorized");
+  assert.equal(
+    exec.calls.filter((call) => call[0] === "ssm" && call[1] === "get-command-invocation").length,
+    1,
+  );
 });
 
 test("describeStackEventsTail: returns the bounded formatter output", async () => {
