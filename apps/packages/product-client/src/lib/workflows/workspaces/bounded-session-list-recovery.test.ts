@@ -36,6 +36,21 @@ describe("loadSessionsWithBoundedRecovery", () => {
     expect(load.mock.calls).toEqual([[true]]);
   });
 
+  it("rejects a non-empty first forced result after ownership changes", async () => {
+    let current = true;
+    const load = vi.fn(async () => {
+      current = false;
+      return [{ id: "stale" }];
+    });
+
+    await expect(loadSessionsWithBoundedRecovery({
+      forceInitialRefresh: true,
+      isCurrent: () => current,
+      load,
+    })).resolves.toEqual({ kind: "stale" });
+    expect(load.mock.calls).toEqual([[true]]);
+  });
+
   it("never reuses a stale non-empty cache when the authoritative retry is empty", async () => {
     const load = vi.fn(async (force: boolean) => (
       force ? [] : [{ id: "gone" }]

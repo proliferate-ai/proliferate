@@ -14,6 +14,9 @@ export async function loadSessionsWithBoundedRecovery<T>(input: {
 }): Promise<BoundedSessionListRecoveryResult<T>> {
   try {
     const sessions = await input.load(input.forceInitialRefresh ?? false);
+    if (!input.isCurrent()) {
+      return { kind: "stale" };
+    }
     if (sessions.length > 0) {
       return {
         kind: "loaded",

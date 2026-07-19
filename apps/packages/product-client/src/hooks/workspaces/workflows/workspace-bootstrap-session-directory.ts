@@ -44,6 +44,7 @@ export async function loadWorkspaceSessionDirectory(
     load: (forceRefresh) => deps.loadWorkspaceSessions({
       workspaceConnection: input.workspaceConnection,
       workspaceId: input.workspaceId,
+      isCurrent: input.isCurrent,
       requestOptions: input.requestOptions ?? undefined,
       forceRefresh,
       timeoutMs: input.timeoutMs,
