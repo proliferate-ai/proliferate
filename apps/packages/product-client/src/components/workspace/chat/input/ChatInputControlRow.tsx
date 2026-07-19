@@ -48,7 +48,7 @@ export interface ComposerLeadingControlsProps {
 }
 
 /**
- * The leading control cluster (model selector, reasoning bars, mode, fast mode,
+ * The leading control cluster (model selector, mode, reasoning bars, fast mode,
  * goal, integrations). Shared verbatim between the in-session chat composer
  * (ChatInputControlRow) and the home/new-chat composer (HomeNextScreen slot):
  * home feeds it launch-time control descriptors instead of live-session
@@ -84,21 +84,7 @@ export function ComposerLeadingControls({
         <ComposerModelSelectorControl modelSelectorProps={modelSelectorProps} />
       </div>
 
-      {/* 2. Reasoning/effort bars */}
-      {controlGroups.reasoningEffortControl && (
-        <span
-          className={`inline-flex shrink-0 ${
-            runtimeControlsDisabled ? "pointer-events-none opacity-55" : ""
-          }`}
-        >
-          <ComposerReasoningEffortBars
-            control={controlGroups.reasoningEffortControl}
-            agentKind={agentKind}
-          />
-        </span>
-      )}
-
-      {/* 3. Primary working mode control (bypass/plan/etc) */}
+      {/* 2. Primary working mode control (bypass/plan/etc) */}
       {controlGroups.modeControl && (
         <span
           className={`inline-flex min-w-0 ${
@@ -109,6 +95,20 @@ export function ComposerLeadingControls({
             agentKind={agentKind}
             control={controlGroups.modeControl}
             triggerStyle="value"
+          />
+        </span>
+      )}
+
+      {/* 3. Reasoning/effort bars */}
+      {controlGroups.reasoningEffortControl && (
+        <span
+          className={`inline-flex shrink-0 ${
+            runtimeControlsDisabled ? "pointer-events-none opacity-55" : ""
+          }`}
+        >
+          <ComposerReasoningEffortBars
+            control={controlGroups.reasoningEffortControl}
+            agentKind={agentKind}
           />
         </span>
       )}

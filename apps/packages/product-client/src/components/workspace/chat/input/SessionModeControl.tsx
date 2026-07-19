@@ -1,5 +1,6 @@
 import { CHAT_MODE_CONTROL_LABELS } from "#product/copy/chat/chat-copy";
 import {
+  getNextSessionModeValue,
   resolveSessionControlPresentation,
 } from "#product/lib/domain/chat/session-controls/session-mode-control";
 import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
@@ -46,11 +47,12 @@ export function SessionModeControl({
   const visibleTriggerLabel = triggerStyle === "value" ? animatedValue : triggerLabel;
   const visibleTriggerDetail = triggerStyle === "value" ? null : animatedValue;
   const compactTrigger = triggerStyle === "value";
+  const nextValue = getNextSessionModeValue(control.options, currentValue);
   const triggerIcon = compactTrigger
     ? undefined
     : <SessionControlIcon icon={currentPresentation.icon} className="size-3.5" />;
-  // No disclosure chevron on the compact trigger: the mode name alone is the
-  // whole affordance; the popover still opens on click.
+  // No disclosure chevron on the compact trigger: the mode name itself steps
+  // immediately to the next runtime-provided value.
   const triggerTrailing = control.pendingState
     ? <PendingConfigIndicator pendingState={control.pendingState} />
     : null;
@@ -71,22 +73,32 @@ export function SessionModeControl({
     );
   }
 
+  const trigger = (
+    <ComposerControlButton
+      emphasizeLabel={triggerStyle === "value"}
+      icon={triggerIcon}
+      label={visibleTriggerLabel}
+      detail={visibleTriggerDetail}
+      trailing={triggerTrailing}
+      title={`${CHAT_MODE_CONTROL_LABELS.cycleHint} (${CHAT_MODE_CONTROL_LABELS.shortcut})`}
+      aria-label={`${control.label}: ${currentOption?.label ?? currentDetail ?? ""}`}
+      className="max-w-[12rem]"
+      data-session-mode-trigger=""
+      data-session-mode-selected={currentValue ?? ""}
+      data-session-mode-next={nextValue ?? ""}
+      onClick={compactTrigger && nextValue
+        ? () => control.onSelect(nextValue)
+        : undefined}
+    />
+  );
+
+  if (compactTrigger) {
+    return trigger;
+  }
+
   return (
     <PopoverButton
-      trigger={
-        <ComposerControlButton
-          emphasizeLabel={triggerStyle === "value"}
-          icon={triggerIcon}
-          label={visibleTriggerLabel}
-          detail={visibleTriggerDetail}
-          trailing={triggerTrailing}
-          title={`${CHAT_MODE_CONTROL_LABELS.cycleHint} (${CHAT_MODE_CONTROL_LABELS.shortcut})`}
-          aria-label={`${control.label}: ${currentOption?.label ?? currentDetail ?? ""}`}
-          className="max-w-[12rem]"
-          data-session-mode-trigger=""
-          data-session-mode-selected={currentValue ?? ""}
-        />
-      }
+      trigger={trigger}
       side="top"
       className={`w-56 ${POPOVER_SURFACE_CLASS}`}
     >

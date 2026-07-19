@@ -172,7 +172,7 @@ describe("ChatInputControlRow", () => {
     expect(mode.querySelector("svg")).toBeNull();
   });
 
-  it("orders model, reasoning bars, working mode, and fast mode in the visible row", () => {
+  it("orders model, working mode, reasoning bars, and fast mode in the visible row", () => {
     renderControlRow();
 
     const model = screen.getByRole("button", { name: "Model: Opus 4.1" });
@@ -180,11 +180,11 @@ describe("ChatInputControlRow", () => {
     const mode = screen.getByRole("button", { name: "Mode: Default" });
     const fast = screen.getByRole("button", { name: "Fast mode: Slow" });
 
-    expect(model.compareDocumentPosition(reasoning) & Node.DOCUMENT_POSITION_FOLLOWING)
+    expect(model.compareDocumentPosition(mode) & Node.DOCUMENT_POSITION_FOLLOWING)
       .toBeTruthy();
-    expect(reasoning.compareDocumentPosition(mode) & Node.DOCUMENT_POSITION_FOLLOWING)
+    expect(mode.compareDocumentPosition(reasoning) & Node.DOCUMENT_POSITION_FOLLOWING)
       .toBeTruthy();
-    expect(mode.compareDocumentPosition(fast) & Node.DOCUMENT_POSITION_FOLLOWING)
+    expect(reasoning.compareDocumentPosition(fast) & Node.DOCUMENT_POSITION_FOLLOWING)
       .toBeTruthy();
   });
 
