@@ -150,9 +150,11 @@ export interface CfnBootstrapDiagnostic {
     | "captured"
     | "instance_not_found"
     | "ssm_not_online"
+    | "send_command_target_or_permission_unavailable"
     | "send_command_unauthorized"
     | "send_command_failed"
     | "command_poll_unauthorized"
+    | "command_poll_failed"
     | "command_poll_timeout"
     | "command_terminal"
     | "no_allowlisted_observations";
@@ -1098,6 +1100,12 @@ function ssmTargetNotReadyError(error: unknown): boolean {
     .test(message);
 }
 
+function ssmCommandPollRetryableError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /(?:InvocationDoesNotExist|Throttl|TooManyRequests|InternalServerError|ServiceUnavailable|RequestTimeout)/i
+    .test(message);
+}
+
 /**
  * Parses the bounded `describe-stack-events` projection used when a failed
  * EC2 resource has no `describe-stack-resource` physical id. CloudFormation's
@@ -1226,6 +1234,7 @@ export async function captureCfnBootstrapDiagnostic(input: {
 
   const deadline = now() + pollTimeoutMs;
   let commandId = "";
+  let sendUnavailableDetail: CfnBootstrapDiagnostic["detail"] = "ssm_not_online";
   do {
     try {
       const candidate = (
@@ -1278,12 +1287,16 @@ export async function captureCfnBootstrapDiagnostic(input: {
           "send_command_failed",
         );
       }
+      const message = error instanceof Error ? error.message : String(error);
+      if (/InvalidInstanceId/i.test(message)) {
+        sendUnavailableDetail = "send_command_target_or_permission_unavailable";
+      }
     }
     if (now() >= deadline) break;
     await sleepFn(pollIntervalMs);
   } while (now() < deadline);
   if (!commandId) {
-    return emptyCfnBootstrapDiagnostic(stackNameHash, instanceIdHash, "ssm_unavailable", "ssm_not_online");
+    return emptyCfnBootstrapDiagnostic(stackNameHash, instanceIdHash, "ssm_unavailable", sendUnavailableDetail);
   }
 
   let lastStatus = "Pending";
@@ -1315,7 +1328,13 @@ export async function captureCfnBootstrapDiagnostic(input: {
           "command_poll_unauthorized",
         );
       }
-      continue;
+      if (ssmCommandPollRetryableError(error)) continue;
+      return emptyCfnBootstrapDiagnostic(
+        stackNameHash,
+        instanceIdHash,
+        "command_failed",
+        "command_poll_failed",
+      );
     }
     let parsed: { Status?: unknown; StandardOutputContent?: unknown };
     try {

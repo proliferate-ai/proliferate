@@ -634,6 +634,7 @@ test("create failure: registered retention captures bounded SSM evidence before 
   const artifactPath = cfnBootstrapDiagnosticArtifactPath(runDir);
   const order: string[] = [];
   let sendAttempts = 0;
+  let pollAttempts = 0;
   let releaseStack: (() => Promise<void>) | undefined;
   const exec = new FakeExec((args) => {
     if (args[0] === "cloudformation" && args[1] === "create-stack") {
@@ -685,6 +686,10 @@ test("create failure: registered retention captures bounded SSM evidence before 
     }
     if (args[0] === "ssm" && args[1] === "get-command-invocation") {
       order.push("ssm-read");
+      pollAttempts += 1;
+      if (pollAttempts === 1) {
+        throw new Error("InvocationDoesNotExist: command registration is not visible yet");
+      }
       return JSON.stringify({
         Status: "Success",
         StandardOutputContent: [
@@ -750,6 +755,7 @@ test("create failure: registered retention captures bounded SSM evidence before 
     assert.equal(parsed.diagnostic.capture_status, "captured");
     assert.equal(parsed.diagnostic.observations[0]?.stage, "02-bootstrap");
     assert.equal(sendAttempts, 2, "a transient not-ready target retries through send-command");
+    assert.equal(pollAttempts, 2, "eventually consistent command registration is retried");
     assert.equal(
       exec.calls.some((call) => call[0] === "ssm" && call[1] === "describe-instance-information"),
       false,
@@ -792,7 +798,7 @@ test("create failure: SSM unavailable remains red, persists fixed evidence, and 
     }
     if (args[0] === "ssm" && args[1] === "send-command") {
       order.push("ssm-not-ready");
-      throw new Error("InvalidInstanceId: target is not in a valid state");
+      throw new Error("TargetNotConnected: target is not online");
     }
     if (args[0] === "cloudformation" && args[1] === "delete-stack") {
       order.push("delete");
@@ -860,6 +866,35 @@ test("create failure: SSM unavailable remains red, persists fixed evidence, and 
   }
 });
 
+test("captureCfnBootstrapDiagnostic: ambiguous InvalidInstanceId exhausts without claiming offline", async () => {
+  let clock = 0;
+  const exec = new FakeExec((args) => {
+    if (args[0] === "cloudformation" && args[1] === "describe-stack-resource") {
+      return "i-0abc\n";
+    }
+    if (args[0] === "ssm" && args[1] === "send-command") {
+      throw new Error("InvalidInstanceId");
+    }
+    return "";
+  });
+
+  const diagnostic = await captureCfnBootstrapDiagnostic({
+    exec,
+    stackName: "stk",
+    region: "us-east-1",
+    pollTimeoutMs: 2,
+    pollIntervalMs: 1,
+    now: () => clock,
+    sleep: async (ms) => { clock += ms; },
+  });
+
+  assert.equal(diagnostic.capture_status, "ssm_unavailable");
+  assert.equal(diagnostic.detail, "send_command_target_or_permission_unavailable");
+  assert.ok(
+    exec.calls.filter((call) => call[0] === "ssm" && call[1] === "send-command").length > 1,
+  );
+});
+
 test("captureCfnBootstrapDiagnostic: authorization failure is distinct and never retried", async () => {
   let sleeps = 0;
   const exec = new FakeExec((args) => {
@@ -917,6 +952,38 @@ test("captureCfnBootstrapDiagnostic: command-read authorization failure is disti
 
   assert.equal(diagnostic.capture_status, "ssm_unavailable");
   assert.equal(diagnostic.detail, "command_poll_unauthorized");
+  assert.equal(
+    exec.calls.filter((call) => call[0] === "ssm" && call[1] === "get-command-invocation").length,
+    1,
+  );
+});
+
+test("captureCfnBootstrapDiagnostic: permanent command-read failure does not become a timeout", async () => {
+  const exec = new FakeExec((args) => {
+    if (args[0] === "cloudformation" && args[1] === "describe-stack-resource") {
+      return "i-0abc\n";
+    }
+    if (args[0] === "ssm" && args[1] === "send-command") {
+      return "command-1\n";
+    }
+    if (args[0] === "ssm" && args[1] === "get-command-invocation") {
+      throw new Error("InvalidCommandId: the command id is malformed");
+    }
+    return "";
+  });
+
+  const diagnostic = await captureCfnBootstrapDiagnostic({
+    exec,
+    stackName: "stk",
+    region: "us-east-1",
+    pollTimeoutMs: 30_000,
+    pollIntervalMs: 0,
+    now: () => 0,
+    sleep: async () => undefined,
+  });
+
+  assert.equal(diagnostic.capture_status, "command_failed");
+  assert.equal(diagnostic.detail, "command_poll_failed");
   assert.equal(
     exec.calls.filter((call) => call[0] === "ssm" && call[1] === "get-command-invocation").length,
     1,
