@@ -151,7 +151,7 @@ describe("usePromptAttachmentPreviewActions", () => {
       result.current.previewActions.openAttachmentPreview({
         origin: "draft",
         sessionId: null,
-        part: normalizeDraftAttachments([first])[0]!,
+        part: previewPart(first),
       });
     });
     const firstTargetKey = viewerTargetKey(
@@ -183,7 +183,7 @@ describe("usePromptAttachmentPreviewActions", () => {
       result.current.previewActions.openAttachmentPreview({
         origin: "draft",
         sessionId: null,
-        part: normalizeDraftAttachments([second])[0]!,
+        part: previewPart(second),
       });
     });
     const secondTargetKey = viewerTargetKey(
@@ -222,4 +222,14 @@ function createTestWrapper() {
       </ProductHostProvider>
     </QueryClientProvider>
   );
+}
+
+function previewPart(
+  attachment: Parameters<typeof normalizeDraftAttachments>[0][number],
+) {
+  const part = normalizeDraftAttachments([attachment])[0];
+  if (!part || (part.type !== "image" && part.type !== "file")) {
+    throw new Error("Expected a previewable draft attachment");
+  }
+  return part;
 }

@@ -32,16 +32,16 @@ function usePromptAttachmentTextSource<Source extends string | Blob>(
 ): PromptAttachmentTextState {
   const [state, setState] = useState<PromptAttachmentTextState & {
     source: Source | null;
-  }>(() => initialState(source));
-  const visibleState = state.source === source ? state : initialState(source);
+  }>(() => initialState<Source>(source));
+  const visibleState = state.source === source ? state : initialState<Source>(source);
 
   useEffect(() => {
     const abortController = new AbortController();
     if (!source) {
-      setState(initialState(null));
+      setState(initialState<Source>(null));
       return () => abortController.abort();
     }
-    setState(initialState(source));
+    setState(initialState<Source>(source));
     void read(source, abortController.signal)
       .then((data) => {
         if (!abortController.signal.aborted) {
