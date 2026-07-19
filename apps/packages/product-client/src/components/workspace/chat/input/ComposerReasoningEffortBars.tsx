@@ -91,7 +91,7 @@ export function ComposerReasoningEffortBars({
         onStep={(nextValue: string) => control.onSelect(nextValue)}
         label={labelNode}
         emphasis="none"
-        className={`!gap-2 ${toneClass} ${chipClass}`}
+        className={`!gap-0.5 ${toneClass} ${chipClass}`}
         disabled={!control.settable}
         title={tooltip}
         aria-label={ariaLabel}

@@ -139,6 +139,7 @@ describe("ChatInputControlRow", () => {
     renderControlRow();
     const reasoning = screen.getByRole("button", { name: "Reasoning: Medium" });
     expect(reasoning.getAttribute("title")?.startsWith("Reasoning: Medium")).toBe(true);
+    expect(reasoning.className).toContain("!gap-0.5");
     // The level name is a visible label beside the bars, not sr-only.
     expect(screen.getByText("Medium").className).not.toContain("sr-only");
   });
