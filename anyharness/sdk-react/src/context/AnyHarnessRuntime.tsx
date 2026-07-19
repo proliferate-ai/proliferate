@@ -4,6 +4,10 @@ import type { AnyHarnessClientConnection } from "../lib/client-cache.js";
 export interface AnyHarnessRuntimeContextValue {
   runtimeUrl: string | null;
   authToken?: string | null;
+  /** Context-owned transport override; omitted by normal runtime hosts. */
+  fetch?: typeof globalThis.fetch;
+  /** Resolve a fresh connection when the runtime bearer credential rotates. */
+  resolveConnection?: () => Promise<AnyHarnessClientConnection>;
   /**
    * Stable identity boundary for cached AnyHarness data, such as an API
    * deployment and authenticated actor. Falls back to runtimeUrl while
@@ -17,11 +21,19 @@ const AnyHarnessRuntimeContext = createContext<AnyHarnessRuntimeContextValue | n
 export function AnyHarnessRuntime({
   runtimeUrl,
   authToken,
+  fetch,
+  resolveConnection,
   cacheScopeKey,
   children,
 }: AnyHarnessRuntimeContextValue & { children: ReactNode }) {
   return (
-    <AnyHarnessRuntimeContext.Provider value={{ runtimeUrl, authToken, cacheScopeKey }}>
+    <AnyHarnessRuntimeContext.Provider value={{
+      runtimeUrl,
+      authToken,
+      fetch,
+      resolveConnection,
+      cacheScopeKey,
+    }}>
       {children}
     </AnyHarnessRuntimeContext.Provider>
   );
@@ -55,5 +67,14 @@ export function resolveRuntimeConnection(
   return {
     runtimeUrl,
     authToken: context.authToken ?? undefined,
+    ...(context.fetch ? { fetch: context.fetch } : {}),
   };
+}
+
+export function resolveRuntimeConnectionFromContext(
+  context: AnyHarnessRuntimeContextValue,
+): Promise<AnyHarnessClientConnection> {
+  return context.resolveConnection
+    ? context.resolveConnection()
+    : Promise.resolve(resolveRuntimeConnection(context));
 }

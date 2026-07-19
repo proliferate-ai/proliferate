@@ -9,6 +9,7 @@ interface HarnessUpdateProgressProps {
   components: AgentInstallProgressComponent[];
   displayName: string;
   targetLabel: string;
+  variant?: "card" | "gate";
 }
 
 const TERMINAL_PHASES = new Set(["completed", "skipped", "failed"]);
@@ -59,6 +60,7 @@ export function HarnessUpdateProgress({
   components,
   displayName,
   targetLabel,
+  variant = "card",
 }: HarnessUpdateProgressProps) {
   const sorted = [...components].sort((left, right) =>
     left.role === right.role ? 0 : left.role === "native_cli" ? -1 : 1
@@ -82,13 +84,17 @@ export function HarnessUpdateProgress({
   return (
     <section
       aria-label={`${displayName} update progress`}
-      className="space-y-3 rounded-lg border border-border bg-foreground/[0.02] p-4"
+      className={variant === "card"
+        ? "space-y-3 rounded-lg border border-border bg-foreground/[0.02] p-4 text-left"
+        : "w-[min(28rem,80vw)] space-y-3 text-left"}
     >
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-ui font-medium text-foreground">
-            Updating {displayName}
-          </p>
+          {variant === "card" ? (
+            <p className="text-ui font-medium text-foreground">
+              Updating {displayName}
+            </p>
+          ) : null}
           <p className="text-ui-sm text-muted-foreground">
             {targetLabel} · {aggregateLabel}
           </p>

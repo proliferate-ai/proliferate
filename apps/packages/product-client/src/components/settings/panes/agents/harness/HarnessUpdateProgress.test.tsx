@@ -45,7 +45,7 @@ it("shows exact MB for owned downloads and an honest unknown npm size", () => {
   })).toBeNull();
 });
 
-it("labels a selected workspace runtime explicitly", () => {
+it("labels the shared Cloud runtime without workspace terminology", () => {
   render(
     <HarnessUpdateProgress
       components={[{
@@ -56,10 +56,13 @@ it("labels a selected workspace runtime explicitly", () => {
         downloadSizeBytes: 20_000_000,
       }]}
       displayName="OpenCode"
-      targetLabel="Selected workspace runtime"
+      targetLabel="Proliferate Cloud"
+      variant="gate"
     />,
   );
 
-  expect(screen.getByText(/Selected workspace runtime/)).toBeTruthy();
+  expect(screen.getByText(/Proliferate Cloud/)).toBeTruthy();
   expect(screen.getByText("20 MB of 20 MB")).toBeTruthy();
+  expect(screen.queryByText("Updating OpenCode")).toBeNull();
+  expect(screen.queryByText(/Workspace/)).toBeNull();
 });

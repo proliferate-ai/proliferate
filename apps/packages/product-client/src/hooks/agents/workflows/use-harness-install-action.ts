@@ -1,8 +1,8 @@
 import { useCallback, useMemo } from "react";
 import type { AgentSummary } from "@anyharness/sdk";
+import type { AgentAuthSurface } from "@proliferate/cloud-sdk";
 import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
 import { useAgentInstallationActions } from "#product/hooks/agents/workflows/use-agent-installation-actions";
-import type { AgentInstallTarget } from "#product/hooks/agents/workflows/use-agent-installation-actions";
 import { useToastStore } from "#product/stores/toast/toast-store";
 
 export interface HarnessInstallAction {
@@ -14,7 +14,7 @@ export interface HarnessInstallAction {
 
 export function useHarnessInstallAction(
   agent: AgentSummary | null,
-  target: AgentInstallTarget = "runtime",
+  surface: AgentAuthSurface = "local",
 ): HarnessInstallAction | null {
   const showToast = useToastStore((state) => state.show);
   const {
@@ -25,7 +25,7 @@ export function useHarnessInstallAction(
     reconcileAgents,
     reconcileSnapshot,
     supportsScopedReconcile,
-  } = useAgentInstallationActions(target);
+  } = useAgentInstallationActions();
 
   const canInstall = agent?.installState === "install_required"
     || agent?.installState === "failed";
@@ -42,7 +42,7 @@ export function useHarnessInstallAction(
         });
         showToast(HARNESS_PANE_COPY.updateStartedToast(
           agent.displayName,
-          target === "runtime" ? "the local runtime" : "the selected runtime",
+          surface,
         ));
       } else {
         // Older runtimes ignore unknown reconcile fields and would turn a
@@ -64,7 +64,7 @@ export function useHarnessInstallAction(
     reconcileAgents,
     showToast,
     supportsScopedReconcile,
-    target,
+    surface,
   ]);
 
   const reconcileActive = Boolean(
@@ -80,10 +80,10 @@ export function useHarnessInstallAction(
     }
     return {
       label: isBusy
-        ? HARNESS_PANE_COPY.installingAction
+        ? HARNESS_PANE_COPY.installingAction(agent.displayName)
         : agent.installState === "failed"
-          ? HARNESS_PANE_COPY.retryInstallAction
-          : HARNESS_PANE_COPY.installAction,
+          ? HARNESS_PANE_COPY.retryInstallAction(agent.displayName)
+          : HARNESS_PANE_COPY.installAction(agent.displayName),
       loading: isBusy,
       disabled: isBusy || isAgentSeedHydrating,
       onInstall: () => {

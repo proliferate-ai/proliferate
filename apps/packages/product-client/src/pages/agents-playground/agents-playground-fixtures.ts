@@ -20,49 +20,21 @@ import { QueryClient } from "@tanstack/react-query";
 import { serverCapabilitiesKey } from "#product/hooks/access/cloud/server-capabilities/query-keys";
 import {
   createAgentsPlaygroundCloudTransport,
+  PLAYGROUND_CLOUD_URL,
   type AgentsPlaygroundCloudTransport,
 } from "#product/pages/agents-playground/agents-playground-cloud-client";
+import {
+  createAgentsPlaygroundRuntimeTransport,
+  type AgentsPlaygroundRuntimeTransport,
+} from "#product/pages/agents-playground/agents-playground-runtime-client";
+import type {
+  AgentsPlaygroundScenario,
+} from "#product/pages/agents-playground/agents-playground-scenarios";
 
 export const PLAYGROUND_RUNTIME_URL = "http://agents-playground.runtime";
+export const PLAYGROUND_CLOUD_RUNTIME_URL =
+  `${PLAYGROUND_CLOUD_URL}/v1/gateway/cloud-sandbox/anyharness`;
 export const PLAYGROUND_CACHE_SCOPE = "agents-playground";
-export type AgentsPlaygroundScenarioId =
-  | "ready-local"
-  | "login-required"
-  | "install-required"
-  | "updating"
-  | "runtime-error"
-  | "unsupported"
-  | "opencode-multi-source"
-  | "cloud-signed-out"
-  | "cloud-ready"
-  | "api-keys-empty"
-  | "api-keys-ready"
-  | "api-keys-loading"
-  | "api-keys-error";
-
-export interface AgentsPlaygroundScenario {
-  id: AgentsPlaygroundScenarioId;
-  label: string;
-  harnessKind: "claude" | "opencode";
-  pane: "harness" | "api-keys";
-  surface: "cloud" | "local";
-}
-
-export const SCENARIOS: readonly AgentsPlaygroundScenario[] = [
-  { id: "ready-local", label: "Ready", harnessKind: "claude", pane: "harness", surface: "local" },
-  { id: "login-required", label: "Login required", harnessKind: "claude", pane: "harness", surface: "local" },
-  { id: "install-required", label: "Install required", harnessKind: "claude", pane: "harness", surface: "local" },
-  { id: "updating", label: "Updating", harnessKind: "claude", pane: "harness", surface: "local" },
-  { id: "runtime-error", label: "Runtime error", harnessKind: "claude", pane: "harness", surface: "local" },
-  { id: "unsupported", label: "Unsupported", harnessKind: "claude", pane: "harness", surface: "local" },
-  { id: "opencode-multi-source", label: "Multiple auth", harnessKind: "opencode", pane: "harness", surface: "local" },
-  { id: "cloud-signed-out", label: "Cloud signed out", harnessKind: "claude", pane: "harness", surface: "cloud" },
-  { id: "cloud-ready", label: "Cloud ready", harnessKind: "claude", pane: "harness", surface: "cloud" },
-  { id: "api-keys-empty", label: "Keys empty", harnessKind: "claude", pane: "api-keys", surface: "cloud" },
-  { id: "api-keys-ready", label: "Keys ready", harnessKind: "claude", pane: "api-keys", surface: "cloud" },
-  { id: "api-keys-loading", label: "Keys loading", harnessKind: "claude", pane: "api-keys", surface: "cloud" },
-  { id: "api-keys-error", label: "Keys error", harnessKind: "claude", pane: "api-keys", surface: "cloud" },
-];
 
 interface FixtureState {
   authenticated: boolean;
@@ -144,7 +116,7 @@ function buildSelection(
 function buildFixtureState(scenario: AgentsPlaygroundScenario): FixtureState {
   const readiness: AgentSummary["readiness"] = scenario.id === "login-required"
     ? "login_required"
-    : scenario.id === "install-required"
+    : scenario.id === "install-required" || scenario.id === "cloud-install-required"
       ? "install_required"
       : scenario.id === "runtime-error"
         ? "error"
@@ -187,6 +159,7 @@ function buildFixtureState(scenario: AgentsPlaygroundScenario): FixtureState {
           jobId: "playground-update",
           status: "running",
           reinstall: true,
+          installedOnly: false,
           results: [],
           startedAt: "2026-07-18T18:00:00Z",
           progress: {
@@ -212,7 +185,7 @@ function buildFixtureState(scenario: AgentsPlaygroundScenario): FixtureState {
             ],
           },
         }
-      : { status: "idle", reinstall: false, results: [] },
+      : { status: "idle", reinstall: false, installedOnly: false, results: [] },
     selections,
     apiKeys,
   };
@@ -223,16 +196,19 @@ function seedHarnessQueries(
   scenario: AgentsPlaygroundScenario,
   fixture: FixtureState,
 ) {
+  const runtimeUrl = scenario.surface === "cloud"
+    ? PLAYGROUND_CLOUD_RUNTIME_URL
+    : PLAYGROUND_RUNTIME_URL;
   client.setQueryData(
-    anyHarnessAgentsKey(PLAYGROUND_RUNTIME_URL, PLAYGROUND_CACHE_SCOPE),
+    anyHarnessAgentsKey(runtimeUrl, PLAYGROUND_CACHE_SCOPE),
     [fixture.agent],
   );
   client.setQueryData(
-    anyHarnessAgentReconcileStatusKey(PLAYGROUND_RUNTIME_URL, PLAYGROUND_CACHE_SCOPE),
+    anyHarnessAgentReconcileStatusKey(runtimeUrl, PLAYGROUND_CACHE_SCOPE),
     fixture.reconcile,
   );
   client.setQueryData(
-    anyHarnessAgentLaunchOptionsKey(PLAYGROUND_RUNTIME_URL, null, PLAYGROUND_CACHE_SCOPE),
+    anyHarnessAgentLaunchOptionsKey(runtimeUrl, null, PLAYGROUND_CACHE_SCOPE),
     {
       agents: [{
         kind: scenario.harnessKind,
@@ -247,7 +223,7 @@ function seedHarnessQueries(
   );
   client.setQueryData(
     anyHarnessAgentGatewayModelsKey(
-      PLAYGROUND_RUNTIME_URL,
+      runtimeUrl,
       scenario.harnessKind,
       PLAYGROUND_CACHE_SCOPE,
     ),
@@ -370,12 +346,18 @@ export function buildMockQueryClient(
   client: QueryClient;
   fixture: FixtureState;
   cloudTransport: AgentsPlaygroundCloudTransport;
+  runtimeTransport: AgentsPlaygroundRuntimeTransport;
 } {
   const fixture = buildFixtureState(scenario);
   const cloudTransport = createAgentsPlaygroundCloudTransport({
     harnessKind: scenario.harnessKind,
     apiKeys: fixture.apiKeys,
     selections: fixture.selections,
+  });
+  const runtimeTransport = createAgentsPlaygroundRuntimeTransport({
+    runtimeUrls: [PLAYGROUND_RUNTIME_URL, PLAYGROUND_CLOUD_RUNTIME_URL],
+    agent: fixture.agent,
+    reconcile: fixture.reconcile,
   });
   const client = new QueryClient({
     defaultOptions: {
@@ -391,5 +373,5 @@ export function buildMockQueryClient(
   });
   seedHarnessQueries(client, scenario, fixture);
   seedCloudQueries(client, parentHost, scenario, fixture);
-  return { client, fixture, cloudTransport };
+  return { client, fixture, cloudTransport, runtimeTransport };
 }

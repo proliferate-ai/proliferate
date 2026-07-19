@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
 
 import { cleanup, render, screen } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { afterEach, expect, it, vi } from "vitest";
 import {
+  CLOUD_HARNESS_UPDATE_TOAST_ID,
   HarnessUpdateToastPresenter,
   HARNESS_UPDATE_TOAST_ID,
 } from "#product/components/feedback/HarnessUpdateToastPresenter";
@@ -27,10 +29,11 @@ const state = vi.hoisted(() => {
     },
   } as Record<string, unknown>;
   return {
-    workspaceId: null as string | null,
+    cloudActive: false,
+    catalogCallCount: 0,
     defaultLocalSnapshot: localSnapshot,
     localSnapshot: localSnapshot as Record<string, unknown> | null,
-    workspaceSnapshot: null as null | Record<string, unknown>,
+    cloudSnapshot: null as null | Record<string, unknown>,
   };
 });
 
@@ -40,32 +43,37 @@ const sonnerMocks = vi.hoisted(() => {
 });
 
 vi.mock("@proliferate/ui/kit/Sonner", () => ({ toast: sonnerMocks.toast }));
-vi.mock("@anyharness/sdk-react", () => ({
-  useAnyHarnessWorkspaceContext: () => ({ workspaceId: state.workspaceId }),
-}));
 vi.mock("#product/hooks/agents/derived/use-agent-catalog", () => ({
-  useAgentCatalog: () => ({ isReconciling: true, reconcileSnapshot: state.localSnapshot }),
+  useAgentCatalog: () => {
+    state.catalogCallCount += 1;
+    const cloudCall = state.cloudActive && state.catalogCallCount % 2 === 0;
+    return {
+      isReconciling: true,
+      reconcileSnapshot: cloudCall ? state.cloudSnapshot : state.localSnapshot,
+    };
+  },
 }));
-vi.mock("#product/hooks/agents/derived/use-workspace-agent-catalog", () => ({
-  useWorkspaceAgentCatalog: () => ({
-    isReconciling: state.workspaceSnapshot !== null,
-    reconcileSnapshot: state.workspaceSnapshot,
-  }),
+vi.mock("#product/hooks/cloud/derived/use-cloud-availability-state", () => ({
+  useCloudAvailabilityState: () => ({ cloudActive: state.cloudActive }),
+}));
+vi.mock("#product/providers/CloudAnyHarnessRuntimeProvider", () => ({
+  CloudAnyHarnessRuntimeProvider: ({ children }: { children: ReactNode }) => children,
 }));
 
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
-  state.workspaceId = null;
+  state.cloudActive = false;
+  state.catalogCallCount = 0;
   state.localSnapshot = state.defaultLocalSnapshot;
-  state.workspaceSnapshot = null;
+  state.cloudSnapshot = null;
 });
 
-it("dismisses workspace progress when its route-scoped target disappears", () => {
-  state.workspaceId = "workspace-1";
+it("shows shared Cloud progress without a workspace target", () => {
+  state.cloudActive = true;
   state.localSnapshot = null;
-  state.workspaceSnapshot = {
-    jobId: "job-workspace",
+  state.cloudSnapshot = {
+    jobId: "job-cloud",
     status: "running",
     currentAgent: "claude",
     progress: {
@@ -82,19 +90,16 @@ it("dismisses workspace progress when its route-scoped target disappears", () =>
       }],
     },
   };
-  const { rerender } = render(<HarnessUpdateToastPresenter />);
-  expect(sonnerMocks.toast).toHaveBeenCalledWith(
-    expect.anything(),
-    expect.objectContaining({ id: "harness-update:workspace:workspace-1" }),
-  );
+  render(<HarnessUpdateToastPresenter />);
 
-  state.workspaceId = null;
-  state.workspaceSnapshot = null;
-  rerender(<HarnessUpdateToastPresenter />);
-
-  expect(sonnerMocks.toast.dismiss).toHaveBeenCalledWith(
-    "harness-update:workspace:workspace-1",
+  const cloudCall = sonnerMocks.toast.mock.calls.find(
+    ([, options]) => options.id === CLOUD_HARNESS_UPDATE_TOAST_ID,
   );
+  expect(cloudCall).toBeTruthy();
+  const [, options] = cloudCall ?? [];
+  render(<>{options.description}</>);
+  expect(screen.getByText(/Proliferate Cloud · 12 MB downloaded/)).toBeTruthy();
+  expect(screen.queryByText(/workspace/i)).toBeNull();
 });
 
 it("shows local aggregate MB and the current harness", () => {
@@ -105,10 +110,10 @@ it("shows local aggregate MB and the current harness", () => {
 
   expect(screen.getByText("AGENTS")).toBeTruthy();
   expect(screen.getByText("Updating Codex")).toBeTruthy();
-  expect(screen.getByText(/Local runtime · 42 MB of 100 MB/)).toBeTruthy();
+  expect(screen.getByText(/This machine · 42 MB of 100 MB/)).toBeTruthy();
   expect(options.id).toBe(HARNESS_UPDATE_TOAST_ID);
   expect(screen.getByRole("progressbar", {
-    name: "Local runtime agent tools download progress",
+    name: "This machine agent tools download progress",
   }).getAttribute("aria-valuenow")).toBe("42");
 });
 

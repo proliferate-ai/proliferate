@@ -1,18 +1,19 @@
 import { useEffect, useRef } from "react";
 import type { ReconcileAgentsResponse } from "@anyharness/sdk";
-import { useAnyHarnessWorkspaceContext } from "@anyharness/sdk-react";
 import { toast } from "@proliferate/ui/kit/Sonner";
 import { Badge } from "@proliferate/ui/primitives/Badge";
 import { ProgressBar } from "@proliferate/ui/primitives/ProgressBar";
 import { useAgentCatalog } from "#product/hooks/agents/derived/use-agent-catalog";
-import { useWorkspaceAgentCatalog } from "#product/hooks/agents/derived/use-workspace-agent-catalog";
 import {
   byteProgressPercent,
   formatByteProgress,
 } from "#product/lib/domain/updates/byte-progress";
 import { getProviderDisplayName } from "#product/lib/domain/agents/provider-display";
+import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
+import { CloudAnyHarnessRuntimeProvider } from "#product/providers/CloudAnyHarnessRuntimeProvider";
 
 export const HARNESS_UPDATE_TOAST_ID = "harness-update:local";
+export const CLOUD_HARNESS_UPDATE_TOAST_ID = "harness-update:cloud";
 
 interface HarnessProgressToastOptions {
   snapshot: ReconcileAgentsResponse | null;
@@ -117,23 +118,34 @@ function useHarnessProgressToast({
 }
 
 export function HarnessUpdateToastPresenter() {
-  const { workspaceId } = useAnyHarnessWorkspaceContext();
   const localCatalog = useAgentCatalog();
-  const workspaceCatalog = useWorkspaceAgentCatalog({ enabled: !!workspaceId });
-  const workspaceSnapshot = workspaceCatalog.reconcileSnapshot?.jobId
-      && workspaceCatalog.reconcileSnapshot.jobId === localCatalog.reconcileSnapshot?.jobId
-    ? null
-    : workspaceCatalog.reconcileSnapshot;
 
   useHarnessProgressToast({
     snapshot: localCatalog.reconcileSnapshot,
-    targetLabel: "Local runtime",
+    targetLabel: "This machine",
     toastId: HARNESS_UPDATE_TOAST_ID,
   });
+
+  return <CloudHarnessUpdateToastPresenter />;
+}
+
+function CloudHarnessUpdateToastPresenter() {
+  const { cloudActive } = useCloudAvailabilityState();
+
+  return cloudActive ? (
+    <CloudAnyHarnessRuntimeProvider>
+      <CloudHarnessUpdateToast />
+    </CloudAnyHarnessRuntimeProvider>
+  ) : null;
+}
+
+function CloudHarnessUpdateToast() {
+  const cloudCatalog = useAgentCatalog();
+
   useHarnessProgressToast({
-    snapshot: workspaceSnapshot,
-    targetLabel: "Selected workspace runtime",
-    toastId: `harness-update:workspace:${workspaceId ?? "none"}`,
+    snapshot: cloudCatalog.reconcileSnapshot,
+    targetLabel: "Proliferate Cloud",
+    toastId: CLOUD_HARNESS_UPDATE_TOAST_ID,
   });
 
   return null;

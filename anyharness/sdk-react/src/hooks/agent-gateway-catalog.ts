@@ -3,7 +3,7 @@ import type { AnyHarnessClient } from "@anyharness/sdk";
 import {
   useAnyHarnessRuntimeContext,
   resolveRuntimeCacheScopeKey,
-  resolveRuntimeConnection,
+  resolveRuntimeConnectionFromContext,
   type AnyHarnessRuntimeContextValue,
 } from "../context/AnyHarnessRuntime.js";
 import { getAnyHarnessClient } from "../lib/client-cache.js";
@@ -31,7 +31,8 @@ function gatewayModelsQueryOptions(
     enabled: (options?.enabled ?? true) && runtimeUrl.length > 0 && trimmedKind.length > 0,
     refetchInterval: options?.refetchInterval,
     queryFn: async ({ signal }: { signal: AbortSignal }) => {
-      const client: AnyHarnessClient = getAnyHarnessClient(resolveRuntimeConnection(runtime));
+      const connection = await resolveRuntimeConnectionFromContext(runtime);
+      const client: AnyHarnessClient = getAnyHarnessClient(connection);
       return client.agentGatewayCatalog.getGatewayModels(
         trimmedKind,
         requestOptionsWithSignal(undefined, signal),
@@ -79,7 +80,8 @@ export function useRefreshAgentGatewayModelsMutation() {
 
   return useMutation({
     mutationFn: async (kind: string) => {
-      const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
+      const connection = await resolveRuntimeConnectionFromContext(runtime);
+      const client = getAnyHarnessClient(connection);
       return client.agentGatewayCatalog.refreshGatewayModels(kind.trim());
     },
     onSuccess: async (_response, kind) => {

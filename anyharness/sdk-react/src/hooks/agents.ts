@@ -11,7 +11,7 @@ import type {
 import { AnyHarnessError } from "@anyharness/sdk";
 import {
   resolveRuntimeCacheScopeKey,
-  resolveRuntimeConnection,
+  resolveRuntimeConnectionFromContext,
   useAnyHarnessCacheScopeKey,
   useAnyHarnessRuntimeContext,
 } from "../context/AnyHarnessRuntime.js";
@@ -64,7 +64,8 @@ export function useAgentsQuery(options?: RuntimeQueryOptions) {
     queryKey: anyHarnessAgentsKey(runtimeUrl, cacheScopeKey),
     enabled: (options?.enabled ?? true) && runtimeUrl.length > 0,
     queryFn: async ({ signal }) => {
-      const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
+      const connection = await resolveRuntimeConnectionFromContext(runtime);
+      const client = getAnyHarnessClient(connection);
       return client.agents.list(requestOptionsWithSignal(undefined, signal));
     },
   });
@@ -82,7 +83,8 @@ export function useAgentLaunchOptionsQuery(options?: RuntimeQueryOptions & {
     queryKey: anyHarnessAgentLaunchOptionsKey(runtimeUrl, workspaceId, cacheScopeKey),
     enabled: (options?.enabled ?? true) && runtimeUrl.length > 0,
     queryFn: async ({ signal }) => {
-      const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
+      const connection = await resolveRuntimeConnectionFromContext(runtime);
+      const client = getAnyHarnessClient(connection);
       return client.agents.getLaunchOptions(
         workspaceId,
         requestOptionsWithSignal(undefined, signal),
@@ -99,7 +101,8 @@ export function useInstallAgentMutation() {
 
   return useMutation({
     mutationFn: async (input: { kind: string; request?: InstallAgentRequest }) => {
-      const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
+      const connection = await resolveRuntimeConnectionFromContext(runtime);
+      const client = getAnyHarnessClient(connection);
       return client.agents.install(input.kind, input.request ?? {});
     },
     onSuccess: async () => {
@@ -137,7 +140,8 @@ export function useStartAgentLoginMutation() {
 
   return useMutation({
     mutationFn: async (kind: string) => {
-      const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
+      const connection = await resolveRuntimeConnectionFromContext(runtime);
+      const client = getAnyHarnessClient(connection);
       return client.agents.startLogin(kind);
     },
   });
@@ -148,7 +152,8 @@ export function useStartAgentLoginTerminalMutation() {
 
   return useMutation({
     mutationFn: async (kind: string) => {
-      const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
+      const connection = await resolveRuntimeConnectionFromContext(runtime);
+      const client = getAnyHarnessClient(connection);
       return client.agents.startLoginTerminal(kind);
     },
   });
@@ -162,7 +167,8 @@ export function useCloseAgentLoginTerminalMutation() {
 
   return useMutation({
     mutationFn: async (terminalId: string) => {
-      const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
+      const connection = await resolveRuntimeConnectionFromContext(runtime);
+      const client = getAnyHarnessClient(connection);
       await client.agents.closeLoginTerminal(terminalId);
     },
     onSuccess: async () => {
@@ -219,7 +225,8 @@ export function useAgentReconcileStatusQuery(
     queryKey: anyHarnessAgentReconcileStatusKey(runtimeUrl, cacheScopeKey),
     enabled: (options?.enabled ?? true) && runtimeUrl.length > 0,
     queryFn: async ({ signal }) => {
-      const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
+      const connection = await resolveRuntimeConnectionFromContext(runtime);
+      const client = getAnyHarnessClient(connection);
       return client.agents.getReconcileStatus(requestOptionsWithSignal(undefined, signal));
     },
     refetchInterval: (query) => resolveAgentReconcileRefetchInterval(query.state, {
@@ -262,7 +269,8 @@ export function useReconcileAgentsMutation() {
   return useMutation({
     mutationKey: anyHarnessReconcileAgentsMutationKey(runtimeUrl, cacheScopeKey),
     mutationFn: async (request?: ReconcileAgentsRequest) => {
-      const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
+      const connection = await resolveRuntimeConnectionFromContext(runtime);
+      const client = getAnyHarnessClient(connection);
       return client.agents.reconcile(request ?? {});
     },
     onSuccess: async (response) => {

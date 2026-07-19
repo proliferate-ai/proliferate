@@ -11,11 +11,13 @@ import { HarnessPane } from "#product/components/settings/panes/agents/harness/H
 import {
   PLAYGROUND_CACHE_SCOPE,
   PLAYGROUND_RUNTIME_URL,
-  SCENARIOS,
   buildMockQueryClient,
+} from "#product/pages/agents-playground/agents-playground-fixtures";
+import {
+  AGENTS_PLAYGROUND_SCENARIOS,
   type AgentsPlaygroundScenario,
   type AgentsPlaygroundScenarioId,
-} from "#product/pages/agents-playground/agents-playground-fixtures";
+} from "#product/pages/agents-playground/agents-playground-scenarios";
 import { buildPlaygroundHost } from "#product/pages/agents-playground/agents-playground-cloud-client";
 import { useAgentSurfaceStore } from "#product/stores/ui/agent-surface-store";
 
@@ -24,8 +26,10 @@ export function AgentsPlaygroundPage() {
   const [activeScenario, setActiveScenario] = useState<AgentsPlaygroundScenarioId>("ready-local");
   const surface = useAgentSurfaceStore((state) => state.surface);
   const setSurface = useAgentSurfaceStore((state) => state.setSurface);
-  const scenario = SCENARIOS.find((candidate) => candidate.id === activeScenario) ?? SCENARIOS[0];
-  const { client, fixture, cloudTransport } = useMemo(
+  const scenario = AGENTS_PLAYGROUND_SCENARIOS.find(
+    (candidate) => candidate.id === activeScenario,
+  ) ?? AGENTS_PLAYGROUND_SCENARIOS[0];
+  const { client, fixture, cloudTransport, runtimeTransport } = useMemo(
     () => buildMockQueryClient(parentHost, scenario),
     [parentHost, scenario],
   );
@@ -48,7 +52,7 @@ export function AgentsPlaygroundPage() {
       <header className="flex flex-wrap items-center gap-2 border-b border-border bg-accent/50 px-4 py-2">
         <span className="text-xs font-medium text-muted-foreground">Scenario:</span>
         <div className="flex flex-1 flex-wrap gap-1">
-          {SCENARIOS.map((candidate) => (
+          {AGENTS_PLAYGROUND_SCENARIOS.map((candidate) => (
             <Button
               key={candidate.id}
               variant="unstyled"
@@ -85,6 +89,7 @@ export function AgentsPlaygroundPage() {
                 <AnyHarnessRuntime
                   runtimeUrl={PLAYGROUND_RUNTIME_URL}
                   cacheScopeKey={PLAYGROUND_CACHE_SCOPE}
+                  fetch={runtimeTransport.fetch}
                 >
                   <AnyHarnessWorkspace
                     workspaceId={null}

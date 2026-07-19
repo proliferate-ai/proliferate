@@ -3,6 +3,7 @@ import type { CloudWorkspaceDetail } from "@proliferate/cloud-sdk/types";
 import {
   type CloudSandboxGatewayUrlSource,
   resolveCloudSandboxGatewayConnectionForWorkspace,
+  resolveCloudSandboxGatewayRuntimeConnection,
 } from "#product/lib/access/cloud/cloud-sandbox-gateway";
 import { setSandboxGatewayAccessTokenProvider } from "#product/lib/access/cloud/sandbox-gateway-access";
 
@@ -67,5 +68,20 @@ describe("resolveCloudSandboxGatewayConnectionForWorkspace", () => {
         null,
       ),
     ).rejects.toThrow(/Cloud client is unavailable/);
+  });
+});
+
+describe("resolveCloudSandboxGatewayRuntimeConnection", () => {
+  it("targets the shared Cloud runtime without requiring a workspace id", async () => {
+    const connection = await resolveCloudSandboxGatewayRuntimeConnection(
+      explicitCloudClient,
+      async () => "fresh-cloud-token",
+    );
+
+    expect(connection).toEqual({
+      runtimeUrl: "http://api.test/v1/gateway/cloud-sandbox/anyharness",
+      authToken: "fresh-cloud-token",
+    });
+    expect(connection).not.toHaveProperty("anyharnessWorkspaceId");
   });
 });
