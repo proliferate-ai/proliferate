@@ -11,6 +11,10 @@ import {
 import { USER_PREFERENCE_DEFAULTS } from "#product/lib/domain/preferences/user/model";
 import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 import { requestRightPanelTabByIndex } from "#product/lib/workflows/workspaces/right-panel-shortcut-requests";
+import {
+  clearCoworkNewThreadShortcutForTests,
+  registerCoworkNewThreadShortcut,
+} from "#product/lib/domain/cowork/new-thread-shortcut";
 
 const navigationMocks = vi.hoisted(() => ({
   selectWorkspaceFromSurface: vi.fn(),
@@ -55,6 +59,7 @@ describe("useAppShortcuts", () => {
     harnessState.selectedLogicalWorkspaceId = null;
     harnessState.sidebarShortcutTargets = [];
     clearShortcutHandlerRegistryForTests();
+    clearCoworkNewThreadShortcutForTests();
     useUserPreferencesStore.setState({
       ...USER_PREFERENCE_DEFAULTS,
       _hydrated: true,
@@ -65,6 +70,7 @@ describe("useAppShortcuts", () => {
   afterEach(() => {
     cleanup();
     clearShortcutHandlerRegistryForTests();
+    clearCoworkNewThreadShortcutForTests();
     document.body.innerHTML = "";
     vi.clearAllMocks();
   });
@@ -159,6 +165,27 @@ describe("useAppShortcuts", () => {
 
     expect(runShortcutHandler("app.open-web", { source: "keyboard" })).toBe(true);
     expect(actions.openWebApp.execute).toHaveBeenCalledWith("shortcut");
+  });
+
+  it("lets the active Cowork context consume Cmd-N exactly once", () => {
+    const actions = commandActions();
+    const createCoworkThread = vi.fn();
+    registerCoworkNewThreadShortcut(createCoworkThread);
+    renderHook(() => useAppShortcuts(actions));
+
+    expect(runShortcutHandler("workspace.new-default", { source: "keyboard" })).toBe(true);
+    expect(createCoworkThread).toHaveBeenCalledTimes(1);
+    expect(actions.newLocalWorkspace.execute).not.toHaveBeenCalled();
+    expect(actions.newWorktreeWorkspace.execute).not.toHaveBeenCalled();
+  });
+
+  it("preserves the normal Cmd-N action outside Cowork", () => {
+    const actions = commandActions();
+    renderHook(() => useAppShortcuts(actions));
+
+    expect(runShortcutHandler("workspace.new-default", { source: "keyboard" })).toBe(true);
+    expect(actions.newWorktreeWorkspace.execute).toHaveBeenCalledTimes(1);
+    expect(actions.newLocalWorkspace.execute).not.toHaveBeenCalled();
   });
 
   describe("app.open-support gating", () => {

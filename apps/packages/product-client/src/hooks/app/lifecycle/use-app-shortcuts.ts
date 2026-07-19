@@ -17,6 +17,7 @@ import {
   runSelectAllCommand,
   runUndoCommand,
 } from "#product/lib/infra/dom/dom-select-all";
+import { runCoworkNewThreadShortcut } from "#product/lib/domain/cowork/new-thread-shortcut";
 
 // Owns global app shortcut registration. App command behavior stays in the
 // workflow actions passed by the caller.
@@ -125,6 +126,9 @@ export function useAppShortcuts(actions: AppCommandActions): void {
   });
 
   useShortcutHandler("workspace.new-default", () => {
+    if (runCoworkNewThreadShortcut()) {
+      return;
+    }
     const mode = useUserPreferencesStore.getState().defaultNewWorkspaceMode;
     if (mode === "local") {
       actions.newLocalWorkspace.execute("shortcut");
