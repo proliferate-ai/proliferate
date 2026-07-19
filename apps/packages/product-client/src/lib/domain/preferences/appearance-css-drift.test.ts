@@ -145,3 +145,30 @@ describe("design-package @theme --text-* tokens", () => {
     }
   });
 });
+
+describe("right-panel tab typography", () => {
+  const productCss = stripCssComments(
+    readFileSync(resolve(designCssDir, "product.css"), "utf8"),
+  );
+  const rightPanelRule = productCss.match(
+    /\.right-panel-tab-system\s*\{([\s\S]*?)\}/,
+  )?.[1];
+
+  it("consumes live compact UI tokens instead of removed workspace-tab aliases", () => {
+    expect(rightPanelRule).toContain("font-size: var(--text-ui-sm);");
+    expect(rightPanelRule).toContain(
+      "line-height: var(--text-ui-sm--line-height);",
+    );
+    expect(rightPanelRule).toContain("font-weight: 500;");
+    expect(rightPanelRule).not.toContain("--workspace-shell-tab-font-size");
+    expect(rightPanelRule).not.toContain("--workspace-shell-tab-line-height");
+    expect(rightPanelRule).not.toContain("--workspace-shell-tab-font-weight");
+    expect(rightPanelRule).toContain("--right-panel-tab-icon-size: 1.27em;");
+    expect(rightPanelRule).toContain(
+      "--right-panel-tab-close-size: calc(var(--text-ui-sm) * 1.45);",
+    );
+    expect(productCss).not.toContain("--right-panel-tab-font-size");
+    expect(productCss).not.toContain("--right-panel-tab-line-height");
+    expect(productCss).not.toContain("--right-panel-tab-font-weight");
+  });
+});
