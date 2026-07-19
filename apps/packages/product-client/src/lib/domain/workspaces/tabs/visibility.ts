@@ -187,6 +187,36 @@ export function resolveFallbackAfterHidingChatTabs(args: {
   return remaining[Math.min(activeIndex, remaining.length - 1)] ?? null;
 }
 
+export function resolveChatSessionIdsToHide(args: {
+  sessionIds: readonly string[];
+  childToParent: ReadonlyMap<string, string>;
+}): string[] {
+  const expandedHideSet = new Set(args.sessionIds);
+  for (const sessionId of args.sessionIds) {
+    if (args.childToParent.has(sessionId)) {
+      continue;
+    }
+    for (const [childId, parentId] of args.childToParent) {
+      if (parentId === sessionId) {
+        expandedHideSet.add(childId);
+      }
+    }
+  }
+  return [...expandedHideSet];
+}
+
+export function preservesVisibleChatSession(args: {
+  visibleSessionIds: readonly string[];
+  sessionIdsToHide: readonly string[];
+  childToParent: ReadonlyMap<string, string>;
+}): boolean {
+  const hideSet = new Set(resolveChatSessionIdsToHide({
+    sessionIds: args.sessionIdsToHide,
+    childToParent: args.childToParent,
+  }));
+  return args.visibleSessionIds.some((sessionId) => !hideSet.has(sessionId));
+}
+
 export function resolveMostRecentHiddenChatTab(args: {
   recentlyHiddenIds: string[];
   liveIds: string[];

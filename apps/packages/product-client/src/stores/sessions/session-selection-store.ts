@@ -5,6 +5,9 @@ import {
   buildPendingWorkspaceUiKey,
 } from "#product/lib/domain/workspaces/creation/pending-entry";
 import type { WorkspaceArrivalEvent } from "#product/lib/domain/workspaces/creation/arrival";
+import type {
+  WorkspaceSessionRecovery,
+} from "#product/lib/domain/workspaces/selection/session-recovery";
 
 interface ActivateWorkspaceOptions {
   logicalWorkspaceId: string | null;
@@ -30,6 +33,7 @@ interface SessionSelectionState {
   selectedWorkspaceId: string | null;
   workspaceSelectionNonce: number;
   workspaceArrivalEvent: WorkspaceArrivalEvent | null;
+  workspaceSessionRecovery: WorkspaceSessionRecovery | null;
   activeSessionId: string | null;
   activeSessionVersion: number;
   sessionActivationIntentEpochByWorkspace: Record<string, number>;
@@ -41,6 +45,7 @@ interface SessionSelectionState {
   ) => void;
   setPendingWorkspaceEntry: (entry: PendingWorkspaceEntry | null) => void;
   setWorkspaceArrivalEvent: (event: WorkspaceArrivalEvent | null) => void;
+  setWorkspaceSessionRecovery: (recovery: WorkspaceSessionRecovery | null) => void;
   activateWorkspace: (options: ActivateWorkspaceOptions) => void;
   activateHotWorkspace: (options: ActivateWorkspaceOptions) => void;
   deselectWorkspacePreservingSessions: () => void;
@@ -59,6 +64,7 @@ export const useSessionSelectionStore = create<SessionSelectionState>((set, get)
   selectedWorkspaceId: null,
   workspaceSelectionNonce: 0,
   workspaceArrivalEvent: null,
+  workspaceSessionRecovery: null,
   activeSessionId: null,
   activeSessionVersion: 0,
   sessionActivationIntentEpochByWorkspace: {},
@@ -76,6 +82,7 @@ export const useSessionSelectionStore = create<SessionSelectionState>((set, get)
       selectedWorkspaceId: null,
       workspaceSelectionNonce: state.workspaceSelectionNonce + 1,
       workspaceArrivalEvent: null,
+      workspaceSessionRecovery: null,
       activeSessionId,
       activeSessionVersion: bumpVersionIfChanged(
         state.activeSessionVersion,
@@ -94,6 +101,10 @@ export const useSessionSelectionStore = create<SessionSelectionState>((set, get)
     set({ workspaceArrivalEvent });
   },
 
+  setWorkspaceSessionRecovery: (workspaceSessionRecovery) => {
+    set({ workspaceSessionRecovery });
+  },
+
   activateWorkspace: (options) => {
     set((state) => ({
       pendingWorkspaceEntry: options.clearPending === false
@@ -105,6 +116,7 @@ export const useSessionSelectionStore = create<SessionSelectionState>((set, get)
       workspaceArrivalEvent: state.workspaceArrivalEvent?.workspaceId === options.workspaceId
         ? state.workspaceArrivalEvent
         : null,
+      workspaceSessionRecovery: null,
       activeSessionId: options.initialActiveSessionId ?? null,
       activeSessionVersion: bumpVersionIfChanged(
         state.activeSessionVersion,
@@ -126,6 +138,7 @@ export const useSessionSelectionStore = create<SessionSelectionState>((set, get)
       workspaceArrivalEvent: state.workspaceArrivalEvent?.workspaceId === options.workspaceId
         ? state.workspaceArrivalEvent
         : null,
+      workspaceSessionRecovery: null,
       activeSessionId: options.initialActiveSessionId ?? null,
       activeSessionVersion: bumpVersionIfChanged(
         state.activeSessionVersion,
@@ -151,6 +164,7 @@ export const useSessionSelectionStore = create<SessionSelectionState>((set, get)
       selectedWorkspaceId: null,
       workspaceSelectionNonce: state.workspaceSelectionNonce + 1,
       workspaceArrivalEvent: null,
+      workspaceSessionRecovery: null,
       activeSessionId: null,
       activeSessionVersion: bumpVersionIfChanged(
         state.activeSessionVersion,
@@ -168,6 +182,7 @@ export const useSessionSelectionStore = create<SessionSelectionState>((set, get)
       selectedWorkspaceId: null,
       workspaceSelectionNonce: state.workspaceSelectionNonce + 1,
       workspaceArrivalEvent: null,
+      workspaceSessionRecovery: null,
       activeSessionId: null,
       activeSessionVersion: bumpVersionIfChanged(
         state.activeSessionVersion,
@@ -182,6 +197,7 @@ export const useSessionSelectionStore = create<SessionSelectionState>((set, get)
   setActiveSessionId: (activeSessionId) => set((state) => {
     return {
       activeSessionId,
+      workspaceSessionRecovery: activeSessionId ? null : state.workspaceSessionRecovery,
       activeSessionVersion: bumpVersionIfChanged(
         state.activeSessionVersion,
         state.activeSessionId,
@@ -193,6 +209,7 @@ export const useSessionSelectionStore = create<SessionSelectionState>((set, get)
   activateHotSession: (options) => set((state) => {
     return {
       activeSessionId: options.sessionId,
+      workspaceSessionRecovery: options.sessionId ? null : state.workspaceSessionRecovery,
       activeSessionVersion: bumpVersionIfChanged(
         state.activeSessionVersion,
         state.activeSessionId,

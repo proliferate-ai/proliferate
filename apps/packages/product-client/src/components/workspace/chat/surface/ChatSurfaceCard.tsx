@@ -8,6 +8,8 @@ interface ChatSurfaceCardProps {
   title: string;
   description: string;
   icon?: ReactNode;
+  actions?: ReactNode;
+  surfaceId?: string;
 }
 
 export function ChatSurfaceCard({
@@ -16,9 +18,12 @@ export function ChatSurfaceCard({
   title,
   description,
   icon,
+  actions,
+  surfaceId,
 }: ChatSurfaceCardProps) {
   return (
     <div
+      data-chat-surface={surfaceId}
       className={`flex flex-1 min-h-0 ${CHAT_SURFACE_GUTTER_CLASSNAME}`}
       style={{ paddingBottom: bottomInsetPx }}
     >
@@ -40,6 +45,11 @@ export function ChatSurfaceCard({
           <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-muted-foreground">
             {description}
           </p>
+          {actions && (
+            <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+              {actions}
+            </div>
+          )}
         </div>
       </div>
     </div>

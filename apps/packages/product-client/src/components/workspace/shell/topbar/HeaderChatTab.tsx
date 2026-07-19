@@ -40,6 +40,7 @@ interface HeaderChatTabProps {
   onPreview: (sessionId: string) => void;
   onActivate: (sessionId: string) => void;
   onSuppressSelect: () => void;
+  canClose: boolean;
   onClose: (sessionId: string) => void;
   onCloseOthers: (sessionId: string) => void;
   onCloseRight: (sessionId: string) => void;
@@ -77,6 +78,7 @@ export function HeaderChatTab({
   onPreview,
   onActivate,
   onSuppressSelect,
+  canClose,
   onClose,
   onCloseOthers,
   onCloseRight,
@@ -175,6 +177,8 @@ export function HeaderChatTab({
         onSelectPointerDownCapture={handleSelectPointerDownCapture}
         onContextMenuTarget={(anchorRect) => onContextMenuTarget(tab.id, anchorRect)}
         onSelect={handleSelect}
+        canClose={canClose}
+        canDismiss={canClose}
         onClose={() => onClose(tab.id)}
         onCloseOthers={() => onCloseOthers(tab.id)}
         onCloseRight={() => onCloseRight(tab.id)}

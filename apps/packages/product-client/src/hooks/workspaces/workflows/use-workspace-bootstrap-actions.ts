@@ -51,13 +51,19 @@ import {
 import {
   isOptimisticWorkspaceSessionPlaceholder,
 } from "#product/lib/domain/workspaces/selection/optimistic-session-shell";
-import { handleEmptyWorkspaceBootstrap } from "#product/hooks/workspaces/workflows/workspace-bootstrap-empty-session";
+import {
+  handleEmptyWorkspaceBootstrapWithRecovery,
+} from "#product/hooks/workspaces/workflows/workspace-bootstrap-empty-session";
 import { handleRememberedWorkspaceSessionBootstrap } from "#product/hooks/workspaces/workflows/workspace-bootstrap-remembered-session";
 import {
   shouldPreserveStagedReplacementShell,
 } from "#product/hooks/sessions/workflows/session-replacement-tombstones";
 import { useProductStorageContext } from "#product/hooks/persistence/facade/use-product-storage-context";
 import { resumePendingEmptySessionCreationForBootstrap } from "#product/hooks/workspaces/workflows/workspace-bootstrap-pending-empty-session";
+import {
+  loadWorkspaceSessionDirectory,
+} from "#product/hooks/workspaces/workflows/workspace-bootstrap-session-directory";
+import { enterWorkspaceSessionRecovery } from "#product/hooks/workspaces/workflows/workspace-session-recovery-state";
 
 interface BootstrapWorkspaceInput {
   workspaceId: string;
@@ -136,6 +142,7 @@ export function useWorkspaceBootstrapActions() {
       maxDurationMs: 30_000,
     });
     let measurementFinishReason: MeasurementFinishReason = "completed";
+    let sessions: WorkspaceSession[] = [];
     cancelDeferredFileTreePrefetch();
     const unbindMeasurementCategories = measurementOperationId
       ? bindMeasurementCategories({
@@ -190,7 +197,6 @@ export function useWorkspaceBootstrapActions() {
         startedAt: initWorkspaceStartedAt,
         isCurrent,
       });
-      let sessionsLoadFailed = false;
       if (measurementOperationId) {
         recordMeasurementMetric({
           type: "cache",
@@ -206,158 +212,151 @@ export function useWorkspaceBootstrapActions() {
         category: "session.list",
         headers: requestHeaders,
       });
-      const sessions = await loadWorkspaceSessions({
+      const sessionsLoadResult = await loadWorkspaceSessionDirectory({
+        isCurrent,
+        logicalWorkspaceId,
+        measurementOperationId,
+        requestOptions: sessionRequestOptions,
+        sessionsStartedAt,
+        timeoutMs: WORKSPACE_BOOTSTRAP_SESSION_LIST_TIMEOUT_MS,
         workspaceConnection,
         workspaceId,
-        requestOptions: sessionRequestOptions ?? undefined,
-        timeoutMs: WORKSPACE_BOOTSTRAP_SESSION_LIST_TIMEOUT_MS,
-      }).then((result) => {
-        recordMeasurementWorkflowStep({
-          operationId: measurementOperationId,
-          step: "workspace.bootstrap.sessions",
-          startedAt: sessionsStartedAt,
-          count: result.length,
-        });
-        logLatency("workspace.select.sessions_loaded", {
-          workspaceId,
-          sessionCount: result.length,
-          elapsedMs: elapsedMs(sessionsStartedAt),
-        });
-        return result;
-      }).catch(() => {
-        sessionsLoadFailed = true;
-        recordMeasurementWorkflowStep({
-          operationId: measurementOperationId,
-          step: "workspace.bootstrap.sessions",
-          startedAt: sessionsStartedAt,
-          outcome: "error_sanitized",
-        });
-        logLatency("workspace.select.sessions_loaded", {
-          workspaceId,
-          sessionCount: 0,
-          fallback: "load_failed",
-        });
-        return [] as WorkspaceSession[];
+      }, {
+        loadWorkspaceSessions,
       });
+      if (sessionsLoadResult.kind === "stale") {
+        return { sessions };
+      }
+      if (sessionsLoadResult.kind === "failed") {
+        measurementFinishReason = "error_sanitized";
+        return { sessions };
+      }
+      sessions = sessionsLoadResult.sessions;
 
-    if (!isCurrent()) {
-      return { sessions };
-    }
-    if (await resumePendingEmptySessionCreationForBootstrap({
-      createEmptySession: createEmptySessionWithResolvedConfig,
-      isCurrent,
-      startedAt,
-      storageContext,
-      workspaceId,
-    })) {
-      return { sessions };
-    }
-    const activeSessionIdAfterLoad = useSessionSelectionStore.getState().activeSessionId;
-    const activeSessionRecordAfterLoad = activeSessionIdAfterLoad
-      ? getSessionRecord(activeSessionIdAfterLoad)
-      : null;
-    const preserveStagedReplacementShell = shouldPreserveStagedReplacementShell(
-      workspaceId,
-      activeSessionRecordAfterLoad?.workspaceId,
-    );
-    const loadedActiveSession = activeSessionIdAfterLoad
-      ? findLoadedSessionForClientSession(activeSessionIdAfterLoad, sessions)
-      : null;
-    if (activeSessionIdAfterLoad && loadedActiveSession) {
-      const wasOptimisticPlaceholder =
-        isOptimisticWorkspaceSessionPlaceholder(activeSessionRecordAfterLoad);
-      applySessionSummary(activeSessionIdAfterLoad, loadedActiveSession, workspaceId);
-      if (wasOptimisticPlaceholder) {
-        logLatency("workspace.select.optimistic_session_validated", {
+      if (!isCurrent()) {
+        return { sessions };
+      }
+      if (await resumePendingEmptySessionCreationForBootstrap({
+        createEmptySession: createEmptySessionWithResolvedConfig,
+        isCurrent,
+        startedAt,
+        storageContext,
+        workspaceId,
+      })) {
+        return { sessions };
+      }
+      const activeSessionIdAfterLoad = useSessionSelectionStore.getState().activeSessionId;
+      const activeSessionRecordAfterLoad = activeSessionIdAfterLoad
+        ? getSessionRecord(activeSessionIdAfterLoad)
+        : null;
+      const preserveStagedReplacementShell = shouldPreserveStagedReplacementShell(
+        workspaceId,
+        activeSessionRecordAfterLoad?.workspaceId,
+      );
+      const loadedActiveSession = activeSessionIdAfterLoad
+        ? findLoadedSessionForClientSession(activeSessionIdAfterLoad, sessions)
+        : null;
+      if (activeSessionIdAfterLoad && loadedActiveSession) {
+        const wasOptimisticPlaceholder =
+          isOptimisticWorkspaceSessionPlaceholder(activeSessionRecordAfterLoad);
+        applySessionSummary(activeSessionIdAfterLoad, loadedActiveSession, workspaceId);
+        if (wasOptimisticPlaceholder) {
+          logLatency("workspace.select.optimistic_session_validated", {
+            workspaceId,
+            logicalWorkspaceId,
+            sessionId: activeSessionIdAfterLoad,
+            title: loadedActiveSession.title ?? null,
+            agentKind: loadedActiveSession.agentKind,
+          });
+        }
+      } else if (!preserveStagedReplacementShell) {
+        clearInvalidOptimisticActiveSession({
           workspaceId,
           logicalWorkspaceId,
-          sessionId: activeSessionIdAfterLoad,
-          title: loadedActiveSession.title ?? null,
-          agentKind: loadedActiveSession.agentKind,
         });
       }
-    } else if (!sessionsLoadFailed && !preserveStagedReplacementShell) {
-      clearInvalidOptimisticActiveSession({
-        workspaceId,
-        logicalWorkspaceId,
-      });
-    }
 
-    if (sessions.length === 0) {
-      if (preserveStagedReplacementShell) {
-        logLatency("workspace.select.initial_session_open.skipped", {
-          workspaceId,
-          sessionId: activeSessionIdAfterLoad,
-          reason: "staged_session_replacement",
-          totalElapsedMs: elapsedMs(startedAt),
-        });
-        if (isCurrent()) {
-          markWorkspaceBootstrappedInSession(workspaceId);
+      if (sessions.length === 0) {
+        if (preserveStagedReplacementShell) {
+          logLatency("workspace.select.initial_session_open.skipped", {
+            workspaceId,
+            sessionId: activeSessionIdAfterLoad,
+            reason: "staged_session_replacement",
+            totalElapsedMs: elapsedMs(startedAt),
+          });
+          if (isCurrent()) {
+            markWorkspaceBootstrappedInSession(workspaceId);
+          }
+          return { sessions };
         }
-        return { sessions };
+        const emptyBootstrap = await handleEmptyWorkspaceBootstrapWithRecovery({
+          agentsByKind,
+          latencyFlowId,
+          logicalWorkspaceId,
+          measurementOperationId,
+          preferences,
+          requestOptions: sessionRequestOptions,
+          sessions,
+          shouldClearLastViewedSession: true,
+          startedAt,
+          timeoutMs: WORKSPACE_BOOTSTRAP_SESSION_LIST_TIMEOUT_MS,
+          workspaceConnection,
+          workspaceId,
+          isCurrent,
+        }, {
+          clearLastViewedSession,
+          createEmptySessionWithResolvedConfig,
+          ensureCloudAgentCatalog,
+          fetchWorkspaceSessions,
+          getActiveSessionId: () => useSessionSelectionStore.getState().activeSessionId,
+          getPendingWorkspaceEntry: () => useSessionSelectionStore.getState().pendingWorkspaceEntry,
+          markWorkspaceBootstrappedInSession,
+          setActiveSessionId: (sessionId) =>
+            useSessionSelectionStore.getState().setActiveSessionId(sessionId),
+        });
+        if (emptyBootstrap.enteredRecovery) {
+          measurementFinishReason = "error_sanitized";
+        }
+        if (emptyBootstrap.shouldReturn) {
+          return { sessions };
+        }
+      } else {
+        const rememberedBootstrap = await handleRememberedWorkspaceSessionBootstrap({
+          lastViewedSessionByWorkspace,
+          latencyFlowId,
+          logicalWorkspaceId,
+          measurementOperationId,
+          requestHeaders,
+          sessions,
+          startedAt,
+          workspaceId,
+          isCurrent,
+        }, {
+          clearLastViewedSession,
+          getActiveSessionId: () => useSessionSelectionStore.getState().activeSessionId,
+          getSessionRecord,
+          patchSessionRecord,
+          rehydrateSessionSlotFromHistory,
+          selectSession,
+          setActiveSessionId: (sessionId) =>
+            useSessionSelectionStore.getState().setActiveSessionId(sessionId),
+        });
+        if (rememberedBootstrap.shouldReturn) {
+          return { sessions };
+        }
       }
-      const emptyBootstrap = await handleEmptyWorkspaceBootstrap({
-        agentsByKind,
-        latencyFlowId,
-        logicalWorkspaceId,
-        measurementOperationId,
-        preferences,
-        requestOptions: sessionRequestOptions,
-        sessions,
-        shouldClearLastViewedSession: !sessionsLoadFailed,
-        startedAt,
-        timeoutMs: WORKSPACE_BOOTSTRAP_SESSION_LIST_TIMEOUT_MS,
-        workspaceConnection,
-        workspaceId,
-        isCurrent,
-      }, {
-        clearLastViewedSession,
-        createEmptySessionWithResolvedConfig,
-        ensureCloudAgentCatalog,
-        fetchWorkspaceSessions,
-        getPendingWorkspaceEntry: () =>
-          useSessionSelectionStore.getState().pendingWorkspaceEntry,
-        markWorkspaceBootstrappedInSession,
-        setActiveSessionId: (sessionId) =>
-          useSessionSelectionStore.getState().setActiveSessionId(sessionId),
-      });
-      if (emptyBootstrap.shouldReturn) {
-        return { sessions };
-      }
-    } else {
-      const rememberedBootstrap = await handleRememberedWorkspaceSessionBootstrap({
-        lastViewedSessionByWorkspace,
-        latencyFlowId,
-        logicalWorkspaceId,
-        measurementOperationId,
-        requestHeaders,
-        sessions,
-        startedAt,
-        workspaceId,
-        isCurrent,
-      }, {
-        clearLastViewedSession,
-        getActiveSessionId: () => useSessionSelectionStore.getState().activeSessionId,
-        getSessionRecord,
-        patchSessionRecord,
-        rehydrateSessionSlotFromHistory,
-        selectSession,
-        setActiveSessionId: (sessionId) =>
-          useSessionSelectionStore.getState().setActiveSessionId(sessionId),
-      });
-      if (rememberedBootstrap.shouldReturn) {
-        return { sessions };
-      }
-    }
 
-    if (isCurrent()) {
-      markWorkspaceBootstrappedInSession(workspaceId);
-    }
+      if (isCurrent()) {
+        markWorkspaceBootstrappedInSession(workspaceId);
+      }
 
-    return { sessions };
-    } catch (error) {
+      return { sessions };
+    } catch {
       measurementFinishReason = "error_sanitized";
-      throw error;
+      if (isCurrent()) {
+        enterWorkspaceSessionRecovery(workspaceId, logicalWorkspaceId, "session-selection-failed");
+      }
+      return { sessions };
     } finally {
       unbindMeasurementCategories();
       if (measurementOperationId) {

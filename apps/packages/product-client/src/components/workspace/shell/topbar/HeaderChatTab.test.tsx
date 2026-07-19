@@ -2,13 +2,17 @@
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ProductHost } from "@proliferate/product-client/host/product-host";
-import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
+import type { ProductHost } from "#product/host/product-host";
+import { ProductHostProvider } from "#product/host/ProductHostProvider";
 import { HeaderChatTab } from "#product/components/workspace/shell/topbar/HeaderChatTab";
 import type { HeaderChatTabEntry } from "#product/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-types";
 
 vi.mock("#product/hooks/cowork/workflows/use-open-cowork-coding-session", () => ({
   useOpenCoworkCodingSession: () => vi.fn(),
+}));
+
+vi.mock("#product/hooks/workspaces/ui/tabs/use-workspace-tab-native-context-menu", () => ({
+  useWorkspaceTabNativeContextMenu: () => ({ onContextMenuCapture: vi.fn() }),
 }));
 
 const webTestHost = { desktop: null } as ProductHost;
@@ -46,6 +50,12 @@ describe("HeaderChatTab", () => {
     expect(onActivate).toHaveBeenCalledTimes(1);
     expect(onActivate).toHaveBeenCalledWith("session-1");
   });
+
+  it("does not expose a pointer close action for the last visible session", () => {
+    renderHeaderChatTab({ canClose: false });
+
+    expect(screen.queryByRole("button", { name: "Close tab" })).toBeNull();
+  });
 });
 
 function renderHeaderChatTab(overrides: Partial<Parameters<typeof HeaderChatTab>[0]> = {}) {
@@ -72,6 +82,7 @@ function renderHeaderChatTab(overrides: Partial<Parameters<typeof HeaderChatTab>
     onPreview: vi.fn(),
     onActivate: vi.fn(),
     onSuppressSelect: vi.fn(),
+    canClose: true,
     onClose: vi.fn(),
     onCloseOthers: vi.fn(),
     onCloseRight: vi.fn(),

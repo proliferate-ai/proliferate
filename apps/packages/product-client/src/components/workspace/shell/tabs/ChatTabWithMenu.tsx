@@ -40,6 +40,8 @@ export function ChatTabWithMenu({
   onCreateGroup,
   onContextMenuTarget,
   onFork,
+  canClose,
+  canDismiss,
   onClose,
   onCloseOthers,
   onCloseRight,
@@ -63,6 +65,8 @@ export function ChatTabWithMenu({
   onCreateGroup?: () => void;
   onContextMenuTarget?: (anchorRect: ManualChatGroupEditorAnchorRect) => void;
   onFork?: () => void;
+  canClose: boolean;
+  canDismiss: boolean;
   onClose: () => void;
   onCloseOthers: () => void;
   onCloseRight: () => void;
@@ -76,7 +80,8 @@ export function ChatTabWithMenu({
   const menuItems = buildChatTabContextMenuItems({
     canRename: !isReviewAgentChild,
     canFork: tab.canFork && !tab.isChild && !isReviewAgentChild,
-    canDismiss: !isReviewAgentChild,
+    canClose,
+    canDismiss: canDismiss && !isReviewAgentChild,
     canCreateGroup: !isReviewAgentChild && canCreateGroup,
     isChild: tab.isChild,
   });
@@ -130,6 +135,7 @@ export function ChatTabWithMenu({
       groupColor={tab.groupColor}
       onSelect={onSelect}
       onSelectPointerDownCapture={onSelectPointerDownCapture}
+      canClose={canClose}
       onClose={onClose}
       badge={renderChatTabStatusBadge(tab)}
       shortcutLabel={shortcutLabel}

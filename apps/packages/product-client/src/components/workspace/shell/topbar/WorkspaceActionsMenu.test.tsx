@@ -51,4 +51,17 @@ describe("WorkspaceActionsMenu", () => {
 
     expect(await screen.findByText("Rename chat")).toBeTruthy();
   });
+
+  it("disables archive when the active session must be preserved", async () => {
+    nativeMenuState.show.mockResolvedValue(false);
+    render(<WorkspaceActions session={{ ...session, canDismiss: false }} />);
+
+    fireEvent.pointerDown(screen.getByRole("button", { name: "Chat actions" }), {
+      button: 0,
+      ctrlKey: false,
+    });
+
+    const archive = await screen.findByText("Archive chat");
+    expect(archive.closest('[role="menuitem"]')?.getAttribute("data-disabled")).not.toBeNull();
+  });
 });

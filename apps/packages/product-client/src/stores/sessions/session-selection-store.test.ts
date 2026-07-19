@@ -12,6 +12,7 @@ describe("session selection store invariants", () => {
       selectedWorkspaceId: null,
       workspaceSelectionNonce: 0,
       workspaceArrivalEvent: null,
+      workspaceSessionRecovery: null,
       activeSessionId: null,
       activeSessionVersion: 0,
       sessionActivationIntentEpochByWorkspace: {},
@@ -176,6 +177,20 @@ describe("session selection store invariants", () => {
 
     useSessionSelectionStore.getState().clearHotPaintGate(12);
     expect(useSessionSelectionStore.getState().hotPaintGate).toBeNull();
+  });
+
+  it("clears exhausted workspace recovery when a session becomes active", () => {
+    useSessionSelectionStore.setState({
+      workspaceSessionRecovery: {
+        workspaceId: "workspace-a",
+        logicalWorkspaceId: "logical-a",
+        reason: "session-list-failed",
+      },
+    });
+
+    useSessionSelectionStore.getState().setActiveSessionId("session-a");
+
+    expect(useSessionSelectionStore.getState().workspaceSessionRecovery).toBeNull();
   });
 });
 

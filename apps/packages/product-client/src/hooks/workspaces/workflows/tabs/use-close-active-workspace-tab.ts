@@ -87,6 +87,9 @@ export function useCloseActiveWorkspaceTab(headerTabs: WorkspaceTabActionsContex
     }
 
     if (activeShellTab?.kind === "chat") {
+      if (!chatVisibilityActions.canHideChatSessionTabs([activeShellTab.sessionId])) {
+        return "blocked";
+      }
       const hidden = chatVisibilityActions.hideChatSessionTabs(
         [activeShellTab.sessionId],
         { selectFallback: true },

@@ -156,6 +156,9 @@ const HeaderTabsInner = memo(function HeaderTabsInner({
   }, [activeTabIndex, layout.positions, layout.widths]);
 
   const dismissChatSession = useCallback((sessionId: string) => {
+    if (!chatVisibilityActions.canHideChatSessionTabs([sessionId])) {
+      return;
+    }
     void dismissSession(sessionId).then(() => {
       if (viewModel.selectedWorkspaceId) {
         removeSessionsFromManualChatGroups(viewModel.workspaceUiKey ?? viewModel.selectedWorkspaceId, [sessionId]);
@@ -166,6 +169,7 @@ const HeaderTabsInner = memo(function HeaderTabsInner({
       showToast(message);
     });
   }, [
+    chatVisibilityActions.canHideChatSessionTabs,
     dismissSession,
     multiSelect.clearSelection,
     removeSessionsFromManualChatGroups,
@@ -185,6 +189,7 @@ const HeaderTabsInner = memo(function HeaderTabsInner({
     buffersByPath: viewModel.buffersByPath,
     closeTarget,
     showChatSessionTab: chatVisibilityActions.showChatSessionTab,
+    canHideChatSessionTabs: chatVisibilityActions.canHideChatSessionTabs,
     hideChatSessionTabs: chatVisibilityActions.hideChatSessionTabs,
   });
 
@@ -272,9 +277,13 @@ const HeaderTabsInner = memo(function HeaderTabsInner({
     forkSession(sessionId);
   }, [forkSession, multiSelect.clearSelection]);
   const handleCloseChatTab = useCallback((sessionId: string) => {
+    if (!chatVisibilityActions.canHideChatSessionTabs([sessionId])) {
+      return;
+    }
     multiSelect.clearSelection();
     chatVisibilityActions.hideChatSessionTabs([sessionId], { selectFallback: true });
   }, [
+    chatVisibilityActions.canHideChatSessionTabs,
     chatVisibilityActions.hideChatSessionTabs,
     multiSelect.clearSelection,
   ]);
@@ -336,6 +345,8 @@ const HeaderTabsInner = memo(function HeaderTabsInner({
               onPreviewChatTab={previewHeaderChatTab}
               onActivateChatTab={activateHeaderChatTab}
               onSuppressChatTabSelect={clearUrgentChatHighlight}
+              canCloseChatTab={(sessionId) =>
+                chatVisibilityActions.canHideChatSessionTabs([sessionId])}
               onCloseChatTab={handleCloseChatTab}
               onCloseOtherChatTabs={handleCloseOtherChatTabs}
               onCloseChatTabsToRight={handleCloseChatTabsToRight}

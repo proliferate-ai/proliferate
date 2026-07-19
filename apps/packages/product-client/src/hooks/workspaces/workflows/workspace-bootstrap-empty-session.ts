@@ -27,6 +27,7 @@ import {
   orderBootstrapLaunchAgents,
 } from "#product/lib/domain/workspaces/selection/workspace-bootstrap-selection";
 import type { PendingWorkspaceEntry } from "#product/lib/domain/workspaces/creation/pending-entry";
+import { enterWorkspaceSessionRecovery } from "#product/hooks/workspaces/workflows/workspace-session-recovery-state";
 
 export async function handleEmptyWorkspaceBootstrap(
   input: {
@@ -202,4 +203,36 @@ export async function handleEmptyWorkspaceBootstrap(
   }
 
   return { shouldReturn: false };
+}
+
+export async function handleEmptyWorkspaceBootstrapWithRecovery(
+  input: Parameters<typeof handleEmptyWorkspaceBootstrap>[0],
+  deps: Parameters<typeof handleEmptyWorkspaceBootstrap>[1] & {
+    getActiveSessionId: () => string | null;
+  },
+): Promise<{ shouldReturn: boolean; enteredRecovery: boolean }> {
+  let result: { shouldReturn: boolean };
+  try {
+    result = await handleEmptyWorkspaceBootstrap(input, deps);
+  } catch {
+    if (input.isCurrent()) {
+      enterWorkspaceSessionRecovery(
+        input.workspaceId,
+        input.logicalWorkspaceId,
+        "session-create-failed",
+      );
+    }
+    return { shouldReturn: true, enteredRecovery: true };
+  }
+
+  if (result.shouldReturn || !input.isCurrent() || deps.getActiveSessionId()) {
+    return { shouldReturn: result.shouldReturn, enteredRecovery: false };
+  }
+
+  enterWorkspaceSessionRecovery(
+    input.workspaceId,
+    input.logicalWorkspaceId,
+    "no-visible-session",
+  );
+  return { shouldReturn: true, enteredRecovery: true };
 }

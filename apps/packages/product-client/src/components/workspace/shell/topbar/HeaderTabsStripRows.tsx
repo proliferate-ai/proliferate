@@ -51,6 +51,7 @@ interface HeaderTabsStripRowsProps {
   onPreviewChatTab: (sessionId: string) => void;
   onActivateChatTab: (sessionId: string) => void;
   onSuppressChatTabSelect: () => void;
+  canCloseChatTab: (sessionId: string) => boolean;
   onCloseChatTab: (sessionId: string) => void;
   onCloseOtherChatTabs: (sessionId: string) => void;
   onCloseChatTabsToRight: (sessionId: string) => void;
@@ -85,6 +86,7 @@ export function HeaderTabsStripRows({
   onPreviewChatTab,
   onActivateChatTab,
   onSuppressChatTabSelect,
+  canCloseChatTab,
   onCloseChatTab,
   onCloseOtherChatTabs,
   onCloseChatTabsToRight,
@@ -192,6 +194,7 @@ export function HeaderTabsStripRows({
             onPreview={onPreviewChatTab}
             onActivate={onActivateChatTab}
             onSuppressSelect={onSuppressChatTabSelect}
+            canClose={canCloseChatTab(tab.id)}
             onClose={onCloseChatTab}
             onCloseOthers={onCloseOtherChatTabs}
             onCloseRight={onCloseChatTabsToRight}

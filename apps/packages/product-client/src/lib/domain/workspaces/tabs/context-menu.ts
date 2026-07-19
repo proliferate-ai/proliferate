@@ -56,12 +56,14 @@ export const FILE_TAB_CONTEXT_MENU_ITEMS: readonly WorkspaceTabContextMenuItem[]
 export function buildChatTabContextMenuItems({
   canRename,
   canFork = false,
+  canClose = true,
   canDismiss,
   canCreateGroup = false,
   isChild = false,
 }: {
   canRename: boolean;
   canFork?: boolean;
+  canClose?: boolean;
   canDismiss: boolean;
   canCreateGroup?: boolean;
   isChild?: boolean;
@@ -93,29 +95,32 @@ export function buildChatTabContextMenuItems({
     });
   }
 
-  if (items.length > 0) {
-    items.push({ kind: "separator", id: "close-separator" });
+  const closeItems: WorkspaceTabContextMenuItem[] = [];
+  if (canClose) {
+    closeItems.push(CLOSE_TAB_ACTION);
   }
-
-  items.push(CLOSE_TAB_ACTION);
-
   if (!isChild) {
-    items.push(
+    closeItems.push(
       CLOSE_OTHER_TABS_ACTION,
       CLOSE_TABS_TO_RIGHT_ACTION,
     );
   }
 
+  if (closeItems.length > 0 && items.length > 0) {
+    items.push({ kind: "separator", id: "close-separator" });
+  }
+  items.push(...closeItems);
+
   if (canDismiss) {
-    items.push(
-      { kind: "separator", id: "dismiss-separator" },
-      {
-        kind: "action",
-        command: "dismiss",
-        label: "Dismiss Session",
-        tone: "destructive",
-      },
-    );
+    if (items.length > 0) {
+      items.push({ kind: "separator", id: "dismiss-separator" });
+    }
+    items.push({
+      kind: "action",
+      command: "dismiss",
+      label: "Dismiss Session",
+      tone: "destructive",
+    });
   }
 
   return items;

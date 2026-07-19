@@ -18,6 +18,7 @@ import { NoWorkspaceState } from "#product/components/workspace/chat/surface/NoW
 import { SessionTranscriptPane } from "#product/components/workspace/chat/surface/SessionTranscriptPane";
 import { SessionContentSearchOverlay } from "#product/components/workspace/chat/surface/SessionContentSearchOverlay";
 import { TranscriptSwitchingPlaceholder } from "#product/components/workspace/chat/surface/TranscriptSwitchingPlaceholder";
+import { WorkspaceSessionRecoveryState } from "#product/components/workspace/chat/surface/WorkspaceSessionRecoveryState";
 import { type ChatSurfaceState, useChatSurfaceState } from "#product/hooks/chat/derived/use-chat-surface-state";
 import {
   useActiveSessionId,
@@ -64,6 +65,13 @@ function ChatContent({
           nonDisplacingBottomInsetPx={stickyNonDisplacingBottomInsetPx}
         />
       );
+    case "workspace-recovery":
+      return (
+        <WorkspaceSessionRecoveryState
+          bottomInsetPx={dockSafeAreaPx}
+          reason={mode.reason}
+        />
+      );
     case "workspace-status":
     case "session-loading":
       return (
@@ -106,6 +114,7 @@ function shouldShowSessionInputChrome(mode: ChatSurfaceState): boolean {
     case "session-transcript":
       return true;
     case "no-workspace":
+    case "workspace-recovery":
       return false;
     case "launch-intent":
       return true;
@@ -113,7 +122,7 @@ function shouldShowSessionInputChrome(mode: ChatSurfaceState): boolean {
 }
 
 function shouldEnableContentSearchOverlay(mode: ChatSurfaceState): boolean {
-  return mode.kind !== "no-workspace";
+  return mode.kind !== "no-workspace" && mode.kind !== "workspace-recovery";
 }
 
 export const ChatView = memo(function ChatView({
@@ -253,21 +262,23 @@ export const ChatView = memo(function ChatView({
         />
       )}
       <SessionContentSearchOverlay enabled={contentSearchEnabled} surface="chat" />
-      <DebugProfiler id="chat-composer-dock-region">
-        <ChatComposerDock
-          ref={dockRef}
-          backdrop={isSessionMode}
-          outboundSlot={composerDockSlots.outboundSlot}
-          activeSlot={composerDockSlots.activeSlot}
-          attachedSlot={composerDockSlots.attachedSlot}
-          lowerBackdropTopPx={lowerBackdropTopPx}
-          shellClassName="pointer-events-none absolute inset-x-0 bottom-0"
-          data-telemetry-block
-          data-focus-zone="chat"
-        >
-          {chatInput}
-        </ChatComposerDock>
-      </DebugProfiler>
+      {mode.kind !== "workspace-recovery" && (
+        <DebugProfiler id="chat-composer-dock-region">
+          <ChatComposerDock
+            ref={dockRef}
+            backdrop={isSessionMode}
+            outboundSlot={composerDockSlots.outboundSlot}
+            activeSlot={composerDockSlots.activeSlot}
+            attachedSlot={composerDockSlots.attachedSlot}
+            lowerBackdropTopPx={lowerBackdropTopPx}
+            shellClassName="pointer-events-none absolute inset-x-0 bottom-0"
+            data-telemetry-block
+            data-focus-zone="chat"
+          >
+            {chatInput}
+          </ChatComposerDock>
+        </DebugProfiler>
+      )}
       </div>
     </DebugProfiler>
   );

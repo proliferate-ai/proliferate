@@ -44,6 +44,9 @@ export function WorkspaceActionsMenuContainer() {
     [viewModel?.chatTabs],
   );
   const activeSessionId = viewModel?.activeSessionId ?? null;
+  const canDismissActiveSession = activeTab !== null
+    && !activeTab.isReviewAgentChild
+    && chatVisibilityActions.canHideChatSessionTabs([activeTab.id]);
 
   const handleRename = useCallback(() => {
     runShortcutHandler("session.rename", { source: "menu" });
@@ -54,7 +57,7 @@ export function WorkspaceActionsMenuContainer() {
     }
   }, [activeSessionId, forkSession]);
   const handleDismiss = useCallback(() => {
-    if (!activeSessionId || !viewModel) {
+    if (!activeSessionId || !viewModel || !canDismissActiveSession) {
       return;
     }
     const workspaceGroupKey = viewModel.workspaceUiKey ?? viewModel.selectedWorkspaceId;
@@ -67,6 +70,7 @@ export function WorkspaceActionsMenuContainer() {
     });
   }, [
     activeSessionId,
+    canDismissActiveSession,
     dismissSession,
     removeSessionsFromManualChatGroups,
     showToast,
@@ -84,7 +88,7 @@ export function WorkspaceActionsMenuContainer() {
           && activeTab.canFork
           && !activeTab.isChild
           && !activeTab.isReviewAgentChild,
-        canDismiss: activeTab !== null && !activeTab.isReviewAgentChild,
+        canDismiss: canDismissActiveSession,
         onRename: handleRename,
         onFork: handleFork,
         onDismiss: handleDismiss,
