@@ -24,6 +24,17 @@ The self-host CloudFormation template is one of the assets attached to a
 version does not identify an exact artifact build unless the corresponding
 artifact tag and source SHA are also known.
 
+The Proliferate LiteLLM wrapper has a separate upstream input coordinate. Both
+`server/litellm/Dockerfile` and local development Compose bind
+`ghcr.io/berriai/litellm:v1.93.0@sha256:a1745e629abfb17d434426ff48b115f54f4f4c4a0f5af241de569e93c63c411e`.
+The digest identifies the official multi-architecture OCI index and the tag
+makes its reviewed release legible; neither may be replaced by a floating or
+tag-only reference. This pin preserves Proliferate's checked-in model config,
+LiteLLM management API contract, and existing `$5` team/key enrollment cap.
+The selected upstream source contains the bounded per-request budget
+reservation behavior, so a request without `max_tokens` does not reserve all
+remaining budget headroom while it is in flight.
+
 ## Topology
 
 ### Hosted spine
@@ -199,6 +210,10 @@ Server releases publish server and LiteLLM GHCR images with version and rolling
 also holds the two Linux runtime bundles, CloudFormation template, installer,
 AWS launch helper, deploy bundle, and checksum manifest enumerated in the
 [Release procedure](../../../../developing/deploying/releases.md).
+
+Those published LiteLLM images are Proliferate-owned wrappers. Their rolling or
+versioned outer tags do not loosen the wrapper's upstream input: every build
+still starts from the exact release-and-index-digest coordinate above.
 
 ## Workflow Inventory
 
