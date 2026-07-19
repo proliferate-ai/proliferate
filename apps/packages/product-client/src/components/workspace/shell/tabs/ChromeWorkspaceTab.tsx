@@ -129,7 +129,7 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
           >
             {showTitle && (
               <span
-                className="workspace-shell-tab__label min-w-0 flex-1 overflow-hidden whitespace-nowrap text-left"
+                className="workspace-shell-tab__label min-w-0 flex-1 overflow-hidden whitespace-nowrap text-left text-ui-sm"
                 style={{
                   WebkitMaskImage: titleMask,
                   maskImage: titleMask,

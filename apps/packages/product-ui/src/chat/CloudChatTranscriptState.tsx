@@ -15,6 +15,10 @@ import {
   CloudChatTranscriptRows,
   type CloudChatTranscriptPlanActions,
 } from "./CloudChatTranscript";
+import {
+  CHAT_COLUMN_CLASSNAME,
+  CHAT_SURFACE_GUTTER_CLASSNAME,
+} from "./ChatColumn";
 
 export type CloudChatTranscriptStateView = ChatTranscriptState;
 
@@ -35,8 +39,8 @@ export function CloudChatTranscriptState({
     ...view,
     layout: {
       bottomInsetPx: 32,
-      columnClassName: "mx-auto w-full max-w-3xl",
-      gutterClassName: "px-6",
+      columnClassName: CHAT_COLUMN_CLASSNAME,
+      gutterClassName: CHAT_SURFACE_GUTTER_CLASSNAME,
       ...view.layout,
     },
   }), [view]);
@@ -58,8 +62,8 @@ export function CloudChatTranscriptState({
     && (view.outboxEntries?.length ?? 0) === 0
   ) {
     return (
-      <div className="web-scrollbar min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto flex w-full max-w-3xl flex-col px-6 py-6">
+      <div className={`web-scrollbar min-h-0 flex-1 overflow-y-auto ${CHAT_SURFACE_GUTTER_CLASSNAME}`}>
+        <div className={`${CHAT_COLUMN_CLASSNAME} flex flex-col py-6`}>
           <CloudChatTranscript
             rows={[]}
             emptyTitle={emptyTitle}

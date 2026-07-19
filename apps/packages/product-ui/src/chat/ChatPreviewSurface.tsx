@@ -4,6 +4,7 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
 import { Textarea } from "@proliferate/ui/primitives/Textarea";
 import { ClaimBanner, type ClaimBannerView } from "./ClaimBanner";
+import { CHAT_COLUMN_CLASSNAME } from "./ChatColumn";
 
 export interface ChatPreviewMessageView {
   id: string;
@@ -71,7 +72,7 @@ export function ChatPreviewSurface({
       </header>
 
       <div className="proliferate-scrollbar min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-3xl px-6 py-6">
+        <div className={`${CHAT_COLUMN_CLASSNAME} px-6 py-6`}>
           <div className="mb-4 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <span className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1">
               <GitBranchIcon className="size-[13px]" />
@@ -102,7 +103,7 @@ export function ChatPreviewSurface({
       </div>
 
       <footer className="shrink-0 border-t border-border p-4">
-        <div className="mx-auto flex max-w-3xl items-end gap-2 rounded-lg border border-input bg-card p-2">
+        <div className={`${CHAT_COLUMN_CLASSNAME} flex items-end gap-2 rounded-lg border border-input bg-card p-2`}>
           <Textarea
             rows={2}
             className="min-h-10 flex-1 resize-none bg-transparent px-2 py-1 text-sm text-foreground outline-none placeholder:text-muted-foreground"

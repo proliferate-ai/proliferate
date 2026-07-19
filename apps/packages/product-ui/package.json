@@ -183,6 +183,10 @@
       "types": "./dist/chat/ChatPreviewSurface.d.ts",
       "import": "./dist/chat/ChatPreviewSurface.js"
     },
+    "./chat/ChatColumn": {
+      "types": "./dist/chat/ChatColumn.d.ts",
+      "import": "./dist/chat/ChatColumn.js"
+    },
     "./chat/CloudChatComposer": {
       "types": "./dist/chat/CloudChatComposer.d.ts",
       "import": "./dist/chat/CloudChatComposer.js"

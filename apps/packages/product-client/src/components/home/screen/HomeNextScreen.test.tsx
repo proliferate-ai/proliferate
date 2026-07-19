@@ -10,11 +10,9 @@ import {
   resetHomeNextTargetSelectionForTests,
   setHomeNextTargetSelectionStorageContext,
 } from "#product/hooks/home/ui/use-home-next-target-selection-state";
-import {
-  createMemoryProductStorage,
-  type MemoryProductStorage,
-} from "#product/test/product-storage-test-utils";
+import { createMemoryProductStorage, type MemoryProductStorage } from "#product/test/product-storage-test-utils";
 import type { ProductStorage } from "@proliferate/product-client/host/product-host";
+import { CHAT_COLUMN_CLASSNAME, CHAT_SURFACE_GUTTER_CLASSNAME } from "@proliferate/product-ui/chat/ChatColumn";
 import { HOME_CHAT_COMPOSER_INPUT } from "#product/config/chat";
 
 const screenMocks = vi.hoisted(() => {
@@ -399,9 +397,11 @@ describe("HomeNextScreen composer control-row parity", () => {
 
   it("renders the shared leading and trailing composer control clusters", () => {
     render(<HomeNextScreen />);
-
     expect(screen.getByTestId("composer-leading-controls")).toBeTruthy();
     expect(screen.getByTestId("composer-trailing-controls")).toBeTruthy();
+    const column = screen.getByLabelText("Prompt").closest('[class~="max-w-[46rem]"]');
+    expect(column?.className).toContain(CHAT_COLUMN_CLASSNAME);
+    expect(column?.parentElement?.className).toContain(CHAT_SURFACE_GUTTER_CLASSNAME);
   });
 
   it("feeds the clusters sessionless chat-equivalent props", () => {

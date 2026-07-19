@@ -88,12 +88,14 @@ afterEach(() => {
 });
 
 describe("GlobalHeader", () => {
-  it("renders the workspace title one restrained type step above surrounding header controls", () => {
+  it("applies the larger semantic workspace-title scale to the workspace name", () => {
     renderHeader();
 
     const title = screen.getByTitle("repo");
-    expect(title.className.split(" ")).toContain("text-sidebar-nav");
+    expect(title.style.fontSize).toBe("var(--text-workspace-title)");
+    expect(title.style.lineHeight).toBe("var(--text-workspace-title--line-height)");
     expect(title.className.split(" ")).not.toContain("text-ui");
+    expect(title.className.split(" ")).not.toContain("text-sidebar-nav");
   });
 
   it("does not offer a native open action without a Desktop file bridge", () => {

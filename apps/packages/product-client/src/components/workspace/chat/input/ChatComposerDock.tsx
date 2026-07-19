@@ -3,9 +3,9 @@ import { twMerge } from "@proliferate/ui/utils/tw-merge";
 import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
 import {
   CHAT_COLUMN_CLASSNAME,
-  CHAT_DOCK_LOWER_BACKDROP_FADE_HEIGHT_PX,
   CHAT_SURFACE_GUTTER_CLASSNAME,
-} from "#product/config/chat-layout";
+} from "@proliferate/product-ui/chat/ChatColumn";
+import { CHAT_DOCK_LOWER_BACKDROP_FADE_HEIGHT_PX } from "#product/config/chat-layout";
 import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-count";
 
 interface ChatComposerDockProps extends HTMLAttributes<HTMLDivElement> {

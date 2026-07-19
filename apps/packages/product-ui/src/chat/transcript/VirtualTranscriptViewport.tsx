@@ -2,8 +2,10 @@ import type { RefObject } from "react";
 import type { VirtualItem } from "@tanstack/react-virtual";
 import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
 import {
-  DEFAULT_CHAT_COLUMN_CLASSNAME,
-  DEFAULT_CHAT_SURFACE_GUTTER_CLASSNAME,
+  CHAT_COLUMN_CLASSNAME,
+  CHAT_SURFACE_GUTTER_CLASSNAME,
+} from "../ChatColumn";
+import {
   TranscriptHistoryLoadingRow,
   type TranscriptRenderableRow,
   type TranscriptRowListBaseProps,
@@ -26,8 +28,8 @@ export function VirtualTranscriptViewport({
   topSpacerHeight,
   virtualItems,
   virtualizationMode,
-  columnClassName = DEFAULT_CHAT_COLUMN_CLASSNAME,
-  gutterClassName = DEFAULT_CHAT_SURFACE_GUTTER_CLASSNAME,
+  columnClassName = CHAT_COLUMN_CLASSNAME,
+  gutterClassName = CHAT_SURFACE_GUTTER_CLASSNAME,
 }: {
   bottomSpacerHeight: number;
   nonDisplacingBottomInsetPx: number;

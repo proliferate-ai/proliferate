@@ -3,6 +3,10 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { NewChatSurface } from "../src/new-chat/NewChatSurface";
+import {
+  CHAT_COLUMN_CLASSNAME,
+  CHAT_SURFACE_GUTTER_CLASSNAME,
+} from "../src/chat/ChatColumn";
 
 const target = {
   label: "Target",
@@ -81,6 +85,30 @@ describe("NewChatSurface", () => {
 
     fireEvent.click(screen.getByLabelText("Send message"));
     expect(onSubmit).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses the shared chat column and gutter around the pre-message composer", () => {
+    render(
+      <NewChatSurface
+        heading="What should we run?"
+        draft=""
+        placeholder="Describe a task"
+        canSubmit={false}
+        submitting={false}
+        target={target}
+        model={model}
+        mode={mode}
+        notices={[]}
+        actions={[]}
+        onDraftChange={vi.fn()}
+        onSubmit={vi.fn()}
+      />,
+    );
+
+    const composer = screen.getByPlaceholderText("Describe a task");
+    const column = composer.closest('[class~="max-w-[46rem]"]');
+    expect(column?.className).toContain(CHAT_COLUMN_CLASSNAME);
+    expect(column?.parentElement?.className).toContain(CHAT_SURFACE_GUTTER_CLASSNAME);
   });
 
   it("emits draft and picker changes", () => {

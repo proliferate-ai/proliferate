@@ -1,8 +1,10 @@
 import { useSearchParams } from "react-router-dom";
+import { MessageSquare } from "@proliferate/ui/icons";
 import { PlaygroundComposer } from "#product/components/playground/PlaygroundComposer";
 import { PlaygroundScenarioBar } from "#product/components/playground/PlaygroundScenarioBar";
 import { PlaygroundSidebarGitDiff } from "#product/components/playground/PlaygroundSidebarGitDiff";
 import { PlaygroundTranscript } from "#product/components/playground/transcript/PlaygroundTranscript";
+import { ChromeWorkspaceTab } from "#product/components/workspace/shell/tabs/ChromeWorkspaceTab";
 // This dev-only route sits outside AuthenticatedProductClient, so load the
 // authenticated presentation rules explicitly for direct playground URLs.
 import "../app/authenticated.css";
@@ -10,7 +12,10 @@ import {
   resolvePlaygroundScenarioSelection,
   type ScenarioKey,
 } from "#product/config/playground";
-import { CHAT_COLUMN_CLASSNAME, CHAT_SURFACE_GUTTER_CLASSNAME } from "#product/config/chat-layout";
+import {
+  CHAT_COLUMN_CLASSNAME,
+  CHAT_SURFACE_GUTTER_CLASSNAME,
+} from "@proliferate/product-ui/chat/ChatColumn";
 import { useChatDockInset } from "#product/hooks/chat/ui/use-chat-dock-inset";
 import { useReplaySession } from "#product/hooks/playground/lifecycle/use-replay-session";
 import { PlaygroundAttachmentPreviewAside } from "#product/components/playground/PlaygroundAttachmentFixtures";
@@ -51,12 +56,27 @@ export function ChatPlaygroundPage() {
   return (
     <div className="chat-selection-root flex h-screen flex-col bg-background text-foreground">
       {!focusMarkdownPresentation && (
-        <PlaygroundScenarioBar
-          selection={selection}
-          replay={replay}
-          onSelectFixture={handleSelectFixture}
-          onSelectRecording={handleSelectRecording}
-        />
+        <>
+          <header
+            aria-label="Populated session preview"
+            className="flex h-10 shrink-0 items-center border-b border-border bg-sidebar px-3"
+          >
+            <ChromeWorkspaceTab
+              isActive
+              width={256}
+              icon={<MessageSquare className="size-3.5" />}
+              label="Typography hierarchy review"
+              onSelect={() => {}}
+              onClose={() => {}}
+            />
+          </header>
+          <PlaygroundScenarioBar
+            selection={selection}
+            replay={replay}
+            onSelectFixture={handleSelectFixture}
+            onSelectRecording={handleSelectRecording}
+          />
+        </>
       )}
       <main className="relative flex flex-1 overflow-hidden">
         <div

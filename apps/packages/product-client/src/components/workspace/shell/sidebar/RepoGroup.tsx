@@ -313,11 +313,11 @@ function RepoGroupEnvironmentIcon({
   // Codex parity: remote-capable repos use the fused folder+globe glyph —
   // one icon, never a badge overlay.
   if (kind === "cloud" || kind === "local_cloud") {
-    return <FolderRemote className="size-4 shrink-0" />;
+    return <FolderRemote className="size-[var(--sidebar-primary-icon-size)] shrink-0" />;
   }
 
   const FolderIcon = expanded ? FolderFilled : FolderClosedFilled;
-  return <FolderIcon className="size-4 shrink-0" />;
+  return <FolderIcon className="size-[var(--sidebar-primary-icon-size)] shrink-0" />;
 }
 
 function repoMenuActionIcon(id: RepoGroupMenuAction["id"]) {

@@ -45,7 +45,7 @@ export function CloudChatComposer({ composer }: { composer: CloudChatComposerVie
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col">
+    <div className="flex flex-col">
       <ChatComposerSurface overflowMode="visible">
         <form onSubmit={submitComposer} className="relative flex flex-col">
           <ComposerTextareaFrame topInset="standard">
