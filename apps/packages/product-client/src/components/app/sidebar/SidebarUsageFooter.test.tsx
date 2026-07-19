@@ -102,7 +102,7 @@ describe("SidebarUsageFooter", () => {
     expect(screen.queryByRole("button", { name: "Billing" })).toBeNull();
   });
 
-  it("does not direct billing-disabled users to an admin when usage is exhausted", () => {
+  it("does not direct billing-disabled users to an admin when usage has no allocation", () => {
     state.billingEnabled = false;
     state.query = {
       data: usage({
@@ -118,7 +118,7 @@ describe("SidebarUsageFooter", () => {
 
     expect(screen.queryByText(/Ask your admin/)).toBeNull();
     expect(screen.getByText("Billing actions aren't available on this deployment.")).not.toBeNull();
-    expect(screen.getByRole("button", { name: /Compute usage, exhausted/ })).not.toBeNull();
+    expect(screen.getByRole("button", { name: /Compute usage, No allocation/ })).not.toBeNull();
   });
 });
 

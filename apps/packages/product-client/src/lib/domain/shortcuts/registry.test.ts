@@ -30,7 +30,7 @@ describe("shortcut registry", () => {
     const cleanupB = registerShortcutHandler("app.open-settings", secondHandler);
 
     expect(consoleWarn).toHaveBeenCalledWith(
-      "Duplicate shortcut handler registration for app.open-settings; using latest handler",
+      "Duplicate shortcut handler registration for app.open-settings at global priority; using latest same-priority handler",
     );
 
     expect(runShortcutHandler("app.open-settings", { source: "keyboard" })).toBe(true);
@@ -43,6 +43,64 @@ describe("shortcut registry", () => {
     expect(firstHandler).toHaveBeenCalledWith({ source: "menu" });
 
     cleanupA();
+    consoleWarn.mockRestore();
+  });
+
+  it("keeps contextual ownership above a later global registration", () => {
+    const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const contextualHandler = vi.fn();
+    const globalHandler = vi.fn();
+
+    const cleanupContextual = registerShortcutHandler(
+      "workspace.new-default",
+      contextualHandler,
+      { priority: "contextual" },
+    );
+    const cleanupGlobal = registerShortcutHandler("workspace.new-default", globalHandler);
+
+    expect(consoleWarn).not.toHaveBeenCalled();
+    expect(runShortcutHandler("workspace.new-default", { source: "keyboard" })).toBe(true);
+    expect(contextualHandler).toHaveBeenCalledWith({ source: "keyboard" });
+    expect(globalHandler).not.toHaveBeenCalled();
+
+    cleanupContextual();
+    expect(runShortcutHandler("workspace.new-default", { source: "menu" })).toBe(true);
+    expect(globalHandler).toHaveBeenCalledWith({ source: "menu" });
+
+    cleanupGlobal();
+    consoleWarn.mockRestore();
+  });
+
+  it("uses registration order only to break ties between contextual owners", () => {
+    const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const globalHandler = vi.fn();
+    const contextualA = vi.fn();
+    const contextualB = vi.fn();
+    const cleanupGlobal = registerShortcutHandler("workspace.new-default", globalHandler);
+    const cleanupA = registerShortcutHandler("workspace.new-default", contextualA, {
+      priority: "contextual",
+    });
+    const cleanupB = registerShortcutHandler("workspace.new-default", contextualB, {
+      priority: "contextual",
+    });
+
+    expect(consoleWarn).toHaveBeenCalledWith(
+      "Duplicate shortcut handler registration for workspace.new-default at contextual priority; using latest same-priority handler",
+    );
+    expect(runShortcutHandler("workspace.new-default", { source: "keyboard" })).toBe(true);
+    expect(contextualB).toHaveBeenCalledTimes(1);
+    expect(contextualA).not.toHaveBeenCalled();
+    expect(globalHandler).not.toHaveBeenCalled();
+
+    cleanupB();
+    expect(runShortcutHandler("workspace.new-default", { source: "keyboard" })).toBe(true);
+    expect(contextualA).toHaveBeenCalledTimes(1);
+
+    cleanupA();
+    expect(runShortcutHandler("workspace.new-default", { source: "keyboard" })).toBe(true);
+    expect(globalHandler).toHaveBeenCalledTimes(1);
+
+    cleanupGlobal();
     consoleWarn.mockRestore();
   });
 

@@ -59,7 +59,7 @@ function DesktopCoworkThreadLaunchProvider({ children }: { children: ReactNode }
     () => {
       void createThread();
     },
-    { enabled: ownsNewThreadShortcut, allowOverride: true },
+    { enabled: ownsNewThreadShortcut, priority: "contextual" },
   );
 
   const value = useMemo(

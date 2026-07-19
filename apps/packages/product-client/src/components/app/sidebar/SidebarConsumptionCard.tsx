@@ -4,12 +4,18 @@ import { Button } from "@proliferate/ui/primitives/Button";
 
 type ConsumptionMeterTone = "default" | "warning" | "destructive";
 
-type ConsumptionMeterKind = "unlimited" | "available" | "blocked" | "exhausted";
+type ConsumptionMeterKind =
+  | "unlimited"
+  | "available"
+  | "blocked"
+  | "zero-allocation"
+  | "exhausted";
 
 interface ConsumptionMeterState {
   kind: ConsumptionMeterKind;
   percent: number | null;
   tone: ConsumptionMeterTone;
+  blocked: boolean;
 }
 
 export type SidebarConsumptionState =
@@ -41,34 +47,72 @@ function resolveConsumptionMeterState(
 ): ConsumptionMeterState {
   if (limit) {
     if (limit.capValue <= 0) {
-      return { kind: "exhausted", percent: 100, tone: "destructive" };
+      return limit.usedValue > 0
+        ? { kind: "exhausted", percent: 100, tone: "destructive", blocked: limit.blocked }
+        : { kind: "zero-allocation", percent: 100, tone: "destructive", blocked: limit.blocked };
+    }
+    if (limit.blocked) {
+      return limit.usedValue > 0
+        ? { kind: "exhausted", percent: 100, tone: "destructive", blocked: true }
+        : { kind: "blocked", percent: 100, tone: "destructive", blocked: true };
     }
     const percent = Math.min(100, (limit.usedValue / limit.capValue) * 100);
-    if (limit.blocked) {
-      return { kind: "blocked", percent, tone: "destructive" };
-    }
     return {
       kind: "available",
       percent,
       tone: percent >= CONSUMPTION_NEAR_LIMIT_PERCENT ? "warning" : "default",
+      blocked: false,
     };
   }
 
   if (remainingValue === null) {
-    return { kind: "unlimited", percent: null, tone: "default" };
+    return { kind: "unlimited", percent: null, tone: "default", blocked: false };
+  }
+
+  if (remainingValue <= 0) {
+    return usedValue > 0
+      ? { kind: "exhausted", percent: 100, tone: "destructive", blocked: false }
+      : { kind: "zero-allocation", percent: 100, tone: "destructive", blocked: false };
   }
 
   const total = usedValue + remainingValue;
-  if (total <= 0 || remainingValue <= 0) {
-    return { kind: "exhausted", percent: 100, tone: "destructive" };
-  }
-
   const percent = Math.min(100, (usedValue / total) * 100);
   return {
     kind: "available",
     percent,
     tone: percent >= CONSUMPTION_NEAR_LIMIT_PERCENT ? "warning" : "default",
+    blocked: false,
   };
+}
+
+function consumptionMeterAriaStatus(state: ConsumptionMeterState): string {
+  switch (state.kind) {
+    case "zero-allocation":
+      return "No allocation";
+    case "exhausted":
+      return `100% used, exhausted${state.blocked ? ", blocked" : ""}`;
+    case "blocked":
+      return "blocked";
+    case "unlimited":
+      return "unlimited";
+    case "available":
+      return `${Math.round(state.percent ?? 0)}% used`;
+  }
+}
+
+function consumptionMeterDetailLabel(state: ConsumptionMeterState): string {
+  switch (state.kind) {
+    case "zero-allocation":
+      return "No allocation";
+    case "exhausted":
+      return `100% used · Exhausted${state.blocked ? " · Blocked" : ""}`;
+    case "blocked":
+      return "Blocked";
+    case "unlimited":
+      return "No limit";
+    case "available":
+      return `${Math.round(state.percent ?? 0)}% used`;
+  }
 }
 
 function formatRemainingHours(seconds: number | null): string {
@@ -124,18 +168,12 @@ export const SidebarUsageMeterTrigger = forwardRef<
   const label = meter === "compute" ? "Compute" : "LLM";
   const shortLabel = meter === "compute" ? "C" : "L";
   const percent = meters?.[meter].percent ?? null;
-  const meterKind = meters?.[meter].kind ?? null;
   const tone = meters?.[meter].tone ?? fallbackTone;
-  const percentLabel = percent === null ? null : `${Math.round(percent)}% used`;
   const statusLabel = state.kind === "loading"
     ? "loading"
     : state.kind === "unavailable"
       ? "unavailable"
-      : meterKind === "exhausted"
-        ? "exhausted"
-        : meterKind === "blocked"
-          ? `${percentLabel}, blocked`
-          : percentLabel ?? "unlimited";
+      : consumptionMeterAriaStatus(meters![meter]);
   const dashOffset = percent === null
     ? RING_CIRCUMFERENCE
     : RING_CIRCUMFERENCE * (1 - Math.max(0, Math.min(100, percent)) / 100);
@@ -196,11 +234,7 @@ function ConsumptionDetailRow({
   state: ConsumptionMeterState;
   remainingLabel: string;
 }) {
-  const usedLabel = state.kind === "exhausted"
-    ? "No allocation"
-    : state.percent === null
-      ? "No limit"
-      : `${Math.round(state.percent)}% used`;
+  const usedLabel = consumptionMeterDetailLabel(state);
   return (
     <div className="flex items-center justify-between gap-3 px-2.5 py-1.5">
       <div>
@@ -250,8 +284,10 @@ export function ConsumptionCard({
 
   const meters = metersForState(state)!;
   const blocked = meters.compute.kind === "blocked"
+    || meters.compute.kind === "zero-allocation"
     || meters.compute.kind === "exhausted"
     || meters.llm.kind === "blocked"
+    || meters.llm.kind === "zero-allocation"
     || meters.llm.kind === "exhausted";
 
   return (

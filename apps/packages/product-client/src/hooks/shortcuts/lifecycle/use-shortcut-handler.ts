@@ -3,15 +3,16 @@ import type { ShortcutId } from "#product/config/shortcuts/registry";
 import {
   registerShortcutHandler,
   type ShortcutHandler,
+  type ShortcutHandlerPriority,
 } from "#product/lib/domain/shortcuts/registry";
 
 interface UseShortcutHandlerOptions {
   enabled?: boolean;
-  allowOverride?: boolean;
+  priority?: ShortcutHandlerPriority;
 }
 
-// Owns registering a mounted shortcut handler while keeping the latest callback.
-// Does not own global shortcut event dispatch.
+// Owns registering a mounted shortcut handler and its priority while keeping
+// the latest callback. Does not own global shortcut event dispatch.
 export function useShortcutHandler(
   id: ShortcutId,
   handler: ShortcutHandler,
@@ -32,7 +33,7 @@ export function useShortcutHandler(
     return registerShortcutHandler(
       id,
       (trigger) => handlerRef.current(trigger),
-      { allowOverride: options?.allowOverride },
+      { priority: options?.priority },
     );
-  }, [enabled, id, options?.allowOverride]);
+  }, [enabled, id, options?.priority]);
 }

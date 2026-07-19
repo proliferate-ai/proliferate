@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
 
-import { cleanup, renderHook } from "@testing-library/react";
+import { cleanup, render, renderHook } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AppCommandActions } from "#product/hooks/app/workflows/app-command-action-types";
 import { useAppShortcuts } from "#product/hooks/app/lifecycle/use-app-shortcuts";
+import { useShortcutDispatcher } from "#product/hooks/shortcuts/lifecycle/use-shortcut-dispatcher";
 import { useShortcutHandler } from "#product/hooks/shortcuts/lifecycle/use-shortcut-handler";
 import {
   clearShortcutHandlerRegistryForTests,
@@ -67,6 +69,7 @@ describe("useAppShortcuts", () => {
     cleanup();
     clearShortcutHandlerRegistryForTests();
     document.body.innerHTML = "";
+    vi.unstubAllGlobals();
     vi.clearAllMocks();
   });
 
@@ -162,28 +165,36 @@ describe("useAppShortcuts", () => {
     expect(actions.openWebApp.execute).toHaveBeenCalledWith("shortcut");
   });
 
-  it("lets active Cowork temporarily own Cmd-N, then restores the normal fallback", () => {
+  it("prioritizes a child Cowork owner across unmount and remount regardless of effect order", () => {
+    vi.stubGlobal("navigator", {
+      platform: "MacIntel",
+      userAgent: "Mac OS X",
+    });
     const actions = commandActions();
     const createCoworkThread = vi.fn();
-    const { rerender } = renderHook(
-      ({ cowork }) => {
-        useAppShortcuts(actions);
-        useShortcutHandler("workspace.new-default", createCoworkThread, {
-          enabled: cowork,
-          allowOverride: true,
-        });
-      },
-      { initialProps: { cowork: true } },
+    const { rerender } = render(
+      <GlobalShortcutOwner actions={actions}>
+        <ContextualCoworkShortcutOwner onCreateThread={createCoworkThread} />
+      </GlobalShortcutOwner>,
     );
 
-    expect(runShortcutHandler("workspace.new-default", { source: "keyboard" })).toBe(true);
+    expect(dispatchNewChatKeyboardShortcut().defaultPrevented).toBe(true);
     expect(createCoworkThread).toHaveBeenCalledTimes(1);
     expect(actions.newLocalWorkspace.execute).not.toHaveBeenCalled();
     expect(actions.newWorktreeWorkspace.execute).not.toHaveBeenCalled();
 
-    rerender({ cowork: false });
-    expect(runShortcutHandler("workspace.new-default", { source: "keyboard" })).toBe(true);
+    rerender(<GlobalShortcutOwner actions={actions} />);
+    expect(dispatchNewChatKeyboardShortcut().defaultPrevented).toBe(true);
     expect(createCoworkThread).toHaveBeenCalledTimes(1);
+    expect(actions.newWorktreeWorkspace.execute).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <GlobalShortcutOwner actions={actions}>
+        <ContextualCoworkShortcutOwner onCreateThread={createCoworkThread} />
+      </GlobalShortcutOwner>,
+    );
+    expect(dispatchNewChatKeyboardShortcut().defaultPrevented).toBe(true);
+    expect(createCoworkThread).toHaveBeenCalledTimes(2);
     expect(actions.newWorktreeWorkspace.execute).toHaveBeenCalledTimes(1);
   });
 
@@ -218,6 +229,41 @@ describe("useAppShortcuts", () => {
     });
   });
 });
+
+function GlobalShortcutOwner({
+  actions,
+  children,
+}: {
+  actions: AppCommandActions;
+  children?: ReactNode;
+}) {
+  useAppShortcuts(actions);
+  useShortcutDispatcher();
+  return children;
+}
+
+function ContextualCoworkShortcutOwner({
+  onCreateThread,
+}: {
+  onCreateThread: () => void;
+}) {
+  useShortcutHandler("workspace.new-default", onCreateThread, {
+    priority: "contextual",
+  });
+  return null;
+}
+
+function dispatchNewChatKeyboardShortcut(): KeyboardEvent {
+  const event = new KeyboardEvent("keydown", {
+    key: "n",
+    code: "KeyN",
+    metaKey: true,
+    bubbles: true,
+    cancelable: true,
+  });
+  window.dispatchEvent(event);
+  return event;
+}
 
 function commandActions(): AppCommandActions {
   const action = () => ({
