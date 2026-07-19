@@ -107,7 +107,7 @@ export const GlobalHeader = memo(function GlobalHeader({
     <DebugProfiler id="global-header">
       <div className="flex h-full min-w-0 flex-1 items-center gap-1 px-2">
         <div
-          className="min-w-0 max-w-[220px] shrink-0 truncate px-1.5 text-ui font-medium text-foreground"
+          className="min-w-0 max-w-[220px] shrink-0 truncate px-1.5 text-sidebar-nav font-medium text-foreground"
           title={title}
           data-telemetry-mask="true"
         >
