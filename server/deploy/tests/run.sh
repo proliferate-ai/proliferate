@@ -327,7 +327,10 @@ if PATH="$FAKE_BIN:$PATH" PROLIFERATE_INSTALL_ROOT="$BADBUNDLE" \
 else
   ok "--bundle install dies when the SUMS omits the bundle line"
 fi
-grep -qi "did not cover proliferate-deploy.tar.gz" "$SCRATCH/badbundle.log" \
+# GNU coreutils exits non-zero itself when --ignore-missing verifies no files,
+# while Darwin's sha256sum returns zero and reaches our explicit coverage guard.
+# Both safe paths must name the bundle/checksum failure and refuse extraction.
+grep -Eqi "did not cover proliferate-deploy.tar.gz|checksum verification FAILED for proliferate-deploy.tar.gz" "$SCRATCH/badbundle.log" \
   && ok "missing-bundle-line failure is reported" || no "missing-bundle-line failure not reported"
 [[ ! -f "$BADBUNDLE/server/deploy/bootstrap.sh" ]] \
   && ok "no files extracted when the bundle line is absent" || no "files were extracted despite an unverified bundle"
