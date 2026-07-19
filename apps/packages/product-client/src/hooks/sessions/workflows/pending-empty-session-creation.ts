@@ -366,6 +366,7 @@ export async function resumePendingEmptySessionCreations(
         workspaceId,
         clientSessionId: entry.clientSessionId,
         runtimeSessionId: entry.runtimeSessionId,
+        adoptMaterializedSessionId: true,
         agentKind: entry.agentKind,
         modelId: entry.modelId,
         resolvedModeId: entry.modeId,

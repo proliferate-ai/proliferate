@@ -36,4 +36,28 @@ describe("session replacement tab identity", () => {
       sessionIds: ["new", "other"],
     }]);
   });
+
+  it("keeps one deterministic group owner when the runtime id already exists", () => {
+    expect(replaceSessionIdInManualChatGroups([{
+      id: createManualChatGroupId("runtime-group"),
+      label: "Existing runtime group",
+      colorId: "blue",
+      sessionIds: ["new", "runtime-peer"],
+    }, {
+      id: createManualChatGroupId("alias-group"),
+      label: "Recovered alias group",
+      colorId: "magenta",
+      sessionIds: ["old", "alias-peer"],
+    }], "old", "new")).toEqual([{
+      id: createManualChatGroupId("runtime-group"),
+      label: "Existing runtime group",
+      colorId: "blue",
+      sessionIds: ["runtime-peer"],
+    }, {
+      id: createManualChatGroupId("alias-group"),
+      label: "Recovered alias group",
+      colorId: "magenta",
+      sessionIds: ["new", "alias-peer"],
+    }]);
+  });
 });

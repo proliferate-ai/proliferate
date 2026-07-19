@@ -53,6 +53,7 @@ interface SessionIntentStoreState extends SessionIntentStateShape {
   patchIntent: (intentId: string, patch: Partial<SessionIntent>) => void;
   removeIntent: (intentId: string) => void;
   bindMaterializedSession: (clientSessionId: string, materializedSessionId: string) => void;
+  reassignClientSession: (clientSessionId: string, nextClientSessionId: string) => void;
   reconcileFromEnvelopes: (
     clientSessionId: string,
     envelopes: readonly SessionEventEnvelope[],
@@ -207,6 +208,33 @@ export const useSessionIntentStore = create<SessionIntentStoreState>((set) => ({
         materializedSessionId,
       }, debugStartedAtMs);
       return next;
+    });
+  },
+
+  reassignClientSession: (clientSessionId, nextClientSessionId) => {
+    if (clientSessionId === nextClientSessionId) {
+      return;
+    }
+    const debugStartedAtMs = startSessionIntentStoreActionTrace();
+    set((state) => {
+      const intents = sessionIntentsForSession(state, clientSessionId);
+      if (intents.length === 0) {
+        return state;
+      }
+      let next: SessionIntentStateShape = state;
+      for (const intent of intents) {
+        next = removeSessionIntent(next, intent.intentId);
+        next = upsertSessionIntent(next, {
+          ...intent,
+          clientSessionId: nextClientSessionId,
+        });
+      }
+      const versionedNext = withDispatchVersion(state, next);
+      recordSessionIntentStoreAction("reassignClientSession", state, versionedNext, {
+        clientSessionId,
+        nextClientSessionId,
+      }, debugStartedAtMs);
+      return versionedNext;
     });
   },
 

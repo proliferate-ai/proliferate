@@ -33,114 +33,91 @@ export function beginReplacementShellPreferences(input: {
   const snapshots: ReplacementShellPreferenceSnapshot[] = [];
 
   for (const workspaceId of workspaceIds) {
-    const state = useWorkspaceUiStore.getState();
-    const beforeOrder = ownArray(state.shellTabOrderByWorkspace, workspaceId);
-    const beforeVisible = ownArray(
-      state.visibleChatSessionIdsByWorkspace,
-      workspaceId,
-    );
-    const beforeManualGroups = ownManualGroups(
-      state.manualChatGroupsByWorkspace,
-      workspaceId,
-    );
-    const afterOrder = beforeOrder
-      ? replaceSessionIdInShellTabOrder(
-        beforeOrder,
-        input.replacedSessionId,
-        input.replacementSessionId,
-      )
-      : null;
-    const afterVisible = beforeVisible
-      ? replaceSessionIdInOrderedList(
-        beforeVisible,
-        input.replacedSessionId,
-        input.replacementSessionId,
-      )
-      : null;
-    const afterManualGroups = beforeManualGroups
-      ? replaceSessionIdInManualChatGroups(
-        beforeManualGroups,
-        input.replacedSessionId,
-        input.replacementSessionId,
-      )
-      : null;
-    const changedOrder = !!afterOrder
-      && !sameStringList(beforeOrder ?? [], afterOrder);
-    const changedVisible = !!afterVisible
-      && !sameStringList(beforeVisible ?? [], afterVisible);
-    const changedManualGroups = !!afterManualGroups
-      && !sameManualChatGroups(beforeManualGroups ?? [], afterManualGroups);
-
-    if (changedOrder && afterOrder) {
-      state.setShellTabOrderForWorkspace(workspaceId, afterOrder);
-    }
-    if (changedVisible && afterVisible) {
-      state.setVisibleChatSessionIdsForWorkspace(workspaceId, afterVisible);
-    }
-    if (changedManualGroups && afterManualGroups) {
-      state.setManualChatGroupsForWorkspace(workspaceId, afterManualGroups);
-    }
+    replaceSessionIdInShellPreferencesForWorkspace(workspaceId, input);
     snapshots.push({ workspaceId });
   }
 
   return {
     rollback: () => {
       for (const snapshot of snapshots) {
-        const state = useWorkspaceUiStore.getState();
-        const currentOrder = ownArray(
-          state.shellTabOrderByWorkspace,
-          snapshot.workspaceId,
-        );
-        const nextOrder = currentOrder
-          ? replaceSessionIdInShellTabOrder(
-            currentOrder,
-            input.replacementSessionId,
-            input.replacedSessionId,
-          )
-          : null;
-        if (nextOrder && !sameStringList(currentOrder ?? [], nextOrder)) {
-          state.setShellTabOrderForWorkspace(snapshot.workspaceId, nextOrder);
-        }
-        const currentVisible = ownArray(
-          state.visibleChatSessionIdsByWorkspace,
-          snapshot.workspaceId,
-        );
-        const nextVisible = currentVisible
-          ? replaceSessionIdInOrderedList(
-            currentVisible,
-            input.replacementSessionId,
-            input.replacedSessionId,
-          )
-          : null;
-        if (nextVisible && !sameStringList(currentVisible ?? [], nextVisible)) {
-          state.setVisibleChatSessionIdsForWorkspace(
-            snapshot.workspaceId,
-            nextVisible,
-          );
-        }
-        const currentManualGroups = ownManualGroups(
-          state.manualChatGroupsByWorkspace,
-          snapshot.workspaceId,
-        );
-        const nextManualGroups = currentManualGroups
-          ? replaceSessionIdInManualChatGroups(
-            currentManualGroups,
-            input.replacementSessionId,
-            input.replacedSessionId,
-          )
-          : null;
-        if (
-          nextManualGroups
-          && !sameManualChatGroups(currentManualGroups ?? [], nextManualGroups)
-        ) {
-          state.setManualChatGroupsForWorkspace(
-            snapshot.workspaceId,
-            nextManualGroups,
-          );
-        }
+        replaceSessionIdInShellPreferencesForWorkspace(snapshot.workspaceId, {
+          replacedSessionId: input.replacementSessionId,
+          replacementSessionId: input.replacedSessionId,
+        });
       }
     },
   };
+}
+
+/** One-way identity promotion after a recovered session has materialized. */
+export function replaceSessionIdInShellPreferences(input: {
+  shellWorkspaceId: string;
+  materializedWorkspaceId: string;
+  replacedSessionId: string;
+  replacementSessionId: string;
+}): void {
+  for (const workspaceId of new Set([
+    input.shellWorkspaceId,
+    input.materializedWorkspaceId,
+  ])) {
+    replaceSessionIdInShellPreferencesForWorkspace(workspaceId, input);
+  }
+}
+
+function replaceSessionIdInShellPreferencesForWorkspace(
+  workspaceId: string,
+  input: {
+    replacedSessionId: string;
+    replacementSessionId: string;
+  },
+): void {
+  const state = useWorkspaceUiStore.getState();
+  const beforeOrder = ownArray(state.shellTabOrderByWorkspace, workspaceId);
+  const beforeVisible = ownArray(
+    state.visibleChatSessionIdsByWorkspace,
+    workspaceId,
+  );
+  const beforeManualGroups = ownManualGroups(
+    state.manualChatGroupsByWorkspace,
+    workspaceId,
+  );
+  const afterOrder = beforeOrder
+    ? replaceSessionIdInShellTabOrder(
+      beforeOrder,
+      input.replacedSessionId,
+      input.replacementSessionId,
+    )
+    : null;
+  const afterVisible = beforeVisible
+    ? replaceSessionIdInOrderedList(
+      beforeVisible,
+      input.replacedSessionId,
+      input.replacementSessionId,
+    )
+    : null;
+  const afterManualGroups = beforeManualGroups
+    ? replaceSessionIdInManualChatGroups(
+      beforeManualGroups,
+      input.replacedSessionId,
+      input.replacementSessionId,
+    )
+    : null;
+  const changedOrder = !!afterOrder
+    && !sameStringList(beforeOrder ?? [], afterOrder);
+  const changedVisible = !!afterVisible
+    && !sameStringList(beforeVisible ?? [], afterVisible);
+  const changedManualGroups = !!afterManualGroups
+    && !sameManualChatGroups(beforeManualGroups ?? [], afterManualGroups);
+
+  if (changedOrder && afterOrder) {
+    state.setShellTabOrderForWorkspace(workspaceId, afterOrder);
+  }
+  if (changedVisible && afterVisible) {
+    state.setVisibleChatSessionIdsForWorkspace(workspaceId, afterVisible);
+  }
+  if (changedManualGroups && afterManualGroups) {
+    state.setManualChatGroupsForWorkspace(workspaceId, afterManualGroups);
+  }
 }
 
 function ownArray<T>(source: Record<string, T[]>, workspaceId: string): T[] | null {

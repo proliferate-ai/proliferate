@@ -85,6 +85,7 @@ describe("pending empty-session creation", () => {
         workspaceId: ENTRY.workspaceId,
         clientSessionId: ENTRY.clientSessionId,
         runtimeSessionId: ENTRY.runtimeSessionId,
+        adoptMaterializedSessionId: true,
         agentKind: ENTRY.agentKind,
         modelId: ENTRY.modelId,
         resolvedModeId: ENTRY.modeId,

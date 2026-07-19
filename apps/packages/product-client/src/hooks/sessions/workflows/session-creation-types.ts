@@ -24,6 +24,11 @@ export interface CreateSessionWithResolvedConfigOptions {
   clientSessionId?: string | null;
   /** Stable server session UUID used to resume an interrupted empty create. */
   runtimeSessionId?: string | null;
+  /**
+   * Fresh-renderer recovery only: once the replayed create materializes, move
+   * the shell from the stale optimistic alias to the authoritative runtime id.
+   */
+  adoptMaterializedSessionId?: boolean;
   /** Subagent preference frozen before an interrupted empty create. */
   subagentsEnabled?: boolean;
   reuseInFlightEmptySession?: boolean;
@@ -53,6 +58,8 @@ export interface CreateEmptySessionWithResolvedConfigOptions {
   clientSessionId?: string | null;
   /** Stable server session UUID used to resume an interrupted empty create. */
   runtimeSessionId?: string | null;
+  /** Promote a recovered optimistic shell to its runtime id after materialization. */
+  adoptMaterializedSessionId?: boolean;
   subagentsEnabled?: boolean;
   reuseInFlightEmptySession?: boolean;
   preserveProjectedSessionOnCreateFailure?: boolean;

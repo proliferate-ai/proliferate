@@ -348,7 +348,11 @@ the materializer retires the created runtime or retains it honestly rather than
 publishing an unowned replay entry. If a reload interrupts the request before
 the response is observed, workspace bootstrap resumes the entry with both
 original ids and frozen inputs before it considers opening a default empty
-session. The runtime UUID is the idempotency identity: resume may repeat that
+session. The fresh renderer keeps the original client alias only while that
+replay is unresolved. Once the replay materializes, it atomically promotes the
+session record, queued intents, active selection, and shell preferences to the
+runtime UUID; a successful replay must not leave a `client-session:*` tab
+behind. The runtime UUID is the idempotency identity: resume may repeat that
 exact request, but must never probe by agent/model and must never mint a new
 UUID as a fallback. This ledger is limited to empty session creation;
 prompt-bearing projected sessions retain their existing inspectable

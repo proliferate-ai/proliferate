@@ -55,6 +55,7 @@ import {
   beginReplacementShellPreferences,
   type ReplacementShellPreferencesTransaction,
 } from "#product/hooks/sessions/workflows/session-replacement-shell-preferences";
+import { adoptRecoveredSessionIdentity } from "#product/hooks/sessions/workflows/session-creation-recovered-identity";
 import { cleanupSessionCreationFailure } from "#product/hooks/sessions/workflows/session-creation-failure-cleanup";
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 import { useWorkspaceCollectionsInvalidationActions } from "#product/hooks/workspaces/cache/use-workspace-collections-invalidation";
@@ -226,8 +227,8 @@ export function useSessionCreationActions() {
     let currentOwnedShellEpoch: number | null = null;
     let currentOwnedShellWorkspaceId: string | null = null;
     let currentOwnedSessionId: string | null = null;
-    const writeOwnedShellIntent = (sessionId: string): void => {
-      const write = writeChatShellIntentForSession({ workspaceId, sessionId });
+    const writeOwnedShellIntent = (sessionId: string, shellWorkspaceId?: string | null): void => {
+      const write = writeChatShellIntentForSession({ workspaceId, shellWorkspaceId, sessionId });
       if (!write) {
         return;
       }
@@ -394,6 +395,15 @@ export function useSessionCreationActions() {
       // A superseded materializer can settle without issuing the POST. Its
       // durable intent must not be resurrected by the next bootstrap.
       await pendingCreationLifecycle.current?.clear();
+      if (options.adoptMaterializedSessionId === true) {
+        return adoptRecoveredSessionIdentity({
+          clientSessionId: pendingSessionId,
+          materializedWorkspaceId: workspaceId,
+          ownedShellWorkspaceId: currentOwnedShellWorkspaceId,
+          resolvedSessionId,
+          writeOwnedShellIntent,
+        });
+      }
       return resolvedSessionId;
     }).finally(unregisterSessionCreation);
 
@@ -462,28 +472,11 @@ export function useSessionCreationActions() {
     storageContext,
   ]);
 
-  const createEmptySessionWithResolvedConfig = useCallback(async (
+  const createEmptySessionWithResolvedConfig = useCallback((
     options: CreateEmptySessionWithResolvedConfigOptions,
-  ): Promise<string> => {
-    return createSessionWithResolvedConfig({
-      text: "",
-      agentKind: options.agentKind,
-      modelId: options.modelId,
-      modeId: options.modeId,
-      resolvedModeId: options.resolvedModeId,
-      unattendedModeId: options.unattendedModeId,
-      launchControlValues: options.launchControlValues,
-      frozenLiveControlValues: options.frozenLiveControlValues,
-      workspaceId: options.workspaceId,
-      latencyFlowId: options.latencyFlowId,
-      clientSessionId: options.clientSessionId,
-      runtimeSessionId: options.runtimeSessionId,
-      subagentsEnabled: options.subagentsEnabled,
-      reuseInFlightEmptySession: options.reuseInFlightEmptySession,
-      preserveProjectedSessionOnCreateFailure: options.preserveProjectedSessionOnCreateFailure,
-      replacesSessionId: options.replacesSessionId,
-    });
-  }, [createSessionWithResolvedConfig]);
+  ): Promise<string> => createSessionWithResolvedConfig({ ...options, text: "" }), [
+    createSessionWithResolvedConfig,
+  ]);
 
   return { createEmptySessionWithResolvedConfig, createSessionWithResolvedConfig };
 }
