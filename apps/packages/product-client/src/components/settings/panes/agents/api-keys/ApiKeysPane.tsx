@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { AgentApiKey } from "@proliferate/cloud-sdk";
 import { ProliferateClientError } from "@proliferate/cloud-sdk";
 import {
@@ -44,6 +44,17 @@ export function ApiKeysPane() {
   const [pendingRevoke, setPendingRevoke] = useState<AgentApiKey | null>(null);
   const [isRetrying, setIsRetrying] = useState(false);
   const retryInFlight = useRef(false);
+  const retryGeneration = useRef(0);
+  const mounted = useRef(true);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      retryGeneration.current += 1;
+      retryInFlight.current = false;
+    };
+  }, []);
 
   const keys = keysQuery.data ?? [];
   const canSubmit =
@@ -95,11 +106,23 @@ export function ApiKeysPane() {
       return;
     }
     retryInFlight.current = true;
+    const generation = retryGeneration.current + 1;
+    retryGeneration.current = generation;
     setIsRetrying(true);
-    void keysQuery.refetch().finally(() => {
-      retryInFlight.current = false;
-      setIsRetrying(false);
-    });
+    void (async () => {
+      try {
+        await keysQuery.refetch();
+      } catch {
+        // The query error state is the recovery surface; consume transport
+        // rejections so Retry can return to a usable state.
+      } finally {
+        if (!mounted.current || retryGeneration.current !== generation) {
+          return;
+        }
+        retryInFlight.current = false;
+        setIsRetrying(false);
+      }
+    })();
   }
 
   if (!cloudActive) {

@@ -79,10 +79,12 @@ function key(overrides: Record<string, unknown> = {}) {
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
-  const promise = new Promise<T>((resolvePromise) => {
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
     resolve = resolvePromise;
+    reject = rejectPromise;
   });
-  return { promise, resolve };
+  return { promise, resolve, reject };
 }
 
 describe("ApiKeysPane", () => {
@@ -191,6 +193,69 @@ describe("ApiKeysPane", () => {
       secondRetry.resolve({ isError: true });
       await secondRetry.promise;
     });
+  });
+
+  it("restores Retry when refetch throws synchronously", async () => {
+    state.keys.isError = true;
+    refetchKeys
+      .mockImplementationOnce(() => {
+        throw new Error("synchronous refetch failure");
+      })
+      .mockResolvedValueOnce({ isError: true });
+    const user = userEvent.setup();
+    render(<ApiKeysPane />);
+
+    await user.click(screen.getByRole("button", { name: AGENT_API_KEYS_COPY.retryAction }));
+    await waitFor(() => {
+      expect(
+        (screen.getByRole("button", {
+          name: AGENT_API_KEYS_COPY.retryAction,
+        }) as HTMLButtonElement).disabled,
+      ).toBe(false);
+    });
+
+    await user.click(screen.getByRole("button", { name: AGENT_API_KEYS_COPY.retryAction }));
+    expect(refetchKeys).toHaveBeenCalledTimes(2);
+  });
+
+  it("consumes a rejected refetch and restores Retry", async () => {
+    state.keys.isError = true;
+    refetchKeys.mockRejectedValueOnce(new Error("rejected refetch failure"));
+    const user = userEvent.setup();
+    render(<ApiKeysPane />);
+
+    await user.click(screen.getByRole("button", { name: AGENT_API_KEYS_COPY.retryAction }));
+
+    await waitFor(() => {
+      expect(
+        (screen.getByRole("button", {
+          name: AGENT_API_KEYS_COPY.retryAction,
+        }) as HTMLButtonElement).disabled,
+      ).toBe(false);
+    });
+    expect(refetchKeys).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not update Retry state after an in-flight refetch is unmounted", async () => {
+    state.keys.isError = true;
+    const retry = deferred<unknown>();
+    refetchKeys.mockReturnValue(retry.promise);
+    const user = userEvent.setup();
+    const view = render(<ApiKeysPane />);
+
+    await user.click(screen.getByRole("button", { name: AGENT_API_KEYS_COPY.retryAction }));
+    expect(
+      (screen.getByRole("button", {
+        name: AGENT_API_KEYS_COPY.retryingAction,
+      }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+
+    view.unmount();
+    await act(async () => {
+      retry.reject(new Error("rejected after unmount"));
+      await retry.promise.catch(() => undefined);
+    });
+    expect(refetchKeys).toHaveBeenCalledTimes(1);
   });
 
   it("creates a key from title + value only", () => {
