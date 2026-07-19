@@ -549,12 +549,30 @@ Resources:
           Value: !Sub ${AWS::StackName}-instance
       UserData:
         Fn::Base64: !Sub |
-          #!/bin/bash -xe
-          dnf install -y aws-cfn-bootstrap
-          /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource ProliferateInstance --region ${AWS::Region} --configsets bootstrap
-          EXIT_CODE=$?
-          /opt/aws/bin/cfn-signal -e $EXIT_CODE --stack ${AWS::StackName} --resource ProliferateInstance --region ${AWS::Region}
-          exit $EXIT_CODE
+          #!/bin/bash -x
+          set -o pipefail
+
+          # Do not enable `errexit` here. A failed cfn-init must still reach
+          # cfn-signal so CloudFormation reports the bounded stage/exit reason
+          # immediately instead of waiting for the CreationPolicy timeout.
+          EXIT_CODE=0
+          FAILURE_REASON="CloudFormation bootstrap completed."
+          dnf install -y aws-cfn-bootstrap || {
+            EXIT_CODE=$?
+            FAILURE_REASON="aws-cfn-bootstrap installation failed with exit code $EXIT_CODE."
+          }
+          if [ "$EXIT_CODE" -eq 0 ]; then
+            /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource ProliferateInstance --region ${AWS::Region} --configsets bootstrap || {
+              EXIT_CODE=$?
+              FAILURE_REASON="cfn-init bootstrap failed with exit code $EXIT_CODE; inspect /var/log/cfn-init.log and /var/log/cfn-init-cmd.log through SSM."
+            }
+          fi
+          if [ -x /opt/aws/bin/cfn-signal ]; then
+            /opt/aws/bin/cfn-signal -e "$EXIT_CODE" --reason "$FAILURE_REASON" --stack ${AWS::StackName} --resource ProliferateInstance --region ${AWS::Region}
+          else
+            echo "cfn-signal is unavailable; bootstrap exit code $EXIT_CODE." >&2
+          fi
+          exit "$EXIT_CODE"
 
   ProliferateDnsRecord:
     Type: AWS::Route53::RecordSet

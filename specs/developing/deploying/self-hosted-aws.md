@@ -54,6 +54,12 @@ public `/health` URL, and writes it to `.env.runtime`; the stack reports
 success only after both the local API and that advertised public HTTPS endpoint
 respond.
 
+The instance always reports the bootstrap exit status through `cfn-signal`.
+When `cfn-init` fails, the stack event carries only a bounded stage and exit-code
+reason; inspect `/var/log/cfn-init.log` and `/var/log/cfn-init-cmd.log` through
+SSM for host-local detail rather than copying those potentially secret-bearing
+logs into CloudFormation events.
+
 ## Required Inputs
 
 The base stack needs:
