@@ -1270,33 +1270,32 @@ body {
   }
 }
 
-/* Reasoning-level label swap (ComposerReasoningEffortBars): when the level
-   steps, the new label slides in from above while the old one slides out
-   below, clipped by the swap container. Compositor rule: transform/opacity
-   only. */
+/* Composer control value swap: when a selection changes, the new value slides
+   in from above while the old value slides out below, clipped by the swap
+   container. Compositor rule: transform/opacity only. */
 /* display block, not inline-block: an inline-block with overflow hidden
    baseline-aligns on its bottom edge, which would hoist the label a few px
    the moment the swap wrapper first mounts. */
-.composer-reasoning-level-swap {
+.composer-value-swap {
   position: relative;
   display: block;
   overflow: hidden;
 }
 
-.composer-reasoning-level-enter {
+.composer-value-enter {
   display: inline-block;
-  animation: composer-reasoning-level-enter 240ms cubic-bezier(0.23, 1, 0.32, 1);
+  animation: composer-value-enter 240ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 
-.composer-reasoning-level-exit {
+.composer-value-exit {
   position: absolute;
   inset: 0;
   display: inline-block;
   white-space: nowrap;
-  animation: composer-reasoning-level-exit 240ms cubic-bezier(0.23, 1, 0.32, 1) forwards;
+  animation: composer-value-exit 240ms cubic-bezier(0.23, 1, 0.32, 1) forwards;
 }
 
-@keyframes composer-reasoning-level-enter {
+@keyframes composer-value-enter {
   0% {
     transform: translateY(-100%);
     opacity: 0;
@@ -1307,7 +1306,7 @@ body {
   }
 }
 
-@keyframes composer-reasoning-level-exit {
+@keyframes composer-value-exit {
   0% {
     transform: translateY(0);
     opacity: 1;
@@ -1342,12 +1341,12 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .composer-reasoning-level-enter,
-  .composer-reasoning-level-exit {
+  .composer-value-enter,
+  .composer-value-exit {
     animation: none;
   }
 
-  .composer-reasoning-level-exit {
+  .composer-value-exit {
     display: none;
   }
 }

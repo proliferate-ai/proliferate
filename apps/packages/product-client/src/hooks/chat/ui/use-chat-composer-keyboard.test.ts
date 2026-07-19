@@ -3,6 +3,7 @@
 import { cleanup, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useChatComposerKeyboard } from "#product/hooks/chat/ui/use-chat-composer-keyboard";
+import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
 
 function keyboardEvent(overrides: Partial<{
   key: string;
@@ -191,5 +192,36 @@ describe("useChatComposerKeyboard", () => {
 
     expect(event.preventDefault).not.toHaveBeenCalled();
     expect(onEditLastQueued).not.toHaveBeenCalled();
+  });
+
+  it("cycles working mode through the control transition on Shift+Tab", () => {
+    const onSelect = vi.fn();
+    const modeControl: LiveSessionControlDescriptor = {
+      key: "collaboration_mode",
+      label: "Mode",
+      detail: "Plan",
+      rawConfigId: "collaboration_mode",
+      settable: true,
+      pendingState: null,
+      kind: "select",
+      options: [
+        { value: "default", label: "Default", selected: false },
+        { value: "plan", label: "Plan", selected: true },
+      ],
+      onSelect,
+    };
+    const { result } = renderHook(() => useChatComposerKeyboard({
+      handleSubmit: vi.fn(),
+      handleCancel: vi.fn(),
+      isRunning: false,
+      canSubmit: true,
+      modeControl,
+    }));
+    const event = keyboardEvent({ key: "Tab", code: "Tab", shiftKey: true });
+
+    result.current.handleKeyDown(event as never);
+
+    expect(event.preventDefault).toHaveBeenCalledTimes(1);
+    expect(onSelect).toHaveBeenCalledWith("default");
   });
 });

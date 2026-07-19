@@ -1,72 +1,80 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
-const ANIMATION_DURATION_MS = 200;
+const SWAP_DURATION_MS = 240;
 
-export function AnimatedSwapText({ value }: { value: string }) {
-  const [transition, setTransition] = useState<{
-    outgoing: string | null;
-    incoming: string;
-    active: boolean;
-  }>({
-    outgoing: null,
-    incoming: value,
-    active: false,
-  });
+interface AnimatedSwapTextProps {
+  /** Stable semantic key for the rendered value. */
+  valueKey: string;
+  value: ReactNode;
+}
 
-  useEffect(() => {
-    if (value === transition.incoming) {
+interface SwapTransition {
+  id: number;
+  outgoing: ReactNode;
+}
+
+/**
+ * Keeps the incoming value owned by the current render, so optimistic control
+ * updates are visible immediately. The previous committed value is retained
+ * only for the compositor-only exit animation.
+ */
+export function AnimatedSwapText({ valueKey, value }: AnimatedSwapTextProps) {
+  const committedValueRef = useRef({ key: valueKey, value });
+  const nextTransitionIdRef = useRef(0);
+  const [transition, setTransition] = useState<SwapTransition | null>(null);
+  const valueChanged = committedValueRef.current.key !== valueKey;
+  const visibleTransition = valueChanged
+    ? {
+        id: nextTransitionIdRef.current + 1,
+        outgoing: committedValueRef.current.value,
+      }
+    : transition;
+
+  useLayoutEffect(() => {
+    if (committedValueRef.current.key === valueKey) {
+      committedValueRef.current.value = value;
       return;
     }
 
-    const nextIncoming = value;
+    const outgoing = committedValueRef.current.value;
+    nextTransitionIdRef.current += 1;
+    committedValueRef.current = { key: valueKey, value };
     setTransition({
-      outgoing: transition.incoming,
-      incoming: nextIncoming,
-      active: false,
+      id: nextTransitionIdRef.current,
+      outgoing,
     });
+  }, [value, valueKey]);
 
-    const frame = window.requestAnimationFrame(() => {
-      setTransition((current) => ({ ...current, active: true }));
-    });
-    const timer = window.setTimeout(() => {
-      setTransition({
-        outgoing: null,
-        incoming: nextIncoming,
-        active: false,
-      });
-    }, ANIMATION_DURATION_MS);
-
-    return () => {
-      window.cancelAnimationFrame(frame);
-      window.clearTimeout(timer);
-    };
-  }, [transition.incoming, value]);
+  useEffect(() => {
+    if (!transition) {
+      return;
+    }
+    const transitionId = transition.id;
+    const timeout = window.setTimeout(() => {
+      setTransition((current) => current?.id === transitionId ? null : current);
+    }, SWAP_DURATION_MS);
+    return () => window.clearTimeout(timeout);
+  }, [transition]);
 
   return (
-    <span className="relative block h-[18px] min-w-0 overflow-hidden">
-      {transition.outgoing && (
+    <span className="composer-value-swap">
+      <span
+        key={visibleTransition?.id ?? valueKey}
+        className={visibleTransition ? "composer-value-enter" : undefined}
+      >
+        {value}
+      </span>
+      {visibleTransition && (
         <span
           aria-hidden="true"
-          className={`absolute inset-0 block truncate transition-all duration-200 ${
-            transition.active
-              ? "-translate-y-3 opacity-0"
-              : "translate-y-0 opacity-100"
-          }`}
+          className="composer-value-exit"
+          onAnimationEnd={() => {
+            setTransition(null);
+          }}
         >
-          {transition.outgoing}
+          {visibleTransition.outgoing}
         </span>
       )}
-      <span
-        className={`block truncate transition-all duration-200 ${
-          transition.outgoing
-            ? transition.active
-              ? "translate-y-0 opacity-100"
-              : "translate-y-3 opacity-0"
-            : "translate-y-0 opacity-100"
-        }`}
-      >
-        {transition.incoming}
-      </span>
     </span>
   );
 }

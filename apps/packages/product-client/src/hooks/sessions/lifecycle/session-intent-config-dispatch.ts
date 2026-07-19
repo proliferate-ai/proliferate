@@ -38,6 +38,7 @@ export interface ConfigIntentDispatchDeps {
     workspaceId: string,
     session: Session,
   ) => void;
+  onFailure?: (message: string) => void;
 }
 
 export async function dispatchConfigIntent(
@@ -153,9 +154,11 @@ export async function dispatchConfigIntent(
       applyState: response.applyState,
     });
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     useSessionIntentStore.getState().patchIntent(intent.intentId, {
       status: "failed",
-      errorMessage: error instanceof Error ? error.message : String(error),
+      errorMessage: message,
     });
+    deps.onFailure?.(message);
   }
 }
