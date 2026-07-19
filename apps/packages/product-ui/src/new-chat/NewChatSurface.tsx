@@ -10,6 +10,10 @@ import {
 import {
   CloudChatTranscript,
 } from "../chat/CloudChatTranscript";
+import {
+  CHAT_COLUMN_CLASSNAME,
+  CHAT_SURFACE_GUTTER_CLASSNAME,
+} from "../chat/ChatColumn";
 import type { CloudChatTranscriptRowView } from "@proliferate/product-domain/chats/cloud/transcript-view";
 import { RecentWorkStatusDot } from "../workspaces/RecentWorkStatusDot";
 
@@ -125,8 +129,8 @@ export function NewChatSurface({
 
   return (
     <div className="relative flex h-full w-full min-w-0 flex-1 overflow-hidden bg-background text-foreground">
-      <main className="web-scrollbar flex min-h-0 flex-1 items-center justify-center overflow-y-auto px-6 py-16">
-        <div className="w-full max-w-3xl">
+      <main className={`web-scrollbar flex min-h-0 flex-1 items-center justify-center overflow-y-auto py-16 ${CHAT_SURFACE_GUTTER_CLASSNAME}`}>
+        <div className={CHAT_COLUMN_CLASSNAME}>
           <header className="mb-5 flex flex-col items-center text-center">
             <h1 className="max-w-[34rem] text-2xl font-medium leading-tight text-foreground">
               {heading}
@@ -148,7 +152,7 @@ export function NewChatSurface({
           />
 
           {onCancel ? (
-            <div className="mx-auto mt-2 flex max-w-3xl justify-end px-2">
+            <div className="mt-2 flex justify-end px-2">
               <Button
                 type="button"
                 variant="ghost"
@@ -162,7 +166,7 @@ export function NewChatSurface({
           ) : null}
 
           {commandMessage ? (
-            <p className="mx-auto mt-2 max-w-3xl px-2 text-center text-xs text-muted-foreground">
+            <p className="mt-2 px-2 text-center text-xs text-muted-foreground">
               {commandMessage}
             </p>
           ) : null}
@@ -176,7 +180,7 @@ export function NewChatSurface({
           ) : null}
 
           {transcriptRows.length > 0 ? (
-            <div className="mx-auto mt-5 max-w-3xl" data-home-submit-preview>
+            <div className="mt-5" data-home-submit-preview>
               <CloudChatTranscript
                 rows={transcriptRows}
                 emptyTitle={emptyTitle}
@@ -285,7 +289,7 @@ function RecentWorkList({
   onSelect?: (item: RecentWorkItemView) => void;
 }) {
   return (
-    <section className="mx-auto mt-8 max-w-3xl">
+    <section className="mt-8">
       <header className="mb-2 flex items-center px-1">
         <h2 className="text-sm font-medium leading-5 text-muted-foreground">
           Recent work

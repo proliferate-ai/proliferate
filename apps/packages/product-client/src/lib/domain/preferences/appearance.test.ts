@@ -88,7 +88,7 @@ describe("appearance preferences", () => {
       ui: { fontSize: "12px", lineHeight: "17px" },
       chat: { fontSize: "11px", lineHeight: "19px" },
       composer: { fontSize: "13px", lineHeight: "21px" },
-      sessionTitle: { fontSize: "13px", lineHeight: "21px" },
+      sessionTitle: { fontSize: "14px", lineHeight: "22px" },
       lg: { fontSize: "0.8125rem", lineHeight: "1.1875rem" },
       xl: { fontSize: "1.0625rem", lineHeight: "1.625rem" },
       title: { fontSize: "19px", lineHeight: "23px" },
@@ -106,9 +106,12 @@ describe("appearance preferences", () => {
     expect(READABLE_CODE_FONT_SCALES.xxxlarge.monacoFontSize).toBe(14);
   });
 
-  it("keeps session titles at the Codex 1:1 message-size ratio", () => {
+  it("keeps session titles visibly larger than message text at every preset", () => {
     for (const id of APPEARANCE_SIZE_IDS) {
-      expect(UI_FONT_SCALES[id].sessionTitle).toEqual(UI_FONT_SCALES[id].composer);
+      expect(cssLengthToPx(UI_FONT_SCALES[id].sessionTitle.fontSize))
+        .toBeGreaterThan(cssLengthToPx(UI_FONT_SCALES[id].composer.fontSize));
+      expect(cssLengthToPx(UI_FONT_SCALES[id].sessionTitle.lineHeight))
+        .toBeGreaterThan(cssLengthToPx(UI_FONT_SCALES[id].composer.lineHeight));
     }
   });
 

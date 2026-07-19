@@ -7,6 +7,10 @@ import {
   ComposerLeadingControls,
   ComposerTrailingControls,
 } from "#product/components/workspace/chat/input/ChatInputControlRow";
+import {
+  CHAT_COLUMN_CLASSNAME,
+  CHAT_SURFACE_GUTTER_CLASSNAME,
+} from "@proliferate/product-ui/chat/ChatColumn";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { useHomeNextLaunchControls } from "#product/hooks/home/derived/use-home-next-launch-controls";
 import { useHomeCloudRepoSettingsNavigation } from "#product/hooks/home/workflows/use-home-cloud-repo-settings-navigation";
@@ -128,8 +132,8 @@ export function HomeNextScreen() {
   return (
     <div className="relative flex h-full w-full min-w-0 flex-1 overflow-hidden bg-background text-foreground" data-telemetry-block>
       <div className="absolute inset-x-0 top-0 h-10" data-tauri-drag-region="true" />
-      <main className="flex min-h-0 flex-1 items-center justify-center overflow-auto px-6 py-16">
-        <div className="w-full max-w-3xl">
+      <main className={`flex min-h-0 flex-1 items-center justify-center overflow-auto py-16 ${CHAT_SURFACE_GUTTER_CLASSNAME}`}>
+        <div className={CHAT_COLUMN_CLASSNAME}>
           {/* Hero heading (spec §1.1): 28px / 400 / centered; the project name
               is an inline menu trigger with a pill hover fill. */}
           <div className="mb-5 flex flex-col items-center text-center">

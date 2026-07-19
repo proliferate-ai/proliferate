@@ -1,5 +1,8 @@
 import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
-import { CHAT_COLUMN_CLASSNAME } from "@proliferate/product-ui/chat/ChatColumn";
+import {
+  CHAT_COLUMN_CLASSNAME,
+  CHAT_SURFACE_GUTTER_CLASSNAME,
+} from "@proliferate/product-ui/chat/ChatColumn";
 
 function AssistantMessageSkeleton() {
   return (
@@ -31,7 +34,7 @@ export function TranscriptSwitchingPlaceholder({
   return (
     <DebugProfiler id="session-transcript-pane">
       <div
-        className="flex h-full min-h-0 overflow-hidden px-5 py-4"
+        className={`flex h-full min-h-0 overflow-hidden py-4 ${CHAT_SURFACE_GUTTER_CLASSNAME}`}
         role="status"
         aria-label={label}
         data-chat-switching-placeholder

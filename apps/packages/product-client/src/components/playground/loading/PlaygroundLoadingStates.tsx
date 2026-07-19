@@ -2,17 +2,53 @@ import {
   CloudChatAssistantLoadingRow,
   CloudChatThoughtRow,
 } from "@proliferate/product-ui/chat/transcript/CloudChatTranscriptRowItems";
+import { CloudChatSurface } from "@proliferate/product-ui/chat/CloudChatSurface";
 import { SessionCheckScreen } from "#product/components/auth/SessionCheckScreen";
 import { SkeletonBlock, shimmerDelay } from "#product/components/feedback/Skeleton";
 import { ThinkingText } from "#product/components/feedback/ThinkingText";
 import { LoadingState } from "#product/components/feedback/LoadingIllustration";
 import { PlaygroundThinkingTimingControls } from "#product/components/playground/loading/PlaygroundThinkingTimingControls";
 import { StreamingIndicator } from "#product/components/workspace/chat/transcript/StreamingIndicator";
+import { TranscriptSwitchingPlaceholder } from "#product/components/workspace/chat/surface/TranscriptSwitchingPlaceholder";
 import { renderChatTabIcon } from "#product/components/workspace/shell/tabs/tab-rendering";
 
 export function PlaygroundLoadingStates() {
   return (
     <div className="flex flex-col gap-8" data-playground-loading-states>
+      <section className="grid gap-4 md:grid-cols-2">
+        <div className="h-[22rem] overflow-hidden rounded-md border border-border">
+          <TranscriptSwitchingPlaceholder label="Desktop switching alignment" />
+        </div>
+        <div className="flex h-[22rem] flex-col overflow-hidden rounded-md border border-border">
+          <CloudChatSurface
+            header={{
+              workspaceLabel: "Typography",
+              status: { label: "Loading", tone: "info", live: true },
+              sessionSwitcher: {
+                workspaceLabel: "Typography",
+                activeSessionId: "session-1",
+                activeSessionLabel: "Layout alignment",
+                sessions: [{ id: "session-1", label: "Layout alignment" }],
+                newSessionLabel: "New session",
+                onSelectSession: () => {},
+                onNewSession: () => {},
+              },
+            }}
+            transcriptRows={[]}
+            transcriptLoading
+            emptyTitle="No transcript yet"
+            composer={{
+              value: "",
+              placeholder: "Describe a task",
+              canSubmit: false,
+              controls: [],
+              onChange: () => {},
+              onSubmit: () => {},
+            }}
+          />
+        </div>
+      </section>
+
       <section className="overflow-hidden rounded-md border border-border">
         <SessionCheckScreen resolving className="min-h-[20rem] p-6" />
       </section>

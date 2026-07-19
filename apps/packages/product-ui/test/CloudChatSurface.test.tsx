@@ -6,6 +6,11 @@ import {
   CloudChatSurface,
   type CloudChatHeaderView,
 } from "../src/chat/CloudChatSurface";
+import type { CloudChatTranscriptRowView } from "../src/chat/CloudChatTranscript";
+import {
+  CHAT_COLUMN_CLASSNAME,
+  CHAT_SURFACE_GUTTER_CLASSNAME,
+} from "../src/chat/ChatColumn";
 
 describe("CloudChatSurface", () => {
   afterEach(cleanup);
@@ -73,8 +78,23 @@ describe("CloudChatSurface", () => {
 
     expect(screen.getByText("Bramble")).toBeTruthy();
     expect(screen.getByRole("button", { name: /Switch sessions in Bramble/u })).toBeTruthy();
-    expect(screen.getByRole("status", { name: "Loading session content" })).toBeTruthy();
+    const loading = screen.getByRole("status", { name: "Loading session content" });
+    expect(loading).toBeTruthy();
+    expectSharedChatLayout(loading);
     expect(screen.queryByText("No transcript yet")).toBeNull();
+  });
+
+  it("keeps loaded, empty, and composer states in the same column/gutter order", () => {
+    const { rerender } = renderSurface({}, {
+      transcriptRows: [{ id: "assistant", kind: "assistant", body: "Loaded response" }],
+    });
+
+    expectSharedChatLayout(screen.getByText("Loaded response"));
+    expectSharedChatLayout(screen.getByPlaceholderText("Describe a task"));
+
+    rerender(createSurface({ transcriptRows: [] }));
+    expectSharedChatLayout(screen.getByText("No transcript yet"));
+    expectSharedChatLayout(screen.getByPlaceholderText("Describe a task"));
   });
 });
 
@@ -116,12 +136,25 @@ const baseHeader: CloudChatHeaderView = {
 
 function renderSurface(
   header: Partial<CloudChatHeaderView> = {},
-  options: { transcriptLoading?: boolean } = {},
+  options: {
+    transcriptLoading?: boolean;
+    transcriptRows?: readonly CloudChatTranscriptRowView[];
+  } = {},
 ) {
-  return render(
+  return render(createSurface(options, header));
+}
+
+function createSurface(
+  options: {
+    transcriptLoading?: boolean;
+    transcriptRows?: readonly CloudChatTranscriptRowView[];
+  } = {},
+  header: Partial<CloudChatHeaderView> = {},
+) {
+  return (
     <CloudChatSurface
       header={{ ...baseHeader, ...header }}
-      transcriptRows={[]}
+      transcriptRows={options.transcriptRows ?? []}
       transcriptLoading={options.transcriptLoading}
       emptyTitle="No transcript yet"
       composer={{
@@ -132,6 +165,12 @@ function renderSurface(
         onSubmit: vi.fn(),
         controls: [],
       }}
-    />,
+    />
   );
+}
+
+function expectSharedChatLayout(element: HTMLElement) {
+  const column = element.closest('[class~="max-w-[46rem]"]');
+  expect(column?.className).toContain(CHAT_COLUMN_CLASSNAME);
+  expect(column?.parentElement?.className).toContain(CHAT_SURFACE_GUTTER_CLASSNAME);
 }

@@ -94,6 +94,8 @@ describe("design-package @theme --text-* tokens", () => {
       Object.assign(merged, tokens);
     }
     expect(merged).toEqual(DEFAULT_UI_TEXT_SCALE_CSS_VARIABLES);
+    expect(Number.parseFloat(merged["--text-session-title"] ?? "0"))
+      .toBeGreaterThan(Number.parseFloat(merged["--text-composer"] ?? "0"));
   });
 
   it("matches the tokens.ts typography table that generates theme.css (no tokens↔table drift)", () => {

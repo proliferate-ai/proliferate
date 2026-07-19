@@ -8,7 +8,6 @@ import {
 import { CloudChatComposerFooter } from "./composer/CloudChatComposerFooter";
 import type { CloudChatComposerView } from "./composer/CloudChatComposerView";
 import { ChatComposerSurface } from "./composer/ChatComposerSurface";
-import { CHAT_COLUMN_CLASSNAME } from "./ChatColumn";
 
 export type {
   CloudChatComposerControlGroupView,
@@ -46,7 +45,7 @@ export function CloudChatComposer({ composer }: { composer: CloudChatComposerVie
   }
 
   return (
-    <div className={`${CHAT_COLUMN_CLASSNAME} flex flex-col`}>
+    <div className="flex flex-col">
       <ChatComposerSurface overflowMode="visible">
         <form onSubmit={submitComposer} className="relative flex flex-col">
           <ComposerTextareaFrame topInset="standard">

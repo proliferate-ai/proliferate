@@ -15,6 +15,10 @@ import {
   type MemoryProductStorage,
 } from "#product/test/product-storage-test-utils";
 import type { ProductStorage } from "@proliferate/product-client/host/product-host";
+import {
+  CHAT_COLUMN_CLASSNAME,
+  CHAT_SURFACE_GUTTER_CLASSNAME,
+} from "@proliferate/product-ui/chat/ChatColumn";
 import { HOME_CHAT_COMPOSER_INPUT } from "#product/config/chat";
 
 const screenMocks = vi.hoisted(() => {
@@ -402,6 +406,15 @@ describe("HomeNextScreen composer control-row parity", () => {
 
     expect(screen.getByTestId("composer-leading-controls")).toBeTruthy();
     expect(screen.getByTestId("composer-trailing-controls")).toBeTruthy();
+  });
+
+  it("uses the shared chat column and gutter around the Home composer", () => {
+    render(<HomeNextScreen />);
+
+    const prompt = screen.getByLabelText("Prompt");
+    const column = prompt.closest('[class~="max-w-[46rem]"]');
+    expect(column?.className).toContain(CHAT_COLUMN_CLASSNAME);
+    expect(column?.parentElement?.className).toContain(CHAT_SURFACE_GUTTER_CLASSNAME);
   });
 
   it("feeds the clusters sessionless chat-equivalent props", () => {

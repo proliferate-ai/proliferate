@@ -1,8 +1,10 @@
 import { useSearchParams } from "react-router-dom";
+import { MessageSquare } from "@proliferate/ui/icons";
 import { PlaygroundComposer } from "#product/components/playground/PlaygroundComposer";
 import { PlaygroundScenarioBar } from "#product/components/playground/PlaygroundScenarioBar";
 import { PlaygroundSidebarGitDiff } from "#product/components/playground/PlaygroundSidebarGitDiff";
 import { PlaygroundTranscript } from "#product/components/playground/transcript/PlaygroundTranscript";
+import { ChromeWorkspaceTab } from "#product/components/workspace/shell/tabs/ChromeWorkspaceTab";
 import {
   resolvePlaygroundScenarioSelection,
   type ScenarioKey,
@@ -43,6 +45,19 @@ export function ChatPlaygroundPage() {
 
   return (
     <div className="chat-selection-root flex h-screen flex-col bg-background text-foreground">
+      <header
+        aria-label="Populated session preview"
+        className="flex h-10 shrink-0 items-center border-b border-border bg-sidebar px-3"
+      >
+        <ChromeWorkspaceTab
+          isActive
+          width={256}
+          icon={<MessageSquare className="size-3.5" />}
+          label="Typography hierarchy review"
+          onSelect={() => {}}
+          onClose={() => {}}
+        />
+      </header>
       <PlaygroundScenarioBar
         selection={selection}
         replay={replay}
