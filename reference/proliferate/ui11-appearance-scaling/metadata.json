@@ -41,6 +41,7 @@
     "founderApprovedMock": "11 - Proportional appearance scaling mock.svg"
   },
   "artifacts": {
+    "approvedMock": "founder-approved-mock.svg",
     "primaryRecording": "appearance-independent-scaling-exact-head.mp4",
     "defaultSettings": "01-default-ui-default-code.jpg",
     "uiOnlyExtraLarge": "02-extra-large-ui-default-code.jpg",

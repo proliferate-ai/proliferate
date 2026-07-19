@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="760" viewBox="0 0 1200 760" role="img" aria-labelledby="title desc">
+  <title id="title">Draft mock for proportional appearance scaling</title>
+  <desc id="desc">Side-by-side Default and Extra Large Proliferate typography and icon scale targets.</desc>
+  <rect width="1200" height="760" fill="#111315"/>
+  <text x="52" y="58" fill="#f5f6f7" font-family="Inter, system-ui, sans-serif" font-size="28" font-weight="650">Proportional appearance scaling</text>
+  <text x="52" y="88" fill="#9da3aa" font-family="Inter, system-ui, sans-serif" font-size="14">FOUNDER-APPROVED TARGET · 2026-07-19</text>
+
+  <rect x="52" y="122" width="528" height="500" rx="16" fill="#191c1f" stroke="#30353a"/>
+  <rect x="620" y="122" width="528" height="500" rx="16" fill="#191c1f" stroke="#30353a"/>
+
+  <text x="84" y="168" fill="#f5f6f7" font-family="Inter, system-ui, sans-serif" font-size="19" font-weight="650">Default</text>
+  <text x="652" y="168" fill="#f5f6f7" font-family="Inter, system-ui, sans-serif" font-size="21" font-weight="650">Extra Large</text>
+  <text x="84" y="194" fill="#8d949b" font-family="Inter, system-ui, sans-serif" font-size="11">UI = Default · Readable code = Default</text>
+  <text x="652" y="194" fill="#8d949b" font-family="Inter, system-ui, sans-serif" font-size="13">UI = Extra Large · Readable code = Extra Large</text>
+
+  <rect x="84" y="222" width="464" height="46" rx="8" fill="#23272b"/>
+  <circle cx="105" cy="245" r="7" fill="none" stroke="#d9dde1" stroke-width="1.6"/>
+  <path d="M101 245h8M105 241v8" stroke="#d9dde1" stroke-width="1.6" stroke-linecap="round"/>
+  <text x="126" y="250" fill="#eef0f2" font-family="Inter, system-ui, sans-serif" font-size="14" font-weight="600">Workspace title · 14px</text>
+
+  <rect x="652" y="222" width="464" height="46" rx="8" fill="#23272b"/>
+  <circle cx="675" cy="245" r="8" fill="none" stroke="#d9dde1" stroke-width="1.8"/>
+  <path d="M670 245h10M675 240v10" stroke="#d9dde1" stroke-width="1.8" stroke-linecap="round"/>
+  <text x="699" y="251" fill="#eef0f2" font-family="Inter, system-ui, sans-serif" font-size="16" font-weight="600">Workspace title · 16px</text>
+
+  <text x="84" y="306" fill="#e5e8ea" font-family="Inter, system-ui, sans-serif" font-size="13">Message and composer text · 13px</text>
+  <text x="652" y="308" fill="#e5e8ea" font-family="Inter, system-ui, sans-serif" font-size="15">Message and composer text · 15px</text>
+
+  <rect x="84" y="330" width="464" height="72" rx="9" fill="#111315" stroke="#30353a"/>
+  <text x="104" y="360" fill="#b7e0c1" font-family="SFMono-Regular, Menlo, monospace" font-size="13">const samePreset = true;</text>
+  <text x="104" y="384" fill="#8d949b" font-family="SFMono-Regular, Menlo, monospace" font-size="11">Readable code · 13px (not 10px)</text>
+
+  <rect x="652" y="330" width="464" height="76" rx="9" fill="#111315" stroke="#30353a"/>
+  <text x="674" y="362" fill="#b7e0c1" font-family="SFMono-Regular, Menlo, monospace" font-size="15">const samePreset = true;</text>
+  <text x="674" y="389" fill="#8d949b" font-family="SFMono-Regular, Menlo, monospace" font-size="13">Readable code · 15px (not 12px)</text>
+
+  <rect x="84" y="434" width="464" height="56" rx="8" fill="#202428"/>
+  <rect x="95" y="448" width="28" height="28" rx="7" fill="#2b3035" stroke="#3a4046"/>
+  <path d="M103 462h12M109 456v12" stroke="#f0f2f4" stroke-width="1.8" stroke-linecap="round"/>
+  <text x="136" y="468" fill="#eef0f2" font-family="Inter, system-ui, sans-serif" font-size="12">UI row · 12px · paired icon 13.8px</text>
+
+  <rect x="652" y="434" width="464" height="56" rx="8" fill="#202428"/>
+  <rect x="663" y="448" width="28" height="28" rx="7" fill="#2b3035" stroke="#3a4046"/>
+  <path d="M670 462h14M677 455v14" stroke="#f0f2f4" stroke-width="2" stroke-linecap="round"/>
+  <text x="704" y="469" fill="#eef0f2" font-family="Inter, system-ui, sans-serif" font-size="14">UI row · 14px · paired icon 16.1px</text>
+
+  <text x="84" y="532" fill="#9da3aa" font-family="Inter, system-ui, sans-serif" font-size="11">Secondary/meta · 11px</text>
+  <text x="652" y="534" fill="#9da3aa" font-family="Inter, system-ui, sans-serif" font-size="13">Secondary/meta · 13px</text>
+
+  <line x1="84" y1="558" x2="548" y2="558" stroke="#30353a"/>
+  <line x1="652" y1="558" x2="1116" y2="558" stroke="#30353a"/>
+  <text x="84" y="588" fill="#b9bec4" font-family="Inter, system-ui, sans-serif" font-size="12">Visible glyph scales; 28px hit target stays usable.</text>
+  <text x="652" y="588" fill="#b9bec4" font-family="Inter, system-ui, sans-serif" font-size="14">Visible glyph scales; 28px hit target stays usable.</text>
+
+  <rect x="52" y="650" width="1096" height="70" rx="12" fill="#171a1d" stroke="#30353a"/>
+  <text x="78" y="682" fill="#f0f2f4" font-family="Inter, system-ui, sans-serif" font-size="14" font-weight="600">Contract shown here</text>
+  <text x="78" y="706" fill="#9da3aa" font-family="Inter, system-ui, sans-serif" font-size="13">Same-name code = message size · all owned text is semantic · paired icons default to 1.15em · hit areas and window zoom remain independent</text>
+</svg>
