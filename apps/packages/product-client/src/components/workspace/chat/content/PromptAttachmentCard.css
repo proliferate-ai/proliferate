@@ -1,0 +1,15 @@
+.prompt-card-file {
+  width: 210px;
+  height: 52px;
+}
+
+.prompt-card-image-draft {
+  width: 5rem;
+  height: 5rem;
+}
+
+.prompt-card:hover .prompt-card-remove,
+.prompt-card-remove:focus-visible {
+  pointer-events: auto;
+  opacity: 1;
+}

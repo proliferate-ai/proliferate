@@ -33,6 +33,7 @@ import {
   createPlaygroundEnvironmentAdvancedControls,
   createPlaygroundEnvironmentTargetState,
 } from "#product/lib/domain/chat/__fixtures__/playground/environment-fixtures";
+import { PlaygroundAttachmentComposerSurface } from "#product/components/playground/PlaygroundAttachmentFixtures";
 
 export function renderComposerSurfaceForScenario(scenario: ScenarioKey): ReactNode {
   switch (scenario) {
@@ -40,6 +41,12 @@ export function renderComposerSurfaceForScenario(scenario: ScenarioKey): ReactNo
       return <PlaygroundLongInputComposerSurface />;
     case "composer-ultra":
       return <PlaygroundComposerSurface ultra />;
+    case "attachment-previews":
+      return (
+        <PlaygroundAttachmentComposerSurface
+          controlRow={<PlaygroundComposerControlRow />}
+        />
+      );
     case "workspace-status-card":
       return <PlaygroundComposerSurface statusControl={<PlaygroundWorkspaceStatusControl />} />;
     case "status-live-stream":

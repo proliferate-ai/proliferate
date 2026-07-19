@@ -9,6 +9,11 @@ import {
   isNonPersistedWorkspaceUiStateKey,
   selectPersistedWorkspaceUiState,
 } from "#product/lib/domain/preferences/workspace-ui/persistence";
+import {
+  fileViewerTarget,
+  promptAttachmentViewerTarget,
+  viewerTargetKey,
+} from "#product/lib/domain/workspaces/viewer/viewer-target";
 
 describe("workspace UI state persistence", () => {
   it("sanitizes persisted chat slices and excludes non-persisted runtime state", () => {
@@ -101,5 +106,37 @@ describe("workspace UI state persistence", () => {
     expect(isNonPersistedWorkspaceUiStateKey("pendingChatActivationByWorkspace")).toBe(true);
     expect(isNonPersistedWorkspaceUiStateKey("urgentHighlightedChatSessionByWorkspace")).toBe(true);
     expect(isNonPersistedWorkspaceUiStateKey("sidebarOpen")).toBe(false);
+  });
+
+  it("strips attachment preview targets from every persisted viewer surface", () => {
+    const attachmentKey = viewerTargetKey(promptAttachmentViewerTarget({
+      origin: "draft",
+      attachmentId: "attachment:one",
+      name: "paste.txt",
+      mimeType: "text/plain",
+      attachmentKind: "text_resource",
+      attachmentSource: "paste",
+      objectUrl: "blob:attachment-one",
+    }));
+    const fileKey = viewerTargetKey(fileViewerTarget("README.md"));
+
+    const selected = selectPersistedWorkspaceUiState({
+      ...WORKSPACE_UI_DEFAULTS,
+      activeShellTabKeyByWorkspace: { w1: attachmentKey },
+      shellTabOrderByWorkspace: { w1: [attachmentKey, fileKey] },
+      rightPanelMaterializedByWorkspace: {
+        w1: {
+          activeEntryKey: attachmentKey,
+          headerOrder: [attachmentKey, fileKey],
+        },
+      },
+    });
+
+    expect(selected.activeShellTabKeyByWorkspace).toEqual({});
+    expect(selected.shellTabOrderByWorkspace).toEqual({ w1: [fileKey] });
+    expect(selected.rightPanelMaterializedByWorkspace.w1).toEqual({
+      activeEntryKey: "tool:scratch",
+      headerOrder: [fileKey, "tool:scratch", "tool:git"],
+    });
   });
 });

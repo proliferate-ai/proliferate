@@ -6,6 +6,7 @@ import { renderPlaygroundPlanTranscript } from "#product/components/playground/t
 import { renderPlaygroundStatusTranscript } from "#product/components/playground/transcript/PlaygroundStatusTranscript";
 import { renderPlaygroundToolTranscript } from "#product/components/playground/transcript/PlaygroundToolTranscript";
 import { PlaygroundLoadingStates } from "#product/components/playground/loading/PlaygroundLoadingStates";
+import { PlaygroundAttachmentTranscript } from "#product/components/playground/PlaygroundAttachmentFixtures";
 
 interface PlaygroundTranscriptProps {
   stickyBottomInsetPx: number;
@@ -33,6 +34,9 @@ export function PlaygroundTranscript({
   const scenario = selection.key;
   if (scenario === "loading-states") {
     return <PlaygroundLoadingStates />;
+  }
+  if (scenario === "attachment-previews") {
+    return <PlaygroundAttachmentTranscript />;
   }
 
   const planTranscript = renderPlaygroundPlanTranscript(scenario);

@@ -17,6 +17,7 @@ import {
   type ViewerTargetKey,
 } from "#product/lib/domain/workspaces/viewer/viewer-target";
 import type { WorkspaceFileBuffer } from "#product/stores/editor/workspace-file-buffers-store";
+import { focusChatInput } from "#product/lib/domain/focus-zone";
 
 type RightPanelStateUpdater = (value: SetStateAction<RightPanelWorkspaceState>) => void;
 
@@ -99,6 +100,9 @@ export function useRightPanelViewerActions({
         isCloudWorkspaceSelected,
       )
     );
+    if (target.kind === "promptAttachment") {
+      focusChatInput();
+    }
   }, [
     buffersByPath,
     clearBuffer,
