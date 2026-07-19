@@ -232,7 +232,11 @@ function promptAttachmentCardClassName(args: {
   isImage: boolean;
 }): string {
   if (args.isImage) {
-    const size = args.isDraft ? "size-20" : args.isCompact ? "size-10" : "size-14";
+    const size = args.isDraft
+      ? "prompt-card-image-draft"
+      : args.isCompact
+        ? "size-10"
+        : "size-14";
     const border = args.isDraft ? "border-border" : "border-border/60";
     return `prompt-card relative inline-flex ${size} shrink-0 overflow-visible rounded-lg border ${border} bg-card text-foreground`;
   }

@@ -27,8 +27,12 @@ describe("PromptAttachmentCard style ownership", () => {
     expect(componentSource).not.toContain("style={isDraft && !isImage");
     expect(componentSource).not.toContain("h-[52px]");
     expect(componentSource).not.toContain("w-[210px]");
+    expect(componentSource).not.toContain(["size", "20"].join("-"));
     expect(componentCss).toMatch(
       /\.prompt-card-file\s*\{[^}]*width:\s*210px;[^}]*height:\s*52px;/su,
+    );
+    expect(componentCss).toMatch(
+      /\.prompt-card-image-draft\s*\{[^}]*width:\s*5rem;[^}]*height:\s*5rem;/su,
     );
     expect(componentCss).toContain(".prompt-card:hover .prompt-card-remove,");
     expect(componentCss).toContain(".prompt-card-remove:focus-visible");
