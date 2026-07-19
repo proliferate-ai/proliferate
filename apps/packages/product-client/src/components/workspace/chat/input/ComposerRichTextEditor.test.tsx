@@ -158,6 +158,25 @@ describe("ComposerRichTextEditor", () => {
     expect(typed.root.textContent).toBe("[Docs](https://example.com)");
   });
 
+  it("formats complete pasted Markdown lists as editable list blocks", async () => {
+    const onChange = vi.fn();
+    const harness = renderEditor({ onChange });
+    await harness.ready();
+    act(() => resetText(harness.editor, ""));
+    onChange.mockClear();
+
+    const listPaste = pasteEvent("- **first**\n- second");
+    act(() => { fireEvent(harness.root, listPaste); });
+
+    await waitFor(() => expect(harness.root.querySelectorAll("ul li")).toHaveLength(2));
+    expect(listPaste.defaultPrevented).toBe(true);
+    expect(harness.root.querySelector("ul li .font-semibold")?.textContent).toBe("first");
+    expect(harness.root.querySelectorAll("ul li")[1]?.textContent).toBe("second");
+    expect(onChange.mock.calls[onChange.mock.calls.length - 1]?.[0]).toBe(
+      "- **first**\n- second",
+    );
+  });
+
   it("restores pasted-link identity from the controlled snapshot", async () => {
     const onChange = vi.fn();
     const harness = renderEditor({ onChange });

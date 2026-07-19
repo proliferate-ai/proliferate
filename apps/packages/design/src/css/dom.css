@@ -121,6 +121,25 @@ body {
   background-clip: content-box;
 }
 
+@property --top-fade {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0;
+}
+
+@property --bottom-fade {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0;
+}
+
+@property --edge-fade-distance {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 1.5rem;
+}
+
+/* Static two-edge fallback for browsers without scroll-driven animations. */
 .vertical-scroll-fade-mask {
   --edge-fade-distance: 1.5rem;
   mask-image: linear-gradient(
@@ -137,6 +156,43 @@ body {
     black calc(100% - var(--edge-fade-distance)),
     transparent 100%
   );
+}
+
+@keyframes vertical-scroll-edge-fade {
+  0%,
+  1% {
+    --top-fade: 0;
+    --bottom-fade: var(--edge-fade-distance);
+  }
+
+  99%,
+  100% {
+    --top-fade: var(--edge-fade-distance);
+    --bottom-fade: 0;
+  }
+}
+
+/* Codex-style edge ownership: at the top only the bottom edge fades; after
+   scrolling both edges fade; at the bottom only the top edge fades. */
+@supports (animation-timeline: scroll()) {
+  .vertical-scroll-fade-mask {
+    mask-image: linear-gradient(
+      to bottom,
+      transparent,
+      black var(--top-fade) calc(100% - var(--bottom-fade)),
+      transparent
+    );
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      transparent,
+      black var(--top-fade) calc(100% - var(--bottom-fade)),
+      transparent
+    );
+    animation-name: vertical-scroll-edge-fade;
+    animation-timing-function: linear;
+    animation-fill-mode: both;
+    animation-timeline: scroll(self y);
+  }
 }
 
 /* Codex composer chrome (UX_SPEC §5): no border — a 0.5px stroke painted in

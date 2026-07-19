@@ -247,6 +247,12 @@ export function ChatInput({
   }, [attachments, planAttachments]);
 
   const handlePaste = useCallback((event: ClipboardEvent<HTMLDivElement>) => {
+    // The editor owns formatted Markdown paste first. Once it has imported a
+    // list or link, do not reinterpret the same clipboard text as an
+    // attachment at the composer surface.
+    if (event.defaultPrevented) {
+      return;
+    }
     if (!canAcceptPastedAttachments) {
       return;
     }

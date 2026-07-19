@@ -93,6 +93,65 @@ export const PLAYGROUND_SIDEBAR_GIT_DIFF_FILES: PlaygroundSidebarGitDiffFile[] =
   },
 ];
 
+const PLAYGROUND_END_TURN_FILE_CHANGES = [
+  {
+    itemId: "tool-end-diff-readme",
+    path: "apps/packages/product-client/src/components/workspace/chat/transcript/TranscriptPatchTurnDiffPanel.tsx",
+    additions: 3,
+    deletions: 3,
+    patch: PLAYGROUND_PATCH_README,
+  },
+  {
+    itemId: "tool-end-diff-git",
+    path: "apps/packages/product-client/src/components/workspace/chat/transcript/TurnDiffFileRow.tsx",
+    additions: 1,
+    deletions: 1,
+    patch: PLAYGROUND_PATCH_GIT_PANEL,
+  },
+  {
+    itemId: "tool-end-diff-transcript-row",
+    path: "apps/packages/product-client/src/components/workspace/chat/transcript/TurnDiffPanel.test.tsx",
+    additions: 5,
+    deletions: 3,
+    patch: PLAYGROUND_PATCH_MESSAGE_LIST,
+  },
+  {
+    itemId: "tool-end-diff-collapsed-actions",
+    path: "apps/packages/product-client/src/components/workspace/chat/transcript/TurnDiffPanel.tsx",
+    additions: 4,
+    deletions: 2,
+    patch: PLAYGROUND_PATCH_MESSAGE_LIST,
+  },
+  {
+    itemId: "tool-end-diff-dom-css",
+    path: "apps/packages/product-client/src/components/workspace/chat/transcript/TurnDiffPanelHeader.tsx",
+    additions: 2,
+    deletions: 1,
+    patch: PLAYGROUND_PATCH_MESSAGE_LIST,
+  },
+  {
+    itemId: "tool-end-diff-transcript-spec",
+    path: "apps/packages/product-client/src/components/workspace/chat/transcript/TurnDocumentReferenceCard.test.tsx",
+    additions: 2,
+    deletions: 1,
+    patch: PLAYGROUND_PATCH_README,
+  },
+  {
+    itemId: "tool-end-diff-document-resource",
+    path: "specs/codebase/systems/product/chat/transcript.md",
+    additions: 5,
+    deletions: 2,
+    patch: PLAYGROUND_PATCH_MESSAGE_LIST,
+  },
+  {
+    itemId: "tool-end-diff-playground-config",
+    path: "apps/packages/product-client/src/components/workspace/chat/transcript/TurnDocumentReferenceCard.tsx",
+    additions: 3,
+    deletions: 2,
+    patch: PLAYGROUND_PATCH_MESSAGE_LIST,
+  },
+] as const;
+
 export const PLAYGROUND_END_TURN_DIFF_TRANSCRIPT: TranscriptState = {
   sessionMeta: {
     sessionId: "playground-end-turn-diff",
@@ -105,18 +164,18 @@ export const PLAYGROUND_END_TURN_DIFF_TRANSCRIPT: TranscriptState = {
   turnsById: {
     "turn-end-diff": {
       turnId: "turn-end-diff",
-      itemOrder: ["assistant-end-diff", "tool-end-diff-readme", "tool-end-diff-git"],
+      itemOrder: [
+        "assistant-end-diff",
+        ...PLAYGROUND_END_TURN_FILE_CHANGES.map((file) => file.itemId),
+      ],
       startedAt: "2026-04-29T12:00:00Z",
       completedAt: "2026-04-29T12:00:03Z",
       stopReason: "end_turn",
-      fileBadges: [
-        { path: "README.md", additions: 2, deletions: 1 },
-        {
-          path: "apps/desktop/src/components/workspace/git/GitPanel.tsx",
-          additions: 2,
-          deletions: 1,
-        },
-      ],
+      fileBadges: PLAYGROUND_END_TURN_FILE_CHANGES.map((file) => ({
+        path: file.path,
+        additions: file.additions,
+        deletions: file.deletions,
+      })),
     },
   },
   itemsById: {
@@ -138,47 +197,31 @@ export const PLAYGROUND_END_TURN_DIFF_TRANSCRIPT: TranscriptState = {
       lastUpdatedSeq: 1,
       completedSeq: 1,
       completedAt: "2026-04-29T12:00:00Z",
-      text: "I updated the chat and git diff surfaces to share the Codex-style contract.",
+      text: "I updated the chat and git diff surfaces to share the Codex-style contract. The implementation notes are in [tool-call-blocks.md](docs/tool-call-blocks.md).",
       isStreaming: false,
     },
-    "tool-end-diff-readme": toolCallItem({
-      itemId: "tool-end-diff-readme",
-      toolCallId: "tool-end-diff-readme",
-      turnId: "turn-end-diff",
-      title: "Edit README.md",
-      nativeToolName: "Edit",
-      toolKind: "edit",
-      semanticKind: "file_change",
-      contentParts: [{
-        type: "file_change",
-        operation: "edit",
-        path: "/Users/pablo/proliferate/README.md",
-        workspacePath: "README.md",
-        basename: "README.md",
-        additions: 2,
-        deletions: 1,
-        patch: PLAYGROUND_PATCH_README,
-      }],
-    }),
-    "tool-end-diff-git": toolCallItem({
-      itemId: "tool-end-diff-git",
-      toolCallId: "tool-end-diff-git",
-      turnId: "turn-end-diff",
-      title: "Edit GitPanel.tsx",
-      nativeToolName: "Edit",
-      toolKind: "edit",
-      semanticKind: "file_change",
-      contentParts: [{
-        type: "file_change",
-        operation: "edit",
-        path: "/Users/pablo/proliferate/apps/desktop/src/components/workspace/git/GitPanel.tsx",
-        workspacePath: "apps/desktop/src/components/workspace/git/GitPanel.tsx",
-        basename: "GitPanel.tsx",
-        additions: 2,
-        deletions: 1,
-        patch: PLAYGROUND_PATCH_GIT_PANEL,
-      }],
-    }),
+    ...Object.fromEntries(PLAYGROUND_END_TURN_FILE_CHANGES.map((file) => [
+      file.itemId,
+      toolCallItem({
+        itemId: file.itemId,
+        toolCallId: file.itemId,
+        turnId: "turn-end-diff",
+        title: `Edit ${extractFixtureBasename(file.path)}`,
+        nativeToolName: "Edit",
+        toolKind: "edit",
+        semanticKind: "file_change",
+        contentParts: [{
+          type: "file_change",
+          operation: "edit",
+          path: `/Users/pablo/proliferate/${file.path}`,
+          workspacePath: file.path,
+          basename: extractFixtureBasename(file.path),
+          additions: file.additions,
+          deletions: file.deletions,
+          patch: file.patch,
+        }],
+      }),
+    ])),
   },
   openAssistantItemId: null,
   openThoughtItemId: null,
@@ -194,3 +237,8 @@ export const PLAYGROUND_END_TURN_DIFF_TRANSCRIPT: TranscriptState = {
   linkCompletionsByCompletionId: {},
   latestLinkCompletionBySessionLinkId: {},
 };
+
+function extractFixtureBasename(path: string): string {
+  const segments = path.split("/");
+  return segments[segments.length - 1] ?? path;
+}

@@ -43,6 +43,8 @@ import type { PromptPlanAttachmentDescriptor } from "@proliferate/product-domain
 import type { SessionViewState } from "@proliferate/product-domain/sessions/activity";
 import { useToastStore } from "#product/stores/toast/toast-store";
 import { useAssistantRevealFrontier } from "#product/hooks/chat/ui/use-assistant-reveal-frontier";
+import { TurnDocumentReferenceCard } from "#product/components/workspace/chat/transcript/TurnDocumentReferenceCard";
+import { resolveAssistantMarkdownEndResource } from "#product/lib/domain/chat/assistant-markdown-end-resource";
 
 type PlanHandoffHandler = (plan: PromptPlanAttachmentDescriptor) => void;
 
@@ -111,6 +113,10 @@ export function TranscriptTurnRow({
     turnId: turn.turnId,
   });
   const visualTurnCompleted = !!turn.completedAt && assistantRevealComplete;
+  const assistantEndResource = useMemo(
+    () => resolveAssistantMarkdownEndResource(tailAssistantCopyContent),
+    [tailAssistantCopyContent],
+  );
   const diffPanelKind = resolveTranscriptTurnDiffPanelKind({
     rowIsLastTurnRow: row.isLastTurnRow,
     turnCompleted: visualTurnCompleted,
@@ -245,9 +251,13 @@ export function TranscriptTurnRow({
           onAssistantRevealStateChange={handleAssistantRevealStateChange}
           showCompletedArtifactFallback={row.isLastTurnRow}
           workspaceId={selectedWorkspaceId}
+          onOpenTurnChanges={onOpenTurnChanges}
           onOpenArtifact={onOpenArtifact}
           onHandOffPlanToNewSession={onHandOffPlanToNewSession}
         />
+        {visualTurnCompleted && assistantEndResource && (
+          <TurnDocumentReferenceCard resource={assistantEndResource} />
+        )}
         {assistantRevealComplete && trailingStatus && (
           <div data-turn-frontier-status>{trailingStatus}</div>
         )}

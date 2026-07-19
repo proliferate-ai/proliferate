@@ -62,10 +62,18 @@ function classifyLine(line: string): "added" | "removed" | "context" | "hunk" | 
   if (line.startsWith("+") && !line.startsWith("+++")) return "added";
   if (line.startsWith("-") && !line.startsWith("---")) return "removed";
   if (
+    line.length === 0 ||
     line.startsWith("diff ") ||
     line.startsWith("index ") ||
     line.startsWith("---") ||
-    line.startsWith("+++")
+    line.startsWith("+++") ||
+    /^(?:new|deleted) file mode \d+$/.test(line) ||
+    /^(?:old|new) mode \d+$/.test(line) ||
+    /^(?:dis)?similarity index \d+%$/.test(line) ||
+    /^(?:rename|copy) (?:from|to) /.test(line) ||
+    line === "GIT binary patch" ||
+    line.startsWith("Binary files ") ||
+    line === "\\ No newline at end of file"
   )
     return "meta";
   return "context";

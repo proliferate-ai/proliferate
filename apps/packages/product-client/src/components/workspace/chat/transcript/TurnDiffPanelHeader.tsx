@@ -1,5 +1,5 @@
 import { FileChangeStats } from "#product/components/content/ui/FileChangeStats";
-import { ArrowRight, FilePen, Undo } from "@proliferate/ui/icons";
+import { ArrowUpRight, FileDiff, Undo } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
 
 interface TurnDiffPanelHeaderProps {
@@ -26,39 +26,43 @@ export function TurnDiffPanelHeader({
   return (
     <div
       data-chat-diff-wrap-context-trigger="turn-header"
-      className="group/turn-diff-header relative bg-[var(--color-diff-chat-turn-header-surface)] transition-colors hover:bg-[var(--color-diff-chat-turn-header-hover-surface)]"
+      className={`group/turn-diff-header relative focus-within:[&_.turn-diff-default-subtitle]:hidden hover:[&_.turn-diff-default-subtitle]:hidden focus-within:[&_.turn-diff-hover-subtitle]:inline-flex hover:[&_.turn-diff-hover-subtitle]:inline-flex ${onOpenReviewPane ? "cursor-pointer" : ""}`}
     >
-      <div className="pointer-events-none relative z-10 flex min-w-0 items-center gap-3 px-[var(--turn-diff-row-padding-x)] py-2.5 text-left">
+      {onOpenReviewPane && (
+        <button
+          type="button"
+          data-chat-transcript-ignore
+          aria-label="Review changed files"
+          onClick={onOpenReviewPane}
+          className="absolute inset-0 z-0 rounded-t-lg bg-transparent group-hover/turn-diff-header:bg-list-hover/30 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-border"
+        />
+      )}
+      <div className="pointer-events-none relative z-10 flex min-w-0 items-center gap-2.5 px-[var(--turn-diff-row-padding-x)] py-3 text-left">
         <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-[var(--color-diff-chat-turn-icon-surface)] text-secondary-foreground">
-          <FilePen className="size-4" />
+          <FileDiff className="size-6" />
         </span>
         <span className="flex min-w-0 flex-1 flex-col">
           <span className="truncate text-chat font-medium leading-[var(--text-chat--line-height)] text-foreground">
             {title}
           </span>
           <span className="relative block min-h-4 min-w-0 text-xs leading-4 text-muted-foreground">
-            <span
-              className={`turn-diff-default-subtitle block truncate transition-opacity duration-200 ${
-                onOpenReviewPane
-                  ? "group-hover/turn-diff-header:opacity-0 group-focus-within/turn-diff-header:opacity-0"
-                  : ""
-              }`}
-            >
+            <span className="turn-diff-default-subtitle inline-flex truncate">
               <FileChangeStats
                 additions={totalAdditions}
                 deletions={totalDeletions}
                 className="text-xs"
+                rolling
               />
             </span>
             {onOpenReviewPane && (
-              <span className="turn-diff-hover-subtitle pointer-events-none absolute inset-0 flex min-w-0 items-center gap-1 truncate opacity-0 transition-opacity duration-200 group-hover/turn-diff-header:opacity-100 group-focus-within/turn-diff-header:opacity-100">
+              <span className="turn-diff-hover-subtitle pointer-events-none absolute inset-0 hidden min-w-0 items-center gap-1 truncate">
                 Review changes
-                <ArrowRight className="size-3 shrink-0" />
+                <ArrowUpRight className="size-3 shrink-0" />
               </span>
             )}
           </span>
         </span>
-        <span className="pointer-events-auto flex shrink-0 items-center gap-1">
+        <span className="pointer-events-auto flex shrink-0 items-center gap-2">
           {showUndo && (
             <Button
               type="button"
@@ -70,22 +74,22 @@ export function TurnDiffPanelHeader({
                 event.stopPropagation();
                 onUndoTurnChanges?.();
               }}
-              className="h-8 gap-1.5 rounded-md px-2.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45"
+              className="h-7 gap-1 rounded-md px-2 text-chat text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45"
             >
-              <Undo className="size-4" />
               Undo
+              <Undo className="size-3.5" />
             </Button>
           )}
           {onOpenReviewPane && (
             <Button
               type="button"
-              variant="ghost"
+              variant="outline"
               size="sm"
               onClick={(event) => {
                 event.stopPropagation();
                 onOpenReviewPane();
               }}
-              className="h-8 rounded-md px-2.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+              className="h-7 rounded-md border-border bg-transparent px-2 text-chat text-muted-foreground hover:bg-muted hover:text-foreground"
             >
               Review
             </Button>

@@ -7,11 +7,17 @@ import { FileChangeCall } from "#product/components/workspace/chat/tool-calls/Fi
 import { FileReadCall } from "#product/components/workspace/chat/tool-calls/FileReadCall";
 import { GenericToolResultRow } from "#product/components/workspace/chat/tool-calls/GenericToolResultRow";
 import { ReasoningBlock } from "#product/components/workspace/chat/tool-calls/ReasoningBlock";
+import { CollapsedActions } from "#product/components/workspace/chat/tool-calls/CollapsedActions";
 import type { ScenarioKey } from "#product/config/playground";
 import { PLAYGROUND_END_TURN_DIFF_TRANSCRIPT } from "#product/lib/domain/chat/__fixtures__/playground/git-diff-fixtures";
 import {
   PLAYGROUND_COWORK_ARTIFACT_TOOL_CALL,
 } from "#product/lib/domain/chat/__fixtures__/playground/tool-artifact-transcript-fixtures";
+import {
+  PLAYGROUND_ACTIVITY_LEDGER_EDIT_ITEMS,
+  PLAYGROUND_ACTIVITY_LEDGER_READ_ITEMS,
+  PLAYGROUND_ACTIVITY_LEDGER_TRANSCRIPT,
+} from "#product/lib/domain/chat/__fixtures__/playground/tool-activity-ledger-fixtures";
 import {
   PLAYGROUND_SUBAGENT_CREATION_GROUP_TRANSCRIPT,
   PLAYGROUND_SUBAGENT_CREATION_SINGLE_TRANSCRIPT,
@@ -125,6 +131,25 @@ export function renderPlaygroundToolTranscript(
             patch={"@@ -1,3 +1,4 @@\n Proliferate\n-Old transcript rows\n+Compact transcript rows\n+Visible nested tool calls\n"}
             status="completed"
           />
+        </TranscriptPreviewShell>
+      );
+    case "tool-activity-ledger":
+      return (
+        <TranscriptPreviewShell>
+          <div className="rounded-xl border border-border/70 bg-foreground/[0.02] p-3">
+            <div className="mb-2 text-xs font-medium text-muted-foreground">Scrollable activity</div>
+            <CollapsedActions
+              itemIds={PLAYGROUND_ACTIVITY_LEDGER_READ_ITEMS.map((item) => item.itemId)}
+              transcript={PLAYGROUND_ACTIVITY_LEDGER_TRANSCRIPT}
+            />
+          </div>
+          <div className="rounded-xl border border-border/70 bg-foreground/[0.02] p-3">
+            <div className="mb-2 text-xs font-medium text-muted-foreground">Read and edit rows</div>
+            <CollapsedActions
+              itemIds={PLAYGROUND_ACTIVITY_LEDGER_EDIT_ITEMS.map((item) => item.itemId)}
+              transcript={PLAYGROUND_ACTIVITY_LEDGER_TRANSCRIPT}
+            />
+          </div>
         </TranscriptPreviewShell>
       );
     case "tool-reasoning":

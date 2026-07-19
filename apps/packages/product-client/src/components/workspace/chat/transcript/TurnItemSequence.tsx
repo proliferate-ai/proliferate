@@ -47,6 +47,7 @@ export function TurnItemSequence({
   onAssistantRevealStateChange,
   showCompletedArtifactFallback,
   workspaceId,
+  onOpenTurnChanges,
   onOpenArtifact,
   onHandOffPlanToNewSession,
 }: {
@@ -65,6 +66,7 @@ export function TurnItemSequence({
   ) => void;
   showCompletedArtifactFallback: boolean;
   workspaceId: string | null;
+  onOpenTurnChanges?: () => void;
   onOpenArtifact: (workspaceId: string, artifactId: string) => void;
   onHandOffPlanToNewSession?: PlanHandoffHandler;
 }) {
@@ -148,6 +150,7 @@ export function TurnItemSequence({
                         transcript={transcript}
                         autoFollowCollapsedActionBlockId={null}
                         animateActivityEntry={false}
+                        onOpenChanges={onOpenTurnChanges}
                         renderItem={(itemId) => (
                           <TranscriptFragment
                             itemId={itemId}
@@ -174,6 +177,7 @@ export function TurnItemSequence({
               transcript={transcript}
               autoFollowCollapsedActionBlockId={autoFollowCollapsedActionBlockId}
               animateActivityEntry={animateActivityEntry}
+              onOpenChanges={onOpenTurnChanges}
               renderItem={(itemId) => (
                 <TranscriptFragment
                   itemId={itemId}

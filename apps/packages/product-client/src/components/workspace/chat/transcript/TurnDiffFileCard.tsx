@@ -1,11 +1,11 @@
 import type { ReactNode } from "react";
 import { DiffViewer } from "#product/components/content/ui/DiffViewer";
-import { FileDiffCard } from "#product/components/content/ui/FileDiffCard";
 import { useTurnCurrentFilePatch } from "#product/hooks/chat/cache/use-turn-current-file-diffs";
 import { useLazyDiffFileLines } from "#product/hooks/ui/diff/use-lazy-diff-file-lines";
 import type { GitPanelReviewFile } from "#product/lib/domain/workspaces/changes/git-panel-diff";
 import { CircleAlert, FileCode, FileIcon, RefreshCw } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
+import { TurnDiffFileRow } from "#product/components/workspace/chat/transcript/TurnDiffFileRow";
 
 const TURN_DIFF_VIEWPORT_CLASS = "max-h-[calc(var(--diffs-line-height)*18)]";
 
@@ -19,10 +19,11 @@ interface TurnDiffFileCardProps {
   runtimeBlockedReason: string | null;
   metadataLoading: boolean;
   metadataErrorMessage: string | null;
+  fallbackAdditions: number;
+  fallbackDeletions: number;
   isExpanded: boolean;
   onToggleExpand: () => void;
   onOpenFile: () => void;
-  onOpenReviewPane?: () => void;
 }
 
 export function TurnDiffFileCard({
@@ -35,10 +36,11 @@ export function TurnDiffFileCard({
   runtimeBlockedReason,
   metadataLoading,
   metadataErrorMessage,
+  fallbackAdditions,
+  fallbackDeletions,
   isExpanded,
   onToggleExpand,
   onOpenFile,
-  onOpenReviewPane,
 }: TurnDiffFileCardProps) {
   const {
     currentDiff,
@@ -66,21 +68,18 @@ export function TurnDiffFileCard({
     binary: Boolean(diffQuery.data?.binary || currentDiff?.binary),
     truncated: Boolean(diffQuery.data?.truncated && !patch),
   });
+  const displayAdditions = currentDiff || diffQuery.data ? additions : fallbackAdditions;
+  const displayDeletions = currentDiff || diffQuery.data ? deletions : fallbackDeletions;
 
   return (
-    <FileDiffCard
+    <TurnDiffFileRow
       filePath={file.displayPath}
-      displayLabel={fileCount === 1 ? "Details" : undefined}
-      additions={additions}
-      deletions={deletions}
+      additions={displayAdditions}
+      deletions={displayDeletions}
       showStats={fileCount !== 1}
       isExpanded={isExpanded}
       onToggleExpand={onToggleExpand}
       onOpenFile={onOpenFile}
-      onOpenAction={onOpenReviewPane}
-      openActionLabel={onOpenReviewPane ? "Show file in review" : undefined}
-      openActionTitle={onOpenReviewPane ? "Show file in review" : undefined}
-      embedded
     >
       {!isRuntimeReady ? (
         <TurnDiffInlineState
@@ -158,7 +157,7 @@ export function TurnDiffFileCard({
           onOpenFile={onOpenFile}
         />
       ) : null}
-    </FileDiffCard>
+    </TurnDiffFileRow>
   );
 }
 

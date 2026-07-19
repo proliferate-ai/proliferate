@@ -322,7 +322,7 @@ describe("CollapsedActions", () => {
     expect(html).toContain("flex flex-col gap-1");
   });
 
-  it("keeps compact scrolling for expanded non-edit action ledgers", () => {
+  it("starts expanded non-edit ledgers at the top with Codex edge fading", () => {
     const transcript = createTranscriptState("session-1");
     transcript.itemsById = {
       read: toolItem("read", "turn-1", 1, "file_read"),
@@ -344,8 +344,44 @@ describe("CollapsedActions", () => {
     expect(ledger?.querySelector("[data-file-reference-badge='inline']")?.textContent)
       .toContain("read.ts");
     expect(html).toContain("overflow-y-auto overflow-x-hidden");
-    expect(html).toContain("max-h-[7.5rem]");
+    expect(html).toContain("vertical-scroll-fade-mask");
+    expect(html).toContain("max-h-56");
+    expect((ledger as HTMLElement).style.getPropertyValue("--edge-fade-distance")).toBe("3rem");
+    expect(ledger?.scrollTop).toBe(0);
     expect(html).not.toContain("pl-4");
+  });
+
+  it("does not steal the user's ledger scroll position while work is live", () => {
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById = {
+      read: toolItem("read", "turn-1", 1, "file_read", "completed"),
+      command: terminalItem("command", "turn-1", 2, "pnpm test", "in_progress"),
+    };
+
+    const { rerender } = render(
+      <CollapsedActions
+        itemIds={["read", "command"]}
+        transcript={transcript}
+        autoFollow
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Running command/i }));
+
+    const ledger = document.querySelector<HTMLElement>("[data-collapsed-actions-ledger]");
+    expect(ledger?.getAttribute("data-live")).toBe("true");
+    if (!ledger) throw new Error("Expected activity ledger");
+    ledger.scrollTop = 24;
+
+    transcript.itemsById.search = toolItem("search", "turn-1", 3, "search", "in_progress");
+    rerender(
+      <CollapsedActions
+        itemIds={["read", "command", "search"]}
+        transcript={transcript}
+        autoFollow
+      />,
+    );
+
+    expect(ledger.scrollTop).toBe(24);
   });
 
   it("uses the same Codex ink for command and plain ledger rows", () => {
@@ -364,17 +400,19 @@ describe("CollapsedActions", () => {
     fireEvent.click(screen.getByRole("button", { name: /command/i }));
 
     const commandRow = screen.getByRole("button", { name: /Ran pnpm test/i });
-    const readRow = screen.getByText("Read").parentElement;
+    const readRow = screen.getByText("Read").parentElement?.parentElement;
     expect(commandRow.className).toContain("text-foreground/60");
     expect(readRow?.className).toContain("text-foreground/60");
   });
 
-  it("starts grouped edit cards closed inside the expanded action batch", () => {
+  it("keeps grouped edit activity compact until a file row reveals its diff", () => {
     const transcript = createTranscriptState("session-1");
     const firstEdit = toolItem("edit-1", "turn-1", 1, "file_change");
     const firstEditPart = firstEdit.contentParts[0];
     if (firstEditPart?.type === "file_change") {
       firstEditPart.patch = "@@ -1 +1 @@\n-old\n+new";
+      firstEditPart.additions = 1;
+      firstEditPart.deletions = 1;
     }
     transcript.itemsById = {
       "edit-1": firstEdit,
@@ -387,29 +425,57 @@ describe("CollapsedActions", () => {
         transcript={transcript}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: /Edited files/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Edited files" }));
 
-    const html = document.body.innerHTML;
     const ledger = document.querySelector("[data-collapsed-actions-ledger]");
     expect(ledger?.firstElementChild?.className).toContain("flex flex-col gap-1");
-    expect(html).toContain("Edit");
-    expect(html).toContain("edit-1.ts");
-    expect(html).toContain("aria-expanded=\"false\"");
-    expect(html).not.toContain("data-diff-surface=\"chat\"");
-    expect(html).not.toContain("Toggle file diff");
-    expect(html).not.toContain("data-app-action-review-file-toggle");
-    expect(html).not.toContain("aria-label=\"Open edit-1.ts\"");
-    const editRow = screen.getByRole("button", { name: /Edit edit-1\.ts/i });
-    const editIcon = editRow.querySelector("svg");
+    expect(document.body.innerHTML).toContain("edit-1.ts");
+    expect(document.body.innerHTML).not.toContain("data-diff-surface=\"chat\"");
+    const editRow = ledger?.querySelector("[data-edit-action-row]");
+    const editLabel = editRow?.querySelector("[data-edit-action-file-label]");
+    expect(editRow?.textContent).not.toContain("Edit ");
+    const editIcon = editRow?.querySelector("svg");
     expect(editIcon?.getAttribute("viewBox")).toBe("0 0 20 21");
     expect(editIcon?.querySelector("path")?.getAttribute("d")).toContain("11.3312 4.20472");
     expect(editIcon?.parentElement?.className).toContain("size-[1.143em]");
     expect(editIcon?.parentElement?.className).toContain("text-current");
-    expect(editRow.className).toContain("text-foreground/60");
-    expect(editRow.querySelector("[data-file-reference-badge='inline']")?.className)
-      .toContain("[&>span:first-child]:hidden");
-    expect(editRow.querySelector("[data-file-reference-badge='inline']")?.className)
-      .toContain("decoration-dotted");
+    expect(editRow?.className).toContain("text-foreground/60");
+    expect(editLabel?.className).toContain("decoration-dotted");
+    const stats = editRow?.querySelector("[data-thread-find-skip='true']");
+    expect(stats?.textContent).toBe("+1-1");
+    expect(stats?.querySelector("span")?.className).toContain("text-inherit");
+    expect(stats?.querySelector("span")?.className).toContain("group-hover/action-row:text-git-green");
+    expect(stats?.querySelector("span")?.className).toContain("group-focus-within/action-row:text-git-green");
+
+    const toggle = screen.getByRole("button", { name: "Toggle diff for edit-1.ts" });
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(document.body.innerHTML).toContain("data-diff-surface=\"chat\"");
+  });
+
+  it("opens Changes from an edit summary and keeps ledger disclosure separate", () => {
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById = {
+      "edit-1": toolItem("edit-1", "turn-1", 1, "file_change"),
+      "edit-2": toolItem("edit-2", "turn-1", 2, "file_change"),
+    };
+    const onOpenChanges = vi.fn();
+
+    render(
+      <CollapsedActions
+        itemIds={["edit-1", "edit-2"]}
+        transcript={transcript}
+        onOpenChanges={onOpenChanges}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Edited files" }));
+    expect(onOpenChanges).toHaveBeenCalledOnce();
+    expect(document.querySelector("[data-collapsed-actions-ledger]")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Expand edited files" }));
+    expect(document.querySelector("[data-collapsed-actions-ledger]")).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Collapse edited files" })).toBeTruthy();
   });
 
   it("repeats each parsed command's semantic icon in the expanded ledger", () => {
@@ -431,12 +497,12 @@ describe("CollapsedActions", () => {
     fireEvent.click(screen.getByRole("button", { name: /Read files, ran a command/i }));
 
     const searchRow = screen.getByText("Searched for anchor").parentElement;
-    const readRow = screen.getByText("Read").parentElement;
+    const readRow = screen.getByText("Read").parentElement?.parentElement;
     const commandRow = screen.getByText("Ran pnpm test").parentElement;
     expect(readRow?.querySelector("[data-file-reference-badge='inline']")?.textContent)
       .toContain("README.md");
     const searchIcon = searchRow?.querySelector("svg");
-    const readIcon = readRow?.querySelector("svg");
+    const readIcon = readRow?.children[0]?.querySelector("svg");
     const commandIcon = commandRow?.querySelector("svg");
 
     expect(searchIcon?.getAttribute("viewBox")).toBe("0 0 16 16");
@@ -478,7 +544,7 @@ describe("CollapsedActions", () => {
       .toContain("text-foreground/60");
   });
 
-  it("opens grouped edit cards from the edit action row", () => {
+  it("reveals the edited diff from the row and opens the file only from its arrow", () => {
     const transcript = createTranscriptState("session-1");
     const firstEdit = toolItem("edit-1", "turn-1", 1, "file_change");
     const firstEditPart = firstEdit.contentParts[0];
@@ -498,7 +564,13 @@ describe("CollapsedActions", () => {
 
     expect(document.body.innerHTML).not.toContain("data-diff-surface=\"chat\"");
     fireEvent.click(screen.getByRole("button", { name: /Edited a file/i }));
-    fireEvent.click(screen.getByRole("button", { name: /Edit edit-1\.ts/i }));
+    const toggle = screen.getByRole("button", { name: "Toggle diff for edit-1.ts" });
+    fireEvent.click(toggle);
     expect(document.body.innerHTML).toContain("data-diff-surface=\"chat\"");
+    expect(openPrimaryMock).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open edit-1.ts" }));
+    expect(openPrimaryMock).toHaveBeenCalledOnce();
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
   });
 });

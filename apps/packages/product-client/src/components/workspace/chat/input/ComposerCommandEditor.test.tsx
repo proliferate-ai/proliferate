@@ -10,7 +10,9 @@ import {
 import type { SessionSlashCommandViewModel } from "#product/lib/domain/chat/composer/session-slash-command-policy";
 import { ComposerCommandEditor } from "#product/components/workspace/chat/input/ComposerCommandEditor";
 import {
+  isComposerFormattedPaste,
   isComposerLinkPaste,
+  isComposerMarkdownListPaste,
   isExactHttpsComposerPaste,
 } from "#product/components/workspace/chat/input/ComposerLinkPastePlugin";
 
@@ -188,6 +190,11 @@ describe("ComposerCommandEditor", () => {
     expect(isComposerLinkPaste("See [Docs](https://example.com) now")).toBe(true);
     expect(isComposerLinkPaste("[Docs](https://example.com")).toBe(false);
     expect(isComposerLinkPaste("[Docs](http://example.com)")).toBe(false);
+    expect(isComposerMarkdownListPaste("- first\n- second")).toBe(true);
+    expect(isComposerMarkdownListPaste("1. first\n2. second")).toBe(true);
+    expect(isComposerMarkdownListPaste("a hyphen - inside prose")).toBe(false);
+    expect(isComposerMarkdownListPaste("-")).toBe(false);
+    expect(isComposerFormattedPaste("- first")).toBe(true);
 
     const { textarea: typed } = renderEditor({
       draft: createTextDraft("[Docs](https://example.com)"),

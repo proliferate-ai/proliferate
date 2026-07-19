@@ -1,19 +1,25 @@
-import { useCallback, useState, type KeyboardEvent } from "react";
+import { useState } from "react";
 import type {
   FileChangeContentPart,
   ToolCallItem,
 } from "@anyharness/sdk";
-import { DiffViewer } from "#product/components/content/ui/DiffViewer";
 import { FileChangeStats } from "#product/components/content/ui/FileChangeStats";
-import { FileDiffCard } from "#product/components/content/ui/FileDiffCard";
-import { HighlightedCodeBlock } from "#product/components/content/ui/HighlightedCodeBlock";
-import { useFileReferenceActions } from "#product/hooks/workspaces/workflows/files/use-file-reference-actions";
-import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@proliferate/product-domain/chats/tools/tool-call-layout";
-import { ChevronRight } from "@proliferate/ui/icons";
+import { DiffViewer } from "#product/components/content/ui/DiffViewer";
 import { basename } from "@proliferate/product-domain/chats/tools/collapsed-action-labels";
+import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@proliferate/product-domain/chats/tools/tool-call-layout";
 import { CollapsedActionIcon } from "#product/components/workspace/chat/tool-calls/CollapsedActionIcon";
-import { ActionFileLink, ActionRowIcon } from "#product/components/workspace/chat/tool-calls/CollapsedActionRowPrimitives";
+import { ActionRowIcon } from "#product/components/workspace/chat/tool-calls/CollapsedActionRowPrimitives";
 import { GenericActionRow } from "#product/components/workspace/chat/tool-calls/CollapsedGenericActionRow";
+import { resolveDiffDisplayPolicy } from "#product/lib/domain/workspaces/changes/diff-display-policy";
+import { useFileReferenceActions } from "#product/hooks/workspaces/workflows/files/use-file-reference-actions";
+import { useFileReferenceNativeContextMenu } from "#product/hooks/workspaces/ui/files/use-file-reference-native-context-menu";
+import {
+  FILE_REFERENCE_MENU_CLASS,
+  FileReferenceMenuContent,
+} from "#product/components/workspace/file-references/FileReferenceMenu";
+import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
+import { Button } from "@proliferate/ui/primitives/Button";
+import { ArrowUpRight } from "@proliferate/ui/icons";
 
 export function EditRows({ item }: { item: ToolCallItem }) {
   const fileChanges = item.contentParts.filter(
@@ -31,10 +37,9 @@ export function EditRows({ item }: { item: ToolCallItem }) {
       {fileChanges.map((part, idx) => (
         <EditActionRow
           key={`${item.itemId}-edit-${idx}`}
-          itemId={item.itemId}
-          index={idx}
           part={part}
           failed={item.status === "failed"}
+          contentSearchUnitId={`diff:${item.itemId}:${idx}`}
         />
       ))}
     </>
@@ -42,138 +47,130 @@ export function EditRows({ item }: { item: ToolCallItem }) {
 }
 
 function EditActionRow({
-  itemId,
-  index,
   part,
   failed,
+  contentSearchUnitId,
 }: {
-  itemId: string;
-  index: number;
   part: FileChangeContentPart;
   failed: boolean;
+  contentSearchUnitId: string;
 }) {
+  const [expanded, setExpanded] = useState(false);
   const pathLabel = part.newWorkspacePath ?? part.workspacePath ?? part.newPath ?? part.path;
   const displayName = part.newBasename ?? part.basename ?? basename(pathLabel);
-  const action = failed
-    ? formatFailedEditActionTitle(part.operation)
-    : formatEditActionTitle(part.operation);
   const additions = part.additions ?? 0;
   const deletions = part.deletions ?? 0;
-  const hasDetails = !!part.patch || !!part.preview;
-  const [expanded, setExpanded] = useState(false);
   const workspacePath = part.newWorkspacePath ?? part.workspacePath ?? null;
-  const fileReferenceActions = useFileReferenceActions({
-    rawPath: pathLabel,
-    workspacePath,
-  });
-  const handleOpen = useCallback(() => {
-    void fileReferenceActions.openPrimary();
-  }, [fileReferenceActions]);
-  const toggleExpanded = () => setExpanded((next) => !next);
-  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (!hasDetails) return;
-    if (
-      event.target === event.currentTarget
-      && (event.key === "Enter" || event.key === " ")
-    ) {
-      event.preventDefault();
-      toggleExpanded();
+  const patch = part.patch?.trim() ? part.patch : null;
+  const canExpand = Boolean(patch);
+  const fileActions = useFileReferenceActions({ rawPath: pathLabel, workspacePath });
+  const nativeContextMenu = useFileReferenceNativeContextMenu(fileActions);
+  const canOpenFile = fileActions.canOpenInSidebar || fileActions.canOpenExternal;
+  const displayPolicy = patch
+    ? resolveDiffDisplayPolicy({ path: pathLabel, additions, deletions, patch })
+    : null;
+  const toggleExpanded = () => {
+    if (canExpand) {
+      setExpanded((value) => !value);
     }
   };
-
-  return (
-    <div>
-      <div
-        {...(hasDetails
-          ? {
-            role: "button",
-            tabIndex: 0,
-            "data-chat-transcript-ignore": true,
-            "aria-expanded": expanded,
-            onClick: toggleExpanded,
-            onKeyDown: handleKeyDown,
-          }
-          : {})}
-        className={`group/action-row inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-none bg-transparent p-0 text-left text-chat leading-[var(--text-chat--line-height)] font-normal outline-none transition-colors focus-visible:underline ${
-          failed
-            ? "text-destructive/80 hover:text-destructive"
-            : "text-foreground/60 hover:text-foreground"
-        } ${hasDetails ? "cursor-pointer" : ""}`}
-      >
+  const row = (
+    <div
+      data-edit-action-row
+      onContextMenuCapture={nativeContextMenu.onContextMenuCapture}
+      className={`group/action-row relative flex min-w-0 max-w-full items-center text-left text-chat leading-[var(--text-chat--line-height)] transition-colors ${
+        failed
+          ? "text-destructive/80 hover:text-destructive"
+          : "text-foreground/60 hover:text-foreground"
+      }`}
+    >
+      {canExpand && (
+        <button
+          type="button"
+          data-chat-transcript-ignore
+          aria-label={`Toggle diff for ${pathLabel}`}
+          aria-expanded={expanded}
+          onClick={toggleExpanded}
+          className="absolute inset-0 z-0 cursor-pointer border-0 bg-transparent p-0 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-border"
+        />
+      )}
+      <div className="pointer-events-none relative z-10 flex min-w-0 max-w-full items-center gap-1.5">
         <ActionRowIcon>
           <CollapsedActionIcon kind="edit" />
         </ActionRowIcon>
-        <span className={failed ? "shrink-0 text-destructive/80" : "shrink-0 text-inherit"}>
-          {action}
-        </span>
-        <ActionFileLink
-          pathLabel={pathLabel}
-          workspacePath={workspacePath}
-          displayName={displayName}
-        />
-        {(additions > 0 || deletions > 0) && (
-          <FileChangeStats
-            additions={additions}
-            deletions={deletions}
-            className="text-sm"
-          />
+        {failed && (
+          <span className="shrink-0">{formatFailedEditActionTitle(part.operation)}</span>
         )}
-        {hasDetails && (
-          <ChevronRight
-            aria-hidden="true"
-            className={`size-2.5 shrink-0 text-faint transition-transform group-hover/action-row:text-muted-foreground group-focus-visible/action-row:text-muted-foreground ${expanded ? "rotate-90" : ""}`}
-          />
+        <span
+          data-edit-action-file-label
+          title={pathLabel}
+          className="min-w-0 truncate underline decoration-current decoration-dotted decoration-[0.5px] underline-offset-2"
+        >
+          {displayName}
+        </span>
+        <FileChangeStats
+          additions={additions}
+          deletions={deletions}
+          className="text-chat leading-none"
+          tone="activity"
+        />
+        {canOpenFile && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            data-chat-transcript-ignore
+            aria-label={`Open ${pathLabel}`}
+            title="Open file"
+            onClick={(event) => {
+              event.stopPropagation();
+              void fileActions.openPrimary();
+            }}
+            className="pointer-events-auto size-5 shrink-0 rounded border-0 bg-transparent p-0 text-current opacity-0 transition-opacity hover:bg-muted focus-visible:opacity-100 focus-visible:ring-1 group-hover/action-row:opacity-100 group-focus-within/action-row:opacity-100"
+          >
+            <ArrowUpRight className="size-3" />
+          </Button>
         )}
       </div>
-      {expanded && part.patch ? (
-        <div className="mt-1.5">
-          <FileDiffCard
-            filePath={pathLabel}
-            additions={additions}
-            deletions={deletions}
-            isExpanded
-            collapsible={false}
-            headerTone="inlineTool"
-            showOpenAction={false}
-            onOpenFile={fileReferenceActions.canOpenInSidebar || fileReferenceActions.canOpenExternal
-              ? handleOpen
-              : undefined}
-          >
+    </div>
+  );
+
+  return (
+    <div className="min-w-0">
+      <PopoverButton
+        trigger={row}
+        triggerMode="contextMenu"
+        stopPropagation
+        className={FILE_REFERENCE_MENU_CLASS}
+      >
+        {(close) => (
+          <FileReferenceMenuContent actions={fileActions} close={close} />
+        )}
+      </PopoverButton>
+      {expanded && patch && (
+        <div
+          data-diff-surface="chat"
+          className="thread-diff-virtualized mt-1.5 overflow-hidden rounded-lg border border-border/60 bg-foreground/[0.04]"
+        >
+          {displayPolicy && !displayPolicy.canRenderInline ? (
+            <div className="px-3 py-4 text-xs text-muted-foreground">
+              <p className="font-medium text-foreground">{displayPolicy.placeholderTitle}</p>
+              <p className="mt-0.5 leading-5">{displayPolicy.placeholderDescription}</p>
+            </div>
+          ) : (
             <DiffViewer
-              patch={part.patch}
+              patch={patch}
               filePath={pathLabel}
-              contentSearchUnitId={`diff:collapsed-tool:${itemId}:file-change:${index}`}
+              contentSearchUnitId={contentSearchUnitId}
               className="w-full"
               viewportClassName={TOOL_CALL_BODY_MAX_HEIGHT_CLASS}
               variant="chat"
             />
-          </FileDiffCard>
+          )}
         </div>
-      ) : expanded && part.preview ? (
-        <HighlightedCodeBlock
-          code={part.preview}
-          filename={pathLabel}
-          showLanguageLabel={false}
-          className="mt-1.5 border-border/60 bg-foreground/[0.04]"
-          contentClassName={TOOL_CALL_BODY_MAX_HEIGHT_CLASS}
-        />
-      ) : null}
+      )}
     </div>
   );
-}
-
-function formatEditActionTitle(operation: FileChangeContentPart["operation"]): string {
-  switch (operation) {
-    case "create":
-      return "Create";
-    case "delete":
-      return "Delete";
-    case "move":
-      return "Move";
-    case "edit":
-    default:
-      return "Edit";
-  }
 }
 
 function formatFailedEditActionTitle(operation: FileChangeContentPart["operation"]): string {
