@@ -31,8 +31,13 @@ export type SidebarConsumptionActions =
   | { kind: "unavailable"; message: string };
 
 const CONSUMPTION_NEAR_LIMIT_PERCENT = 80;
-const RING_RADIUS = 8;
-const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
+const CONSUMPTION_RING_GEOMETRY: Record<
+  SidebarConsumptionMeter,
+  { radius: number; circumference: number }
+> = {
+  compute: { radius: 10, circumference: 2 * Math.PI * 10 },
+  llm: { radius: 6.25, circumference: 2 * Math.PI * 6.25 },
+};
 
 const CONSUMPTION_METER_TEXT_CLASS: Record<ConsumptionMeterTone, string> = {
   default: "text-sidebar-muted-foreground",
@@ -145,38 +150,83 @@ function metersForState(state: SidebarConsumptionState) {
   };
 }
 
-interface SidebarUsageMeterTriggerProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  meter: SidebarConsumptionMeter;
+interface SidebarUsageTriggerProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   state: SidebarConsumptionState;
 }
 
-/** One independently labeled, focusable ring trigger for the usage concern. */
-export const SidebarUsageMeterTrigger = forwardRef<
-  HTMLButtonElement,
-  SidebarUsageMeterTriggerProps
->(function SidebarUsageMeterTrigger({
+function meterStatusLabel(
+  state: SidebarConsumptionState,
+  meter: SidebarConsumptionMeter,
+): string {
+  if (state.kind === "loading") {
+    return "loading";
+  }
+  if (state.kind === "unavailable") {
+    return "unavailable";
+  }
+  return consumptionMeterAriaStatus(metersForState(state)![meter]);
+}
+
+function ConcentricMeterRing({
   meter,
+  meterState,
+  fallbackTone,
+}: {
+  meter: SidebarConsumptionMeter;
+  meterState: ConsumptionMeterState | null;
+  fallbackTone: ConsumptionMeterTone;
+}) {
+  const geometry = CONSUMPTION_RING_GEOMETRY[meter];
+  const percent = meterState?.percent ?? null;
+  const dashOffset = percent === null
+    ? geometry.circumference
+    : geometry.circumference * (1 - Math.max(0, Math.min(100, percent)) / 100);
+  const tone = meterState?.tone ?? fallbackTone;
+
+  return (
+    <>
+      <circle
+        data-meter={meter}
+        data-part="track"
+        cx="14"
+        cy="14"
+        r={geometry.radius}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        className="opacity-20"
+      />
+      <circle
+        data-meter={meter}
+        data-part="progress"
+        cx="14"
+        cy="14"
+        r={geometry.radius}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeDasharray={geometry.circumference}
+        strokeDashoffset={dashOffset}
+        className={CONSUMPTION_METER_TEXT_CLASS[tone]}
+      />
+    </>
+  );
+}
+
+/** One focusable usage trigger with outer Compute and inner LLM rings. */
+export const SidebarUsageTrigger = forwardRef<
+  HTMLButtonElement,
+  SidebarUsageTriggerProps
+>(function SidebarUsageTrigger({
   state,
   className = "",
-  onKeyDown,
   ...buttonProps
 }, ref) {
   const meters = metersForState(state);
   const fallbackTone: ConsumptionMeterTone = state.kind === "unavailable"
     ? "destructive"
     : "default";
-  const label = meter === "compute" ? "Compute" : "LLM";
-  const shortLabel = meter === "compute" ? "C" : "L";
-  const percent = meters?.[meter].percent ?? null;
-  const tone = meters?.[meter].tone ?? fallbackTone;
-  const statusLabel = state.kind === "loading"
-    ? "loading"
-    : state.kind === "unavailable"
-      ? "unavailable"
-      : consumptionMeterAriaStatus(meters![meter]);
-  const dashOffset = percent === null
-    ? RING_CIRCUMFERENCE
-    : RING_CIRCUMFERENCE * (1 - Math.max(0, Math.min(100, percent)) / 100);
 
   return (
     <Button
@@ -185,52 +235,39 @@ export const SidebarUsageMeterTrigger = forwardRef<
       type="button"
       variant="unstyled"
       size="unstyled"
-      aria-label={`${label} usage, ${statusLabel}. Open usage details`}
-      onKeyDown={(event) => {
-        onKeyDown?.(event);
-        if (!event.defaultPrevented && (event.key === "Enter" || event.key === " ")) {
-          event.preventDefault();
-          event.currentTarget.click();
-        }
-      }}
-      className={`relative flex size-7 shrink-0 items-center justify-center rounded-full text-sidebar-muted-foreground outline-none hover:text-sidebar-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-sidebar-ring data-[state=open]:text-sidebar-foreground ${className}`}
+      aria-label={`Usage. Compute, ${meterStatusLabel(state, "compute")}. LLM, ${meterStatusLabel(state, "llm")}. Open usage details`}
+      title="Usage"
+      className={`relative flex size-10 shrink-0 items-center justify-center rounded-lg text-sidebar-muted-foreground outline-none hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-sidebar-ring data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-foreground ${className}`}
     >
-      <svg viewBox="0 0 20 20" className="size-5 -rotate-90" aria-hidden="true">
-        <circle
-          cx="10"
-          cy="10"
-          r={RING_RADIUS}
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          className="opacity-20"
+      <svg viewBox="0 0 28 28" className="size-6 -rotate-90" aria-hidden="true">
+        <ConcentricMeterRing
+          meter="compute"
+          meterState={meters?.compute ?? null}
+          fallbackTone={fallbackTone}
         />
-        <circle
-          cx="10"
-          cy="10"
-          r={RING_RADIUS}
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeDasharray={RING_CIRCUMFERENCE}
-          strokeDashoffset={dashOffset}
-          className={CONSUMPTION_METER_TEXT_CLASS[tone]}
+        <ConcentricMeterRing
+          meter="llm"
+          meterState={meters?.llm ?? null}
+          fallbackTone={fallbackTone}
         />
       </svg>
-      <span className="pointer-events-none absolute text-[7px] font-semibold leading-none text-sidebar-foreground" aria-hidden="true">
-        {state.kind === "unavailable" ? "!" : shortLabel}
-      </span>
+      {state.kind === "unavailable" ? (
+        <span className="pointer-events-none absolute text-[8px] font-semibold leading-none text-destructive" aria-hidden="true">
+          !
+        </span>
+      ) : null}
     </Button>
   );
 });
 
 function ConsumptionDetailRow({
   label,
+  ringLabel,
   state,
   remainingLabel,
 }: {
   label: string;
+  ringLabel: string;
   state: ConsumptionMeterState;
   remainingLabel: string;
 }) {
@@ -240,7 +277,7 @@ function ConsumptionDetailRow({
       <div>
         <div className="text-ui text-sidebar-foreground">{label}</div>
         <div className={`text-ui-sm ${CONSUMPTION_METER_TEXT_CLASS[state.tone]}`}>
-          {usedLabel}
+          {usedLabel} · {ringLabel}
         </div>
       </div>
       <div className={`text-right text-ui-sm ${CONSUMPTION_METER_TEXT_CLASS[state.tone]}`}>
@@ -297,11 +334,13 @@ export function ConsumptionCard({
       </div>
       <ConsumptionDetailRow
         label="Compute"
+        ringLabel="Outer ring"
         state={meters.compute}
         remainingLabel={formatRemainingHours(state.usageSummary.computeRemainingSeconds)}
       />
       <ConsumptionDetailRow
         label="LLM"
+        ringLabel="Inner ring"
         state={meters.llm}
         remainingLabel={formatRemainingUsd(state.usageSummary.llmRemainingUsd)}
       />

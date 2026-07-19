@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { UsageSummary } from "@proliferate/cloud-sdk";
 import {
   ConsumptionCard,
-  SidebarUsageMeterTrigger,
+  SidebarUsageTrigger,
   type SidebarConsumptionMeter,
   type SidebarConsumptionState,
 } from "#product/components/app/sidebar/SidebarConsumptionCard";
@@ -13,29 +14,30 @@ import {
 afterEach(cleanup);
 
 describe("sidebar consumption", () => {
-  it("renders independently labeled keyboard-focusable Compute and LLM rings", () => {
-    const onComputeOpen = vi.fn();
-    const onLlmOpen = vi.fn();
+  it("renders one keyboard-focusable trigger that labels both concentric rings", async () => {
+    const user = userEvent.setup();
+    const onOpen = vi.fn();
     const state = { kind: "ready", usageSummary: usage() } as const;
-    render(
-      <>
-        <SidebarUsageMeterTrigger meter="compute" state={state} onClick={onComputeOpen} />
-        <SidebarUsageMeterTrigger meter="llm" state={state} onClick={onLlmOpen} />
-      </>,
-    );
+    render(<SidebarUsageTrigger state={state} onClick={onOpen} />);
 
-    const compute = screen.getByRole("button", { name: /Compute usage, 50% used/ });
-    const llm = screen.getByRole("button", { name: /LLM usage, 90% used/ });
-    expect(compute.getAttribute("type")).toBe("button");
-    expect(llm.getAttribute("type")).toBe("button");
-    compute.focus();
-    expect(document.activeElement).toBe(compute);
-    llm.focus();
-    expect(document.activeElement).toBe(llm);
-    fireEvent.keyDown(compute, { key: "Enter" });
-    fireEvent.keyDown(llm, { key: " " });
-    expect(onComputeOpen).toHaveBeenCalledTimes(1);
-    expect(onLlmOpen).toHaveBeenCalledTimes(1);
+    const trigger = screen.getByRole("button", {
+      name: /Usage\. Compute, 50% used\. LLM, 90% used/,
+    });
+    expect(trigger.getAttribute("type")).toBe("button");
+    expect(trigger.querySelectorAll("circle[data-meter]")).toHaveLength(4);
+    const computeRadius = Number(trigger
+      .querySelector('circle[data-meter="compute"][data-part="track"]')
+      ?.getAttribute("r"));
+    const llmRadius = Number(trigger
+      .querySelector('circle[data-meter="llm"][data-part="track"]')
+      ?.getAttribute("r"));
+    expect(computeRadius).toBeGreaterThan(llmRadius);
+    trigger.focus();
+    expect(document.activeElement).toBe(trigger);
+    await user.keyboard("{Enter}");
+    expect(onOpen).toHaveBeenCalledTimes(1);
+    await user.keyboard(" ");
+    expect(onOpen).toHaveBeenCalledTimes(2);
   });
 
   it("keeps loading and unavailable states explicit", () => {
@@ -177,18 +179,23 @@ describe("sidebar consumption", () => {
       const state = stateForMeterScenario(meter, scenario);
       render(
         <>
-          <SidebarUsageMeterTrigger meter={meter} state={state} />
+          <SidebarUsageTrigger state={state} />
           <ConsumptionCard state={state} />
         </>,
       );
 
-      const trigger = screen.getByRole("button", { name: new RegExp(`${label} usage`) });
-      expect(trigger.getAttribute("aria-label")).toContain(ariaStatus);
-      const dashOffset = trigger.querySelectorAll("circle")[1]?.getAttribute("stroke-dashoffset");
+      const trigger = screen.getByRole("button", { name: /Open usage details/ });
+      expect(trigger.getAttribute("aria-label")).toContain(`${label}, ${ariaStatus}`);
+      const dashOffset = trigger
+        .querySelector(`circle[data-meter="${meter}"][data-part="progress"]`)
+        ?.getAttribute("stroke-dashoffset");
       expect(dashOffset === "0").toBe(fullRing);
 
       if (state.kind === "ready") {
         expect(screen.getByText(label).parentElement?.textContent).toContain(detail);
+        expect(screen.getByText(label).parentElement?.textContent).toContain(
+          meter === "compute" ? "Outer ring" : "Inner ring",
+        );
         if (scenario === "zero-allocation") {
           expect(screen.queryByText("0% used")).toBeNull();
         }
@@ -205,12 +212,12 @@ describe("sidebar consumption", () => {
     } as const;
     render(
       <>
-        <SidebarUsageMeterTrigger meter="compute" state={state} />
+        <SidebarUsageTrigger state={state} />
         <ConsumptionCard state={state} />
       </>,
     );
 
-    expect(screen.getByRole("button", { name: /Compute usage, unlimited/ })).not.toBeNull();
+    expect(screen.getByRole("button", { name: /Compute, unlimited/ })).not.toBeNull();
     expect(screen.getByText("Compute").parentElement?.textContent).toContain("No limit");
   });
 });

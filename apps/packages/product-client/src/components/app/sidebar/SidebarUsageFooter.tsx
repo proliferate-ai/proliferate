@@ -6,8 +6,7 @@ import {
 } from "@proliferate/ui/primitives/PopoverButton";
 import {
   ConsumptionCard,
-  SidebarUsageMeterTrigger,
-  type SidebarConsumptionMeter,
+  SidebarUsageTrigger,
   type SidebarConsumptionState,
   type SidebarConsumptionActions,
 } from "#product/components/app/sidebar/SidebarConsumptionCard";
@@ -16,7 +15,7 @@ import { useAppCapabilities } from "#product/hooks/capabilities/derived/use-app-
 import { useSelectedCloudOwner } from "#product/hooks/organizations/derived/use-selected-cloud-owner";
 import { buildBillingSettingsHref } from "#product/lib/domain/settings/navigation";
 
-/** Capability-gated usage concern with independently focusable Compute/LLM rings. */
+/** Capability-gated usage concern with concentric Compute/LLM rings. */
 export function SidebarUsageFooter() {
   const navigate = useNavigate();
   const authStatus = useProductAuthStatus();
@@ -43,13 +42,12 @@ export function SidebarUsageFooter() {
     close();
   };
 
-  const meterPopover = (meter: SidebarConsumptionMeter) => (
+  return (
     <PopoverButton
-      key={meter}
       align="end"
       side="top"
       offset={8}
-      trigger={<SidebarUsageMeterTrigger meter={meter} state={state} />}
+      trigger={<SidebarUsageTrigger state={state} />}
       className={`w-64 ${POPOVER_SURFACE_CLASS}`}
     >
       {(close) => (
@@ -67,18 +65,6 @@ export function SidebarUsageFooter() {
         />
       )}
     </PopoverButton>
-  );
-
-  return (
-    <div
-      role="group"
-      aria-label="Usage meters"
-      title="Usage"
-      className="flex h-10 items-center gap-0.5 rounded-lg px-1 text-sidebar-muted-foreground hover:bg-sidebar-accent"
-    >
-      {meterPopover("compute")}
-      {meterPopover("llm")}
-    </div>
   );
 }
 

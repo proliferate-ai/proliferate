@@ -47,14 +47,12 @@ vi.mock("@proliferate/ui/primitives/PopoverButton", () => ({
     trigger,
     children,
   }: {
-    trigger: ReactElement<{ meter?: "compute" | "llm" }>;
+    trigger: ReactElement;
     children: (close: () => void) => ReactNode;
   }) => (
     <div>
       {trigger}
-      {trigger.props.meter === "compute" ? (
-        <div>{children(vi.fn())}</div>
-      ) : null}
+      <div>{children(vi.fn())}</div>
     </div>
   ),
 }));
@@ -89,12 +87,12 @@ describe("SidebarUsageFooter", () => {
 
   it("renders truthful loading and unavailable states", () => {
     const { rerender } = render(<SidebarUsageFooter />);
-    expect(screen.getByRole("button", { name: /Compute usage, loading/ })).not.toBeNull();
+    expect(screen.getByRole("button", { name: /Compute, loading\. LLM, loading/ })).not.toBeNull();
     expect(screen.getByText(/Loading usage/)).not.toBeNull();
 
     state.query = { data: undefined, isLoading: false, refetch: vi.fn() };
     rerender(<SidebarUsageFooter />);
-    expect(screen.getByRole("button", { name: /LLM usage, unavailable/ })).not.toBeNull();
+    expect(screen.getByRole("button", { name: /Compute, unavailable\. LLM, unavailable/ })).not.toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(state.query.refetch).toHaveBeenCalledTimes(1);
   });
@@ -196,7 +194,7 @@ describe("SidebarUsageFooter", () => {
 
     expect(screen.queryByText(/Ask your admin/)).toBeNull();
     expect(screen.getByText("Billing actions aren't available on this deployment.")).not.toBeNull();
-    expect(screen.getByRole("button", { name: /Compute usage, No allocation/ })).not.toBeNull();
+    expect(screen.getByRole("button", { name: /Compute, No allocation/ })).not.toBeNull();
   });
 });
 
