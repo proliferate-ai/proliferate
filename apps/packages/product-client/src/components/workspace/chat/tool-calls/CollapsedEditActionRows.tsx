@@ -85,8 +85,10 @@ function EditActionRow({
       }`}
     >
       {canExpand && (
-        <button
+        <Button
           type="button"
+          variant="unstyled"
+          size="unstyled"
           data-chat-transcript-ignore
           aria-label={`Toggle diff for ${pathLabel}`}
           aria-expanded={expanded}

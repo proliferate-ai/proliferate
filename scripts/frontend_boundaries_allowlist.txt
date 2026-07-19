@@ -9,7 +9,7 @@
 # boundary scanner matches the literal "apps/desktop/" substring. Several are
 # asserted verbatim by diff-display tests, so they are pinned here rather than
 # rewritten. Retire when the playground fixtures are refreshed post-move.
-PRODUCT_CLIENT_FORBIDDEN_IMPORT apps/packages/product-client/src/lib/domain/chat/__fixtures__/playground/git-diff-fixtures.ts 7 sample diff display-path strings, not imports
+PRODUCT_CLIENT_FORBIDDEN_IMPORT apps/packages/product-client/src/lib/domain/chat/__fixtures__/playground/git-diff-fixtures.ts 4 sample diff display-path strings, not imports
 PRODUCT_CLIENT_FORBIDDEN_IMPORT apps/packages/product-client/src/components/playground/transcript/PlaygroundToolTranscript.tsx 4 sample tool-call path strings in a dev playground, not imports
 PRODUCT_CLIENT_FORBIDDEN_IMPORT apps/packages/product-client/src/lib/domain/chat/__fixtures__/playground/plan-transcript-fixtures.ts 3 sample display-path strings, not imports
 PRODUCT_CLIENT_FORBIDDEN_IMPORT apps/packages/product-client/src/lib/domain/chat/__fixtures__/playground/subagent-tool-transcript-fixtures.ts 2 sample display-path strings, not imports

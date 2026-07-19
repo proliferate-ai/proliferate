@@ -31,8 +31,10 @@ export function TurnDiffFileRow({
       data-chat-diff-wrap-context-trigger="file-header"
       className="group/turn-diff-file relative flex h-9 w-full min-w-0 items-center bg-background/70 text-chat leading-[var(--text-chat--line-height)] text-foreground hover:bg-list-hover/60"
     >
-      <button
+      <Button
         type="button"
+        variant="unstyled"
+        size="unstyled"
         data-chat-transcript-ignore
         data-app-action-review-file-toggle=""
         data-app-action-review-file-expanded={isExpanded ? "true" : "false"}

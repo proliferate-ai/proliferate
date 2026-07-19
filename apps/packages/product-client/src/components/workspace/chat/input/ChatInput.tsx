@@ -55,12 +55,6 @@ import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-co
 const CHAT_INPUT_ATTACHMENT_ACCEPT =
   "image/*,text/*,.md,.json,.ts,.tsx,.js,.jsx,.py,.rs,.go,.java,.css,.html,.xml,.yaml,.yml,.toml,.sql,.sh";
 
-/**
- * The composer surface: command-aware editor + model / session controls +
- * send button. The outer dock shell (backdrop, padding, max-width, dock-slot
- * area) is owned by ChatComposerDock so it can be shared with the dev
- * playground.
- */
 export function ChatInput({
   attachments,
   suppressActiveSessionState = false,
