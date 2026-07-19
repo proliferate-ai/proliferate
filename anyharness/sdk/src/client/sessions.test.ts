@@ -129,6 +129,39 @@ describe("SessionsClient.listEvents", () => {
   });
 });
 
+describe("SessionsClient.setConfigOption", () => {
+  it("forwards request options to the config mutation transport", async () => {
+    const calls: Array<{
+      body: unknown;
+      options: AnyHarnessRequestOptions | undefined;
+      path: string;
+    }> = [];
+    const transport = {
+      post: async (path: string, body: unknown, options?: AnyHarnessRequestOptions) => {
+        calls.push({ path, body, options });
+        return {
+          applyState: "applied",
+          session: sessionResponse(),
+        };
+      },
+    } as unknown as AnyHarnessTransport;
+    const client = new SessionsClient(transport);
+    const controller = new AbortController();
+
+    await client.setConfigOption(
+      "session-1",
+      { configId: "collaboration_mode", value: "plan" },
+      { signal: controller.signal },
+    );
+
+    expect(calls).toEqual([{
+      path: "/v1/sessions/session-1/config-options",
+      body: { configId: "collaboration_mode", value: "plan" },
+      options: { signal: controller.signal },
+    }]);
+  });
+});
+
 describe("SessionsClient.reorderPendingPrompts", () => {
   it("sends both expected and desired queue order for CAS", async () => {
     const calls: Array<{ path: string; body: unknown }> = [];

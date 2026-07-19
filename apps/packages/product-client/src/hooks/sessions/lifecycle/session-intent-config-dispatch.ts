@@ -27,6 +27,8 @@ import { logLatency } from "#product/lib/infra/measurement/measurement-port";
 
 type SetSessionConfigOptionMutation = ReturnType<typeof useSetSessionConfigOptionMutation>;
 
+export const CONFIG_INTENT_DISPATCH_TIMEOUT_MS = 15_000;
+
 export interface ConfigIntentDispatchDeps {
   ssh?: DesktopSshBridge | null;
   cloudClient: CloudSandboxGatewayUrlSource | null;
@@ -38,6 +40,7 @@ export interface ConfigIntentDispatchDeps {
     workspaceId: string,
     session: Session,
   ) => void;
+  timeoutMs?: number;
   onFailure?: (message: string) => void;
 }
 
@@ -49,10 +52,11 @@ export async function dispatchConfigIntent(
   if (!current || current.kind !== "update_config" || current.status !== "queued") {
     return;
   }
+  const dispatchedAt = new Date().toISOString();
   useSessionIntentStore.getState().patchIntent(intent.intentId, {
     status: "dispatching",
     errorMessage: null,
-    dispatchedAt: new Date().toISOString(),
+    dispatchedAt,
   });
   try {
     const { workspaceId, materializedSessionId } = await getSessionClientAndWorkspace(
@@ -64,11 +68,18 @@ export async function dispatchConfigIntent(
       intent.clientSessionId,
       materializedSessionId,
     );
-    const response = await deps.setSessionConfigOptionMutation.mutateAsync({
-      workspaceId,
-      sessionId: materializedSessionId,
-      request: { configId: intent.configId, value: intent.value },
-    });
+    const response = await runConfigMutationWithTimeout(
+      deps.timeoutMs ?? CONFIG_INTENT_DISPATCH_TIMEOUT_MS,
+      (signal) => deps.setSessionConfigOptionMutation.mutateAsync({
+        workspaceId,
+        sessionId: materializedSessionId,
+        request: { configId: intent.configId, value: intent.value },
+        requestOptions: { signal },
+      }),
+    );
+    if (!isCurrentConfigDispatch(intent.intentId, dispatchedAt)) {
+      return;
+    }
     if (workspaceId) {
       deps.upsertWorkspaceSessionRecord(workspaceId, response.session);
     }
@@ -154,11 +165,45 @@ export async function dispatchConfigIntent(
       applyState: response.applyState,
     });
   } catch (error) {
+    if (!isCurrentConfigDispatch(intent.intentId, dispatchedAt)) {
+      return;
+    }
     const message = error instanceof Error ? error.message : String(error);
     useSessionIntentStore.getState().patchIntent(intent.intentId, {
       status: "failed",
       errorMessage: message,
     });
     deps.onFailure?.(message);
+  }
+}
+
+function isCurrentConfigDispatch(intentId: string, dispatchedAt: string): boolean {
+  const current = useSessionIntentStore.getState().entriesById[intentId];
+  return current?.kind === "update_config"
+    && current.status === "dispatching"
+    && current.dispatchedAt === dispatchedAt;
+}
+
+async function runConfigMutationWithTimeout<T>(
+  timeoutMs: number,
+  run: (signal: AbortSignal) => Promise<T>,
+): Promise<T> {
+  const controller = new AbortController();
+  let timeoutId: ReturnType<typeof globalThis.setTimeout> | null = null;
+  const timeoutError = new Error("request timed out");
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = globalThis.setTimeout(() => {
+      reject(timeoutError);
+      controller.abort(timeoutError);
+    }, timeoutMs);
+  });
+  try {
+    const request = run(controller.signal);
+    request.catch(() => undefined);
+    return await Promise.race([request, timeout]);
+  } finally {
+    if (timeoutId !== null) {
+      globalThis.clearTimeout(timeoutId);
+    }
   }
 }

@@ -213,10 +213,12 @@ export class SessionsClient {
   async setConfigOption(
     sessionId: string,
     input: SetSessionConfigOptionRequest,
+    options?: AnyHarnessRequestOptions,
   ): Promise<SetSessionConfigOptionResponse> {
     const response = await this.transport.post<SetSessionConfigOptionResponse>(
       `/v1/sessions/${encodeURIComponent(sessionId)}/config-options`,
       input,
+      options,
     );
     if (!response.liveConfig) {
       return {
