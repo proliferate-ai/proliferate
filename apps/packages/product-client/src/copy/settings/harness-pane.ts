@@ -1,8 +1,54 @@
 export const HARNESS_PANE_COPY = {
   surfaceCloud: "Cloud",
   surfaceLocal: "Local",
-  authenticationTitle: "Method",
+  authenticationTitle: "Authentication",
   signInTitle: "Authentication",
+  runtimeTitle: "Runtime",
+  runtimeDescription: (surface: "cloud" | "local") =>
+    surface === "local"
+      ? "Installation and readiness on this machine."
+      : "Installation and readiness in Proliferate Cloud.",
+  runtimeChecking: "Checking",
+  runtimeUnavailable: "Unavailable",
+  runtimeNotReported: "Not reported",
+  runtimeCheckingDescription: (surface: "cloud" | "local") =>
+    surface === "local"
+      ? "Checking this machine for this harness."
+      : "Checking Proliferate Cloud for this harness.",
+  runtimeUnavailableDescription: (surface: "cloud" | "local") =>
+    surface === "local"
+      ? "Could not read harness readiness from this machine."
+      : "Could not read harness readiness from Proliferate Cloud.",
+  runtimeReadyDescription: (surface: "cloud" | "local") =>
+    surface === "local"
+      ? "Installed and available on this machine."
+      : "Installed and available in Proliferate Cloud.",
+  runtimeUnsupportedDescription: (surface: "cloud" | "local") =>
+    surface === "local"
+      ? "This harness is not supported on this machine."
+      : "This harness is not supported in Proliferate Cloud.",
+  runtimeStatusDescription: (statusLabel: string, surface: "cloud" | "local") =>
+    surface === "local"
+      ? `${statusLabel} on this machine.`
+      : `${statusLabel} in Proliferate Cloud.`,
+  runtimeNotReportedDescription: (surface: "cloud" | "local") =>
+    surface === "local"
+      ? "This machine has not reported this harness yet."
+      : "Proliferate Cloud has not reported this harness yet.",
+  surfaceDescription: (surface: "cloud" | "local", displayName: string) =>
+    surface === "local"
+      ? `Configure how ${displayName} runs and authenticates on this machine.`
+      : `Configure how ${displayName} runs and authenticates in Proliferate Cloud.`,
+  installGateTitle: (displayName: string) => `Install ${displayName}`,
+  installGateDescription: (surface: "cloud" | "local", displayName: string) =>
+    surface === "local"
+      ? `Install ${displayName} and its Proliferate adapter on this machine.`
+      : `Install ${displayName} and its Proliferate adapter in Proliferate Cloud.`,
+  installingGateTitle: (displayName: string) => `Installing ${displayName}`,
+  installingGateDescription: (surface: "cloud" | "local") =>
+    surface === "local"
+      ? "Downloading and preparing the managed tools on this machine."
+      : "Downloading and preparing the managed tools in Proliferate Cloud.",
   gatewayLabel: "Proliferate gateway",
   apiKeysTitle: "API keys",
   envVarPlaceholder: "ENV_VAR_NAME",
@@ -42,8 +88,11 @@ export const HARNESS_PANE_COPY = {
   recommendedBadge: "Recommended",
   // Method card labels.
   methodGateway: "Proliferate gateway",
+  methodGatewayDescription: "Use managed model access.",
   methodApiKey: "API key",
+  methodApiKeyDescription: "Use a saved provider key.",
   methodCli: "CLI login",
+  methodCliDescription: "Use the harness's own session.",
   // Detail section titles.
   detailsGateway: "Gateway",
   detailsApiKey: "API keys",
@@ -69,12 +118,14 @@ export const HARNESS_PANE_COPY = {
     `Local runtime unavailable — could not read ${displayName} models.`,
   catalogOverrideError: (displayName: string) =>
     `Could not update the ${displayName} model catalog.`,
-  installAction: "Install",
-  retryInstallAction: "Retry install",
-  installingAction: "Installing...",
+  installAction: (displayName: string) => `Install ${displayName}`,
+  retryInstallAction: (displayName: string) => `Retry installing ${displayName}`,
+  installingAction: (displayName: string) => `Installing ${displayName}…`,
   installError: (displayName: string) =>
     `Could not install ${displayName}.`,
   readyToast: (displayName: string) => `${displayName} is ready.`,
-  updateStartedToast: (displayName: string, targetLabel: string) =>
-    `Updating ${displayName} on ${targetLabel}.`,
+  updateStartedToast: (displayName: string, surface: "cloud" | "local") =>
+    surface === "local"
+      ? `Updating ${displayName} on this machine.`
+      : `Updating ${displayName} in Proliferate Cloud.`,
 } as const;

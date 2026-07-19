@@ -122,7 +122,7 @@ export function ApiKeyDetails({
           <div>
             <Button
               type="button"
-              variant="secondary"
+              variant="primary"
               size="sm"
               className="gap-1.5"
               disabled={editor.busy}

@@ -53,7 +53,20 @@ it("force-installs a missing managed harness from its settings action", async ()
     reinstall: true,
     agentKinds: ["codex"],
   });
-  expect(showToast).toHaveBeenCalledWith("Updating Codex on the local runtime.");
+  expect(result.current?.label).toBe("Install Codex");
+  expect(showToast).toHaveBeenCalledWith("Updating Codex on this machine.");
+});
+
+it("describes the shared Cloud runtime without a workspace target", async () => {
+  const { result } = renderHook(() => useHarnessInstallAction(agent, "cloud"));
+
+  await act(async () => {
+    result.current?.onInstall();
+    await vi.waitFor(() => expect(reconcileAgents).toHaveBeenCalledOnce());
+  });
+
+  expect(showToast).toHaveBeenCalledWith("Updating Codex in Proliferate Cloud.");
+  expect(showToast).not.toHaveBeenCalledWith(expect.stringMatching(/workspace/i));
 });
 
 it("uses the kind-scoped install endpoint for an older runtime", async () => {

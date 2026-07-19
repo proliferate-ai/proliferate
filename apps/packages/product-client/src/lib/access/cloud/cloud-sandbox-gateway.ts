@@ -3,6 +3,9 @@ import type { CloudConnectionInfo, CloudWorkspaceDetail } from "@proliferate/clo
 import { isCloudAgentKind, ProliferateClientError } from "@proliferate/cloud-sdk";
 import { getSandboxGatewayAccessToken } from "#product/lib/access/cloud/sandbox-gateway-access";
 
+export const CLOUD_SANDBOX_GATEWAY_ANYHARNESS_PATH =
+  "/v1/gateway/cloud-sandbox/anyharness";
+
 /**
  * The gateway URL builder this module depends on — satisfied by the single
  * `host.cloud.client` from `useProductHost()` (or the composition-root client).
@@ -11,6 +14,12 @@ import { getSandboxGatewayAccessToken } from "#product/lib/access/cloud/sandbox-
 export type CloudSandboxGatewayUrlSource = Pick<ProliferateCloudClient, "buildUrl">;
 
 export type AnyHarnessRuntimeAccessKind = "direct" | "proliferate-gateway";
+
+export function cloudSandboxGatewayRuntimeUrl(
+  cloudClient: CloudSandboxGatewayUrlSource,
+): string {
+  return cloudClient.buildUrl(CLOUD_SANDBOX_GATEWAY_ANYHARNESS_PATH);
+}
 
 export type CloudSandboxGatewayConnectionInfo = CloudConnectionInfo & {
   runtimeAccessKind: "proliferate-gateway";
@@ -77,7 +86,7 @@ export async function resolveCloudSandboxGatewayConnectionForCloudWorkspace(
   }
   const productToken = await getSandboxGatewayAccessToken();
   return {
-    runtimeUrl: cloudClient.buildUrl("/v1/gateway/cloud-sandbox/anyharness"),
+    runtimeUrl: cloudSandboxGatewayRuntimeUrl(cloudClient),
     accessToken: productToken,
     anyharnessWorkspaceId: input.anyharnessWorkspaceId,
     runtimeGeneration: input.runtimeGeneration ?? 0,

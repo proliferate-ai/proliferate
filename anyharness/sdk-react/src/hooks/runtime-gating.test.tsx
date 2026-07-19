@@ -109,4 +109,5 @@ describe("runtime query gating", () => {
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
   });
+
 });

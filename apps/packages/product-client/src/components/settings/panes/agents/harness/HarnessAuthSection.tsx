@@ -177,7 +177,7 @@ function HarnessAuthMethods({
         <p className="pb-2 text-sm text-muted-foreground">{POLICY_TOOLTIP}.</p>
       ) : null}
       <div
-        className="grid grid-cols-3 gap-3"
+        className="grid grid-cols-1 gap-2 sm:grid-cols-3"
         data-harness-auth-section={harnessKind}
         data-harness-selected-route={[...selectedMethods]
           .map((method) => `${harnessKind}:${method}`)
@@ -185,6 +185,7 @@ function HarnessAuthMethods({
       >
         <MethodCard
           label={HARNESS_PANE_COPY.methodGateway}
+          description={HARNESS_PANE_COPY.methodGatewayDescription}
           icon={<CloudIcon className="size-5" />}
           selected={selectedMethods.has("gateway")}
           disabled={editor.gatewayLocked || editor.busy || gatewayCardDisallowed}
@@ -200,6 +201,7 @@ function HarnessAuthMethods({
         />
         <MethodCard
           label={HARNESS_PANE_COPY.methodApiKey}
+          description={HARNESS_PANE_COPY.methodApiKeyDescription}
           icon={<KeyRound className="size-5" />}
           selected={selectedMethods.has("api_key")}
           disabled={editor.busy || apiKeyCardDisallowed}
@@ -209,6 +211,7 @@ function HarnessAuthMethods({
         />
         <MethodCard
           label={HARNESS_PANE_COPY.methodCli}
+          description={HARNESS_PANE_COPY.methodCliDescription}
           icon={<SquareTerminal className="size-5" />}
           selected={selectedMethods.has("cli")}
           disabled={multiSource || editor.busy || nativeCardDisallowed}
@@ -311,6 +314,7 @@ function handleMultiSourceSelect(method: AuthMethod, editor: HarnessAuthEditorAp
 
 interface MethodCardProps {
   label: string;
+  description: string;
   icon: React.ReactNode;
   selected: boolean;
   disabled?: boolean;
@@ -322,6 +326,7 @@ interface MethodCardProps {
 
 function MethodCard({
   label,
+  description,
   icon,
   selected,
   disabled,
@@ -335,11 +340,12 @@ function MethodCard({
         variant="unstyled"
         size="unstyled"
         type="button"
+        aria-label={label}
         aria-pressed={selected}
         disabled={disabled}
         data-harness-route-option={routeOptionId}
         className={[
-          "relative flex flex-col items-center gap-2 rounded-lg border px-4 py-5 transition-colors",
+          "relative flex min-h-28 min-w-0 flex-col items-start justify-end gap-1 overflow-hidden rounded-lg border px-4 py-3.5 text-left transition-colors sm:min-h-32",
           selected
             ? "border-foreground/20 bg-foreground/5 text-foreground"
             : "border-border bg-background text-muted-foreground hover:border-foreground/10 hover:bg-foreground/[0.02]",
@@ -350,8 +356,13 @@ function MethodCard({
         {selected ? (
           <Check className="absolute right-2.5 top-2.5 size-4 text-foreground" />
         ) : null}
-        {icon}
-        <span className="text-xs font-medium">{label}</span>
+        <span className="mb-auto inline-flex size-8 items-center justify-center rounded-md bg-foreground/5">
+          {icon}
+        </span>
+        <span className="text-ui-sm font-medium text-current">{label}</span>
+        <span className="w-full whitespace-normal text-ui-sm font-normal leading-[1.35] text-muted-foreground">
+          {description}
+        </span>
       </Button>
       {disabled && disabledReason ? (
         <p className="px-1 text-[11px] leading-tight text-muted-foreground">
