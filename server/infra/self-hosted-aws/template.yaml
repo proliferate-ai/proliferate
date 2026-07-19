@@ -562,9 +562,12 @@ Resources:
             FAILURE_REASON="aws-cfn-bootstrap installation failed with exit code $EXIT_CODE."
           }
           if [ "$EXIT_CODE" -eq 0 ]; then
-            timeout --signal=TERM 18m /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource ProliferateInstance --region ${AWS::Region} --configsets bootstrap || {
+            timeout --signal=TERM --kill-after=30s 18m /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource ProliferateInstance --region ${AWS::Region} --configsets bootstrap || {
               EXIT_CODE=$?
-              if [ "$EXIT_CODE" -eq 124 ]; then
+              # GNU timeout returns 137 when its kill-after KILL is required.
+              # Normalize that hard-deadline path to the owned timeout status.
+              if [ "$EXIT_CODE" -eq 124 ] || [ "$EXIT_CODE" -eq 137 ]; then
+                EXIT_CODE=124
                 FAILURE_REASON="cfn-init bootstrap exceeded the 18-minute limit; inspect /var/log/cfn-init.log and /var/log/cfn-init-cmd.log through SSM."
               else
                 FAILURE_REASON="cfn-init bootstrap failed with exit code $EXIT_CODE; inspect /var/log/cfn-init.log and /var/log/cfn-init-cmd.log through SSM."
