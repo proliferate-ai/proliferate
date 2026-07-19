@@ -15,6 +15,7 @@ import {
 } from "#product/lib/domain/workspaces/viewer/viewer-target";
 import { focusChatInput } from "#product/lib/domain/focus-zone";
 import { useWorkspaceViewerTabsStore } from "#product/stores/editor/workspace-viewer-tabs-store";
+import "./PlaygroundAttachmentFixtures.css";
 
 const PLAYGROUND_ATTACHMENT_SESSION_ID = "playground-attachment-session";
 const PLAYGROUND_IMAGE_ID = "playground-attachment-image";
@@ -187,10 +188,7 @@ export function PlaygroundAttachmentPreviewAside() {
   }, []);
 
   return (
-    <aside
-      className="flex shrink-0 flex-col border-l border-sidebar-border bg-sidebar-background"
-      style={{ width: "26rem" }}
-    >
+    <aside className="playground-attachment-preview-aside flex shrink-0 flex-col border-l border-sidebar-border bg-sidebar-background">
       {target?.kind === "promptAttachment" ? (
         <>
           <div className="right-panel-tab-system flex h-10 shrink-0 items-stretch border-b border-sidebar-border">

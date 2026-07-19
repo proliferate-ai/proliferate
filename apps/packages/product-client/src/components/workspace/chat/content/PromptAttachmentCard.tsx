@@ -4,6 +4,7 @@ import type { PromptDisplayAttachmentPart } from "@proliferate/product-domain/ch
 import { FileTreeEntryIcon } from "#product/components/workspace/files/file-icons";
 import { PlanReferenceAttachmentCard } from "#product/components/workspace/chat/content/PlanReferenceAttachmentCard";
 import { usePromptAttachmentUrl } from "#product/hooks/access/anyharness/sessions/use-prompt-attachment-url";
+import "./PromptAttachmentCard.css";
 
 type PromptAttachmentCardVariant = "transcript" | "compact" | "draft";
 type NonPlanPromptAttachmentPart = Exclude<
@@ -50,12 +51,7 @@ export function PromptAttachmentCard({
   const className = promptAttachmentCardClassName({ isCompact, isDraft, isImage });
 
   return (
-    <div
-      className={className}
-      data-telemetry-mask
-      style={isDraft && !isImage ? { height: 52, width: 210 } : undefined}
-      title={title}
-    >
+    <div className={className} data-telemetry-mask title={title}>
       {canPreview && onOpenAttachment ? (
         <Button
           type="button"
@@ -241,7 +237,7 @@ function promptAttachmentCardClassName(args: {
     return `prompt-attachment-card relative inline-flex ${size} shrink-0 overflow-visible rounded-lg border ${border} bg-card text-foreground`;
   }
   if (args.isDraft) {
-    return "prompt-attachment-card relative inline-flex max-w-full shrink-0 overflow-visible rounded-lg border border-border bg-card text-foreground";
+    return "prompt-attachment-card prompt-attachment-card-draft-file relative inline-flex max-w-full shrink-0 overflow-visible rounded-lg border border-border bg-card text-foreground";
   }
   if (args.isCompact) {
     return "prompt-attachment-card relative inline-flex h-10 w-44 max-w-full shrink-0 overflow-visible rounded-lg border border-border/50 bg-card/70 text-foreground";

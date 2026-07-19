@@ -1,0 +1,10 @@
+.prompt-attachment-card-draft-file {
+  width: 210px;
+  height: 52px;
+}
+
+.prompt-attachment-card:hover .prompt-attachment-remove,
+.prompt-attachment-remove:focus-visible {
+  pointer-events: auto;
+  opacity: 1;
+}

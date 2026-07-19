@@ -151,9 +151,3 @@
 .turn-document-reference-trigger:is(:hover, :focus-visible) .turn-document-open-label {
   opacity: 1;
 }
-
-.prompt-attachment-card:hover .prompt-attachment-remove,
-.prompt-attachment-remove:focus-visible {
-  pointer-events: auto;
-  opacity: 1;
-}
