@@ -40,7 +40,7 @@ export function AgentSetupModal({
       onClose={onClose}
       title={(
         <div className="flex items-center gap-3">
-          <ProviderIcon kind={agent.kind} className="size-6" />
+          <ProviderIcon kind={agent.kind} className="icon-large" />
           <span>{agent.displayName}</span>
         </div>
       )}

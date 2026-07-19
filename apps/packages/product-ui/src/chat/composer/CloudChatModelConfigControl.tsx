@@ -64,10 +64,7 @@ export function CloudChatModelConfigControl({
         trailing={(
           <span className="flex items-center gap-1">
             <PendingComposerConfigIndicator pendingState={pendingState} />
-            <ChevronDown
-              size={12}
-              className="shrink-0 text-[color:var(--color-composer-control-muted-foreground)]"
-            />
+            <ChevronDown className="icon-paired shrink-0 text-[color:var(--color-composer-control-muted-foreground)]" />
           </span>
         )}
         aria-haspopup="menu"
@@ -204,7 +201,7 @@ function ComposerConfigSubmenuButton({
   return (
     <PopoverMenuItem
       label={modelConfigSubmenuLabel(control)}
-      trailing={<ChevronDown className="-rotate-90 size-3.5 shrink-0" />}
+      trailing={<ChevronDown className="-rotate-90 icon-paired shrink-0" />}
       className={active ? "bg-list-hover text-popover-foreground" : ""}
       aria-haspopup="menu"
       aria-expanded={active}

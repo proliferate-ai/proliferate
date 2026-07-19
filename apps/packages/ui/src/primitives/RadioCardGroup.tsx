@@ -52,7 +52,7 @@ export function RadioCardGroup<Value extends string>({
             {option.icon ? (
               <span
                 className={twMerge(
-                  "flex shrink-0 items-center [&_svg]:size-4",
+                  "flex shrink-0 items-center [&_svg]:icon-paired",
                   selected ? "text-foreground" : "text-muted-foreground",
                 )}
               >
@@ -75,7 +75,7 @@ export function RadioCardGroup<Value extends string>({
                 selected ? "border-special bg-special text-background" : "border-input text-transparent",
               )}
             >
-              {selected ? <Check className="size-3" strokeWidth={3} /> : null}
+              {selected ? <Check className="icon-compact" strokeWidth={3} /> : null}
             </span>
           </button>
         );

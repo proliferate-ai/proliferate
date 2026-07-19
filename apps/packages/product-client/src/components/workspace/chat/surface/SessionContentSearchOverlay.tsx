@@ -117,7 +117,7 @@ export function SessionContentSearchOverlay({
     >
       <div className="pointer-events-auto grid max-w-[70vw] w-[340px] grid-cols-[minmax(0,1fr)_auto] overflow-hidden rounded-[20px] border-[0.5px] border-border bg-sidebar-background shadow-[0px_8px_16px_-4px_rgba(0,0,0,0.12)]">
         <div className="col-[1/2] row-[1] flex h-[44px] min-w-0 items-center gap-2 pl-4">
-          <Search className="size-4 shrink-0 text-foreground" />
+          <Search className="icon-paired shrink-0 text-foreground" />
           <Input
             ref={inputRef}
             id="content-search-input"
@@ -164,7 +164,7 @@ export function SessionContentSearchOverlay({
             className="-m-0.5 flex size-6 items-center justify-center rounded-full text-foreground hover:bg-list-hover"
             onClick={closeSearch}
           >
-            <X className="size-4" />
+            <X className="icon-paired" />
           </Button>
         </div>
       </div>
@@ -193,7 +193,7 @@ function SearchNavigationButton({
       className="flex size-4 items-center justify-center rounded-full p-0 text-muted-foreground hover:bg-list-hover hover:text-foreground disabled:opacity-40"
       onClick={onClick}
     >
-      <ArrowUp className={`size-4 ${next ? "rotate-180" : ""}`} />
+      <ArrowUp className={`icon-paired ${next ? "rotate-180" : ""}`} />
     </Button>
   );
 }

@@ -1,5 +1,4 @@
 import { ProliferateLivingMark } from "@proliferate/product-ui/brand/ProliferateLivingMark";
-import { AuthAppearanceBoundary } from "#product/components/auth/AuthAppearanceBoundary";
 import { AUTH_GATE_LABELS } from "#product/copy/auth/auth-copy";
 import { twMerge } from "@proliferate/ui/utils/tw-merge";
 
@@ -15,7 +14,7 @@ export function SessionCheckScreen({
   onResolved,
 }: SessionCheckScreenProps) {
   return (
-    <AuthAppearanceBoundary
+    <div
       className={twMerge(
         "flex min-h-screen flex-col items-center justify-center bg-background p-8",
         className,
@@ -27,7 +26,7 @@ export function SessionCheckScreen({
         <div className="space-y-5">
           <ProliferateLivingMark complete={resolving} onResolved={onResolved} />
           <div className="space-y-2.5">
-            <h1 className="text-3xl font-semibold leading-tight text-foreground">
+            <h1 className="text-hero font-semibold text-foreground">
               {AUTH_GATE_LABELS.loadingMessage}
             </h1>
             <p className="text-sm text-muted-foreground">
@@ -36,6 +35,6 @@ export function SessionCheckScreen({
           </div>
         </div>
       </div>
-    </AuthAppearanceBoundary>
+    </div>
   );
 }

@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "app": "proliferate",
+  "appVersion": "0.3.44",
+  "feature": "proportional-appearance-scaling",
+  "interaction": "change UI size and readable-code size independently, then inspect scaled sidebar action glyphs",
+  "capturedAt": "2026-07-19T15:21:39-07:00",
+  "timezone": "PDT",
+  "sourceSurface": "web-dev and Desktop renderer",
+  "targetUrl": "http://127.0.0.1:39003/settings?section=appearance",
+  "theme": "dark",
+  "provenance": "live",
+  "viewport": {
+    "width": 1280,
+    "height": 720,
+    "deviceScaleFactor": 1
+  },
+  "environment": {
+    "branch": "codex/ui-proportional-appearance-scaling-impl",
+    "baseSha": "ec2aafc2cf1d0d254adfce1bb0084a90e06e4b38",
+    "captureSha": "dbfccea7fb9dca143db13db5c9ce63985cd3e9a5+working-tree",
+    "profile": "ui-11-appearance-scaling",
+    "deliverySurface": "real ProductClient Web plus isolated Desktop renderer; not packaged Desktop",
+    "ports": [39003, 3900],
+    "hmr": "Vite HMR enabled; the Web renderer was restarted after the production budget build and captures were taken after session restoration"
+  },
+  "referenceContract": {
+    "primary": "Codex Desktop 26.715.31925",
+    "state": "open file-browser/file-tree workspace at 1800x1600",
+    "matched": [
+      "one legible scale per semantic role",
+      "text-relative vector glyphs",
+      "stable compact-control hit areas",
+      "readable code at the surrounding reading size"
+    ],
+    "proliferateDifferences": [
+      "eight independent UI and readable-code presets",
+      "existing product hierarchy, font family, themes, and 46rem chat column",
+      "independent window zoom"
+    ],
+    "founderApprovedMock": "11 - Proportional appearance scaling mock.svg"
+  },
+  "artifacts": {
+    "approvedMock": "founder-approved-mock.svg",
+    "primaryRecording": "appearance-independent-scaling-exact-head.mp4",
+    "defaultSettings": "01-default-ui-default-code.jpg",
+    "uiOnlyExtraLarge": "02-extra-large-ui-default-code.jpg",
+    "uiAndCodeExtraLarge": "03-extra-large-ui-extra-large-code.jpg",
+    "sidebarActionRepair": "04-extra-large-product-shell-sidebar-actions.jpg",
+    "desktopSidebarActionRepair": "extra-large-desktop-sidebar-actions-after.jpg",
+    "populatedComparison": "populated-default-vs-extra-large.jpg",
+    "narrowProof": "narrow-extra-large-900x720.jpg"
+  },
+  "measurements": {
+    "defaultMessageAndCodePx": 13,
+    "extraLargeMessageAndCodePx": 15,
+    "extraLargeSidebarRowPx": 15,
+    "extraLargeSidebarActionGlyphPx": 15,
+    "sidebarActionTargetPx": 24
+  },
+  "limitations": [
+    "The primary recording is assembled from live exact-working-tree frames so each independent preference state remains inspectable without relying on a temporary preview.",
+    "The populated transcript comparison is the real ProductClient chat playground fixture; the product shell and corrected repository actions are separately captured on the real Web and isolated Desktop renderer surfaces.",
+    "No Rust build, Docker service, or packaged Desktop capture was used for this frontend-only slice."
+  ]
+}

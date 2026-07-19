@@ -58,7 +58,7 @@ export function CurrentUserInvitationsSection({
             loading={accepting}
             onClick={() => setAcceptTarget(invitation)}
           >
-            <Check className="size-4" />
+            <Check className="icon-paired" />
             Accept invitation
           </Button>
         </SettingsRow>

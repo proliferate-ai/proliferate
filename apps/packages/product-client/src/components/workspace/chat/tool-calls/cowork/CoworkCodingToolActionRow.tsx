@@ -115,18 +115,18 @@ function CoworkCodingIcon({
   action: CoworkCodingAction;
 }) {
   if (action === "create_workspace") {
-    return <FolderPlus className="size-2.5 text-faint" />;
+    return <FolderPlus className="icon-compact text-faint" />;
   }
   if (action === "create_session" || action === "send_message" || action === "schedule_wake") {
-    return <GitBranchIcon className="size-2.5 text-faint" />;
+    return <GitBranchIcon className="icon-compact text-faint [font-size:var(--text-chat)]" />;
   }
-  return <ProliferateIcon className="size-2.5 text-faint" />;
+  return <ProliferateIcon className="icon-compact text-faint [font-size:var(--text-chat)]" />;
 }
 
 function RunningIcon() {
   return (
     <span className="inline-flex size-3 items-center justify-center" style={{ color: SPINNER_COLOR }}>
-      <Spinner className="size-3 opacity-80" />
+      <Spinner className="icon-compact opacity-80" />
     </span>
   );
 }
@@ -181,7 +181,7 @@ function CoworkCodingHint({
           }}
           className="ml-0.5 size-4 rounded-full px-0 text-muted-foreground hover:text-foreground"
         >
-          <ExternalLink className="size-2.5" />
+          <ExternalLink className="icon-compact" />
         </Button>
       )}
     </span>

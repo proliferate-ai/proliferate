@@ -68,7 +68,7 @@ export function RedirectCallbackScreen({
               )}
             </div>
             <div className="space-y-2.5">
-              <h1 className="text-3xl font-semibold leading-tight text-foreground">{title}</h1>
+              <h1 className="text-hero font-semibold leading-tight text-foreground">{title}</h1>
               <p className="text-sm text-muted-foreground">{description}</p>
               {detail ? <p className="text-sm text-muted-foreground">{detail}</p> : null}
             </div>
@@ -102,12 +102,12 @@ export function RedirectCallbackScreen({
               toneClasses[tone],
             )}
           >
-            <span className="size-1.5 shrink-0 rounded-full bg-current" />
+            <span className="icon-status shrink-0 rounded-full bg-current" />
             <span className="min-w-0 truncate">{statusLabel}</span>
           </div>
 
           <div className="space-y-2.5">
-            <h1 className="text-3xl font-semibold leading-tight text-foreground">{title}</h1>
+            <h1 className="text-hero font-semibold leading-tight text-foreground">{title}</h1>
             <p className="text-sm leading-6 text-muted-foreground">{description}</p>
             {detail ? (
               <p className="text-sm leading-6 text-muted-foreground">{detail}</p>

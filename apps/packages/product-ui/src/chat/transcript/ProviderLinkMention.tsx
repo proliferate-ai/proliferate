@@ -26,8 +26,9 @@ const PLAIN_LINK_CLASS =
   "text-link-foreground underline decoration-current decoration-[0.5px] decoration-opacity-50 transition-colors hover:decoration-opacity-100";
 
 const ICON_SHELL_CLASS =
-  "relative mr-[3px] inline-block h-[1lh] w-3.5 shrink-0 align-bottom";
-const ICON_CLASS = "absolute left-0 top-1/2 size-3.5 -translate-y-1/2";
+  "relative mr-[3px] inline-block h-[1lh] w-[var(--icon-paired)] shrink-0 align-bottom";
+const ICON_CLASS =
+  "absolute left-0 top-1/2 icon-paired -translate-y-1/2";
 
 export function ProviderLinkMention({
   href,

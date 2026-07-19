@@ -121,7 +121,7 @@ export function CloudRepoPicker({
           role="alert"
           className="mt-2 flex items-start gap-2 rounded-lg bg-destructive-subtle px-2.5 py-2 text-ui-sm leading-[1.45] text-destructive"
         >
-          <ShieldAlert className="mt-px size-3.5 shrink-0" aria-hidden />
+          <ShieldAlert className="mt-px icon-paired shrink-0" aria-hidden />
           <span className="min-w-0 flex-1">{error}</span>
           {onRetry ? (
             <Button
@@ -131,7 +131,7 @@ export function CloudRepoPicker({
               className="h-6 shrink-0 px-2 text-destructive hover:text-destructive"
               onClick={onRetry}
             >
-              <RotateCw size={12} aria-hidden />
+              <RotateCw aria-hidden className="icon-paired" />
               Retry
             </Button>
           ) : null}
@@ -253,7 +253,7 @@ function RepositoryRow({
         {repo.ownerAvatarUrl ? (
           <img src={repo.ownerAvatarUrl} alt="" className="size-full object-cover" />
         ) : (
-          <GitHub aria-hidden className="size-3" />
+          <GitHub aria-hidden className="icon-compact" />
         )}
       </span>
       <span className="min-w-0 flex-1">
@@ -261,10 +261,10 @@ function RepositoryRow({
           <span className="min-w-0 truncate text-ui font-medium leading-5 text-foreground">
             {repo.fullName}
           </span>
-          {repo.private ? <Lock className="size-3 shrink-0 text-muted-foreground" aria-hidden /> : null}
-          {repo.archived ? <Archive className="size-3 shrink-0 text-warning" aria-hidden /> : null}
+          {repo.private ? <Lock className="icon-paired shrink-0 text-muted-foreground" aria-hidden /> : null}
+          {repo.archived ? <Archive className="icon-paired shrink-0 text-warning" aria-hidden /> : null}
           {repo.repoConfigState === "configured" ? (
-            <Check className="size-3 shrink-0 text-success" aria-hidden />
+            <Check className="icon-paired shrink-0 text-success" aria-hidden />
           ) : null}
         </span>
         <span className="block truncate text-ui-sm leading-[1.45] text-muted-foreground">

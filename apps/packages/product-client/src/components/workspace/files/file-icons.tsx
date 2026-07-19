@@ -54,7 +54,7 @@ export function FileTreeEntryIcon({
   path,
   kind,
   isExpanded,
-  className = "size-3.5 shrink-0",
+  className = "icon-paired shrink-0",
   toneClassName,
 }: {
   name: string;

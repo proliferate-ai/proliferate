@@ -66,7 +66,7 @@ function TechnicalDetails({
       <summary className="w-fit cursor-pointer rounded-sm py-1 pr-1 text-xs outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background">
         Technical details
       </summary>
-      <dl className="mt-3 space-y-3 border-l border-border/50 pl-3 text-[11px] leading-relaxed">
+      <dl className="mt-3 space-y-3 border-l border-border/50 pl-3 text-[length:var(--text-ui-sm)] leading-[var(--text-ui-sm--line-height)]">
         <div>
           <dt className="font-medium text-foreground/90">Error message</dt>
           <dd className="mt-1 break-words">{details.message}</dd>
@@ -74,7 +74,7 @@ function TechnicalDetails({
         <div>
           <dt className="font-medium text-foreground/90">Component stack</dt>
           <dd>
-            <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed">
+            <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono text-[length:var(--readable-code-font-size)] leading-[var(--readable-code-line-height)]">
               {details.componentStack}
             </pre>
           </dd>
@@ -170,7 +170,7 @@ export function AppErrorRecoverySurface({
           <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
             Proliferate recovery
           </p>
-          <h1 className="text-2xl font-semibold leading-tight tracking-tight">
+          <h1 className="text-[length:var(--text-title)] font-semibold leading-[var(--text-title--line-height)] tracking-tight">
             The app needs a quick reload
           </h1>
           <p className="text-sm leading-relaxed text-muted-foreground">
@@ -186,7 +186,7 @@ export function AppErrorRecoverySurface({
           data-report-appearance="neutral"
         >
           {reportStatus === "reporting" ? (
-            <Spinner className="mt-0.5 size-3.5 shrink-0 animate-spin text-muted-foreground" />
+            <Spinner className="mt-0.5 icon-paired shrink-0 animate-spin text-muted-foreground" />
           ) : null}
           <p className="min-w-0">
             <span className="font-medium text-foreground">

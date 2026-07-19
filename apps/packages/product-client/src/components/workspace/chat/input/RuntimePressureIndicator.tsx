@@ -28,7 +28,7 @@ export function RuntimePressureRing({
   return (
     <svg
       viewBox="0 0 16 16"
-      className={`block size-4 ${
+      className={`block icon-paired [font-size:var(--text-composer)] ${
         loading ? "animate-pulse" : ""
       }`}
       aria-hidden="true"

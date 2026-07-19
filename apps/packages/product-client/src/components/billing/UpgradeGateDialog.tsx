@@ -61,7 +61,7 @@ export function UpgradeGateDialog({
           <ul className="space-y-2">
             {copy.benefits.map((benefit) => (
               <li key={benefit} className="flex gap-2 text-sm leading-5 text-muted-foreground">
-                <Check className="mt-0.5 size-4 shrink-0 text-success" />
+                <Check className="mt-0.5 icon-paired shrink-0 text-success" />
                 <span>{benefit}</span>
               </li>
             ))}

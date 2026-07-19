@@ -86,7 +86,7 @@ export function WorkspaceSessionRecoveryInlinePanelView({
             loading={isRetrying}
             onClick={onRetry}
           >
-            {!isRetrying && <RefreshCw className="size-3.5" />}
+            {!isRetrying && <RefreshCw className="icon-paired" />}
             Retry
           </Button>
         </div>

@@ -68,8 +68,8 @@ export function CloudRuntimeAttachedPanelView({
           phaseLabel={state.subtitle ?? "Reconnecting runtime"}
           tone={tone}
           statusIcon={state.phase === "resuming"
-            ? <Spinner className="size-3" />
-            : <CircleAlert className="size-3" />}
+            ? <Spinner className="icon-compact" />
+            : <CircleAlert className="icon-compact" />}
           primaryAction={primaryAction}
           expanded={expanded}
           onToggleExpanded={() => setExpanded((value) => !value)}

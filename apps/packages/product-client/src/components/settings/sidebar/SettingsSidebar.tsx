@@ -268,7 +268,7 @@ export function SettingsSidebar({
     return (
       <SidebarNavRow
         key={item.id}
-        icon={<Icon className="size-4" />}
+        icon={<Icon className="icon-paired" />}
         label={item.label}
         status={settingsItemStatus(item, updateActionState, agentsByKind)}
         shortcutLabel={item.kind === "section" ? shortcutLabelBySection.get(item.id) : undefined}

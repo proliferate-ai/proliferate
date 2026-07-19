@@ -66,7 +66,7 @@ export function LoopsPanel({
             disabled={!capabilities.supported || pendingWrite}
             onClick={() => setComposing(true)}
           >
-            <Plus className="size-3.5" />
+            <Plus className="icon-paired" />
           </IconButton>
         )}
       </div>
@@ -124,12 +124,12 @@ function LoopRow({
   return (
     <li
       className={twMerge(
-        "flex items-start gap-2 rounded-md px-1.5 py-1.5 hover:bg-muted/40",
+        "flex items-start gap-2 rounded-md px-1.5 py-1.5 text-xs hover:bg-muted/40",
         cleared && "opacity-60",
       )}
     >
       <RotateCw
-        className={twMerge("mt-0.5 size-3.5 shrink-0", cleared ? "text-faint" : "text-muted-foreground")}
+        className={twMerge("mt-0.5 icon-paired shrink-0", cleared ? "text-faint" : "text-muted-foreground")}
         aria-hidden
       />
       <div className="min-w-0 flex-1">
@@ -178,7 +178,7 @@ function LoopRow({
           disabled={pendingWrite}
           onClick={() => onDelete(loop.loopId)}
         >
-          <Trash2 className="size-3.5" />
+          <Trash2 className="icon-paired" />
         </IconButton>
       )}
     </li>

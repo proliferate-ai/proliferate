@@ -56,7 +56,7 @@ export function AutomationAgentRunConfigPicker({
         <PillControlButton
           aria-label="Agent run config"
           disabled={isLoading}
-          icon={<Brain className="size-3.5 shrink-0 text-muted-foreground" />}
+          icon={<Brain className="icon-paired shrink-0 text-muted-foreground" />}
           label={isLoading ? "Loading configs" : triggerLabel}
           disclosure
           className="max-w-[16rem]"
@@ -72,7 +72,7 @@ export function AutomationAgentRunConfigPicker({
           onSearchChange={setSearchValue}
         >
           <PopoverMenuItem
-            icon={<Sparkles className="size-3.5 text-muted-foreground" />}
+            icon={<Sparkles className="icon-paired text-muted-foreground" />}
             label="Runtime defaults"
             onClick={() => {
               onSelect(null);
@@ -80,7 +80,7 @@ export function AutomationAgentRunConfigPicker({
               close();
             }}
             trailing={selectedConfigId === null
-              ? <Check className="size-3.5 text-foreground/70" />
+              ? <Check className="icon-paired text-foreground/70" />
               : null}
           >
             <span className="block truncate">
@@ -95,7 +95,7 @@ export function AutomationAgentRunConfigPicker({
             filteredConfigs.map((config) => (
               <PopoverMenuItem
                 key={config.id}
-                icon={<Brain className="size-3.5 text-muted-foreground" />}
+                icon={<Brain className="icon-paired text-muted-foreground" />}
                 label={agentRunConfigDisplayName(config)}
                 onClick={() => {
                   onSelect(config);
@@ -103,7 +103,7 @@ export function AutomationAgentRunConfigPicker({
                   close();
                 }}
                 trailing={config.id === selectedConfigId
-                  ? <Check className="size-3.5 text-foreground/70" />
+                  ? <Check className="icon-paired text-foreground/70" />
                   : null}
               >
                 <span className="block truncate">

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   APPEARANCE_SIZE_IDS,
-  CHAT_LINE_HEIGHTS,
+  DEFAULT_UI_GLYPH_SCALE_CSS_VARIABLES,
   READABLE_CODE_FONT_SCALES,
   type TextTokenScale,
   resolveAppearanceSizeId,
@@ -103,7 +103,7 @@ describe("appearance preferences", () => {
     expect(cssLengthToPx(UI_FONT_SCALES.xxxlarge.base.fontSize))
       .toBeGreaterThan(cssLengthToPx(UI_FONT_SCALES.xxlarge.base.fontSize));
     expect(UI_FONT_SCALES.xxxlarge.composer.fontSize).toBe("17px");
-    expect(READABLE_CODE_FONT_SCALES.xxxlarge.monacoFontSize).toBe(14);
+    expect(READABLE_CODE_FONT_SCALES.xxxlarge.monacoFontSize).toBe(17);
   });
 
   it("keeps workspace titles visibly larger than message text at every preset", () => {
@@ -115,13 +115,24 @@ describe("appearance preferences", () => {
     }
   });
 
-  it("keeps same-named readable code bodies aligned with UI base size", () => {
+  it("exposes semantic glyph tiers with the approved paired-icon ratio", () => {
+    expect(DEFAULT_UI_GLYPH_SCALE_CSS_VARIABLES).toEqual({
+      "--icon-status": "0.45em",
+      "--icon-compact": "1em",
+      "--icon-paired": "1.15em",
+      "--icon-control": "1.333333em",
+      "--icon-large": "1.666667em",
+      "--icon-display": "2em",
+    });
+  });
+
+  it("keeps same-named readable code bodies aligned with visible message size", () => {
     for (const id of APPEARANCE_SIZE_IDS) {
-      const basePx = cssLengthToPx(UI_FONT_SCALES[id].base.fontSize);
+      const messagePx = cssLengthToPx(UI_FONT_SCALES[id].composer.fontSize);
       const readable = READABLE_CODE_FONT_SCALES[id];
-      expect(readable.monacoFontSize).toBe(basePx);
-      expect(cssLengthToPx(readable.diffsFontSize)).toBe(basePx);
-      expect(cssLengthToPx(readable.codeFontSize)).toBe(basePx);
+      expect(readable.monacoFontSize).toBe(messagePx);
+      expect(cssLengthToPx(readable.diffsFontSize)).toBe(messagePx);
+      expect(cssLengthToPx(readable.codeFontSize)).toBe(messagePx);
       expect(readable.monacoLineHeight).toBeGreaterThan(readable.monacoFontSize);
     }
   });
@@ -150,10 +161,11 @@ describe("appearance preferences", () => {
 
   it("uses the readable chat line-height ladder and preserves a usable lower bound", () => {
     for (const id of APPEARANCE_SIZE_IDS) {
-      expect(UI_FONT_SCALES[id].chat.lineHeight).toBe(CHAT_LINE_HEIGHTS[id]);
+      expect(cssLengthToPx(UI_FONT_SCALES[id].chat.lineHeight))
+        .toBe(cssLengthToPx(UI_FONT_SCALES[id].composer.fontSize) + 6);
     }
     expect(cssLengthToPx(UI_FONT_SCALES.xxsmall.base.fontSize)).toBe(8);
     expect(cssLengthToPx(UI_FONT_SCALES.xxsmall.chat.fontSize)).toBe(9);
-    expect(READABLE_CODE_FONT_SCALES.xxsmall.monacoFontSize).toBe(8);
+    expect(READABLE_CODE_FONT_SCALES.xxsmall.monacoFontSize).toBe(11);
   });
 });

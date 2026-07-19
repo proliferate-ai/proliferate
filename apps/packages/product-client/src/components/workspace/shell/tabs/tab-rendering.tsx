@@ -29,7 +29,7 @@ export function renderChatTabIcon(
   if (tab.viewState === "working") {
     return (
       <span className="flex size-4 shrink-0 items-center justify-center">
-        <Spinner className="size-3.5 text-foreground" />
+        <Spinner className="icon-paired text-foreground" />
       </span>
     );
   }
@@ -41,15 +41,15 @@ export function renderChatTabIcon(
   if (tab.viewState === "errored") {
     return (
       <span className="flex size-4 shrink-0 items-center justify-center">
-        <CircleAlert className="size-3 shrink-0 text-destructive" />
+        <CircleAlert className="icon-compact shrink-0 text-destructive" />
       </span>
     );
   }
 
   return tab.agentKind ? (
-    <ProviderIcon kind={tab.agentKind} className="size-3 shrink-0" />
+    <ProviderIcon kind={tab.agentKind} className="icon-compact shrink-0 [font-size:var(--text-sidebar-row)]" />
   ) : (
-    <MessageSquare className="size-3 shrink-0" />
+    <MessageSquare className="icon-compact shrink-0" />
   );
 }
 
@@ -93,7 +93,7 @@ function delegatedAgentStatusDotClassName(
 function renderChatTabActivityIcon(colorClassName: string): ReactNode {
   return (
     <span className="flex size-4 shrink-0 items-center justify-center">
-      <Clock className={`size-3 shrink-0 ${colorClassName}`} />
+      <Clock className={`icon-compact shrink-0 ${colorClassName}`} />
     </span>
   );
 }
@@ -116,7 +116,7 @@ export function renderChatTabStatusBadge(
     return (
       <span
         aria-hidden="true"
-        className="size-1.5 shrink-0 rounded-full bg-info"
+        className="icon-status shrink-0 rounded-full bg-info [font-size:var(--text-sidebar-row)]"
       />
     );
   }

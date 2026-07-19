@@ -43,7 +43,7 @@ export function IntegrationRow({
       }
     >
       <div className="flex min-w-0 items-center gap-3">
-        <IntegrationIcon namespace={integration.namespace} className="size-8" />
+        <IntegrationIcon namespace={integration.namespace} className="icon-display [font-size:var(--text-sidebar-brand)]" />
         <div className="min-w-0">
           <div className="truncate text-sm font-medium text-foreground">
             {integration.displayName}

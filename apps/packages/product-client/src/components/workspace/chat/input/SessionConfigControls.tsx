@@ -80,7 +80,7 @@ function ToggleControl({ control }: { control: LiveSessionControlDescriptor }) {
         <ComposerControlButton
           disabled={!control.settable || !nextValue}
           active={!!control.isEnabled}
-          icon={<Icon className={`size-3.5 ${control.isEnabled ? "" : "opacity-65"}`} />}
+          icon={<Icon className={`icon-paired [font-size:var(--text-composer)] ${control.isEnabled ? "" : "opacity-65"}`} />}
           label={triggerLabel}
           trailing={<PendingConfigIndicator pendingState={control.pendingState} />}
           aria-label={tooltip}
@@ -153,7 +153,7 @@ function SelectControl({ control }: { control: LiveSessionControlDescriptor }) {
               key={option.value}
               data-session-config-option={`${control.key}:${option.value}`}
               label={option.label}
-              trailing={option.selected ? <Check className="size-3.5 shrink-0 text-foreground/60" /> : null}
+              trailing={option.selected ? <Check className="icon-paired shrink-0 text-foreground/60" /> : null}
               onClick={() => {
                 control.onSelect(option.value);
                 close();

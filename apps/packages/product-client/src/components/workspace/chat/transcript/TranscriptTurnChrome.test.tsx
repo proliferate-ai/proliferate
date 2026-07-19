@@ -134,7 +134,7 @@ describe("resolveTurnTrailingStatus", () => {
     expect(container.querySelector("[data-trailing-status='transient']")).not.toBeNull();
     expect(container.textContent).toContain("Reading workspace flow");
     expect(container.innerHTML).toContain("text-[length:var(--text-chat)]");
-    expect(container.innerHTML).toContain("size-[1.143em]");
+    expect(container.innerHTML).toContain("icon-paired");
     expect(container.innerHTML).not.toContain("text-xs");
   });
 

@@ -120,7 +120,7 @@ export function WorkflowRunDetail({
 function StatusCard({ label, value, tone }: { label: string; value: string; tone: string }) {
   return (
     <div className="rounded-lg border border-border bg-card p-3">
-      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="text-ui-sm uppercase tracking-wide text-muted-foreground">{label}</p>
       <p className={`mt-1 text-sm font-medium ${toneClass(tone)}`}>{value}</p>
     </div>
   );

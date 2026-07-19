@@ -39,6 +39,11 @@ jobs:
       - name: Check frontend layer boundaries
         run: python3 scripts/check_frontend_boundaries.py
 
+      - name: Check appearance scaling ownership
+        run: |
+          python3 -m unittest scripts/test_check_appearance_scaling.py
+          python3 scripts/check_appearance_scaling.py
+
       - name: Check frontend structure drift
         run: python3 scripts/report_frontend_structure.py --strict --summary-only
 

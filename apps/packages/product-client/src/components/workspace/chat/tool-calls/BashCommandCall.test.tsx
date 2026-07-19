@@ -9,7 +9,6 @@ afterEach(() => {
 });
 
 describe("BashCommandCall", () => {
-
   it("keeps command output hidden until the row is clicked", () => {
     render(
       <BashCommandCall
@@ -23,8 +22,8 @@ describe("BashCommandCall", () => {
     const row = screen.getByRole("button", { name: /Running command pnpm test/i });
     expect(row).toBeTruthy();
     expect(row.className).toContain("leading-[1.5]");
-    expect(row.firstElementChild?.className).toContain("size-[1.143em]");
-    expect(row.firstElementChild?.innerHTML).toContain("[&amp;_svg]:size-[1.143em]");
+    expect(row.firstElementChild?.className).toContain("icon-paired");
+    expect(row.firstElementChild?.innerHTML).toContain("[&amp;_svg]:size-full");
     expect(row.firstElementChild?.innerHTML).not.toContain("text-xs");
     expect(screen.queryByText("test output")).toBeNull();
 

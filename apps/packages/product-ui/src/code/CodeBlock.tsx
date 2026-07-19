@@ -67,7 +67,7 @@ export function CodeBlock({
           className="size-6 shrink-0 rounded-md bg-transparent text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           aria-label="Copy code"
         >
-          {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+          {copied ? <Check className="icon-paired" /> : <Copy className="icon-paired" />}
         </Button>
       </div>
       <div

@@ -47,7 +47,7 @@ export function buildGitHubAppUserAuthorizationServiceView({
             : needsReconnect
               ? "Reauthorize GitHub App"
               : "Authorize GitHub App",
-          icon: <ProviderBrandIcon provider="github" className="size-[13px]" />,
+          icon: <ProviderBrandIcon provider="github" className="icon-paired" />,
           loading: authorizing,
           disabled: authorizing,
           onClick: () => { void onAuthorize(); },

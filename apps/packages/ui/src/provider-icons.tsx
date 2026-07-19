@@ -58,7 +58,7 @@ const PROVIDER_ICON_MAP: Record<string, ComponentType<IconProps>> = {
 
 export function ProviderIcon({
   kind,
-  className = "size-4",
+  className = "icon-paired",
   ...props
 }: {
   kind: string;
@@ -72,7 +72,7 @@ export function ProviderIcon({
 export function AgentGlyph({
   agentKind,
   color,
-  className = "size-4",
+  className = "icon-paired",
   ...props
 }: {
   agentKind?: string | null;

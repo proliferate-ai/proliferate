@@ -34,8 +34,8 @@ export function CopyMessageButton({
       className="rounded-md text-muted-foreground hover:text-foreground"
     >
       {copied
-        ? <Check className="size-3" />
-        : <Copy className="size-3" />}
+        ? <Check className="icon-paired" />
+        : <Copy className="icon-paired" />}
     </IconButton>
   );
 

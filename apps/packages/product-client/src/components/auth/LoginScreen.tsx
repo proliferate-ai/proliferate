@@ -1,5 +1,4 @@
 import { ProliferateLivingMark } from "@proliferate/product-ui/brand/ProliferateLivingMark";
-import { AuthAppearanceBoundary } from "#product/components/auth/AuthAppearanceBoundary";
 import { ConnectServerDialog } from "#product/components/auth/ConnectServerDialog";
 import { PasswordSignInForm } from "#product/components/auth/PasswordSignInForm";
 import { useConnectServer } from "#product/hooks/auth/workflows/use-connect-server";
@@ -43,7 +42,7 @@ export function LoginScreen({
     && !githubSignInAvailable;
   const connectServer = useConnectServer();
   return (
-    <AuthAppearanceBoundary
+    <div
       className="flex min-h-screen flex-col items-center justify-center bg-background p-8"
       data-tauri-drag-region="true"
     >
@@ -51,7 +50,7 @@ export function LoginScreen({
         <div className="space-y-5">
           <ProliferateLivingMark />
           <div className="space-y-2.5">
-            <h1 className="text-3xl font-semibold leading-tight text-foreground">
+            <h1 className="text-hero font-semibold text-foreground">
               {AUTH_LOGIN_LABELS.title}
             </h1>
             {canContinueLocally
@@ -96,9 +95,9 @@ export function LoginScreen({
                 disabled={busy || githubSignInChecking || !githubSignInAvailable}
                 className="h-11 w-full"
               >
-                {!submitting && <GitHub className="h-4 w-4 shrink-0" />}
+                {!submitting && <GitHub className="icon-paired shrink-0" />}
                 {submitting ? AUTH_LOGIN_LABELS.waiting : AUTH_LOGIN_LABELS.signIn}
-                {!submitting && <ArrowRight className="h-4 w-4" />}
+                {!submitting && <ArrowRight className="icon-paired" />}
               </Button>
             )}
 
@@ -146,6 +145,6 @@ export function LoginScreen({
         </div>
       )}
       <ConnectServerDialog controller={connectServer} />
-    </AuthAppearanceBoundary>
+    </div>
   );
 }

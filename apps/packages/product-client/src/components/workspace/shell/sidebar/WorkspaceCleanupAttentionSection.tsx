@@ -31,7 +31,7 @@ export function WorkspaceCleanupAttentionSection({
             className="min-h-[34px] px-2 py-1 gap-1.5 text-sm leading-4 focus-visible:outline-offset-[-2px]"
           >
             <div className="flex w-4 shrink-0 items-center justify-center">
-              <CircleAlert className="size-3 text-destructive" />
+              <CircleAlert className="icon-compact text-destructive" />
             </div>
             <div className="flex min-w-0 flex-1 flex-col">
               <span className="truncate text-ui leading-5 text-current">
@@ -50,7 +50,7 @@ export function WorkspaceCleanupAttentionSection({
               className="size-6"
               alwaysVisible
             >
-              <RefreshCw className="size-3" />
+              <RefreshCw className="icon-compact" />
             </SidebarActionButton>
           </SidebarRowSurface>
         ))}

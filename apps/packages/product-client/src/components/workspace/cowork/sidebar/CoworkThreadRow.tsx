@@ -56,8 +56,8 @@ export function CoworkThreadRow({
           className="rounded focus-visible:outline-offset-[-2px]"
         >
           {expanded
-            ? <ChevronDown className="size-3" />
-            : <ChevronRight className="size-3" />}
+            ? <ChevronDown className="icon-compact" />
+            : <ChevronRight className="icon-compact" />}
         </IconButton>
       ) : null}
     />

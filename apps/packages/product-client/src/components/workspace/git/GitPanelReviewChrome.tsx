@@ -24,7 +24,7 @@ export function GitLastTurnUndoAction({
 }) {
   return (
     <div className="flex items-center gap-2 rounded-md border border-sidebar-border/70 bg-sidebar-accent/35 px-2.5 py-2 text-xs leading-5 text-sidebar-muted-foreground">
-      <Undo className="size-3.5 shrink-0" />
+      <Undo className="icon-paired shrink-0" />
       <span className="min-w-0 flex-1 truncate">
         {fileCount > 0
           ? `${fileCount} file${fileCount === 1 ? "" : "s"} from the last turn`
@@ -39,7 +39,7 @@ export function GitLastTurnUndoAction({
         onClick={onUndo}
         className="h-7 shrink-0 gap-1 rounded-md px-2 text-xs text-sidebar-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground disabled:cursor-not-allowed disabled:opacity-45"
       >
-        <Undo className="size-3.5" />
+        <Undo className="icon-paired" />
         {busy ? "Undoing" : "Undo"}
       </Button>
     </div>
@@ -78,7 +78,7 @@ export function GitReviewNoChangesState({
       description={gitPanelEmptyDescription(mode, baseRef)}
       action={
         <GitReviewEmptyStateAction onClick={onRefresh}>
-          <RefreshCw className="size-3" />
+          <RefreshCw className="icon-compact" />
           Refresh
         </GitReviewEmptyStateAction>
       }

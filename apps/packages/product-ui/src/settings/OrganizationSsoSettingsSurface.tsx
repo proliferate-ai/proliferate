@@ -87,7 +87,7 @@ export function OrganizationSsoSettingsSurface({
             disabled={busy}
             loading={loading}
           >
-            <RefreshCw className="size-3.5" />
+            <RefreshCw className="icon-paired" />
             Refresh
           </Button>
         )}
@@ -104,7 +104,7 @@ export function OrganizationSsoSettingsSurface({
         <div className="overflow-clip rounded-lg bg-foreground/5">
           <div className="flex min-h-[3.5rem] flex-col gap-2 px-3.5 py-3.5 text-sm sm:flex-row sm:items-center sm:justify-between">
             <div className="flex min-w-0 items-center gap-3">
-              <ShieldCheckFilled className="size-5 shrink-0 text-muted-foreground" />
+              <ShieldCheckFilled className="icon-paired shrink-0 text-muted-foreground" />
               <div className="min-w-0">
                 <div className="font-medium text-foreground">
                   {connection?.displayName || "OIDC connection"}
@@ -254,7 +254,7 @@ export function OrganizationSsoSettingsSurface({
               disabled={!connection || busy}
               onClick={onCopyRedirectUri}
             >
-              <Copy className="size-3.5" />
+              <Copy className="icon-paired" />
             </Button>
           </div>
         </div>
@@ -272,7 +272,7 @@ export function OrganizationSsoSettingsSurface({
               className="text-destructive hover:text-destructive"
               onClick={() => setDeleteConfirmOpen(true)}
             >
-              <Trash className="size-3.5" />
+              <Trash className="icon-paired" />
               Delete connection
             </Button>
           ) : null}

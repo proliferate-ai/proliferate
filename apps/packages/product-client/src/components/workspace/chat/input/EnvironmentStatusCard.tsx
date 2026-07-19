@@ -71,7 +71,7 @@ export function ResourcesSection({
         : null}
     >
       <StatusRow
-        icon={<GitBranch className="size-4" />}
+        icon={<GitBranch className="icon-paired" />}
         label={`${inventory.length} ${inventory.length === 1 ? "worktree" : "worktrees"}`}
         meta={worktreeInventoryTotalMeta(inventory)}
         hoverItems={worktreeHoverItems}
@@ -121,7 +121,7 @@ export function AdvancedControlSections({
               disabled={!control.settable}
               trailing={(
                 <span className="flex shrink-0 items-center gap-1">
-                  {option.selected && <Check className="size-3.5 text-foreground/60" />}
+                  {option.selected && <Check className="icon-paired text-foreground/60" />}
                   {option.selected && control.pendingState && (
                     <PendingConfigIndicator pendingState={control.pendingState} />
                   )}
@@ -190,12 +190,12 @@ export function EnvironmentCardSections({
               />
             </div>
             {targetState.inventoryLoading ? (
-              <StatusRow icon={<GitBranch className="size-4" />} label="Loading worktrees..." disabled />
+              <StatusRow icon={<GitBranch className="icon-paired" />} label="Loading worktrees..." disabled />
             ) : targetState.inventoryError ? (
-              <StatusRow icon={<GitBranch className="size-4" />} label="Runtime inventory is unavailable" disabled />
+              <StatusRow icon={<GitBranch className="icon-paired" />} label="Runtime inventory is unavailable" disabled />
             ) : visibleRows.length === 0 ? (
               <StatusRow
-                icon={<GitBranch className="size-4" />}
+                icon={<GitBranch className="icon-paired" />}
                 label={inventory.length === 0 ? "No worktrees" : "No matches"}
                 disabled
               />
@@ -274,7 +274,7 @@ function WorktreeStatusRow({
           onClick={onDelete}
           className="shrink-0 rounded-sm p-0.5 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover/worktree-row:opacity-100 focus-visible:opacity-100"
         >
-          <X className="size-3.5" />
+          <X className="icon-paired" />
         </Button>
       )}
     </div>

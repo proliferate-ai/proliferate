@@ -27,7 +27,7 @@ export function CodeBlockTokenContent({
           <tbody>
             {lines.map((tokens, index) => (
               <tr key={index}>
-                <td className="select-none px-3 align-top text-right text-[11px] tabular-nums text-faint">
+                <td className="select-none px-3 align-top text-right text-[length:var(--readable-code-font-size)] leading-[var(--readable-code-line-height)] tabular-nums text-faint">
                   {lineNumberStart + index}
                 </td>
                 <td className="py-px pr-3 align-top">

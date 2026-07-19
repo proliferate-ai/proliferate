@@ -44,11 +44,11 @@ export function SettingsMenu({
           type="button"
           variant="outline"
           size="sm"
-          className={`h-8 justify-between rounded-lg border border-input bg-transparent px-2.5 text-sm font-[430] leading-4 text-foreground shadow-none hover:bg-foreground/5 data-[state=open]:bg-foreground/5 ${className}`}
+          className={`h-8 justify-between rounded-lg border border-input bg-transparent px-2.5 text-ui font-[430] leading-4 text-foreground shadow-none hover:bg-foreground/5 data-[state=open]:bg-foreground/5 ${className}`}
         >
           {leading}
           <span className="min-w-0 flex-1 truncate text-left">{label}</span>
-          <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
+          <ChevronDown className="icon-paired shrink-0 text-muted-foreground" />
         </Button>
       )}
       className={`${menuClassName} ${POPOVER_SURFACE_CLASS}`}
@@ -69,7 +69,7 @@ export function SettingsMenu({
                   label={option.label}
                   icon={option.icon}
                   disabled={option.disabled}
-                  trailing={option.selected ? <Check className="size-3.5" /> : undefined}
+                  trailing={option.selected ? <Check className="icon-paired" /> : undefined}
                   onClick={() => {
                     option.onSelect();
                     close();

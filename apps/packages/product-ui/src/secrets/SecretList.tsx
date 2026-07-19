@@ -32,8 +32,8 @@ export function SecretList({
 }: SecretListProps) {
   if (items.length === 0) {
     return (
-      <div className="flex flex-col items-center gap-2 rounded-md border border-dashed border-border-light px-4 py-6 text-center">
-        <KeyRound size={16} className="text-muted-foreground" />
+      <div className="flex flex-col items-center gap-2 rounded-md border border-dashed border-border-light px-4 py-6 text-center text-sm">
+        <KeyRound className="icon-large text-muted-foreground" />
         <div className="space-y-0.5">
           <div className="text-sm text-foreground">{emptyLabel}</div>
           {emptyDescription ? (
@@ -42,7 +42,7 @@ export function SecretList({
         </div>
         {canManage && onAdd ? (
           <Button type="button" variant="secondary" size="sm" onClick={onAdd}>
-            <Plus size={14} />
+            <Plus className="icon-paired" />
             {addLabel}
           </Button>
         ) : null}

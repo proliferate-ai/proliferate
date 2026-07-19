@@ -8,7 +8,7 @@ import { CHAT_PRE_MESSAGE_LABELS } from "#product/copy/chat/chat-copy";
 export function ChatReadyHero() {
   return (
     <div className="flex flex-col items-center text-center">
-      <h2 className="mt-6 text-2xl font-semibold tracking-[-0.02em] text-foreground">
+      <h2 className="mt-6 text-[length:var(--text-hero)] font-semibold leading-[var(--text-hero--line-height)] tracking-[-0.02em] text-foreground">
         {CHAT_PRE_MESSAGE_LABELS.readyTitle}
       </h2>
     </div>

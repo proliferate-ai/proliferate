@@ -13,7 +13,7 @@ export function WorkspaceOpenInWebFooterControl() {
 
   return (
     <ComposerControlButton
-      icon={<ExternalLink className="size-4" />}
+      icon={<ExternalLink className="icon-paired" />}
       label="Open in web"
       detail={!url ? "Sync first" : null}
       disabled={disabled}

@@ -93,7 +93,7 @@ export function ModalShell({
             aria-label="Close"
             className="absolute right-4 top-4 z-10 rounded-md p-1 text-muted-foreground/70 transition-colors hover:text-muted-foreground disabled:text-muted-foreground/30"
           >
-            <X className="size-4" />
+            <X className="icon-control" />
           </DialogClose>
         ) : null}
 

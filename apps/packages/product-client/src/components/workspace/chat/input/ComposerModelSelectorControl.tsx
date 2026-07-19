@@ -67,7 +67,7 @@ export function ComposerModelSelectorControl({
         disabled
         data-composer-model-trigger
         data-composer-selected-model={selectedModelId}
-        icon={currentModel ? <ProviderIcon kind={currentModel.kind} className="size-4 shrink-0" /> : undefined}
+        icon={currentModel ? <ProviderIcon kind={currentModel.kind} className="icon-paired shrink-0 [font-size:var(--text-composer)]" /> : undefined}
         label={triggerLabel}
         className="max-w-[15rem]"
       />
@@ -81,7 +81,7 @@ export function ComposerModelSelectorControl({
           emphasizeLabel
           data-composer-model-trigger
           data-composer-selected-model={selectedModelId}
-          icon={currentModel ? <ProviderIcon kind={currentModel.kind} className="size-4 shrink-0" /> : undefined}
+          icon={currentModel ? <ProviderIcon kind={currentModel.kind} className="icon-paired shrink-0 [font-size:var(--text-composer)]" /> : undefined}
           label={triggerLabel}
           trailing={currentModel?.pendingState
             ? <PendingConfigIndicator pendingState={currentModel.pendingState} />
@@ -202,14 +202,14 @@ function ComposerModelPickerPopover({
 
       <div className="shrink-0 border-t border-border p-1">
         <PopoverMenuItem
-          icon={<Plus className="size-3 shrink-0" />}
+          icon={<Plus className="icon-compact shrink-0" />}
           label="Add provider"
           density="compact"
           className="text-ui-sm text-muted-foreground hover:text-popover-foreground"
           onClick={onAddProvider}
         />
         <PopoverMenuItem
-          icon={<Settings className="size-3 shrink-0" />}
+          icon={<Settings className="icon-compact shrink-0" />}
           label="Settings"
           density="compact"
           className="text-ui-sm text-muted-foreground hover:text-popover-foreground"
@@ -250,7 +250,7 @@ function ModelPickerGroup({
         </div>
       )}
       <div className="flex items-center gap-1.5 px-2.5 pb-1 pt-1.5 text-ui-sm text-muted-foreground">
-        <ProviderIcon kind={group.kind} className="size-3 shrink-0" />
+        <ProviderIcon kind={group.kind} className="icon-compact shrink-0 [font-size:var(--text-composer)]" />
         <span className="truncate">{group.providerDisplayName}</span>
       </div>
 
@@ -273,7 +273,7 @@ function ModelPickerGroup({
             data-model-selected={model.isSelected ? "true" : "false"}
             aria-selected={isHighlighted}
             onMouseEnter={() => onHighlight(rowKey)}
-            icon={<ProviderIcon kind={group.kind} className="size-3 shrink-0 text-muted-foreground" />}
+            icon={<ProviderIcon kind={group.kind} className="icon-compact shrink-0 text-muted-foreground [font-size:var(--text-composer)]" />}
             label={(
               <span className="flex items-center gap-1.5">
                 <span className="min-w-0 truncate">{nameParts.leaf}</span>
@@ -285,9 +285,9 @@ function ModelPickerGroup({
             trailing={(
               <span className="flex size-3.5 shrink-0 items-center justify-center">
                 {showNewChatIndicator ? (
-                  <ArrowUpRight className="size-3.5 shrink-0 text-muted-foreground/60" />
+                  <ArrowUpRight className="icon-paired shrink-0 text-muted-foreground/60" />
                 ) : model.isSelected ? (
-                  <Check className="size-3.5 shrink-0 text-foreground/60" />
+                  <Check className="icon-paired shrink-0 text-foreground/60" />
                 ) : null}
               </span>
             )}

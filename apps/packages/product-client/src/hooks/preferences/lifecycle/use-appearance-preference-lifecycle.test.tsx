@@ -102,7 +102,7 @@ describe("useAppearancePreferenceLifecycle", () => {
       expect(document.documentElement.dataset.windowZoom).toBe("zoom90");
       expect(document.documentElement.style.getPropertyValue("--text-chat")).toBe("12px");
       expect(document.documentElement.style.getPropertyValue("--text-workspace-title")).toBe("15px");
-      expect(document.documentElement.style.getPropertyValue("--readable-code-font-size")).toBe("0.75rem");
+      expect(document.documentElement.style.getPropertyValue("--readable-code-font-size")).toBe("15px");
       expect(document.documentElement.style.getPropertyValue("--proliferate-window-zoom")).toBe("0.9");
     });
   });

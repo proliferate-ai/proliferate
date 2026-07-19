@@ -150,7 +150,7 @@ function AttachmentZone({
           size="sm"
           onClick={onBrowse}
         >
-          <CloudUpload className="size-3.5" />
+          <CloudUpload className="icon-paired" />
           Add files
         </Button>
       </div>
@@ -161,7 +161,7 @@ function AttachmentZone({
         className="flex min-h-[72px] w-full flex-col items-center justify-center rounded-lg border border-dashed border-border/80 bg-surface-control/80 px-4 py-3 text-center text-ui-sm text-muted-foreground transition-colors hover:border-ring hover:bg-popover-accent hover:text-popover-foreground"
         onClick={onBrowse}
       >
-        <CloudUpload className="mb-1.5 size-4" />
+        <CloudUpload className="mb-1.5 icon-paired" />
         <span>Drop screenshots or files here</span>
       </Button>
       <Input
@@ -189,7 +189,7 @@ function AttachmentZone({
                   className="size-8 shrink-0 rounded object-cover"
                 />
               ) : (
-                <FileText className="size-4 shrink-0 text-muted-foreground" />
+                <FileText className="icon-paired shrink-0 text-muted-foreground" />
               )}
               <div className="min-w-0 flex-1">
                 <div className="truncate font-medium leading-5">{attachment.fileName}</div>
@@ -204,7 +204,7 @@ function AttachmentZone({
                 aria-label={`Remove ${attachment.fileName}`}
                 onClick={() => onRemove(attachment)}
               >
-                <X className="size-3.5" />
+                <X className="icon-paired" />
               </Button>
             </div>
           ))}

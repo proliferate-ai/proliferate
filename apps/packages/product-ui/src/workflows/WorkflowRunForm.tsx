@@ -115,9 +115,9 @@ export function WorkflowRunForm({
                       Include
                     </Label>
                   ) : input.required ? (
-                    <span className="text-[11px] uppercase tracking-wide text-muted-foreground">Required</span>
+                    <span className="text-ui-sm uppercase tracking-wide text-muted-foreground">Required</span>
                   ) : (
-                    <span className="text-[11px] uppercase tracking-wide text-muted-foreground">Required for run</span>
+                    <span className="text-ui-sm uppercase tracking-wide text-muted-foreground">Required for run</span>
                   )}
                 </div>
                 {requiredByPrompt ? (

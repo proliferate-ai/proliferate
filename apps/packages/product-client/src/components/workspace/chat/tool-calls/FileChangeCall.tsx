@@ -214,7 +214,7 @@ function buildLabel(
       <div className="flex min-w-0 items-center gap-2">
         <span className="shrink-0 text-inherit">{actionLabel}</span>
         {primaryChip}
-        <ArrowRight className="size-3 shrink-0 text-muted-foreground" />
+        <ArrowRight className="icon-compact shrink-0 text-muted-foreground" />
         <ToolFileChip
           basename={resolvedNewBasename ?? resolvedBasename}
           pathLabel={nextPathLabel}

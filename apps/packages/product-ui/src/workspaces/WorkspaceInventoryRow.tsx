@@ -25,7 +25,7 @@ export function InventoryRow({
   const subtitle = rowSubtitle(item);
 
   const rowClass = twMerge(
-    "group relative grid h-12 w-full grid-cols-[18px_minmax(0,1fr)_3.5rem] items-center gap-x-3 rounded-[5px] px-3 py-1 text-left",
+    "group relative grid h-12 w-full grid-cols-[18px_minmax(0,1fr)_3.5rem] items-center gap-x-3 rounded-[5px] px-3 py-1 text-left text-sm",
     suppressSourceLabel
       ? "sm:grid-cols-[18px_7.5rem_minmax(0,1fr)_3.5rem] lg:grid-cols-[18px_7.5rem_minmax(0,1fr)_minmax(8rem,14rem)_6.75rem_3.5rem]"
       : "sm:grid-cols-[18px_5.5rem_minmax(0,1fr)_3.5rem] md:grid-cols-[18px_5.5rem_7.5rem_minmax(0,1fr)_3.5rem] lg:grid-cols-[18px_5.5rem_7.5rem_minmax(0,1fr)_minmax(8rem,14rem)_6.75rem_3.5rem]",
@@ -90,7 +90,7 @@ export function InventoryRow({
             className="pointer-events-none absolute right-0 flex size-7 items-center justify-center text-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
             aria-hidden
           >
-            <ExternalLink className="size-3.5" />
+            <ExternalLink className="icon-paired" />
           </span>
         )}
       </span>

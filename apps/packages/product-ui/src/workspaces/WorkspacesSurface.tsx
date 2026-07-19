@@ -82,7 +82,7 @@ export function WorkspacesSurface({
             disabled={isRefreshing}
             onClick={onRefresh}
           >
-            <RefreshCw className={twMerge("size-3.5", isRefreshing ? "animate-spin" : "")} aria-hidden />
+            <RefreshCw className={twMerge("icon-paired", isRefreshing ? "animate-spin" : "")} aria-hidden />
           </ToolbarIconButton>
         </div>
       }
@@ -196,9 +196,9 @@ function WorkspaceViewPopover({
         expanded={open}
         onClick={onToggle}
       >
-        <ListFilter className="size-3.5" aria-hidden />
+        <ListFilter className="icon-paired" aria-hidden />
         {activeOptionCount > 0 ? (
-          <span className="absolute -right-0.5 -top-0.5 size-1.5 rounded-full bg-foreground" />
+          <span className="absolute -right-0.5 -top-0.5 icon-status rounded-full bg-foreground" />
         ) : null}
       </ToolbarIconButton>
       {open ? (
@@ -344,7 +344,7 @@ function WorkspaceMenuOption({
               {count}
             </span>
           ) : null}
-          {active ? <Check className="size-3.5 text-foreground/60" /> : null}
+          {active ? <Check className="icon-paired text-foreground/60" /> : null}
         </span>
       )}
       className={active ? "bg-sidebar-accent text-sidebar-accent-foreground" : ""}

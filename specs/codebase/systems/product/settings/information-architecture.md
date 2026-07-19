@@ -15,6 +15,11 @@ shared UI primitives, and shared vocabulary used by every other spec
 that ships UI. Feature specs own page *content*; this spec owns the
 *frame*.
 
+The independent UI-font, readable-code, and window-zoom behavior exposed by
+the Appearance pane is owned by
+[`appearance-scaling.md`](appearance-scaling.md). This document continues to
+own the pane's Settings placement and shared frame.
+
 ## 1. Purpose & Scope
 
 In scope:

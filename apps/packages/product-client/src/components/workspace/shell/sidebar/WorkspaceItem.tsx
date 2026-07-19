@@ -293,7 +293,7 @@ export function WorkspaceItem({
                 </div>
               </div>
               <PopoverMenuItem
-                icon={<Trash className="size-3.5 shrink-0 text-muted-foreground" />}
+                icon={<Trash className="icon-paired shrink-0 text-muted-foreground" />}
                 label="Delete workspace"
                 variant="sidebar"
                 onClick={() => {
@@ -315,7 +315,7 @@ export function WorkspaceItem({
             <>
               {onRename && (
                 <PopoverMenuItem
-                  icon={<Pencil className="size-3.5 shrink-0 text-muted-foreground" />}
+                  icon={<Pencil className="icon-paired shrink-0 text-muted-foreground" />}
                   label="Rename"
                   variant="sidebar"
                   onClick={() => {
@@ -326,7 +326,7 @@ export function WorkspaceItem({
               )}
               {onCopyWorkspaceLocation && (
                 <PopoverMenuItem
-                  icon={<Folder className="size-3.5 shrink-0 text-muted-foreground" />}
+                  icon={<Folder className="icon-paired shrink-0 text-muted-foreground" />}
                   label={workspaceLocationCopyLabel ?? "Copy workspace location"}
                   trailing={(
                     <ShortcutBadge
@@ -343,7 +343,7 @@ export function WorkspaceItem({
               )}
               {handleOpenPullRequestCommand && (
                 <PopoverMenuItem
-                  icon={<GitPullRequest className="size-3.5 shrink-0 text-muted-foreground" />}
+                  icon={<GitPullRequest className="icon-paired shrink-0 text-muted-foreground" />}
                   label={pullRequestNumber !== null
                     ? `Open pull request #${pullRequestNumber}`
                     : "Open pull request"}
@@ -356,7 +356,7 @@ export function WorkspaceItem({
               )}
               {onCopyBranchName && (
                 <PopoverMenuItem
-                  icon={<GitBranchIcon className="size-3.5 shrink-0 text-muted-foreground" />}
+                  icon={<GitBranchIcon className="icon-paired shrink-0 text-muted-foreground [font-size:var(--text-sidebar-row)]" />}
                   label="Copy branch name"
                   trailing={(
                     <ShortcutBadge
@@ -373,7 +373,7 @@ export function WorkspaceItem({
               )}
               {onMarkDone && (
                 <PopoverMenuItem
-                  icon={<Trash className="size-3.5 shrink-0 text-muted-foreground" />}
+                  icon={<Trash className="icon-paired shrink-0 text-muted-foreground" />}
                   label="Delete workspace..."
                   variant="sidebar"
                   onClick={() => {
@@ -383,7 +383,7 @@ export function WorkspaceItem({
               )}
               {onArchive && !archived && (
                 <PopoverMenuItem
-                  icon={<Archive className="size-3.5 shrink-0 text-muted-foreground" />}
+                  icon={<Archive className="icon-paired shrink-0 text-muted-foreground" />}
                   label="Archive..."
                   variant="sidebar"
                   onClick={() => { close(); handleArchiveCommand(); }}
@@ -391,7 +391,7 @@ export function WorkspaceItem({
               )}
               {onUnarchive && archived && (
                 <PopoverMenuItem
-                  icon={<Archive className="size-3.5 shrink-0 text-muted-foreground" />}
+                  icon={<Archive className="icon-paired shrink-0 text-muted-foreground" />}
                   label="Unarchive"
                   variant="sidebar"
                   onClick={() => { close(); handleUnarchiveCommand(); }}
@@ -400,7 +400,7 @@ export function WorkspaceItem({
               {availabilityCommands.map((command) => (
                 <PopoverMenuItem
                   key={command.kind}
-                  icon={<GitBranchIcon className="size-3.5 shrink-0 text-muted-foreground" />}
+                  icon={<GitBranchIcon className="icon-paired shrink-0 text-muted-foreground" />}
                   label={command.blocker ? `${command.label} — ${command.blocker}` : command.label}
                   variant="sidebar"
                   onClick={() => {

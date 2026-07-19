@@ -46,7 +46,7 @@ function HarnessProgressToastCard({
   return (
     <div className="w-full rounded-xl border border-border bg-popover p-3 text-foreground shadow-md">
       <div className="flex items-start gap-3">
-        <Spinner className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+        <Spinner className="mt-0.5 icon-control shrink-0 text-muted-foreground" />
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-3">
             <p className="truncate text-ui-sm font-medium">Updating {displayName}</p>
@@ -58,7 +58,7 @@ function HarnessProgressToastCard({
               className="-mr-1 -mt-1 shrink-0"
               onClick={onDismiss}
             >
-              <X className="size-3.5" aria-hidden="true" />
+              <X className="icon-paired" aria-hidden="true" />
             </Button>
           </div>
           <p className="mt-0.5 text-ui-xs tabular-nums text-muted-foreground">

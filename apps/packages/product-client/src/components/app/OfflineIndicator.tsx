@@ -17,7 +17,7 @@ export function OfflineIndicator() {
       role="status"
       className="flex items-center justify-center gap-2 border-b border-warning/40 bg-warning px-3 py-1.5 text-sm font-medium text-warning-foreground"
     >
-      <WifiOff className="size-3.5 shrink-0" aria-hidden="true" />
+      <WifiOff className="icon-paired shrink-0" aria-hidden="true" />
       No internet connection — local work is safe; agents need a connection.
     </div>
   );

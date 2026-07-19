@@ -92,7 +92,7 @@ export function AutomationCreatePanel({
             onClick={onCancel}
             disabled={submitting}
           >
-            <X size={14} />
+            <X className="icon-paired" />
           </Button>
         </div>
 
@@ -143,7 +143,7 @@ export function AutomationCreatePanel({
           </Field>
 
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field title="Repo" icon={<GitBranchIcon className="size-3.5" />}>
+            <Field title="Repo" icon={<GitBranchIcon className="icon-paired" />}>
               <Select
                 aria-label="Workflow repo"
                 value={values.repoKey}
@@ -163,7 +163,7 @@ export function AutomationCreatePanel({
             </Field>
             <Field
               title="Agent"
-              icon={<Bot size={14} />}
+              icon={<Bot className="icon-paired" />}
               description="Select the harness, model, mode, and launch defaults for scheduled runs."
             >
               <div className="rounded-lg border border-border bg-background/40 px-2 py-2">
@@ -176,7 +176,7 @@ export function AutomationCreatePanel({
           </div>
 
           <div className="grid gap-3 sm:grid-cols-[1fr_8rem_1.3fr]">
-            <Field title="Schedule" icon={<CalendarClock size={14} />}>
+            <Field title="Schedule" icon={<CalendarClock className="icon-paired" />}>
               <Select
                 aria-label="Workflow schedule"
                 value={values.schedulePreset}
@@ -248,7 +248,7 @@ function Field({
   return (
     <div className="min-w-0 space-y-1.5">
       <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-        {icon ? <span className="flex size-3.5 items-center justify-center">{icon}</span> : null}
+        {icon ? <span className="flex icon-paired items-center justify-center">{icon}</span> : null}
         <span>{title}</span>
       </div>
       {children}

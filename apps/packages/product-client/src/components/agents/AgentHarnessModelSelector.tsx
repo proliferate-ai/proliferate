@@ -39,7 +39,7 @@ export function AgentHarnessModelSelector({
 }: AgentHarnessModelSelectorProps) {
   const groups = modelGroups.filter((group) => group.models.length > 0);
   const icon = agentKind
-    ? <ProviderIcon kind={agentKind} className="size-3.5" />
+    ? <ProviderIcon kind={agentKind} className="icon-paired" />
     : null;
 
   return (
@@ -49,7 +49,7 @@ export function AgentHarnessModelSelector({
           disabled={disabled || groups.length === 0}
           icon={icon}
           label={label}
-          trailing={<ChevronDown className="size-3 shrink-0 text-[color:var(--color-composer-control-muted-foreground)]" />}
+          trailing={<ChevronDown className="icon-compact shrink-0 text-[color:var(--color-composer-control-muted-foreground)]" />}
           aria-label="Agent model"
           className={className}
         />
@@ -68,10 +68,10 @@ export function AgentHarnessModelSelector({
               {group.models.map((model) => (
                 <PopoverMenuItem
                   key={`${group.agentKind}:${model.id}`}
-                  icon={<ProviderIcon kind={group.agentKind} className="size-3.5" />}
+                  icon={<ProviderIcon kind={group.agentKind} className="icon-paired" />}
                   label={model.label}
                   trailing={group.agentKind === agentKind && model.id === selectedModelId
-                    ? <Check className="size-3.5 shrink-0 text-foreground/60" />
+                    ? <Check className="icon-paired shrink-0 text-foreground/60" />
                     : null}
                   onClick={() => {
                     onSelectModel(group.agentKind, model.id);

@@ -69,7 +69,7 @@ export function UpdateRestartDialog() {
     >
       <div className="flex items-start gap-3">
         <span className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-border/70 bg-foreground/5">
-          <RefreshCw className="size-4 text-special" />
+          <RefreshCw className="icon-paired text-special" />
         </span>
         <div className="min-w-0 space-y-0.5 pt-0.5">
           <p className="text-ui text-foreground">{ready}</p>
@@ -82,7 +82,7 @@ export function UpdateRestartDialog() {
         <div className="mt-3 flex items-center gap-2.5 rounded-lg border border-border/70 bg-foreground/[0.03] px-3 py-2">
           <span className="relative flex size-1.5 shrink-0" aria-hidden="true">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-special opacity-50 motion-reduce:hidden" />
-            <span className="relative inline-flex size-1.5 rounded-full bg-special" />
+            <span className="relative inline-flex icon-status rounded-full bg-special [font-size:var(--text-ui-sm)]" />
           </span>
           <span className="text-ui-sm text-muted-foreground">
             <span className="text-foreground">{runningLabel}</span> — {stopClause}

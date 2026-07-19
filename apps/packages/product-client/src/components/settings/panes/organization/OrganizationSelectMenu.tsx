@@ -41,7 +41,7 @@ export function OrganizationSelectMenu({
           className={`flex h-9 w-full items-center justify-between gap-2 rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none transition-colors hover:bg-list-hover focus:outline-none focus:ring-1 focus:ring-ring ${className}`}
         >
           <span className="min-w-0 truncate">{selectedOption?.label ?? "Select"}</span>
-          <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
+          <ChevronDown className="icon-paired shrink-0 text-muted-foreground" />
         </Button>
       )}
     >
@@ -53,7 +53,7 @@ export function OrganizationSelectMenu({
               density="compact"
               label={option.label}
               disabled={option.disabled || option.value === value}
-              trailing={option.value === value ? <Check className="size-3.5" /> : null}
+              trailing={option.value === value ? <Check className="icon-paired" /> : null}
               onClick={() => {
                 onChange(option.value);
                 close();

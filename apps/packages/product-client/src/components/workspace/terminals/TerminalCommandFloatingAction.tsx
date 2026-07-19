@@ -48,7 +48,7 @@ export function TerminalCommandFloatingAction({
             .finally(() => setIsRerunning(false));
         }}
       >
-        <RefreshCw className="size-3.5" />
+        <RefreshCw className="icon-paired" />
         {label}
       </Button>
     </div>

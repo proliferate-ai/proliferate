@@ -47,7 +47,7 @@ export function ChatPreviewSurface({
     <div className="flex h-full flex-col" data-telemetry-block={telemetryBlocked || undefined}>
       <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-4">
         <IconButton title="Back" onClick={onBack}>
-          <ArrowLeft size={16} />
+          <ArrowLeft className="icon-paired" />
         </IconButton>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -62,12 +62,12 @@ export function ChatPreviewSurface({
         </div>
         {primaryAction ? (
           <Button variant={primaryAction.kind === "claim" ? "secondary" : "outline"} size="sm" onClick={primaryAction.onClick}>
-            {primaryAction.kind === "continue" ? <ExternalLink size={14} /> : null}
+            {primaryAction.kind === "continue" ? <ExternalLink className="icon-paired" /> : null}
             {primaryAction.label}
           </Button>
         ) : null}
         <IconButton title="Session menu">
-          <MoreHorizontal size={16} />
+          <MoreHorizontal className="icon-paired" />
         </IconButton>
       </header>
 
@@ -75,7 +75,7 @@ export function ChatPreviewSurface({
         <div className={`${CHAT_COLUMN_CLASSNAME} px-6 py-6`}>
           <div className="mb-4 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <span className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1">
-              <GitBranchIcon className="size-[13px]" />
+              <GitBranchIcon className="icon-paired" />
               {branchLabel}
             </span>
             <span className="rounded-md border border-border px-2 py-1">{repoLabel}</span>
@@ -110,7 +110,7 @@ export function ChatPreviewSurface({
             placeholder="Message this session"
           />
           <Button size="icon" aria-label="Send message">
-            <Send size={15} />
+            <Send className="icon-paired" />
           </Button>
         </div>
       </footer>

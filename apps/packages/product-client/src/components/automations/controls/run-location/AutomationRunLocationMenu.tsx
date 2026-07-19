@@ -232,7 +232,7 @@ export function RunLocationMenuItem({
         </>
       )}
       labelClassName="flex items-baseline gap-1.5 text-left"
-      trailing={selected ? <Check className="size-3.5" /> : null}
+      trailing={selected ? <Check className="icon-paired" /> : null}
       onClick={() => {
         onClick();
       }}

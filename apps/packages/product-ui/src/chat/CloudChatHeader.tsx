@@ -94,7 +94,7 @@ export function CloudChatHeader({ header }: { header: CloudChatHeaderView }) {
             onClick={header.sessionSwitcher.onNewSession}
             className="shrink-0"
           >
-            <Plus size={15} />
+            <Plus className="icon-paired" />
           </IconButton>
         </div>
         <CloudChatStatusChip status={header.status} />
@@ -107,7 +107,7 @@ export function CloudChatHeader({ header }: { header: CloudChatHeaderView }) {
             onClick={header.desktopAction.onClick}
             className="hidden h-7 shrink-0 gap-1.5 px-2 md:inline-flex"
           >
-            <ExternalLink size={13} />
+            <ExternalLink className="icon-paired" />
             {header.desktopAction.label}
           </Button>
         ) : null}
@@ -142,8 +142,7 @@ function CloudChatSessionSwitcher({ view }: { view: CloudChatSessionSwitcherView
           >
             <span className="min-w-0 truncate">{activeLabel}</span>
             <ChevronDown
-              size={13}
-              className={`shrink-0 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`}
+              className={`icon-paired shrink-0 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`}
             />
           </Button>
         )}
@@ -175,7 +174,7 @@ function CloudChatSessionSwitcher({ view }: { view: CloudChatSessionSwitcherView
             ) : null}
             <PopoverMenuItem
               role="menuitem"
-              icon={<Plus size={14} />}
+              icon={<Plus className="icon-paired" />}
               label={view.newSessionLabel}
               onClick={() => {
                 close();
@@ -245,8 +244,7 @@ function CloudChatHeaderNotice({ notice }: { notice: CloudChatHeaderNoticeView }
           >
             Details
             <ChevronDown
-              size={12}
-              className={`transition-transform ${detailsOpen ? "rotate-180" : ""}`}
+              className={`icon-paired transition-transform ${detailsOpen ? "rotate-180" : ""}`}
             />
           </Button>
         ) : null}
@@ -265,7 +263,7 @@ function CloudChatHeaderNotice({ notice }: { notice: CloudChatHeaderNoticeView }
             onClick={copyDetails}
             className="shrink-0 border-border/60"
           >
-            {copied ? <Check size={13} /> : <Copy size={13} />}
+            {copied ? <Check className="icon-paired" /> : <Copy className="icon-paired" />}
           </IconButton>
         </div>
       ) : null}

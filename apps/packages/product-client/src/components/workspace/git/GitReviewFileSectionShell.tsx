@@ -75,7 +75,7 @@ export function GitReviewFileSectionShell({
               name={name}
               path={file.path}
               kind="file"
-              className="size-4 shrink-0"
+              className="icon-paired shrink-0"
             />
             <span className="min-w-0 truncate [direction:rtl]" title={hoverTitle}>
               <span className="min-w-0 truncate [direction:ltr] [unicode-bidi:plaintext] @xs/diff-header:hidden">
@@ -117,7 +117,7 @@ export function GitReviewFileSectionShell({
                 }}
                 className={REVIEW_HEADER_ACTION_CLASS}
               >
-                <ArrowUpRight className="size-3.5" />
+                <ArrowUpRight className="icon-paired" />
               </Button>
               <Button
                 type="button"
@@ -134,7 +134,7 @@ export function GitReviewFileSectionShell({
                 className={REVIEW_HEADER_ACTION_CLASS}
               >
                 <ChevronDown
-                  className={`size-3.5 transition-transform duration-200 ${
+                  className={`icon-paired transition-transform duration-200 ${
                     collapsed ? "rotate-0" : "rotate-180"
                   }`}
                 />
@@ -164,4 +164,3 @@ function basenameOf(path: string): string {
   const segments = path.split("/").filter(Boolean);
   return segments[segments.length - 1] ?? path;
 }
-

@@ -21,6 +21,15 @@ export const TEXT_SIZE_TOKEN_IDS = [
   "sidebar-brand",
 ] as const;
 
+export const ICON_SIZE_TOKEN_IDS = [
+  "status",
+  "compact",
+  "paired",
+  "control",
+  "large",
+  "display",
+] as const;
+
 /**
  * The one true twMerge: knows the design-package font-size tokens. Import it
  * from here — never from "tailwind-merge" directly. check-design-system.sh
@@ -28,10 +37,11 @@ export const TEXT_SIZE_TOKEN_IDS = [
  * workspace that depends on tailwind-merge (mobile is React Native and has
  * no tailwind-merge surface).
  */
-export const twMerge = extendTailwindMerge({
+export const twMerge = extendTailwindMerge<"icon-size">({
   extend: {
     classGroups: {
       "font-size": [{ text: [...TEXT_SIZE_TOKEN_IDS] }],
+      "icon-size": [{ icon: [...ICON_SIZE_TOKEN_IDS] }],
     },
   },
 });

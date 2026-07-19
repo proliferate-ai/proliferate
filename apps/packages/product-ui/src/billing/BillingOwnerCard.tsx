@@ -59,9 +59,9 @@ export function BillingOwnerCard({ view }: { view: BillingOwnerCardView }) {
     <SettingsSection>
       <div className="space-y-5 p-4">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="flex min-w-0 gap-3">
+          <div className="flex min-w-0 gap-3 text-sm">
             <div className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border-light bg-foreground/5 text-muted-foreground">
-              <Icon className="size-4" />
+              <Icon className="icon-large" />
             </div>
             <div className="min-w-0 space-y-2">
               <div className="flex flex-wrap items-center gap-2">
@@ -101,19 +101,19 @@ export function BillingOwnerCard({ view }: { view: BillingOwnerCardView }) {
         <div className="space-y-3 border-t border-border-light pt-4">
           <div className="grid gap-3 sm:grid-cols-3">
             <Metric
-              icon={<CreditCard className="size-4" />}
+              icon={<CreditCard className="icon-paired" />}
               label="Purchased"
               value={creditBalance.purchased}
               detail="Current period and top ups"
             />
             <Metric
-              icon={<Gauge className="size-4" />}
+              icon={<Gauge className="icon-paired" />}
               label="Available"
               value={creditBalance.available}
               detail="Ready for cloud work"
             />
             <Metric
-              icon={<Cloud className="size-4" />}
+              icon={<Cloud className="icon-paired" />}
               label="Used"
               value={creditBalance.used}
               detail="Consumed this period"
@@ -122,13 +122,13 @@ export function BillingOwnerCard({ view }: { view: BillingOwnerCardView }) {
 
           <div className="grid gap-3 sm:grid-cols-2">
             <Metric
-              icon={<Server className="size-4" />}
+              icon={<Server className="icon-paired" />}
               label="Active sandboxes"
               value={formatLimit(plan.activeSandboxCount, plan.concurrentSandboxLimit)}
               detail="Currently running cloud work"
             />
             <Metric
-              icon={<Cloud className="size-4" />}
+              icon={<Cloud className="icon-paired" />}
               label="Cloud repos"
               value={formatLimit(plan.activeCloudRepoCount, repoLimit(plan))}
               detail="Enabled environments"

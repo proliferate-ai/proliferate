@@ -22,6 +22,17 @@ interface UseXtermSurfaceInput {
   lineHeight?: number;
 }
 
+export function resolveXtermSurfaceTypography(
+  readableCodeFontSizeId: unknown,
+  overrides: Pick<UseXtermSurfaceInput, "fontSize" | "lineHeight"> = {},
+): { fontSize: number; lineHeight: number } {
+  const scale = resolveReadableCodeFontScale(readableCodeFontSizeId);
+  return {
+    fontSize: overrides.fontSize ?? scale.monacoFontSize,
+    lineHeight: overrides.lineHeight ?? scale.monacoLineHeight / scale.monacoFontSize,
+  };
+}
+
 export function useXtermSurface({
   visible,
   focusRequestToken,
@@ -40,9 +51,14 @@ export function useXtermSurface({
   const [isReady, setIsReady] = useState(false);
   const [hasBeenVisible, setHasBeenVisible] = useState(visible);
   const readableCodeFontSizeId = useUserPreferencesStore((state) => state.readableCodeFontSizeId);
-  const terminalFontSize = fontSize
-    ?? resolveReadableCodeFontScale(readableCodeFontSizeId).monacoFontSize;
+  const terminalTypography = resolveXtermSurfaceTypography(readableCodeFontSizeId, {
+    fontSize,
+    lineHeight,
+  });
+  const terminalFontSize = terminalTypography.fontSize;
+  const terminalLineHeight = terminalTypography.lineHeight;
   const terminalFontSizeRef = useRef(terminalFontSize);
+  const terminalLineHeightRef = useRef(terminalLineHeight);
 
   useEffect(() => {
     onDataRef.current = onData;
@@ -60,18 +76,17 @@ export function useXtermSurface({
 
   useEffect(() => {
     terminalFontSizeRef.current = terminalFontSize;
+    terminalLineHeightRef.current = terminalLineHeight;
     const term = terminalRef.current;
     if (!term) {
       return;
     }
     term.options.fontSize = terminalFontSize;
-    if (lineHeight !== undefined) {
-      term.options.lineHeight = lineHeight;
-    }
+    term.options.lineHeight = terminalLineHeight;
     requestAnimationFrame(() => {
       fitAddonRef.current?.fit();
     });
-  }, [lineHeight, terminalFontSize]);
+  }, [terminalFontSize, terminalLineHeight]);
 
   useEffect(() => {
     if (!hasBeenVisible) return;
@@ -98,7 +113,7 @@ export function useXtermSurface({
         term = new Terminal({
           cursorBlink: true,
           fontSize: terminalFontSizeRef.current,
-          ...(lineHeight === undefined ? {} : { lineHeight }),
+          lineHeight: terminalLineHeightRef.current,
           fontFamily: TERMINAL_FONT_FAMILY,
           theme: getTerminalTheme(),
           allowTransparency: true,

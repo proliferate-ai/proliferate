@@ -65,7 +65,7 @@ export function PasswordSignInForm({
         className="h-11 w-full"
       >
         {submitting ? AUTH_LOGIN_LABELS.passwordWaiting : AUTH_LOGIN_LABELS.passwordSignIn}
-        {!submitting && <ArrowRight className="h-4 w-4" />}
+        {!submitting && <ArrowRight className="icon-paired" />}
       </Button>
     </form>
   );

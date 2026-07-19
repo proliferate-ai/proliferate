@@ -270,7 +270,7 @@ export function SecretEditorDialog({
                     aria-label={revealed ? "Hide value" : "Show value"}
                     onClick={() => setRevealed((value) => !value)}
                   >
-                    {revealed ? <EyeOff size={13} /> : <Eye size={13} />}
+                    {revealed ? <EyeOff className="icon-paired" /> : <Eye className="icon-paired" />}
                     {revealed ? "Hide" : "Show"}
                   </Button>
                 )}
@@ -342,7 +342,7 @@ export function SecretEditorDialog({
                 <span className="block">Upload file</span>
                 <div className="flex flex-col gap-2 rounded-md border border-input bg-surface-control p-3">
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <CloudUpload className="size-4 shrink-0" />
+                    <CloudUpload className="icon-paired shrink-0" />
                     <span className="min-w-0 truncate">
                       {selectedFile
                         ? `${selectedFile.name} · ${formatBytes(selectedFile.size)}`

@@ -45,7 +45,7 @@ export function PersonalSecretsPane() {
             className="gap-1.5"
             onClick={() => setAddKeyOpen(true)}
           >
-            <Plus className="size-3.5" />
+            <Plus className="icon-paired" />
             Add API key
           </Button>
         }

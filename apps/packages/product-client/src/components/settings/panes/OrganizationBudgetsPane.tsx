@@ -247,13 +247,13 @@ function UsageBarChart({
       <div className="flex flex-wrap items-center gap-4 pb-3 text-ui-sm text-muted-foreground">
         {showCompute ? (
           <span className="inline-flex items-center gap-1.5">
-            <span className="size-2 rounded-full bg-primary" />
+            <span className="icon-status rounded-full bg-primary [font-size:var(--text-ui-sm)]" />
             Compute (PCUs)
           </span>
         ) : null}
         {showLlm ? (
           <span className="inline-flex items-center gap-1.5">
-            <span className="size-2 rounded-full bg-foreground/60" />
+            <span className="icon-status rounded-full bg-foreground/60 [font-size:var(--text-ui-sm)]" />
             LLM ($)
           </span>
         ) : null}
@@ -381,7 +381,7 @@ function UserDrillDown({
         onClick={onBack}
         className="mb-3 inline-flex h-7 items-center gap-1.5 rounded-md px-0 text-ui text-muted-foreground transition-colors hover:text-foreground"
       >
-        <ArrowLeft className="size-4" />
+        <ArrowLeft className="icon-paired" />
         Back to usage by member
       </Button>
       <div className="mb-3">

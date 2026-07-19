@@ -57,10 +57,10 @@ export function ComposerIntegrationsControl() {
             isUrgent ? (
               <span
                 aria-hidden="true"
-                className="block size-1.5 rounded-full bg-warning/70"
+                className="block icon-status rounded-full bg-warning/70"
               />
             ) : (
-              <Blocks aria-hidden="true" className="size-4" />
+              <Blocks aria-hidden="true" className="icon-paired" />
             )
           }
         />
@@ -80,7 +80,7 @@ export function ComposerIntegrationsControl() {
             >
               {providers.length === 0 && (
                 <StatusRow
-                  icon={<Blocks className="size-4" />}
+                  icon={<Blocks className="icon-paired" />}
                   label="No integrations connected"
                   disabled
                 />
@@ -96,11 +96,11 @@ export function ComposerIntegrationsControl() {
                 />
               ))}
               <StatusRow
-                icon={<Settings className="size-4" />}
+                icon={<Settings className="icon-paired" />}
                 label="Manage integrations"
                 trailing={(
                   <span className="shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/status-row:opacity-100 group-focus-visible/status-row:opacity-100">
-                    <ArrowUpRight className="size-3.5" />
+                    <ArrowUpRight className="icon-paired" />
                   </span>
                 )}
                 onSelect={() => {
@@ -130,7 +130,7 @@ function ProviderRow({
 
   return (
     <StatusRow
-      icon={<IntegrationIcon namespace={provider.namespace} className="size-4 rounded-sm" />}
+      icon={<IntegrationIcon namespace={provider.namespace} className="icon-paired rounded-sm [font-size:var(--text-composer)]" />}
       label={provider.displayName}
       trailing={(
         <span className="flex shrink-0 items-center gap-2">

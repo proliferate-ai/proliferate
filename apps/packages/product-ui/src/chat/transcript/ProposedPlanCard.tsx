@@ -176,7 +176,7 @@ export function ProposedPlanCard({
       content={content}
       subtitle={status ? (
         <span className={`${status.className} chip-enter`}>
-          <span className="size-1.5 shrink-0 rounded-full bg-current" />
+          <span className="icon-status shrink-0 rounded-full bg-current" />
           {status.label}
         </span>
       ) : undefined}
@@ -208,7 +208,7 @@ export function ProposedPlanCard({
               disabled={rejectAction.disabled}
               className="rounded-md px-2.5 text-ui-sm"
             >
-              <rejectAction.icon className="size-3.5" />
+              <rejectAction.icon className="icon-paired" />
               {rejectAction.label}
             </Button>
           )}
@@ -223,7 +223,7 @@ export function ProposedPlanCard({
                   aria-label="More plan actions"
                   className="size-7 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
                 >
-                  <MoreHorizontal className="size-3.5" />
+                  <MoreHorizontal className="icon-paired" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="shadow-popover">
@@ -232,7 +232,7 @@ export function ProposedPlanCard({
                     key={action.key}
                     onSelect={() => action.onClick?.()}
                   >
-                    <action.icon className="size-3.5" />
+                    <action.icon className="icon-paired" />
                     {action.label}
                   </DropdownMenuItem>
                 ))}
@@ -249,7 +249,7 @@ export function ProposedPlanCard({
               disabled={primaryAction.disabled}
               className="rounded-md px-2.5 text-ui-sm"
             >
-              <primaryAction.icon className="size-3.5" />
+              <primaryAction.icon className="icon-paired" />
               {primaryAction.label}
             </Button>
           )}

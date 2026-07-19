@@ -119,9 +119,9 @@ describe("CollapsedActions", () => {
     expect(activeButton.className).toContain("leading-[1.5]");
     expect(activeButton.className).toContain("text-foreground/60");
     expect(summaryContent?.className).toContain("gap-1.5");
-    expect(iconShell?.className).toContain("size-[1.143em]");
+    expect(iconShell?.className).toContain("icon-paired");
     expect(iconShell?.className).toContain("[&_svg]:text-current");
-    expect(disclosureChevron?.getAttribute("class")).toContain("size-[1em]");
+    expect(disclosureChevron?.getAttribute("class")).toContain("icon-compact");
     expect(disclosureChevron?.getAttribute("class")).toContain("transition-transform");
     expect(disclosureChevron?.getAttribute("class")).toContain("duration-300");
     expect(disclosureChevron?.getAttribute("viewBox")).toBe("0 0 20 20");
@@ -437,7 +437,7 @@ describe("CollapsedActions", () => {
     const editIcon = editRow?.querySelector("svg");
     expect(editIcon?.getAttribute("viewBox")).toBe("0 0 20 21");
     expect(editIcon?.querySelector("path")?.getAttribute("d")).toContain("11.3312 4.20472");
-    expect(editIcon?.parentElement?.className).toContain("size-[1.143em]");
+    expect(editIcon?.parentElement?.className).toContain("icon-paired");
     expect(editIcon?.parentElement?.className).toContain("text-current");
     expect(editRow?.className).toContain("text-foreground/60");
     expect(editLabel?.className).toContain("decoration-dotted");
@@ -511,7 +511,7 @@ describe("CollapsedActions", () => {
     expect(commandIcon?.getAttribute("viewBox")).toBe("0 0 20 20");
     expect(commandIcon?.querySelector("path")?.getAttribute("d")).toContain("6.19629 7.86231");
     for (const icon of [searchIcon, readIcon, commandIcon]) {
-      expect(icon?.parentElement?.className).toContain("size-[1.143em]");
+      expect(icon?.parentElement?.className).toContain("icon-paired");
       expect(icon?.parentElement?.className).toContain("text-current");
     }
   });

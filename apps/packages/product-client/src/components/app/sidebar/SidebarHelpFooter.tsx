@@ -46,7 +46,7 @@ export function SidebarHelpFooter() {
           title="Help and support"
           className="size-10 rounded-lg text-sidebar-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-foreground"
         >
-          <CircleHelp className="size-4" />
+          <CircleHelp className="icon-paired" />
         </Button>
       )}
       className={`w-64 ${POPOVER_SURFACE_CLASS}`}

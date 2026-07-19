@@ -27,7 +27,7 @@ interface SidebarWorkspaceVariantIconProps {
 
 export function SidebarWorkspaceVariantIcon({
   variant,
-  className = "size-3 text-sidebar-muted-foreground",
+  className = "icon-compact text-sidebar-muted-foreground",
   targetAppearance = null,
   withTooltip = false,
 }: SidebarWorkspaceVariantIconProps) {

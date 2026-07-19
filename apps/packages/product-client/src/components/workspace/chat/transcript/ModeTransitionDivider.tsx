@@ -14,7 +14,7 @@ export function ModeTransitionDivider({ label }: { label: string }) {
       className="chip-enter flex w-full items-center gap-2 py-1"
     >
       <span className="flex min-w-0 shrink items-center gap-1.5 text-[length:var(--text-chat)] leading-[var(--text-chat--line-height)] text-muted-foreground">
-        <SlidersHorizontal aria-hidden="true" className="size-3 shrink-0 text-faint" />
+        <SlidersHorizontal aria-hidden="true" className="icon-compact shrink-0 text-faint" />
         <span className="min-w-0 truncate">{label}</span>
       </span>
       <span aria-hidden="true" className="min-w-4 flex-1 border-t border-border-light" />

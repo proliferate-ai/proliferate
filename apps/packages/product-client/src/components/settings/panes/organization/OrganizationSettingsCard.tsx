@@ -97,7 +97,7 @@ export function OrganizationSettingsCard({
                     size="sm"
                     onClick={() => fileInputRef.current?.click()}
                   >
-                    <CloudUpload className="size-4" />
+                    <CloudUpload className="icon-paired" />
                     Upload
                   </Button>
                   {settingsLogoImage ? (

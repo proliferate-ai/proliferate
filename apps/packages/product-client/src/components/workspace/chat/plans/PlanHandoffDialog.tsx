@@ -78,7 +78,7 @@ export function PlanHandoffDialog({
               loading={isSubmitting}
             >
               Start session
-              <ArrowRight className="size-3" />
+              <ArrowRight className="icon-compact" />
             </Button>
           </>
         )}
@@ -98,12 +98,12 @@ export function PlanHandoffDialog({
                 aria-label={`Preview attached plan: ${plan.title}`}
               >
                 <span className="grid size-[26px] shrink-0 place-items-center rounded-md bg-foreground/10 text-muted-foreground">
-                  <FileText className="size-3.5" />
+                  <FileText className="icon-paired" />
                 </span>
                 <span className="min-w-0 flex-1 truncate text-sm font-medium leading-5">
                   {plan.title}
                 </span>
-                <ExternalLink className="size-3.5 shrink-0 text-muted-foreground/70" />
+                <ExternalLink className="icon-paired shrink-0 text-muted-foreground/70" />
               </Button>
             </div>
           )}

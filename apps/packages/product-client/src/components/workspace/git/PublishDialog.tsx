@@ -21,9 +21,9 @@ const PUBLISH_INTENTS: ReadonlyArray<{
   label: string;
   icon: ReactNode;
 }> = [
-  { id: "commit", label: "Commit", icon: <GitCommit className="size-4" /> },
-  { id: "publish", label: "Publish", icon: <ArrowUp className="size-4" /> },
-  { id: "pull_request", label: "Pull request", icon: <GitPullRequest className="size-4" /> },
+  { id: "commit", label: "Commit", icon: <GitCommit className="icon-paired" /> },
+  { id: "publish", label: "Publish", icon: <ArrowUp className="icon-paired" /> },
+  { id: "pull_request", label: "Pull request", icon: <GitPullRequest className="icon-paired" /> },
 ];
 
 interface PublishDialogProps {
@@ -147,11 +147,11 @@ export function PublishDialog({
         <div className="flex h-9 w-full items-center justify-between gap-3">
           <span className="flex min-w-0 items-center gap-2 text-foreground">
             {intent === "pull_request" ? (
-              <GitPullRequest className="size-3.5 shrink-0 text-muted-foreground" />
+              <GitPullRequest className="icon-paired shrink-0 text-muted-foreground" />
             ) : intent === "publish" ? (
-              <ArrowUp className="size-3.5 shrink-0 text-muted-foreground" />
+              <ArrowUp className="icon-paired shrink-0 text-muted-foreground" />
             ) : (
-              <GitCommit className="size-3.5 shrink-0 text-muted-foreground" />
+              <GitCommit className="icon-paired shrink-0 text-muted-foreground" />
             )}
             <span className="shrink-0 text-ui font-medium">{title}</span>
             {viewState.branchName ? (
@@ -204,7 +204,7 @@ export function PublishDialog({
             })}
             {viewState.existingPr && viewState.workflowSteps.length > 0 && (
               <PublishActionRow
-                icon={<GitHub className="size-4" />}
+                icon={<GitHub className="icon-paired" />}
                 label="View pull request"
                 active={false}
                 loading={false}
@@ -354,7 +354,7 @@ function PublishActionRow({
       <span className="min-w-0 flex-1 truncate">{label}</span>
       {active && (
         loading
-          ? <Spinner className="size-3.5 shrink-0 text-muted-foreground" />
+          ? <Spinner className="icon-paired shrink-0 text-muted-foreground" />
           : (
             <kbd className="inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-md bg-current/10 px-1.5 font-sans text-xs leading-4 text-current opacity-80">
               ⌘⏎

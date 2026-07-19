@@ -132,7 +132,7 @@ export function WorkspaceActivityComposerCard({
                     with +adds −dels trailing, and the row itself opens the
                     review panel (no separate "Review changes" entry). */}
                 <ActivityActionRow
-                  icon={<StackedFiles className="size-4" />}
+                  icon={<StackedFiles className="icon-paired" />}
                   label={model.git.changeLabel}
                   meta={model.git.stagedFiles > 0 ? model.git.stagingLabel : null}
                   trailing={(
@@ -150,10 +150,10 @@ export function WorkspaceActivityComposerCard({
                 />
                 {model.git.branchName ? (
                   <ActivityActionRow
-                    icon={<GitBranchIcon className="size-4" />}
+                    icon={<GitBranchIcon className="icon-paired" />}
                     label={model.git.branchName}
                     trailing={(
-                      <Copy className="size-3.5 opacity-0 transition-opacity group-hover/activity-row:opacity-100 group-focus-visible/activity-row:opacity-100" />
+                      <Copy className="icon-paired opacity-0 transition-opacity group-hover/activity-row:opacity-100 group-focus-visible/activity-row:opacity-100" />
                     )}
                     onSelect={() => {
                       onCopyBranch?.();
@@ -165,25 +165,25 @@ export function WorkspaceActivityComposerCard({
                 ) : null}
                 {model.git.conflictedFiles > 0 ? (
                   <ActivityDetailRow
-                    icon={<CircleAlert className="size-4 text-destructive" />}
+                    icon={<CircleAlert className="icon-paired text-destructive" />}
                     label={`${model.git.conflictedFiles} ${model.git.conflictedFiles === 1 ? "conflict" : "conflicts"}`}
                   />
                 ) : null}
                 {model.git.syncLabel ? (
                   <ActivityDetailRow
-                    icon={<ArrowUp className="size-4" />}
+                    icon={<ArrowUp className="icon-paired" />}
                     label={model.git.syncLabel}
                   />
                 ) : null}
                 {model.git.pullRequestLabel ? (
                   <ActivityDetailRow
-                    icon={<GitPullRequest className="size-4" />}
+                    icon={<GitPullRequest className="icon-paired" />}
                     label={model.git.pullRequestLabel}
                   />
                 ) : null}
                 <ActivityRowDivider />
                 <ActivityActionRow
-                  icon={<GitCommit className="size-4" />}
+                  icon={<GitCommit className="icon-paired" />}
                   label="Commit…"
                   onSelect={() => {
                     onCommit?.();
@@ -193,7 +193,7 @@ export function WorkspaceActivityComposerCard({
                   title={gitActionsDisabledReason ?? undefined}
                 />
                 <ActivityActionRow
-                  icon={<ArrowUp className="size-4" />}
+                  icon={<ArrowUp className="icon-paired" />}
                   label={model.git.pushLabel}
                   onSelect={() => {
                     onPublish?.();
@@ -203,7 +203,7 @@ export function WorkspaceActivityComposerCard({
                   title={gitActionsDisabledReason ?? undefined}
                 />
                 <ActivityActionRow
-                  icon={<GitPullRequest className="size-4" />}
+                  icon={<GitPullRequest className="icon-paired" />}
                   label={pullRequestActionLabel}
                   onSelect={() => {
                     onPullRequest?.();

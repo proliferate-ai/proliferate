@@ -41,10 +41,10 @@ const variantClasses: Record<ButtonVariant, string> = {
 };
 
 const sizeClasses: Record<ButtonSize, string> = {
-  sm: "h-8 px-3 text-xs rounded-md",
-  md: "h-9 px-4 text-sm rounded-md",
+  sm: "h-8 px-3 text-ui rounded-md",
+  md: "h-9 px-4 text-ui rounded-md",
   icon: "h-8 w-8 rounded-md",
-  pill: "h-auto px-2.5 py-0.5 text-sm rounded-full",
+  pill: "h-auto px-2.5 py-0.5 text-ui rounded-full",
   "icon-sm": "h-7 w-7 rounded-full px-0",
   unstyled: "",
 };
@@ -69,7 +69,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         className={twMerge(base, variantClasses[variant], sizeClasses[size], className)}
         {...props}
       >
-        {loading && <Spinner className="size-3" />}
+        {loading && <Spinner className="icon-compact" />}
         {children}
       </button>
     );

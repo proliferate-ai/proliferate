@@ -49,14 +49,14 @@ export function ClosedChatTabsMenu({
               className="size-6 shrink-0 rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive focus-visible:opacity-100 group-hover/row:opacity-100"
               onClick={() => onDeleteSession(row.id)}
             >
-              <Trash className="size-3" />
+              <Trash className="icon-compact" />
             </Button>
             {row.closedAt && (
               <span className="shrink-0 text-xs text-muted-foreground">
                 {formatRelativeTime(row.closedAt)}
               </span>
             )}
-            <RotateCcw className="size-3 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <RotateCcw className="icon-compact shrink-0 text-muted-foreground" aria-hidden="true" />
           </div>
         ))}
       </div>

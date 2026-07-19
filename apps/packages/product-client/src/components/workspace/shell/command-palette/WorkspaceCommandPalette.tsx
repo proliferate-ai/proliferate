@@ -104,7 +104,7 @@ function WorkspaceCommandPaletteContent({
       <div className="flex shrink-0 items-center border-b border-border-light px-3 py-2.5">
         <CommandPaletteGlyph
           name="search"
-          className="mr-2 size-4 shrink-0 text-muted-foreground"
+          className="mr-2 icon-paired shrink-0 text-muted-foreground"
           aria-hidden="true"
         />
         <CommandPaletteInput
@@ -165,7 +165,7 @@ function WorkspaceCommandPaletteRow({ entry }: { entry: CommandPaletteEntry }) {
             name={entry.label}
             path={entry.detail ?? entry.label}
             kind="file"
-            className="size-4"
+            className="icon-paired"
           />
         ) : (
           <WorkspaceCommandIcon icon={entry.icon} />
@@ -200,7 +200,7 @@ function WorkspaceCommandIcon({ icon }: { icon?: CommandPaletteIconId }) {
   return (
     <CommandPaletteGlyph
       name={icon ?? "command"}
-      className="size-4"
+      className="icon-paired"
       aria-hidden="true"
     />
   );

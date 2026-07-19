@@ -102,7 +102,7 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
                   aria-label="Close tab"
                   className="workspace-shell-tab__close hidden size-4 shrink-0 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground group-hover/tab:inline-flex group-focus-within/tab:inline-flex focus-visible:inline-flex"
                 >
-                  <X className="size-2.5" />
+                  <X className="icon-compact" />
                 </Button>
               )}
             </span>
@@ -166,7 +166,7 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
               aria-label="Close tab"
               className="workspace-shell-tab__close absolute right-1.5 top-1/2 z-20 hidden size-4 shrink-0 -translate-y-1/2 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground group-hover/tab:inline-flex group-focus-within/tab:inline-flex focus-visible:inline-flex"
             >
-              <X className="size-2.5" />
+              <X className="icon-compact" />
             </Button>
           )}
         </div>

@@ -41,7 +41,7 @@ const VARIANT_MAX_WIDTH: Record<PillVariant, string> = {
 function DownloadProgressRing({ progress }: { progress: number | null }) {
   const clamped = Math.max(0, Math.min(100, Math.round(progress ?? 0)));
   return (
-    <svg viewBox="0 0 12 12" className="size-3 shrink-0 -rotate-90" aria-hidden="true">
+    <svg viewBox="0 0 12 12" className="icon-compact shrink-0 -rotate-90 [font-size:var(--text-sidebar-row)]" aria-hidden="true">
       <circle
         cx="6"
         cy="6"
@@ -144,7 +144,7 @@ export function SidebarUpdatePill({
         key={variant}
         className="animate-streaming-fade flex min-w-0 items-center gap-1.5"
       >
-        {variant === "available" && <ArrowDown className="size-3 shrink-0" />}
+        {variant === "available" && <ArrowDown className="icon-compact shrink-0" />}
         {isDownloading && <DownloadProgressRing progress={downloadProgress} />}
         <span className="relative min-w-0 truncate">
           {label}

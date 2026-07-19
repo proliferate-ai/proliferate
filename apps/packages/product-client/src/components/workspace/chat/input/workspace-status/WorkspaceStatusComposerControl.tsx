@@ -123,7 +123,7 @@ export function WorkspaceStatusComposerControl({
       trigger={(
         <ComposerControlButton
           iconOnly
-          icon={<List className="size-4" />}
+          icon={<List className="icon-paired" />}
           label="Workspace status"
           aria-label="Workspace status"
           title="Workspace status"
@@ -182,19 +182,19 @@ export function WorkspaceStatusCard({
         {model.environment && (
           <StatusSection title="Source control">
             <StatusRow
-              icon={<AppShellReviewIcon className="size-4" />}
+              icon={<AppShellReviewIcon className="icon-paired" />}
               label={model.environment.reviewChangesLabel}
               onSelect={run(actions.onOpenChanges)}
             />
             <StatusRow
-              icon={<GitCommit className="size-4" />}
+              icon={<GitCommit className="icon-paired" />}
               label={model.environment.commitOrPushLabel}
               meta={model.environment.commitOrPushMeta ?? undefined}
               disabled={model.environment.commitOrPushDisabled}
               onSelect={run(actions.onCommitOrPush)}
             />
             <StatusRow
-              icon={<GitPullRequest className="size-4" />}
+              icon={<GitPullRequest className="icon-paired" />}
               label={model.environment.compareLabel}
               meta={model.environment.compareMeta ?? undefined}
               disabled={model.environment.compareDisabled}
@@ -202,7 +202,7 @@ export function WorkspaceStatusCard({
                 ? undefined
                 : (
                   <span className="shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/status-row:opacity-100 group-focus-visible/status-row:opacity-100">
-                    <ArrowUpRight className="size-3.5" />
+                    <ArrowUpRight className="icon-paired" />
                   </span>
                 )}
               onSelect={run(actions.onCompareBranch)}
@@ -258,10 +258,10 @@ export function WorkspaceStatusCard({
               <StatusRow
                 key={row.key}
                 icon={row.kind === "terminals"
-                  ? <SquareTerminal className="size-4" />
+                  ? <SquareTerminal className="icon-paired" />
                   : row.kind === "loops"
-                    ? <RefreshCw className="size-4" />
-                    : <Robot className="size-4" />}
+                    ? <RefreshCw className="icon-paired" />
+                    : <Robot className="icon-paired" />}
                 label={row.label}
                 meta={row.meta}
                 hoverItems={row.items}
@@ -333,7 +333,7 @@ function SubagentSpriteCluster({ rows }: { rows: WorkspaceStatusSubagentRow[] })
         <PixelAgentSprite
           key={row.key}
           seed={row.name}
-          className={`size-4 ${row.tintClassName ?? "text-muted-foreground"}`}
+          className={`icon-paired ${row.tintClassName ?? "text-muted-foreground"}`}
         />
       ))}
     </span>

@@ -76,7 +76,7 @@ export function AppearancePane() {
                     className="px-2.5 text-xs"
                     onClick={() => setMode(candidateMode)}
                   >
-                    <Icon className="size-3.5" />
+                    <Icon className="icon-paired" />
                     {MODE_LABELS[candidateMode]}
                   </Button>
                 );
@@ -100,7 +100,7 @@ export function AppearancePane() {
                 className="h-8 w-8 rounded-none text-muted-foreground hover:bg-foreground/10 hover:text-foreground"
                 onClick={() => setPreference("windowZoomId", stepWindowZoomId(windowZoomId, -1))}
               >
-                <Minus className="size-3.5" />
+                <Minus className="icon-paired" />
               </Button>
               <div className="flex h-8 min-w-16 items-center justify-center border-x border-border-light px-3 text-ui font-medium text-foreground">
                 {WINDOW_ZOOM_LABELS[windowZoomId]}
@@ -114,7 +114,7 @@ export function AppearancePane() {
                 className="h-8 w-8 rounded-none text-muted-foreground hover:bg-foreground/10 hover:text-foreground"
                 onClick={() => setPreference("windowZoomId", stepWindowZoomId(windowZoomId, 1))}
               >
-                <Plus className="size-3.5" />
+                <Plus className="icon-paired" />
               </Button>
             </div>
           </SettingsRow>

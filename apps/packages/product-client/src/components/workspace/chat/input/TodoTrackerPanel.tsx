@@ -80,8 +80,8 @@ const STATUS_TEXT_CLASSNAME: Record<string, string> = {
 function TodoEntryRow({ content, status }: { content: string; status: string }) {
   return (
     <div data-todo-status={status} className="flex items-start gap-1.5 px-3 py-1.5">
-      {/* Icon box spans the first text line so wrapped rows stay aligned;
-          its 16px width lines the icons up under the header glyph. */}
+      {/* The fixed icon box spans the first text line so wrapped rows stay
+          aligned while the visible status glyph follows the UI preference. */}
       <span className="flex h-[var(--text-ui--line-height)] w-4 shrink-0 items-center justify-center">
         <TodoStatusIcon status={status} />
       </span>
@@ -94,16 +94,16 @@ function TodoEntryRow({ content, status }: { content: string; status: string }) 
   );
 }
 
-// Uniform 14px state icons on one grid line: hollow circle (queued), app
+// Uniform semantic state icons on one grid line: hollow circle (queued), app
 // Spinner in the --special accent (in flight), filled check (done).
 function TodoStatusIcon({ status }: { status: string }) {
   if (status === "in_progress") {
-    return <Spinner className="size-3.5 shrink-0 text-special" />;
+    return <Spinner className="icon-paired shrink-0 text-special" />;
   }
   if (status === "completed") {
-    return <CheckCircleFilled className="size-3.5 shrink-0 text-muted-foreground" />;
+    return <CheckCircleFilled className="icon-paired shrink-0 text-muted-foreground" />;
   }
-  return <Circle className="size-3.5 shrink-0 text-faint" />;
+  return <Circle className="icon-paired shrink-0 text-faint" />;
 }
 
 /**
@@ -121,13 +121,13 @@ export function TodoTrackerStrip({ entries }: TodoTrackerPanelProps) {
       data-todo-tracker-strip
       className="flex min-w-0 items-center gap-1.5 border-x-[0.5px] border-t-[0.5px] border-border bg-[color:color-mix(in_oklab,var(--color-foreground)_2%,var(--color-background))] px-3 py-1.5 text-ui-sm text-muted-foreground"
     >
-      <ListChecks className="size-3.5 shrink-0" />
+      <ListChecks className="icon-paired shrink-0 [font-size:var(--text-chat)]" />
       <span className="shrink-0 tabular-nums">
         {completedCount}/{entries.length}
       </span>
       {currentTask && (
         <>
-          <Spinner className="ml-1 size-3.5 shrink-0 text-special" />
+          <Spinner className="ml-1 icon-paired shrink-0 text-special" />
           <span className="min-w-0 truncate">{currentTask.content}</span>
         </>
       )}

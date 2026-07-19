@@ -94,7 +94,7 @@ function AutomationInventoryRow({
         aria-label={automationRowAriaLabel(item)}
       >
         <span className="inline-flex shrink-0 items-center justify-center">
-          <AutomationStatusGlyph status={item.statusKind} size={14} />
+          <AutomationStatusGlyph status={item.statusKind} className="icon-paired" />
         </span>
 
         <span className="min-w-0" title={item.title}>
@@ -134,7 +134,7 @@ function AutomationInventoryRow({
               disabledReason={runNowReason}
               onClick={() => onRunNow(item.id)}
             >
-              <Zap className="size-3.5" aria-hidden />
+              <Zap className="icon-paired" aria-hidden />
             </RowIconButton>
           ) : null}
           <AutomationActionMenu
@@ -207,14 +207,14 @@ function AutomationActionMenu({
         disabled={actionsDisabled || busy !== null}
         onClick={() => setOpen((current) => !current)}
       >
-        <MoreHorizontal className="size-3.5" aria-hidden />
+        <MoreHorizontal className="icon-paired" aria-hidden />
       </RowIconButton>
       {open ? (
         <span className="absolute right-0 top-full z-40 mt-2 w-44 rounded-[10px] border border-popover-ring bg-popover p-1 text-popover-foreground shadow-popover">
           {onRunNow ? (
             <MenuAction
               label="Run now"
-              icon={<Zap className="size-3.5" aria-hidden />}
+              icon={<Zap className="icon-paired" aria-hidden />}
               disabled={actionsDisabled || busy !== null || !item.enabled}
               disabledReason={runNowReason}
               onClick={() => {
@@ -226,7 +226,7 @@ function AutomationActionMenu({
           {onEdit ? (
             <MenuAction
               label="Edit"
-              icon={<Pencil className="size-3.5" aria-hidden />}
+              icon={<Pencil className="icon-paired" aria-hidden />}
               disabled={actionsDisabled || busy !== null}
               onClick={() => {
                 onEdit(item.id);
@@ -237,7 +237,7 @@ function AutomationActionMenu({
           {toggleAction ? (
             <MenuAction
               label={item.enabled ? "Pause" : "Resume"}
-              icon={item.enabled ? <Pause className="size-3.5" aria-hidden /> : <Play className="size-3.5" aria-hidden />}
+              icon={item.enabled ? <Pause className="icon-paired" aria-hidden /> : <Play className="icon-paired" aria-hidden />}
               disabled={actionsDisabled || busy !== null}
               onClick={() => {
                 toggleAction(item.id);
@@ -320,7 +320,7 @@ function MenuAction({
       }}
       className="flex h-8 w-full items-center gap-2 rounded-md px-2.5 text-left text-sm text-muted-foreground transition-colors hover:bg-popover-accent hover:text-foreground aria-disabled:cursor-default aria-disabled:hover:bg-transparent aria-disabled:hover:text-muted-foreground disabled:opacity-45"
     >
-      <span className="flex size-3.5 shrink-0 items-center justify-center">{icon}</span>
+      <span className="flex icon-paired shrink-0 items-center justify-center">{icon}</span>
       <span className="min-w-0 flex-1 truncate">
         {label}
         {disabledReason ? <span className="sr-only">: {disabledReason}</span> : null}

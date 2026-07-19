@@ -130,7 +130,7 @@ function EditActionRow({
             }}
             className="edit-action-row-open pointer-events-auto size-5 shrink-0 rounded border-0 bg-transparent p-0 text-current opacity-0 transition-opacity hover:bg-muted focus-visible:opacity-100 focus-visible:ring-1"
           >
-            <ArrowUpRight className="size-3" />
+            <ArrowUpRight className="icon-compact" />
           </Button>
         )}
       </div>

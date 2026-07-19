@@ -70,7 +70,7 @@ export function TerminalPanel({
           <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
             <p className="text-xs text-muted-foreground">No terminal selected</p>
             <Button onClick={onNewTerminal} size="sm" disabled={!isRuntimeReady}>
-              <TerminalIcon className="size-3.5" />
+              <TerminalIcon className="icon-paired [font-size:var(--text-sidebar-row)]" />
               New terminal
             </Button>
           </div>

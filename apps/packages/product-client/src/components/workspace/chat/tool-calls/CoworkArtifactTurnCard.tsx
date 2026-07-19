@@ -33,7 +33,7 @@ export function CoworkArtifactTurnCard({
   return (
     <div className="space-y-1.5 py-0.5">
       <div className="inline-flex min-w-0 max-w-full items-center gap-1 rounded-md pl-0.5 pr-1.5 text-sm leading-5 text-muted-foreground">
-        <FileText className="size-3 text-faint" />
+        <FileText className="icon-compact text-faint" />
         <span className="text-inherit">{completedActionLabel}</span>
       </div>
 

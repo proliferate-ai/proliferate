@@ -62,7 +62,7 @@ export function SupportSurface({ onSubmit }: SupportSurfaceProps) {
         <section className="overflow-hidden rounded-lg border border-border-light bg-surface-elevated shadow-subtle">
           <div className="border-b border-border-light px-4 py-3">
             <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-              <LifeBuoy size={15} />
+              <LifeBuoy className="icon-paired" />
               Contact support
             </div>
             <p className="mt-1 max-w-2xl text-xs leading-4 text-muted-foreground">
@@ -105,7 +105,7 @@ export function SupportSurface({ onSubmit }: SupportSurfaceProps) {
                   disabled={!trimmedMessage || submitting}
                   aria-label="Send support message"
                 >
-                  <ArrowUp size={16} />
+                  <ArrowUp className="icon-paired" />
                 </Button>
               </div>
             </div>
@@ -120,7 +120,7 @@ export function SupportSurface({ onSubmit }: SupportSurfaceProps) {
                     : "border-destructive/30 bg-destructive/10 text-destructive"
                 }`}
               >
-                {notice.tone === "success" ? <CheckCircle2 size={15} /> : <AlertCircle size={15} />}
+                {notice.tone === "success" ? <CheckCircle2 className="icon-paired" /> : <AlertCircle className="icon-paired" />}
                 <span>{notice.text}</span>
               </div>
             ) : null}

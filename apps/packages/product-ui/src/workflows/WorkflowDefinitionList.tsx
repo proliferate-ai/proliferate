@@ -27,7 +27,7 @@ export function WorkflowDefinitionList({
       description="Define reusable agent workflows and inspect their managed Cloud runs."
       actions={(
         <Button type="button" onClick={onNew}>
-          <Plus className="size-4" aria-hidden />
+          <Plus className="icon-paired" aria-hidden />
           New workflow
         </Button>
       )}
@@ -44,7 +44,7 @@ export function WorkflowDefinitionList({
           description={error}
           action={onRetry ? (
             <Button type="button" variant="secondary" size="sm" onClick={onRetry}>
-              <RotateCcw className="size-3.5" aria-hidden />
+              <RotateCcw className="icon-paired" aria-hidden />
               Retry
             </Button>
           ) : null}
@@ -55,7 +55,7 @@ export function WorkflowDefinitionList({
           description="Create a definition with inputs, stages, and prompts."
           action={(
             <Button type="button" variant="secondary" size="sm" onClick={onNew}>
-              <Plus className="size-3.5" aria-hidden />
+              <Plus className="icon-paired" aria-hidden />
               New workflow
             </Button>
           )}
@@ -74,7 +74,7 @@ export function WorkflowDefinitionList({
               }`}
             >
               <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-foreground/5 text-muted-foreground">
-                <Workflow className="size-4" aria-hidden />
+                <Workflow className="icon-paired" aria-hidden />
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-medium text-foreground">

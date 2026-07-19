@@ -125,7 +125,7 @@ export function SidebarAccountFooter() {
                   <span className="truncate text-ui-sm text-faint">{organizationName}</span>
                 ) : null}
               </span>
-              <ChevronUpDown className="size-3.5 shrink-0 text-sidebar-muted-foreground" />
+              <ChevronUpDown className="icon-paired shrink-0 text-sidebar-muted-foreground" />
             </Button>
           )}
           className={`w-72 ${POPOVER_SURFACE_CLASS}`}
@@ -153,7 +153,7 @@ export function SidebarAccountFooter() {
                       key={invitation.id}
                       variant="sidebar"
                       label={invitation.organizationName ?? invitation.email}
-                      icon={<Mail className="size-4" />}
+                      icon={<Mail className="icon-paired" />}
                       trailing={<span className="font-[520]">Accept</span>}
                       trailingClassName="text-sidebar-muted-foreground group-hover/menu-item:text-sidebar-foreground group-focus/menu-item:text-sidebar-foreground"
                       onClick={() => {
@@ -191,7 +191,7 @@ export function SidebarAccountFooter() {
                         iconClassName="text-current"
                         trailing={
                           organization.id === activeOrganizationId
-                            ? <Check className="size-3.5" />
+                            ? <Check className="icon-paired" />
                             : undefined
                         }
                         onClick={() => {
@@ -222,7 +222,7 @@ export function SidebarAccountFooter() {
                   <PopoverMenuItem
                     variant="sidebar"
                     label="Plan"
-                    icon={<CreditCard className="size-4" />}
+                    icon={<CreditCard className="icon-paired [font-size:var(--text-sidebar-row)]" />}
                     trailing={<span>{planLabel}</span>}
                     onClick={() => {
                       navigate("/settings?section=billing");
@@ -236,7 +236,7 @@ export function SidebarAccountFooter() {
                 <PopoverMenuItem
                   variant="sidebar"
                   label="Keyboard shortcuts"
-                  icon={<Keyboard className="size-4" />}
+                  icon={<Keyboard className="icon-paired [font-size:var(--text-sidebar-row)]" />}
                   trailing={<span>{getShortcutDisplayLabel(SHORTCUTS.showKeyboardShortcuts)}</span>}
                   onClick={() => {
                     close();
@@ -246,7 +246,7 @@ export function SidebarAccountFooter() {
                 <PopoverMenuItem
                   variant="sidebar"
                   label="Settings"
-                  icon={<Settings className="size-4" />}
+                  icon={<Settings className="icon-paired [font-size:var(--text-sidebar-row)]" />}
                   trailing={<span>{getShortcutDisplayLabel(SHORTCUTS.openSettings)}</span>}
                   onClick={() => {
                     navigate("/settings?section=account");
@@ -257,7 +257,7 @@ export function SidebarAccountFooter() {
                   <PopoverMenuItem
                     variant="sidebar"
                     label="Log out"
-                    icon={<LogOut className="size-4" />}
+                    icon={<LogOut className="icon-paired" />}
                     onClick={() => {
                       handleSignOut();
                       close();

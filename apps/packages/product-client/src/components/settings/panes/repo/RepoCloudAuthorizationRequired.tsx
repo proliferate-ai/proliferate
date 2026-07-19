@@ -179,7 +179,7 @@ function RepoAuthorityActionState({
             onClick={onAction}
           >
             {withGitHubIcon ? (
-              <ProviderBrandIcon provider="github" className="size-[13px]" />
+              <ProviderBrandIcon provider="github" className="icon-paired" />
             ) : null}
             {actionLabel}
           </Button>

@@ -109,17 +109,20 @@ function setRootToNonDefaultTextScale() {
   }
 }
 
-function getAuthAppearanceBoundary(): HTMLElement {
-  const boundary = document.querySelector<HTMLElement>("[data-auth-default-appearance]");
-  if (!boundary) {
-    throw new Error("Missing auth appearance boundary");
+function getRenderedRoot(container: HTMLElement): HTMLElement {
+  const root = container.firstElementChild;
+  if (!(root instanceof HTMLElement)) {
+    throw new Error("Missing rendered auth root");
   }
-  return boundary;
+  return root;
 }
 
-function expectDefaultAuthAppearance(element: HTMLElement) {
-  for (const [property, value] of Object.entries(DEFAULT_UI_TEXT_SCALE_CSS_VARIABLES)) {
-    expect(element.style.getPropertyValue(property)).toBe(value);
+function expectAuthAppearanceInheritedFromRoot(element: HTMLElement) {
+  for (const [property, value] of Object.entries(
+    buildUiTextScaleCssVariables(UI_FONT_SCALES.xxxlarge),
+  )) {
+    expect(element.style.getPropertyValue(property)).toBe("");
+    expect(document.documentElement.style.getPropertyValue(property)).toBe(value);
   }
 }
 
@@ -161,18 +164,18 @@ describe("SessionCheckScreen", () => {
     expect(onResolved).toHaveBeenCalledTimes(1);
   });
 
-  it("ignores user appearance text-size preferences", () => {
+  it("inherits user appearance text-size preferences", () => {
     setRootToNonDefaultTextScale();
-    render(<SessionCheckScreen />);
+    const { container } = render(<SessionCheckScreen />);
 
-    expectDefaultAuthAppearance(getAuthAppearanceBoundary());
+    expectAuthAppearanceInheritedFromRoot(getRenderedRoot(container));
   });
 });
 
 describe("LoginScreen", () => {
-  it("ignores user appearance text-size preferences", () => {
+  it("inherits user appearance text-size preferences", () => {
     setRootToNonDefaultTextScale();
-    render(
+    const { container } = render(
       <LoginScreen
         submitting={false}
         busy={false}
@@ -186,7 +189,7 @@ describe("LoginScreen", () => {
       />,
     );
 
-    expectDefaultAuthAppearance(getAuthAppearanceBoundary());
+    expectAuthAppearanceInheritedFromRoot(getRenderedRoot(container));
   });
 });
 
@@ -335,10 +338,10 @@ describe("AuthScreenLayout", () => {
     expect(onCancelSignIn).toHaveBeenCalledTimes(1);
   });
 
-  it("ignores user appearance text-size preferences", () => {
+  it("inherits user appearance text-size preferences", () => {
     setRootToNonDefaultTextScale();
-    render(<AuthScreenLayout mode="auth" />);
+    const { container } = render(<AuthScreenLayout mode="auth" />);
 
-    expectDefaultAuthAppearance(getAuthAppearanceBoundary());
+    expectAuthAppearanceInheritedFromRoot(getRenderedRoot(container));
   });
 });

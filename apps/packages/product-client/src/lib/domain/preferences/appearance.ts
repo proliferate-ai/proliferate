@@ -88,6 +88,15 @@ export type UiTextScaleCssVariables = {
   "--text-sidebar-brand--line-height": string;
 };
 
+export type UiGlyphScaleCssVariables = {
+  "--icon-status": string;
+  "--icon-compact": string;
+  "--icon-paired": string;
+  "--icon-control": string;
+  "--icon-large": string;
+  "--icon-display": string;
+};
+
 export interface ReadableCodeFontScale {
   monacoFontSize: number;
   monacoLineHeight: number;
@@ -104,217 +113,78 @@ export interface WindowZoomScale {
 
 export const DEFAULT_APPEARANCE_SIZE_ID: AppearanceSizeId = "default";
 export const DEFAULT_WINDOW_ZOOM_ID: WindowZoomId = "default";
-export const CHAT_LINE_HEIGHTS: Record<UiFontSizeId, string> = {
-  xxsmall: "17px", xsmall: "17.5px", small: "18px", default: "19px",
-  large: "20px", xlarge: "21px", xxlarge: "22px", xxxlarge: "23px",
-};
+/** Compact canonical numeric ladders; expanded once into the public API below. */
+const COMPOSER_FONT_SIZES = [11, 11.5, 12, 13, 14, 15, 16, 17] as const;
+const HERO_FONT_SIZES = [23, 24, 25, 26.5, 28, 29.5, 31, 32.5] as const;
+const XS_REM_SCALES = [6.5, 11, 7, 11, 7, 11, 7.5, 12, 8, 12, 9, 14, 10, 16, 11, 18] as const;
+const SM_REM_SCALES = [7.5, 13, 8, 13, 8, 13, 9, 15, 10, 16, 11, 17, 12, 18, 13, 19] as const;
+const BASE_REM_SCALES = [8, 13, 8.5, 13.5, 9, 14, 10, 15, 11, 16, 12, 18, 13, 20, 14, 22] as const;
+const LG_LINE_HEIGHTS = [17, 17.5, 18, 19, 20, 22, 24, 26] as const;
+const XL_LINE_HEIGHTS = [22, 23, 24, 26, 28, 30, 32, 34] as const;
 
-/** Every workspace-title rung stays 1px above message/composer after preset advancement. */
-export const UI_FONT_SCALES: Record<UiFontSizeId, UiFontScale> = {
-  xxsmall: {
-    xs: { fontSize: "0.40625rem", lineHeight: "0.6875rem" },
-    sm: { fontSize: "0.46875rem", lineHeight: "0.8125rem" },
-    base: { fontSize: "0.5rem", lineHeight: "0.8125rem" },
-    uiSm: { fontSize: "9px", lineHeight: "13px" },
-    ui: { fontSize: "10px", lineHeight: "15px" },
-    chat: { fontSize: "9px", lineHeight: CHAT_LINE_HEIGHTS.xxsmall },
-    composer: { fontSize: "11px", lineHeight: "19px" },
-    workspaceTitle: { fontSize: "12px", lineHeight: "20px" },
-    lg: { fontSize: "0.6875rem", lineHeight: "1.0625rem" },
-    xl: { fontSize: "0.9375rem", lineHeight: "1.375rem" },
-    title: { fontSize: "16px", lineHeight: "20px" },
-    hero: { fontSize: "23px", lineHeight: "31px" },
-    sidebarNav: { fontSize: "11px", lineHeight: "16px" },
-    sidebarRow: { fontSize: "11px", lineHeight: "16px" },
-    sidebarBrand: { fontSize: "14px", lineHeight: "21px" },
-  },
-  xsmall: {
-    xs: { fontSize: "0.4375rem", lineHeight: "0.6875rem" },
-    sm: { fontSize: "0.5rem", lineHeight: "0.8125rem" },
-    base: { fontSize: "0.53125rem", lineHeight: "0.84375rem" },
-    uiSm: { fontSize: "9.5px", lineHeight: "13.5px" },
-    ui: { fontSize: "10.5px", lineHeight: "15.5px" },
-    chat: { fontSize: "9.5px", lineHeight: CHAT_LINE_HEIGHTS.xsmall },
-    composer: { fontSize: "11.5px", lineHeight: "19.5px" },
-    workspaceTitle: { fontSize: "12.5px", lineHeight: "20.5px" },
-    lg: { fontSize: "0.71875rem", lineHeight: "1.09375rem" },
-    xl: { fontSize: "0.96875rem", lineHeight: "1.4375rem" },
-    title: { fontSize: "17px", lineHeight: "21px" },
-    hero: { fontSize: "24px", lineHeight: "32px" },
-    sidebarNav: { fontSize: "11.5px", lineHeight: "16.5px" },
-    sidebarRow: { fontSize: "11.5px", lineHeight: "16.5px" },
-    sidebarBrand: { fontSize: "14.5px", lineHeight: "21.5px" },
-  },
-  small: {
-    xs: { fontSize: "0.4375rem", lineHeight: "0.6875rem" },
-    sm: { fontSize: "0.5rem", lineHeight: "0.8125rem" },
-    base: { fontSize: "0.5625rem", lineHeight: "0.875rem" },
-    uiSm: { fontSize: "10px", lineHeight: "14px" },
-    ui: { fontSize: "11px", lineHeight: "16px" },
-    chat: { fontSize: "10px", lineHeight: CHAT_LINE_HEIGHTS.small },
-    composer: { fontSize: "12px", lineHeight: "20px" },
-    workspaceTitle: { fontSize: "13px", lineHeight: "21px" },
-    lg: { fontSize: "0.75rem", lineHeight: "1.125rem" },
-    xl: { fontSize: "1rem", lineHeight: "1.5rem" },
-    title: { fontSize: "18px", lineHeight: "22px" },
-    hero: { fontSize: "25px", lineHeight: "33px" },
-    sidebarNav: { fontSize: "12px", lineHeight: "17px" },
-    sidebarRow: { fontSize: "12px", lineHeight: "17px" },
-    sidebarBrand: { fontSize: "15px", lineHeight: "22px" },
-  },
-  default: {
-    xs: { fontSize: "0.46875rem", lineHeight: "0.75rem" },
-    sm: { fontSize: "0.5625rem", lineHeight: "0.9375rem" },
-    base: { fontSize: "0.625rem", lineHeight: "0.9375rem" },
-    uiSm: { fontSize: "11px", lineHeight: "15px" },
-    ui: { fontSize: "12px", lineHeight: "17px" },
-    chat: { fontSize: "11px", lineHeight: CHAT_LINE_HEIGHTS.default },
-    composer: { fontSize: "13px", lineHeight: "21px" },
-    workspaceTitle: { fontSize: "14px", lineHeight: "22px" },
-    lg: { fontSize: "0.8125rem", lineHeight: "1.1875rem" },
-    xl: { fontSize: "1.0625rem", lineHeight: "1.625rem" },
-    title: { fontSize: "19px", lineHeight: "23px" },
-    hero: { fontSize: "26.5px", lineHeight: "34.5px" },
-    sidebarNav: { fontSize: "13px", lineHeight: "18px" },
-    sidebarRow: { fontSize: "13px", lineHeight: "18px" },
-    sidebarBrand: { fontSize: "16px", lineHeight: "23px" },
-  },
-  large: {
-    xs: { fontSize: "0.5rem", lineHeight: "0.75rem" },
-    sm: { fontSize: "0.625rem", lineHeight: "1rem" },
-    base: { fontSize: "0.6875rem", lineHeight: "1rem" },
-    uiSm: { fontSize: "12px", lineHeight: "16px" },
-    ui: { fontSize: "13px", lineHeight: "18px" },
-    chat: { fontSize: "12px", lineHeight: CHAT_LINE_HEIGHTS.large },
-    composer: { fontSize: "14px", lineHeight: "22px" },
-    workspaceTitle: { fontSize: "15px", lineHeight: "23px" },
-    lg: { fontSize: "0.875rem", lineHeight: "1.25rem" },
-    xl: { fontSize: "1.125rem", lineHeight: "1.75rem" },
-    title: { fontSize: "20px", lineHeight: "24px" },
-    hero: { fontSize: "28px", lineHeight: "36px" },
-    sidebarNav: { fontSize: "14px", lineHeight: "19px" },
-    sidebarRow: { fontSize: "14px", lineHeight: "19px" },
-    sidebarBrand: { fontSize: "17px", lineHeight: "24px" },
-  },
-  xlarge: {
-    xs: { fontSize: "0.5625rem", lineHeight: "0.875rem" },
-    sm: { fontSize: "0.6875rem", lineHeight: "1.0625rem" },
-    base: { fontSize: "0.75rem", lineHeight: "1.125rem" },
-    uiSm: { fontSize: "13px", lineHeight: "17px" },
-    ui: { fontSize: "14px", lineHeight: "19px" },
-    chat: { fontSize: "13px", lineHeight: CHAT_LINE_HEIGHTS.xlarge },
-    composer: { fontSize: "15px", lineHeight: "23px" },
-    workspaceTitle: { fontSize: "16px", lineHeight: "24px" },
-    lg: { fontSize: "0.9375rem", lineHeight: "1.375rem" },
-    xl: { fontSize: "1.1875rem", lineHeight: "1.875rem" },
-    title: { fontSize: "21px", lineHeight: "25px" },
-    hero: { fontSize: "29.5px", lineHeight: "37.5px" },
-    sidebarNav: { fontSize: "15px", lineHeight: "20px" },
-    sidebarRow: { fontSize: "15px", lineHeight: "20px" },
-    sidebarBrand: { fontSize: "18px", lineHeight: "25px" },
-  },
-  xxlarge: {
-    xs: { fontSize: "0.625rem", lineHeight: "1rem" },
-    sm: { fontSize: "0.75rem", lineHeight: "1.125rem" },
-    base: { fontSize: "0.8125rem", lineHeight: "1.25rem" },
-    uiSm: { fontSize: "14px", lineHeight: "18px" },
-    ui: { fontSize: "15px", lineHeight: "20px" },
-    chat: { fontSize: "14px", lineHeight: CHAT_LINE_HEIGHTS.xxlarge },
-    composer: { fontSize: "16px", lineHeight: "24px" },
-    workspaceTitle: { fontSize: "17px", lineHeight: "25px" },
-    lg: { fontSize: "1rem", lineHeight: "1.5rem" },
-    xl: { fontSize: "1.25rem", lineHeight: "2rem" },
-    title: { fontSize: "22px", lineHeight: "26px" },
-    hero: { fontSize: "31px", lineHeight: "39px" },
-    sidebarNav: { fontSize: "16px", lineHeight: "21px" },
-    sidebarRow: { fontSize: "16px", lineHeight: "21px" },
-    sidebarBrand: { fontSize: "19px", lineHeight: "26px" },
-  },
-  xxxlarge: {
-    xs: { fontSize: "0.6875rem", lineHeight: "1.125rem" },
-    sm: { fontSize: "0.8125rem", lineHeight: "1.1875rem" },
-    base: { fontSize: "0.875rem", lineHeight: "1.375rem" },
-    uiSm: { fontSize: "15px", lineHeight: "19px" },
-    ui: { fontSize: "16px", lineHeight: "21px" },
-    chat: { fontSize: "15px", lineHeight: CHAT_LINE_HEIGHTS.xxxlarge },
-    composer: { fontSize: "17px", lineHeight: "25px" },
-    workspaceTitle: { fontSize: "18px", lineHeight: "26px" },
-    lg: { fontSize: "1.0625rem", lineHeight: "1.625rem" },
-    xl: { fontSize: "1.3125rem", lineHeight: "2.125rem" },
-    title: { fontSize: "23px", lineHeight: "27px" },
-    hero: { fontSize: "32.5px", lineHeight: "40.5px" },
-    sidebarNav: { fontSize: "17px", lineHeight: "22px" },
-    sidebarRow: { fontSize: "17px", lineHeight: "22px" },
-    sidebarBrand: { fontSize: "20px", lineHeight: "27px" },
-  },
-};
+function rem(value: number): string {
+  return `${value / 16}rem`;
+}
 
-export const READABLE_CODE_FONT_SCALES: Record<ReadableCodeFontSizeId, ReadableCodeFontScale> = {
-  xxsmall: {
-    monacoFontSize: 8,
-    monacoLineHeight: 14.5,
-    diffsFontSize: "8px",
+function pixelScale(fontSize: number, lineHeight: number): TextTokenScale {
+  return { fontSize: `${fontSize}px`, lineHeight: `${lineHeight}px` };
+}
+
+function remTokenScale(fontSize: number, lineHeight: number): TextTokenScale {
+  return { fontSize: rem(fontSize), lineHeight: rem(lineHeight) };
+}
+
+function remScale(values: readonly number[], index: number): TextTokenScale {
+  const offset = index * 2;
+  return {
+    fontSize: rem(values[offset]!),
+    lineHeight: rem(values[offset + 1]!),
+  };
+}
+
+function scaleRecord<T>(build: (index: number) => T): Record<AppearanceSizeId, T> {
+  return Object.fromEntries(APPEARANCE_SIZE_IDS.map((id, index) => [id, build(index)])) as Record<AppearanceSizeId, T>;
+}
+
+function buildUiFontScale(index: number): UiFontScale {
+  const composer = COMPOSER_FONT_SIZES[index]!;
+  const hero = HERO_FONT_SIZES[index]!;
+  return {
+    xs: remScale(XS_REM_SCALES, index),
+    sm: remScale(SM_REM_SCALES, index),
+    base: remScale(BASE_REM_SCALES, index),
+    uiSm: pixelScale(composer - 2, composer + 2),
+    ui: pixelScale(composer - 1, composer + 4),
+    chat: pixelScale(composer - 2, composer + 6),
+    composer: pixelScale(composer, composer + 8),
+    /** Every workspace-title rung stays 1px above message/composer. */
+    workspaceTitle: pixelScale(composer + 1, composer + 9),
+    lg: remTokenScale(composer, LG_LINE_HEIGHTS[index]!),
+    xl: remTokenScale(composer + 4, XL_LINE_HEIGHTS[index]!),
+    title: pixelScale(16 + index, 20 + index),
+    hero: pixelScale(hero, hero + 8),
+    sidebarNav: pixelScale(composer, composer + 5),
+    sidebarRow: pixelScale(composer, composer + 5),
+    sidebarBrand: pixelScale(composer + 3, composer + 10),
+  };
+}
+
+export const UI_FONT_SCALES = /* @__PURE__ */ scaleRecord(buildUiFontScale);
+
+function buildReadableCodeFontScale(index: number): ReadableCodeFontScale {
+  const fontSize = COMPOSER_FONT_SIZES[index]!;
+  const fontSizePx = `${fontSize}px`;
+  return {
+    monacoFontSize: fontSize,
+    monacoLineHeight: fontSize + 8,
+    diffsFontSize: fontSizePx,
     diffsLineHeight: "calc(var(--diffs-font-size) * 1.8)",
-    codeFontSize: "0.5rem",
+    codeFontSize: fontSizePx,
     codeLineHeight: "1.625",
-  },
-  xsmall: {
-    monacoFontSize: 8.5,
-    monacoLineHeight: 15.5,
-    diffsFontSize: "8.5px",
-    diffsLineHeight: "calc(var(--diffs-font-size) * 1.8)",
-    codeFontSize: "0.53125rem",
-    codeLineHeight: "1.625",
-  },
-  small: {
-    monacoFontSize: 9,
-    monacoLineHeight: 16,
-    diffsFontSize: "9px",
-    diffsLineHeight: "calc(var(--diffs-font-size) * 1.8)",
-    codeFontSize: "0.5625rem",
-    codeLineHeight: "1.625",
-  },
-  default: {
-    monacoFontSize: 10,
-    monacoLineHeight: 17,
-    diffsFontSize: "10px",
-    diffsLineHeight: "calc(var(--diffs-font-size) * 1.8)",
-    codeFontSize: "0.625rem",
-    codeLineHeight: "1.625",
-  },
-  large: {
-    monacoFontSize: 11,
-    monacoLineHeight: 18,
-    diffsFontSize: "11px",
-    diffsLineHeight: "calc(var(--diffs-font-size) * 1.8)",
-    codeFontSize: "0.6875rem",
-    codeLineHeight: "1.625",
-  },
-  xlarge: {
-    monacoFontSize: 12,
-    monacoLineHeight: 20,
-    diffsFontSize: "12px",
-    diffsLineHeight: "calc(var(--diffs-font-size) * 1.8)",
-    codeFontSize: "0.75rem",
-    codeLineHeight: "1.625",
-  },
-  xxlarge: {
-    monacoFontSize: 13,
-    monacoLineHeight: 21,
-    diffsFontSize: "13px",
-    diffsLineHeight: "calc(var(--diffs-font-size) * 1.8)",
-    codeFontSize: "0.8125rem",
-    codeLineHeight: "1.625",
-  },
-  xxxlarge: {
-    monacoFontSize: 14,
-    monacoLineHeight: 22,
-    diffsFontSize: "14px",
-    diffsLineHeight: "calc(var(--diffs-font-size) * 1.8)",
-    codeFontSize: "0.875rem",
-    codeLineHeight: "1.625",
-  },
-};
+  };
+}
+
+export const READABLE_CODE_FONT_SCALES = /* @__PURE__ */ scaleRecord(buildReadableCodeFontScale);
 
 export const WINDOW_ZOOM_SCALES: Record<WindowZoomId, WindowZoomScale> = {
   zoom80: { factor: 0.8, cssValue: "0.8" },
@@ -325,7 +195,7 @@ export const WINDOW_ZOOM_SCALES: Record<WindowZoomId, WindowZoomScale> = {
 };
 
 export function isAppearanceSizeId(value: unknown): value is AppearanceSizeId {
-  return typeof value === "string" && APPEARANCE_SIZE_IDS.includes(value as AppearanceSizeId);
+  return APPEARANCE_SIZE_IDS.includes(value as AppearanceSizeId);
 }
 
 export function resolveAppearanceSizeId(value: unknown): AppearanceSizeId {
@@ -333,7 +203,7 @@ export function resolveAppearanceSizeId(value: unknown): AppearanceSizeId {
 }
 
 export function isWindowZoomId(value: unknown): value is WindowZoomId {
-  return typeof value === "string" && WINDOW_ZOOM_IDS.includes(value as WindowZoomId);
+  return WINDOW_ZOOM_IDS.includes(value as WindowZoomId);
 }
 
 export function resolveWindowZoomId(value: unknown): WindowZoomId {
@@ -341,50 +211,36 @@ export function resolveWindowZoomId(value: unknown): WindowZoomId {
 }
 
 export function resolveUiFontScale(value: unknown): UiFontScale {
-  return UI_FONT_SCALES[resolveAppearanceSizeId(value)];
+  return buildUiFontScale(APPEARANCE_SIZE_IDS.indexOf(resolveAppearanceSizeId(value)));
 }
 
 export function buildUiTextScaleCssVariables(scale: UiFontScale): UiTextScaleCssVariables {
-  return {
-    "--text-xs": scale.xs.fontSize,
-    "--text-xs--line-height": scale.xs.lineHeight,
-    "--text-sm": scale.sm.fontSize,
-    "--text-sm--line-height": scale.sm.lineHeight,
-    "--text-base": scale.base.fontSize,
-    "--text-base--line-height": scale.base.lineHeight,
-    "--text-ui-sm": scale.uiSm.fontSize,
-    "--text-ui-sm--line-height": scale.uiSm.lineHeight,
-    "--text-ui": scale.ui.fontSize,
-    "--text-ui--line-height": scale.ui.lineHeight,
-    "--text-chat": scale.chat.fontSize,
-    "--text-chat--line-height": scale.chat.lineHeight,
-    "--text-composer": scale.composer.fontSize,
-    "--text-composer--line-height": scale.composer.lineHeight,
-    "--text-workspace-title": scale.workspaceTitle.fontSize,
-    "--text-workspace-title--line-height": scale.workspaceTitle.lineHeight,
-    "--text-lg": scale.lg.fontSize,
-    "--text-lg--line-height": scale.lg.lineHeight,
-    "--text-xl": scale.xl.fontSize,
-    "--text-xl--line-height": scale.xl.lineHeight,
-    "--text-title": scale.title.fontSize,
-    "--text-title--line-height": scale.title.lineHeight,
-    "--text-hero": scale.hero.fontSize,
-    "--text-hero--line-height": scale.hero.lineHeight,
-    "--text-sidebar-nav": scale.sidebarNav.fontSize,
-    "--text-sidebar-nav--line-height": scale.sidebarNav.lineHeight,
-    "--text-sidebar-row": scale.sidebarRow.fontSize,
-    "--text-sidebar-row--line-height": scale.sidebarRow.lineHeight,
-    "--text-sidebar-brand": scale.sidebarBrand.fontSize,
-    "--text-sidebar-brand--line-height": scale.sidebarBrand.lineHeight,
-  };
+  return Object.fromEntries((Object.entries(scale) as Array<[keyof UiFontScale, TextTokenScale]>).flatMap(([role, token]) => {
+    const cssRole = role.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
+    const property = `--text-${cssRole}`;
+    return [
+      [property, token.fontSize],
+      [`${property}--line-height`, token.lineHeight],
+    ];
+  })) as UiTextScaleCssVariables;
 }
 
-export const DEFAULT_UI_TEXT_SCALE_CSS_VARIABLES = buildUiTextScaleCssVariables(
-  UI_FONT_SCALES[DEFAULT_APPEARANCE_SIZE_ID],
+export const DEFAULT_UI_TEXT_SCALE_CSS_VARIABLES = /* @__PURE__ */ buildUiTextScaleCssVariables(
+  /* @__PURE__ */ buildUiFontScale(APPEARANCE_SIZE_IDS.indexOf(DEFAULT_APPEARANCE_SIZE_ID)),
 );
 
+/** Visible glyphs are text-relative; fixed pointer targets remain on wrappers. */
+export const DEFAULT_UI_GLYPH_SCALE_CSS_VARIABLES: UiGlyphScaleCssVariables = {
+  "--icon-status": "0.45em",
+  "--icon-compact": "1em",
+  "--icon-paired": "1.15em",
+  "--icon-control": "1.333333em",
+  "--icon-large": "1.666667em",
+  "--icon-display": "2em",
+};
+
 export function resolveReadableCodeFontScale(value: unknown): ReadableCodeFontScale {
-  return READABLE_CODE_FONT_SCALES[resolveAppearanceSizeId(value)];
+  return buildReadableCodeFontScale(APPEARANCE_SIZE_IDS.indexOf(resolveAppearanceSizeId(value)));
 }
 
 export function resolveWindowZoomScale(value: unknown): WindowZoomScale {

@@ -70,7 +70,7 @@ export function PopoverMenuItem({
     "text-muted-foreground/75 transition-colors group-hover/menu-item:text-muted-foreground group-focus/menu-item:text-muted-foreground";
   const defaultTrailingClassName = density === "compact"
     ? `flex size-5 shrink-0 items-center justify-center ${trailingHoverPromotion}`
-    : `flex shrink-0 items-center justify-center ${trailingHoverPromotion} [&_*]:text-base`;
+    : `flex shrink-0 items-center justify-center ${trailingHoverPromotion}`;
 
   return (
     <button

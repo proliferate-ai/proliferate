@@ -209,7 +209,7 @@ export function ProductSidebarWorkspaceRow({
                 <span
                   role="img"
                   aria-label="Unseen activity"
-                  className="block size-1.5 rounded-full bg-info/70"
+                  className="block icon-status rounded-full bg-info/70"
                 />
               </Tooltip>
             ) : trailingLabel ? (

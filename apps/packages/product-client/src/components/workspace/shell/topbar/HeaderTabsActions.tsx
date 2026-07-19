@@ -33,7 +33,7 @@ export function NewChatButton({
       data-chat-new-tab-button
       className={`${HEADER_FLAT_ICON_BUTTON_CLASS} relative`}
     >
-      <Plus className="size-3.5" />
+      <Plus className="icon-paired" />
       <span className="sr-only">
         {newSessionDisabledReason ?? "New chat"}
       </span>
@@ -67,7 +67,7 @@ export function ClosedSessionsTrigger({
       title="Closed sessions"
       className={HEADER_FLAT_ICON_BUTTON_CLASS}
     >
-      <History className="size-3.5" />
+      <History className="icon-paired" />
     </Button>
   );
 

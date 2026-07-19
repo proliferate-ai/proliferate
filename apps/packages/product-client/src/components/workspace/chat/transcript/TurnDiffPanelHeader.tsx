@@ -41,7 +41,7 @@ export function TurnDiffPanelHeader({
       )}
       <div className="pointer-events-none relative z-10 flex min-w-0 items-center gap-2.5 px-[var(--turn-diff-row-padding-x)] py-3 text-left">
         <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-[var(--color-diff-chat-turn-icon-surface)] text-secondary-foreground">
-          <FileDiff className="size-6" />
+          <FileDiff className="icon-display" />
         </span>
         <span className="flex min-w-0 flex-1 flex-col">
           <span className="truncate text-chat font-medium leading-[var(--text-chat--line-height)] text-foreground">
@@ -59,7 +59,7 @@ export function TurnDiffPanelHeader({
             {onOpenReviewPane && (
               <span className="turn-diff-hover-subtitle pointer-events-none absolute inset-0 hidden min-w-0 items-center gap-1 truncate">
                 Review changes
-                <ArrowUpRight className="size-3 shrink-0" />
+                <ArrowUpRight className="icon-compact shrink-0" />
               </span>
             )}
           </span>
@@ -79,7 +79,7 @@ export function TurnDiffPanelHeader({
               className="h-7 gap-1 rounded-md px-2 text-chat text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45"
             >
               Undo
-              <Undo className="size-3.5" />
+              <Undo className="icon-paired" />
             </Button>
           )}
           {onOpenReviewPane && (

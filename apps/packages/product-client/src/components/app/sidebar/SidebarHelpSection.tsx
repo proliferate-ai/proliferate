@@ -55,7 +55,7 @@ export function SidebarHelpSection({
           <PopoverMenuItem
             variant="sidebar"
             label="Send feedback"
-            icon={<MessageSquare className="size-4" />}
+            icon={<MessageSquare className="icon-paired [font-size:var(--text-sidebar-row)]" />}
             trailing={<span>{getShortcutDisplayLabel(SHORTCUTS.openSupport)}</span>}
             disabled={Boolean(supportDisabledReason)}
             title={supportDisabledReason ?? undefined}
@@ -67,7 +67,7 @@ export function SidebarHelpSection({
           <PopoverMenuItem
             variant="sidebar"
             label="Submit a prompt"
-            icon={<Lightbulb className="size-4" />}
+            icon={<Lightbulb className="icon-paired" />}
             disabled={Boolean(supportDisabledReason)}
             title={supportDisabledReason ?? undefined}
             onClick={() => {
@@ -80,7 +80,7 @@ export function SidebarHelpSection({
         <PopoverMenuItem
           variant="sidebar"
           label="Contact support"
-          icon={<Mail className="size-4" />}
+          icon={<Mail className="icon-paired" />}
           onClick={() => {
             openExternalUrl(supportAction.url);
             onClose();
@@ -90,8 +90,8 @@ export function SidebarHelpSection({
       <PopoverMenuItem
         variant="sidebar"
         label="Documentation"
-        icon={<BookOpen className="size-4" />}
-        trailing={<ArrowUpRight className="size-3" />}
+        icon={<BookOpen className="icon-paired" />}
+        trailing={<ArrowUpRight className="icon-compact" />}
         onClick={() => {
           openExternalUrl(PROLIFERATE_DOCS_URL);
           onClose();
@@ -100,8 +100,8 @@ export function SidebarHelpSection({
       <PopoverMenuItem
         variant="sidebar"
         label="Discord"
-        icon={<Discord className="size-4" />}
-        trailing={<ArrowUpRight className="size-3" />}
+        icon={<Discord className="icon-paired" />}
+        trailing={<ArrowUpRight className="icon-compact" />}
         onClick={() => {
           openExternalUrl(PROLIFERATE_DISCORD_URL);
           onClose();
@@ -110,8 +110,8 @@ export function SidebarHelpSection({
       <PopoverMenuItem
         variant="sidebar"
         label="Changelog"
-        icon={<BookMarked className="size-4" />}
-        trailing={<ArrowUpRight className="size-3" />}
+        icon={<BookMarked className="icon-paired" />}
+        trailing={<ArrowUpRight className="icon-compact" />}
         onClick={() => {
           openExternalUrl(PROLIFERATE_CHANGELOG_URL);
           onClose();
@@ -121,7 +121,7 @@ export function SidebarHelpSection({
         <PopoverMenuItem
           variant="sidebar"
           label="Go to web"
-          icon={<Globe className="size-4" />}
+          icon={<Globe className="icon-paired [font-size:var(--text-sidebar-row)]" />}
           trailing={<span>{getShortcutDisplayLabel(SHORTCUTS.openWebApp)}</span>}
           onClick={() => {
             openExternalUrl(webApp.baseUrl!);

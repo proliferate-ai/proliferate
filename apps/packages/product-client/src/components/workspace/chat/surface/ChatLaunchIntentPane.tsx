@@ -67,7 +67,7 @@ export function ChatLaunchIntentPane({
                 size="sm"
                 onClick={returnHome}
               >
-                <ArrowLeft className="size-3.5" />
+                <ArrowLeft className="icon-paired" />
                 Back
               </Button>
             )}
@@ -89,7 +89,7 @@ export function ChatLaunchIntentPane({
                 loading={isRetrying}
                 onClick={retry}
               >
-                {!isRetrying && <RefreshCw className="size-3.5" />}
+                {!isRetrying && <RefreshCw className="icon-paired" />}
                 Retry
               </Button>
             )}

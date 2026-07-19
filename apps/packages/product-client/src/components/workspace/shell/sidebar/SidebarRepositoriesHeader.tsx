@@ -53,9 +53,9 @@ export function SidebarRepositoriesHeader({
               variant="section"
             >
               {allRepoGroupsCollapsed ? (
-                <ChevronUpDown className="size-3" />
+                <ChevronUpDown className="icon-compact" />
               ) : (
-                <ChevronDownUp className="size-3" />
+                <ChevronDownUp className="icon-compact" />
               )}
             </SidebarActionButton>
           )}
@@ -66,7 +66,7 @@ export function SidebarRepositoriesHeader({
                 active={filtersActive}
                 variant="section"
               >
-                <ListFilter className="size-3" />
+                <ListFilter className="icon-compact" />
               </SidebarActionButton>
             }
           >
@@ -85,11 +85,11 @@ export function SidebarRepositoriesHeader({
                       icon={(
                         <SidebarWorkspaceVariantIcon
                           variant={variant}
-                          className="size-3.5 text-muted-foreground"
+                          className="icon-paired text-muted-foreground [font-size:var(--text-sidebar-row)]"
                         />
                       )}
                       label={label}
-                      trailing={selected ? <Check className="size-3.5 text-foreground/60" /> : null}
+                      trailing={selected ? <Check className="icon-paired text-foreground/60" /> : null}
                     />
                   );
                 })}
@@ -101,7 +101,7 @@ export function SidebarRepositoriesHeader({
             title="Add repository"
             variant="section"
           >
-            <FolderPlus className="size-3" />
+            <FolderPlus className="icon-compact" />
           </SidebarActionButton>
         </>
       )}

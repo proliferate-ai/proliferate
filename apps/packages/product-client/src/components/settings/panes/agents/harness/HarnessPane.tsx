@@ -178,7 +178,7 @@ function HarnessRuntimeStatusRow({
       label={(
         <span className="flex min-w-0 items-center gap-2.5">
           <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-md bg-foreground/5 text-muted-foreground">
-            <ProviderIcon kind={harnessKind} className="size-4" />
+            <ProviderIcon kind={harnessKind} className="icon-control" />
           </span>
           <span className="truncate">{displayName}</span>
         </span>

@@ -137,7 +137,7 @@ export function SignInMethodRow({
         <ProviderBrandIcon
           provider={provider.provider}
           label={provider.brandLabel ?? provider.label}
-          className="size-5 shrink-0 text-muted-foreground"
+          className="icon-paired shrink-0 text-muted-foreground"
         />
         <div className="min-w-0">
           <div className="flex items-center gap-2 font-medium text-foreground">

@@ -33,7 +33,7 @@ export function PlanPickerContentBody({
       <div className="max-h-80 overflow-y-auto p-1">
         {picker.isLoading && (
           <div className="flex items-center gap-2 px-3 py-4 text-sm text-muted-foreground">
-            <Spinner className="size-4" />
+            <Spinner className="icon-paired" />
             Loading plans...
           </div>
         )}
@@ -58,7 +58,7 @@ export function PlanPickerContentBody({
             className="h-auto w-full justify-start rounded-lg px-2 py-2 text-left"
           >
             <span className="grid size-7 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground">
-              <ClipboardList className="size-3.5" />
+              <ClipboardList className="icon-paired" />
             </span>
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm font-medium text-foreground">

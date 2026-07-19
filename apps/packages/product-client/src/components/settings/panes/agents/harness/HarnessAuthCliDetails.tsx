@@ -100,7 +100,7 @@ export function CliDetails({
             disabled={refreshing}
             onClick={handleRefreshCredential}
           >
-            <RefreshCw className={`size-3.5 ${refreshing ? "animate-spin" : ""}`} />
+            <RefreshCw className={`icon-paired ${refreshing ? "animate-spin" : ""}`} />
           </IconButton>
         </div>
 

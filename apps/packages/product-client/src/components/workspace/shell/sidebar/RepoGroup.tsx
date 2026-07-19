@@ -147,7 +147,7 @@ export function RepoGroup({
       expandedIcon={<RepoGroupEnvironmentIcon kind={environmentKind} expanded />}
       hoverIcon={(
         <ChevronRight
-          className={`size-3 transition-transform ${collapsed ? "" : "rotate-90"}`}
+          className={`icon-compact transition-transform ${collapsed ? "" : "rotate-90"}`}
         />
       )}
       onToggleCollapsed={onToggleCollapsed}
@@ -161,7 +161,7 @@ export function RepoGroup({
               alwaysVisible
               className="rounded-md opacity-0 group-hover/folder-row:opacity-100 focus-visible:opacity-100"
             >
-              <Plus className="size-3" />
+              <Plus className="icon-compact" />
             </SidebarActionButton>
           }
           side="right"
@@ -174,7 +174,7 @@ export function RepoGroup({
               {showLocalWorkspaceActions && (
                 <>
                   <PopoverMenuItem
-                    icon={<SidebarWorkspaceVariantIcon variant="local" className="size-3.5 shrink-0" />}
+                    icon={<SidebarWorkspaceVariantIcon variant="local" className="icon-paired shrink-0 [font-size:var(--text-sidebar-row)]" />}
                     label="New local workspace"
                     trailing={(
                       <ShortcutBadge
@@ -185,7 +185,7 @@ export function RepoGroup({
                     onClick={() => { close(); onNewLocalWorkspace?.(); }}
                   />
                   <PopoverMenuItem
-                    icon={<SidebarWorkspaceVariantIcon variant="worktree" className="size-3.5 shrink-0" />}
+                    icon={<SidebarWorkspaceVariantIcon variant="worktree" className="icon-paired shrink-0 [font-size:var(--text-sidebar-row)]" />}
                     label="New worktree"
                     trailing={(
                       <ShortcutBadge
@@ -200,7 +200,7 @@ export function RepoGroup({
               {onCloudWorkspaceAction && cloudWorkspaceLabel && (
                 cloudWorkspaceEnabled ? (
                   <PopoverMenuItem
-                    icon={<CloudIcon className="size-3.5 shrink-0" />}
+                    icon={<CloudIcon className="icon-paired shrink-0 [font-size:var(--text-sidebar-row)]" />}
                     label={cloudWorkspaceLabel}
                     trailing={(
                       <ShortcutBadge
@@ -218,7 +218,7 @@ export function RepoGroup({
                     <PopoverMenuItem
                       aria-disabled="true"
                       onClick={(event) => { event.preventDefault(); }}
-                      icon={<CloudIcon className="size-3.5 shrink-0" />}
+                      icon={<CloudIcon className="icon-paired shrink-0 [font-size:var(--text-sidebar-row)]" />}
                       label={cloudWorkspaceLabel}
                       trailing={(
                         <ShortcutBadge
@@ -242,7 +242,7 @@ export function RepoGroup({
                 alwaysVisible
                 className="opacity-0 group-hover/folder-row:opacity-100 focus-visible:opacity-100"
               >
-                <MoreHorizontal className="size-3" />
+                <MoreHorizontal className="icon-compact" />
               </SidebarActionButton>
             }
             side="right"
@@ -313,11 +313,11 @@ function RepoGroupEnvironmentIcon({
   // Codex parity: remote-capable repos use the fused folder+globe glyph —
   // one icon, never a badge overlay.
   if (kind === "cloud" || kind === "local_cloud") {
-    return <FolderRemote className="size-[var(--sidebar-primary-icon-size)] shrink-0" />;
+    return <FolderRemote className="icon-paired shrink-0" />;
   }
 
   const FolderIcon = expanded ? FolderFilled : FolderClosedFilled;
-  return <FolderIcon className="size-[var(--sidebar-primary-icon-size)] shrink-0" />;
+  return <FolderIcon className="icon-paired shrink-0" />;
 }
 
 function repoMenuActionIcon(id: RepoGroupMenuAction["id"]) {
@@ -325,11 +325,11 @@ function repoMenuActionIcon(id: RepoGroupMenuAction["id"]) {
     case "set-up-cloud":
     case "add-to-this-mac":
     case "cloud-settings":
-      return <CloudIcon className="size-3.5 shrink-0 text-muted-foreground" />;
+      return <CloudIcon className="icon-paired shrink-0 text-muted-foreground [font-size:var(--text-sidebar-row)]" />;
     case "repository-settings":
-      return <Settings className="size-3.5 shrink-0 text-muted-foreground" />;
+      return <Settings className="icon-paired shrink-0 text-muted-foreground" />;
     case "remove-repository":
-      return <Trash className="size-3.5 shrink-0" />;
+      return <Trash className="icon-paired shrink-0" />;
   }
 }
 

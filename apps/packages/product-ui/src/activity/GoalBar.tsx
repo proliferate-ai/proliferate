@@ -178,12 +178,12 @@ export function GoalBar({
           />
           <GoalBarIconAction
             label="Edit goal"
-            icon={<Pencil className="size-3.5" />}
+            icon={<Pencil className="icon-paired" />}
             onClick={() => setEditing(true)}
           />
           <GoalBarIconAction
             label="Delete goal"
-            icon={<Trash2 className="size-3.5" />}
+            icon={<Trash2 className="icon-paired" />}
             destructive
             onClick={onClear}
           />
@@ -216,7 +216,7 @@ export function GoalBar({
               >
                 — {state.goal.objective}
               </span>
-              <ChevronUp className="size-3.5 shrink-0 text-faint" aria-hidden />
+              <ChevronUp className="icon-paired shrink-0 text-faint" aria-hidden />
             </Button>
           )}
           side="top"
@@ -249,7 +249,7 @@ export function GoalBar({
         <span className="ml-1 flex shrink-0 items-center">
           <GoalBarIconAction
             label="Dismiss goal result"
-            icon={<X className="size-3.5" />}
+            icon={<X className="icon-paired" />}
             onClick={onDismiss}
           />
         </span>
@@ -293,7 +293,7 @@ function GoalBarGlyph({
   /** Nudged down to align with a multi-line editor's first line of text. */
   raised?: boolean;
 }) {
-  const className = twMerge("size-3.5 shrink-0", raised && "mt-1");
+  const className = twMerge("icon-paired shrink-0", raised && "mt-1");
   if (state.kind === "result") {
     if (state.outcome === "met") {
       return <CircleCheck className={twMerge(className, "text-success")} aria-hidden />;
@@ -320,7 +320,7 @@ function GoalBarPauseAction({
   onResume: () => void;
 }) {
   const label = paused ? "Resume goal" : "Pause goal";
-  const icon = paused ? <Play className="size-3.5" /> : <Pause className="size-3.5" />;
+  const icon = paused ? <Play className="icon-paired" /> : <Pause className="icon-paired" />;
   if (pauseSupported) {
     return (
       <GoalBarIconAction label={label} icon={icon} onClick={paused ? onResume : onPause} />

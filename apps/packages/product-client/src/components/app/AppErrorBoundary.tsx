@@ -98,7 +98,7 @@ function EmergencyRecoveryShell({
         <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
           Proliferate recovery
         </p>
-        <h1 className="text-2xl font-semibold">The app needs a quick reload</h1>
+        <h1 className="text-[length:var(--text-title)] font-semibold leading-[var(--text-title--line-height)]">The app needs a quick reload</h1>
         <p className="text-sm text-muted-foreground" role="status" aria-live="polite">
           {emergencyReportCopy(reportStatus)}
           {enhancementStatus === "loading"

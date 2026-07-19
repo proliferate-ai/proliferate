@@ -90,8 +90,8 @@ export function FileReferenceBadge({
             path={iconPath}
             kind={actions.pathKind === "directory" ? "directory" : "file"}
             className={variant === "inline"
-              ? "absolute left-0 top-1/2 size-3.5 -translate-y-1/2 opacity-95"
-              : "size-2.5 opacity-90"}
+              ? "absolute left-0 top-1/2 icon-paired -translate-y-1/2 opacity-95 [font-size:var(--text-chat)]"
+              : "icon-compact opacity-90 [font-size:var(--text-chat)]"}
             toneClassName={variant === "inline" ? "text-current" : "file-reference-icon"}
           />
         )}

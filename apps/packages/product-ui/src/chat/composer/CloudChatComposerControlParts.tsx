@@ -27,10 +27,10 @@ export function ComposerControlMenuRows({
           <PopoverMenuItem
             key={`${group.id}:${option.id}`}
             label={option.label}
-            icon={option.icon ? <SessionControlIcon icon={option.icon} className="size-3.5" /> : undefined}
+            icon={option.icon ? <SessionControlIcon icon={option.icon} className="icon-paired" /> : undefined}
             trailing={(
               <span className="flex items-center gap-1">
-                {option.selected ? <Check className="size-3.5 shrink-0" /> : null}
+                {option.selected ? <Check className="icon-paired shrink-0" /> : null}
                 {option.selected ? (
                   <PendingComposerConfigIndicator pendingState={control.pendingState ?? null} />
                 ) : null}
@@ -64,10 +64,10 @@ export function PendingComposerConfigIndicator({
   pendingState: CloudChatComposerControlView["pendingState"];
 }) {
   if (pendingState === "sending") {
-    return <Loader2 size={12} className="shrink-0 animate-spin text-muted-foreground/70" />;
+    return <Loader2 className="icon-paired shrink-0 animate-spin text-muted-foreground/70" />;
   }
   if (pendingState === "queued") {
-    return <Clock3 size={12} className="shrink-0 text-muted-foreground/70" />;
+    return <Clock3 className="icon-paired shrink-0 text-muted-foreground/70" />;
   }
   return null;
 }
@@ -78,14 +78,14 @@ export function iconNodeForComposerControl(
 ): ReactNode {
   switch (icon) {
     case "brain":
-      return <Brain size={14} className={className} />;
+      return <Brain className={`icon-paired ${className}`} />;
     case "settings":
-      return <Wrench size={14} className={className} />;
+      return <Wrench className={`icon-paired ${className}`} />;
     case "bot":
-      return <Bot size={14} className={className} />;
+      return <Bot className={`icon-paired ${className}`} />;
     case undefined:
     case null:
-      return <Bot size={14} className={className} />;
+      return <Bot className={`icon-paired ${className}`} />;
     default:
       return <SessionControlIcon icon={icon} className={className} />;
   }

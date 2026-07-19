@@ -69,7 +69,7 @@ export function OrganizationMembersSection({
       <div className="space-y-3">
         <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
           <div className="relative min-w-0 flex-1">
-            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Search className="pointer-events-none absolute left-3 top-1/2 icon-paired -translate-y-1/2 text-muted-foreground" />
             <Input
               value={search}
               onChange={(event) => setSearch(event.currentTarget.value)}

@@ -219,7 +219,7 @@ export function TranscriptScrollToBottomButton({
             : "opacity-0"
         }`}
       >
-        <ChevronDown className="size-4" />
+        <ChevronDown className="icon-control" />
       </Button>
     </div>
   );
@@ -228,7 +228,7 @@ export function TranscriptScrollToBottomButton({
 export function TranscriptHistoryLoadingRow() {
   return (
     <div className="flex justify-center pb-3 text-muted-foreground" role="status">
-      <Spinner className="size-4" />
+      <Spinner className="icon-control" />
       <span className="sr-only">Loading earlier messages</span>
     </div>
   );

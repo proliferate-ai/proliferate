@@ -409,7 +409,7 @@ export function CloudRepoActionDialogHost() {
         data-telemetry-block
       >
         <DialogHeader>
-          <DialogTitle className="text-[15px] font-semibold leading-5">
+          <DialogTitle className="text-[length:var(--text-workspace-title)] font-semibold leading-[var(--text-workspace-title--line-height)]">
             {cloning ? "Clone from GitHub" : "Set up in Cloud"}
           </DialogTitle>
         </DialogHeader>

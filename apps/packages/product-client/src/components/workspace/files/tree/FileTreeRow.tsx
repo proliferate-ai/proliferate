@@ -54,7 +54,7 @@ export function FileTreeRow({
       {isDirectory && (
         <ChevronRight
           className={twMerge(
-            "size-3 shrink-0 text-sidebar-muted-foreground transition-transform duration-150",
+            "icon-compact shrink-0 text-sidebar-muted-foreground transition-transform duration-150",
             expanded && "rotate-90",
           )}
         />
@@ -64,7 +64,7 @@ export function FileTreeRow({
         path={path}
         kind={kind}
         isExpanded={isDirectory ? expanded : undefined}
-        className="size-3.5 shrink-0"
+        className="icon-paired shrink-0 [font-size:var(--text-sidebar-row)]"
         toneClassName={iconTone}
       />
       <span className="min-w-0 flex-1 truncate">
@@ -72,7 +72,7 @@ export function FileTreeRow({
       </span>
       {changed && (
         <span
-          className="shrink-0 pr-1 text-[10px] font-medium leading-none text-git-yellow"
+          className="shrink-0 pr-1 text-[length:var(--text-ui-sm)] font-medium leading-none text-git-yellow"
           aria-label="Modified"
         >
           M

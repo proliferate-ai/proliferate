@@ -94,7 +94,7 @@ export function CollapsiblePlanCard({
               aria-label={copyLabel}
               className="size-7 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
             >
-              {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+              {copied ? <Check className="icon-paired" /> : <Copy className="icon-paired" />}
             </Button>
             <Button
               type="button"
@@ -106,7 +106,7 @@ export function CollapsiblePlanCard({
               className="size-7 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
             >
               <ChevronDown
-                className={`size-3.5 transition-transform ${expanded ? "" : "-rotate-90"}`}
+                className={`icon-paired transition-transform ${expanded ? "" : "-rotate-90"}`}
               />
             </Button>
           </div>

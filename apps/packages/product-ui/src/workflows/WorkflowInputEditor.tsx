@@ -40,7 +40,7 @@ export function WorkflowInputEditor({
             { name: "", type: "string", required: true },
           ])}
         >
-          <Plus className="size-3.5" aria-hidden />
+          <Plus className="icon-paired" aria-hidden />
           Add input
         </Button>
       </div>
@@ -116,7 +116,7 @@ export function WorkflowInputEditor({
                   disabled={disabled}
                   onClick={() => onChange(inputs.filter((_, candidateIndex) => candidateIndex !== index))}
                 >
-                  <Trash2 className="size-4" aria-hidden />
+                  <Trash2 className="icon-paired" aria-hidden />
                 </Button>
               </div>
             );

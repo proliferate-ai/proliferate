@@ -322,7 +322,7 @@ export function AccountPane() {
                 label: signingIn
                   ? AUTH_ACCOUNT_LABELS.reconnecting
                   : AUTH_ACCOUNT_LABELS.reconnect,
-                icon: <RefreshCw className="size-3" />,
+                icon: <RefreshCw className="icon-compact" />,
                 loading: signingIn,
                 disabled: signingIn || cloudSignInChecking,
                 onClick: () => { void signInWithGitHub({ prompt: "select_account" }); },
@@ -333,7 +333,7 @@ export function AccountPane() {
                 label: signingIn
                   ? AUTH_ACCOUNT_LABELS.connectingGitHub
                   : AUTH_ACCOUNT_LABELS.connectGitHub,
-                icon: <ProviderBrandIcon provider="github" className="size-[13px]" />,
+                icon: <ProviderBrandIcon provider="github" className="icon-paired" />,
                 loading: signingIn,
                 disabled: signingIn || cloudSignInChecking,
                 onClick: () => { void signInWithGitHub({ prompt: "select_account" }); },
@@ -342,7 +342,7 @@ export function AccountPane() {
           connectGoogle: isAuthenticated && !devAuthBypassed
             ? {
                 label: linkingGoogle ? "Waiting for Google…" : "Add Google",
-                icon: <ProviderBrandIcon provider="google" className="size-[13px]" />,
+                icon: <ProviderBrandIcon provider="google" className="icon-paired" />,
                 loading: linkingGoogle,
                 disabled: !canLinkGoogle || linkingGoogle,
                 onClick: () => { void handleLinkGoogle(); },
@@ -351,7 +351,7 @@ export function AccountPane() {
           manageGitHubAccess: canOpenGitHubSettings
             ? {
                 label: AUTH_ACCOUNT_LABELS.manageAccess,
-                icon: <ExternalLink className="size-3" />,
+                icon: <ExternalLink className="icon-compact" />,
                 onClick: () => { void links.openExternal(githubSettingsUrl); },
               }
             : undefined,

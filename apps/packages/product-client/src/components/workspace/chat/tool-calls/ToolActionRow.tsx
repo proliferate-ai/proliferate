@@ -131,9 +131,9 @@ export function ToolActionLeadingAffordance({
   icon?: ReactNode;
 }) {
   return (
-    <span className="relative flex size-[1.143em] shrink-0 items-center justify-center text-current">
+    <span className="icon-paired relative flex shrink-0 items-center justify-center text-current">
       <span
-        className="absolute inset-0 flex items-center justify-center leading-none text-current [&_svg]:size-[1.143em] [&_svg]:text-current"
+        className="absolute inset-0 flex items-center justify-center leading-none text-current [&_svg]:size-full [&_svg]:text-current"
       >
         {icon}
       </span>

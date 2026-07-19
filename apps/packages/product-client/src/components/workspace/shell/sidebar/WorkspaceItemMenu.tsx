@@ -110,7 +110,7 @@ export function WorkspaceItemMenu({
           title="Workspace actions"
           className="opacity-50 hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"
         >
-          <MoreHorizontal className="size-3.5" />
+          <MoreHorizontal className="icon-paired" />
         </IconButton>
       </DropdownMenuTrigger>
       <DropdownMenuContent
@@ -120,25 +120,25 @@ export function WorkspaceItemMenu({
       >
         {onRename && (
           <DropdownMenuItem onSelect={onRename}>
-            <Pencil className="size-4 text-muted-foreground" />
+            <Pencil className="icon-paired text-muted-foreground" />
             Rename
           </DropdownMenuItem>
         )}
         {onArchive && !archived && (
           <DropdownMenuItem onSelect={onArchive}>
-            <Archive className="size-4 text-muted-foreground" />
+            <Archive className="icon-paired text-muted-foreground" />
             Archive...
           </DropdownMenuItem>
         )}
         {onUnarchive && archived && (
           <DropdownMenuItem onSelect={onUnarchive}>
-            <Archive className="size-4 text-muted-foreground" />
+            <Archive className="icon-paired text-muted-foreground" />
             Unarchive
           </DropdownMenuItem>
         )}
         {onCopyWorkspaceLocation && (
           <DropdownMenuItem onSelect={onCopyWorkspaceLocation}>
-            <Folder className="size-4 text-muted-foreground" />
+            <Folder className="icon-paired text-muted-foreground" />
             {workspaceLocationCopyLabel ?? "Copy workspace location"}
             <DropdownMenuShortcut>
               {getShortcutDisplayLabel(SHORTCUTS.copyWorkspacePath)}
@@ -157,7 +157,7 @@ export function WorkspaceItemMenu({
                     onAvailabilityCommand?.(command.kind);
                   }}
                 >
-                  <Icon className="size-4 text-muted-foreground" />
+                  <Icon className="icon-paired text-muted-foreground [font-size:var(--text-sidebar-row)]" />
                   <span className="min-w-0">
                     <span className="block">{command.label}</span>
                     {command.blocker ? (
@@ -176,7 +176,7 @@ export function WorkspaceItemMenu({
             <DropdownMenuSeparator />
             {onOpenPullRequest && (
               <DropdownMenuItem onSelect={onOpenPullRequest}>
-                <GitPullRequest className="size-4 text-muted-foreground" />
+                <GitPullRequest className="icon-paired text-muted-foreground" />
                 {pullRequestNumber !== null
                   ? `Open pull request #${pullRequestNumber}`
                   : "Open pull request"}
@@ -184,13 +184,13 @@ export function WorkspaceItemMenu({
             )}
             {branchName && (
               <div className="flex items-center gap-2 px-2 py-1.5 font-mono text-ui-sm text-muted-foreground">
-                <GitBranchIcon className="size-3.5 shrink-0" />
+                <GitBranchIcon className="icon-paired shrink-0 [font-size:var(--text-sidebar-row)]" />
                 <span className="min-w-0 truncate">{branchName}</span>
               </div>
             )}
             {onCopyBranchName && (
               <DropdownMenuItem onSelect={onCopyBranchName}>
-                <GitBranchIcon className="size-4 text-muted-foreground" />
+                <GitBranchIcon className="icon-paired text-muted-foreground [font-size:var(--text-sidebar-row)]" />
                 Copy branch name
                 <DropdownMenuShortcut>
                   {getShortcutDisplayLabel(SHORTCUTS.copyBranchName)}
@@ -203,7 +203,7 @@ export function WorkspaceItemMenu({
           <>
             <DropdownMenuSeparator />
             <DropdownMenuItem variant="destructive" onSelect={onMarkDone}>
-              <Trash className="size-4" />
+              <Trash className="icon-paired" />
               Delete workspace...
             </DropdownMenuItem>
           </>

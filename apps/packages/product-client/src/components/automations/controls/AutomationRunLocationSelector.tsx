@@ -83,10 +83,10 @@ export function AutomationRunLocationSelector({
   const triggerIcon = ownerScope === "organization"
     ? selectedRow
       ? renderAutomationTargetRowIcon(selectedRow, "trigger")
-      : <CloudIcon className="size-3.5" />
+      : <CloudIcon className="icon-paired" />
     : selectedRow
     ? renderAutomationTargetRowIcon(selectedRow, "trigger")
-    : <FolderOpen className="size-3.5" />;
+    : <FolderOpen className="icon-paired" />;
   const activeGroups = ownerScope === "organization" ? teamGroups : personalGroups;
   const activeOption = ownerScope === "organization" ? teamOption : personalOption;
   const activeOwnerDisabledReason = activeOption?.disabledReason ?? null;

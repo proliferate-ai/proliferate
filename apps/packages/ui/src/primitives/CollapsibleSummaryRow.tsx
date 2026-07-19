@@ -21,14 +21,14 @@ export function CollapsibleSummaryRow({
       className="flex w-full items-center justify-between rounded-lg border border-border bg-transparent px-4 py-3 text-left transition-colors duration-150 hover:bg-foreground/[0.03]"
     >
       <span className="flex min-w-0 flex-1 flex-col">
-        <span className="text-sm font-medium uppercase tracking-wider text-muted-foreground">
+        <span className="text-ui font-medium uppercase tracking-wider text-muted-foreground">
           {label}
         </span>
-        <span className="mt-0.5 truncate text-sm text-foreground">
+        <span className="mt-0.5 truncate text-ui text-foreground">
           {value}
         </span>
       </span>
-      {trailingIcon ?? <ChevronDown className="ml-3 size-4 shrink-0 text-muted-foreground" />}
+      {trailingIcon ?? <ChevronDown className="ml-3 icon-paired shrink-0 text-muted-foreground" />}
     </button>
   );
 }

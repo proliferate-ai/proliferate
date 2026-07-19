@@ -36,7 +36,7 @@ export function TerminalRosterRow({ process, nowMs, onOpen }: TerminalRosterRowP
   const tone = processStatusTone(process);
   const content = (
     <>
-      <SquareTerminal className={twMerge("mt-0.5 size-3.5 shrink-0", TONE_CLASSNAME[tone])} aria-hidden />
+      <SquareTerminal className={twMerge("mt-0.5 icon-paired shrink-0", TONE_CLASSNAME[tone])} aria-hidden />
       <div className="min-w-0 flex-1">
         <p className="truncate font-mono text-xs text-foreground" data-telemetry-mask title={process.command}>
           {process.command}
@@ -65,7 +65,7 @@ export function TerminalRosterRow({ process, nowMs, onOpen }: TerminalRosterRowP
   if (!onOpen) {
     return (
       <div
-        className="flex w-full items-start gap-2 rounded-md px-1.5 py-1.5 text-left"
+        className="flex w-full items-start gap-2 rounded-md px-1.5 py-1.5 text-left text-xs"
         data-terminal-roster-row
         data-process-id={process.id}
       >
@@ -79,7 +79,7 @@ export function TerminalRosterRow({ process, nowMs, onOpen }: TerminalRosterRowP
       variant="unstyled"
       size="unstyled"
       type="button"
-      className="flex w-full items-start gap-2 rounded-md px-1.5 py-1.5 text-left hover:bg-muted/40"
+      className="flex w-full items-start gap-2 rounded-md px-1.5 py-1.5 text-left text-xs hover:bg-muted/40"
       onClick={() => onOpen(process.id)}
       data-terminal-roster-row
       data-process-id={process.id}

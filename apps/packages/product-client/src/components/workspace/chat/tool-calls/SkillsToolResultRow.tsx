@@ -18,7 +18,7 @@ export function SkillsToolResultRow({
 }: SkillsToolResultRowProps) {
   return (
     <ToolActionRow
-      icon={<ProliferateIcon className="size-3 text-faint" />}
+      icon={<ProliferateIcon className="icon-compact text-faint" />}
       label={labelFor(presentation)}
       hint={hintFor(presentation)}
       status={status}
