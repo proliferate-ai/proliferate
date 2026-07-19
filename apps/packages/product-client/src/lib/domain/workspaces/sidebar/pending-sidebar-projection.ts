@@ -30,6 +30,12 @@ export function buildPendingSidebarProjection(args: {
   activeSessionTitle: string | null;
 }): PendingSidebarProjection | null {
   const { entry, repoRootsById } = args;
+  // Cowork owns its pending and materialized rows in CoworkThreadsSection.
+  // Projecting the same pending entry into the generic repository groups made
+  // a second row flash there while a newly opened thread finished activating.
+  if (entry.source === "cowork-created") {
+    return null;
+  }
   const pendingWorkspaceUiKey = buildPendingWorkspaceUiKey(entry);
   const materializedSelectedLogicalId =
     entry.workspaceId

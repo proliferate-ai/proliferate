@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { test } from "node:test";
 
 import {
@@ -8,11 +11,15 @@ import {
   HARNESSES_WITHOUT_GATEWAY_AUTH_SLOT,
   LOCAL6_REPRESENTATIVE_HARNESS,
   NoEligibleGatewayModelError,
+  SafeTurnFailure,
   assertOpencodeProviderSource,
   buildLocalRouteTurnEvidence,
+  captureLocalRouteFailure,
+  classifyTurnErrorForEvidence,
   collectLocal2GatewayCells,
   collectLocal3UserKeyCells,
   collectLocal6RouteChangeCell,
+  turnErrorEvidenceMessage,
   type LocalRouteDriver,
   type RouteModelSelection,
 } from "./chat-authroute.js";
@@ -273,6 +280,52 @@ function fakeDriver(options: FakeDriverOptions = {}): { driver: LocalRouteDriver
 }
 
 // ── LOCAL-2 (gateway per harness) ─────────────────────────────────────────────
+
+test("turn errors retain only a fixed route and safe class in evidence", () => {
+  const raw = "LiteLLM 429: Budget has been exceeded; current=5 max=5 key=sk-secret";
+  assert.equal(classifyTurnErrorForEvidence(raw), "budget_exceeded");
+  const message = turnErrorEvidenceMessage("gateway", raw);
+  assert.equal(message, "sendBoundedTurn route=gateway error_class=budget_exceeded");
+  assert.doesNotMatch(message, /(?:sk-secret|current|\b5\b)/);
+});
+
+test("turn error classification is conservative and bounded", () => {
+  assert.equal(classifyTurnErrorForEvidence("HTTP 429 from upstream"), "rate_limited");
+  assert.equal(classifyTurnErrorForEvidence("provider returned 401 unauthorized"), "authentication_failed");
+  assert.equal(classifyTurnErrorForEvidence("upstream service unavailable (503)"), "provider_unavailable");
+  assert.equal(classifyTurnErrorForEvidence("opaque provider detail secret=abc"), "unclassified");
+});
+
+test("safe turn failures never persist raw browser diagnostics", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "local-turn-safe-"));
+  const debugDir = path.join(root, "debug");
+  const previous = process.env.LOCAL_WORLD_SMOKE_DEBUG_DIR;
+  const raw = "LiteLLM 429: Budget has been exceeded; current=5 max=5 key=sk-secret";
+  try {
+    await mkdir(debugDir);
+    await writeFile(path.join(debugDir, "unrelated.txt"), "keep");
+    process.env.LOCAL_WORLD_SMOKE_DEBUG_DIR = debugDir;
+    const page = {
+      page: {
+        content: async () => `<main>${raw}</main>`,
+        screenshot: async ({ path: outputPath }: { path: string }) => writeFile(outputPath, raw),
+      },
+      debug: { console: [raw], network: [raw] },
+    } as unknown as ProductPage;
+
+    await captureLocalRouteFailure(page, "route-change", new SafeTurnFailure("gateway", raw));
+
+    assert.deepEqual(await readdir(debugDir), ["unrelated.txt"]);
+    assert.equal(await readFile(path.join(debugDir, "unrelated.txt"), "utf8"), "keep");
+  } finally {
+    if (previous === undefined) {
+      delete process.env.LOCAL_WORLD_SMOKE_DEBUG_DIR;
+    } else {
+      process.env.LOCAL_WORLD_SMOKE_DEBUG_DIR = previous;
+    }
+    await rm(root, { recursive: true, force: true });
+  }
+});
 
 test("LOCAL-2: a non-cursor harness produces a green local_route_turn (route=gateway) with folded cleanup", async () => {
   const { driver } = fakeDriver();

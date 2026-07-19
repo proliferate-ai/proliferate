@@ -17,6 +17,7 @@ interface PlaygroundComposerProps {
   lowerBackdropTopPx: number | null;
   selection: PlaygroundScenarioSelection;
   replay: PlaygroundReplayState;
+  rightInsetPx?: number;
 }
 
 export function PlaygroundComposer({
@@ -24,6 +25,7 @@ export function PlaygroundComposer({
   lowerBackdropTopPx,
   selection,
   replay,
+  rightInsetPx = 0,
 }: PlaygroundComposerProps) {
   const replaySlots = useComposerDockSlots();
   const scenario = selection.kind === "fixture" ? selection.key : null;
@@ -32,7 +34,10 @@ export function PlaygroundComposer({
   const attachedSlot = scenario ? renderAttachedSlot(scenario) : replaySlots.attachedSlot;
 
   return (
-    <div className="pointer-events-none absolute inset-0 z-10">
+    <div
+      className="pointer-events-none absolute inset-y-0 left-0 z-10"
+      style={{ right: rightInsetPx }}
+    >
       <ChatComposerDock
         ref={dockRef}
         outboundSlot={outboundSlot ?? undefined}

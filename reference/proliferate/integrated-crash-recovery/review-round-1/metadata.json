@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "app": "proliferate",
+  "appVersion": "web-dev@640133b8a310+working-tree",
+  "feature": "integrated-crash-recovery-review-round-1",
+  "capturedAt": "2026-07-18T22:10:50-07:00",
+  "timezone": "PDT",
+  "sourceSurface": "web-dev",
+  "targetUrl": "http://127.0.0.1:5433/playground/crash-recovery",
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "environment": {
+    "branch": "codex/ui-crash-recovery",
+    "baseSha": "c91d6f9275cd6e21723f9b83388df2ac8a697389",
+    "reviewedHead": "640133b8a310a1b6e8ca434f6bc9e46c62adfe19",
+    "captureSha": "640133b8a310a1b6e8ca434f6bc9e46c62adfe19+working-tree",
+    "profile": "ui-08-crash-recovery",
+    "deliverySurface": "web-dev (real ProductClient web host; not packaged Desktop)",
+    "port": 5433,
+    "hmr": "Vite HMR enabled; fresh server and captures taken after the lazy recovery chunk settled"
+  },
+  "artifacts": {
+    "matchedBefore": "../before-generic.png",
+    "reported": "after-reported.jpg",
+    "detailsExpanded": "after-reported-details.jpg",
+    "retryBefore": "after-retry-before.jpg",
+    "retrySuccess": "after-retry-success.jpg",
+    "interactionRecording": "../after-interaction.mp4"
+  },
+  "verification": [
+    "The crash-only recovery presentation loaded from its lazy chunk and reached the reported state.",
+    "Technical details expanded with safe message, relative component-stack fallback, release identity, and report status.",
+    "Try again reset the boundary and restored the playground content.",
+    "Console errors were limited to the deliberate playground render throw and AppErrorBoundary diagnostics."
+  ]
+}

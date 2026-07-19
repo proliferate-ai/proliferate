@@ -15,6 +15,9 @@ import {
   type PersistedWorkspaceUiState,
   type WorkspaceUiChangeTrackedState,
 } from "#product/lib/domain/preferences/workspace-ui/model";
+import {
+  sanitizeRightPanelMaterializedByWorkspace,
+} from "#product/lib/domain/preferences/workspace-ui/persisted-right-panel";
 
 export function selectPersistedWorkspaceUiState(
   state: PersistedWorkspaceUiState,
@@ -29,7 +32,9 @@ export function selectPersistedWorkspaceUiState(
     sidebarOpen: state.sidebarOpen,
     sidebarWidth: state.sidebarWidth,
     rightPanelDurableByWorkspace: state.rightPanelDurableByWorkspace,
-    rightPanelMaterializedByWorkspace: state.rightPanelMaterializedByWorkspace,
+    rightPanelMaterializedByWorkspace: sanitizeRightPanelMaterializedByWorkspace(
+      state.rightPanelMaterializedByWorkspace,
+    ),
     activeShellTabKeyByWorkspace: sanitizeActiveShellTabKeysByWorkspace(
       state.activeShellTabKeyByWorkspace,
     ),

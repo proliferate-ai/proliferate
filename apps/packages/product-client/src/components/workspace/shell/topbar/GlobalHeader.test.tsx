@@ -88,12 +88,14 @@ afterEach(() => {
 });
 
 describe("GlobalHeader", () => {
-  it("applies the workspace-title scale to the workspace name", () => {
+  it("applies the larger semantic workspace-title scale to the workspace name", () => {
     renderHeader();
 
-    const workspaceTitle = screen.getByTitle("repo");
-    expect(workspaceTitle.style.fontSize).toBe("var(--text-workspace-title)");
-    expect(workspaceTitle.style.lineHeight).toBe("var(--text-workspace-title--line-height)");
+    const title = screen.getByTitle("repo");
+    expect(title.style.fontSize).toBe("var(--text-workspace-title)");
+    expect(title.style.lineHeight).toBe("var(--text-workspace-title--line-height)");
+    expect(title.className.split(" ")).not.toContain("text-ui");
+    expect(title.className.split(" ")).not.toContain("text-sidebar-nav");
   });
 
   it("does not offer a native open action without a Desktop file bridge", () => {

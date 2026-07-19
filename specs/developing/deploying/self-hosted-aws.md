@@ -54,6 +54,15 @@ public `/health` URL, and writes it to `.env.runtime`; the stack reports
 success only after both the local API and that advertised public HTTPS endpoint
 respond.
 
+The instance gives `cfn-init` an 18-minute inner deadline, followed by a
+30-second forced-kill fallback if it does not stop on `TERM`, and always reports
+its bootstrap exit status through `cfn-signal`. This leaves headroom inside the
+stack's 20-minute creation policy. A failed or overlong bootstrap therefore
+puts only a bounded stage and exit-code reason in the stack event. Inspect
+`/var/log/cfn-init.log` and `/var/log/cfn-init-cmd.log` through SSM for host-local
+detail rather than copying those potentially secret-bearing logs into
+CloudFormation events.
+
 ## Required Inputs
 
 The base stack needs:
@@ -203,5 +212,7 @@ The stack also supports advanced override parameters:
   - use this with `RuntimeBinaryUrl` when you also have a matching `SHA256SUMS` file for the unreleased tarball
 
 Those overrides exist so the stack can be validated before the first tagged
-self-hosted release is cut. The normal release path should leave both at their
-defaults.
+self-hosted release is cut. `SH-CFN-WRAPPER` uses both runtime overrides with
+the exact current-head arm64 runtime archive and its run-scoped checksum file;
+it never derives a nonexistent `server-v<qualification-run-id>` runtime URL.
+The normal release path should leave both at their defaults.

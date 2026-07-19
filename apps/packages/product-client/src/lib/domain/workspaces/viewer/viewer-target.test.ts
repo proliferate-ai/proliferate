@@ -5,8 +5,10 @@ import {
   defaultFileViewerMode,
   fileDiffViewerTarget,
   fileViewerTarget,
+  isPersistableViewerTarget,
   pathIsWithinWorkspaceEntry,
   parseViewerTargetKey,
+  promptAttachmentViewerTarget,
   remapPathWithinWorkspaceEntry,
   remapViewerTargetPathWithinWorkspaceEntry,
   viewerTargetEditablePath,
@@ -47,6 +49,23 @@ describe("viewer target keys", () => {
       v: 2,
       target: fileViewerTarget("README.md"),
     }))}`)).toBeNull();
+  });
+
+  it("round-trips session-local attachment targets without making them durable", () => {
+    const draftTarget = promptAttachmentViewerTarget({
+      origin: "draft",
+      attachmentId: "attachment:one",
+      name: "notes.md",
+      mimeType: "text/markdown",
+      size: 128,
+      attachmentKind: "text_resource",
+      attachmentSource: "upload",
+      objectUrl: "blob:attachment-one",
+    });
+
+    expect(parseViewerTargetKey(viewerTargetKey(draftTarget))).toEqual(draftTarget);
+    expect(isPersistableViewerTarget(draftTarget)).toBe(false);
+    expect(isPersistableViewerTarget(fileViewerTarget("notes.md"))).toBe(true);
   });
 
   it("normalizes legacy working_tree all-changes payloads to composite scope", () => {

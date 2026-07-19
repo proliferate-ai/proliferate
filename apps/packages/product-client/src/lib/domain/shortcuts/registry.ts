@@ -11,12 +11,25 @@ export interface ShortcutTrigger {
 // handler intentionally performed no action because the app was already busy.
 export type ShortcutHandler = (trigger: ShortcutTrigger) => boolean | void;
 
+export type ShortcutHandlerPriority = "global" | "contextual";
+
 interface RegisteredShortcutHandler {
   token: symbol;
   handler: ShortcutHandler;
+  priority: ShortcutHandlerPriority;
+}
+
+interface RegisterShortcutHandlerOptions {
+  priority?: ShortcutHandlerPriority;
 }
 
 const shortcutHandlers = new Map<ShortcutId, RegisteredShortcutHandler[]>();
+// Contextual surfaces own a shortcut while mounted. Global handlers remain
+// deterministic fallbacks regardless of React passive-effect registration order.
+const SHORTCUT_HANDLER_PRIORITY_RANK: Record<ShortcutHandlerPriority, number> = {
+  global: 0,
+  contextual: 1,
+};
 const VALID_SHORTCUT_IDS = new Set<ShortcutId>(
   Object.values(SHORTCUTS).map((shortcut) => shortcut.id),
 );
@@ -24,6 +37,7 @@ const VALID_SHORTCUT_IDS = new Set<ShortcutId>(
 export function registerShortcutHandler(
   id: ShortcutId,
   handler: ShortcutHandler,
+  options?: RegisterShortcutHandlerOptions,
 ): () => void {
   if (!VALID_SHORTCUT_IDS.has(id)) {
     const message = `Unknown shortcut handler registration for ${id}`;
@@ -36,12 +50,15 @@ export function registerShortcutHandler(
   }
 
   const token = Symbol(id);
+  const priority = options?.priority ?? "global";
   const handlers = shortcutHandlers.get(id) ?? [];
-  if (handlers.length > 0) {
-    console.warn(`Duplicate shortcut handler registration for ${id}; using latest handler`);
+  if (handlers.some((entry) => entry.priority === priority)) {
+    console.warn(
+      `Duplicate shortcut handler registration for ${id} at ${priority} priority; using latest same-priority handler`,
+    );
   }
 
-  shortcutHandlers.set(id, [...handlers, { token, handler }]);
+  shortcutHandlers.set(id, [...handlers, { token, handler, priority }]);
 
   return () => {
     const current = shortcutHandlers.get(id);
@@ -61,7 +78,16 @@ export function registerShortcutHandler(
 
 export function getShortcutHandler(id: ShortcutId): ShortcutHandler | null {
   const handlers = shortcutHandlers.get(id);
-  return handlers?.[handlers.length - 1]?.handler ?? null;
+  if (!handlers || handlers.length === 0) {
+    return null;
+  }
+
+  const owner = handlers.reduce((currentOwner, candidate) =>
+    SHORTCUT_HANDLER_PRIORITY_RANK[candidate.priority]
+      >= SHORTCUT_HANDLER_PRIORITY_RANK[currentOwner.priority]
+      ? candidate
+      : currentOwner);
+  return owner.handler;
 }
 
 export function runShortcutHandler(id: ShortcutId, trigger: ShortcutTrigger): boolean {

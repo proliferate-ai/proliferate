@@ -97,6 +97,16 @@ GHCR tags are not produced. Manual dispatch is validation-only; GHCR and
 release-asset publication require either a `server-v*` tag push or a publishing
 reusable-workflow call.
 
+The LiteLLM wrapper and the direct local-development service both consume the
+exact upstream coordinate recorded in the Delivery system contract. Treat an
+upstream change as one reviewed tag-and-digest update: verify an official
+non-prerelease tag, confirm its GHCR OCI-index digest and Linux amd64/arm64
+manifests, confirm the image's source-revision label matches the release commit,
+and check the configured models and management API against that source. Never
+substitute `main-stable`, another floating tag, or a version tag without its
+digest. Run `node --test scripts/ci-cd/litellm-image-pin.test.mjs` after an
+update; the test binds both build surfaces to the reviewed coordinate.
+
 The `server-v<version>` GitHub Release contains exactly these seven self-host
 assets:
 

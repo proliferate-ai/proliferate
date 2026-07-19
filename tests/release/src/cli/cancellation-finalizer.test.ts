@@ -83,6 +83,36 @@ test("normal close and cancellation share one finalizer invocation", async () =>
   }
 });
 
+test("a bounded signal posture and ordinary close still share one invocation", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "qualification-cancel-signal-mode-"));
+  try {
+    const calls: string[] = [];
+    const handle = registerCancellationFinalizer({
+      world: "self-host",
+      run: run("qs-signal-mode"),
+      runDir: path.join(dir, "self-host", "1"),
+      finalize: async () => {
+        calls.push("ordinary");
+        return { failed: 0 };
+      },
+      finalizeForSignal: async (signal) => {
+        calls.push(`signal:${signal}`);
+        return { failed: 1 };
+      },
+    });
+
+    await finalizeRegisteredForSignal("SIGTERM");
+    await handle.run();
+    assert.deepEqual(calls, ["signal:SIGTERM"]);
+
+    const raw = await readFile(path.join(dir, "self-host", "1-cancellation-finalization.json"), "utf8");
+    const receipt = JSON.parse(raw);
+    assert.equal(receipt.status, "failed");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("a cancellation cleanup failure remains identity-bound and red", async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), "qualification-cancel-failed-"));
   try {

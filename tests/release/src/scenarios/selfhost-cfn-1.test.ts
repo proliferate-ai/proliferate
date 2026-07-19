@@ -1,11 +1,16 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { afterEach, test } from "node:test";
 
 import {
   SELFHOST_CFN_1_ID,
   SH_CFN_WRAPPER,
   attachCfnCleanup,
   cleanupIsClean,
+  constructSelfHostCfnWorld,
+  registerSelfHostCfnCancellationFinalizer,
   resolveCfnWorldInputs,
   runCfnWrapperCell,
   runSelfHostCfnCells,
@@ -24,6 +29,22 @@ import {
   type TestRunReportV4,
 } from "../evidence/schema.js";
 import type { SelfHostCfnWorldCleanupEvidence } from "../worlds/selfhost/cfn.js";
+import {
+  SelfHostCfnCleanupStack,
+  buildCfnStackTags,
+  createCfnStackAndWait,
+  type CfnAwsExec,
+} from "../worlds/selfhost/cfn.js";
+import {
+  clearCancellationFinalizersForTest,
+  finalizeRegisteredForSignal,
+} from "../cli/cancellation-finalizer.js";
+import {
+  CLEANUP_LEDGER_FILENAME,
+  openCleanupLedger,
+} from "../worlds/local-workspace/cleanup-ledger.js";
+
+afterEach(() => clearCancellationFinalizersForTest());
 
 // ── Fakes ────────────────────────────────────────────────────────────────────
 
@@ -127,6 +148,7 @@ interface FakeWorldOptions {
   observedDigest?: string;
   ssmThrows?: boolean;
   bundleDigestBound?: boolean;
+  runtimeDigestBound?: boolean;
   templateValidated?: boolean;
   outputsSiteAddress?: string;
   cleanup?: SelfHostCfnWorldCleanupEvidence;
@@ -144,6 +166,7 @@ function fakeWorld(options: FakeWorldOptions = {}): { world: ReadySelfHostCfnWor
     templateSha256: "t".repeat(64),
     templateValidated: options.templateValidated ?? true,
     bundleDigestBound: options.bundleDigestBound ?? true,
+    runtimeDigestBound: options.runtimeDigestBound ?? true,
     pushedImageDigest: PUSHED_DIGEST,
     releaseVersionTag: "local-run-1-local-0",
     outputs: {
@@ -220,6 +243,7 @@ test("runCfnWrapperCell: green when every shallow check passes", async () => {
   assert.equal(result.status, "green");
   assert.ok(result.evidence);
   assert.equal(result.evidence?.image_digest_bound, true);
+  assert.equal(result.evidence?.runtime_digest_bound, true);
 });
 
 test("runCfnWrapperCell: an unreadable SSM image digest FAILS CLOSED (no version-only fallback, PR7-CONTROL-006)", async () => {
@@ -262,6 +286,7 @@ test("runCfnWrapperCell: unhealthy TLS, bad outputs, unbound bundle, and hosted-
   assert.equal((await runCfnWrapperCell(fakeWorld({ healthy: false }).world)).status, "failed");
   assert.equal((await runCfnWrapperCell(fakeWorld({ outputsSiteAddress: "other.example.com" }).world)).status, "failed");
   assert.equal((await runCfnWrapperCell(fakeWorld({ bundleDigestBound: false }).world)).status, "failed");
+  assert.equal((await runCfnWrapperCell(fakeWorld({ runtimeDigestBound: false }).world)).status, "failed");
   assert.equal((await runCfnWrapperCell(fakeWorld({ templateValidated: false }).world)).status, "failed");
   assert.equal((await runCfnWrapperCell(fakeWorld({ cloudWorkspaces: true }).world)).status, "failed");
   assert.equal((await runCfnWrapperCell(fakeWorld({ agentGateway: true }).world)).status, "failed");
@@ -292,6 +317,142 @@ test("resolveCfnWorldInputs: green resolution + typed failures for absent inputs
   assert.equal(resolveCfnWorldInputs(fakeCtx({ candidateBuildMap: null })).ok, false);
   const missingRegion = resolveCfnWorldInputs(fakeCtx({ env: fakeEnv({ RELEASE_E2E_SELFHOST_REGION: undefined }) }));
   assert.equal(missingRegion.ok, false);
+});
+
+test("constructSelfHostCfnWorld rejects a CFN map without the exact arm64 runtime before provider work", async () => {
+  const ctx = fakeCtx();
+  await assert.rejects(
+    constructSelfHostCfnWorld({
+      map: fakeCandidateMap(),
+      run: ctx.runIdentity!,
+      runDir: ctx.runDir ?? "/tmp/selfhost-cfn-missing-runtime",
+      region: "us-east-1",
+      hostedZoneId: "Z123",
+      bucket: "qual-bundle-bucket",
+      imageRepo: "ghcr.io/proliferate-ai/proliferate-server-qualification",
+    }),
+    /missing the required selfhost-runtime\/linux\/arm64 artifact/,
+  );
+});
+
+test("SIGTERM during retained-stack diagnostics initiates one bounded delete and preserves red custody", async () => {
+  const parentDir = await mkdtemp(path.join(os.tmpdir(), "selfhost-cfn-signal-"));
+  const cfnDir = path.join(parentDir, "cfn");
+  await mkdir(cfnDir, { recursive: true });
+  const run = fakeCtx().runIdentity!;
+  const ledger = await openCleanupLedger({
+    runDir: cfnDir,
+    runId: run.run_id,
+    shardId: run.shard_id,
+  });
+  const stack = new SelfHostCfnCleanupStack({ ledger });
+  const finalizer = registerSelfHostCfnCancellationFinalizer(stack, run, cfnDir);
+  let runDirectoryReleased = false;
+  await stack.registerAcquire("run_directory", cfnDir, async () => {
+    runDirectoryReleased = true;
+  });
+
+  const calls: Array<{ args: string[]; timeoutMs: number | undefined }> = [];
+  const exec: CfnAwsExec = {
+    async run(args, options) {
+      const copy = [...args];
+      calls.push({ args: copy, timeoutMs: options?.timeoutMs });
+      if (copy[0] === "cloudformation" && copy[1] === "wait" && copy[2] === "stack-create-complete") {
+        throw new Error("waiter observed CREATE_FAILED");
+      }
+      if (copy[0] === "cloudformation" && copy[1] === "describe-stack-events") {
+        return JSON.stringify({
+          StackEvents: [{
+            LogicalResourceId: "ProliferateInstance",
+            ResourceStatus: "CREATE_FAILED",
+            ResourceStatusReason: "Received FAILURE signal",
+          }],
+        });
+      }
+      if (copy[0] === "cloudformation" && copy[1] === "describe-stacks") {
+        return "DELETE_IN_PROGRESS\n";
+      }
+      return "";
+    },
+  };
+
+  let markCaptureStarted!: () => void;
+  const captureStarted = new Promise<void>((resolve) => { markCaptureStarted = resolve; });
+  let releaseCapture!: () => void;
+  const captureHeld = new Promise<void>((resolve) => { releaseCapture = resolve; });
+
+  try {
+    const create = createCfnStackAndWait({
+      exec,
+      stackName: "proliferate-sh-cfn-signal",
+      templatePath: "/t.yaml",
+      parameters: [],
+      tags: buildCfnStackTags({
+        stackName: "proliferate-sh-cfn-signal",
+        runId: run.run_id,
+        shardId: run.shard_id,
+      }),
+      region: "us-east-1",
+      writeParameterFile: async () => ({ path: "/tmp/p.json", remove: async () => undefined }),
+      registerCleanup: (kind, providerId, release, cancellationRelease) =>
+        stack.registerAcquire(kind, providerId, release, cancellationRelease),
+      onCreateFailure: async () => {
+        markCaptureStarted();
+        await captureHeld;
+        throw new Error("diagnostic capture interrupted by supported signal");
+      },
+    });
+
+    await captureStarted;
+    await finalizeRegisteredForSignal("SIGTERM");
+    const signalSummary = await finalizer.run();
+
+    const deletes = calls.filter((call) =>
+      call.args[0] === "cloudformation" && call.args[1] === "delete-stack"
+    );
+    const deleteWaits = calls.filter((call) =>
+      call.args[0] === "cloudformation" && call.args[1] === "wait" && call.args[2] === "stack-delete-complete"
+    );
+    const deleteObservations = calls.filter((call) =>
+      call.args[0] === "cloudformation" && call.args[1] === "describe-stacks"
+    );
+    assert.equal(deletes.length, 1, "supported signal submits the exact stack delete once");
+    assert.equal(deleteWaits.length, 0, "signal cleanup must not enter the ordinary 30-minute waiter");
+    assert.equal(deleteObservations.length, 1, "signal cleanup makes one immediate status observation");
+    assert.equal(deletes[0]?.timeoutMs, 5_000);
+    assert.equal(deleteObservations[0]?.timeoutMs, 5_000);
+    assert.equal(runDirectoryReleased, false, "the ledger directory remains for follow-up cleanup");
+    assert.equal(signalSummary.failed, 2);
+    assert.equal(signalSummary.stackDeleted, false);
+
+    const persistedLedger = JSON.parse(
+      await readFile(path.join(cfnDir, CLEANUP_LEDGER_FILENAME), "utf8"),
+    ) as { entries: Array<{ kind: string; phase: string; providerId: string | null }> };
+    const stackEntry = persistedLedger.entries.find((entry) => entry.kind === "cloudformation_stack");
+    assert.deepEqual(
+      { phase: stackEntry?.phase, providerId: stackEntry?.providerId },
+      { phase: "acquired", providerId: "proliferate-sh-cfn-signal" },
+      "DELETE_IN_PROGRESS remains durable, unreconciled follow-up custody",
+    );
+
+    const receiptRaw = await readFile(path.join(parentDir, "cfn-cancellation-finalization.json"), "utf8");
+    const receipt = JSON.parse(receiptRaw);
+    assert.equal(receipt.signal, "SIGTERM");
+    assert.equal(receipt.status, "failed");
+    assert.doesNotMatch(receiptRaw, /proliferate-sh-cfn-signal|Received FAILURE signal/);
+
+    const createRejected = assert.rejects(create, /Bootstrap diagnostic: capture_failed/);
+    releaseCapture();
+    await createRejected;
+    assert.equal(
+      calls.filter((call) => call.args[0] === "cloudformation" && call.args[1] === "delete-stack").length,
+      1,
+      "construction failure and signal share the memoized finalizer",
+    );
+  } finally {
+    releaseCapture?.();
+    await rm(parentDir, { recursive: true, force: true });
+  }
 });
 
 // ── Build / close failure semantics ───────────────────────────────────────────
@@ -364,6 +525,7 @@ test("cleanupIsClean + attachCfnCleanup: clean requires all deletions; block is 
     template_sha256: "f".repeat(64),
     template_validated: true,
     bundle_digest_bound: true,
+    runtime_digest_bound: true,
     image_digest_bound: true,
     outputs_valid: true,
     dns_tls_verified: true,

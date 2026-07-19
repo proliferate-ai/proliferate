@@ -12,7 +12,6 @@ export const TEXT_SIZE_TOKEN_IDS = [
   "ui",
   "ui-sm",
   "composer",
-  "workspace-title",
   "title",
   "hero",
   "chat",

@@ -144,6 +144,7 @@ function cfnWrapperEvidence(overrides: Partial<SelfHostCfnWrapperEvidenceV1> = {
     template_sha256: "f".repeat(64),
     template_validated: true,
     bundle_digest_bound: true,
+    runtime_digest_bound: true,
     image_digest_bound: true,
     outputs_valid: true,
     dns_tls_verified: true,

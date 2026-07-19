@@ -1204,12 +1204,18 @@ export SELFHOST_API_BASE_URL
 # INSTALL-1/QUAL-1/ISOLATION-1). SELFHOST-CFN-1's CloudFormation template
 # defaults to a Graviton (arm64) t4g instance, so run it with
 # SELFHOST_CANDIDATE_PLATFORM=linux/arm64 so the docker-load candidate image
-# matches the box arch.
+# and exact runtime archive match the box arch.
 SELFHOST_CANDIDATE_PLATFORM ?= linux/amd64
 # Optional matrix-cell filter passed verbatim to run.ts --cells (e.g. SH-GATEWAY
 # to run SELFHOST-QUAL-1's gateway cell alone on a run-scoped origin). Empty =
 # every planned cell.
 SELFHOST_CELLS ?=
+# Workflow seam for keeping the short-lived provider credential window separate
+# from long local candidate builds. `all` preserves the one-command local path;
+# Actions uses `build` before AWS federation and `run` afterward. The run phase
+# revalidates the exact map and every artifact hash before provider work.
+QUALIFICATION_SELFHOST_PHASE ?= all
+export QUALIFICATION_SELFHOST_PHASE
 qualification-selfhost:
 	@test -n "$(PROFILE)" || { \
 		echo "PROFILE=<unique-name> is required, e.g. make qualification-selfhost PROFILE=$$(whoami)-1 BEHAVIOR=diagnostic"; \
@@ -1219,6 +1225,10 @@ qualification-selfhost:
 		echo "BEHAVIOR=<diagnostic|strict> is required."; \
 		exit 1; \
 	}
+	@case "$${QUALIFICATION_SELFHOST_PHASE:-all}" in \
+		all|build|run) ;; \
+		*) echo "QUALIFICATION_SELFHOST_PHASE must be all, build, or run."; exit 2 ;; \
+	esac
 	@if [ "$$GITHUB_ACTIONS" != "true" ]; then \
 		test -f "$(QUALIFICATION_INFRA_ENV)" || { \
 			echo "Missing qualification secret profile at $(QUALIFICATION_INFRA_ENV)."; \
@@ -1239,27 +1249,38 @@ qualification-selfhost:
 	run_id="qs-$(PROFILE)"; \
 	shard_id="1"; \
 	run_dir="$(QUALIFICATION_SELFHOST_BASE_DIR)/$$run_id/$$shard_id"; \
+	phase="$${QUALIFICATION_SELFHOST_PHASE:-all}"; \
+	candidate_map="$$run_dir/candidate-build.json"; \
 	preflight_cells="$(SELFHOST_CELLS)"; \
 	if [ -z "$$preflight_cells" ]; then preflight_cells=all; fi; \
 	mkdir -p "$$run_dir/preflight"; \
 	source_sha=$$(git rev-parse HEAD); \
 	attempt="$${GITHUB_RUN_ATTEMPT:-1}"; \
-	node scripts/ci-cd/qualification-preflight.mjs \
-		--world self-host --source-sha "$$source_sha" --run-id "$$run_id" --shard-id "$$shard_id" --attempt "$$attempt" \
-		--scenarios "$(SELFHOST_SCENARIOS)" --cells "$$preflight_cells" --artifact-mode build \
-		--output "$$run_dir/preflight/qualification-preflight.json" || exit $$?; \
-	pnpm install --silent; \
-	pnpm exec playwright install --with-deps chromium; \
-	api_base_url="$${SELFHOST_API_BASE_URL:-}"; \
-	if [ -z "$$api_base_url" ]; then \
-		api_base_url=$$(cd tests/release && pnpm exec tsx src/cli/print-selfhost-run-api-base-url.ts "$$run_id" "$$shard_id") || exit $$?; \
+	if [ "$$phase" = "run" ]; then \
+		node scripts/ci-cd/qualification-preflight.mjs \
+			--world self-host --source-sha "$$source_sha" --run-id "$$run_id" --shard-id "$$shard_id" --attempt "$$attempt" \
+			--scenarios "$(SELFHOST_SCENARIOS)" --cells "$$preflight_cells" --artifact-mode reuse \
+			--candidate-build-map "$$candidate_map" \
+			--output "$$run_dir/preflight/qualification-preflight.json" || exit $$?; \
+	else \
+		node scripts/ci-cd/qualification-preflight.mjs \
+			--world self-host --source-sha "$$source_sha" --run-id "$$run_id" --shard-id "$$shard_id" --attempt "$$attempt" \
+			--scenarios "$(SELFHOST_SCENARIOS)" --cells "$$preflight_cells" --artifact-mode build \
+			--output "$$run_dir/preflight/qualification-preflight.json" || exit $$?; \
+		pnpm install --silent; \
+		pnpm exec playwright install --with-deps chromium; \
+		api_base_url="$${SELFHOST_API_BASE_URL:-}"; \
+		if [ -z "$$api_base_url" ]; then \
+			api_base_url=$$(cd tests/release && pnpm exec tsx src/cli/print-selfhost-run-api-base-url.ts "$$run_id" "$$shard_id") || exit $$?; \
+		fi; \
+		build_summary=$$(node scripts/ci-cd/build-selfhost-qualification-candidates.mjs \
+			--run-id "$$run_id" --shard-id "$$shard_id" --run-dir "$$run_dir" \
+			--platform "$(SELFHOST_CANDIDATE_PLATFORM)" \
+			--api-base-url "$$api_base_url") || exit $$?; \
+		echo "$$build_summary"; \
+		candidate_map=$$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).candidate_build_map)' "$$build_summary"); \
+		if [ "$$phase" = "build" ]; then exit 0; fi; \
 	fi; \
-	build_summary=$$(node scripts/ci-cd/build-selfhost-qualification-candidates.mjs \
-		--run-id "$$run_id" --shard-id "$$shard_id" --run-dir "$$run_dir" \
-		--platform "$(SELFHOST_CANDIDATE_PLATFORM)" \
-		--api-base-url "$$api_base_url") || exit $$?; \
-	echo "$$build_summary"; \
-	candidate_map=$$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).candidate_build_map)' "$$build_summary"); \
 	cells_flag=""; \
 	if [ -n "$(SELFHOST_CELLS)" ]; then cells_flag="--cells $(SELFHOST_CELLS)"; fi; \
 	cd tests/release && pnpm exec tsx src/cli/run.ts \

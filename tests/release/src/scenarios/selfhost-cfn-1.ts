@@ -16,6 +16,7 @@ import type { CandidateBuildMapV1 } from "../artifacts/build-map.js";
 import type { SelfHostCfnCleanupEvidenceBlock, SelfHostCfnWrapperEvidenceV1 } from "../evidence/schema.js";
 import type { PlannedCellV1, ResultReason, ScenarioDeclarableStatus } from "../runner/result.js";
 import type { RunIdentityV1 } from "../runner/identity.js";
+import { registerCancellationFinalizer } from "../cli/cancellation-finalizer.js";
 import { resolveSelfHostCandidateSet } from "../artifacts/selfhost-candidate-set.js";
 import { materializeLocalArtifact } from "../artifacts/materialize-local.js";
 import { openCleanupLedger } from "../worlds/local-workspace/cleanup-ledger.js";
@@ -25,7 +26,10 @@ import {
   QUALIFICATION_ZONE,
   SelfHostCfnCleanupStack,
   buildCfnParameters,
+  buildCfnStackTags,
   bundleDigestBound,
+  captureCfnBootstrapDiagnostic,
+  cfnBootstrapDiagnosticArtifactPath,
   cfnSiteAddress,
   cfnStackName,
   createCfnStackAndWait,
@@ -37,12 +41,15 @@ import {
   pushCandidateServerImage,
   runScopedImageTag,
   route53RecordAbsent,
+  runtimeDigestBound,
   s3KeyPrefix,
   ssmInspectRunningImageDigest,
   templateFileSha256,
   tmpParameterFileIo,
   uploadBundleAndPresign,
   validateTemplate,
+  writeCfnBootstrapDiagnosticArtifact,
+  type CfnBootstrapDiagnosticArtifactV1,
   type CfnStackOutputs,
   type SelfHostCfnWorldCleanupEvidence,
 } from "../worlds/selfhost/cfn.js";
@@ -77,6 +84,9 @@ import {
  *   the EXACT candidate `proliferate-deploy.tar.gz` + its SHA256SUMS; the stack
  *   `sha256sum -c`s them on the box. `bundle_digest_bound` = the uploaded sums
  *   list the candidate bundle sha256.
+ * - runtime: the same run-scoped SHA256SUMS binds the EXACT arm64 runtime
+ *   archive built from this source head; `RuntimeBinaryUrl` prevents the
+ *   run-scoped server-image tag from being misread as a GitHub release tag.
  * - template: the bundle does NOT ship the template (`proliferate-deploy.tar.gz`
  *   is built from `server/deploy/**`; the template lives under
  *   `server/infra/self-hosted-aws/`), so the receipt is the REPO template's byte
@@ -173,6 +183,7 @@ export interface ReadySelfHostCfnWorld {
   templateSha256: string;
   templateValidated: boolean;
   bundleDigestBound: boolean;
+  runtimeDigestBound: boolean;
   /** `sha256:<hex>` digest of the pushed candidate image. */
   pushedImageDigest: string;
   /** The run-scoped tag the candidate image was pushed under + passed as ReleaseVersion. */
@@ -315,6 +326,12 @@ export async function runCfnWrapperCell(world: ReadySelfHostCfnWorld): Promise<S
         "the stack would install an unverified bundle.",
     );
   }
+  if (!world.runtimeDigestBound) {
+    return fail(
+      "SH-CFN-WRAPPER: the uploaded SHA256SUMS did not bind the candidate arm64 runtime digest; " +
+        "the stack would install an unverified runtime.",
+    );
+  }
 
   // Outputs well-formed: BaseUrl == https://<SiteAddress>, SiteAddress == the
   // requested run subdomain, InstanceId present.
@@ -392,6 +409,7 @@ export async function runCfnWrapperCell(world: ReadySelfHostCfnWorld): Promise<S
     template_sha256: world.templateSha256,
     template_validated: true,
     bundle_digest_bound: true,
+    runtime_digest_bound: true,
     image_digest_bound: true,
     outputs_valid: true,
     dns_tls_verified: true,
@@ -413,6 +431,20 @@ export async function runCfnWrapperCell(world: ReadySelfHostCfnWorld): Promise<S
 export async function constructSelfHostCfnWorld(inputs: CfnWorldInputs): Promise<ReadySelfHostCfnWorld> {
   const log = (message: string): void => void message;
   const candidateSet = resolveSelfHostCandidateSet(inputs.map);
+  const expectedPlatformSuffix = "/linux/arm64";
+  const runtimeBundle = candidateSet.runtimeBundle;
+  if (!runtimeBundle) {
+    throw new Error("SH-CFN-WRAPPER: candidate map is missing the required selfhost-runtime/linux/arm64 artifact.");
+  }
+  for (const [name, artifactId] of [
+    ["server image", candidateSet.serverImage.artifact_id],
+    ["deploy bundle", candidateSet.bundle.artifact_id],
+    ["runtime bundle", runtimeBundle.artifact_id],
+  ] as const) {
+    if (!artifactId.endsWith(expectedPlatformSuffix)) {
+      throw new Error(`SH-CFN-WRAPPER: ${name} artifact ${artifactId} does not match the template's linux/arm64 instance architecture.`);
+    }
+  }
 
   const cfnDir = path.join(inputs.runDir, "cfn");
   const artifactsDir = path.join(cfnDir, "artifacts");
@@ -439,6 +471,7 @@ export async function constructSelfHostCfnWorld(inputs: CfnWorldInputs): Promise
     log,
     observeRoute53RecordAbsent: () => route53RecordAbsent(aws, inputs.hostedZoneId, siteAddress, inputs.region),
   });
+  const cancellationFinalizer = registerSelfHostCfnCancellationFinalizer(stack, inputs.run, cfnDir);
 
   try {
     // Local materialized paths tear down LAST (register first). run_directory
@@ -449,10 +482,12 @@ export async function constructSelfHostCfnWorld(inputs: CfnWorldInputs): Promise
     // Materialize (re-hash) the exact candidate bytes into run storage; the
     // SHA256SUMS sits next to the ORIGINAL bundle (builder sibling).
     const bundlePath = await materializeLocalArtifact(candidateSet.bundle, artifactsDir);
+    const runtimePath = await materializeLocalArtifact(runtimeBundle, artifactsDir);
     const serverImagePath = await materializeLocalArtifact(candidateSet.serverImage, artifactsDir);
     const sumsPath = path.join(path.dirname(candidateSet.bundle.locator.path), "self-hosted-assets.SHA256SUMS");
     const sumsContent = await readFile(sumsPath, "utf8");
     const digestBound = bundleDigestBound(sumsContent, candidateSet.bundle.sha256);
+    const runtimeBound = runtimeDigestBound(sumsContent, runtimeBundle.sha256);
 
     const templatePath = resolveRepoTemplatePath();
     const templateValidated = await validateTemplate(aws, templatePath, inputs.region);
@@ -465,8 +500,10 @@ export async function constructSelfHostCfnWorld(inputs: CfnWorldInputs): Promise
       bucket: inputs.bucket,
       keyPrefix: s3KeyPrefix(inputs.run.run_id, inputs.run.shard_id),
       bundlePath,
+      runtimePath,
       sumsPath,
-      registerCleanup: (kind, providerId, release) => stack.registerAcquire(kind, providerId, release),
+      registerCleanup: (kind, providerId, release, cancellationRelease) =>
+        stack.registerAcquire(kind, providerId, release, cancellationRelease),
       log,
     });
 
@@ -478,7 +515,8 @@ export async function constructSelfHostCfnWorld(inputs: CfnWorldInputs): Promise
       archivePath: serverImagePath,
       targetRepo: inputs.imageRepo,
       tag,
-      registerCleanup: (kind, providerId, release) => stack.registerAcquire(kind, providerId, release),
+      registerCleanup: (kind, providerId, release, cancellationRelease) =>
+        stack.registerAcquire(kind, providerId, release, cancellationRelease),
       log,
     });
 
@@ -493,6 +531,8 @@ export async function constructSelfHostCfnWorld(inputs: CfnWorldInputs): Promise
     const parameters = buildCfnParameters({
       releaseVersion: tag,
       serverImageRepository: inputs.imageRepo,
+      runtimeBinaryUrl: presigned.runtimeBinaryUrl,
+      runtimeBinaryChecksumUrl: presigned.deployBundleChecksumUrl,
       deployBundleUrl: presigned.deployBundleUrl,
       deployBundleChecksumUrl: presigned.deployBundleChecksumUrl,
       siteAddress,
@@ -503,9 +543,42 @@ export async function constructSelfHostCfnWorld(inputs: CfnWorldInputs): Promise
       stackName,
       templatePath,
       parameters,
+      tags: buildCfnStackTags({
+        stackName,
+        runId: inputs.run.run_id,
+        shardId: inputs.run.shard_id,
+      }),
       region: inputs.region,
-      registerCleanup: (kind, providerId, release) => stack.registerAcquire(kind, providerId, release),
+      registerCleanup: (kind, providerId, release, cancellationRelease) =>
+        stack.registerAcquire(kind, providerId, release, cancellationRelease),
       writeParameterFile: tmpParameterFileIo(),
+      onCreateFailure: async ({ stackName: failedStackName, region }) => {
+        const diagnostic = await captureCfnBootstrapDiagnostic({
+          exec: aws,
+          stackName: failedStackName,
+          region,
+        });
+        const artifact: CfnBootstrapDiagnosticArtifactV1 = {
+          schema_version: 1,
+          kind: "proliferate.selfhost-cfn-bootstrap-diagnostic",
+          run: {
+            run_id: inputs.run.run_id,
+            shard_id: inputs.run.shard_id,
+            attempt: inputs.run.attempt,
+            source_sha: inputs.run.source_sha,
+          },
+          diagnostic,
+        };
+        // This path is deliberately a sibling of `<runDir>/cfn`, not inside
+        // it: the nested run-directory releaser may delete `cfn/` after the
+        // callback returns, while the workflow's existing `**/logs/` glob must
+        // retain this bounded artifact on the red run.
+        await writeCfnBootstrapDiagnosticArtifact(
+          cfnBootstrapDiagnosticArtifactPath(inputs.runDir),
+          artifact,
+        );
+        return diagnostic;
+      },
       log,
     });
 
@@ -515,6 +588,7 @@ export async function constructSelfHostCfnWorld(inputs: CfnWorldInputs): Promise
       artifactIds: [
         candidateSet.serverImage.artifact_id,
         candidateSet.bundle.artifact_id,
+        runtimeBundle.artifact_id,
         candidateSet.anyharness.artifact_id,
         candidateSet.desktopRenderer.artifact_id,
       ],
@@ -525,6 +599,7 @@ export async function constructSelfHostCfnWorld(inputs: CfnWorldInputs): Promise
       templateSha256,
       templateValidated,
       bundleDigestBound: digestBound,
+      runtimeDigestBound: runtimeBound,
       pushedImageDigest: pushed.pushedDigest,
       releaseVersionTag: tag,
       outputs,
@@ -532,12 +607,31 @@ export async function constructSelfHostCfnWorld(inputs: CfnWorldInputs): Promise
         ssmInspectRunningImageDigest({ exec: aws, instanceId: outputs.instanceId, region: inputs.region, log }),
       waitHealthy: () => waitForHealth(`https://${siteAddress}`, {}),
       fetchMeta: () => fetchCfnMeta(`https://${siteAddress}`),
-      close: () => stack.runAll(),
+      close: () => cancellationFinalizer.run(),
     };
   } catch (error) {
-    await stack.runAll().catch(() => undefined);
+    await cancellationFinalizer.run().catch(() => undefined);
     throw error;
   }
+}
+
+/**
+ * Registers the CFN world's one memoized cleanup owner immediately after the
+ * ledger/stack exist. Normal close and setup failure retain full reconciliation;
+ * supported signals use the stack's bounded delete-initiation custody posture.
+ */
+export function registerSelfHostCfnCancellationFinalizer(
+  stack: SelfHostCfnCleanupStack,
+  run: RunIdentityV1,
+  runDir: string,
+) {
+  return registerCancellationFinalizer({
+    world: "self-host",
+    run,
+    runDir,
+    finalize: () => stack.runAll(),
+    finalizeForSignal: () => stack.runForCancellation(),
+  });
 }
 
 /** Reads the public `/meta` serverVersion + base capability booleans. */

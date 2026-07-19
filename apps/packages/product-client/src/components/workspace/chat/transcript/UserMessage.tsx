@@ -9,6 +9,7 @@ import {
   normalizeContentParts,
   type PromptDisplayPlanPart,
 } from "@proliferate/product-domain/chats/composer/prompt-display-parts";
+import { usePromptAttachmentPreviewActions } from "#product/hooks/chat/workflows/use-prompt-attachment-preview-actions";
 
 export interface UserMessageProps {
   sessionId: string | null;
@@ -39,6 +40,9 @@ export function UserMessage({
     ) ?? null
     : null;
   const hasAttachments = displayParts.some((part) => part.type !== "text");
+  const hasPreviewableAttachments = displayParts.some((part) => (
+    part.type === "image" || part.type === "file"
+  ));
   const hasTextPart = displayParts.some((part) => (
     part.type === "text" && part.text.trim().length > 0
   ));
@@ -67,13 +71,10 @@ export function UserMessage({
       <div className="flex w-full flex-col items-end justify-end gap-1">
         {hasAttachments && (
           <div className="w-full max-w-xl self-end lg:max-w-3xl" data-telemetry-mask>
-            <PromptContentRenderer
+            <UserMessageAttachmentContent
               sessionId={sessionId}
               parts={contentParts}
-              fallbackText=""
-              variant="transcript"
-              includeText={false}
-              layout="auto"
+              previewEnabled={hasPreviewableAttachments}
             />
           </div>
         )}
@@ -127,5 +128,64 @@ export function UserMessage({
         )}
       </div>
     </div>
+  );
+}
+
+function UserMessageAttachmentContent({
+  sessionId,
+  parts,
+  previewEnabled,
+}: {
+  sessionId: string | null;
+  parts: ContentPart[];
+  previewEnabled: boolean;
+}) {
+  if (previewEnabled) {
+    return <PreviewConnectedUserMessageAttachments sessionId={sessionId} parts={parts} />;
+  }
+  return <UserMessageAttachments sessionId={sessionId} parts={parts} />;
+}
+
+function PreviewConnectedUserMessageAttachments({
+  sessionId,
+  parts,
+}: {
+  sessionId: string | null;
+  parts: ContentPart[];
+}) {
+  const { openAttachmentPreview } = usePromptAttachmentPreviewActions();
+  return (
+    <PromptContentRenderer
+      sessionId={sessionId}
+      parts={parts}
+      fallbackText=""
+      variant="transcript"
+      includeText={false}
+      layout="auto"
+      onOpenAttachment={(part) => openAttachmentPreview({
+        part,
+        origin: "session",
+        sessionId,
+      })}
+    />
+  );
+}
+
+function UserMessageAttachments({
+  sessionId,
+  parts,
+}: {
+  sessionId: string | null;
+  parts: ContentPart[];
+}) {
+  return (
+    <PromptContentRenderer
+      sessionId={sessionId}
+      parts={parts}
+      fallbackText=""
+      variant="transcript"
+      includeText={false}
+      layout="auto"
+    />
   );
 }

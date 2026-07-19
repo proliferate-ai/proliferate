@@ -61,18 +61,48 @@ The durable right-panel tool id remains `git`; “Changes” is a display label.
 ## Viewer Targets
 
 Center tabs use `ViewerTarget`, owned by
-`apps/desktop/src/lib/domain/workspaces/viewer-target.ts`.
+`apps/packages/product-client/src/lib/domain/workspaces/viewer/viewer-target.ts`.
 
 Supported targets:
 
 - `file`: editable/readable file view
 - `fileDiff`: one file diff for `unstaged`, `staged`, or `branch`
 - `allChanges`: a scoped multi-file review view
+- `promptAttachment`: an ephemeral read-only image or text-resource preview
+  originating from a composer draft or submitted session prompt
 
 Shell-tab keys are `viewer:<base64url-json>`. The encoded payload is canonical:
 optional fields normalize to `null`, refs are trimmed, and UTF-8 paths are
 encoded through the shared base64url helper. Legacy persisted `file:<path>`
 keys are read as file viewer targets and written back as `viewer:*`.
+
+`promptAttachment` identity includes its `draft` or `session` origin,
+attachment id, display name, MIME type, optional size, image/text-resource
+kind, and upload/paste source. Draft targets may include an in-memory object
+URL and must not include a session id. Session targets never include an object
+URL; they resolve the attachment through the existing session resource access
+path and may temporarily have no usable session id while queued or optimistic
+identity is incomplete, in which case the viewer shows an unavailable state.
+
+Prompt-attachment targets are session-local UI state and are never persisted.
+Shell-tab seeding and right-panel preference sanitization discard them on
+write and restore. Draft object URLs must never be copied into durable state,
+logs, workspace files, or submitted session targets. Their lifetime is owned
+by
+`apps/packages/product-client/src/hooks/chat/ui/use-prompt-attachments.ts`:
+removal, submission, scope
+change, and unmount first remove every matching viewer target and materialized
+right-panel header through
+`apps/packages/product-client/src/hooks/chat/workflows/use-prompt-attachment-preview-actions.ts`,
+then revoke
+each owned URL exactly once. Closing the viewer alone leaves the draft and its
+URL intact. Submitted attachment blobs and derived object URLs remain owned by
+`apps/packages/product-client/src/hooks/access/anyharness/sessions/use-prompt-attachment-url.ts`;
+draft and
+session text reads, cancellation, and identity reset are owned by
+`apps/packages/product-client/src/hooks/access/prompt-attachments/use-prompt-attachment-text.ts`.
+The read-only presentation surface is
+`apps/packages/product-client/src/components/workspace/files/PromptAttachmentViewer.tsx`.
 
 `working_tree_composite` is UI-only. It is never passed to git diff queries.
 It renders separate unstaged and staged sections, and rows open `fileDiff`

@@ -2,7 +2,6 @@ import {
   BookMarked,
   BookOpen,
   Globe,
-  Keyboard,
   Lightbulb,
   MessageSquare,
 } from "lucide-react";
@@ -24,13 +23,12 @@ export interface SidebarHelpSectionProps {
   openSupport: () => void;
   openPrompt: () => void;
   openExternalUrl: (url: string) => void;
-  onShowKeyboardShortcuts: () => void;
   onClose: () => void;
 }
 
 /**
- * Docs/Changelog/Discord/keyboard-shortcuts (always universal — no gating) plus
- * the capability-gated "Go to web" and support actions:
+ * Documentation/Changelog/Discord (always universal — no gating) plus the
+ * capability-gated "Go to web" and support actions:
  *
  * - `supportAction.kind === "vendor"` (hosted): unchanged "Send feedback" /
  *   "Submit a prompt" actions into the vendor support-report window.
@@ -48,63 +46,10 @@ export function SidebarHelpSection({
   openSupport,
   openPrompt,
   openExternalUrl,
-  onShowKeyboardShortcuts,
   onClose,
 }: SidebarHelpSectionProps) {
   return (
-    <div className="border-t border-border-light py-1">
-      <PopoverMenuItem
-        variant="sidebar"
-        label="Keyboard shortcuts"
-        icon={<Keyboard className="size-4" />}
-        trailing={<span>{getShortcutDisplayLabel(SHORTCUTS.showKeyboardShortcuts)}</span>}
-        onClick={() => {
-          onClose();
-          onShowKeyboardShortcuts();
-        }}
-      />
-      <PopoverMenuItem
-        variant="sidebar"
-        label="Docs"
-        icon={<BookOpen className="size-4" />}
-        trailing={<ArrowUpRight className="size-3" />}
-        onClick={() => {
-          openExternalUrl(PROLIFERATE_DOCS_URL);
-          onClose();
-        }}
-      />
-      <PopoverMenuItem
-        variant="sidebar"
-        label="Changelog"
-        icon={<BookMarked className="size-4" />}
-        trailing={<ArrowUpRight className="size-3" />}
-        onClick={() => {
-          openExternalUrl(PROLIFERATE_CHANGELOG_URL);
-          onClose();
-        }}
-      />
-      <PopoverMenuItem
-        variant="sidebar"
-        label="Discord"
-        icon={<Discord className="size-4" />}
-        trailing={<ArrowUpRight className="size-3" />}
-        onClick={() => {
-          openExternalUrl(PROLIFERATE_DISCORD_URL);
-          onClose();
-        }}
-      />
-      {webApp.available && webApp.baseUrl ? (
-        <PopoverMenuItem
-          variant="sidebar"
-          label="Go to web"
-          icon={<Globe className="size-4" />}
-          trailing={<span>{getShortcutDisplayLabel(SHORTCUTS.openWebApp)}</span>}
-          onClick={() => {
-            openExternalUrl(webApp.baseUrl!);
-            onClose();
-          }}
-        />
-      ) : null}
+    <div className="py-1">
       {supportAction.kind === "vendor" ? (
         <>
           <PopoverMenuItem
@@ -138,6 +83,48 @@ export function SidebarHelpSection({
           icon={<Mail className="size-4" />}
           onClick={() => {
             openExternalUrl(supportAction.url);
+            onClose();
+          }}
+        />
+      ) : null}
+      <PopoverMenuItem
+        variant="sidebar"
+        label="Documentation"
+        icon={<BookOpen className="size-4" />}
+        trailing={<ArrowUpRight className="size-3" />}
+        onClick={() => {
+          openExternalUrl(PROLIFERATE_DOCS_URL);
+          onClose();
+        }}
+      />
+      <PopoverMenuItem
+        variant="sidebar"
+        label="Discord"
+        icon={<Discord className="size-4" />}
+        trailing={<ArrowUpRight className="size-3" />}
+        onClick={() => {
+          openExternalUrl(PROLIFERATE_DISCORD_URL);
+          onClose();
+        }}
+      />
+      <PopoverMenuItem
+        variant="sidebar"
+        label="Changelog"
+        icon={<BookMarked className="size-4" />}
+        trailing={<ArrowUpRight className="size-3" />}
+        onClick={() => {
+          openExternalUrl(PROLIFERATE_CHANGELOG_URL);
+          onClose();
+        }}
+      />
+      {webApp.available && webApp.baseUrl ? (
+        <PopoverMenuItem
+          variant="sidebar"
+          label="Go to web"
+          icon={<Globe className="size-4" />}
+          trailing={<span>{getShortcutDisplayLabel(SHORTCUTS.openWebApp)}</span>}
+          onClick={() => {
+            openExternalUrl(webApp.baseUrl!);
             onClose();
           }}
         />

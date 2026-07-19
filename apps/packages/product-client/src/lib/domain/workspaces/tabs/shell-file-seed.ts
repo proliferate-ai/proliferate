@@ -3,7 +3,11 @@ import {
   parseWorkspaceShellTabKey,
   type WorkspaceShellTabKey,
 } from "#product/lib/domain/workspaces/tabs/shell-tabs";
-import { viewerTargetKey, type ViewerTarget } from "#product/lib/domain/workspaces/viewer/viewer-target";
+import {
+  isPersistableViewerTarget,
+  viewerTargetKey,
+  type ViewerTarget,
+} from "#product/lib/domain/workspaces/viewer/viewer-target";
 
 export interface WorkspaceFileTabSeed {
   shellOrderKeys: WorkspaceShellTabKey[];
@@ -19,7 +23,7 @@ export function sanitizeWorkspaceShellTabKeys(
 
   for (const key of keys ?? []) {
     const parsed = parseWorkspaceShellTabKey(key);
-    if (!parsed) {
+    if (!parsed || (parsed.kind === "viewer" && !isPersistableViewerTarget(parsed.target))) {
       continue;
     }
     const canonicalKey = getWorkspaceShellTabKey(parsed);

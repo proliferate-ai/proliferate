@@ -82,6 +82,14 @@ const SubagentsUxPlaygroundPage = import.meta.env.DEV
     )
   : null
 
+const CrashRecoveryPlaygroundPage = import.meta.env.DEV
+  ? lazy(() =>
+      import("#product/pages/CrashRecoveryPlaygroundPage").then((m) => ({
+        default: m.CrashRecoveryPlaygroundPage,
+      })),
+    )
+  : null
+
 interface AppProps {
   // Host-supplied routes component (Desktop/Web pass their Sentry-instrumented
   // InstrumentedRoutes; the browser fixture passes plain React Router Routes).
@@ -189,6 +197,16 @@ export function App({ RoutesComponent }: AppProps) {
               element={
                 <Suspense fallback={null}>
                   <SubagentsUxPlaygroundPage />
+                </Suspense>
+              }
+            />
+          )}
+          {import.meta.env.DEV && CrashRecoveryPlaygroundPage && (
+            <Route
+              path="/playground/crash-recovery"
+              element={
+                <Suspense fallback={null}>
+                  <CrashRecoveryPlaygroundPage />
                 </Suspense>
               }
             />

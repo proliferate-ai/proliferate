@@ -1,9 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CreditCard, LogOut, Settings } from "lucide-react";
+import { CreditCard, Keyboard, LogOut, Settings } from "lucide-react";
 import { Check, ChevronUpDown, Mail } from "@proliferate/ui/icons";
-import { useUsageSummary } from "@proliferate/cloud-sdk-react";
-import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
 import {
@@ -14,15 +12,12 @@ import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import { OrganizationAvatar } from "#product/components/organizations/OrganizationAvatar";
 import { SHORTCUTS } from "#product/config/shortcuts/registry";
 import { useAppCapabilities } from "#product/hooks/capabilities/derived/use-app-capabilities";
-import { useWebAppTarget } from "#product/hooks/capabilities/derived/use-web-app-target";
 import { useAppSidebarSignOutAction } from "#product/hooks/app/workflows/use-app-sidebar-sign-out-action";
 import { useCloudBilling } from "#product/hooks/cloud/facade/use-cloud-billing";
 import { useCurrentUserOrganizationInvitations } from "#product/hooks/access/cloud/organizations/use-current-user-organization-invitations";
 import { useOrganizationActions } from "#product/hooks/access/cloud/organizations/use-organization-actions";
 import { useJoinedOrganizationActivation } from "#product/hooks/organizations/workflows/use-joined-organization-activation";
 import { useActiveOrganization } from "#product/hooks/organizations/facade/use-active-organization";
-import { useOpenSupportReportWindow } from "#product/hooks/support/workflows/use-open-support-report-window";
-import { useSupportMenuAction } from "#product/hooks/support/derived/use-support-menu-action";
 import { getShortcutDisplayLabel } from "#product/lib/domain/shortcuts/matching";
 import type {
   OrganizationInvitationRecord,
@@ -35,34 +30,22 @@ import {
 import { useKeyboardShortcutsDialogStore } from "#product/stores/shortcuts/keyboard-shortcuts-dialog-store";
 import { useToastStore } from "#product/stores/toast/toast-store";
 import { OrganizationSwitchDialog } from "#product/components/app/sidebar/OrganizationSwitchDialog";
-import { SidebarAppVersionRow } from "#product/components/app/sidebar/SidebarAppVersionRow";
-import { SidebarHelpSection } from "#product/components/app/sidebar/SidebarHelpSection";
-import { ConsumptionCard } from "#product/components/app/sidebar/SidebarConsumptionCard";
+import { SidebarHelpFooter } from "#product/components/app/sidebar/SidebarHelpFooter";
+import { SidebarUsageFooter } from "#product/components/app/sidebar/SidebarUsageFooter";
 
 /**
- * The single sidebar bottom-left account block, shared verbatim by the main
- * sidebar and the settings sidebar: avatar + name/organization trigger opening
- * one popover with invitations, the organization switcher, plan, help links,
- * settings/log out and the Proliferate app-version footer.
+ * Shared sidebar footer: a wide identity/account trigger plus independent
+ * usage and help concerns. Organization behavior stays in the account surface.
  */
 export function SidebarAccountFooter() {
   const navigate = useNavigate();
   const user = useProductAuthUser();
   const authStatus = useProductAuthStatus();
-  const { openExternal } = useProductHost().links;
   const handleSignOut = useAppSidebarSignOutAction();
   const openShortcutsDialog = useKeyboardShortcutsDialogStore((state) => state.setOpen);
-  const {
-    openBug: openSupport,
-    openFeature: openPrompt,
-    disabledReason: supportDisabledReason,
-  } = useOpenSupportReportWindow({ source: "sidebar" });
-  const supportAction = useSupportMenuAction();
   const showToast = useToastStore((state) => state.show);
   const capabilities = useAppCapabilities();
-  const webApp = useWebAppTarget();
   const { data: billingPlan } = useCloudBilling();
-  const { data: usageSummary } = useUsageSummary(undefined, authStatus === "authenticated");
   const {
     activeOrganization,
     activeOrganizationId,
@@ -87,12 +70,11 @@ export function SidebarAccountFooter() {
   const planLabel = capabilities.billingEnabled && billingPlan
     ? (billingPlan.isPaidCloud ? "Pro" : "Free")
     : null;
-
-  const openExternalUrl = (url: string) => {
-    void openExternal(url).catch(() => {
-      showToast("Failed to open the link.");
-    });
-  };
+  const identityLabel = authStatus === "loading"
+    ? "Loading account…"
+    : authStatus === "authenticated"
+      ? displayName
+      : "Signed out";
 
   async function handleAcceptInvitation() {
     if (!acceptTarget) {
@@ -110,16 +92,8 @@ export function SidebarAccountFooter() {
 
   return (
     <div className="shrink-0">
-      {capabilities.usageMeteringEnabled && usageSummary ? (
-        <ConsumptionCard
-          usageSummary={usageSummary}
-          onTopUp={() => {
-            navigate("/settings?section=billing");
-          }}
-        />
-      ) : null}
-      <div aria-hidden className="h-[0.5px] bg-sidebar-border" />
-      <div className="flex items-center px-2 py-2">
+      <div aria-hidden className="mx-3 h-[0.5px] bg-sidebar-border" />
+      <div className="flex items-center gap-1 px-2 py-2">
         <PopoverButton
           align="start"
           side="top"
@@ -130,7 +104,7 @@ export function SidebarAccountFooter() {
               variant="unstyled"
               size="unstyled"
               aria-label="Open account menu"
-              className="flex h-10 w-full min-w-0 items-center gap-3 rounded-lg px-2 text-left text-sidebar-foreground hover:bg-sidebar-accent data-[state=open]:bg-sidebar-accent"
+              className="flex h-10 min-w-0 flex-1 items-center gap-3 rounded-lg px-2 text-left text-sidebar-foreground hover:bg-sidebar-accent data-[state=open]:bg-sidebar-accent"
               title={displayName}
             >
               <span className="flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-sidebar-accent text-ui-sm font-medium text-sidebar-foreground">
@@ -158,7 +132,18 @@ export function SidebarAccountFooter() {
         >
           {(close) => (
             <div className="max-h-[28rem] overflow-y-auto">
-              {pendingInvitations.length > 0 ? (
+              <div className="px-2.5 py-2">
+                <div className="truncate text-ui font-medium text-sidebar-foreground">
+                  {identityLabel}
+                </div>
+                {authStatus === "authenticated" && user?.email && user.email !== displayName ? (
+                  <div className="truncate text-ui-sm text-sidebar-muted-foreground">
+                    {user.email}
+                  </div>
+                ) : null}
+              </div>
+
+              {authStatus === "authenticated" && pendingInvitations.length > 0 ? (
                 <div className="py-1">
                   <div className="px-2 py-1 text-ui-sm text-muted-foreground">
                     Pending invitations
@@ -180,57 +165,59 @@ export function SidebarAccountFooter() {
                 </div>
               ) : null}
 
-              <div className={`${pendingInvitations.length > 0 ? "border-t border-border-light" : ""} py-1`}>
-                {organizationsQuery.isLoading ? (
-                  <div className="px-2 py-1.5 text-ui text-muted-foreground">
-                    Loading organizations...
-                  </div>
-                ) : organizationsQuery.isError ? (
-                  <div className="px-2 py-1.5 text-ui text-muted-foreground">
-                    Organizations could not be loaded.
-                  </div>
-                ) : organizations.length > 0 ? (
-                  organizations.map((organization) => (
-                    <PopoverMenuItem
-                      key={organization.id}
-                      variant="sidebar"
-                      label={organization.name}
-                      icon={(
-                        <OrganizationAvatar
-                          name={organization.name}
-                          logoImage={organization.logoImage}
-                          className="size-5"
-                        />
-                      )}
-                      iconClassName="text-current"
-                      trailing={
-                        organization.id === activeOrganizationId
-                          ? <Check className="size-3.5" />
-                          : undefined
-                      }
-                      onClick={() => {
-                        // Org->org is semi-destructive (worker identity
-                        // rotates), so it confirms first; gaining a first
-                        // organization adopts it in place.
-                        if (organization.id !== activeOrganizationId) {
-                          if (activeOrganizationId) {
-                            setSwitchTarget(organization);
-                          } else {
-                            setActiveOrganizationId(organization.id);
-                          }
+              {authStatus === "authenticated" ? (
+                <div className={`${pendingInvitations.length > 0 ? "border-t" : ""} border-border-light py-1`}>
+                  {organizationsQuery.isLoading ? (
+                    <div className="px-2 py-1.5 text-ui text-muted-foreground">
+                      Loading organizations...
+                    </div>
+                  ) : organizationsQuery.isError ? (
+                    <div className="px-2 py-1.5 text-ui text-muted-foreground">
+                      Organizations could not be loaded.
+                    </div>
+                  ) : organizations.length > 0 ? (
+                    organizations.map((organization) => (
+                      <PopoverMenuItem
+                        key={organization.id}
+                        variant="sidebar"
+                        label={organization.name}
+                        icon={(
+                          <OrganizationAvatar
+                            name={organization.name}
+                            logoImage={organization.logoImage}
+                            className="size-5"
+                          />
+                        )}
+                        iconClassName="text-current"
+                        trailing={
+                          organization.id === activeOrganizationId
+                            ? <Check className="size-3.5" />
+                            : undefined
                         }
-                        close();
-                      }}
-                    />
-                  ))
-                ) : (
-                  <div className="px-2 py-1.5 text-ui text-muted-foreground">
-                    No organizations yet.
-                  </div>
-                )}
-              </div>
+                        onClick={() => {
+                          // Org->org is semi-destructive (worker identity
+                          // rotates), so it confirms first; gaining a first
+                          // organization adopts it in place.
+                          if (organization.id !== activeOrganizationId) {
+                            if (activeOrganizationId) {
+                              setSwitchTarget(organization);
+                            } else {
+                              setActiveOrganizationId(organization.id);
+                            }
+                          }
+                          close();
+                        }}
+                      />
+                    ))
+                  ) : (
+                    <div className="px-2 py-1.5 text-ui text-muted-foreground">
+                      No organizations yet.
+                    </div>
+                  )}
+                </div>
+              ) : null}
 
-              {planLabel ? (
+              {authStatus === "authenticated" && planLabel ? (
                 <div className="border-t border-border-light py-1">
                   <PopoverMenuItem
                     variant="sidebar"
@@ -245,18 +232,17 @@ export function SidebarAccountFooter() {
                 </div>
               ) : null}
 
-              <SidebarHelpSection
-                webApp={webApp}
-                supportAction={supportAction}
-                supportDisabledReason={supportDisabledReason}
-                openSupport={openSupport}
-                openPrompt={openPrompt}
-                openExternalUrl={openExternalUrl}
-                onShowKeyboardShortcuts={() => openShortcutsDialog(true)}
-                onClose={close}
-              />
-
               <div className="border-t border-border-light py-1">
+                <PopoverMenuItem
+                  variant="sidebar"
+                  label="Keyboard shortcuts"
+                  icon={<Keyboard className="size-4" />}
+                  trailing={<span>{getShortcutDisplayLabel(SHORTCUTS.showKeyboardShortcuts)}</span>}
+                  onClick={() => {
+                    close();
+                    openShortcutsDialog(true);
+                  }}
+                />
                 <PopoverMenuItem
                   variant="sidebar"
                   label="Settings"
@@ -267,25 +253,23 @@ export function SidebarAccountFooter() {
                     close();
                   }}
                 />
-                <PopoverMenuItem
-                  variant="sidebar"
-                  label="Log out"
-                  icon={<LogOut className="size-4" />}
-                  onClick={() => {
-                    handleSignOut();
-                    close();
-                  }}
-                />
+                {authStatus === "authenticated" ? (
+                  <PopoverMenuItem
+                    variant="sidebar"
+                    label="Log out"
+                    icon={<LogOut className="size-4" />}
+                    onClick={() => {
+                      handleSignOut();
+                      close();
+                    }}
+                  />
+                ) : null}
               </div>
-
-              <SidebarAppVersionRow
-                connectedServerName={
-                  capabilities.isSelfManaged ? capabilities.serverDisplayName : null
-                }
-              />
             </div>
           )}
         </PopoverButton>
+        <SidebarUsageFooter />
+        <SidebarHelpFooter />
       </div>
       <ConfirmationDialog
         open={acceptTarget !== null}

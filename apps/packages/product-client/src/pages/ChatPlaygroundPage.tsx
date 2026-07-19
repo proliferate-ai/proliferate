@@ -15,6 +15,7 @@ import {
 } from "@proliferate/product-ui/chat/ChatColumn";
 import { useChatDockInset } from "#product/hooks/chat/ui/use-chat-dock-inset";
 import { useReplaySession } from "#product/hooks/playground/lifecycle/use-replay-session";
+import { PlaygroundAttachmentPreviewAside } from "#product/components/playground/PlaygroundAttachmentFixtures";
 
 export function ChatPlaygroundPage() {
   const [params, setParams] = useSearchParams();
@@ -30,6 +31,8 @@ export function ChatPlaygroundPage() {
   );
   const showSidebarGitDiff =
     selection.kind === "fixture" && selection.key === "git-diff-panel";
+  const showAttachmentPreview =
+    selection.kind === "fixture" && selection.key === "attachment-previews";
 
   const handleSelectFixture = (key: ScenarioKey) => {
     const next = new URLSearchParams(params);
@@ -86,12 +89,14 @@ export function ChatPlaygroundPage() {
           lowerBackdropTopPx={lowerBackdropTopPx}
           selection={selection}
           replay={replay}
+          rightInsetPx={showAttachmentPreview ? 416 : 0}
         />
         {showSidebarGitDiff && (
           <aside className="hidden w-[22rem] shrink-0 border-l border-sidebar-border bg-sidebar-background lg:block">
             <PlaygroundSidebarGitDiff />
           </aside>
         )}
+        {showAttachmentPreview && <PlaygroundAttachmentPreviewAside />}
       </main>
       <footer className="border-t border-border px-4 py-2 text-xs text-muted-foreground">
         <code className="font-mono">?s={selection.raw}</code>

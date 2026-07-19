@@ -35,6 +35,12 @@ test("resolves the four required slots by prefix and exact id", () => {
   assert.equal(set.bundle.artifact_id, "selfhost-bundle/linux/amd64");
   assert.equal(set.anyharness.artifact_id, "anyharness/x86_64-unknown-linux-gnu");
   assert.equal(set.desktopRenderer.artifact_id, "desktop-renderer/browser");
+  assert.equal(set.runtimeBundle, undefined);
+});
+
+test("accepts one optional platform runtime bundle for the CFN posture", () => {
+  const set = resolveSelfHostCandidateSet(mapOf([...FULL, "selfhost-runtime/linux/arm64"]));
+  assert.equal(set.runtimeBundle?.artifact_id, "selfhost-runtime/linux/arm64");
 });
 
 test("server/ and selfhost-bundle/ slots are disjoint (bundle is not matched as the server image)", () => {
@@ -80,5 +86,16 @@ test("rejects an unexpected extra artifact", () => {
   assert.throws(
     () => resolveSelfHostCandidateSet(mapOf([...FULL, "catalog/extra"])),
     (error: unknown) => error instanceof BuildMapError && /unexpected artifact/.test((error as Error).message),
+  );
+});
+
+test("rejects duplicate optional runtime bundles", () => {
+  assert.throws(
+    () =>
+      resolveSelfHostCandidateSet(
+        mapOf([...FULL, "selfhost-runtime/linux/amd64", "selfhost-runtime/linux/arm64"]),
+      ),
+    (error: unknown) =>
+      error instanceof BuildMapError && /2 self-host runtime bundle artifacts/.test((error as Error).message),
   );
 });

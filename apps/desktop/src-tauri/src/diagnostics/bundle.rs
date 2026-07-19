@@ -16,6 +16,13 @@ use super::scrub::scrub_diagnostic_text;
 const MAX_ROTATED_LOG_FILES: usize = 5;
 const SUPPORT_LOG_TAIL_BYTES: u64 = 2 * 1024 * 1024;
 
+fn desktop_log_base_paths(logs_dir: &Path) -> [PathBuf; 2] {
+    [
+        logs_dir.join("desktop-native.log"),
+        logs_dir.join("renderer-diagnostics.log"),
+    ]
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct ExportDebugBundleOptions {
     pub output_path: PathBuf,
@@ -158,17 +165,19 @@ pub async fn export_debug_bundle_to_path(
         .compression_method(CompressionMethod::Deflated)
         .unix_permissions(0o644);
 
-    for path in collect_log_files(&logs_dir_path()?.join("desktop-native.log")) {
-        let file_name = path
-            .file_name()
-            .expect("desktop log file should have a name")
-            .to_string_lossy();
-        add_scrubbed_text_file(
-            &mut zip,
-            &format!("logs/desktop/{file_name}"),
-            &path,
-            file_options,
-        )?;
+    for base_path in desktop_log_base_paths(&logs_dir_path()?) {
+        for path in collect_log_files(&base_path) {
+            let file_name = path
+                .file_name()
+                .expect("desktop log file should have a name")
+                .to_string_lossy();
+            add_scrubbed_text_file(
+                &mut zip,
+                &format!("logs/desktop/{file_name}"),
+                &path,
+                file_options,
+            )?;
+        }
     }
 
     if let Some(anyharness_base_log) = anyharness_base_log.as_ref() {
@@ -256,12 +265,9 @@ pub async fn collect_support_diagnostics_bundle(
 
     let mut logs = Vec::new();
     let mut collection_errors = Vec::new();
-    collect_support_logs_for_source(
-        &mut logs,
-        &mut collection_errors,
-        "desktop",
-        &logs_dir_path()?.join("desktop-native.log"),
-    );
+    for base_path in desktop_log_base_paths(&logs_dir_path()?) {
+        collect_support_logs_for_source(&mut logs, &mut collection_errors, "desktop", &base_path);
+    }
     if let Some(anyharness_base_log) = anyharness_base_log.as_ref() {
         collect_support_logs_for_source(
             &mut logs,
@@ -481,8 +487,8 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     use super::{
-        collect_log_files, collection_error_for_source, scrub_diagnostic_text,
-        scrub_health_response, suggested_bundle_file_name, HealthResponse,
+        collect_log_files, collection_error_for_source, desktop_log_base_paths,
+        scrub_diagnostic_text, scrub_health_response, suggested_bundle_file_name, HealthResponse,
     };
 
     fn temp_path(file_name: &str) -> PathBuf {
@@ -513,6 +519,19 @@ mod tests {
 
         fs::remove_dir_all(base.parent().expect("temp dir should exist"))
             .expect("cleanup should succeed");
+    }
+
+    #[test]
+    fn desktop_support_bundles_include_native_and_renderer_log_owners() {
+        let logs_dir = PathBuf::from("/tmp/proliferate-logs");
+
+        assert_eq!(
+            desktop_log_base_paths(&logs_dir),
+            [
+                logs_dir.join("desktop-native.log"),
+                logs_dir.join("renderer-diagnostics.log"),
+            ]
+        );
     }
 
     #[test]

@@ -17,6 +17,7 @@ import {
 } from "../local-world-smoke-1.js";
 import { bootLocalFunctionalWorld, isWorldBackedRun, resolveLocalFunctionalWorldInputs } from "./world-boot.js";
 import { captureLocalDriverFailure } from "./debug-capture.js";
+import { waitForComposerModelSelection } from "./composer-model-option.js";
 import {
   resolveLocalWorkspaceSessionAfter,
   resolveLocalWorkspaceSessionId,
@@ -62,6 +63,48 @@ import {
 
 /** The route a functional cell drives. */
 export type { LocalRoute } from "../../evidence/schema.js";
+
+export type SafeTurnErrorClass =
+  | "budget_exceeded"
+  | "rate_limited"
+  | "authentication_failed"
+  | "provider_unavailable"
+  | "unclassified";
+
+/** Maps an untrusted runtime/provider error to a fixed evidence-safe class. */
+export function classifyTurnErrorForEvidence(raw: string): SafeTurnErrorClass {
+  const message = raw.toLowerCase();
+  if (/\bbudget\b[\s\S]{0,120}\b(?:exceed(?:ed|s|ing)?|exhausted|reached)\b/.test(message)) return "budget_exceeded";
+  if (/\b429\b|\brate[ _-]?limit(?:ed|ing)?\b/.test(message)) return "rate_limited";
+  if (/\b(?:401|403)\b|\bunauthori[sz]ed\b|\bauthentication failed\b|\binvalid api[ _-]?key\b/.test(message)) return "authentication_failed";
+  if (/\b(?:502|503|504)\b|\b(?:service|provider|upstream) unavailable\b/.test(message)) return "provider_unavailable";
+  return "unclassified";
+}
+
+/** Builds a diagnostic reason whose vocabulary cannot carry provider payloads. */
+export function turnErrorEvidenceMessage(route: LocalRoute, raw: string): string {
+  return `sendBoundedTurn route=${route} error_class=${classifyTurnErrorForEvidence(raw)}`;
+}
+
+/** Carries only the fixed-vocabulary turn failure; the raw provider payload is discarded. */
+export class SafeTurnFailure extends Error {
+  constructor(route: LocalRoute, raw: string) {
+    super(turnErrorEvidenceMessage(route, raw));
+    this.name = "SafeTurnFailure";
+  }
+}
+
+/** Provider turn failures must not persist the rendered/raw browser diagnostics. */
+export async function captureLocalRouteFailure(
+  page: ProductPage | undefined,
+  label: string,
+  error: unknown,
+): Promise<void> {
+  if (error instanceof SafeTurnFailure) {
+    return;
+  }
+  await captureLocalDriverFailure(page, label);
+}
 
 /**
  * BYOK env mapping (BRIEF §"BYOK input mapping"). Each user-key harness reads a
@@ -369,7 +412,7 @@ export const defaultLocalRouteDriver: LocalRouteDriver = {
     return { route, modelId, providerId: directProviderId(modelId) };
   },
   selectModelInUi: (page, modelId) => defaultLocalWorldSmokeDriver.selectModelInUi(page, modelId),
-  async sendBoundedTurn(world, page, _expectedRoute, repoPath, existingSessionIds) {
+  async sendBoundedTurn(world, page, expectedRoute, repoPath, existingSessionIds) {
     const p = page.page;
     // Snapshot before Send. LOCAL-6 uses the same concrete workspace for both
     // routes; resolving the "latest" session after the click can otherwise
@@ -423,7 +466,7 @@ export const defaultLocalRouteDriver: LocalRouteDriver = {
     );
     const completion = await waitForTurnCompletion(world, sessionId, TURN_TIMEOUT_MS);
     if (completion.error) {
-      throw new Error(`sendBoundedTurn: assistant turn errored: ${completion.error}`);
+      throw new SafeTurnFailure(expectedRoute, completion.error);
     }
     if (!completion.ended) {
       throw new Error(`sendBoundedTurn: assistant turn did not end within ${TURN_TIMEOUT_MS}ms.`);
@@ -448,13 +491,14 @@ export const defaultLocalRouteDriver: LocalRouteDriver = {
     if (!reply.trim()) {
       throw new Error("reopenAndVerify: the transcript did not re-render an assistant reply after reopen.");
     }
-    await p
-      .locator(`[data-composer-model-trigger][data-composer-selected-model="${cssAttr(expect.modelId)}"]`)
-      .first()
-      .waitFor({ state: "attached", timeout: 15_000 })
-      .catch(() => {
-        throw new Error(`reopenAndVerify: composer no longer reflects model "${expect.modelId}" after reopen.`);
-      });
+    const modelTrigger = p.locator("[data-composer-model-trigger]").first();
+    await waitForComposerModelSelection(
+      () => modelTrigger.getAttribute("data-composer-selected-model"),
+      expect.modelId,
+      15_000,
+    ).catch(() => {
+      throw new Error(`reopenAndVerify: composer no longer reflects model "${expect.modelId}" after reopen.`);
+    });
   },
   async correlateGatewaySpend(world, params) {
     const correlated = await world.gateway.correlateTurn({
@@ -742,7 +786,7 @@ async function runLocal2GatewayCell(
         },
       };
     } catch (uiError) {
-      await captureLocalDriverFailure(page, `${cell.cell_id}-ui-failure`);
+      await captureLocalRouteFailure(page, `${cell.cell_id}-ui-failure`, uiError);
       throw uiError;
     } finally {
       await page.close().catch(() => undefined);
@@ -823,7 +867,7 @@ async function runLocal3UserKeyCell(
         },
       };
     } catch (uiError) {
-      await captureLocalDriverFailure(page, `${cell.cell_id}-ui-failure`);
+      await captureLocalRouteFailure(page, `${cell.cell_id}-ui-failure`, uiError);
       throw uiError;
     } finally {
       await page.close().catch(() => undefined);
@@ -939,7 +983,7 @@ async function runLocal6RouteChangeCell(
         },
       };
     } catch (uiError) {
-      await captureLocalDriverFailure(page, `${cell.cell_id}-ui-failure`);
+      await captureLocalRouteFailure(page, `${cell.cell_id}-ui-failure`, uiError);
       throw uiError;
     } finally {
       await page.close().catch(() => undefined);

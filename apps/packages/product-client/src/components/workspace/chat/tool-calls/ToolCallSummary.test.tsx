@@ -13,6 +13,7 @@ describe("ToolCallSummary", () => {
         label="Worked for 13m 25s"
         summary="2 messages, 3 tool calls"
         showWorkDivider
+        borderless
         completionContent={<div>Edited files</div>}
         renderChildren={() => <div>Work ledger</div>}
       />,
@@ -26,6 +27,16 @@ describe("ToolCallSummary", () => {
     fireEvent.click(disclosure);
     expect(screen.getByText("Work ledger")).toBeTruthy();
     const ledger = screen.getByText("Work ledger");
+    const summaryShell = container.querySelector("[data-completed-work-summary]");
+    const ledgerShell = container.querySelector("[data-completed-work-ledger]");
+    expect(summaryShell).not.toBeNull();
+    expect(ledgerShell).not.toBeNull();
+    expect(disclosure.className).toContain("border-0");
+    expect(disclosure.className).toContain("rounded-none");
+    expect(disclosure.className).not.toMatch(/(?:^|\s)border(?:\s|$)/);
+    expect(disclosure.className).not.toMatch(/(?:^|\s)rounded-md(?:\s|$)/);
+    expect(ledgerShell?.className).not.toMatch(/(?:^|\s)border(?:\s|$)/);
+    expect(ledgerShell?.className).not.toMatch(/(?:^|\s)rounded(?:\s|$)/);
     expect(ledger.parentElement?.className).toContain("mt-1");
     expect(ledger.parentElement?.className).not.toContain("mt-2");
     const completion = screen.getByText("Edited files");
