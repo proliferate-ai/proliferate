@@ -1063,6 +1063,19 @@ jobs:
             QUALIFICATION_TRUSTED_CLEANUP_REPOSITORY="${GITHUB_WORKSPACE}/.qualification-trusted-default" \
             QUALIFICATION_TRUSTED_CLEANUP_DEFAULT_BRANCH="${{ github.event.repository.default_branch }}"
 
+      # CP1 takes long enough for main to advance after the job's initial
+      # trusted checkout. Refresh immediately before the derivative world so
+      # its fail-closed preflight proves cleanup authority against the current
+      # remote default-branch tip, not the tip observed before the build.
+      - name: Refresh trusted default-branch cleanup authorization before fixture smoke
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          path: .qualification-trusted-default
+          fetch-depth: 1
+          sparse-checkout: tests/release/fixtures/managed-cloud-litellm-attribution-attestations.v1.json
+          sparse-checkout-cone-mode: false
+
       - name: Reuse candidates and run MANAGED-CLOUD-FIXTURE-SMOKE-1 (strict)
         env:
           MANAGED_CLOUD_SMOKE_DEBUG_DIR: ${{ github.workspace }}/tests/release/.output/managed-cloud-world/qlc-ci-${{ github.run_id }}-${{ github.run_attempt }}/debug/logs/fixture-smoke
