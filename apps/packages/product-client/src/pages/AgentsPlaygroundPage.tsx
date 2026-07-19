@@ -7,6 +7,7 @@ import { SegmentedControl } from "@proliferate/ui/primitives/SegmentedControl";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Cloud, Laptop } from "lucide-react";
 import { ApiKeysPane } from "#product/components/settings/panes/agents/api-keys/ApiKeysPane";
+import { HarnessUpdateToastPresenter } from "#product/components/feedback/HarnessUpdateToastPresenter";
 import { HarnessPane } from "#product/components/settings/panes/agents/harness/HarnessPane";
 import {
   PLAYGROUND_CACHE_SCOPE,
@@ -97,6 +98,7 @@ export function AgentsPlaygroundPage() {
                       new Error("No playground workspace selected."),
                     )}
                   >
+                    <HarnessUpdateToastPresenter includeCloud={false} />
                     {scenario.pane === "harness" ? (
                       <HarnessPane key={activeScenario} harnessKind={scenario.harnessKind} />
                     ) : (

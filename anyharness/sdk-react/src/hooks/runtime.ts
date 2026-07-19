@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { AnyHarnessRequestOptions } from "@anyharness/sdk";
 import {
   resolveRuntimeCacheScopeKey,
-  resolveRuntimeConnectionFromContext,
+  resolveRuntimeConnection,
   useAnyHarnessRuntimeContext,
 } from "../context/AnyHarnessRuntime.js";
 import { getAnyHarnessClient } from "../lib/client-cache.js";
@@ -25,8 +25,7 @@ export function useRuntimeHealthQuery(options?: RuntimeQueryOptions) {
     queryKey: anyHarnessRuntimeHealthKey(runtimeUrl, cacheScopeKey),
     enabled: (options?.enabled ?? true) && runtimeUrl.length > 0,
     queryFn: async ({ signal }) => {
-      const connection = await resolveRuntimeConnectionFromContext(runtime);
-      const client = getAnyHarnessClient(connection);
+      const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
       return client.runtime.getHealth(requestOptionsWithSignal(options?.requestOptions, signal));
     },
     refetchInterval: options?.pollWhileAgentSeedHydrating

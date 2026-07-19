@@ -88,20 +88,31 @@ afterEach(() => {
 });
 
 describe("HarnessPane visual hierarchy", () => {
-  it("presents runtime status before a single authentication heading", () => {
+  it("omits the redundant runtime status once the harness is configured", () => {
     const { container } = render(<HarnessPane harnessKind="claude" />);
-    const runtime = container.querySelector('[data-harness-runtime-state="ready"]');
-    const authentication = screen.getByText("Authentication");
 
-    expect(runtime).not.toBeNull();
-    if (!runtime) throw new Error("Expected the ready runtime row.");
+    expect(container.querySelector('[data-harness-runtime-state="ready"]')).toBeNull();
+    expect(screen.queryByText("Runtime")).toBeNull();
     expect(screen.getAllByText("Authentication")).toHaveLength(1);
-    expect(
-      runtime.compareDocumentPosition(authentication) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
     expect(
       screen.getByText("Configure how Claude Code runs and authenticates on this machine."),
     ).toBeTruthy();
+  });
+
+  it("preserves the agent-specific warning row when login is required", () => {
+    const loginRequiredAgent = {
+      ...readyAgent,
+      readiness: "login_required",
+    };
+    readyCatalog.agentsByKind.set("claude", loginRequiredAgent);
+    readyCatalog.agentsNeedingSetup = [loginRequiredAgent];
+
+    const { container } = render(<HarnessPane harnessKind="claude" />);
+
+    expect(container.querySelector('[data-harness-runtime-state="login_required"]')).not.toBeNull();
+    expect(screen.getByText("Login required")).toBeTruthy();
+    expect(screen.getByText("Sign in with Claude Code in Proliferate.")).toBeTruthy();
+    expect(screen.getByText("Authentication")).toBeTruthy();
   });
 
   it("describes an unsupported harness without claiming it is installed", () => {
@@ -124,7 +135,10 @@ describe("HarnessPane visual hierarchy", () => {
 
     expect(screen.queryByLabelText("Harness update target")).toBeNull();
     expect(screen.queryByText("Workspace")).toBeNull();
-    expect(screen.getByText("Installation and readiness on this machine.")).toBeTruthy();
+    expect(screen.queryByText("Installation and readiness on this machine.")).toBeNull();
+    expect(
+      screen.getByText("Configure how Claude Code runs and authenticates on this machine."),
+    ).toBeTruthy();
   });
 
   it("replaces the pane with a full install gate when the harness is missing", () => {
@@ -149,7 +163,7 @@ describe("HarnessPane visual hierarchy", () => {
     expect(onInstall).toHaveBeenCalledOnce();
   });
 
-  it("keeps real component progress in the full install gate", () => {
+  it("keeps the install gate compact while shared toast progress owns the details", () => {
     readyCatalog.isReconciling = true;
     readyCatalog.reconcileSnapshot = {
       progress: {
@@ -172,11 +186,10 @@ describe("HarnessPane visual hierarchy", () => {
     render(<HarnessPane harnessKind="claude" />);
 
     expect(screen.getByText("Installing Claude Code")).toBeTruthy();
-    expect(screen.getByText("This machine · 42 MB downloaded")).toBeTruthy();
-    expect(screen.getByText("Claude Code CLI")).toBeTruthy();
-    expect(screen.getByRole("progressbar", {
-      name: "Claude Code CLI download progress",
-    })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Installing Claude Code…" })).toBeTruthy();
+    expect(screen.queryByText("This machine · 42 MB downloaded")).toBeNull();
+    expect(screen.queryByText("Claude Code CLI")).toBeNull();
+    expect(screen.queryByRole("progressbar")).toBeNull();
     expect(screen.queryByText("Authentication")).toBeNull();
   });
 });

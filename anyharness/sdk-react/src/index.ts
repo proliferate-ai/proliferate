@@ -2,7 +2,6 @@ export {
   AnyHarnessRuntime,
   resolveRuntimeCacheScopeKey,
   resolveRuntimeConnection,
-  resolveRuntimeConnectionFromContext,
   useAnyHarnessCacheScopeKey,
   useAnyHarnessRuntimeContext,
 } from "./context/AnyHarnessRuntime.js";

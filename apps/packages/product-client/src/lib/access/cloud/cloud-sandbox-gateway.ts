@@ -15,26 +15,10 @@ export type CloudSandboxGatewayUrlSource = Pick<ProliferateCloudClient, "buildUr
 
 export type AnyHarnessRuntimeAccessKind = "direct" | "proliferate-gateway";
 
-export interface CloudSandboxGatewayRuntimeConnection {
-  runtimeUrl: string;
-  authToken: string;
-}
-
 export function cloudSandboxGatewayRuntimeUrl(
   cloudClient: CloudSandboxGatewayUrlSource,
 ): string {
   return cloudClient.buildUrl(CLOUD_SANDBOX_GATEWAY_ANYHARNESS_PATH);
-}
-
-/** Resolve the user's single managed-Cloud AnyHarness runtime without a workspace target. */
-export async function resolveCloudSandboxGatewayRuntimeConnection(
-  cloudClient: CloudSandboxGatewayUrlSource,
-  getAccessToken: () => Promise<string> = getSandboxGatewayAccessToken,
-): Promise<CloudSandboxGatewayRuntimeConnection> {
-  return {
-    runtimeUrl: cloudSandboxGatewayRuntimeUrl(cloudClient),
-    authToken: await getAccessToken(),
-  };
 }
 
 export type CloudSandboxGatewayConnectionInfo = CloudConnectionInfo & {

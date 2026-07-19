@@ -11,14 +11,12 @@ import {
   useAgentsQuery,
   useWorkspaceAgentsQuery,
 } from "./agents.js";
-import { useAgentGatewayModelsQuery } from "./agent-gateway-catalog.js";
 import { useRuntimeHealthQuery } from "./runtime.js";
 import { useRuntimeWorkspacesQuery, useWorkspaceQuery } from "./workspaces.js";
 
 const mocks = vi.hoisted(() => ({
   getClient: vi.fn(),
   getHealth: vi.fn(),
-  getGatewayModels: vi.fn(),
   getReconcileStatus: vi.fn(),
   getWorkspace: vi.fn(),
   listAgents: vi.fn(),
@@ -34,7 +32,6 @@ vi.mock("../lib/client-cache.js", () => ({
         list: mocks.listAgents,
         getReconcileStatus: mocks.getReconcileStatus,
       },
-      agentGatewayCatalog: { getGatewayModels: mocks.getGatewayModels },
       workspaces: {
         list: mocks.listWorkspaces,
         get: mocks.getWorkspace,
@@ -48,7 +45,6 @@ describe("runtime query gating", () => {
     cleanup();
     mocks.getClient.mockReset();
     mocks.getHealth.mockReset();
-    mocks.getGatewayModels.mockReset();
     mocks.getReconcileStatus.mockReset();
     mocks.getWorkspace.mockReset();
     mocks.listAgents.mockReset();
@@ -114,61 +110,4 @@ describe("runtime query gating", () => {
     );
   });
 
-  it("resolves a fresh runtime connection for each settings runtime request", async () => {
-    mocks.listAgents.mockResolvedValue([]);
-    mocks.getHealth.mockResolvedValue({ status: "ok" });
-    mocks.getGatewayModels.mockResolvedValue({ source: "seed", models: [] });
-    const resolveConnection = vi.fn()
-      .mockResolvedValueOnce({
-        runtimeUrl: "https://api.test/v1/gateway/cloud-sandbox/anyharness",
-        authToken: "gateway-token-1",
-      })
-      .mockResolvedValueOnce({
-        runtimeUrl: "https://api.test/v1/gateway/cloud-sandbox/anyharness",
-        authToken: "gateway-token-2",
-      })
-      .mockResolvedValueOnce({
-        runtimeUrl: "https://api.test/v1/gateway/cloud-sandbox/anyharness",
-        authToken: "gateway-token-3",
-      });
-    const queryClient = new QueryClient({
-      defaultOptions: { queries: { retry: false } },
-    });
-
-    const { result } = renderHook(() => ({
-      agents: useAgentsQuery(),
-      gatewayModels: useAgentGatewayModelsQuery("claude"),
-      health: useRuntimeHealthQuery(),
-    }), {
-      wrapper: ({ children }: { children: ReactNode }) => (
-        <QueryClientProvider client={queryClient}>
-          <AnyHarnessRuntime
-            runtimeUrl="https://api.test/v1/gateway/cloud-sandbox/anyharness"
-            cacheScopeKey="https://api.test::user:user-1"
-            resolveConnection={resolveConnection}
-          >
-            {children}
-          </AnyHarnessRuntime>
-        </QueryClientProvider>
-      ),
-    });
-
-    await waitFor(() => expect(result.current.agents.isSuccess).toBe(true));
-    await waitFor(() => expect(result.current.gatewayModels.isSuccess).toBe(true));
-    await waitFor(() => expect(result.current.health.isSuccess).toBe(true));
-
-    expect(resolveConnection).toHaveBeenCalledTimes(3);
-    expect(mocks.getClient).toHaveBeenCalledWith({
-      runtimeUrl: "https://api.test/v1/gateway/cloud-sandbox/anyharness",
-      authToken: "gateway-token-1",
-    });
-    expect(mocks.getClient).toHaveBeenCalledWith({
-      runtimeUrl: "https://api.test/v1/gateway/cloud-sandbox/anyharness",
-      authToken: "gateway-token-2",
-    });
-    expect(mocks.getClient).toHaveBeenCalledWith({
-      runtimeUrl: "https://api.test/v1/gateway/cloud-sandbox/anyharness",
-      authToken: "gateway-token-3",
-    });
-  });
 });

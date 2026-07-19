@@ -22,7 +22,11 @@ it("targets the one Cloud sandbox runtime with a fresh token per request", async
   const cloudClient = {
     buildUrl: (path: string) => `https://api.test${path}`,
   } as ProliferateCloudClient;
-  const fixtureFetch = vi.fn() as unknown as typeof globalThis.fetch;
+  const authorizations: Array<string | null> = [];
+  const fixtureFetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+    authorizations.push(new Headers(init?.headers).get("authorization"));
+    return new Response(null, { status: 204 });
+  }) as typeof globalThis.fetch;
   const baseHost = makeTestProductHost({ cloudClient });
   const host = {
     ...baseHost,
@@ -52,23 +56,23 @@ it("targets the one Cloud sandbox runtime with a fresh token per request", async
     "https://api.test/v1/gateway/cloud-sandbox/anyharness",
   );
   expect(result.current.cacheScopeKey).toBe("actor:user-1");
-  const resolveConnection = result.current.resolveConnection;
-  if (!resolveConnection) throw new Error("Expected a Cloud runtime resolver.");
+  const cloudFetch = result.current.fetch;
+  if (!cloudFetch) throw new Error("Expected a Cloud runtime transport.");
 
   await act(async () => {
-    await expect(resolveConnection()).resolves.toEqual({
-      runtimeUrl: "https://api.test/v1/gateway/cloud-sandbox/anyharness",
-      authToken: "cloud-token-1",
-      fetch: fixtureFetch,
-    });
-    await expect(resolveConnection()).resolves.toEqual({
-      runtimeUrl: "https://api.test/v1/gateway/cloud-sandbox/anyharness",
-      authToken: "cloud-token-2",
-      fetch: fixtureFetch,
-    });
+    await cloudFetch(
+      "https://api.test/v1/gateway/cloud-sandbox/anyharness/health",
+    );
+    await cloudFetch(
+      "https://api.test/v1/gateway/cloud-sandbox/anyharness/v1/agents",
+    );
   });
 
   expect(getAccessToken).toHaveBeenCalledTimes(2);
+  expect(authorizations).toEqual([
+    "Bearer cloud-token-1",
+    "Bearer cloud-token-2",
+  ]);
 });
 
 it("keeps a Cloud mutation and its invalidation read inside the inherited transport", async () => {

@@ -6,8 +6,6 @@ export interface AnyHarnessRuntimeContextValue {
   authToken?: string | null;
   /** Context-owned transport override; omitted by normal runtime hosts. */
   fetch?: typeof globalThis.fetch;
-  /** Resolve a fresh connection when the runtime bearer credential rotates. */
-  resolveConnection?: () => Promise<AnyHarnessClientConnection>;
   /**
    * Stable identity boundary for cached AnyHarness data, such as an API
    * deployment and authenticated actor. Falls back to runtimeUrl while
@@ -22,7 +20,6 @@ export function AnyHarnessRuntime({
   runtimeUrl,
   authToken,
   fetch,
-  resolveConnection,
   cacheScopeKey,
   children,
 }: AnyHarnessRuntimeContextValue & { children: ReactNode }) {
@@ -31,7 +28,6 @@ export function AnyHarnessRuntime({
       runtimeUrl,
       authToken,
       fetch,
-      resolveConnection,
       cacheScopeKey,
     }}>
       {children}
@@ -69,12 +65,4 @@ export function resolveRuntimeConnection(
     authToken: context.authToken ?? undefined,
     ...(context.fetch ? { fetch: context.fetch } : {}),
   };
-}
-
-export function resolveRuntimeConnectionFromContext(
-  context: AnyHarnessRuntimeContextValue,
-): Promise<AnyHarnessClientConnection> {
-  return context.resolveConnection
-    ? context.resolveConnection()
-    : Promise.resolve(resolveRuntimeConnection(context));
 }

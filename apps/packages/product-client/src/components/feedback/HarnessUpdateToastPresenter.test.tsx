@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, expect, it, vi } from "vitest";
 import {
@@ -38,7 +38,7 @@ const state = vi.hoisted(() => {
 });
 
 const sonnerMocks = vi.hoisted(() => {
-  const toast = Object.assign(vi.fn(), { dismiss: vi.fn() });
+  const toast = Object.assign(vi.fn(), { custom: vi.fn(), dismiss: vi.fn() });
   return { toast };
 });
 
@@ -69,7 +69,7 @@ afterEach(() => {
   state.cloudSnapshot = null;
 });
 
-it("shows shared Cloud progress without a workspace target", () => {
+it("shows shared Cloud progress without a workspace target", async () => {
   state.cloudActive = true;
   state.localSnapshot = null;
   state.cloudSnapshot = {
@@ -92,12 +92,15 @@ it("shows shared Cloud progress without a workspace target", () => {
   };
   render(<HarnessUpdateToastPresenter />);
 
-  const cloudCall = sonnerMocks.toast.mock.calls.find(
+  await waitFor(() => expect(sonnerMocks.toast.custom.mock.calls.some(
+    ([, options]) => options.id === CLOUD_HARNESS_UPDATE_TOAST_ID,
+  )).toBe(true));
+  const cloudCall = sonnerMocks.toast.custom.mock.calls.find(
     ([, options]) => options.id === CLOUD_HARNESS_UPDATE_TOAST_ID,
   );
   expect(cloudCall).toBeTruthy();
-  const [, options] = cloudCall ?? [];
-  render(<>{options.description}</>);
+  const [renderToast] = cloudCall ?? [];
+  render(<>{renderToast(CLOUD_HARNESS_UPDATE_TOAST_ID)}</>);
   expect(screen.getByText(/Proliferate Cloud · 12 MB downloaded/)).toBeTruthy();
   expect(screen.queryByText(/workspace/i)).toBeNull();
 });
@@ -105,21 +108,38 @@ it("shows shared Cloud progress without a workspace target", () => {
 it("shows local aggregate MB and the current harness", () => {
   render(<HarnessUpdateToastPresenter />);
 
-  const [title, options] = sonnerMocks.toast.mock.calls[0] ?? [];
-  render(<>{title}{options.description}</>);
+  const [renderToast, options] = sonnerMocks.toast.custom.mock.calls[0] ?? [];
+  render(<>{renderToast(HARNESS_UPDATE_TOAST_ID)}</>);
 
-  expect(screen.getByText("AGENTS")).toBeTruthy();
   expect(screen.getByText("Updating Codex")).toBeTruthy();
   expect(screen.getByText(/This machine · 42 MB of 100 MB/)).toBeTruthy();
   expect(options.id).toBe(HARNESS_UPDATE_TOAST_ID);
+  expect(options.unstyled).toBe(true);
   expect(screen.getByRole("progressbar", {
     name: "This machine agent tools download progress",
   }).getAttribute("aria-valuenow")).toBe("42");
+
+  fireEvent.click(screen.getByRole("button", { name: "Dismiss agent update" }));
+  expect(sonnerMocks.toast.dismiss).toHaveBeenCalledWith(HARNESS_UPDATE_TOAST_ID);
+});
+
+it("can keep deterministic playground progress local-only", async () => {
+  state.cloudActive = true;
+  render(<HarnessUpdateToastPresenter includeCloud={false} />);
+
+  await waitFor(() => expect(sonnerMocks.toast.custom).toHaveBeenCalledWith(
+    expect.anything(),
+    expect.objectContaining({ id: HARNESS_UPDATE_TOAST_ID }),
+  ));
+  expect(sonnerMocks.toast.custom).not.toHaveBeenCalledWith(
+    expect.anything(),
+    expect.objectContaining({ id: CLOUD_HARNESS_UPDATE_TOAST_ID }),
+  );
 });
 
 it("keeps a dismissed active job hidden until a different job starts", () => {
   const { rerender } = render(<HarnessUpdateToastPresenter />);
-  const [, options] = sonnerMocks.toast.mock.calls[0] ?? [];
+  const [, options] = sonnerMocks.toast.custom.mock.calls[0] ?? [];
   expect(options.onDismiss).toBeTypeOf("function");
 
   options.onDismiss({ id: HARNESS_UPDATE_TOAST_ID });
@@ -132,21 +152,21 @@ it("keeps a dismissed active job hidden until a different job starts", () => {
     },
   };
   rerender(<HarnessUpdateToastPresenter />);
-  expect(sonnerMocks.toast).not.toHaveBeenCalled();
+  expect(sonnerMocks.toast.custom).not.toHaveBeenCalled();
 
   state.localSnapshot = {
     ...state.localSnapshot,
     status: "completed",
   };
   rerender(<HarnessUpdateToastPresenter />);
-  expect(sonnerMocks.toast).not.toHaveBeenCalled();
+  expect(sonnerMocks.toast.custom).not.toHaveBeenCalled();
 
   state.localSnapshot = {
     ...state.defaultLocalSnapshot,
     jobId: "job-local-2",
   };
   rerender(<HarnessUpdateToastPresenter />);
-  expect(sonnerMocks.toast).toHaveBeenCalledWith(
+  expect(sonnerMocks.toast.custom).toHaveBeenCalledWith(
     expect.anything(),
     expect.objectContaining({ id: HARNESS_UPDATE_TOAST_ID }),
   );

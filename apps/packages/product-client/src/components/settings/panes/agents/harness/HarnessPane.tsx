@@ -83,6 +83,11 @@ function HarnessRuntimeSurface({
       (component) => component.agent === harnessKind,
     ) ?? []
     : [];
+  const showRuntimeStatus = runtimeCatalogIsLoading
+    || runtimeCatalogIsError
+    || !runtimeAgent
+    || runtimeAgent.readiness !== "ready"
+    || runtimeAgent.installState === "installing";
 
   if (updateComponents.length > 0 || installAction) {
     return (
@@ -91,30 +96,32 @@ function HarnessRuntimeSurface({
         displayName={displayName}
         surface={surface}
         installAction={installAction}
-        progressComponents={updateComponents}
+        installing={updateComponents.length > 0}
       />
     );
   }
 
   return (
     <>
-      <SettingsSection
-        title={HARNESS_PANE_COPY.runtimeTitle}
-        description={HARNESS_PANE_COPY.runtimeDescription(surface)}
-      >
-        {issueAgent ? (
-          <HarnessConfigIssueBanner agent={issueAgent} />
-        ) : (
-          <HarnessRuntimeStatusRow
-            harnessKind={harnessKind}
-            displayName={displayName}
-            agent={runtimeAgent}
-            surface={surface}
-            loading={runtimeCatalogIsLoading}
-            error={runtimeCatalogIsError}
-          />
-        )}
-      </SettingsSection>
+      {showRuntimeStatus ? (
+        <SettingsSection
+          title={HARNESS_PANE_COPY.runtimeTitle}
+          description={HARNESS_PANE_COPY.runtimeDescription(surface)}
+        >
+          {issueAgent ? (
+            <HarnessConfigIssueBanner agent={issueAgent} />
+          ) : (
+            <HarnessRuntimeStatusRow
+              harnessKind={harnessKind}
+              displayName={displayName}
+              agent={runtimeAgent}
+              surface={surface}
+              loading={runtimeCatalogIsLoading}
+              error={runtimeCatalogIsError}
+            />
+          )}
+        </SettingsSection>
+      ) : null}
 
       {surface === "cloud" ? (
         <HarnessSurfaceCloud harnessKind={harnessKind} displayName={displayName} />

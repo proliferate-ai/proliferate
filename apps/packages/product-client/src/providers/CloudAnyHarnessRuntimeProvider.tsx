@@ -5,10 +5,7 @@ import {
 } from "@anyharness/sdk-react";
 import { useCallback, type ReactNode } from "react";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
-import {
-  cloudSandboxGatewayRuntimeUrl,
-  resolveCloudSandboxGatewayRuntimeConnection,
-} from "#product/lib/access/cloud/cloud-sandbox-gateway";
+import { cloudSandboxGatewayRuntimeUrl } from "#product/lib/access/cloud/cloud-sandbox-gateway";
 
 /**
  * Rebind AnyHarness runtime hooks to the user's one managed-Cloud sandbox.
@@ -28,25 +25,25 @@ export function CloudAnyHarnessRuntimeProvider({
   const runtimeUrl = cloudClient
     ? cloudSandboxGatewayRuntimeUrl(cloudClient)
     : null;
-  const resolveConnection = useCallback(async () => {
+  const runtimeFetch = parentRuntime.fetch ?? globalThis.fetch;
+  const fetchWithFreshToken = useCallback(async (
+    input: RequestInfo | URL,
+    init?: RequestInit,
+  ) => {
     if (!cloudClient) {
       throw new Error("Cloud client is unavailable; sign in to connect to Cloud.");
     }
-    const connection = await resolveCloudSandboxGatewayRuntimeConnection(
-      cloudClient,
-      getAccessToken,
-    );
-    return {
-      ...connection,
-      ...(parentRuntime.fetch ? { fetch: parentRuntime.fetch } : {}),
-    };
-  }, [cloudClient, getAccessToken, parentRuntime.fetch]);
+    const headers = new Headers(input instanceof Request ? input.headers : undefined);
+    new Headers(init?.headers).forEach((value, key) => headers.set(key, value));
+    headers.set("authorization", `Bearer ${await getAccessToken()}`);
+    return runtimeFetch(input, { ...init, headers });
+  }, [cloudClient, getAccessToken, runtimeFetch]);
 
   return (
     <AnyHarnessRuntime
       runtimeUrl={runtimeUrl}
       cacheScopeKey={parentCacheScopeKey}
-      resolveConnection={resolveConnection}
+      fetch={fetchWithFreshToken}
     >
       {children}
     </AnyHarnessRuntime>
