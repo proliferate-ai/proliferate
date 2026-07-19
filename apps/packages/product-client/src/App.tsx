@@ -14,7 +14,6 @@ import { LoginPage } from "#product/pages/LoginPage"
 import { SettingsCloudRedirect } from "#product/pages/SettingsCloudRedirect"
 import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store"
 import { ShortcutRevealProvider } from "#product/providers/ShortcutRevealProvider"
-import { useProductAuthStatus } from "#product/hooks/auth/facade/use-product-auth"
 import type { ProductRoutesComponent } from "#product/ProductClient"
 
 // The authenticated product root is internal and lazy-loaded through the
@@ -22,12 +21,6 @@ import type { ProductRoutesComponent } from "#product/ProductClient"
 // eagerly pulls the authenticated-only chunks (editor/terminal/etc.).
 const AuthenticatedProductClient = lazy(
   () => import("#product/app/AuthenticatedProductClient"),
-)
-
-const HarnessUpdateToastPresenter = lazy(() =>
-  import("#product/components/feedback/HarnessUpdateToastPresenter").then((module) => ({
-    default: module.HarnessUpdateToastPresenter,
-  })),
 )
 
 // Dev-only playground. Lazy-loaded with a DEV guard so neither this file
@@ -206,20 +199,9 @@ export function App({ RoutesComponent }: AppProps) {
             toast-store call sites, which now delegate to Sonner). */}
         <Toaster />
         <UpdateToastPresenter />
-        <HarnessUpdateToastGate />
         <KeyboardShortcutsDialog />
       </ShortcutRevealProvider>
   )
-}
-
-function HarnessUpdateToastGate() {
-  const authStatus = useProductAuthStatus()
-
-  return authStatus === "authenticated" ? (
-    <Suspense fallback={null}>
-      <HarnessUpdateToastPresenter />
-    </Suspense>
-  ) : null
 }
 
 function WorktreeCleanupPolicySyncGate() {
