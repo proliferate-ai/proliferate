@@ -46,6 +46,7 @@ import {
   renderGatewayEnvLines,
   resolveGatewayConfig,
   selectPersonalEnrollmentKeyToken,
+  spendWindowUtc,
   stripGatewayKeysSedProgram,
   type GatewayEnvSource,
 } from "../worlds/selfhost/gateway.js";
@@ -814,6 +815,13 @@ test("correlateGatewaySpend: correlated but master-key-used when both keys spent
 test("correlateGatewaySpend: a zero-token row does not count as spend", () => {
   const rows = [{ api_key: "vk", total_tokens: 0 }];
   assert.deepEqual(correlateGatewaySpend(rows, "vk"), { correlated: false, masterKeyNotUsed: false });
+});
+
+test("spendWindowUtc: advances LiteLLM's midnight end bound so same-day rows are included", () => {
+  assert.deepEqual(spendWindowUtc(new Date("2026-07-18T23:59:59.000Z")), {
+    startDate: "2026-07-18",
+    endDate: "2026-07-19",
+  });
 });
 
 /** A gateway env source with a pinned (immutable) LiteLLM tag + the given extras. */

@@ -572,10 +572,16 @@ export async function litellmSpendRows(
   }));
 }
 
-/** The inclusive UTC day window (`YYYY-MM-DD`) covering a turn, for a spend-log query. */
+/**
+ * The UTC date window (`YYYY-MM-DD`) covering a turn for a spend-log query.
+ * LiteLLM parses `end_date` at midnight and applies `startTime <= end_date`, so
+ * an end bound equal to today excludes every request made after 00:00 today.
+ * Match the production usage importer and advance the end bound by one day.
+ */
 export function spendWindowUtc(now = new Date()): { startDate: string; endDate: string } {
   const day = now.toISOString().slice(0, 10);
-  return { startDate: day, endDate: day };
+  const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1_000).toISOString().slice(0, 10);
+  return { startDate: day, endDate: tomorrow };
 }
 
 // ── Actor enrollment sync (server-side virtual-key mint) ────────────────────
