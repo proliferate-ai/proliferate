@@ -149,6 +149,50 @@ test("invitedActor does not reuse the one-time /setup claim (never calls claimSe
   assert.ok(calls.some((c) => c.startsWith("registerInvited")));
 });
 
+test("invitedActor hands actor-B enrollment custody off before selection or scenario tracking", async () => {
+  const { transport, calls } = fakeTransport({
+    getEnrollment: async () => ({ id: "enrollment-b", syncStatus: "synced", lastErrorCode: null }),
+  });
+  const custody: Array<{ userId: string; enrollmentId: string }> = [];
+
+  await assert.rejects(
+    () => invitedActor(fakeWorld(), {
+      inviter: fakeInviter(),
+      enrollmentPollMs: 1,
+      resolveAndTrackActorSubjects: async (identity) => {
+        custody.push(identity);
+        throw new Error("simulated actor-B custody interruption");
+      },
+    }, transport),
+    /simulated actor-B custody interruption/,
+  );
+
+  assert.deepEqual(custody, [{ userId: "user-b", enrollmentId: "enrollment-b" }]);
+  assert.ok(!calls.some((call) => call.startsWith("putGatewaySelection")));
+});
+
+test("invitedActor persists enrollment intent before invite/register and binds before selection", async () => {
+  const world = fakeWorld();
+  const { transport, calls } = fakeTransport({
+    getEnrollment: async () => ({ id: "enrollment-b", syncStatus: "synced", lastErrorCode: null }),
+  });
+  await invitedActor(world, {
+    inviter: fakeInviter(),
+    email: "qual-actor-b-cloud-run-1-cloud-0@example.com",
+    beginActorEnrollmentCustody: async ({ email }) => {
+      calls.push(`beginCustody:${email}`);
+      return {
+        resolveAndTrack: async (identity) => {
+          calls.push(`bindCustody:${identity.userId}:${identity.enrollmentId}`);
+          return world.gateway.resolveActorKey(identity);
+        },
+      };
+    },
+  }, transport);
+  assert.ok(calls.indexOf("beginCustody:qual-actor-b-cloud-run-1-cloud-0@example.com") < calls.findIndex((c) => c.startsWith("createInvitation:")));
+  assert.ok(calls.indexOf("bindCustody:user-b:enrollment-b") < calls.findIndex((c) => c.startsWith("putGatewaySelection:")));
+});
+
 test("invitedActor propagates a bounded timeout when enrollment never syncs", async () => {
   const { transport } = fakeTransport({
     getEnrollment: async () => ({ id: "enrollment-b", syncStatus: "pending", lastErrorCode: "gateway_unreachable" }),

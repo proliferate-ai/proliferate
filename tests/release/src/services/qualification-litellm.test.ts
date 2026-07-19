@@ -124,6 +124,35 @@ test("resolveActorKey throws when no key matches the alias", async () => {
   );
 });
 
+test("resolveActorKey fails closed when the exact deterministic alias is ambiguous", async () => {
+  const { fetch } = fakeFetch({
+    "GET /key/list": () => response(200, { keys: [
+      { key_alias: ALIAS, token: "token-a", team_id: "team_1", user_id: "user-u1" },
+      { key_alias: ALIAS, token: "token-b", team_id: "team_2", user_id: "user-u1" },
+    ] }),
+  });
+  await assert.rejects(
+    new QualificationLiteLlmController(CONFIG, { fetch }).resolveActorKey({
+      userId: "u1",
+      enrollmentId: "enroll-9999-aaaa",
+    }),
+    /multiple keys.*ambiguous/i,
+  );
+});
+
+test("resolveActorKey fails closed when the exact alias row omits its token identity", async () => {
+  const { fetch } = fakeFetch({
+    "GET /key/list": () => response(200, { keys: [{ key_alias: ALIAS, team_id: "team_1" }] }),
+  });
+  await assert.rejects(
+    new QualificationLiteLlmController(CONFIG, { fetch }).resolveActorKey({
+      userId: "u1",
+      enrollmentId: "enroll-9999-aaaa",
+    }),
+    /omitted its exact token identity/i,
+  );
+});
+
 const WINDOW_START = "2026-07-14T12:00:00.000Z";
 const WINDOW_END = "2026-07-14T12:05:00.000Z";
 const IN_WINDOW = "2026-07-14T12:02:00.000Z";

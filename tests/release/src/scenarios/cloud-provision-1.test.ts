@@ -1,11 +1,18 @@
 import assert from "node:assert/strict";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { test } from "node:test";
 
 import {
   CLOUD_PROVISION_1_ID,
   DETERMINISTIC_PROMPT,
+  HOME_COMPOSER_EDITOR_SELECTOR,
   REPRESENTATIVE_HARNESS,
   SANDBOX_RUNTIME_PORT,
+  WORKSPACE_COMPOSER_EDITOR_SELECTOR,
+  cloudComposerTargetSelectionIsStable,
+  coveredRepoSourceRootSelector,
   createCloudProvision1Driver,
   resolveBotSeedForAutomation,
   resolveWorldConstructionInputs,
@@ -30,6 +37,7 @@ import type { PlannedCellV1 } from "../runner/result.js";
 import type { CorrelatedTurnSpend, SpendSnapshot } from "../services/qualification-litellm.js";
 import type { BoxExec, ServerPythonOptions } from "../worlds/managed-cloud/box-exec.js";
 import type { ManagedCloudCleanupEvidence } from "../worlds/managed-cloud/cleanup-kinds.js";
+import { MANAGED_CLOUD_TEMPLATE_DESTINATIONS } from "../worlds/managed-cloud/template.js";
 import type { ManagedCloudWorld } from "../worlds/managed-cloud/world.js";
 
 const REQUIRED_ENV_VARS: Record<string, string> = {
@@ -327,6 +335,75 @@ test("resolveWorldConstructionInputs fails cleanly when a required cloud env var
   assert.equal(result.ok, false);
 });
 
+test("coveredRepoSourceRootSelector targets the exact cloud-only repo row (deterministic home-picker selection)", () => {
+  // The home Project menu row carries data-repo-source-root="cloud:<owner>/<repo>"
+  // for a cloud-only repo (HomeProjectMenu.tsx / repositories.ts). A deterministic
+  // attribute click replaces the fuzzy getByText that could leave destination on
+  // "cowork" so the Runtime button never mounts (attempt-2 regression red).
+  assert.equal(
+    coveredRepoSourceRootSelector(),
+    '[data-repo-source-root="cloud:proliferate-e2e/e2e-fixture"]',
+  );
+});
+
+test("cloudComposerTargetSelectionIsStable distinguishes a retained Cloud target from a reset home target", () => {
+  assert.equal(cloudComposerTargetSelectionIsStable({
+    homeComposerVisible: true,
+    projectAriaLabel: "Project: e2e-fixture",
+    runtimeAriaLabel: "Runtime: Cloud",
+  }), true);
+  assert.equal(cloudComposerTargetSelectionIsStable({
+    homeComposerVisible: true,
+    projectAriaLabel: "Project: No project",
+    runtimeAriaLabel: null,
+  }), false);
+  assert.equal(cloudComposerTargetSelectionIsStable({
+    homeComposerVisible: false,
+    projectAriaLabel: null,
+    runtimeAriaLabel: null,
+  }), true, "an already-open workspace has no home target rows to retain");
+});
+
+test("composer surface selectors do not classify the rich home editor as an open workspace", () => {
+  assert.equal(HOME_COMPOSER_EDITOR_SELECTOR, "[data-home-composer-editor]");
+  assert.equal(
+    WORKSPACE_COMPOSER_EDITOR_SELECTOR,
+    "[data-chat-composer-editor]:not([data-home-composer-editor])",
+  );
+});
+
+test("buildWorld writes GITHUB_APP_WEBHOOK_SECRET into the github-app env file (#1318 base-world repair)", async () => {
+  // #1257's six-field github_app_configured gate now requires
+  // GITHUB_APP_WEBHOOK_SECRET, else the repo-authority gate 503s inside the
+  // sandbox bootstrap and the covered repo never materializes. buildWorld writes
+  // the github-app env file BEFORE it calls constructManagedCloudWorld (which
+  // throws on the empty fake candidate map), so we catch that throw and read the
+  // staged env file off disk.
+  const runDir = await mkdtemp(path.join(os.tmpdir(), "cp1-webhook-"));
+  try {
+    await writeFile(
+      path.join(runDir, "cloud-world-subdomain.json"),
+      JSON.stringify({ subdomain: "mcq-smoke-run-1-smoke-0.qualification.proliferate.com" }),
+    );
+    const resolved = resolveWorldConstructionInputs(fakeCtx({ runDir }));
+    assert.equal(resolved.ok, true);
+    if (!resolved.ok) return;
+    const driver = createCloudProvision1Driver();
+    await driver.buildWorld(resolved.value).catch(() => undefined); // construction throws on the empty map — that's fine.
+    const githubEnv = await readFile(
+      path.join(runDir, "cloud-provision-1", "secrets", "github-app.env"),
+      "utf8",
+    );
+    const match = /^GITHUB_APP_WEBHOOK_SECRET=([0-9a-f]{64})$/m.exec(githubEnv);
+    assert.ok(match, "github-app.env must contain a 64-hex GITHUB_APP_WEBHOOK_SECRET line");
+    assert.ok(githubEnv.includes("GITHUB_APP_CLIENT_SECRET="), "the existing client secret line is preserved");
+    // The webhook secret is a run-scoped random never carried in evidence/receipts.
+    assert.notEqual(match![1], REQUIRED_ENV_VARS.RELEASE_E2E_CLOUD_GITHUB_APP_CLIENT_SECRET);
+  } finally {
+    await rm(runDir, { recursive: true, force: true });
+  }
+});
+
 test("resolveWorldConstructionInputs resolves every typed input on the happy path", () => {
   const result = resolveWorldConstructionInputs(fakeCtx());
   assert.equal(result.ok, true);
@@ -414,6 +491,34 @@ test("runCloudProvision1Cell reports failed (not green) when cleanup does not fu
   const outcome = await runCloudProvision1Cell(fakeCell(), fakeCtx(), driver);
   assert.equal(outcome.status, "failed");
   assert.ok(outcome.evidence, "a failed cleanup still carries evidence recording the failure");
+});
+
+test("runCloudProvision1Cell stays green when exact template custody transfers durably", async () => {
+  const driver = fakeDriver({
+    closeWorld: async () => ({
+      ledgerIdHash: "e".repeat(64),
+      registered: 9,
+      reconciled: 9,
+      failed: 0,
+      sandboxesDeleted: true,
+      templateDeleted: false,
+      templateCustodyTransferred: true,
+      dnsRecordDeleted: true,
+      ec2Terminated: true,
+      securityGroupDeleted: true,
+      keyPairDeleted: true,
+      virtualKeyDeleted: true,
+      litellmSubjectsDeleted: true,
+      localPathsRemoved: true,
+    }),
+  });
+  const outcome = await runCloudProvision1Cell(fakeCell(), fakeCtx(), driver);
+  assert.equal(outcome.status, "green");
+  assert.equal(outcome.evidence?.kind, "cloud_provision_turn");
+  if (outcome.evidence?.kind === "cloud_provision_turn") {
+    assert.equal(outcome.evidence.cleanup.template_deleted, false);
+    assert.equal(outcome.evidence.cleanup.template_custody_transferred, true);
+  }
 });
 
 test("runCloudProvision1Cell reports blocked when no eligible live model intersects the allowlist", async () => {
@@ -617,8 +722,9 @@ function fakeExecInProviderSandbox(
     if (command[0] === "sha256sum") {
       return { stdout: `${"a".repeat(64)}  ${command[1]}`, stderr: "", exitCode: 0 };
     }
-    // A binary `--version` exec.
-    return { stdout: "1.4.0", stderr: "", exitCode: 0 };
+    // A binary `--version` exec. The real clap binaries print
+    // `<binary-name> <version>`; the fake world's candidate receipts are 1.0.0.
+    return { stdout: `${path.basename(command[0]!)} 1.0.0`, stderr: "", exitCode: 0 };
   };
   return { fn, calls };
 }
@@ -640,9 +746,9 @@ test("createCloudProvision1Driver().verifyWorkerSupervisor asserts worker enroll
   const driver = createCloudProvision1Driver({ execInProviderSandbox: exec });
   const world: ManagedCloudWorld = { ...fakeWorld(), box };
   const result = await driver.verifyWorkerSupervisor(world, fakeConvergenceForDriver());
-  assert.equal(result.workerVersion, "1.4.0");
-  assert.equal(result.supervisorVersion, "1.4.0");
-  assert.equal(result.anyharnessVersion, "1.4.0");
+  assert.equal(result.workerVersion, "1.0.0");
+  assert.equal(result.supervisorVersion, "1.0.0");
+  assert.equal(result.anyharnessVersion, "1.0.0");
   assert.equal(result.supervisorIsParent, false, "supervisor-parentage stays deferred to PR 9");
   assert.equal(result.heartbeatRecent, true);
   // The binary hashes were compared against the candidate receipts (MCW-003).
@@ -655,6 +761,49 @@ test("createCloudProvision1Driver().verifyWorkerSupervisor asserts worker enroll
   assert.equal(calls.filter((c) => c.command.at(-1) === "--version").length, 3);
   assert.equal(calls.filter((c) => c.command[0] === "sha256sum").length, 3);
   assert.equal(calls.length, 6);
+});
+
+test("createCloudProvision1Driver().verifyWorkerSupervisor canonicalizes clap --version output to the candidate receipt token", async () => {
+  const box = fakeBoxExec();
+  const { fn: exec, calls } = fakeExecInProviderSandbox(() => "[]");
+  const clapAnyharnessVersionExec = async (providerSandboxId: string, command: readonly string[]) => {
+    if (
+      command[0] === MANAGED_CLOUD_TEMPLATE_DESTINATIONS.anyharness &&
+      command.at(-1) === "--version"
+    ) {
+      return { stdout: `anyharness ${fakeWorld().artifacts.anyharness.version}\n`, stderr: "", exitCode: 0 };
+    }
+    return exec(providerSandboxId, command);
+  };
+  const driver = createCloudProvision1Driver({ execInProviderSandbox: clapAnyharnessVersionExec });
+  const world: ManagedCloudWorld = { ...fakeWorld(), box };
+  const result = await driver.verifyWorkerSupervisor(world, fakeConvergenceForDriver());
+
+  assert.equal(result.anyharnessVersion, world.artifacts.anyharness.version);
+  assert.equal(result.anyharnessHashMatchesReceipt, true);
+  assert.equal(calls.filter((c) => c.command[0] === "sha256sum").length, 3);
+});
+
+test("createCloudProvision1Driver().verifyWorkerSupervisor rejects blank or diverged --version output", async () => {
+  for (const stdout of ["\n", "anyharness 9.9.9\n"]) {
+    const box = fakeBoxExec();
+    const { fn: exec } = fakeExecInProviderSandbox(() => "[]");
+    const badAnyharnessVersionExec = async (providerSandboxId: string, command: readonly string[]) => {
+      if (
+        command[0] === MANAGED_CLOUD_TEMPLATE_DESTINATIONS.anyharness &&
+        command.at(-1) === "--version"
+      ) {
+        return { stdout, stderr: "", exitCode: 0 };
+      }
+      return exec(providerSandboxId, command);
+    };
+    const driver = createCloudProvision1Driver({ execInProviderSandbox: badAnyharnessVersionExec });
+    const world: ManagedCloudWorld = { ...fakeWorld(), box };
+    await assert.rejects(
+      () => driver.verifyWorkerSupervisor(world, fakeConvergenceForDriver()),
+      /did not advertise candidate receipt version 1\.0\.0/,
+    );
+  }
 });
 
 test("createCloudProvision1Driver().verifyWorkerSupervisor fails when a baked binary hash does not match its receipt", async () => {

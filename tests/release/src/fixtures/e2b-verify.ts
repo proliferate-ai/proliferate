@@ -56,6 +56,21 @@ export interface E2BStateResult {
   state: "running" | "paused";
 }
 
+export interface E2BTemplateSweepResult {
+  matches: Array<{
+    providerSandboxId: string;
+    state: "running" | "paused";
+    templateId: string;
+  }>;
+  count: number;
+}
+
+export interface E2BTemplateInventoryRow {
+  templateId: string;
+  aliases: string[];
+  names: string[];
+}
+
 export interface E2BExecResult {
   stdout: string;
   stderr: string;
@@ -130,12 +145,109 @@ async function runProbe<T>(args: readonly string[], env: NodeJS.ProcessEnv, stdi
   });
 }
 
+const E2B_READ_RATE_LIMIT_DELAYS_MS = [2_000, 4_000, 8_000] as const;
+
+export interface E2BReadRateLimitRetryOptions {
+  delaysMs?: readonly number[];
+  sleep?: (ms: number) => Promise<void>;
+}
+
+function isE2bRateLimitError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /RateLimitException/i.test(message) && /(?:\b429\b|rate limit)/i.test(message);
+}
+
+/**
+ * Retries only idempotent E2B inventory reads after the provider's explicit
+ * 429 signal. The bounded fourth attempt remains fail-closed, and all other
+ * errors surface immediately.
+ */
+export async function retryE2bReadAfterRateLimit<T>(
+  operation: () => Promise<T>,
+  options: E2BReadRateLimitRetryOptions = {},
+): Promise<T> {
+  const delaysMs = options.delaysMs ?? E2B_READ_RATE_LIMIT_DELAYS_MS;
+  const sleep = options.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+  let retryIndex = 0;
+  for (;;) {
+    try {
+      return await operation();
+    } catch (error) {
+      if (!isE2bRateLimitError(error) || retryIndex >= delaysMs.length) {
+        throw error;
+      }
+      await sleep(delaysMs[retryIndex]!);
+      retryIndex += 1;
+    }
+  }
+}
+
 /** Resolves a cloud sandbox's provider (E2B) sandbox id purely via E2B metadata -- no DB access. */
 export async function findProviderSandbox(
   cloudSandboxId: string,
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<E2BFindResult> {
-  return runProbe<E2BFindResult>(["find", cloudSandboxId], env);
+  return retryE2bReadAfterRateLimit(() => runProbe<E2BFindResult>(["find", cloudSandboxId], env));
+}
+
+/** Exhaustively lists live sandboxes whose observed template id exactly matches. */
+export async function listProviderSandboxesByTemplate(
+  templateId: string,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<E2BTemplateSweepResult> {
+  return retryE2bReadAfterRateLimit(() => runProbe<E2BTemplateSweepResult>(["list-template", templateId], env));
+}
+
+/** Lists strict immutable template identities and aliases through the authenticated E2B CLI. */
+export async function listProviderTemplates(
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<E2BTemplateInventoryRow[]> {
+  const apiKey = env.RELEASE_E2E_E2B_API_KEY?.trim() || env.E2B_API_KEY?.trim();
+  const teamId = env.RELEASE_E2E_E2B_TEAM_ID?.trim() || env.E2B_TEAM_ID?.trim();
+  if (!apiKey || !teamId) {
+    throw new Error("E2B template inventory requires the qualification API key and team id.");
+  }
+  const { execFile } = await import("node:child_process");
+  const { promisify } = await import("node:util");
+  const run = promisify(execFile);
+  const { stdout } = await run(
+    "e2b",
+    // `--team` is explicitly a team-ID selector in the E2B CLI. This is
+    // distinct from the template-name namespace, which uses the human slug.
+    ["template", "list", "--team", teamId, "--format", "json"],
+    {
+      env: { ...env, E2B_API_KEY: apiKey },
+      timeout: 60_000,
+      maxBuffer: 8 * 1024 * 1024,
+    },
+  );
+  const parsed = JSON.parse(stdout.toString().trim()) as unknown;
+  if (!Array.isArray(parsed)) {
+    throw new Error("E2B template inventory returned a non-array JSON payload.");
+  }
+  return parsed.map((row): E2BTemplateInventoryRow => {
+    if (typeof row !== "object" || row === null || Array.isArray(row)) {
+      throw new Error("E2B template inventory returned a malformed row.");
+    }
+    const value = row as Record<string, unknown>;
+    const id = typeof value.templateID === "string" ? value.templateID : value.templateId;
+    if (typeof id !== "string" || !id) {
+      throw new Error("E2B template inventory row has no immutable template id.");
+    }
+    const aliases = Array.isArray(value.aliases) ? value.aliases : [];
+    const names = Array.isArray(value.names) ? value.names : [];
+    if (aliases.some((name) => typeof name !== "string") || names.some((name) => typeof name !== "string")) {
+      throw new Error("E2B template inventory row has malformed aliases/names.");
+    }
+    return { templateId: id, aliases: aliases as string[], names: names as string[] };
+  });
+}
+
+/** Lists immutable template ids directly through the authenticated E2B CLI. */
+export async function listProviderTemplateIds(
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<string[]> {
+  return (await listProviderTemplates(env)).map((row) => row.templateId);
 }
 
 export async function getProviderSandboxState(
@@ -145,7 +257,7 @@ export async function getProviderSandboxState(
   return runProbe<E2BStateResult>(["state", providerSandboxId], env);
 }
 
-/** Idempotent provider-sandbox kill for run cleanup (an absent sandbox counts as killed). */
+/** Idempotent provider-sandbox kill (`killed: false` means the exact id was already absent). */
 export async function killProviderSandbox(
   providerSandboxId: string,
   env: NodeJS.ProcessEnv = process.env,

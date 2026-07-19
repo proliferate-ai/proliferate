@@ -249,6 +249,21 @@ async function findPidsByExactExe(
     .filter((token) => /^\d+$/.test(token));
 }
 
+/**
+ * Read-only exact-executable probe used by a scenario to wait until the
+ * runtime-readiness boundary actually exists before arming its one destructive
+ * injection. The subsequent `injectFailureAt(..., "runtime_readiness", ...)`
+ * still independently proves present→absent; this probe only prevents an early
+ * one-shot call from mistaking "process not started yet" for a product failure.
+ */
+export async function providerProcessWithExactExecutablePresent(
+  providerSandboxId: string,
+  executable: string,
+  exec: typeof execInProviderSandbox = execInProviderSandbox,
+): Promise<boolean> {
+  return (await findPidsByExactExe(exec, providerSandboxId, executable)).length > 0;
+}
+
 /** Kills an explicit PID list with SIGKILL (never `pkill -f`) and returns the command result. */
 async function killPids(
   exec: typeof execInProviderSandbox,

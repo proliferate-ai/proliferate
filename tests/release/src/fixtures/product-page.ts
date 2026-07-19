@@ -7,11 +7,25 @@ import type { ReadyLocalWorld } from "../worlds/local-workspace/world.js";
 import type { AuthenticatedActor, StoredAuthSession } from "./authenticated-actor.js";
 import { scrubSecretText } from "./redact-diagnostics.js";
 
+/**
+ * Resolves the failure-diagnostics output directory from either debug env var.
+ * `LOCAL_WORLD_SMOKE_DEBUG_DIR` is the local-world lane's gate;
+ * `MANAGED_CLOUD_SMOKE_DEBUG_DIR` is the managed-cloud lane's (CLOUD-PROVISION-1
+ * + MANAGED-CLOUD-FIXTURE-SMOKE-1). A `productPage` opened in the cloud lane
+ * must honour its own lane's var so the browser console/network sinks populate
+ * and a UI-flow failure there is diagnosable — otherwise a cloud browser-turn
+ * break uploads only its error text (the CLOUD-PROVISION-1 "no Project row"
+ * blind spot). Empty (returns `undefined`) on the green path in both lanes.
+ */
+export function resolveDiagnosticsDir(): string | undefined {
+  return process.env.LOCAL_WORLD_SMOKE_DEBUG_DIR || process.env.MANAGED_CLOUD_SMOKE_DEBUG_DIR || undefined;
+}
+
 /** Records browser console output for env-gated failure diagnostics. Secret
  * shapes are scrubbed at capture time so the sink never holds a credential
  * (these diagnostics are uploaded as CI artifacts). */
 function captureConsole(page: Page, sink: string[]): void {
-  if (!process.env.LOCAL_WORLD_SMOKE_DEBUG_DIR) {
+  if (!resolveDiagnosticsDir()) {
     return;
   }
   page.on("console", (message) => sink.push(scrubSecretText(`[${message.type()}] ${message.text()}`)));
@@ -20,7 +34,7 @@ function captureConsole(page: Page, sink: string[]): void {
 
 /** Records non-2xx and failed network requests for env-gated failure diagnostics. */
 function captureNetwork(page: Page, sink: string[]): void {
-  if (!process.env.LOCAL_WORLD_SMOKE_DEBUG_DIR) {
+  if (!resolveDiagnosticsDir()) {
     return;
   }
   page.on("requestfailed", (request) => {
@@ -54,13 +68,14 @@ function captureNetwork(page: Page, sink: string[]): void {
 }
 
 /**
- * Env-gated (`LOCAL_WORLD_SMOKE_DEBUG_DIR`) dump of the rendered DOM, a
- * screenshot, and captured console output on a UI failure. A no-op unless the
- * env var is set, so it never touches the green path. When enabled (incl. in
- * CI) every captured string is scrubbed of secret shapes before it is written.
+ * Env-gated (`LOCAL_WORLD_SMOKE_DEBUG_DIR` or `MANAGED_CLOUD_SMOKE_DEBUG_DIR`,
+ * see `resolveDiagnosticsDir`) dump of the rendered DOM, a screenshot, and
+ * captured console output on a UI failure. A no-op unless one of those env vars
+ * is set, so it never touches the green path. When enabled (incl. in CI) every
+ * captured string is scrubbed of secret shapes before it is written.
  */
 async function dumpFailureArtifacts(page: Page | undefined, consoleLog: string[], label: string): Promise<void> {
-  const dir = process.env.LOCAL_WORLD_SMOKE_DEBUG_DIR;
+  const dir = resolveDiagnosticsDir();
   if (!dir || !page) {
     return;
   }
@@ -103,8 +118,8 @@ export interface ProductPage {
   page: Page;
   /**
    * Env-gated diagnostic sinks (populated only when LOCAL_WORLD_SMOKE_DEBUG_DIR
-   * is set): browser console output and non-2xx / failed network requests.
-   * Empty on the green path.
+   * or MANAGED_CLOUD_SMOKE_DEBUG_DIR is set): browser console output and
+   * non-2xx / failed network requests. Empty on the green path.
    */
   debug: { console: string[]; network: string[] };
   /** Closes the page + context; registered with the world cleanup stack. */

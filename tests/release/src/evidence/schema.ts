@@ -114,6 +114,7 @@ export type CellEvidenceV1 =
   | SelfHostBaseTurnEvidenceV1
   | SelfHostInviteeEvidenceV1
   | CloudProvisionTurnEvidenceV1
+  | ManagedCloudFixtureSmokeEvidenceV1
   | SelfHostGithubAuthEvidenceV1
   | SelfHostSwitchIsolationEvidenceV1
   | SelfHostGatewayEvidenceV1
@@ -662,8 +663,9 @@ export interface CloudProvisionTurnEvidenceV1 {
   /**
    * The managed-cloud cleanup block. Its shape mirrors
    * `ManagedCloudCleanupEvidence` (worlds/managed-cloud/cleanup-kinds.ts) in
-   * snake_case: a green cell requires `failed === 0` and every deletion boolean
-   * true (spec "Cleanup reconciles every run-created resource").
+   * snake_case: a green cell requires `failed === 0`, every ordinary deletion
+   * boolean true, and exactly one of template deletion or durable transfer true
+   * (spec "Cleanup reconciles every run-created resource").
    */
   cleanup: {
     ledger_id_hash: string;
@@ -672,6 +674,7 @@ export interface CloudProvisionTurnEvidenceV1 {
     failed: number;
     sandboxes_deleted: boolean;
     template_deleted: boolean;
+    template_custody_transferred: boolean;
     dns_record_deleted: boolean;
     ec2_terminated: boolean;
     security_group_deleted: boolean;
@@ -680,6 +683,49 @@ export interface CloudProvisionTurnEvidenceV1 {
     litellm_subjects_deleted: boolean;
     local_paths_removed: boolean;
   };
+}
+
+/**
+ * ── Managed-cloud shared-fixture live smoke evidence (MANAGED-CLOUD-FIXTURE-
+ * SMOKE-1) ──────────────────────────────────────────────────────────────────
+ *
+ * One bounded evidence object per independently-judged matrix cell (callback-
+ * relay / stripe-test-clock / billing-threshold / failure-injection / cleanup-
+ * replay). Each carries exactly ONE entry in `cells` (its own), so the report
+ * aggregates one row per cell. `provider_sweeps` is non-empty only on the
+ * cleanup-replay cell (the sweep is the last cell's job). Bounded and secret-
+ * free BY CONSTRUCTION: `external_ids` are test-mode/run-owned ids only (evt_/
+ * cus_/tc_/sub_/we_/price ids), never a raw secret key, webhook secret, or
+ * signed payload; the validator additionally rejects any external id that looks
+ * like a Stripe secret (`sk_`/`rk_`/`whsec_`). Its kind-scoped validator +
+ * sanitizer own its bounds; it does not touch any other kind.
+ */
+export interface ManagedCloudFixtureSmokeEvidenceV1 {
+  kind: "managed_cloud_fixture_smoke";
+  /** Every qualified artifact id (candidate + run-scoped template/api receipts). */
+  artifact_ids: string[];
+  /** Provider-verified world identity (same shape the provision proof carries). */
+  world: {
+    source_sha: string;
+    server_digest: string;
+    e2b_template_id: string;
+    e2b_template_build_id: string;
+    e2b_template_input_hash: string;
+  };
+  /** Exactly one entry: the cell this evidence object belongs to. */
+  cells: Array<{
+    cell_id: string;
+    /** Bounded test-mode / run-owned ids only (never secrets). */
+    external_ids: string[];
+    observed_transition: string;
+    /** Bounded cleanup-ledger references this cell owns (safe tokens). */
+    cleanup_entries: string[];
+  }>;
+  /** Non-empty only on the cleanup-replay cell; each provider's remaining owned count. */
+  provider_sweeps: Array<{
+    provider: "aws" | "e2b" | "stripe" | "process" | "filesystem";
+    remaining_owned_resources: number;
+  }>;
 }
 
 /** V4 result: a V3 result plus one bounded optional evidence attachment. */
@@ -912,6 +958,14 @@ const CELL_REQUIRED_EVIDENCE_KIND: Readonly<Record<string, CellEvidenceV1["kind"
   "SELFHOST-QUAL-1/SH-GITHUB-AUTH": "selfhost_github_auth",
   "SELFHOST-QUAL-1/SH-GATEWAY": "selfhost_gateway",
   "SELFHOST-QUAL-1/SH-CLOUD-ADDON": "selfhost_cloud_addon",
+  // MANAGED-CLOUD-FIXTURE-SMOKE-1's five independently-judged cells each attach
+  // the SAME kind-scoped evidence (managed_cloud_fixture_smoke); the cell binds
+  // on its `cell` dimension so a green cell cannot carry null or a foreign kind.
+  "MANAGED-CLOUD-FIXTURE-SMOKE-1/callback-relay": "managed_cloud_fixture_smoke",
+  "MANAGED-CLOUD-FIXTURE-SMOKE-1/stripe-test-clock": "managed_cloud_fixture_smoke",
+  "MANAGED-CLOUD-FIXTURE-SMOKE-1/billing-threshold": "managed_cloud_fixture_smoke",
+  "MANAGED-CLOUD-FIXTURE-SMOKE-1/failure-injection": "managed_cloud_fixture_smoke",
+  "MANAGED-CLOUD-FIXTURE-SMOKE-1/cleanup-replay": "managed_cloud_fixture_smoke",
 };
 
 /**
@@ -1456,6 +1510,13 @@ function validateCellEvidence(
     case "cloud_provision_turn":
       validateCloudProvisionTurnEvidence(where, evidence as CloudProvisionTurnEvidenceV1, result.status);
       return;
+    case "managed_cloud_fixture_smoke":
+      validateManagedCloudFixtureSmokeEvidence(
+        where,
+        evidence as ManagedCloudFixtureSmokeEvidenceV1,
+        result.status,
+      );
+      return;
     default:
       throw new ReportValidationError(`${where}.kind is unknown.`);
   }
@@ -1797,6 +1858,7 @@ const CLOUD_CLEANUP_EVIDENCE_KEYS = [
   "failed",
   "sandboxes_deleted",
   "template_deleted",
+  "template_custody_transferred",
   "dns_record_deleted",
   "ec2_terminated",
   "security_group_deleted",
@@ -1807,6 +1869,34 @@ const CLOUD_CLEANUP_EVIDENCE_KEYS = [
 ] as const;
 
 const FULL_SHA_PATTERN = /^[0-9a-f]{40}$/;
+
+// ── MANAGED-CLOUD-FIXTURE-SMOKE-1 evidence key sets (append-only) ────────────
+const MANAGED_CLOUD_FIXTURE_SMOKE_EVIDENCE_KEYS = [
+  "kind",
+  "artifact_ids",
+  "world",
+  "cells",
+  "provider_sweeps",
+] as const;
+const FIXTURE_SMOKE_WORLD_KEYS = [
+  "source_sha",
+  "server_digest",
+  "e2b_template_id",
+  "e2b_template_build_id",
+  "e2b_template_input_hash",
+] as const;
+const FIXTURE_SMOKE_CELL_KEYS = ["cell_id", "external_ids", "observed_transition", "cleanup_entries"] as const;
+const FIXTURE_SMOKE_SWEEP_KEYS = ["provider", "remaining_owned_resources"] as const;
+const FIXTURE_SMOKE_SWEEP_PROVIDERS = new Set(["aws", "e2b", "stripe", "process", "filesystem"]);
+/** External ids must never carry Stripe secret material. */
+const STRIPE_SECRET_LOOKING_PATTERN = /^(sk|rk|whsec)_/;
+/** The cleanup-replay cell id ends with this dimension; only it carries sweeps. */
+const FIXTURE_SMOKE_CLEANUP_REPLAY_CELL_SUFFIX = "cell=cleanup-replay";
+/** Bound on the observed_transition free-ish string (still safe-token-checked in pieces). */
+const MAX_FIXTURE_SMOKE_TRANSITION_LENGTH = 400;
+const MAX_FIXTURE_SMOKE_EXTERNAL_IDS = 50;
+/** A canonical matrix cell id: `<SCENARIO>/<lane>/<dim>=<value>` (safe chars + one `=`, `/`). */
+const FIXTURE_SMOKE_CELL_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)*\/[A-Za-z0-9._-]+=[A-Za-z0-9._-]+$/;
 
 /**
  * Kind-scoped validator for `cloud_provision_turn` (PR 2, spec step 10). Per
@@ -1919,7 +2009,6 @@ function validateCloudCleanupEvidence(
   requireNonNegativeInteger(`${where}.cleanup.failed`, cleanup.failed);
   const deletionFields = [
     "sandboxes_deleted",
-    "template_deleted",
     "dns_record_deleted",
     "ec2_terminated",
     "security_group_deleted",
@@ -1931,16 +2020,154 @@ function validateCloudCleanupEvidence(
   for (const field of deletionFields) {
     requireBoolean(`${where}.cleanup.${field}`, cleanup[field]);
   }
+  requireBoolean(`${where}.cleanup.template_deleted`, cleanup.template_deleted);
+  requireBoolean(
+    `${where}.cleanup.template_custody_transferred`,
+    cleanup.template_custody_transferred,
+  );
   // Green-cell rule (spec "Cleanup and failure behavior"): a green cell requires
-  // failed === 0 and every deletion boolean true; a non-green cell may record
-  // its own cleanup failure so the report is still persisted with a real
-  // nonzero exit rather than throwing and exiting 2.
+  // failed === 0, every ordinary deletion boolean true, and exactly one of
+  // template deletion / durable transfer true. A non-green cell may record its
+  // own cleanup failure so the report is still persisted with a real nonzero
+  // exit rather than throwing and exiting 2.
   if (status === "green") {
     if (cleanup.failed > 0) {
       throw new ReportValidationError(`${where}.cleanup.failed must be 0 for a green result.`);
     }
     if (deletionFields.some((field) => cleanup[field] !== true)) {
       throw new ReportValidationError(`${where}.cleanup is incomplete on a green result.`);
+    }
+    if (cleanup.template_deleted === cleanup.template_custody_transferred) {
+      throw new ReportValidationError(
+        `${where}.cleanup must prove exactly one of template deletion or durable custody transfer on a green result.`,
+      );
+    }
+  }
+}
+
+/**
+ * Kind-scoped validator for `managed_cloud_fixture_smoke`
+ * (MANAGED-CLOUD-FIXTURE-SMOKE-1). Per the extension contract: requires the
+ * exact declared key set on the object and every nested object; bounds every
+ * string with safe-token/hash patterns; requires exactly ONE `cells` entry
+ * (the cell this evidence belongs to); asserts no `external_ids` value looks
+ * like a Stripe secret; requires non-negative sweep counts and a known provider
+ * enum; and on a GREEN cleanup-replay cell requires every provider sweep to
+ * report zero remaining resources. Does not touch any other kind's validator.
+ */
+function validateManagedCloudFixtureSmokeEvidence(
+  where: string,
+  evidence: ManagedCloudFixtureSmokeEvidenceV1,
+  status: FinalTestStatus,
+): void {
+  requireExactKeys(evidence, MANAGED_CLOUD_FIXTURE_SMOKE_EVIDENCE_KEYS, where);
+  if (evidence.kind !== "managed_cloud_fixture_smoke") {
+    throw new ReportValidationError(`${where}.kind is unknown.`);
+  }
+  if (!Array.isArray(evidence.artifact_ids) || evidence.artifact_ids.length === 0) {
+    throw new ReportValidationError(`${where}.artifact_ids must be a non-empty array.`);
+  }
+  for (const [index, id] of evidence.artifact_ids.entries()) {
+    requireSafeEvidenceToken(`${where}.artifact_ids[${index}]`, id);
+  }
+
+  const world = evidence.world;
+  if (typeof world !== "object" || world === null || Array.isArray(world)) {
+    throw new ReportValidationError(`${where}.world must be an object.`);
+  }
+  requireExactKeys(world, FIXTURE_SMOKE_WORLD_KEYS, `${where}.world`);
+  requireSafeEvidenceToken(`${where}.world.source_sha`, world.source_sha);
+  requireSafeEvidenceToken(`${where}.world.server_digest`, world.server_digest);
+  requireSafeEvidenceToken(`${where}.world.e2b_template_id`, world.e2b_template_id);
+  requireSafeEvidenceToken(`${where}.world.e2b_template_build_id`, world.e2b_template_build_id);
+  requireEvidenceHash(`${where}.world.e2b_template_input_hash`, world.e2b_template_input_hash);
+
+  if (!Array.isArray(evidence.cells) || evidence.cells.length !== 1) {
+    throw new ReportValidationError(`${where}.cells must contain exactly one entry (this cell's own).`);
+  }
+  const cell = evidence.cells[0]!;
+  const cellWhere = `${where}.cells[0]`;
+  if (typeof cell !== "object" || cell === null || Array.isArray(cell)) {
+    throw new ReportValidationError(`${cellWhere} must be an object.`);
+  }
+  requireExactKeys(cell, FIXTURE_SMOKE_CELL_KEYS, cellWhere);
+  // The canonical cell id carries `=` in its matrix dimension segment
+  // (`…/cell=callback-relay`), which the safe-token pattern deliberately
+  // excludes — so bound it with the matrix-cell-id shape instead.
+  if (
+    typeof cell.cell_id !== "string" ||
+    cell.cell_id.length === 0 ||
+    cell.cell_id.length > MAX_EVIDENCE_TOKEN_LENGTH ||
+    cell.cell_id.includes("..") ||
+    !FIXTURE_SMOKE_CELL_ID_PATTERN.test(cell.cell_id)
+  ) {
+    throw new ReportValidationError(`${cellWhere}.cell_id is missing or unsafe.`);
+  }
+  if (!Array.isArray(cell.external_ids) || cell.external_ids.length > MAX_FIXTURE_SMOKE_EXTERNAL_IDS) {
+    throw new ReportValidationError(`${cellWhere}.external_ids must be an array of at most ${MAX_FIXTURE_SMOKE_EXTERNAL_IDS}.`);
+  }
+  for (const [index, id] of cell.external_ids.entries()) {
+    requireSafeEvidenceToken(`${cellWhere}.external_ids[${index}]`, id);
+    if (STRIPE_SECRET_LOOKING_PATTERN.test(id)) {
+      throw new ReportValidationError(
+        `${cellWhere}.external_ids[${index}] looks like Stripe secret material; only test-mode ids are allowed.`,
+      );
+    }
+  }
+  if (
+    typeof cell.observed_transition !== "string" ||
+    cell.observed_transition.length === 0 ||
+    cell.observed_transition.length > MAX_FIXTURE_SMOKE_TRANSITION_LENGTH
+  ) {
+    throw new ReportValidationError(`${cellWhere}.observed_transition must be a bounded non-empty string.`);
+  }
+  if (!Array.isArray(cell.cleanup_entries)) {
+    throw new ReportValidationError(`${cellWhere}.cleanup_entries must be an array.`);
+  }
+  for (const [index, entry] of cell.cleanup_entries.entries()) {
+    requireSafeEvidenceToken(`${cellWhere}.cleanup_entries[${index}]`, entry);
+  }
+
+  if (!Array.isArray(evidence.provider_sweeps)) {
+    throw new ReportValidationError(`${where}.provider_sweeps must be an array.`);
+  }
+  for (const [index, sweep] of evidence.provider_sweeps.entries()) {
+    const sweepWhere = `${where}.provider_sweeps[${index}]`;
+    if (typeof sweep !== "object" || sweep === null || Array.isArray(sweep)) {
+      throw new ReportValidationError(`${sweepWhere} must be an object.`);
+    }
+    requireExactKeys(sweep, FIXTURE_SMOKE_SWEEP_KEYS, sweepWhere);
+    if (typeof sweep.provider !== "string" || !FIXTURE_SMOKE_SWEEP_PROVIDERS.has(sweep.provider)) {
+      throw new ReportValidationError(`${sweepWhere}.provider must be one of aws|e2b|stripe|process|filesystem.`);
+    }
+    requireNonNegativeInteger(`${sweepWhere}.remaining_owned_resources`, sweep.remaining_owned_resources);
+  }
+
+  // Only the cleanup-replay cell carries sweeps; every other cell's array is
+  // empty. A green cleanup-replay cell requires every sweep to report zero
+  // remaining owned resources (spec "Provider sweeps show zero owned resources").
+  const isCleanupReplay = cell.cell_id.endsWith(FIXTURE_SMOKE_CLEANUP_REPLAY_CELL_SUFFIX);
+  if (!isCleanupReplay && evidence.provider_sweeps.length > 0) {
+    throw new ReportValidationError(
+      `${where}.provider_sweeps is non-empty on a non-cleanup-replay cell (only cleanup-replay sweeps providers).`,
+    );
+  }
+  if (status === "green" && isCleanupReplay) {
+    const requiredProviders = ["aws", "e2b", "stripe", "process", "filesystem"] as const;
+    const observedProviders = evidence.provider_sweeps.map((sweep) => sweep.provider);
+    if (
+      evidence.provider_sweeps.length !== requiredProviders.length ||
+      requiredProviders.some((provider) => observedProviders.filter((value) => value === provider).length !== 1)
+    ) {
+      throw new ReportValidationError(
+        `${where}.provider_sweeps must contain exactly one aws|e2b|stripe|process|filesystem row ` +
+          "for a green cleanup-replay cell.",
+      );
+    }
+    if (evidence.provider_sweeps.some((sweep) => sweep.remaining_owned_resources !== 0)) {
+      throw new ReportValidationError(
+        `${where}.provider_sweeps reports remaining owned resources on a green cleanup-replay cell.`,
+      );
     }
   }
 }
@@ -2538,6 +2765,11 @@ const GREEN_EVIDENCE_REQUIRED_SCENARIOS: ReadonlySet<string> = new Set([
   "T2-BILL",
   SELFHOST_INSTALL_1_SCENARIO_ID,
   "CLOUD-PROVISION-1",
+  // Every MANAGED-CLOUD-FIXTURE-SMOKE-1 cell emits its kind-scoped evidence on
+  // green (a bare string, matching CLOUD-PROVISION-1, to avoid a scenario→schema
+  // import cycle). Enforces "each fixture smoke cell has one independent terminal
+  // green result" carrying complete evidence.
+  "MANAGED-CLOUD-FIXTURE-SMOKE-1",
   // Every SELFHOST-QUAL-1 cell (SH-GITHUB-AUTH / SH-GATEWAY / SH-CLOUD-ADDON)
   // emits its kind-scoped evidence on green (a bare string here, not a scenario
   // import, to keep schema.ts free of a scenario→schema cycle — matching
@@ -2805,6 +3037,8 @@ export function sanitizeCellEvidence(
     case "cloud_provision_turn":
       // Owned by the managed-cloud slice; delegate to its kind-scoped sanitizer.
       return sanitizeCloudProvisionTurnEvidence(evidence, secretValues);
+    case "managed_cloud_fixture_smoke":
+      return sanitizeManagedCloudFixtureSmokeEvidence(evidence, secretValues);
     default:
       return evidence;
   }
@@ -2994,6 +3228,41 @@ function sanitizeCloudProvisionTurnEvidence(
       ...evidence.cleanup,
       ledger_id_hash: clean(evidence.cleanup.ledger_id_hash),
     },
+  };
+}
+
+/**
+ * Kind-scoped sanitizer for `managed_cloud_fixture_smoke`. Applies the same
+ * `redactSecrets`/`redactUrlCredentials`/`boundMessage` pipeline to every
+ * string-bearing field (artifact ids, world identity, per-cell ids/transition/
+ * cleanup entries) so a raw secret or credentialled URL that reached evidence
+ * becomes a `[REDACTED]`-bearing string the validator then rejects. Numeric
+ * sweep counts pass through untouched. Does not touch any other sanitizer.
+ */
+function sanitizeManagedCloudFixtureSmokeEvidence(
+  evidence: ManagedCloudFixtureSmokeEvidenceV1,
+  secretValues: readonly string[],
+): ManagedCloudFixtureSmokeEvidenceV1 {
+  const clean = (value: string): string => boundMessage(redactUrlCredentials(redactSecrets(value, secretValues)));
+  return {
+    ...evidence,
+    artifact_ids: evidence.artifact_ids.map(clean),
+    world: {
+      ...evidence.world,
+      source_sha: clean(evidence.world.source_sha),
+      server_digest: clean(evidence.world.server_digest),
+      e2b_template_id: clean(evidence.world.e2b_template_id),
+      e2b_template_build_id: clean(evidence.world.e2b_template_build_id),
+      e2b_template_input_hash: clean(evidence.world.e2b_template_input_hash),
+    },
+    cells: evidence.cells.map((cell) => ({
+      ...cell,
+      cell_id: clean(cell.cell_id),
+      external_ids: cell.external_ids.map(clean),
+      observed_transition: clean(cell.observed_transition),
+      cleanup_entries: cell.cleanup_entries.map(clean),
+    })),
+    provider_sweeps: evidence.provider_sweeps.map((sweep) => ({ ...sweep })),
   };
 }
 

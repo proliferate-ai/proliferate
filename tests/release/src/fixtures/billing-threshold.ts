@@ -609,6 +609,29 @@ async def main():
 asyncio.run(main())
 `;
 
+/**
+ * The deterministic remote path of the durable restoration receipt for a
+ * (run, shard, actor, ledger) identity — the same value `billingThreshold`
+ * computes internally. Exported (append-only) so a scenario that wants to
+ * invoke the restore-and-reload NOW (not only at world close) can locate the
+ * receipt the position step wrote. Mirrors the in-fixture derivation exactly.
+ */
+export function billingThresholdReceiptFile(runTag: string, userId: string, ledger: BillingLedger): string {
+  const sourceRef = `billing-threshold:${runTag}:${userId}:${ledger}`;
+  return `${REMOTE_WORKDIR}/billing-threshold-receipt-${hashBillingSourceRef(sourceRef)}.json`;
+}
+
+/**
+ * Runs the durable restore-and-reload releaser NOW (append-only export of the
+ * previously module-private function). Reads the on-box receipt and restores
+ * every mutated grant + deletes the run-tagged grant. The still-registered
+ * world-close releaser is a clean no-op afterward (a consumed/absent receipt is
+ * a no-op — see `RELEASE_ADJUSTMENT_PY`), so calling this early is safe.
+ */
+export function restoreBillingFixtureAdjustment(box: BoxExec, receiptFile: string): Promise<void> {
+  return releaseBillingFixtureAdjustment(box, receiptFile);
+}
+
 async function releaseBillingFixtureAdjustment(box: BoxExec, receiptFile: string): Promise<void> {
   const result = await box.serverPython(RELEASE_ADJUSTMENT_PY, {
     env: { SEED_RECEIPT_FILE: receiptFile },

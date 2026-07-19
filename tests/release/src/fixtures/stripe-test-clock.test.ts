@@ -4,6 +4,7 @@ import { test } from "node:test";
 import {
   clockNameForRun,
   createDefaultStripeTestClockTransport,
+  defaultStripeHttp,
   isLiveModeSecretKey,
   resolveTestModeSecretKey,
   stripeCleanupReplayHandlers,
@@ -316,6 +317,7 @@ function recordingHttp(): { http: StripeHttp; reqs: Array<{ method: string; path
       reqs.push({ method: req.method, path: req.path });
       if (req.path === "/test_helpers/test_clocks") return { id: "tc_9" };
       if (req.path === "/customers") return { id: "cus_9" };
+      if (req.path === "/payment_methods") return { id: "pm_9" };
       if (req.path === "/subscriptions") return { id: "sub_9" };
       return {};
     },
@@ -346,15 +348,46 @@ test("HTTP contract: createClock/createCustomerOnClock/advance use POST on their
   assert.deepEqual(reqs, [
     { method: "POST", path: "/test_helpers/test_clocks" },
     { method: "POST", path: "/customers" },
+    // A default payment method is attached before subscribing (Stripe rejects a
+    // charge_automatically subscription on a customer with no default PM).
+    { method: "POST", path: "/payment_methods" },
+    { method: "POST", path: "/payment_methods/pm_9/attach" },
+    { method: "POST", path: "/customers/cus_9" },
     { method: "POST", path: "/subscriptions" },
     { method: "POST", path: "/test_helpers/test_clocks/tc_9/advance" },
   ]);
 });
 
+test("HTTP contract: createCustomerOnClock attaches tok_visa as the default payment method", async () => {
+  const forms: Array<{ path: string; form?: Record<string, string> }> = [];
+  const http: StripeHttp = {
+    async request(_k, req) {
+      forms.push({ path: req.path, form: req.form });
+      if (req.path === "/customers") return { id: "cus_9" };
+      if (req.path === "/payment_methods") return { id: "pm_9" };
+      if (req.path === "/subscriptions") return { id: "sub_9" };
+      return {};
+    },
+  };
+  const transport = createDefaultStripeTestClockTransport(http);
+  await transport.createCustomerOnClock({ secretKey: "sk_test_x", testClockId: "tc_9", priceId: "price_1", metadata: {} });
+  const pm = forms.find((f) => f.path === "/payment_methods");
+  assert.deepEqual(pm?.form, { type: "card", "card[token]": "tok_visa" });
+  const attach = forms.find((f) => f.path === "/payment_methods/pm_9/attach");
+  assert.deepEqual(attach?.form, { customer: "cus_9" });
+  const setDefault = forms.find((f) => f.path === "/customers/cus_9");
+  assert.deepEqual(setDefault?.form, { "invoice_settings[default_payment_method]": "pm_9" });
+});
+
 test("HTTP contract: deleteClock/deleteCustomer swallow resource_missing (idempotent cleanup)", async () => {
+  // The message wording for a deleted test clock is "No such billingclock"
+  // (Stripe's internal object name), NOT "No such test clock" — a live run
+  // threw this from the world-close releaser after the cell's own delete. The
+  // tolerance must match Stripe's structured `resource_missing` code / the real
+  // wording, not the assumed human string.
   const missingHttp: StripeHttp = {
     async request(_k, req) {
-      if (req.method === "DELETE") throw new Error("stripeTestClockActor: No such test clock: resource_missing");
+      if (req.method === "DELETE") throw new Error("stripeTestClockActor: No such billingclock: 'clock_x' (resource_missing)");
       return {};
     },
   };
@@ -370,6 +403,27 @@ test("HTTP contract: deleteClock/deleteCustomer swallow resource_missing (idempo
     secretKey: "sk_test_x",
     customerId: "cus_gone",
   }); // must not throw
+});
+
+test("defaultStripeHttp appends Stripe's error code so idempotent-delete tolerance can key on resource_missing", async () => {
+  // The real seam: a deleted test clock returns 404 with
+  // { error: { message: "No such billingclock: ...", code: "resource_missing" } }.
+  // Assert the thrown Error carries the code so downstream `resource_missing`
+  // matching is wording-independent.
+  const savedFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify({ error: { message: "No such billingclock: 'clock_x'", code: "resource_missing" } }), {
+        status: 404,
+        headers: { "content-type": "application/json" },
+      })) as typeof fetch;
+    await assert.rejects(
+      () => defaultStripeHttp.request("sk_test_x", { method: "DELETE", path: "/test_helpers/test_clocks/clock_x" }),
+      /No such billingclock.*\(resource_missing\)/,
+    );
+  } finally {
+    globalThis.fetch = savedFetch;
+  }
 });
 
 // --- Durability of the intent→acquired handoff across RUNNER LOSS (PR6-CONTROL-002 r4).
@@ -517,7 +571,7 @@ test("RUNNER-LOSS regression: a clock accepted but NEVER acquired (intent-only l
   }
 });
 
-test("happy-path replay: an ACQUIRED real id in the reloaded ledger deletes by id without any lookup", async () => {
+test("happy-path replay: a real Stripe clock_ id in the reloaded ledger deletes by id without any lookup", async () => {
   const { mkdtemp, rm } = await import("node:fs/promises");
   const os = await import("node:os");
   const path = await import("node:path");
@@ -527,7 +581,7 @@ test("happy-path replay: an ACQUIRED real id in the reloaded ledger deletes by i
     const stack = new ManagedCloudCleanupStack({ ledger });
     const clockEntry = await stack.register("stripe_test_clock", async () => undefined);
     await stack.acquired(clockEntry, "intent:test_clock:name=x");
-    await stack.acquired(clockEntry, "tc_acq"); // markAcquired ran → real id persisted.
+    await stack.acquired(clockEntry, "clock_acq"); // Stripe's real prefix; markAcquired persisted it.
     const custEntry = await stack.register("stripe_customer", async () => undefined);
     await stack.acquired(custEntry, "cus_acq");
 
@@ -535,7 +589,7 @@ test("happy-path replay: an ACQUIRED real id in the reloaded ledger deletes by i
     const reloaded = await loadCleanupLedger(runDir);
     const result = await replayLedger(reloaded, stripeCleanupReplayHandlers({ secretKey: "sk_test_x", transport }));
 
-    assert.ok(calls.includes("deleteClock:tc_acq"), "acquired clock deleted by real id");
+    assert.ok(calls.includes("deleteClock:clock_acq"), "acquired clock deleted by real id");
     assert.ok(calls.includes("deleteCustomer:cus_acq"), "acquired customer deleted by real id");
     assert.ok(!calls.some((c) => c.startsWith("findTestClockByName")), "no lookup for an acquired real id");
     assert.equal(result.failed, 0);
@@ -743,6 +797,40 @@ test("propagation window: PAST the window, an exhaustive empty lookup reconciles
     assert.equal(result.failed, 0, "past the window an empty lookup reconciles clean");
     assert.equal(result.reconciled, 1);
     assert.ok(!calls.includes("deleteClock"), "nothing to delete — clock was never created");
+  } finally {
+    await rm(runDir, { recursive: true, force: true });
+  }
+});
+
+test("malformed cleanup timestamps fail closed instead of treating an invisible intent as never-created", async () => {
+  const { mkdtemp, rm } = await import("node:fs/promises");
+  const os = await import("node:os");
+  const path = await import("node:path");
+  const runDir = await mkdtemp(path.join(os.tmpdir(), "stripe-ledger-malformed-time-"));
+  try {
+    const ledger = await openCleanupLedger({ runDir, runId: "run-3", shardId: "shard-1" });
+    const stack = new ManagedCloudCleanupStack({ ledger });
+    const entryId = await stack.register("stripe_test_clock", async () => undefined);
+    await stack.acquired(entryId, `intent:test_clock:name=${clockNameForRun("run-3:shard-1")}`);
+
+    const raw = JSON.parse(await (await import("node:fs/promises")).readFile(
+      path.join(runDir, "cleanup-ledger.json"),
+      "utf8",
+    )) as { entries: Array<{ entryId: string; createdAt: string }> };
+    raw.entries.find((entry) => entry.entryId === entryId)!.createdAt = "not-a-timestamp";
+    await (await import("node:fs/promises")).writeFile(
+      path.join(runDir, "cleanup-ledger.json"),
+      JSON.stringify(raw),
+    );
+
+    const reloaded = await loadCleanupLedger(runDir);
+    const { transport } = fakeTransport();
+    const result = await replayLedger(
+      reloaded,
+      stripeCleanupReplayHandlers({ secretKey: "sk_test_x", transport }),
+    );
+    assert.equal(result.failed, 1);
+    assert.equal(reloaded.unreconciled().length, 1);
   } finally {
     await rm(runDir, { recursive: true, force: true });
   }

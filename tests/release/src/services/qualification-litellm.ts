@@ -335,12 +335,23 @@ export class QualificationLiteLlmController {
     }
     // The `/key/list` alias filter is advisory on the pinned image, so re-check
     // client-side (mirrors the Server's delete_virtual_keys_by_alias).
-    const match = keys
+    const matches = keys
       .map(asRecord)
-      .find((key) => key.key_alias === keyAlias && typeof key.token === "string" && key.token);
-    if (!match) {
+      .filter((key) => key.key_alias === keyAlias);
+    if (matches.length === 0) {
       throw new QualificationLiteLlmError(
         `No LiteLLM key resolved for the actor enrollment alias "${keyAlias}".`,
+      );
+    }
+    if (matches.length > 1) {
+      throw new QualificationLiteLlmError(
+        `LiteLLM returned multiple keys for actor enrollment alias "${keyAlias}"; cleanup identity is ambiguous.`,
+      );
+    }
+    const match = matches[0];
+    if (typeof match.token !== "string" || !match.token) {
+      throw new QualificationLiteLlmError(
+        `LiteLLM key for actor enrollment alias "${keyAlias}" omitted its exact token identity.`,
       );
     }
     const tokenId = String(match.token);

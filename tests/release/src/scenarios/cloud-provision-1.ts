@@ -1,6 +1,6 @@
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { mkdir, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
 
@@ -19,12 +19,14 @@ import { invitedActor } from "../fixtures/invited-actor.js";
 import { coreFunding, defaultCoreFundingTransport, type CoreFundingResult } from "../fixtures/core-funding.js";
 import {
   execInProviderSandbox,
+  type E2BExecResult,
   findProviderSandbox,
   getProviderSandboxState,
   killProviderSandbox,
 } from "../fixtures/e2b-verify.js";
 import { githubAuthorization, type GithubAuthorizationBoundary } from "../fixtures/github-authorization.js";
-import { productPage, type ProductPage } from "../fixtures/product-page.js";
+import { productPage, resolveDiagnosticsDir, type ProductPage } from "../fixtures/product-page.js";
+import { scrubSecretText } from "../fixtures/redact-diagnostics.js";
 import type { BoxExec } from "../worlds/managed-cloud/box-exec.js";
 import {
   DEFAULT_BOT_SEED_SSM_PARAMETER,
@@ -51,6 +53,7 @@ import {
   type ConstructManagedCloudWorldOptions,
 } from "../worlds/managed-cloud/world.js";
 import type { ReadyLocalWorld } from "../worlds/local-workspace/world.js";
+import { sharedTemplateCustodyPath } from "../worlds/managed-cloud/shared-template-custody.js";
 
 /**
  * CLOUD-PROVISION-1 (spec "The single scenario"). A fresh, prepared,
@@ -106,12 +109,23 @@ export const COVERED_REPO_NAME = "e2e-fixture";
  */
 export const COVERED_REPO_DEFAULT_BRANCH = "main";
 /**
+ * The rich home composer intentionally carries both hooks. A workspace editor
+ * must therefore exclude the home hook; checking the generic chat hook alone
+ * misclassifies the home screen as an already-open workspace.
+ */
+export const HOME_COMPOSER_EDITOR_SELECTOR = "[data-home-composer-editor]";
+export const WORKSPACE_COMPOSER_EDITOR_SELECTOR =
+  "[data-chat-composer-editor]:not([data-home-composer-editor])";
+
+/**
  * Where the product materializes cloud repo checkouts:
  * `SANDBOX_REPOS_ROOT = /home/user/workspace/repos`
  * (server materialization/paths.py). The covered repo lands at
  * `<root>/<owner>/<repo>`.
  */
 export const COVERED_REPO_CHECKOUT_ROOT = "/home/user/workspace/repos";
+const CLOUD_PROVISION_WORLD_SUBDIR = "cloud-provision-1";
+const CLOUD_SUBDOMAIN_SIDECAR = "cloud-world-subdomain.json";
 /** Default local seed-file path for the D2 bot refresh token (names only in docs). */
 const DEFAULT_BOT_SEED_PATH = path.join(
   homedir(),
@@ -500,6 +514,36 @@ interface CloudRuntimeWorkerRow {
   last_seen_at: string | null;
 }
 
+function observedVersionMatchingReceipt(
+  observed: E2BExecResult,
+  receiptVersion: string,
+  label: string,
+): string {
+  if (observed.exitCode !== 0) {
+    throw new Error(
+      `verifyWorkerSupervisor: ${label} --version exited ${observed.exitCode}; stderr=${observed.stderr.trim().slice(0, 300)}`,
+    );
+  }
+  // clap prints `<binary-name> <version>` for `--version`. Persisting that
+  // whole line would make otherwise-valid evidence fail the safe-token schema
+  // because it contains whitespace. Match the exact receipt version as a
+  // whitespace token (also tolerating clap's conventional leading `v`) and
+  // persist the receipt's canonical token. A blank or diverged response stays
+  // non-green: the hash check below proves the bytes, while this check proves
+  // the stamped version those exact bytes advertise.
+  const versionMatches = observed.stdout
+    .split(/\s+/)
+    .filter(Boolean)
+    .some((token) => token === receiptVersion || token === `v${receiptVersion}`);
+  if (!versionMatches) {
+    throw new Error(
+      `verifyWorkerSupervisor: ${label} --version did not advertise candidate receipt version ${receiptVersion}; ` +
+        `stdout=${JSON.stringify(observed.stdout.trim().slice(0, 200))}`,
+    );
+  }
+  return receiptVersion;
+}
+
 /**
  * Queries `cloud_runtime_worker` directly (there is no product API exposing
  * worker enrollment/heartbeat — see the product read this fix implements).
@@ -853,7 +897,17 @@ export function createCloudProvision1Driver(
     deps.launchOptionsPollIntervalMs ?? productionRuntimeDeps.launchOptionsPollIntervalMs;
   return {
   async buildWorld(inputs) {
-    const secretsDir = path.join(inputs.runDir, "secrets");
+    // The candidate builder owns the parent run directory. Keep this world's
+    // cleanup ledger and transient files in a scenario-scoped subtree so its
+    // run_directory releaser cannot delete the exact candidate map/artifacts
+    // another managed-cloud scenario reuses after this proof passes.
+    const scopedRunDir = path.join(inputs.runDir, CLOUD_PROVISION_WORLD_SUBDIR);
+    await mkdir(scopedRunDir, { recursive: true });
+    await copyFile(
+      path.join(inputs.runDir, CLOUD_SUBDOMAIN_SIDECAR),
+      path.join(scopedRunDir, CLOUD_SUBDOMAIN_SIDECAR),
+    );
+    const secretsDir = path.join(scopedRunDir, "secrets");
     await mkdir(secretsDir, { recursive: true });
     const e2bSecretsPath = await writeSecretEnvFile(secretsDir, "e2b.env", {
       E2B_API_KEY: inputs.e2bApiKey,
@@ -861,12 +915,29 @@ export function createCloudProvision1Driver(
     // Client secret is single-line and rides the docker --env-file; the private
     // key is a multi-line PEM (docker --env-file rejects it), so it is written as
     // its own 0600 PEM file and mounted into the Server container on the box.
+    // #1318 / base-world repair: #1257 (3cb284a51) added
+    // require_github_app_runtime_configured() at the top of
+    // require_github_cloud_repo_authority, gating on Settings.github_app_configured
+    // — now a SIX-field check including github_app_webhook_secret. Without it the
+    // gate raises github_app_not_configured (503) inside the repo preclone, the
+    // sandbox bootstrap's best-effort try/except swallows it, and the covered repo
+    // never materializes (verifyCoveredRepo red). Qualification exercises no
+    // inbound App webhook (authorization completes via the controller boundary), so
+    // a run-scoped random value (mirrors the JWT_SECRET/CLOUD_SECRET_KEY precedent)
+    // satisfies the config gate and is never verified against a delivery.
     const githubSecretsPath = await writeSecretEnvFile(secretsDir, "github-app.env", {
       GITHUB_APP_CLIENT_SECRET: inputs.github.clientSecret,
+      GITHUB_APP_WEBHOOK_SECRET: randomBytes(32).toString("hex"),
     });
     const githubPrivateKeyPath = path.join(secretsDir, "github-app-private-key.pem");
     await writeFile(githubPrivateKeyPath, `${inputs.github.privateKey.trimEnd()}\n`, { mode: 0o600 });
 
+    const templateCustodyMode = process.env.RELEASE_E2E_SHARED_TEMPLATE_CUSTODY ?? "world_owned";
+    if (templateCustodyMode !== "world_owned" && templateCustodyMode !== "producer") {
+      throw new Error(
+        `CLOUD-PROVISION-1 does not accept shared-template custody mode ${templateCustodyMode}.`,
+      );
+    }
     const options: ConstructManagedCloudWorldOptions = {
       run: inputs.run,
       map: inputs.map,
@@ -890,7 +961,11 @@ export function createCloudProvision1Driver(
         privateKeyPemPath: githubPrivateKeyPath,
       },
       tls: inputs.tls,
-      runDir: inputs.runDir,
+      runDir: scopedRunDir,
+      templateCustody:
+        templateCustodyMode === "producer"
+          ? { mode: "shared_producer", journalPath: sharedTemplateCustodyPath(inputs.runDir) }
+          : { mode: "world_owned" },
       // World progress + failure diagnostics onto the runner stream (the make
       // log). The constructor's default log is a silent no-op — without this,
       // readiness/cleanup diagnostics are discarded.
@@ -908,7 +983,15 @@ export function createCloudProvision1Driver(
   // `refresh-gateway` 400s (GATEWAY_REFRESH_NO_SELECTION) and step 8's live
   // probe finds zero models.
   createActor: (world) =>
-    authenticatedActor(asAuthenticatedActorWorld(world), "owner", { gatewaySurface: "cloud" }),
+    authenticatedActor(asAuthenticatedActorWorld(world), "owner", {
+      gatewaySurface: "cloud",
+      beginActorEnrollmentCustody: (params) => {
+        if (!world.beginActorEnrollmentCustody) {
+          throw new Error("managed-cloud world exposes no pre-creation LiteLLM enrollment custody.");
+        }
+        return world.beginActorEnrollmentCustody(params);
+      },
+    }),
   // Actor B is a REAL invited second user (MCW-001): actor A mints an org
   // invitation, actor B registers against it and logs in. Reusing the one-time
   // `/setup` claim (as the prior version did) is not a viable second identity —
@@ -918,6 +1001,12 @@ export function createCloudProvision1Driver(
       inviter: actorA,
       gatewaySurface: "cloud",
       email: `qual-actor-b-${world.run.run_id}-${world.run.shard_id}@example.com`,
+      beginActorEnrollmentCustody: (params) => {
+        if (!world.beginActorEnrollmentCustody) {
+          throw new Error("managed-cloud world exposes no pre-creation LiteLLM enrollment custody.");
+        }
+        return world.beginActorEnrollmentCustody(params);
+      },
     }),
   fundCore: (world, actor) =>
     // Founder ruling (option B): the candidate box carries no Stripe/billing
@@ -1229,9 +1318,17 @@ export function createCloudProvision1Driver(
     );
 
     return {
-      workerVersion: workerVersion.stdout.trim(),
-      supervisorVersion: supervisorVersion.stdout.trim(),
-      anyharnessVersion: anyharnessVersion.stdout.trim(),
+      workerVersion: observedVersionMatchingReceipt(workerVersion, world.artifacts.worker.version, "worker"),
+      supervisorVersion: observedVersionMatchingReceipt(
+        supervisorVersion,
+        world.artifacts.supervisor.version,
+        "supervisor",
+      ),
+      anyharnessVersion: observedVersionMatchingReceipt(
+        anyharnessVersion,
+        world.artifacts.anyharness.version,
+        "anyharness",
+      ),
       // Supervisor-parentage is PR 9's guarantee (see above); PR 2 does not
       // claim it. `false` records the honest current state in evidence.
       supervisorIsParent: false,
@@ -1557,6 +1654,14 @@ export function createCloudProvision1Driver(
       }
       const reply = await readAssistantReplyFromPage(page.page, 20_000);
       return { reply };
+    } catch (uiError) {
+      // Env-gated cloud browser-turn diagnostics: dump the DOM/screenshot, the
+      // console+network sinks, and the exact cloud-repo-list gate inputs (/meta
+      // capability contract + /v1/cloud/repositories) so a "no Project row" /
+      // composer break names its true layer without a live browser. Never on
+      // the green path; best-effort so it never masks the real error.
+      await captureCloudTurnFailure(page, actor, "cloud-turn-ui-failure");
+      throw uiError;
     } finally {
       await page.close().catch(() => undefined);
     }
@@ -1827,6 +1932,7 @@ export async function runCloudProvision1Cell(
         failed: cleanup.failed,
         sandboxes_deleted: cleanup.sandboxesDeleted,
         template_deleted: cleanup.templateDeleted,
+        template_custody_transferred: cleanup.templateCustodyTransferred === true,
         dns_record_deleted: cleanup.dnsRecordDeleted,
         ec2_terminated: cleanup.ec2Terminated,
         security_group_deleted: cleanup.securityGroupDeleted,
@@ -1864,6 +1970,7 @@ export async function runCloudProvision1Cell(
 function allCleanupBooleansTrue(cleanup: {
   sandboxesDeleted: boolean;
   templateDeleted: boolean;
+  templateCustodyTransferred?: boolean;
   dnsRecordDeleted: boolean;
   ec2Terminated: boolean;
   securityGroupDeleted: boolean;
@@ -1874,7 +1981,7 @@ function allCleanupBooleansTrue(cleanup: {
 }): boolean {
   return (
     cleanup.sandboxesDeleted &&
-    cleanup.templateDeleted &&
+    cleanup.templateDeleted !== (cleanup.templateCustodyTransferred === true) &&
     cleanup.dnsRecordDeleted &&
     cleanup.ec2Terminated &&
     cleanup.securityGroupDeleted &&
@@ -2098,6 +2205,76 @@ function cssAttr(value: string): string {
 }
 
 /**
+ * The exact home Project-menu row selector for the covered cloud-only repo. The
+ * row carries `data-repo-source-root="<sourceRoot>"` (HomeProjectMenu.tsx); a
+ * cloud-only repo's sourceRoot is `cloud:<owner>/<repo>` (repositories.ts). Used
+ * for a deterministic click instead of a fuzzy getByText fallback.
+ */
+export function coveredRepoSourceRootSelector(): string {
+  return `[data-repo-source-root="${cssAttr(`cloud:${COVERED_REPO_OWNER}/${COVERED_REPO_NAME}`)}"]`;
+}
+
+/**
+ * Env-gated (`MANAGED_CLOUD_SMOKE_DEBUG_DIR`) failure capture for the cloud
+ * browser turn — the managed-cloud analogue of `local-world-smoke-1`'s
+ * `captureUiFailure`. CLOUD-PROVISION-1's browser step previously threw only its
+ * error text, so a "no Project row" / composer break could not be root-caused
+ * without a live browser (attempts 2–3 blind spot). This dumps, best-effort:
+ *
+ *   - the live rendered DOM + a full-page screenshot at the failure point;
+ *   - the browser console + non-2xx/failed network log (now populated in the
+ *     cloud lane because `productPage` honours this lane's debug dir); and
+ *   - the two exact inputs to the home cloud-repo list gate: the server's public
+ *     `/meta` capability contract (`cloudWorkspaces` / `managedCloud.status` /
+ *     `githubRepositoryAccess.status` — the client's `cloudActive` factor) and
+ *     the actor's own `/v1/cloud/repositories` listing (the rows the menu is
+ *     built from). Together these disambiguate a server gate (cloudWorkspaces
+ *     false) from a client readiness/selector issue (gate true, row present).
+ *
+ * A no-op off the debug dir, so it never touches the green path; every written
+ * string is scrubbed of secret shapes. It never throws — diagnostics must not
+ * mask the real failure.
+ */
+async function captureCloudTurnFailure(page: ProductPage, actor: AuthenticatedActor, label: string): Promise<void> {
+  const dir = resolveDiagnosticsDir();
+  if (!dir) {
+    return;
+  }
+  try {
+    const { mkdirSync, writeFileSync } = await import("node:fs");
+    const nodePath = await import("node:path");
+    mkdirSync(dir, { recursive: true });
+    const stamp = `${label.replace(/[^A-Za-z0-9._-]+/g, "-")}-${Date.now()}`;
+    writeFileSync(
+      nodePath.join(dir, `${stamp}.html`),
+      scrubSecretText(await page.page.content().catch(() => "<no content>")),
+    );
+    await page.page
+      .screenshot({ path: nodePath.join(dir, `${stamp}.png`), fullPage: true })
+      .catch(() => undefined);
+    writeFileSync(nodePath.join(dir, `${stamp}.console.txt`), scrubSecretText(page.debug.console.join("\n")));
+    writeFileSync(nodePath.join(dir, `${stamp}.network.txt`), scrubSecretText(page.debug.network.join("\n")));
+    // The exact cloud-repo-list gate inputs. `/meta` is the public capability
+    // contract (unauthenticated); `/v1/cloud/repositories` needs the actor
+    // bearer. Capture both outcomes (value or error) so the layer names itself.
+    const meta = await actor.api
+      .get<unknown>("/meta")
+      .then((value) => ({ ok: true, value }))
+      .catch((error: unknown) => ({ ok: false, error: describe(error) }));
+    const repos = await actor.api
+      .get<unknown>("/v1/cloud/repositories")
+      .then((value) => ({ ok: true, value }))
+      .catch((error: unknown) => ({ ok: false, error: describe(error) }));
+    writeFileSync(
+      nodePath.join(dir, `${stamp}.gate.json`),
+      scrubSecretText(JSON.stringify({ meta, cloud_repositories: repos }, null, 2)),
+    );
+  } catch {
+    // Diagnostics are best-effort; never let a capture failure mask the error.
+  }
+}
+
+/**
  * Brings the browser to a state where the composer can dispatch a turn into
  * the actor's cloud sandbox. Two observed states are valid:
  *
@@ -2124,11 +2301,15 @@ async function ensureCloudLaunchTargetSelected(page: ProductPage): Promise<void>
   const p = page.page;
   const deadline = Date.now() + SANDBOX_READY_TIMEOUT_MS;
   for (;;) {
-    if (await p.locator("[data-chat-composer-editor]").first().isVisible().catch(() => false)) {
-      return;
-    }
-    if (await p.locator("[data-home-composer-editor]").first().isVisible().catch(() => false)) {
+    // Home's rich editor also has data-chat-composer-editor, so classify home
+    // first and use the exclusive workspace selector below. The opposite order
+    // silently skipped Project + Runtime selection after the rich-composer
+    // migration and left the picker on the unavailable local target.
+    if (await p.locator(HOME_COMPOSER_EDITOR_SELECTOR).first().isVisible().catch(() => false)) {
       break;
+    }
+    if (await p.locator(WORKSPACE_COMPOSER_EDITOR_SELECTOR).first().isVisible().catch(() => false)) {
+      return;
     }
     if (Date.now() >= deadline) {
       throw new Error(
@@ -2140,7 +2321,48 @@ async function ensureCloudLaunchTargetSelected(page: ProductPage): Promise<void>
   }
 
   await clickByRole(p, "button", /^Project:/, "home Project picker trigger");
-  await clickMenuItemByText(p, COVERED_REPO_NAME, "covered repository row");
+  // Deterministic covered-repo selection: the home Project menu renders each row
+  // with `data-repo-source-root="<sourceRoot>"` (HomeProjectMenu.tsx), where a
+  // cloud-only repo's sourceRoot is `cloud:<owner>/<repo>` (repositories.ts).
+  // Click that exact row — NOT a fuzzy getByText, which can no-op / mis-click for
+  // the cloud-only repo and leave destination on "cowork" so the Runtime button
+  // (rendered only when destination === "repository") never mounts (the observed
+  // regression red).
+  const coveredRepoRow = p.locator(coveredRepoSourceRootSelector()).first();
+  try {
+    await coveredRepoRow.waitFor({ state: "visible", timeout: 20_000 });
+  } catch {
+    throw new Error(
+      `ensureCloudLaunchTargetSelected: the covered cloud-only repo row ` +
+        `(${coveredRepoSourceRootSelector()}) never appeared in the home Project menu within 20000ms — the ` +
+        "covered cloud-only repo is not listed for this actor (cloudActive gating or a repo_environment listing " +
+        "gap; see use-cloud-availability-state.ts). The Runtime picker is downstream of this selection, so this " +
+        "names the true failing layer rather than a Runtime-row timeout.",
+    );
+  }
+  await coveredRepoRow.click();
+  // Assert the Project selection settled (destination flipped to "repository")
+  // BEFORE touching Runtime: the Project row's aria-label becomes
+  // "Project: <repo>" (homeTargetProjectAriaLabel) and the Runtime button mounts
+  // only in that state. Without this wait the next clickByRole(/^Runtime:/) can
+  // race a not-yet-mounted button.
+  try {
+    await p
+      .getByRole("button", { name: new RegExp(`^Project: ${COVERED_REPO_NAME}`) })
+      .first()
+      .waitFor({ state: "visible", timeout: 15_000 });
+  } catch {
+    const observed = await p
+      .getByRole("button", { name: /^Project:/ })
+      .first()
+      .getAttribute("aria-label")
+      .catch(() => null);
+    throw new Error(
+      `ensureCloudLaunchTargetSelected: the home Project row did not settle on "Project: ${COVERED_REPO_NAME}" ` +
+        `(observed: ${observed ?? "no Project row"}) — destination never flipped to "repository", so the Runtime ` +
+        "picker (rendered only for a repository destination) would not mount.",
+    );
+  }
   await clickByRole(p, "button", /^Runtime:/, "home Runtime picker trigger");
   await clickMenuItemByText(p, "Cloud", '"Cloud" runtime option');
   // Postcondition: the runtime row must settle on exactly "Runtime: Cloud"
@@ -2179,11 +2401,11 @@ async function ensureCloudLaunchTargetSelected(page: ProductPage): Promise<void>
  * populates as soon as `GET /v1/agents/catalog` resolves — it does NOT wait on
  * the sandbox runtime. The pre-turn `waitForSandboxLaunchOptions` gate still
  * matters for the SEND (the sandbox must be able to launch the harness), but
- * the picker itself has no sandbox dependency. A persistent empty `[]` here
- * now means the cloud catalog itself never listed the model for this actor —
- * the failure message folds the available `data-model-option` values in so a
- * genuine mismatch names itself (empty ⇒ catalog gap; non-empty without
- * `modelId` ⇒ id-format mismatch, e.g. a dated snapshot id vs the bare alias).
+ * the picker itself has no sandbox dependency. The failure message folds the
+ * available `data-model-option` values and composer state into the error so a
+ * genuine mismatch names itself. `pickerOpened=false` means the trigger never
+ * enabled, which is distinct from an opened picker with zero options and must
+ * not be reported as though the menu was inspected.
  *
  * A bounded periodic reload remains as the safety net for a cold catalog
  * query. IMPORTANT: the home composer's explicit model selection is plain
@@ -2198,6 +2420,8 @@ async function selectModelInCloudComposer(page: ProductPage, modelId: string): P
   const deadline = start + MODEL_PICKER_TIMEOUT_MS;
   const optionSelector = `[data-model-option="${cssAttr(modelId)}"]`;
   let lastAvailable: Array<string | null> = [];
+  let pickerOpened = false;
+  let lastComposerState = await readCloudComposerUiState(page);
   const RELOAD_EVERY_MS = 30_000;
   let lastReloadAt = start;
   let surfacedEmpty = false;
@@ -2207,9 +2431,17 @@ async function selectModelInCloudComposer(page: ProductPage, modelId: string): P
       await trigger.waitFor({ state: "visible", timeout: 5_000 });
       await trigger.click();
     } catch {
+      lastComposerState = await readCloudComposerUiState(page);
+      if (!cloudComposerTargetSelectionIsStable(lastComposerState)) {
+        throw new Error(
+          "selectModelInCloudComposer: the home composer lost its already-verified Cloud launch target before " +
+            `the model trigger enabled. Observed composer state: ${JSON.stringify(lastComposerState)}.`,
+        );
+      }
       await sleep(1_500);
       continue;
     }
+    pickerOpened = true;
     const option = p.locator(optionSelector).first();
     if (await option.count().catch(() => 0)) {
       await option.click();
@@ -2223,6 +2455,7 @@ async function selectModelInCloudComposer(page: ProductPage, modelId: string): P
       .locator("[data-model-option]")
       .evaluateAll((els) => els.map((el) => el.getAttribute("data-model-option")))
       .catch(() => []);
+    lastComposerState = await readCloudComposerUiState(page);
     // Surface an empty picker once to the runner log (make log, NOT evidence):
     // with the Cloud launch target selected this menu comes from the cloud v2
     // catalog, so an [] means the catalog query has not resolved (or lists
@@ -2239,15 +2472,88 @@ async function selectModelInCloudComposer(page: ProductPage, modelId: string): P
       lastReloadAt = Date.now();
       await p.reload({ waitUntil: "domcontentloaded" }).catch(() => undefined);
       // A reload resets the home target selection UI state; re-establish the
-      // Cloud launch target before retrying the picker.
-      await ensureCloudLaunchTargetSelected(page).catch(() => undefined);
+      // Cloud launch target before retrying the picker. A failed reselection is
+      // a more precise product-state boundary than the eventual generic model
+      // timeout, so preserve it instead of swallowing it.
+      try {
+        await ensureCloudLaunchTargetSelected(page);
+      } catch (error) {
+        lastComposerState = await readCloudComposerUiState(page);
+        throw new Error(
+          "selectModelInCloudComposer: after a cold-catalog reload, the Cloud launch target could not be " +
+            `re-established: ${describe(error)} Observed composer state: ` +
+            `${JSON.stringify(lastComposerState)}.`,
+        );
+      }
     }
     await sleep(2_000);
   }
+  lastComposerState = await readCloudComposerUiState(page);
   throw new Error(
     `selectModelInCloudComposer: model "${modelId}" was not offered by the composer picker within ` +
-      `${MODEL_PICKER_TIMEOUT_MS}ms. Last available options: ${JSON.stringify(lastAvailable)}.`,
+      `${MODEL_PICKER_TIMEOUT_MS}ms. Picker opened: ${pickerOpened}. ` +
+      `Last available options: ${JSON.stringify(lastAvailable)}. ` +
+      `Last composer state: ${JSON.stringify(lastComposerState)}.`,
   );
+}
+
+interface CloudComposerUiState {
+  homeComposerVisible: boolean;
+  workspaceComposerVisible: boolean;
+  modelTriggerPresent: boolean;
+  modelTriggerDisabled: boolean | null;
+  modelTriggerText: string | null;
+  selectedModel: string | null;
+  projectAriaLabel: string | null;
+  runtimeAriaLabel: string | null;
+}
+
+export function cloudComposerTargetSelectionIsStable(
+  state: Pick<
+    CloudComposerUiState,
+    "homeComposerVisible" | "projectAriaLabel" | "runtimeAriaLabel"
+  >,
+): boolean {
+  return !state.homeComposerVisible
+    || (
+      state.projectAriaLabel === `Project: ${COVERED_REPO_NAME}`
+      && state.runtimeAriaLabel === "Runtime: Cloud"
+    );
+}
+
+/**
+ * Bounded, secret-free browser-state receipt for model-picker failures. This
+ * intentionally records only stable composer hooks and aria labels: it makes
+ * "trigger never enabled" and "picker opened but model absent" distinguishable
+ * without placing the page body or actor data in runner output/evidence.
+ */
+async function readCloudComposerUiState(page: ProductPage): Promise<CloudComposerUiState> {
+  return page.page.evaluate(() => {
+    const trigger = document.querySelector<HTMLButtonElement>("[data-composer-model-trigger]");
+    const ariaButton = (prefix: string): HTMLButtonElement | null =>
+      Array.from(document.querySelectorAll<HTMLButtonElement>("button[aria-label]"))
+        .find((button) => button.getAttribute("aria-label")?.startsWith(prefix)) ?? null;
+    return {
+      homeComposerVisible: document.querySelector("[data-home-composer-editor]") !== null,
+      workspaceComposerVisible:
+        document.querySelector("[data-chat-composer-editor]:not([data-home-composer-editor])") !== null,
+      modelTriggerPresent: trigger !== null,
+      modelTriggerDisabled: trigger ? trigger.disabled : null,
+      modelTriggerText: trigger?.textContent?.trim().slice(0, 120) || null,
+      selectedModel: trigger?.getAttribute("data-composer-selected-model") || null,
+      projectAriaLabel: ariaButton("Project:")?.getAttribute("aria-label") ?? null,
+      runtimeAriaLabel: ariaButton("Runtime:")?.getAttribute("aria-label") ?? null,
+    };
+  }).catch(() => ({
+    homeComposerVisible: false,
+    workspaceComposerVisible: false,
+    modelTriggerPresent: false,
+    modelTriggerDisabled: null,
+    modelTriggerText: null,
+    selectedModel: null,
+    projectAriaLabel: null,
+    runtimeAriaLabel: null,
+  }));
 }
 
 /**

@@ -1296,6 +1296,12 @@ qualification-selfhost:
 # directly; this target does not read or expect the local file there. AWS
 # credentials themselves stay ambient (the `aws` CLI), never a manifest var.
 QUALIFICATION_MANAGED_CLOUD_BASE_DIR ?= $(CURDIR)/tests/release/.output/managed-cloud-world
+# Managed-cloud scenario selection. Each scenario owns a scoped world subtree;
+# sequential invocations may therefore share one parent PROFILE and exact
+# candidate map while keeping ledgers/secrets/world cleanup disjoint.
+CLOUD_SCENARIOS ?= CLOUD-PROVISION-1
+CLOUD_EVIDENCE_SUBDIR ?= evidence
+SHARED_TEMPLATE_CUSTODY_MODE ?= world_owned
 # A separate clean checkout of the canonical repository pinned to the trusted
 # default-branch cleanup revision. Candidate checkout bytes cannot authorize
 # their own LiteLLM hard-cancel reconciliation.
@@ -1343,10 +1349,18 @@ qualification-managed-cloud:
 	source_sha=$$(git rev-parse HEAD); \
 	attempt="$${GITHUB_RUN_ATTEMPT:-1}"; \
 	candidate_map="$$run_dir/candidate-build.json"; \
-	if [ "$(REUSE_CANDIDATES)" = "1" ] && [ -f "$$candidate_map" ]; then \
+	if [ "$(REUSE_CANDIDATES)" = "1" ]; then \
+		test -f "$$candidate_map" || { \
+			echo "REUSE_CANDIDATES=1 requires the existing candidate map at $$candidate_map; refusing a silent rebuild."; \
+			exit 2; \
+		}; \
+		test -f "$$run_dir/cloud-world-subdomain.json" || { \
+			echo "REUSE_CANDIDATES=1 requires cloud-world-subdomain.json beside the candidate map."; \
+			exit 2; \
+		}; \
 		node scripts/ci-cd/qualification-preflight.mjs \
 			--world managed-cloud --source-sha "$$source_sha" --run-id "$$run_id" --shard-id "$$shard_id" --attempt "$$attempt" \
-			--scenarios CLOUD-PROVISION-1 --artifact-mode reuse --candidate-build-map "$$candidate_map" \
+			--scenarios "$(CLOUD_SCENARIOS)" --artifact-mode reuse --candidate-build-map "$$candidate_map" \
 			--cleanup-attestation-repository "$(QUALIFICATION_TRUSTED_CLEANUP_REPOSITORY)" \
 			--cleanup-attestation-default-branch "$(QUALIFICATION_TRUSTED_CLEANUP_DEFAULT_BRANCH)" \
 			--cleanup-attestations "$(QUALIFICATION_TRUSTED_CLEANUP_REPOSITORY)/tests/release/fixtures/managed-cloud-litellm-attribution-attestations.v1.json" \
@@ -1355,7 +1369,7 @@ qualification-managed-cloud:
 	else \
 		node scripts/ci-cd/qualification-preflight.mjs \
 			--world managed-cloud --source-sha "$$source_sha" --run-id "$$run_id" --shard-id "$$shard_id" --attempt "$$attempt" \
-			--scenarios CLOUD-PROVISION-1 --artifact-mode build \
+			--scenarios "$(CLOUD_SCENARIOS)" --artifact-mode build \
 			--cleanup-attestation-repository "$(QUALIFICATION_TRUSTED_CLEANUP_REPOSITORY)" \
 			--cleanup-attestation-default-branch "$(QUALIFICATION_TRUSTED_CLEANUP_DEFAULT_BRANCH)" \
 			--cleanup-attestations "$(QUALIFICATION_TRUSTED_CLEANUP_REPOSITORY)/tests/release/fixtures/managed-cloud-litellm-attribution-attestations.v1.json" \
@@ -1369,15 +1383,15 @@ qualification-managed-cloud:
 		echo "$$build_summary"; \
 		candidate_map=$$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).candidate_build_map)' "$$build_summary"); \
 	fi; \
-	cd tests/release && pnpm exec tsx src/cli/run.ts \
+	cd tests/release && RELEASE_E2E_SHARED_TEMPLATE_CUSTODY="$(SHARED_TEMPLATE_CUSTODY_MODE)" pnpm exec tsx src/cli/run.ts \
 		--behavior $(BEHAVIOR) \
 		--lane cloud \
 		--desktop web \
 		--agents claude \
-		--scenarios CLOUD-PROVISION-1 \
+		--scenarios "$(CLOUD_SCENARIOS)" \
 		--candidate-build-map "$$candidate_map" \
 		--run-id "$$run_id" --shard-id "$$shard_id" \
-		--output-dir "$$run_dir/evidence"
+		--output-dir "$$run_dir/$(CLOUD_EVIDENCE_SUBDIR)"
 
 test-cloud-ssh-worker:
 	@test -n "$(SSH_TARGET)" || { \

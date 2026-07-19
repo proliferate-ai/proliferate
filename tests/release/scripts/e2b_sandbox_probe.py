@@ -26,6 +26,7 @@ which matters most for the staging lane (its DB is VPC-only).
 
 Subcommands, one JSON object printed to stdout each:
   find <cloud_sandbox_id>                  -> {"providerSandboxId": str|null, "state": str|null}
+  list-template <template_id>              -> {"matches": [...], "count": int}
   state <provider_sandbox_id>              -> {"state": str}
   pause <provider_sandbox_id>              -> {"paused": bool}
   exec <provider_sandbox_id> <command...>  -> {"stdout": str, "stderr": str, "exitCode": int}
@@ -109,6 +110,32 @@ def cmd_find(cloud_sandbox_id: str) -> dict[str, object]:
     }
 
 
+def cmd_list_template(template_id: str) -> dict[str, object]:
+    """Exhaustively list live sandboxes created from one immutable template id."""
+    from e2b import Sandbox
+    from e2b.api.client.models.sandbox_state import SandboxState
+    from e2b.sandbox.sandbox_api import SandboxQuery
+
+    paginator = Sandbox.list(
+        query=SandboxQuery(state=[SandboxState.RUNNING, SandboxState.PAUSED]),
+        api_key=_api_key(),
+    )
+    matches: list[dict[str, object]] = []
+    while True:
+        for info in paginator.next_items():
+            if getattr(info, "template_id", None) == template_id:
+                matches.append(
+                    {
+                        "providerSandboxId": info.sandbox_id,
+                        "state": _state_name(info.state),
+                        "templateId": getattr(info, "template_id", None),
+                    }
+                )
+        if not paginator.has_next:
+            break
+    return {"matches": matches, "count": len(matches)}
+
+
 def cmd_state(provider_sandbox_id: str) -> dict[str, object]:
     from e2b import Sandbox
 
@@ -126,7 +153,7 @@ def cmd_pause(provider_sandbox_id: str) -> dict[str, object]:
 
 
 def cmd_kill(provider_sandbox_id: str) -> dict[str, object]:
-    """Idempotent provider-sandbox kill for run cleanup (absent counts as killed)."""
+    """Idempotent provider-sandbox kill (`killed=False` means already absent)."""
     from e2b import Sandbox
     from e2b.exceptions import NotFoundException
 
@@ -187,6 +214,9 @@ def main() -> None:
     p_find = sub.add_parser("find")
     p_find.add_argument("cloud_sandbox_id")
 
+    p_list_template = sub.add_parser("list-template")
+    p_list_template.add_argument("template_id")
+
     p_state = sub.add_parser("state")
     p_state.add_argument("provider_sandbox_id")
 
@@ -218,6 +248,8 @@ def main() -> None:
 
     if args.action == "find":
         result = cmd_find(args.cloud_sandbox_id)
+    elif args.action == "list-template":
+        result = cmd_list_template(args.template_id)
     elif args.action == "state":
         result = cmd_state(args.provider_sandbox_id)
     elif args.action == "pause":

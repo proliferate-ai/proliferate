@@ -183,7 +183,8 @@ export function clockNameForRun(runTag: string): string {
  * The intent-phase providerId persisted in the ledger BEFORE a create. It carries
  * the run-scoped RECOVERY IDENTITY so a lost runner can locate + delete the
  * resource from the reloaded entry alone. `markAcquired(real id)` later replaces
- * it with the `tc_…`/`cus_…` id. The encodings are prefix-tagged so a replay
+ * it with the real `clock_…`/`cus_…` id. (`tc_…` remains accepted for
+ * older fixtures.) The encodings are prefix-tagged so a replay
  * handler can tell an intent ref from a real id.
  */
 export function encodeClockIntentRef(clockName: string): string {
@@ -197,7 +198,7 @@ export function encodeCustomerIntentRef(runTag: string): string {
 export function decodeStripeProviderId(
   providerId: string,
 ): { kind: "real"; id: string } | { kind: "intent_clock"; clockName: string } | { kind: "intent_customer"; runTag: string } | { kind: "unknown" } {
-  if (providerId.startsWith("tc_") || providerId.startsWith("cus_")) {
+  if (providerId.startsWith("clock_") || providerId.startsWith("tc_") || providerId.startsWith("cus_")) {
     return { kind: "real", id: providerId };
   }
   const clockName = /^intent:test_clock:name=(.+)$/.exec(providerId);
@@ -233,7 +234,7 @@ export class StripeIntentStillPropagatingError extends Error {
  * Ledger-replay handlers for `stripe_test_clock` / `stripe_customer`, usable with
  * `replayLedger` after a runner restart. They work from the ENTRY ALONE (no
  * closures):
- *   - real `tc_`/`cus_` providerId → DELETE by id (idempotent);
+ *   - real `clock_`/`cus_` providerId → DELETE by id (idempotent);
  *   - intent providerId → deterministically locate the run-owned resource:
  *       * clock: paginated list by run-scoped name;
  *       * customer: recover the CLOCK first (real id from the reloaded clock
@@ -266,7 +267,7 @@ export function stripeCleanupReplayHandlers(params: {
   const withinWindow = (entry: { createdAt: string }): boolean => {
     const registeredAt = Date.parse(entry.createdAt);
     if (Number.isNaN(registeredAt)) {
-      return false; // unparseable timestamp → do not block reconcile forever.
+      throw new Error("Stripe cleanup entry has a malformed createdAt timestamp; refusing to reconcile it.");
     }
     return now().getTime() - registeredAt < STRIPE_INTENT_RECOVERY_WINDOW_MS;
   };
@@ -274,7 +275,9 @@ export function stripeCleanupReplayHandlers(params: {
   /** Resolve the run's clock id: the sibling clock entry's real id, else a paginated name lookup. */
   const resolveClockId = async (clockName: string): Promise<string | null> => {
     const clockEntry = entries.find(
-      (e) => e.kind === "stripe_test_clock" && e.providerId?.startsWith("tc_"),
+      (e) =>
+        e.kind === "stripe_test_clock" &&
+        (e.providerId?.startsWith("clock_") || e.providerId?.startsWith("tc_")),
     );
     if (clockEntry?.providerId) {
       return clockEntry.providerId;
@@ -306,7 +309,9 @@ export function stripeCleanupReplayHandlers(params: {
         }
         return; // past the window → truly-never-created / already-deleted, clean.
       }
-      // unknown/null providerId: nothing actionable, but reconcile cleanly.
+      throw new Error(
+        `stripe_test_clock cleanup entry has an unrecognized provider identity; refusing to reconcile it: ${providerId || "<empty>"}`,
+      );
     },
     stripe_customer: async (entry) => {
       const providerId = entry.providerId ?? "";
@@ -348,6 +353,9 @@ export function stripeCleanupReplayHandlers(params: {
         }
         return;
       }
+      throw new Error(
+        `stripe_customer cleanup entry has an unrecognized provider identity; refusing to reconcile it: ${providerId || "<empty>"}`,
+      );
     },
   };
 }
@@ -573,12 +581,15 @@ export const defaultStripeHttp: StripeHttp = {
     const response = await fetch(`${STRIPE_API_BASE}${path}`, init);
     const payload = (await response.json().catch(() => ({}))) as Record<string, unknown>;
     if (!response.ok) {
-      const message =
-        typeof (payload.error as { message?: unknown } | undefined)?.message === "string"
-          ? (payload.error as { message: string }).message
-          : `Stripe ${method} ${path} -> ${response.status}`;
-      // Never echo the request body: only Stripe's own bounded error message.
-      throw new Error(`stripeTestClockActor: ${message}`);
+      const error = payload.error as { message?: unknown; code?: unknown } | undefined;
+      const message = typeof error?.message === "string" ? error.message : `Stripe ${method} ${path} -> ${response.status}`;
+      // Append Stripe's structured error CODE when present so idempotent-delete
+      // tolerance can match on `resource_missing` regardless of the human
+      // message wording (a deleted test clock reports "No such billingclock",
+      // NOT "No such test clock" — the object's internal name differs). Never
+      // echo the request body: only Stripe's own bounded message + code.
+      const code = typeof error?.code === "string" ? ` (${error.code})` : "";
+      throw new Error(`stripeTestClockActor: ${message}${code}`);
     }
     return payload;
   },
@@ -613,6 +624,32 @@ export function createDefaultStripeTestClockTransport(http: StripeHttp = default
       if (!customerId) {
         throw new Error("stripeTestClockActor: Stripe did not return a customer id.");
       }
+      // A subscription with the default `charge_automatically` collection needs a
+      // default payment method, else Stripe rejects POST /subscriptions with
+      // "This customer has no attached payment source or default payment method"
+      // (observed live). Attach the canonical test card + set it as the customer's
+      // invoice default: create a PaymentMethod from the `tok_visa` test token,
+      // attach it to the customer, then set invoice_settings[default_payment_method].
+      // (test-clock customers accept a real attached test PM.)
+      const paymentMethod = await http.request(secretKey, {
+        method: "POST",
+        path: "/payment_methods",
+        form: { type: "card", "card[token]": "tok_visa" },
+      });
+      const paymentMethodId = typeof paymentMethod.id === "string" ? paymentMethod.id : "";
+      if (!paymentMethodId) {
+        throw new Error("stripeTestClockActor: Stripe did not return a payment method id.");
+      }
+      await http.request(secretKey, {
+        method: "POST",
+        path: `/payment_methods/${paymentMethodId}/attach`,
+        form: { customer: customerId },
+      });
+      await http.request(secretKey, {
+        method: "POST",
+        path: `/customers/${customerId}`,
+        form: { "invoice_settings[default_payment_method]": paymentMethodId },
+      });
       const subscription = await http.request(secretKey, {
         method: "POST",
         path: "/subscriptions",
@@ -644,7 +681,11 @@ export function createDefaultStripeTestClockTransport(http: StripeHttp = default
         await http.request(secretKey, { method: "DELETE", path: `/test_helpers/test_clocks/${testClockId}` });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        if (!/No such test clock|resource_missing/i.test(message)) {
+        // Tolerate already-deleted: match Stripe's structured `resource_missing`
+        // code (now appended by the HTTP seam) OR either human phrasing — a gone
+        // test clock reports "No such billingclock" (the object's internal name),
+        // NOT "No such test clock".
+        if (!/resource_missing|No such (test clock|billingclock)/i.test(message)) {
           throw error;
         }
       }

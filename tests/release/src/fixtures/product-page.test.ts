@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Browser, BrowserContext, Page } from "playwright";
 
-import { BROWSER_AUTH_SESSION_KEY, productPage, type ProductPageDriver } from "./product-page.js";
+import { BROWSER_AUTH_SESSION_KEY, productPage, resolveDiagnosticsDir, type ProductPageDriver } from "./product-page.js";
 import type { ReadyLocalWorld } from "../worlds/local-workspace/world.js";
 import type { AuthenticatedActor } from "./authenticated-actor.js";
 
@@ -126,3 +126,35 @@ test("productPage closes only the context if page creation itself fails", async 
 test("BROWSER_AUTH_SESSION_KEY matches the real desktop client's localStorage key", () => {
   assert.equal(BROWSER_AUTH_SESSION_KEY, "proliferate.auth.session");
 });
+
+test("resolveDiagnosticsDir honours both lane debug vars (local preferred, cloud accepted)", () => {
+  const savedLocal = process.env.LOCAL_WORLD_SMOKE_DEBUG_DIR;
+  const savedCloud = process.env.MANAGED_CLOUD_SMOKE_DEBUG_DIR;
+  try {
+    delete process.env.LOCAL_WORLD_SMOKE_DEBUG_DIR;
+    delete process.env.MANAGED_CLOUD_SMOKE_DEBUG_DIR;
+    assert.equal(resolveDiagnosticsDir(), undefined, "no var → no diagnostics dir (green path is untouched)");
+
+    // The managed-cloud lane's own var must resolve — this is the fix: a cloud
+    // browser-turn failure (CLOUD-PROVISION-1) must capture diagnostics even
+    // though the local-lane var is unset.
+    process.env.MANAGED_CLOUD_SMOKE_DEBUG_DIR = "/tmp/mc-debug";
+    assert.equal(resolveDiagnosticsDir(), "/tmp/mc-debug");
+
+    // When both are set, the local var wins (the local lane is the only one
+    // that sets it, so there is never real contention; deterministic anyway).
+    process.env.LOCAL_WORLD_SMOKE_DEBUG_DIR = "/tmp/local-debug";
+    assert.equal(resolveDiagnosticsDir(), "/tmp/local-debug");
+  } finally {
+    restoreEnv("LOCAL_WORLD_SMOKE_DEBUG_DIR", savedLocal);
+    restoreEnv("MANAGED_CLOUD_SMOKE_DEBUG_DIR", savedCloud);
+  }
+});
+
+function restoreEnv(name: string, value: string | undefined): void {
+  if (value === undefined) {
+    delete process.env[name];
+  } else {
+    process.env[name] = value;
+  }
+}

@@ -128,6 +128,26 @@ export interface AuthenticatedActorOptions {
    * "cloud" or the sandbox's state.json carries no gateway source to probe.
    */
   gatewaySurface?: "local" | "cloud";
+  /**
+   * Managed-cloud crash custody. Called with the exact run-owned email BEFORE
+   * `/setup` creates the actor (and therefore before async LiteLLM enrollment
+   * can create provider subjects). The returned binder promotes that same
+   * durable intent after the exact enrollment resolves.
+   */
+  beginActorEnrollmentCustody?(params: { email: string }): Promise<{
+    resolveAndTrack(params: { userId: string; enrollmentId: string }): Promise<ActorKeyIdentity>;
+  }>;
+  /**
+   * Managed-cloud custody seam. Once the synced enrollment exposes the exact
+   * product user + enrollment ids, resolve the provider subjects and durably
+   * register their cleanup before this fixture performs any later selection or
+   * returns control to the scenario. Local worlds omit this and resolve the key
+   * directly because their cleanup owner is different.
+   */
+  resolveAndTrackActorSubjects?(params: {
+    userId: string;
+    enrollmentId: string;
+  }): Promise<ActorKeyIdentity>;
 }
 
 interface DesktopTokenResponse {
@@ -336,10 +356,14 @@ export async function authenticatedActor(
   const setupCommitTimeoutMs = options.setupCommitTimeoutMs ?? 10_000;
   const setupCommitPollMs = options.setupCommitPollMs ?? 250;
 
+  let enrollmentCustody: {
+    resolveAndTrack(params: { userId: string; enrollmentId: string }): Promise<ActorKeyIdentity>;
+  } | undefined;
   let claim: Promise<{ email: string; password: string }>;
   if (explicitEmail !== undefined) {
     // A caller-provided email opts out of the shared per-world owner cache
     // (it wants its own, distinct claim identity); claim directly.
+    enrollmentCustody = await options.beginActorEnrollmentCustody?.({ email: explicitEmail });
     claim = performClaim(
       world,
       transport,
@@ -354,10 +378,15 @@ export async function authenticatedActor(
     if (cached !== undefined) {
       claim = cached;
     } else {
+      // Persist managed-cloud provider custody before the real setup claim can
+      // enqueue eager LiteLLM enrollment. Cache hits reuse this already-
+      // custodied owner and must not create a duplicate cleanup intent.
+      const email = `qual-owner-${world.run.run_id}-${world.run.shard_id}@example.com`;
+      enrollmentCustody = await options.beginActorEnrollmentCustody?.({ email });
       claim = performClaim(
         world,
         transport,
-        undefined,
+        email,
         options.organizationName,
         setupCommitTimeoutMs,
         setupCommitPollMs,
@@ -403,14 +432,14 @@ export async function authenticatedActor(
     pollMs: options.enrollmentPollMs ?? 2_000,
   });
 
-  if (options.selectGatewayRoute !== false) {
-    await transport.putGatewaySelection(api, harnessKind, options.gatewaySurface ?? "local");
-  }
-
-  const gatewayKey = await world.gateway.resolveActorKey({
+  const gatewayKey = await (enrollmentCustody?.resolveAndTrack ?? options.resolveAndTrackActorSubjects ?? ((params) => world.gateway.resolveActorKey(params)))({
     userId: session.user_id,
     enrollmentId: enrollment.id,
   });
+
+  if (options.selectGatewayRoute !== false) {
+    await transport.putGatewaySelection(api, harnessKind, options.gatewaySurface ?? "local");
+  }
 
   return {
     role,

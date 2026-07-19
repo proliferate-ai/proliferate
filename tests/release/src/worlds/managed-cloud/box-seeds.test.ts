@@ -141,6 +141,26 @@ test("seedGithubAuthorizationOnBox does not persist when GitHub returns no rotat
   assert.equal(result.refreshTokenRotated, false);
 });
 
+test("seedGithubAuthorizationOnBox seed-only mode cannot invoke provider materialization", async () => {
+  const box = fakeBox(() => '{"github_login": "proliferate-e2e-bot", "github_user_id": "301498062"}');
+  await seedGithubAuthorizationOnBox({
+    box,
+    userId: ACTOR_ID,
+    clientId: "Iv23xxxx",
+    clientSecret: "secret",
+    refreshToken: "ghr_old",
+    coveredRepoOwner: "proliferate-e2e",
+    coveredRepoName: "e2e-fixture",
+    coveredRepoDefaultBranch: "main",
+    materializeSandbox: false,
+    persistRotatedRefreshToken: async () => undefined,
+    refresher: fakeRefresher(null),
+  });
+  const payload = JSON.parse(box.putFiles[0]!.contents) as Record<string, unknown>;
+  assert.equal(payload.materialize_sandbox, false);
+  assert.match(box.scripts[0]!, /if payload\.get\("materialize_sandbox", True\):/);
+});
+
 test("persistRotatedBotSeed writes a 0600 seed file with the rotated token and identity", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "bot-seed-"));
   const seedPath = path.join(dir, "seed.json");
