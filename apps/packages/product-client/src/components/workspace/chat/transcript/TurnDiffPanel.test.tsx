@@ -123,10 +123,10 @@ describe("TurnDiffPanel", () => {
     expect(html).toContain("Edited 2 files");
     expect(html).toContain("bg-foreground/[0.0475]");
     expect(html).toContain("data-chat-diff-wrap-context-trigger=\"turn-header\"");
-    expect(html).toContain("group/turn-diff-header relative focus-within:[&amp;_.turn-diff-default-subtitle]:hidden");
+    expect(html).toContain("turn-diff-default-subtitle inline-flex");
     expect(html).toContain("bg-[var(--color-diff-chat-turn-icon-surface)]");
     expect(html).toContain("border border-border bg-foreground/[0.0475]");
-    expect(html).toContain("group/turn-diff-file relative flex h-9 w-full min-w-0 items-center bg-background/70");
+    expect(html).toContain("data-chat-diff-wrap-context-trigger=\"file-header\" class=\"relative flex h-9 w-full min-w-0 items-center bg-background/70");
     expect(html).toContain("hover:bg-list-hover/60");
     expect(html).toContain("flex flex-col border-t border-border");
     expect(html).toContain('text-git-green">+<span aria-label="4" class="diff-stat-rolling-number"');
@@ -168,9 +168,7 @@ describe("TurnDiffPanel", () => {
     expect(html).toContain("Review changes");
     expect(html).toContain("aria-label=\"Review changed files\"");
     expect(html).not.toContain("Show file in review");
-    expect(html).toContain("group-hover/turn-diff-header:bg-list-hover/30");
-    expect(html).toContain("hover:[&amp;_.turn-diff-default-subtitle]:hidden");
-    expect(html).toContain("hover:[&amp;_.turn-diff-hover-subtitle]:inline-flex");
+    expect(html).toContain("turn-diff-review-target absolute inset-0");
     expect(html).toContain("turn-diff-default-subtitle inline-flex");
     expect(html).toContain("turn-diff-hover-subtitle pointer-events-none absolute inset-0 hidden");
     expect(html).toContain("data-app-action-review-file-toggle");

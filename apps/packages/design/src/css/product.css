@@ -837,67 +837,6 @@ mark.codex-thread-find-active {
  * NON-THEME STYLES
  * ======================================================================== */
 
-/* Codex completion-diff stats keep their semantic ink while changed digits
-   roll vertically. Right-aligned keys preserve the column identity when the
-   number gains or loses a leading digit. */
-.diff-stat-rolling-number {
-  display: inline-flex;
-  align-items: baseline;
-  height: 1lh;
-  line-height: inherit;
-}
-
-.diff-stat-digit-column {
-  position: relative;
-  display: inline-block;
-  contain: layout paint style;
-  width: 1ch;
-  height: 1lh;
-  line-height: inherit;
-}
-
-.diff-stat-digit-column::before {
-  content: "0";
-  visibility: hidden;
-}
-
-.diff-stat-digit-clip {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-}
-
-.diff-stat-digit-stack {
-  display: flex;
-  flex-direction: column;
-  contain: layout size style;
-  height: 1lh;
-  transition: transform 300ms cubic-bezier(0.16, 1, 0.3, 1);
-  will-change: transform;
-}
-
-.diff-stat-digit-stack > span {
-  flex: 0 0 1lh;
-  height: 1lh;
-}
-
-.diff-stat-digit-stack-0 { transform: translateY(0); }
-.diff-stat-digit-stack-1 { transform: translateY(-1lh); }
-.diff-stat-digit-stack-2 { transform: translateY(-2lh); }
-.diff-stat-digit-stack-3 { transform: translateY(-3lh); }
-.diff-stat-digit-stack-4 { transform: translateY(-4lh); }
-.diff-stat-digit-stack-5 { transform: translateY(-5lh); }
-.diff-stat-digit-stack-6 { transform: translateY(-6lh); }
-.diff-stat-digit-stack-7 { transform: translateY(-7lh); }
-.diff-stat-digit-stack-8 { transform: translateY(-8lh); }
-.diff-stat-digit-stack-9 { transform: translateY(-9lh); }
-
-@media (prefers-reduced-motion: reduce) {
-  .diff-stat-digit-stack {
-    transition: none;
-  }
-}
-
 /* Codex composer chrome (UX_SPEC §5): no border — a 0.5px stroke painted in
    the shadow stack plus the prominent-elevation shadow pair. */
 .chat-composer-surface {

@@ -1,0 +1,153 @@
+/* Authenticated-only interaction styles stay behind the lazy product boundary
+ * so chat affordances do not consume the public login shell's CSS budget. */
+
+@property --top-fade {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0;
+}
+
+@property --bottom-fade {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0;
+}
+
+@property --edge-fade-distance {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 1.5rem;
+}
+
+@keyframes vertical-scroll-edge-fade {
+  0%,
+  1% {
+    --top-fade: 0;
+    --bottom-fade: var(--edge-fade-distance);
+  }
+
+  99%,
+  100% {
+    --top-fade: var(--edge-fade-distance);
+    --bottom-fade: 0;
+  }
+}
+
+/* At the top only the bottom edge fades; after scrolling both edges fade; at
+ * the bottom only the top edge fades. dom.css retains the static fallback. */
+@supports (animation-timeline: scroll()) {
+  .vertical-scroll-fade-mask {
+    mask-image: linear-gradient(
+      to bottom,
+      transparent,
+      black var(--top-fade) calc(100% - var(--bottom-fade)),
+      transparent
+    );
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      transparent,
+      black var(--top-fade) calc(100% - var(--bottom-fade)),
+      transparent
+    );
+    animation-name: vertical-scroll-edge-fade;
+    animation-timing-function: linear;
+    animation-fill-mode: both;
+    animation-timeline: scroll(self y);
+  }
+}
+
+/* Completion-diff stats keep their semantic ink while changed digits roll. */
+.diff-stat-rolling-number {
+  display: inline-flex;
+  align-items: baseline;
+  height: 1lh;
+  line-height: inherit;
+}
+
+.diff-stat-digit-column {
+  position: relative;
+  display: inline-block;
+  contain: layout paint style;
+  width: 1ch;
+  height: 1lh;
+  line-height: inherit;
+}
+
+.diff-stat-digit-column::before {
+  content: "0";
+  visibility: hidden;
+}
+
+.diff-stat-digit-clip {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.diff-stat-digit-stack {
+  display: flex;
+  flex-direction: column;
+  contain: layout size style;
+  height: 1lh;
+  transition: transform 300ms cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform;
+}
+
+.diff-stat-digit-stack > span {
+  flex: 0 0 1lh;
+  height: 1lh;
+}
+
+.diff-stat-digit-stack-0 { transform: translateY(0); }
+.diff-stat-digit-stack-1 { transform: translateY(-1lh); }
+.diff-stat-digit-stack-2 { transform: translateY(-2lh); }
+.diff-stat-digit-stack-3 { transform: translateY(-3lh); }
+.diff-stat-digit-stack-4 { transform: translateY(-4lh); }
+.diff-stat-digit-stack-5 { transform: translateY(-5lh); }
+.diff-stat-digit-stack-6 { transform: translateY(-6lh); }
+.diff-stat-digit-stack-7 { transform: translateY(-7lh); }
+.diff-stat-digit-stack-8 { transform: translateY(-8lh); }
+.diff-stat-digit-stack-9 { transform: translateY(-9lh); }
+
+@media (prefers-reduced-motion: reduce) {
+  .diff-stat-digit-stack {
+    transition: none;
+  }
+}
+
+[data-edit-action-row]:is(:hover, :focus-within) .activity-file-change-stat-additions {
+  color: var(--color-git-green);
+}
+
+[data-edit-action-row]:is(:hover, :focus-within) .activity-file-change-stat-deletions {
+  color: var(--color-git-red);
+}
+
+[data-edit-action-row]:is(:hover, :focus-within) .edit-action-row-open,
+[data-chat-diff-wrap-context-trigger="file-header"]:is(:hover, :focus-within) .turn-diff-file-open {
+  opacity: 1;
+}
+
+[data-chat-diff-wrap-context-trigger="turn-header"]:is(:hover, :focus-within) .turn-diff-default-subtitle {
+  display: none;
+}
+
+[data-chat-diff-wrap-context-trigger="turn-header"]:is(:hover, :focus-within) .turn-diff-hover-subtitle {
+  display: inline-flex;
+}
+
+[data-chat-diff-wrap-context-trigger="turn-header"]:hover .turn-diff-review-target {
+  background: color-mix(in oklab, var(--color-list-hover) 30%, transparent);
+}
+
+.turn-document-reference-trigger:hover {
+  background: color-mix(in srgb, var(--color-foreground) 3.5%, transparent);
+}
+
+.turn-document-reference-trigger:is(:hover, :focus-visible) .turn-document-type-label {
+  opacity: 0;
+}
+
+.turn-document-reference-trigger:is(:hover, :focus-visible) .turn-document-open-label {
+  opacity: 1;
+}

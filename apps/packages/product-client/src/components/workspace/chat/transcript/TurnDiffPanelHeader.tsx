@@ -26,7 +26,7 @@ export function TurnDiffPanelHeader({
   return (
     <div
       data-chat-diff-wrap-context-trigger="turn-header"
-      className={`group/turn-diff-header relative focus-within:[&_.turn-diff-default-subtitle]:hidden hover:[&_.turn-diff-default-subtitle]:hidden focus-within:[&_.turn-diff-hover-subtitle]:inline-flex hover:[&_.turn-diff-hover-subtitle]:inline-flex ${onOpenReviewPane ? "cursor-pointer" : ""}`}
+      className={`relative ${onOpenReviewPane ? "cursor-pointer" : ""}`}
     >
       {onOpenReviewPane && (
         <Button
@@ -36,7 +36,7 @@ export function TurnDiffPanelHeader({
           data-chat-transcript-ignore
           aria-label="Review changed files"
           onClick={onOpenReviewPane}
-          className="absolute inset-0 z-0 rounded-t-lg bg-transparent group-hover/turn-diff-header:bg-list-hover/30 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-border"
+          className="turn-diff-review-target absolute inset-0 z-0 rounded-t-lg bg-transparent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-border"
         />
       )}
       <div className="pointer-events-none relative z-10 flex min-w-0 items-center gap-2.5 px-[var(--turn-diff-row-padding-x)] py-3 text-left">

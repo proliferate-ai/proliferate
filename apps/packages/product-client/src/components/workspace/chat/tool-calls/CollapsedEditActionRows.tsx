@@ -78,7 +78,7 @@ function EditActionRow({
     <div
       data-edit-action-row
       onContextMenuCapture={nativeContextMenu.onContextMenuCapture}
-      className={`group/action-row relative flex min-w-0 max-w-full items-center text-left text-chat leading-[var(--text-chat--line-height)] transition-colors ${
+      className={`relative flex min-w-0 max-w-full items-center text-left text-chat leading-[var(--text-chat--line-height)] transition-colors ${
         failed
           ? "text-destructive/80 hover:text-destructive"
           : "text-foreground/60 hover:text-foreground"
@@ -128,7 +128,7 @@ function EditActionRow({
               event.stopPropagation();
               void fileActions.openPrimary();
             }}
-            className="pointer-events-auto size-5 shrink-0 rounded border-0 bg-transparent p-0 text-current opacity-0 transition-opacity hover:bg-muted focus-visible:opacity-100 focus-visible:ring-1 group-hover/action-row:opacity-100 group-focus-within/action-row:opacity-100"
+            className="edit-action-row-open pointer-events-auto size-5 shrink-0 rounded border-0 bg-transparent p-0 text-current opacity-0 transition-opacity hover:bg-muted focus-visible:opacity-100 focus-visible:ring-1"
           >
             <ArrowUpRight className="size-3" />
           </Button>

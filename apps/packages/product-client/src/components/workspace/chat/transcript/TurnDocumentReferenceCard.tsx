@@ -20,7 +20,7 @@ export function TurnDocumentReferenceCard({
         variant="unstyled"
         size="unstyled"
         onClick={() => void fileActions.openPrimary()}
-        className="group/end-resource flex w-full min-w-0 items-center justify-start gap-2.5 rounded-none px-3 py-3 text-left hover:bg-foreground/[0.035] focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
+        className="turn-document-reference-trigger flex w-full min-w-0 items-center justify-start gap-2.5 rounded-none px-3 py-3 text-left focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
         aria-label={`Open preview for ${resource.displayName}`}
       >
         <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-[var(--color-diff-chat-turn-icon-surface)] text-secondary-foreground">
@@ -31,10 +31,10 @@ export function TurnDocumentReferenceCard({
             {resource.displayName}
           </span>
           <span className="relative block min-h-4 min-w-0 text-xs leading-4 text-muted-foreground">
-            <span className="block truncate transition-opacity duration-150 group-hover/end-resource:opacity-0 group-focus-visible/end-resource:opacity-0">
+            <span className="turn-document-type-label block truncate transition-opacity duration-150">
               {resource.typeLabel}
             </span>
-            <span className="pointer-events-none absolute inset-0 flex items-center opacity-0 transition-opacity duration-150 group-hover/end-resource:opacity-100 group-focus-visible/end-resource:opacity-100">
+            <span className="turn-document-open-label pointer-events-none absolute inset-0 flex items-center opacity-0 transition-opacity duration-150">
               Open preview
             </span>
           </span>

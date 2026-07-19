@@ -30,7 +30,7 @@ export function FileChangeStats({
           value={additions}
           rolling={rolling}
           className={tone === "activity"
-            ? "text-inherit transition-colors group-hover/action-row:text-git-green group-focus-within/action-row:text-git-green"
+            ? "activity-file-change-stat-additions text-inherit transition-colors"
             : "text-git-green"}
         />
       )}
@@ -40,7 +40,7 @@ export function FileChangeStats({
           value={deletions}
           rolling={rolling}
           className={tone === "activity"
-            ? "text-inherit transition-colors group-hover/action-row:text-git-red group-focus-within/action-row:text-git-red"
+            ? "activity-file-change-stat-deletions text-inherit transition-colors"
             : "text-git-red"}
         />
       )}

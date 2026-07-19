@@ -7,6 +7,7 @@ import { RepoSetupModalHost } from "#product/components/workspace/repo-setup/Rep
 import { WorkspaceAvailabilityActionHost } from "#product/components/workspace/repo-setup/WorkspaceAvailabilityActionHost"
 import { AuthenticatedAppHost } from "#product/pages/AuthenticatedAppHost"
 import { CoworkThreadLaunchProvider } from "#product/providers/CoworkThreadLaunchProvider"
+import "./authenticated.css"
 
 /**
  * Internal, lazy-loaded authenticated product root.
