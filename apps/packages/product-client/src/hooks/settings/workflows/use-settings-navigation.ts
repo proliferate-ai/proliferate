@@ -34,6 +34,8 @@ export function useSettingsNavigation({
   const rawFlowId = searchParams.get("flowId");
   const rawStatus = searchParams.get("status");
   const rawFailureCode = searchParams.get("failureCode");
+  const rawBillingOwnerScope = searchParams.get("billingOwnerScope");
+  const rawBillingOrganizationId = searchParams.get("billingOrganizationId");
 
   const selection = useMemo(() => resolveSettingsSelection({
     rawSection,
@@ -48,8 +50,12 @@ export function useSettingsNavigation({
     rawFlowId,
     rawStatus,
     rawFailureCode,
+    rawBillingOwnerScope,
+    rawBillingOrganizationId,
     repositories,
   }), [
+    rawBillingOrganizationId,
+    rawBillingOwnerScope,
     rawCloudRepoName,
     rawCloudRepoOwner,
     rawContext,

@@ -11,6 +11,7 @@ use crate::{
         SaveDiagnosticJsonResult, SupportDiagnosticsBundle,
     },
     sidecar::{RuntimeStatus, SharedSidecar},
+    telemetry_file_logging::{RendererDiagnosticLog, RENDERER_DIAGNOSTIC_TARGET},
 };
 
 #[derive(Debug, Deserialize)]
@@ -49,16 +50,47 @@ fn runtime_status_label(status: &RuntimeStatus) -> &'static str {
 }
 
 #[tauri::command]
-pub fn log_renderer_diagnostic(input: RendererDiagnosticInput) -> Result<(), String> {
+pub fn log_renderer_diagnostic(
+    renderer_log: State<'_, RendererDiagnosticLog>,
+    input: RendererDiagnosticInput,
+) -> Result<(), String> {
+    record_renderer_diagnostic(&renderer_log, &input)
+}
+
+fn record_renderer_diagnostic(
+    renderer_log: &RendererDiagnosticLog,
+    input: &RendererDiagnosticInput,
+) -> Result<(), String> {
+    persist_renderer_diagnostic(renderer_log, input)?;
     tracing::error!(
+        target: RENDERER_DIAGNOSTIC_TARGET,
         source = %input.source,
-        route = %input.route.unwrap_or_default(),
+        route = %input.route.as_deref().unwrap_or_default(),
         message = %scrub_diagnostic_text(&input.message),
         stack = %scrub_diagnostic_text(input.stack.as_deref().unwrap_or_default()),
         component_stack = %scrub_diagnostic_text(input.component_stack.as_deref().unwrap_or_default()),
         "Renderer diagnostic"
     );
     Ok(())
+}
+
+fn persist_renderer_diagnostic(
+    renderer_log: &RendererDiagnosticLog,
+    input: &RendererDiagnosticInput,
+) -> Result<(), String> {
+    let record = serde_json::json!({
+        "event": "renderer_diagnostic",
+        "source": input.source,
+        "route": input.route.as_deref().unwrap_or_default(),
+        "message": scrub_diagnostic_text(&input.message),
+        "stack": scrub_diagnostic_text(input.stack.as_deref().unwrap_or_default()),
+        "component_stack": scrub_diagnostic_text(
+            input.component_stack.as_deref().unwrap_or_default()
+        ),
+    });
+    let line = serde_json::to_string(&record)
+        .map_err(|error| format!("Failed to serialize renderer diagnostic: {error}"))?;
+    renderer_log.persist(&line)
 }
 
 #[tauri::command]
@@ -171,4 +203,120 @@ fn expand_home_path(path: &str) -> Result<PathBuf, String> {
     }
 
     Ok(PathBuf::from(path))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::io;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    use tracing_subscriber::{filter::filter_fn, layer::SubscriberExt, Layer};
+
+    use crate::telemetry_file_logging::{
+        create_file_log_sink, is_renderer_diagnostic_event, RendererDiagnosticWriter,
+    };
+
+    fn input() -> RendererDiagnosticInput {
+        RendererDiagnosticInput {
+            source: "react.render".to_string(),
+            message: "Workspace panel failed".to_string(),
+            stack: Some("at WorkspacePane (WorkspacePane.tsx:41:9)".to_string()),
+            component_stack: Some("at WorkspacePane".to_string()),
+            route: Some("/workspaces/example".to_string()),
+        }
+    }
+
+    #[test]
+    fn renderer_diagnostic_persistence_fails_when_native_sink_is_unavailable() {
+        let error = persist_renderer_diagnostic(&RendererDiagnosticLog::default(), &input())
+            .expect_err("unavailable native sink must reject the command");
+
+        assert!(error.contains("file log sink is unavailable"));
+    }
+
+    #[test]
+    fn renderer_diagnostic_persistence_returns_only_after_the_record_is_readable() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time should be valid")
+            .as_nanos();
+        let directory = std::env::temp_dir().join(format!("renderer-diagnostic-{unique}"));
+        let path = directory.join("desktop-native.log");
+        fs::create_dir_all(&directory).expect("temp directory should be created");
+        let log = RendererDiagnosticLog::from_path(path.clone())
+            .expect("renderer diagnostic log should open");
+
+        persist_renderer_diagnostic(&log, &input())
+            .expect("native persistence should be acknowledged");
+        let line = fs::read_to_string(&path).expect("acknowledged record should be readable");
+        let record: serde_json::Value =
+            serde_json::from_str(line.trim()).expect("record should be valid JSON");
+        assert_eq!(record["event"], "renderer_diagnostic");
+        assert_eq!(record["source"], "react.render");
+        assert_eq!(record["message"], "Workspace panel failed");
+
+        fs::remove_dir_all(directory).expect("cleanup should succeed");
+    }
+
+    struct FailingDiagnosticWriter(&'static str);
+
+    impl RendererDiagnosticWriter for FailingDiagnosticWriter {
+        fn persist(&mut self, _line: &str) -> io::Result<()> {
+            Err(io::Error::other(self.0))
+        }
+    }
+
+    #[test]
+    fn renderer_diagnostic_command_propagates_durable_write_barrier_failures() {
+        for failure in ["write failed", "flush failed", "sync failed"] {
+            let log = RendererDiagnosticLog::from_writer(FailingDiagnosticWriter(failure));
+            let error = record_renderer_diagnostic(&log, &input())
+                .expect_err("durable writer failure must reject the command");
+
+            assert!(error.contains(failure));
+        }
+    }
+
+    #[test]
+    fn renderer_diagnostic_command_writes_one_owned_record_not_a_tracing_duplicate() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time should be valid")
+            .as_nanos();
+        let directory = std::env::temp_dir().join(format!("renderer-command-{unique}"));
+        let renderer_path = directory.join("renderer-diagnostics.log");
+        let native_path = directory.join("desktop-native.log");
+        let renderer_log = RendererDiagnosticLog::from_path(renderer_path.clone())
+            .expect("renderer diagnostic log should open");
+        let native_sink = create_file_log_sink(&native_path).expect("native log sink should open");
+        let subscriber = tracing_subscriber::registry().with(
+            tracing_subscriber::fmt::layer()
+                .with_ansi(false)
+                .with_writer(native_sink.writer.clone())
+                .with_filter(filter_fn(|metadata| {
+                    !is_renderer_diagnostic_event(metadata)
+                })),
+        );
+
+        tracing::subscriber::with_default(subscriber, || {
+            record_renderer_diagnostic(&renderer_log, &input())
+                .expect("renderer diagnostic command should succeed");
+        });
+        drop(native_sink.guard);
+
+        let renderer_contents =
+            fs::read_to_string(renderer_path).expect("renderer log should be readable");
+        assert_eq!(renderer_contents.lines().count(), 1);
+        let record: serde_json::Value = serde_json::from_str(renderer_contents.trim())
+            .expect("renderer record should be valid JSON");
+        assert_eq!(record["event"], "renderer_diagnostic");
+
+        let native_contents = fs::read_to_string(native_path).unwrap_or_default();
+        assert!(!native_contents.contains("Renderer diagnostic"));
+        assert!(!native_contents.contains("renderer_diagnostic"));
+
+        fs::remove_dir_all(directory).expect("cleanup should succeed");
+    }
 }

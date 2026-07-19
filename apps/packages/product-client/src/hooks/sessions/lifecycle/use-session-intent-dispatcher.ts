@@ -22,6 +22,7 @@ import { useWorkspaceSessionCache } from "#product/hooks/access/anyharness/sessi
 import { getSessionRecord } from "#product/stores/sessions/session-records";
 import { useSessionIntentStore } from "#product/stores/sessions/session-intent-store";
 import { logLatency } from "#product/lib/infra/measurement/measurement-port";
+import { useToastStore } from "#product/stores/toast/toast-store";
 import {
   dispatchConfigIntent,
 } from "#product/hooks/sessions/lifecycle/session-intent-config-dispatch";
@@ -47,6 +48,7 @@ export function useSessionIntentDispatcher(): void {
   const { maybeGenerateWorkspaceName } = useWorkspaceNameActions();
   const { getWorkspaceSurface } = useWorkspaceSurfaceLookup();
   const { upsertWorkspaceSessionRecord } = useWorkspaceSessionCache();
+  const showToast = useToastStore((state) => state.show);
   const promptSessionMutation = usePromptSessionMutation();
   const setSessionConfigOptionMutation = useSetSessionConfigOptionMutation();
   const resolveInteractionMutation = useResolveSessionInteractionMutation();
@@ -95,6 +97,9 @@ export function useSessionIntentDispatcher(): void {
           ssh,
           cloudClient,
           upsertWorkspaceSessionRecord,
+          onFailure: (message) => {
+            showToast(`Failed to update session config: ${message}`);
+          },
         });
         break;
       case "resolve_interaction":
@@ -118,6 +123,7 @@ export function useSessionIntentDispatcher(): void {
     rehydrateSessionSlotFromHistory,
     resolveInteractionMutation,
     setSessionConfigOptionMutation,
+    showToast,
     ssh,
     cloudClient,
     upsertWorkspaceSessionRecord,

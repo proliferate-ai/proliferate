@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo } from "react";
 import {
   reasoningLadderTopsOutAtUltra,
   resolveReasoningEffortPresentation,
@@ -9,6 +9,7 @@ import { resolveSessionControlTooltip } from "#product/lib/domain/chat/session-c
 import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
 import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
 import { LevelBarsButton } from "@proliferate/ui/primitives/LevelBarsButton";
+import { AnimatedSwapText } from "@proliferate/ui/primitives/AnimatedSwapText";
 
 // Tier-label tint ladder for ultra-capable ladders. Ultra keeps the
 // codex-convention purple (same hue as --color-pr-merged); max keeps the app
@@ -72,39 +73,15 @@ export function ComposerReasoningEffortBars({
   const chipClass = isUltraTier ? "composer-reasoning-ultra-chip" : "";
   const toneClass = isUltraLadder ? TIER_TONE_CLASSES[tierTone] : "";
 
-  // Label swap: when the level steps, the new label slides in from above
-  // while the outgoing one slides down and fades (render-phase derived state;
-  // the exit span unmounts on animationend). The initial render keeps a plain
-  // string so nothing animates on mount.
-  const swapKeyRef = useRef(0);
-  const lastLevelRef = useRef(currentLevel);
-  const [exitingLevel, setExitingLevel] = useState<string | null>(null);
-  if (lastLevelRef.current !== currentLevel) {
-    setExitingLevel(lastLevelRef.current);
-    lastLevelRef.current = currentLevel;
-    swapKeyRef.current += 1;
-  }
   const levelText = isSolUltra
     ? <span className="composer-reasoning-ultra-sol">{currentLevel}</span>
     : currentLevel;
-  const labelNode = swapKeyRef.current === 0
-    ? levelText
-    : (
-      <span className="composer-reasoning-level-swap">
-        <span key={swapKeyRef.current} className="composer-reasoning-level-enter">
-          {levelText}
-        </span>
-        {exitingLevel !== null && (
-          <span
-            aria-hidden="true"
-            className="composer-reasoning-level-exit"
-            onAnimationEnd={() => setExitingLevel(null)}
-          >
-            {exitingLevel}
-          </span>
-        )}
-      </span>
-    );
+  const labelNode = (
+    <AnimatedSwapText
+      valueKey={currentOption?.value ?? currentLevel}
+      value={levelText}
+    />
+  );
 
   return (
     <Tooltip content={tooltip}>
@@ -114,7 +91,7 @@ export function ComposerReasoningEffortBars({
         onStep={(nextValue: string) => control.onSelect(nextValue)}
         label={labelNode}
         emphasis="none"
-        className={`!gap-1.5 ${toneClass} ${chipClass}`}
+        className={`!gap-0.5 ${toneClass} ${chipClass}`}
         disabled={!control.settable}
         title={tooltip}
         aria-label={ariaLabel}

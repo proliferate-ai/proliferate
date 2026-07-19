@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { pickFuzzyPathMatch, resolveFileReference } from "#product/lib/domain/files/path-references";
+import {
+  pickFuzzyPathMatch,
+  resolveFileReference,
+  resolveFileReferencePrimaryAction,
+} from "#product/lib/domain/files/path-references";
 
 describe("pickFuzzyPathMatch", () => {
   const tree = [
@@ -74,5 +78,17 @@ describe("resolveFileReference", () => {
       absolutePath: "/tmp/file.txt",
       workspacePath: null,
     });
+  });
+});
+
+describe("resolveFileReferencePrimaryAction", () => {
+  it.each([
+    [{ pathKind: "file" as const, canOpenViewer: true, canReveal: true }, "open-viewer"],
+    [{ pathKind: "file" as const, canOpenViewer: false, canReveal: true }, "unavailable"],
+    [{ pathKind: "directory" as const, canOpenViewer: true, canReveal: true }, "reveal"],
+    [{ pathKind: "directory" as const, canOpenViewer: true, canReveal: false }, "unavailable"],
+    [{ pathKind: null, canOpenViewer: true, canReveal: true }, "unavailable"],
+  ])("routes %o to %s", (input, expected) => {
+    expect(resolveFileReferencePrimaryAction(input)).toBe(expected);
   });
 });

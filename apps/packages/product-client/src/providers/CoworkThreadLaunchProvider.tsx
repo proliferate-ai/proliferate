@@ -1,6 +1,13 @@
+import type { Workspace } from "@anyharness/sdk";
 import { createContext, useContext, useMemo, type ReactNode } from "react";
+import { useLocation } from "react-router-dom";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useCoworkThreadWorkflow } from "#product/hooks/cowork/workflows/use-cowork-thread-workflow";
+import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
+import { useShortcutHandler } from "#product/hooks/shortcuts/lifecycle/use-shortcut-handler";
+import { resolveWorkspaceShellSurface } from "#product/lib/domain/workspaces/shell/shell-surface";
+import { ownsCoworkNewThreadShortcut } from "#product/lib/domain/cowork/new-thread-shortcut";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 
 type CreateCoworkThreadFromSelection = ReturnType<
   typeof useCoworkThreadWorkflow
@@ -32,7 +39,29 @@ export function CoworkThreadLaunchProvider({ children }: { children: ReactNode }
 }
 
 function DesktopCoworkThreadLaunchProvider({ children }: { children: ReactNode }) {
-  const { createThreadFromSelection } = useCoworkThreadWorkflow();
+  const location = useLocation();
+  const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
+  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
+  const { data: workspaceCollections } = useWorkspaces();
+  const workspaces = workspaceCollections?.workspaces ?? EMPTY_WORKSPACES;
+  const selectedWorkspace = useMemo(
+    () => workspaces.find((workspace) => workspace.id === selectedWorkspaceId) ?? null,
+    [selectedWorkspaceId, workspaces],
+  );
+  const { createThread, createThreadFromSelection } = useCoworkThreadWorkflow();
+  const ownsNewThreadShortcut = ownsCoworkNewThreadShortcut(
+    location.pathname,
+    resolveWorkspaceShellSurface(selectedWorkspace, pendingWorkspaceEntry),
+  );
+
+  useShortcutHandler(
+    "workspace.new-default",
+    () => {
+      void createThread();
+    },
+    { enabled: ownsNewThreadShortcut, priority: "contextual" },
+  );
+
   const value = useMemo(
     () => ({ desktopTargetsAvailable: true, createThreadFromSelection }),
     [createThreadFromSelection],
@@ -43,6 +72,8 @@ function DesktopCoworkThreadLaunchProvider({ children }: { children: ReactNode }
     </CoworkThreadLaunchContext.Provider>
   );
 }
+
+const EMPTY_WORKSPACES: Workspace[] = [];
 
 export function useCoworkThreadLaunchContext(): CoworkThreadLaunchContextValue {
   const value = useContext(CoworkThreadLaunchContext);

@@ -24,6 +24,7 @@ import {
   imageDigestBound,
   outputsWellFormed,
   parseCfnBootstrapDiagnosticOutput,
+  parseCfnInstanceIdEventProjection,
   parseGhcrRepo,
   parseGhcrVersions,
   parseStackOutputs,
@@ -642,18 +643,36 @@ test("create failure: registered retention captures bounded SSM evidence before 
       order.push("wait-create");
       throw new Error("waiter observed CREATE_FAILED");
     }
+    if (args[0] === "cloudformation" && args[1] === "describe-stack-events" && args.includes("--query")) {
+      order.push("describe-instance-events");
+      assert.deepEqual(args, [
+        "cloudformation",
+        "describe-stack-events",
+        "--stack-name",
+        "stk",
+        "--region",
+        "us-east-1",
+        "--max-items",
+        "32",
+        "--query",
+        "StackEvents[?LogicalResourceId=='ProliferateInstance'].[PhysicalResourceId,ResourceStatusReason]",
+        "--output",
+        "json",
+      ]);
+      return JSON.stringify([[null, "Received FAILURE signal with UniqueId i-0abc"]]);
+    }
     if (args[0] === "cloudformation" && args[1] === "describe-stack-events") {
       return JSON.stringify({
         StackEvents: [{
           LogicalResourceId: "ProliferateInstance",
           ResourceStatus: "CREATE_FAILED",
-          ResourceStatusReason: "Received FAILURE signal",
+          ResourceStatusReason: "Received FAILURE signal with UniqueId i-0abc",
         }],
       });
     }
     if (args[0] === "cloudformation" && args[1] === "describe-stack-resource") {
       order.push("describe-instance");
-      return "i-0abc\n";
+      return "None\n";
     }
     if (args[0] === "ssm" && args[1] === "describe-instance-information") {
       order.push("ssm-online");
@@ -733,6 +752,10 @@ test("create failure: registered retention captures bounded SSM evidence before 
       assert.ok(!persisted.includes(secret), `diagnostic artifact leaked ${secret}`);
     }
     assert.ok(order.indexOf("register") < order.indexOf("create"), `registered before create: ${order}`);
+    assert.ok(
+      order.indexOf("describe-instance") < order.indexOf("describe-instance-events"),
+      `event fallback follows direct lookup: ${order}`,
+    );
     assert.ok(order.indexOf("ssm-read") < order.indexOf("artifact"), `SSM capture before artifact: ${order}`);
     assert.ok(order.indexOf("artifact") < order.indexOf("delete"), `artifact before delete: ${order}`);
     assert.ok(order.indexOf("delete") < order.indexOf("wait-delete"), `delete is awaited: ${order}`);
@@ -832,6 +855,35 @@ test("describeStackEventsTail: returns the bounded formatter output", async () =
     JSON.stringify({ StackEvents: [{ LogicalResourceId: "X", ResourceStatus: "DELETE_FAILED", ResourceStatusReason: "boom" }] }),
   );
   assert.equal(await describeStackEventsTail(exec, "stk", "us-east-1"), "X DELETE_FAILED: boom");
+});
+
+test("parseCfnInstanceIdEventProjection: accepts one signaling instance and rejects ambiguity", () => {
+  assert.equal(
+    parseCfnInstanceIdEventProjection(
+      JSON.stringify([
+        ["i-0abc", "Received FAILURE signal with UniqueId i-0abc"],
+        [null, "Received FAILURE signal with UniqueId i-0abc"],
+      ]),
+    ),
+    "i-0abc",
+  );
+  assert.equal(
+    parseCfnInstanceIdEventProjection(
+      JSON.stringify([
+        [null, "Received FAILURE signal with UniqueId i-0abc"],
+        [null, "Received FAILURE signal with UniqueId i-0def"],
+      ]),
+    ),
+    null,
+  );
+  for (const malformed of [
+    [["i-0abc", null], { corrupt: true }],
+    [["i-0abc", null, null]],
+    [["i-0abc", 7]],
+  ]) {
+    assert.equal(parseCfnInstanceIdEventProjection(JSON.stringify(malformed)), null);
+  }
+  assert.equal(parseCfnInstanceIdEventProjection("not-json"), null);
 });
 
 // ── SSM digest readback ───────────────────────────────────────────────────────

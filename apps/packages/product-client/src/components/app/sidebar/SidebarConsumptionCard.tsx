@@ -1,22 +1,38 @@
+import { forwardRef, type ButtonHTMLAttributes } from "react";
 import type { UsageSummary } from "@proliferate/cloud-sdk";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { ProgressBar } from "@proliferate/ui/primitives/ProgressBar";
 
 type ConsumptionMeterTone = "default" | "warning" | "destructive";
 
+type ConsumptionMeterKind =
+  | "unlimited"
+  | "available"
+  | "blocked"
+  | "zero-allocation"
+  | "exhausted";
+
 interface ConsumptionMeterState {
+  kind: ConsumptionMeterKind;
   percent: number | null;
-  blocked: boolean;
   tone: ConsumptionMeterTone;
+  blocked: boolean;
 }
 
-const CONSUMPTION_NEAR_LIMIT_PERCENT = 80;
+export type SidebarConsumptionState =
+  | { kind: "loading" }
+  | { kind: "unavailable"; message: string }
+  | { kind: "ready"; usageSummary: UsageSummary };
 
-const CONSUMPTION_METER_INDICATOR_CLASS: Record<ConsumptionMeterTone, string> = {
-  default: "h-full rounded-full bg-primary/70",
-  warning: "h-full rounded-full bg-warning-foreground",
-  destructive: "h-full rounded-full bg-destructive",
-};
+export type SidebarConsumptionMeter = "compute" | "llm";
+
+export type SidebarConsumptionActions =
+  | { kind: "billing"; onBilling: () => void }
+  | { kind: "admin-managed"; message: string; onBilling: () => void }
+  | { kind: "unavailable"; message: string };
+
+const CONSUMPTION_NEAR_LIMIT_PERCENT = 80;
+const RING_RADIUS = 8;
+const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 
 const CONSUMPTION_METER_TEXT_CLASS: Record<ConsumptionMeterTone, string> = {
   default: "text-sidebar-muted-foreground",
@@ -24,40 +40,79 @@ const CONSUMPTION_METER_TEXT_CLASS: Record<ConsumptionMeterTone, string> = {
   destructive: "text-destructive",
 };
 
-/**
- * The tightest enabled limit (if any) wins per §3.1's `*Limit` contract; when
- * there is no limit we fall back to used/remaining balance for the bar and
- * treat an exhausted balance as blocked.
- */
 function resolveConsumptionMeterState(
   usedValue: number,
   remainingValue: number | null,
   limit: UsageSummary["computeLimit"],
 ): ConsumptionMeterState {
-  let percent: number | null;
-  let blocked: boolean;
-
   if (limit) {
-    percent = limit.capValue > 0
-      ? Math.min(100, (limit.usedValue / limit.capValue) * 100)
-      : 100;
-    blocked = limit.blocked;
-  } else if (remainingValue !== null) {
-    const total = usedValue + remainingValue;
-    percent = total > 0 ? Math.min(100, (usedValue / total) * 100) : 0;
-    blocked = remainingValue <= 0;
-  } else {
-    percent = null;
-    blocked = false;
+    if (limit.capValue <= 0) {
+      return limit.usedValue > 0
+        ? { kind: "exhausted", percent: 100, tone: "destructive", blocked: limit.blocked }
+        : { kind: "zero-allocation", percent: 100, tone: "destructive", blocked: limit.blocked };
+    }
+    if (limit.blocked) {
+      return limit.usedValue > 0
+        ? { kind: "exhausted", percent: 100, tone: "destructive", blocked: true }
+        : { kind: "blocked", percent: 100, tone: "destructive", blocked: true };
+    }
+    const percent = Math.min(100, (limit.usedValue / limit.capValue) * 100);
+    return {
+      kind: "available",
+      percent,
+      tone: percent >= CONSUMPTION_NEAR_LIMIT_PERCENT ? "warning" : "default",
+      blocked: false,
+    };
   }
 
-  const tone: ConsumptionMeterTone = blocked
-    ? "destructive"
-    : percent !== null && percent >= CONSUMPTION_NEAR_LIMIT_PERCENT
-      ? "warning"
-      : "default";
+  if (remainingValue === null) {
+    return { kind: "unlimited", percent: null, tone: "default", blocked: false };
+  }
 
-  return { percent, blocked, tone };
+  if (remainingValue <= 0) {
+    return usedValue > 0
+      ? { kind: "exhausted", percent: 100, tone: "destructive", blocked: false }
+      : { kind: "zero-allocation", percent: 100, tone: "destructive", blocked: false };
+  }
+
+  const total = usedValue + remainingValue;
+  const percent = Math.min(100, (usedValue / total) * 100);
+  return {
+    kind: "available",
+    percent,
+    tone: percent >= CONSUMPTION_NEAR_LIMIT_PERCENT ? "warning" : "default",
+    blocked: false,
+  };
+}
+
+function consumptionMeterAriaStatus(state: ConsumptionMeterState): string {
+  switch (state.kind) {
+    case "zero-allocation":
+      return "No allocation";
+    case "exhausted":
+      return `100% used, exhausted${state.blocked ? ", blocked" : ""}`;
+    case "blocked":
+      return "blocked";
+    case "unlimited":
+      return "unlimited";
+    case "available":
+      return `${Math.round(state.percent ?? 0)}% used`;
+  }
+}
+
+function consumptionMeterDetailLabel(state: ConsumptionMeterState): string {
+  switch (state.kind) {
+    case "zero-allocation":
+      return "No allocation";
+    case "exhausted":
+      return `100% used · Exhausted${state.blocked ? " · Blocked" : ""}`;
+    case "blocked":
+      return "Blocked";
+    case "unlimited":
+      return "No limit";
+    case "available":
+      return `${Math.round(state.percent ?? 0)}% used`;
+  }
 }
 
 function formatRemainingHours(seconds: number | null): string {
@@ -72,7 +127,105 @@ function formatRemainingUsd(usd: number): string {
   return `$${Math.max(usd, 0).toFixed(2)} left`;
 }
 
-function ConsumptionMeterRow({
+function metersForState(state: SidebarConsumptionState) {
+  if (state.kind !== "ready") {
+    return null;
+  }
+  return {
+    compute: resolveConsumptionMeterState(
+      state.usageSummary.computeUsedSecondsMtd,
+      state.usageSummary.computeRemainingSeconds,
+      state.usageSummary.computeLimit,
+    ),
+    llm: resolveConsumptionMeterState(
+      state.usageSummary.llmUsedUsdMtd,
+      state.usageSummary.llmRemainingUsd,
+      state.usageSummary.llmLimit,
+    ),
+  };
+}
+
+interface SidebarUsageMeterTriggerProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  meter: SidebarConsumptionMeter;
+  state: SidebarConsumptionState;
+}
+
+/** One independently labeled, focusable ring trigger for the usage concern. */
+export const SidebarUsageMeterTrigger = forwardRef<
+  HTMLButtonElement,
+  SidebarUsageMeterTriggerProps
+>(function SidebarUsageMeterTrigger({
+  meter,
+  state,
+  className = "",
+  onKeyDown,
+  ...buttonProps
+}, ref) {
+  const meters = metersForState(state);
+  const fallbackTone: ConsumptionMeterTone = state.kind === "unavailable"
+    ? "destructive"
+    : "default";
+  const label = meter === "compute" ? "Compute" : "LLM";
+  const shortLabel = meter === "compute" ? "C" : "L";
+  const percent = meters?.[meter].percent ?? null;
+  const tone = meters?.[meter].tone ?? fallbackTone;
+  const statusLabel = state.kind === "loading"
+    ? "loading"
+    : state.kind === "unavailable"
+      ? "unavailable"
+      : consumptionMeterAriaStatus(meters![meter]);
+  const dashOffset = percent === null
+    ? RING_CIRCUMFERENCE
+    : RING_CIRCUMFERENCE * (1 - Math.max(0, Math.min(100, percent)) / 100);
+
+  return (
+    <Button
+      {...buttonProps}
+      ref={ref}
+      type="button"
+      variant="unstyled"
+      size="unstyled"
+      aria-label={`${label} usage, ${statusLabel}. Open usage details`}
+      onKeyDown={(event) => {
+        onKeyDown?.(event);
+        if (!event.defaultPrevented && (event.key === "Enter" || event.key === " ")) {
+          event.preventDefault();
+          event.currentTarget.click();
+        }
+      }}
+      className={`relative flex size-7 shrink-0 items-center justify-center rounded-full text-sidebar-muted-foreground outline-none hover:text-sidebar-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-sidebar-ring data-[state=open]:text-sidebar-foreground ${className}`}
+    >
+      <svg viewBox="0 0 20 20" className="size-5 -rotate-90" aria-hidden="true">
+        <circle
+          cx="10"
+          cy="10"
+          r={RING_RADIUS}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          className="opacity-20"
+        />
+        <circle
+          cx="10"
+          cy="10"
+          r={RING_RADIUS}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeDasharray={RING_CIRCUMFERENCE}
+          strokeDashoffset={dashOffset}
+          className={CONSUMPTION_METER_TEXT_CLASS[tone]}
+        />
+      </svg>
+      <span className="pointer-events-none absolute text-[7px] font-semibold leading-none text-sidebar-foreground" aria-hidden="true">
+        {state.kind === "unavailable" ? "!" : shortLabel}
+      </span>
+    </Button>
+  );
+});
+
+function ConsumptionDetailRow({
   label,
   state,
   remainingLabel,
@@ -81,67 +234,97 @@ function ConsumptionMeterRow({
   state: ConsumptionMeterState;
   remainingLabel: string;
 }) {
+  const usedLabel = consumptionMeterDetailLabel(state);
   return (
-    <div className="flex items-center gap-2 px-2.5 py-1">
-      <span className="w-20 shrink-0 text-ui-sm text-sidebar-foreground">{label}</span>
-      <ProgressBar
-        value={state.percent ?? 0}
-        className="h-1.5 flex-1 overflow-hidden rounded-full bg-sidebar-accent"
-        indicatorClassName={CONSUMPTION_METER_INDICATOR_CLASS[state.tone]}
-        aria-label={`${label} usage`}
-      />
-      <span className={`shrink-0 text-ui-sm ${CONSUMPTION_METER_TEXT_CLASS[state.tone]}`}>
+    <div className="flex items-center justify-between gap-3 px-2.5 py-1.5">
+      <div>
+        <div className="text-ui text-sidebar-foreground">{label}</div>
+        <div className={`text-ui-sm ${CONSUMPTION_METER_TEXT_CLASS[state.tone]}`}>
+          {usedLabel}
+        </div>
+      </div>
+      <div className={`text-right text-ui-sm ${CONSUMPTION_METER_TEXT_CLASS[state.tone]}`}>
         {remainingLabel}
-      </span>
+      </div>
     </div>
   );
 }
 
-/**
- * Compute + LLM usage meters, personal scope only (an admin's org-wide view
- * lives in Usage & limits settings — spec decision). Rendered always-visible
- * in the sidebar directly above the account footer, not inside its popover.
- */
+/** Usage detail surface opened by the circular footer meters. */
 export function ConsumptionCard({
-  usageSummary,
-  onTopUp,
+  state,
+  onRetry,
+  actions,
 }: {
-  usageSummary: UsageSummary;
-  onTopUp: () => void;
+  state: SidebarConsumptionState;
+  onRetry?: () => void;
+  actions?: SidebarConsumptionActions;
 }) {
-  const computeState = resolveConsumptionMeterState(
-    usageSummary.computeUsedSecondsMtd,
-    usageSummary.computeRemainingSeconds,
-    usageSummary.computeLimit,
-  );
-  const llmState = resolveConsumptionMeterState(
-    usageSummary.llmUsedUsdMtd,
-    usageSummary.llmRemainingUsd,
-    usageSummary.llmLimit,
-  );
-  const blocked = computeState.blocked || llmState.blocked;
+  if (state.kind === "loading") {
+    return (
+      <div className="px-3 py-3 text-ui text-sidebar-muted-foreground" role="status">
+        Loading usage…
+      </div>
+    );
+  }
+
+  if (state.kind === "unavailable") {
+    return (
+      <div className="space-y-2 px-3 py-3">
+        <div className="text-ui text-sidebar-foreground">Usage unavailable</div>
+        <div className="text-ui-sm text-sidebar-muted-foreground">{state.message}</div>
+        {onRetry ? (
+          <Button type="button" variant="secondary" size="sm" className="w-full" onClick={onRetry}>
+            Try again
+          </Button>
+        ) : null}
+      </div>
+    );
+  }
+
+  const meters = metersForState(state)!;
+  const blocked = meters.compute.kind === "blocked"
+    || meters.compute.kind === "zero-allocation"
+    || meters.compute.kind === "exhausted"
+    || meters.llm.kind === "blocked"
+    || meters.llm.kind === "zero-allocation"
+    || meters.llm.kind === "exhausted";
 
   return (
-    <div className="border-t border-border-light py-1">
-      <ConsumptionMeterRow
+    <div className="py-1">
+      <div className="px-2.5 pb-1 pt-1 text-ui-sm font-medium text-sidebar-muted-foreground">
+        Usage
+      </div>
+      <ConsumptionDetailRow
         label="Compute"
-        state={computeState}
-        remainingLabel={formatRemainingHours(usageSummary.computeRemainingSeconds)}
+        state={meters.compute}
+        remainingLabel={formatRemainingHours(state.usageSummary.computeRemainingSeconds)}
       />
-      <ConsumptionMeterRow
-        label="LLM credits"
-        state={llmState}
-        remainingLabel={formatRemainingUsd(usageSummary.llmRemainingUsd)}
+      <ConsumptionDetailRow
+        label="LLM"
+        state={meters.llm}
+        remainingLabel={formatRemainingUsd(state.usageSummary.llmRemainingUsd)}
       />
-      {blocked ? (
-        <div className="px-2.5 pt-1">
-          {usageSummary.canSelfServeTopUp ? (
-            <Button type="button" variant="secondary" size="sm" className="w-full" onClick={onTopUp}>
-              Top up
-            </Button>
-          ) : (
-            <div className="text-ui-sm text-destructive">Ask your admin to raise your limit.</div>
-          )}
+      {blocked && actions?.kind === "admin-managed" ? (
+        <div className="px-2.5 py-1.5 text-ui-sm text-destructive">
+          Ask your admin to raise your limit.
+        </div>
+      ) : null}
+      {!blocked && actions?.kind === "admin-managed" ? (
+        <div className="px-2.5 py-1.5 text-ui-sm text-sidebar-muted-foreground">
+          {actions.message}
+        </div>
+      ) : null}
+      {actions?.kind === "unavailable" ? (
+        <div className="px-2.5 py-1.5 text-ui-sm text-sidebar-muted-foreground">
+          {actions.message}
+        </div>
+      ) : null}
+      {actions?.kind === "billing" || actions?.kind === "admin-managed" ? (
+        <div className="mt-1 flex gap-2 border-t border-border-light px-2 py-2">
+          <Button type="button" variant="secondary" size="sm" className="flex-1" onClick={actions.onBilling}>
+            Billing
+          </Button>
         </div>
       ) : null}
     </div>

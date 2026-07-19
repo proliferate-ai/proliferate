@@ -12,6 +12,37 @@ import {
 } from "#product/lib/domain/workspaces/sidebar/sidebar-test-fixtures";
 
 describe("pending sidebar projection", () => {
+  it("leaves cowork pending rows to the dedicated Threads section", () => {
+    const pendingWorkspaceEntry = buildSubmittingPendingWorkspaceEntry({
+      attemptId: "attempt-cowork",
+      selectedWorkspaceId: null,
+      source: "cowork-created",
+      displayName: "Untitled chat",
+      request: {
+        kind: "cowork",
+        input: {
+          agentKind: "codex",
+          modelId: "gpt-5",
+          sourceWorkspaceId: null,
+        },
+      },
+    });
+
+    expect(buildPendingSidebarProjection({
+      entry: pendingWorkspaceEntry,
+      repoRootsById: new Map(),
+      selectedLogicalWorkspaceId: buildPendingWorkspaceUiKey(pendingWorkspaceEntry),
+      selectedWorkspaceId: null,
+      activeSessionTitle: null,
+    })).toBeNull();
+
+    expect(buildGroups({
+      logicalWorkspaces: [],
+      pendingWorkspaceEntry,
+      selectedLogicalWorkspaceId: buildPendingWorkspaceUiKey(pendingWorkspaceEntry),
+    })).toEqual([]);
+  });
+
   it("projects a pending worktree into its repo group before materialization", () => {
     const pendingWorkspaceEntry = buildSubmittingPendingWorkspaceEntry({
       attemptId: "attempt-1",

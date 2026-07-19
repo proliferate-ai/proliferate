@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildBillingSettingsHref,
   buildCloudRepoSettingsHref,
   buildSettingsHref,
   resolveSettingsSelection,
@@ -171,6 +172,47 @@ describe("settings navigation", () => {
       focus: { checkout: "success" },
       joinOrganizationId: null,
     });
+  });
+
+  it("builds and preserves an exact organization owner for Billing", () => {
+    expect(buildBillingSettingsHref({
+      ownerScope: "organization",
+      organizationId: "org-1",
+    })).toBe(
+      "/settings?section=billing&billingOwnerScope=organization&billingOrganizationId=org-1",
+    );
+    expect(resolveSettingsSelection({
+      rawSection: "billing",
+      rawBillingOwnerScope: "organization",
+      rawBillingOrganizationId: "org-1",
+      repositories: [],
+    }).focus).toEqual({
+      billingOwnerScope: "organization",
+      billingOrganizationId: "org-1",
+    });
+  });
+
+  it("fails closed for unsupported or malformed Billing owners", () => {
+    expect(buildBillingSettingsHref({
+      ownerScope: "personal",
+      organizationId: null,
+    })).toBeNull();
+    expect(buildBillingSettingsHref({
+      ownerScope: "organization",
+      organizationId: " ",
+    })).toBeNull();
+    expect(resolveSettingsSelection({
+      rawSection: "billing",
+      rawBillingOwnerScope: "personal",
+      rawBillingOrganizationId: "org-1",
+      repositories: [],
+    }).focus).toEqual({});
+    expect(resolveSettingsSelection({
+      rawSection: "general",
+      rawBillingOwnerScope: "organization",
+      rawBillingOrganizationId: "org-1",
+      repositories: [],
+    }).focus).toEqual({});
   });
 
   it("preserves OAuth return focus only on the integrations section", () => {

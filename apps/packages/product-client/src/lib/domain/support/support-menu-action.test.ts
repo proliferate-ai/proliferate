@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { SupportCapability } from "#product/lib/domain/capabilities/server-capability-contract";
-import { deriveSupportMenuAction } from "#product/lib/domain/support/support-menu-action";
+import {
+  crashRecoverySupportDestination,
+  deriveSupportMenuAction,
+} from "#product/lib/domain/support/support-menu-action";
 
 describe("deriveSupportMenuAction", () => {
   it("vendor: routes to the existing feedback/prompt report flow", () => {
@@ -58,5 +61,33 @@ describe("deriveSupportMenuAction", () => {
     const support: SupportCapability = { kind: "none", email: null, url: null };
 
     expect(deriveSupportMenuAction(support)).toEqual({ kind: "none" });
+  });
+});
+
+describe("crashRecoverySupportDestination", () => {
+  it("uses the vendor emergency email only for hosted vendor support", () => {
+    expect(
+      crashRecoverySupportDestination(
+        { kind: "vendor" },
+        "support@proliferate.com",
+      ),
+    ).toBe(
+      "mailto:support@proliferate.com?subject=Proliferate%20crash%20recovery",
+    );
+  });
+
+  it("preserves operator routing and never substitutes vendor support for none", () => {
+    expect(
+      crashRecoverySupportDestination(
+        { kind: "operator", url: "https://help.acme.example" },
+        "support@proliferate.com",
+      ),
+    ).toBe("https://help.acme.example");
+    expect(
+      crashRecoverySupportDestination(
+        { kind: "none" },
+        "support@proliferate.com",
+      ),
+    ).toBeNull();
   });
 });

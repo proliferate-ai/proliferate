@@ -7,11 +7,12 @@ import { fileTreeIconToneClass } from "#product/lib/domain/files/file-tree-icon-
 interface FileTreeRowProps {
   name: string;
   path: string;
-  kind: "file" | "directory";
+  kind: "file" | "directory" | "symlink";
   level: number;
   selected?: boolean;
   expanded?: boolean;
   changed?: boolean;
+  busy?: boolean;
   onClick: () => void;
 }
 
@@ -23,10 +24,11 @@ export function FileTreeRow({
   selected = false,
   expanded,
   changed = false,
+  busy = false,
   onClick,
 }: FileTreeRowProps) {
   const isDirectory = kind === "directory";
-  const paddingLeft = isDirectory ? 6 + level * 12 : 18 + level * 12;
+  const paddingLeft = isDirectory ? 6 + level * 14 : 28 + level * 14;
   const iconTone = fileTreeIconToneClass(name, path, kind);
 
   return (
@@ -38,14 +40,13 @@ export function FileTreeRow({
       aria-expanded={isDirectory ? expanded : undefined}
       aria-selected={selected}
       aria-level={level + 1}
+      aria-busy={busy || undefined}
       title={path}
       className={twMerge(
         // Codex tree rows read at chat-body size; ours follows --text-message
         // so the tree tracks transcript prose across appearance presets.
-        "flex h-7 w-full items-center gap-1.5 rounded-md px-1.5 text-left text-[length:var(--text-message)] leading-none transition-colors duration-150",
-        "hover:bg-sidebar-accent",
-        isDirectory ? "text-sidebar-muted-foreground" : "text-sidebar-foreground",
-        selected && "bg-sidebar-accent text-sidebar-foreground",
+        "flex h-7 w-full items-center gap-2.5 rounded-md px-1.5 text-left text-[length:var(--text-message)] leading-none text-sidebar-foreground transition-colors duration-150 hover:bg-sidebar-accent",
+        selected && "bg-sidebar-accent",
       )}
       style={{ paddingLeft }}
       onClick={onClick}
@@ -53,7 +54,7 @@ export function FileTreeRow({
       {isDirectory && (
         <ChevronRight
           className={twMerge(
-            "size-3 shrink-0 text-sidebar-muted-foreground/50 transition-transform duration-150",
+            "size-3 shrink-0 text-sidebar-muted-foreground transition-transform duration-150",
             expanded && "rotate-90",
           )}
         />
@@ -71,9 +72,11 @@ export function FileTreeRow({
       </span>
       {changed && (
         <span
-          className="inline-flex size-1.5 shrink-0 rounded-full bg-accent"
+          className="shrink-0 pr-1 text-[10px] font-medium leading-none text-git-yellow"
           aria-label="Modified"
-        />
+        >
+          M
+        </span>
       )}
     </Button>
   );

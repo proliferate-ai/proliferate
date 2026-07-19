@@ -12,7 +12,9 @@ import { useSessionIntentStore } from "#product/stores/sessions/session-intent-s
 import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
 
 const mocks = vi.hoisted(() => ({
+  dispatchConfigIntent: vi.fn(),
   dispatchPromptIntent: vi.fn(),
+  showToast: vi.fn(),
 }));
 
 vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
@@ -55,7 +57,12 @@ vi.mock("#product/hooks/access/anyharness/sessions/use-workspace-session-cache",
 }));
 
 vi.mock("#product/hooks/sessions/lifecycle/session-intent-config-dispatch", () => ({
-  dispatchConfigIntent: vi.fn(),
+  dispatchConfigIntent: mocks.dispatchConfigIntent,
+}));
+
+vi.mock("#product/stores/toast/toast-store", () => ({
+  useToastStore: (selector: (state: { show: typeof mocks.showToast }) => unknown) =>
+    selector({ show: mocks.showToast }),
 }));
 
 vi.mock("#product/hooks/sessions/lifecycle/session-intent-interaction-dispatch", () => ({
@@ -135,6 +142,34 @@ describe("useSessionIntentDispatcher", () => {
     expect(mocks.dispatchPromptIntent.mock.calls[1]?.[0]).toMatchObject({
       clientPromptId: "prompt-2",
       deliveryState: "waiting_for_session",
+    });
+  });
+
+  it("surfaces an asynchronous config rejection through existing error language", async () => {
+    mocks.dispatchConfigIntent.mockImplementation(async (intent, deps) => {
+      deps.onFailure?.("request timed out");
+      useSessionIntentStore.getState().patchIntent(intent.intentId, {
+        status: "failed",
+        errorMessage: "request timed out",
+      });
+    });
+    renderHook(() => useSessionIntentDispatcher());
+
+    act(() => {
+      useSessionIntentStore.getState().enqueueConfig({
+        intentId: "config-plan",
+        clientSessionId: "session-1",
+        materializedSessionId: "runtime-session-1",
+        workspaceId: "workspace-1",
+        configId: "collaboration_mode",
+        value: "plan",
+      });
+    });
+
+    await waitFor(() => {
+      expect(mocks.showToast).toHaveBeenCalledWith(
+        "Failed to update session config: request timed out",
+      );
     });
   });
 });
