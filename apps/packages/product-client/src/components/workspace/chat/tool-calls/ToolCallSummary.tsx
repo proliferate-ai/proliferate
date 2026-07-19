@@ -14,6 +14,8 @@ interface ToolCallSummaryProps {
   completionContent?: React.ReactNode;
   /** Fade in only when a mounted live turn becomes completed history. */
   animateCompletion?: boolean;
+  /** Removes only the outer disclosure border box; nested detail panels stay framed. */
+  borderless?: boolean;
 }
 
 export function ToolCallSummary({
@@ -26,6 +28,7 @@ export function ToolCallSummary({
   showWorkDivider = false,
   completionContent = null,
   animateCompletion = false,
+  borderless = false,
 }: ToolCallSummaryProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const renderedChildren = expanded || (itemCount !== undefined && itemCount <= 1)
@@ -47,10 +50,11 @@ export function ToolCallSummary({
         interactive
         expanded={expanded}
         onClick={() => setExpanded(!expanded)}
+        borderless={borderless}
       />
       {expanded && (
         <div
-          className="mt-1 space-y-1.5 border-0 bg-transparent"
+          className="mt-1 space-y-1.5"
           data-completed-work-ledger
         >
           {renderedChildren}

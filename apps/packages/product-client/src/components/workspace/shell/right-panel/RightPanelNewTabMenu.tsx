@@ -39,22 +39,26 @@ export function RightPanelNewTabMenu({
     onCreateTerminal();
   };
 
+  const trigger = (
+    <IconButton
+      type="button"
+      size="xs"
+      tone="sidebar"
+      disabled={!isWorkspaceReady}
+      aria-label="New terminal"
+      title="New terminal"
+      onClick={open ? undefined : handleCreateTerminal}
+      className="ui-icon-button workspace-shell-icon-button glass-editor-panel-new-tab-menu-trigger relative"
+    >
+      <AppShellPlusIcon className="ui-icon" />
+    </IconButton>
+  );
+
   return (
     <DropdownMenu open={open} onOpenChange={handleMenuOpenChange}>
-      <DropdownMenuTrigger asChild>
-        <IconButton
-          type="button"
-          size="xs"
-          tone="sidebar"
-          disabled={!isWorkspaceReady}
-          aria-label="New terminal"
-          title="New terminal"
-          onClick={handleCreateTerminal}
-          className="ui-icon-button workspace-shell-icon-button glass-editor-panel-new-tab-menu-trigger relative"
-        >
-          <AppShellPlusIcon className="ui-icon" />
-        </IconButton>
-      </DropdownMenuTrigger>
+      {open
+        ? <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
+        : trigger}
       <DropdownMenuContent align="end" className="min-w-40 shadow-popover">
         <DropdownMenuItem
           disabled={!isWorkspaceReady}

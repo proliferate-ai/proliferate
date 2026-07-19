@@ -1,13 +1,15 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { RightPanelNewTabMenu } from "#product/components/workspace/shell/right-panel/RightPanelNewTabMenu";
 
 describe("RightPanelNewTabMenu", () => {
   afterEach(cleanup);
 
-  it("creates exactly one terminal for each direct plus click", () => {
+  it("creates exactly one terminal for each direct plus click", async () => {
+    const user = userEvent.setup();
     const onCreateTerminal = vi.fn();
     const onOpenChange = vi.fn();
     render(
@@ -21,8 +23,8 @@ describe("RightPanelNewTabMenu", () => {
     );
 
     const createButton = screen.getByRole("button", { name: "New terminal" });
-    fireEvent.click(createButton);
-    fireEvent.click(createButton);
+    await user.click(createButton);
+    await user.click(createButton);
 
     expect(onCreateTerminal).toHaveBeenCalledTimes(2);
     expect(onOpenChange).toHaveBeenNthCalledWith(1, false);
@@ -30,8 +32,39 @@ describe("RightPanelNewTabMenu", () => {
     expect(screen.queryByRole("menuitem", { name: "Terminal" })).toBeNull();
   });
 
-  it("keeps the explicit programmatic picker path available", async () => {
+  it("uses truthful button semantics and creates once for Enter and Space", async () => {
+    const user = userEvent.setup();
+    const onCreateTerminal = vi.fn();
+    const onOpenChange = vi.fn();
     render(
+      <RightPanelNewTabMenu
+        open={false}
+        defaultKind="terminal"
+        isWorkspaceReady
+        onOpenChange={onOpenChange}
+        onCreateTerminal={onCreateTerminal}
+      />,
+    );
+
+    const createButton = screen.getByRole("button", { name: "New terminal" });
+    expect(createButton.getAttribute("aria-haspopup")).toBeNull();
+    expect(createButton.getAttribute("aria-expanded")).toBeNull();
+    expect(createButton.getAttribute("data-state")).toBeNull();
+    expect(createButton.getAttribute("data-slot")).toBeNull();
+
+    createButton.focus();
+    await user.keyboard("{Enter}");
+    expect(onCreateTerminal).toHaveBeenCalledTimes(1);
+
+    await user.keyboard(" ");
+    expect(onCreateTerminal).toHaveBeenCalledTimes(2);
+    expect(onOpenChange).toHaveBeenCalledTimes(2);
+    expect(onOpenChange).toHaveBeenNthCalledWith(1, false);
+    expect(onOpenChange).toHaveBeenNthCalledWith(2, false);
+  });
+
+  it("keeps the explicit programmatic picker path available", async () => {
+    const { container } = render(
       <RightPanelNewTabMenu
         open
         defaultKind="terminal"
@@ -41,7 +74,15 @@ describe("RightPanelNewTabMenu", () => {
       />,
     );
 
-    expect(await screen.findByRole("menuitem", { name: "Terminal" })).toBeTruthy();
+    const trigger = container.querySelector<HTMLButtonElement>(
+      "[data-slot='dropdown-menu-trigger']",
+    );
+    expect(trigger).not.toBeNull();
+    expect(trigger?.getAttribute("aria-haspopup")).toBe("menu");
+    expect(trigger?.getAttribute("aria-expanded")).toBe("true");
+
+    const terminalItem = await screen.findByRole("menuitem", { name: "Terminal" });
+    await waitFor(() => expect(document.activeElement).toBe(terminalItem));
   });
 
   it("disables terminal creation until the workspace is ready", () => {
