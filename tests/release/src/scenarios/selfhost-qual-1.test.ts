@@ -330,6 +330,19 @@ test("runSelfHostQualCells: SH-GATEWAY alone runs on the run-scoped origin", asy
   assert.deepEqual(probe.ownerEmails, [undefined]);
 });
 
+test("runSelfHostQualCells: the world owns only its scenario subtree", async () => {
+  const driver = allGreenDriver();
+  let runDir: string | undefined;
+  const buildWorld = driver.buildWorld;
+  driver.buildWorld = async (inputs, fixedSubdomain) => {
+    runDir = inputs.runDir;
+    return buildWorld(inputs, fixedSubdomain);
+  };
+
+  await runSelfHostQualCells(fakeCtx(), [cellFor(SH_GATEWAY)], driver);
+  assert.equal(runDir, "/tmp/run-1/worlds/selfhost-qual-1");
+});
+
 test("runSelfHostQualCells: a failed install/claim fails both cells cleanly", async () => {
   const driver = allGreenDriver();
   driver.installAndClaim = async () => ({ ok: false, reason: "shipped installer digest mismatch" });

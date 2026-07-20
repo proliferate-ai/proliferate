@@ -109,6 +109,7 @@ import {
  */
 
 export const SELFHOST_QUAL_1_ID = "SELFHOST-QUAL-1";
+export const SELFHOST_QUAL_WORLD_SUBDIR = "selfhost-qual-1";
 export const REPRESENTATIVE_HARNESS = "claude";
 
 export const SH_GITHUB_AUTH = "SH-GITHUB-AUTH";
@@ -383,7 +384,7 @@ export async function runSelfHostQualCells(
   cells: readonly PlannedCellV1[],
   driver: SelfHostQualDriver,
 ): Promise<ScenarioCellOutcome[]> {
-  const inputs = resolveSelfHostWorldInputs(ctx);
+  const inputs = resolveSelfHostWorldInputs(ctx, SELFHOST_QUAL_WORLD_SUBDIR);
   if (!inputs.ok) {
     return cells.map((cell) => failedOutcome(cell.cell_id, inputs.reason));
   }

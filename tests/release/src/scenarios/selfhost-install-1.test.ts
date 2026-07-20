@@ -220,9 +220,22 @@ test("resolveSelfHostWorldInputs: ok with a complete context", () => {
   const result = resolveSelfHostWorldInputs(fakeCtx());
   assert.equal(result.ok, true);
   if (result.ok) {
+    assert.equal(result.value.runDir, "/tmp/run-1/worlds/selfhost-install-1");
     assert.equal(result.value.aws.region, "us-east-1");
     assert.equal(result.value.aws.zone, "qualification.proliferate.com");
     assert.equal(result.value.ssh.sshUser, "ubuntu");
+  }
+});
+
+test("resolveSelfHostWorldInputs: sequential scenarios own disjoint children of the candidate publication", () => {
+  const install = resolveSelfHostWorldInputs(fakeCtx(), "selfhost-install-1");
+  const qualification = resolveSelfHostWorldInputs(fakeCtx(), "selfhost-qual-1");
+  assert.equal(install.ok, true);
+  assert.equal(qualification.ok, true);
+  if (install.ok && qualification.ok) {
+    assert.equal(install.value.runDir, "/tmp/run-1/worlds/selfhost-install-1");
+    assert.equal(qualification.value.runDir, "/tmp/run-1/worlds/selfhost-qual-1");
+    assert.notEqual(install.value.runDir, qualification.value.runDir);
   }
 });
 
