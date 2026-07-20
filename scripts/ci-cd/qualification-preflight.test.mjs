@@ -2,8 +2,9 @@ import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 
 import { assembleCandidateBuildMapFromArtifacts } from "./assemble-candidate-build-map.mjs";
 import { PREFLIGHT_DEADLINE_MS, runQualificationPreflight, writePreflightReceipt } from "./qualification-preflight.mjs";
@@ -94,6 +95,8 @@ test("strict local preflight rejects missing, malformed, and unknown selectors b
   const invalid = [
     [{ ...BASE, agents: undefined }, "agent_selection"],
     [{ ...BASE, scenarios: undefined }, "scenario_selection"],
+    [{ ...BASE, scenarios: "T3-CHAT-1,T3-CHAT-1" }, "scenario_selection"],
+    [{ ...BASE, scenarios: "T3-CHAT-1,not valid!" }, "scenario_selection"],
     [{ ...BASE, agents: "claude,claude" }, "agent_selection"],
     [{ ...BASE, agents: "claude,not-a-shipped-agent" }, "agent_catalog"],
   ];
@@ -101,6 +104,36 @@ test("strict local preflight rejects missing, malformed, and unknown selectors b
     const receipt = runQualificationPreflight(options, { env: LOCAL_ENV });
     assert.equal(receipt.verdict, "failed");
     assert.ok(receipt.checks.some((check) => check.id === failedCheckId && check.status === "failed"));
+  }
+});
+
+test("the preflight command rejects an unknown Local scenario before install/build/provider seams", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "qualification-preflight-unknown-local-"));
+  try {
+    const output = path.join(dir, "qualification-preflight.json");
+    const result = spawnSync(
+      process.execPath,
+      [
+        fileURLToPath(new URL("./qualification-preflight.mjs", import.meta.url)),
+        "--world", "local",
+        "--source-sha", SHA,
+        "--run-id", "ql-unknown",
+        "--shard-id", "1",
+        "--attempt", "1",
+        "--scenarios", "T3-NOT-REAL",
+        "--agents", "claude",
+        "--behavior", "strict",
+        "--artifact-mode", "build",
+        "--output", output,
+      ],
+      { encoding: "utf8", env: { ...process.env, ...LOCAL_ENV } },
+    );
+    assert.equal(result.status, 2, `${result.stdout}\n${result.stderr}`);
+    const receipt = JSON.parse(readFileSync(output, "utf8"));
+    assert.equal(receipt.verdict, "failed");
+    assert.ok(receipt.checks.some((check) => check.id === "scenario_catalog" && check.status === "failed"));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
 });
 

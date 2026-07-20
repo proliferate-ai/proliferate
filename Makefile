@@ -971,13 +971,13 @@ qualification-local-workspace:
 	if [ -n "$(REUSE_CANDIDATES)" ]; then \
 		node scripts/ci-cd/qualification-preflight.mjs \
 			--world local --source-sha "$$source_sha" --run-id "$$run_id" --shard-id "$$shard_id" --attempt "$$attempt" \
-			--scenarios LOCAL-WORLD-SMOKE-1 --artifact-mode reuse \
+			--scenarios LOCAL-WORLD-SMOKE-1 --agents claude --behavior "$(BEHAVIOR)" --artifact-mode reuse \
 			--candidate-build-map "$(REUSE_CANDIDATES)/candidate-build.json" \
 			--output "$$run_dir/preflight/qualification-preflight.json" || exit $$?; \
 	else \
 		node scripts/ci-cd/qualification-preflight.mjs \
 			--world local --source-sha "$$source_sha" --run-id "$$run_id" --shard-id "$$shard_id" --attempt "$$attempt" \
-			--scenarios LOCAL-WORLD-SMOKE-1 --artifact-mode build \
+			--scenarios LOCAL-WORLD-SMOKE-1 --agents claude --behavior "$(BEHAVIOR)" --artifact-mode build \
 			--output "$$run_dir/preflight/qualification-preflight.json" || exit $$?; \
 	fi; \
 	pnpm install --silent; \
@@ -1122,13 +1122,13 @@ qualification-local-functional:
 	if [ -n "$(REUSE_CANDIDATES)" ]; then \
 		node scripts/ci-cd/qualification-preflight.mjs \
 			--world local --source-sha "$$source_sha" --run-id "$$run_id" --shard-id "$$shard_id" --attempt "$$attempt" \
-			--scenarios "$$scenarios" --artifact-mode reuse \
+			--scenarios "$$scenarios" --agents "$(AGENTS)" --behavior "$(BEHAVIOR)" --artifact-mode reuse \
 			--candidate-build-map "$(REUSE_CANDIDATES)/candidate-build.json" \
 			--output "$$build_dir/preflight/qualification-preflight.json" || exit $$?; \
 	else \
 		node scripts/ci-cd/qualification-preflight.mjs \
 			--world local --source-sha "$$source_sha" --run-id "$$run_id" --shard-id "$$shard_id" --attempt "$$attempt" \
-			--scenarios "$$scenarios" --artifact-mode build \
+			--scenarios "$$scenarios" --agents "$(AGENTS)" --behavior "$(BEHAVIOR)" --artifact-mode build \
 			--output "$$build_dir/preflight/qualification-preflight.json" || exit $$?; \
 	fi; \
 	pnpm install --silent; \

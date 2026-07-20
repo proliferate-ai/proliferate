@@ -15,6 +15,21 @@ export const PREFLIGHT_DEADLINE_MS = 120_000;
 const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 const SHA = /^[0-9a-f]{40}$/;
 const WORLDS = new Set(["local", "managed-cloud", "self-host", "tier4"]);
+const CORE_RELEASE_SCENARIO_IDS = new Set(
+  JSON.parse(
+    readFileSync(
+      new URL("../../specs/developing/testing/core-release-scenario-manifest.json", import.meta.url),
+      "utf8",
+    ),
+  ).requiredScenarios
+    .filter((scenario) => scenario.tier === 3)
+    .map((scenario) => scenario.id),
+);
+const LOCAL_SCENARIO_IDS = new Set([
+  ...CORE_RELEASE_SCENARIO_IDS,
+  // Provisional infrastructure proof registered beside the core scenarios.
+  "LOCAL-WORLD-SMOKE-1",
+]);
 const LOCAL_AGENT_KINDS = new Set(
   JSON.parse(
     readFileSync(new URL("../../catalogs/agents/catalog.json", import.meta.url), "utf8"),
@@ -175,6 +190,7 @@ export function runQualificationPreflight(options, deps = {}) {
     ? parseSelector(options.agents ?? "", "agent_selection", fail)
     : null;
   if (options.world === "local") {
+    validateLocalScenarioSelection(scenarioIds, pass, fail);
     validateLocalAgentSelection(agentIds, pass, fail);
   }
   const requirements = WORLD_REQUIREMENTS[options.world] ?? [];
@@ -342,6 +358,22 @@ function validateLocalAgentSelection(agentIds, pass, fail) {
     return;
   }
   pass("agent_catalog", `${agentIds.length} explicit catalog agent kind(s) are selected.`);
+}
+
+function validateLocalScenarioSelection(scenarioIds, pass, fail) {
+  if (scenarioIds === "all") {
+    pass("scenario_catalog", `All ${LOCAL_SCENARIO_IDS.size} known Tier 3/Local infrastructure scenario ids are selectable.`);
+    return;
+  }
+  if (!Array.isArray(scenarioIds) || scenarioIds.length === 0) {
+    return;
+  }
+  const unknown = scenarioIds.filter((scenario) => !LOCAL_SCENARIO_IDS.has(scenario));
+  if (unknown.length > 0) {
+    fail("scenario_catalog", `Scenario selector contains ${unknown.length} unknown machine-inventory id(s).`);
+    return;
+  }
+  pass("scenario_catalog", `${scenarioIds.length} explicit machine-inventory scenario id(s) are selected.`);
 }
 
 function validateEnv(name, shape, env, pass, fail) {
