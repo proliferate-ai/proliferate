@@ -210,12 +210,54 @@ export function selectCheapestEligibleClaudeModel(
   allowlist: readonly string[],
   liveProbe: readonly string[],
 ): string | null {
-  const probe = new Set(liveProbe);
-  const eligible = allowlist.filter((id) => probe.has(id) && isEligibleClaudeModel(id));
+  const eligible = intersectEligibleModels(allowlist, liveProbe).filter(isEligibleClaudeModel);
   if (eligible.length === 0) {
     return null;
   }
   return orderClaudeModelsCheapestFirst(eligible)[0];
+}
+
+/**
+ * Selects the cheapest bounded non-Fable model from the exact allowlist/live
+ * probe intersection, regardless of provider family. The local Tier-3 matrix
+ * exercises every supported harness, so Claude-only ranking cannot select a
+ * real Codex or Grok gateway model even when both LiteLLM and AnyHarness offer
+ * one. Cost is not on the wire; use a deterministic small-to-large tier proxy,
+ * then lexical order.
+ */
+export function selectCheapestEligibleModel(
+  allowlist: readonly string[],
+  liveProbe: readonly string[],
+): string | null {
+  const eligible = intersectEligibleModels(allowlist, liveProbe);
+  if (eligible.length === 0) {
+    return null;
+  }
+  return [...new Set(eligible)].sort((a, b) => {
+    const rankDelta = genericModelTierRank(a) - genericModelTierRank(b);
+    return rankDelta !== 0 ? rankDelta : a.localeCompare(b);
+  })[0];
+}
+
+function intersectEligibleModels(
+  allowlist: readonly string[],
+  liveProbe: readonly string[],
+): string[] {
+  const probe = new Set(liveProbe);
+  return allowlist.filter(
+    (id) => probe.has(id) && !id.toLowerCase().includes(EXCLUDED_MODEL_ID_SUBSTRING),
+  );
+}
+
+function genericModelTierRank(id: string): number {
+  const lower = id.toLowerCase();
+  if (/haiku|mini|nano|small|flash|lite|fast/.test(lower)) return 0;
+  // Model ids such as `gpt-5.2` and `grok-4` carry no explicit size tier.
+  // Treat that ordinary unlabeled class as cheaper than names that explicitly
+  // advertise a medium/large tier, while still preferring every small/fast id.
+  if (!/sonnet|medium|opus|large/.test(lower)) return 1;
+  if (/sonnet|medium/.test(lower)) return 2;
+  return 3;
 }
 
 /** A model is eligible when it is a Claude model and NOT the excluded tier. */

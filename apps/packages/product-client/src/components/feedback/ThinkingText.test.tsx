@@ -108,18 +108,18 @@ describe("thinking gleam css contract", () => {
 });
 
 describe("StreamingIndicator", () => {
-  it("defaults to the agent-work label with no elapsed suffix under 10s", () => {
+  it("shows elapsed work after the first full second", () => {
     const html = renderToStaticMarkup(
       <StreamingIndicator startedAt={new Date(Date.now() - 2_000).toISOString()} />,
     );
 
     expect(html).toContain("Thinking");
-    // Below the 10s threshold: no elapsed suffix and no jank canary.
-    expect(html).not.toContain("·");
+    expect(html).toContain("·");
+    expect(html).toContain("2s");
     expect(html).not.toContain("data-jank-canary=\"braille\"");
   });
 
-  it("appends an elapsed suffix once the wait passes 10s", () => {
+  it("keeps advancing the elapsed suffix for longer work", () => {
     const html = renderToStaticMarkup(
       <StreamingIndicator startedAt={new Date(Date.now() - 34_000).toISOString()} />,
     );

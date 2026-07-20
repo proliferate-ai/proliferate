@@ -31,7 +31,7 @@ export function CopyMessageButton({
       size="xs"
       onClick={handleCopy}
       title={copied ? "Copied" : "Copy message"}
-      className="rounded-md text-muted-foreground hover:text-foreground"
+      className="!size-6 !p-0 rounded-md text-muted-foreground hover:text-foreground"
     >
       {copied
         ? <Check className="icon-control" />

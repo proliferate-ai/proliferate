@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   resolveTurnAssistantFooterMode,
   resolveTranscriptTurnDiffPanelKind,
+  shouldRenderAssistantEndResource,
   shouldRenderStandaloneStoppedNotice,
 } from "#product/components/workspace/chat/transcript/TranscriptTurnRow";
 import {
@@ -82,6 +83,26 @@ describe("resolveTurnAssistantFooterMode", () => {
       hasAssistantCopyContent: true,
       assistantRevealComplete: false,
     })).toBe("reserved");
+  });
+});
+
+describe("assistant end resource placement", () => {
+  it("renders a linked Markdown resource only after the final completed row", () => {
+    expect(shouldRenderAssistantEndResource({
+      rowIsLastTurnRow: false,
+      visualTurnCompleted: true,
+      hasResource: true,
+    })).toBe(false);
+    expect(shouldRenderAssistantEndResource({
+      rowIsLastTurnRow: true,
+      visualTurnCompleted: false,
+      hasResource: true,
+    })).toBe(false);
+    expect(shouldRenderAssistantEndResource({
+      rowIsLastTurnRow: true,
+      visualTurnCompleted: true,
+      hasResource: true,
+    })).toBe(true);
   });
 });
 

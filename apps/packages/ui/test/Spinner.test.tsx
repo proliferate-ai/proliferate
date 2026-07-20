@@ -20,5 +20,7 @@ describe("Spinner", () => {
     expect(glyph?.getAttribute("class")).toContain("block");
     expect(glyph?.getAttribute("class")).toContain("size-full");
     expect(glyph?.getAttribute("class")).toContain("motion-safe:animate-spin");
+    expect(glyph?.getAttribute("style")).toContain("transform-box: fill-box");
+    expect(glyph?.getAttribute("style")).toContain("transform-origin: center");
   });
 });

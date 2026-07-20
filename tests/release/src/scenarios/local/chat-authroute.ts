@@ -10,7 +10,7 @@ import { authenticatedActor, type AuthenticatedActor } from "../../fixtures/auth
 import { preparedRepository, type PreparedRepository } from "../../fixtures/prepared-repository.js";
 import { productPage, type ProductPage } from "../../fixtures/product-page.js";
 import { findErrorEvent, findTurnEndedEvent } from "../../fixtures/local-runtime.js";
-import { selectCheapestEligibleClaudeModel } from "../../services/qualification-litellm.js";
+import { selectCheapestEligibleModel } from "../../services/qualification-litellm.js";
 import {
   DETERMINISTIC_PROMPT,
   defaultLocalWorldSmokeDriver,
@@ -149,7 +149,7 @@ export const HARNESSES_WITHOUT_GATEWAY_AUTH_SLOT: ReadonlySet<LocalHarnessKind> 
 
 /**
  * How a harness selects its model on each route (BRIEF §"BYOK input mapping"):
- *  - gateway: cheapest eligible non-Fable Claude model from the intersection of
+ *  - gateway: cheapest eligible non-Fable model from the intersection of
  *    the qualification allowlist and AnyHarness's live gateway probe (identical
  *    to the smoke, per harness). OpenCode MUST select from the injected
  *    `proliferate` provider so a native/direct provider cannot satisfy the turn.
@@ -184,6 +184,8 @@ export interface LocalRouteDriver {
   createDualRouteActor(world: ReadyLocalWorld, harness: LocalHarnessKind): Promise<AuthenticatedActor>;
   prepareRepo(world: ReadyLocalWorld, actor: AuthenticatedActor, cellId: string): Promise<PreparedRepository>;
   openPage(world: ReadyLocalWorld, actor: AuthenticatedActor): Promise<ProductPage>;
+  /** Installs the harness before Settings can gate its auth controls behind the install card. */
+  ensureHarnessInstalled(world: ReadyLocalWorld, page: ProductPage, harness: LocalHarnessKind): Promise<void>;
   ensureHarnessReady(world: ReadyLocalWorld, page: ProductPage, harness: LocalHarnessKind): Promise<void>;
 
   /**
@@ -210,7 +212,7 @@ export interface LocalRouteDriver {
    * or the direct provider family), asserting OpenCode's provider source. */
   resolveRouteModel(world: ReadyLocalWorld, page: ProductPage, harness: LocalHarnessKind, route: LocalRoute): Promise<RouteModelSelection>;
 
-  selectModelInUi(page: ProductPage, modelId: string): Promise<void>;
+  selectModelInUi(page: ProductPage, harness: LocalHarnessKind, modelId: string): Promise<void>;
 
   /** Sends the bounded prompt, materializes workspace+session, runs one turn,
    * asserts a stable reply, and asserts the LAUNCH route (evidence, not config
@@ -278,6 +280,8 @@ export const defaultLocalRouteDriver: LocalRouteDriver = {
     authenticatedActor(world, "owner", { harnessKind: harness, selectGatewayRoute: true }),
   prepareRepo: (world, actor, cellId) => preparedRepository(world, actor, { cellId }),
   openPage: (world, actor) => productPage(world, actor),
+  ensureHarnessInstalled: (world, page, harness) =>
+    defaultLocalWorldSmokeDriver.ensureHarnessInstalled(world, page, harness),
   ensureHarnessReady: (world, page, harness) =>
     defaultLocalWorldSmokeDriver.ensureHarnessReady(world, page, harness),
   async storeAndSelectUserKeyRoute(page, harness) {
@@ -388,8 +392,8 @@ export const defaultLocalRouteDriver: LocalRouteDriver = {
         world.gateway.preflight(),
         world.runtime.client.getGatewayModels(harness),
       ]);
-      const modelId = selectCheapestEligibleClaudeModel(
-        preflight.eligibleClaudeModels,
+      const modelId = selectCheapestEligibleModel(
+        preflight.allowlistModels,
         probe.map((model) => model.id),
       );
       if (!modelId) {
@@ -411,7 +415,8 @@ export const defaultLocalRouteDriver: LocalRouteDriver = {
     const modelId = pickCheapestModelId(ids);
     return { route, modelId, providerId: directProviderId(modelId) };
   },
-  selectModelInUi: (page, modelId) => defaultLocalWorldSmokeDriver.selectModelInUi(page, modelId),
+  selectModelInUi: (page, harness, modelId) =>
+    defaultLocalWorldSmokeDriver.selectModelInUi(page, modelId, harness),
   async sendBoundedTurn(world, page, expectedRoute, repoPath, existingSessionIds) {
     const p = page.page;
     // Snapshot before Send. LOCAL-6 uses the same concrete workspace for both
@@ -747,7 +752,7 @@ async function runLocal2GatewayCell(
       await driver.selectRepoAndWorkLocally(page, repo);
       const selection = await driver.resolveRouteModel(world, page, harness, "gateway");
       assertOpencodeProviderSource(harness, "gateway", selection);
-      await driver.selectModelInUi(page, selection.modelId);
+      await driver.selectModelInUi(page, harness, selection.modelId);
       const before = await driver.snapshotGatewaySpend(world, actor);
       const windowStartedAt = new Date().toISOString();
       const turn = await driver.sendBoundedTurn(world, page, "gateway", repo.path);
@@ -810,13 +815,11 @@ async function runLocal3UserKeyCell(
     const repo = await driver.prepareRepo(world, actor, cell.cell_id);
     const page = await driver.openPage(world, actor);
     try {
-      // Store + SELECT the user key FIRST (decision #3): on the api_key route a
-      // harness only surfaces models in its launch-options once the provider key
-      // is stored AND the api_key route selected. Then INSTALL before polling the
-      // sync signal: `waitForRouteSync("user_key")` reads launch-options, and an
-      // agent appears there only once its agent process is INSTALLED. On a fresh
-      // world claude is `install_required`, and only `ensureHarnessReady` triggers
-      // the install, so polling launch-options before it can never converge.
+      // Install before opening the route controls: Settings deliberately hides
+      // the harness auth section behind its install card while install_required.
+      // Once installed, store + SELECT the user key (decision #3). The api_key
+      // route only surfaces models in launch-options after the key is stored and
+      // selected, so route sync must follow both prerequisite actions.
       //
       // NOTE on the api_key route yielding launchable models: this requires the
       // runtime to emit a credential fact for a stored api_key source so the
@@ -829,13 +832,14 @@ async function runLocal3UserKeyCell(
       // `CredentialFact::Env` for api_key sources); this cell requires the
       // rebased/rebuilt candidate that includes it. The ordering below is the
       // driver's own correctness requirement, independent of that runtime fix.
+      await driver.ensureHarnessInstalled(world, page, harness);
       await driver.storeAndSelectUserKeyRoute(page, harness);
-      await driver.ensureHarnessReady(world, page, harness);
       await driver.waitForRouteSync(world, page, harness, "user_key");
+      await driver.ensureHarnessReady(world, page, harness);
       await driver.selectRepoAndWorkLocally(page, repo);
       const selection = await driver.resolveRouteModel(world, page, harness, "user_key");
       assertOpencodeProviderSource(harness, "user_key", selection);
-      await driver.selectModelInUi(page, selection.modelId);
+      await driver.selectModelInUi(page, harness, selection.modelId);
       const windowStartedAt = new Date().toISOString();
       const turn = await driver.sendBoundedTurn(world, page, "user_key", repo.path);
       if (!turn.reply.trim()) {
@@ -892,21 +896,19 @@ async function runLocal6RouteChangeCell(
     const repo = await driver.prepareRepo(world, actor, cell.cell_id);
     const page = await driver.openPage(world, actor);
     try {
-      // 1) Start + prove the user-key session (the original route). Store +
-      // select the user key first (decision #3), then INSTALL via
-      // `ensureHarnessReady` BEFORE polling the user-key sync signal: the
-      // launch-options signal `waitForRouteSync("user_key")` lists an agent only
-      // once its process is installed, and only `ensureHarnessReady` triggers the
-      // install on a fresh world. (The api_key route only yields launchable models
-      // on a runtime carrying #1236's api_key credential fact — see the LOCAL-3
-      // note above; this route-change cell requires the same rebased/rebuilt
-      // candidate.)
+      // 1) Start + prove the user-key session (the original route). Install the
+      // harness first so Settings exposes its route controls, then store + select
+      // the user key (decision #3) before polling the user-key sync signal. (The
+      // api_key route only yields launchable models on a runtime carrying #1236's
+      // api_key credential fact — see the LOCAL-3 note above; this route-change
+      // cell requires the same rebased/rebuilt candidate.)
+      await driver.ensureHarnessInstalled(world, page, harness);
       await driver.storeAndSelectUserKeyRoute(page, harness);
-      await driver.ensureHarnessReady(world, page, harness);
       await driver.waitForRouteSync(world, page, harness, "user_key");
+      await driver.ensureHarnessReady(world, page, harness);
       await driver.selectRepoAndWorkLocally(page, repo);
       const userKeySelection = await driver.resolveRouteModel(world, page, harness, "user_key");
-      await driver.selectModelInUi(page, userKeySelection.modelId);
+      await driver.selectModelInUi(page, harness, userKeySelection.modelId);
       const userKeyTurn = await driver.sendBoundedTurn(world, page, "user_key", repo.path);
       if (!userKeyTurn.reply.trim()) {
         throw new Error("empty assistant reply on the user-key session");
@@ -935,7 +937,7 @@ async function runLocal6RouteChangeCell(
       const preRouteSwitchSessionIds = await snapshotLocalWorkspaceSessionIds(world, repo.path);
       await driver.switchSelectedRouteToGateway(world, page, harness);
       const gatewaySelection = await driver.resolveRouteModel(world, page, harness, "gateway");
-      await driver.selectModelInUi(page, gatewaySelection.modelId);
+      await driver.selectModelInUi(page, harness, gatewaySelection.modelId);
       const before = await driver.snapshotGatewaySpend(world, actor);
       const windowStartedAt = new Date().toISOString();
       const gatewayTurn = await driver.sendBoundedTurn(world, page, "gateway", repo.path, preRouteSwitchSessionIds);

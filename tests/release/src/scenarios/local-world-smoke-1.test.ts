@@ -246,6 +246,9 @@ function fakeDriver(
     waitForGatewaySync: async (_world, _page, harnessKind) => {
       calls.push(`waitForGatewaySync:${harnessKind}`);
     },
+    ensureHarnessInstalled: async (_world, _page, harnessKind) => {
+      calls.push(`ensureHarnessInstalled:${harnessKind}`);
+    },
     ensureHarnessReady: async (_world, _page, harnessKind) => {
       calls.push(`ensureHarnessReady:${harnessKind}`);
     },

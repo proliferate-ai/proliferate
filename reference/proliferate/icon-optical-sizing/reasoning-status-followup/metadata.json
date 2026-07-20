@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "app": "proliferate",
+  "appVersion": "0.3.45",
+  "feature": "reasoning-status-followup",
+  "interaction": "Desktop/Web completed-work disclosure, live-thinking status, composer reasoning control, spinner, transcript action, and sidebar status repair",
+  "capturedAt": "2026-07-20T00:38:00-07:00",
+  "timezone": "PDT",
+  "sourceSurface": "Desktop renderer development playground backed by freshly compiled workspace packages",
+  "targetUrl": "http://127.0.0.1:39111/",
+  "theme": "dark",
+  "provenance": "live",
+  "viewport": {
+    "width": 1280,
+    "height": 800,
+    "deviceScaleFactor": 1
+  },
+  "branch": "codex/ui-reasoning-status-followup",
+  "baseSha": "43db5efdfab5523a1bd1f68b1dc78c703db58a84",
+  "profile": "ui-icon-optical-sizing",
+  "hmr": true,
+  "hmrPort": 39112,
+  "artifacts": {
+    "recording": "exact-head-review.mp4",
+    "beforeCopy": "before-copy-clipped.png",
+    "beforeSpinner": "before-install-spinner.png",
+    "beforeMarkdownOrdering": "before-markdown-resource-order.png",
+    "primaryReference": "../../../codex/reasoning-disclosure/codex-work-disclosure.mov"
+  },
+  "limitations": [
+    "The final recording is the frontend-only Desktop renderer, not packaged Desktop.",
+    "The authenticated real-product surface was also validated with profile ui-icon-optical-sizing on renderer port 39101 before the proof capture.",
+    "The local preview is ephemeral and is stopped after capture; the committed MP4 is the durable exact-tree proof."
+  ]
+}

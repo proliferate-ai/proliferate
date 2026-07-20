@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ThinkingText } from "@proliferate/ui/primitives/ThinkingText";
+import { AnimatedCollapsibleContent } from "@proliferate/ui/primitives/AnimatedCollapsibleContent";
 import type { CloudChatTranscriptRowView } from "./CloudChatTranscriptTypes";
 import { MarkdownBody as CloudChatMarkdownRenderer } from "./MarkdownBody";
 import {
@@ -179,6 +180,7 @@ export function CloudChatWorkHistoryRow({
   renderChildRow: (row: CloudChatTranscriptRowView) => ReactNode;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [hasExpanded, setHasExpanded] = useState(false);
   const children = row.children ?? [];
   const label = row.title ?? "Worked";
   const hasExpandedContent = children.length > 0 || Boolean(row.body?.trim());
@@ -189,28 +191,34 @@ export function CloudChatWorkHistoryRow({
         label={label}
         interactive={hasExpandedContent}
         expanded={expanded}
-        onClick={() => setExpanded((value) => !value)}
+        onClick={() => {
+          const nextExpanded = !expanded;
+          setExpanded(nextExpanded);
+          if (nextExpanded) setHasExpanded(true);
+        }}
       />
-      {expanded && hasExpandedContent ? (
-        <div className="mt-4 space-y-4" data-cloud-work-history-items>
-          {row.body?.trim() ? (
-            <CloudTranscriptDetailsPanel>
-              <div className="max-h-72 overflow-auto px-3 py-2.5" data-telemetry-mask>
-                <CloudChatMarkdownRenderer
-                  content={row.body}
-                  className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0 text-muted-foreground"
-                />
-              </div>
-            </CloudTranscriptDetailsPanel>
-          ) : null}
-          {children.map((child) => (
-            <CloudChatHistoryChildRow
-              key={child.id}
-              row={child}
-              renderChildRow={renderChildRow}
-            />
-          ))}
-        </div>
+      {hasExpandedContent ? (
+        <AnimatedCollapsibleContent expanded={expanded}>
+          <div className="mt-4 space-y-4" data-cloud-work-history-items>
+            {hasExpanded && row.body?.trim() ? (
+              <CloudTranscriptDetailsPanel>
+                <div className="max-h-72 overflow-auto px-3 py-2.5" data-telemetry-mask>
+                  <CloudChatMarkdownRenderer
+                    content={row.body}
+                    className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0 text-muted-foreground"
+                  />
+                </div>
+              </CloudTranscriptDetailsPanel>
+            ) : null}
+            {hasExpanded ? children.map((child) => (
+              <CloudChatHistoryChildRow
+                key={child.id}
+                row={child}
+                renderChildRow={renderChildRow}
+              />
+            )) : null}
+          </div>
+        </AnimatedCollapsibleContent>
       ) : null}
       {!expanded ? (
         <div

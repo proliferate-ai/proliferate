@@ -6,6 +6,7 @@ import {
   deriveActorKeyAlias,
   QualificationLiteLlmController,
   QualificationLiteLlmError,
+  selectCheapestEligibleModel,
   selectCheapestEligibleClaudeModel,
   type ActorKeyIdentity,
   type FetchLike,
@@ -50,6 +51,17 @@ test("selectCheapestEligibleClaudeModel intersects, excludes fable, and picks th
 test("selectCheapestEligibleClaudeModel returns null when the intersection is empty or all-fable", () => {
   assert.equal(selectCheapestEligibleClaudeModel(["claude-haiku-4-5"], ["gpt-4"]), null);
   assert.equal(selectCheapestEligibleClaudeModel(["claude-fable-5"], ["claude-fable-5"]), null);
+});
+
+test("selectCheapestEligibleModel selects bounded non-Claude harness models", () => {
+  const allow = ["gpt-5.2", "gpt-5-mini", "grok-4", "grok-4-fast", "claude-fable-5"];
+  assert.equal(selectCheapestEligibleModel(allow, ["gpt-5.2", "gpt-5-mini"]), "gpt-5-mini");
+  assert.equal(selectCheapestEligibleModel(allow, ["grok-4", "grok-4-fast"]), "grok-4-fast");
+  assert.equal(
+    selectCheapestEligibleModel(["claude-opus-4-6", "gpt-5.2"], ["claude-opus-4-6", "gpt-5.2"]),
+    "gpt-5.2",
+  );
+  assert.equal(selectCheapestEligibleModel(allow, ["claude-fable-5"]), null);
 });
 
 test("deriveActorKeyAlias is the frozen vk-user-<user>-<enrollment[:8]> contract", () => {

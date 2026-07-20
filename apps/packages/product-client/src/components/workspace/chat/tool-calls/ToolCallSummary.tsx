@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { AnimatedCollapsibleContent } from "@proliferate/ui/primitives/AnimatedCollapsibleContent";
 import { TurnSeparator } from "#product/components/workspace/chat/transcript/TurnSeparator";
 import { TURN_ITEM_GAP_CLASS } from "#product/components/workspace/chat/transcript/TranscriptTurnChrome";
 
@@ -32,7 +33,8 @@ export function ToolCallSummary({
   borderless = false,
 }: ToolCallSummaryProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
-  const renderedChildren = expanded || (itemCount !== undefined && itemCount <= 1)
+  const [hasExpanded, setHasExpanded] = useState(defaultExpanded);
+  const renderedChildren = hasExpanded || (itemCount !== undefined && itemCount <= 1)
     ? renderChildren?.() ?? children
     : null;
 
@@ -50,17 +52,21 @@ export function ToolCallSummary({
         label={showWorkDivider ? _label : summary}
         interactive
         expanded={expanded}
-        onClick={() => setExpanded(!expanded)}
+        onClick={() => {
+          const nextExpanded = !expanded;
+          setExpanded(nextExpanded);
+          if (nextExpanded) setHasExpanded(true);
+        }}
         borderless={borderless}
       />
-      {expanded && (
+      <AnimatedCollapsibleContent expanded={expanded}>
         <div
           className={`mt-4 flex flex-col ${TURN_ITEM_GAP_CLASS}`}
           data-completed-work-ledger
         >
           {renderedChildren}
         </div>
-      )}
+      </AnimatedCollapsibleContent>
       {completionContent && (
         <div className="mt-4 flex flex-col gap-4" data-completed-work-content>
           {completionContent}

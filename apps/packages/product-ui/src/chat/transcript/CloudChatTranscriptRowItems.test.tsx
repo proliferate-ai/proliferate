@@ -50,5 +50,14 @@ describe("Cloud chat transcript optical spacing", () => {
     expect(items?.className.split(" ")).toContain("space-y-4");
     expect(container.querySelector("[data-cloud-work-history-divider]")).toBeNull();
     expect(screen.queryByText("Read files")).not.toBeNull();
+
+    const motionShell = container.querySelector("[data-animated-collapsible-content]");
+    expect(motionShell?.getAttribute("data-expanded")).toBe("true");
+    expect(motionShell?.className).toContain("duration-200");
+
+    fireEvent.click(screen.getByRole("button", { name: "Worked for 12s" }));
+    expect(motionShell?.getAttribute("data-expanded")).toBe("false");
+    expect((motionShell as HTMLElement | null)?.style.gridTemplateRows).toBe("0fr");
+    expect(screen.queryByText("Read files")).not.toBeNull();
   });
 });

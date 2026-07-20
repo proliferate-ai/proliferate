@@ -8,7 +8,7 @@ import { authenticatedActor, type AuthenticatedActor } from "../../fixtures/auth
 import { findErrorEvent, findTurnEndedEvent } from "../../fixtures/local-runtime.js";
 import { preparedRepository, type PreparedRepository } from "../../fixtures/prepared-repository.js";
 import { productPage, type ProductPage } from "../../fixtures/product-page.js";
-import { selectCheapestEligibleClaudeModel } from "../../services/qualification-litellm.js";
+import { selectCheapestEligibleModel } from "../../services/qualification-litellm.js";
 import type { ReadyLocalWorld } from "../../worlds/local-workspace/world.js";
 import {
   LOCAL_HARNESS_KINDS,
@@ -890,11 +890,20 @@ async function ensureHarnessReady(world: ReadyLocalWorld, page: ProductPage, har
     last = await client.getAgent(harness).catch(() => undefined);
     const options = await client.getAgentLaunchOptions().catch(() => []);
     const entry = options.find((agent) => agent.kind === harness);
-    if (entry && entry.models.length > 0) {
+    if (entry && entry.models.length > 0 && last?.installState === "installed") {
       launchable = true;
       break;
     }
-    if (!triggeredInstall && last && last.readiness === "install_required") {
+    if (
+      !triggeredInstall
+      && last
+      && last.installState !== "installing"
+      && (
+        last.readiness === "install_required"
+        || last.installState === "install_required"
+        || last.installState === "not_installed"
+      )
+    ) {
       triggeredInstall = true;
       await client.installAgent(harness).catch(() => undefined);
     }
@@ -907,7 +916,7 @@ async function ensureHarnessReady(world: ReadyLocalWorld, page: ProductPage, har
     // with an unsynced gateway route points at the route-sync path, an
     // `installing`/`install_required` installState points at the agent build.
     throw new Error(
-      `ensureHarnessReady: agent "${harness}" never became launchable within ${HARNESS_READY_TIMEOUT_MS}ms ` +
+      `ensureHarnessReady: agent "${harness}" never became installed and launchable within ${HARNESS_READY_TIMEOUT_MS}ms ` +
         `(last: readiness=${last?.readiness}, installState=${last?.installState}, credentialState=${last?.credentialState}).`,
     );
   }
@@ -959,10 +968,14 @@ async function selectRepoAndWorkLocally(page: ProductPage, repo: PreparedReposit
   await p.getByRole("button", { name: /Work locally/i }).first().click();
 }
 
-async function selectModelInComposer(page: ProductPage, modelId: string): Promise<void> {
+async function selectModelInComposer(
+  page: ProductPage,
+  harness: LocalHarnessKind,
+  modelId: string,
+): Promise<void> {
   const p = page.page;
   const deadline = Date.now() + MODEL_PICKER_TIMEOUT_MS;
-  const optionSelector = `[data-model-option="${cssAttr(modelId)}"]`;
+  const optionSelector = `[data-model-kind="${cssAttr(harness)}"][data-model-option="${cssAttr(modelId)}"]`;
   while (Date.now() < deadline) {
     const trigger = p.locator("[data-composer-model-trigger]:not([disabled])").first();
     try {
@@ -995,11 +1008,11 @@ async function runBaselineTurn(
 ): Promise<{ workspaceId: string; sessionId: string; modelId: string }> {
   const preflight = await world.gateway.preflight();
   const probe = (await world.runtime.client.getGatewayModels(harness).catch(() => [])).map((model) => model.id);
-  const modelId = selectCheapestEligibleClaudeModel(preflight.eligibleClaudeModels, probe);
+  const modelId = selectCheapestEligibleModel(preflight.allowlistModels, probe);
   if (!modelId) {
     throw new Error(`runBaselineTurn: no eligible non-Fable model for "${harness}" in the allowlist ∩ live probe`);
   }
-  await selectModelInComposer(page, modelId);
+  await selectModelInComposer(page, harness, modelId);
 
   const p = page.page;
   const editor = p.locator("[data-home-composer-editor]").first();
@@ -1037,11 +1050,16 @@ async function selectConfigValueInUi(
   if (control.surface === "reasoning") {
     return stepReasoningEffortToValue(page, value, control.values.length);
   }
-  // mode: SessionModeControl is a real popover — click the trigger, click the
-  // target PopoverMenuItem (data-session-mode-option), read the selection back.
+  // Mode uses the compact stepper in the current composer. Retain the popover
+  // path for any non-compact surface, but drive the stamped next-value contract
+  // when present and bound the walk to one full advertised ladder.
   const p = page.page;
   const trigger = p.locator("[data-session-mode-trigger]").first();
   await trigger.waitFor({ state: "visible", timeout: 15_000 });
+  const compactNext = (await trigger.getAttribute("data-session-mode-next")) ?? "";
+  if (compactNext) {
+    return stepSessionModeToValue(page, value, control.values.length);
+  }
   await trigger.click();
   const option = p.locator(`[data-session-mode-option="${cssAttr(value)}"]`).first();
   await option.waitFor({ state: "visible", timeout: 15_000 });
@@ -1050,6 +1068,34 @@ async function selectConfigValueInUi(
   // reverted the UI to the last-accepted value before we read back.
   await sleep(CONFIG_REJECTION_WINDOW_MS);
   const readback = await readRequiredAttr(p, "[data-session-mode-trigger]", "data-session-mode-selected");
+  return { accepted: readback === value, readback };
+}
+
+async function stepSessionModeToValue(
+  page: ProductPage,
+  value: string,
+  ladderSize: number,
+): Promise<{ accepted: boolean; readback: string }> {
+  const trigger = page.page.locator("[data-session-mode-trigger]").first();
+  const maxSteps = Math.max(ladderSize, 2);
+  let readback = (await trigger.getAttribute("data-session-mode-selected").catch(() => null)) ?? "";
+  for (let step = 0; step < maxSteps && readback !== value; step += 1) {
+    const before = readback;
+    await trigger.click();
+    const deadline = Date.now() + CONFIG_REJECTION_WINDOW_MS;
+    while (Date.now() < deadline) {
+      readback = (await trigger.getAttribute("data-session-mode-selected").catch(() => null)) ?? "";
+      if (readback !== before) {
+        break;
+      }
+      await sleep(300);
+    }
+    if (readback === before) {
+      break;
+    }
+  }
+  await sleep(CONFIG_REJECTION_WINDOW_MS);
+  readback = (await trigger.getAttribute("data-session-mode-selected").catch(() => null)) ?? "";
   return { accepted: readback === value, readback };
 }
 
@@ -1127,11 +1173,11 @@ async function materializeFirstChat(
   // empty chat.
   const preflight = await world.gateway.preflight();
   const probe = (await world.runtime.client.getGatewayModels(harness).catch(() => [])).map((model) => model.id);
-  const modelId = selectCheapestEligibleClaudeModel(preflight.eligibleClaudeModels, probe);
+  const modelId = selectCheapestEligibleModel(preflight.allowlistModels, probe);
   if (!modelId) {
     throw new Error(`materializeFirstChat: no eligible non-Fable model for "${harness}" in the allowlist ∩ live probe`);
   }
-  await selectModelInComposer(page, modelId);
+  await selectModelInComposer(page, harness, modelId);
   const editor = p.locator("[data-home-composer-editor]").first();
   await editor.waitFor({ state: "visible", timeout: 15_000 });
   await editor.fill(BASELINE_PROMPT);
@@ -1147,15 +1193,17 @@ async function materializeFirstChat(
   await p.locator("[data-workspace-tab-strip]").first().waitFor({ state: "visible", timeout: WORKSPACE_SETTLE_TIMEOUT_MS });
   const tab = p.locator("[data-chat-tab]").first();
   await tab.waitFor({ state: "visible", timeout: TAB_SETTLE_TIMEOUT_MS });
-  const tabId = await readRequiredAttr(p, "[data-chat-tab]", "data-chat-tab", tab);
   const workspaceId = await readRequiredAttr(p, "[data-workspace-shell]", "data-workspace-ui-key");
-  const sessionId = await readRequiredAttr(p, "[data-chat-tab]", "data-chat-tab-session-id", tab);
+  const sessionId = await waitForReconciledSessionId(p, tab);
+  const tabId = await readRequiredAttr(p, "[data-chat-tab]", "data-chat-tab", tab);
   // Wait for the materializing turn to complete so the session is real before the
   // subsequent tab-semantics proofs run against it.
-  const anyharnessSessionId = await resolveActiveSessionId(world, sessionId);
-  const completion = await waitForTurnCompletion(world, anyharnessSessionId, TURN_TIMEOUT_MS);
+  const completion = await waitForTurnCompletion(world, sessionId, TURN_TIMEOUT_MS);
   if (completion.error) {
     throw new Error(`materializeFirstChat: the materializing turn errored: ${completion.error}`);
+  }
+  if (!completion.ended) {
+    throw new Error(`materializeFirstChat: the materializing turn did not end within ${TURN_TIMEOUT_MS}ms`);
   }
   return { workspaceId, sessionId, tabId };
 }
@@ -1251,7 +1299,38 @@ async function switchHarnessEmptyChat(
   // The unused backend session is replaced IN PLACE at the same tab position:
   // poll the tab AT THIS INDEX (not the stale tab-id locator, since the tab
   // element's own id changes with the session) until its session-id changes.
-  const newSessionId = await waitForAttrChange(p, "[data-chat-tab]", "data-chat-tab-session-id", oldSessionId, activeTabByIndex);
+  await waitForAttrChange(
+    p,
+    "[data-chat-tab]",
+    "data-chat-tab-session-id",
+    oldSessionId,
+    activeTabByIndex,
+  );
+  let newSessionId: string;
+  try {
+    newSessionId = await waitForReconciledSessionId(p, activeTabByIndex);
+  } catch {
+    // Empty-session replacement paints an optimistic `client-session:` id
+    // immediately. A reload is the product's authoritative recovery path when
+    // the live adoption event is missed: the durable replacement must return
+    // at the same tab index with its server id, or this remains a real failure.
+    await p.reload({ waitUntil: "domcontentloaded" });
+    await p.locator("[data-workspace-tab-strip]").first().waitFor({
+      state: "visible",
+      timeout: WORKSPACE_SETTLE_TIMEOUT_MS,
+    });
+    const recoveredTab = p.locator(`[data-chat-tab-index="${tabIndex}"]`).first();
+    await recoveredTab.waitFor({ state: "visible", timeout: TAB_SETTLE_TIMEOUT_MS });
+    newSessionId = await waitForReconciledSessionId(p, recoveredTab);
+    await recoveredTab.click();
+    await p
+      .locator(`[data-chat-tab-index="${tabIndex}"][data-chat-tab-active="true"]`)
+      .first()
+      .waitFor({ state: "attached", timeout: TAB_SETTLE_TIMEOUT_MS });
+  }
+  if (newSessionId === oldSessionId) {
+    throw new Error("switchHarnessEmptyChat: recovered replacement kept the old backend session id");
+  }
   const afterCount = await p.locator("[data-chat-tab]").count();
   return { oldSessionId, newSessionId, tabIndex, tabCountUnchanged: afterCount === beforeCount, noOp: false };
 }
@@ -1264,11 +1343,13 @@ async function sendMessage(world: ReadyLocalWorld, page: ProductPage): Promise<{
   const send = p.locator("[data-chat-send-button]:not([disabled])").first();
   await send.click();
   const activeTab = p.locator('[data-chat-tab][data-chat-tab-active="true"]').first();
-  const sessionId = await readRequiredAttr(p, "[data-chat-tab]", "data-chat-tab-session-id", activeTab);
-  const anyharnessSessionId = await resolveActiveSessionId(world, sessionId);
-  const completion = await waitForTurnCompletion(world, anyharnessSessionId, TURN_TIMEOUT_MS);
+  const sessionId = await waitForReconciledSessionId(p, activeTab);
+  const completion = await waitForTurnCompletion(world, sessionId, TURN_TIMEOUT_MS);
   if (completion.error) {
     throw new Error(`sendMessage: assistant turn errored: ${completion.error}`);
+  }
+  if (!completion.ended) {
+    throw new Error(`sendMessage: assistant turn did not end within ${TURN_TIMEOUT_MS}ms`);
   }
   return { sessionId };
 }
@@ -1329,15 +1410,17 @@ async function changeModelSameHarness(
   const fromModelId = await readRequiredAttr(p, "[data-composer-model-trigger]", "data-composer-selected-model");
   const preflight = await world.gateway.preflight();
   const probe = (await world.runtime.client.getGatewayModels(harness).catch(() => [])).map((model) => model.id);
-  const candidates = probe.filter((id) => preflight.eligibleClaudeModels.includes(id) && id !== fromModelId);
-  const toModelId = candidates.find((id) => id !== undefined);
+  const toModelId = selectCheapestEligibleModel(
+    preflight.allowlistModels.filter((id) => id !== fromModelId),
+    probe,
+  );
   if (!toModelId) {
     throw new Error(
       `changeModelSameHarness: no alternate eligible model for "${harness}" other than the active "${fromModelId}" ` +
         "— cannot prove an in-session model change without a distinct target.",
     );
   }
-  await selectModelInComposer(page, toModelId);
+  await selectModelInComposer(page, harness, toModelId);
   const afterSessionId = await readRequiredAttr(p, "[data-chat-tab]", "data-chat-tab-session-id", activeTab);
   return { sessionId, fromModelId, toModelId, stayedInSession: afterSessionId === sessionId };
 }
@@ -1350,17 +1433,22 @@ async function reloadAndVerifyTabs(
   const p = page.page;
   await p.reload({ waitUntil: "domcontentloaded" });
   await p.locator("[data-workspace-tab-strip]").first().waitFor({ state: "visible", timeout: 60_000 });
-  const observedOrder = await p
-    .locator("[data-chat-tab]")
-    .evaluateAll((els) =>
-      els
-        .map((el) => ({
-          id: el.getAttribute("data-chat-tab"),
-          index: Number(el.getAttribute("data-chat-tab-index") ?? "0"),
-        }))
-        .sort((a, b) => a.index - b.index)
-        .map((entry) => entry.id),
-    );
+  const tabLocators = p.locator("[data-chat-tab]");
+  const tabCount = await tabLocators.count();
+  const observedTabs: Array<{ id: string | null; index: number }> = [];
+  for (let index = 0; index < tabCount; index += 1) {
+    const tab = tabLocators.nth(index);
+    observedTabs.push({
+      id: await tab.getAttribute("data-chat-tab"),
+      index: Number((await tab.getAttribute("data-chat-tab-index")) ?? "0"),
+    });
+  }
+  // Keep all projection on the controller side. Vite/esbuild may decorate
+  // browser-evaluated callbacks with its private `__name` helper, which does
+  // not exist in Playwright's isolated page function.
+  const observedOrder = observedTabs
+    .sort((a, b) => a.index - b.index)
+    .map((entry) => entry.id);
   if (JSON.stringify(observedOrder) !== JSON.stringify(expect.tabOrder)) {
     throw new Error(
       `reloadAndVerifyTabs: tab order not preserved (wanted ${JSON.stringify(expect.tabOrder)}, saw ${JSON.stringify(observedOrder)})`,
@@ -1407,13 +1495,10 @@ async function reloadAndVerifyTabs(
 }
 
 /** Selects `harness` in the composer by picking one of ITS models in the model
- * picker. The picker (ComposerModelPickerPopover) groups rows by harness but
- * stamps only `data-model-option="<modelId>"` on each row — there is no
- * per-harness section testid in the popover (`data-harness-auth-section` is a
- * SETTINGS pane testid). The round-3 body clicked `.first()` of a union with
- * `[data-model-option]`, which resolves to the CURRENT harness's first model and
- * never switches (fix round 4). Resolve the target harness's own model ids from
- * the runtime's gateway probe and click the first one the picker offers. */
+ * picker. Rows stamp both their harness kind and model id, which is required
+ * because different harness groups can expose the same canonical model id.
+ * Resolve the target harness's own model ids from the runtime's gateway probe
+ * and click the first exact kind+model row the picker offers. */
 async function selectHarnessInComposer(
   world: ReadyLocalWorld,
   page: ProductPage,
@@ -1440,7 +1525,11 @@ async function selectHarnessInComposer(
       continue;
     }
     for (const modelId of candidates) {
-      const option = p.locator(`[data-model-option="${cssAttr(modelId)}"]`).first();
+      const option = p
+        .locator(
+          `[data-model-kind="${cssAttr(harness)}"][data-model-option="${cssAttr(modelId)}"]`,
+        )
+        .first();
       if (await option.count().catch(() => 0)) {
         await option.click();
         return;
@@ -1522,21 +1611,6 @@ async function waitForReconciledSessionId(
     `waitForReconciledSessionId: the active tab's session id never reconciled off the optimistic ` +
       `client id (last "${last}") within ${TAB_SETTLE_TIMEOUT_MS}ms.`,
   );
-}
-
-/** Resolves the AnyHarness native session id backing the currently-active chat.
- * The Desktop client's tab session id is ephemeral; the runtime's most recent
- * session is the one just messaged. */
-async function resolveActiveSessionId(world: ReadyLocalWorld, _clientSessionId: string): Promise<string> {
-  const deadline = Date.now() + WORKSPACE_SETTLE_TIMEOUT_MS;
-  while (Date.now() < deadline) {
-    const sessions = await world.runtime.client.listSessions().catch(() => []);
-    if (sessions.length > 0) {
-      return sessions[sessions.length - 1]!.id;
-    }
-    await sleep(1_000);
-  }
-  throw new Error("resolveActiveSessionId: no AnyHarness session found for the active chat");
 }
 
 async function waitForTurnCompletion(
