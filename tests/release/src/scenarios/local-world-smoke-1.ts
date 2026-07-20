@@ -158,12 +158,13 @@ export interface LocalWorldSmokeDriver {
    * runtime's probe result. Fails closed if the state never syncs.
    */
   waitForGatewaySync(world: ReadyLocalWorld, page: ProductPage, harnessKind: string): Promise<void>;
+  /** Installs the harness process without requiring an auth route to be launchable yet. */
+  ensureHarnessInstalled(world: ReadyLocalWorld, page: ProductPage, harnessKind: string): Promise<void>;
   /**
-   * Ensures the representative harness's agent process is installed and reaches
-   * readiness `ready` in AnyHarness, so Desktop lists it as a launchable agent
-   * (its models appear in the composer picker). Claude's ACP process is built
-   * from git and can still be installing after gateway state syncs. Prerequisite
-   * agent setup — not the workspace/session/turn behavior under test.
+   * Ensures the representative harness's agent process is installed and its
+   * launch-options contain models, so Desktop can list it in the composer.
+   * Native login readiness may remain `login_required` for a gateway-routed
+   * actor. Prerequisite agent setup — not session/turn behavior under test.
    */
   ensureHarnessReady(world: ReadyLocalWorld, page: ProductPage, harnessKind: string): Promise<void>;
   /**
@@ -177,7 +178,7 @@ export interface LocalWorldSmokeDriver {
   /** The qualification allowlist, cheapest-first (from controller preflight). */
   allowlistModels(world: ReadyLocalWorld): Promise<string[]>;
   /** Selects canonical `modelId` through its unique exact/known-alias option and asserts it sticks. */
-  selectModelInUi(page: ProductPage, modelId: string): Promise<void>;
+  selectModelInUi(page: ProductPage, modelId: string, harnessKind?: string): Promise<void>;
   /**
    * Sends the bounded prompt from the home composer. This materializes the
    * pending workspace + session, transitions to the workspace shell, and runs
@@ -213,6 +214,50 @@ export interface LocalWorldSmokeDriver {
   closeWorld(world: ReadyLocalWorld): ReturnType<ReadyLocalWorld["close"]>;
 }
 
+async function ensureLocalHarnessInstalled(
+  world: ReadyLocalWorld,
+  page: ProductPage,
+  harnessKind: string,
+): Promise<void> {
+  const client = world.runtime.client;
+  const deadline = Date.now() + HARNESS_READY_TIMEOUT_MS;
+  let triggeredInstall = false;
+  let last: Awaited<ReturnType<typeof client.getAgent>> | undefined;
+  while (Date.now() < deadline) {
+    last = await client.getAgent(harnessKind).catch(() => undefined);
+    if (last?.installState === "installed") {
+      // Desktop snapshots the agent catalog at boot. Refresh only after the
+      // candidate runtime confirms installation so Settings no longer renders
+      // the install gate in front of the route cards.
+      await page.page.reload({ waitUntil: "domcontentloaded" });
+      await page.page
+        .locator("[data-home-composer-editor], [data-chat-composer-editor], [data-workspace-tab-strip]")
+        .first()
+        .waitFor({ state: "visible", timeout: 30_000 });
+      return;
+    }
+    if (
+      !triggeredInstall
+      && last
+      && last.installState !== "installing"
+      && (
+        last.readiness === "install_required"
+        || last.installState === "install_required"
+        || last.installState === "not_installed"
+      )
+    ) {
+      triggeredInstall = true;
+      await client.installAgent(harnessKind).catch(() => undefined);
+    }
+    await sleep(2_000);
+  }
+  await dumpHarnessReadinessDiagnostics(world, harnessKind).catch(() => undefined);
+  throw new Error(
+    `ensureHarnessInstalled: agent "${harnessKind}" never installed within ${HARNESS_READY_TIMEOUT_MS}ms `
+      + `(last: readiness=${last?.readiness}, installState=${last?.installState}, credentialState=${last?.credentialState}).`,
+  );
+}
+
 export const defaultLocalWorldSmokeDriver: LocalWorldSmokeDriver = {
   buildWorld: ({ map, litellm, run, runDir, ports }) =>
     constructLocalWorld({ run, map, litellm, runDir, worldRoot: localWorldSmokeWorldRoot(runDir), ports }),
@@ -242,10 +287,12 @@ export const defaultLocalWorldSmokeDriver: LocalWorldSmokeDriver = {
         `within ${GATEWAY_SYNC_TIMEOUT_MS}ms${lastError ? ` (last probe error: ${describe(lastError)})` : ""}.`,
     );
   },
+  ensureHarnessInstalled: (world, page, harnessKind) =>
+    ensureLocalHarnessInstalled(world, page, harnessKind),
   async ensureHarnessReady(world, page, harnessKind) {
+    await ensureLocalHarnessInstalled(world, page, harnessKind);
     const client = world.runtime.client;
     const deadline = Date.now() + HARNESS_READY_TIMEOUT_MS;
-    let triggeredInstall = false;
     let last: Awaited<ReturnType<typeof client.getAgent>> | undefined;
     let launchable = false;
     // Launchability is judged by `GET /v1/agents/launch-options` — the exact
@@ -269,34 +316,21 @@ export const defaultLocalWorldSmokeDriver: LocalWorldSmokeDriver = {
         launchable = true;
         break;
       }
-      // Trigger the install once if the agent process is not yet present and
-      // nothing else is already installing it (Desktop may auto-reconcile).
-      if (
-        !triggeredInstall &&
-        last &&
-        last.installState !== "installing" &&
-        (last.readiness === "install_required" || last.installState === "not_installed")
-      ) {
-        triggeredInstall = true;
-        await client.installAgent(harnessKind).catch(() => undefined);
-      }
       await sleep(2_000);
     }
     if (!launchable) {
       await dumpHarnessReadinessDiagnostics(world, harnessKind).catch(() => undefined);
       throw new Error(
-        `ensureHarnessReady: agent "${harnessKind}" never became launchable within ${HARNESS_READY_TIMEOUT_MS}ms ` +
+        `ensureHarnessReady: installed agent "${harnessKind}" never became launchable within ${HARNESS_READY_TIMEOUT_MS}ms ` +
           `(last: readiness=${last?.readiness}, installState=${last?.installState}, credentialState=${last?.credentialState}).`,
       );
     }
-    // Desktop fetches agents/launch-options once at boot and does not poll them
-    // (anyharness/sdk-react useAgentsQuery/useAgentLaunchOptionsQuery have no
-    // refetchInterval), so a harness that finished installing after boot never
-    // appears in the composer. Reload to force a fresh fetch now that AnyHarness
-    // lists it, then wait for the home composer to re-render.
+    // The renderer's launch-options query is not polled. Refresh after the
+    // runtime is definitively launchable so the composer observes the same
+    // model list that satisfied the strict readiness gate above.
     await page.page.reload({ waitUntil: "domcontentloaded" });
     await page.page
-      .locator("[data-home-composer-editor]")
+      .locator("[data-home-composer-editor], [data-chat-composer-editor], [data-workspace-tab-strip]")
       .first()
       .waitFor({ state: "visible", timeout: 30_000 });
   },
@@ -342,7 +376,7 @@ export const defaultLocalWorldSmokeDriver: LocalWorldSmokeDriver = {
     const preflight = await world.gateway.preflight();
     return preflight.eligibleClaudeModels;
   },
-  async selectModelInUi(page, modelId) {
+  async selectModelInUi(page, modelId, harnessKind) {
     const p = page.page;
     // The composer model picker is disabled until agents are healthy, and the
     // just-installed claude agent can surface a beat after AnyHarness reports it
@@ -359,8 +393,11 @@ export const defaultLocalWorldSmokeDriver: LocalWorldSmokeDriver = {
         await sleep(1_500);
         continue;
       }
+      const optionScope = harnessKind
+        ? `[data-model-kind="${cssAttr(harnessKind)}"][data-model-option]`
+        : "[data-model-option]";
       lastAvailable = await p
-        .locator("[data-model-option]")
+        .locator(optionScope)
         .evaluateAll((els) => els.map((el) => el.getAttribute("data-model-option")))
         .catch(() => []);
       const visibleModelId = resolveVisibleComposerModelOptionId(
@@ -368,7 +405,10 @@ export const defaultLocalWorldSmokeDriver: LocalWorldSmokeDriver = {
         lastAvailable.filter((candidate): candidate is string => candidate !== null),
       );
       if (visibleModelId) {
-        const option = p.locator(`[data-model-option="${cssAttr(visibleModelId)}"]`).first();
+        const kindSelector = harnessKind ? `[data-model-kind="${cssAttr(harnessKind)}"]` : "";
+        const option = p
+          .locator(`${kindSelector}[data-model-option="${cssAttr(visibleModelId)}"]`)
+          .first();
         await option.click();
         // The runtime/LiteLLM id remains canonical evidence, while Claude's
         // live selector may reflect the equivalent agent alias (`haiku`).

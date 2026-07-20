@@ -29,7 +29,7 @@ import {
   type ToolCallAuditCorrelation,
 } from "../../fixtures/integration-gateway.js";
 import { findErrorEvent, findTurnEndedEvent } from "../../fixtures/local-runtime.js";
-import { selectCheapestEligibleClaudeModel } from "../../services/qualification-litellm.js";
+import { selectCheapestEligibleModel } from "../../services/qualification-litellm.js";
 import type {
   LocalCleanupV1,
   LocalHarnessKind,
@@ -102,7 +102,7 @@ export interface LocalMcpDriver {
 }
 
 /**
- * Thrown when no eligible non-Fable Claude model is present in the
+ * Thrown when no eligible non-Fable model is present in the
  * intersection of the qualification allowlist and AnyHarness's live gateway
  * probe. The collector maps this to a typed `blocked` cell, distinct from a
  * genuine turn/tool-call/audit failure.
@@ -138,7 +138,7 @@ export const defaultLocalMcpDriver: LocalMcpDriver = {
       last = await client.getAgent(harness).catch(() => undefined);
       const options = await client.getAgentLaunchOptions().catch(() => []);
       const entry = options.find((agent) => agent.kind === harness);
-      if (entry && entry.models.length > 0) {
+      if (entry && entry.models.length > 0 && last?.installState === "installed") {
         launchable = true;
         break;
       }
@@ -146,7 +146,11 @@ export const defaultLocalMcpDriver: LocalMcpDriver = {
         !triggeredInstall &&
         last &&
         last.installState !== "installing" &&
-        (last.readiness === "install_required" || last.installState === "not_installed")
+        (
+          last.readiness === "install_required"
+          || last.installState === "install_required"
+          || last.installState === "not_installed"
+        )
       ) {
         triggeredInstall = true;
         await client.installAgent(harness).catch(() => undefined);
@@ -155,7 +159,7 @@ export const defaultLocalMcpDriver: LocalMcpDriver = {
     }
     if (!launchable) {
       throw new Error(
-        `ensureHarnessReady: agent "${harness}" never became launchable within ${HARNESS_READY_TIMEOUT_MS}ms ` +
+        `ensureHarnessReady: agent "${harness}" never became installed and launchable within ${HARNESS_READY_TIMEOUT_MS}ms ` +
           `(last: readiness=${last?.readiness}, installState=${last?.installState}).`,
       );
     }
@@ -239,17 +243,17 @@ export const defaultLocalMcpDriver: LocalMcpDriver = {
       world.gateway.preflight(),
       world.runtime.client.getGatewayModels(harness),
     ]);
-    const modelId = selectCheapestEligibleClaudeModel(
-      preflight.eligibleClaudeModels,
+    const modelId = selectCheapestEligibleModel(
+      preflight.allowlistModels,
       liveProbe.map((model) => model.id),
     );
     if (!modelId) {
       throw new NoEligibleMcpModelError(
-        `[${harness}] no eligible non-Fable Claude model in the intersection of the qualification allowlist ` +
+        `[${harness}] no eligible non-Fable model in the intersection of the qualification allowlist ` +
           "and AnyHarness's live gateway probe.",
       );
     }
-    await selectModelInUi(page, modelId);
+    await selectModelInUi(page, harness, modelId);
     // The integration prompt REQUIRES an `integrations.call_tool` MCP call, and
     // the session's default permission mode gates every tool call behind an
     // interactive approval card ("Permission — AWAITING RESPONSE"; proven:
@@ -562,6 +566,23 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function waitForAttributeValueChange(
+  locator: ReturnType<Page["locator"]>,
+  attribute: string,
+  previous: string,
+  timeoutMs: number,
+): Promise<string> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const value = (await locator.getAttribute(attribute).catch(() => null)) ?? "";
+    if (value && value !== previous) {
+      return value;
+    }
+    await sleep(200);
+  }
+  throw new Error(`attribute "${attribute}" did not change from "${previous}" within ${timeoutMs}ms`);
+}
+
 /** Escapes a value for safe interpolation inside a `[attr="…"]` CSS selector. */
 function cssAttr(value: string): string {
   return value.replace(/["\\]/g, "\\$&");
@@ -677,10 +698,14 @@ function deriveRepoName(repo: PreparedRepository): string {
   return repo.repoUrl.split("/").pop()?.replace(/\.git$/, "") ?? repo.path;
 }
 
-async function selectModelInUi(page: ProductPage, modelId: string): Promise<void> {
+async function selectModelInUi(
+  page: ProductPage,
+  harness: LocalHarnessKind,
+  modelId: string,
+): Promise<void> {
   const p = page.page;
   const deadline = Date.now() + MODEL_PICKER_TIMEOUT_MS;
-  const optionSelector = `[data-model-option="${cssAttr(modelId)}"]`;
+  const optionSelector = `[data-model-kind="${cssAttr(harness)}"][data-model-option="${cssAttr(modelId)}"]`;
   while (Date.now() < deadline) {
     const trigger = p.locator("[data-composer-model-trigger]:not([disabled])").first();
     try {
@@ -706,27 +731,38 @@ async function selectModelInUi(page: ProductPage, modelId: string): Promise<void
 }
 
 /**
- * Selects a session permission mode (e.g. `bypassPermissions`) in the composer's
- * SessionModeControl popover. The trigger stamps `data-session-mode-trigger`
- * (readback in `data-session-mode-selected`) and each option a
- * `data-session-mode-option="<modeId>"` (SessionModeControl.tsx). The same
- * popover renders on the home composer pre-launch (home-composer-controls.ts),
- * so a selection here is carried into the session the send materializes. Read
- * the selection back so a rejected apply surfaces loudly rather than silently
- * leaving the session on its approval-gated default.
+ * Selects a session permission mode (e.g. `bypassPermissions`) in the compact
+ * composer control. The current product trigger steps immediately to
+ * `data-session-mode-next`; older/non-compact surfaces may still expose the
+ * popover options, so retain that path as a compatibility fallback. Every step
+ * is read back before proceeding and the walk is bounded to one full ladder.
  */
 async function selectSessionModeInUi(page: ProductPage, modeId: string): Promise<void> {
   const p = page.page;
   const trigger = p.locator("[data-session-mode-trigger]").first();
   await trigger.waitFor({ state: "visible", timeout: 15_000 });
-  await trigger.click();
-  const option = p.locator(`[data-session-mode-option="${cssAttr(modeId)}"]`).first();
-  await option.waitFor({ state: "visible", timeout: 15_000 });
-  await option.click();
-  await p
-    .locator(`[data-session-mode-trigger][data-session-mode-selected="${cssAttr(modeId)}"]`)
-    .first()
-    .waitFor({ state: "attached", timeout: 15_000 });
+  for (let step = 0; step < 16; step += 1) {
+    const selected = (await trigger.getAttribute("data-session-mode-selected")) ?? "";
+    if (selected === modeId) {
+      return;
+    }
+    const next = (await trigger.getAttribute("data-session-mode-next")) ?? "";
+    if (next) {
+      await trigger.click();
+      await waitForAttributeValueChange(trigger, "data-session-mode-selected", selected, 15_000);
+      continue;
+    }
+    await trigger.click();
+    const option = p.locator(`[data-session-mode-option="${cssAttr(modeId)}"]`).first();
+    await option.waitFor({ state: "visible", timeout: 15_000 });
+    await option.click();
+    await p
+      .locator(`[data-session-mode-trigger][data-session-mode-selected="${cssAttr(modeId)}"]`)
+      .first()
+      .waitFor({ state: "attached", timeout: 15_000 });
+    return;
+  }
+  throw new Error(`selectSessionModeInUi: mode "${modeId}" was not reached within one bounded ladder walk.`);
 }
 
 async function readWorkspaceUiKey(page: Page): Promise<string> {
