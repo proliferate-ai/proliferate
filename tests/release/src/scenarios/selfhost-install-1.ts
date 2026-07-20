@@ -76,6 +76,7 @@ import { AUTHENTICATED_READINESS_SELECTOR, BROWSER_AUTH_SESSION_KEY, type Produc
  */
 
 export const SELFHOST_INSTALL_1_ID = SELFHOST_INSTALL_1_SCENARIO_ID;
+export const SELFHOST_INSTALL_WORLD_SUBDIR = "selfhost-install-1";
 export const REPRESENTATIVE_HARNESS = "claude";
 
 /** The `cell` dimension values, in run order. */
@@ -834,7 +835,7 @@ export async function runSelfHostInstallCells(
   cells: readonly PlannedCellV1[],
   driver: SelfHostInstallDriver,
 ): Promise<ScenarioCellOutcome[]> {
-  const inputs = resolveSelfHostWorldInputs(ctx);
+  const inputs = resolveSelfHostWorldInputs(ctx, SELFHOST_INSTALL_WORLD_SUBDIR);
   if (!inputs.ok) {
     return cells.map(
       (cell): ScenarioCellOutcome => ({
@@ -979,6 +980,7 @@ function cleanupIsClean(cleanup: SelfHostWorldCleanupEvidence): boolean {
  */
 export function resolveSelfHostWorldInputs(
   ctx: ScenarioRunContext,
+  worldSubdir = SELFHOST_INSTALL_WORLD_SUBDIR,
 ): { ok: true; value: SelfHostWorldConstructionInputs } | { ok: false; reason: string } {
   const map = ctx.candidateBuildMap;
   if (!map) {
@@ -1013,7 +1015,11 @@ export function resolveSelfHostWorldInputs(
     value: {
       map,
       run: ctx.runIdentity,
-      runDir: ctx.runDir,
+      // `ctx.runDir` is the parent candidate publication: it owns the build
+      // map, ports sidecar, and source artifact bytes shared by sequential
+      // scenarios. A world finalizer must therefore own only its scenario
+      // subtree, never the parent publication it will need again.
+      runDir: path.join(ctx.runDir, "worlds", worldSubdir),
       ports: ctx.ports,
       aws: { region, instanceType, hostedZoneId, zone: "qualification.proliferate.com" },
       ssh: { sshUser },
