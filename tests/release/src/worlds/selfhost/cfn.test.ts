@@ -1,14 +1,17 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
+import { promisify } from "node:util";
 
 import {
   CFN_DIAGNOSTIC_OUTPUT_BYTE_BUDGET,
   MAX_STACK_EVENT_TAIL,
   SelfHostCfnCleanupStack,
   boundedStackEventsTail,
+  buildCfnDiagnosticCommand,
   buildCfnParameters,
   buildCfnStackTags,
   bundleDigestBound,
@@ -46,6 +49,8 @@ import {
   type GhExec,
 } from "./cfn.js";
 import type { CleanupLedger, CleanupLedgerEntry, CleanupResourceKind } from "../local-workspace/cleanup-ledger.js";
+
+const execFileAsync = promisify(execFile);
 
 // ── Fakes ────────────────────────────────────────────────────────────────────
 
@@ -392,6 +397,77 @@ test("parseCfnBootstrapDiagnosticOutput: identifies the last started bootstrap s
     ],
   );
   assert.equal(JSON.stringify(parsed).includes("secret-token"), false);
+});
+
+test("CFN-DIAG-CONTROL-002: multibyte context cannot truncate fixed outer/substep markers", async () => {
+  const logDirectory = await mkdtemp(path.join(tmpdir(), "cfn-diagnostic-multibyte-"));
+  const multibyteLine = `${"😀".repeat(240)} error Command 02-bootstrap`;
+  const variableLines = Array.from({ length: 36 }, () => multibyteLine).join("\n");
+  const outerMarker = "__PROLIFERATE_CFN_OUTER__:timeout";
+  const substepMarker = "__PROLIFERATE_BOOTSTRAP_SUBSTEP__:preflight:started";
+
+  try {
+    await writeFile(
+      path.join(logDirectory, "cloud-init-output.log"),
+      `${variableLines}\n${outerMarker}\n`,
+    );
+    await writeFile(
+      path.join(logDirectory, "cfn-init-cmd.log"),
+      `${variableLines}\n__PROLIFERATE_BOOTSTRAP_SUBSTEP__:ensure-secrets:completed\n${substepMarker}\n`,
+    );
+    await writeFile(
+      path.join(logDirectory, "cfn-init.log"),
+      `Running Command 02-bootstrap\n${variableLines}\n`,
+    );
+
+    // The old variable-first, character-counted projection is >20 KB before
+    // either marker class is appended, so its aggregate byte cap loses both.
+    const legacyCharacterProjection = Array.from({ length: 36 }, () =>
+      [...multibyteLine].slice(0, 240).join(""),
+    ).join("\n");
+    const legacyCapped = Buffer.from(
+      `${legacyCharacterProjection}\n${substepMarker}\n${outerMarker}\n`,
+      "utf8",
+    ).subarray(0, CFN_DIAGNOSTIC_OUTPUT_BYTE_BUDGET).toString("utf8");
+    assert.ok(Buffer.byteLength(legacyCharacterProjection, "utf8") > CFN_DIAGNOSTIC_OUTPUT_BYTE_BUDGET);
+    assert.equal(legacyCapped.includes(substepMarker), false, "old ordering loses the substep marker");
+    assert.equal(legacyCapped.includes(outerMarker), false, "old ordering loses the outer marker");
+
+    const command = buildCfnDiagnosticCommand({ logDirectory, elevated: false });
+    const { stdout } = await execFileAsync("bash", ["-c", command], {
+      encoding: "utf8",
+      maxBuffer: 1024 * 1024,
+    });
+    assert.ok(Buffer.byteLength(stdout, "utf8") <= CFN_DIAGNOSTIC_OUTPUT_BYTE_BUDGET);
+    assert.ok(Buffer.byteLength(stdout, "utf8") < 24_000);
+    assert.match(stdout, /^[\x00-\x7f]*$/, "diagnostic stdout is a byte-bounded ASCII token projection");
+    assert.ok(stdout.includes(outerMarker), "outer terminal marker survives adversarial context");
+    assert.ok(stdout.includes(substepMarker), "bootstrap substep marker survives adversarial context");
+
+    const parsed = parseCfnBootstrapDiagnosticOutput(stdout);
+    assert.equal(parsed.terminal_cause, "outer_timeout");
+    assert.equal(
+      parsed.observations.some(
+        (item) => item.substep === "preflight" && item.outcome === "started",
+      ),
+      true,
+    );
+    assert.match(
+      summarizeCfnBootstrapDiagnostic({
+        stack_name_hash: "a".repeat(64),
+        instance_id_hash: "b".repeat(64),
+        capture_status: "captured",
+        detail: "captured",
+        ssm_status: "Success",
+        terminal_cause: parsed.terminal_cause,
+        observations: parsed.observations,
+      }),
+      /02-bootstrap\/preflight:started:exit=unknown:other/,
+      "priority-safe acquisition still places the deepest substep in the evidence tail",
+    );
+  } finally {
+    await rm(logDirectory, { recursive: true, force: true });
+  }
 });
 
 test("parseGhcrVersions + ghcrVersionIdForTag: finds the version whose tags include the run tag", () => {

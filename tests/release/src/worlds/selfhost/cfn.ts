@@ -93,34 +93,57 @@ const CFN_DIAGNOSTIC_MAX_OBSERVATIONS = 24;
 const CFN_DIAGNOSTIC_COMMAND_TIMEOUT_SECONDS = 30;
 /** SSM returns at most 24,000 stdout characters; stay below that hard provider cap. */
 export const CFN_DIAGNOSTIC_OUTPUT_BYTE_BUDGET = 20_000;
-const CFN_DIAGNOSTIC_COMMAND = [
-  "{",
-  // Authoritative/fixed tokens come first. Even if verbose context exhausts
-  // the global cap below, terminal stage, substep, and outer-timeout truth is
-  // retained by SSM's bounded StandardOutputContent response.
-  "f=/var/log/cfn-init.log",
-  "if sudo test -r \"$f\"; then",
-  "  printf '__PROLIFERATE_CFN_LOG__:%s\\n' \"${f##*/}\"",
-  "  sudo grep -aiE 'Running Command [0-9]{2}-[A-Za-z0-9_-]+|Command [0-9]{2}-[A-Za-z0-9_-]+ (succeeded|successfully completed|completed successfully|failed)([^A-Za-z]|$)|exit(ed)?( with)? (error )?(code|status)|return code' \"$f\" 2>/dev/null | tail -n 36 | cut -c1-240",
-  "fi",
-  "f=/var/log/cfn-init-cmd.log",
-  "if sudo test -r \"$f\"; then",
-  "  printf '__PROLIFERATE_CFN_LOG__:%s\\n' \"${f##*/}\"",
-  "  sudo grep -aiE '__PROLIFERATE_BOOTSTRAP_SUBSTEP__:(ensure-secrets|preflight|registry-login|runtime-install|db-up|migrate|api-caddy-up|optional-profiles|health-wait):(started|completed)' \"$f\" 2>/dev/null | tail -n 24 | cut -c1-160",
-  "fi",
-  "f=/var/log/cloud-init-output.log",
-  "if sudo test -r \"$f\"; then",
-  "  printf '__PROLIFERATE_CFN_LOG__:%s\\n' \"${f##*/}\"",
-  "  sudo grep -aiE '__PROLIFERATE_CFN_OUTER__:(timeout|command_failure)|cfn-init bootstrap exceeded the 18-minute limit' \"$f\" 2>/dev/null | tail -n 4 | cut -c1-240",
-  "fi",
-  // Coarse allowlisted context is useful only after fixed truth is secured.
-  "for f in /var/log/cfn-init.log /var/log/cfn-init-cmd.log; do",
-  "  sudo test -r \"$f\" || continue",
-  "  printf '__PROLIFERATE_CFN_LOG__:%s\\n' \"${f##*/}\"",
-  "  sudo grep -aiE 'Command [0-9]{2}-[A-Za-z0-9_-]+|timed out|timeout|failed|error|unhealthy|checksum|sha256|no space|permission denied|access denied|curl|download|docker compose|health' \"$f\" 2>/dev/null | tail -n 16 | cut -c1-240",
-  "done",
-  `} | head -c ${CFN_DIAGNOSTIC_OUTPUT_BYTE_BUDGET}`,
-].join("\n");
+
+function shellQuoteDiagnosticPath(value: string): string {
+  return `'${value.replaceAll("'", "'\\''")}'`;
+}
+
+/** Builds the fixed-token SSM command; configurable paths keep its byte bounds executable offline. */
+export function buildCfnDiagnosticCommand(options?: {
+  logDirectory?: string;
+  elevated?: boolean;
+}): string {
+  const logDirectory = options?.logDirectory ?? "/var/log";
+  const elevated = options?.elevated ?? true;
+  const sudo = elevated ? "sudo " : "";
+  const logPath = (name: string): string => shellQuoteDiagnosticPath(path.posix.join(logDirectory, name));
+
+  return [
+    "{",
+    // Emit the two authoritative fixed-marker classes first. grep -o projects
+    // only bounded ASCII tokens, so multibyte log context can consume neither
+    // their per-section allowance nor the aggregate byte budget.
+    `f=${logPath("cloud-init-output.log")}`,
+    `if ${sudo}test -r \"$f\"; then`,
+    "  printf '__PROLIFERATE_CFN_LOG__:%s\\n' \"${f##*/}\"",
+    `  ${sudo}grep -aioE '__PROLIFERATE_CFN_OUTER__:(timeout|command_failure)' \"$f\" 2>/dev/null | tail -n 4`,
+    `  if ${sudo}grep -aiq 'cfn-init bootstrap exceeded the 18-minute limit' \"$f\" 2>/dev/null; then`,
+    "    printf '__PROLIFERATE_CFN_OUTER__:timeout\\n'",
+    "  fi",
+    "fi",
+    `f=${logPath("cfn-init-cmd.log")}`,
+    `if ${sudo}test -r \"$f\"; then`,
+    "  printf '__PROLIFERATE_CFN_LOG__:%s\\n' \"${f##*/}\"",
+    `  ${sudo}grep -aioE '__PROLIFERATE_BOOTSTRAP_SUBSTEP__:(ensure-secrets|preflight|registry-login|runtime-install|db-up|migrate|api-caddy-up|optional-profiles|health-wait):(started|completed)' \"$f\" 2>/dev/null | tail -n 24`,
+    "fi",
+    // cfn-init stage truth is also normalized to bounded ASCII rather than
+    // retaining variable prefixes/suffixes or relying on character-counted cut.
+    `f=${logPath("cfn-init.log")}`,
+    `if ${sudo}test -r \"$f\"; then`,
+    "  printf '__PROLIFERATE_CFN_LOG__:%s\\n' \"${f##*/}\"",
+    `  ${sudo}grep -aioE 'Running Command [0-9]{2}-[A-Za-z0-9_-]+|Command [0-9]{2}-[A-Za-z0-9_-]+ (succeeded|successfully completed|completed successfully|failed)|exit(ed)?( with)? (error )?(code|status)[ :=]*[0-9]{1,3}|return code[ :=]*[0-9]{1,3}' \"$f\" 2>/dev/null | tail -n 36`,
+    "fi",
+    // Coarse context comes last and is likewise an ASCII token projection.
+    `for f in ${logPath("cfn-init.log")} ${logPath("cfn-init-cmd.log")}; do`,
+    `  ${sudo}test -r \"$f\" || continue`,
+    "  printf '__PROLIFERATE_CFN_LOG__:%s\\n' \"${f##*/}\"",
+    `  ${sudo}grep -aioE 'Command [0-9]{2}-[A-Za-z0-9_-]+|timed out|timeout|failed|error|unhealthy|checksum|sha256|no space|permission denied|access denied|curl|download|docker compose|health' \"$f\" 2>/dev/null | tail -n 16`,
+    "done",
+    `} | head -c ${CFN_DIAGNOSTIC_OUTPUT_BYTE_BUDGET}`,
+  ].join("\n");
+}
+
+const CFN_DIAGNOSTIC_COMMAND = buildCfnDiagnosticCommand();
 
 export type CfnBootstrapDiagnosticCaptureStatus =
   | "captured"
@@ -742,8 +765,14 @@ export function parseCfnBootstrapDiagnosticOutput(raw: string): CfnBootstrapDiag
     }
   }
 
-  const observations = [...stages.values(), ...substeps.values()]
-    .sort((left, right) => left.order - right.order)
+  // The SSM command is priority-ordered for truncation safety rather than
+  // globally chronological. Preserve chronology within each class, then keep
+  // bootstrap substeps after template stages so the evidence tail still names
+  // the deepest proven progress point.
+  const observations = [
+    ...[...stages.values()].sort((left, right) => left.order - right.order),
+    ...[...substeps.values()].sort((left, right) => left.order - right.order),
+  ]
     .slice(-CFN_DIAGNOSTIC_MAX_OBSERVATIONS)
     .map(({ order: _order, terminal: _terminal, ...observation }) => observation);
   return { terminal_cause: terminalCause, observations };
