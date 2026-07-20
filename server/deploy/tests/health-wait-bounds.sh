@@ -17,6 +17,13 @@ cat >"$FAKE_BIN/curl" <<'EOF'
 printf '%s\n' "$*" >>"$FAKE_CURL_CALLS"
 case "$*" in
   *http://local.test/health) exit 0 ;;
+  *https://public.test/health)
+    if [[ -n "${FAKE_PUBLIC_SUCCEED_AFTER:-}" ]]; then
+      public_calls="$(grep -c 'https://public.test/health' "$FAKE_CURL_CALLS" || true)"
+      (( public_calls >= FAKE_PUBLIC_SUCCEED_AFTER )) && exit 0
+    fi
+    exit 22
+    ;;
   *) exit 22 ;;
 esac
 EOF
@@ -52,6 +59,33 @@ __PROLIFERATE_HEALTHCHECK_TARGET__:public:started
 __PROLIFERATE_HEALTHCHECK_TARGET__:public:failed
 EOF
 diff -u "$SCRATCH/expected-progress" "$progress"
+
+# The CFN path deliberately raises the retry count above the historical 60.
+# Prove the shared gate can recover from cold public TLS after that old cutoff
+# without relaxing the absolute outer deadline.
+: >"$progress"
+: >"$calls"
+future_deadline="$(( $(date +%s) + 60 ))"
+PATH="$FAKE_BIN:$PATH" \
+  FAKE_CURL_CALLS="$calls" \
+  FAKE_PUBLIC_SUCCEED_AFTER=61 \
+  PROLIFERATE_ENV_FILE="$runtime_env" \
+  PROLIFERATE_HEALTHCHECK_URL="http://local.test/health" \
+  PROLIFERATE_HEALTHCHECK_ATTEMPTS=210 \
+  PROLIFERATE_HEALTHCHECK_SLEEP_SECONDS=0 \
+  PROLIFERATE_HEALTHCHECK_CONNECT_TIMEOUT_SECONDS=1 \
+  PROLIFERATE_HEALTHCHECK_MAX_TIME_SECONDS=1 \
+  PROLIFERATE_HEALTHCHECK_DEADLINE_EPOCH_SECONDS="$future_deadline" \
+  PROLIFERATE_HEALTHCHECK_PROGRESS_FILE="$progress" \
+  "$DEPLOY_DIR/wait-for-health.sh" >/dev/null 2>&1
+[[ "$(grep -c 'https://public.test/health' "$calls")" -eq 61 ]]
+cat >"$SCRATCH/expected-recovered-progress" <<'EOF'
+__PROLIFERATE_HEALTHCHECK_TARGET__:local:started
+__PROLIFERATE_HEALTHCHECK_TARGET__:local:completed
+__PROLIFERATE_HEALTHCHECK_TARGET__:public:started
+__PROLIFERATE_HEALTHCHECK_TARGET__:public:completed
+EOF
+diff -u "$SCRATCH/expected-recovered-progress" "$progress"
 
 # An exhausted CFN-owned deadline fails before starting curl, while retaining a
 # precise fixed target marker rather than waiting for the outer timeout.

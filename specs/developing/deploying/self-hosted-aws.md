@@ -56,16 +56,22 @@ respond.
 
 The instance gives `cfn-init` an 18-minute inner deadline, followed by a
 30-second forced-kill fallback if it does not stop on `TERM`, and always reports
-its bootstrap exit status through `cfn-signal`. This leaves headroom inside the
-stack's 20-minute creation policy. A failed or overlong bootstrap therefore
-puts only a bounded stage and exit-code reason in the stack event. Inspect
+its bootstrap exit status through `cfn-signal`. The signal targets a separate
+20-minute CloudFormation wait condition rather than the EC2 resource itself.
+That lets the instance reach `CREATE_COMPLETE` so its Elastic IP association
+and DNS can converge while bootstrap waits for the real public endpoint; the
+stack still cannot complete without a successful bootstrap signal. The
+presigned wait-handle URL is substituted only while shell xtrace is disabled.
+A failed or overlong bootstrap therefore puts only a bounded stage and
+exit-code reason in the stack event. Inspect
 `/var/log/cfn-init.log` and `/var/log/cfn-init-cmd.log` through SSM for host-local
 detail rather than copying those potentially secret-bearing logs into
 CloudFormation events.
 
-The health gate receives a deadline one minute inside that 18-minute wrapper
-and bounds every `curl` connect and total request. It therefore either finishes
-inside the existing creation envelope or returns control for `cfn-signal`; one
+The health gate receives a deadline one minute inside that 18-minute wrapper,
+uses the installer's bounded 210-attempt cold-TLS budget, and bounds every
+`curl` connect and total request. It therefore either finishes inside the
+existing creation envelope or returns control for `cfn-signal`; one
 unresponsive TLS request cannot consume the outer timeout. Its owner-only
 progress record distinguishes the local API and public HTTPS targets with fixed
 started/completed/failed tokens, without recording either URL.

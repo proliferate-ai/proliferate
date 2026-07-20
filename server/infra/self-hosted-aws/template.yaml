@@ -326,11 +326,11 @@ Resources:
     Properties:
       Roles: [!Ref ProliferateIamRole]
 
+  ProliferateBootstrapWaitHandle:
+    Type: AWS::CloudFormation::WaitConditionHandle
+
   ProliferateInstance:
     Type: AWS::EC2::Instance
-    CreationPolicy:
-      ResourceSignal:
-        Timeout: PT20M
     Metadata:
       AWS::CloudFormation::Init:
         configSets:
@@ -555,7 +555,7 @@ Resources:
 
           # Do not enable `errexit` here. A failed or overlong cfn-init must
           # still reach cfn-signal so CloudFormation reports the bounded
-          # stage/exit reason before the 20-minute CreationPolicy timeout.
+          # stage/exit reason before the 20-minute bootstrap wait expires.
           EXIT_CODE=0
           FAILURE_REASON="CloudFormation bootstrap completed."
           dnf install -y aws-cfn-bootstrap || {
@@ -567,6 +567,7 @@ Resources:
             # the cfn-init wrapper deadline. Its individual curl attempts are
             # bounded too, so an unresponsive TLS peer cannot consume the whole
             # CloudFormation creation envelope without a terminal marker.
+            export PROLIFERATE_HEALTHCHECK_ATTEMPTS=210
             export PROLIFERATE_HEALTHCHECK_DEADLINE_EPOCH_SECONDS="$(( $(date +%s) + 17 * 60 ))"
             timeout --signal=TERM --kill-after=30s 18m /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource ProliferateInstance --region ${AWS::Region} --configsets bootstrap || {
               EXIT_CODE=$?
@@ -583,7 +584,16 @@ Resources:
             }
           fi
           if [ -x /opt/aws/bin/cfn-signal ]; then
-            /opt/aws/bin/cfn-signal -e "$EXIT_CODE" --reason "$FAILURE_REASON" --stack ${AWS::StackName} --resource ProliferateInstance --region ${AWS::Region}
+            # The wait handle is a presigned bearer URL. Disable xtrace before
+            # CloudFormation substitutes it into this command so it never
+            # enters cloud-init logs.
+            set +x
+            /opt/aws/bin/cfn-signal -e "$EXIT_CODE" --reason "$FAILURE_REASON" '${ProliferateBootstrapWaitHandle}'
+            SIGNAL_EXIT_CODE=$?
+            set -x
+            if [ "$SIGNAL_EXIT_CODE" -ne 0 ] && [ "$EXIT_CODE" -eq 0 ]; then
+              EXIT_CODE="$SIGNAL_EXIT_CODE"
+            fi
           else
             echo "cfn-signal is unavailable; bootstrap exit code $EXIT_CODE." >&2
           fi
@@ -602,6 +612,18 @@ Resources:
             - UsesElasticIp
             - !Ref ProliferateEip
             - !GetAtt ProliferateInstance.PublicIp
+
+  # Keep stack creation fail-closed on bootstrap without holding the EC2
+  # resource in CREATE_IN_PROGRESS. The instance may therefore complete and
+  # allow its EIP association/DNS resources to converge while UserData waits
+  # for the real public HTTPS endpoint, then this independent condition makes
+  # the bootstrap signal authoritative for the overall stack.
+  ProliferateBootstrapWaitCondition:
+    Type: AWS::CloudFormation::WaitCondition
+    DependsOn: ProliferateInstance
+    Properties:
+      Handle: !Ref ProliferateBootstrapWaitHandle
+      Timeout: "1200"
 
 Outputs:
   BaseUrl:
