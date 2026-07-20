@@ -93,6 +93,7 @@ const CFN_DIAGNOSTIC_MAX_OBSERVATIONS = 24;
 const CFN_DIAGNOSTIC_COMMAND_TIMEOUT_SECONDS = 30;
 /** SSM returns at most 24,000 stdout characters; stay below that hard provider cap. */
 export const CFN_DIAGNOSTIC_OUTPUT_BYTE_BUDGET = 20_000;
+const CFN_BOOTSTRAP_PROGRESS_FILE = "/opt/proliferate/server/deploy/.bootstrap-progress.log";
 
 function shellQuoteDiagnosticPath(value: string): string {
   return `'${value.replaceAll("'", "'\\''")}'`;
@@ -101,18 +102,20 @@ function shellQuoteDiagnosticPath(value: string): string {
 /** Builds the fixed-token SSM command; configurable paths keep its byte bounds executable offline. */
 export function buildCfnDiagnosticCommand(options?: {
   logDirectory?: string;
+  bootstrapProgressFile?: string;
   elevated?: boolean;
 }): string {
   const logDirectory = options?.logDirectory ?? "/var/log";
+  const bootstrapProgressFile = options?.bootstrapProgressFile ?? CFN_BOOTSTRAP_PROGRESS_FILE;
   const elevated = options?.elevated ?? true;
   const sudo = elevated ? "sudo " : "";
   const logPath = (name: string): string => shellQuoteDiagnosticPath(path.posix.join(logDirectory, name));
 
   return [
     "{",
-    // Emit the two authoritative fixed-marker classes first. grep -o projects
-    // only bounded ASCII tokens, so multibyte log context can consume neither
-    // their per-section allowance nor the aggregate byte budget.
+    // Emit authoritative fixed-marker classes first. grep -o projects only
+    // bounded ASCII tokens, so multibyte log context can consume neither their
+    // per-section allowance nor the aggregate byte budget.
     `f=${logPath("cloud-init-output.log")}`,
     `if ${sudo}test -r \"$f\"; then`,
     "  printf '__PROLIFERATE_CFN_LOG__:%s\\n' \"${f##*/}\"",
@@ -121,6 +124,14 @@ export function buildCfnDiagnosticCommand(options?: {
     "    printf '__PROLIFERATE_CFN_OUTER__:timeout\\n'",
     "  fi",
     "fi",
+    // bootstrap.sh writes these fixed markers directly before each material
+    // action. Read its owned file before cfn-init's buffered compatibility copy.
+    `f=${shellQuoteDiagnosticPath(bootstrapProgressFile)}`,
+    `if ${sudo}test -r \"$f\"; then`,
+    "  printf '__PROLIFERATE_CFN_LOG__:bootstrap-progress.log\\n'",
+    `  ${sudo}grep -aioE '__PROLIFERATE_BOOTSTRAP_SUBSTEP__:(ensure-secrets|preflight|registry-login|runtime-install|db-up|migrate|api-caddy-up|optional-profiles|health-wait):(started|completed)' \"$f\" 2>/dev/null | tail -n 24`,
+    "fi",
+    // Retain cfn-init-cmd.log as a compatibility fallback for older bundles.
     `f=${logPath("cfn-init-cmd.log")}`,
     `if ${sudo}test -r \"$f\"; then`,
     "  printf '__PROLIFERATE_CFN_LOG__:%s\\n' \"${f##*/}\"",
@@ -153,6 +164,7 @@ export type CfnBootstrapDiagnosticCaptureStatus =
   | "no_allowlisted_observations";
 
 export type CfnBootstrapDiagnosticSource =
+  | "bootstrap-progress.log"
   | "cfn-init.log"
   | "cfn-init-cmd.log"
   | "cloud-init-output.log"
@@ -609,6 +621,7 @@ export function parseCfnBootstrapDiagnosticOutput(raw: string): CfnBootstrapDiag
   const stages = new Map<CfnBootstrapStage, ResolvedState>();
   const substeps = new Map<CfnBootstrapSubstep, ResolvedState>();
   const activeStage: Record<Exclude<CfnBootstrapDiagnosticSource, "bootstrap.sh">, CfnBootstrapStage> = {
+    "bootstrap-progress.log": "unknown",
     "cfn-init.log": "unknown",
     "cfn-init-cmd.log": "unknown",
     "cloud-init-output.log": "unknown",
@@ -617,7 +630,7 @@ export function parseCfnBootstrapDiagnosticOutput(raw: string): CfnBootstrapDiag
   for (const rawLine of raw.split(/\r?\n/)) {
     order += 1;
     const marker = rawLine.match(
-      /^__PROLIFERATE_CFN_LOG__:(cfn-init\.log|cfn-init-cmd\.log|cloud-init-output\.log)$/,
+      /^__PROLIFERATE_CFN_LOG__:(bootstrap-progress\.log|cfn-init\.log|cfn-init-cmd\.log|cloud-init-output\.log)$/,
     );
     if (marker) {
       source = marker[1] as Exclude<CfnBootstrapDiagnosticSource, "bootstrap.sh">;
@@ -647,11 +660,11 @@ export function parseCfnBootstrapDiagnosticOutput(raw: string): CfnBootstrapDiag
     if (candidateSubstep && ALLOWED_CFN_BOOTSTRAP_SUBSTEPS.has(candidateSubstep)) {
       const outcome = substepMatch?.[2]?.toLowerCase() as "started" | "completed";
       const prior = substeps.get(candidateSubstep);
-      // The same command output can appear in both cfn-init logs. A later copy
-      // of STARTED must not regress an already observed completion.
-      if (!prior?.terminal || outcome === "completed") {
+      // Keep the first source for duplicate states, permit only a genuine
+      // started -> completed upgrade, and never regress a completion.
+      if (!prior || (!prior.terminal && outcome === "completed")) {
         substeps.set(candidateSubstep, {
-          source: "bootstrap.sh",
+          source: source === "bootstrap-progress.log" ? source : "bootstrap.sh",
           stage: "02-bootstrap",
           substep: candidateSubstep,
           outcome,

@@ -37,6 +37,7 @@ e2b-connection.json
 .env.prod
 .env.prod.server
 .env.*.local
+/server/deploy/.bootstrap-progress.log
 
 reference/
 references/

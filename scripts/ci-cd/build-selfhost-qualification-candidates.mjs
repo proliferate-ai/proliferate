@@ -177,10 +177,10 @@ export function buildServerImageArchive({ outputPath, version, platform, exec = 
 /**
  * Builds `proliferate-deploy.tar.gz` + `self-hosted-assets.SHA256SUMS` EXACTLY
  * the way `server-ci.yml self-hosted-release-assets` builds the release bundle:
- * `cp -R server/deploy/. proliferate-deploy/`, drop the CI-only `smoke/` and
- * `tests/`, write `VERSION`, then a reproducible root-owned tar and a bare-name
- * checksum. This is never reconstructed ad-hoc from loose source — the shipped
- * installer checksum-verifies exactly this artifact.
+ * `cp -R server/deploy/. proliferate-deploy/`, drop the CI-only trees and
+ * host-local progress file, write `VERSION`, then a reproducible root-owned tar
+ * and a bare-name checksum. This is never reconstructed ad-hoc from loose
+ * source — the shipped installer checksum-verifies exactly this artifact.
  */
 export function buildSelfHostDeployBundle({
   bundleOutputPath,
@@ -202,6 +202,7 @@ export function buildSelfHostDeployBundle({
     // compose, and config the running stack needs (server-ci parity).
     exec("rm", ["-rf", path.join(stageDir, "smoke")]);
     exec("rm", ["-rf", path.join(stageDir, "tests")]);
+    exec("rm", ["-f", path.join(stageDir, ".bootstrap-progress.log")]);
     writeFileSync(path.join(stageDir, "VERSION"), `${version}\n`);
     // Archive as root:root, numeric owner (server-ci parity) so a root
     // extraction on the box does not hand ownership to the builder's uid.

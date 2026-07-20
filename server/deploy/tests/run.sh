@@ -65,6 +65,7 @@ make_release() {
   mkdir -p "$staging/proliferate-deploy"
   cp -R "$DEPLOY_DIR/." "$staging/proliferate-deploy/"
   rm -rf "$staging/proliferate-deploy/smoke" "$staging/proliferate-deploy/tests"
+  rm -f "$staging/proliferate-deploy/.bootstrap-progress.log"
   printf '%s\n' "$version" >"$staging/proliferate-deploy/VERSION"
   tar czf "$dl/proliferate-deploy.tar.gz" -C "$staging" proliferate-deploy
   ( cd "$dl" && sha256sum proliferate-deploy.tar.gz >self-hosted-assets.SHA256SUMS )
@@ -146,9 +147,9 @@ printf 'AGENT_GATEWAY_ENABLED=true\nE2B_API_KEY=k\nE2B_TEMPLATE_NAME=t/x:product
 [[ "$(proliferate_enabled_profiles "$env_both")" == "agent-gateway cloud-workspaces" ]] && ok "gateway + cloud both on -> both profiles" || no "expected both profiles: got '$(proliferate_enabled_profiles "$env_both")'"
 
 if bash "$TESTS_DIR/bootstrap-markers.sh"; then
-  ok "bootstrap markers are ordered and stop without completion on failure"
+  ok "bootstrap markers are ordered, durable across wrapper kill, and stop without completion on failure"
 else
-  no "bootstrap marker ordering/failure contract regressed"
+  no "bootstrap marker ordering/durability/failure contract regressed"
 fi
 
 mv="$(printf '0.3.2\n0.3.18\n0.10.0\n2.0.0\n0.3.9\n' | proliferate_max_version)"
@@ -304,6 +305,7 @@ BSTAGE="$SCRATCH/bstage"
 mkdir -p "$BSTAGE/proliferate-deploy"
 cp -R "$DEPLOY_DIR/." "$BSTAGE/proliferate-deploy/"
 rm -rf "$BSTAGE/proliferate-deploy/smoke" "$BSTAGE/proliferate-deploy/tests"
+rm -f "$BSTAGE/proliferate-deploy/.bootstrap-progress.log"
 printf '0.3.18\n' >"$BSTAGE/proliferate-deploy/VERSION"
 tar czf "$BUNDLE_DIR/proliferate-deploy.tar.gz" -C "$BSTAGE" proliferate-deploy
 rm -rf "$BSTAGE"
@@ -427,6 +429,7 @@ BUNDLE_ROOT="$SCRATCH/bundle"
 mkdir -p "$BUNDLE_ROOT/proliferate-deploy"
 cp -R "$DEPLOY_DIR/." "$BUNDLE_ROOT/proliferate-deploy/"
 rm -rf "$BUNDLE_ROOT/proliferate-deploy/smoke" "$BUNDLE_ROOT/proliferate-deploy/tests"
+rm -f "$BUNDLE_ROOT/proliferate-deploy/.bootstrap-progress.log"
 printf '0.3.18\n' >"$BUNDLE_ROOT/proliferate-deploy/VERSION"
 tar czf "$SCRATCH/proliferate-deploy.tar.gz" -C "$BUNDLE_ROOT" proliferate-deploy
 members="$(tar tzf "$SCRATCH/proliferate-deploy.tar.gz")"
@@ -435,6 +438,7 @@ for want in proliferate-deploy/bootstrap.sh proliferate-deploy/update.sh prolife
 done
 echo "$members" | grep -q 'proliferate-deploy/smoke/' && no "bundle should NOT contain smoke/" || ok "bundle excludes smoke/"
 echo "$members" | grep -q 'proliferate-deploy/tests/' && no "bundle should NOT contain tests/" || ok "bundle excludes tests/"
+echo "$members" | grep -q 'proliferate-deploy/.bootstrap-progress.log' && no "bundle should NOT contain host progress" || ok "bundle excludes host progress"
 ( cd "$SCRATCH" && sha256sum proliferate-deploy.tar.gz >sums && sha256sum -c --ignore-missing sums >/dev/null 2>&1 ) \
   && ok "checksum round-trips (sha256sum -c)" || no "checksum round-trip failed"
 
@@ -564,7 +568,7 @@ user_data_status=$?
 [[ "$user_data_status" -eq 23 ]] && ok "template UserData preserves failed cfn-init exit code" || no "template UserData returned $user_data_status instead of cfn-init exit 23"
 grep -qx -- '-e' "$signal_args" \
   && grep -qx -- '23' "$signal_args" \
-  && grep -qx -- 'cfn-init bootstrap failed with exit code 23; inspect /var/log/cfn-init.log and /var/log/cfn-init-cmd.log through SSM.' "$signal_args" \
+  && grep -qx -- 'cfn-init bootstrap failed with exit code 23; inspect .bootstrap-progress.log and cfn-init logs through SSM.' "$signal_args" \
   && ok "template UserData failure invokes cfn-signal with bounded diagnostics" \
   || no "template UserData failure did not invoke cfn-signal with the expected bounded reason"
 
@@ -573,7 +577,7 @@ FAKE_CFN_BIN="$FAKE_CFN_BIN" FAKE_TIMEOUT_EXIT=124 CFN_SIGNAL_ARGS_FILE="$timeou
   bash "$user_data" >/dev/null 2>&1
 user_data_status=$?
 [[ "$user_data_status" -eq 124 ]] && ok "template UserData bounds an overlong cfn-init before the CreationPolicy timeout" || no "template UserData returned $user_data_status instead of timeout exit 124"
-grep -qx -- 'cfn-init bootstrap exceeded the 18-minute limit; inspect /var/log/cfn-init.log and /var/log/cfn-init-cmd.log through SSM.' "$timeout_signal_args" \
+grep -qx -- 'cfn-init bootstrap exceeded the 18-minute limit; inspect .bootstrap-progress.log and cfn-init logs through SSM.' "$timeout_signal_args" \
   && ok "template UserData timeout invokes cfn-signal with bounded diagnostics" \
   || no "template UserData timeout did not invoke cfn-signal with the expected bounded reason"
 
@@ -583,7 +587,7 @@ FAKE_CFN_BIN="$FAKE_CFN_BIN" FAKE_TIMEOUT_EXIT=137 CFN_SIGNAL_ARGS_FILE="$kill_t
 user_data_status=$?
 [[ "$user_data_status" -eq 124 ]] && ok "template UserData normalizes kill-after exit 137 to timeout exit 124" || no "template UserData returned $user_data_status instead of normalized timeout exit 124"
 grep -qx -- '124' "$kill_timeout_signal_args" \
-  && grep -qx -- 'cfn-init bootstrap exceeded the 18-minute limit; inspect /var/log/cfn-init.log and /var/log/cfn-init-cmd.log through SSM.' "$kill_timeout_signal_args" \
+  && grep -qx -- 'cfn-init bootstrap exceeded the 18-minute limit; inspect .bootstrap-progress.log and cfn-init logs through SSM.' "$kill_timeout_signal_args" \
   && ok "template UserData kill-after invokes cfn-signal with timeout diagnostics" \
   || no "template UserData kill-after did not invoke cfn-signal with normalized timeout diagnostics"
 
@@ -633,7 +637,7 @@ EOF
     [[ "$hard_deadline_status" -eq 124 ]] \
       && [[ "$signal_call_count" -eq 1 ]] \
       && grep -qx -- '124' "$hard_deadline_signal_args" \
-      && grep -qx -- 'cfn-init bootstrap exceeded the 18-minute limit; inspect /var/log/cfn-init.log and /var/log/cfn-init-cmd.log through SSM.' "$hard_deadline_signal_args" \
+      && grep -qx -- 'cfn-init bootstrap exceeded the 18-minute limit; inspect .bootstrap-progress.log and cfn-init logs through SSM.' "$hard_deadline_signal_args" \
       && ok "template UserData hard-kills a TERM-resistant cfn-init and signals one bounded timeout" \
       || no "template UserData did not hard-bound and signal the TERM-resistant cfn-init (status=$hard_deadline_status calls=$signal_call_count)"
   else

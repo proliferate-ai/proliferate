@@ -63,14 +63,26 @@ puts only a bounded stage and exit-code reason in the stack event. Inspect
 detail rather than copying those potentially secret-bearing logs into
 CloudFormation events.
 
-`bootstrap.sh` emits fixed, secret-free start/completion markers for its
-material substeps (secret resolution, preflight, registry login, runtime
-installation, database start/migration, API+Caddy start, optional profiles,
-and health wait). Qualification diagnostics accept only those allowlisted
-tokens. A timeout can therefore identify the last started substep without
-persisting command output, environment values, URLs, or provider payloads;
-absence of a completion marker is reported as unfinished rather than guessed
-as a command failure.
+`bootstrap.sh` initializes its owner-only
+`/opt/proliferate/server/deploy/.bootstrap-progress.log` at each invocation,
+then appends fixed, secret-free start/completion markers for its material
+substeps (secret resolution, preflight, registry login, runtime installation,
+database start/migration, API+Caddy start, optional profiles, and health wait).
+Each start append returns and closes before the same marker is printed to normal
+operator stdout and before material work begins; each completion append follows
+successful material work. A later `TERM`/`KILL` of the bootstrap process cannot
+remove an append that already returned. This is not a claim of recovery from a
+termination during the append, host power loss, filesystem failure, or storage
+corruption.
+
+Qualification diagnostics read that file directly before treating
+`cfn-init-cmd.log` as a compatibility fallback. This matters because the AWS
+helper buffers command stdout until the child exits, so an outer timeout can
+kill `cfn-init` before stdout markers reach that log. Diagnostics accept only
+the allowlisted marker tokens under the existing byte cap. A timeout can
+therefore identify the last started substep without persisting command output,
+environment values, URLs, or provider payloads; absence of a completion marker
+is reported as unfinished rather than guessed as a command failure.
 
 ## Required Inputs
 

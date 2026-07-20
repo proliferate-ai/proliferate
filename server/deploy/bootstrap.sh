@@ -9,6 +9,20 @@ STATIC_ENV_FILE="$SCRIPT_DIR/.env.static"
 LEGACY_ENV_FILE="$SCRIPT_DIR/.env"
 RUNTIME_ENV_FILE="$SCRIPT_DIR/.env.runtime"
 EXAMPLE_ENV_FILE="$SCRIPT_DIR/.env.production.example"
+BOOTSTRAP_PROGRESS_FILE="$SCRIPT_DIR/.bootstrap-progress.log"
+
+# This file is the deployment layer's host-local progress record. Reinitialize
+# it before any validation or material work so one invocation can never inherit
+# another invocation's markers. Reject links/non-files before writing because
+# CloudFormation runs this script as root.
+bootstrap_progress_init() {
+  if [[ -L "$BOOTSTRAP_PROGRESS_FILE" || ( -e "$BOOTSTRAP_PROGRESS_FILE" && ! -f "$BOOTSTRAP_PROGRESS_FILE" ) ]]; then
+    printf 'Refusing unsafe bootstrap progress path: %s\n' "$BOOTSTRAP_PROGRESS_FILE" >&2
+    return 1
+  fi
+  (umask 077 && : >"$BOOTSTRAP_PROGRESS_FILE")
+  chmod 0600 "$BOOTSTRAP_PROGRESS_FILE"
+}
 
 # Fixed, secret-free progress markers consumed by the bounded CloudFormation
 # failure diagnostic. Keep both token allowlists in sync; never place command
@@ -16,6 +30,7 @@ EXAMPLE_ENV_FILE="$SCRIPT_DIR/.env.production.example"
 bootstrap_substep_marker() {
   local substep="$1"
   local status="$2"
+  local marker
   case "$substep" in
     ensure-secrets|preflight|registry-login|runtime-install|db-up|migrate|api-caddy-up|optional-profiles|health-wait) ;;
     *) return 2 ;;
@@ -24,8 +39,16 @@ bootstrap_substep_marker() {
     started|completed) ;;
     *) return 2 ;;
   esac
-  printf '__PROLIFERATE_BOOTSTRAP_SUBSTEP__:%s:%s\n' "$substep" "$status"
+  marker="__PROLIFERATE_BOOTSTRAP_SUBSTEP__:${substep}:${status}"
+  # Append and close the owned file before writing ordinary operator stdout.
+  # This guarantees that a later process termination cannot lose an append
+  # that already returned; it does not claim power-loss or filesystem-failure
+  # immunity, nor recovery if termination interrupts this append itself.
+  printf '%s\n' "$marker" >>"$BOOTSTRAP_PROGRESS_FILE"
+  printf '%s\n' "$marker"
 }
+
+bootstrap_progress_init
 
 if [[ -f "$STATIC_ENV_FILE" ]]; then
   ENV_FILE="$STATIC_ENV_FILE"

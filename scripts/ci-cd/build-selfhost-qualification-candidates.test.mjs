@@ -101,7 +101,7 @@ test("buildServerImageArchive uses buildx --load for the box platform and docker
   }
 });
 
-test("buildSelfHostDeployBundle mirrors the server-ci release bundle build (drop smoke/tests, VERSION, root-owned tar, sibling SHA256SUMS)", () => {
+test("buildSelfHostDeployBundle mirrors server-ci (drop CI/runtime files, VERSION, root-owned tar, sibling SHA256SUMS)", () => {
   const dir = mkdtempSync(path.join(os.tmpdir(), "selfhost-bundle-"));
   try {
     const { exec, calls } = fakeExecFactory();
@@ -119,10 +119,11 @@ test("buildSelfHostDeployBundle mirrors the server-ci release bundle build (drop
     // cp -R server/deploy/. <stage>/
     const cpCall = calls.find((c) => c.command === "cp");
     assert.deepEqual(cpCall.args.slice(0, 2), ["-R", `${deployDir}/.`]);
-    // Drops the CI-only trees.
+    // Drops the CI-only trees and host-local bootstrap progress.
     const rmTargets = calls.filter((c) => c.command === "rm").map((c) => c.args[1]);
     assert.ok(rmTargets.some((t) => t.endsWith("/smoke")));
     assert.ok(rmTargets.some((t) => t.endsWith("/tests")));
+    assert.ok(rmTargets.some((t) => t.endsWith("/.bootstrap-progress.log")));
     // Reproducible root-owned archive (server-ci parity).
     const tarCall = calls.find((c) => c.command === "tar");
     assert.ok(tarCall.args.includes("--owner=0"));

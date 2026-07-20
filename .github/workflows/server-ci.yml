@@ -323,6 +323,7 @@ jobs:
           # scripts, compose, and config the running stack needs.
           rm -rf "$bundle_root/proliferate-deploy/smoke"
           rm -rf "$bundle_root/proliferate-deploy/tests"
+          rm -f "$bundle_root/proliferate-deploy/.bootstrap-progress.log"
           printf '%s\n' "$VERSION" > "$bundle_root/proliferate-deploy/VERSION"
           tar czf artifacts/proliferate-deploy.tar.gz \
             --owner=0 --group=0 --numeric-owner \
