@@ -16,6 +16,8 @@ const BASE = {
   shardId: "1",
   attempt: 1,
   scenarios: "LOCAL-WORLD-SMOKE-1",
+  agents: "claude",
+  behavior: "strict",
   artifactMode: "build",
 };
 const LOCAL_ENV = {
@@ -60,6 +62,45 @@ test("secret values never enter passed or failed machine-readable evidence", () 
     const serialized = JSON.stringify(receipt);
     assert.doesNotMatch(serialized, /super-secret-master-value/);
     assert.doesNotMatch(serialized, /super-secret-url/);
+  }
+});
+
+test("strict local preflight binds an explicit four-agent selector before spend", () => {
+  const receipt = runQualificationPreflight(
+    {
+      ...BASE,
+      scenarios: "T3-CHAT-1,T3-CFG-1,T3-INT-1",
+      agents: "claude,codex,grok,opencode",
+    },
+    {
+      env: {
+        ...LOCAL_ENV,
+        RELEASE_E2E_INTEGRATION_NAMESPACE: "exa",
+        RELEASE_E2E_INTEGRATION_API_KEY: "integration-secret",
+      },
+    },
+  );
+  assert.equal(receipt.verdict, "passed");
+  assert.equal(receipt.behavior, "strict");
+  assert.deepEqual(receipt.selected_agents, ["claude", "codex", "grok", "opencode"]);
+  assert.ok(
+    receipt.checks.some(
+      (check) => check.id === "agent_catalog" && check.status === "passed" && /4 explicit/.test(check.message),
+    ),
+  );
+});
+
+test("strict local preflight rejects missing, malformed, and unknown selectors before spend", () => {
+  const invalid = [
+    [{ ...BASE, agents: undefined }, "agent_selection"],
+    [{ ...BASE, scenarios: undefined }, "scenario_selection"],
+    [{ ...BASE, agents: "claude,claude" }, "agent_selection"],
+    [{ ...BASE, agents: "claude,not-a-shipped-agent" }, "agent_catalog"],
+  ];
+  for (const [options, failedCheckId] of invalid) {
+    const receipt = runQualificationPreflight(options, { env: LOCAL_ENV });
+    assert.equal(receipt.verdict, "failed");
+    assert.ok(receipt.checks.some((check) => check.id === failedCheckId && check.status === "failed"));
   }
 });
 

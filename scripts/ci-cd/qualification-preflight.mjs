@@ -2,19 +2,24 @@
 
 import { createHash, createPrivateKey, createPublicKey, X509Certificate } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, renameSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { loadCandidateBuildMapForReuse } from "./assemble-candidate-build-map.mjs";
 
 export const PREFLIGHT_KIND = "proliferate.qualification-preflight";
-export const PREFLIGHT_SCHEMA_VERSION = 1;
+export const PREFLIGHT_SCHEMA_VERSION = 2;
 export const PREFLIGHT_DEADLINE_MS = 120_000;
 
 const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 const SHA = /^[0-9a-f]{40}$/;
 const WORLDS = new Set(["local", "managed-cloud", "self-host", "tier4"]);
+const LOCAL_AGENT_KINDS = new Set(
+  JSON.parse(
+    readFileSync(new URL("../../catalogs/agents/catalog.json", import.meta.url), "utf8"),
+  ).agents.map((agent) => agent.kind),
+);
 const SECRET_NAMES = new Set([
   "AGENT_GATEWAY_LITELLM_MASTER_KEY",
   "RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY",
@@ -153,8 +158,25 @@ export function runQualificationPreflight(options, deps = {}) {
   }
   validateIdentity(options, pass, fail);
 
-  const scenarioIds = parseSelector(options.scenarios ?? "all", "scenario_selection", fail);
+  const behavior = options.world === "local" && ["diagnostic", "strict"].includes(options.behavior)
+    ? options.behavior
+    : null;
+  if (options.world === "local" && !behavior) {
+    fail("behavior", "Local behavior must be diagnostic or strict.");
+  }
+  const strictLocal = options.world === "local" && behavior === "strict";
+  const scenarioIds = parseSelector(
+    options.scenarios ?? (strictLocal ? "" : "all"),
+    "scenario_selection",
+    fail,
+  );
   const cellIds = parseSelector(options.cells ?? "all", "cell_selection", fail);
+  const agentIds = options.world === "local"
+    ? parseSelector(options.agents ?? "", "agent_selection", fail)
+    : null;
+  if (options.world === "local") {
+    validateLocalAgentSelection(agentIds, pass, fail);
+  }
   const requirements = WORLD_REQUIREMENTS[options.world] ?? [];
   for (const [name, shape] of requirements) {
     validateEnv(name, shape, env, pass, fail);
@@ -267,8 +289,10 @@ export function runQualificationPreflight(options, deps = {}) {
       source_sha: SHA.test(options.sourceSha ?? "") ? options.sourceSha : null,
     },
     world: WORLDS.has(options.world) ? options.world : null,
+    behavior,
     selected_scenarios: scenarioIds,
     selected_cells: cellIds,
+    selected_agents: agentIds,
     artifact_mode: options.artifactMode ?? null,
     candidate_build: candidateBuild,
     cleanup_authorization_revision: cleanupAuthorizationRevision,
@@ -293,11 +317,31 @@ function parseSelector(raw, checkId, fail) {
     .map((value) => value.trim())
     .filter(Boolean);
   if (ids.length === 0 || ids.some((id) => !SAFE_ID.test(id)) || new Set(ids).size !== ids.length) {
-    const label = checkId === "cell_selection" ? "Cell" : "Scenario";
+    const label = checkId === "cell_selection"
+      ? "Cell"
+      : checkId === "agent_selection"
+        ? "Agent"
+        : "Scenario";
     fail(checkId, `${label} selector is empty, duplicated, or malformed.`);
     return [];
   }
   return ids.sort();
+}
+
+function validateLocalAgentSelection(agentIds, pass, fail) {
+  if (agentIds === "all") {
+    pass("agent_catalog", `All ${LOCAL_AGENT_KINDS.size} catalog agent kinds are selected.`);
+    return;
+  }
+  if (!Array.isArray(agentIds) || agentIds.length === 0) {
+    return;
+  }
+  const unknown = agentIds.filter((agent) => !LOCAL_AGENT_KINDS.has(agent));
+  if (unknown.length > 0) {
+    fail("agent_catalog", `Agent selector contains ${unknown.length} unknown catalog kind(s).`);
+    return;
+  }
+  pass("agent_catalog", `${agentIds.length} explicit catalog agent kind(s) are selected.`);
 }
 
 function validateEnv(name, shape, env, pass, fail) {
@@ -496,6 +540,8 @@ function parseArgs(argv) {
     ["--shard-id", "shardId"],
     ["--attempt", "attempt"],
     ["--scenarios", "scenarios"],
+    ["--agents", "agents"],
+    ["--behavior", "behavior"],
     ["--cells", "cells"],
     ["--artifact-mode", "artifactMode"],
     ["--candidate-build-map", "candidateBuildMap"],
@@ -537,8 +583,10 @@ function main() {
       kind: PREFLIGHT_KIND,
       run: { run_id: null, shard_id: null, attempt: null, source_sha: null },
       world: null,
+      behavior: null,
       selected_scenarios: [],
       selected_cells: [],
+      selected_agents: [],
       artifact_mode: null,
       candidate_build: null,
       cleanup_authorization_revision: null,

@@ -87,6 +87,20 @@ test("the manual local world builds and publishes once, then reuses exact candid
   assert.doesNotMatch(release, /^  release-e2e-local-world-smoke:/m);
 });
 
+test("the manual local world preserves the typed agent selector through preflight and execution", () => {
+  const local = job(release, "release-e2e-local-functional");
+  const preflight = local.slice(0, local.indexOf("pnpm/action-setup"));
+  const execution = local.slice(local.indexOf("Build once, run the smoke"));
+
+  assert.match(preflight, /AGENTS_INPUT: \$\{\{ inputs\.agents \}\}/);
+  assert.match(preflight, /--agents "\$\{AGENTS_INPUT\}"/);
+  assert.match(preflight, /BEHAVIOR_INPUT: \$\{\{ inputs\.local_functional_behavior \}\}/);
+  assert.match(preflight, /--behavior "\$\{BEHAVIOR_INPUT\}"/);
+  assert.match(execution, /AGENTS: \$\{\{ inputs\.agents \}\}/);
+  assert.match(execution, /BEHAVIOR: \$\{\{ inputs\.local_functional_behavior \}\}/);
+  assert.doesNotMatch(local, /github\.event\.inputs\.agents \|\|/);
+});
+
 test("the manual local world reuses candidates only after a clean smoke exit", () => {
   const local = job(release, "release-e2e-local-functional");
   const smoke = local.indexOf("make qualification-local-workspace");

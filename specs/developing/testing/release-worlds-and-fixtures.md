@@ -700,7 +700,12 @@ and reachability are world-readiness checks.
 The current shared preflight is `scripts/ci-cd/qualification-preflight.mjs`.
 Its receipt records names/statuses, exact run/source identity, safe candidate
 artifact identities and digests when a local map is reused, and the trusted
-cleanup revision; it never records environment values or locator paths. Artifact
+cleanup revision; for the manual local world it also records the validated
+strict/diagnostic behavior and the exact catalog agent selector before any
+installation, build, or provider-spend seam. A strict local run fails preflight
+when its scenario or agent selector is missing, empty, duplicated, malformed, or
+names an unshipped agent kind. The receipt never records environment values or
+locator paths. Artifact
 mode `external` is accepted only for read-only Tier 4 validation: it records a
 null candidate build and explicitly delegates published-CDN/git artifact
 identity and availability checks to the selected scenario, without claiming a

@@ -185,8 +185,9 @@ Current execution reliability is deliberately bounded:
 - `qualification-preflight.mjs` runs before dependency installation, candidate
   builds, or provider mutation in the current local, managed-cloud, self-host,
   and Tier-4 artifact-chain entrypoints. It checks required world/scenario
-  inputs and the deterministic prerequisites of an explicitly selected
-  self-host cell,
+  inputs, binds the manual local world's typed behavior and catalog agent
+  selectors into its receipt, and checks the deterministic prerequisites of an
+  explicitly selected self-host cell,
   complete supported AWS credential postures, exact candidate-map hashes on a
   reuse request, and cleanup authorization using local operations plus one
   bounded remote-default-branch identity lookup. It writes a redacted
