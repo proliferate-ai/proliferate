@@ -33,7 +33,11 @@ import { useWorkspaceOpenInWebActions } from "#product/hooks/workspaces/workflow
 import { useWorkspaceRemoteAccessActions } from "#product/hooks/workspaces/workflows/remote-access/use-workspace-remote-access-actions";
 import { useWorkspaceRuntimeBlock } from "#product/hooks/workspaces/derived/use-workspace-runtime-block";
 import { useWorkspaceActivityAcknowledgement } from "#product/hooks/workspaces/lifecycle/use-workspace-activity-acknowledgement";
-import { resolveStandardWorkspaceChromeClasses } from "#product/lib/domain/preferences/workspace-chrome";
+import {
+  resolveMainSidebarEdgeClassName,
+  resolveStandardWorkspaceChromeClasses,
+} from "#product/lib/domain/preferences/workspace-chrome";
+import { useProductHost } from "#product/host/ProductHostProvider";
 import { WorkspacePathProvider } from "#product/providers/WorkspacePathProvider";
 import { useRepoPreferencesStore } from "#product/stores/preferences/repo-preferences-store";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
@@ -93,6 +97,7 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
     onRightSeparatorDown,
   } = layout;
   const transparentChromeEnabled = useTransparentChromeEnabled();
+  const desktopHost = useProductHost().desktop !== null;
   const chromeClasses = useMemo(
     () => resolveStandardWorkspaceChromeClasses({
       transparent: transparentChromeEnabled,
@@ -231,6 +236,10 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
                 updaterPhase={updaterPhase}
                 downloadProgress={downloadProgress}
                 restartWhenIdle={restartWhenIdle}
+                edgeClassName={resolveMainSidebarEdgeClassName({
+                  desktop: desktopHost,
+                  transparent: transparentChromeEnabled,
+                })}
                 onToggleSidebar={actions.onToggleSidebar}
                 onDownloadUpdate={downloadUpdate}
                 onOpenRestartPrompt={openRestartPrompt}

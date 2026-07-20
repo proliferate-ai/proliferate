@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { GitHub } from "@proliferate/ui/icons";
+import { CHAT_TRANSCRIPT_LINK_CLASS } from "./TranscriptLinkStyles";
 
 /**
  * Inline "mention"-style rendering for external links in markdown bodies, with
@@ -12,18 +13,13 @@ import { GitHub } from "@proliferate/ui/icons";
  * `amazon.com` icon if the subdomain has none), then no icon at all. All
  * requests go to the linked site itself, so no host list leaks to a third party.
  *
- * Styling matches the desktop file-path mention (see FileReferenceBadge): a
- * muted blue at rest with no underline, brightening to the foreground color and
- * a dashed underline on hover, plus an inline provider icon sized to one
- * line-height. Non-URL hrefs (mailto:, #anchor, relative paths) fall back to a
- * plain underlined link.
+ * Styling uses one stable link tone with a hover-only underline, plus an
+ * inline provider icon sized to one line-height. Non-URL hrefs (mailto:,
+ * #anchor, relative paths) fall back to the same shared link treatment.
  */
 
 const INLINE_MENTION_CLASS =
-  "group/inline-mention inline whitespace-normal break-words align-baseline font-medium leading-[inherit] text-[color:color-mix(in_srgb,var(--color-link-foreground)_80%,var(--color-foreground)_20%)] no-underline transition-colors hover:text-foreground hover:underline hover:decoration-current hover:decoration-dashed hover:decoration-[0.5px] hover:underline-offset-2 focus-visible:outline-none focus-visible:underline";
-
-const PLAIN_LINK_CLASS =
-  "text-link-foreground underline decoration-current decoration-[0.5px] decoration-opacity-50 transition-colors hover:decoration-opacity-100";
+  `group/inline-mention inline whitespace-normal break-words align-baseline font-medium leading-[inherit] ${CHAT_TRANSCRIPT_LINK_CLASS}`;
 
 const ICON_SHELL_CLASS =
   "relative mr-[3px] inline-block h-[1lh] w-[var(--icon-paired)] shrink-0 align-bottom";
@@ -41,7 +37,7 @@ export function ProviderLinkMention({
   if (!host) {
     // mailto:, #fragment, relative, or unparseable — keep a plain link.
     return (
-      <a href={href} target="_blank" rel="noopener noreferrer" className={PLAIN_LINK_CLASS}>
+      <a href={href} target="_blank" rel="noopener noreferrer" className={CHAT_TRANSCRIPT_LINK_CLASS}>
         {children}
       </a>
     );

@@ -67,7 +67,7 @@ export function ComposerModelSelectorControl({
         disabled
         data-composer-model-trigger
         data-composer-selected-model={selectedModelId}
-        icon={currentModel ? <ProviderIcon kind={currentModel.kind} className="icon-paired shrink-0 [font-size:var(--text-composer)]" /> : undefined}
+        icon={currentModel ? <ProviderIcon kind={currentModel.kind} className="icon-control shrink-0 [font-size:var(--text-composer)]" /> : undefined}
         label={triggerLabel}
         className="max-w-[15rem]"
       />
@@ -81,7 +81,7 @@ export function ComposerModelSelectorControl({
           emphasizeLabel
           data-composer-model-trigger
           data-composer-selected-model={selectedModelId}
-          icon={currentModel ? <ProviderIcon kind={currentModel.kind} className="icon-paired shrink-0 [font-size:var(--text-composer)]" /> : undefined}
+          icon={currentModel ? <ProviderIcon kind={currentModel.kind} className="icon-control shrink-0 [font-size:var(--text-composer)]" /> : undefined}
           label={triggerLabel}
           trailing={currentModel?.pendingState
             ? <PendingConfigIndicator pendingState={currentModel.pendingState} />

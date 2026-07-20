@@ -62,8 +62,16 @@ vi.mock("#product/hooks/shortcuts/lifecycle/use-shortcut-handler", () => ({
   useShortcutHandler: () => {},
 }));
 
+const chromeState = vi.hoisted(() => ({ transparent: false }));
+
 vi.mock("#product/hooks/theme/derived/use-transparent-chrome", () => ({
-  useTransparentChromeEnabled: () => false,
+  useTransparentChromeEnabled: () => chromeState.transparent,
+}));
+
+const productHostState = vi.hoisted(() => ({ desktop: {} as object | null }));
+
+vi.mock("#product/host/ProductHostProvider", () => ({
+  useProductHost: () => productHostState,
 }));
 
 vi.mock("#product/hooks/access/tauri/use-updater", () => ({
@@ -122,9 +130,33 @@ vi.mock("#product/providers/WorkspacePathProvider", () => ({
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  chromeState.transparent = false;
+  productHostState.desktop = {};
 });
 
 describe("CoworkWorkspaceShell", () => {
+  it("owns the missing transparent Desktop sidebar edge without adding it to Web", () => {
+    chromeState.transparent = true;
+    productHostState.desktop = {};
+    const { rerender } = render(
+      <CoworkWorkspaceShell
+        workspaceId="workspace-cowork"
+        workspacePath="/tmp/workspace-cowork"
+      />,
+    );
+
+    expect(document.getElementById("cowork-sidebar")?.className).toContain("border-r");
+
+    productHostState.desktop = null;
+    rerender(
+      <CoworkWorkspaceShell
+        workspaceId="workspace-cowork"
+        workspacePath="/tmp/workspace-cowork"
+      />,
+    );
+    expect(document.getElementById("cowork-sidebar")?.className).not.toContain("border-r");
+  });
+
   it("renders chat without standard workspace composer panels", () => {
     render(
       <CoworkWorkspaceShell

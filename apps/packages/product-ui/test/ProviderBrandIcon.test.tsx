@@ -7,6 +7,13 @@ import { ProviderBrandIcon } from "../src/auth/ProviderBrandIcon";
 describe("ProviderBrandIcon", () => {
   afterEach(cleanup);
 
+  it("uses the primary provider-identity tier by default", () => {
+    const { container } = render(<ProviderBrandIcon provider="github" />);
+
+    expect(container.querySelector('[data-auth-provider-brand="github"]')?.getAttribute("class"))
+      .toContain("icon-control");
+  });
+
   it.each([
     ["Auth0", "auth0"],
     ["Okta", "okta"],

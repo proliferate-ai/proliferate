@@ -58,7 +58,10 @@ export function CloudChatModelConfigControl({
     <div ref={rootRef} className="relative min-w-0">
       <ComposerControlButton
         disabled={disabled}
-        icon={iconNodeForComposerControl(selectedModel?.icon ?? modelControl?.icon ?? "claude", "size-4")}
+        icon={iconNodeForComposerControl(
+          selectedModel?.icon ?? modelControl?.icon ?? "claude",
+          "icon-paired",
+        )}
         label={triggerLabel}
         detail={triggerDetail}
         trailing={(

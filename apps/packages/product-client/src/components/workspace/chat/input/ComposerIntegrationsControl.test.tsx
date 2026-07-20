@@ -55,6 +55,7 @@ describe("ComposerIntegrationsControl", () => {
 
     const trigger = screen.getByRole("button", { name: /0 connected integrations/i });
     expect(trigger.textContent).not.toContain("0");
+    expect(trigger.querySelector("svg")?.className.baseVal).toContain("icon-control");
 
     fireEvent.click(trigger);
     expect(screen.getByText("Manage integrations")).toBeTruthy();

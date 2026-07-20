@@ -43,10 +43,10 @@ export function SidebarStatusGlyph({
       return <CircleAlert className="icon-paired text-warning-foreground" />;
     case "waiting_input":
     case "waiting_plan":
-      return <Clock className="icon-paired text-info" />;
+      return <Clock className="icon-control text-info" />;
     case "iterating":
     case "queued_prompt":
-      return <Spinner className="icon-paired text-sidebar-foreground" />;
+      return <Spinner className="icon-control text-sidebar-foreground" />;
   }
 }
 

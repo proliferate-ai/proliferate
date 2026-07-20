@@ -2,11 +2,19 @@ import { describe, expect, it } from "vitest";
 import {
   resolveCoworkWorkspaceChromeClasses,
   resolveEditorTabChromeClasses,
+  resolveMainSidebarEdgeClassName,
   resolveStandardWorkspaceChromeClasses,
   resolveTerminalTabChromeClasses,
 } from "#product/lib/domain/preferences/workspace-chrome";
 
 describe("workspace chrome classes", () => {
+  it("adds one main-sidebar edge only for transparent Desktop chrome", () => {
+    expect(resolveMainSidebarEdgeClassName({ desktop: true, transparent: true }))
+      .toBe("border-r border-sidebar-border");
+    expect(resolveMainSidebarEdgeClassName({ desktop: true, transparent: false })).toBe("");
+    expect(resolveMainSidebarEdgeClassName({ desktop: false, transparent: true })).toBe("");
+  });
+
   it("preserves standard shell classes", () => {
     expect(resolveStandardWorkspaceChromeClasses({
       transparent: true,

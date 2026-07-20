@@ -14,6 +14,7 @@ import {
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ProviderLinkMention } from "./ProviderLinkMention";
+import { CHAT_TRANSCRIPT_LINK_CLASS } from "./TranscriptLinkStyles";
 import { MarkdownCodeBlockShell } from "./MarkdownCodeBlock";
 import {
   ChatContentSearchQueryContext,
@@ -201,7 +202,7 @@ function createMarkdownAnchor(renderLink: MarkdownLinkRenderer | undefined) {
       }
     }
     const merged =
-      `text-link-foreground underline decoration-current decoration-[0.5px] decoration-opacity-50 transition-colors hover:decoration-opacity-100${anchorClassName ? ` ${anchorClassName}` : ""}`;
+      `${CHAT_TRANSCRIPT_LINK_CLASS}${anchorClassName ? ` ${anchorClassName}` : ""}`;
     if (dangerouslySetInnerHTML) {
       return (
         <a

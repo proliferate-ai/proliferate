@@ -50,7 +50,9 @@ describe("ScratchCodeMirrorEditor", () => {
     expect(styleText).toContain("font-size: var(--scratch-font-size)");
     expect(styleText).toContain("line-height: var(--scratch-line-height)");
     expect(styleText).toContain("white-space: normal");
-    expect(styleText).toContain("border-left-color: var(--color-foreground)");
+    expect(styleText).toContain("border-left-color: var(--color-text-caret)");
+    expect(styleText).toContain("border-left-width: 1px");
+    expect(styleText).toContain("background-color: var(--color-text-selection)");
     expect(styleText).not.toContain("height: 1em !important");
     expect(styleText).not.toContain("margin-top: 0.33em");
     expect(styleText).not.toContain("min-height: 1.1em");

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { TurnSeparator } from "#product/components/workspace/chat/transcript/TurnSeparator";
+import { TURN_ITEM_GAP_CLASS } from "#product/components/workspace/chat/transcript/TranscriptTurnChrome";
 
 interface ToolCallSummaryProps {
   label?: string;
@@ -54,7 +55,7 @@ export function ToolCallSummary({
       />
       {expanded && (
         <div
-          className="mt-1 space-y-1.5"
+          className={`mt-4 flex flex-col ${TURN_ITEM_GAP_CLASS}`}
           data-completed-work-ledger
         >
           {renderedChildren}
@@ -65,7 +66,7 @@ export function ToolCallSummary({
           {completionContent}
         </div>
       )}
-      {showWorkDivider && <ToolCallWorkDivider className="mt-1" />}
+      {showWorkDivider && !expanded && <ToolCallWorkDivider className="mt-1" />}
     </div>
   );
 }
