@@ -77,7 +77,7 @@ PATH="$FAKE_BIN:$PATH" BOOTSTRAP_OPS="$success_ops" bash "$FIXTURE/bootstrap.sh"
 grep '^__PROLIFERATE_BOOTSTRAP_SUBSTEP__:' "$success_output" >"$SCRATCH/success.markers"
 diff -u "$expected_success" "$SCRATCH/success.markers"
 diff -u "$expected_success" "$FIXTURE/.bootstrap-progress.log"
-[[ "$(stat -f '%Lp' "$FIXTURE/.bootstrap-progress.log" 2>/dev/null || stat -c '%a' "$FIXTURE/.bootstrap-progress.log")" == "600" ]]
+[[ "$(stat -c '%a' "$FIXTURE/.bootstrap-progress.log" 2>/dev/null || stat -f '%Lp' "$FIXTURE/.bootstrap-progress.log")" == "600" ]]
 
 failed_output="$SCRATCH/failed.out"
 failed_ops="$SCRATCH/failed.ops"

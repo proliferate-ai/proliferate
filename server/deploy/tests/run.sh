@@ -568,7 +568,7 @@ user_data_status=$?
 [[ "$user_data_status" -eq 23 ]] && ok "template UserData preserves failed cfn-init exit code" || no "template UserData returned $user_data_status instead of cfn-init exit 23"
 grep -qx -- '-e' "$signal_args" \
   && grep -qx -- '23' "$signal_args" \
-  && grep -qx -- 'cfn-init bootstrap failed with exit code 23; inspect /var/log/cfn-init.log and /var/log/cfn-init-cmd.log through SSM.' "$signal_args" \
+  && grep -qx -- 'cfn-init bootstrap failed with exit code 23; inspect .bootstrap-progress.log and cfn-init logs through SSM.' "$signal_args" \
   && ok "template UserData failure invokes cfn-signal with bounded diagnostics" \
   || no "template UserData failure did not invoke cfn-signal with the expected bounded reason"
 
@@ -577,7 +577,7 @@ FAKE_CFN_BIN="$FAKE_CFN_BIN" FAKE_TIMEOUT_EXIT=124 CFN_SIGNAL_ARGS_FILE="$timeou
   bash "$user_data" >/dev/null 2>&1
 user_data_status=$?
 [[ "$user_data_status" -eq 124 ]] && ok "template UserData bounds an overlong cfn-init before the CreationPolicy timeout" || no "template UserData returned $user_data_status instead of timeout exit 124"
-grep -qx -- 'cfn-init bootstrap exceeded the 18-minute limit; inspect /var/log/cfn-init.log and /var/log/cfn-init-cmd.log through SSM.' "$timeout_signal_args" \
+grep -qx -- 'cfn-init bootstrap exceeded the 18-minute limit; inspect .bootstrap-progress.log and cfn-init logs through SSM.' "$timeout_signal_args" \
   && ok "template UserData timeout invokes cfn-signal with bounded diagnostics" \
   || no "template UserData timeout did not invoke cfn-signal with the expected bounded reason"
 
@@ -587,7 +587,7 @@ FAKE_CFN_BIN="$FAKE_CFN_BIN" FAKE_TIMEOUT_EXIT=137 CFN_SIGNAL_ARGS_FILE="$kill_t
 user_data_status=$?
 [[ "$user_data_status" -eq 124 ]] && ok "template UserData normalizes kill-after exit 137 to timeout exit 124" || no "template UserData returned $user_data_status instead of normalized timeout exit 124"
 grep -qx -- '124' "$kill_timeout_signal_args" \
-  && grep -qx -- 'cfn-init bootstrap exceeded the 18-minute limit; inspect /var/log/cfn-init.log and /var/log/cfn-init-cmd.log through SSM.' "$kill_timeout_signal_args" \
+  && grep -qx -- 'cfn-init bootstrap exceeded the 18-minute limit; inspect .bootstrap-progress.log and cfn-init logs through SSM.' "$kill_timeout_signal_args" \
   && ok "template UserData kill-after invokes cfn-signal with timeout diagnostics" \
   || no "template UserData kill-after did not invoke cfn-signal with normalized timeout diagnostics"
 
@@ -637,7 +637,7 @@ EOF
     [[ "$hard_deadline_status" -eq 124 ]] \
       && [[ "$signal_call_count" -eq 1 ]] \
       && grep -qx -- '124' "$hard_deadline_signal_args" \
-      && grep -qx -- 'cfn-init bootstrap exceeded the 18-minute limit; inspect /var/log/cfn-init.log and /var/log/cfn-init-cmd.log through SSM.' "$hard_deadline_signal_args" \
+      && grep -qx -- 'cfn-init bootstrap exceeded the 18-minute limit; inspect .bootstrap-progress.log and cfn-init logs through SSM.' "$hard_deadline_signal_args" \
       && ok "template UserData hard-kills a TERM-resistant cfn-init and signals one bounded timeout" \
       || no "template UserData did not hard-bound and signal the TERM-resistant cfn-init (status=$hard_deadline_status calls=$signal_call_count)"
   else
