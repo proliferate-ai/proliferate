@@ -57,6 +57,10 @@ test("selectCheapestEligibleModel selects bounded non-Claude harness models", ()
   const allow = ["gpt-5.2", "gpt-5-mini", "grok-4", "grok-4-fast", "claude-fable-5"];
   assert.equal(selectCheapestEligibleModel(allow, ["gpt-5.2", "gpt-5-mini"]), "gpt-5-mini");
   assert.equal(selectCheapestEligibleModel(allow, ["grok-4", "grok-4-fast"]), "grok-4-fast");
+  assert.equal(
+    selectCheapestEligibleModel(["claude-opus-4-6", "gpt-5.2"], ["claude-opus-4-6", "gpt-5.2"]),
+    "gpt-5.2",
+  );
   assert.equal(selectCheapestEligibleModel(allow, ["claude-fable-5"]), null);
 });
 

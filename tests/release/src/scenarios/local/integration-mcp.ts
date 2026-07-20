@@ -575,7 +575,10 @@ async function waitForAttributeValueChange(
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const value = (await locator.getAttribute(attribute).catch(() => null)) ?? "";
-    if (value && value !== previous) {
+    // The stamped mode contract is always a nonempty id. Ignore transient
+    // removal/blank frames, but accept the next nonempty value even when the
+    // initial `previous` read was itself empty.
+    if (value !== "" && value !== previous) {
       return value;
     }
     await sleep(200);

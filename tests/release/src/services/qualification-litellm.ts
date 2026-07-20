@@ -252,8 +252,11 @@ function intersectEligibleModels(
 function genericModelTierRank(id: string): number {
   const lower = id.toLowerCase();
   if (/haiku|mini|nano|small|flash|lite|fast/.test(lower)) return 0;
-  if (/sonnet|medium/.test(lower)) return 1;
-  if (/opus|large/.test(lower)) return 2;
+  // Model ids such as `gpt-5.2` and `grok-4` carry no explicit size tier.
+  // Treat that ordinary unlabeled class as cheaper than names that explicitly
+  // advertise a medium/large tier, while still preferring every small/fast id.
+  if (!/sonnet|medium|opus|large/.test(lower)) return 1;
+  if (/sonnet|medium/.test(lower)) return 2;
   return 3;
 }
 
