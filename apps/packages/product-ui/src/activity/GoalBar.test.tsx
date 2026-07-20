@@ -70,7 +70,7 @@ describe("GoalBar chips", () => {
   });
 
   it("stacks chips on the same row as a live goal", () => {
-    render(
+    const { container } = render(
       <GoalBar
         {...baseProps()}
         capabilities={SUPPORTED}
@@ -91,6 +91,8 @@ describe("GoalBar chips", () => {
     );
     expect(screen.getByText("Ship the feature")).toBeTruthy();
     expect(screen.getByText("2 loops")).toBeTruthy();
+    expect(container.querySelector("[data-session-goal-bar] > div")?.className.split(" "))
+      .toContain("gap-1.5");
   });
 
   it("suppresses chips while the empty-state composer editor is open", () => {
@@ -104,6 +106,8 @@ describe("GoalBar chips", () => {
     );
     expect(screen.getByLabelText("Goal objective")).toBeTruthy();
     expect(screen.queryByText("2 loops")).toBeNull();
+    expect(container.querySelector("[data-session-goal-bar] > div")?.className.split(" "))
+      .toContain("gap-1.5");
     expect(container.querySelector("svg.lucide-target")?.getAttribute("class")?.split(" "))
       .toContain("mt-[0.175em]");
   });
