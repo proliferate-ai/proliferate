@@ -54,9 +54,10 @@
 //   {..., "second_ports_file":"<path>","second_ports":{...}}
 //
 // The `self-hosted-assets.SHA256SUMS` is written as a DETERMINISTIC SIBLING of
-// the bundle inside the map's artifacts dir; the self-host world derives its
-// path from the bundle locator (dirname(bundle)/self-hosted-assets.SHA256SUMS)
-// and scp's it to the box for the shipped installer's checksum-verify.
+// the bundle inside the map's artifacts dir; each self-host world derives that
+// source path from the bundle locator, copies the manifest into its own scoped
+// materialization directory, and scp's that copy to the box for the shipped
+// installer's checksum verification.
 
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";

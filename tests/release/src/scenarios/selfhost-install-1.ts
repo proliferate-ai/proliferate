@@ -277,7 +277,7 @@ export const defaultSelfHostInstallDriver: SelfHostInstallDriver = {
       ssh: world.control.ssh,
       serverImageArchive: world.artifacts.serverImage,
       bundle: world.artifacts.bundle,
-      bundleSha256SumsPath: bundleSha256SumsPath(world.artifacts.bundle.path),
+      bundleSha256SumsPath: world.artifacts.bundleSha256SumsPath,
       siteAddress: originOf(world.api.baseUrl),
       candidateImageRepo,
       candidateImageTag,
@@ -1131,17 +1131,6 @@ function originOf(url: string): string {
   } catch {
     return url.replace(/^https?:\/\//, "").split(/[/?#]/)[0] ?? url;
   }
-}
-
-/**
- * `install.sh --bundle` verifies the bundle against its adjacent
- * `self-hosted-assets.SHA256SUMS` (the exact convention `server-ci.yml
- * self-hosted-release-assets` produces alongside `proliferate-deploy.tar.gz`).
- * ASSUMPTION (disclosed): the builder (workstream B) writes it next to the
- * materialized bundle archive under the same run-owned directory.
- */
-function bundleSha256SumsPath(materializedBundlePath: string): string {
-  return path.join(path.dirname(materializedBundlePath), "self-hosted-assets.SHA256SUMS");
 }
 
 /**

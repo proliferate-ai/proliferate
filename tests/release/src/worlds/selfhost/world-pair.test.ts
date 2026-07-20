@@ -21,6 +21,7 @@ import type { Ec2Exec } from "./ec2.js";
 import type { Route53Exec } from "./dns.js";
 import {
   SECOND_WORLD_PORT_OFFSET,
+  SELFHOST_BUNDLE_SHA256SUMS_FILENAME,
   constructSelfHostWorldPair,
   offsetLocalWorldPorts,
   type SelfHostWorldDeps,
@@ -47,13 +48,18 @@ async function fileArtifact(dir: string, id: string, version: string, content: s
 }
 
 async function buildMap(dir: string): Promise<CandidateBuildMapV1> {
+  const bundle = await fileArtifact(dir, "selfhost-bundle/linux-amd64", "1.2.3", "deploy-bundle-bytes");
+  await writeFile(
+    path.join(dir, SELFHOST_BUNDLE_SHA256SUMS_FILENAME),
+    `${bundle.sha256}  proliferate-deploy.tar.gz\n`,
+  );
   return {
     schema_version: 1,
     kind: "proliferate.candidate-build",
     source_sha: "0".repeat(40),
     artifacts: [
       await fileArtifact(dir, "server/linux-amd64", "1.2.3", "server-archive-bytes"),
-      await fileArtifact(dir, "selfhost-bundle/linux-amd64", "1.2.3", "deploy-bundle-bytes"),
+      bundle,
       await fileArtifact(dir, "anyharness/host-target", ANYHARNESS_VERSION, "anyharness-bytes"),
       await fileArtifact(dir, "desktop-renderer/browser", "0.1.0", "renderer-tar-bytes"),
     ],

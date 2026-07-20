@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import type { ChildProcess, SpawnOptions } from "node:child_process";
 import { createHash } from "node:crypto";
 import { EventEmitter } from "node:events";
-import { access, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -20,7 +20,12 @@ import type { ChromiumLauncher } from "../local-workspace/renderer.js";
 import { TEST_QUALIFICATION_TLS } from "../qualification-tls.test-fixture.js";
 import type { Ec2Exec } from "./ec2.js";
 import type { Route53Exec } from "./dns.js";
-import { constructSelfHostWorld, type SelfHostWorldDeps, type SshTransport } from "./world.js";
+import {
+  SELFHOST_BUNDLE_SHA256SUMS_FILENAME,
+  constructSelfHostWorld,
+  type SelfHostWorldDeps,
+  type SshTransport,
+} from "./world.js";
 
 const RUN: RunIdentityV1 = {
   run_id: "selfhost-run-1",
@@ -48,13 +53,18 @@ async function fileArtifact(dir: string, id: string, version: string, content: s
 }
 
 async function buildMap(dir: string): Promise<CandidateBuildMapV1> {
+  const bundle = await fileArtifact(dir, "selfhost-bundle/linux-amd64", "1.2.3", "deploy-bundle-bytes");
+  await writeFile(
+    path.join(dir, SELFHOST_BUNDLE_SHA256SUMS_FILENAME),
+    `${bundle.sha256}  proliferate-deploy.tar.gz\n`,
+  );
   return {
     schema_version: 1,
     kind: "proliferate.candidate-build",
     source_sha: "0".repeat(40),
     artifacts: [
       await fileArtifact(dir, "server/linux-amd64", "1.2.3", "server-archive-bytes"),
-      await fileArtifact(dir, "selfhost-bundle/linux-amd64", "1.2.3", "deploy-bundle-bytes"),
+      bundle,
       await fileArtifact(dir, "anyharness/host-target", ANYHARNESS_VERSION, "anyharness-bytes"),
       await fileArtifact(dir, "desktop-renderer/browser", "0.1.0", "renderer-tar-bytes"),
     ],
@@ -199,6 +209,10 @@ test("constructSelfHostWorld provisions infra + stands up runtime/renderer/contr
     assert.equal(world.artifacts.serverImage.version, "1.2.3");
     assert.equal(world.artifacts.anyharness.version, ANYHARNESS_VERSION);
     await access(world.artifacts.bundle.path);
+    assert.equal(
+      await readFile(world.artifacts.bundleSha256SumsPath, "utf8"),
+      `${world.artifacts.bundle.sha256}  proliferate-deploy.tar.gz\n`,
+    );
     await access(path.join(runDir, CLEANUP_LEDGER_FILENAME));
     // The SSH readiness probe ran (cloud-init gate), and the control handle is wired.
     assert.ok(h.sshCommands.some((c) => c.includes("selfhost-ready") && c.includes("docker compose version")));
@@ -223,6 +237,77 @@ test("constructSelfHostWorld provisions infra + stands up runtime/renderer/contr
   } finally {
     await rm(src, { recursive: true, force: true });
     await rm(runDir, { recursive: true, force: true });
+  }
+});
+
+test("a missing bundle checksum sibling fails before AWS provisioning", async () => {
+  const src = await mkdtemp(path.join(os.tmpdir(), "sh-src-"));
+  const runDir = await mkdtemp(path.join(os.tmpdir(), "sh-run-"));
+  try {
+    const map = await buildMap(src);
+    await rm(path.join(src, SELFHOST_BUNDLE_SHA256SUMS_FILENAME));
+    const h = harness();
+    await assert.rejects(
+      constructSelfHostWorld({
+        run: RUN,
+        map,
+        runDir,
+        ports: PORTS,
+        aws: AWS,
+        ssh: SSH,
+        tls: TEST_QUALIFICATION_TLS,
+        deps: h.deps,
+      }),
+      /Could not materialize self-hosted-assets\.SHA256SUMS/,
+    );
+    assert.equal(h.ec2Calls.length, 0);
+    await access(map.artifacts[0]!.locator.path);
+  } finally {
+    await rm(src, { recursive: true, force: true });
+    await rm(runDir, { recursive: true, force: true });
+  }
+});
+
+test("an invalid bundle checksum manifest fails before AWS provisioning", async (t) => {
+  const cases = [
+    ["wrong bundle digest", () => `${"f".repeat(64)}  proliferate-deploy.tar.gz\n`],
+    ["missing bundle entry", () => `${"e".repeat(64)}  anyharness-aarch64-unknown-linux-musl.tar.gz\n`],
+    [
+      "duplicate bundle entry",
+      (sha: string) => `${sha}  proliferate-deploy.tar.gz\n${sha}  proliferate-deploy.tar.gz\n`,
+    ],
+    ["malformed checksum line", () => "not-a-checksum  proliferate-deploy.tar.gz\n"],
+  ] as const;
+
+  for (const [label, sumsContent] of cases) {
+    await t.test(label, async () => {
+      const src = await mkdtemp(path.join(os.tmpdir(), "sh-src-"));
+      const runDir = await mkdtemp(path.join(os.tmpdir(), "sh-run-"));
+      try {
+        const map = await buildMap(src);
+        const bundle = map.artifacts.find((artifact) => artifact.artifact_id === "selfhost-bundle/linux-amd64")!;
+        await writeFile(path.join(src, SELFHOST_BUNDLE_SHA256SUMS_FILENAME), sumsContent(bundle.sha256));
+        const h = harness();
+        await assert.rejects(
+          constructSelfHostWorld({
+            run: RUN,
+            map,
+            runDir,
+            ports: PORTS,
+            aws: AWS,
+            ssh: SSH,
+            tls: TEST_QUALIFICATION_TLS,
+            deps: h.deps,
+          }),
+          /does not contain exactly one valid proliferate-deploy\.tar\.gz entry/,
+        );
+        assert.equal(h.ec2Calls.length, 0);
+        assert.equal(h.route53Calls.length, 0);
+      } finally {
+        await rm(src, { recursive: true, force: true });
+        await rm(runDir, { recursive: true, force: true });
+      }
+    });
   }
 });
 
