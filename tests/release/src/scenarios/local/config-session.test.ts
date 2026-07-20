@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 import {
@@ -9,6 +10,7 @@ import {
   configSurfaceFor,
   cycleConfigControls,
   defaultLocalConfigDriver,
+  selectDistinctEligibleModel,
   type LocalConfigControl,
   type LocalConfigDriver,
   type LocalSessionTabsDriver,
@@ -246,6 +248,40 @@ test("LOCAL-4: green per-harness cells carry local_config_matrix evidence with a
   assert.equal(claude.controls[0]!.accepted_value, "high");
   assert.equal(claude.controls[0]!.rejected, false);
   assert.equal(claude.known_1063_expected_fail, false);
+});
+
+test("LOCAL-4: Grok records a distinct model-picker value on its existing baseline session", async () => {
+  const { driver } = makeConfigDriver({
+    controls: [control({
+      key: "model",
+      rawConfigId: "model",
+      currentValue: "model-grok",
+      values: ["model-grok", "grok-code-fast-1"],
+      surface: "model",
+    })],
+  });
+  let seen: { harness?: string; sessionId?: string; value?: string } = {};
+  driver.selectConfigValueInUi = async (context, _control, value) => {
+    seen = { harness: context.harness, sessionId: context.sessionId, value };
+    return { accepted: true, readback: value };
+  };
+  const [outcome] = await collectLocal4ConfigCells(fakeCtx(), [cfgCell("grok")], driver);
+  assert.equal(outcome?.status, "green");
+  assert.deepEqual(seen, {
+    harness: "grok",
+    sessionId: "sess-grok",
+    value: "grok-code-fast-1",
+  });
+  const evidence = outcome?.evidence as {
+    model_id: string;
+    controls: Array<{ control_key: string; accepted_value: string }>;
+  };
+  assert.equal(evidence.model_id, "model-grok");
+  assert.deepEqual(evidence.controls, [{
+    control_key: "model",
+    accepted_value: "grok-code-fast-1",
+    rejected: false,
+  }]);
 });
 
 test("LOCAL-4: selects the gateway route for EVERY runnable harness before the page boots", async () => {
@@ -601,24 +637,224 @@ test("enumerateControls keeps only UI-drivable controls and drops a reasoning la
     ...fakeWorld(),
     runtime: { baseUrl: "http://fake", client: { getLiveConfig: async () => liveConfig } },
   } as unknown as ReadyLocalWorld;
-  const controls = await defaultLocalConfigDriver.enumerateControls(world, "session-1");
+  const controls = await defaultLocalConfigDriver.enumerateControls(world, "session-1", "claude", "claude-haiku");
   assert.deepEqual(
     controls.map((control) => `${control.key}:${control.surface}`).sort(),
     ["effort:reasoning", "mode:mode"],
   );
 });
 
-test("configSurfaceFor maps only the live-composer control keys; everything else has no surface", () => {
+test("Grok catalog model control resolves one distinct allowlisted live-probed picker target", async () => {
+  const catalog = JSON.parse(
+    readFileSync(
+      new URL("../../../../../catalogs/agents/catalog.json", import.meta.url),
+      "utf8",
+    ),
+  ) as {
+    agents: Array<{
+      kind: string;
+      session: {
+        controls: Array<{ key: string; mapping?: { switchVia?: string } }>;
+        gatewayPolicy?: { seedModels?: string[] };
+      };
+    }>;
+  };
+  const grok = catalog.agents.find((agent) => agent.kind === "grok");
+  assert.ok(grok?.session.controls.some(
+    (entry) => entry.key === "model" && entry.mapping?.switchVia === "setSessionModel",
+  ));
+  assert.deepEqual(grok?.session.gatewayPolicy?.seedModels, [
+    "grok-4",
+    "grok-4-fast",
+    "grok-code-fast-1",
+    "grok-build",
+  ]);
+
+  const liveConfig = {
+    rawConfigOptions: [],
+    sourceSeq: 1,
+    normalizedControls: {
+      model: {
+        key: "model",
+        rawConfigId: "model",
+        label: "Model",
+        currentValue: "raw-probe-default",
+        settable: true,
+        values: [
+          { value: "raw-probe-default", label: "Raw default" },
+          { value: "raw-probe-other", label: "Raw other" },
+        ],
+      },
+    },
+  };
+  const probed = ["grok-4", "grok-4-fast", "grok-code-fast-1", "grok-build"];
+  const world = {
+    ...fakeWorld(),
+    runtime: {
+      baseUrl: "http://fake",
+      client: {
+        getLiveConfig: async () => liveConfig,
+        getGatewayModels: async () => probed.map((id) => ({ id })),
+      },
+    },
+    gateway: {
+      preflight: async () => ({
+        adminReachable: true,
+        allowlistModels: [...probed, "not-probed"],
+        eligibleClaudeModels: [],
+      }),
+    },
+  } as unknown as ReadyLocalWorld;
+  const controls = await defaultLocalConfigDriver.enumerateControls(
+    world,
+    "session-grok",
+    "grok",
+    "grok-4-fast",
+  );
+  assert.deepEqual(controls, [{
+    key: "model",
+    rawConfigId: "model",
+    currentValue: "grok-4-fast",
+    settable: true,
+    values: ["grok-4-fast", "grok-code-fast-1"],
+    surface: "model",
+  }]);
+  assert.equal(
+    selectDistinctEligibleModel("grok-4-fast", probed, probed),
+    "grok-code-fast-1",
+  );
+  assert.equal(
+    selectDistinctEligibleModel("grok-4-fast", ["grok-4-fast"], probed),
+    null,
+  );
+});
+
+test("default Grok model picker proof preserves the session and correlates one post-switch turn", async () => {
+  const sessionId = "sess-grok";
+  const targetModelId = "grok-code-fast-1";
+  let selectedModelId = "grok-4-fast";
+  let sent = false;
+  let correlated: { acceptedModelId?: string; windowStartedAt?: string; windowFinishedAt?: string } | undefined;
+
+  const locatorFor = (selector: string) => {
+    const locator = {
+      first: () => locator,
+      waitFor: async () => undefined,
+      count: async () => selector.includes("data-model-option") ? 1 : 0,
+      click: async () => {
+        if (selector.includes(`data-model-option=\"${targetModelId}\"`)) {
+          selectedModelId = targetModelId;
+        }
+        if (selector.includes("data-chat-send-button")) {
+          sent = true;
+        }
+      },
+      fill: async () => undefined,
+      getAttribute: async (name: string) => {
+        if (name === "data-chat-tab-session-id") return sessionId;
+        if (name === "data-composer-selected-model") return selectedModelId;
+        return null;
+      },
+    };
+    return locator;
+  };
+  const product = {
+    context: undefined as never,
+    page: {
+      locator: (selector: string) => locatorFor(selector),
+      keyboard: { press: async () => undefined },
+    } as never,
+    debug: { console: [], network: [] },
+    close: async () => undefined,
+  } satisfies ProductPage;
+  const baselineEvent = { sessionId, seq: 1, timestamp: "2026-07-20T00:00:00Z", event: { type: "turn_ended" } };
+  const switchedEvent = { sessionId, seq: 2, timestamp: "2026-07-20T00:00:01Z", event: { type: "turn_ended" } };
+  const world = {
+    ...fakeWorld(),
+    runtime: {
+      baseUrl: "http://fake",
+      client: {
+        getSession: async () => ({
+          id: sessionId,
+          workspaceId: "ws-grok",
+          agentKind: "grok",
+          modelId: selectedModelId,
+          requestedModelId: selectedModelId,
+          status: "idle",
+        }),
+        getLiveConfig: async () => ({
+          rawConfigOptions: [],
+          sourceSeq: 2,
+          normalizedControls: {
+            model: {
+              key: "model",
+              rawConfigId: "model",
+              label: "Model",
+              currentValue: selectedModelId,
+              settable: true,
+              values: [],
+            },
+          },
+        }),
+        getEvents: async () => sent ? [baselineEvent, switchedEvent] : [baselineEvent],
+      },
+    },
+    gateway: {
+      snapshotSpend: async () => ({ tokenIdHash: "token-hash-1", requestIds: ["before"], takenAt: "2026-07-20T00:00:00Z" }),
+      correlateTurn: async (params: typeof correlated & { actor: unknown; before: unknown }) => {
+        correlated = params;
+        return {
+          tokenIdHash: "token-hash-1",
+          requestIds: ["after"],
+          modelId: params.acceptedModelId!,
+          promptTokens: 1,
+          completionTokens: 1,
+          totalTokens: 2,
+          spendUsd: 0.001,
+          windowStartedAt: params.windowStartedAt!,
+          windowFinishedAt: params.windowFinishedAt!,
+        };
+      },
+    },
+  } as unknown as ReadyLocalWorld;
+
+  const result = await defaultLocalConfigDriver.selectConfigValueInUi(
+    { world, page: product, actor: fakeActor(), harness: "grok", sessionId },
+    control({
+      key: "model",
+      rawConfigId: "model",
+      currentValue: "grok-4-fast",
+      values: ["grok-4-fast", targetModelId],
+      surface: "model",
+    }),
+    targetModelId,
+  );
+  assert.deepEqual(result, { accepted: true, readback: targetModelId });
+  assert.equal(sent, true);
+  assert.equal(correlated?.acceptedModelId, targetModelId);
+  assert.ok(Date.parse(correlated?.windowStartedAt ?? "") <= Date.parse(correlated?.windowFinishedAt ?? ""));
+});
+
+test("model config selection remains unavailable to non-Grok harnesses", async () => {
+  await assert.rejects(
+    defaultLocalConfigDriver.selectConfigValueInUi(
+      { world: fakeWorld(), page: fakePage(), actor: fakeActor(), harness: "codex", sessionId: "sess-codex" },
+      control({ key: "model", surface: "model", currentValue: "codex-a", values: ["codex-a", "codex-b"] }),
+      "codex-b",
+    ),
+    /bounded to Grok/,
+  );
+});
+
+test("configSurfaceFor maps the catalog model picker and promoted live-composer controls", () => {
   // The live chat composer renders exactly the promoted control groups
   // (ChatInputControlRow): effort/reasoning bars and the working-mode control.
   assert.equal(configSurfaceFor("effort"), "reasoning");
   assert.equal(configSurfaceFor("reasoning"), "reasoning");
   assert.equal(configSurfaceFor("mode"), "mode");
   assert.equal(configSurfaceFor("collaboration_mode"), "mode");
-  // The raw ACP model control is owned by the catalog model picker (its raw
-  // values are never data-model-option ids — the run-3 deadlock), fast_mode has
-  // no testid, and arbitrary ACP controls have no live-composer strip.
-  assert.equal(configSurfaceFor("model"), null);
+  assert.equal(configSurfaceFor("model"), "model");
+  // fast_mode has no testid, and arbitrary ACP controls have no live-composer strip.
   assert.equal(configSurfaceFor("fast_mode"), null);
   assert.equal(configSurfaceFor("temperature"), null);
 });
