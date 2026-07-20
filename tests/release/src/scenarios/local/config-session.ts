@@ -112,7 +112,12 @@ export interface LocalConfigDriver {
 
   /** Enumerates the session's live-probe controls (reuses the runtime's
    * `GET /v1/sessions/{id}/live-config` `normalizedControls`, the t3-cfg-1 seam). */
-  enumerateControls(world: ReadyLocalWorld, sessionId: string): Promise<LocalConfigControl[]>;
+  enumerateControls(
+    world: ReadyLocalWorld,
+    sessionId: string,
+    harness: LocalHarnessKind,
+    activeModelId: string,
+  ): Promise<LocalConfigControl[]>;
 
   /**
    * Selects `value` for `control` THROUGH the product UI (composer
@@ -120,7 +125,11 @@ export interface LocalConfigDriver {
    * model picker), waits beyond the rejection window, and reads the value back
    * from the UI. Returns whether it was accepted or rejected-and-restored.
    */
-  selectConfigValueInUi(page: ProductPage, control: LocalConfigControl, value: string): Promise<{ accepted: boolean; readback: string }>;
+  selectConfigValueInUi(
+    context: LocalConfigSelectionContext,
+    control: LocalConfigControl,
+    value: string,
+  ): Promise<{ accepted: boolean; readback: string }>;
 
   closeWorld(world: ReadyLocalWorld): ReturnType<ReadyLocalWorld["close"]>;
 }
@@ -134,10 +143,17 @@ export interface LocalConfigControl {
   settable: boolean;
   values: readonly string[];
   /** Which composer surface renders it, so the driver picks the right testid.
-   * Only "mode" (SessionModeControl popover) and "reasoning"
-   * (ComposerReasoningEffortBars stepper) exist on the live chat composer —
-   * see `configSurfaceFor` for why the other advertised controls are excluded. */
-  surface: "mode" | "reasoning";
+   * Grok's catalog-backed `model` control is driven through the composer model
+   * picker; mode and reasoning use their promoted live composer controls. */
+  surface: "model" | "mode" | "reasoning";
+}
+
+export interface LocalConfigSelectionContext {
+  world: ReadyLocalWorld;
+  page: ProductPage;
+  actor: AuthenticatedActor;
+  harness: LocalHarnessKind;
+  sessionId: string;
 }
 
 /** Every privileged/UI step LOCAL-5 performs, faked in offline unit tests. */
@@ -198,16 +214,35 @@ export const defaultLocalConfigDriver: LocalConfigDriver = {
   ensureHarnessReady: (world, page, harness) => ensureHarnessReady(world, page, harness),
   selectRepoAndWorkLocally: (page, repo) => selectRepoAndWorkLocally(page, repo),
   runBaselineTurn: (world, page, harness, repoPath) => runBaselineTurn(world, page, harness, repoPath),
-  async enumerateControls(world, sessionId) {
+  async enumerateControls(world, sessionId, harness, activeModelId) {
     const live = await world.runtime.client.getLiveConfig(sessionId);
     const normalized = Object.values(live.normalizedControls);
     // The reasoning bars render ONE ladder: `effort` wins over `reasoning` when
     // both are advertised (resolveReasoningEffortControl), so a shadowed
     // `reasoning` control has no surface of its own.
     const hasEffort = normalized.some((control) => control.key === "effort");
+    let grokModelValues: string[] | null = null;
+    if (harness === "grok" && normalized.some((control) => control.key === "model")) {
+      const [preflight, probed] = await Promise.all([
+        world.gateway.preflight(),
+        world.runtime.client.getGatewayModels(harness),
+      ]);
+      const alternate = selectDistinctEligibleModel(
+        activeModelId,
+        preflight.allowlistModels,
+        probed.map((model) => model.id),
+      );
+      grokModelValues = alternate ? [activeModelId, alternate] : [activeModelId];
+    }
     return normalized.flatMap((control) => {
       const surface = configSurfaceFor(control.key);
-      if (!surface || (control.key === "reasoning" && hasEffort)) {
+      if (
+        !surface
+        || (control.key === "reasoning" && hasEffort)
+        // LOCAL-GROK-CFG-003 is deliberately Grok-only. Other harness model
+        // semantics remain owned by their existing collectors/product rulings.
+        || (surface === "model" && harness !== "grok")
+      ) {
         // No live-composer surface renders this control (see configSurfaceFor);
         // it cannot be UI-driven, so LOCAL-4 excludes it from the cycle rather
         // than timing out against a selector that can never exist.
@@ -217,15 +252,17 @@ export const defaultLocalConfigDriver: LocalConfigDriver = {
         {
           key: control.key,
           rawConfigId: control.rawConfigId,
-          currentValue: control.currentValue,
+          currentValue: surface === "model" ? activeModelId : control.currentValue,
           settable: control.settable,
-          values: control.values.map((option) => option.value),
+          values: surface === "model"
+            ? (grokModelValues ?? [activeModelId])
+            : control.values.map((option) => option.value),
           surface,
         },
       ];
     });
   },
-  selectConfigValueInUi: (page, control, value) => selectConfigValueInUi(page, control, value),
+  selectConfigValueInUi: (context, control, value) => selectConfigValueInUi(context, control, value),
   closeWorld: (world) => world.close(),
 };
 
@@ -348,8 +385,14 @@ export async function collectLocal4ConfigCells(
         await driver.ensureHarnessReady(world, page, harness);
         await driver.selectRepoAndWorkLocally(page, repo);
         const { workspaceId, sessionId, modelId } = await driver.runBaselineTurn(world, page, harness, repo.path);
-        const controls = await driver.enumerateControls(world, sessionId);
-        const { recorded, known1063 } = await cycleConfigControls(page, controls, driver);
+        const controls = await driver.enumerateControls(world, sessionId, harness, modelId);
+        const { recorded, known1063 } = await cycleConfigControls(page, controls, {
+          selectConfigValueInUi: (_page, control, value) => driver.selectConfigValueInUi(
+            { world, page: page!, actor, harness, sessionId },
+            control,
+            value,
+          ),
+        });
         collected.push({
           cell,
           outcome: { kind: "ok", harness, modelId, workspaceId, sessionId, controls: recorded, known1063 },
@@ -431,7 +474,13 @@ export async function collectLocal4ConfigCells(
 export async function cycleConfigControls(
   page: ProductPage,
   controls: readonly LocalConfigControl[],
-  driver: Pick<LocalConfigDriver, "selectConfigValueInUi">,
+  driver: {
+    selectConfigValueInUi(
+      page: ProductPage,
+      control: LocalConfigControl,
+      value: string,
+    ): Promise<{ accepted: boolean; readback: string }>;
+  },
 ): Promise<{ recorded: Array<{ controlKey: string; acceptedValue: string; rejected: boolean }>; known1063: boolean }> {
   const cyclable = controls.filter(
     (control) => control.settable && control.values.some((value) => value !== control.currentValue),
@@ -813,10 +862,11 @@ function allCleanupBooleansTrue(cleanup: LocalCleanupV1): boolean {
  * (config/session-controls.ts SupportedLiveControlKey). Everything else has no
  * composer surface:
  *   - the raw ACP `model` control is owned by the catalog model picker
- *     (data-model-option carries CATALOG model ids, never the control's raw
- *     values — run 3 deadlocked waiting for `[data-model-option="default"]`),
- *     and the baseline turn already proves that surface end-to-end via
- *     `selectModelInComposer` (set + data-composer-selected-model readback);
+ *     (data-model-option carries catalog/live-probed model ids, never the raw
+ *     ACP values). LOCAL-GROK-CFG-003 maps this surface for Grok; enumeration
+ *     replaces raw values with the allowlist ∩ live gateway probe and the
+ *     driver proves picker readback, same-session survival, and one bounded
+ *     attributed turn. Other harness model semantics remain unchanged;
  *   - the generic SessionConfigControls strip (data-session-config-control)
  *     renders only on the Settings/automations composers, not the live chat
  *     composer;
@@ -824,6 +874,9 @@ function allCleanupBooleansTrue(cleanup: LocalCleanupV1): boolean {
  *     advertises it on this candidate (claude/grok probe fastMode=false).
  */
 export function configSurfaceFor(key: string): LocalConfigControl["surface"] | null {
+  if (key === "model") {
+    return "model";
+  }
   if (key === "effort" || key === "reasoning") {
     return "reasoning";
   }
@@ -831,6 +884,20 @@ export function configSurfaceFor(key: string): LocalConfigControl["surface"] | n
     return "mode";
   }
   return null;
+}
+
+/** Picks one distinct model from the exact qualification allowlist/live-probe
+ * intersection. The existing cheap-tier ordering remains the authority; the
+ * active model is excluded before selection so a no-op can never pass. */
+export function selectDistinctEligibleModel(
+  activeModelId: string,
+  allowlist: readonly string[],
+  liveProbe: readonly string[],
+): string | null {
+  return selectCheapestEligibleModel(
+    allowlist.filter((modelId) => modelId !== activeModelId),
+    liveProbe,
+  );
 }
 
 function dedupe(values: readonly string[]): string[] {
@@ -1043,10 +1110,14 @@ async function runBaselineTurn(
 }
 
 async function selectConfigValueInUi(
-  page: ProductPage,
+  context: LocalConfigSelectionContext,
   control: LocalConfigControl,
   value: string,
 ): Promise<{ accepted: boolean; readback: string }> {
+  if (control.surface === "model") {
+    return switchGrokModelAndProveTurn(context, control, value);
+  }
+  const { page } = context;
   if (control.surface === "reasoning") {
     return stepReasoningEffortToValue(page, value, control.values.length);
   }
@@ -1069,6 +1140,120 @@ async function selectConfigValueInUi(
   await sleep(CONFIG_REJECTION_WINDOW_MS);
   const readback = await readRequiredAttr(p, "[data-session-mode-trigger]", "data-session-mode-selected");
   return { accepted: readback === value, readback };
+}
+
+/**
+ * Drives Grok's catalog-backed model control through the real composer picker.
+ * A successful return means all four acceptance facts held: the target was
+ * distinct and picker-visible, UI/runtime readback matched, the concrete
+ * AnyHarness session id survived, and a new turn on that same session
+ * correlated to the actor key + selected model inside a bounded window.
+ */
+async function switchGrokModelAndProveTurn(
+  context: LocalConfigSelectionContext,
+  control: LocalConfigControl,
+  value: string,
+): Promise<{ accepted: boolean; readback: string }> {
+  const { world, page, actor, harness, sessionId } = context;
+  if (harness !== "grok") {
+    throw new Error(`model config surface is bounded to Grok, got "${harness}"`);
+  }
+  if (value === control.currentValue) {
+    throw new Error(`Grok model switch target "${value}" is not distinct from the active model`);
+  }
+
+  const activeTab = page.page.locator('[data-chat-tab][data-chat-tab-active="true"]').first();
+  const beforeSessionId = await waitForReconciledSessionId(page.page, activeTab);
+  if (beforeSessionId !== sessionId) {
+    throw new Error(
+      `Grok model switch started on session "${beforeSessionId}", expected baseline session "${sessionId}"`,
+    );
+  }
+
+  await selectModelInComposer(page, harness, value);
+  await waitForRuntimeModelReadback(world, sessionId, value, CONFIG_REJECTION_WINDOW_MS);
+  const readback = await readRequiredAttr(
+    page.page,
+    "[data-composer-model-trigger]",
+    "data-composer-selected-model",
+  );
+  if (readback !== value) {
+    throw new Error(`Grok model picker readback was "${readback}", expected "${value}"`);
+  }
+  const selectedSessionId = await waitForReconciledSessionId(page.page, activeTab);
+  if (selectedSessionId !== sessionId) {
+    throw new Error(
+      `Grok model switch replaced session "${sessionId}" with "${selectedSessionId}"`,
+    );
+  }
+
+  const beforeSpend = await world.gateway.snapshotSpend(actor.gatewayKey);
+  const beforeEvents = await world.runtime.client.getEvents(sessionId);
+  const afterSeq = beforeEvents.reduce((max, event) => Math.max(max, event.seq), 0);
+  const windowStartedAt = new Date().toISOString();
+  const editor = page.page.locator("[data-chat-composer-editor]").first();
+  await editor.waitFor({ state: "visible", timeout: 15_000 });
+  await editor.fill(BASELINE_PROMPT);
+  const send = page.page.locator("[data-chat-send-button]:not([disabled])").first();
+  await send.waitFor({ state: "visible", timeout: 15_000 });
+  await send.click();
+  const completion = await waitForTurnCompletion(world, sessionId, TURN_TIMEOUT_MS, afterSeq);
+  const windowFinishedAt = new Date().toISOString();
+  if (completion.error) {
+    throw new Error(`Grok attributed model-switch turn errored: ${completion.error}`);
+  }
+  if (!completion.ended) {
+    throw new Error(`Grok attributed model-switch turn did not end within ${TURN_TIMEOUT_MS}ms`);
+  }
+  await world.gateway.correlateTurn({
+    actor: actor.gatewayKey,
+    before: beforeSpend,
+    acceptedModelId: value,
+    windowStartedAt,
+    windowFinishedAt,
+  });
+
+  const afterSessionId = await waitForReconciledSessionId(page.page, activeTab);
+  if (afterSessionId !== sessionId) {
+    throw new Error(
+      `Grok model-switch turn left baseline session "${sessionId}" for "${afterSessionId}"`,
+    );
+  }
+  await waitForRuntimeModelReadback(world, sessionId, value, CONFIG_REJECTION_WINDOW_MS);
+  return { accepted: true, readback };
+}
+
+async function waitForRuntimeModelReadback(
+  world: ReadyLocalWorld,
+  sessionId: string,
+  expectedModelId: string,
+  timeoutMs: number,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  let last: string[] = [];
+  while (Date.now() < deadline) {
+    const [session, live] = await Promise.all([
+      world.runtime.client.getSession(sessionId).catch(() => null),
+      world.runtime.client.getLiveConfig(sessionId).catch(() => null),
+    ]);
+    const liveModelId = live?.normalizedControls.model?.currentValue;
+    last = [
+      session?.modelId,
+      session?.requestedModelId,
+      liveModelId,
+    ].filter((value): value is string => typeof value === "string" && value.length > 0);
+    // Session model/requested-model fields can reflect product intent before
+    // the harness accepts it. The live-config current value is the authoritative
+    // runtime readback for this existing-session switch.
+    if (liveModelId === expectedModelId) {
+      return;
+    }
+    await sleep(300);
+  }
+  throw new Error(
+    `Grok model runtime readback did not reach "${expectedModelId}" within ${timeoutMs}ms ` +
+      `(last values: ${last.join(", ") || "none"})`,
+  );
 }
 
 async function stepSessionModeToValue(
@@ -1628,10 +1813,12 @@ async function waitForTurnCompletion(
   world: ReadyLocalWorld,
   sessionId: string,
   timeoutMs: number,
+  afterSeq = 0,
 ): Promise<{ ended: boolean; error: string | undefined }> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const events = await world.runtime.client.getEvents(sessionId).catch(() => []);
+    const events = (await world.runtime.client.getEvents(sessionId).catch(() => []))
+      .filter((event) => event.seq > afterSeq);
     const error = findErrorEvent(events);
     if (error) {
       return { ended: true, error };
