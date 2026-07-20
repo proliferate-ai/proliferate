@@ -793,7 +793,10 @@ summary beside the parent run logs after both setup failure and normal close.
 Deleting its nested ledger is therefore not itself treated as zero-survivor
 proof: the retained receipt must independently report stack and Route53
 absence, exact S3 `HEAD` absence, bounded GHCR tag-relist absence, local-path
-removal, and zero cleanup failures.
+removal, and zero cleanup failures. Before its first S3 write, the world also
+issues a bounded, read-only `HEAD` against a reserved never-written key in the
+run prefix. Only an exact missing-object response permits provisioning to
+continue; authorization failures stay red and fail before provider mutation.
 
 GitHub Actions cancellation and job timeout are a distinct failure boundary:
 steps on the cancelled runner, including `if: always()` cleanup and artifact

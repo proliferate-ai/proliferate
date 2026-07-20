@@ -83,6 +83,8 @@ export const STACK_WAIT_TIMEOUT_MS = 30 * 60_000;
 export const CFN_CANCELLATION_CALL_TIMEOUT_MS = 5_000;
 /** Individual ordinary cleanup delete/observer calls must also remain bounded. */
 const CFN_CLEANUP_PROVIDER_CALL_TIMEOUT_MS = 30_000;
+/** Reserved, never-written key used to prove exact missing-object observations before upload. */
+const S3_ABSENCE_AUTHORITY_PROBE_BASENAME = ".proliferate-exact-absence-authority-probe";
 /** Stack submission and failure-tail calls stay inside the 25s signal bridge. */
 const CFN_STACK_CONTROL_CALL_TIMEOUT_MS = 10_000;
 /** Bounded describe-stack-events tail on a create failure. */
@@ -1025,6 +1027,13 @@ export async function uploadBundleAndPresign(input: {
   const runtimeKey = `${keyPrefix}${CFN_RUNTIME_ARCHIVE_NAME}`;
   const sumsKey = `${keyPrefix}self-hosted-assets.SHA256SUMS`;
 
+  // Cleanup can be accepted only when a missing object produces an exact 404.
+  // Probe a reserved key that this controller never writes before registering
+  // cleanup custody or attempting the first S3 mutation. In particular, S3
+  // returns 403 for a missing key when the caller lacks bucket ListBucket
+  // authority; treating that as absence would create false-green evidence.
+  await assertS3ExactAbsenceAuthority(exec, region, bucket, keyPrefix);
+
   await input.registerCleanup("s3_object", `s3://${bucket}/${bundleKey}`, () =>
     deleteS3Object(exec, region, bucket, bundleKey),
   );
@@ -1062,6 +1071,33 @@ export async function uploadBundleAndPresign(input: {
     throw new Error("CFN: aws s3 presign returned an empty URL.");
   }
   return { deployBundleUrl, deployBundleChecksumUrl, runtimeBinaryUrl, runtimeKey, bundleKey, sumsKey };
+}
+
+/**
+ * Proves the caller can distinguish a missing object from an authorization
+ * failure. The reserved probe key is read-only and is never created by this
+ * controller. Provider payloads are deliberately excluded from the stable
+ * failure because CLI errors can contain account or request details.
+ */
+async function assertS3ExactAbsenceAuthority(
+  exec: CfnAwsExec,
+  region: string,
+  bucket: string,
+  keyPrefix: string,
+): Promise<void> {
+  const probeKey = `${keyPrefix}${S3_ABSENCE_AUTHORITY_PROBE_BASENAME}`;
+  try {
+    await exec.run(
+      ["s3api", "head-object", "--bucket", bucket, "--key", probeKey, "--region", region],
+      { timeoutMs: CFN_CLEANUP_PROVIDER_CALL_TIMEOUT_MS },
+    );
+  } catch (error) {
+    if (s3ObjectAbsentError(error)) {
+      return;
+    }
+    throw new Error("CFN readiness: S3 exact-absence authority is unproven; refusing provider mutation.");
+  }
+  throw new Error("CFN readiness: S3 exact-absence authority is unproven; refusing provider mutation.");
 }
 
 /** Deletes one S3 object and succeeds only after an exact HEAD observes absence. */

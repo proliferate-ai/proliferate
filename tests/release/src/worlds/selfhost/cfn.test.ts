@@ -643,9 +643,12 @@ test("parseGhcrVersions + ghcrVersionIdForTag: finds the version whose tags incl
 
 // ── S3 upload / presign ──────────────────────────────────────────────────────
 
-test("uploadBundleAndPresign: registers bundle, runtime, and sums BEFORE each cp and returns presigned URLs", async () => {
+test("uploadBundleAndPresign: a 404 authority probe passes before registered uploads and presigned URLs", async () => {
   const log: string[] = [];
   const exec = new FakeExec((args) => {
+    if (args[0] === "s3api" && args[1] === "head-object") {
+      throw new Error("An error occurred (404) when calling HeadObject: Not Found");
+    }
     if (args[0] === "s3" && args[1] === "cp") {
       log.push(`cp:${args[3]}`);
       return "";
@@ -667,6 +670,17 @@ test("uploadBundleAndPresign: registers bundle, runtime, and sums BEFORE each cp
       log.push(`register:${kind}:${providerId}`);
     },
   });
+  assert.deepEqual(exec.calls[0], [
+    "s3api",
+    "head-object",
+    "--bucket",
+    "bkt",
+    "--key",
+    "qualification/run-1/shard-0/.proliferate-exact-absence-authority-probe",
+    "--region",
+    "us-east-1",
+  ]);
+  assert.equal(exec.callOptions[0]?.timeoutMs, 30_000);
   // Registered-before-create: each s3_object intent precedes its cp.
   const bundleReg = log.indexOf("register:s3_object:s3://bkt/qualification/run-1/shard-0/proliferate-deploy.tar.gz");
   const bundleCp = log.indexOf("cp:s3://bkt/qualification/run-1/shard-0/proliferate-deploy.tar.gz");
@@ -685,6 +699,43 @@ test("uploadBundleAndPresign: registers bundle, runtime, and sums BEFORE each cp
     result.runtimeKey,
     "qualification/run-1/shard-0/anyharness-aarch64-unknown-linux-musl.tar.gz",
   );
+});
+
+test("uploadBundleAndPresign: a 403 authority probe fails before cleanup registration or S3 mutation", async () => {
+  const providerDetail =
+    "An error occurred (403) when calling the HeadObject operation: Forbidden request-id=secret-provider-detail";
+  const exec = new FakeExec(() => {
+    throw new Error(providerDetail);
+  });
+  let registrations = 0;
+
+  await assert.rejects(
+    uploadBundleAndPresign({
+      exec,
+      region: "us-east-1",
+      bucket: "bkt",
+      keyPrefix: "qualification/run-1/shard-0/",
+      bundlePath: "/tmp/proliferate-deploy.tar.gz",
+      runtimePath: "/tmp/anyharness-aarch64-unknown-linux-musl.tar.gz",
+      sumsPath: "/tmp/self-hosted-assets.SHA256SUMS",
+      registerCleanup: async () => {
+        registrations += 1;
+      },
+    }),
+    (error: unknown) => {
+      assert.ok(error instanceof Error);
+      assert.equal(
+        error.message,
+        "CFN readiness: S3 exact-absence authority is unproven; refusing provider mutation.",
+      );
+      assert.doesNotMatch(error.message, /AccessDenied|request-id|secret-provider-detail/);
+      return true;
+    },
+  );
+  assert.equal(registrations, 0);
+  assert.equal(exec.calls.length, 1);
+  assert.deepEqual(exec.calls[0]?.slice(0, 2), ["s3api", "head-object"]);
+  assert.equal(exec.calls.some((args) => args[0] === "s3" && args[1] === "cp"), false);
 });
 
 test("deleteS3Object: requires an exact post-delete absence observation", async () => {
