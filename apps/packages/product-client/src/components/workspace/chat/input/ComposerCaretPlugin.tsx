@@ -128,7 +128,9 @@ export function ComposerCaretPlugin() {
       const snap = (value: number) => Math.round(value * deviceScale) / deviceScale;
 
       return {
-        color: computedStyle?.color || "currentColor",
+        color: computedStyle?.getPropertyValue("--color-text-caret").trim()
+          || computedStyle?.color
+          || "currentColor",
         height: snap(height),
         left: snap(rangeRect.left),
         top: snap(rangeRect.top + ((measuredHeight - height) / 2)),

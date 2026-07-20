@@ -6,6 +6,7 @@ import {
 import { Button } from "@proliferate/ui/primitives/Button";
 import { FileTreeEntryIcon } from "#product/components/workspace/files/file-icons";
 import { InlinePathMentionIcon } from "@proliferate/ui/icons";
+import { CHAT_TRANSCRIPT_LINK_CLASS } from "@proliferate/product-ui/chat/transcript/TranscriptLinkStyles";
 import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import {
   FILE_REFERENCE_MENU_CLASS,
@@ -131,7 +132,7 @@ function resolveBadgeClassName(
   }
 
   return [
-    "group/inline-mention m-0 inline appearance-none whitespace-normal break-words border-0 bg-transparent px-0.5 py-0 text-left align-baseline font-[inherit] font-medium leading-[inherit] text-[color:color-mix(in_srgb,var(--color-link-foreground)_80%,var(--color-foreground)_20%)] shadow-none transition-colors hover:bg-transparent hover:text-foreground hover:underline hover:decoration-current hover:decoration-dashed hover:decoration-[0.5px] hover:underline-offset-2 focus-visible:outline-none focus-visible:underline",
+    `group/inline-mention m-0 inline appearance-none whitespace-normal break-words border-0 bg-transparent px-0.5 py-0 text-left align-baseline font-[inherit] font-medium leading-[inherit] shadow-none hover:bg-transparent ${CHAT_TRANSCRIPT_LINK_CLASS}`,
     className,
   ].filter(Boolean).join(" ");
 }

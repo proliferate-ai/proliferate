@@ -181,7 +181,7 @@ export function AuthScreenLayout({
                   tabIndex={showAuth ? 0 : -1}
                   className="h-11 w-full"
                 >
-                  {!submitting && <GitHub className="icon-paired shrink-0" />}
+                  {!submitting && <GitHub className="icon-control shrink-0" />}
                   {submitting ? AUTH_LOGIN_LABELS.waiting : AUTH_LOGIN_LABELS.signIn}
                   {!submitting && <ArrowRight className="icon-paired" />}
                 </Button>
@@ -202,7 +202,7 @@ export function AuthScreenLayout({
                     <ProviderBrandIcon
                       provider="sso"
                       label={ssoDisplayName}
-                      className="icon-paired shrink-0"
+                      className="icon-control shrink-0"
                     />
                   )}
                   {ssoSubmitting

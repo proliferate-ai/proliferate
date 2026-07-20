@@ -28,6 +28,7 @@ describe("GoalBarObjectiveEditor", () => {
     expect(textarea.tagName).toBe("TEXTAREA");
     expect(textarea.rows).toBe(3);
     expect(textarea.value).toBe("Line one\nLine two");
+    expect(textarea.hasAttribute("data-ui-thin-caret")).toBe(true);
   });
 
   it("renders explicit commit and cancel icon buttons", () => {

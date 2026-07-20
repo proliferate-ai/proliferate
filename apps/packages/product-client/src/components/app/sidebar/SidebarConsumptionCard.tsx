@@ -239,7 +239,9 @@ export const SidebarUsageTrigger = forwardRef<
       title="Usage"
       className={`relative flex size-10 shrink-0 items-center justify-center rounded-lg text-sidebar-muted-foreground outline-none hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-sidebar-ring data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-foreground ${className}`}
     >
-      <svg viewBox="0 0 28 28" className="icon-large -rotate-90 [font-size:var(--text-sidebar-row)]" aria-hidden="true">
+      {/* 20/28 of the control tier matches the CircleHelp glyph's 20/24 of
+          the paired tier, while both surrounding hit targets remain 40px. */}
+      <svg viewBox="0 0 28 28" className="icon-control -rotate-90 [font-size:var(--text-sidebar-row)]" aria-hidden="true">
         <ConcentricMeterRing
           meter="compute"
           meterState={meters?.compute ?? null}

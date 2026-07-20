@@ -5,12 +5,12 @@ export interface SpinnerProps {
 export function Spinner({ className }: SpinnerProps) {
   return (
     <div
-      className={`proliferate-spinner inline-flex shrink-0 ${className ?? ""}`}
+      className={`proliferate-spinner inline-grid flex-none place-items-center align-middle leading-none ${className ?? ""}`}
       data-loading-spinner
     >
       <svg
         aria-hidden="true"
-        className="size-full"
+        className="block size-full motion-safe:animate-spin"
         viewBox="0 0 24 24"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"

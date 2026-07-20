@@ -11,6 +11,7 @@ export function CloudTranscriptActionRow({
   statusLabel,
   children,
   defaultExpanded = false,
+  iconLabelGapClassName = "gap-1.5",
 }: {
   icon?: ReactNode;
   label: ReactNode;
@@ -19,6 +20,7 @@ export function CloudTranscriptActionRow({
   statusLabel?: string | null;
   children?: ReactNode;
   defaultExpanded?: boolean;
+  iconLabelGapClassName?: string;
 }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const hasDetails = Boolean(children);
@@ -39,9 +41,10 @@ export function CloudTranscriptActionRow({
         <div
           role="button"
           tabIndex={0}
+          data-cloud-transcript-action-row
           data-chat-transcript-ignore
           aria-expanded={expanded}
-          className={`group/tool-action-row inline-flex min-w-0 max-w-full cursor-pointer items-center gap-1.5 rounded-none bg-transparent p-0 text-left text-chat font-normal leading-[var(--text-chat--line-height)] outline-none focus-visible:underline ${
+          className={`group/tool-action-row inline-flex min-w-0 max-w-full cursor-pointer items-center ${iconLabelGapClassName} rounded-none bg-transparent p-0 text-left text-chat font-normal leading-[var(--text-chat--line-height)] outline-none focus-visible:underline ${
             status === "failed"
               ? "text-destructive/80 hover:text-destructive"
               : "text-muted-foreground hover:text-foreground"
@@ -60,7 +63,8 @@ export function CloudTranscriptActionRow({
         </div>
       ) : (
         <div
-          className={`inline-flex min-w-0 max-w-full items-center gap-1.5 text-chat leading-[var(--text-chat--line-height)] ${
+          data-cloud-transcript-action-row
+          className={`inline-flex min-w-0 max-w-full items-center ${iconLabelGapClassName} text-chat leading-[var(--text-chat--line-height)] ${
             status === "failed" ? "text-destructive/80" : "text-muted-foreground"
           }`}
         >

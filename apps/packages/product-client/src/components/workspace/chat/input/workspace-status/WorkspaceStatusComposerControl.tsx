@@ -123,7 +123,7 @@ export function WorkspaceStatusComposerControl({
       trigger={(
         <ComposerControlButton
           iconOnly
-          icon={<List className="icon-paired" />}
+          icon={<List className="icon-control" />}
           label="Workspace status"
           aria-label="Workspace status"
           title="Workspace status"

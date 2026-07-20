@@ -93,11 +93,11 @@ export const scratchEditorTheme = EditorView.theme({
     outline: "none",
   },
   ".cm-cursor": {
-    borderLeftColor: "var(--color-foreground)",
+    borderLeftColor: "var(--color-text-caret)",
     borderLeftWidth: "1px",
   },
   ".cm-selectionBackground, &.cm-focused .cm-selectionBackground": {
-    backgroundColor: "color-mix(in oklab, var(--color-foreground) 18%, transparent)",
+    backgroundColor: "var(--color-text-selection)",
   },
   ".cm-placeholder": {
     color: "color-mix(in oklab, var(--color-sidebar-muted-foreground) 65%, transparent)",

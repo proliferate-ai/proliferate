@@ -56,8 +56,9 @@ export function ToolActionRow({
           role="button"
           tabIndex={0}
           data-chat-transcript-ignore
+          data-tool-action-row
           aria-expanded={expanded}
-          className={`group/tool-action-row inline-flex min-w-0 max-w-full cursor-pointer items-center gap-1.5 rounded-none bg-transparent p-0 text-left text-chat leading-[1.5] font-normal outline-none focus-visible:underline ${
+          className={`group/tool-action-row inline-flex min-w-0 max-w-full cursor-pointer items-center gap-1 rounded-none bg-transparent p-0 text-left text-chat leading-[1.5] font-normal outline-none focus-visible:underline ${
             status === "failed"
               ? "text-destructive/80 hover:text-destructive"
               : "text-muted-foreground hover:text-foreground"
@@ -74,7 +75,8 @@ export function ToolActionRow({
         </div>
       ) : (
         <div
-          className={`inline-flex min-w-0 max-w-full items-center gap-1.5 text-chat leading-[1.5] ${
+          data-tool-action-row
+          className={`inline-flex min-w-0 max-w-full items-center gap-1 text-chat leading-[1.5] ${
             status === "failed" ? "text-destructive/80" : "text-muted-foreground"
           }`}
         >

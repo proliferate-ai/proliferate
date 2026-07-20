@@ -116,6 +116,10 @@ describe("ComposerRichTextEditor", () => {
     act(() => resetText(bare.editor, ""));
     act(() => { bare.editor.dispatchCommand(PASTE_COMMAND, pasteEvent("https://example.com")); });
     await waitFor(() => expect(bare.root.querySelector('a[href="https://example.com"]')).toBeTruthy());
+    const bareLink = bare.root.querySelector('a[href="https://example.com"]');
+    expect(bareLink?.className).toContain("no-underline");
+    expect(bareLink?.className).toContain("hover:underline");
+    expect(bareLink?.className).toContain("focus-visible:underline");
 
     cleanup();
     const selected = renderEditor({ value: "Docs" });
@@ -247,6 +251,7 @@ describe("ComposerRichTextEditor", () => {
     mockRangeRect({ height: 15, left: 24, top: 18 });
     const harness = renderEditor();
     await harness.ready();
+    harness.root.style.setProperty("--color-text-caret", "rgb(1, 2, 3)");
 
     act(() => {
       harness.root.focus();
@@ -263,6 +268,7 @@ describe("ComposerRichTextEditor", () => {
     expect(caret.style.width).toBe("1px");
     expect(caret.style.height).toBe("15px");
     expect(caret.style.left).toBe("24px");
+    expect(caret.style.backgroundColor).toBe("rgb(1, 2, 3)");
     expect(harness.root.style.caretColor).toBe("transparent");
 
     fireEvent.compositionStart(harness.root);

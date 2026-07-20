@@ -67,7 +67,7 @@ describe("AccountSettingsPane", () => {
   });
 
   it("renders multiple linked providers", () => {
-    render(
+    const { container } = render(
       <AccountSettingsPane
         displayName="Pablo"
         email="pablo@example.com"
@@ -109,6 +109,9 @@ describe("AccountSettingsPane", () => {
     expect(screen.getByText("pablo@gmail.com")).toBeTruthy();
     expect(screen.getByText("Apple")).toBeTruthy();
     expect(screen.getAllByText("Not connected").length).toBeGreaterThan(0);
+    const providerIcons = container.querySelectorAll("[data-auth-provider-brand]");
+    expect(providerIcons.length).toBe(4);
+    expect([...providerIcons].every((icon) => icon.classList.contains("icon-control"))).toBe(true);
   });
 
   it("uses SSO brand labels for icons without changing the visible provider label", () => {
@@ -138,7 +141,7 @@ describe("AccountSettingsPane", () => {
   it("keeps email password separate from linked providers", async () => {
     const setPassword = vi.fn();
 
-    render(
+    const { container } = render(
       <AccountSettingsPane
         displayName="Pablo"
         email="pablo@example.com"
@@ -163,6 +166,8 @@ describe("AccountSettingsPane", () => {
 
     expect(screen.getByText("Email & password")).toBeTruthy();
     expect(screen.getByText("Not set")).toBeTruthy();
+    expect(container.querySelector('[data-auth-provider-brand="password"]')?.getAttribute("class"))
+      .toContain("icon-control");
     fireEvent.click(screen.getByText("Set password"));
     fireEvent.change(screen.getByLabelText("New password"), {
       target: { value: "correct horse battery" },

@@ -186,7 +186,7 @@ export function AppErrorRecoverySurface({
           data-report-appearance="neutral"
         >
           {reportStatus === "reporting" ? (
-            <Spinner className="mt-0.5 icon-paired shrink-0 animate-spin text-muted-foreground" />
+            <Spinner className="mt-0.5 icon-paired shrink-0 text-muted-foreground" />
           ) : null}
           <p className="min-w-0">
             <span className="font-medium text-foreground">

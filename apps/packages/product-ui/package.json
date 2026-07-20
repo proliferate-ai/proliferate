@@ -239,6 +239,10 @@
       "types": "./dist/chat/transcript/ProviderLinkMention.d.ts",
       "import": "./dist/chat/transcript/ProviderLinkMention.js"
     },
+    "./chat/transcript/TranscriptLinkStyles": {
+      "types": "./dist/chat/transcript/TranscriptLinkStyles.d.ts",
+      "import": "./dist/chat/transcript/TranscriptLinkStyles.js"
+    },
     "./chat/transcript/ChatTranscriptView": {
       "types": "./dist/chat/transcript/ChatTranscriptView.d.ts",
       "import": "./dist/chat/transcript/ChatTranscriptView.js"

@@ -45,17 +45,23 @@ describe("LevelBarsButton", () => {
 
     const twoLevelIcon = container.querySelector<HTMLElement>("[data-level-bars-icon]");
     const twoLevelBars = twoLevelIcon?.querySelectorAll<HTMLElement>(":scope > span");
-    expect(twoLevelIcon?.className).toContain("size-3.5");
+    expect(twoLevelIcon?.className).toContain("icon-control");
     expect(twoLevelIcon?.dataset.levelBarsCount).toBe("2");
-    expect(twoLevelBars?.[0]?.style.width).toBe("4px");
+    expect(twoLevelIcon?.style.gap).toBe("0.083333em");
+    expect(twoLevelBars?.[0]?.style.width).toBe("0.333333em");
+    expect(twoLevelBars?.[0]?.style.height).toBe("50%");
+    expect(twoLevelBars?.[0]?.style.minHeight).toBe("0.166667em");
 
     rerender(<LevelBarsButton levels={sixLevels} currentIndex={5} onStep={onStep} />);
 
     const sixLevelIcon = container.querySelector<HTMLElement>("[data-level-bars-icon]");
     const sixLevelBars = sixLevelIcon?.querySelectorAll<HTMLElement>(":scope > span");
-    expect(sixLevelIcon?.className).toContain("size-3.5");
+    expect(sixLevelIcon?.className).toContain("icon-control");
     expect(sixLevelIcon?.dataset.levelBarsCount).toBe("6");
-    expect(sixLevelBars?.[0]?.style.width).toBe("1.5px");
+    expect(sixLevelBars?.[0]?.style.width).toBe("0.152778em");
+    expect(sixLevelBars?.[0]?.style.height).toBe("16.666666666666664%");
+    expect(sixLevelBars?.[0]?.style.minHeight).toBe("0.166667em");
+    expect(sixLevelBars?.[5]?.style.height).toBe("100%");
   });
 
   it("can render the bars without visible level text", () => {
