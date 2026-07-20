@@ -14,7 +14,7 @@
       "GET /auth/sso/discover -> 200 { enabled: false }"
     ]
   },
-  "testedSha": "43db5efdfab5523a1bd1f68b1dc78c703db58a84",
+  "testedSha": "dc0b14fed1996d9cf689036e606fcddb29e676a7",
   "base": "/login",
   "compressionMetric": "gzip (Node zlib, level 9) for js/css/svg/other; emitted bytes for fonts/images/audio",
   "caps": {
