@@ -569,8 +569,10 @@ Resources:
               if [ "$EXIT_CODE" -eq 124 ] || [ "$EXIT_CODE" -eq 137 ]; then
                 EXIT_CODE=124
                 FAILURE_REASON="cfn-init bootstrap exceeded the 18-minute limit; inspect /var/log/cfn-init.log and /var/log/cfn-init-cmd.log through SSM."
+                printf '__PROLIFERATE_CFN_OUTER__:timeout\n'
               else
                 FAILURE_REASON="cfn-init bootstrap failed with exit code $EXIT_CODE; inspect /var/log/cfn-init.log and /var/log/cfn-init-cmd.log through SSM."
+                printf '__PROLIFERATE_CFN_OUTER__:command_failure\n'
               fi
             }
           fi

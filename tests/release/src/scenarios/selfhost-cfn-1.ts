@@ -49,7 +49,7 @@ import {
   uploadBundleAndPresign,
   validateTemplate,
   writeCfnBootstrapDiagnosticArtifact,
-  type CfnBootstrapDiagnosticArtifactV1,
+  type CfnBootstrapDiagnosticArtifactV2,
   type CfnStackOutputs,
   type SelfHostCfnWorldCleanupEvidence,
 } from "../worlds/selfhost/cfn.js";
@@ -558,8 +558,8 @@ export async function constructSelfHostCfnWorld(inputs: CfnWorldInputs): Promise
           stackName: failedStackName,
           region,
         });
-        const artifact: CfnBootstrapDiagnosticArtifactV1 = {
-          schema_version: 1,
+        const artifact: CfnBootstrapDiagnosticArtifactV2 = {
+          schema_version: 2,
           kind: "proliferate.selfhost-cfn-bootstrap-diagnostic",
           run: {
             run_id: inputs.run.run_id,

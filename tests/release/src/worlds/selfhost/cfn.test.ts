@@ -1,13 +1,17 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
+import { promisify } from "node:util";
 
 import {
+  CFN_DIAGNOSTIC_OUTPUT_BYTE_BUDGET,
   MAX_STACK_EVENT_TAIL,
   SelfHostCfnCleanupStack,
   boundedStackEventsTail,
+  buildCfnDiagnosticCommand,
   buildCfnParameters,
   buildCfnStackTags,
   bundleDigestBound,
@@ -34,16 +38,19 @@ import {
   s3KeyPrefix,
   scrubCfnParameterUrls,
   ssmInspectRunningImageDigest,
+  summarizeCfnBootstrapDiagnostic,
   templateFileSha256,
   uploadBundleAndPresign,
   validateTemplate,
   writeCfnBootstrapDiagnosticArtifact,
-  type CfnBootstrapDiagnosticArtifactV1,
+  type CfnBootstrapDiagnosticArtifactV2,
   type CfnAwsExec,
   type DockerExec,
   type GhExec,
 } from "./cfn.js";
 import type { CleanupLedger, CleanupLedgerEntry, CleanupResourceKind } from "../local-workspace/cleanup-ledger.js";
+
+const execFileAsync = promisify(execFile);
 
 // ── Fakes ────────────────────────────────────────────────────────────────────
 
@@ -249,17 +256,20 @@ test("boundedStackEventsTail: only FAILED events, bounded count, secret-free for
 
 test("parseCfnBootstrapDiagnosticOutput: emits only allowlisted tokens and drops raw secrets", () => {
   const raw = [
-    "__PROLIFERATE_CFN_LOG__:cfn-init-cmd.log",
+    "__PROLIFERATE_CFN_LOG__:cfn-init.log",
     "2026-07-19 Running Command 02-bootstrap",
     "2026-07-19 Exited with error code 17: https://bucket/x?X-Amz-Signature=deadbeef",
     "Bearer eyJsecret.payload.signature vk-super-secret-value",
     "download error from https://example.invalid/private?token=secret",
   ].join("\n");
-  const observations = parseCfnBootstrapDiagnosticOutput(raw);
+  const parsed = parseCfnBootstrapDiagnosticOutput(raw);
+  const { observations } = parsed;
 
+  assert.equal(parsed.terminal_cause, "command_failure");
   assert.deepEqual(observations[0], {
-    source: "cfn-init-cmd.log",
+    source: "cfn-init.log",
     stage: "02-bootstrap",
+    substep: null,
     outcome: "failed",
     exit_code: 17,
     category: "download",
@@ -267,6 +277,254 @@ test("parseCfnBootstrapDiagnosticOutput: emits only allowlisted tokens and drops
   const serialized = JSON.stringify(observations);
   for (const secret of ["X-Amz-Signature", "deadbeef", "Bearer", "eyJsecret", "vk-super", "https://"]) {
     assert.ok(!serialized.includes(secret), `structured evidence leaked ${secret}`);
+  }
+});
+
+test("run 29704360192: terminal cfn-init success overrides tolerated compose stderr and keeps the unfinished tail", () => {
+  const raw = [
+    "__PROLIFERATE_CFN_LOG__:cfn-init.log",
+    "2026-07-19 22:54:10 Running Command 01-install-base",
+    "2026-07-19 22:54:21 Command 01-install-base succeeded",
+    "2026-07-19 22:54:21 Running Command 02-install-compose-plugin",
+    "2026-07-19 22:54:22 Command 02-install-compose-plugin output: Error: Unable to find a match: docker-compose-plugin",
+    "2026-07-19 22:54:23 Command 02-install-compose-plugin succeeded",
+    "2026-07-19 22:54:23 Command 02-install-compose-plugin output: tolerated package lookup failed before fallback",
+    "2026-07-19 22:54:23 Running Command 03-enable-docker",
+    "2026-07-19 22:54:24 Command 03-enable-docker succeeded",
+    "2026-07-19 22:54:24 Running Command 04-create-directories",
+    "2026-07-19 22:54:25 Command 04-create-directories succeeded",
+    "2026-07-19 22:54:25 Running Command 01-fetch-verify-extract",
+    "2026-07-19 22:57:40 Command 01-fetch-verify-extract succeeded",
+    "2026-07-19 22:57:41 Running Command 01-daemon-reload",
+    "2026-07-19 22:57:41 Command 01-daemon-reload succeeded",
+    "2026-07-19 22:57:42 Running Command 02-bootstrap",
+    "__PROLIFERATE_CFN_LOG__:cfn-init-cmd.log",
+    "2026-07-19 22:54:22 Command 02-install-compose-plugin",
+    "Error: Unable to find a match: docker-compose-plugin",
+    "Docker Compose version v2.39.4",
+    "__PROLIFERATE_CFN_LOG__:cloud-init-output.log",
+    "cfn-init bootstrap exceeded the 18-minute limit; inspect host logs through SSM.",
+  ].join("\n");
+
+  const parsed = parseCfnBootstrapDiagnosticOutput(raw);
+  const compose = parsed.observations.find((item) => item.stage === "02-install-compose-plugin");
+  const bootstrap = parsed.observations.find((item) => item.stage === "02-bootstrap" && item.substep === null);
+
+  assert.equal(parsed.terminal_cause, "outer_timeout");
+  assert.deepEqual(compose, {
+    source: "cfn-init.log",
+    stage: "02-install-compose-plugin",
+    substep: null,
+    outcome: "completed",
+    exit_code: 0,
+    category: "other",
+  });
+  assert.deepEqual(bootstrap, {
+    source: "cfn-init.log",
+    stage: "02-bootstrap",
+    substep: null,
+    outcome: "started",
+    exit_code: null,
+    category: "timeout",
+  });
+  assert.equal(
+    parsed.observations.some((item) => item.stage === "02-install-compose-plugin" && item.outcome === "failed"),
+    false,
+  );
+
+  const summary = summarizeCfnBootstrapDiagnostic({
+    stack_name_hash: "a".repeat(64),
+    instance_id_hash: "b".repeat(64),
+    capture_status: "captured",
+    detail: "captured",
+    ssm_status: "Success",
+    terminal_cause: parsed.terminal_cause,
+    observations: parsed.observations,
+  });
+  assert.match(summary, /terminal=outer_timeout/);
+  assert.match(summary, /02-bootstrap:started:exit=unknown:timeout/);
+  assert.doesNotMatch(summary, /02-install-compose-plugin:failed/);
+});
+
+test("parseCfnBootstrapDiagnosticOutput: terminal success clears a tolerated adjacent nonzero exit", () => {
+  const parsed = parseCfnBootstrapDiagnosticOutput([
+    "__PROLIFERATE_CFN_LOG__:cfn-init.log",
+    "Running Command 02-install-compose-plugin",
+    "Exited with error code 1: Error: Unable to find a match: docker-compose-plugin",
+    "Command 02-install-compose-plugin succeeded",
+  ].join("\n"));
+
+  assert.equal(parsed.terminal_cause, "unknown");
+  assert.equal(parsed.observations[0]?.outcome, "completed");
+  assert.equal(parsed.observations[0]?.category, "other");
+});
+
+test("parseCfnBootstrapDiagnosticOutput: identifies the last started bootstrap substep without inventing completion", () => {
+  const parsed = parseCfnBootstrapDiagnosticOutput([
+    "__PROLIFERATE_CFN_LOG__:cfn-init.log",
+    "2026-07-19 Running Command 02-bootstrap",
+    "__PROLIFERATE_CFN_LOG__:cfn-init-cmd.log",
+    "__PROLIFERATE_BOOTSTRAP_SUBSTEP__:ensure-secrets:started",
+    "__PROLIFERATE_BOOTSTRAP_SUBSTEP__:ensure-secrets:completed",
+    "__PROLIFERATE_BOOTSTRAP_SUBSTEP__:preflight:started",
+    "__PROLIFERATE_BOOTSTRAP_SUBSTEP__:secret-token:started",
+    "__PROLIFERATE_BOOTSTRAP_SUBSTEP__:ensure-secrets:started",
+    "preflight output mentions an unrelated error that is not a terminal marker",
+    "__PROLIFERATE_CFN_LOG__:cloud-init-output.log",
+    "__PROLIFERATE_CFN_OUTER__:timeout",
+  ].join("\n"));
+
+  assert.equal(parsed.terminal_cause, "outer_timeout");
+  assert.deepEqual(
+    parsed.observations.filter((item) => item.substep !== null),
+    [
+      {
+        source: "bootstrap.sh",
+        stage: "02-bootstrap",
+        substep: "ensure-secrets",
+        outcome: "completed",
+        exit_code: 0,
+        category: "other",
+      },
+      {
+        source: "bootstrap.sh",
+        stage: "02-bootstrap",
+        substep: "preflight",
+        outcome: "started",
+        exit_code: null,
+        category: "other",
+      },
+    ],
+  );
+  assert.equal(JSON.stringify(parsed).includes("secret-token"), false);
+});
+
+test("CFN-DIAG-CONTROL-002: multibyte context cannot truncate fixed outer/substep markers", async () => {
+  const logDirectory = await mkdtemp(path.join(tmpdir(), "cfn-diagnostic-multibyte-"));
+  const multibyteLine = `${"😀".repeat(240)} error Command 02-bootstrap`;
+  const variableLines = Array.from({ length: 36 }, () => multibyteLine).join("\n");
+  const outerMarker = "__PROLIFERATE_CFN_OUTER__:timeout";
+  const substepMarker = "__PROLIFERATE_BOOTSTRAP_SUBSTEP__:preflight:started";
+
+  try {
+    await writeFile(
+      path.join(logDirectory, "cloud-init-output.log"),
+      `${variableLines}\n${outerMarker}\n`,
+    );
+    await writeFile(
+      path.join(logDirectory, "cfn-init-cmd.log"),
+      `${variableLines}\n__PROLIFERATE_BOOTSTRAP_SUBSTEP__:ensure-secrets:completed\n${substepMarker}\n`,
+    );
+    await writeFile(
+      path.join(logDirectory, "cfn-init.log"),
+      `Running Command 02-bootstrap\n${variableLines}\n`,
+    );
+
+    // The old variable-first, character-counted projection is >20 KB before
+    // either marker class is appended, so its aggregate byte cap loses both.
+    const legacyCharacterProjection = Array.from({ length: 36 }, () =>
+      [...multibyteLine].slice(0, 240).join(""),
+    ).join("\n");
+    const legacyCapped = Buffer.from(
+      `${legacyCharacterProjection}\n${substepMarker}\n${outerMarker}\n`,
+      "utf8",
+    ).subarray(0, CFN_DIAGNOSTIC_OUTPUT_BYTE_BUDGET).toString("utf8");
+    assert.ok(Buffer.byteLength(legacyCharacterProjection, "utf8") > CFN_DIAGNOSTIC_OUTPUT_BYTE_BUDGET);
+    assert.equal(legacyCapped.includes(substepMarker), false, "old ordering loses the substep marker");
+    assert.equal(legacyCapped.includes(outerMarker), false, "old ordering loses the outer marker");
+
+    const command = buildCfnDiagnosticCommand({ logDirectory, elevated: false });
+    const { stdout } = await execFileAsync("bash", ["-c", command], {
+      encoding: "utf8",
+      maxBuffer: 1024 * 1024,
+    });
+    assert.ok(Buffer.byteLength(stdout, "utf8") <= CFN_DIAGNOSTIC_OUTPUT_BYTE_BUDGET);
+    assert.ok(Buffer.byteLength(stdout, "utf8") < 24_000);
+    assert.match(stdout, /^[\x00-\x7f]*$/, "diagnostic stdout is a byte-bounded ASCII token projection");
+    assert.ok(stdout.includes(outerMarker), "outer terminal marker survives adversarial context");
+    assert.ok(stdout.includes(substepMarker), "bootstrap substep marker survives adversarial context");
+
+    const parsed = parseCfnBootstrapDiagnosticOutput(stdout);
+    assert.equal(parsed.terminal_cause, "outer_timeout");
+    assert.equal(
+      parsed.observations.some(
+        (item) => item.substep === "preflight" && item.outcome === "started",
+      ),
+      true,
+    );
+    assert.match(
+      summarizeCfnBootstrapDiagnostic({
+        stack_name_hash: "a".repeat(64),
+        instance_id_hash: "b".repeat(64),
+        capture_status: "captured",
+        detail: "captured",
+        ssm_status: "Success",
+        terminal_cause: parsed.terminal_cause,
+        observations: parsed.observations,
+      }),
+      /02-bootstrap\/preflight:started:exit=unknown:other/,
+      "priority-safe acquisition still places the deepest substep in the evidence tail",
+    );
+  } finally {
+    await rm(logDirectory, { recursive: true, force: true });
+  }
+});
+
+test("CFN-DIAG-CONTROL-003: named failure preserves exit code and bounded context refines category", async () => {
+  const logDirectory = await mkdtemp(path.join(tmpdir(), "cfn-diagnostic-terminal-failure-"));
+  const rawSecretLine =
+    "Exited with error code 17: curl download https://private.invalid/?X-Amz-Signature=deadbeef Bearer eyJsecret permission denied";
+
+  try {
+    await writeFile(path.join(logDirectory, "cloud-init-output.log"), "");
+    await writeFile(path.join(logDirectory, "cfn-init-cmd.log"), "");
+    await writeFile(
+      path.join(logDirectory, "cfn-init.log"),
+      [
+        "Running Command 01-daemon-reload",
+        "Command 01-daemon-reload succeeded",
+        "Command 01-daemon-reload output: curl download",
+        "Running Command 02-bootstrap",
+        rawSecretLine,
+        "Command 02-bootstrap failed",
+        "Running Command 03-enable-cfn-hup",
+        "Command 03-enable-cfn-hup output: curl download",
+      ].join("\n"),
+    );
+
+    const command = buildCfnDiagnosticCommand({ logDirectory, elevated: false });
+    const { stdout } = await execFileAsync("bash", ["-c", command], {
+      encoding: "utf8",
+      maxBuffer: 1024 * 1024,
+    });
+    const parsed = parseCfnBootstrapDiagnosticOutput(stdout);
+    const bootstrap = parsed.observations.find(
+      (item) => item.stage === "02-bootstrap" && item.substep === null,
+    );
+    assert.deepEqual(bootstrap, {
+      source: "cfn-init.log",
+      stage: "02-bootstrap",
+      substep: null,
+      outcome: "failed",
+      exit_code: 17,
+      category: "download",
+    });
+    assert.equal(
+      parsed.observations.find((item) => item.stage === "01-daemon-reload")?.outcome,
+      "completed",
+      "context cannot change a completed outcome",
+    );
+    assert.equal(
+      parsed.observations.find((item) => item.stage === "03-enable-cfn-hup")?.outcome,
+      "started",
+      "context cannot change a started outcome",
+    );
+    for (const raw of ["https://", "X-Amz-Signature", "deadbeef", "Bearer", "eyJsecret", rawSecretLine]) {
+      assert.equal(stdout.includes(raw), false, `bounded command leaked ${raw}`);
+      assert.equal(JSON.stringify(parsed).includes(raw), false, `parsed diagnostic leaked ${raw}`);
+    }
+  } finally {
+    await rm(logDirectory, { recursive: true, force: true });
   }
 });
 
@@ -693,7 +951,7 @@ test("create failure: registered retention captures bounded SSM evidence before 
       return JSON.stringify({
         Status: "Success",
         StandardOutputContent: [
-          "__PROLIFERATE_CFN_LOG__:cfn-init-cmd.log",
+          "__PROLIFERATE_CFN_LOG__:cfn-init.log",
           "Running Command 02-bootstrap",
           "Exited with error code 17: https://s3/x?X-Amz-Signature=secret",
         ].join("\n"),
@@ -734,8 +992,8 @@ test("create failure: registered retention captures bounded SSM evidence before 
             now: () => 0,
             sleep: async () => undefined,
           });
-          const artifact: CfnBootstrapDiagnosticArtifactV1 = {
-            schema_version: 1,
+          const artifact: CfnBootstrapDiagnosticArtifactV2 = {
+            schema_version: 2,
             kind: "proliferate.selfhost-cfn-bootstrap-diagnostic",
             run: { run_id: "run-1", shard_id: "shard-0", attempt: 1, source_sha: "a".repeat(40) },
             diagnostic,
@@ -745,17 +1003,37 @@ test("create failure: registered retention captures bounded SSM evidence before 
           return diagnostic;
         },
       }),
-      /Bootstrap diagnostic: captured\(02-bootstrap:failed:exit=17:download\)/,
+      /Bootstrap diagnostic: captured\(terminal=command_failure;02-bootstrap:failed:exit=17:download\)/,
     );
 
     assert.ok(releaseStack, "stack cleanup must be registered before create");
     await releaseStack();
     const persisted = await readFile(artifactPath, "utf8");
-    const parsed = JSON.parse(persisted) as CfnBootstrapDiagnosticArtifactV1;
+    const parsed = JSON.parse(persisted) as CfnBootstrapDiagnosticArtifactV2;
+    assert.equal(parsed.schema_version, 2);
     assert.equal(parsed.diagnostic.capture_status, "captured");
+    assert.equal(parsed.diagnostic.terminal_cause, "command_failure");
     assert.equal(parsed.diagnostic.observations[0]?.stage, "02-bootstrap");
     assert.equal(sendAttempts, 2, "a transient not-ready target retries through send-command");
     assert.equal(pollAttempts, 2, "eventually consistent command registration is retried");
+    const diagnosticSend = exec.calls.find(
+      (call) => call[0] === "ssm" && call[1] === "send-command" && call.includes("--parameters"),
+    );
+    assert.ok(diagnosticSend, "diagnostic send-command was captured");
+    const parameterIndex = diagnosticSend.indexOf("--parameters");
+    const parameters = JSON.parse(diagnosticSend[parameterIndex + 1] ?? "{}") as { commands?: unknown[] };
+    assert.equal(parameters.commands?.length, 1);
+    const diagnosticCommand = String(parameters.commands?.[0] ?? "");
+    assert.match(diagnosticCommand, new RegExp(`head -c ${CFN_DIAGNOSTIC_OUTPUT_BYTE_BUDGET}$`));
+    assert.ok(CFN_DIAGNOSTIC_OUTPUT_BYTE_BUDGET < 24_000, "hard cap stays below SSM's stdout limit");
+    assert.ok(
+      diagnosticCommand.indexOf("__PROLIFERATE_BOOTSTRAP_SUBSTEP__") < diagnosticCommand.indexOf("no space"),
+      "fixed substep markers are emitted before verbose keyword context",
+    );
+    assert.ok(
+      diagnosticCommand.indexOf("__PROLIFERATE_CFN_OUTER__") < diagnosticCommand.indexOf("no space"),
+      "fixed outer terminal markers are emitted before verbose keyword context",
+    );
     assert.equal(
       exec.calls.some((call) => call[0] === "ssm" && call[1] === "describe-instance-information"),
       false,
@@ -836,7 +1114,7 @@ test("create failure: SSM unavailable remains red, persists fixed evidence, and 
             sleep: async (ms) => { clock += ms; },
           });
           await writeCfnBootstrapDiagnosticArtifact(artifactPath, {
-            schema_version: 1,
+            schema_version: 2,
             kind: "proliferate.selfhost-cfn-bootstrap-diagnostic",
             run: { run_id: "run-1", shard_id: "shard-0", attempt: 1, source_sha: "a".repeat(40) },
             diagnostic,
@@ -850,7 +1128,7 @@ test("create failure: SSM unavailable remains red, persists fixed evidence, and 
 
     assert.ok(releaseStack, "stack cleanup must still be registered");
     await releaseStack();
-    const persisted = JSON.parse(await readFile(artifactPath, "utf8")) as CfnBootstrapDiagnosticArtifactV1;
+    const persisted = JSON.parse(await readFile(artifactPath, "utf8")) as CfnBootstrapDiagnosticArtifactV2;
     assert.equal(persisted.diagnostic.capture_status, "ssm_unavailable");
     assert.equal(persisted.diagnostic.detail, "ssm_not_online");
     assert.ok(order.filter((item) => item === "ssm-not-ready").length > 1, "not-ready dispatch is retried");

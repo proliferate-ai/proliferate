@@ -145,6 +145,12 @@ env_both="$SCRATCH/both.env"
 printf 'AGENT_GATEWAY_ENABLED=true\nE2B_API_KEY=k\nE2B_TEMPLATE_NAME=t/x:production\n' >"$env_both"
 [[ "$(proliferate_enabled_profiles "$env_both")" == "agent-gateway cloud-workspaces" ]] && ok "gateway + cloud both on -> both profiles" || no "expected both profiles: got '$(proliferate_enabled_profiles "$env_both")'"
 
+if bash "$TESTS_DIR/bootstrap-markers.sh"; then
+  ok "bootstrap markers are ordered and stop without completion on failure"
+else
+  no "bootstrap marker ordering/failure contract regressed"
+fi
+
 mv="$(printf '0.3.2\n0.3.18\n0.10.0\n2.0.0\n0.3.9\n' | proliferate_max_version)"
 [[ "$mv" == "2.0.0" ]] && ok "max_version picks 2.0.0" || no "max_version wrong: $mv"
 mv2="$(printf '0.3.2\n0.3.18\n0.3.9\n' | proliferate_max_version)"
