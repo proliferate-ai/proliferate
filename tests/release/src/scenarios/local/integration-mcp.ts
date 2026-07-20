@@ -783,6 +783,7 @@ export async function approvePendingPermissionIfPresent(page: Page): Promise<boo
     "Allow all server tools for this session",
     "Allow tool for this session",
     "Always Allow",
+    "Allow once",
     "Allow",
   ];
   for (const label of labels) {

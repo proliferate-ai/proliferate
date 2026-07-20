@@ -19,6 +19,7 @@ import {
   collectLocal2GatewayCells,
   collectLocal3UserKeyCells,
   collectLocal6RouteChangeCell,
+  preflightLocalUserKey,
   turnErrorEvidenceMessage,
   type LocalRouteDriver,
   type RouteModelSelection,
@@ -290,6 +291,28 @@ test("turn errors retain only a fixed route and safe class in evidence", () => {
   const message = turnErrorEvidenceMessage("gateway", raw);
   assert.equal(message, "sendBoundedTurn route=gateway error_class=budget_exceeded");
   assert.doesNotMatch(message, /(?:sk-secret|current|\b5\b)/);
+});
+
+test("preflightLocalUserKey rejects an Anthropic key with a bounded status-only reason", async () => {
+  await assert.rejects(
+    preflightLocalUserKey("opencode", "sk-ant-secret", {
+      checkKey: async () => ({ status: 401 }),
+    }),
+    /opencode provider credential preflight failed: provider returned 401 on \/models/,
+  );
+});
+
+test("preflightLocalUserKey passes a valid Anthropic key and skips providers without a narrow probe", async () => {
+  let calls = 0;
+  const probe = {
+    checkKey: async () => {
+      calls += 1;
+      return { status: 200 };
+    },
+  };
+  await preflightLocalUserKey("claude", "sk-ant-secret", probe);
+  await preflightLocalUserKey("codex", "sk-openai-secret", probe);
+  assert.equal(calls, 1);
 });
 
 test("turn error classification is conservative and bounded", () => {

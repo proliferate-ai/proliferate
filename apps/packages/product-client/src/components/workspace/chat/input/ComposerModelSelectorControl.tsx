@@ -41,13 +41,25 @@ export function ComposerModelSelectorControl({
   } = modelSelectorProps;
   const selectorEnabled = connectionState === "healthy" && !isLoading && hasAgents;
   const triggerLabel = resolveTriggerLabel(modelSelectorProps);
-  // Stable qualification hook (attributes only): the id of the currently
-  // selected model, derived from the group items already rendered. Lets the
-  // local-world smoke driver assert the composer picker reflects its choice
-  // without adding a modelId to the display-only `currentModel`. No behavior
-  // change.
-  const selectedModelId =
-    groups.flatMap((group) => group.models).find((model) => model.isSelected)?.modelId ?? "";
+  // Stable qualification hook (attributes only): prefer the model whose
+  // rendered identity matches the current chip. During live-config restore,
+  // the requested launch row can remain selected while `currentModel` already
+  // reflects the effective model reported by the running session. The hook
+  // must describe the same effective model the user sees, then fall back to
+  // the ordinary selected row when the live label has no unique catalog match.
+  const modelsForCurrentKind = currentModel
+    ? groups
+      .filter((group) => group.kind === currentModel.kind)
+      .flatMap((group) => group.models)
+    : [];
+  const effectiveModelMatches = currentModel
+    ? modelsForCurrentKind.filter((model) => model.displayName === currentModel.displayName)
+    : [];
+  const selectedModelId = effectiveModelMatches.length === 1
+    ? effectiveModelMatches[0].modelId
+    : modelsForCurrentKind.find((model) => model.isSelected)?.modelId
+      ?? groups.flatMap((group) => group.models).find((model) => model.isSelected)?.modelId
+      ?? "";
 
   // UX_SPEC S5: adding a harness routes to Settings -> per-harness agent pages.
   const handleAddProvider = useCallback(() => {

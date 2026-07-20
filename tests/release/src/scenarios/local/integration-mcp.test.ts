@@ -377,3 +377,22 @@ test("approvePendingPermissionIfPresent prefers a non-destructive session-scoped
   assert.equal(await approvePendingPermissionIfPresent(page), true);
   assert.deepEqual(clicked, ["Allow all server tools for this session"]);
 });
+
+test("approvePendingPermissionIfPresent accepts the one-shot action emitted by Grok", async () => {
+  const clicked: string[] = [];
+  const page = {
+    getByRole: (_role: string, options: { name: string }) => {
+      const action = {
+        first: () => action,
+        isVisible: async () => options.name === "Allow once",
+        click: async () => {
+          clicked.push(options.name);
+        },
+      };
+      return action;
+    },
+  } as never;
+
+  assert.equal(await approvePendingPermissionIfPresent(page), true);
+  assert.deepEqual(clicked, ["Allow once"]);
+});
