@@ -96,7 +96,7 @@
      pointer target stay fixed. Paired label icons use the approved 1.15em
      optical ratio; larger tiers are reserved for icon-only controls and
      display glyphs. */
-  --icon-status: 0.45em;
+  --icon-status: 0.55em;
   --icon-compact: 1em;
   --icon-paired: 1.15em;
   --icon-control: 1.333333em;

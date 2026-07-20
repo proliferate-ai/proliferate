@@ -1,0 +1,58 @@
+{
+  "schema": "login-runtime-budget/v1",
+  "measuredAt": "runtime headless chromium; fresh cache; fixed anonymous API fixture (https://login-budget-fixture.invalid); durable login-ready marker [data-auth-screen=\"auth\"]; document.fonts.ready; network-idle (fail-closed, not swallowed) + 2s drain",
+  "readiness": {
+    "loginReadySelector": "[data-auth-screen=\"auth\"]",
+    "markerReached": true,
+    "networkSettled": true,
+    "fixtureApiOrigin": "https://login-budget-fixture.invalid",
+    "fixtureEndpoints": [
+      "POST /auth/web/session/bootstrap -> 401 (anonymous)",
+      "GET /health -> 200",
+      "GET /auth/desktop/methods -> 200",
+      "GET /auth/desktop/github/availability -> 200",
+      "GET /auth/sso/discover -> 200 { enabled: false }"
+    ]
+  },
+  "testedSha": "43db5efdfab5523a1bd1f68b1dc78c703db58a84",
+  "base": "/login",
+  "compressionMetric": "gzip (Node zlib, level 9) for js/css/svg/other; emitted bytes for fonts/images/audio",
+  "caps": {
+    "js": 485000,
+    "css": 66000,
+    "source": "founder decision WDU-1247-D1 (2026-07-15), gzip-9 bytes"
+  },
+  "legacyBaseline": {
+    "source": "specs/codebase/systems/product/clients/web-desktop-unification/migration/web-bundle-baseline-c6e094b41.json",
+    "jsGzipBytes": 471212,
+    "cssGzipBytes": 24226,
+    "note": "recorded context; the enforceable gate is the founder caps above"
+  },
+  "perKind": {
+    "js": 482284,
+    "css": 65894
+  },
+  "total": 548178,
+  "jsBytes": 482284,
+  "cssBytes": 65894,
+  "headroom": {
+    "js": 2716,
+    "css": 106
+  },
+  "unexpectedCrossOrigin": [],
+  "pass": true,
+  "violations": [],
+  "files": [
+    {
+      "path": "/assets/index-DHWSG-b3.js",
+      "kind": "js",
+      "bytes": 482284
+    },
+    {
+      "path": "/assets/index-xRZyIp-1.css",
+      "kind": "css",
+      "bytes": 65894
+    }
+  ],
+  "rerunCommand": "pnpm shared:build && VITE_PROLIFERATE_API_BASE_URL=https://login-budget-fixture.invalid pnpm web:build && node scripts/measure-login-runtime-budget.mjs --no-build"
+}

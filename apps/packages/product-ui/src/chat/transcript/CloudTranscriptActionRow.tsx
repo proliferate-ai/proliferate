@@ -1,6 +1,7 @@
 import { useState, type KeyboardEvent, type ReactNode } from "react";
 import { ChevronRight } from "lucide-react";
 import { Button } from "@proliferate/ui/primitives/Button";
+import { AnimatedCollapsibleContent } from "@proliferate/ui/primitives/AnimatedCollapsibleContent";
 import type { CloudTranscriptActionStatus } from "./CloudChatTranscriptTypes";
 
 export function CloudTranscriptActionRow({
@@ -23,7 +24,14 @@ export function CloudTranscriptActionRow({
   iconLabelGapClassName?: string;
 }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
+  const [hasExpanded, setHasExpanded] = useState(defaultExpanded);
   const hasDetails = Boolean(children);
+
+  function toggleExpanded() {
+    const nextExpanded = !expanded;
+    setExpanded(nextExpanded);
+    if (nextExpanded) setHasExpanded(true);
+  }
 
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     if (
@@ -31,7 +39,7 @@ export function CloudTranscriptActionRow({
       && (event.key === "Enter" || event.key === " ")
     ) {
       event.preventDefault();
-      setExpanded((value) => !value);
+      toggleExpanded();
     }
   }
 
@@ -49,7 +57,7 @@ export function CloudTranscriptActionRow({
               ? "text-destructive/80 hover:text-destructive"
               : "text-muted-foreground hover:text-foreground"
           }`}
-          onClick={() => setExpanded((value) => !value)}
+          onClick={toggleExpanded}
           onKeyDown={handleKeyDown}
         >
           <CloudTranscriptActionRowContent
@@ -78,7 +86,11 @@ export function CloudTranscriptActionRow({
           />
         </div>
       )}
-      {expanded && children ? <div className="mt-1.5">{children}</div> : null}
+      {hasDetails ? (
+        <AnimatedCollapsibleContent expanded={expanded}>
+          <div className="mt-1.5">{hasExpanded ? children : null}</div>
+        </AnimatedCollapsibleContent>
+      ) : null}
     </div>
   );
 }

@@ -99,6 +99,10 @@
       "types": "./dist/primitives/AnimatedSwapText.d.ts",
       "import": "./dist/primitives/AnimatedSwapText.js"
     },
+    "./primitives/AnimatedCollapsibleContent": {
+      "types": "./dist/primitives/AnimatedCollapsibleContent.d.ts",
+      "import": "./dist/primitives/AnimatedCollapsibleContent.js"
+    },
     "./primitives/Badge": {
       "types": "./dist/primitives/Badge.d.ts",
       "import": "./dist/primitives/Badge.js"

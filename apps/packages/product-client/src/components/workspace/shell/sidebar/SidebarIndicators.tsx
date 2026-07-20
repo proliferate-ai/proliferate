@@ -38,9 +38,9 @@ export function SidebarStatusGlyph({
 }: SidebarStatusGlyphProps): ReactNode {
   switch (indicator.kind) {
     case "error":
-      return <CircleAlert className="icon-paired text-destructive" />;
+      return <CircleAlert className="icon-control text-destructive" />;
     case "worktree_missing":
-      return <CircleAlert className="icon-paired text-warning-foreground" />;
+      return <CircleAlert className="icon-control text-warning-foreground" />;
     case "waiting_input":
     case "waiting_plan":
       return <Clock className="icon-control text-info" />;
