@@ -80,7 +80,7 @@ function ToggleControl({ control }: { control: LiveSessionControlDescriptor }) {
         <ComposerControlButton
           disabled={!control.settable || !nextValue}
           active={!!control.isEnabled}
-          icon={<Icon className={`icon-paired [font-size:var(--text-composer)] ${control.isEnabled ? "" : "opacity-65"}`} />}
+          icon={<Icon className={`icon-control [font-size:var(--text-composer)] ${control.isEnabled ? "" : "opacity-65"}`} />}
           label={triggerLabel}
           trailing={<PendingConfigIndicator pendingState={control.pendingState} />}
           aria-label={tooltip}

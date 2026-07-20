@@ -24,6 +24,13 @@ describe("sidebar consumption", () => {
       name: /Usage\. Compute, 50% used\. LLM, 90% used/,
     });
     expect(trigger.getAttribute("type")).toBe("button");
+    expect(trigger.className).toContain("size-10");
+    const meterGlyph = trigger.querySelector("svg");
+    expect(meterGlyph?.getAttribute("class")).toContain("icon-control");
+    expect(meterGlyph?.getAttribute("class")).not.toContain("icon-large");
+    // Usage: 20/28 of 1.333333em. Help: Lucide's 20/24 circle at 1.15em.
+    // Their visible outer circles stay optically equal while targets stay 40px.
+    expect(Math.abs((20 / 28) * 1.333333 - (20 / 24) * 1.15)).toBeLessThan(0.01);
     expect(trigger.querySelectorAll("circle[data-meter]")).toHaveLength(4);
     const computeRadius = Number(trigger
       .querySelector('circle[data-meter="compute"][data-part="track"]')

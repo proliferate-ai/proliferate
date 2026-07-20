@@ -94,7 +94,7 @@ describe("GoalBar chips", () => {
   });
 
   it("suppresses chips while the empty-state composer editor is open", () => {
-    render(
+    const { container } = render(
       <GoalBar
         {...baseProps()}
         capabilities={SUPPORTED}
@@ -104,6 +104,8 @@ describe("GoalBar chips", () => {
     );
     expect(screen.getByLabelText("Goal objective")).toBeTruthy();
     expect(screen.queryByText("2 loops")).toBeNull();
+    expect(container.querySelector("svg.lucide-target")?.getAttribute("class")?.split(" "))
+      .toContain("mt-[0.175em]");
   });
 
   it("preserves the original hidden behavior when chips are absent", () => {

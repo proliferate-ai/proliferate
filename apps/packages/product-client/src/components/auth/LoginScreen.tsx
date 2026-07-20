@@ -95,7 +95,7 @@ export function LoginScreen({
                 disabled={busy || githubSignInChecking || !githubSignInAvailable}
                 className="h-11 w-full"
               >
-                {!submitting && <GitHub className="icon-paired shrink-0" />}
+                {!submitting && <GitHub className="icon-control shrink-0" />}
                 {submitting ? AUTH_LOGIN_LABELS.waiting : AUTH_LOGIN_LABELS.signIn}
                 {!submitting && <ArrowRight className="icon-paired" />}
               </Button>

@@ -40,6 +40,7 @@ import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { ComposerCaretPlugin } from "#product/components/workspace/chat/input/ComposerCaretPlugin";
 import { ComposerLinkPastePlugin } from "#product/components/workspace/chat/input/ComposerLinkPastePlugin";
+import { CHAT_TRANSCRIPT_LINK_CLASS } from "@proliferate/product-ui/chat/transcript/TranscriptLinkStyles";
 import type { ComposerKeyboardEventLike } from "#product/lib/domain/chat/composer/composer-keyboard";
 import type { ChatComposerEditorSnapshot } from "#product/lib/domain/chat/composer/file-mention-draft-model";
 
@@ -113,7 +114,7 @@ export function ComposerRichTextEditor({
         ol: "list-decimal pl-5",
         nested: { listitem: "list-none" },
       },
-      link: "text-link-foreground underline decoration-current decoration-[0.5px]",
+      link: CHAT_TRANSCRIPT_LINK_CLASS,
     },
     editorState: snapshot?.version === 1
       ? snapshot.payload

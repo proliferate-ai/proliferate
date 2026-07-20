@@ -29,24 +29,29 @@ interface LevelBarsButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonEleme
 // "wave" (see composer-level-bar-wave in product.css) used to force a
 // repaint of the whole icon every frame. Plain <span> bars with
 // currentColor backgrounds pick up the same scaleY/opacity keyframes on
-// the compositor instead. Every ladder owns the same 14px icon slot. Bar
-// width adapts to the number of runtime-provided levels: short ladders get
-// heavier bars, while longer ladders stay inside the slot instead of
-// consuming the icon-to-label gap.
-const LEVEL_BAR_CONTAINER_PX = 14;
-const LEVEL_BAR_GAP_PX = 1;
-const LEVEL_BAR_MAX_WIDTH_PX = 4;
+// the compositor instead. Every ladder owns the semantic control-tier slot.
+// All internal geometry is proportional to the owning text role: short
+// ladders get heavier bars, while longer ladders stay inside the slot instead
+// of consuming the icon-to-label gap.
+const LEVEL_BAR_CONTAINER_EM = 4 / 3;
+const LEVEL_BAR_GAP_EM = LEVEL_BAR_CONTAINER_EM / 16;
+const LEVEL_BAR_MAX_WIDTH_EM = LEVEL_BAR_CONTAINER_EM / 4;
+const LEVEL_BAR_MIN_HEIGHT_EM = LEVEL_BAR_CONTAINER_EM / 8;
 
-function resolveLevelBarGeometry(barCount: number): { barGapPx: number; barWidthPx: number } {
+function formatEm(value: number): string {
+  return `${Number(value.toFixed(6))}em`;
+}
+
+function resolveLevelBarGeometry(barCount: number): { barGapEm: string; barWidthEm: string } {
   const safeBarCount = Math.max(1, barCount);
-  const barGapPx = safeBarCount <= 1
+  const barGap = safeBarCount <= 1
     ? 0
-    : Math.min(LEVEL_BAR_GAP_PX, LEVEL_BAR_CONTAINER_PX / (safeBarCount * 2));
-  const availableWidth = LEVEL_BAR_CONTAINER_PX
-    - (Math.max(0, safeBarCount - 1) * barGapPx);
+    : Math.min(LEVEL_BAR_GAP_EM, LEVEL_BAR_CONTAINER_EM / (safeBarCount * 2));
+  const availableWidth = LEVEL_BAR_CONTAINER_EM
+    - (Math.max(0, safeBarCount - 1) * barGap);
   return {
-    barGapPx,
-    barWidthPx: Math.min(LEVEL_BAR_MAX_WIDTH_PX, availableWidth / safeBarCount),
+    barGapEm: formatEm(barGap),
+    barWidthEm: formatEm(Math.min(LEVEL_BAR_MAX_WIDTH_EM, availableWidth / safeBarCount)),
   };
 }
 
@@ -62,10 +67,10 @@ function LevelBarsIcon({
   levelOptionAttribute?: string;
 }) {
   const barCount = levels.length;
-  const { barGapPx, barWidthPx } = resolveLevelBarGeometry(barCount);
+  const { barGapEm, barWidthEm } = resolveLevelBarGeometry(barCount);
 
   const bars = Array.from({ length: barCount }, (_, i) => {
-    const heightPx = Math.max(2, Math.round(((i + 1) / barCount) * LEVEL_BAR_CONTAINER_PX));
+    const proportionalHeight = ((i + 1) / barCount) * 100;
     const lit = i <= currentIndex;
     const wave = lit && emphasis === "ultra";
     const optionAttr = levelOptionAttribute && levels[i]
@@ -78,8 +83,9 @@ function LevelBarsIcon({
         {...optionAttr}
         className={`block shrink-0 rounded-full bg-current${wave ? " composer-level-bar-wave" : ""}`}
         style={{
-          height: `${heightPx}px`,
-          width: `${barWidthPx}px`,
+          height: `${proportionalHeight}%`,
+          minHeight: formatEm(LEVEL_BAR_MIN_HEIGHT_EM),
+          width: barWidthEm,
           opacity: lit ? 1 : 0.3,
           animationDelay: wave ? `${i * 110}ms` : undefined,
         }}
@@ -95,8 +101,8 @@ function LevelBarsIcon({
 
   return (
     <span
-      className={`inline-flex size-3.5 shrink-0 items-end justify-center ${emphasisClass}`}
-      style={{ gap: `${barGapPx}px` }}
+      className={`icon-control inline-flex shrink-0 items-end justify-center ${emphasisClass}`}
+      style={{ gap: barGapEm }}
       aria-hidden="true"
       data-level-bars-icon
       data-level-bars-count={barCount}

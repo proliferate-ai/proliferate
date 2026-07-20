@@ -47,6 +47,13 @@ function renderGlyph(kind: GlyphTestKind): ReactNode {
   });
 }
 
+function glyphClassName(node: ReactNode): string {
+  if (!isValidElement(node)) {
+    return "";
+  }
+  return String((node.props as { className?: string }).className ?? "");
+}
+
 describe("SidebarStatusGlyph", () => {
 
   it("keeps user-input blockers visually distinct from progress", () => {
@@ -54,6 +61,7 @@ describe("SidebarStatusGlyph", () => {
 
     expect(countElementsByType(glyph, Clock)).toBe(1);
     expect(countElementsByType(glyph, Spinner)).toBe(0);
+    expect(glyphClassName(glyph)).toContain("icon-control");
   });
 
   it("keeps plan-approval blockers visually distinct from progress", () => {
@@ -61,18 +69,21 @@ describe("SidebarStatusGlyph", () => {
 
     expect(countElementsByType(glyph, Clock)).toBe(1);
     expect(countElementsByType(glyph, Spinner)).toBe(0);
+    expect(glyphClassName(glyph)).toContain("icon-control");
   });
 
   it("uses a progress glyph for active work", () => {
     const glyph = renderGlyph("iterating");
 
     expect(countElementsByType(glyph, Spinner)).toBe(1);
+    expect(glyphClassName(glyph)).toContain("icon-control");
   });
 
   it("uses a progress glyph for queued prompts", () => {
     const glyph = renderGlyph("queued_prompt");
 
     expect(countElementsByType(glyph, Spinner)).toBe(1);
+    expect(glyphClassName(glyph)).toContain("icon-control");
   });
 });
 

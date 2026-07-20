@@ -49,6 +49,21 @@ export interface TerminalTabChromeClasses {
   inactive: string;
 }
 
+/**
+ * Transparent Desktop chrome has no content-shell border to define the main
+ * sidebar edge. Opaque chrome already owns that edge on the content shell,
+ * and Web owns its responsive sidebar boundary separately.
+ */
+export function resolveMainSidebarEdgeClassName({
+  desktop,
+  transparent,
+}: {
+  desktop: boolean;
+  transparent: boolean;
+}): string {
+  return desktop && transparent ? "border-r border-sidebar-border" : "";
+}
+
 export function resolveStandardWorkspaceChromeClasses({
   transparent,
   sidebarOpen,

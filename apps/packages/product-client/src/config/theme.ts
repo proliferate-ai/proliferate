@@ -146,8 +146,8 @@ export function getTerminalTheme(): Record<string, string> {
   return {
     background: v("--color-sidebar"),
     foreground: v("--color-foreground"),
-    cursor: v("--color-foreground"),
-    selectionBackground: v("--color-input"),
+    cursor: v("--color-text-caret") || v("--color-foreground"),
+    selectionBackground: v("--color-text-selection") || v("--color-input"),
     black: v("--color-terminal-black"),
     red: v("--color-terminal-red"),
     green: v("--color-terminal-green"),

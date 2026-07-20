@@ -367,8 +367,8 @@ describe("HomeNextScreen model availability notices", () => {
       { id: "add-repository", title: "Add a GitHub repo", icon: "github" },
       { id: "agent-defaults", title: "Configure default harnesses", icon: "sliders" },
     );
-
     render(<HomeNextScreen />);
+    expect(document.querySelector('[data-home-composer-vertical-balance="onboarding"] .translate-y-5')).toBeTruthy();
 
     expect(screen.getByText("Add a GitHub repo")).toBeTruthy();
     expect(screen.getByText("Configure default harnesses")).toBeTruthy();

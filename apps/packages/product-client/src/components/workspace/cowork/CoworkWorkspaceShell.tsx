@@ -11,7 +11,11 @@ import { useResize } from "#product/hooks/ui/layout/use-resize";
 import { useShortcutHandler } from "#product/hooks/shortcuts/lifecycle/use-shortcut-handler";
 import { useTransparentChromeEnabled } from "#product/hooks/theme/derived/use-transparent-chrome";
 import { useUpdater } from "#product/hooks/access/tauri/use-updater";
-import { resolveCoworkWorkspaceChromeClasses } from "#product/lib/domain/preferences/workspace-chrome";
+import {
+  resolveCoworkWorkspaceChromeClasses,
+  resolveMainSidebarEdgeClassName,
+} from "#product/lib/domain/preferences/workspace-chrome";
+import { useProductHost } from "#product/host/ProductHostProvider";
 import {
   WORKSPACE_SIDEBAR_MAX_WIDTH,
   WORKSPACE_SIDEBAR_MIN_WIDTH,
@@ -55,6 +59,7 @@ export function CoworkWorkspaceShell({
   );
   const setArtifactPanelOpen = useCoworkUiStore((state) => state.setArtifactPanelOpen);
   const transparentChromeEnabled = useTransparentChromeEnabled();
+  const desktopHost = useProductHost().desktop !== null;
   const chromeClasses = resolveCoworkWorkspaceChromeClasses({
     transparent: transparentChromeEnabled,
     sidebarOpen,
@@ -125,7 +130,10 @@ export function CoworkWorkspaceShell({
       >
         <div
           id="cowork-sidebar"
-          className="flex shrink-0 flex-col overflow-hidden bg-sidebar transition-[width] duration-150 ease-in-out"
+          className={`flex shrink-0 flex-col overflow-hidden bg-sidebar transition-[width] duration-150 ease-in-out ${resolveMainSidebarEdgeClassName({
+            desktop: desktopHost,
+            transparent: transparentChromeEnabled,
+          })}`}
           style={{ width: sidebarOpen ? sidebarWidth : 0 }}
         >
           <div className="flex h-10 shrink-0 items-center" data-tauri-drag-region="true">
@@ -137,7 +145,7 @@ export function CoworkWorkspaceShell({
                 title="Hide sidebar"
                 className="rounded-md"
               >
-                <SplitPanelLeft className="icon-paired" />
+                <SplitPanelLeft className="icon-control [font-size:var(--text-ui)]" />
               </IconButton>
               {/* The update pill's single home is the top-left, next to the
                   sidebar toggle. */}
@@ -180,7 +188,7 @@ export function CoworkWorkspaceShell({
                   title="Show sidebar"
                   className="rounded-md"
                 >
-                  <SplitPanelLeft className="icon-paired" />
+                  <SplitPanelLeft className="icon-control [font-size:var(--text-ui)]" />
                 </IconButton>
                 <SidebarUpdatePill
                   phase={updaterPhase}

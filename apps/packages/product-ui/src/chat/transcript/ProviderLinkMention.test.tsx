@@ -67,6 +67,8 @@ describe("ProviderLinkMention", () => {
     );
     expect(html).toContain("data-provider-link-host=\"github.com\"");
     expect(html).toContain("PR #737");
+    expect(html).toContain("text-link-foreground no-underline hover:text-link-foreground hover:underline");
+    expect(html).not.toContain("hover:text-foreground");
     expect(html).not.toContain("favicon.ico");
   });
 
@@ -94,6 +96,7 @@ describe("ProviderLinkMention", () => {
       <ProviderLinkMention href="mailto:support@proliferate.com">email</ProviderLinkMention>,
     );
     expect(html).not.toContain("data-provider-link-host");
-    expect(html).toContain("text-link-foreground underline");
+    expect(html).toContain("text-link-foreground no-underline hover:text-link-foreground hover:underline");
+    expect(html).not.toContain("hover:text-foreground");
   });
 });

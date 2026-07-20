@@ -1720,15 +1720,9 @@ body {
   box-shadow: 0 0 0 2px var(--color-ring);
 }
 
-/* ---- Chat view text selection ----
-   Scoped to the chat view root only (the rest of the app uses the browser
-   default selection color). Uses each theme's accent (`--color-border-highlight`)
-   at low opacity so the selection rectangle reads as "this is selected"
-   without the harsh OS-accent slab. Every theme defines
-   `--color-border-highlight`, so this one rule inherits the correct hue per
-   theme automatically. */
+/* ---- Chat view text selection ---- */
 .chat-selection-root ::selection {
-  background-color: color-mix(in oklab, var(--color-border-highlight) 15%, transparent);
+  background-color: var(--color-text-selection);
   color: inherit;
 }
 
@@ -2217,8 +2211,8 @@ body {
 .right-panel-tab-system .ui-tab-system-tab__icon,
 .right-panel-tab-system .ui-icon {
   display: block;
-  width: var(--icon-paired);
-  height: var(--icon-paired);
+  width: var(--icon-control);
+  height: var(--icon-control);
   flex-shrink: 0;
   color: var(--right-panel-tab-text-tertiary);
   vertical-align: middle;
@@ -2394,8 +2388,8 @@ body {
 }
 
 .right-panel-tab-system .workspace-shell-icon-button .ui-icon {
-  width: var(--icon-paired);
-  height: var(--icon-paired);
+  width: var(--icon-control);
+  height: var(--icon-control);
 }
 
 .right-panel-tab-system .right-panel-tab-drop-target {

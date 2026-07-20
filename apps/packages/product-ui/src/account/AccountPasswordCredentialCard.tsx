@@ -96,7 +96,7 @@ export function AccountPasswordCredentialRow({
     <div className="border-b border-border-light px-3.5 py-3.5 text-sm last:border-b-0">
       <div className="flex min-h-[2.75rem] flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-center gap-3">
-          <ProviderBrandIcon provider="password" className="icon-paired shrink-0 text-muted-foreground" />
+          <ProviderBrandIcon provider="password" className="icon-control shrink-0 text-muted-foreground" />
           <div className="min-w-0">
             <div className="font-medium text-foreground">Email &amp; password</div>
             <div className="truncate text-muted-foreground">{detailText}</div>

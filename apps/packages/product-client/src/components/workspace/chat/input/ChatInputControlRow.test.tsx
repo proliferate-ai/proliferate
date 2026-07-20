@@ -191,7 +191,21 @@ describe("ChatInputControlRow", () => {
 
   it("renders plus button for file attach", () => {
     renderControlRow();
-    expect(screen.getByRole("button", { name: "Add file" })).toBeTruthy();
+    const addButton = screen.getByRole("button", { name: "Add file" });
+    expect(addButton.querySelector("svg")?.className.baseVal).toContain("icon-control");
+  });
+
+  it("uses control-sized optics for the visible primary composer actions", () => {
+    renderControlRow();
+
+    const model = screen.getByRole("button", { name: "Model: Opus 4.1" });
+    const fast = screen.getByRole("button", { name: "Fast mode: Slow" });
+    const integrations = screen.getByRole("button", { name: /connected integrations/i });
+    const send = screen.getByRole("button", { name: /Send/ });
+
+    for (const control of [model, fast, integrations, send]) {
+      expect(control.querySelector("svg")?.className.baseVal).toContain("icon-control");
+    }
   });
 
   it("disables plus button when cannot attach", () => {
