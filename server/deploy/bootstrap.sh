@@ -145,5 +145,5 @@ bootstrap_substep_marker optional-profiles completed
 # Waits for /health, then prints the first-run setup token and claim URL when
 # the instance is still unclaimed.
 bootstrap_substep_marker health-wait started
-"$SCRIPT_DIR/wait-for-health.sh"
+PROLIFERATE_HEALTHCHECK_PROGRESS_FILE="$BOOTSTRAP_PROGRESS_FILE" "$SCRIPT_DIR/wait-for-health.sh"
 bootstrap_substep_marker health-wait completed

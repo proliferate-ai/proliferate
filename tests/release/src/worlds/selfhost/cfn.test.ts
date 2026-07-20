@@ -22,7 +22,9 @@ import {
   cfnSiteAddress,
   cfnStackName,
   createCfnStackAndWait,
+  deleteCfnStackAndWait,
   deleteGhcrPackageVersion,
+  deleteS3Object,
   describeStackEventsTail,
   digestSha256,
   ghcrVersionIdForTag,
@@ -59,10 +61,12 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..
 /** Records argv and returns canned stdout via a routing handler. */
 class FakeExec implements CfnAwsExec, DockerExec, GhExec {
   calls: string[][] = [];
+  callOptions: Array<{ timeoutMs?: number } | undefined> = [];
   constructor(private readonly handler: (args: string[]) => string) {}
-  async run(args: readonly string[]): Promise<string> {
+  async run(args: readonly string[], options?: { timeoutMs?: number }): Promise<string> {
     const copy = [...args];
     this.calls.push(copy);
+    this.callOptions.push(options);
     return this.handler(copy);
   }
 }
@@ -401,6 +405,54 @@ test("parseCfnBootstrapDiagnosticOutput: identifies the last started bootstrap s
   assert.equal(JSON.stringify(parsed).includes("secret-token"), false);
 });
 
+test("run 29717900508: bounded health markers identify the exact failing target", () => {
+  const parsed = parseCfnBootstrapDiagnosticOutput([
+    "__PROLIFERATE_CFN_LOG__:bootstrap-progress.log",
+    "__PROLIFERATE_BOOTSTRAP_SUBSTEP__:health-wait:started",
+    "__PROLIFERATE_HEALTHCHECK_TARGET__:local:started",
+    "__PROLIFERATE_HEALTHCHECK_TARGET__:local:completed",
+    "__PROLIFERATE_HEALTHCHECK_TARGET__:public:started",
+    "__PROLIFERATE_HEALTHCHECK_TARGET__:public:failed",
+    "__PROLIFERATE_CFN_LOG__:cfn-init.log",
+    "Running Command 02-bootstrap",
+    "Exited with error code 1",
+    "Command 02-bootstrap failed",
+    "__PROLIFERATE_CFN_LOG__:cloud-init-output.log",
+    "__PROLIFERATE_CFN_OUTER__:command_failure",
+  ].join("\n"));
+
+  assert.equal(parsed.terminal_cause, "command_failure");
+  assert.deepEqual(
+    parsed.observations.filter((item) => item.substep?.startsWith("health-")),
+    [
+      {
+        source: "bootstrap-progress.log",
+        stage: "02-bootstrap",
+        substep: "health-wait",
+        outcome: "started",
+        exit_code: null,
+        category: "other",
+      },
+      {
+        source: "bootstrap-progress.log",
+        stage: "02-bootstrap",
+        substep: "health-local",
+        outcome: "completed",
+        exit_code: 0,
+        category: "other",
+      },
+      {
+        source: "bootstrap-progress.log",
+        stage: "02-bootstrap",
+        substep: "health-public",
+        outcome: "failed",
+        exit_code: 1,
+        category: "health",
+      },
+    ],
+  );
+});
+
 test("run 29710731437 / CFN-DIAG-CONTROL-004: wrapper kill preserves direct progress when buffered stdout is lost", async () => {
   const evidenceDirectory = await mkdtemp(path.join(tmpdir(), "cfn-diagnostic-wrapper-kill-"));
   const marker = "__PROLIFERATE_BOOTSTRAP_SUBSTEP__:preflight:started";
@@ -635,6 +687,34 @@ test("uploadBundleAndPresign: registers bundle, runtime, and sums BEFORE each cp
   );
 });
 
+test("deleteS3Object: requires an exact post-delete absence observation", async () => {
+  const absent = new FakeExec((args) => {
+    if (args[0] === "s3api") throw new Error("An error occurred (404) when calling HeadObject: Not Found");
+    return "";
+  });
+  await deleteS3Object(absent, "us-east-1", "bkt", "qualification/run/object");
+  assert.deepEqual(absent.calls, [
+    ["s3", "rm", "s3://bkt/qualification/run/object", "--region", "us-east-1"],
+    ["s3api", "head-object", "--bucket", "bkt", "--key", "qualification/run/object", "--region", "us-east-1"],
+  ]);
+  assert.deepEqual(absent.callOptions.map((options) => options?.timeoutMs), [30_000, 30_000]);
+
+  const survivor = new FakeExec(() => "{}");
+  await assert.rejects(
+    deleteS3Object(survivor, "us-east-1", "bkt", "qualification/run/object"),
+    /S3 object survived delete/,
+  );
+
+  const unproven = new FakeExec((args) => {
+    if (args[0] === "s3api") throw new Error("AccessDenied");
+    return "";
+  });
+  await assert.rejects(
+    deleteS3Object(unproven, "us-east-1", "bkt", "qualification/run/object"),
+    /S3 absence observation failed/,
+  );
+});
+
 // ── Image push + GHCR delete ─────────────────────────────────────────────────
 
 test("pushCandidateServerImage: registers ghcr BEFORE push, tags+pushes, returns pushed digest", async () => {
@@ -686,12 +766,16 @@ test("pushCandidateServerImage: refuses a rolling tag before touching docker", a
 });
 
 test("deleteGhcrPackageVersion: resolves the version id by tag then DELETEs the exact endpoint", async () => {
+  let lists = 0;
   const gh = new FakeExec((args) => {
     if (args.includes("--paginate")) {
-      return JSON.stringify([
-        { id: 55, metadata: { container: { tags: ["other"] } } },
-        { id: 77, metadata: { container: { tags: ["run-1-shard-0"] } } },
-      ]);
+      lists += 1;
+      return lists === 1
+        ? JSON.stringify([
+            { id: 55, metadata: { container: { tags: ["other"] } } },
+            { id: 77, metadata: { container: { tags: ["run-1-shard-0"] } } },
+          ])
+        : JSON.stringify([{ id: 55, metadata: { container: { tags: ["other"] } } }]);
     }
     return "";
   });
@@ -704,6 +788,7 @@ test("deleteGhcrPackageVersion: resolves the version id by tag then DELETEs the 
     "DELETE",
     "/orgs/proliferate-ai/packages/container/proliferate-server-qualification/versions/77",
   ]);
+  assert.ok(gh.callOptions.every((options) => options?.timeoutMs === 30_000));
 });
 
 test("deleteGhcrPackageVersion: idempotent when the tag is already gone (no DELETE)", async () => {
@@ -730,21 +815,72 @@ test("deleteGhcrPackageVersion: REFUSES to delete a version carrying sibling tag
 });
 
 test("deleteGhcrPackageVersion: deletes when the run tag is the version's SOLE tag", async () => {
-  const gh = new FakeExec((args) =>
-    args.includes("--paginate") ? JSON.stringify([{ id: 42, metadata: { container: { tags: ["run-1-shard-0"] } } }]) : "",
-  );
+  let lists = 0;
+  const gh = new FakeExec((args) => {
+    if (!args.includes("--paginate")) return "";
+    lists += 1;
+    return lists === 1
+      ? JSON.stringify([{ id: 42, metadata: { container: { tags: ["run-1-shard-0"] } } }])
+      : "[]";
+  });
   await deleteGhcrPackageVersion(gh, "ghcr.io/x/y", "run-1-shard-0");
   assert.ok(gh.calls.some((call) => call.includes("DELETE") && call.join(" ").includes("/versions/42")));
+});
+
+test("deleteGhcrPackageVersion: tolerates bounded visibility lag but never false-greens a survivor", async () => {
+  let lists = 0;
+  const delayed = new FakeExec((args) => {
+    if (!args.includes("--paginate")) return "";
+    lists += 1;
+    return lists < 3
+      ? JSON.stringify([{ id: 42, metadata: { container: { tags: ["run-1-shard-0"] } } }])
+      : "[]";
+  });
+  const sleeps: number[] = [];
+  await deleteGhcrPackageVersion(delayed, "ghcr.io/x/y", "run-1-shard-0", () => undefined, {
+    attempts: 3,
+    delayMs: 7,
+    sleep: async (ms) => void sleeps.push(ms),
+  });
+  assert.deepEqual(sleeps, [7]);
+
+  const survivor = new FakeExec((args) =>
+    args.includes("--paginate")
+      ? JSON.stringify([{ id: 42, metadata: { container: { tags: ["run-1-shard-0"] } } }])
+      : "",
+  );
+  await assert.rejects(
+    deleteGhcrPackageVersion(survivor, "ghcr.io/x/y", "run-1-shard-0", () => undefined, {
+      attempts: 2,
+      delayMs: 0,
+    }),
+    /run tag survived/,
+  );
+
+  const malformed = new FakeExec(() => "not-json");
+  await assert.rejects(
+    deleteGhcrPackageVersion(malformed, "ghcr.io/x/y", "run-1-shard-0"),
+    /not a JSON array/,
+  );
+  const trailing = new FakeExec(() => "[]unexpected");
+  await assert.rejects(
+    deleteGhcrPackageVersion(trailing, "ghcr.io/x/y", "run-1-shard-0"),
+    /trailing content/,
+  );
 });
 
 test("route53RecordAbsent: true when no A record survives, false on a survivor (PR7-CONTROL-008)", async () => {
   const gone = new FakeExec(() => JSON.stringify({ ResourceRecordSets: [] }));
   assert.equal(await route53RecordAbsent(gone, "Z1", "sh-x.qualification.proliferate.com", "us-east-1"), true);
+  assert.equal(gone.callOptions[0]?.timeoutMs, 30_000);
 
   const survivor = new FakeExec(() =>
     JSON.stringify({ ResourceRecordSets: [{ Name: "sh-x.qualification.proliferate.com.", Type: "A" }] }),
   );
   assert.equal(await route53RecordAbsent(survivor, "Z1", "sh-x.qualification.proliferate.com", "us-east-1"), false);
+
+  const malformed = new FakeExec(() => "{}");
+  assert.equal(await route53RecordAbsent(malformed, "Z1", "sh-x.qualification.proliferate.com", "us-east-1"), false);
 });
 
 test("SelfHostCfnCleanupStack: route53RecordDeleted requires the record be OBSERVED absent (PR7-CONTROL-008)", async () => {
@@ -934,6 +1070,61 @@ test("createCfnStackAndWait: a create-complete wait failure tails describe-stack
     }),
     /ProliferateInstance CREATE_FAILED/,
   );
+});
+
+test("SHCFN-CONTROL-001: a hung create-failure event tail terminates with bounded red evidence", async () => {
+  const calls: Array<{ args: string[]; timeoutMs: number | undefined }> = [];
+  const exec: CfnAwsExec = {
+    async run(args, options) {
+      const copy = [...args];
+      calls.push({ args: copy, timeoutMs: options?.timeoutMs });
+      if (copy[1] === "wait") {
+        throw new Error("Waiter StackCreateComplete failed: ROLLBACK");
+      }
+      if (copy[1] === "describe-stack-events") {
+        return new Promise<string>(() => undefined);
+      }
+      return "";
+    },
+  };
+
+  await assert.rejects(
+    createCfnStackAndWait({
+      exec,
+      stackName: "stk",
+      templatePath: "/t.yaml",
+      parameters: [],
+      tags: TEST_CFN_TAGS,
+      region: "us-east-1",
+      writeParameterFile: async () => ({ path: "/tmp/p.json", remove: async () => undefined }),
+      registerCleanup: async () => undefined,
+      failureTailTimeoutMs: 5,
+    }),
+    /Recent failures: \(stack events unavailable\).*Bootstrap diagnostic: not_requested/,
+  );
+  const tailCall = calls.find((call) => call.args[1] === "describe-stack-events");
+  assert.equal(tailCall?.timeoutMs, 5);
+});
+
+test("SHCFN-CONTROL-001: a hung delete-stack submission terminates before the waiter", async () => {
+  const calls: Array<{ args: string[]; timeoutMs: number | undefined }> = [];
+  const exec: CfnAwsExec = {
+    async run(args, options) {
+      const copy = [...args];
+      calls.push({ args: copy, timeoutMs: options?.timeoutMs });
+      if (copy[1] === "delete-stack") {
+        return new Promise<string>(() => undefined);
+      }
+      throw new Error("stack-delete waiter must not run after submission timeout");
+    },
+  };
+
+  await assert.rejects(
+    deleteCfnStackAndWait(exec, "stk", "us-east-1", { callTimeoutMs: 5, waitTimeoutMs: 5 }),
+    /cloudformation delete-stack call exceeded 5ms/,
+  );
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0]?.timeoutMs, 5);
 });
 
 test("create failure: registered retention captures bounded SSM evidence before artifact then delete", async () => {

@@ -30,6 +30,8 @@ import {
   bundleDigestBound,
   captureCfnBootstrapDiagnostic,
   cfnBootstrapDiagnosticArtifactPath,
+  cfnCleanupIsClean,
+  cfnCleanupReceiptArtifactPath,
   cfnSiteAddress,
   cfnStackName,
   createCfnStackAndWait,
@@ -49,6 +51,7 @@ import {
   uploadBundleAndPresign,
   validateTemplate,
   writeCfnBootstrapDiagnosticArtifact,
+  writeCfnCleanupReceiptArtifact,
   type CfnBootstrapDiagnosticArtifactV2,
   type CfnStackOutputs,
   type SelfHostCfnWorldCleanupEvidence,
@@ -610,9 +613,29 @@ export async function constructSelfHostCfnWorld(inputs: CfnWorldInputs): Promise
       close: () => cancellationFinalizer.run(),
     };
   } catch (error) {
-    await cancellationFinalizer.run().catch(() => undefined);
-    throw error;
+    return rethrowCfnConstructionFailureAfterCleanup(error, () => cancellationFinalizer.run());
   }
+}
+
+/** Preserves the construction error while making missing cleanup proof explicit. */
+export async function rethrowCfnConstructionFailureAfterCleanup(
+  constructionError: unknown,
+  finalize: () => Promise<SelfHostCfnWorldCleanupEvidence>,
+): Promise<never> {
+  let cleanup: SelfHostCfnWorldCleanupEvidence;
+  try {
+    cleanup = await finalize();
+  } catch {
+    throw new Error(
+      `${describe(constructionError)} Cleanup finalization failed before an identity-bound receipt could be retained.`,
+    );
+  }
+  if (!cleanupIsClean(cleanup)) {
+    throw new Error(
+      `${describe(constructionError)} Cleanup did not prove zero survivors; inspect the identity-bound CFN cleanup receipt.`,
+    );
+  }
+  throw constructionError;
 }
 
 /**
@@ -625,12 +648,20 @@ export function registerSelfHostCfnCancellationFinalizer(
   run: RunIdentityV1,
   runDir: string,
 ) {
+  const receiptPath = cfnCleanupReceiptArtifactPath(path.dirname(runDir));
+  const finalize = async (
+    cleanup: () => Promise<SelfHostCfnWorldCleanupEvidence>,
+  ): Promise<SelfHostCfnWorldCleanupEvidence> => {
+    const summary = await cleanup();
+    await writeCfnCleanupReceiptArtifact(receiptPath, run, summary);
+    return summary;
+  };
   return registerCancellationFinalizer({
     world: "self-host",
     run,
     runDir,
-    finalize: () => stack.runAll(),
-    finalizeForSignal: () => stack.runForCancellation(),
+    finalize: () => finalize(() => stack.runAll()),
+    finalizeForSignal: () => finalize(() => stack.runForCancellation()),
   });
 }
 
@@ -736,14 +767,7 @@ export function attachCfnCleanup(
 
 /** A green CFN cleanup: `failed === 0` and every deletion boolean true. */
 export function cleanupIsClean(cleanup: SelfHostCfnWorldCleanupEvidence): boolean {
-  return (
-    cleanup.failed === 0 &&
-    cleanup.stackDeleted &&
-    cleanup.s3ObjectsDeleted &&
-    cleanup.ghcrVersionDeleted &&
-    cleanup.route53RecordDeleted &&
-    cleanup.localPathsRemoved
-  );
+  return cfnCleanupIsClean(cleanup);
 }
 
 // ── Small shared helpers ─────────────────────────────────────────────────────
