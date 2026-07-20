@@ -77,7 +77,7 @@ export const CFN_RUNTIME_ARCHIVE_NAME = "anyharness-aarch64-unknown-linux-musl.t
 export const SELFHOST_QUALIFICATION_PURPOSE = "self-hosting-qualification";
 /** Presigned-URL lifetime: long enough for a bounded stack bootstrap, no longer. */
 export const PRESIGN_EXPIRY_SECONDS = 3600;
-/** Bounded stack create/delete wait (a t4g bootstrap has a PT20M CreationPolicy). */
+/** Bounded stack create/delete wait (20-minute host bootstrap plus bounded public gate). */
 export const STACK_WAIT_TIMEOUT_MS = 30 * 60_000;
 /** Each cancellation delete/observe call must leave headroom in the 25s process bridge. */
 export const CFN_CANCELLATION_CALL_TIMEOUT_MS = 5_000;

@@ -524,6 +524,38 @@ grep -q "DeployBundleUrl" "$AWS_TEMPLATE" && ok "template exposes DeployBundleUr
 grep -Fq 'PROLIFERATE_HEALTHCHECK_DEADLINE_EPOCH_SECONDS="$(( $(date +%s) + 17 * 60 ))"' "$AWS_TEMPLATE" \
   && ok "template health deadline leaves one minute for cfn-init unwind and cfn-signal" \
   || no "template health gate must terminate inside the unchanged 18-minute cfn-init wrapper"
+grep -Fq 'export PROLIFERATE_HEALTHCHECK_SKIP_PUBLIC=true' "$AWS_TEMPLATE" \
+  && ok "template lets CreationPolicy prove local health before dependent public networking" \
+  || no "template must split local bootstrap from the create/replacement public health gate"
+if awk '
+  /^  ProliferateInstance:/ { in_instance = 1; next }
+  in_instance && /^  [A-Za-z0-9]+:/ { exit }
+  in_instance && /CreationPolicy:/ { found = 1 }
+  END { exit found ? 0 : 1 }
+' "$AWS_TEMPLATE"; then
+  ok "template preserves replacement-safe EC2 CreationPolicy signaling"
+else
+  no "template must keep bootstrap fail-closed across EC2 replacements"
+fi
+grep -A30 '^  ProliferatePublicHealth:' "$AWS_TEMPLATE" | grep -Fq 'InstanceGeneration: !Ref ProliferateInstance' \
+  && ! grep -A30 '^  ProliferatePublicHealth:' "$AWS_TEMPLATE" | grep -Fq 'InstanceGeneration: !Sub ${ProliferateInstance}:${ReleaseVersion}' \
+  && grep -A30 '^  ProliferatePublicHealth:' "$AWS_TEMPLATE" | grep -Fq 'EipAssociationReady: !If' \
+  && grep -A30 '^  ProliferatePublicHealth:' "$AWS_TEMPLATE" | grep -Fq 'DnsRecordReady: !If' \
+  && grep -A30 '^  ProliferatePublicHealth:' "$AWS_TEMPLATE" | grep -Fq 'ServiceTimeout: "460"' \
+  && ok "template gates create and physical-instance replacements on bounded public HTTPS health" \
+  || no "template missing the create/replacement public HTTPS custom resource contract"
+
+public_health_handler="$SCRATCH/public-health-handler.py"
+awk '
+  /ZipFile: \|/ { in_handler = 1; next }
+  in_handler && /^  ProliferatePublicHealth:/ { exit }
+  in_handler { sub(/^          /, ""); print }
+' "$AWS_TEMPLATE" >"$public_health_handler"
+if python3 "$TESTS_DIR/public-health-custom-resource.py" "$public_health_handler"; then
+  ok "template public-health handler is bounded, replacement-safe, and secret-free"
+else
+  no "template public-health handler contract regressed"
+fi
 
 # Execute the template's exact UserData body with fake cfn tools. The failure
 # path must preserve cfn-init's exit code and invoke cfn-signal with a bounded,
@@ -577,6 +609,8 @@ user_data_status=$?
 grep -qx -- '-e' "$signal_args" \
   && grep -qx -- '23' "$signal_args" \
   && grep -qx -- 'cfn-init bootstrap failed with exit code 23; inspect .bootstrap-progress.log and cfn-init logs through SSM.' "$signal_args" \
+  && grep -qx -- '--resource' "$signal_args" \
+  && grep -qx -- 'ProliferateInstance' "$signal_args" \
   && ok "template UserData failure invokes cfn-signal with bounded diagnostics" \
   || no "template UserData failure did not invoke cfn-signal with the expected bounded reason"
 

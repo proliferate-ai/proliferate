@@ -17,6 +17,13 @@ cat >"$FAKE_BIN/curl" <<'EOF'
 printf '%s\n' "$*" >>"$FAKE_CURL_CALLS"
 case "$*" in
   *http://local.test/health) exit 0 ;;
+  *https://public.test/health)
+    if [[ -n "${FAKE_PUBLIC_SUCCEED_AFTER:-}" ]]; then
+      public_calls="$(grep -c 'https://public.test/health' "$FAKE_CURL_CALLS" || true)"
+      (( public_calls >= FAKE_PUBLIC_SUCCEED_AFTER )) && exit 0
+    fi
+    exit 22
+    ;;
   *) exit 22 ;;
 esac
 EOF
@@ -52,6 +59,27 @@ __PROLIFERATE_HEALTHCHECK_TARGET__:public:started
 __PROLIFERATE_HEALTHCHECK_TARGET__:public:failed
 EOF
 diff -u "$SCRATCH/expected-progress" "$progress"
+
+# CloudFormation's EC2 CreationPolicy intentionally proves local readiness
+# before its dependent EIP/DNS resources can converge. The explicit skip must
+# not read or touch the configured public endpoint.
+: >"$progress"
+: >"$calls"
+PATH="$FAKE_BIN:$PATH" \
+  FAKE_CURL_CALLS="$calls" \
+  PROLIFERATE_ENV_FILE="$runtime_env" \
+  PROLIFERATE_HEALTHCHECK_URL="http://local.test/health" \
+  PROLIFERATE_HEALTHCHECK_SKIP_PUBLIC=true \
+  PROLIFERATE_HEALTHCHECK_ATTEMPTS=1 \
+  PROLIFERATE_HEALTHCHECK_SLEEP_SECONDS=0 \
+  PROLIFERATE_HEALTHCHECK_PROGRESS_FILE="$progress" \
+  "$DEPLOY_DIR/wait-for-health.sh" >/dev/null 2>&1
+[[ "$(wc -l <"$calls" | tr -d ' ')" -eq 1 ]]
+cat >"$SCRATCH/expected-local-only-progress" <<'EOF'
+__PROLIFERATE_HEALTHCHECK_TARGET__:local:started
+__PROLIFERATE_HEALTHCHECK_TARGET__:local:completed
+EOF
+diff -u "$SCRATCH/expected-local-only-progress" "$progress"
 
 # An exhausted CFN-owned deadline fails before starting curl, while retaining a
 # precise fixed target marker rather than waiting for the outer timeout.
