@@ -38,7 +38,7 @@ flags (`--version`, `--eval`, `--no-start`, `--dry-run`, `--yes`).
 | `docker-compose.production.yml` | The stack: `caddy`, `db`, `migrate`, `api`, and the profiled `litellm`/`litellm-db` (agent-gateway) and `redis` (cloud-workspaces). |
 | `Caddyfile` | Public HTTPS via Caddy (Let's Encrypt), plus the `/llm` route to the agent gateway when enabled. |
 | `.env.production.example` | Copy to `.env.static` and fill in; the installer does this for you. |
-| `bootstrap.sh` | First-run: generate secrets, migrate, boot, wait for health, print the claim token, and emit fixed secret-free substep progress markers for bounded AWS diagnostics. |
+| `bootstrap.sh` | First-run: generate secrets, migrate, boot, wait for health, print the claim token, and append fixed secret-free substep progress markers to `.bootstrap-progress.log` before also emitting them to stdout. |
 | `update.sh` | Pull + migrate + restart, including any enabled optional profile. |
 | `preflight.sh` | Validate config before replacing a running stack. |
 | `doctor.sh` | Redacting diagnostics for the running instance. |
@@ -62,6 +62,13 @@ docker compose --env-file .env.runtime -f docker-compose.production.yml logs -f
 Config lives in `.env.static` (operator settings) and `.env.local` (host-local
 overrides that survive infra rewrites). Secrets are generated into
 `.env.generated`; never commit either.
+
+`.bootstrap-progress.log` is reinitialized with mode `0600` at the start of
+each bootstrap invocation. Every allowlisted marker append closes before the
+corresponding stdout write or material action, so a later process kill leaves
+that completed append host-local for bounded AWS diagnostics. It does not
+promise recovery when termination interrupts the append itself or when the
+host/filesystem/storage fails.
 
 ## Optional add-ons
 

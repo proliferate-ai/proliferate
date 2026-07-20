@@ -391,8 +391,9 @@ Resources:
                   # the one owned deployment layer: the stack no longer embeds
                   # duplicate copies that could drift from server/deploy/**.
                   # Operator config/data (.env.static/.env.local/.env.generated/
-                  # .env.runtime) is written/managed outside the bundle and is
-                  # never present in it, so this cp never clobbers it.
+                  # .env.runtime) and the bootstrap-owned progress log are
+                  # written/managed outside the bundle and are never present in
+                  # it, so this extraction never clobbers them.
                   tmp="$(mktemp -d)"
                   trap 'rm -rf "$tmp"' EXIT
                   curl -fsSL "${ResolvedDeployBundleUrl}" -o "$tmp/proliferate-deploy.tar.gz"
@@ -568,10 +569,10 @@ Resources:
               # Normalize that hard-deadline path to the owned timeout status.
               if [ "$EXIT_CODE" -eq 124 ] || [ "$EXIT_CODE" -eq 137 ]; then
                 EXIT_CODE=124
-                FAILURE_REASON="cfn-init bootstrap exceeded the 18-minute limit; inspect /var/log/cfn-init.log and /var/log/cfn-init-cmd.log through SSM."
+                FAILURE_REASON="cfn-init bootstrap exceeded the 18-minute limit; inspect .bootstrap-progress.log and cfn-init logs through SSM."
                 printf '__PROLIFERATE_CFN_OUTER__:timeout\n'
               else
-                FAILURE_REASON="cfn-init bootstrap failed with exit code $EXIT_CODE; inspect /var/log/cfn-init.log and /var/log/cfn-init-cmd.log through SSM."
+                FAILURE_REASON="cfn-init bootstrap failed with exit code $EXIT_CODE; inspect .bootstrap-progress.log and cfn-init logs through SSM."
                 printf '__PROLIFERATE_CFN_OUTER__:command_failure\n'
               fi
             }

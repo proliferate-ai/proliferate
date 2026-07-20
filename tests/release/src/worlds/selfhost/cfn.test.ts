@@ -4,6 +4,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 import {
@@ -51,6 +52,7 @@ import {
 import type { CleanupLedger, CleanupLedgerEntry, CleanupResourceKind } from "../local-workspace/cleanup-ledger.js";
 
 const execFileAsync = promisify(execFile);
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../../..");
 
 // ── Fakes ────────────────────────────────────────────────────────────────────
 
@@ -397,6 +399,53 @@ test("parseCfnBootstrapDiagnosticOutput: identifies the last started bootstrap s
     ],
   );
   assert.equal(JSON.stringify(parsed).includes("secret-token"), false);
+});
+
+test("run 29710731437 / CFN-DIAG-CONTROL-004: wrapper kill preserves direct progress when buffered stdout is lost", async () => {
+  const evidenceDirectory = await mkdtemp(path.join(tmpdir(), "cfn-diagnostic-wrapper-kill-"));
+  const marker = "__PROLIFERATE_BOOTSTRAP_SUBSTEP__:preflight:started";
+
+  try {
+    await execFileAsync("bash", [path.join(REPO_ROOT, "server/deploy/tests/bootstrap-markers.sh")], {
+      env: { ...process.env, BOOTSTRAP_MARKER_EVIDENCE_DIR: evidenceDirectory },
+      encoding: "utf8",
+      maxBuffer: 1024 * 1024,
+    });
+
+    const bufferedStdout = await readFile(path.join(evidenceDirectory, "cfn-init-cmd.log"), "utf8");
+    const durableProgress = await readFile(path.join(evidenceDirectory, "bootstrap-progress.log"), "utf8");
+    assert.equal(bufferedStdout.includes(marker), false, "killed wrapper never flushes child stdout to its log");
+    assert.equal(durableProgress.includes(marker), true, "started append survives wrapper/child termination");
+    assert.equal(durableProgress.includes("preflight:completed"), false, "no completion is invented");
+
+    const command = buildCfnDiagnosticCommand({
+      logDirectory: evidenceDirectory,
+      bootstrapProgressFile: path.join(evidenceDirectory, "bootstrap-progress.log"),
+      elevated: false,
+    });
+    const { stdout } = await execFileAsync("bash", ["-c", command], {
+      encoding: "utf8",
+      maxBuffer: 1024 * 1024,
+    });
+    assert.ok(Buffer.byteLength(stdout, "utf8") <= CFN_DIAGNOSTIC_OUTPUT_BYTE_BUDGET);
+    assert.equal(stdout.includes(marker), true, "diagnostic reads the owned progress file directly");
+
+    const parsed = parseCfnBootstrapDiagnosticOutput(stdout);
+    assert.equal(parsed.terminal_cause, "outer_timeout");
+    assert.deepEqual(
+      parsed.observations.find((item) => item.substep === "preflight"),
+      {
+        source: "bootstrap-progress.log",
+        stage: "02-bootstrap",
+        substep: "preflight",
+        outcome: "started",
+        exit_code: null,
+        category: "other",
+      },
+    );
+  } finally {
+    await rm(evidenceDirectory, { recursive: true, force: true });
+  }
 });
 
 test("CFN-DIAG-CONTROL-002: multibyte context cannot truncate fixed outer/substep markers", async () => {

@@ -65,6 +65,7 @@ make_release() {
   mkdir -p "$staging/proliferate-deploy"
   cp -R "$DEPLOY_DIR/." "$staging/proliferate-deploy/"
   rm -rf "$staging/proliferate-deploy/smoke" "$staging/proliferate-deploy/tests"
+  rm -f "$staging/proliferate-deploy/.bootstrap-progress.log"
   printf '%s\n' "$version" >"$staging/proliferate-deploy/VERSION"
   tar czf "$dl/proliferate-deploy.tar.gz" -C "$staging" proliferate-deploy
   ( cd "$dl" && sha256sum proliferate-deploy.tar.gz >self-hosted-assets.SHA256SUMS )
@@ -146,9 +147,9 @@ printf 'AGENT_GATEWAY_ENABLED=true\nE2B_API_KEY=k\nE2B_TEMPLATE_NAME=t/x:product
 [[ "$(proliferate_enabled_profiles "$env_both")" == "agent-gateway cloud-workspaces" ]] && ok "gateway + cloud both on -> both profiles" || no "expected both profiles: got '$(proliferate_enabled_profiles "$env_both")'"
 
 if bash "$TESTS_DIR/bootstrap-markers.sh"; then
-  ok "bootstrap markers are ordered and stop without completion on failure"
+  ok "bootstrap markers are ordered, durable across wrapper kill, and stop without completion on failure"
 else
-  no "bootstrap marker ordering/failure contract regressed"
+  no "bootstrap marker ordering/durability/failure contract regressed"
 fi
 
 mv="$(printf '0.3.2\n0.3.18\n0.10.0\n2.0.0\n0.3.9\n' | proliferate_max_version)"
@@ -304,6 +305,7 @@ BSTAGE="$SCRATCH/bstage"
 mkdir -p "$BSTAGE/proliferate-deploy"
 cp -R "$DEPLOY_DIR/." "$BSTAGE/proliferate-deploy/"
 rm -rf "$BSTAGE/proliferate-deploy/smoke" "$BSTAGE/proliferate-deploy/tests"
+rm -f "$BSTAGE/proliferate-deploy/.bootstrap-progress.log"
 printf '0.3.18\n' >"$BSTAGE/proliferate-deploy/VERSION"
 tar czf "$BUNDLE_DIR/proliferate-deploy.tar.gz" -C "$BSTAGE" proliferate-deploy
 rm -rf "$BSTAGE"
@@ -427,6 +429,7 @@ BUNDLE_ROOT="$SCRATCH/bundle"
 mkdir -p "$BUNDLE_ROOT/proliferate-deploy"
 cp -R "$DEPLOY_DIR/." "$BUNDLE_ROOT/proliferate-deploy/"
 rm -rf "$BUNDLE_ROOT/proliferate-deploy/smoke" "$BUNDLE_ROOT/proliferate-deploy/tests"
+rm -f "$BUNDLE_ROOT/proliferate-deploy/.bootstrap-progress.log"
 printf '0.3.18\n' >"$BUNDLE_ROOT/proliferate-deploy/VERSION"
 tar czf "$SCRATCH/proliferate-deploy.tar.gz" -C "$BUNDLE_ROOT" proliferate-deploy
 members="$(tar tzf "$SCRATCH/proliferate-deploy.tar.gz")"
@@ -435,6 +438,7 @@ for want in proliferate-deploy/bootstrap.sh proliferate-deploy/update.sh prolife
 done
 echo "$members" | grep -q 'proliferate-deploy/smoke/' && no "bundle should NOT contain smoke/" || ok "bundle excludes smoke/"
 echo "$members" | grep -q 'proliferate-deploy/tests/' && no "bundle should NOT contain tests/" || ok "bundle excludes tests/"
+echo "$members" | grep -q 'proliferate-deploy/.bootstrap-progress.log' && no "bundle should NOT contain host progress" || ok "bundle excludes host progress"
 ( cd "$SCRATCH" && sha256sum proliferate-deploy.tar.gz >sums && sha256sum -c --ignore-missing sums >/dev/null 2>&1 ) \
   && ok "checksum round-trips (sha256sum -c)" || no "checksum round-trip failed"
 
