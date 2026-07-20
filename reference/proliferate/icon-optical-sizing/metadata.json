@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "app": "proliferate",
+  "appVersion": "0.3.45",
+  "feature": "icon-optical-sizing",
+  "interaction": "Desktop/Web workspace icon, link, editor, and progress-state audit",
+  "capturedAt": "2026-07-19T22:50:24-07:00",
+  "timezone": "PDT",
+  "sourceSurface": "Desktop renderer development surface (real product plus owned playground fixtures)",
+  "targetUrl": "http://127.0.0.1:39101/",
+  "theme": "dark",
+  "provenance": "live",
+  "viewport": {
+    "width": 1280,
+    "height": 720,
+    "deviceScaleFactor": 1
+  },
+  "branch": "codex/ui-icon-optical-sizing",
+  "baseSha": "80e8a681552e4a9104fcd2f2d56ba42988d6f2b1",
+  "profile": "ui-icon-optical-sizing",
+  "hmr": true,
+  "artifacts": {
+    "screenshot": "after-home.png",
+    "dom": null,
+    "computedStyles": null,
+    "styles": null,
+    "recording": "exact-head-review.mp4",
+    "contactSheet": null,
+    "trace": null
+  },
+  "limitations": [
+    "Renderer development surface, not packaged Desktop.",
+    "The primary recording combines one real-product Home state with owned playground fixtures for links, reasoning, goal alignment, and spinner motion.",
+    "The local preview is ephemeral and is not a durable review URL."
+  ]
+}

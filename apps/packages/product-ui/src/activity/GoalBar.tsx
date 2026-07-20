@@ -293,7 +293,10 @@ function GoalBarGlyph({
   /** Nudged down to align with a multi-line editor's first line of text. */
   raised?: boolean;
 }) {
-  const className = twMerge("icon-paired shrink-0", raised && "mt-1");
+  // The editing textarea uses a 1.5em line box while the paired glyph is
+  // 1.15em. Half of that difference centers the glyph on the first line and
+  // stays proportional at every Appearance preset.
+  const className = twMerge("icon-paired shrink-0", raised && "mt-[0.175em]");
   if (state.kind === "result") {
     if (state.outcome === "met") {
       return <CircleCheck className={twMerge(className, "text-success")} aria-hidden />;

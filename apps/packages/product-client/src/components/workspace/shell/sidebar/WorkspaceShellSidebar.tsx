@@ -9,6 +9,7 @@ interface WorkspaceShellSidebarProps {
   updaterPhase: UpdaterPhase;
   downloadProgress: number | null;
   restartWhenIdle: boolean;
+  edgeClassName?: string;
   onToggleSidebar: () => void;
   onDownloadUpdate: () => void;
   onOpenRestartPrompt: () => void;
@@ -20,6 +21,7 @@ export function WorkspaceShellSidebar({
   updaterPhase,
   downloadProgress,
   restartWhenIdle,
+  edgeClassName = "",
   onToggleSidebar,
   onDownloadUpdate,
   onOpenRestartPrompt,
@@ -30,7 +32,7 @@ export function WorkspaceShellSidebar({
       // isolate: the resize separator's hit strip overlaps this edge (z-10 in
       // the page context); a local stacking context keeps sidebar-internal
       // z-indexes from painting over the dragger.
-      className="isolate flex shrink-0 flex-col overflow-hidden bg-sidebar transition-[width] duration-150 ease-in-out"
+      className={`isolate flex shrink-0 flex-col overflow-hidden bg-sidebar transition-[width] duration-150 ease-in-out ${edgeClassName}`}
       style={{ width: open ? width : 0 }}
     >
       <DebugProfiler id="workspace-sidebar-frame">

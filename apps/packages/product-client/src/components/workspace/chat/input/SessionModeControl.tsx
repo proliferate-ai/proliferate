@@ -50,7 +50,7 @@ export function SessionModeControl({
   const nextValue = getNextSessionModeValue(control.options, currentValue);
   const triggerIcon = compactTrigger
     ? undefined
-    : <SessionControlIcon icon={currentPresentation.icon} className="icon-paired [font-size:var(--text-composer)]" />;
+    : <SessionControlIcon icon={currentPresentation.icon} className="icon-control [font-size:var(--text-composer)]" />;
   // No disclosure chevron on the compact trigger: the mode name itself steps
   // immediately to the next runtime-provided value.
   const triggerTrailing = control.pendingState

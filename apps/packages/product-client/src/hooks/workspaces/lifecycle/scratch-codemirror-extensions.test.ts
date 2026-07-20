@@ -42,6 +42,15 @@ afterEach(() => {
 });
 
 describe("scratchListDecorations", () => {
+  it("uses the shared one-pixel caret and selection theme roles", () => {
+    createView("entry");
+
+    const styleText = collectStyleText();
+    expect(styleText).toContain("border-left-color: var(--color-text-caret)");
+    expect(styleText).toContain("border-left-width: 1px");
+    expect(styleText).toContain("background-color: var(--color-text-selection)");
+  });
+
   it("renders unordered markdown markers with shared marker spacing", () => {
     const editor = createView("- first");
 

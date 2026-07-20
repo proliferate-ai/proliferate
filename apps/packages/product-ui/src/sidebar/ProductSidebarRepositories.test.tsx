@@ -18,6 +18,7 @@ describe("ProductSidebarWorkspaceRow trailing slot", () => {
 
     const unreadDot = screen.getByRole("img", { name: "Unseen activity" });
     expect(unreadDot.className).toContain("icon-status");
+    expect(unreadDot.className).toContain("text-sidebar-brand");
     expect(unreadDot.className).toContain("bg-info/70");
     expect(screen.queryByText("2m")).toBeNull();
     expect(unreadDot.closest(".grid")?.className).toContain("min-w-[26px]");

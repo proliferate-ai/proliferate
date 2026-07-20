@@ -4,7 +4,11 @@ import { SplitPanelLeft } from "@proliferate/ui/icons";
 import { useResize } from "#product/hooks/ui/layout/use-resize";
 import { useTransparentChromeEnabled } from "#product/hooks/theme/derived/use-transparent-chrome";
 import { useUpdater } from "#product/hooks/access/tauri/use-updater";
-import { resolveStandardWorkspaceChromeClasses } from "#product/lib/domain/preferences/workspace-chrome";
+import {
+  resolveMainSidebarEdgeClassName,
+  resolveStandardWorkspaceChromeClasses,
+} from "#product/lib/domain/preferences/workspace-chrome";
+import { useProductHost } from "#product/host/ProductHostProvider";
 import {
   WORKSPACE_SIDEBAR_MAX_WIDTH,
   WORKSPACE_SIDEBAR_MIN_WIDTH,
@@ -23,6 +27,7 @@ export function MainSidebarPageShell({ children }: MainSidebarPageShellProps) {
   const setSidebarOpen = useWorkspaceUiStore((s) => s.setSidebarOpen);
   const setSidebarWidth = useWorkspaceUiStore((s) => s.setSidebarWidth);
   const transparentChromeEnabled = useTransparentChromeEnabled();
+  const desktopHost = useProductHost().desktop !== null;
   const chromeClasses = resolveStandardWorkspaceChromeClasses({
     transparent: transparentChromeEnabled,
     sidebarOpen,
@@ -54,7 +59,10 @@ export function MainSidebarPageShell({ children }: MainSidebarPageShellProps) {
         id="main-sidebar"
         // isolate: keeps sidebar-internal z-indexes below the resize
         // separator's overlapping hit strip (z-10 in the page context).
-        className="isolate flex shrink-0 flex-col overflow-hidden bg-sidebar transition-[width] duration-150 ease-in-out"
+        className={`isolate flex shrink-0 flex-col overflow-hidden bg-sidebar transition-[width] duration-150 ease-in-out ${resolveMainSidebarEdgeClassName({
+          desktop: desktopHost,
+          transparent: transparentChromeEnabled,
+        })}`}
         style={{ width: sidebarOpen ? sidebarWidth : 0 }}
       >
         <div className="flex h-10 shrink-0 items-center" data-tauri-drag-region="true">
@@ -66,7 +74,7 @@ export function MainSidebarPageShell({ children }: MainSidebarPageShellProps) {
               title="Hide sidebar"
               className="rounded-md"
             >
-              <SplitPanelLeft className="icon-paired" />
+              <SplitPanelLeft className="icon-control [font-size:var(--text-ui)]" />
             </IconButton>
             {/* The update pill's single home is the top-left, next to the
                 sidebar toggle. */}
@@ -109,7 +117,7 @@ export function MainSidebarPageShell({ children }: MainSidebarPageShellProps) {
                 title="Show sidebar"
                 className="rounded-md"
               >
-                <SplitPanelLeft className="icon-paired" />
+                <SplitPanelLeft className="icon-control [font-size:var(--text-ui)]" />
               </IconButton>
               <SidebarUpdatePill
                 phase={updaterPhase}

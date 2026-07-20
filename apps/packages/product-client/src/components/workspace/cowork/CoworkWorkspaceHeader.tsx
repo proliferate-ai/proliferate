@@ -30,7 +30,7 @@ export function CoworkWorkspaceHeader({
             title="Show sidebar"
             className="rounded-md"
           >
-            <SplitPanelLeft className="icon-paired" />
+            <SplitPanelLeft className="icon-control [font-size:var(--text-ui)]" />
           </IconButton>
         )}
         <div className="min-w-0">
@@ -49,7 +49,7 @@ export function CoworkWorkspaceHeader({
             title={rightPanelOpen ? "Hide artifacts" : "Show artifacts"}
             className={rightPanelOpen ? "bg-accent text-foreground" : "rounded-md"}
           >
-            <FileText className="icon-paired" />
+            <FileText className="icon-control" />
           </IconButton>
         </div>
       ) : null}

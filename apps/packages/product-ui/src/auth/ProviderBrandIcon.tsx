@@ -14,7 +14,7 @@ interface ProviderBrandIconProps {
 export function ProviderBrandIcon({
   provider,
   label,
-  className = "icon-paired",
+  className = "icon-control",
 }: ProviderBrandIconProps) {
   if (provider === "github") {
     return <GitHubBrandMark className={className} />;

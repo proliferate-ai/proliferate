@@ -168,7 +168,18 @@ describe("right-panel tab typography", () => {
     expect(rightPanelRule).not.toContain("--workspace-shell-tab-font-size");
     expect(rightPanelRule).not.toContain("--workspace-shell-tab-line-height");
     expect(rightPanelRule).not.toContain("--workspace-shell-tab-font-weight");
-    expect(productCss).toContain("width: var(--icon-paired);");
+    const tabIconRule = productCss.match(
+      /\.right-panel-tab-system \.ui-tab-system-tab__icon,\s*\.right-panel-tab-system \.ui-icon\s*\{([\s\S]*?)\}/,
+    )?.[1];
+    expect(tabIconRule).toContain("width: var(--icon-control);");
+    expect(tabIconRule).toContain("height: var(--icon-control);");
+    expect(tabIconRule).not.toContain("var(--icon-paired)");
+    const rightPanelActionIconRule = productCss.match(
+      /\.right-panel-tab-system \.workspace-shell-icon-button \.ui-icon\s*\{([\s\S]*?)\}/,
+    )?.[1];
+    expect(rightPanelActionIconRule).toContain("width: var(--icon-control);");
+    expect(rightPanelActionIconRule).toContain("height: var(--icon-control);");
+    expect(rightPanelActionIconRule).not.toContain("var(--icon-paired)");
     expect(productCss).toContain("width: var(--icon-status);");
     expect(rightPanelRule).toContain(
       "--right-panel-tab-close-target-size: 1rem;",
@@ -208,5 +219,20 @@ describe("appearance scaling CSS defaults", () => {
     const bodyRule = domCss.match(/body\s*\{([\s\S]*?)\}/)?.[1];
     expect(bodyRule).toContain("font-size: var(--text-ui);");
     expect(bodyRule).toContain("line-height: var(--text-ui--line-height);");
+  });
+
+  it("shares semantic caret and selection colors across text-entry renderers", () => {
+    expect(readDeclaration(domCss, "--color-text-caret")).toBe("var(--color-foreground)");
+    expect(readDeclaration(domCss, "--color-text-selection"))
+      .toBe("var(--color-highlight, var(--color-input))");
+    expect(domCss).toContain("caret-color: var(--color-text-caret);");
+    expect(domCss).toContain("background-color: var(--color-text-selection);");
+    expect(productCss).toContain(".chat-selection-root ::selection");
+    expect(productCss).toContain("background-color: var(--color-text-selection);");
+  });
+
+  it("keeps the spinner inline box stationary while its SVG owns motion", () => {
+    const spinnerRule = domCss.match(/\.proliferate-spinner\s*\{([\s\S]*?)\}/)?.[1];
+    expect(spinnerRule).toContain("animation: none !important;");
   });
 });

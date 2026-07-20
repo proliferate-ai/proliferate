@@ -60,7 +60,7 @@ export function ComposerIntegrationsControl() {
                 className="block icon-status rounded-full bg-warning/70"
               />
             ) : (
-              <Blocks aria-hidden="true" className="icon-paired" />
+              <Blocks aria-hidden="true" className="icon-control" />
             )
           }
         />

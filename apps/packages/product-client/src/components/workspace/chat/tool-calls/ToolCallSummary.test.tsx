@@ -7,7 +7,7 @@ import { ToolCallSummary } from "#product/components/workspace/chat/tool-calls/T
 afterEach(cleanup);
 
 describe("ToolCallSummary", () => {
-  it("renders completed work as a left disclosure with one hairline below", () => {
+  it("shows the completed-work divider only while collapsed and restores turn spacing when expanded", () => {
     const { container } = render(
       <ToolCallSummary
         label="Worked for 13m 25s"
@@ -37,11 +37,12 @@ describe("ToolCallSummary", () => {
     expect(disclosure.className).not.toMatch(/(?:^|\s)rounded-md(?:\s|$)/);
     expect(ledgerShell?.className).not.toMatch(/(?:^|\s)border(?:\s|$)/);
     expect(ledgerShell?.className).not.toMatch(/(?:^|\s)rounded(?:\s|$)/);
-    expect(ledger.parentElement?.className).toContain("mt-1");
-    expect(ledger.parentElement?.className).not.toContain("mt-2");
-    const completion = screen.getByText("Edited files");
-    const divider = container.querySelector("[data-completed-work-divider]");
-    expect(ledger.compareDocumentPosition(divider!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-    expect(completion.compareDocumentPosition(divider!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(ledger.parentElement?.className).toContain("mt-4");
+    expect(ledger.parentElement?.className).toContain("gap-4");
+    expect(container.querySelector("[data-completed-work-divider]")).toBeNull();
+
+    fireEvent.click(disclosure);
+    expect(screen.queryByText("Work ledger")).toBeNull();
+    expect(container.querySelectorAll("[data-completed-work-divider]")).toHaveLength(1);
   });
 });

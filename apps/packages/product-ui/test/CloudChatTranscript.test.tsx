@@ -110,9 +110,10 @@ describe("CloudChatTranscript", () => {
 
     expect(screen.getByText("Worked for 12s")).toBeTruthy();
     expect(document.querySelector("[data-cloud-work-history]")).toBeTruthy();
-    expect(document.querySelector("[data-cloud-work-history] .border-border")).toBeTruthy();
+    expect(document.querySelector("[data-cloud-work-history-divider]")).toBeTruthy();
     expect(screen.queryByText("Earlier assistant draft")).toBeNull();
     fireEvent.click(screen.getByText("Worked for 12s"));
+    expect(document.querySelector("[data-cloud-work-history-divider]")).toBeNull();
     expect(screen.getByText("Earlier assistant draft")).toBeTruthy();
 
     expect(screen.getByText("Session failed")).toBeTruthy();

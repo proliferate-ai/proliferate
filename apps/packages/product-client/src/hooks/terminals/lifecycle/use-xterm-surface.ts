@@ -8,7 +8,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import "@xterm/xterm/css/xterm.css";
 import { getTerminalTheme, onThemeChange } from "#product/config/theme";
 import { resolveReadableCodeFontScale } from "#product/lib/domain/preferences/appearance";
-import { TERMINAL_FONT_FAMILY } from "#product/lib/domain/terminals/terminal-grid";
+import {
+  TERMINAL_FONT_FAMILY,
+  TERMINAL_LINE_HEIGHT,
+} from "#product/lib/domain/terminals/terminal-grid";
 import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 
 interface UseXtermSurfaceInput {
@@ -22,6 +25,11 @@ interface UseXtermSurfaceInput {
   lineHeight?: number;
 }
 
+export const XTERM_CURSOR_OPTIONS = {
+  cursorStyle: "bar",
+  cursorWidth: 1,
+} as const;
+
 export function resolveXtermSurfaceTypography(
   readableCodeFontSizeId: unknown,
   overrides: Pick<UseXtermSurfaceInput, "fontSize" | "lineHeight"> = {},
@@ -29,7 +37,7 @@ export function resolveXtermSurfaceTypography(
   const scale = resolveReadableCodeFontScale(readableCodeFontSizeId);
   return {
     fontSize: overrides.fontSize ?? scale.monacoFontSize,
-    lineHeight: overrides.lineHeight ?? scale.monacoLineHeight / scale.monacoFontSize,
+    lineHeight: overrides.lineHeight ?? TERMINAL_LINE_HEIGHT,
   };
 }
 
@@ -112,6 +120,7 @@ export function useXtermSurface({
       try {
         term = new Terminal({
           cursorBlink: true,
+          ...XTERM_CURSOR_OPTIONS,
           fontSize: terminalFontSizeRef.current,
           lineHeight: terminalLineHeightRef.current,
           fontFamily: TERMINAL_FONT_FAMILY,

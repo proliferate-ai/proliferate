@@ -67,6 +67,7 @@ export function CloudChatThoughtRow({ row }: { row: CloudChatTranscriptRowView }
         hint={hint}
         status={status}
         defaultExpanded={false}
+        iconLabelGapClassName="gap-1"
       >
         {body ? (
           <CloudTranscriptDetailsPanel>
@@ -191,7 +192,7 @@ export function CloudChatWorkHistoryRow({
         onClick={() => setExpanded((value) => !value)}
       />
       {expanded && hasExpandedContent ? (
-        <div className="mt-2 space-y-1.5">
+        <div className="mt-4 space-y-4" data-cloud-work-history-items>
           {row.body?.trim() ? (
             <CloudTranscriptDetailsPanel>
               <div className="max-h-72 overflow-auto px-3 py-2.5" data-telemetry-mask>
@@ -211,11 +212,14 @@ export function CloudChatWorkHistoryRow({
           ))}
         </div>
       ) : null}
-      <div
-        aria-hidden="true"
-        data-chat-transcript-ignore
-        className="mt-1 w-full border-t border-border"
-      />
+      {!expanded ? (
+        <div
+          aria-hidden="true"
+          data-chat-transcript-ignore
+          data-cloud-work-history-divider
+          className="mt-1 w-full border-t border-border"
+        />
+      ) : null}
     </article>
   );
 }

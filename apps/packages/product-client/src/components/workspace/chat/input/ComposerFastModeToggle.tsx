@@ -34,7 +34,7 @@ export function ComposerFastModeToggle({ control }: ComposerFastModeToggleProps)
       className={control.isEnabled ? "bg-[var(--color-composer-control-hover)]" : ""}
       icon={
         <Zap
-          className={`icon-paired transition-[color,fill,opacity] ${
+          className={`icon-control transition-[color,fill,opacity] ${
             control.isEnabled
               ? "fill-current stroke-none opacity-100"
               : "fill-none stroke-current stroke-[1.5] text-[color:var(--color-composer-control-muted-foreground)] opacity-100"

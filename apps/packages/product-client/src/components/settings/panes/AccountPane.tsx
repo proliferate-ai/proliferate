@@ -333,7 +333,7 @@ export function AccountPane() {
                 label: signingIn
                   ? AUTH_ACCOUNT_LABELS.connectingGitHub
                   : AUTH_ACCOUNT_LABELS.connectGitHub,
-                icon: <ProviderBrandIcon provider="github" className="icon-paired" />,
+                icon: <ProviderBrandIcon provider="github" className="icon-control" />,
                 loading: signingIn,
                 disabled: signingIn || cloudSignInChecking,
                 onClick: () => { void signInWithGitHub({ prompt: "select_account" }); },
@@ -342,7 +342,7 @@ export function AccountPane() {
           connectGoogle: isAuthenticated && !devAuthBypassed
             ? {
                 label: linkingGoogle ? "Waiting for Google…" : "Add Google",
-                icon: <ProviderBrandIcon provider="google" className="icon-paired" />,
+                icon: <ProviderBrandIcon provider="google" className="icon-control" />,
                 loading: linkingGoogle,
                 disabled: !canLinkGoogle || linkingGoogle,
                 onClick: () => { void handleLinkGoogle(); },

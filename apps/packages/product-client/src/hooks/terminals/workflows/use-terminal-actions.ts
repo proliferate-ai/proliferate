@@ -12,6 +12,7 @@ import {
 import { measureWorkspaceTerminalGrid } from "#product/lib/infra/terminals/terminal-grid-probe";
 import {
   DEFAULT_TERMINAL_GRID,
+  TERMINAL_LINE_HEIGHT,
   type TerminalGrid,
 } from "#product/lib/domain/terminals/terminal-grid";
 import { resolveReadableCodeFontScale } from "#product/lib/domain/preferences/appearance";
@@ -69,7 +70,10 @@ export function useTerminalActions() {
   ): Promise<TerminalGrid> => {
     const { readableCodeFontSizeId } = useUserPreferencesStore.getState();
     const fontSize = resolveReadableCodeFontScale(readableCodeFontSizeId).monacoFontSize;
-    const measured = await measureWorkspaceTerminalGrid(workspaceId, { fontSize });
+    const measured = await measureWorkspaceTerminalGrid(workspaceId, {
+      fontSize,
+      lineHeight: TERMINAL_LINE_HEIGHT,
+    });
     return measured ?? DEFAULT_TERMINAL_GRID;
   }, []);
 

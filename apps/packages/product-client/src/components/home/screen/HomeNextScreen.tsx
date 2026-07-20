@@ -117,6 +117,8 @@ export function HomeNextScreen() {
       agentSetupCardVisible: onboardingCards.some((card) => card.id === "agent-defaults"),
     })
     : undefined;
+  const homeOnboardingVisible = onboardingCards.length > 0
+    || (modelProbeState !== undefined && modelProbeState.kind !== "hidden");
   const modelAvailabilityNotice =
     homeNext.modelAvailabilityState === "no_launchable_model"
       ? {
@@ -132,8 +134,17 @@ export function HomeNextScreen() {
   return (
     <div className="relative flex h-full w-full min-w-0 flex-1 overflow-hidden bg-background text-foreground" data-telemetry-block>
       <div className="absolute inset-x-0 top-0 h-10" data-tauri-drag-region="true" />
-      <main className={`flex min-h-0 flex-1 items-center justify-center overflow-auto py-16 ${CHAT_SURFACE_GUTTER_CLASSNAME}`}>
-        <div className={CHAT_COLUMN_CLASSNAME}>
+      {/* A visible onboarding row pulls the primary composer above the main
+          viewport center. Keep the same 8rem total scroll padding, bias it
+          6rem/2rem, then finish the measured 1280×720 correction on the stack
+          itself so the composer—not the combined composer/card block—centers. */}
+      <main
+        className={`flex min-h-0 flex-1 items-center justify-center overflow-auto ${
+          homeOnboardingVisible ? "pb-8 pt-24" : "py-16"
+        } ${CHAT_SURFACE_GUTTER_CLASSNAME}`}
+        data-home-composer-vertical-balance={homeOnboardingVisible ? "onboarding" : "default"}
+      >
+        <div className={`${CHAT_COLUMN_CLASSNAME} ${homeOnboardingVisible ? "translate-y-5" : ""}`}>
           {/* Hero heading (spec §1.1): 28px / 400 / centered; the project name
               is an inline menu trigger with a pill hover fill. */}
           <div className="mb-5 flex flex-col items-center text-center">

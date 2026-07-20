@@ -86,6 +86,11 @@
   --color-composer-send-foreground: var(--color-background);
   --color-composer-shadow: var(--shadow-subtle);
   --color-composer-backdrop-filter: none;
+  /* One semantic caret/selection pair for native entry, composed editors,
+     and renderer APIs such as xterm. Product themes may specialize the
+     highlight role without changing any editor implementation. */
+  --color-text-caret: var(--color-foreground);
+  --color-text-selection: var(--color-highlight, var(--color-input));
   /* Semantic vector-glyph tiers. These use em so the visible glyph follows
      its owning UI text role while the surrounding row/button geometry and
      pointer target stay fixed. Paired label icons use the approved 1.15em
@@ -134,6 +139,22 @@ body {
      root and therefore stays independent from the UI font preference. */
   font-size: var(--text-ui);
   line-height: var(--text-ui--line-height);
+}
+
+:is(input, textarea, [contenteditable]:not([contenteditable="false"]), [data-ui-thin-caret]) {
+  caret-color: var(--color-text-caret);
+}
+
+:is(input, textarea, [contenteditable]:not([contenteditable="false"]), [data-ui-thin-caret])::selection {
+  background-color: var(--color-text-selection);
+  color: inherit;
+}
+
+/* Spinner.tsx keeps the wrapper box stationary while the shared theme rotates
+   only its centered SVG. Neutralize legacy wrapper animation classes so
+   transforms never compound. */
+.proliferate-spinner {
+  animation: none !important;
 }
 
 /*
@@ -205,7 +226,7 @@ body {
    styles are inline on the overlay; this rule is the native fallback whenever
    the overlay cannot resolve a valid collapsed selection. */
 [data-chat-composer-editor] {
-  caret-color: currentColor;
+  caret-color: var(--color-text-caret);
 }
 
 @keyframes chat-composer-caret-blink {
