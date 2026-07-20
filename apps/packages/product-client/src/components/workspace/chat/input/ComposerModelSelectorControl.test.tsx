@@ -63,3 +63,33 @@ it("identifies model rows by both harness kind and model id", () => {
   const codexRow = container.querySelector('button[data-model-kind="codex"][data-model-option="gpt-5.5"]');
   expect(codexRow).not.toBeNull();
 });
+
+it("reports the effective live model when the launch row remains selected", () => {
+  const props: ModelSelectorProps = {
+    connectionState: "healthy",
+    currentModel: { kind: "claude", displayName: "Haiku 4.5", pendingState: null },
+    groups: [
+      {
+        kind: "claude",
+        providerDisplayName: "Claude Code",
+        models: [
+          { kind: "claude", modelId: "claude-sonnet-4-5", displayName: "Sonnet 4.5", actionKind: "select", isSelected: true },
+          { kind: "claude", modelId: "haiku", displayName: "Haiku 4.5", actionKind: "update_current_chat", isSelected: false },
+        ],
+      },
+    ],
+    hasAgents: true,
+    isLoading: false,
+    onSelect: vi.fn(),
+  };
+
+  const { container } = render(
+    <MemoryRouter>
+      <ComposerModelSelectorControl modelSelectorProps={props} />
+    </MemoryRouter>,
+  );
+
+  expect(
+    container.querySelector("[data-composer-model-trigger]")?.getAttribute("data-composer-selected-model"),
+  ).toBe("haiku");
+});

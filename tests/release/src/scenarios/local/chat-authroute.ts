@@ -7,6 +7,11 @@ import type { PlannedCellV1 } from "../../runner/result.js";
 import type { ReadyLocalWorld } from "../../worlds/local-workspace/world.js";
 import type { LocalWorldCleanupEvidence } from "../../worlds/local-workspace/cleanup.js";
 import { authenticatedActor, type AuthenticatedActor } from "../../fixtures/authenticated-actor.js";
+import {
+  defaultByokPreflightProbe,
+  preflightByokKey,
+  type ByokPreflightProbe,
+} from "../../fixtures/byok.js";
 import { preparedRepository, type PreparedRepository } from "../../fixtures/prepared-repository.js";
 import { productPage, type ProductPage } from "../../fixtures/product-page.js";
 import { findStructuredErrorEvent, findTurnEndedEvent } from "../../fixtures/local-runtime.js";
@@ -129,6 +134,29 @@ export const BYOK_ENV_BY_HARNESS: Readonly<Record<Exclude<LocalHarnessKind, "cur
   // second Anthropic key so the two Anthropic-consuming harnesses stay isolated).
   opencode: "RELEASE_E2E_BYOK_ANTHROPIC_B_API_KEY",
 };
+
+/**
+ * Preflights Anthropic-backed LOCAL-3 keys before the UI persists them. The
+ * provider check is a bounded, side-effect-free `GET /v1/models` and returns
+ * only a status-derived reason; neither the key nor a provider body can reach
+ * evidence. Other providers keep proving their credentials through the real
+ * turn until they have an equally narrow provider-owned probe.
+ */
+export async function preflightLocalUserKey(
+  harness: LocalHarnessKind,
+  rawKey: string,
+  probe: ByokPreflightProbe = defaultByokPreflightProbe,
+): Promise<void> {
+  if (harness !== "claude" && harness !== "opencode") {
+    return;
+  }
+  const result = await preflightByokKey(rawKey, {}, probe);
+  if (!result.ok) {
+    throw new Error(
+      `storeAndSelectUserKeyRoute: ${harness} provider credential preflight failed: ${result.reason ?? "unknown"}`,
+    );
+  }
+}
 
 /** The representative single-source harness LOCAL-6 uses (gateway and direct do
  * NOT coexist for it, so route switching is observable). OpenCode is excluded
@@ -299,6 +327,7 @@ export const defaultLocalRouteDriver: LocalRouteDriver = {
     if (!key) {
       throw new Error(`storeAndSelectUserKeyRoute: required provider key env "${envVar}" is not set.`);
     }
+    await preflightLocalUserKey(harness, key);
     const p = page.page;
     // The api_key route lives on the per-harness settings pane (fix round 3).
     await openHarnessSettings(p, harness);
