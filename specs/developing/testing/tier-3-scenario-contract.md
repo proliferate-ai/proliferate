@@ -770,7 +770,11 @@ cleanup. Every ordinary finalization, including construction failure, retains a
 separate identity-bound cleanup receipt outside the cleanup-owned run directory.
 That receipt is reconciled only when stack deletion, exact Route53 and S3
 absence, bounded GHCR run-tag absence, and local-path removal are all observed;
-any missing observation remains failed. This diagnostic posture is
+any missing observation remains failed. The stack-delete submission and the
+create-failure stack-event read have explicit provider-call deadlines inside
+the process cancellation bridge; a hung call therefore becomes retained red
+cleanup/diagnostic evidence instead of monopolizing the single-flight
+finalizer. This diagnostic posture is
 qualification-only and does not change the production template or operator
 launch path. Supported `SIGINT`/`SIGTERM`
 cancellation enters the shared memoized world finalizer: it submits one bounded

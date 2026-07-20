@@ -22,6 +22,7 @@ import {
   cfnSiteAddress,
   cfnStackName,
   createCfnStackAndWait,
+  deleteCfnStackAndWait,
   deleteGhcrPackageVersion,
   deleteS3Object,
   describeStackEventsTail,
@@ -1069,6 +1070,61 @@ test("createCfnStackAndWait: a create-complete wait failure tails describe-stack
     }),
     /ProliferateInstance CREATE_FAILED/,
   );
+});
+
+test("SHCFN-CONTROL-001: a hung create-failure event tail terminates with bounded red evidence", async () => {
+  const calls: Array<{ args: string[]; timeoutMs: number | undefined }> = [];
+  const exec: CfnAwsExec = {
+    async run(args, options) {
+      const copy = [...args];
+      calls.push({ args: copy, timeoutMs: options?.timeoutMs });
+      if (copy[1] === "wait") {
+        throw new Error("Waiter StackCreateComplete failed: ROLLBACK");
+      }
+      if (copy[1] === "describe-stack-events") {
+        return new Promise<string>(() => undefined);
+      }
+      return "";
+    },
+  };
+
+  await assert.rejects(
+    createCfnStackAndWait({
+      exec,
+      stackName: "stk",
+      templatePath: "/t.yaml",
+      parameters: [],
+      tags: TEST_CFN_TAGS,
+      region: "us-east-1",
+      writeParameterFile: async () => ({ path: "/tmp/p.json", remove: async () => undefined }),
+      registerCleanup: async () => undefined,
+      failureTailTimeoutMs: 5,
+    }),
+    /Recent failures: \(stack events unavailable\).*Bootstrap diagnostic: not_requested/,
+  );
+  const tailCall = calls.find((call) => call.args[1] === "describe-stack-events");
+  assert.equal(tailCall?.timeoutMs, 5);
+});
+
+test("SHCFN-CONTROL-001: a hung delete-stack submission terminates before the waiter", async () => {
+  const calls: Array<{ args: string[]; timeoutMs: number | undefined }> = [];
+  const exec: CfnAwsExec = {
+    async run(args, options) {
+      const copy = [...args];
+      calls.push({ args: copy, timeoutMs: options?.timeoutMs });
+      if (copy[1] === "delete-stack") {
+        return new Promise<string>(() => undefined);
+      }
+      throw new Error("stack-delete waiter must not run after submission timeout");
+    },
+  };
+
+  await assert.rejects(
+    deleteCfnStackAndWait(exec, "stk", "us-east-1", { callTimeoutMs: 5, waitTimeoutMs: 5 }),
+    /cloudformation delete-stack call exceeded 5ms/,
+  );
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0]?.timeoutMs, 5);
 });
 
 test("create failure: registered retention captures bounded SSM evidence before artifact then delete", async () => {

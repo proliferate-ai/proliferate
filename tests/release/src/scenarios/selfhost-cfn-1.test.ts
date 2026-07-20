@@ -35,6 +35,7 @@ import {
   SelfHostCfnCleanupStack,
   buildCfnStackTags,
   createCfnStackAndWait,
+  deleteCfnStackAndWait,
   type CfnAwsExec,
 } from "../worlds/selfhost/cfn.js";
 import {
@@ -506,6 +507,66 @@ test("normal CFN finalization retains identity-bound zero-survivor truth after d
     } finally {
       await rm(parentDir, { recursive: true, force: true });
     }
+  }
+});
+
+test("SHCFN-CONTROL-001: a hung stack-delete submission retains a failed identity-bound receipt", async () => {
+  const parentDir = await mkdtemp(path.join(os.tmpdir(), "selfhost-cfn-hung-delete-receipt-"));
+  const cfnDir = path.join(parentDir, "cfn");
+  const artifactsDir = path.join(cfnDir, "artifacts");
+  await mkdir(artifactsDir, { recursive: true });
+  const run = fakeCtx().runIdentity!;
+  const ledger = await openCleanupLedger({
+    runDir: cfnDir,
+    runId: run.run_id,
+    shardId: run.shard_id,
+  });
+  const stack = new SelfHostCfnCleanupStack({
+    ledger,
+    observeRoute53RecordAbsent: async () => true,
+  });
+  const exec: CfnAwsExec = {
+    async run(args) {
+      if (args[1] === "delete-stack") {
+        return new Promise<string>(() => undefined);
+      }
+      throw new Error("stack-delete waiter must not run after submission timeout");
+    },
+  };
+  const finalizer = registerSelfHostCfnCancellationFinalizer(stack, run, cfnDir);
+  await stack.registerAcquire("run_directory", cfnDir, () => rm(cfnDir, { recursive: true, force: true }));
+  await stack.registerAcquire("extracted_artifacts", artifactsDir, async () => undefined);
+  await stack.registerAcquire("s3_object", "s3://bucket/key", async () => undefined);
+  await stack.registerAcquire("ghcr_package_version", "ghcr.io/o/p:tag", async () => undefined);
+  await stack.registerAcquire(
+    "cloudformation_stack",
+    "provider-stack-unique",
+    () => deleteCfnStackAndWait(exec, "provider-stack-unique", "us-east-1", { callTimeoutMs: 5 }),
+  );
+
+  try {
+    const summary = await finalizer.run();
+    assert.equal(summary.stackDeleted, false);
+    assert.ok(summary.failed > 0);
+    const receiptRaw = await readFile(path.join(parentDir, "logs", CFN_CLEANUP_RECEIPT_FILENAME), "utf8");
+    const receipt = JSON.parse(receiptRaw) as {
+      run: { run_id: string; shard_id: string; attempt: number; source_sha: string };
+      status: string;
+      cleanup: { stack_deleted: boolean; failed: number };
+    };
+    assert.deepEqual(receipt.run, {
+      run_id: run.run_id,
+      shard_id: run.shard_id,
+      attempt: run.attempt,
+      source_sha: run.source_sha,
+    });
+    assert.equal(receipt.status, "failed");
+    assert.equal(receipt.cleanup.stack_deleted, false);
+    assert.ok(receipt.cleanup.failed > 0);
+    assert.doesNotMatch(receiptRaw, /provider-stack-unique/);
+    await readFile(path.join(cfnDir, CLEANUP_LEDGER_FILENAME), "utf8");
+  } finally {
+    await rm(parentDir, { recursive: true, force: true });
   }
 });
 

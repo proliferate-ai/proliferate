@@ -83,6 +83,8 @@ export const STACK_WAIT_TIMEOUT_MS = 30 * 60_000;
 export const CFN_CANCELLATION_CALL_TIMEOUT_MS = 5_000;
 /** Individual ordinary cleanup delete/observer calls must also remain bounded. */
 const CFN_CLEANUP_PROVIDER_CALL_TIMEOUT_MS = 30_000;
+/** Stack submission and failure-tail calls stay inside the 25s signal bridge. */
+const CFN_STACK_CONTROL_CALL_TIMEOUT_MS = 10_000;
 /** Bounded describe-stack-events tail on a create failure. */
 export const MAX_STACK_EVENT_TAIL = 8;
 const MAX_EVENT_REASON_CHARS = 240;
@@ -1360,6 +1362,7 @@ export async function createCfnStackAndWait(input: {
     eventTail: string;
   }) => Promise<CfnBootstrapDiagnostic>;
   waitTimeoutMs?: number;
+  failureTailTimeoutMs?: number;
   log?: (message: string) => void;
 }): Promise<CfnStackOutputs> {
   const { exec, stackName, region } = input;
@@ -1434,7 +1437,12 @@ export async function createCfnStackAndWait(input: {
       timeoutMs: waitTimeoutMs,
     });
   } catch (error) {
-    const tail = await describeStackEventsTail(exec, stackName, region).catch(() => "(stack events unavailable)");
+    const tail = await describeStackEventsTail(
+      exec,
+      stackName,
+      region,
+      input.failureTailTimeoutMs ?? CFN_STACK_CONTROL_CALL_TIMEOUT_MS,
+    ).catch(() => "(stack events unavailable)");
     let diagnosticSummary = "not_requested";
     if (input.onCreateFailure) {
       try {
@@ -1468,17 +1476,27 @@ export async function createCfnStackAndWait(input: {
 }
 
 /** Reads a bounded, secret-free tail of the stack's FAILED events. */
-export async function describeStackEventsTail(exec: CfnAwsExec, stackName: string, region: string): Promise<string> {
-  const raw = await exec.run([
-    "cloudformation",
-    "describe-stack-events",
-    "--stack-name",
-    stackName,
-    "--region",
-    region,
-    "--output",
-    "json",
-  ]);
+export async function describeStackEventsTail(
+  exec: CfnAwsExec,
+  stackName: string,
+  region: string,
+  callTimeoutMs: number = CFN_STACK_CONTROL_CALL_TIMEOUT_MS,
+): Promise<string> {
+  const raw = await runBoundedCfnProviderCall(
+    exec,
+    [
+      "cloudformation",
+      "describe-stack-events",
+      "--stack-name",
+      stackName,
+      "--region",
+      region,
+      "--output",
+      "json",
+    ],
+    callTimeoutMs,
+    "cloudformation describe-stack-events",
+  );
   return boundedStackEventsTail(raw);
 }
 
@@ -1487,13 +1505,41 @@ export async function deleteCfnStackAndWait(
   exec: CfnAwsExec,
   stackName: string,
   region: string,
-  options: { waitTimeoutMs?: number } = {},
+  options: { waitTimeoutMs?: number; callTimeoutMs?: number } = {},
 ): Promise<void> {
   const waitTimeoutMs = options.waitTimeoutMs ?? STACK_WAIT_TIMEOUT_MS;
-  await exec.run(["cloudformation", "delete-stack", "--stack-name", stackName, "--region", region]);
+  await runBoundedCfnProviderCall(
+    exec,
+    ["cloudformation", "delete-stack", "--stack-name", stackName, "--region", region],
+    options.callTimeoutMs ?? CFN_STACK_CONTROL_CALL_TIMEOUT_MS,
+    "cloudformation delete-stack",
+  );
   await exec.run(["cloudformation", "wait", "stack-delete-complete", "--stack-name", stackName, "--region", region], {
     timeoutMs: waitTimeoutMs,
   });
+}
+
+async function runBoundedCfnProviderCall(
+  exec: CfnAwsExec,
+  args: readonly string[],
+  timeoutMs: number,
+  operation: string,
+): Promise<string> {
+  if (!Number.isInteger(timeoutMs) || timeoutMs < 1) {
+    throw new Error(`CFN: invalid ${operation} timeout.`);
+  }
+  let timer: NodeJS.Timeout | undefined;
+  const deadline = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`CFN: ${operation} call exceeded ${timeoutMs}ms.`)),
+      timeoutMs,
+    );
+  });
+  try {
+    return await Promise.race([exec.run(args, { timeoutMs }), deadline]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 /**
