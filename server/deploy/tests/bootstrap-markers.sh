@@ -137,10 +137,13 @@ live_pids=()
 for _ in $(seq 1 500); do
   live_pids=()
   for pid in "$wrapper_pid" "$bootstrap_pid" "$helper_pid"; do
+    kill -0 "$pid" 2>/dev/null || continue
     process_state="$(ps -o stat= -p "$pid" 2>/dev/null | awk 'NR == 1 { print $1 }' || true)"
-    if [[ -n "$process_state" && "$process_state" != Z* ]]; then
-      live_pids+=("$pid")
-    fi
+    [[ "$process_state" == Z* ]] && continue
+    # Empty state can mean the process exited between probes or ps failed.
+    # Recheck so a tooling failure cannot turn a live process green.
+    [[ -n "$process_state" ]] || kill -0 "$pid" 2>/dev/null || continue
+    live_pids+=("$pid")
   done
   [[ "${#live_pids[@]}" -eq 0 ]] && break
   sleep 0.01
