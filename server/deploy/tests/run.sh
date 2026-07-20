@@ -151,6 +151,11 @@ if bash "$TESTS_DIR/bootstrap-markers.sh"; then
 else
   no "bootstrap marker ordering/durability/failure contract regressed"
 fi
+if bash "$TESTS_DIR/health-wait-bounds.sh"; then
+  ok "health checks bound each curl and retain exact local/public failure markers"
+else
+  no "health-check timeout/deadline contract regressed"
+fi
 
 mv="$(printf '0.3.2\n0.3.18\n0.10.0\n2.0.0\n0.3.9\n' | proliferate_max_version)"
 [[ "$mv" == "2.0.0" ]] && ok "max_version picks 2.0.0" || no "max_version wrong: $mv"
@@ -516,6 +521,9 @@ grep -q "fetch_bundle:" "$AWS_TEMPLATE" && ok "template fetches the deploy bundl
 grep -q "sha256sum -c --ignore-missing" "$AWS_TEMPLATE" && ok "template verifies the bundle checksum" || no "template missing checksum verification"
 grep -q "docker-compose.production.yml:" "$AWS_TEMPLATE" && no "template still embeds docker-compose (drift)" || ok "template no longer embeds docker-compose"
 grep -q "DeployBundleUrl" "$AWS_TEMPLATE" && ok "template exposes DeployBundleUrl override" || no "template missing DeployBundleUrl override"
+grep -Fq 'PROLIFERATE_HEALTHCHECK_DEADLINE_EPOCH_SECONDS="$(( $(date +%s) + 17 * 60 ))"' "$AWS_TEMPLATE" \
+  && ok "template health deadline leaves one minute for cfn-init unwind and cfn-signal" \
+  || no "template health gate must terminate inside the unchanged 18-minute cfn-init wrapper"
 
 # Execute the template's exact UserData body with fake cfn tools. The failure
 # path must preserve cfn-init's exit code and invoke cfn-signal with a bounded,

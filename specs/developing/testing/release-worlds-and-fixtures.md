@@ -779,6 +779,13 @@ run/shard/attempt/source identity and a red status when the cleanup summary
 reports failures. `SIGKILL`, runner loss, and a job-level timeout may bypass
 that bridge and the `if: always()` upload step.
 
+The self-host CloudFormation world additionally retains its ordinary cleanup
+summary beside the parent run logs after both setup failure and normal close.
+Deleting its nested ledger is therefore not itself treated as zero-survivor
+proof: the retained receipt must independently report stack and Route53
+absence, exact S3 `HEAD` absence, bounded GHCR tag-relist absence, local-path
+removal, and zero cleanup failures.
+
 GitHub Actions cancellation and job timeout are a distinct failure boundary:
 steps on the cancelled runner, including `if: always()` cleanup and artifact
 upload, are not guaranteed to execute. Managed-cloud AWS ingress resources

@@ -63,11 +63,19 @@ puts only a bounded stage and exit-code reason in the stack event. Inspect
 detail rather than copying those potentially secret-bearing logs into
 CloudFormation events.
 
+The health gate receives a deadline one minute inside that 18-minute wrapper
+and bounds every `curl` connect and total request. It therefore either finishes
+inside the existing creation envelope or returns control for `cfn-signal`; one
+unresponsive TLS request cannot consume the outer timeout. Its owner-only
+progress record distinguishes the local API and public HTTPS targets with fixed
+started/completed/failed tokens, without recording either URL.
+
 `bootstrap.sh` initializes its owner-only
 `/opt/proliferate/server/deploy/.bootstrap-progress.log` at each invocation,
 then appends fixed, secret-free start/completion markers for its material
 substeps (secret resolution, preflight, registry login, runtime installation,
 database start/migration, API+Caddy start, optional profiles, and health wait).
+The health wait adds fixed local/public target markers beneath that substep.
 Each start append returns and closes before the same marker is printed to normal
 operator stdout and before material work begins; each completion append follows
 successful material work. A later `TERM`/`KILL` of the bootstrap process cannot
