@@ -1955,9 +1955,12 @@ function emptyCfnBootstrapDiagnostic(
 /**
  * Reads the RUNNING api container's image RepoDigest on the stack's host over
  * SSM (`aws ssm send-command` → poll `get-command-invocation`) and returns its
- * `sha256:<hex>` component. The template provisions an SSM-enabled instance role
+ * `sha256:<hex>` component. Container inspection only exposes an image ID;
+ * `RepoDigests` belongs to the image object, so the command deliberately
+ * resolves the Compose service container → image ID → immutable repo digest.
+ * The template provisions an SSM-enabled instance role
  * (`AmazonSSMManagedInstanceCore`), so this needs no SSH/key pair. Bounded poll;
- * throws (so the caller's fallback engages) if SSM never yields a digest.
+ * throws and fails closed if SSM never yields a digest.
  */
 export async function ssmInspectRunningImageDigest(input: {
   exec: CfnAwsExec;
@@ -1969,7 +1972,11 @@ export async function ssmInspectRunningImageDigest(input: {
   const { exec, instanceId, region } = input;
   const pollTimeoutMs = input.pollTimeoutMs ?? SSM_POLL_TIMEOUT_MS;
   const command =
-    "sudo docker inspect --format '{{index .RepoDigests 0}}' \"$(sudo docker ps -qf name=api | head -n1)\"";
+    "set -eu; " +
+    "container_id=\"$(sudo docker ps -q --filter label=com.docker.compose.service=api | head -n1)\"; " +
+    "test -n \"$container_id\"; " +
+    "image_id=\"$(sudo docker inspect --format '{{.Image}}' \"$container_id\")\"; " +
+    "sudo docker image inspect --format '{{index .RepoDigests 0}}' \"$image_id\"";
   const commandId = (
     await exec.run([
       "ssm",

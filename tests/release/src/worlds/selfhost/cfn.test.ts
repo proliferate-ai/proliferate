@@ -1600,8 +1600,12 @@ test("parseCfnInstanceIdEventProjection: accepts one signaling instance and reje
 test("ssmInspectRunningImageDigest: send-command then poll to Success returns the sha256 digest", async () => {
   const sha = `sha256:${"d".repeat(64)}`;
   let polls = 0;
+  let sentCommand = "";
   const exec = new FakeExec((args) => {
     if (args[1] === "send-command") {
+      const parametersIndex = args.indexOf("--parameters");
+      const parameters = JSON.parse(args[parametersIndex + 1] ?? "{}") as { commands?: string[] };
+      sentCommand = parameters.commands?.[0] ?? "";
       return "cmd-123\n";
     }
     if (args[1] === "get-command-invocation") {
@@ -1618,9 +1622,12 @@ test("ssmInspectRunningImageDigest: send-command then poll to Success returns th
     pollTimeoutMs: 5_000,
   });
   assert.equal(digest, sha);
+  assert.match(sentCommand, /label=com\.docker\.compose\.service=api/);
+  assert.match(sentCommand, /docker inspect --format '\{\{\.Image\}\}'/);
+  assert.match(sentCommand, /docker image inspect --format '\{\{index \.RepoDigests 0\}\}'/);
 });
 
-test("ssmInspectRunningImageDigest: a terminal Failed status throws (so the cell's fallback engages)", async () => {
+test("ssmInspectRunningImageDigest: a terminal Failed status fails closed", async () => {
   const exec = new FakeExec((args) => {
     if (args[1] === "send-command") {
       return "cmd-1\n";
