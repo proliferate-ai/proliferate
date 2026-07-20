@@ -7,11 +7,72 @@ HEALTHCHECK_URL="${PROLIFERATE_HEALTHCHECK_URL:-http://127.0.0.1:8000/health}"
 PUBLIC_HEALTHCHECK_URL="${PROLIFERATE_PUBLIC_HEALTHCHECK_URL:-}"
 MAX_ATTEMPTS="${PROLIFERATE_HEALTHCHECK_ATTEMPTS:-60}"
 SLEEP_SECONDS="${PROLIFERATE_HEALTHCHECK_SLEEP_SECONDS:-2}"
+CURL_CONNECT_TIMEOUT_SECONDS="${PROLIFERATE_HEALTHCHECK_CONNECT_TIMEOUT_SECONDS:-2}"
+CURL_MAX_TIME_SECONDS="${PROLIFERATE_HEALTHCHECK_MAX_TIME_SECONDS:-5}"
+TARGET_TIMEOUT_SECONDS="${PROLIFERATE_HEALTHCHECK_TIMEOUT_SECONDS:-}"
+HEALTH_DEADLINE_EPOCH_SECONDS="${PROLIFERATE_HEALTHCHECK_DEADLINE_EPOCH_SECONDS:-}"
+HEALTH_PROGRESS_FILE="${PROLIFERATE_HEALTHCHECK_PROGRESS_FILE:-}"
 COMPOSE_FILE="${PROLIFERATE_COMPOSE_FILE:-$SCRIPT_DIR/docker-compose.production.yml}"
 SETUP_TOKEN_PATH="${PROLIFERATE_SETUP_TOKEN_PATH:-/var/lib/proliferate/setup/setup-token}"
 
 warn() {
   echo "WARNING: $*" >&2
+}
+
+require_nonnegative_integer() {
+  local name="$1"
+  local value="$2"
+  if [[ ! "$value" =~ ^[0-9]+$ ]]; then
+    echo "$name must be a non-negative integer; got '$value'." >&2
+    exit 1
+  fi
+}
+
+require_nonnegative_integer PROLIFERATE_HEALTHCHECK_ATTEMPTS "$MAX_ATTEMPTS"
+require_nonnegative_integer PROLIFERATE_HEALTHCHECK_SLEEP_SECONDS "$SLEEP_SECONDS"
+require_nonnegative_integer PROLIFERATE_HEALTHCHECK_CONNECT_TIMEOUT_SECONDS "$CURL_CONNECT_TIMEOUT_SECONDS"
+require_nonnegative_integer PROLIFERATE_HEALTHCHECK_MAX_TIME_SECONDS "$CURL_MAX_TIME_SECONDS"
+# Canonicalize decimal strings before bash arithmetic (for example, user input
+# `08` must not be interpreted as an invalid octal literal).
+MAX_ATTEMPTS=$((10#$MAX_ATTEMPTS))
+SLEEP_SECONDS=$((10#$SLEEP_SECONDS))
+CURL_CONNECT_TIMEOUT_SECONDS=$((10#$CURL_CONNECT_TIMEOUT_SECONDS))
+CURL_MAX_TIME_SECONDS=$((10#$CURL_MAX_TIME_SECONDS))
+if (( MAX_ATTEMPTS < 1 || CURL_CONNECT_TIMEOUT_SECONDS < 1 || CURL_MAX_TIME_SECONDS < 1 )); then
+  echo "Health-check attempts and curl timeouts must be at least 1 second." >&2
+  exit 1
+fi
+if [[ -z "$TARGET_TIMEOUT_SECONDS" ]]; then
+  # Preserve the historical attempts×sleep budget (about two minutes by
+  # default) plus one bounded request. Raising attempts deliberately raises the
+  # target budget, as the installer qualification path already expects.
+  TARGET_TIMEOUT_SECONDS=$((MAX_ATTEMPTS * SLEEP_SECONDS + CURL_MAX_TIME_SECONDS))
+else
+  require_nonnegative_integer PROLIFERATE_HEALTHCHECK_TIMEOUT_SECONDS "$TARGET_TIMEOUT_SECONDS"
+  TARGET_TIMEOUT_SECONDS=$((10#$TARGET_TIMEOUT_SECONDS))
+  if (( TARGET_TIMEOUT_SECONDS < 1 )); then
+    echo "PROLIFERATE_HEALTHCHECK_TIMEOUT_SECONDS must be at least 1 second." >&2
+    exit 1
+  fi
+fi
+if [[ -n "$HEALTH_DEADLINE_EPOCH_SECONDS" ]]; then
+  require_nonnegative_integer PROLIFERATE_HEALTHCHECK_DEADLINE_EPOCH_SECONDS "$HEALTH_DEADLINE_EPOCH_SECONDS"
+  HEALTH_DEADLINE_EPOCH_SECONDS=$((10#$HEALTH_DEADLINE_EPOCH_SECONDS))
+fi
+
+health_progress_marker() {
+  local target="$1"
+  local status="$2"
+  local marker
+  [[ -n "$HEALTH_PROGRESS_FILE" ]] || return 0
+  case "$target" in local|public) ;; *) return 2 ;; esac
+  case "$status" in started|completed|failed) ;; *) return 2 ;; esac
+  if [[ -L "$HEALTH_PROGRESS_FILE" || ( -e "$HEALTH_PROGRESS_FILE" && ! -f "$HEALTH_PROGRESS_FILE" ) ]]; then
+    echo "Refusing unsafe health progress path: $HEALTH_PROGRESS_FILE" >&2
+    return 1
+  fi
+  marker="__PROLIFERATE_HEALTHCHECK_TARGET__:${target}:${status}"
+  (umask 077 && printf '%s\n' "$marker" >>"$HEALTH_PROGRESS_FILE")
 }
 
 # Resolve the compose env file explicitly so this script also works standalone
@@ -75,17 +136,56 @@ site_url_from_address() {
 }
 
 wait_for_url() {
-  local url="$1"
+  local target="$1"
+  local url="$2"
   local attempt=1
+  local now
+  local remaining
+  local request_timeout
+  local connect_timeout
+  local sleep_seconds
+  local target_deadline
 
-  until curl -fsS "$url" >/dev/null; do
-    if (( attempt >= MAX_ATTEMPTS )); then
-      echo "Health check failed for $url after $MAX_ATTEMPTS attempts." >&2
-      exit 1
+  health_progress_marker "$target" started
+  target_deadline=$(( $(date +%s) + TARGET_TIMEOUT_SECONDS ))
+  if [[ -n "$HEALTH_DEADLINE_EPOCH_SECONDS" ]] && (( HEALTH_DEADLINE_EPOCH_SECONDS < target_deadline )); then
+    target_deadline="$HEALTH_DEADLINE_EPOCH_SECONDS"
+  fi
+
+  while (( attempt <= MAX_ATTEMPTS )); do
+    request_timeout="$CURL_MAX_TIME_SECONDS"
+    connect_timeout="$CURL_CONNECT_TIMEOUT_SECONDS"
+    now="$(date +%s)"
+    remaining=$((target_deadline - now))
+    if (( remaining <= 0 )); then
+      health_progress_marker "$target" failed
+      echo "Health-check budget exhausted while waiting for the $target endpoint." >&2
+      return 1
+    fi
+    (( request_timeout > remaining )) && request_timeout="$remaining"
+    (( connect_timeout > request_timeout )) && connect_timeout="$request_timeout"
+
+    if curl -fsS --connect-timeout "$connect_timeout" --max-time "$request_timeout" "$url" >/dev/null; then
+      health_progress_marker "$target" completed
+      return 0
     fi
 
+    if (( attempt >= MAX_ATTEMPTS )); then
+      health_progress_marker "$target" failed
+      echo "Health check failed for the $target endpoint after $MAX_ATTEMPTS attempts." >&2
+      return 1
+    fi
     attempt=$((attempt + 1))
-    sleep "$SLEEP_SECONDS"
+    sleep_seconds="$SLEEP_SECONDS"
+    now="$(date +%s)"
+    remaining=$((target_deadline - now))
+    if (( remaining <= 0 )); then
+      health_progress_marker "$target" failed
+      echo "Health-check budget exhausted while waiting for the $target endpoint." >&2
+      return 1
+    fi
+    (( sleep_seconds > remaining )) && sleep_seconds="$remaining"
+    (( sleep_seconds > 0 )) && sleep "$sleep_seconds"
   done
 }
 
@@ -162,10 +262,10 @@ if [[ -z "$PUBLIC_HEALTHCHECK_URL" ]]; then
   PUBLIC_HEALTHCHECK_URL="$(read_env_value "$RUNTIME_ENV_FILE" PROLIFERATE_PUBLIC_HEALTHCHECK_URL)"
 fi
 
-wait_for_url "$HEALTHCHECK_URL"
+wait_for_url local "$HEALTHCHECK_URL"
 
 if [[ -n "$PUBLIC_HEALTHCHECK_URL" ]]; then
-  wait_for_url "$PUBLIC_HEALTHCHECK_URL"
+  wait_for_url public "$PUBLIC_HEALTHCHECK_URL"
 fi
 
 print_setup_instructions

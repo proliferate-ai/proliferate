@@ -563,6 +563,11 @@ Resources:
             FAILURE_REASON="aws-cfn-bootstrap installation failed with exit code $EXIT_CODE."
           }
           if [ "$EXIT_CODE" -eq 0 ]; then
+            # Give the final health gate an explicit deadline one minute before
+            # the cfn-init wrapper deadline. Its individual curl attempts are
+            # bounded too, so an unresponsive TLS peer cannot consume the whole
+            # CloudFormation creation envelope without a terminal marker.
+            export PROLIFERATE_HEALTHCHECK_DEADLINE_EPOCH_SECONDS="$(( $(date +%s) + 17 * 60 ))"
             timeout --signal=TERM --kill-after=30s 18m /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource ProliferateInstance --region ${AWS::Region} --configsets bootstrap || {
               EXIT_CODE=$?
               # GNU timeout returns 137 when its kill-after KILL is required.

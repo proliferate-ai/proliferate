@@ -766,8 +766,13 @@ stage/exit/category observations, persists that secret-free companion beside
 the parent run evidence, and then runs the ordinary registered cleanup. Raw log
 lines, command text, URLs, environment values, and provider payloads are not
 evidence. An unavailable SSM path remains red and does not excuse stack
-cleanup. This diagnostic posture is qualification-only and does not change the
-production template or operator launch path. Supported `SIGINT`/`SIGTERM`
+cleanup. Every ordinary finalization, including construction failure, retains a
+separate identity-bound cleanup receipt outside the cleanup-owned run directory.
+That receipt is reconciled only when stack deletion, exact Route53 and S3
+absence, bounded GHCR run-tag absence, and local-path removal are all observed;
+any missing observation remains failed. This diagnostic posture is
+qualification-only and does not change the production template or operator
+launch path. Supported `SIGINT`/`SIGTERM`
 cancellation enters the shared memoized world finalizer: it submits one bounded
 stack deletion and observes its immediate status without entering the ordinary
 long waiter. A deletion not yet proved complete remains unreconciled in the

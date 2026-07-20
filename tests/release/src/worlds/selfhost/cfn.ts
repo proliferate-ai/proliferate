@@ -10,6 +10,7 @@ import {
   type CleanupLedger,
   type CleanupResourceKind,
 } from "../local-workspace/cleanup-ledger.js";
+import type { RunIdentityV1 } from "../../runner/identity.js";
 
 /**
  * The self-host CloudFormation-WRAPPER controller (frozen tier-3 contract
@@ -80,6 +81,8 @@ export const PRESIGN_EXPIRY_SECONDS = 3600;
 export const STACK_WAIT_TIMEOUT_MS = 30 * 60_000;
 /** Each cancellation delete/observe call must leave headroom in the 25s process bridge. */
 export const CFN_CANCELLATION_CALL_TIMEOUT_MS = 5_000;
+/** Individual ordinary cleanup delete/observer calls must also remain bounded. */
+const CFN_CLEANUP_PROVIDER_CALL_TIMEOUT_MS = 30_000;
 /** Bounded describe-stack-events tail on a create failure. */
 export const MAX_STACK_EVENT_TAIL = 8;
 const MAX_EVENT_REASON_CHARS = 240;
@@ -89,6 +92,7 @@ const SSM_POLL_INTERVAL_MS = 3_000;
 /** Failure-diagnostic SSM acquisition stays well below the outer stack/cleanup budget. */
 export const CFN_DIAGNOSTIC_TIMEOUT_MS = 90_000;
 export const CFN_BOOTSTRAP_DIAGNOSTIC_FILENAME = "cfn-bootstrap-diagnostic.json";
+export const CFN_CLEANUP_RECEIPT_FILENAME = "cfn-cleanup-finalization.json";
 const CFN_DIAGNOSTIC_MAX_OBSERVATIONS = 24;
 const CFN_DIAGNOSTIC_COMMAND_TIMEOUT_SECONDS = 30;
 /** SSM returns at most 24,000 stdout characters; stay below that hard provider cap. */
@@ -129,13 +133,13 @@ export function buildCfnDiagnosticCommand(options?: {
     `f=${shellQuoteDiagnosticPath(bootstrapProgressFile)}`,
     `if ${sudo}test -r \"$f\"; then`,
     "  printf '__PROLIFERATE_CFN_LOG__:bootstrap-progress.log\\n'",
-    `  ${sudo}grep -aioE '__PROLIFERATE_BOOTSTRAP_SUBSTEP__:(ensure-secrets|preflight|registry-login|runtime-install|db-up|migrate|api-caddy-up|optional-profiles|health-wait):(started|completed)' \"$f\" 2>/dev/null | tail -n 24`,
+    `  ${sudo}grep -aioE '__PROLIFERATE_(BOOTSTRAP_SUBSTEP__:(ensure-secrets|preflight|registry-login|runtime-install|db-up|migrate|api-caddy-up|optional-profiles|health-wait):(started|completed)|HEALTHCHECK_TARGET__:(local|public):(started|completed|failed))' \"$f\" 2>/dev/null | tail -n 24`,
     "fi",
     // Retain cfn-init-cmd.log as a compatibility fallback for older bundles.
     `f=${logPath("cfn-init-cmd.log")}`,
     `if ${sudo}test -r \"$f\"; then`,
     "  printf '__PROLIFERATE_CFN_LOG__:%s\\n' \"${f##*/}\"",
-    `  ${sudo}grep -aioE '__PROLIFERATE_BOOTSTRAP_SUBSTEP__:(ensure-secrets|preflight|registry-login|runtime-install|db-up|migrate|api-caddy-up|optional-profiles|health-wait):(started|completed)' \"$f\" 2>/dev/null | tail -n 24`,
+    `  ${sudo}grep -aioE '__PROLIFERATE_(BOOTSTRAP_SUBSTEP__:(ensure-secrets|preflight|registry-login|runtime-install|db-up|migrate|api-caddy-up|optional-profiles|health-wait):(started|completed)|HEALTHCHECK_TARGET__:(local|public):(started|completed|failed))' \"$f\" 2>/dev/null | tail -n 24`,
     "fi",
     // cfn-init stage truth is also normalized to bounded ASCII rather than
     // retaining variable prefixes/suffixes or relying on character-counted cut.
@@ -201,7 +205,9 @@ export type CfnBootstrapSubstep =
   | "migrate"
   | "api-caddy-up"
   | "optional-profiles"
-  | "health-wait";
+  | "health-wait"
+  | "health-local"
+  | "health-public";
 
 export type CfnBootstrapTerminalCause = "outer_timeout" | "command_failure" | "unknown";
 
@@ -254,6 +260,25 @@ export interface CfnBootstrapDiagnosticArtifactV2 {
     source_sha: string;
   };
   diagnostic: CfnBootstrapDiagnostic;
+}
+
+/** Durable zero-survivor receipt retained outside the cleanup-owned CFN directory. */
+export interface CfnCleanupReceiptV1 {
+  schema_version: 1;
+  kind: "proliferate.selfhost-cfn-cleanup-finalization";
+  run: Pick<RunIdentityV1, "run_id" | "shard_id" | "attempt" | "source_sha">;
+  status: "reconciled" | "failed";
+  cleanup: {
+    ledger_id_hash: string;
+    registered: number;
+    reconciled: number;
+    failed: number;
+    stack_deleted: boolean;
+    s3_objects_deleted: boolean;
+    ghcr_version_deleted: boolean;
+    route53_record_deleted: boolean;
+    local_paths_removed: boolean;
+  };
 }
 
 /** A signal cleanup reconciles only observed absence; initiation stays in durable custody. */
@@ -405,22 +430,29 @@ export async function route53RecordAbsent(
   hostedZoneId: string,
   recordName: string,
   region: string,
+  callTimeoutMs: number = CFN_CLEANUP_PROVIDER_CALL_TIMEOUT_MS,
 ): Promise<boolean> {
+  if (!Number.isInteger(callTimeoutMs) || callTimeoutMs < 1) {
+    throw new Error("CFN cleanup: invalid Route53 absence-observation timeout.");
+  }
   const fqdn = recordName.endsWith(".") ? recordName : `${recordName}.`;
-  const raw = await exec.run([
-    "route53",
-    "list-resource-record-sets",
-    "--hosted-zone-id",
-    hostedZoneId,
-    "--start-record-name",
-    fqdn,
-    "--start-record-type",
-    "A",
-    "--max-items",
-    "1",
-    "--region",
-    region,
-  ]);
+  const raw = await exec.run(
+    [
+      "route53",
+      "list-resource-record-sets",
+      "--hosted-zone-id",
+      hostedZoneId,
+      "--start-record-name",
+      fqdn,
+      "--start-record-type",
+      "A",
+      "--max-items",
+      "1",
+      "--region",
+      region,
+    ],
+    { timeoutMs: callTimeoutMs },
+  );
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
@@ -428,7 +460,16 @@ export async function route53RecordAbsent(
     // An unparseable response cannot prove absence → treat as a survivor.
     return false;
   }
-  const sets = (parsed as { ResourceRecordSets?: Array<{ Name?: string; Type?: string }> }).ResourceRecordSets ?? [];
+  if (
+    typeof parsed !== "object" || parsed === null || Array.isArray(parsed) ||
+    !Array.isArray((parsed as { ResourceRecordSets?: unknown }).ResourceRecordSets)
+  ) {
+    return false;
+  }
+  const sets = (parsed as { ResourceRecordSets: Array<{ Name?: unknown; Type?: unknown }> }).ResourceRecordSets;
+  if (sets.some((record) => typeof record.Name !== "string" || typeof record.Type !== "string")) {
+    return false;
+  }
   const survivor = sets.some(
     (record) => record.Type === "A" && (record.Name === fqdn || record.Name === recordName),
   );
@@ -601,6 +642,8 @@ const ALLOWED_CFN_BOOTSTRAP_SUBSTEPS = new Set<CfnBootstrapSubstep>([
   "api-caddy-up",
   "optional-profiles",
   "health-wait",
+  "health-local",
+  "health-public",
 ]);
 
 /**
@@ -625,6 +668,29 @@ export function parseCfnBootstrapDiagnosticOutput(raw: string): CfnBootstrapDiag
     "cfn-init.log": "unknown",
     "cfn-init-cmd.log": "unknown",
     "cloud-init-output.log": "unknown",
+  };
+  const recordSubstep = (
+    candidateSubstep: CfnBootstrapSubstep,
+    outcome: "started" | "completed" | "failed",
+    category: CfnBootstrapFailureCategory,
+  ): void => {
+    if (!ALLOWED_CFN_BOOTSTRAP_SUBSTEPS.has(candidateSubstep)) return;
+    const prior = substeps.get(candidateSubstep);
+    const terminal = outcome !== "started";
+    // Keep the first source for duplicate states, permit a genuine terminal
+    // upgrade, and never regress a completed/failed target to `started`.
+    if (!prior || (!prior.terminal && terminal)) {
+      substeps.set(candidateSubstep, {
+        source: source === "bootstrap-progress.log" ? source : "bootstrap.sh",
+        stage: "02-bootstrap",
+        substep: candidateSubstep,
+        outcome,
+        exit_code: outcome === "completed" ? 0 : outcome === "failed" ? 1 : null,
+        category,
+        order,
+        terminal,
+      });
+    }
   };
 
   for (const rawLine of raw.split(/\r?\n/)) {
@@ -659,21 +725,17 @@ export function parseCfnBootstrapDiagnosticOutput(raw: string): CfnBootstrapDiag
     const candidateSubstep = substepMatch?.[1]?.toLowerCase() as CfnBootstrapSubstep | undefined;
     if (candidateSubstep && ALLOWED_CFN_BOOTSTRAP_SUBSTEPS.has(candidateSubstep)) {
       const outcome = substepMatch?.[2]?.toLowerCase() as "started" | "completed";
-      const prior = substeps.get(candidateSubstep);
-      // Keep the first source for duplicate states, permit only a genuine
-      // started -> completed upgrade, and never regress a completion.
-      if (!prior || (!prior.terminal && outcome === "completed")) {
-        substeps.set(candidateSubstep, {
-          source: source === "bootstrap-progress.log" ? source : "bootstrap.sh",
-          stage: "02-bootstrap",
-          substep: candidateSubstep,
-          outcome,
-          exit_code: outcome === "completed" ? 0 : null,
-          category: "other",
-          order,
-          terminal: outcome === "completed",
-        });
-      }
+      recordSubstep(candidateSubstep, outcome, "other");
+    }
+
+    const healthMatch = line.match(
+      /__PROLIFERATE_HEALTHCHECK_TARGET__:(local|public):(started|completed|failed)\b/i,
+    );
+    if (healthMatch) {
+      const target = healthMatch[1]?.toLowerCase();
+      const outcome = healthMatch[2]?.toLowerCase() as "started" | "completed" | "failed";
+      const healthSubstep = target === "local" ? "health-local" : "health-public";
+      recordSubstep(healthSubstep, outcome, outcome === "failed" ? "health" : "other");
     }
 
     const stageMatch = line.match(/\bCommand\s+([0-9]{2}-[A-Za-z0-9_-]{1,64})\b/i);
@@ -851,6 +913,66 @@ export async function writeCfnBootstrapDiagnosticArtifact(
   }
 }
 
+/** The cleanup receipt survives successful removal of `<runDir>/cfn`. */
+export function cfnCleanupReceiptArtifactPath(runDir: string): string {
+  return path.join(runDir, "logs", CFN_CLEANUP_RECEIPT_FILENAME);
+}
+
+/** Full reconciliation requires provider absence plus removal of owned local paths. */
+export function cfnCleanupIsClean(cleanup: SelfHostCfnWorldCleanupEvidence): boolean {
+  return (
+    cleanup.failed === 0 &&
+    cleanup.stackDeleted &&
+    cleanup.s3ObjectsDeleted &&
+    cleanup.ghcrVersionDeleted &&
+    cleanup.route53RecordDeleted &&
+    cleanup.localPathsRemoved
+  );
+}
+
+/** Atomically retains the exact cleanup observer result after every finalization. */
+export async function writeCfnCleanupReceiptArtifact(
+  artifactPath: string,
+  run: RunIdentityV1,
+  cleanup: SelfHostCfnWorldCleanupEvidence,
+): Promise<void> {
+  const receipt: CfnCleanupReceiptV1 = {
+    schema_version: 1,
+    kind: "proliferate.selfhost-cfn-cleanup-finalization",
+    run: {
+      run_id: run.run_id,
+      shard_id: run.shard_id,
+      attempt: run.attempt,
+      source_sha: run.source_sha,
+    },
+    status: cfnCleanupIsClean(cleanup) ? "reconciled" : "failed",
+    cleanup: {
+      ledger_id_hash: cleanup.ledgerIdHash,
+      registered: cleanup.registered,
+      reconciled: cleanup.reconciled,
+      failed: cleanup.failed,
+      stack_deleted: cleanup.stackDeleted,
+      s3_objects_deleted: cleanup.s3ObjectsDeleted,
+      ghcr_version_deleted: cleanup.ghcrVersionDeleted,
+      route53_record_deleted: cleanup.route53RecordDeleted,
+      local_paths_removed: cleanup.localPathsRemoved,
+    },
+  };
+  const serialized = `${JSON.stringify(receipt, null, 2)}\n`;
+  if (/X-Amz-|Bearer\s+|\b(?:sk|vk)-[A-Za-z0-9._-]{6,}|\beyJ[A-Za-z0-9._-]{10,}/i.test(serialized)) {
+    throw new Error("CFN: refusing to persist a secret-shaped cleanup receipt.");
+  }
+  await mkdir(path.dirname(artifactPath), { recursive: true });
+  const tmpPath = `${artifactPath}.tmp-${process.pid}-${randomUUID()}`;
+  try {
+    await writeFile(tmpPath, serialized, { mode: 0o600 });
+    await rename(tmpPath, artifactPath);
+  } catch (error) {
+    await rm(tmpPath, { force: true }).catch(() => undefined);
+    throw error;
+  }
+}
+
 /** Safe one-line summary for the ordinary failed-cell reason. */
 export function summarizeCfnBootstrapDiagnostic(diagnostic: CfnBootstrapDiagnostic): string {
   const observations = diagnostic.observations
@@ -940,9 +1062,35 @@ export async function uploadBundleAndPresign(input: {
   return { deployBundleUrl, deployBundleChecksumUrl, runtimeBinaryUrl, runtimeKey, bundleKey, sumsKey };
 }
 
-/** Deletes one S3 object (idempotent — an already-absent object is a clean outcome). */
-export async function deleteS3Object(exec: CfnAwsExec, region: string, bucket: string, key: string): Promise<void> {
-  await exec.run(["s3", "rm", `s3://${bucket}/${key}`, "--region", region]);
+/** Deletes one S3 object and succeeds only after an exact HEAD observes absence. */
+export async function deleteS3Object(
+  exec: CfnAwsExec,
+  region: string,
+  bucket: string,
+  key: string,
+  callTimeoutMs: number = CFN_CLEANUP_PROVIDER_CALL_TIMEOUT_MS,
+): Promise<void> {
+  if (!Number.isInteger(callTimeoutMs) || callTimeoutMs < 1) {
+    throw new Error("CFN cleanup: invalid S3 absence-observation timeout.");
+  }
+  await exec.run(["s3", "rm", `s3://${bucket}/${key}`, "--region", region], { timeoutMs: callTimeoutMs });
+  try {
+    await exec.run(
+      ["s3api", "head-object", "--bucket", bucket, "--key", key, "--region", region],
+      { timeoutMs: callTimeoutMs },
+    );
+  } catch (error) {
+    if (s3ObjectAbsentError(error)) {
+      return;
+    }
+    throw new Error("CFN cleanup: S3 absence observation failed; retaining cleanup custody.");
+  }
+  throw new Error("CFN cleanup: S3 object survived delete; retaining cleanup custody.");
+}
+
+function s3ObjectAbsentError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /(?:\b404\b|NoSuchKey|Not Found)/i.test(message);
 }
 
 // ── Candidate server-image push to GHCR ─────────────────────────────────────
@@ -1003,20 +1151,37 @@ export async function deleteGhcrPackageVersion(
   targetRepo: string,
   tag: string,
   log: (message: string) => void = () => undefined,
+  observe: {
+    attempts?: number;
+    delayMs?: number;
+    callTimeoutMs?: number;
+    sleep?: (ms: number) => Promise<void>;
+  } = {},
 ): Promise<void> {
   const { org, packageName } = parseGhcrRepo(targetRepo);
   const encodedName = encodeURIComponent(packageName);
   const listPath = `/orgs/${org}/packages/container/${encodedName}/versions`;
+  const callTimeoutMs = observe.callTimeoutMs ?? CFN_CLEANUP_PROVIDER_CALL_TIMEOUT_MS;
+  const attempts = observe.attempts ?? 6;
+  const delayMs = observe.delayMs ?? 2_000;
+  const sleep = observe.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+  if (
+    !Number.isInteger(attempts) || attempts < 1 ||
+    !Number.isInteger(delayMs) || delayMs < 0 ||
+    !Number.isInteger(callTimeoutMs) || callTimeoutMs < 1
+  ) {
+    throw new Error("CFN cleanup: invalid GHCR absence-observation bounds.");
+  }
   let raw: string;
   try {
-    raw = await gh.run(["api", "--paginate", listPath]);
+    raw = await gh.run(["api", "--paginate", listPath], { timeoutMs: callTimeoutMs });
   } catch (error) {
     if (isGhNotFound(error)) {
       return; // The package/version is already gone.
     }
     throw error;
   }
-  const versions = parseGhcrVersions(raw);
+  const versions = parseGhcrVersionsForCleanup(raw);
   const match = versions.find((version) => version.tags.includes(tag));
   if (match === undefined) {
     return; // No version carries this tag — nothing to delete (idempotent).
@@ -1037,7 +1202,69 @@ export async function deleteGhcrPackageVersion(
     );
   }
   log(`deleting GHCR package version ${match.id} (sole tag "${tag}")`);
-  await gh.run(["api", "--method", "DELETE", `/orgs/${org}/packages/container/${encodedName}/versions/${match.id}`]);
+  await gh.run(
+    ["api", "--method", "DELETE", `/orgs/${org}/packages/container/${encodedName}/versions/${match.id}`],
+    { timeoutMs: callTimeoutMs },
+  );
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    let observedRaw: string;
+    try {
+      observedRaw = await gh.run(["api", "--paginate", listPath], { timeoutMs: callTimeoutMs });
+    } catch (error) {
+      if (isGhNotFound(error)) {
+        return;
+      }
+      throw new Error("CFN cleanup: GHCR absence observation failed; retaining cleanup custody.");
+    }
+    const observed = parseGhcrVersionsForCleanup(observedRaw);
+    if (!observed.some((version) => version.tags.includes(tag))) {
+      return;
+    }
+    if (attempt < attempts && delayMs > 0) {
+      await sleep(delayMs);
+    }
+  }
+  throw new Error("CFN cleanup: GHCR run tag survived the bounded observation window; retaining cleanup custody.");
+}
+
+/** Cleanup must reject malformed/incomplete provider output rather than infer absence. */
+function parseGhcrVersionsForCleanup(raw: string): Array<{ id: number; tags: string[] }> {
+  const chunks = topLevelJsonArrays(raw);
+  if (chunks.length === 0) {
+    throw new Error("CFN cleanup: GHCR versions response was not a JSON array; absence is unproven.");
+  }
+  let remainder = raw;
+  for (const chunk of chunks) {
+    const offset = remainder.indexOf(chunk);
+    if (offset < 0 || remainder.slice(0, offset).trim().length > 0) {
+      throw new Error("CFN cleanup: GHCR versions response contained unexpected content; absence is unproven.");
+    }
+    remainder = remainder.slice(offset + chunk.length);
+  }
+  if (remainder.trim().length > 0) {
+    throw new Error("CFN cleanup: GHCR versions response contained trailing content; absence is unproven.");
+  }
+  const results: Array<{ id: number; tags: string[] }> = [];
+  for (const chunk of chunks) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(chunk);
+    } catch {
+      throw new Error("CFN cleanup: GHCR versions response was malformed; absence is unproven.");
+    }
+    if (!Array.isArray(parsed)) {
+      throw new Error("CFN cleanup: GHCR versions response was not an array; absence is unproven.");
+    }
+    for (const entry of parsed as Array<{ id?: unknown; metadata?: { container?: { tags?: unknown } } }>) {
+      const id = typeof entry.id === "number" ? entry.id : Number(entry.id);
+      const tags = entry.metadata?.container?.tags;
+      if (!Number.isFinite(id) || !Array.isArray(tags) || !tags.every((value) => typeof value === "string")) {
+        throw new Error("CFN cleanup: GHCR version entry lacked an id or authoritative tag list; absence is unproven.");
+      }
+      results.push({ id, tags });
+    }
+  }
+  return results;
 }
 
 /** Parses a (possibly `--paginate`-concatenated) GHCR versions JSON payload. */
@@ -1730,8 +1957,9 @@ export async function ssmInspectRunningImageDigest(input: {
 /**
  * The bounded, evidence-safe cleanup summary the CFN world's `close()` returns —
  * exactly the `cleanup` block of `SelfHostCfnWrapperEvidenceV1`
- * (`SelfHostCfnCleanupEvidenceBlock`). `route53RecordDeleted` RIDES the stack
- * deletion (the stack owns the record), so it equals `stackDeleted`.
+ * (`SelfHostCfnCleanupEvidenceBlock`). Provider booleans mean the releaser also
+ * observed absence: the CFN waiter observed the stack gone, S3 performed exact
+ * HEAD, GHCR relisted the run tag, and Route53 queried the exact A record.
  */
 export interface SelfHostCfnWorldCleanupEvidence {
   ledgerIdHash: string;
@@ -1756,8 +1984,8 @@ export type SelfHostCfnCleanupResourceKind = Extract<
  * needs ≥1 registered entry, all reconciled, for its boolean to be true — so an
  * incomplete/failed run can never show a fully-clean summary (mirrors the EC2
  * world's `SELFHOST_EVIDENCE_CATEGORIES` discipline). `route53RecordDeleted` is
- * NOT a category here: the record is stack-owned and its flag equals
- * `stackDeleted` (set after the run).
+ * not a ledger category: the record is stack-owned and is independently
+ * observed after the stack releaser completes.
  */
 export const SELFHOST_CFN_EVIDENCE_CATEGORIES = {
   stackDeleted: ["cloudformation_stack"],

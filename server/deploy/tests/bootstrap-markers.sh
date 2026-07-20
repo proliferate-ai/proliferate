@@ -129,6 +129,12 @@ kill -TERM "$wrapper_pid" "$bootstrap_pid" "$helper_pid" 2>/dev/null || true
 kill -KILL "$wrapper_pid" "$bootstrap_pid" "$helper_pid" 2>/dev/null || true
 wait "$wrapper_pid" 2>/dev/null || true
 for pid in "$wrapper_pid" "$bootstrap_pid" "$helper_pid"; do
+  # Grandchildren are reaped asynchronously after KILL on a loaded runner. Give
+  # the kernel/init a short bounded window before asserting no process remains.
+  for _ in $(seq 1 200); do
+    kill -0 "$pid" 2>/dev/null || break
+    sleep 0.01
+  done
   if kill -0 "$pid" 2>/dev/null; then
     printf 'timeout regression left process %s alive\n' "$pid" >&2
     exit 1

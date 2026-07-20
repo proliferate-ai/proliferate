@@ -5,7 +5,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { CLEANUP_LEDGER_FILENAME } from "../local-workspace/cleanup-ledger.js";
-import { CFN_BOOTSTRAP_DIAGNOSTIC_FILENAME } from "./cfn.js";
+import { CFN_BOOTSTRAP_DIAGNOSTIC_FILENAME, CFN_CLEANUP_RECEIPT_FILENAME } from "./cfn.js";
 
 /**
  * SHR-006: the self-host cleanup ledger must be Actions-durable — it must
@@ -163,6 +163,13 @@ test("the selfhost job's upload-artifact step path globs cover the cleanup ledge
   assert.ok(
     globs.some((glob) => uploadGlobIncludes(glob, cfnDiagnosticPath)),
     `no upload glob (${JSON.stringify(globs)}) matches the CFN diagnostic "${cfnDiagnosticPath}".`,
+  );
+
+  const cfnCleanupReceiptPath =
+    `tests/release/.output/selfhost-world/qs-ci-12345-1/1/logs/${CFN_CLEANUP_RECEIPT_FILENAME}`;
+  assert.ok(
+    globs.some((glob) => uploadGlobIncludes(glob, cfnCleanupReceiptPath)),
+    `no upload glob (${JSON.stringify(globs)}) matches the CFN cleanup receipt "${cfnCleanupReceiptPath}".`,
   );
 
   const cfnCancellationReceiptPath =

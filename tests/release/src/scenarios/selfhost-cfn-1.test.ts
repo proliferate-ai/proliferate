@@ -11,6 +11,7 @@ import {
   cleanupIsClean,
   constructSelfHostCfnWorld,
   registerSelfHostCfnCancellationFinalizer,
+  rethrowCfnConstructionFailureAfterCleanup,
   resolveCfnWorldInputs,
   runCfnWrapperCell,
   runSelfHostCfnCells,
@@ -30,6 +31,7 @@ import {
 } from "../evidence/schema.js";
 import type { SelfHostCfnWorldCleanupEvidence } from "../worlds/selfhost/cfn.js";
 import {
+  CFN_CLEANUP_RECEIPT_FILENAME,
   SelfHostCfnCleanupStack,
   buildCfnStackTags,
   createCfnStackAndWait,
@@ -453,6 +455,76 @@ test("SIGTERM during retained-stack diagnostics initiates one bounded delete and
     releaseCapture?.();
     await rm(parentDir, { recursive: true, force: true });
   }
+});
+
+test("normal CFN finalization retains identity-bound zero-survivor truth after deleting its ledger", async () => {
+  for (const route53Absent of [true, false]) {
+    const parentDir = await mkdtemp(path.join(os.tmpdir(), "selfhost-cfn-cleanup-receipt-"));
+    const cfnDir = path.join(parentDir, "cfn");
+    const artifactsDir = path.join(cfnDir, "artifacts");
+    await mkdir(artifactsDir, { recursive: true });
+    const run = fakeCtx().runIdentity!;
+    const ledger = await openCleanupLedger({
+      runDir: cfnDir,
+      runId: run.run_id,
+      shardId: run.shard_id,
+    });
+    const stack = new SelfHostCfnCleanupStack({
+      ledger,
+      observeRoute53RecordAbsent: async () => route53Absent,
+    });
+    const finalizer = registerSelfHostCfnCancellationFinalizer(stack, run, cfnDir);
+    await stack.registerAcquire("run_directory", cfnDir, () => rm(cfnDir, { recursive: true, force: true }));
+    await stack.registerAcquire("extracted_artifacts", artifactsDir, async () => undefined);
+    await stack.registerAcquire("s3_object", "s3://bucket/key", async () => undefined);
+    await stack.registerAcquire("ghcr_package_version", "ghcr.io/o/p:tag", async () => undefined);
+    await stack.registerAcquire("cloudformation_stack", "provider-stack-unique", async () => undefined);
+
+    try {
+      const summary = await finalizer.run();
+      assert.equal(summary.route53RecordDeleted, route53Absent);
+      await assert.rejects(readFile(path.join(cfnDir, CLEANUP_LEDGER_FILENAME)), /ENOENT/);
+
+      const receiptPath = path.join(parentDir, "logs", CFN_CLEANUP_RECEIPT_FILENAME);
+      const receiptRaw = await readFile(receiptPath, "utf8");
+      const receipt = JSON.parse(receiptRaw) as {
+        run: { run_id: string; shard_id: string; attempt: number; source_sha: string };
+        status: string;
+        cleanup: { route53_record_deleted: boolean; stack_deleted: boolean; failed: number };
+      };
+      assert.deepEqual(receipt.run, {
+        run_id: run.run_id,
+        shard_id: run.shard_id,
+        attempt: run.attempt,
+        source_sha: run.source_sha,
+      });
+      assert.equal(receipt.status, route53Absent ? "reconciled" : "failed");
+      assert.equal(receipt.cleanup.stack_deleted, true);
+      assert.equal(receipt.cleanup.route53_record_deleted, route53Absent);
+      assert.equal(receipt.cleanup.failed, 0);
+      assert.doesNotMatch(receiptRaw, /s3:\/\/bucket|ghcr\.io|provider-stack-unique|providerId/);
+    } finally {
+      await rm(parentDir, { recursive: true, force: true });
+    }
+  }
+});
+
+test("construction failure preserves its cause but fails closed when cleanup proof is absent", async () => {
+  const original = new Error("stack CREATE_FAILED");
+  await assert.rejects(
+    rethrowCfnConstructionFailureAfterCleanup(original, async () => cleanCleanup()),
+    (error: unknown) => error === original,
+  );
+  await assert.rejects(
+    rethrowCfnConstructionFailureAfterCleanup(original, async () => dirtyCleanup()),
+    /Cleanup did not prove zero survivors/,
+  );
+  await assert.rejects(
+    rethrowCfnConstructionFailureAfterCleanup(original, async () => {
+      throw new Error("receipt write failed");
+    }),
+    /identity-bound receipt could be retained/,
+  );
 });
 
 // ── Build / close failure semantics ───────────────────────────────────────────
