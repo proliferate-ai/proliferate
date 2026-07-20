@@ -725,16 +725,37 @@ export function parseCfnBootstrapDiagnosticOutput(raw: string): CfnBootstrapDiag
       const priorCategory = current.category;
       const category =
         lineCategory === "command_failed" && priorCategory !== "other" ? priorCategory : lineCategory;
+      const preservedExitCode =
+        namedTerminalFailure &&
+        exitCode === null &&
+        current.outcome === "failed" &&
+        current.exit_code !== null &&
+        current.exit_code !== 0
+          ? current.exit_code
+          : exitCode;
       stages.set(stage, {
         source,
         stage,
         substep: null,
         outcome: "failed",
-        exit_code: exitCode,
+        exit_code: preservedExitCode,
         category,
         order,
         terminal: true,
       });
+      continue;
+    }
+
+    // A later bounded context token may refine only a generic, already-failed
+    // stage. Never change an outcome/exit code and never replace one specific
+    // allowlisted category with another token observed later in the log.
+    if (
+      current.outcome === "failed" &&
+      current.category === "command_failed" &&
+      lineCategory !== "command_failed" &&
+      lineCategory !== "other"
+    ) {
+      stages.set(stage, { ...current, category: lineCategory });
       continue;
     }
 

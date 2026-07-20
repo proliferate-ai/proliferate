@@ -470,6 +470,64 @@ test("CFN-DIAG-CONTROL-002: multibyte context cannot truncate fixed outer/subste
   }
 });
 
+test("CFN-DIAG-CONTROL-003: named failure preserves exit code and bounded context refines category", async () => {
+  const logDirectory = await mkdtemp(path.join(tmpdir(), "cfn-diagnostic-terminal-failure-"));
+  const rawSecretLine =
+    "Exited with error code 17: curl download https://private.invalid/?X-Amz-Signature=deadbeef Bearer eyJsecret permission denied";
+
+  try {
+    await writeFile(path.join(logDirectory, "cloud-init-output.log"), "");
+    await writeFile(path.join(logDirectory, "cfn-init-cmd.log"), "");
+    await writeFile(
+      path.join(logDirectory, "cfn-init.log"),
+      [
+        "Running Command 01-daemon-reload",
+        "Command 01-daemon-reload succeeded",
+        "Command 01-daemon-reload output: curl download",
+        "Running Command 02-bootstrap",
+        rawSecretLine,
+        "Command 02-bootstrap failed",
+        "Running Command 03-enable-cfn-hup",
+        "Command 03-enable-cfn-hup output: curl download",
+      ].join("\n"),
+    );
+
+    const command = buildCfnDiagnosticCommand({ logDirectory, elevated: false });
+    const { stdout } = await execFileAsync("bash", ["-c", command], {
+      encoding: "utf8",
+      maxBuffer: 1024 * 1024,
+    });
+    const parsed = parseCfnBootstrapDiagnosticOutput(stdout);
+    const bootstrap = parsed.observations.find(
+      (item) => item.stage === "02-bootstrap" && item.substep === null,
+    );
+    assert.deepEqual(bootstrap, {
+      source: "cfn-init.log",
+      stage: "02-bootstrap",
+      substep: null,
+      outcome: "failed",
+      exit_code: 17,
+      category: "download",
+    });
+    assert.equal(
+      parsed.observations.find((item) => item.stage === "01-daemon-reload")?.outcome,
+      "completed",
+      "context cannot change a completed outcome",
+    );
+    assert.equal(
+      parsed.observations.find((item) => item.stage === "03-enable-cfn-hup")?.outcome,
+      "started",
+      "context cannot change a started outcome",
+    );
+    for (const raw of ["https://", "X-Amz-Signature", "deadbeef", "Bearer", "eyJsecret", rawSecretLine]) {
+      assert.equal(stdout.includes(raw), false, `bounded command leaked ${raw}`);
+      assert.equal(JSON.stringify(parsed).includes(raw), false, `parsed diagnostic leaked ${raw}`);
+    }
+  } finally {
+    await rm(logDirectory, { recursive: true, force: true });
+  }
+});
+
 test("parseGhcrVersions + ghcrVersionIdForTag: finds the version whose tags include the run tag", () => {
   const page1 = JSON.stringify([
     { id: 11, metadata: { container: { tags: ["stable"] } } },
