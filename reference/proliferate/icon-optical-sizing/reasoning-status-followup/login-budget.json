@@ -14,7 +14,7 @@
       "GET /auth/sso/discover -> 200 { enabled: false }"
     ]
   },
-  "testedSha": "dc0b14fed1996d9cf689036e606fcddb29e676a7",
+  "testedSha": "8e0bc1157468ef6ce7bec07df6327cba95611247",
   "base": "/login",
   "compressionMetric": "gzip (Node zlib, level 9) for js/css/svg/other; emitted bytes for fonts/images/audio",
   "caps": {
@@ -29,29 +29,29 @@
     "note": "recorded context; the enforceable gate is the founder caps above"
   },
   "perKind": {
-    "js": 482284,
-    "css": 65894
+    "js": 482285,
+    "css": 65844
   },
-  "total": 548178,
-  "jsBytes": 482284,
-  "cssBytes": 65894,
+  "total": 548129,
+  "jsBytes": 482285,
+  "cssBytes": 65844,
   "headroom": {
-    "js": 2716,
-    "css": 106
+    "js": 2715,
+    "css": 156
   },
   "unexpectedCrossOrigin": [],
   "pass": true,
   "violations": [],
   "files": [
     {
-      "path": "/assets/index-DHWSG-b3.js",
+      "path": "/assets/index-DwdAsCR9.js",
       "kind": "js",
-      "bytes": 482284
+      "bytes": 482285
     },
     {
-      "path": "/assets/index-xRZyIp-1.css",
+      "path": "/assets/index-Dky0yyal.css",
       "kind": "css",
-      "bytes": 65894
+      "bytes": 65844
     }
   ],
   "rerunCommand": "pnpm shared:build && VITE_PROLIFERATE_API_BASE_URL=https://login-budget-fixture.invalid pnpm web:build && node scripts/measure-login-runtime-budget.mjs --no-build"
