@@ -270,6 +270,7 @@ function ModelPickerGroup({
             key={model.modelId}
             ref={(element: HTMLButtonElement | null) => setRowRef(rowKey, element)}
             data-model-option={model.modelId}
+            data-model-kind={group.kind}
             data-model-selected={model.isSelected ? "true" : "false"}
             aria-selected={isHighlighted}
             onMouseEnter={() => onHighlight(rowKey)}
