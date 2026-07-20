@@ -12,6 +12,7 @@ CURL_MAX_TIME_SECONDS="${PROLIFERATE_HEALTHCHECK_MAX_TIME_SECONDS:-5}"
 TARGET_TIMEOUT_SECONDS="${PROLIFERATE_HEALTHCHECK_TIMEOUT_SECONDS:-}"
 HEALTH_DEADLINE_EPOCH_SECONDS="${PROLIFERATE_HEALTHCHECK_DEADLINE_EPOCH_SECONDS:-}"
 HEALTH_PROGRESS_FILE="${PROLIFERATE_HEALTHCHECK_PROGRESS_FILE:-}"
+SKIP_PUBLIC="${PROLIFERATE_HEALTHCHECK_SKIP_PUBLIC:-false}"
 COMPOSE_FILE="${PROLIFERATE_COMPOSE_FILE:-$SCRIPT_DIR/docker-compose.production.yml}"
 SETUP_TOKEN_PATH="${PROLIFERATE_SETUP_TOKEN_PATH:-/var/lib/proliferate/setup/setup-token}"
 
@@ -32,6 +33,13 @@ require_nonnegative_integer PROLIFERATE_HEALTHCHECK_ATTEMPTS "$MAX_ATTEMPTS"
 require_nonnegative_integer PROLIFERATE_HEALTHCHECK_SLEEP_SECONDS "$SLEEP_SECONDS"
 require_nonnegative_integer PROLIFERATE_HEALTHCHECK_CONNECT_TIMEOUT_SECONDS "$CURL_CONNECT_TIMEOUT_SECONDS"
 require_nonnegative_integer PROLIFERATE_HEALTHCHECK_MAX_TIME_SECONDS "$CURL_MAX_TIME_SECONDS"
+case "$SKIP_PUBLIC" in
+  true|false) ;;
+  *)
+    echo "PROLIFERATE_HEALTHCHECK_SKIP_PUBLIC must be true or false; got '$SKIP_PUBLIC'." >&2
+    exit 1
+    ;;
+esac
 # Canonicalize decimal strings before bash arithmetic (for example, user input
 # `08` must not be interpreted as an invalid octal literal).
 MAX_ATTEMPTS=$((10#$MAX_ATTEMPTS))
@@ -258,13 +266,13 @@ $RUNTIME_ENV_FILE -f $COMPOSE_FILE exec api cat $SETUP_TOKEN_PATH"
   echo "until the instance is claimed."
 }
 
-if [[ -z "$PUBLIC_HEALTHCHECK_URL" ]]; then
+if [[ "$SKIP_PUBLIC" == "false" && -z "$PUBLIC_HEALTHCHECK_URL" ]]; then
   PUBLIC_HEALTHCHECK_URL="$(read_env_value "$RUNTIME_ENV_FILE" PROLIFERATE_PUBLIC_HEALTHCHECK_URL)"
 fi
 
 wait_for_url local "$HEALTHCHECK_URL"
 
-if [[ -n "$PUBLIC_HEALTHCHECK_URL" ]]; then
+if [[ "$SKIP_PUBLIC" == "false" && -n "$PUBLIC_HEALTHCHECK_URL" ]]; then
   wait_for_url public "$PUBLIC_HEALTHCHECK_URL"
 fi
 

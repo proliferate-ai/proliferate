@@ -326,11 +326,11 @@ Resources:
     Properties:
       Roles: [!Ref ProliferateIamRole]
 
-  ProliferateBootstrapWaitHandle:
-    Type: AWS::CloudFormation::WaitConditionHandle
-
   ProliferateInstance:
     Type: AWS::EC2::Instance
+    CreationPolicy:
+      ResourceSignal:
+        Timeout: PT20M
     Metadata:
       AWS::CloudFormation::Init:
         configSets:
@@ -555,7 +555,7 @@ Resources:
 
           # Do not enable `errexit` here. A failed or overlong cfn-init must
           # still reach cfn-signal so CloudFormation reports the bounded
-          # stage/exit reason before the 20-minute bootstrap wait expires.
+          # stage/exit reason before the 20-minute CreationPolicy expires.
           EXIT_CODE=0
           FAILURE_REASON="CloudFormation bootstrap completed."
           dnf install -y aws-cfn-bootstrap || {
@@ -563,11 +563,10 @@ Resources:
             FAILURE_REASON="aws-cfn-bootstrap installation failed with exit code $EXIT_CODE."
           }
           if [ "$EXIT_CODE" -eq 0 ]; then
-            # Give the final health gate an explicit deadline one minute before
-            # the cfn-init wrapper deadline. Its individual curl attempts are
-            # bounded too, so an unresponsive TLS peer cannot consume the whole
-            # CloudFormation creation envelope without a terminal marker.
-            export PROLIFERATE_HEALTHCHECK_ATTEMPTS=210
+            # CreationPolicy owns host bootstrap and local API readiness. The
+            # separate update-aware public-health custom resource runs only
+            # after the instance can unblock its EIP/DNS dependencies.
+            export PROLIFERATE_HEALTHCHECK_SKIP_PUBLIC=true
             export PROLIFERATE_HEALTHCHECK_DEADLINE_EPOCH_SECONDS="$(( $(date +%s) + 17 * 60 ))"
             timeout --signal=TERM --kill-after=30s 18m /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource ProliferateInstance --region ${AWS::Region} --configsets bootstrap || {
               EXIT_CODE=$?
@@ -584,16 +583,7 @@ Resources:
             }
           fi
           if [ -x /opt/aws/bin/cfn-signal ]; then
-            # The wait handle is a presigned bearer URL. Disable xtrace before
-            # CloudFormation substitutes it into this command so it never
-            # enters cloud-init logs.
-            set +x
-            /opt/aws/bin/cfn-signal -e "$EXIT_CODE" --reason "$FAILURE_REASON" '${ProliferateBootstrapWaitHandle}'
-            SIGNAL_EXIT_CODE=$?
-            set -x
-            if [ "$SIGNAL_EXIT_CODE" -ne 0 ] && [ "$EXIT_CODE" -eq 0 ]; then
-              EXIT_CODE="$SIGNAL_EXIT_CODE"
-            fi
+            /opt/aws/bin/cfn-signal -e "$EXIT_CODE" --reason "$FAILURE_REASON" --stack ${AWS::StackName} --resource ProliferateInstance --region ${AWS::Region}
           else
             echo "cfn-signal is unavailable; bootstrap exit code $EXIT_CODE." >&2
           fi
@@ -613,17 +603,112 @@ Resources:
             - !Ref ProliferateEip
             - !GetAtt ProliferateInstance.PublicIp
 
-  # Keep stack creation fail-closed on bootstrap without holding the EC2
-  # resource in CREATE_IN_PROGRESS. The instance may therefore complete and
-  # allow its EIP association/DNS resources to converge while UserData waits
-  # for the real public HTTPS endpoint, then this independent condition makes
-  # the bootstrap signal authoritative for the overall stack.
-  ProliferateBootstrapWaitCondition:
-    Type: AWS::CloudFormation::WaitCondition
-    DependsOn: ProliferateInstance
+  ProliferatePublicHealthRole:
+    Type: AWS::IAM::Role
     Properties:
-      Handle: !Ref ProliferateBootstrapWaitHandle
-      Timeout: "1200"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+
+  ProliferatePublicHealthFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.13
+      Handler: index.handler
+      Role: !GetAtt ProliferatePublicHealthRole.Arn
+      Timeout: 450
+      MemorySize: 128
+      Code:
+        ZipFile: |
+          import json
+          import time
+          import urllib.request
+
+          HEALTH_TIMEOUT_SECONDS = 420
+          REQUEST_TIMEOUT_SECONDS = 5
+          RETRY_SLEEP_SECONDS = 2
+
+          def send_response(event, status, reason):
+              body = json.dumps({
+                  "Status": status,
+                  "Reason": reason,
+                  "PhysicalResourceId": event.get("PhysicalResourceId", "ProliferatePublicHealth"),
+                  "StackId": event["StackId"],
+                  "RequestId": event["RequestId"],
+                  "LogicalResourceId": event["LogicalResourceId"],
+              }).encode("utf-8")
+              request = urllib.request.Request(
+                  event["ResponseURL"],
+                  data=body,
+                  method="PUT",
+                  headers={"content-type": "", "content-length": str(len(body))},
+              )
+              urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT_SECONDS).read()
+
+          def public_health_ready(url):
+              deadline = time.monotonic() + HEALTH_TIMEOUT_SECONDS
+              while True:
+                  remaining = deadline - time.monotonic()
+                  if remaining <= 0:
+                      return False
+                  try:
+                      request = urllib.request.Request(url, method="GET")
+                      with urllib.request.urlopen(
+                          request,
+                          timeout=min(REQUEST_TIMEOUT_SECONDS, remaining),
+                      ) as response:
+                          if 200 <= response.status < 300:
+                              return True
+                  except Exception:
+                      pass
+                  remaining = deadline - time.monotonic()
+                  if remaining <= 0:
+                      return False
+                  time.sleep(min(RETRY_SLEEP_SECONDS, remaining))
+
+          def handler(event, context):
+              if event.get("RequestType") == "Delete":
+                  send_response(event, "SUCCESS", "Public health gate deleted.")
+                  return
+              url = event.get("ResourceProperties", {}).get("HealthUrl", "")
+              if not isinstance(url, str) or not url.startswith("https://") or not url.endswith("/health"):
+                  send_response(event, "FAILED", "Public health URL contract is invalid.")
+                  return
+              if public_health_ready(url):
+                  send_response(event, "SUCCESS", "Public HTTPS health is ready.")
+                  return
+              send_response(event, "FAILED", "Public HTTPS health did not become ready inside the bounded window.")
+
+  # This resource is invoked on CREATE and whenever InstanceGeneration changes
+  # (including a latest-AMI replacement). Conditional Ref properties also make
+  # it wait for the selected EIP association and Route53 record before probing.
+  ProliferatePublicHealth:
+    Type: AWS::CloudFormation::CustomResource
+    Properties:
+      ServiceToken: !GetAtt ProliferatePublicHealthFunction.Arn
+      ServiceTimeout: "460"
+      HealthUrl: !Sub
+        - https://${ResolvedSiteAddress}/health
+        - ResolvedSiteAddress: !If
+            - UsesSslipFallback
+            - !If
+                - UsesElasticIp
+                - !Join ["", [!Ref ProliferateEip, ".sslip.io"]]
+                - !Join ["", [!GetAtt ProliferateInstance.PublicIp, ".sslip.io"]]
+            - !Ref SiteAddress
+      InstanceGeneration: !Sub ${ProliferateInstance}:${ReleaseVersion}
+      EipAssociationReady: !If
+        - UsesElasticIp
+        - !Ref ProliferateEipAssociation
+        - !Ref AWS::NoValue
+      DnsRecordReady: !If
+        - CreatesRoute53Record
+        - !Ref ProliferateDnsRecord
+        - !Ref AWS::NoValue
 
 Outputs:
   BaseUrl:

@@ -524,23 +524,37 @@ grep -q "DeployBundleUrl" "$AWS_TEMPLATE" && ok "template exposes DeployBundleUr
 grep -Fq 'PROLIFERATE_HEALTHCHECK_DEADLINE_EPOCH_SECONDS="$(( $(date +%s) + 17 * 60 ))"' "$AWS_TEMPLATE" \
   && ok "template health deadline leaves one minute for cfn-init unwind and cfn-signal" \
   || no "template health gate must terminate inside the unchanged 18-minute cfn-init wrapper"
-grep -Fq 'export PROLIFERATE_HEALTHCHECK_ATTEMPTS=210' "$AWS_TEMPLATE" \
-  && ok "template gives cold public TLS readiness the bounded seven-minute retry budget" \
-  || no "template must widen public TLS readiness beyond the two-minute script default"
+grep -Fq 'export PROLIFERATE_HEALTHCHECK_SKIP_PUBLIC=true' "$AWS_TEMPLATE" \
+  && ok "template lets CreationPolicy prove local health before dependent public networking" \
+  || no "template must split local bootstrap from the update-aware public health gate"
 if awk '
   /^  ProliferateInstance:/ { in_instance = 1; next }
   in_instance && /^  [A-Za-z0-9]+:/ { exit }
   in_instance && /CreationPolicy:/ { found = 1 }
   END { exit found ? 0 : 1 }
 ' "$AWS_TEMPLATE"; then
-  no "template instance still waits on its own bootstrap and deadlocks EIP association"
+  ok "template preserves replacement-safe EC2 CreationPolicy signaling"
 else
-  ok "template instance completion no longer blocks EIP association on bootstrap"
+  no "template must keep bootstrap fail-closed across EC2 replacements"
 fi
-grep -A6 '^  ProliferateBootstrapWaitCondition:' "$AWS_TEMPLATE" | grep -Fq 'DependsOn: ProliferateInstance' \
-  && grep -A6 '^  ProliferateBootstrapWaitCondition:' "$AWS_TEMPLATE" | grep -Fq 'Timeout: "1200"' \
-  && ok "template keeps bootstrap authoritative through an independent bounded wait condition" \
-  || no "template missing the independent 20-minute bootstrap wait condition"
+grep -A30 '^  ProliferatePublicHealth:' "$AWS_TEMPLATE" | grep -Fq 'InstanceGeneration: !Sub ${ProliferateInstance}:${ReleaseVersion}' \
+  && grep -A30 '^  ProliferatePublicHealth:' "$AWS_TEMPLATE" | grep -Fq 'EipAssociationReady: !If' \
+  && grep -A30 '^  ProliferatePublicHealth:' "$AWS_TEMPLATE" | grep -Fq 'DnsRecordReady: !If' \
+  && grep -A30 '^  ProliferatePublicHealth:' "$AWS_TEMPLATE" | grep -Fq 'ServiceTimeout: "460"' \
+  && ok "template gates create and replacement updates on bounded public HTTPS health" \
+  || no "template missing the update-aware public HTTPS custom resource contract"
+
+public_health_handler="$SCRATCH/public-health-handler.py"
+awk '
+  /ZipFile: \|/ { in_handler = 1; next }
+  in_handler && /^  ProliferatePublicHealth:/ { exit }
+  in_handler { sub(/^          /, ""); print }
+' "$AWS_TEMPLATE" >"$public_health_handler"
+if python3 "$TESTS_DIR/public-health-custom-resource.py" "$public_health_handler"; then
+  ok "template public-health handler is bounded, update-aware, and secret-free"
+else
+  no "template public-health handler contract regressed"
+fi
 
 # Execute the template's exact UserData body with fake cfn tools. The failure
 # path must preserve cfn-init's exit code and invoke cfn-signal with a bounded,
@@ -558,7 +572,6 @@ awk '
       -e 's|timeout --signal=TERM --kill-after=30s 18m|"$FAKE_CFN_BIN/timeout"|g' \
       -e 's|${AWS::StackName}|test-stack|g' \
       -e 's|${AWS::Region}|us-east-1|g' \
-      -e 's|${ProliferateBootstrapWaitHandle}|https://wait.example.invalid/handle?sig=test|g' \
   >"$user_data"
 
 FAKE_CFN_BIN="$SCRATCH/fake-cfn-bin"
@@ -588,28 +601,23 @@ EOF
 chmod +x "$FAKE_CFN_BIN/dnf" "$FAKE_CFN_BIN/cfn-init" "$FAKE_CFN_BIN/timeout" "$FAKE_CFN_BIN/cfn-signal"
 
 signal_args="$SCRATCH/cfn-signal.args"
-user_data_log="$SCRATCH/cfn-user-data.log"
 FAKE_CFN_BIN="$FAKE_CFN_BIN" FAKE_CFN_INIT_EXIT=23 CFN_SIGNAL_ARGS_FILE="$signal_args" \
-  bash "$user_data" >"$user_data_log" 2>&1
+  bash "$user_data" >/dev/null 2>&1
 user_data_status=$?
 [[ "$user_data_status" -eq 23 ]] && ok "template UserData preserves failed cfn-init exit code" || no "template UserData returned $user_data_status instead of cfn-init exit 23"
 grep -qx -- '-e' "$signal_args" \
   && grep -qx -- '23' "$signal_args" \
   && grep -qx -- 'cfn-init bootstrap failed with exit code 23; inspect .bootstrap-progress.log and cfn-init logs through SSM.' "$signal_args" \
-  && grep -Fqx -- 'https://wait.example.invalid/handle?sig=test' "$signal_args" \
+  && grep -qx -- '--resource' "$signal_args" \
+  && grep -qx -- 'ProliferateInstance' "$signal_args" \
   && ok "template UserData failure invokes cfn-signal with bounded diagnostics" \
   || no "template UserData failure did not invoke cfn-signal with the expected bounded reason"
-if grep -Fq 'wait.example.invalid' "$user_data_log"; then
-  no "template UserData leaked its presigned bootstrap wait handle through xtrace"
-else
-  ok "template UserData keeps its presigned bootstrap wait handle out of xtrace"
-fi
 
 timeout_signal_args="$SCRATCH/cfn-timeout-signal.args"
 FAKE_CFN_BIN="$FAKE_CFN_BIN" FAKE_TIMEOUT_EXIT=124 CFN_SIGNAL_ARGS_FILE="$timeout_signal_args" \
   bash "$user_data" >/dev/null 2>&1
 user_data_status=$?
-[[ "$user_data_status" -eq 124 ]] && ok "template UserData bounds an overlong cfn-init before the bootstrap wait timeout" || no "template UserData returned $user_data_status instead of timeout exit 124"
+[[ "$user_data_status" -eq 124 ]] && ok "template UserData bounds an overlong cfn-init before the CreationPolicy timeout" || no "template UserData returned $user_data_status instead of timeout exit 124"
 grep -qx -- 'cfn-init bootstrap exceeded the 18-minute limit; inspect .bootstrap-progress.log and cfn-init logs through SSM.' "$timeout_signal_args" \
   && ok "template UserData timeout invokes cfn-signal with bounded diagnostics" \
   || no "template UserData timeout did not invoke cfn-signal with the expected bounded reason"
@@ -653,7 +661,6 @@ EOF
           -e 's|timeout --signal=TERM --kill-after=30s 18m|timeout --signal=TERM --kill-after=0.2s 0.2s|g' \
           -e 's|${AWS::StackName}|test-stack|g' \
           -e 's|${AWS::Region}|us-east-1|g' \
-          -e 's|${ProliferateBootstrapWaitHandle}|https://wait.example.invalid/handle?sig=test|g' \
       >"$hard_deadline_user_data"
 
     hard_deadline_signal_args="$SCRATCH/cfn-hard-deadline-signal.args"

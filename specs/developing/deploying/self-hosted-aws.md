@@ -56,24 +56,28 @@ respond.
 
 The instance gives `cfn-init` an 18-minute inner deadline, followed by a
 30-second forced-kill fallback if it does not stop on `TERM`, and always reports
-its bootstrap exit status through `cfn-signal`. The signal targets a separate
-20-minute CloudFormation wait condition rather than the EC2 resource itself.
-That lets the instance reach `CREATE_COMPLETE` so its Elastic IP association
-and DNS can converge while bootstrap waits for the real public endpoint; the
-stack still cannot complete without a successful bootstrap signal. The
-presigned wait-handle URL is substituted only while shell xtrace is disabled.
-A failed or overlong bootstrap therefore puts only a bounded stage and
-exit-code reason in the stack event. Inspect
+its bootstrap and local API status through the EC2 resource's 20-minute
+CreationPolicy. Keeping that resource signal preserves fail-closed behavior
+when a latest-AMI or network change replaces the instance. Once the instance is
+locally ready, its Elastic IP association and DNS can converge. A separate
+Lambda-backed CloudFormation custom resource then probes the advertised public
+HTTPS `/health` endpoint for up to seven minutes. Its instance/release
+generation property changes on replacements and release updates, so both stack
+creation and updates remain gated on external public readiness. The probe role
+has no data-plane permissions or logging policy, and its CloudFormation response
+contains only fixed success/failure reasons. A failed or overlong host bootstrap
+therefore puts only a bounded stage and exit-code reason in the stack event.
+Inspect
 `/var/log/cfn-init.log` and `/var/log/cfn-init-cmd.log` through SSM for host-local
 detail rather than copying those potentially secret-bearing logs into
 CloudFormation events.
 
-The health gate receives a deadline one minute inside that 18-minute wrapper,
-uses the installer's bounded 210-attempt cold-TLS budget, and bounds every
-`curl` connect and total request. It therefore either finishes inside the
-existing creation envelope or returns control for `cfn-signal`; one
-unresponsive TLS request cannot consume the outer timeout. Its owner-only
-progress record distinguishes the local API and public HTTPS targets with fixed
+The host-local health gate receives a deadline one minute inside that 18-minute
+wrapper and bounds every `curl` connect and total request. The CloudFormation
+path explicitly skips its public target until after CreationPolicy completes;
+the update-aware external gate owns the public retry budget instead. Manual and
+direct-installer paths continue to check both targets. The owner-only host
+progress record distinguishes the targets it runs with fixed
 started/completed/failed tokens, without recording either URL.
 
 `bootstrap.sh` initializes its owner-only
