@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "kind": "proliferate.qualification-world-scenario-inventory",
+  "worlds": {
+    "local": {
+      "runtime_lane": "local",
+      "scenario_ids": [
+        "LOCAL-WORLD-SMOKE-1",
+        "T3-WT-1",
+        "T3-REPO-1",
+        "T3-CHAT-1",
+        "T3-AUTHROUTE-1",
+        "T3-CFG-1",
+        "T3-SESSION-1",
+        "T3-INT-1"
+      ]
+    }
+  }
+}

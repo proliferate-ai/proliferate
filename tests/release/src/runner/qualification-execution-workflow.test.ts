@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
@@ -21,6 +22,18 @@ function job(source: string, id: string): string {
   const nextJob = /^  [a-zA-Z0-9_-]+:\s*$/m.exec(remainder);
   const end = nextJob?.index === undefined ? undefined : start + id.length + 3 + nextJob.index;
   return source.slice(start, end);
+}
+
+function makeTarget(name: string): string {
+  const startMatch = new RegExp(`^${name}:\\s*$`, "m").exec(makefile);
+  assert.ok(startMatch?.index !== undefined, `missing Make target ${name}`);
+  const start = startMatch.index;
+  const remainder = makefile.slice(start + startMatch[0].length);
+  const nextTarget = /^[-A-Za-z0-9_.]+:\s*$/m.exec(remainder);
+  const end = nextTarget?.index === undefined
+    ? undefined
+    : start + startMatch[0].length + nextTarget.index;
+  return makefile.slice(start, end);
 }
 
 test("release qualification has stable independent concurrency groups by world", () => {
@@ -85,6 +98,104 @@ test("the manual local world builds and publishes once, then reuses exact candid
   assert.match(local, /local-world-ports\.json/);
   assert.match(local, /\/artifacts\//);
   assert.doesNotMatch(release, /^  release-e2e-local-world-smoke:/m);
+});
+
+test("the manual local world preserves the typed agent selector through preflight and execution", () => {
+  const local = job(release, "release-e2e-local-functional");
+  const preflight = local.slice(0, local.indexOf("pnpm/action-setup"));
+  const execution = local.slice(local.indexOf("Build once, run the smoke"));
+
+  assert.match(preflight, /AGENTS_INPUT: \$\{\{ inputs\.agents \}\}/);
+  assert.match(preflight, /--agents "\$\{AGENTS_INPUT\}"/);
+  assert.match(preflight, /BEHAVIOR_INPUT: \$\{\{ inputs\.local_functional_behavior \}\}/);
+  assert.match(preflight, /--behavior "\$\{BEHAVIOR_INPUT\}"/);
+  assert.match(execution, /AGENTS: \$\{\{ inputs\.agents \}\}/);
+  assert.match(execution, /BEHAVIOR: \$\{\{ inputs\.local_functional_behavior \}\}/);
+  assert.doesNotMatch(local, /github\.event\.inputs\.agents \|\|/);
+});
+
+test("the real Local Make entrypoints pass matching selectors through their mandatory preflights", () => {
+  const smokeTarget = makeTarget("qualification-local-workspace");
+  const functionalTarget = makeTarget("qualification-local-functional");
+  assert.equal((smokeTarget.match(/--agents claude --behavior "\$\(BEHAVIOR\)"/g) ?? []).length, 2);
+  assert.equal((functionalTarget.match(/--agents "\$\(AGENTS\)" --behavior "\$\(BEHAVIOR\)"/g) ?? []).length, 2);
+  assert.equal((smokeTarget.match(/--qualification-world local/g) ?? []).length, 1);
+  assert.equal((functionalTarget.match(/--qualification-world local/g) ?? []).length, 1);
+
+  const dir = mkdtempSync(path.join(os.tmpdir(), "qualification-local-make-selectors-"));
+  try {
+    const nodeShim = path.join(dir, "node");
+    const pnpmShim = path.join(dir, "pnpm");
+    writeFileSync(
+      nodeShim,
+      [
+        "#!/bin/sh",
+        'if [ "$1" = "scripts/ci-cd/build-local-qualification-candidates.mjs" ]; then',
+        "  printf '%s\\n' '{\"candidate_build_map\":\"/tmp/fake-local-candidate-build.json\"}'",
+        "  exit 0",
+        "fi",
+        'exec "$REAL_NODE" "$@"',
+        "",
+      ].join("\n"),
+    );
+    writeFileSync(pnpmShim, "#!/bin/sh\nexit 0\n");
+    chmodSync(nodeShim, 0o755);
+    chmodSync(pnpmShim, 0o755);
+
+    const baseDir = path.join(dir, "output");
+    const env = {
+      ...process.env,
+      PATH: `${dir}:${process.env.PATH ?? ""}`,
+      REAL_NODE: process.execPath,
+      GITHUB_ACTIONS: "true",
+      AGENT_GATEWAY_LITELLM_BASE_URL: "https://admin.qualification.invalid",
+      AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL: "https://gateway.qualification.invalid",
+      AGENT_GATEWAY_LITELLM_MASTER_KEY: "test-master-secret",
+      RELEASE_E2E_INTEGRATION_NAMESPACE: "exa",
+      RELEASE_E2E_INTEGRATION_API_KEY: "test-integration-secret",
+    };
+    const smoke = spawnSync(
+      "make",
+      [
+        "qualification-local-workspace",
+        "PROFILE=selector-smoke",
+        "BEHAVIOR=strict",
+        `QUALIFICATION_LOCAL_WORLD_BASE_DIR=${baseDir}`,
+      ],
+      { cwd: REPO_ROOT, encoding: "utf8", env },
+    );
+    assert.equal(smoke.status, 0, `${smoke.stdout}\n${smoke.stderr}`);
+    const smokeReceipt = JSON.parse(
+      readFileSync(path.join(baseDir, "ql-selector-smoke", "1", "preflight", "qualification-preflight.json"), "utf8"),
+    );
+    assert.equal(smokeReceipt.verdict, "passed");
+    assert.equal(smokeReceipt.behavior, "strict");
+    assert.deepEqual(smokeReceipt.selected_scenarios, ["LOCAL-WORLD-SMOKE-1"]);
+    assert.deepEqual(smokeReceipt.selected_agents, ["claude"]);
+
+    const functional = spawnSync(
+      "make",
+      [
+        "qualification-local-functional",
+        "PROFILE=selector-functional",
+        "BEHAVIOR=strict",
+        "AGENTS=claude,codex,grok,opencode",
+        "SCENARIOS=T3-CHAT-1,T3-CFG-1,T3-INT-1",
+        `QUALIFICATION_LOCAL_WORLD_BASE_DIR=${baseDir}`,
+      ],
+      { cwd: REPO_ROOT, encoding: "utf8", env },
+    );
+    assert.equal(functional.status, 0, `${functional.stdout}\n${functional.stderr}`);
+    const functionalReceipt = JSON.parse(
+      readFileSync(path.join(baseDir, "qlf-selector-functional", "1", "preflight", "qualification-preflight.json"), "utf8"),
+    );
+    assert.equal(functionalReceipt.verdict, "passed");
+    assert.equal(functionalReceipt.behavior, "strict");
+    assert.deepEqual(functionalReceipt.selected_scenarios, ["T3-CFG-1", "T3-CHAT-1", "T3-INT-1"]);
+    assert.deepEqual(functionalReceipt.selected_agents, ["claude", "codex", "grok", "opencode"]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("the manual local world reuses candidates only after a clean smoke exit", () => {

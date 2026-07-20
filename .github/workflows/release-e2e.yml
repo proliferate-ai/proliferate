@@ -556,7 +556,9 @@ jobs:
           RELEASE_E2E_BYOK_XAI_API_KEY: ${{ secrets.RELEASE_E2E_BYOK_XAI_API_KEY }}
           RELEASE_E2E_INTEGRATION_NAMESPACE: ${{ vars.RELEASE_E2E_INTEGRATION_NAMESPACE }}
           RELEASE_E2E_INTEGRATION_API_KEY: ${{ secrets.RELEASE_E2E_INTEGRATION_API_KEY }}
-          SCENARIOS_INPUT: ${{ github.event.inputs.scenarios || 'all' }}
+          SCENARIOS_INPUT: ${{ inputs.scenarios }}
+          AGENTS_INPUT: ${{ inputs.agents }}
+          BEHAVIOR_INPUT: ${{ inputs.local_functional_behavior }}
         run: |
           node scripts/ci-cd/qualification-preflight.mjs \
             --world local \
@@ -565,6 +567,8 @@ jobs:
             --shard-id 1 \
             --attempt "${GITHUB_RUN_ATTEMPT}" \
             --scenarios "${SCENARIOS_INPUT}" \
+            --agents "${AGENTS_INPUT}" \
+            --behavior "${BEHAVIOR_INPUT}" \
             --artifact-mode build \
             --output "tests/release/.output/preflight/local/qualification-preflight.json"
       - uses: pnpm/action-setup@v6
@@ -625,9 +629,9 @@ jobs:
           # Same debug-log sibling-path convention as local-world-smoke-1
           # (outside the run dir the cleanup stack deletes on teardown).
           LOCAL_WORLD_SMOKE_DEBUG_DIR: ${{ github.workspace }}/tests/release/.output/local-world/qlf-ci-${{ github.run_id }}-${{ github.run_attempt }}/debug/logs
-          SCENARIOS: ${{ github.event.inputs.scenarios || 'all' }}
-          AGENTS: ${{ github.event.inputs.agents || 'all' }}
-          BEHAVIOR: ${{ github.event.inputs.local_functional_behavior || 'strict' }}
+          SCENARIOS: ${{ inputs.scenarios }}
+          AGENTS: ${{ inputs.agents }}
+          BEHAVIOR: ${{ inputs.local_functional_behavior }}
         run: |
           set -euo pipefail
           profile="ci-${{ github.run_id }}-${{ github.run_attempt }}"

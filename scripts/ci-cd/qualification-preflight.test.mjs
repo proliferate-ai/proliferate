@@ -2,8 +2,9 @@ import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 
 import { assembleCandidateBuildMapFromArtifacts } from "./assemble-candidate-build-map.mjs";
 import { PREFLIGHT_DEADLINE_MS, runQualificationPreflight, writePreflightReceipt } from "./qualification-preflight.mjs";
@@ -16,12 +17,23 @@ const BASE = {
   shardId: "1",
   attempt: 1,
   scenarios: "LOCAL-WORLD-SMOKE-1",
+  agents: "claude",
+  behavior: "strict",
   artifactMode: "build",
 };
 const LOCAL_ENV = {
   AGENT_GATEWAY_LITELLM_BASE_URL: "https://admin.qualification.invalid",
   AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL: "https://gateway.qualification.invalid",
   AGENT_GATEWAY_LITELLM_MASTER_KEY: "super-secret-master-value",
+};
+const FULL_LOCAL_ENV = {
+  ...LOCAL_ENV,
+  RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY: "anthropic-a-secret",
+  RELEASE_E2E_BYOK_ANTHROPIC_B_API_KEY: "anthropic-b-secret",
+  RELEASE_E2E_BYOK_OPENAI_API_KEY: "openai-secret",
+  RELEASE_E2E_BYOK_XAI_API_KEY: "xai-secret",
+  RELEASE_E2E_INTEGRATION_NAMESPACE: "exa",
+  RELEASE_E2E_INTEGRATION_API_KEY: "integration-secret",
 };
 const TEST_TLS_MATERIAL = JSON.parse(
   readFileSync(
@@ -60,6 +72,105 @@ test("secret values never enter passed or failed machine-readable evidence", () 
     const serialized = JSON.stringify(receipt);
     assert.doesNotMatch(serialized, /super-secret-master-value/);
     assert.doesNotMatch(serialized, /super-secret-url/);
+  }
+});
+
+test("strict local preflight binds an explicit four-agent selector before spend", () => {
+  const receipt = runQualificationPreflight(
+    {
+      ...BASE,
+      scenarios: "T3-CHAT-1,T3-CFG-1,T3-INT-1",
+      agents: "claude,codex,grok,opencode",
+    },
+    {
+      env: {
+        ...LOCAL_ENV,
+        RELEASE_E2E_INTEGRATION_NAMESPACE: "exa",
+        RELEASE_E2E_INTEGRATION_API_KEY: "integration-secret",
+      },
+    },
+  );
+  assert.equal(receipt.verdict, "passed");
+  assert.equal(receipt.behavior, "strict");
+  assert.deepEqual(receipt.selected_agents, ["claude", "codex", "grok", "opencode"]);
+  assert.ok(
+    receipt.checks.some(
+      (check) => check.id === "agent_catalog" && check.status === "passed" && /4 explicit/.test(check.message),
+    ),
+  );
+});
+
+test("strict local preflight rejects missing, malformed, and unknown selectors before spend", () => {
+  const invalid = [
+    [{ ...BASE, agents: undefined }, "agent_selection"],
+    [{ ...BASE, scenarios: undefined }, "scenario_selection"],
+    [{ ...BASE, scenarios: "T3-CHAT-1,T3-CHAT-1" }, "scenario_selection"],
+    [{ ...BASE, scenarios: "T3-CHAT-1,not valid!" }, "scenario_selection"],
+    [{ ...BASE, agents: "claude,claude" }, "agent_selection"],
+    [{ ...BASE, agents: "claude,not-a-shipped-agent" }, "agent_catalog"],
+  ];
+  for (const [options, failedCheckId] of invalid) {
+    const receipt = runQualificationPreflight(options, { env: LOCAL_ENV });
+    assert.equal(receipt.verdict, "failed");
+    assert.ok(receipt.checks.some((check) => check.id === failedCheckId && check.status === "failed"));
+  }
+});
+
+test("strict local preflight accepts every executable Local scenario and the all selector", () => {
+  const executable = [
+    "LOCAL-WORLD-SMOKE-1",
+    "T3-WT-1",
+    "T3-REPO-1",
+    "T3-CHAT-1",
+    "T3-AUTHROUTE-1",
+    "T3-CFG-1",
+    "T3-SESSION-1",
+    "T3-INT-1",
+  ];
+  for (const scenarios of [...executable, "all"]) {
+    const receipt = runQualificationPreflight({ ...BASE, scenarios }, { env: FULL_LOCAL_ENV });
+    assert.equal(receipt.verdict, "passed", `${scenarios}: ${JSON.stringify(receipt.checks)}`);
+    assert.ok(receipt.checks.some((check) => check.id === "scenario_catalog" && check.status === "passed"));
+  }
+});
+
+test("strict local preflight rejects manifest-known deferred and non-Local selectors before spend", () => {
+  for (const scenarios of ["T3-AUTH-1", "T3-MOBILITY-1", "T3-SH-2"]) {
+    const receipt = runQualificationPreflight({ ...BASE, scenarios }, { env: FULL_LOCAL_ENV });
+    assert.equal(receipt.verdict, "failed");
+    assert.ok(receipt.checks.some((check) => check.id === "scenario_catalog" && check.status === "failed"));
+  }
+});
+
+test("the preflight command rejects out-of-inventory Local scenarios before install/build/provider seams", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "qualification-preflight-unknown-local-"));
+  try {
+    for (const scenario of ["T3-AUTH-1", "T3-MOBILITY-1", "T3-SH-2", "T3-NOT-REAL"]) {
+      const output = path.join(dir, `${scenario}.json`);
+      const result = spawnSync(
+        process.execPath,
+        [
+          fileURLToPath(new URL("./qualification-preflight.mjs", import.meta.url)),
+          "--world", "local",
+          "--source-sha", SHA,
+          "--run-id", "ql-unknown",
+          "--shard-id", "1",
+          "--attempt", "1",
+          "--scenarios", scenario,
+          "--agents", "claude",
+          "--behavior", "strict",
+          "--artifact-mode", "build",
+          "--output", output,
+        ],
+        { encoding: "utf8", env: { ...process.env, ...FULL_LOCAL_ENV } },
+      );
+      assert.equal(result.status, 2, `${scenario}: ${result.stdout}\n${result.stderr}`);
+      const receipt = JSON.parse(readFileSync(output, "utf8"));
+      assert.equal(receipt.verdict, "failed");
+      assert.ok(receipt.checks.some((check) => check.id === "scenario_catalog" && check.status === "failed"));
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
 });
 

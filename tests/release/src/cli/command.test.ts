@@ -157,6 +157,31 @@ test("a valid supplied map is loaded after selection and before any setup side e
   assert.deepEqual(calls, ["identity", "select", "loadBuildMap", "loadLocalWorldPorts", "seed", "gateway", "envManifest", "execute", "write"]);
 });
 
+test("qualification-world scope reaches selection before any setup side effect", async () => {
+  const { deps, calls } = makeDeps();
+  let seenSelector: readonly string[] | "all" | undefined;
+  let seenWorld: string | undefined;
+  deps.selectScenarios = (selector, qualificationWorld) => {
+    calls.push("select");
+    seenSelector = selector;
+    seenWorld = qualificationWorld;
+    return [SCENARIO];
+  };
+  const exit = await runReleaseCommand(
+    [
+      "--behavior", "diagnostic",
+      "--qualification-world", "local",
+      "--scenarios", "T3-WT-1",
+      "--dry-run",
+    ],
+    deps,
+  );
+  assert.equal(exit, 0);
+  assert.deepEqual(seenSelector, ["T3-WT-1"]);
+  assert.equal(seenWorld, "local");
+  assert.deepEqual(calls.slice(0, 2), ["identity", "select"]);
+});
+
 test("an invalid supplied map exits 2 with zero setup, execution, or report side effects", async () => {
   const { deps, calls } = makeDeps();
   deps.loadBuildMap = async () => {

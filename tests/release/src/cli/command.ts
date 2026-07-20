@@ -19,6 +19,7 @@ import {
   type CandidateBuildMapV1,
 } from "../artifacts/build-map.js";
 import type { FinalCellResultV2, TestRunReportV3, TestRunReportV4 } from "../evidence/schema.js";
+import type { QualificationWorld } from "../config/types.js";
 
 /**
  * Testable command orchestration
@@ -35,7 +36,10 @@ export interface CommandDeps {
     shardId?: string;
     attempt?: number;
   }) => Promise<RunIdentityV1>;
-  selectScenarios: (selector: readonly string[] | "all") => ScenarioDefinition[];
+  selectScenarios: (
+    selector: readonly string[] | "all",
+    qualificationWorld?: QualificationWorld,
+  ) => ScenarioDefinition[];
   loadBuildMap: (path: string, expectedSourceSha: string) => Promise<CandidateBuildMapV1>;
   /**
    * Loads the `local-world-ports.json` sidecar the candidate builder wrote into
@@ -94,7 +98,7 @@ export async function runReleaseCommand(argv: readonly string[], deps: CommandDe
 
   let scenarios: ScenarioDefinition[];
   try {
-    scenarios = deps.selectScenarios(args.scenarios);
+    scenarios = deps.selectScenarios(args.scenarios, args.qualificationWorld);
     if (scenarios.length === 0) {
       throw new SelectionError("Selection resolved to zero scenarios.");
     }

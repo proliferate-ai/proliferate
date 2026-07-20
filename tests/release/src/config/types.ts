@@ -39,6 +39,14 @@ export type TargetLane = "local" | "staging" | "cloud" | "selfhost";
  */
 export type RuntimeLane = "local" | "sandbox" | "selfhost";
 
+/**
+ * A shipped qualification entrypoint's bounded executable scenario inventory.
+ * This is deliberately separate from both target and runtime lanes: other
+ * release targets also use `--lane local`, but must not inherit the Local
+ * qualification world's allowlist.
+ */
+export type QualificationWorld = "local";
+
 export const ALL_RUNTIME_LANES: readonly RuntimeLane[] = ["local", "sandbox", "selfhost"];
 
 export type DesktopMode = "web" | "native";
@@ -55,4 +63,11 @@ export function parseDesktopMode(value: string): DesktopMode {
     return value;
   }
   throw new Error(`--desktop must be "web" or "native", got "${value}"`);
+}
+
+export function parseQualificationWorld(value: string): QualificationWorld {
+  if (value === "local") {
+    return value;
+  }
+  throw new Error(`--qualification-world must be "local", got "${value}"`);
 }

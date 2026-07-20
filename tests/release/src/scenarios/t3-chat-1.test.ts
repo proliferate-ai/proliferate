@@ -33,6 +33,13 @@ test("explicit --agents selection produces one cell per selected harness", async
   );
 });
 
+test("the explicit strict qualification selector expands exactly the four supported agent cells", async () => {
+  const selected = ["claude", "codex", "grok", "opencode"];
+  const specs = await chatCellSpecs(selected);
+  assert.equal(specs.length, 4);
+  assert.deepEqual(specs.map((spec) => spec.dimensions.harness), selected);
+});
+
 test("T3-CHAT-1 --agents all plans every catalog harness exactly once per lane", async () => {
   const expected = await catalogKinds();
   const cells = await buildPlannedCells([t3Chat1], { desktop: "web", agents: ["all"] });

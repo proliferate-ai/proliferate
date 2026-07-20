@@ -1,4 +1,6 @@
 import type { ScenarioDefinition } from "./types.js";
+import type { QualificationWorld } from "../config/types.js";
+import qualificationWorldInventory from "./qualification-world-scenarios.json";
 import { t3Prov1 } from "./t3-prov-1.js";
 import { t3Prov2 } from "./t3-prov-2.js";
 import { t3Wt1 } from "./t3-wt-1.js";
@@ -87,23 +89,56 @@ export const SCENARIOS: readonly ScenarioDefinition[] = [
   selfhostCfn1,
 ];
 
+interface QualificationWorldEntry {
+  runtime_lane: string;
+  scenario_ids: string[];
+}
+
+interface QualificationWorldInventory {
+  schema_version: number;
+  kind: string;
+  worlds: Record<QualificationWorld, QualificationWorldEntry>;
+}
+
+const QUALIFICATION_WORLD_INVENTORY = qualificationWorldInventory as unknown as QualificationWorldInventory;
+const SCENARIOS_BY_ID = new Map(SCENARIOS.map((scenario) => [scenario.id, scenario]));
+const QUALIFICATION_WORLD_SCENARIO_IDS = validateQualificationWorldInventory();
+
+/** Exact executable scenario ids owned by a qualification world. This is the
+ * runner-side reader for the same pre-install JSON inventory the shared
+ * qualification preflight consumes. */
+export function qualificationWorldScenarioIds(world: QualificationWorld): readonly string[] {
+  return QUALIFICATION_WORLD_SCENARIO_IDS.get(world) ?? [];
+}
+
 export function allScenarioIds(): string[] {
   return SCENARIOS.map((scenario) => scenario.id);
 }
 
-export function selectScenarios(selector: readonly string[] | "all"): ScenarioDefinition[] {
+export function selectScenarios(
+  selector: readonly string[] | "all",
+  qualificationWorld?: QualificationWorld,
+): ScenarioDefinition[] {
+  const worldIds = qualificationWorld === undefined
+    ? null
+    : qualificationWorldScenarioIds(qualificationWorld);
   if (selector === "all" || (selector.length === 1 && selector[0] === "all")) {
-    return [...SCENARIOS];
+    return worldIds === null
+      ? [...SCENARIOS]
+      : worldIds.map((id) => SCENARIOS_BY_ID.get(id)!);
   }
-  const byId = new Map(SCENARIOS.map((scenario) => [scenario.id, scenario]));
+  const allowed = worldIds === null ? null : new Set(worldIds);
   const selected: ScenarioDefinition[] = [];
   const unknown: string[] = [];
+  const outsideWorld: string[] = [];
   for (const id of selector) {
-    const scenario = byId.get(id);
-    if (scenario) {
-      selected.push(scenario);
-    } else {
+    const scenario = SCENARIOS_BY_ID.get(id);
+    if (!scenario) {
       unknown.push(id);
+    } else if (allowed !== null && !allowed.has(id)) {
+      outsideWorld.push(id);
+    } else {
+      selected.push(scenario);
     }
   }
   if (unknown.length > 0) {
@@ -111,5 +146,43 @@ export function selectScenarios(selector: readonly string[] | "all"): ScenarioDe
       `Unknown scenario id(s): ${unknown.join(", ")}. Known scenarios: ${allScenarioIds().join(", ")}`,
     );
   }
+  if (outsideWorld.length > 0) {
+    throw new Error(
+      `Scenario id(s) not executable in qualification world "${qualificationWorld}": ${outsideWorld.join(", ")}. ` +
+        `Allowed scenarios: ${worldIds!.join(", ")}`,
+    );
+  }
   return selected;
+}
+
+function validateQualificationWorldInventory(): ReadonlyMap<QualificationWorld, readonly string[]> {
+  if (
+    QUALIFICATION_WORLD_INVENTORY.schema_version !== 1
+    || QUALIFICATION_WORLD_INVENTORY.kind !== "proliferate.qualification-world-scenario-inventory"
+  ) {
+    throw new Error("Qualification-world scenario inventory has an unsupported kind or schema version.");
+  }
+  const validated = new Map<QualificationWorld, readonly string[]>();
+  for (const world of ["local"] as const) {
+    const entry = QUALIFICATION_WORLD_INVENTORY.worlds[world];
+    if (!entry || entry.runtime_lane !== "local" || !Array.isArray(entry.scenario_ids)) {
+      throw new Error(`Qualification-world scenario inventory entry "${world}" is malformed.`);
+    }
+    if (entry.scenario_ids.length === 0 || new Set(entry.scenario_ids).size !== entry.scenario_ids.length) {
+      throw new Error(`Qualification-world scenario inventory entry "${world}" is empty or duplicated.`);
+    }
+    for (const id of entry.scenario_ids) {
+      const scenario = SCENARIOS_BY_ID.get(id);
+      if (!scenario) {
+        throw new Error(`Qualification-world scenario inventory names unregistered scenario "${id}".`);
+      }
+      if (!scenario.lanes.includes("local")) {
+        throw new Error(
+          `Qualification-world scenario "${id}" does not declare runtime lane "${entry.runtime_lane}".`,
+        );
+      }
+    }
+    validated.set(world, Object.freeze([...entry.scenario_ids]));
+  }
+  return validated;
 }

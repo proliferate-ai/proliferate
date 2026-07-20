@@ -1,4 +1,11 @@
-import { parseDesktopMode, parseTargetLane, type DesktopMode, type TargetLane } from "../config/types.js";
+import {
+  parseDesktopMode,
+  parseQualificationWorld,
+  parseTargetLane,
+  type DesktopMode,
+  type QualificationWorld,
+  type TargetLane,
+} from "../config/types.js";
 import type { ResultBehavior } from "../runner/result.js";
 
 export interface CliArgs {
@@ -6,6 +13,8 @@ export interface CliArgs {
   desktop: DesktopMode;
   agents: string[] | "all";
   scenarios: string[] | "all";
+  /** Bound the selector to one shipped qualification world's executable inventory. */
+  qualificationWorld?: QualificationWorld;
   /**
    * Optional matrix-cell filter: keep only planned cells whose `cell` dimension
    * is in this list (e.g. `SH-GATEWAY`). Leaf (non-matrix) scenarios are
@@ -90,6 +99,10 @@ export function parseArgs(argv: readonly string[]): CliArgs {
         // --only is sugar for --scenarios (per the tier-3 build task: "runner
         // should support --only <id>"); both set the same field.
         args.scenarios = parseListFlag(arg, requireValue(argv, i, arg));
+        i += 1;
+        break;
+      case "--qualification-world":
+        args.qualificationWorld = wrapUsage(() => parseQualificationWorld(requireValue(argv, i, arg)));
         i += 1;
         break;
       case "--cells":
@@ -223,6 +236,7 @@ Flags:
   --desktop <web|native>     Desktop lane to drive (default: web)
   --agents <list|all>        Comma-separated harness kinds, or "all" (default: all)
   --scenarios <list|all>     Comma-separated scenario ids, or "all" (default: all)
+  --qualification-world <local>  Bound selection to the shipped executable inventory for that world
   --only <id>                Alias for --scenarios with a single id (e.g. --only T3-WT-1)
   --cells <list|all>         Narrow MATRIX cells to those whose 'cell' dimension is listed (e.g. SH-GATEWAY);
                              leaf (non-matrix) cells of a selected scenario are always kept; "all" = no filter (default: all)
