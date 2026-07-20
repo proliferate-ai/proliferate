@@ -42,7 +42,11 @@ describe("ToolCallSummary", () => {
     expect(container.querySelector("[data-completed-work-divider]")).toBeNull();
 
     fireEvent.click(disclosure);
-    expect(screen.queryByText("Work ledger")).toBeNull();
+    const motionShell = container.querySelector("[data-animated-collapsible-content]");
+    expect(screen.queryByText("Work ledger")).not.toBeNull();
+    expect(motionShell?.getAttribute("data-expanded")).toBe("false");
+    expect((motionShell as HTMLElement | null)?.style.gridTemplateRows).toBe("0fr");
+    expect(motionShell?.hasAttribute("inert")).toBe(true);
     expect(container.querySelectorAll("[data-completed-work-divider]")).toHaveLength(1);
   });
 });

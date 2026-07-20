@@ -108,7 +108,6 @@ export function ComposerLeadingControls({
         >
           <ComposerReasoningEffortBars
             control={controlGroups.reasoningEffortControl}
-            agentKind={agentKind}
           />
         </span>
       )}

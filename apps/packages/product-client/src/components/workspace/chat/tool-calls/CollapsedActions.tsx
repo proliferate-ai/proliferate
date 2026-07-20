@@ -3,6 +3,7 @@ import type {
   TranscriptState,
 } from "@anyharness/sdk";
 import { Button } from "@proliferate/ui/primitives/Button";
+import { AnimatedCollapsibleContent } from "@proliferate/ui/primitives/AnimatedCollapsibleContent";
 import { ChevronRightActivity } from "@proliferate/ui/icons";
 import {
   formatCollapsedActionsSummary,
@@ -37,6 +38,7 @@ export function CollapsedActions({
       && item.status !== "failed";
   });
   const [expanded, setExpanded] = useState(false);
+  const [hasExpanded, setHasExpanded] = useState(false);
   const actionSummary = summarizeCollapsedActions(itemIds, transcript);
   const containsEdits = actionSummary.edits > 0;
   const isLiveLedger = autoFollow || hasActiveAction;
@@ -53,6 +55,12 @@ export function CollapsedActions({
     : <CollapsedActionIcon kind={resolveCollapsedActionsLeadingKind(actionSummary)} />;
   const summaryOpensChanges = containsEdits && Boolean(onOpenChanges) && !isLiveAction;
 
+  function toggleExpanded() {
+    const nextExpanded = !expanded;
+    setExpanded(nextExpanded);
+    if (nextExpanded) setHasExpanded(true);
+  }
+
   return (
     <div className="flex min-w-0 flex-col text-chat leading-[1.5]">
       <div className="group/collapsed-actions flex max-w-full self-start items-center gap-1">
@@ -67,7 +75,7 @@ export function CollapsedActions({
           className="h-auto max-w-full justify-start gap-1 rounded-none bg-transparent p-0 text-left text-chat leading-[1.5] font-normal text-foreground/60 hover:bg-transparent hover:text-foreground focus-visible:text-foreground"
           onClick={summaryOpensChanges
             ? onOpenChanges
-            : () => setExpanded((value) => !value)}
+            : toggleExpanded}
         >
           <span className="inline-flex min-w-0 shrink items-center gap-1.5 truncate">
             <span
@@ -106,7 +114,7 @@ export function CollapsedActions({
             data-chat-transcript-ignore
             aria-label={expanded ? "Collapse edited files" : "Expand edited files"}
             aria-expanded={expanded}
-            onClick={() => setExpanded((value) => !value)}
+            onClick={toggleExpanded}
             className="size-[1em] shrink-0 rounded-none bg-transparent p-0 text-current hover:bg-transparent focus-visible:text-foreground"
           >
             <ChevronRightActivity
@@ -120,16 +128,18 @@ export function CollapsedActions({
           </Button>
         )}
       </div>
-      {expanded && (
+      <AnimatedCollapsibleContent expanded={expanded}>
         <div className="mt-1 flex flex-col gap-1">
-          <CollapsedActionsLedger
-            itemIds={itemIds}
-            transcript={transcript}
-            isLive={isLiveLedger}
-            containsEdits={containsEdits}
-          />
+          {hasExpanded ? (
+            <CollapsedActionsLedger
+              itemIds={itemIds}
+              transcript={transcript}
+              isLive={isLiveLedger}
+              containsEdits={containsEdits}
+            />
+          ) : null}
         </div>
-      )}
+      </AnimatedCollapsibleContent>
     </div>
   );
 }

@@ -86,6 +86,14 @@ describe("CollapsedActions", () => {
 
     expect(document.querySelector("[data-collapsed-actions-ledger]")).not.toBeNull();
     expect(screen.getAllByText("Reading read.ts").length).toBeGreaterThan(0);
+    const motionShell = document.querySelector("[data-animated-collapsible-content]");
+    expect(motionShell?.getAttribute("data-expanded")).toBe("true");
+    expect(motionShell?.className).toContain("duration-200");
+
+    fireEvent.click(screen.getByRole("button", { name: /Reading read\.ts/i }));
+    expect(motionShell?.getAttribute("data-expanded")).toBe("false");
+    expect((motionShell as HTMLElement | null)?.style.gridTemplateRows).toBe("0fr");
+    expect(document.querySelector("[data-collapsed-actions-ledger]")).not.toBeNull();
   });
 
   it("marks active action batches with the live row affordance", () => {

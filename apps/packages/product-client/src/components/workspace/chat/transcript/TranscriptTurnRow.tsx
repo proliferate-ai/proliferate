@@ -255,7 +255,11 @@ export function TranscriptTurnRow({
           onOpenArtifact={onOpenArtifact}
           onHandOffPlanToNewSession={onHandOffPlanToNewSession}
         />
-        {visualTurnCompleted && assistantEndResource && (
+        {shouldRenderAssistantEndResource({
+          rowIsLastTurnRow: row.isLastTurnRow,
+          visualTurnCompleted,
+          hasResource: assistantEndResource !== null,
+        }) && assistantEndResource && (
           <TurnDocumentReferenceCard resource={assistantEndResource} />
         )}
         {assistantRevealComplete && trailingStatus && (
@@ -297,6 +301,18 @@ export function TranscriptTurnRow({
       </div>
     </TurnShell>
   );
+}
+
+export function shouldRenderAssistantEndResource({
+  rowIsLastTurnRow,
+  visualTurnCompleted,
+  hasResource,
+}: {
+  rowIsLastTurnRow: boolean;
+  visualTurnCompleted: boolean;
+  hasResource: boolean;
+}): boolean {
+  return rowIsLastTurnRow && visualTurnCompleted && hasResource;
 }
 
 export function resolveTurnAssistantFooterMode({

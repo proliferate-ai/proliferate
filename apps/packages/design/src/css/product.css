@@ -1328,19 +1328,6 @@ body {
   background-color: color-mix(in oklab, var(--color-pr-merged) 22%, transparent) !important;
 }
 
-/* Sol (codex frontier) ultra tier: the level name sweeps special-blue into
-   the ultra purple instead of the flat purple Claude ultra keeps. */
-.composer-reasoning-ultra-sol {
-  background-image: linear-gradient(
-    90deg,
-    var(--color-special),
-    var(--color-pr-merged)
-  );
-  background-clip: text;
-  -webkit-background-clip: text;
-  color: transparent;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .composer-value-enter,
   .composer-value-exit {

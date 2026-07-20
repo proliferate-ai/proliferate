@@ -4,9 +4,9 @@ import { CHAT_STREAMING_STATUS_LABELS } from "#product/copy/chat/chat-copy";
 import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
 import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-count";
 
-// Only surface the elapsed suffix once a wait is long enough to be worth
-// acknowledging — short "Thinking" flashes stay clean.
-const ELAPSED_SUFFIX_THRESHOLD_SECONDS = 10;
+// Start the elapsed suffix after the first full second so active work exposes
+// useful progress immediately without flashing a misleading zero.
+const ELAPSED_SUFFIX_THRESHOLD_SECONDS = 1;
 
 interface StreamingIndicatorProps {
   startedAt?: string | null;

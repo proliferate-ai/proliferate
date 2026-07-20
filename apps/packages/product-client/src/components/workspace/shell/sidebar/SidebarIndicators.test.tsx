@@ -3,6 +3,7 @@
 import { isValidElement, type ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 import {
+  CircleAlert,
   Clock,
   Spinner,
   Tree,
@@ -17,6 +18,8 @@ import { SidebarWorkspaceVariantIcon } from "#product/components/workspace/shell
   .IS_REACT_ACT_ENVIRONMENT = true;
 
 type GlyphTestKind =
+  | "error"
+  | "worktree_missing"
   | "waiting_input"
   | "waiting_plan"
   | "iterating"
@@ -55,6 +58,16 @@ function glyphClassName(node: ReactNode): string {
 }
 
 describe("SidebarStatusGlyph", () => {
+
+  it.each(["error", "worktree_missing"] as const)(
+    "uses the control tier for the %s warning glyph",
+    (kind) => {
+      const glyph = renderGlyph(kind);
+
+      expect(countElementsByType(glyph, CircleAlert)).toBe(1);
+      expect(glyphClassName(glyph)).toContain("icon-control");
+    },
+  );
 
   it("keeps user-input blockers visually distinct from progress", () => {
     const glyph = renderGlyph("waiting_input");

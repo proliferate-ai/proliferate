@@ -265,7 +265,7 @@ export function GoalBar({
     >
       <div
         className={twMerge(
-          "flex min-w-0 gap-2 pl-3 pr-1.5",
+          "flex min-w-0 gap-1.5 pl-3 pr-1.5",
           isEditingLayout ? "items-start py-1.5" : "h-9 items-center",
         )}
       >
