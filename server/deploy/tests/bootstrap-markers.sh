@@ -128,12 +128,31 @@ read -r helper_pid bootstrap_pid <"$block_pids"
 kill -TERM "$wrapper_pid" "$bootstrap_pid" "$helper_pid" 2>/dev/null || true
 kill -KILL "$wrapper_pid" "$bootstrap_pid" "$helper_pid" 2>/dev/null || true
 wait "$wrapper_pid" 2>/dev/null || true
-for pid in "$wrapper_pid" "$bootstrap_pid" "$helper_pid"; do
-  if kill -0 "$pid" 2>/dev/null; then
-    printf 'timeout regression left process %s alive\n' "$pid" >&2
-    exit 1
-  fi
+
+# Signal delivery and orphan reaping are asynchronous. In particular, kill -0
+# remains true for a zombie even though it cannot execute or retain the pipe.
+# Give the killed tree a bounded interval to stop, while still failing if any
+# named process remains executable after KILL.
+live_pids=()
+for _ in $(seq 1 500); do
+  live_pids=()
+  for pid in "$wrapper_pid" "$bootstrap_pid" "$helper_pid"; do
+    kill -0 "$pid" 2>/dev/null || continue
+    process_state="$(ps -o stat= -p "$pid" 2>/dev/null | awk 'NR == 1 { print $1 }' || true)"
+    [[ "$process_state" == Z* ]] && continue
+    # Empty state can mean the process exited between probes or ps failed.
+    # Recheck so a tooling failure cannot turn a live process green.
+    [[ -n "$process_state" ]] || kill -0 "$pid" 2>/dev/null || continue
+    live_pids+=("$pid")
+  done
+  [[ "${#live_pids[@]}" -eq 0 ]] && break
+  sleep 0.01
 done
+if [[ "${#live_pids[@]}" -ne 0 ]]; then
+  printf 'timeout regression left executable process(es): %s\n' "${live_pids[*]}" >&2
+  ps -o pid=,ppid=,stat=,command= -p "$(IFS=,; printf '%s' "${live_pids[*]}")" >&2 || true
+  exit 1
+fi
 
 grep -qx '__PROLIFERATE_BOOTSTRAP_SUBSTEP__:ensure-secrets:completed' "$FIXTURE/.bootstrap-progress.log"
 grep -qx '__PROLIFERATE_BOOTSTRAP_SUBSTEP__:preflight:started' "$FIXTURE/.bootstrap-progress.log"
