@@ -45,6 +45,37 @@ fn preserves_explicit_params_and_ambiguous_bases() {
 }
 
 #[test]
+fn resolves_unqualified_model_to_one_provider_qualified_live_value() {
+    let option = model_option(&[
+        ("opencode/big-pickle", "Big Pickle"),
+        ("proliferate/claude-sonnet-4-5", "Sonnet 4.5"),
+        ("proliferate/claude-haiku-4-5", "Haiku 4.5"),
+    ]);
+
+    assert_eq!(
+        resolve_model_variant_value(&option, "claude-haiku-4-5"),
+        "proliferate/claude-haiku-4-5"
+    );
+    assert_eq!(
+        resolve_model_variant_value(&option, "opencode/big-pickle"),
+        "opencode/big-pickle"
+    );
+}
+
+#[test]
+fn preserves_unqualified_model_when_provider_qualified_values_are_ambiguous() {
+    let option = model_option(&[
+        ("anthropic/claude-haiku-4-5", "Anthropic Haiku 4.5"),
+        ("proliferate/claude-haiku-4-5", "Gateway Haiku 4.5"),
+    ]);
+
+    assert_eq!(
+        resolve_model_variant_value(&option, "claude-haiku-4-5"),
+        "claude-haiku-4-5"
+    );
+}
+
+#[test]
 fn does_not_collapse_context_tags_or_non_model_controls() {
     let model_option = model_option(&[("sonnet[1m]", "Sonnet (1M context)")]);
     assert_eq!(
@@ -63,6 +94,21 @@ fn does_not_collapse_context_tags_or_non_model_controls() {
     );
     mode_option.category = Some(acp::schema::SessionConfigOptionCategory::Mode);
     assert_eq!(resolve_model_variant_value(&mode_option, "agent"), "agent");
+
+    let mut provider_mode_option = acp::schema::SessionConfigOption::select(
+        "mode",
+        "Mode",
+        "proliferate/agent",
+        vec![acp::schema::SessionConfigSelectOption::new(
+            "proliferate/agent",
+            "Agent",
+        )],
+    );
+    provider_mode_option.category = Some(acp::schema::SessionConfigOptionCategory::Mode);
+    assert_eq!(
+        resolve_model_variant_value(&provider_mode_option, "agent"),
+        "agent"
+    );
 }
 
 #[test]

@@ -254,16 +254,11 @@ export const defaultLocalMcpDriver: LocalMcpDriver = {
       );
     }
     await selectModelInUi(page, harness, modelId);
-    // The integration prompt REQUIRES an `integrations.call_tool` MCP call, and
-    // the session's default permission mode gates every tool call behind an
-    // interactive approval card ("Permission — AWAITING RESPONSE"; proven:
-    // Actions run 29570511844, T3-INT-1/local/harness=claude). Nothing in this
-    // headless collector clicks Allow, so the turn sits awaiting response until
-    // it times out. Select `bypassPermissions` (the same mode the product's own
-    // workflows pick for claude — anyharness workflows/resolution.rs) on the
-    // home composer BEFORE sending, so the fresh session launches with tool
-    // calls auto-executed. Not a product bug: the gate is correct behaviour; the
-    // collector simply never drove the mode.
+    // Claude advertises `bypassPermissions`, which avoids an unnecessary
+    // approval round-trip. Codex/Grok advertise no session-mode control and
+    // OpenCode's real ladder is build/plan, so absence of this Claude-specific
+    // mode is not a failure. Those harnesses are driven through their real
+    // permission card below instead.
     await selectSessionModeInUi(page, "bypassPermissions");
 
     // A successful historical or sibling call must not satisfy this cell. Take
@@ -305,7 +300,7 @@ export const defaultLocalMcpDriver: LocalMcpDriver = {
     // local-session.ts).
     const workspaceId = await readWorkspaceUiKey(p);
     const sessionId = await resolveLocalWorkspaceSessionId(world, repoPath, WORKSPACE_SETTLE_TIMEOUT_MS);
-    const completion = await waitForTurnCompletion(world, sessionId, TURN_TIMEOUT_MS);
+    const completion = await waitForTurnCompletion(world, sessionId, TURN_TIMEOUT_MS, p);
     if (completion.error) {
       throw new Error(`runIntegrationTurn: assistant turn errored: ${completion.error}`);
     }
@@ -740,15 +735,22 @@ async function selectModelInUi(
  * popover options, so retain that path as a compatibility fallback. Every step
  * is read back before proceeding and the walk is bounded to one full ladder.
  */
-async function selectSessionModeInUi(page: ProductPage, modeId: string): Promise<void> {
+export async function selectSessionModeInUi(page: ProductPage, modeId: string): Promise<boolean> {
   const p = page.page;
   const trigger = p.locator("[data-session-mode-trigger]").first();
-  await trigger.waitFor({ state: "visible", timeout: 15_000 });
+  if (!(await trigger.isVisible().catch(() => false))) {
+    return false;
+  }
+  const visited = new Set<string>();
   for (let step = 0; step < 16; step += 1) {
     const selected = (await trigger.getAttribute("data-session-mode-selected")) ?? "";
     if (selected === modeId) {
-      return;
+      return true;
     }
+    if (visited.has(selected)) {
+      return false;
+    }
+    visited.add(selected);
     const next = (await trigger.getAttribute("data-session-mode-next")) ?? "";
     if (next) {
       await trigger.click();
@@ -757,15 +759,40 @@ async function selectSessionModeInUi(page: ProductPage, modeId: string): Promise
     }
     await trigger.click();
     const option = p.locator(`[data-session-mode-option="${cssAttr(modeId)}"]`).first();
-    await option.waitFor({ state: "visible", timeout: 15_000 });
+    if (!(await option.isVisible().catch(() => false))) {
+      await p.keyboard.press("Escape").catch(() => undefined);
+      return false;
+    }
     await option.click();
     await p
       .locator(`[data-session-mode-trigger][data-session-mode-selected="${cssAttr(modeId)}"]`)
       .first()
       .waitFor({ state: "attached", timeout: 15_000 });
-    return;
+    return true;
   }
-  throw new Error(`selectSessionModeInUi: mode "${modeId}" was not reached within one bounded ladder walk.`);
+  return false;
+}
+
+/**
+ * Resolves one visible non-destructive permission card through the product UI.
+ * Prefer session-scoped MCP grants so a harness that emits more than one tool
+ * call does not stall again; fall back to its ordinary one-shot Allow action.
+ */
+export async function approvePendingPermissionIfPresent(page: Page): Promise<boolean> {
+  const labels = [
+    "Allow all server tools for this session",
+    "Allow tool for this session",
+    "Always Allow",
+    "Allow",
+  ];
+  for (const label of labels) {
+    const action = page.getByRole("button", { name: label, exact: true }).first();
+    if (await action.isVisible().catch(() => false)) {
+      await action.click();
+      return true;
+    }
+  }
+  return false;
 }
 
 async function readWorkspaceUiKey(page: Page): Promise<string> {
@@ -786,9 +813,13 @@ async function waitForTurnCompletion(
   world: ReadyLocalWorld,
   sessionId: string,
   timeoutMs: number,
+  page?: Page,
 ): Promise<{ ended: boolean; error: string | undefined }> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
+    if (page) {
+      await approvePendingPermissionIfPresent(page);
+    }
     const events = await world.runtime.client.getEvents(sessionId).catch(() => []);
     const error = findErrorEvent(events);
     if (error) {

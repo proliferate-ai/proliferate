@@ -46,13 +46,11 @@ function fakeCollapsedSidebar(options: FakeControlOptions): {
     waitFor: async () => {
       calls.push("control.waitFor");
     },
-    evaluate: async (callback: (node: unknown, args: unknown) => Promise<void>, args: unknown) => {
+    boundingBox: async () => ({ x: 20, y: 20, width: 100, height: 40 }),
+    evaluate: async (callback: (node: unknown) => boolean) => {
       calls.push("control.evaluate");
       const previousWindow = globalThis.window;
       const previousDocument = globalThis.document;
-      const previousPerformance = globalThis.performance;
-      const previousRaf = globalThis.requestAnimationFrame;
-      let now = 0;
       Object.assign(globalThis, {
         window: {
           innerWidth: 1024,
@@ -66,21 +64,13 @@ function fakeCollapsedSidebar(options: FakeControlOptions): {
             ? target
             : overlay,
         },
-        performance: { now: () => now },
-        requestAnimationFrame: (run: (timestamp: number) => void) => {
-          now += 50;
-          run(now);
-          return now;
-        },
       });
       try {
-        await callback(target, args);
+        return callback(target);
       } finally {
         Object.assign(globalThis, {
           window: previousWindow,
           document: previousDocument,
-          performance: previousPerformance,
-          requestAnimationFrame: previousRaf,
         });
       }
     },
@@ -108,6 +98,7 @@ function fakeCollapsedSidebar(options: FakeControlOptions): {
   };
   const page = {
     getByRole: (_role: string, query: { name: string }) => query.name === "Show sidebar" ? show : hide,
+    waitForTimeout: async () => undefined,
   } as unknown as Page;
 
   return { page, control, calls };
@@ -132,7 +123,7 @@ test("does not accept stable geometry while an overlay owns the hit target", asy
 
   await waitForSidebarControlReady(page, control);
 
-  assert.equal(calls.filter((call) => call === "control.evaluate").length, 1);
+  assert.equal(calls.filter((call) => call === "control.evaluate").length, 2);
 });
 
 test("does not accept a control clipped by an overflow ancestor", async () => {

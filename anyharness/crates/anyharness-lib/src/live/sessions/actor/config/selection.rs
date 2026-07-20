@@ -272,15 +272,16 @@ fn has_explicit_variant_params(value: &str) -> bool {
         .map_or(true, |params| !params.is_empty())
 }
 
-/// Resolve a model request to the exact composed value advertised by the live
-/// ACP session.
+/// Resolve a model request to the exact composed or provider-qualified value
+/// advertised by the live ACP session.
 ///
 /// Cursor's bracket-params model control accepts values such as
 /// `composer-2.5[fast=true]`, while product selection can request the bare
 /// catalog id `composer-2.5` (or `composer-2.5[]`). The live option is the
-/// active-session authority for those provider-chosen defaults. Resolution is
-/// intentionally conservative: it only substitutes when exactly one distinct
-/// advertised bracket-params value shares the requested base.
+/// active-session authority for those provider-chosen defaults. OpenCode may
+/// similarly advertise `provider/model` while the catalog request is `model`.
+/// Resolution is intentionally conservative: it only substitutes when exactly
+/// one distinct advertised value matches the applicable exact rule.
 pub(in crate::live::sessions::actor) fn resolve_model_variant_value(
     option: &acp::schema::SessionConfigOption,
     desired_value: &str,
@@ -306,6 +307,34 @@ pub(in crate::live::sessions::actor) fn resolve_model_variant_value(
             None => resolved = Some(candidate),
             Some(existing) if existing == candidate => {}
             Some(_) => return desired_value.to_string(),
+        }
+    }
+
+    if let Some(resolved) = resolved {
+        return resolved;
+    }
+
+    // OpenCode's ACP model control uses provider-qualified raw values such as
+    // `proliferate/claude-haiku-4-5`, while the curated gateway catalog owns the
+    // launch identity `claude-haiku-4-5`. Resolve that boundary only when the
+    // caller supplied an unqualified id and the live control advertises exactly
+    // one provider-qualified value with the same complete suffix. Multiple
+    // providers may coexist in OpenCode, so ambiguity deliberately preserves
+    // the caller value and lets the agent reject rather than guessing a route.
+    if !desired_value.contains('/') {
+        for candidate in select_option_values(option) {
+            let Some((provider, model_id)) = candidate.split_once('/') else {
+                continue;
+            };
+            if provider.is_empty() || model_id != desired_value {
+                continue;
+            }
+
+            match resolved.as_deref() {
+                None => resolved = Some(candidate),
+                Some(existing) if existing == candidate => {}
+                Some(_) => return desired_value.to_string(),
+            }
         }
     }
 

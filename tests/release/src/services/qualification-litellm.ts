@@ -79,6 +79,17 @@ function litellmModelMatches(rowModel: string, acceptedModelId: string): boolean
   if (row === accepted) {
     return true;
   }
+  // The checked-in LiteLLM configuration deliberately exposes the stable
+  // catalog alias `grok-4-fast` while routing it to xAI's current concrete
+  // fast-tier id `grok-4-1-fast` (server/litellm/config.yaml). Spend logs carry
+  // the concrete id, so correlate this one explicit configured alias without
+  // permitting arbitrary same-family model drift.
+  if (
+    (accepted === "grok-4-fast" && row === "grok-4-1-fast") ||
+    (row === "grok-4-fast" && accepted === "grok-4-1-fast")
+  ) {
+    return true;
+  }
   // A dated snapshot of the alias, e.g. "claude-haiku-4-5" ↔
   // "claude-haiku-4-5-20251001". Require the extra segment to be a date so an
   // unrelated longer id (e.g. a different family) is not accepted.

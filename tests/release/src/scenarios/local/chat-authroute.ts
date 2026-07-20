@@ -9,7 +9,7 @@ import type { LocalWorldCleanupEvidence } from "../../worlds/local-workspace/cle
 import { authenticatedActor, type AuthenticatedActor } from "../../fixtures/authenticated-actor.js";
 import { preparedRepository, type PreparedRepository } from "../../fixtures/prepared-repository.js";
 import { productPage, type ProductPage } from "../../fixtures/product-page.js";
-import { findErrorEvent, findTurnEndedEvent } from "../../fixtures/local-runtime.js";
+import { findStructuredErrorEvent, findTurnEndedEvent } from "../../fixtures/local-runtime.js";
 import { selectCheapestEligibleModel } from "../../services/qualification-litellm.js";
 import {
   DETERMINISTIC_PROMPT,
@@ -67,12 +67,18 @@ export type { LocalRoute } from "../../evidence/schema.js";
 export type SafeTurnErrorClass =
   | "budget_exceeded"
   | "rate_limited"
+  | "network_connection"
   | "authentication_failed"
   | "provider_unavailable"
   | "unclassified";
 
 /** Maps an untrusted runtime/provider error to a fixed evidence-safe class. */
-export function classifyTurnErrorForEvidence(raw: string): SafeTurnErrorClass {
+export function classifyTurnErrorForEvidence(raw: string, structuredCode?: string): SafeTurnErrorClass {
+  // AnyHarness owns these two allowlisted codes. Never project an arbitrary
+  // provider/ACP code into evidence: unknown values still fall through to the
+  // bounded message classifier below.
+  if (structuredCode === "provider_rate_limit") return "rate_limited";
+  if (structuredCode === "network_connection") return "network_connection";
   const message = raw.toLowerCase();
   if (/\bbudget\b[\s\S]{0,120}\b(?:exceed(?:ed|s|ing)?|exhausted|reached)\b/.test(message)) return "budget_exceeded";
   if (/\b429\b|\brate[ _-]?limit(?:ed|ing)?\b/.test(message)) return "rate_limited";
@@ -82,14 +88,14 @@ export function classifyTurnErrorForEvidence(raw: string): SafeTurnErrorClass {
 }
 
 /** Builds a diagnostic reason whose vocabulary cannot carry provider payloads. */
-export function turnErrorEvidenceMessage(route: LocalRoute, raw: string): string {
-  return `sendBoundedTurn route=${route} error_class=${classifyTurnErrorForEvidence(raw)}`;
+export function turnErrorEvidenceMessage(route: LocalRoute, raw: string, structuredCode?: string): string {
+  return `sendBoundedTurn route=${route} error_class=${classifyTurnErrorForEvidence(raw, structuredCode)}`;
 }
 
 /** Carries only the fixed-vocabulary turn failure; the raw provider payload is discarded. */
 export class SafeTurnFailure extends Error {
-  constructor(route: LocalRoute, raw: string) {
-    super(turnErrorEvidenceMessage(route, raw));
+  constructor(route: LocalRoute, raw: string, structuredCode?: string) {
+    super(turnErrorEvidenceMessage(route, raw, structuredCode));
     this.name = "SafeTurnFailure";
   }
 }
@@ -471,7 +477,7 @@ export const defaultLocalRouteDriver: LocalRouteDriver = {
     );
     const completion = await waitForTurnCompletion(world, sessionId, TURN_TIMEOUT_MS);
     if (completion.error) {
-      throw new SafeTurnFailure(expectedRoute, completion.error);
+      throw new SafeTurnFailure(expectedRoute, completion.error.message, completion.error.code);
     }
     if (!completion.ended) {
       throw new Error(`sendBoundedTurn: assistant turn did not end within ${TURN_TIMEOUT_MS}ms.`);
@@ -1339,11 +1345,14 @@ async function waitForTurnCompletion(
   world: ReadyLocalWorld,
   sessionId: string,
   timeoutMs: number,
-): Promise<{ ended: boolean; error: string | undefined }> {
+): Promise<{
+  ended: boolean;
+  error: { message: string; code: string | undefined } | undefined;
+}> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const events = await world.runtime.client.getEvents(sessionId).catch(() => []);
-    const error = findErrorEvent(events);
+    const error = findStructuredErrorEvent(events);
     if (error) {
       return { ended: true, error };
     }

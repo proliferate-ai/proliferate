@@ -154,7 +154,7 @@ export interface LocalSessionTabsDriver {
    * "messaged" starting point, not an empty chat. Named for what it does: the
    * genuinely EMPTY tab used for the empty-chat-switch proof is the one the
    * product itself opens later, in `switchHarnessAfterMessages`. */
-  materializeFirstChat(world: ReadyLocalWorld, page: ProductPage, harness: LocalHarnessKind): Promise<{ workspaceId: string; sessionId: string; tabId: string }>;
+  materializeFirstChat(world: ReadyLocalWorld, page: ProductPage, harness: LocalHarnessKind, repoPath: string): Promise<{ workspaceId: string; sessionId: string; tabId: string }>;
 
   /** Switch harness on a GENUINELY EMPTY chat tab (the one `switchHarnessAfterMessages`
    * just opened): asserts the in-place replacement (tab count and the tab's
@@ -249,7 +249,7 @@ export const defaultLocalSessionTabsDriver: LocalSessionTabsDriver = {
   openPage: (world, actor) => productPage(world, actor),
   ensureHarnessReady: (world, page, harness) => ensureHarnessReady(world, page, harness),
   selectRepoAndWorkLocally: (page, repo) => selectRepoAndWorkLocally(page, repo),
-  materializeFirstChat: (world, page, harness) => materializeFirstChat(world, page, harness),
+  materializeFirstChat: (world, page, harness, repoPath) => materializeFirstChat(world, page, harness, repoPath),
   switchHarnessEmptyChat: (world, page, toHarness) => switchHarnessEmptyChat(world, page, toHarness),
   sendMessage: (world, page) => sendMessage(world, page),
   switchHarnessAfterMessages: (world, page, toHarness) => switchHarnessAfterMessages(world, page, toHarness),
@@ -518,7 +518,7 @@ export async function collectLocal5SessionTabsCell(
     // completion. This tab is MESSAGED (per the product's `isSessionEmpty`, a
     // materialized session with transcript is never empty), so it is deliberately
     // NOT the tab used for the empty-chat-switch proof.
-    const tabA = await driver.materializeFirstChat(world, page, startHarness);
+    const tabA = await driver.materializeFirstChat(world, page, startHarness, repo.path);
     sessionIds.push(tabA.sessionId);
 
     // Proof 1 ("switch after messages"): a REAL harness switch on tab A's
@@ -1159,6 +1159,7 @@ async function materializeFirstChat(
   world: ReadyLocalWorld,
   page: ProductPage,
   harness: LocalHarnessKind,
+  repoPath: string,
 ): Promise<{ workspaceId: string; sessionId: string; tabId: string }> {
   const p = page.page;
   // Fix round 3 (live-proof ruling): the local workspace + AnyHarness session —
@@ -1194,7 +1195,17 @@ async function materializeFirstChat(
   const tab = p.locator("[data-chat-tab]").first();
   await tab.waitFor({ state: "visible", timeout: TAB_SETTLE_TIMEOUT_MS });
   const workspaceId = await readRequiredAttr(p, "[data-workspace-shell]", "data-workspace-ui-key");
-  const sessionId = await waitForReconciledSessionId(p, tab);
+  // A prompt-bearing projected tab deliberately retains its stable
+  // `client-session:*` directory key while recording the concrete
+  // materialized AnyHarness id on the session record. DOM alias promotion is
+  // therefore not a valid readiness contract. Join the concrete local
+  // workspace by clone path and use the runtime's exact session id for turn
+  // completion/evidence, while keeping the UI tab id for tab-strip proofs.
+  const sessionId = await resolveLocalWorkspaceSessionId(
+    world,
+    repoPath,
+    WORKSPACE_SETTLE_TIMEOUT_MS,
+  );
   const tabId = await readRequiredAttr(p, "[data-chat-tab]", "data-chat-tab", tab);
   // Wait for the materializing turn to complete so the session is real before the
   // subsequent tab-semantics proofs run against it.

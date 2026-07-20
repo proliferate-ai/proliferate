@@ -440,6 +440,14 @@ function buildServerEnv(
     // are not blocked by CORS.
     CORS_ALLOW_ORIGINS: `http://127.0.0.1:${rendererPort},http://localhost:${rendererPort}`,
     AGENT_GATEWAY_BACKFILL_INTERVAL_SECONDS: "5",
+    // Qualification setup owners intentionally have no linked GitHub identity,
+    // so they receive the product's fallback budget instead of the one-time
+    // signup credit. A multi-turn route journey can legitimately exceed the
+    // production $5 fallback before correlation completes; give this isolated,
+    // run-owned world enough headroom so the scenario measures routing rather
+    // than an incidental test-account cap. LiteLLM subjects are still deleted
+    // by the world's strict cleanup ledger.
+    AGENT_GATEWAY_DEFAULT_USER_BUDGET_USD: "50",
     AGENT_GATEWAY_LITELLM_BASE_URL: litellm.adminBaseUrl,
     AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL: litellm.publicBaseUrl,
     AGENT_GATEWAY_LITELLM_MASTER_KEY: litellm.masterKey,

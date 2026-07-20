@@ -183,7 +183,11 @@ function spendRow(overrides: Record<string, unknown> = {}): Record<string, unkno
   };
 }
 
-async function correlate(rows: Array<Record<string, unknown>>, before: string[] = []): Promise<unknown> {
+async function correlate(
+  rows: Array<Record<string, unknown>>,
+  before: string[] = [],
+  acceptedModelId = "claude-haiku-4-5",
+): Promise<unknown> {
   const { fetch } = fakeFetch({ "GET /spend/logs": () => response(200, rows) });
   const controller = new QualificationLiteLlmController(CONFIG, {
     fetch,
@@ -192,7 +196,7 @@ async function correlate(rows: Array<Record<string, unknown>>, before: string[] 
   return controller.correlateTurn({
     actor: actor(),
     before: { tokenIdHash: actor().tokenIdHash, requestIds: before, takenAt: WINDOW_START },
-    acceptedModelId: "claude-haiku-4-5",
+    acceptedModelId,
     windowStartedAt: WINDOW_START,
     windowFinishedAt: WINDOW_END,
   });
@@ -234,6 +238,22 @@ test("correlateTurn accepts the provider-prefixed dated snapshot of the accepted
     spendRow({ model: "anthropic/claude-haiku-4-5-20251001" }),
   ])) as { totalTokens: number };
   assert.equal(result.totalTokens, 13);
+});
+
+test("correlateTurn accepts the configured Grok fast alias's concrete xAI model", async () => {
+  const result = (await correlate(
+    [spendRow({ model: "xai/grok-4-1-fast" })],
+    [],
+    "grok-4-fast",
+  )) as { modelId: string };
+  assert.equal(result.modelId, "grok-4-fast");
+});
+
+test("correlateTurn does not generalize the Grok fast alias to another model", async () => {
+  await assert.rejects(
+    correlate([spendRow({ model: "xai/grok-4" })], [], "grok-4-fast"),
+    /expected "grok-4-fast"/,
+  );
 });
 
 test("correlateTurn still rejects a same-family but different dated model", async () => {
