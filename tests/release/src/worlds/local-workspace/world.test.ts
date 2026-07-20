@@ -193,6 +193,10 @@ test("constructLocalWorld runs the ordered startup and returns a ready handle", 
       serverRun!.includes(`API_BASE_URL=http://127.0.0.1:${PORTS.server}`),
       "expected Server env to publish the host-reachable API base URL",
     );
+    assert.ok(
+      serverRun!.includes("AGENT_GATEWAY_DEFAULT_USER_BUDGET_USD=50"),
+      "expected the isolated qualification actor to have multi-turn gateway headroom",
+    );
 
     // A fresh actor enrolled for cleanup, then a full green teardown.
     await world.trackActorSubjects!({

@@ -324,8 +324,28 @@ export function findLastAssistantReply(events: SessionEventEnvelope[]): string |
   return undefined;
 }
 
+export interface LocalRuntimeErrorEvent {
+  message: string;
+  code: string | undefined;
+}
+
+/** Finds a session-level `error` event's bounded fields, if any. Callers that
+ * persist diagnostics must still allowlist `code` and sanitize `message`. */
+export function findStructuredErrorEvent(
+  events: SessionEventEnvelope[],
+): LocalRuntimeErrorEvent | undefined {
+  const errorEvent = events.find((entry) => entry.event.type === "error");
+  if (!errorEvent) {
+    return undefined;
+  }
+  const event = errorEvent.event as { message?: string; code?: string | null };
+  return {
+    message: String(event.message ?? "unknown error"),
+    code: typeof event.code === "string" ? event.code : undefined,
+  };
+}
+
 /** Finds a session-level `error` event's message, if any (surfaces harness/model errors as a real assertion failure, not a hang). */
 export function findErrorEvent(events: SessionEventEnvelope[]): string | undefined {
-  const errorEvent = events.find((entry) => entry.event.type === "error");
-  return errorEvent ? String((errorEvent.event as { message?: string }).message ?? "unknown error") : undefined;
+  return findStructuredErrorEvent(events)?.message;
 }

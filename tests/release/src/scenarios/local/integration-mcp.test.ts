@@ -3,8 +3,10 @@ import { test } from "node:test";
 
 import {
   NoEligibleMcpModelError,
+  approvePendingPermissionIfPresent,
   buildLocalMcpIntegrationEvidence,
   runLocal7McpCellsAgainstWorld,
+  selectSessionModeInUi,
   type LocalMcpDriver,
 } from "./integration-mcp.js";
 import type { PlannedCellV1 } from "../../runner/result.js";
@@ -320,4 +322,58 @@ test("buildLocalMcpIntegrationEvidence: assembles a well-formed local_mcp_integr
   assert.match(evidence.session_id_hash, /^[0-9a-f]{64}$/);
   assert.match(evidence.audit_event_id_hash, /^[0-9a-f]{64}$/);
   assert.deepEqual(evidence.cleanup, cleanup);
+});
+
+test("selectSessionModeInUi treats an absent harness mode control as unsupported", async () => {
+  const missing = {
+    first: () => missing,
+    isVisible: async () => false,
+  };
+  const page = {
+    ...fakePage(),
+    page: { locator: () => missing } as never,
+  };
+
+  assert.equal(await selectSessionModeInUi(page, "bypassPermissions"), false);
+});
+
+test("selectSessionModeInUi walks a bounded ladder and returns false when the mode is not advertised", async () => {
+  let selected = "build";
+  const trigger = {
+    first: () => trigger,
+    isVisible: async () => true,
+    getAttribute: async (attribute: string) => attribute === "data-session-mode-selected"
+      ? selected
+      : (selected === "build" ? "plan" : "build"),
+    click: async () => {
+      selected = selected === "build" ? "plan" : "build";
+    },
+  };
+  const page = {
+    ...fakePage(),
+    page: { locator: () => trigger } as never,
+  };
+
+  assert.equal(await selectSessionModeInUi(page, "bypassPermissions"), false);
+  assert.equal(selected, "build");
+});
+
+test("approvePendingPermissionIfPresent prefers a non-destructive session-scoped MCP grant", async () => {
+  const clicked: string[] = [];
+  const visible = new Set(["Allow all server tools for this session", "Allow"]);
+  const page = {
+    getByRole: (_role: string, options: { name: string }) => {
+      const action = {
+        first: () => action,
+        isVisible: async () => visible.has(options.name),
+        click: async () => {
+          clicked.push(options.name);
+        },
+      };
+      return action;
+    },
+  } as never;
+
+  assert.equal(await approvePendingPermissionIfPresent(page), true);
+  assert.deepEqual(clicked, ["Allow all server tools for this session"]);
 });

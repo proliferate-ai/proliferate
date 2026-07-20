@@ -299,6 +299,21 @@ test("turn error classification is conservative and bounded", () => {
   assert.equal(classifyTurnErrorForEvidence("opaque provider detail secret=abc"), "unclassified");
 });
 
+test("turn error classification projects only AnyHarness-owned structured codes", () => {
+  assert.equal(
+    classifyTurnErrorForEvidence("opaque provider detail", "provider_rate_limit"),
+    "rate_limited",
+  );
+  assert.equal(
+    classifyTurnErrorForEvidence("opaque provider detail", "network_connection"),
+    "network_connection",
+  );
+  assert.equal(
+    classifyTurnErrorForEvidence("opaque provider detail", "provider-secret-code"),
+    "unclassified",
+  );
+});
+
 test("safe turn failures never persist raw browser diagnostics", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "local-turn-safe-"));
   const debugDir = path.join(root, "debug");

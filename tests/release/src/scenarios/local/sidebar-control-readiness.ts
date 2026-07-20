@@ -29,17 +29,44 @@ export async function waitForSidebarControlReady(
   }
 
   await control.waitFor({ state: "visible", timeout: timeoutMs });
-  await control.evaluate(
-    async (node, options) => {
-      const nextFrame = () =>
-        new Promise<number>((resolve) => requestAnimationFrame(() => resolve(performance.now())));
-      const fullyInsideOverflowClips = (rect: DOMRect) => {
-        for (let ancestor = node.parentElement; ancestor; ancestor = ancestor.parentElement) {
-          const style = window.getComputedStyle(ancestor);
-          const clipsX = style.overflowX !== "visible";
-          const clipsY = style.overflowY !== "visible";
-          if (!clipsX && !clipsY) continue;
+  for (let attempt = 0; attempt < SIDEBAR_SETTLE_ATTEMPTS; attempt += 1) {
+    const first = await control.boundingBox();
+    await page.waitForTimeout(SIDEBAR_TRANSITION_SETTLE_MS);
+    const second = await control.boundingBox();
+    const stable =
+      first !== null &&
+      second !== null &&
+      first.width > 0 &&
+      first.height > 0 &&
+      Math.abs(first.x - second.x) < 0.5 &&
+      Math.abs(first.y - second.y) < 0.5 &&
+      Math.abs(first.width - second.width) < 0.5 &&
+      Math.abs(first.height - second.height) < 0.5;
+    if (!stable) {
+      continue;
+    }
 
+    // Keep the page-isolated callback deliberately flat. Nested helper
+    // functions are rewritten by the release bundle with an esbuild `__name`
+    // reference, which does not exist in Playwright's browser evaluation
+    // realm. The controller owns timing/stability; this callback only performs
+    // the one synchronous DOM proof that cannot be expressed through Locator.
+    const interactable = await control.evaluate((node) => {
+      const rect = node.getBoundingClientRect();
+      if (
+        rect.left < 0 ||
+        rect.top < 0 ||
+        rect.right > window.innerWidth ||
+        rect.bottom > window.innerHeight
+      ) {
+        return false;
+      }
+      let ancestor = node.parentElement;
+      while (ancestor) {
+        const style = window.getComputedStyle(ancestor);
+        const clipsX = style.overflowX !== "visible";
+        const clipsY = style.overflowY !== "visible";
+        if (clipsX || clipsY) {
           const ancestorRect = ancestor.getBoundingClientRect();
           const clipLeft = ancestorRect.left + ancestor.clientLeft;
           const clipTop = ancestorRect.top + ancestor.clientTop;
@@ -52,39 +79,17 @@ export async function waitForSidebarControlReady(
             return false;
           }
         }
-        return true;
-      };
-
-      for (let attempt = 0; attempt < options.attempts; attempt += 1) {
-        const first = node.getBoundingClientRect();
-        const startedAt = await nextFrame();
-        let now = startedAt;
-        while (now - startedAt < options.settleMs) {
-          now = await nextFrame();
-        }
-        const second = node.getBoundingClientRect();
-        const stableAndInViewport =
-          first.width > 0 &&
-          first.height > 0 &&
-          Math.abs(first.left - second.left) < 0.5 &&
-          Math.abs(first.top - second.top) < 0.5 &&
-          Math.abs(first.width - second.width) < 0.5 &&
-          Math.abs(first.height - second.height) < 0.5 &&
-          second.left >= 0 &&
-          second.top >= 0 &&
-          second.right <= window.innerWidth &&
-          second.bottom <= window.innerHeight &&
-          fullyInsideOverflowClips(second);
-        if (!stableAndInViewport) continue;
-
-        const centerX = second.left + second.width / 2;
-        const centerY = second.top + second.height / 2;
-        const topAtCenter = document.elementFromPoint(centerX, centerY);
-        if (topAtCenter && (topAtCenter === node || node.contains(topAtCenter))) return;
+        ancestor = ancestor.parentElement;
       }
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+      const topAtCenter = document.elementFromPoint(centerX, centerY);
+      return topAtCenter !== null && (topAtCenter === node || node.contains(topAtCenter));
+    });
+    if (interactable) {
+      return;
+    }
+  }
 
-      throw new Error("sidebar control did not settle into an interactable layout");
-    },
-    { attempts: SIDEBAR_SETTLE_ATTEMPTS, settleMs: SIDEBAR_TRANSITION_SETTLE_MS },
-  );
+  throw new Error("sidebar control did not settle into an interactable layout");
 }
