@@ -268,6 +268,49 @@ test("a missing bundle checksum sibling fails before AWS provisioning", async ()
   }
 });
 
+test("an invalid bundle checksum manifest fails before AWS provisioning", async (t) => {
+  const cases = [
+    ["wrong bundle digest", () => `${"f".repeat(64)}  proliferate-deploy.tar.gz\n`],
+    ["missing bundle entry", () => `${"e".repeat(64)}  anyharness-aarch64-unknown-linux-musl.tar.gz\n`],
+    [
+      "duplicate bundle entry",
+      (sha: string) => `${sha}  proliferate-deploy.tar.gz\n${sha}  proliferate-deploy.tar.gz\n`,
+    ],
+    ["malformed checksum line", () => "not-a-checksum  proliferate-deploy.tar.gz\n"],
+  ] as const;
+
+  for (const [label, sumsContent] of cases) {
+    await t.test(label, async () => {
+      const src = await mkdtemp(path.join(os.tmpdir(), "sh-src-"));
+      const runDir = await mkdtemp(path.join(os.tmpdir(), "sh-run-"));
+      try {
+        const map = await buildMap(src);
+        const bundle = map.artifacts.find((artifact) => artifact.artifact_id === "selfhost-bundle/linux-amd64")!;
+        await writeFile(path.join(src, SELFHOST_BUNDLE_SHA256SUMS_FILENAME), sumsContent(bundle.sha256));
+        const h = harness();
+        await assert.rejects(
+          constructSelfHostWorld({
+            run: RUN,
+            map,
+            runDir,
+            ports: PORTS,
+            aws: AWS,
+            ssh: SSH,
+            tls: TEST_QUALIFICATION_TLS,
+            deps: h.deps,
+          }),
+          /does not contain exactly one valid proliferate-deploy\.tar\.gz entry/,
+        );
+        assert.equal(h.ec2Calls.length, 0);
+        assert.equal(h.route53Calls.length, 0);
+      } finally {
+        await rm(src, { recursive: true, force: true });
+        await rm(runDir, { recursive: true, force: true });
+      }
+    });
+  }
+});
+
 test("an invalid candidate map starts no world (no dirs, no ledger, no AWS side effects)", async () => {
   const src = await mkdtemp(path.join(os.tmpdir(), "sh-src-"));
   const runDir = await mkdtemp(path.join(os.tmpdir(), "sh-run-"));

@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { chmod, copyFile, mkdir, rm } from "node:fs/promises";
+import { chmod, copyFile, mkdir, readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 
@@ -595,7 +595,46 @@ async function materializeBundleSha256Sums(
       }`,
     );
   }
+  const sumsContent = await readFile(destination, "utf8");
+  if (!bundleSha256SumsIntegrityBound(sumsContent, bundle.sha256)) {
+    throw new BuildMapError(
+      `${SELFHOST_BUNDLE_SHA256SUMS_FILENAME} does not contain exactly one valid ` +
+        `proliferate-deploy.tar.gz entry bound to artifact "${bundle.artifact_id}".`,
+    );
+  }
   return destination;
+}
+
+/**
+ * The shipped installer runs `sha256sum -c` from the directory containing the
+ * bare-name bundle. Fail before provider mutation unless every non-empty line
+ * is a canonical GNU sha256sum entry and exactly one entry binds that filename
+ * to the digest already validated by CandidateBuildMap materialization.
+ */
+function bundleSha256SumsIntegrityBound(sumsContent: string, candidateBundleSha256: string): boolean {
+  const want = candidateBundleSha256.trim().toLowerCase();
+  if (!/^[0-9a-f]{64}$/.test(want)) {
+    return false;
+  }
+
+  let bundleEntries = 0;
+  for (const rawLine of sumsContent.split(/\r?\n/)) {
+    if (rawLine.length === 0) {
+      continue;
+    }
+    const match = rawLine.match(/^([0-9a-f]{64}) ([ *])(.+)$/i);
+    if (!match) {
+      return false;
+    }
+    const [, digest, , filename] = match;
+    if (filename === "proliferate-deploy.tar.gz") {
+      bundleEntries += 1;
+      if (digest!.toLowerCase() !== want) {
+        return false;
+      }
+    }
+  }
+  return bundleEntries === 1;
 }
 
 /** Reads the one-time first-run setup token from the api container over SSH. */
