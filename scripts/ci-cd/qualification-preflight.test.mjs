@@ -26,6 +26,15 @@ const LOCAL_ENV = {
   AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL: "https://gateway.qualification.invalid",
   AGENT_GATEWAY_LITELLM_MASTER_KEY: "super-secret-master-value",
 };
+const FULL_LOCAL_ENV = {
+  ...LOCAL_ENV,
+  RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY: "anthropic-a-secret",
+  RELEASE_E2E_BYOK_ANTHROPIC_B_API_KEY: "anthropic-b-secret",
+  RELEASE_E2E_BYOK_OPENAI_API_KEY: "openai-secret",
+  RELEASE_E2E_BYOK_XAI_API_KEY: "xai-secret",
+  RELEASE_E2E_INTEGRATION_NAMESPACE: "exa",
+  RELEASE_E2E_INTEGRATION_API_KEY: "integration-secret",
+};
 const TEST_TLS_MATERIAL = JSON.parse(
   readFileSync(
     new URL("../../tests/release/fixtures/qualification-tls-test-material.json", import.meta.url),
@@ -107,31 +116,59 @@ test("strict local preflight rejects missing, malformed, and unknown selectors b
   }
 });
 
-test("the preflight command rejects an unknown Local scenario before install/build/provider seams", () => {
-  const dir = mkdtempSync(path.join(os.tmpdir(), "qualification-preflight-unknown-local-"));
-  try {
-    const output = path.join(dir, "qualification-preflight.json");
-    const result = spawnSync(
-      process.execPath,
-      [
-        fileURLToPath(new URL("./qualification-preflight.mjs", import.meta.url)),
-        "--world", "local",
-        "--source-sha", SHA,
-        "--run-id", "ql-unknown",
-        "--shard-id", "1",
-        "--attempt", "1",
-        "--scenarios", "T3-NOT-REAL",
-        "--agents", "claude",
-        "--behavior", "strict",
-        "--artifact-mode", "build",
-        "--output", output,
-      ],
-      { encoding: "utf8", env: { ...process.env, ...LOCAL_ENV } },
-    );
-    assert.equal(result.status, 2, `${result.stdout}\n${result.stderr}`);
-    const receipt = JSON.parse(readFileSync(output, "utf8"));
+test("strict local preflight accepts every executable Local scenario and the all selector", () => {
+  const executable = [
+    "LOCAL-WORLD-SMOKE-1",
+    "T3-WT-1",
+    "T3-REPO-1",
+    "T3-CHAT-1",
+    "T3-AUTHROUTE-1",
+    "T3-CFG-1",
+    "T3-SESSION-1",
+    "T3-INT-1",
+  ];
+  for (const scenarios of [...executable, "all"]) {
+    const receipt = runQualificationPreflight({ ...BASE, scenarios }, { env: FULL_LOCAL_ENV });
+    assert.equal(receipt.verdict, "passed", `${scenarios}: ${JSON.stringify(receipt.checks)}`);
+    assert.ok(receipt.checks.some((check) => check.id === "scenario_catalog" && check.status === "passed"));
+  }
+});
+
+test("strict local preflight rejects manifest-known deferred and non-Local selectors before spend", () => {
+  for (const scenarios of ["T3-AUTH-1", "T3-MOBILITY-1", "T3-SH-2"]) {
+    const receipt = runQualificationPreflight({ ...BASE, scenarios }, { env: FULL_LOCAL_ENV });
     assert.equal(receipt.verdict, "failed");
     assert.ok(receipt.checks.some((check) => check.id === "scenario_catalog" && check.status === "failed"));
+  }
+});
+
+test("the preflight command rejects out-of-inventory Local scenarios before install/build/provider seams", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "qualification-preflight-unknown-local-"));
+  try {
+    for (const scenario of ["T3-AUTH-1", "T3-MOBILITY-1", "T3-SH-2", "T3-NOT-REAL"]) {
+      const output = path.join(dir, `${scenario}.json`);
+      const result = spawnSync(
+        process.execPath,
+        [
+          fileURLToPath(new URL("./qualification-preflight.mjs", import.meta.url)),
+          "--world", "local",
+          "--source-sha", SHA,
+          "--run-id", "ql-unknown",
+          "--shard-id", "1",
+          "--attempt", "1",
+          "--scenarios", scenario,
+          "--agents", "claude",
+          "--behavior", "strict",
+          "--artifact-mode", "build",
+          "--output", output,
+        ],
+        { encoding: "utf8", env: { ...process.env, ...FULL_LOCAL_ENV } },
+      );
+      assert.equal(result.status, 2, `${scenario}: ${result.stdout}\n${result.stderr}`);
+      const receipt = JSON.parse(readFileSync(output, "utf8"));
+      assert.equal(receipt.verdict, "failed");
+      assert.ok(receipt.checks.some((check) => check.id === "scenario_catalog" && check.status === "failed"));
+    }
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

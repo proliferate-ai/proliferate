@@ -193,6 +193,11 @@ Current execution reliability is deliberately bounded:
   bounded remote-default-branch identity lookup. It writes a redacted
   machine-readable receipt and exits `2` on failure. It does not authenticate
   to product providers or prove reachability.
+- The Local preflight and runner both consume
+  `tests/release/src/scenarios/qualification-world-scenarios.json` as the
+  machine-owned executable world inventory. The broader
+  `core-release-scenario-manifest.json` is a target-guarantee inventory and is
+  not an executable selector allowlist.
 - Managed-cloud preflight validates only the GitHub App inputs the current
   candidate-world constructor actually consumes. The complete six-field Server
   gate (including webhook secret instead of the current hard-coded/partial

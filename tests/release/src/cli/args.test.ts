@@ -80,6 +80,18 @@ test("--only remains an alias for --scenarios", () => {
   assert.deepEqual(args.scenarios, ["T3-WT-1"]);
 });
 
+test("--qualification-world accepts only the executable Local world scope", () => {
+  assert.equal(
+    parseArgs(["--behavior", "diagnostic", "--qualification-world", "local"]).qualificationWorld,
+    "local",
+  );
+  assert.equal(parseArgs(["--behavior", "diagnostic"]).qualificationWorld, undefined);
+  assert.throws(
+    () => parseArgs(["--behavior", "diagnostic", "--qualification-world", "self-host"]),
+    CliUsageError,
+  );
+});
+
 test("--cells parses a matrix-cell filter and defaults to all", () => {
   assert.equal(parseArgs(["--behavior", "diagnostic"]).cells, "all");
   assert.deepEqual(

@@ -998,6 +998,7 @@ qualification-local-workspace:
 		--desktop web \
 		--agents claude \
 		--scenarios LOCAL-WORLD-SMOKE-1 \
+		--qualification-world local \
 		--candidate-build-map "$$candidate_map" \
 		--run-id "$$run_id" --shard-id "$$shard_id" \
 		--output-dir "$$run_dir/evidence"
@@ -1150,6 +1151,7 @@ qualification-local-functional:
 		--desktop web \
 		--agents $(AGENTS) \
 		--scenarios "$$scenarios" \
+		--qualification-world local \
 		--candidate-build-map "$$candidate_map" \
 		--run-id "$$run_id" --shard-id "$$shard_id" \
 		--output-dir "$$evidence_dir"

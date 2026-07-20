@@ -15,21 +15,30 @@ export const PREFLIGHT_DEADLINE_MS = 120_000;
 const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 const SHA = /^[0-9a-f]{40}$/;
 const WORLDS = new Set(["local", "managed-cloud", "self-host", "tier4"]);
-const CORE_RELEASE_SCENARIO_IDS = new Set(
-  JSON.parse(
-    readFileSync(
-      new URL("../../specs/developing/testing/core-release-scenario-manifest.json", import.meta.url),
-      "utf8",
+const QUALIFICATION_WORLD_SCENARIOS = JSON.parse(
+  readFileSync(
+    new URL(
+      "../../tests/release/src/scenarios/qualification-world-scenarios.json",
+      import.meta.url,
     ),
-  ).requiredScenarios
-    .filter((scenario) => scenario.tier === 3)
-    .map((scenario) => scenario.id),
+    "utf8",
+  ),
 );
-const LOCAL_SCENARIO_IDS = new Set([
-  ...CORE_RELEASE_SCENARIO_IDS,
-  // Provisional infrastructure proof registered beside the core scenarios.
-  "LOCAL-WORLD-SMOKE-1",
-]);
+if (
+  QUALIFICATION_WORLD_SCENARIOS.schema_version !== 1
+  || QUALIFICATION_WORLD_SCENARIOS.kind !== "proliferate.qualification-world-scenario-inventory"
+  || QUALIFICATION_WORLD_SCENARIOS.worlds?.local?.runtime_lane !== "local"
+  || !Array.isArray(QUALIFICATION_WORLD_SCENARIOS.worlds.local.scenario_ids)
+  || QUALIFICATION_WORLD_SCENARIOS.worlds.local.scenario_ids.length === 0
+  || QUALIFICATION_WORLD_SCENARIOS.worlds.local.scenario_ids.some(
+    (scenarioId) => typeof scenarioId !== "string" || !SAFE_ID.test(scenarioId),
+  )
+  || new Set(QUALIFICATION_WORLD_SCENARIOS.worlds.local.scenario_ids).size
+    !== QUALIFICATION_WORLD_SCENARIOS.worlds.local.scenario_ids.length
+) {
+  throw new Error("Local qualification scenario inventory is malformed.");
+}
+const LOCAL_SCENARIO_IDS = new Set(QUALIFICATION_WORLD_SCENARIOS.worlds.local.scenario_ids);
 const LOCAL_AGENT_KINDS = new Set(
   JSON.parse(
     readFileSync(new URL("../../catalogs/agents/catalog.json", import.meta.url), "utf8"),
@@ -362,7 +371,7 @@ function validateLocalAgentSelection(agentIds, pass, fail) {
 
 function validateLocalScenarioSelection(scenarioIds, pass, fail) {
   if (scenarioIds === "all") {
-    pass("scenario_catalog", `All ${LOCAL_SCENARIO_IDS.size} known Tier 3/Local infrastructure scenario ids are selectable.`);
+    pass("scenario_catalog", `All ${LOCAL_SCENARIO_IDS.size} executable Local qualification scenario ids are selected.`);
     return;
   }
   if (!Array.isArray(scenarioIds) || scenarioIds.length === 0) {
@@ -370,10 +379,10 @@ function validateLocalScenarioSelection(scenarioIds, pass, fail) {
   }
   const unknown = scenarioIds.filter((scenario) => !LOCAL_SCENARIO_IDS.has(scenario));
   if (unknown.length > 0) {
-    fail("scenario_catalog", `Scenario selector contains ${unknown.length} unknown machine-inventory id(s).`);
+    fail("scenario_catalog", `Scenario selector contains ${unknown.length} id(s) outside the executable Local qualification inventory.`);
     return;
   }
-  pass("scenario_catalog", `${scenarioIds.length} explicit machine-inventory scenario id(s) are selected.`);
+  pass("scenario_catalog", `${scenarioIds.length} explicit executable Local qualification scenario id(s) are selected.`);
 }
 
 function validateEnv(name, shape, env, pass, fail) {

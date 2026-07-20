@@ -704,7 +704,11 @@ cleanup revision; for the manual local world it also records the validated
 strict/diagnostic behavior and the exact catalog agent selector before any
 installation, build, or provider-spend seam. A strict local run fails preflight
 when its scenario or agent selector is missing, empty, duplicated, malformed, or
-names an unshipped agent kind. The receipt never records environment values or
+names an unshipped agent kind. Local preflight and executor selection share
+`tests/release/src/scenarios/qualification-world-scenarios.json`; this bounded
+inventory names only executable Local-world scenarios, while
+`core-release-scenario-manifest.json` remains the broader target-guarantee
+inventory. The receipt never records environment values or
 locator paths. Artifact
 mode `external` is accepted only for read-only Tier 4 validation: it records a
 null candidate build and explicitly delegates published-CDN/git artifact

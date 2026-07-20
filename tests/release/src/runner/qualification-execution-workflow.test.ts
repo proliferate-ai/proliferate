@@ -119,6 +119,8 @@ test("the real Local Make entrypoints pass matching selectors through their mand
   const functionalTarget = makeTarget("qualification-local-functional");
   assert.equal((smokeTarget.match(/--agents claude --behavior "\$\(BEHAVIOR\)"/g) ?? []).length, 2);
   assert.equal((functionalTarget.match(/--agents "\$\(AGENTS\)" --behavior "\$\(BEHAVIOR\)"/g) ?? []).length, 2);
+  assert.equal((smokeTarget.match(/--qualification-world local/g) ?? []).length, 1);
+  assert.equal((functionalTarget.match(/--qualification-world local/g) ?? []).length, 1);
 
   const dir = mkdtempSync(path.join(os.tmpdir(), "qualification-local-make-selectors-"));
   try {
