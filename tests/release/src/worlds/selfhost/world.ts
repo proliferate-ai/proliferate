@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdir, rm } from "node:fs/promises";
+import { chmod, copyFile, mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 
@@ -9,7 +9,11 @@ import type { Browser } from "playwright";
 import { registerCancellationFinalizer } from "../../cli/cancellation-finalizer.js";
 
 import type { MaterializedArtifact } from "../../artifacts/local-candidate-set.js";
-import type { CandidateBuildMapV1 } from "../../artifacts/build-map.js";
+import {
+  BuildMapError,
+  type CandidateBuildArtifactV1,
+  type CandidateBuildMapV1,
+} from "../../artifacts/build-map.js";
 import {
   resolveSelfHostCandidateSet,
   type SelfHostCandidateSet,
@@ -47,6 +51,8 @@ import {
   type SelfHostWorldCleanupEvidence,
 } from "./cleanup-kinds.js";
 
+export const SELFHOST_BUNDLE_SHA256SUMS_FILENAME = "self-hosted-assets.SHA256SUMS";
+
 /**
  * The reusable self-host-world constructor (frozen spec "World construction
  * (ReadySelfHostWorld)"). It mirrors `ReadyLocalWorld`: it consumes validated
@@ -75,6 +81,8 @@ export interface ReadySelfHostWorld {
     serverImage: MaterializedArtifact;
     /** `selfhost-bundle/<platform>` proliferate-deploy.tar.gz + its SHA256SUMS. */
     bundle: MaterializedArtifact;
+    /** Scenario-owned copy of the builder's deterministic bundle checksum sibling. */
+    bundleSha256SumsPath: string;
     /** `anyharness/<host-target>` release executable (reused PR 1 build). */
     anyharness: MaterializedArtifact;
     /** `desktop-renderer/browser` archive (reused PR 1 build). */
@@ -324,6 +332,7 @@ export async function constructSelfHostWorld(
     // Materialize + re-hash the four mapped artifacts into run storage.
     const serverImage = await materialize(candidateSet.serverImage.artifact_id, options.map, artifactsDir);
     const bundle = await materialize(candidateSet.bundle.artifact_id, options.map, artifactsDir);
+    const bundleSha256SumsPath = await materializeBundleSha256Sums(candidateSet.bundle, artifactsDir);
     const anyharnessArtifact = await materialize(candidateSet.anyharness.artifact_id, options.map, artifactsDir);
     const rendererArtifact = await materialize(candidateSet.desktopRenderer.artifact_id, options.map, artifactsDir);
 
@@ -418,7 +427,13 @@ export async function constructSelfHostWorld(
     return {
       kind: "selfhost",
       run: options.run,
-      artifacts: { serverImage, bundle, anyharness: anyharnessArtifact, desktopRenderer: rendererArtifact },
+      artifacts: {
+        serverImage,
+        bundle,
+        bundleSha256SumsPath,
+        anyharness: anyharnessArtifact,
+        desktopRenderer: rendererArtifact,
+      },
       api: { baseUrl: apiOrigin, client: new ApiClient({ baseUrl: apiOrigin }) },
       runtime: { baseUrl: anyharness.baseUrl, client: new LocalRuntimeClient({ baseUrl: anyharness.baseUrl }) },
       renderer: { baseUrl: served.baseUrl, browser },
@@ -562,6 +577,25 @@ async function materialize(
   }
   const materializedPath = await materializeLocalArtifact(artifact, storageDir);
   return { artifact_id: artifact.artifact_id, version: artifact.version, sha256: artifact.sha256, path: materializedPath };
+}
+
+async function materializeBundleSha256Sums(
+  bundle: CandidateBuildArtifactV1,
+  storageDir: string,
+): Promise<string> {
+  const source = path.join(path.dirname(bundle.locator.path), SELFHOST_BUNDLE_SHA256SUMS_FILENAME);
+  const destination = path.join(storageDir, SELFHOST_BUNDLE_SHA256SUMS_FILENAME);
+  try {
+    await copyFile(source, destination);
+    await chmod(destination, 0o644);
+  } catch (error) {
+    throw new BuildMapError(
+      `Could not materialize ${SELFHOST_BUNDLE_SHA256SUMS_FILENAME} for artifact "${bundle.artifact_id}": ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
+  return destination;
 }
 
 /** Reads the one-time first-run setup token from the api container over SSH. */

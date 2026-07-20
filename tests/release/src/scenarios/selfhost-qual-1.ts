@@ -319,7 +319,7 @@ export const defaultSelfHostQualDriver: SelfHostQualDriver = {
         ssh: world.control.ssh,
         serverImageArchive: world.artifacts.serverImage,
         bundle: world.artifacts.bundle,
-        bundleSha256SumsPath: bundleSha256SumsPath(world.artifacts.bundle.path),
+        bundleSha256SumsPath: world.artifacts.bundleSha256SumsPath,
         siteAddress: hostOf(world.api.baseUrl),
         candidateImageRepo: repo,
         candidateImageTag: tag,
@@ -1290,9 +1290,4 @@ function splitCandidateImageRef(serverImage: { version: string }): { repo: strin
     return { repo: CANDIDATE_SERVER_IMAGE_REPO, tag: value };
   }
   return { repo: value.slice(0, lastColon), tag: value.slice(lastColon + 1) };
-}
-
-/** The bundle's adjacent `self-hosted-assets.SHA256SUMS` path (installer verifies it). */
-function bundleSha256SumsPath(materializedBundlePath: string): string {
-  return path.join(path.dirname(materializedBundlePath), "self-hosted-assets.SHA256SUMS");
 }
