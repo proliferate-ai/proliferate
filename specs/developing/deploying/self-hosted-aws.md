@@ -51,8 +51,8 @@ CloudFormation `.env.static` rewrite on updates.
 CloudFormation leaves `PROLIFERATE_PUBLIC_HEALTHCHECK_URL` blank in
 `.env.static`. `ensure-secrets.sh` resolves the site address, derives the
 public `/health` URL, and writes it to `.env.runtime`; the stack reports
-success only after both the local API and that advertised public HTTPS endpoint
-respond.
+initial creation or a physical-instance replacement as successful only after
+both the local API and that advertised public HTTPS endpoint respond.
 
 The instance gives `cfn-init` an 18-minute inner deadline, followed by a
 30-second forced-kill fallback if it does not stop on `TERM`, and always reports
@@ -61,9 +61,13 @@ CreationPolicy. Keeping that resource signal preserves fail-closed behavior
 when a latest-AMI or network change replaces the instance. Once the instance is
 locally ready, its Elastic IP association and DNS can converge. A separate
 Lambda-backed CloudFormation custom resource then probes the advertised public
-HTTPS `/health` endpoint for up to seven minutes. Its instance/release
-generation property changes on replacements and release updates, so both stack
-creation and updates remain gated on external public readiness. The probe role
+HTTPS `/health` endpoint for up to seven minutes. Its instance-generation
+property changes on physical-instance replacements, so stack creation and
+replacement updates remain gated on external public readiness. Release-only
+metadata updates are applied later by `cfn-hup`; CloudFormation can reach
+`UPDATE_COMPLETE` before that asynchronous host update finishes, so that status
+is not a release-deployment attestation. The canonical `update.sh` still waits
+for local and public health and records failure on the host. The probe role
 has no data-plane permissions or logging policy, and its CloudFormation response
 contains only fixed success/failure reasons. A failed or overlong host bootstrap
 therefore puts only a bounded stage and exit-code reason in the stack event.
@@ -75,7 +79,7 @@ CloudFormation events.
 The host-local health gate receives a deadline one minute inside that 18-minute
 wrapper and bounds every `curl` connect and total request. The CloudFormation
 path explicitly skips its public target until after CreationPolicy completes;
-the update-aware external gate owns the public retry budget instead. Manual and
+the create/replacement external gate owns the public retry budget instead. Manual and
 direct-installer paths continue to check both targets. The owner-only host
 progress record distinguishes the targets it runs with fixed
 started/completed/failed tokens, without recording either URL.

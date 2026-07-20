@@ -564,7 +564,7 @@ Resources:
           }
           if [ "$EXIT_CODE" -eq 0 ]; then
             # CreationPolicy owns host bootstrap and local API readiness. The
-            # separate update-aware public-health custom resource runs only
+            # separate create/replacement public-health custom resource runs only
             # after the instance can unblock its EIP/DNS dependencies.
             export PROLIFERATE_HEALTHCHECK_SKIP_PUBLIC=true
             export PROLIFERATE_HEALTHCHECK_DEADLINE_EPOCH_SECONDS="$(( $(date +%s) + 17 * 60 ))"
@@ -683,9 +683,11 @@ Resources:
                   return
               send_response(event, "FAILED", "Public HTTPS health did not become ready inside the bounded window.")
 
-  # This resource is invoked on CREATE and whenever InstanceGeneration changes
-  # (including a latest-AMI replacement). Conditional Ref properties also make
-  # it wait for the selected EIP association and Route53 record before probing.
+  # This resource is invoked on CREATE and when the physical instance changes
+  # (including a latest-AMI replacement). Release-only metadata updates are
+  # applied asynchronously by cfn-hup and must not false-green by probing the
+  # still-running old release. Conditional Ref properties also make this gate
+  # wait for the selected EIP association and Route53 record before probing.
   ProliferatePublicHealth:
     Type: AWS::CloudFormation::CustomResource
     Properties:
@@ -700,7 +702,7 @@ Resources:
                 - !Join ["", [!Ref ProliferateEip, ".sslip.io"]]
                 - !Join ["", [!GetAtt ProliferateInstance.PublicIp, ".sslip.io"]]
             - !Ref SiteAddress
-      InstanceGeneration: !Sub ${ProliferateInstance}:${ReleaseVersion}
+      InstanceGeneration: !Ref ProliferateInstance
       EipAssociationReady: !If
         - UsesElasticIp
         - !Ref ProliferateEipAssociation

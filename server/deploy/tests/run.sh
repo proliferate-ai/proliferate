@@ -526,7 +526,7 @@ grep -Fq 'PROLIFERATE_HEALTHCHECK_DEADLINE_EPOCH_SECONDS="$(( $(date +%s) + 17 *
   || no "template health gate must terminate inside the unchanged 18-minute cfn-init wrapper"
 grep -Fq 'export PROLIFERATE_HEALTHCHECK_SKIP_PUBLIC=true' "$AWS_TEMPLATE" \
   && ok "template lets CreationPolicy prove local health before dependent public networking" \
-  || no "template must split local bootstrap from the update-aware public health gate"
+  || no "template must split local bootstrap from the create/replacement public health gate"
 if awk '
   /^  ProliferateInstance:/ { in_instance = 1; next }
   in_instance && /^  [A-Za-z0-9]+:/ { exit }
@@ -537,12 +537,13 @@ if awk '
 else
   no "template must keep bootstrap fail-closed across EC2 replacements"
 fi
-grep -A30 '^  ProliferatePublicHealth:' "$AWS_TEMPLATE" | grep -Fq 'InstanceGeneration: !Sub ${ProliferateInstance}:${ReleaseVersion}' \
+grep -A30 '^  ProliferatePublicHealth:' "$AWS_TEMPLATE" | grep -Fq 'InstanceGeneration: !Ref ProliferateInstance' \
+  && ! grep -A30 '^  ProliferatePublicHealth:' "$AWS_TEMPLATE" | grep -Fq 'InstanceGeneration: !Sub ${ProliferateInstance}:${ReleaseVersion}' \
   && grep -A30 '^  ProliferatePublicHealth:' "$AWS_TEMPLATE" | grep -Fq 'EipAssociationReady: !If' \
   && grep -A30 '^  ProliferatePublicHealth:' "$AWS_TEMPLATE" | grep -Fq 'DnsRecordReady: !If' \
   && grep -A30 '^  ProliferatePublicHealth:' "$AWS_TEMPLATE" | grep -Fq 'ServiceTimeout: "460"' \
-  && ok "template gates create and replacement updates on bounded public HTTPS health" \
-  || no "template missing the update-aware public HTTPS custom resource contract"
+  && ok "template gates create and physical-instance replacements on bounded public HTTPS health" \
+  || no "template missing the create/replacement public HTTPS custom resource contract"
 
 public_health_handler="$SCRATCH/public-health-handler.py"
 awk '
@@ -551,7 +552,7 @@ awk '
   in_handler { sub(/^          /, ""); print }
 ' "$AWS_TEMPLATE" >"$public_health_handler"
 if python3 "$TESTS_DIR/public-health-custom-resource.py" "$public_health_handler"; then
-  ok "template public-health handler is bounded, update-aware, and secret-free"
+  ok "template public-health handler is bounded, replacement-safe, and secret-free"
 else
   no "template public-health handler contract regressed"
 fi
