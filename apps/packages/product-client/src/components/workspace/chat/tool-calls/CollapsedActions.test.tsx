@@ -92,7 +92,7 @@ describe("CollapsedActions", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Reading read\.ts/i }));
     expect(motionShell?.getAttribute("data-expanded")).toBe("false");
-    expect(motionShell?.className).toContain("grid-rows-[0fr]");
+    expect((motionShell as HTMLElement | null)?.style.gridTemplateRows).toBe("0fr");
     expect(document.querySelector("[data-collapsed-actions-ledger]")).not.toBeNull();
   });
 

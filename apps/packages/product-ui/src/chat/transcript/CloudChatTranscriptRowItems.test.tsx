@@ -57,7 +57,7 @@ describe("Cloud chat transcript optical spacing", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Worked for 12s" }));
     expect(motionShell?.getAttribute("data-expanded")).toBe("false");
-    expect(motionShell?.className).toContain("grid-rows-[0fr]");
+    expect((motionShell as HTMLElement | null)?.style.gridTemplateRows).toBe("0fr");
     expect(screen.queryByText("Read files")).not.toBeNull();
   });
 });

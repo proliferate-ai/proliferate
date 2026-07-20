@@ -15,7 +15,8 @@ describe("AnimatedCollapsibleContent", () => {
       "[data-animated-collapsible-content]",
     );
 
-    expect(disclosure?.className).toContain("grid-rows-[0fr]");
+    expect(disclosure?.style.gridTemplateRows).toBe("0fr");
+    expect(disclosure?.style.transitionProperty).toBe("grid-template-rows, opacity");
     expect(disclosure?.className).toContain("opacity-0");
     expect(disclosure?.hasAttribute("inert")).toBe(true);
     expect(disclosure?.getAttribute("aria-hidden")).toBe("true");
@@ -26,7 +27,7 @@ describe("AnimatedCollapsibleContent", () => {
       </AnimatedCollapsibleContent>,
     );
 
-    expect(disclosure?.className).toContain("grid-rows-[1fr]");
+    expect(disclosure?.style.gridTemplateRows).toBe("1fr");
     expect(disclosure?.className).toContain("opacity-100");
     expect(disclosure?.hasAttribute("inert")).toBe(false);
     expect(disclosure?.getAttribute("aria-hidden")).toBe("false");

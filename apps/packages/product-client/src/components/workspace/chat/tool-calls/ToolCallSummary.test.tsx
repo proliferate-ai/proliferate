@@ -45,7 +45,7 @@ describe("ToolCallSummary", () => {
     const motionShell = container.querySelector("[data-animated-collapsible-content]");
     expect(screen.queryByText("Work ledger")).not.toBeNull();
     expect(motionShell?.getAttribute("data-expanded")).toBe("false");
-    expect(motionShell?.className).toContain("grid-rows-[0fr]");
+    expect((motionShell as HTMLElement | null)?.style.gridTemplateRows).toBe("0fr");
     expect(motionShell?.hasAttribute("inert")).toBe(true);
     expect(container.querySelectorAll("[data-completed-work-divider]")).toHaveLength(1);
   });
