@@ -1195,11 +1195,12 @@ jobs:
           set -euo pipefail
           run_id="qlc-ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           run_dir="${GITHUB_WORKSPACE}/tests/release/.output/managed-cloud-world/${run_id}/1"
+          attempt_dir="attempt-${GITHUB_RUN_ATTEMPT}"
           mkdir -p "${run_dir}/evidence"
           cd tests/release
           pnpm exec tsx src/cli/verify-managed-cloud-handoff.ts \
-            --cp1-report "${run_dir}/evidence/cp1/${run_id}/1/attempt-1/qualification-evidence.json" \
-            --smoke-report "${run_dir}/evidence/fixture-smoke/${run_id}/1/attempt-1/qualification-evidence.json" \
+            --cp1-report "${run_dir}/evidence/cp1/${run_id}/1/${attempt_dir}/qualification-evidence.json" \
+            --smoke-report "${run_dir}/evidence/fixture-smoke/${run_id}/1/${attempt_dir}/qualification-evidence.json" \
             --custody "${run_dir}/cleanup-custody/shared-e2b-template-custody.json" \
             | tee "${run_dir}/evidence/managed-cloud-handoff-verification.json"
 
