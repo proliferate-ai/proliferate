@@ -374,6 +374,8 @@ test("self-host preflight scopes BYOK and instance requirements to selected scen
   const install = runQualificationPreflight({ ...base, scenarios: "SELFHOST-INSTALL-1" }, { env });
   assert.equal(install.verdict, "failed");
   assert.match(JSON.stringify(install), /RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY is missing/);
+  assert.match(JSON.stringify(install), /AGENT_GATEWAY_LITELLM_BASE_URL is missing/);
+  assert.match(JSON.stringify(install), /AGENT_GATEWAY_LITELLM_MASTER_KEY is missing/);
   assert.match(JSON.stringify(install), /RELEASE_E2E_SELFHOST_INSTANCE_TYPE is missing/);
   assert.match(JSON.stringify(install), /RELEASE_E2E_QUALIFICATION_TLS_CERTIFICATE_B64 is missing/);
 });

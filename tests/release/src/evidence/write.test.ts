@@ -1162,6 +1162,15 @@ function selfHostBaseTurnReportV4(
     transcript_reopened: true,
     byok_route: "api_key",
     byok_key_id_hash: "c".repeat(64),
+    litellm_actor_user_id_hash: "d".repeat(64),
+    provider_window_started_at: "2026-07-20T12:00:00.000Z",
+    provider_window_finished_at: "2026-07-20T12:00:05.000Z",
+    provider_observed_at: "2026-07-20T12:01:10.000Z",
+    provider_settle_ms: 65_000,
+    litellm_spend_rows_observed: 0,
+    e2b_traffic_matches_observed: 0,
+    e2b_observer_dns_canary_seen: true,
+    e2b_observer_tls_canary_seen: true,
     no_litellm_spend: claim,
     no_e2b: claim,
     cleanup: validSelfHostInstallClaimEvidence().cleanup,
@@ -1191,6 +1200,35 @@ test("validateReportV4 accepts an EXPECTED_FAIL SH-BASE-TURN with unproven claim
 
 test("validateReportV4 accepts a GREEN SH-BASE-TURN once provider absence is observed_absent (PR7-CONTROL-010)", () => {
   validateReportV4(selfHostBaseTurnReportV4("green", "observed_absent"));
+});
+
+test("validateReportV4 rejects invalid SH-BASE-TURN provider observation receipts", () => {
+  const nonZeroSpend = selfHostBaseTurnReportV4("green", "observed_absent");
+  (nonZeroSpend.results[0]!.evidence as SelfHostBaseTurnEvidenceV1).litellm_spend_rows_observed = 1 as 0;
+  assert.throws(() => validateReportV4(nonZeroSpend), /litellm_spend_rows_observed must be 0/);
+
+  const nonZeroE2b = selfHostBaseTurnReportV4("green", "observed_absent");
+  (nonZeroE2b.results[0]!.evidence as SelfHostBaseTurnEvidenceV1).e2b_traffic_matches_observed = 1 as 0;
+  assert.throws(() => validateReportV4(nonZeroE2b), /e2b_traffic_matches_observed must be 0/);
+
+  const missingDnsCanary = selfHostBaseTurnReportV4("green", "observed_absent");
+  (missingDnsCanary.results[0]!.evidence as SelfHostBaseTurnEvidenceV1).e2b_observer_dns_canary_seen =
+    false as true;
+  assert.throws(() => validateReportV4(missingDnsCanary), /e2b_observer_dns_canary_seen must be true/);
+
+  const missingTlsCanary = selfHostBaseTurnReportV4("green", "observed_absent");
+  (missingTlsCanary.results[0]!.evidence as SelfHostBaseTurnEvidenceV1).e2b_observer_tls_canary_seen =
+    false as true;
+  assert.throws(() => validateReportV4(missingTlsCanary), /e2b_observer_tls_canary_seen must be true/);
+
+  const shortSettle = selfHostBaseTurnReportV4("green", "observed_absent");
+  (shortSettle.results[0]!.evidence as SelfHostBaseTurnEvidenceV1).provider_settle_ms = 1_000;
+  assert.throws(() => validateReportV4(shortSettle), /provider_settle_ms must be 65000/);
+
+  const observedTooEarly = selfHostBaseTurnReportV4("green", "observed_absent");
+  (observedTooEarly.results[0]!.evidence as SelfHostBaseTurnEvidenceV1).provider_observed_at =
+    "2026-07-20T12:00:04.000Z";
+  assert.throws(() => validateReportV4(observedTooEarly), /must follow the window finish by at least/);
 });
 
 test("validateReportV4 accepts a failed self-host cell whose cleanup evidence records failed>0", () => {

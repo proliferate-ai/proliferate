@@ -705,7 +705,13 @@ self-host product, create a local workspace through the Desktop renderer and
 separate candidate AnyHarness, and complete one bounded turn with a
 representative harness. Assert the self-host server, Desktop renderer, local
 AnyHarness, workspace, session, and transcript remain
-commandable without the optional LiteLLM or E2B profiles.
+commandable without the optional LiteLLM or E2B profiles. Independently query
+the qualification LiteLLM transaction ledger for the exact actor over the turn
+window and require zero rows after the attested 65-second ingestion horizon. In
+parallel, run a packet observer in the candidate API container's network
+namespace, prove its DNS decoder and TLS-SNI decoder independently with
+per-run canaries, and require zero hostname matches for `api.e2b.app`; observer
+startup, either canary, stop, parse, or cleanup failure is non-green.
 
 #### `SH-INVITEE` — invitation, registration, and isolated member page
 
