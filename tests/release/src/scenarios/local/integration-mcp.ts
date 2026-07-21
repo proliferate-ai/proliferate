@@ -24,9 +24,11 @@ import {
   pickSearchTool,
   requireIntegrationAuditProbeEvents,
   runIntegrationAuditProbe,
+  summarizeNewToolCallEvents,
   writeGatewayDotfile,
   type GatewayGrant,
   type ToolCallAuditCorrelation,
+  type ToolCallEvent,
 } from "../../fixtures/integration-gateway.js";
 import { findErrorEvent, findTurnEndedEvent } from "../../fixtures/local-runtime.js";
 import { selectCheapestEligibleModel } from "../../services/qualification-litellm.js";
@@ -314,6 +316,7 @@ export const defaultLocalMcpDriver: LocalMcpDriver = {
   },
   async assertAuditRow(world, actor, namespace, toolName, correlation) {
     const deadline = Date.now() + 15_000;
+    let lastEvents: readonly ToolCallEvent[] = [];
     for (;;) {
       const probe = await runIntegrationAuditProbe(actor.session.email, {
         namespace,
@@ -321,6 +324,7 @@ export const defaultLocalMcpDriver: LocalMcpDriver = {
         databaseUrl: world.db.databaseUrl,
       });
       const events = requireIntegrationAuditProbeEvents(probe, actor.userId);
+      lastEvents = events;
       const row = findCorrelatedToolCallEvent(events, { namespace, toolName, correlation });
       if (row) {
         return { auditEventId: row.id };
@@ -328,7 +332,8 @@ export const defaultLocalMcpDriver: LocalMcpDriver = {
       if (Date.now() >= deadline) {
         throw new Error(
           `assertAuditRow: no new ok=true cloud_integration_tool_call_event for "${namespace}.${toolName}" ` +
-            `matched worker ${correlation.runtimeWorkerId} and organization ${correlation.organizationId}.`,
+            `matched worker ${correlation.runtimeWorkerId} and organization ${correlation.organizationId}. ` +
+            `Observed new rows: ${summarizeNewToolCallEvents(lastEvents, correlation)}.`,
         );
       }
       await sleep(2_000);

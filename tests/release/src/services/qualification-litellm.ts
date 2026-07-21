@@ -484,7 +484,15 @@ export class QualificationLiteLlmController {
         uniqueByRequestId.set(row.request_id, row);
       }
       accepted = [...uniqueByRequestId.values()];
-      if (accepted.length > 0 || Date.now() >= deadline) {
+      // LiteLLM can expose a newly correlated row before its asynchronous
+      // token/spend enrichment has landed (observed for the xAI fast route).
+      // Keep polling the SAME bounded request/window correlation until every
+      // visible row is complete. The strict validation below is unchanged and
+      // still fails the last observed partial row when the deadline expires.
+      if (
+        (accepted.length > 0 && accepted.every(hasSettledUsage)) ||
+        Date.now() >= deadline
+      ) {
         break;
       }
       await sleepMs(this.spendCorrelationPollMs);
@@ -647,6 +655,16 @@ export class QualificationLiteLlmController {
 
 function isPositiveInt(value: number): boolean {
   return Number.isInteger(value) && value > 0;
+}
+
+function hasSettledUsage(row: SpendLogRow): boolean {
+  return (
+    isPositiveInt(row.prompt_tokens) &&
+    isPositiveInt(row.completion_tokens) &&
+    isPositiveInt(row.total_tokens) &&
+    row.prompt_tokens + row.completion_tokens === row.total_tokens &&
+    row.spend > 0
+  );
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

@@ -1334,7 +1334,9 @@ async function goToHomeComposer(page: Page): Promise<void> {
   await ensureSidebarOpen(page);
   await page
     .locator("#main-sidebar")
-    .getByRole("button", { name: "New chat", exact: true })
+    // The visible sidebar action's accessible name also includes its Ctrl+N
+    // shortcut, so an exact-name match cannot resolve it in the real product.
+    .getByRole("button", { name: "New chat" })
     .first()
     .click();
   await page

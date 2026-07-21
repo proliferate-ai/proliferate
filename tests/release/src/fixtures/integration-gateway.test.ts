@@ -5,6 +5,7 @@ import {
   buildIntegrationAuditProbeEnv,
   enrollAfterTicketVisibility,
   findCorrelatedToolCallEvent,
+  summarizeNewToolCallEvents,
   parseIntegrationAuditProbeResult,
   pickSearchTool,
   requireIntegrationAuditProbeEvents,
@@ -276,4 +277,16 @@ test("audit correlation accepts the new successful row from the exact worker and
     }),
     exact,
   );
+});
+
+test("unmatched audit diagnostics are bounded and omit event ids", () => {
+  const events = [
+    toolCallEvent({ id: "audit-old" }),
+    toolCallEvent({ id: "secret-event-id", toolName: "other_tool", runtimeWorkerId: "worker-other" }),
+  ];
+  const summary = summarizeNewToolCallEvents(events, correlation, 1);
+
+  assert.match(summary, /tool="other_tool"/);
+  assert.match(summary, /worker="worker-other"/);
+  assert.doesNotMatch(summary, /secret-event-id|audit-old/);
 });

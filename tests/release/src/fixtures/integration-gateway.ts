@@ -385,6 +385,28 @@ export function findCorrelatedToolCallEvent(
   );
 }
 
+/** Bounded, credential-free diagnostics for a failed exact correlation. Event
+ * ids are deliberately omitted (they are evidence identities); the remaining
+ * fields are the same safe correlation dimensions already named by LOCAL-7. */
+export function summarizeNewToolCallEvents(
+  events: readonly ToolCallEvent[],
+  correlation: ToolCallAuditCorrelation,
+  maxRows = 8,
+): string {
+  const baselineIds = new Set(correlation.baselineEventIds);
+  const fresh = events.filter((event) => !baselineIds.has(event.id)).slice(-maxRows);
+  if (fresh.length === 0) {
+    return "none";
+  }
+  return fresh
+    .map(
+      (event) =>
+        `tool=${JSON.stringify(event.toolName)}, ok=${event.ok}, error=${JSON.stringify(event.errorCode)}, ` +
+        `worker=${JSON.stringify(event.runtimeWorkerId)}, org=${JSON.stringify(event.organizationId)}`,
+    )
+    .join("; ");
+}
+
 /**
  * Runs `tests/release/scripts/integration_audit_probe.py` in-process to read
  * back the `cloud_integration_tool_call_event` audit row.

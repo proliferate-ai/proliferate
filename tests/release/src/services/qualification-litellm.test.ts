@@ -283,6 +283,42 @@ test("correlateTurn rejects zero/inconsistent tokens", async () => {
   );
 });
 
+test("correlateTurn waits for an asynchronously enriched spend row", async () => {
+  let reads = 0;
+  const fetch: FetchLike = async () => {
+    reads += 1;
+    return response(200, [
+      spendRow(
+        reads === 1
+          ? {
+              model: "xai/grok-4.5",
+              prompt_tokens: 0,
+              completion_tokens: 0,
+              total_tokens: 0,
+              spend: 0,
+            }
+          : { model: "xai/grok-4.5" },
+      ),
+    ]);
+  };
+  const controller = new QualificationLiteLlmController(CONFIG, {
+    fetch,
+    spendCorrelationTimeoutMs: 1_000,
+    spendCorrelationPollMs: 0,
+  });
+  const result = await controller.correlateTurn({
+    actor: actor(),
+    before: { tokenIdHash: actor().tokenIdHash, requestIds: [], takenAt: WINDOW_START },
+    acceptedModelId: "grok-4-fast",
+    windowStartedAt: WINDOW_START,
+    windowFinishedAt: WINDOW_END,
+  });
+
+  assert.equal(reads, 2);
+  assert.equal(result.totalTokens, 13);
+  assert.ok(result.spendUsd > 0);
+});
+
 test("correlateTurn rejects zero spend", async () => {
   await assert.rejects(correlate([spendRow({ spend: 0 })]), /spend/);
 });
