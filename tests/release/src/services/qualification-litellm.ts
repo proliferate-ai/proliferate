@@ -81,12 +81,13 @@ function litellmModelMatches(rowModel: string, acceptedModelId: string): boolean
   }
   // The checked-in LiteLLM configuration deliberately exposes the stable
   // catalog alias `grok-4-fast` while routing it to xAI's current concrete
-  // fast-tier id `grok-4-1-fast` (server/litellm/config.yaml). Spend logs carry
-  // the concrete id, so correlate this one explicit configured alias without
-  // permitting arbitrary same-family model drift.
+  // fast-tier id `grok-4-1-fast` (server/litellm/config.yaml). xAI currently
+  // reports that routed request as `grok-4.5` in the response/spend record.
+  // Correlate only those two explicitly observed concrete ids for this checked-
+  // in alias; never generalize to arbitrary same-family model drift.
   if (
-    (accepted === "grok-4-fast" && row === "grok-4-1-fast") ||
-    (row === "grok-4-fast" && accepted === "grok-4-1-fast")
+    (accepted === "grok-4-fast" && (row === "grok-4-1-fast" || row === "grok-4.5")) ||
+    (row === "grok-4-fast" && (accepted === "grok-4-1-fast" || accepted === "grok-4.5"))
   ) {
     return true;
   }

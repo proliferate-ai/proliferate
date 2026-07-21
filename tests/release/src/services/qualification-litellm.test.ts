@@ -249,6 +249,15 @@ test("correlateTurn accepts the configured Grok fast alias's concrete xAI model"
   assert.equal(result.modelId, "grok-4-fast");
 });
 
+test("correlateTurn accepts xAI's observed grok-4.5 response for the configured fast alias", async () => {
+  const result = (await correlate(
+    [spendRow({ model: "xai/grok-4.5" })],
+    [],
+    "grok-4-fast",
+  )) as { modelId: string };
+  assert.equal(result.modelId, "grok-4-fast");
+});
+
 test("correlateTurn does not generalize the Grok fast alias to another model", async () => {
   await assert.rejects(
     correlate([spendRow({ model: "xai/grok-4" })], [], "grok-4-fast"),

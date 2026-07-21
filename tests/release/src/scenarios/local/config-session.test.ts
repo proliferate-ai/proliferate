@@ -729,6 +729,46 @@ test("Grok catalog model control resolves one distinct allowlisted live-probed p
   );
 });
 
+test("Grok materializes its catalog-backed model control when ACP omits the raw model option", async () => {
+  const probed = ["grok-4", "grok-4-fast", "grok-code-fast-1"];
+  const world = {
+    ...fakeWorld(),
+    runtime: {
+      baseUrl: "http://fake",
+      client: {
+        getLiveConfig: async () => ({
+          rawConfigOptions: [],
+          sourceSeq: 1,
+          normalizedControls: {},
+        }),
+        getGatewayModels: async () => probed.map((id) => ({ id })),
+      },
+    },
+    gateway: {
+      preflight: async () => ({
+        adminReachable: true,
+        allowlistModels: probed,
+        eligibleClaudeModels: [],
+      }),
+    },
+  } as unknown as ReadyLocalWorld;
+
+  const controls = await defaultLocalConfigDriver.enumerateControls(
+    world,
+    "session-grok",
+    "grok",
+    "grok-4-fast",
+  );
+  assert.deepEqual(controls, [{
+    key: "model",
+    rawConfigId: "catalog:model",
+    currentValue: "grok-4-fast",
+    settable: true,
+    values: ["grok-4-fast", "grok-code-fast-1"],
+    surface: "model",
+  }]);
+});
+
 test("default Grok model picker proof preserves the session and correlates one post-switch turn", async () => {
   const sessionId = "sess-grok";
   const targetModelId = "grok-code-fast-1";

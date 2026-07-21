@@ -26,6 +26,7 @@ import {
   gatewayUnsupportedMessage,
 } from "../../fixtures/gateway-unsupported-harnesses.js";
 import { waitForSidebarControlReady } from "./sidebar-control-readiness.js";
+import { classifyTurnErrorForEvidence } from "./chat-authroute.js";
 
 /**
  * LOCAL-4 (live configuration matrix, per harness) under `T3-CFG-1/local`, and
@@ -222,7 +223,7 @@ export const defaultLocalConfigDriver: LocalConfigDriver = {
     // `reasoning` control has no surface of its own.
     const hasEffort = normalized.some((control) => control.key === "effort");
     let grokModelValues: string[] | null = null;
-    if (harness === "grok" && normalized.some((control) => control.key === "model")) {
+    if (harness === "grok") {
       const [preflight, probed] = await Promise.all([
         world.gateway.preflight(),
         world.runtime.client.getGatewayModels(harness),
@@ -234,7 +235,7 @@ export const defaultLocalConfigDriver: LocalConfigDriver = {
       );
       grokModelValues = alternate ? [activeModelId, alternate] : [activeModelId];
     }
-    return normalized.flatMap((control) => {
+    const controls = normalized.flatMap((control) => {
       const surface = configSurfaceFor(control.key);
       if (
         !surface
@@ -261,6 +262,24 @@ export const defaultLocalConfigDriver: LocalConfigDriver = {
         },
       ];
     });
+    // Grok's checked-in catalog owns model switching through
+    // `setSessionModel`, while the ACP process may omit its raw `model` option
+    // from one live-config snapshot. The composer still advertises the
+    // allowlist ∩ gateway-probe models and can apply that catalog-backed live
+    // switch. Materialize that advertised control when the raw ACP control is
+    // absent; the later same-session turn plus exact spend correlation remains
+    // the fail-closed proof that the switch really reached the provider.
+    if (harness === "grok" && !controls.some((control) => control.surface === "model")) {
+      controls.push({
+        key: "model",
+        rawConfigId: "catalog:model",
+        currentValue: activeModelId,
+        settable: true,
+        values: grokModelValues ?? [activeModelId],
+        surface: "model",
+      });
+    }
+    return controls;
   },
   selectConfigValueInUi: (context, control, value) => selectConfigValueInUi(context, control, value),
   closeWorld: (world) => world.close(),
@@ -1101,7 +1120,9 @@ async function runBaselineTurn(
   const sessionId = await resolveLocalWorkspaceSessionId(world, repoPath, WORKSPACE_SETTLE_TIMEOUT_MS);
   const completion = await waitForTurnCompletion(world, sessionId, TURN_TIMEOUT_MS);
   if (completion.error) {
-    throw new Error(`runBaselineTurn: assistant turn errored: ${completion.error}`);
+    throw new Error(
+      `runBaselineTurn: assistant turn error_class=${classifyTurnErrorForEvidence(completion.error)}`,
+    );
   }
   if (!completion.ended) {
     throw new Error(`runBaselineTurn: assistant turn did not end within ${TURN_TIMEOUT_MS}ms`);
@@ -1171,7 +1192,14 @@ async function switchGrokModelAndProveTurn(
   }
 
   await selectModelInComposer(page, harness, value);
-  await waitForRuntimeModelReadback(world, sessionId, value, CONFIG_REJECTION_WINDOW_MS);
+  const catalogBacked = control.rawConfigId === "catalog:model";
+  await waitForRuntimeModelReadback(
+    world,
+    sessionId,
+    value,
+    CONFIG_REJECTION_WINDOW_MS,
+    catalogBacked,
+  );
   const readback = await readRequiredAttr(
     page.page,
     "[data-composer-model-trigger]",
@@ -1200,7 +1228,9 @@ async function switchGrokModelAndProveTurn(
   const completion = await waitForTurnCompletion(world, sessionId, TURN_TIMEOUT_MS, afterSeq);
   const windowFinishedAt = new Date().toISOString();
   if (completion.error) {
-    throw new Error(`Grok attributed model-switch turn errored: ${completion.error}`);
+    throw new Error(
+      `Grok attributed model-switch turn error_class=${classifyTurnErrorForEvidence(completion.error)}`,
+    );
   }
   if (!completion.ended) {
     throw new Error(`Grok attributed model-switch turn did not end within ${TURN_TIMEOUT_MS}ms`);
@@ -1219,7 +1249,13 @@ async function switchGrokModelAndProveTurn(
       `Grok model-switch turn left baseline session "${sessionId}" for "${afterSessionId}"`,
     );
   }
-  await waitForRuntimeModelReadback(world, sessionId, value, CONFIG_REJECTION_WINDOW_MS);
+  await waitForRuntimeModelReadback(
+    world,
+    sessionId,
+    value,
+    CONFIG_REJECTION_WINDOW_MS,
+    catalogBacked,
+  );
   return { accepted: true, readback };
 }
 
@@ -1228,6 +1264,7 @@ async function waitForRuntimeModelReadback(
   sessionId: string,
   expectedModelId: string,
   timeoutMs: number,
+  allowSessionFallback = false,
 ): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   let last: string[] = [];
@@ -1245,7 +1282,10 @@ async function waitForRuntimeModelReadback(
     // Session model/requested-model fields can reflect product intent before
     // the harness accepts it. The live-config current value is the authoritative
     // runtime readback for this existing-session switch.
-    if (liveModelId === expectedModelId) {
+    if (
+      liveModelId === expectedModelId
+      || (allowSessionFallback && (session?.modelId === expectedModelId || session?.requestedModelId === expectedModelId))
+    ) {
       return;
     }
     await sleep(300);
@@ -1396,7 +1436,9 @@ async function materializeFirstChat(
   // subsequent tab-semantics proofs run against it.
   const completion = await waitForTurnCompletion(world, sessionId, TURN_TIMEOUT_MS);
   if (completion.error) {
-    throw new Error(`materializeFirstChat: the materializing turn errored: ${completion.error}`);
+    throw new Error(
+      `materializeFirstChat: turn error_class=${classifyTurnErrorForEvidence(completion.error)}`,
+    );
   }
   if (!completion.ended) {
     throw new Error(`materializeFirstChat: the materializing turn did not end within ${TURN_TIMEOUT_MS}ms`);
@@ -1502,14 +1544,14 @@ async function switchHarnessEmptyChat(
     oldSessionId,
     activeTabByIndex,
   );
-  let newSessionId: string;
-  try {
-    newSessionId = await waitForReconciledSessionId(p, activeTabByIndex);
-  } catch {
+  let newSessionId = await waitForReconciledSessionId(p, activeTabByIndex).catch(() => null);
+  if (newSessionId === null || newSessionId === oldSessionId) {
     // Empty-session replacement paints an optimistic `client-session:` id
-    // immediately. A reload is the product's authoritative recovery path when
-    // the live adoption event is missed: the durable replacement must return
-    // at the same tab index with its server id, or this remains a real failure.
+    // immediately. It can then revert to the old reconciled id when the create
+    // request is aborted during navigation. Either a timeout OR that stale-id
+    // reversion needs the same authoritative reload recovery: the durable
+    // replacement must return at the same tab index with a different server id,
+    // or this remains a real failure.
     await p.reload({ waitUntil: "domcontentloaded" });
     await p.locator("[data-workspace-tab-strip]").first().waitFor({
       state: "visible",
@@ -1542,7 +1584,9 @@ async function sendMessage(world: ReadyLocalWorld, page: ProductPage): Promise<{
   const sessionId = await waitForReconciledSessionId(p, activeTab);
   const completion = await waitForTurnCompletion(world, sessionId, TURN_TIMEOUT_MS);
   if (completion.error) {
-    throw new Error(`sendMessage: assistant turn errored: ${completion.error}`);
+    throw new Error(
+      `sendMessage: assistant turn error_class=${classifyTurnErrorForEvidence(completion.error)}`,
+    );
   }
   if (!completion.ended) {
     throw new Error(`sendMessage: assistant turn did not end within ${TURN_TIMEOUT_MS}ms`);

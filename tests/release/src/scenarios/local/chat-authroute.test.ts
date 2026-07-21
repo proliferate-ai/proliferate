@@ -298,7 +298,7 @@ test("preflightLocalUserKey rejects an Anthropic key with a bounded status-only 
     preflightLocalUserKey("opencode", "sk-ant-secret", {
       checkKey: async () => ({ status: 401 }),
     }),
-    /opencode provider credential preflight failed: provider returned 401 on \/models/,
+    /opencode credential preflight result=provider returned 401 on \/models/,
   );
 });
 
@@ -317,6 +317,10 @@ test("preflightLocalUserKey passes a valid Anthropic key and skips providers wit
 
 test("turn error classification is conservative and bounded", () => {
   assert.equal(classifyTurnErrorForEvidence("HTTP 429 from upstream"), "rate_limited");
+  assert.equal(
+    classifyTurnErrorForEvidence("stream disconnected before completion: stream closed before response.completed"),
+    "network_connection",
+  );
   assert.equal(classifyTurnErrorForEvidence("provider returned 401 unauthorized"), "authentication_failed");
   assert.equal(classifyTurnErrorForEvidence("upstream service unavailable (503)"), "provider_unavailable");
   assert.equal(classifyTurnErrorForEvidence("opaque provider detail secret=abc"), "unclassified");

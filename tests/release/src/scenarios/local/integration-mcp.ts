@@ -10,7 +10,7 @@ import {
 } from "./world-boot.js";
 import { captureLocalDriverFailure } from "./debug-capture.js";
 import { resolveLocalWorkspaceSessionId } from "./local-session.js";
-import { CloudSurfaceGatedError } from "./chat-authroute.js";
+import { classifyTurnErrorForEvidence, CloudSurfaceGatedError } from "./chat-authroute.js";
 import type { ReadyLocalWorld } from "../../worlds/local-workspace/world.js";
 import type { LocalWorldCleanupEvidence } from "../../worlds/local-workspace/cleanup.js";
 import { authenticatedActor, type AuthenticatedActor } from "../../fixtures/authenticated-actor.js";
@@ -302,7 +302,9 @@ export const defaultLocalMcpDriver: LocalMcpDriver = {
     const sessionId = await resolveLocalWorkspaceSessionId(world, repoPath, WORKSPACE_SETTLE_TIMEOUT_MS);
     const completion = await waitForTurnCompletion(world, sessionId, TURN_TIMEOUT_MS, p);
     if (completion.error) {
-      throw new Error(`runIntegrationTurn: assistant turn errored: ${completion.error}`);
+      throw new Error(
+        `runIntegrationTurn: assistant turn error_class=${classifyTurnErrorForEvidence(completion.error)}`,
+      );
     }
     if (!completion.ended) {
       throw new Error(`runIntegrationTurn: assistant turn did not end within ${TURN_TIMEOUT_MS}ms.`);

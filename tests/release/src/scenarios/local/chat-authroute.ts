@@ -87,6 +87,7 @@ export function classifyTurnErrorForEvidence(raw: string, structuredCode?: strin
   const message = raw.toLowerCase();
   if (/\bbudget\b[\s\S]{0,120}\b(?:exceed(?:ed|s|ing)?|exhausted|reached)\b/.test(message)) return "budget_exceeded";
   if (/\b429\b|\brate[ _-]?limit(?:ed|ing)?\b/.test(message)) return "rate_limited";
+  if (/\bstream (?:disconnected|closed) before (?:completion|response\.completed)\b/.test(message)) return "network_connection";
   if (/\b(?:401|403)\b|\bunauthori[sz]ed\b|\bauthentication failed\b|\binvalid api[ _-]?key\b/.test(message)) return "authentication_failed";
   if (/\b(?:502|503|504)\b|\b(?:service|provider|upstream) unavailable\b/.test(message)) return "provider_unavailable";
   return "unclassified";
@@ -153,7 +154,7 @@ export async function preflightLocalUserKey(
   const result = await preflightByokKey(rawKey, {}, probe);
   if (!result.ok) {
     throw new Error(
-      `storeAndSelectUserKeyRoute: ${harness} provider credential preflight failed: ${result.reason ?? "unknown"}`,
+      `storeAndSelectUserKeyRoute: ${harness} credential preflight result=${result.reason ?? "unknown"}`,
     );
   }
 }
@@ -396,6 +397,8 @@ export const defaultLocalRouteDriver: LocalRouteDriver = {
     // harness appears launchable (its direct-provider models resolve).
     const deadline = Date.now() + ROUTE_SYNC_TIMEOUT_MS;
     let lastError: unknown;
+    let lastAgent: Awaited<ReturnType<typeof world.runtime.client.getAgent>> | undefined;
+    let lastLaunchModelCount: number | undefined;
     while (Date.now() < deadline) {
       try {
         if (route === "gateway") {
@@ -404,8 +407,13 @@ export const defaultLocalRouteDriver: LocalRouteDriver = {
             return;
           }
         } else {
-          const options = await world.runtime.client.getAgentLaunchOptions();
+          const [options, agent] = await Promise.all([
+            world.runtime.client.getAgentLaunchOptions(),
+            world.runtime.client.getAgent(harness).catch(() => undefined),
+          ]);
+          lastAgent = agent;
           const entry = options.find((agent) => agent.kind === harness);
+          lastLaunchModelCount = entry?.models.length;
           if (entry && entry.models.length > 0) {
             return;
           }
@@ -417,7 +425,12 @@ export const defaultLocalRouteDriver: LocalRouteDriver = {
     }
     throw new Error(
       `waitForRouteSync: Desktop did not sync the "${route}" route for "${harness}" within ` +
-        `${ROUTE_SYNC_TIMEOUT_MS}ms${lastError ? ` (last probe error: ${describe(lastError)})` : ""}.`,
+        `${ROUTE_SYNC_TIMEOUT_MS}ms` +
+        (route === "user_key"
+          ? ` (last: launchModels=${lastLaunchModelCount ?? "absent"}, readiness=${lastAgent?.readiness ?? "unknown"}, ` +
+            `installState=${lastAgent?.installState ?? "unknown"}, credentialState=${lastAgent?.credentialState ?? "unknown"})`
+          : "") +
+        `${lastError ? ` (last probe error: ${describe(lastError)})` : ""}.`,
     );
   },
   selectRepoAndWorkLocally: (page, repo) => defaultLocalWorldSmokeDriver.selectRepoAndWorkLocally(page, repo),
