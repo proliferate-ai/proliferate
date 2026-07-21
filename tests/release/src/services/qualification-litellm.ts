@@ -515,7 +515,10 @@ export class QualificationLiteLlmController {
         !isPositiveInt(row.total_tokens) ||
         row.prompt_tokens + row.completion_tokens !== row.total_tokens
       ) {
-        throw new QualificationLiteLlmError("Correlated a spend row with non-positive/inconsistent tokens.");
+        throw new QualificationLiteLlmError(
+          `Correlated a spend row with non-positive/inconsistent tokens ` +
+            `(model=${row.model}, prompt=${row.prompt_tokens}, completion=${row.completion_tokens}, total=${row.total_tokens}).`,
+        );
       }
       if (!(row.spend > 0)) {
         throw new QualificationLiteLlmError("Correlated a spend row with non-positive spend.");

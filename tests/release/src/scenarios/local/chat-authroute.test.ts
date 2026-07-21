@@ -561,6 +561,18 @@ test("LOCAL-6: route change proves a new gateway session while recording the ori
   assert.ok(calls.includes("switchSelectedRouteToGateway:claude"));
   assert.ok(calls.includes("sendBoundedTurn:user_key"));
   assert.ok(calls.includes("sendBoundedTurn:gateway"));
+  assert.equal(
+    calls.filter((call) => call === "selectRepoAndWorkLocally").length,
+    2,
+    "the gateway leg must reselect the same repo from the home composer",
+  );
+  const gatewayModel = calls.lastIndexOf("selectModelInUi:claude-haiku-4-5");
+  const gatewayRepo = calls.lastIndexOf("selectRepoAndWorkLocally");
+  const gatewaySend = calls.indexOf("sendBoundedTurn:gateway");
+  assert.ok(
+    gatewayModel < gatewayRepo && gatewayRepo < gatewaySend,
+    `gateway model → repo/runtime → send order: ${calls.join(",")}`,
+  );
 });
 
 test("LOCAL-6: a route switch that reuses the same session id fails (route not process-bound)", async () => {

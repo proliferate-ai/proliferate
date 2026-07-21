@@ -362,12 +362,12 @@ test("approvePendingPermissionIfPresent prefers a non-destructive session-scoped
   const clicked: string[] = [];
   const visible = new Set(["Allow all server tools for this session", "Allow"]);
   const page = {
-    getByRole: (_role: string, options: { name: string }) => {
+    getByRole: (_role: string, options: { name: RegExp }) => {
       const action = {
         first: () => action,
-        isVisible: async () => visible.has(options.name),
+        isVisible: async () => [...visible].some((name) => options.name.test(name)),
         click: async () => {
-          clicked.push(options.name);
+          clicked.push([...visible].find((name) => options.name.test(name)) ?? "");
         },
       };
       return action;
@@ -380,13 +380,14 @@ test("approvePendingPermissionIfPresent prefers a non-destructive session-scoped
 
 test("approvePendingPermissionIfPresent accepts the one-shot action emitted by Grok", async () => {
   const clicked: string[] = [];
+  const accessibleName = "1 allow once";
   const page = {
-    getByRole: (_role: string, options: { name: string }) => {
+    getByRole: (_role: string, options: { name: RegExp }) => {
       const action = {
         first: () => action,
-        isVisible: async () => options.name === "Allow once",
+        isVisible: async () => options.name.test(accessibleName),
         click: async () => {
-          clicked.push(options.name);
+          clicked.push(accessibleName);
         },
       };
       return action;
@@ -394,5 +395,5 @@ test("approvePendingPermissionIfPresent accepts the one-shot action emitted by G
   } as never;
 
   assert.equal(await approvePendingPermissionIfPresent(page), true);
-  assert.deepEqual(clicked, ["Allow once"]);
+  assert.deepEqual(clicked, [accessibleName]);
 });

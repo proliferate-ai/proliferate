@@ -782,11 +782,11 @@ export async function selectSessionModeInUi(page: ProductPage, modeId: string): 
  */
 export async function approvePendingPermissionIfPresent(page: Page): Promise<boolean> {
   const labels = [
-    "Allow all server tools for this session",
-    "Allow tool for this session",
-    "Always Allow",
-    "Allow once",
-    "Allow",
+    /^(?:\d+\s+)?allow all server tools for this session$/i,
+    /^(?:\d+\s+)?allow tool for this session$/i,
+    /^(?:\d+\s+)?always allow$/i,
+    /^(?:\d+\s+)?allow once$/i,
+    /^(?:\d+\s+)?allow$/i,
   ];
   for (const label of labels) {
     const action = page.getByRole("button", { name: label, exact: true }).first();

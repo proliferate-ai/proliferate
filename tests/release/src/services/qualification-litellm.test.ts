@@ -273,7 +273,14 @@ test("correlateTurn still rejects a same-family but different dated model", asyn
 });
 
 test("correlateTurn rejects zero/inconsistent tokens", async () => {
-  await assert.rejects(correlate([spendRow({ completion_tokens: 0, total_tokens: 8 })]), /tokens/);
+  await assert.rejects(
+    correlate(
+      [spendRow({ model: "xai/grok-4.5", prompt_tokens: 8, completion_tokens: 0, total_tokens: 8 })],
+      [],
+      "grok-4-fast",
+    ),
+    /model=xai\/grok-4\.5, prompt=8, completion=0, total=8/,
+  );
 });
 
 test("correlateTurn rejects zero spend", async () => {
