@@ -226,11 +226,15 @@ test("the managed-cloud derivative world refreshes trusted cleanup authority aft
   const cp1 = managed.indexOf("Build candidates and run CLOUD-PROVISION-1 (strict)");
   const refresh = managed.indexOf("Refresh trusted default-branch cleanup authorization before fixture smoke");
   const fixtureSmoke = managed.indexOf("Reuse candidates and run MANAGED-CLOUD-FIXTURE-SMOKE-1 (strict)");
+  const handoff = managed.slice(managed.indexOf("Verify exact CP1 → fixture-smoke handoff"));
 
   assert.ok(cp1 >= 0);
   assert.ok(refresh > cp1);
   assert.ok(fixtureSmoke > refresh);
   assert.equal((managed.match(/path: \.qualification-trusted-default/g) ?? []).length, 2);
+  assert.match(handoff, /attempt_dir="attempt-\$\{GITHUB_RUN_ATTEMPT\}"/);
+  assert.equal((handoff.match(/\$\{attempt_dir\}\/qualification-evidence\.json/g) ?? []).length, 2);
+  assert.doesNotMatch(handoff, /attempt-1\/qualification-evidence\.json/);
 });
 
 test("the Tier 4 artifact-chain preflight describes read-only published artifacts", () => {
