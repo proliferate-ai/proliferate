@@ -278,20 +278,23 @@ export interface SelfHostBaseTurnEvidenceV1 extends SelfHostEvidenceBaseV1 {
   /** BYOK is a direct-provider call — never a gateway/LiteLLM correlation. */
   byok_route: "api_key";
   byok_key_id_hash: string;
+  /** Hash of the exact product actor used to scope the shared LiteLLM ledger query. */
+  litellm_actor_user_id_hash: string;
   /**
-   * The frozen contract's `no_litellm_spend`/`no_e2b` are run-window provider
-   * SPEND/TRAFFIC observations. PR 7 does not perform those observations for a
-   * gateway-OFF base install (there is no LiteLLM admin API to query, and E2B
-   * traffic proof needs the managed-cloud controller PR 7 does not own), so the
-   * claims are recorded HONESTLY as `"unproven"` rather than asserted `true`
-   * (PR7-CONTROL-010: a false `true` from an unavailable/insufficient
-   * observation is worse than an explicit unproven). The cell's green rests on
-   * its REAL BYOK-direct observations — capabilities gateway/cloud both false,
-   * the pushed auth route is `api_key` not `gateway`, and the scrubbed candidate
-   * env carries no LiteLLM/E2B input — which prove the TURN was BYOK-direct, not
-   * that zero provider spend/traffic occurred anywhere. `"observed_absent"` is
-   * reserved for when a real run-window observation is later wired.
+   * Exact provider-observation window and the later controller observation.
+   * The actor-scoped qualification LiteLLM transaction log must report zero
+   * in-window rows after the bounded settle delay, and a canary-proven packet
+   * observer in the candidate API container's network namespace must report
+   * zero `api.e2b.app` DNS/TLS hostname matches.
    */
+  provider_window_started_at: string;
+  provider_window_finished_at: string;
+  provider_observed_at: string;
+  provider_settle_ms: number;
+  litellm_spend_rows_observed: 0;
+  e2b_traffic_matches_observed: 0;
+  e2b_observer_dns_canary_seen: true;
+  e2b_observer_tls_canary_seen: true;
   no_litellm_spend: SelfHostProviderClaim;
   no_e2b: SelfHostProviderClaim;
 }
@@ -303,6 +306,9 @@ export interface SelfHostBaseTurnEvidenceV1 extends SelfHostEvidenceBaseV1 {
  * absence. Never a bare `true` derived from configuration.
  */
 export type SelfHostProviderClaim = "unproven" | "observed_absent";
+
+/** Minimum/actual LiteLLM ingestion horizon attested by SH-BASE-TURN evidence. */
+export const SELFHOST_PROVIDER_ABSENCE_SETTLE_MS = 65_000;
 
 export interface SelfHostInviteeEvidenceV1 extends SelfHostEvidenceBaseV1 {
   kind: "selfhost_invitee";
@@ -2228,6 +2234,15 @@ const SELFHOST_BASE_TURN_EVIDENCE_KEYS = [
   "transcript_reopened",
   "byok_route",
   "byok_key_id_hash",
+  "litellm_actor_user_id_hash",
+  "provider_window_started_at",
+  "provider_window_finished_at",
+  "provider_observed_at",
+  "provider_settle_ms",
+  "litellm_spend_rows_observed",
+  "e2b_traffic_matches_observed",
+  "e2b_observer_dns_canary_seen",
+  "e2b_observer_tls_canary_seen",
   "no_litellm_spend",
   "no_e2b",
 ] as const;
@@ -2483,6 +2498,34 @@ function validateSelfHostCellEvidence(
         throw new ReportValidationError(`${where}.byok_route must be "api_key".`);
       }
       requireEvidenceHash(`${where}.byok_key_id_hash`, e.byok_key_id_hash);
+      requireEvidenceHash(`${where}.litellm_actor_user_id_hash`, e.litellm_actor_user_id_hash);
+      requireEvidenceTimestamp(`${where}.provider_window_started_at`, e.provider_window_started_at);
+      requireEvidenceTimestamp(`${where}.provider_window_finished_at`, e.provider_window_finished_at);
+      requireEvidenceTimestamp(`${where}.provider_observed_at`, e.provider_observed_at);
+      const providerWindowStartedAt = Date.parse(e.provider_window_started_at);
+      const providerWindowFinishedAt = Date.parse(e.provider_window_finished_at);
+      const providerObservedAt = Date.parse(e.provider_observed_at);
+      if (providerWindowFinishedAt < providerWindowStartedAt) {
+        throw new ReportValidationError(`${where}.provider_window_finished_at must not precede the window start.`);
+      }
+      if (e.provider_settle_ms !== SELFHOST_PROVIDER_ABSENCE_SETTLE_MS) {
+        throw new ReportValidationError(
+          `${where}.provider_settle_ms must be ${SELFHOST_PROVIDER_ABSENCE_SETTLE_MS}.`,
+        );
+      }
+      if (providerObservedAt - providerWindowFinishedAt < e.provider_settle_ms) {
+        throw new ReportValidationError(
+          `${where}.provider_observed_at must follow the window finish by at least provider_settle_ms.`,
+        );
+      }
+      if (e.litellm_spend_rows_observed !== 0) {
+        throw new ReportValidationError(`${where}.litellm_spend_rows_observed must be 0.`);
+      }
+      if (e.e2b_traffic_matches_observed !== 0) {
+        throw new ReportValidationError(`${where}.e2b_traffic_matches_observed must be 0.`);
+      }
+      requireTrue(`${where}.e2b_observer_dns_canary_seen`, e.e2b_observer_dns_canary_seen);
+      requireTrue(`${where}.e2b_observer_tls_canary_seen`, e.e2b_observer_tls_canary_seen);
       requireProviderClaim(`${where}.no_litellm_spend`, e.no_litellm_spend);
       requireProviderClaim(`${where}.no_e2b`, e.no_e2b);
       // Defense-in-depth for PR7-CONTROL-010: the frozen contract folds the
@@ -3134,6 +3177,10 @@ function sanitizeSelfHostCellEvidence(
         workspace_id_hash: clean(e.workspace_id_hash),
         session_id_hash: clean(e.session_id_hash),
         byok_key_id_hash: clean(e.byok_key_id_hash),
+        litellm_actor_user_id_hash: clean(e.litellm_actor_user_id_hash),
+        provider_window_started_at: clean(e.provider_window_started_at),
+        provider_window_finished_at: clean(e.provider_window_finished_at),
+        provider_observed_at: clean(e.provider_observed_at),
       } as SelfHostBaseTurnEvidenceV1;
     }
     case "selfhost_invitee": {

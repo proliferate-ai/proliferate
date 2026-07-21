@@ -22,7 +22,10 @@ import type {
   SelfHostInviteeEvidenceV1,
   SelfHostProviderClaim,
 } from "../evidence/schema.js";
-import { SELFHOST_INSTALL_1_SCENARIO_ID } from "../evidence/schema.js";
+import {
+  SELFHOST_INSTALL_1_SCENARIO_ID,
+  SELFHOST_PROVIDER_ABSENCE_SETTLE_MS,
+} from "../evidence/schema.js";
 import type { PlannedCellV1, ResultReason, ScenarioDeclarableStatus } from "../runner/result.js";
 import type { RunIdentityV1 } from "../runner/identity.js";
 import type { LocalWorldPorts } from "../worlds/local-workspace/ports.js";
@@ -54,6 +57,11 @@ import {
   connectServerTrustFlow,
 } from "../fixtures/connect-server.js";
 import { AUTHENTICATED_READINESS_SELECTOR, BROWSER_AUTH_SESSION_KEY, type ProductPage } from "../fixtures/product-page.js";
+import {
+  QualificationProviderAbsenceObserver,
+  type ProviderAbsenceBaseline,
+  type ProviderAbsenceObservation,
+} from "../services/provider-absence.js";
 
 /**
  * SELFHOST-INSTALL-1 (frozen spec "The four cells"). ONE matrix scenario, ONE
@@ -99,14 +107,12 @@ const EXPECTED_TURN_REPLY_PATTERN = /pong/i;
 /**
  * SHR-004b: known LiteLLM/gateway env var names
  * (`tests/release/src/config/env-manifest.ts`). SH-BASE-TURN's world is
- * BYOK-only — `SELFHOST_REQUIRED_ENV` above carries no gateway input — so
- * observing their absence from the SCRUBBED candidate child env (the env the
- * candidate AnyHarness actually receives) is part of the "world was constructed
- * with no LiteLLM env configured" half of `no_litellm_spend`. The check is
- * scoped to the candidate env, not the test runner's ambient env: the full
- * strict lane sources one qualification-infra.env for all scenarios, so the
- * runner legitimately carries the gateway inputs the sibling SELFHOST-QUAL-1
- * cell needs — the allowlisting candidateChildEnvironment drops them here.
+ * BYOK-only. The runner now deliberately carries controller-only LiteLLM admin
+ * inputs for the negative observer, so observing their absence from the
+ * SCRUBBED candidate child env (the env the candidate AnyHarness actually
+ * receives) is part of the "world was constructed with no LiteLLM env
+ * configured" half of `no_litellm_spend`. The allowlisting
+ * candidateChildEnvironment drops those runner-only inputs here.
  */
 const LITELLM_GATEWAY_ENV_VARS = [
   "RELEASE_E2E_GATEWAY_TEST_KEY",
@@ -126,6 +132,8 @@ export const SELFHOST_REQUIRED_ENV = [
   "RELEASE_E2E_SELFHOST_HOSTED_ZONE_ID",
   "RELEASE_E2E_SELFHOST_INSTANCE_TYPE",
   "RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY",
+  "AGENT_GATEWAY_LITELLM_BASE_URL",
+  "AGENT_GATEWAY_LITELLM_MASTER_KEY",
   "RELEASE_E2E_QUALIFICATION_TLS_CERTIFICATE_B64",
   "RELEASE_E2E_QUALIFICATION_TLS_PRIVATE_KEY_B64",
 ] as const;
@@ -169,10 +177,12 @@ function planForCell(cell: PlannedCellV1): ScenarioPlanStep[] {
     case SH_BASE_TURN:
       return [
         { description: `${prefix} BYOK preflight (fail closed if the provider rejects the key)` },
+        { description: `${prefix} snapshot actor-scoped LiteLLM spend; canary-preflight + start candidate-API egress capture` },
         { description: `${prefix} owner stores a run-scoped BYOK key; select it (surface=local, sourceKind=api_key)` },
         { description: `${prefix} Desktop pushes state into the controller-local candidate AnyHarness` },
         { description: `${prefix} create a local workspace + run one bounded cheapest-eligible Claude turn (no LiteLLM/E2B)` },
         { description: `${prefix} reload the renderer and re-read the same session's transcript; observe /meta + runtime auth state confirm no LiteLLM/E2B` },
+        { description: `${prefix} require zero in-window actor LiteLLM spend rows and zero api.e2b.app traffic from the candidate API namespace` },
       ];
     case SH_INVITEE:
       return [
@@ -531,6 +541,11 @@ export interface BaseTurnCellOps {
   summarizeAuthState(world: ReadySelfHostWorld, harnessKind: string): string;
   /** Cheapest eligible non-premium claude model from the controller-local runtime. */
   resolveModel(world: ReadySelfHostWorld): Promise<string | undefined>;
+  /** Authenticate the controller-only ledger and canary-prove/start the candidate packet observer. */
+  preflightProviderObservers(
+    world: ReadySelfHostWorld,
+    owner: SelfHostOwnerActor,
+  ): Promise<ProviderAbsenceBaseline>;
   /**
    * UI-REAL: through the renderer composer, create the local workspace + session
    * and send the prompt, waiting for the assistant reply in the transcript DOM.
@@ -564,6 +579,14 @@ export interface BaseTurnCellOps {
   detectGatewayEnvVar(): string | undefined;
   /** The E2B key present in the scrubbed candidate child env, if any. */
   detectE2bEnvKey(): string | undefined;
+  /** After bounded provider-log settling, require zero actor spend and zero E2B network matches. */
+  observeProviderAbsence(world: ReadySelfHostWorld, params: {
+    baseline: ProviderAbsenceBaseline;
+    windowStartedAt: string;
+    windowFinishedAt: string;
+  }): Promise<ProviderAbsenceObservation>;
+  /** Idempotently stop/remove the remote capture on every early-return path. */
+  closeProviderObservers(world: ReadySelfHostWorld, baseline: ProviderAbsenceBaseline): Promise<void>;
 }
 
 /**
@@ -583,21 +606,37 @@ export async function runBaseTurnCell(
   owner: SelfHostOwnerActor,
   ops: BaseTurnCellOps,
 ): Promise<SelfHostCellResult> {
-  const rawKey = ops.resolveByokRawKey();
-  if (!rawKey) {
-    return failedBaseTurn("SH-BASE-TURN: RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY is not set.");
-  }
-  // Fail-closed preflight (frozen spec): a rejected key is a real red, never
-  // blocked/skipped.
-  const preflight = await ops.preflightByok(rawKey);
-  if (!preflight.ok) {
-    return failedBaseTurn(`SH-BASE-TURN: BYOK preflight rejected the key (${preflight.reason ?? "unknown reason"}).`);
-  }
-
-  const selection = await ops.storeAndSelectByok(owner, rawKey);
-
-  const page = await ops.openOwnerPage(world, owner);
+  let providerBaseline: ProviderAbsenceBaseline | undefined;
+  let page: ProductPage | undefined;
   try {
+    const rawKey = ops.resolveByokRawKey();
+    if (!rawKey) {
+      return failedBaseTurn("SH-BASE-TURN: RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY is not set.");
+    }
+    // Fail-closed preflight (frozen spec): a rejected key is a real red, never
+    // blocked/skipped.
+    const preflight = await ops.preflightByok(rawKey);
+    if (!preflight.ok) {
+      return failedBaseTurn(
+        `SH-BASE-TURN: BYOK preflight rejected the key (${preflight.reason ?? "unknown reason"}).`,
+      );
+    }
+
+    try {
+      providerBaseline = await ops.preflightProviderObservers(world, owner);
+    } catch (error) {
+      return failedBaseTurn(`SH-BASE-TURN: provider-absence observer preflight failed: ${describe(error)}`);
+    }
+    if (providerBaseline.actorUserId !== owner.userId) {
+      return failedBaseTurn("SH-BASE-TURN: provider-absence observer preflight returned the wrong actor.");
+    }
+    // Cover every product motion in the cell, beginning before the BYOK key is
+    // stored/selected. The controller's direct Anthropic preflight above is
+    // intentionally outside this candidate-provider window.
+    const providerWindowStartedAt = new Date().toISOString();
+    const selection = await ops.storeAndSelectByok(owner, rawKey);
+    page = await ops.openOwnerPage(world, owner);
+
     try {
       await ops.waitForByokSync(world, page, selection);
     } catch (error) {
@@ -698,26 +737,41 @@ export async function runBaseTurnCell(
       );
     }
 
-    // The checks above prove this TURN was BYOK-DIRECT (capabilities gateway/cloud
-    // both false, the pushed auth route is `api_key` not `gateway`, and the
-    // scrubbed candidate env carries no LiteLLM/E2B input). They do NOT constitute
-    // the frozen contract's run-window SPEND/TRAFFIC observation of
-    // `no_litellm_spend`/`no_e2b`, which PR 7 cannot perform for a gateway-OFF
-    // base install. So those two claims are recorded HONESTLY as "unproven"
-    // rather than asserted from configuration or from an unavailable/false
-    // container probe (PR7-CONTROL-010 — an earlier catch-to-empty container
-    // observation could false-green and has been removed).
-
-    // Honest claim status (PR7-CONTROL-010): the frozen run-window spend/traffic
-    // observation is not performed by PR 7 for a gateway-OFF base install, so
-    // these are "unproven" rather than a false absence assertion. When a real
-    // run-window observation is later wired it sets "observed_absent" and the
-    // cell can go green.
-    // Typed as the union (not narrowed to the "unproven" literal) so the
-    // green-gate comparison below is meaningful and the fields flip to
-    // "observed_absent" cleanly once a real run-window observation is wired.
-    const noLitellmSpend = "unproven" as SelfHostProviderClaim;
-    const noE2b = "unproven" as SelfHostProviderClaim;
+    // Configuration/auth-state checks above prove the candidate was constructed
+    // for a direct BYOK turn. The provider-ground-truth observation below is the
+    // independent run-window proof PR7-CONTROL-010 reserved `observed_absent`
+    // for: the actor-scoped qualification LiteLLM ledger and the canary-proven
+    // candidate API network capture must both remain empty for this exact
+    // window after bounded log settling. Observer errors and ambiguous records
+    // fail closed.
+    const providerWindowFinishedAt = new Date().toISOString();
+    let providerObservation: ProviderAbsenceObservation;
+    try {
+      providerObservation = await ops.observeProviderAbsence(world, {
+        baseline: providerBaseline,
+        windowStartedAt: providerWindowStartedAt,
+        windowFinishedAt: providerWindowFinishedAt,
+      });
+    } catch (error) {
+      return failedBaseTurn(`SH-BASE-TURN: provider-absence observation failed: ${describe(error)}`);
+    }
+    const providerObservedAt = Date.parse(providerObservation.observedAt);
+    const providerWindowFinishedAtMs = Date.parse(providerWindowFinishedAt);
+    if (
+      providerObservation.windowStartedAt !== providerWindowStartedAt ||
+      providerObservation.windowFinishedAt !== providerWindowFinishedAt ||
+      providerObservation.litellmSpendRows !== 0 ||
+      providerObservation.e2bTrafficMatches !== 0 ||
+      providerObservation.e2bDnsCanarySeen !== true ||
+      providerObservation.e2bTlsCanarySeen !== true ||
+      providerObservation.litellmSettleMs !== SELFHOST_PROVIDER_ABSENCE_SETTLE_MS ||
+      !Number.isFinite(providerObservedAt) ||
+      providerObservedAt - providerWindowFinishedAtMs < providerObservation.litellmSettleMs
+    ) {
+      return failedBaseTurn("SH-BASE-TURN: provider-absence observer returned an inconsistent receipt.");
+    }
+    const noLitellmSpend: SelfHostProviderClaim = "observed_absent";
+    const noE2b: SelfHostProviderClaim = "observed_absent";
 
     const evidence: SelfHostBaseTurnEvidenceNoCleanup = {
       kind: "selfhost_base_turn",
@@ -733,41 +787,32 @@ export async function runBaseTurnCell(
       transcript_reopened: true,
       byok_route: "api_key",
       byok_key_id_hash: sha256Hex(selection.apiKeyId),
+      litellm_actor_user_id_hash: sha256Hex(owner.userId),
+      provider_window_started_at: providerObservation.windowStartedAt,
+      provider_window_finished_at: providerObservation.windowFinishedAt,
+      provider_observed_at: providerObservation.observedAt,
+      provider_settle_ms: providerObservation.litellmSettleMs,
+      litellm_spend_rows_observed: providerObservation.litellmSpendRows,
+      e2b_traffic_matches_observed: providerObservation.e2bTrafficMatches,
+      e2b_observer_dns_canary_seen: providerObservation.e2bDnsCanarySeen,
+      e2b_observer_tls_canary_seen: providerObservation.e2bTlsCanarySeen,
       no_litellm_spend: noLitellmSpend,
       no_e2b: noE2b,
     };
-
-    // The frozen contract folds the provider-absence guarantees into
-    // SH-BASE-TURN, so an UNPROVEN required subclaim must NOT contribute a green
-    // result (PR7-CONTROL-010). The cell resolves to `expected_fail` (a known,
-    // accepted gap) with a bounded reason — the genuinely-proven BYOK-direct turn
-    // evidence still attaches, but the aggregate honestly reports the guarantee
-    // as unproven rather than green. It goes green only once both subclaims are
-    // `observed_absent` (a real run-window spend/traffic observation).
-    const unprovenClaims: string[] = [];
-    if (noLitellmSpend !== "observed_absent") {
-      unprovenClaims.push("no_litellm_spend");
-    }
-    if (noE2b !== "observed_absent") {
-      unprovenClaims.push("no_e2b");
-    }
-    if (unprovenClaims.length > 0) {
-      return {
-        status: "expected_fail",
-        reason: {
-          code: "known_gap",
-          message:
-            `SH-BASE-TURN: the BYOK-direct turn is proven, but the folded provider-absence guarantee(s) ` +
-            `[${unprovenClaims.join(", ")}] are unproven — PR 7 does not perform the frozen run-window ` +
-            `spend/traffic observation for a gateway-OFF base install. Reporting expected_fail (accepted gap), ` +
-            `not green, until that observation is wired.`,
-        },
-        evidence,
-      };
-    }
     return { status: "green", evidence };
   } finally {
-    await page.close().catch(() => undefined);
+    let observerCloseError: unknown;
+    if (providerBaseline) {
+      try {
+        await ops.closeProviderObservers(world, providerBaseline);
+      } catch (error) {
+        observerCloseError = error;
+      }
+    }
+    await page?.close().catch(() => undefined);
+    if (observerCloseError) {
+      throw new Error(`SH-BASE-TURN: closing the provider-absence observer failed: ${describe(observerCloseError)}`);
+    }
   }
 }
 
@@ -789,6 +834,11 @@ export const defaultBaseTurnCellOps: BaseTurnCellOps = {
   waitForByokSync: (world, page, selection) => waitForDesktopByokSync(world, page, selection),
   summarizeAuthState: (world, harnessKind) => summarizeRuntimeAuthState(world.paths.runtimeHome, harnessKind),
   resolveModel: (world) => resolveBaseTurnModel(world),
+  preflightProviderObservers: (world, owner) =>
+    providerAbsenceObserverFromEnv().preflightAndStart({
+      ssh: world.control.ssh,
+      actorUserId: owner.userId,
+    }),
   createWorkspaceTurnThroughUi: (world, page, modelId, prompt) =>
     createLocalWorkspaceTurnThroughUi(world, page, modelId, prompt, "selfhost-base-turn-workspace"),
   async reopenSession(world, sessionId) {
@@ -800,11 +850,10 @@ export const defaultBaseTurnCellOps: BaseTurnCellOps = {
   detectGatewayEnvVar: () => {
     // Assert on the SCRUBBED candidate child env (what the candidate AnyHarness
     // actually receives via candidateChildEnvironment), not the test runner's
-    // ambient process.env. The full self-host strict lane sources ONE
-    // qualification-infra.env for all scenarios, so the runner env legitimately
-    // carries AGENT_GATEWAY_LITELLM_* for the sibling SELFHOST-QUAL-1 gateway
-    // cell; the allowlisting candidateChildEnvironment drops those before they
-    // could reach the BYOK-only candidate runtime, which is exactly what
+    // ambient process.env. The runner legitimately carries
+    // AGENT_GATEWAY_LITELLM_* for this controller-only negative observer (and
+    // for sibling gateway cells); candidateChildEnvironment drops those before
+    // they could reach the BYOK-only candidate runtime, which is exactly what
     // no_litellm_spend must prove. Mirrors the E2B-key guard's scope AND its
     // pattern-scan shape: match any surviving gateway-ish key (the four known
     // names plus anything containing litellm/agent_gateway), not a fixed list,
@@ -817,7 +866,18 @@ export const defaultBaseTurnCellOps: BaseTurnCellOps = {
     );
   },
   detectE2bEnvKey: () => Object.keys(candidateChildEnvironment(process.env)).find((key) => /e2b/i.test(key)),
+  observeProviderAbsence: (world, params) =>
+    providerAbsenceObserverFromEnv().observeAbsent({ ssh: world.control.ssh, ...params }),
+  closeProviderObservers: (world, baseline) =>
+    providerAbsenceObserverFromEnv().close({ ssh: world.control.ssh, baseline }),
 };
+
+function providerAbsenceObserverFromEnv(): QualificationProviderAbsenceObserver {
+  return new QualificationProviderAbsenceObserver({
+    litellmAdminBaseUrl: process.env.AGENT_GATEWAY_LITELLM_BASE_URL?.trim() ?? "",
+    litellmMasterKey: process.env.AGENT_GATEWAY_LITELLM_MASTER_KEY?.trim() ?? "",
+  });
+}
 
 /**
  * The real per-scenario orchestration, independent of the matrix plumbing so it

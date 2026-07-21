@@ -178,8 +178,17 @@ function greenEvidenceFor(cellName: string): CellEvidenceNoCleanup {
         transcript_reopened: true,
         byok_route: "api_key",
         byok_key_id_hash: "4".repeat(64),
-        no_litellm_spend: "unproven",
-        no_e2b: "unproven",
+        litellm_actor_user_id_hash: "7".repeat(64),
+        provider_window_started_at: "2026-07-20T12:00:00.000Z",
+        provider_window_finished_at: "2026-07-20T12:00:05.000Z",
+        provider_observed_at: "2026-07-20T12:01:10.000Z",
+        provider_settle_ms: 65_000,
+        litellm_spend_rows_observed: 0,
+        e2b_traffic_matches_observed: 0,
+        e2b_observer_dns_canary_seen: true,
+        e2b_observer_tls_canary_seen: true,
+        no_litellm_spend: "observed_absent",
+        no_e2b: "observed_absent",
       };
       return evidence;
     }
@@ -457,6 +466,20 @@ function greenBaseTurnOps(closed: { value: boolean }, overrides: Partial<BaseTur
     waitForByokSync: async () => undefined,
     summarizeAuthState: () => "[diag: state.json present]",
     resolveModel: async () => "claude-haiku-4-5",
+    preflightProviderObservers: async () => ({
+      takenAt: "2026-07-20T12:00:00.000Z",
+      actorUserId: FAKE_OWNER.userId,
+      litellmActorRequestIds: [],
+      apiContainerId: "a".repeat(64),
+      apiPid: "4242",
+      apiNetnsInode: "9001",
+      captureId: "capture-1",
+      capturePcapPath: "/tmp/capture-1.pcap",
+      capturePidPath: "/tmp/capture-1.pid",
+      captureLogPath: "/tmp/capture-1.log",
+      e2bDnsCanarySeen: true,
+      e2bTlsCanarySeen: true,
+    }),
     createWorkspaceTurnThroughUi: async () => ({
       workspaceId: "ws-1",
       logicalWorkspaceId: "repo-root:root-1:main",
@@ -469,19 +492,26 @@ function greenBaseTurnOps(closed: { value: boolean }, overrides: Partial<BaseTur
     readAuthSourceKinds: () => ["api_key"],
     detectGatewayEnvVar: () => undefined,
     detectE2bEnvKey: () => undefined,
+    observeProviderAbsence: async (_world, { windowStartedAt, windowFinishedAt }) => ({
+      windowStartedAt,
+      windowFinishedAt,
+      observedAt: new Date(Date.parse(windowFinishedAt) + 65_000).toISOString(),
+      litellmSettleMs: 65_000,
+      litellmSpendRows: 0,
+      e2bTrafficMatches: 0,
+      e2bDnsCanarySeen: true,
+      e2bTlsCanarySeen: true,
+    }),
+    closeProviderObservers: async () => undefined,
     ...overrides,
   };
 }
 
-test("runBaseTurnCell: BYOK-direct turn proven, but resolves EXPECTED_FAIL while provider-absence is unproven (PR7-CONTROL-010)", async () => {
-  // The turn/reopen/reload machinery all pass, and the evidence attaches; but the
-  // folded provider-absence guarantees are unproven, so SH-BASE-TURN must NOT be
-  // green — it reports expected_fail (an accepted gap), never a false green.
+test("runBaseTurnCell: BYOK-direct turn plus provider-ground-truth absence resolves GREEN", async () => {
   const closed = { value: false };
   const result = await runBaseTurnCell(baseTurnWorld(), FAKE_OWNER, greenBaseTurnOps(closed));
-  assert.equal(result.status, "expected_fail", JSON.stringify(result));
-  assert.equal(result.reason?.code, "known_gap");
-  assert.match(result.reason?.message ?? "", /provider-absence guarantee.*unproven|no_litellm_spend|no_e2b/);
+  assert.equal(result.status, "green", JSON.stringify(result));
+  assert.equal(result.reason, undefined);
   assert.equal(result.evidence?.kind, "selfhost_base_turn");
   const evidence = result.evidence as {
     model_id: string;
@@ -489,14 +519,22 @@ test("runBaseTurnCell: BYOK-direct turn proven, but resolves EXPECTED_FAIL while
     byok_route: string;
     no_litellm_spend: string;
     no_e2b: string;
+    litellm_spend_rows_observed: number;
+    e2b_traffic_matches_observed: number;
+    provider_settle_ms: number;
+    e2b_observer_dns_canary_seen: boolean;
+    e2b_observer_tls_canary_seen: boolean;
   };
   assert.equal(evidence.model_id, "claude-haiku-4-5");
   assert.equal(evidence.transcript_reopened, true);
   assert.equal(evidence.byok_route, "api_key");
-  // Honest claim status: the run-window spend/traffic observation is not
-  // performed by PR 7, so these are "unproven", not a false absence (PR7-CONTROL-010).
-  assert.equal(evidence.no_litellm_spend, "unproven");
-  assert.equal(evidence.no_e2b, "unproven");
+  assert.equal(evidence.no_litellm_spend, "observed_absent");
+  assert.equal(evidence.no_e2b, "observed_absent");
+  assert.equal(evidence.litellm_spend_rows_observed, 0);
+  assert.equal(evidence.e2b_traffic_matches_observed, 0);
+  assert.equal(evidence.provider_settle_ms, 65_000);
+  assert.equal(evidence.e2b_observer_dns_canary_seen, true);
+  assert.equal(evidence.e2b_observer_tls_canary_seen, true);
   // The owner page is always closed in the finally.
   assert.equal(closed.value, true);
 });
@@ -518,14 +556,147 @@ test("runBaseTurnCell: no launchable model is blocked, not failed", async () => 
   assert.equal(closed.value, true);
 });
 
-test("runBaseTurnCell: an unproven provider-absence subclaim never yields green (PR7-CONTROL-010)", async () => {
+test("runBaseTurnCell: provider observer preflight failure is fail-closed before the turn", async () => {
   const closed = { value: false };
-  const result = await runBaseTurnCell(baseTurnWorld(), FAKE_OWNER, greenBaseTurnOps(closed));
-  assert.notEqual(result.status, "green");
-  assert.equal(result.status, "expected_fail");
-  const ev = result.evidence as { no_litellm_spend: string; no_e2b: string };
-  assert.equal(ev.no_litellm_spend, "unproven");
-  assert.equal(ev.no_e2b, "unproven");
+  let turnCalled = false;
+  const result = await runBaseTurnCell(
+    baseTurnWorld(),
+    FAKE_OWNER,
+    greenBaseTurnOps(closed, {
+      preflightProviderObservers: async () => {
+        throw new Error("E2B lifecycle observer failed with HTTP 401");
+      },
+      createWorkspaceTurnThroughUi: async () => {
+        turnCalled = true;
+        throw new Error("must not be called");
+      },
+    }),
+  );
+  assert.equal(result.status, "failed");
+  assert.match(result.reason?.message ?? "", /provider-absence observer preflight failed/);
+  assert.equal(turnCalled, false);
+});
+
+test("runBaseTurnCell: provider observer preflight must be scoped to the exact owner actor", async () => {
+  const closed = { value: false };
+  const result = await runBaseTurnCell(
+    baseTurnWorld(),
+    FAKE_OWNER,
+    greenBaseTurnOps(closed, {
+      preflightProviderObservers: async () => ({
+        takenAt: "2026-07-20T12:00:00.000Z",
+        actorUserId: "different-owner",
+        litellmActorRequestIds: [],
+        apiContainerId: "a".repeat(64),
+        apiPid: "4242",
+        apiNetnsInode: "9001",
+        captureId: "capture-1",
+        capturePcapPath: "/tmp/capture-1.pcap",
+        capturePidPath: "/tmp/capture-1.pid",
+        captureLogPath: "/tmp/capture-1.log",
+        e2bDnsCanarySeen: true,
+        e2bTlsCanarySeen: true,
+      }),
+    }),
+  );
+  assert.equal(result.status, "failed");
+  assert.match(result.reason?.message ?? "", /wrong actor/);
+});
+
+test("runBaseTurnCell: provider observation failure after the turn never yields green", async () => {
+  const closed = { value: false };
+  const result = await runBaseTurnCell(
+    baseTurnWorld(),
+    FAKE_OWNER,
+    greenBaseTurnOps(closed, {
+      observeProviderAbsence: async () => {
+        throw new Error("LiteLLM recorded 1 spend row inside the BYOK turn window");
+      },
+    }),
+  );
+  assert.equal(result.status, "failed");
+  assert.match(result.reason?.message ?? "", /provider-absence observation failed/);
+});
+
+test("runBaseTurnCell: malformed provider observation timestamps never yield green", async () => {
+  const closed = { value: false };
+  const result = await runBaseTurnCell(
+    baseTurnWorld(),
+    FAKE_OWNER,
+    greenBaseTurnOps(closed, {
+      observeProviderAbsence: async (_world, { windowStartedAt, windowFinishedAt }) => ({
+        windowStartedAt,
+        windowFinishedAt,
+        observedAt: "not-a-timestamp",
+        litellmSettleMs: 65_000,
+        litellmSpendRows: 0,
+        e2bTrafficMatches: 0,
+        e2bDnsCanarySeen: true,
+        e2bTlsCanarySeen: true,
+      }),
+    }),
+  );
+  assert.equal(result.status, "failed");
+  assert.match(result.reason?.message ?? "", /inconsistent receipt/);
+});
+
+test("runBaseTurnCell: provider observation must attest the full LiteLLM settle horizon", async () => {
+  const closed = { value: false };
+  const result = await runBaseTurnCell(
+    baseTurnWorld(),
+    FAKE_OWNER,
+    greenBaseTurnOps(closed, {
+      observeProviderAbsence: async (_world, { windowStartedAt, windowFinishedAt }) => ({
+        windowStartedAt,
+        windowFinishedAt,
+        observedAt: new Date(Date.parse(windowFinishedAt) + 1_000).toISOString(),
+        litellmSettleMs: 1_000,
+        litellmSpendRows: 0,
+        e2bTrafficMatches: 0,
+        e2bDnsCanarySeen: true,
+        e2bTlsCanarySeen: true,
+      }),
+    }),
+  );
+  assert.equal(result.status, "failed");
+  assert.match(result.reason?.message ?? "", /inconsistent receipt/);
+});
+
+test("runBaseTurnCell: provider observer is closed on an early UI failure", async () => {
+  const closed = { value: false };
+  let observerClosed = false;
+  const result = await runBaseTurnCell(
+    baseTurnWorld(),
+    FAKE_OWNER,
+    greenBaseTurnOps(closed, {
+      createWorkspaceTurnThroughUi: async () => {
+        throw new Error("renderer failed");
+      },
+      closeProviderObservers: async () => {
+        observerClosed = true;
+      },
+    }),
+  );
+  assert.equal(result.status, "failed");
+  assert.equal(observerClosed, true);
+  assert.equal(closed.value, true);
+});
+
+test("runBaseTurnCell: provider observer cleanup failure is non-green", async () => {
+  const closed = { value: false };
+  await assert.rejects(
+    runBaseTurnCell(
+      baseTurnWorld(),
+      FAKE_OWNER,
+      greenBaseTurnOps(closed, {
+        closeProviderObservers: async () => {
+          throw new Error("capture process survived");
+        },
+      }),
+    ),
+    /closing the provider-absence observer failed: capture process survived/,
+  );
+  assert.equal(closed.value, true);
 });
 
 test("runBaseTurnCell: a UI create/turn failure fails the cell with a bounded reason", async () => {
