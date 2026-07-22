@@ -507,9 +507,16 @@ export async function cycleConfigControls(
     ): Promise<{ accepted: boolean; readback: string }>;
   },
 ): Promise<{ recorded: Array<{ controlKey: string; acceptedValue: string; rejected: boolean }>; known1063: boolean }> {
-  const cyclable = controls.filter(
-    (control) => control.settable && control.values.some((value) => value !== control.currentValue),
-  );
+  const cyclable = controls
+    .filter(
+      (control) => control.settable && control.values.some((value) => value !== control.currentValue),
+    )
+    // Model changes can legitimately replace the active session's dependent
+    // config surface (for example, removing or changing `effort`). Applying a
+    // control cached before that model switch recreates the stale-menu false
+    // positive that closed issue #1063 diagnosed. Prove every control exposed
+    // by the baseline model first, then mutate the model last.
+    .sort((left, right) => Number(left.key === "model") - Number(right.key === "model"));
   if (cyclable.length === 0) {
     throw new Error("LOCAL-4: session advertised no settable, cyclable live-config control");
   }

@@ -223,6 +223,28 @@ test("correlateTurn accepts one new in-window row and sums token/spend", async (
   assert.equal(result.modelId, "claude-haiku-4-5");
 });
 
+test("correlateTurn uses LiteLLM's safe call id when the provider request id is unsafe", async () => {
+  const result = (await correlate([
+    spendRow({
+      request_id: "provider request id with spaces",
+      metadata: JSON.stringify({ litellm_call_id: "call-safe-123" }),
+    }),
+  ])) as { requestIds: string[] };
+  assert.deepEqual(result.requestIds, ["call-safe-123"]);
+});
+
+test("correlateTurn fails closed when no evidence-safe request identity exists", async () => {
+  await assert.rejects(
+    correlate([
+      spendRow({
+        request_id: "provider request id with spaces",
+        metadata: JSON.stringify({ litellm_call_id: "also unsafe" }),
+      }),
+    ]),
+    /omitted both a safe provider request id and a safe litellm_call_id/,
+  );
+});
+
 test("correlateTurn rejects when only a wrong-key row exists", async () => {
   await assert.rejects(correlate([spendRow({ api_key: "other-token" })]), /No new in-window/);
 });

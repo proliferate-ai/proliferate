@@ -376,6 +376,25 @@ test("cycleConfigControls: requires at least one control to round-trip", async (
   );
 });
 
+test("cycleConfigControls: mutates model last so dependent controls are not stale (#1063)", async () => {
+  const applied: string[] = [];
+  await cycleConfigControls(
+    fakePage(),
+    [
+      control({ key: "model", surface: "model", currentValue: "gpt-a", values: ["gpt-a", "gpt-b"] }),
+      control({ key: "reasoning", surface: "reasoning", currentValue: "low", values: ["low", "high"] }),
+      control({ key: "mode", surface: "mode", currentValue: "default", values: ["default", "plan"] }),
+    ],
+    {
+      selectConfigValueInUi: async (_page, configControl, value) => {
+        applied.push(configControl.key);
+        return { accepted: true, readback: value };
+      },
+    },
+  );
+  assert.deepEqual(applied, ["reasoning", "mode", "model"]);
+});
+
 // ── LOCAL-5 ──────────────────────────────────────────────────────────────────
 
 function makeSessionDriver(

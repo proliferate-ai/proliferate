@@ -46,6 +46,13 @@ const CLAUDE_TIER_RANK: ReadonlyArray<readonly [string, number]> = [
  * ambiguous/unbounded result and rejected. */
 const MAX_CORRELATED_ROWS = 16;
 
+/** Same bounded token alphabet the V4 evidence writer accepts. LiteLLM's
+ * provider-facing `request_id` is preferred, but provider ids are not
+ * guaranteed to use that alphabet. Its own `metadata.litellm_call_id` is the
+ * safe controller-generated correlation identity in that case. */
+const SAFE_REQUEST_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]*(?:\/[A-Za-z0-9][A-Za-z0-9._:-]*)*$/;
+const MAX_SAFE_REQUEST_ID_LENGTH = 200;
+
 /** Bounded wait for LiteLLM's asynchronous spend-log persistence after a turn. */
 const SPEND_CORRELATION_TIMEOUT_MS = 60_000;
 const SPEND_CORRELATION_POLL_MS = 3_000;
@@ -496,6 +503,11 @@ export class QualificationLiteLlmController {
         if (row.api_key !== params.actor.tokenId) {
           continue; // wrong key — not this actor's spend.
         }
+        if (!row.request_id) {
+          throw new QualificationLiteLlmError(
+            "Correlated LiteLLM spend row omitted both a safe provider request id and a safe litellm_call_id.",
+          );
+        }
         if (seen.has(row.request_id)) {
           continue; // pre-existing request id — present before the turn.
         }
@@ -624,7 +636,7 @@ export class QualificationLiteLlmController {
       throw new QualificationLiteLlmError("LiteLLM returned invalid spend logs.");
     }
     return payload.map(asRecord).map((row) => ({
-      request_id: String(row.request_id ?? ""),
+      request_id: evidenceSafeSpendRequestId(row),
       api_key: typeof row.api_key === "string" ? row.api_key : "",
       model: typeof row.model === "string" ? row.model : "",
       spend: typeof row.spend === "number" ? row.spend : 0,
@@ -673,6 +685,35 @@ export class QualificationLiteLlmController {
   private adminHeaders(): Record<string, string> {
     return { authorization: `Bearer ${this.config.masterKey}`, "content-type": "application/json" };
   }
+}
+
+function evidenceSafeSpendRequestId(row: Record<string, unknown>): string {
+  const providerRequestId = typeof row.request_id === "string" ? row.request_id : "";
+  if (isSafeRequestId(providerRequestId)) {
+    return providerRequestId;
+  }
+  const rawMetadata = row.metadata;
+  let metadata: Record<string, unknown> = {};
+  if (typeof rawMetadata === "string") {
+    try {
+      metadata = asRecord(JSON.parse(rawMetadata));
+    } catch {
+      metadata = {};
+    }
+  } else {
+    metadata = asRecord(rawMetadata);
+  }
+  const litellmCallId = typeof metadata.litellm_call_id === "string" ? metadata.litellm_call_id : "";
+  return isSafeRequestId(litellmCallId) ? litellmCallId : "";
+}
+
+function isSafeRequestId(value: string): boolean {
+  return (
+    value.length > 0 &&
+    value.length <= MAX_SAFE_REQUEST_ID_LENGTH &&
+    !value.includes("..") &&
+    SAFE_REQUEST_ID_PATTERN.test(value)
+  );
 }
 
 function isPositiveInt(value: number): boolean {
