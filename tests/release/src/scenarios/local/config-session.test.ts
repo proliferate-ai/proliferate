@@ -592,7 +592,7 @@ test("buildLocalSessionTabsEvidence pins the four proofs true and hashes each se
   }
 });
 
-test("enumerateControls keeps only UI-drivable controls and drops a reasoning ladder shadowed by effort", async () => {
+test("enumerateControls keeps only promoted UI controls and drops shadowed reasoning and mode aliases", async () => {
   const liveConfig = {
     rawConfigOptions: [],
     sourceSeq: 1,
@@ -621,6 +621,14 @@ test("enumerateControls keeps only UI-drivable controls and drops a reasoning la
         settable: true,
         values: [{ value: "on", label: "On" }, { value: "off", label: "Off" }],
       },
+      collaboration_mode: {
+        key: "collaboration_mode",
+        rawConfigId: "collaboration_mode",
+        label: "Working mode",
+        currentValue: "default",
+        settable: true,
+        values: [{ value: "default", label: "Default" }, { value: "plan", label: "Plan" }],
+      },
       mode: {
         key: "mode",
         rawConfigId: "permission_mode",
@@ -638,7 +646,7 @@ test("enumerateControls keeps only UI-drivable controls and drops a reasoning la
   const controls = await defaultLocalConfigDriver.enumerateControls(world, "session-1", "claude", "claude-haiku");
   assert.deepEqual(
     controls.map((control) => `${control.key}:${control.surface}`).sort(),
-    ["effort:reasoning", "mode:mode"],
+    ["collaboration_mode:mode", "effort:reasoning"],
   );
 });
 

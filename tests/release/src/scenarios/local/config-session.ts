@@ -225,6 +225,14 @@ export const defaultLocalConfigDriver: LocalConfigDriver = {
     // both are advertised (resolveReasoningEffortControl), so a shadowed
     // `reasoning` control has no surface of its own.
     const hasEffort = normalized.some((control) => control.key === "effort");
+    // The composer likewise renders ONE promoted mode control:
+    // `collaboration_mode` wins over the legacy `mode` control when it has a
+    // real choice (resolveComposerModeControl). Cycling both through the same
+    // SessionModeControl would test the second control against the first
+    // control's readback and recreate a false #1063 rejection.
+    const hasCollaborationMode = normalized.some(
+      (control) => control.key === "collaboration_mode" && control.values.length >= 2,
+    );
     let grokModelValues: string[] | null = null;
     if (harness === "grok") {
       const [preflight, probed] = await Promise.all([
@@ -243,6 +251,7 @@ export const defaultLocalConfigDriver: LocalConfigDriver = {
       if (
         !surface
         || (control.key === "reasoning" && hasEffort)
+        || (control.key === "mode" && hasCollaborationMode)
         // LOCAL-GROK-CFG-003 is deliberately Grok-only. Other harness model
         // semantics remain owned by their existing collectors/product rulings.
         || (surface === "model" && harness !== "grok")
