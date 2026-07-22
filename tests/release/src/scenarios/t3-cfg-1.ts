@@ -51,7 +51,8 @@ export const t3Cfg1: MatrixScenarioDefinition = {
   lanes: ["local"],
   requiredEnv: [],
   kind: "matrix",
-  expandCells: ({ agents }) => chatCellSpecs(agents) as ScenarioCellSpec[] | Promise<ScenarioCellSpec[]>,
+  expandCells: ({ agents }) =>
+    chatCellSpecs(agents, { includeLocalWorldEnv: true }) as ScenarioCellSpec[] | Promise<ScenarioCellSpec[]>,
   planCell: (_ctx, cell: PlannedCellV1): ScenarioPlanStep[] => {
     const harness = cell.dimensions.harness;
     return [
