@@ -8,6 +8,7 @@ import {
   QualificationLiteLlmError,
   selectCheapestEligibleModel,
   selectCheapestEligibleClaudeModel,
+  selectQualificationGatewayModel,
   type ActorKeyIdentity,
   type FetchLike,
   type HttpResponseLike,
@@ -62,6 +63,13 @@ test("selectCheapestEligibleModel selects bounded non-Claude harness models", ()
     "gpt-5.2",
   );
   assert.equal(selectCheapestEligibleModel(allow, ["claude-fable-5"]), null);
+});
+
+test("selectQualificationGatewayModel pins Codex to gpt-5.2 without changing other harness ranking", () => {
+  const allow = ["gpt-5.2", "gpt-5-mini", "grok-4", "grok-4-fast"];
+  assert.equal(selectQualificationGatewayModel("codex", allow, ["gpt-5.2", "gpt-5-mini"]), "gpt-5.2");
+  assert.equal(selectQualificationGatewayModel("codex", allow, ["gpt-5-mini"]), null);
+  assert.equal(selectQualificationGatewayModel("grok", allow, ["grok-4", "grok-4-fast"]), "grok-4-fast");
 });
 
 test("deriveActorKeyAlias is the frozen vk-user-<user>-<enrollment[:8]> contract", () => {

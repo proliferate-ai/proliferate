@@ -20,6 +20,8 @@
 
 import { createHash } from "node:crypto";
 
+import type { LocalHarnessKind } from "../evidence/schema.js";
+
 /** The excluded premium model tier: the spec selects the cheapest eligible
  * NON-FABLE Claude model, so any candidate whose id contains this substring is
  * ineligible. */
@@ -249,6 +251,26 @@ export function selectCheapestEligibleModel(
     const rankDelta = genericModelTierRank(a) - genericModelTierRank(b);
     return rankDelta !== 0 ? rankDelta : a.localeCompare(b);
   })[0];
+}
+
+/**
+ * Selects the model used by the strict local qualification cells. Codex is
+ * intentionally pinned to gpt-5.2 when that exact id is eligible: gpt-5-mini
+ * is visible in the live probe but cannot complete turns through the current
+ * managed gateway. Other harnesses retain deterministic cheapest-first
+ * selection. Codex does not fall back: an unavailable gpt-5.2 makes the cell
+ * honestly blocked instead of qualifying different model bytes.
+ */
+export function selectQualificationGatewayModel(
+  harness: LocalHarnessKind,
+  allowlist: readonly string[],
+  liveProbe: readonly string[],
+): string | null {
+  const eligible = intersectEligibleModels(allowlist, liveProbe);
+  if (harness === "codex") {
+    return eligible.includes("gpt-5.2") ? "gpt-5.2" : null;
+  }
+  return selectCheapestEligibleModel(allowlist, liveProbe);
 }
 
 function intersectEligibleModels(

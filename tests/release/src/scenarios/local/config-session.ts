@@ -8,7 +8,10 @@ import { authenticatedActor, type AuthenticatedActor } from "../../fixtures/auth
 import { findErrorEvent, findTurnEndedEvent } from "../../fixtures/local-runtime.js";
 import { preparedRepository, type PreparedRepository } from "../../fixtures/prepared-repository.js";
 import { productPage, type ProductPage } from "../../fixtures/product-page.js";
-import { selectCheapestEligibleModel } from "../../services/qualification-litellm.js";
+import {
+  selectCheapestEligibleModel,
+  selectQualificationGatewayModel,
+} from "../../services/qualification-litellm.js";
 import type { ReadyLocalWorld } from "../../worlds/local-workspace/world.js";
 import {
   LOCAL_HARNESS_KINDS,
@@ -22,8 +25,8 @@ import { bootLocalFunctionalWorld, type LocalFunctionalWorldInputs } from "./wor
 import { captureLocalDriverFailure } from "./debug-capture.js";
 import { resolveLocalWorkspaceSessionId } from "./local-session.js";
 import {
-  GATEWAY_UNSUPPORTED_HARNESSES,
-  gatewayUnsupportedMessage,
+  gatewayQualificationUnsupportedMessage,
+  isGatewayQualificationCapabilityUnsupported,
 } from "../../fixtures/gateway-unsupported-harnesses.js";
 import { waitForSidebarControlReady } from "./sidebar-control-readiness.js";
 import { classifyTurnErrorForEvidence } from "./chat-authroute.js";
@@ -337,9 +340,10 @@ interface CollectedConfigCell {
  * One shared world for the whole harness matrix (BRIEF §2); one owner actor
  * reused across cells (LOCAL-4 permits reuse — sharding note "Configuration
  * cells may reuse the already-qualified harness process"); per assigned cell a
- * fresh baseline workspace/session + config cycle. Cursor → typed `blocked`. The
- * world is closed exactly once in `finally`; its cleanup receipt folds into each
- * green cell's evidence. */
+ * fresh baseline workspace/session + config cycle. Cursor and the temporarily
+ * unsupported Grok config cell return typed `blocked`. The world is closed
+ * exactly once in `finally`; its cleanup receipt folds into each green cell's
+ * evidence. */
 export async function collectLocal4ConfigCells(
   ctx: ScenarioRunContext,
   cells: readonly PlannedCellV1[],
@@ -387,15 +391,17 @@ export async function collectLocal4ConfigCells(
         collected.push({ cell, outcome: { kind: "blocked", message: `unknown harness "${cell.dimensions.harness}"` } });
         continue;
       }
-      if (GATEWAY_UNSUPPORTED_HARNESSES.has(harness)) {
+      const unsupportedMessage = gatewayQualificationUnsupportedMessage(
+        harness,
+        "config",
+        "its LOCAL-4 configuration matrix cannot be qualified",
+      );
+      if (unsupportedMessage) {
         collected.push({
           cell,
           outcome: {
             kind: "blocked",
-            message: gatewayUnsupportedMessage(
-              harness,
-              "its LOCAL-4 baseline turn cannot run on the gateway-enrolled world",
-            ),
+            message: unsupportedMessage,
           },
         });
         continue;
@@ -767,7 +773,7 @@ function normalizeHarness(value: string | undefined): LocalHarnessKind | undefin
 function firstRunnableHarness(cells: readonly PlannedCellV1[]): LocalHarnessKind | undefined {
   for (const cell of cells) {
     const harness = normalizeHarness(cell.dimensions.harness);
-    if (harness && !GATEWAY_UNSUPPORTED_HARNESSES.has(harness)) {
+    if (harness && !isGatewayQualificationCapabilityUnsupported(harness, "config")) {
       return harness;
     }
   }
@@ -781,7 +787,7 @@ function runnableHarnesses(cells: readonly PlannedCellV1[]): LocalHarnessKind[] 
   const seen = new Set<LocalHarnessKind>();
   for (const cell of cells) {
     const harness = normalizeHarness(cell.dimensions.harness);
-    if (harness && !GATEWAY_UNSUPPORTED_HARNESSES.has(harness)) {
+    if (harness && !isGatewayQualificationCapabilityUnsupported(harness, "config")) {
       seen.add(harness);
     }
   }
@@ -1094,7 +1100,7 @@ async function runBaselineTurn(
 ): Promise<{ workspaceId: string; sessionId: string; modelId: string }> {
   const preflight = await world.gateway.preflight();
   const probe = (await world.runtime.client.getGatewayModels(harness).catch(() => [])).map((model) => model.id);
-  const modelId = selectCheapestEligibleModel(preflight.allowlistModels, probe);
+  const modelId = selectQualificationGatewayModel(harness, preflight.allowlistModels, probe);
   if (!modelId) {
     throw new Error(`runBaselineTurn: no eligible non-Fable model for "${harness}" in the allowlist ∩ live probe`);
   }

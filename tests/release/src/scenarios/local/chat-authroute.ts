@@ -15,7 +15,7 @@ import {
 import { preparedRepository, type PreparedRepository } from "../../fixtures/prepared-repository.js";
 import { productPage, type ProductPage } from "../../fixtures/product-page.js";
 import { findStructuredErrorEvent, findTurnEndedEvent } from "../../fixtures/local-runtime.js";
-import { selectCheapestEligibleModel } from "../../services/qualification-litellm.js";
+import { selectQualificationGatewayModel } from "../../services/qualification-litellm.js";
 import {
   DETERMINISTIC_PROMPT,
   defaultLocalWorldSmokeDriver,
@@ -37,7 +37,7 @@ import type {
 } from "../../evidence/schema.js";
 import {
   GATEWAY_UNSUPPORTED_HARNESSES,
-  gatewayUnsupportedMessage,
+  gatewayQualificationUnsupportedMessage,
 } from "../../fixtures/gateway-unsupported-harnesses.js";
 
 /**
@@ -441,7 +441,8 @@ export const defaultLocalRouteDriver: LocalRouteDriver = {
         world.gateway.preflight(),
         world.runtime.client.getGatewayModels(harness),
       ]);
-      const modelId = selectCheapestEligibleModel(
+      const modelId = selectQualificationGatewayModel(
+        harness,
         preflight.allowlistModels,
         probe.map((model) => model.id),
       );
@@ -763,26 +764,28 @@ function finalizePending(
   return { cellId: pending.cellId, status: "green", evidence };
 }
 
-/** LOCAL-2: one gateway turn per harness. Cursor → typed `blocked` (no gateway
- * auth slot), never green-required, never dropped (audit ruling #2). */
+/** LOCAL-2: one gateway turn per supported harness. Cursor has no gateway auth
+ * slot; Grok's strict spend evidence is temporarily unsupported. Both produce
+ * explicit typed `blocked` cells, never green-required and never dropped. */
 async function runLocal2GatewayCell(
   cell: PlannedCellV1,
   world: ReadyLocalWorld,
   driver: LocalRouteDriver,
 ): Promise<PendingRouteCell> {
   const harness = harnessOf(cell);
-  if (HARNESSES_WITHOUT_GATEWAY_AUTH_SLOT.has(harness)) {
+  const unsupportedMessage = gatewayQualificationUnsupportedMessage(
+    harness,
+    "chat-spend",
+    "the strict LOCAL-2 gateway chat-and-spend evidence contract cannot be qualified for it",
+  );
+  if (unsupportedMessage) {
     return {
       cellId: cell.cell_id,
       kind: "terminal",
       status: "blocked",
       reason: {
         code: "scenario_blocked",
-        message: gatewayUnsupportedMessage(
-          harness,
-          "the managed gateway route (LOCAL-2) is unsupported for it; this cell is the truthful typed-unsupported " +
-            "result and is never green-required",
-        ),
+        message: unsupportedMessage,
       },
     };
   }

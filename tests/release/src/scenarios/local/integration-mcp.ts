@@ -31,15 +31,14 @@ import {
   type ToolCallEvent,
 } from "../../fixtures/integration-gateway.js";
 import { findErrorEvent, findTurnEndedEvent } from "../../fixtures/local-runtime.js";
-import { selectCheapestEligibleModel } from "../../services/qualification-litellm.js";
+import { selectQualificationGatewayModel } from "../../services/qualification-litellm.js";
 import type {
   LocalCleanupV1,
   LocalHarnessKind,
   LocalMcpIntegrationEvidenceV1,
 } from "../../evidence/schema.js";
 import {
-  GATEWAY_UNSUPPORTED_HARNESSES,
-  gatewayUnsupportedMessage,
+  gatewayQualificationUnsupportedMessage,
 } from "../../fixtures/gateway-unsupported-harnesses.js";
 
 /**
@@ -245,7 +244,8 @@ export const defaultLocalMcpDriver: LocalMcpDriver = {
       world.gateway.preflight(),
       world.runtime.client.getGatewayModels(harness),
     ]);
-    const modelId = selectCheapestEligibleModel(
+    const modelId = selectQualificationGatewayModel(
+      harness,
       preflight.allowlistModels,
       liveProbe.map((model) => model.id),
     );
@@ -391,19 +391,21 @@ export async function runLocal7McpCellsAgainstWorld(
 
   for (const cell of cells) {
     const harness = (cell.dimensions.harness ?? "claude") as LocalHarnessKind;
-    if (GATEWAY_UNSUPPORTED_HARNESSES.has(harness)) {
-      // Short-circuit BEFORE createActor: `authenticatedActor` unconditionally
-      // PUTs a gateway selection for the requested harness, and the server
-      // correctly 400s that PUT for a gateway-unsupported harness (cursor
-      // carries an account key, not a provider key — see
-      // gateway-unsupported-harnesses.ts). That 400 is by design, not a
-      // failure to mask; type this cell blocked the same way LOCAL-2/LOCAL-4
-      // already do for the identical fact.
+    const unsupportedMessage = gatewayQualificationUnsupportedMessage(
+      harness,
+      "integration-audit",
+      "its LOCAL-7 MCP integration evidence contract cannot be qualified",
+    );
+    if (unsupportedMessage) {
+      // Short-circuit BEFORE createActor. Cursor would hit the server's correct
+      // no-gateway-slot 400; Grok can route through the gateway, but the
+      // integration-audit evidence contract is temporarily unsupported. Both
+      // stay explicit blocked cells with no fabricated evidence.
       entries.push({
         cell,
         ok: false,
         status: "blocked",
-        message: gatewayUnsupportedMessage(harness, "its LOCAL-7 MCP integration turn cannot run on the gateway-enrolled world"),
+        message: unsupportedMessage,
       });
       continue;
     }

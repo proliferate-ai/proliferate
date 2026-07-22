@@ -402,6 +402,18 @@ test("LOCAL-2: cursor is a truthful typed-unsupported blocked cell with evidence
   assert.ok(!calls.includes("sendBoundedTurn:gateway"));
 });
 
+test("LOCAL-2: Grok strict chat-spend is temporarily typed unsupported while AUTHROUTE stays separate", async () => {
+  const { driver, calls } = fakeDriver();
+  const [outcome] = await collectLocal2GatewayCells(fakeCtx(), [cell("T3-CHAT-1", { harness: "grok" })], driver);
+  assert.equal(outcome.status, "blocked");
+  assert.equal(outcome.reason?.code, "scenario_blocked");
+  assert.match(outcome.reason?.message ?? "", /temporary product policy/);
+  assert.match(outcome.reason?.message ?? "", /no attributable token or spend totals/);
+  assert.equal(outcome.evidence, undefined);
+  assert.ok(!calls.some((call) => call.startsWith("createGatewayActor:grok")));
+  assert.ok(!calls.includes("sendBoundedTurn:gateway"));
+});
+
 test("LOCAL-2: a green harness cannot hide the cursor blocked child — both emit explicit results", async () => {
   const { driver } = fakeDriver();
   const cells = [cell("T3-CHAT-1", { harness: "claude" }), cell("T3-CHAT-1", { harness: "cursor" })];
@@ -468,7 +480,7 @@ test("LOCAL-2: no eligible gateway model (live probe ∩ allowlist empty) maps t
         "and AnyHarness's live gateway probe",
     );
   };
-  const [outcome] = await collectLocal2GatewayCells(fakeCtx(), [cell("T3-CHAT-1", { harness: "grok" })], driver);
+  const [outcome] = await collectLocal2GatewayCells(fakeCtx(), [cell("T3-CHAT-1", { harness: "opencode" })], driver);
   assert.equal(outcome.status, "blocked");
   assert.equal(outcome.reason?.code, "scenario_blocked");
   assert.match(outcome.reason?.message ?? "", /no eligible non-Fable gateway model/);
