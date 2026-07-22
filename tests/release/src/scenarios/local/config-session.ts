@@ -8,7 +8,10 @@ import { authenticatedActor, type AuthenticatedActor } from "../../fixtures/auth
 import { findErrorEvent, findTurnEndedEvent } from "../../fixtures/local-runtime.js";
 import { preparedRepository, type PreparedRepository } from "../../fixtures/prepared-repository.js";
 import { productPage, type ProductPage } from "../../fixtures/product-page.js";
-import { selectCheapestEligibleModel } from "../../services/qualification-litellm.js";
+import {
+  selectCheapestEligibleModel,
+  selectQualificationGatewayModel,
+} from "../../services/qualification-litellm.js";
 import type { ReadyLocalWorld } from "../../worlds/local-workspace/world.js";
 import {
   LOCAL_HARNESS_KINDS,
@@ -22,10 +25,11 @@ import { bootLocalFunctionalWorld, type LocalFunctionalWorldInputs } from "./wor
 import { captureLocalDriverFailure } from "./debug-capture.js";
 import { resolveLocalWorkspaceSessionId } from "./local-session.js";
 import {
-  GATEWAY_UNSUPPORTED_HARNESSES,
-  gatewayUnsupportedMessage,
+  gatewayQualificationUnsupportedMessage,
+  isGatewayQualificationCapabilityUnsupported,
 } from "../../fixtures/gateway-unsupported-harnesses.js";
 import { waitForSidebarControlReady } from "./sidebar-control-readiness.js";
+import { classifyTurnErrorForEvidence } from "./chat-authroute.js";
 
 /**
  * LOCAL-4 (live configuration matrix, per harness) under `T3-CFG-1/local`, and
@@ -221,8 +225,16 @@ export const defaultLocalConfigDriver: LocalConfigDriver = {
     // both are advertised (resolveReasoningEffortControl), so a shadowed
     // `reasoning` control has no surface of its own.
     const hasEffort = normalized.some((control) => control.key === "effort");
+    // The composer likewise renders ONE promoted mode control:
+    // `collaboration_mode` wins over the legacy `mode` control when it has a
+    // real choice (resolveComposerModeControl). Cycling both through the same
+    // SessionModeControl would test the second control against the first
+    // control's readback and recreate a false #1063 rejection.
+    const hasCollaborationMode = normalized.some(
+      (control) => control.key === "collaboration_mode" && control.values.length >= 2,
+    );
     let grokModelValues: string[] | null = null;
-    if (harness === "grok" && normalized.some((control) => control.key === "model")) {
+    if (harness === "grok") {
       const [preflight, probed] = await Promise.all([
         world.gateway.preflight(),
         world.runtime.client.getGatewayModels(harness),
@@ -234,11 +246,12 @@ export const defaultLocalConfigDriver: LocalConfigDriver = {
       );
       grokModelValues = alternate ? [activeModelId, alternate] : [activeModelId];
     }
-    return normalized.flatMap((control) => {
+    const controls = normalized.flatMap((control) => {
       const surface = configSurfaceFor(control.key);
       if (
         !surface
         || (control.key === "reasoning" && hasEffort)
+        || (control.key === "mode" && hasCollaborationMode)
         // LOCAL-GROK-CFG-003 is deliberately Grok-only. Other harness model
         // semantics remain owned by their existing collectors/product rulings.
         || (surface === "model" && harness !== "grok")
@@ -261,6 +274,24 @@ export const defaultLocalConfigDriver: LocalConfigDriver = {
         },
       ];
     });
+    // Grok's checked-in catalog owns model switching through
+    // `setSessionModel`, while the ACP process may omit its raw `model` option
+    // from one live-config snapshot. The composer still advertises the
+    // allowlist ∩ gateway-probe models and can apply that catalog-backed live
+    // switch. Materialize that advertised control when the raw ACP control is
+    // absent; the later same-session turn plus exact spend correlation remains
+    // the fail-closed proof that the switch really reached the provider.
+    if (harness === "grok" && !controls.some((control) => control.surface === "model")) {
+      controls.push({
+        key: "model",
+        rawConfigId: "catalog:model",
+        currentValue: activeModelId,
+        settable: true,
+        values: grokModelValues ?? [activeModelId],
+        surface: "model",
+      });
+    }
+    return controls;
   },
   selectConfigValueInUi: (context, control, value) => selectConfigValueInUi(context, control, value),
   closeWorld: (world) => world.close(),
@@ -318,9 +349,10 @@ interface CollectedConfigCell {
  * One shared world for the whole harness matrix (BRIEF §2); one owner actor
  * reused across cells (LOCAL-4 permits reuse — sharding note "Configuration
  * cells may reuse the already-qualified harness process"); per assigned cell a
- * fresh baseline workspace/session + config cycle. Cursor → typed `blocked`. The
- * world is closed exactly once in `finally`; its cleanup receipt folds into each
- * green cell's evidence. */
+ * fresh baseline workspace/session + config cycle. Cursor and the temporarily
+ * unsupported Grok config cell return typed `blocked`. The world is closed
+ * exactly once in `finally`; its cleanup receipt folds into each green cell's
+ * evidence. */
 export async function collectLocal4ConfigCells(
   ctx: ScenarioRunContext,
   cells: readonly PlannedCellV1[],
@@ -368,15 +400,17 @@ export async function collectLocal4ConfigCells(
         collected.push({ cell, outcome: { kind: "blocked", message: `unknown harness "${cell.dimensions.harness}"` } });
         continue;
       }
-      if (GATEWAY_UNSUPPORTED_HARNESSES.has(harness)) {
+      const unsupportedMessage = gatewayQualificationUnsupportedMessage(
+        harness,
+        "config",
+        "its LOCAL-4 configuration matrix cannot be qualified",
+      );
+      if (unsupportedMessage) {
         collected.push({
           cell,
           outcome: {
             kind: "blocked",
-            message: gatewayUnsupportedMessage(
-              harness,
-              "its LOCAL-4 baseline turn cannot run on the gateway-enrolled world",
-            ),
+            message: unsupportedMessage,
           },
         });
         continue;
@@ -482,9 +516,16 @@ export async function cycleConfigControls(
     ): Promise<{ accepted: boolean; readback: string }>;
   },
 ): Promise<{ recorded: Array<{ controlKey: string; acceptedValue: string; rejected: boolean }>; known1063: boolean }> {
-  const cyclable = controls.filter(
-    (control) => control.settable && control.values.some((value) => value !== control.currentValue),
-  );
+  const cyclable = controls
+    .filter(
+      (control) => control.settable && control.values.some((value) => value !== control.currentValue),
+    )
+    // Model changes can legitimately replace the active session's dependent
+    // config surface (for example, removing or changing `effort`). Applying a
+    // control cached before that model switch recreates the stale-menu false
+    // positive that closed issue #1063 diagnosed. Prove every control exposed
+    // by the baseline model first, then mutate the model last.
+    .sort((left, right) => Number(left.key === "model") - Number(right.key === "model"));
   if (cyclable.length === 0) {
     throw new Error("LOCAL-4: session advertised no settable, cyclable live-config control");
   }
@@ -748,7 +789,7 @@ function normalizeHarness(value: string | undefined): LocalHarnessKind | undefin
 function firstRunnableHarness(cells: readonly PlannedCellV1[]): LocalHarnessKind | undefined {
   for (const cell of cells) {
     const harness = normalizeHarness(cell.dimensions.harness);
-    if (harness && !GATEWAY_UNSUPPORTED_HARNESSES.has(harness)) {
+    if (harness && !isGatewayQualificationCapabilityUnsupported(harness, "config")) {
       return harness;
     }
   }
@@ -762,7 +803,7 @@ function runnableHarnesses(cells: readonly PlannedCellV1[]): LocalHarnessKind[] 
   const seen = new Set<LocalHarnessKind>();
   for (const cell of cells) {
     const harness = normalizeHarness(cell.dimensions.harness);
-    if (harness && !GATEWAY_UNSUPPORTED_HARNESSES.has(harness)) {
+    if (harness && !isGatewayQualificationCapabilityUnsupported(harness, "config")) {
       seen.add(harness);
     }
   }
@@ -1075,7 +1116,7 @@ async function runBaselineTurn(
 ): Promise<{ workspaceId: string; sessionId: string; modelId: string }> {
   const preflight = await world.gateway.preflight();
   const probe = (await world.runtime.client.getGatewayModels(harness).catch(() => [])).map((model) => model.id);
-  const modelId = selectCheapestEligibleModel(preflight.allowlistModels, probe);
+  const modelId = selectQualificationGatewayModel(harness, preflight.allowlistModels, probe);
   if (!modelId) {
     throw new Error(`runBaselineTurn: no eligible non-Fable model for "${harness}" in the allowlist ∩ live probe`);
   }
@@ -1101,7 +1142,9 @@ async function runBaselineTurn(
   const sessionId = await resolveLocalWorkspaceSessionId(world, repoPath, WORKSPACE_SETTLE_TIMEOUT_MS);
   const completion = await waitForTurnCompletion(world, sessionId, TURN_TIMEOUT_MS);
   if (completion.error) {
-    throw new Error(`runBaselineTurn: assistant turn errored: ${completion.error}`);
+    throw new Error(
+      `runBaselineTurn: assistant turn error_class=${classifyTurnErrorForEvidence(completion.error)}`,
+    );
   }
   if (!completion.ended) {
     throw new Error(`runBaselineTurn: assistant turn did not end within ${TURN_TIMEOUT_MS}ms`);
@@ -1171,7 +1214,14 @@ async function switchGrokModelAndProveTurn(
   }
 
   await selectModelInComposer(page, harness, value);
-  await waitForRuntimeModelReadback(world, sessionId, value, CONFIG_REJECTION_WINDOW_MS);
+  const catalogBacked = control.rawConfigId === "catalog:model";
+  await waitForRuntimeModelReadback(
+    world,
+    sessionId,
+    value,
+    CONFIG_REJECTION_WINDOW_MS,
+    catalogBacked,
+  );
   const readback = await readRequiredAttr(
     page.page,
     "[data-composer-model-trigger]",
@@ -1200,7 +1250,9 @@ async function switchGrokModelAndProveTurn(
   const completion = await waitForTurnCompletion(world, sessionId, TURN_TIMEOUT_MS, afterSeq);
   const windowFinishedAt = new Date().toISOString();
   if (completion.error) {
-    throw new Error(`Grok attributed model-switch turn errored: ${completion.error}`);
+    throw new Error(
+      `Grok attributed model-switch turn error_class=${classifyTurnErrorForEvidence(completion.error)}`,
+    );
   }
   if (!completion.ended) {
     throw new Error(`Grok attributed model-switch turn did not end within ${TURN_TIMEOUT_MS}ms`);
@@ -1219,7 +1271,13 @@ async function switchGrokModelAndProveTurn(
       `Grok model-switch turn left baseline session "${sessionId}" for "${afterSessionId}"`,
     );
   }
-  await waitForRuntimeModelReadback(world, sessionId, value, CONFIG_REJECTION_WINDOW_MS);
+  await waitForRuntimeModelReadback(
+    world,
+    sessionId,
+    value,
+    CONFIG_REJECTION_WINDOW_MS,
+    catalogBacked,
+  );
   return { accepted: true, readback };
 }
 
@@ -1228,6 +1286,7 @@ async function waitForRuntimeModelReadback(
   sessionId: string,
   expectedModelId: string,
   timeoutMs: number,
+  allowSessionFallback = false,
 ): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   let last: string[] = [];
@@ -1245,7 +1304,10 @@ async function waitForRuntimeModelReadback(
     // Session model/requested-model fields can reflect product intent before
     // the harness accepts it. The live-config current value is the authoritative
     // runtime readback for this existing-session switch.
-    if (liveModelId === expectedModelId) {
+    if (
+      liveModelId === expectedModelId
+      || (allowSessionFallback && (session?.modelId === expectedModelId || session?.requestedModelId === expectedModelId))
+    ) {
       return;
     }
     await sleep(300);
@@ -1396,7 +1458,9 @@ async function materializeFirstChat(
   // subsequent tab-semantics proofs run against it.
   const completion = await waitForTurnCompletion(world, sessionId, TURN_TIMEOUT_MS);
   if (completion.error) {
-    throw new Error(`materializeFirstChat: the materializing turn errored: ${completion.error}`);
+    throw new Error(
+      `materializeFirstChat: turn error_class=${classifyTurnErrorForEvidence(completion.error)}`,
+    );
   }
   if (!completion.ended) {
     throw new Error(`materializeFirstChat: the materializing turn did not end within ${TURN_TIMEOUT_MS}ms`);
@@ -1502,14 +1566,14 @@ async function switchHarnessEmptyChat(
     oldSessionId,
     activeTabByIndex,
   );
-  let newSessionId: string;
-  try {
-    newSessionId = await waitForReconciledSessionId(p, activeTabByIndex);
-  } catch {
+  let newSessionId = await waitForReconciledSessionId(p, activeTabByIndex).catch(() => null);
+  if (newSessionId === null || newSessionId === oldSessionId) {
     // Empty-session replacement paints an optimistic `client-session:` id
-    // immediately. A reload is the product's authoritative recovery path when
-    // the live adoption event is missed: the durable replacement must return
-    // at the same tab index with its server id, or this remains a real failure.
+    // immediately. It can then revert to the old reconciled id when the create
+    // request is aborted during navigation. Either a timeout OR that stale-id
+    // reversion needs the same authoritative reload recovery: the durable
+    // replacement must return at the same tab index with a different server id,
+    // or this remains a real failure.
     await p.reload({ waitUntil: "domcontentloaded" });
     await p.locator("[data-workspace-tab-strip]").first().waitFor({
       state: "visible",
@@ -1542,7 +1606,9 @@ async function sendMessage(world: ReadyLocalWorld, page: ProductPage): Promise<{
   const sessionId = await waitForReconciledSessionId(p, activeTab);
   const completion = await waitForTurnCompletion(world, sessionId, TURN_TIMEOUT_MS);
   if (completion.error) {
-    throw new Error(`sendMessage: assistant turn errored: ${completion.error}`);
+    throw new Error(
+      `sendMessage: assistant turn error_class=${classifyTurnErrorForEvidence(completion.error)}`,
+    );
   }
   if (!completion.ended) {
     throw new Error(`sendMessage: assistant turn did not end within ${TURN_TIMEOUT_MS}ms`);

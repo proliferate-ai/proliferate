@@ -3,7 +3,13 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { test } from "node:test";
 
-import { chatCellSpecs, collectChatOutcomes, shippedHarnessKinds, t3Chat1 } from "./t3-chat-1.js";
+import {
+  chatCellSpecs,
+  collectChatOutcomes,
+  LOCAL_WORLD_OPTIONAL_ENV,
+  shippedHarnessKinds,
+  t3Chat1,
+} from "./t3-chat-1.js";
 import { buildPlannedCells } from "../runner/plan.js";
 import { executeSelectedCells } from "../runner/execute.js";
 import type { EnvResolution } from "../config/env-resolution.js";
@@ -52,8 +58,15 @@ test("T3-CHAT-1 --agents all plans every catalog harness exactly once per lane",
     );
     for (const cell of laneCells) {
       assert.equal(cell.cell_id, `T3-CHAT-1/${lane}/harness=${cell.dimensions.harness}`);
+      assert.deepEqual(cell.optional_env, lane === "local" ? LOCAL_WORLD_OPTIONAL_ENV : []);
     }
   }
+});
+
+test("local world inputs are resolved without gating the legacy diagnostic path", async () => {
+  const [spec] = await chatCellSpecs(["codex"], { includeLocalWorldEnv: true });
+  assert.deepEqual(spec?.optionalEnv, LOCAL_WORLD_OPTIONAL_ENV);
+  assert.deepEqual((await chatCellSpecs(["codex"]))[0]?.optionalEnv, undefined);
 });
 
 test("planCell steps name the cell's own harness", () => {

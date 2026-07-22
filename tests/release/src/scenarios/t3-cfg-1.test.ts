@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { t3Cfg1 } from "./t3-cfg-1.js";
+import { LOCAL_WORLD_OPTIONAL_ENV } from "./t3-chat-1.js";
 import type { ScenarioRunContext } from "./types.js";
 import type { PlannedCellV1 } from "../runner/result.js";
 import type { EnvResolution } from "../config/env-resolution.js";
@@ -56,7 +57,10 @@ test("T3-CFG-1 is a local-only matrix with no gated env (legacy diagnostic must 
 test("T3-CFG-1 expandCells fans out one cell per selected harness", async () => {
   if (t3Cfg1.kind !== "matrix") throw new Error("expected matrix");
   const specs = await t3Cfg1.expandCells({ runtimeLane: "local", desktop: "web", agents: ["claude", "grok"] });
-  assert.deepEqual(specs, [{ dimensions: { harness: "claude" } }, { dimensions: { harness: "grok" } }]);
+  assert.deepEqual(specs, [
+    { dimensions: { harness: "claude" }, optionalEnv: LOCAL_WORLD_OPTIONAL_ENV },
+    { dimensions: { harness: "grok" }, optionalEnv: LOCAL_WORLD_OPTIONAL_ENV },
+  ]);
 });
 
 test("T3-CFG-1 planCell prefixes every step with the cell id", () => {

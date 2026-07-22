@@ -298,7 +298,7 @@ test("preflightLocalUserKey rejects an Anthropic key with a bounded status-only 
     preflightLocalUserKey("opencode", "sk-ant-secret", {
       checkKey: async () => ({ status: 401 }),
     }),
-    /opencode provider credential preflight failed: provider returned 401 on \/models/,
+    /opencode credential preflight result=provider returned 401 on \/models/,
   );
 });
 
@@ -317,6 +317,10 @@ test("preflightLocalUserKey passes a valid Anthropic key and skips providers wit
 
 test("turn error classification is conservative and bounded", () => {
   assert.equal(classifyTurnErrorForEvidence("HTTP 429 from upstream"), "rate_limited");
+  assert.equal(
+    classifyTurnErrorForEvidence("stream disconnected before completion: stream closed before response.completed"),
+    "network_connection",
+  );
   assert.equal(classifyTurnErrorForEvidence("provider returned 401 unauthorized"), "authentication_failed");
   assert.equal(classifyTurnErrorForEvidence("upstream service unavailable (503)"), "provider_unavailable");
   assert.equal(classifyTurnErrorForEvidence("opaque provider detail secret=abc"), "unclassified");
@@ -398,6 +402,18 @@ test("LOCAL-2: cursor is a truthful typed-unsupported blocked cell with evidence
   assert.ok(!calls.includes("sendBoundedTurn:gateway"));
 });
 
+test("LOCAL-2: Grok strict chat-spend is temporarily typed unsupported while AUTHROUTE stays separate", async () => {
+  const { driver, calls } = fakeDriver();
+  const [outcome] = await collectLocal2GatewayCells(fakeCtx(), [cell("T3-CHAT-1", { harness: "grok" })], driver);
+  assert.equal(outcome.status, "blocked");
+  assert.equal(outcome.reason?.code, "scenario_blocked");
+  assert.match(outcome.reason?.message ?? "", /temporary product policy/);
+  assert.match(outcome.reason?.message ?? "", /no attributable token or spend totals/);
+  assert.equal(outcome.evidence, undefined);
+  assert.ok(!calls.some((call) => call.startsWith("createGatewayActor:grok")));
+  assert.ok(!calls.includes("sendBoundedTurn:gateway"));
+});
+
 test("LOCAL-2: a green harness cannot hide the cursor blocked child — both emit explicit results", async () => {
   const { driver } = fakeDriver();
   const cells = [cell("T3-CHAT-1", { harness: "claude" }), cell("T3-CHAT-1", { harness: "cursor" })];
@@ -464,7 +480,7 @@ test("LOCAL-2: no eligible gateway model (live probe ∩ allowlist empty) maps t
         "and AnyHarness's live gateway probe",
     );
   };
-  const [outcome] = await collectLocal2GatewayCells(fakeCtx(), [cell("T3-CHAT-1", { harness: "grok" })], driver);
+  const [outcome] = await collectLocal2GatewayCells(fakeCtx(), [cell("T3-CHAT-1", { harness: "opencode" })], driver);
   assert.equal(outcome.status, "blocked");
   assert.equal(outcome.reason?.code, "scenario_blocked");
   assert.match(outcome.reason?.message ?? "", /no eligible non-Fable gateway model/);
@@ -557,6 +573,18 @@ test("LOCAL-6: route change proves a new gateway session while recording the ori
   assert.ok(calls.includes("switchSelectedRouteToGateway:claude"));
   assert.ok(calls.includes("sendBoundedTurn:user_key"));
   assert.ok(calls.includes("sendBoundedTurn:gateway"));
+  assert.equal(
+    calls.filter((call) => call === "selectRepoAndWorkLocally").length,
+    2,
+    "the gateway leg must reselect the same repo from the home composer",
+  );
+  const gatewayModel = calls.lastIndexOf("selectModelInUi:claude-haiku-4-5");
+  const gatewayRepo = calls.lastIndexOf("selectRepoAndWorkLocally");
+  const gatewaySend = calls.indexOf("sendBoundedTurn:gateway");
+  assert.ok(
+    gatewayModel < gatewayRepo && gatewayRepo < gatewaySend,
+    `gateway model → repo/runtime → send order: ${calls.join(",")}`,
+  );
 });
 
 test("LOCAL-6: a route switch that reuses the same session id fails (route not process-bound)", async () => {

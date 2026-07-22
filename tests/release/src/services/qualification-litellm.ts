@@ -20,6 +20,8 @@
 
 import { createHash } from "node:crypto";
 
+import type { LocalHarnessKind } from "../evidence/schema.js";
+
 /** The excluded premium model tier: the spec selects the cheapest eligible
  * NON-FABLE Claude model, so any candidate whose id contains this substring is
  * ineligible. */
@@ -43,6 +45,13 @@ const CLAUDE_TIER_RANK: ReadonlyArray<readonly [string, number]> = [
 /** A bounded cap on accepted spend rows for one turn; more is treated as an
  * ambiguous/unbounded result and rejected. */
 const MAX_CORRELATED_ROWS = 16;
+
+/** Same bounded token alphabet the V4 evidence writer accepts. LiteLLM's
+ * provider-facing `request_id` is preferred, but provider ids are not
+ * guaranteed to use that alphabet. Its own `metadata.litellm_call_id` is the
+ * safe controller-generated correlation identity in that case. */
+const SAFE_REQUEST_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]*(?:\/[A-Za-z0-9][A-Za-z0-9._:-]*)*$/;
+const MAX_SAFE_REQUEST_ID_LENGTH = 200;
 
 /** Bounded wait for LiteLLM's asynchronous spend-log persistence after a turn. */
 const SPEND_CORRELATION_TIMEOUT_MS = 60_000;
@@ -81,12 +90,13 @@ function litellmModelMatches(rowModel: string, acceptedModelId: string): boolean
   }
   // The checked-in LiteLLM configuration deliberately exposes the stable
   // catalog alias `grok-4-fast` while routing it to xAI's current concrete
-  // fast-tier id `grok-4-1-fast` (server/litellm/config.yaml). Spend logs carry
-  // the concrete id, so correlate this one explicit configured alias without
-  // permitting arbitrary same-family model drift.
+  // fast-tier id `grok-4-1-fast` (server/litellm/config.yaml). xAI currently
+  // reports that routed request as `grok-4.5` in the response/spend record.
+  // Correlate only those two explicitly observed concrete ids for this checked-
+  // in alias; never generalize to arbitrary same-family model drift.
   if (
-    (accepted === "grok-4-fast" && row === "grok-4-1-fast") ||
-    (row === "grok-4-fast" && accepted === "grok-4-1-fast")
+    (accepted === "grok-4-fast" && (row === "grok-4-1-fast" || row === "grok-4.5")) ||
+    (row === "grok-4-fast" && (accepted === "grok-4-1-fast" || accepted === "grok-4.5"))
   ) {
     return true;
   }
@@ -248,6 +258,26 @@ export function selectCheapestEligibleModel(
     const rankDelta = genericModelTierRank(a) - genericModelTierRank(b);
     return rankDelta !== 0 ? rankDelta : a.localeCompare(b);
   })[0];
+}
+
+/**
+ * Selects the model used by the strict local qualification cells. Codex is
+ * intentionally pinned to gpt-5.2 when that exact id is eligible: gpt-5-mini
+ * is visible in the live probe but cannot complete turns through the current
+ * managed gateway. Other harnesses retain deterministic cheapest-first
+ * selection. Codex does not fall back: an unavailable gpt-5.2 makes the cell
+ * honestly blocked instead of qualifying different model bytes.
+ */
+export function selectQualificationGatewayModel(
+  harness: LocalHarnessKind,
+  allowlist: readonly string[],
+  liveProbe: readonly string[],
+): string | null {
+  const eligible = intersectEligibleModels(allowlist, liveProbe);
+  if (harness === "codex") {
+    return eligible.includes("gpt-5.2") ? "gpt-5.2" : null;
+  }
+  return selectCheapestEligibleModel(allowlist, liveProbe);
 }
 
 function intersectEligibleModels(
@@ -473,6 +503,11 @@ export class QualificationLiteLlmController {
         if (row.api_key !== params.actor.tokenId) {
           continue; // wrong key — not this actor's spend.
         }
+        if (!row.request_id) {
+          throw new QualificationLiteLlmError(
+            "Correlated LiteLLM spend row omitted both a safe provider request id and a safe litellm_call_id.",
+          );
+        }
         if (seen.has(row.request_id)) {
           continue; // pre-existing request id — present before the turn.
         }
@@ -483,7 +518,15 @@ export class QualificationLiteLlmController {
         uniqueByRequestId.set(row.request_id, row);
       }
       accepted = [...uniqueByRequestId.values()];
-      if (accepted.length > 0 || Date.now() >= deadline) {
+      // LiteLLM can expose a newly correlated row before its asynchronous
+      // token/spend enrichment has landed (observed for the xAI fast route).
+      // Keep polling the SAME bounded request/window correlation until every
+      // visible row is complete. The strict validation below is unchanged and
+      // still fails the last observed partial row when the deadline expires.
+      if (
+        (accepted.length > 0 && accepted.every(hasSettledUsage)) ||
+        Date.now() >= deadline
+      ) {
         break;
       }
       await sleepMs(this.spendCorrelationPollMs);
@@ -514,7 +557,10 @@ export class QualificationLiteLlmController {
         !isPositiveInt(row.total_tokens) ||
         row.prompt_tokens + row.completion_tokens !== row.total_tokens
       ) {
-        throw new QualificationLiteLlmError("Correlated a spend row with non-positive/inconsistent tokens.");
+        throw new QualificationLiteLlmError(
+          `Correlated a spend row with non-positive/inconsistent tokens ` +
+            `(model=${row.model}, prompt=${row.prompt_tokens}, completion=${row.completion_tokens}, total=${row.total_tokens}).`,
+        );
       }
       if (!(row.spend > 0)) {
         throw new QualificationLiteLlmError("Correlated a spend row with non-positive spend.");
@@ -590,7 +636,7 @@ export class QualificationLiteLlmController {
       throw new QualificationLiteLlmError("LiteLLM returned invalid spend logs.");
     }
     return payload.map(asRecord).map((row) => ({
-      request_id: String(row.request_id ?? ""),
+      request_id: evidenceSafeSpendRequestId(row),
       api_key: typeof row.api_key === "string" ? row.api_key : "",
       model: typeof row.model === "string" ? row.model : "",
       spend: typeof row.spend === "number" ? row.spend : 0,
@@ -641,8 +687,47 @@ export class QualificationLiteLlmController {
   }
 }
 
+function evidenceSafeSpendRequestId(row: Record<string, unknown>): string {
+  const providerRequestId = typeof row.request_id === "string" ? row.request_id : "";
+  if (isSafeRequestId(providerRequestId)) {
+    return providerRequestId;
+  }
+  const rawMetadata = row.metadata;
+  let metadata: Record<string, unknown> = {};
+  if (typeof rawMetadata === "string") {
+    try {
+      metadata = asRecord(JSON.parse(rawMetadata));
+    } catch {
+      metadata = {};
+    }
+  } else {
+    metadata = asRecord(rawMetadata);
+  }
+  const litellmCallId = typeof metadata.litellm_call_id === "string" ? metadata.litellm_call_id : "";
+  return isSafeRequestId(litellmCallId) ? litellmCallId : "";
+}
+
+function isSafeRequestId(value: string): boolean {
+  return (
+    value.length > 0 &&
+    value.length <= MAX_SAFE_REQUEST_ID_LENGTH &&
+    !value.includes("..") &&
+    SAFE_REQUEST_ID_PATTERN.test(value)
+  );
+}
+
 function isPositiveInt(value: number): boolean {
   return Number.isInteger(value) && value > 0;
+}
+
+function hasSettledUsage(row: SpendLogRow): boolean {
+  return (
+    isPositiveInt(row.prompt_tokens) &&
+    isPositiveInt(row.completion_tokens) &&
+    isPositiveInt(row.total_tokens) &&
+    row.prompt_tokens + row.completion_tokens === row.total_tokens &&
+    row.spend > 0
+  );
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

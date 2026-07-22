@@ -8,6 +8,7 @@ import {
   QualificationLiteLlmError,
   selectCheapestEligibleModel,
   selectCheapestEligibleClaudeModel,
+  selectQualificationGatewayModel,
   type ActorKeyIdentity,
   type FetchLike,
   type HttpResponseLike,
@@ -62,6 +63,13 @@ test("selectCheapestEligibleModel selects bounded non-Claude harness models", ()
     "gpt-5.2",
   );
   assert.equal(selectCheapestEligibleModel(allow, ["claude-fable-5"]), null);
+});
+
+test("selectQualificationGatewayModel pins Codex to gpt-5.2 without changing other harness ranking", () => {
+  const allow = ["gpt-5.2", "gpt-5-mini", "grok-4", "grok-4-fast"];
+  assert.equal(selectQualificationGatewayModel("codex", allow, ["gpt-5.2", "gpt-5-mini"]), "gpt-5.2");
+  assert.equal(selectQualificationGatewayModel("codex", allow, ["gpt-5-mini"]), null);
+  assert.equal(selectQualificationGatewayModel("grok", allow, ["grok-4", "grok-4-fast"]), "grok-4-fast");
 });
 
 test("deriveActorKeyAlias is the frozen vk-user-<user>-<enrollment[:8]> contract", () => {
@@ -215,6 +223,28 @@ test("correlateTurn accepts one new in-window row and sums token/spend", async (
   assert.equal(result.modelId, "claude-haiku-4-5");
 });
 
+test("correlateTurn uses LiteLLM's safe call id when the provider request id is unsafe", async () => {
+  const result = (await correlate([
+    spendRow({
+      request_id: "provider request id with spaces",
+      metadata: JSON.stringify({ litellm_call_id: "call-safe-123" }),
+    }),
+  ])) as { requestIds: string[] };
+  assert.deepEqual(result.requestIds, ["call-safe-123"]);
+});
+
+test("correlateTurn fails closed when no evidence-safe request identity exists", async () => {
+  await assert.rejects(
+    correlate([
+      spendRow({
+        request_id: "provider request id with spaces",
+        metadata: JSON.stringify({ litellm_call_id: "also unsafe" }),
+      }),
+    ]),
+    /omitted both a safe provider request id and a safe litellm_call_id/,
+  );
+});
+
 test("correlateTurn rejects when only a wrong-key row exists", async () => {
   await assert.rejects(correlate([spendRow({ api_key: "other-token" })]), /No new in-window/);
 });
@@ -249,6 +279,15 @@ test("correlateTurn accepts the configured Grok fast alias's concrete xAI model"
   assert.equal(result.modelId, "grok-4-fast");
 });
 
+test("correlateTurn accepts xAI's observed grok-4.5 response for the configured fast alias", async () => {
+  const result = (await correlate(
+    [spendRow({ model: "xai/grok-4.5" })],
+    [],
+    "grok-4-fast",
+  )) as { modelId: string };
+  assert.equal(result.modelId, "grok-4-fast");
+});
+
 test("correlateTurn does not generalize the Grok fast alias to another model", async () => {
   await assert.rejects(
     correlate([spendRow({ model: "xai/grok-4" })], [], "grok-4-fast"),
@@ -264,7 +303,50 @@ test("correlateTurn still rejects a same-family but different dated model", asyn
 });
 
 test("correlateTurn rejects zero/inconsistent tokens", async () => {
-  await assert.rejects(correlate([spendRow({ completion_tokens: 0, total_tokens: 8 })]), /tokens/);
+  await assert.rejects(
+    correlate(
+      [spendRow({ model: "xai/grok-4.5", prompt_tokens: 8, completion_tokens: 0, total_tokens: 8 })],
+      [],
+      "grok-4-fast",
+    ),
+    /model=xai\/grok-4\.5, prompt=8, completion=0, total=8/,
+  );
+});
+
+test("correlateTurn waits for an asynchronously enriched spend row", async () => {
+  let reads = 0;
+  const fetch: FetchLike = async () => {
+    reads += 1;
+    return response(200, [
+      spendRow(
+        reads === 1
+          ? {
+              model: "xai/grok-4.5",
+              prompt_tokens: 0,
+              completion_tokens: 0,
+              total_tokens: 0,
+              spend: 0,
+            }
+          : { model: "xai/grok-4.5" },
+      ),
+    ]);
+  };
+  const controller = new QualificationLiteLlmController(CONFIG, {
+    fetch,
+    spendCorrelationTimeoutMs: 1_000,
+    spendCorrelationPollMs: 0,
+  });
+  const result = await controller.correlateTurn({
+    actor: actor(),
+    before: { tokenIdHash: actor().tokenIdHash, requestIds: [], takenAt: WINDOW_START },
+    acceptedModelId: "grok-4-fast",
+    windowStartedAt: WINDOW_START,
+    windowFinishedAt: WINDOW_END,
+  });
+
+  assert.equal(reads, 2);
+  assert.equal(result.totalTokens, 13);
+  assert.ok(result.spendUsd > 0);
 });
 
 test("correlateTurn rejects zero spend", async () => {

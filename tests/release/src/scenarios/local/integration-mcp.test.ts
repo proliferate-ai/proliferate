@@ -180,8 +180,8 @@ test("runLocal7McpCellsAgainstWorld: a per-cell failure does not affect its sibl
   const driver: LocalMcpDriver = {
     ...base,
     runIntegrationTurn: async (_world, _page, harness) => {
-      if (harness === "grok") {
-        throw new Error("grok turn errored");
+      if (harness === "opencode") {
+        throw new Error("opencode turn errored");
       }
       return {
         workspaceId: `ws-${harness}`,
@@ -192,13 +192,36 @@ test("runLocal7McpCellsAgainstWorld: a per-cell failure does not affect its sibl
       };
     },
   };
-  const cells = [fakeCell("claude"), fakeCell("grok")];
+  const cells = [fakeCell("claude"), fakeCell("opencode")];
 
   const outcomes = await runLocal7McpCellsAgainstWorld(world, cells, driver);
 
   assert.equal(outcomes[0]!.status, "green");
   assert.equal(outcomes[1]!.status, "failed");
-  assert.match(outcomes[1]!.reason!.message, /grok turn errored/);
+  assert.match(outcomes[1]!.reason!.message, /opencode turn errored/);
+});
+
+test("runLocal7McpCellsAgainstWorld: Grok integration-audit is temporarily blocked before actor creation", async () => {
+  const closed = { value: 0 };
+  const world = fakeWorld();
+  const base = greenDriver(closed);
+  let createActorCalled = false;
+  const driver: LocalMcpDriver = {
+    ...base,
+    createActor: async (_world, harness) => {
+      createActorCalled = true;
+      return fakeActor(harness);
+    },
+  };
+
+  const outcomes = await runLocal7McpCellsAgainstWorld(world, [fakeCell("grok")], driver);
+
+  assert.equal(outcomes[0]!.status, "blocked");
+  assert.equal(outcomes[0]!.reason!.code, "scenario_blocked");
+  assert.match(outcomes[0]!.reason!.message, /temporary product policy/);
+  assert.match(outcomes[0]!.reason!.message, /no post-baseline product audit row/);
+  assert.equal(outcomes[0]!.evidence, undefined);
+  assert.equal(createActorCalled, false);
 });
 
 test("runLocal7McpCellsAgainstWorld: cursor is short-circuited to blocked before any gateway selection PUT (createActor never called)", async () => {
@@ -247,10 +270,10 @@ test("runLocal7McpCellsAgainstWorld: no eligible model maps to a typed blocked c
   const driver: LocalMcpDriver = {
     ...base,
     runIntegrationTurn: async () => {
-      throw new NoEligibleMcpModelError("[grok] no eligible model");
+      throw new NoEligibleMcpModelError("[opencode] no eligible model");
     },
   };
-  const cells = [fakeCell("grok")];
+  const cells = [fakeCell("opencode")];
 
   const outcomes = await runLocal7McpCellsAgainstWorld(world, cells, driver);
 
@@ -362,12 +385,12 @@ test("approvePendingPermissionIfPresent prefers a non-destructive session-scoped
   const clicked: string[] = [];
   const visible = new Set(["Allow all server tools for this session", "Allow"]);
   const page = {
-    getByRole: (_role: string, options: { name: string }) => {
+    getByRole: (_role: string, options: { name: RegExp }) => {
       const action = {
         first: () => action,
-        isVisible: async () => visible.has(options.name),
+        isVisible: async () => [...visible].some((name) => options.name.test(name)),
         click: async () => {
-          clicked.push(options.name);
+          clicked.push([...visible].find((name) => options.name.test(name)) ?? "");
         },
       };
       return action;
@@ -380,13 +403,14 @@ test("approvePendingPermissionIfPresent prefers a non-destructive session-scoped
 
 test("approvePendingPermissionIfPresent accepts the one-shot action emitted by Grok", async () => {
   const clicked: string[] = [];
+  const accessibleName = "1 allow once";
   const page = {
-    getByRole: (_role: string, options: { name: string }) => {
+    getByRole: (_role: string, options: { name: RegExp }) => {
       const action = {
         first: () => action,
-        isVisible: async () => options.name === "Allow once",
+        isVisible: async () => options.name.test(accessibleName),
         click: async () => {
-          clicked.push(options.name);
+          clicked.push(accessibleName);
         },
       };
       return action;
@@ -394,5 +418,5 @@ test("approvePendingPermissionIfPresent accepts the one-shot action emitted by G
   } as never;
 
   assert.equal(await approvePendingPermissionIfPresent(page), true);
-  assert.deepEqual(clicked, ["Allow once"]);
+  assert.deepEqual(clicked, [accessibleName]);
 });

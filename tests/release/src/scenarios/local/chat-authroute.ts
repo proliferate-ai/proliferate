@@ -15,7 +15,7 @@ import {
 import { preparedRepository, type PreparedRepository } from "../../fixtures/prepared-repository.js";
 import { productPage, type ProductPage } from "../../fixtures/product-page.js";
 import { findStructuredErrorEvent, findTurnEndedEvent } from "../../fixtures/local-runtime.js";
-import { selectCheapestEligibleModel } from "../../services/qualification-litellm.js";
+import { selectQualificationGatewayModel } from "../../services/qualification-litellm.js";
 import {
   DETERMINISTIC_PROMPT,
   defaultLocalWorldSmokeDriver,
@@ -37,7 +37,7 @@ import type {
 } from "../../evidence/schema.js";
 import {
   GATEWAY_UNSUPPORTED_HARNESSES,
-  gatewayUnsupportedMessage,
+  gatewayQualificationUnsupportedMessage,
 } from "../../fixtures/gateway-unsupported-harnesses.js";
 
 /**
@@ -87,6 +87,7 @@ export function classifyTurnErrorForEvidence(raw: string, structuredCode?: strin
   const message = raw.toLowerCase();
   if (/\bbudget\b[\s\S]{0,120}\b(?:exceed(?:ed|s|ing)?|exhausted|reached)\b/.test(message)) return "budget_exceeded";
   if (/\b429\b|\brate[ _-]?limit(?:ed|ing)?\b/.test(message)) return "rate_limited";
+  if (/\bstream (?:disconnected|closed) before (?:completion|response\.completed)\b/.test(message)) return "network_connection";
   if (/\b(?:401|403)\b|\bunauthori[sz]ed\b|\bauthentication failed\b|\binvalid api[ _-]?key\b/.test(message)) return "authentication_failed";
   if (/\b(?:502|503|504)\b|\b(?:service|provider|upstream) unavailable\b/.test(message)) return "provider_unavailable";
   return "unclassified";
@@ -153,7 +154,7 @@ export async function preflightLocalUserKey(
   const result = await preflightByokKey(rawKey, {}, probe);
   if (!result.ok) {
     throw new Error(
-      `storeAndSelectUserKeyRoute: ${harness} provider credential preflight failed: ${result.reason ?? "unknown"}`,
+      `storeAndSelectUserKeyRoute: ${harness} credential preflight result=${result.reason ?? "unknown"}`,
     );
   }
 }
@@ -379,15 +380,16 @@ export const defaultLocalRouteDriver: LocalRouteDriver = {
     await returnToAppHome(p, "[data-workspace-shell]");
     await this.waitForRouteSync(world, page, harness, "gateway");
     // LOCAL-6 requires the gateway turn to run on a NEW session (the cell
-    // asserts gatewayTurn.sessionId !== userKeyTurn.sessionId). Back on the
-    // workspace shell the user-key session is still active, and picking the
-    // gateway model there fires the product's same-harness LIVE model switch on
-    // that session (setActiveSessionConfigOption), which the server correctly
-    // 400s SESSION_CONFIG_REJECTED — a session must not silently jump auth
-    // contexts via a config PATCH (proven: Actions run 29570511844,
-    // T3-AUTHROUTE-1/local/route=change). Open a fresh in-workspace chat tab so
-    // the gateway model pick + send go through the create-session/launch path.
-    await openNewChat(p);
+    // asserts gatewayTurn.sessionId !== userKeyTurn.sessionId). Do not use the
+    // in-workspace "+" here: it eagerly creates a session with the old user-key
+    // model before the caller can select the gateway model. That create is
+    // correctly rejected as SESSION_MODEL_GATED, after which the picker tries
+    // to patch the old session and receives SESSION_CONFIG_REJECTED (Actions
+    // run 29862527425). Return to the standalone home composer instead; the
+    // caller selects the gateway model there and explicitly reselects the same
+    // prepared repo before Send, so session creation starts with the new route
+    // and model from the outset.
+    await goToHomeComposer(p);
   },
   async waitForRouteSync(world, _page, harness, route) {
     // Desktop's use-local-auth-state-sync pushes the newly selected route's auth
@@ -396,6 +398,8 @@ export const defaultLocalRouteDriver: LocalRouteDriver = {
     // harness appears launchable (its direct-provider models resolve).
     const deadline = Date.now() + ROUTE_SYNC_TIMEOUT_MS;
     let lastError: unknown;
+    let lastAgent: Awaited<ReturnType<typeof world.runtime.client.getAgent>> | undefined;
+    let lastLaunchModelCount: number | undefined;
     while (Date.now() < deadline) {
       try {
         if (route === "gateway") {
@@ -404,8 +408,13 @@ export const defaultLocalRouteDriver: LocalRouteDriver = {
             return;
           }
         } else {
-          const options = await world.runtime.client.getAgentLaunchOptions();
+          const [options, agent] = await Promise.all([
+            world.runtime.client.getAgentLaunchOptions(),
+            world.runtime.client.getAgent(harness).catch(() => undefined),
+          ]);
+          lastAgent = agent;
           const entry = options.find((agent) => agent.kind === harness);
+          lastLaunchModelCount = entry?.models.length;
           if (entry && entry.models.length > 0) {
             return;
           }
@@ -417,7 +426,12 @@ export const defaultLocalRouteDriver: LocalRouteDriver = {
     }
     throw new Error(
       `waitForRouteSync: Desktop did not sync the "${route}" route for "${harness}" within ` +
-        `${ROUTE_SYNC_TIMEOUT_MS}ms${lastError ? ` (last probe error: ${describe(lastError)})` : ""}.`,
+        `${ROUTE_SYNC_TIMEOUT_MS}ms` +
+        (route === "user_key"
+          ? ` (last: launchModels=${lastLaunchModelCount ?? "absent"}, readiness=${lastAgent?.readiness ?? "unknown"}, ` +
+            `installState=${lastAgent?.installState ?? "unknown"}, credentialState=${lastAgent?.credentialState ?? "unknown"})`
+          : "") +
+        `${lastError ? ` (last probe error: ${describe(lastError)})` : ""}.`,
     );
   },
   selectRepoAndWorkLocally: (page, repo) => defaultLocalWorldSmokeDriver.selectRepoAndWorkLocally(page, repo),
@@ -427,7 +441,8 @@ export const defaultLocalRouteDriver: LocalRouteDriver = {
         world.gateway.preflight(),
         world.runtime.client.getGatewayModels(harness),
       ]);
-      const modelId = selectCheapestEligibleModel(
+      const modelId = selectQualificationGatewayModel(
+        harness,
         preflight.allowlistModels,
         probe.map((model) => model.id),
       );
@@ -460,20 +475,16 @@ export const defaultLocalRouteDriver: LocalRouteDriver = {
     // new process is still reconciling.
     //
     // For LOCAL-6's gateway leg the caller passes an `existingSessionIds`
-    // snapshot taken BEFORE `switchSelectedRouteToGateway` opens the new chat
-    // tab, because that navigation itself materializes the AnyHarness session
-    // (product's `createSessionWithResolvedConfig` runs unconditionally on
-    // open, prompt or not). Snapshotting here — after that navigation — would
-    // count the just-created session as pre-existing and leave zero new
-    // candidates for `resolveLocalWorkspaceSessionAfter` to find (Actions run
-    // 29628880856, T3-AUTHROUTE-1/local/route=change). Callers that don't pass
-    // one (LOCAL-2/3, whose first turn runs from the home screen and doesn't
-    // pre-create a session) keep taking their own fresh snapshot here.
+    // snapshot from the proven user-key session before changing route. The
+    // gateway leg now returns through the home composer and should create
+    // exactly one runtime session on Send; retaining the boundary snapshot
+    // ensures the resolver can never fall back to the old route's session.
+    // Callers that don't pass one (LOCAL-2/3) take their own fresh snapshot.
     const preSendSessionIds = existingSessionIds ?? (await snapshotLocalWorkspaceSessionIds(world, repoPath));
     // LOCAL-2/3's first turn runs from the home screen (`[data-home-composer-editor]`);
-    // LOCAL-6's gateway turn runs from a fresh in-workspace tab
-    // (`[data-chat-composer-editor]`, opened by `openNewChat`). Accept either
-    // surface — the same dual-composer idiom `config-session.ts` uses.
+    // LOCAL-6's gateway turn now runs from the standalone home composer, but
+    // retain the in-workspace composer as a supported driver surface — the
+    // same dual-composer idiom `config-session.ts` uses.
     const editor = p.locator("[data-home-composer-editor], [data-chat-composer-editor]").first();
     await editor.waitFor({ state: "visible", timeout: 15_000 });
     await editor.fill(DETERMINISTIC_PROMPT);
@@ -753,26 +764,28 @@ function finalizePending(
   return { cellId: pending.cellId, status: "green", evidence };
 }
 
-/** LOCAL-2: one gateway turn per harness. Cursor → typed `blocked` (no gateway
- * auth slot), never green-required, never dropped (audit ruling #2). */
+/** LOCAL-2: one gateway turn per supported harness. Cursor has no gateway auth
+ * slot; Grok's strict spend evidence is temporarily unsupported. Both produce
+ * explicit typed `blocked` cells, never green-required and never dropped. */
 async function runLocal2GatewayCell(
   cell: PlannedCellV1,
   world: ReadyLocalWorld,
   driver: LocalRouteDriver,
 ): Promise<PendingRouteCell> {
   const harness = harnessOf(cell);
-  if (HARNESSES_WITHOUT_GATEWAY_AUTH_SLOT.has(harness)) {
+  const unsupportedMessage = gatewayQualificationUnsupportedMessage(
+    harness,
+    "chat-spend",
+    "the strict LOCAL-2 gateway chat-and-spend evidence contract cannot be qualified for it",
+  );
+  if (unsupportedMessage) {
     return {
       cellId: cell.cell_id,
       kind: "terminal",
       status: "blocked",
       reason: {
         code: "scenario_blocked",
-        message: gatewayUnsupportedMessage(
-          harness,
-          "the managed gateway route (LOCAL-2) is unsupported for it; this cell is the truthful typed-unsupported " +
-            "result and is never green-required",
-        ),
+        message: unsupportedMessage,
       },
     };
   }
@@ -958,21 +971,19 @@ async function runLocal6RouteChangeCell(
       });
 
       // 2) Switch the selected route to gateway; a NEW session launches on it.
-      // `switchSelectedRouteToGateway` opens a fresh in-workspace chat tab (so the
-      // gateway turn is a genuinely new session, not a rejected live config-switch
-      // on the user-key session). The workspace/repo binding is retained by the
-      // new-tab path — no repo re-selection needed (those "Project:"/"Runtime:"
-      // controls exist only on the home screen).
-      // Snapshot the pre-existing sessions BEFORE `switchSelectedRouteToGateway`:
-      // its trailing `openNewChat` navigation materializes the new AnyHarness
-      // session immediately (product's create-session path runs unconditionally
-      // on open), so a snapshot taken after it would wrongly count that session
-      // as pre-existing and leave `sendBoundedTurn` unable to find a "new"
-      // candidate (Actions run 29628880856, T3-AUTHROUTE-1/local/route=change).
+      // `switchSelectedRouteToGateway` returns to the standalone home composer
+      // so the gateway model can be selected before a new session exists. Rebind
+      // the same prepared repo + local runtime through the real home controls;
+      // the subsequent Send then creates a genuinely new gateway session rather
+      // than attempting an auth-context-changing config PATCH on the old one.
+      // Snapshot the exact user-key session set before changing route. The home
+      // composer must add one new runtime session on the gateway Send, and the
+      // resolver is forbidden from falling back to any id in this snapshot.
       const preRouteSwitchSessionIds = await snapshotLocalWorkspaceSessionIds(world, repo.path);
       await driver.switchSelectedRouteToGateway(world, page, harness);
       const gatewaySelection = await driver.resolveRouteModel(world, page, harness, "gateway");
       await driver.selectModelInUi(page, harness, gatewaySelection.modelId);
+      await driver.selectRepoAndWorkLocally(page, repo);
       const before = await driver.snapshotGatewaySpend(world, actor);
       const windowStartedAt = new Date().toISOString();
       const gatewayTurn = await driver.sendBoundedTurn(world, page, "gateway", repo.path, preRouteSwitchSessionIds);
@@ -1319,18 +1330,20 @@ async function returnToAppHome(page: Page, expectedSurface = "[data-home-compose
     .waitFor({ state: "visible", timeout: SETTINGS_STEP_TIMEOUT_MS });
 }
 
-/** Opens a NEW, genuinely-empty session tab in the CURRENT workspace via the
- * header "+" new-tab button (`data-chat-new-tab-button`, sr-only label "New
- * chat" → openNewSessionTab → createEmptySessionWithResolvedConfig). This stays
- * inside the active workspace shell — the workspace/repo binding is retained —
- * and lands on the in-workspace chat composer (`[data-chat-composer-editor]`),
- * NOT the standalone home screen's `[data-home-composer-editor]`. That fresh
- * session is what makes the gateway turn a new session distinct from the
- * user-key one, without a rejected live config switch on the old session. */
-async function openNewChat(page: Page): Promise<void> {
-  await page.locator("[data-chat-new-tab-button]:not([disabled])").first().click();
+/** Leaves the active workspace for the standalone home composer without
+ * creating a backend session. The sidebar action is intentionally distinct
+ * from the workspace header's eager session-tab "+" action. */
+async function goToHomeComposer(page: Page): Promise<void> {
+  await ensureSidebarOpen(page);
   await page
-    .locator("[data-chat-composer-editor]")
+    .locator("#main-sidebar")
+    // The visible sidebar action's accessible name also includes its Ctrl+N
+    // shortcut, so an exact-name match cannot resolve it in the real product.
+    .getByRole("button", { name: "New chat" })
+    .first()
+    .click();
+  await page
+    .locator("[data-home-composer-editor]")
     .first()
     .waitFor({ state: "visible", timeout: SETTINGS_STEP_TIMEOUT_MS });
 }

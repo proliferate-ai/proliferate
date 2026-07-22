@@ -10,7 +10,7 @@ import {
 } from "./world-boot.js";
 import { captureLocalDriverFailure } from "./debug-capture.js";
 import { resolveLocalWorkspaceSessionId } from "./local-session.js";
-import { CloudSurfaceGatedError } from "./chat-authroute.js";
+import { classifyTurnErrorForEvidence, CloudSurfaceGatedError } from "./chat-authroute.js";
 import type { ReadyLocalWorld } from "../../worlds/local-workspace/world.js";
 import type { LocalWorldCleanupEvidence } from "../../worlds/local-workspace/cleanup.js";
 import { authenticatedActor, type AuthenticatedActor } from "../../fixtures/authenticated-actor.js";
@@ -24,20 +24,21 @@ import {
   pickSearchTool,
   requireIntegrationAuditProbeEvents,
   runIntegrationAuditProbe,
+  summarizeNewToolCallEvents,
   writeGatewayDotfile,
   type GatewayGrant,
   type ToolCallAuditCorrelation,
+  type ToolCallEvent,
 } from "../../fixtures/integration-gateway.js";
 import { findErrorEvent, findTurnEndedEvent } from "../../fixtures/local-runtime.js";
-import { selectCheapestEligibleModel } from "../../services/qualification-litellm.js";
+import { selectQualificationGatewayModel } from "../../services/qualification-litellm.js";
 import type {
   LocalCleanupV1,
   LocalHarnessKind,
   LocalMcpIntegrationEvidenceV1,
 } from "../../evidence/schema.js";
 import {
-  GATEWAY_UNSUPPORTED_HARNESSES,
-  gatewayUnsupportedMessage,
+  gatewayQualificationUnsupportedMessage,
 } from "../../fixtures/gateway-unsupported-harnesses.js";
 
 /**
@@ -243,7 +244,8 @@ export const defaultLocalMcpDriver: LocalMcpDriver = {
       world.gateway.preflight(),
       world.runtime.client.getGatewayModels(harness),
     ]);
-    const modelId = selectCheapestEligibleModel(
+    const modelId = selectQualificationGatewayModel(
+      harness,
       preflight.allowlistModels,
       liveProbe.map((model) => model.id),
     );
@@ -302,7 +304,9 @@ export const defaultLocalMcpDriver: LocalMcpDriver = {
     const sessionId = await resolveLocalWorkspaceSessionId(world, repoPath, WORKSPACE_SETTLE_TIMEOUT_MS);
     const completion = await waitForTurnCompletion(world, sessionId, TURN_TIMEOUT_MS, p);
     if (completion.error) {
-      throw new Error(`runIntegrationTurn: assistant turn errored: ${completion.error}`);
+      throw new Error(
+        `runIntegrationTurn: assistant turn error_class=${classifyTurnErrorForEvidence(completion.error)}`,
+      );
     }
     if (!completion.ended) {
       throw new Error(`runIntegrationTurn: assistant turn did not end within ${TURN_TIMEOUT_MS}ms.`);
@@ -312,6 +316,7 @@ export const defaultLocalMcpDriver: LocalMcpDriver = {
   },
   async assertAuditRow(world, actor, namespace, toolName, correlation) {
     const deadline = Date.now() + 15_000;
+    let lastEvents: readonly ToolCallEvent[] = [];
     for (;;) {
       const probe = await runIntegrationAuditProbe(actor.session.email, {
         namespace,
@@ -319,6 +324,7 @@ export const defaultLocalMcpDriver: LocalMcpDriver = {
         databaseUrl: world.db.databaseUrl,
       });
       const events = requireIntegrationAuditProbeEvents(probe, actor.userId);
+      lastEvents = events;
       const row = findCorrelatedToolCallEvent(events, { namespace, toolName, correlation });
       if (row) {
         return { auditEventId: row.id };
@@ -326,7 +332,8 @@ export const defaultLocalMcpDriver: LocalMcpDriver = {
       if (Date.now() >= deadline) {
         throw new Error(
           `assertAuditRow: no new ok=true cloud_integration_tool_call_event for "${namespace}.${toolName}" ` +
-            `matched worker ${correlation.runtimeWorkerId} and organization ${correlation.organizationId}.`,
+            `matched worker ${correlation.runtimeWorkerId} and organization ${correlation.organizationId}. ` +
+            `Observed new rows: ${summarizeNewToolCallEvents(lastEvents, correlation)}.`,
         );
       }
       await sleep(2_000);
@@ -384,19 +391,21 @@ export async function runLocal7McpCellsAgainstWorld(
 
   for (const cell of cells) {
     const harness = (cell.dimensions.harness ?? "claude") as LocalHarnessKind;
-    if (GATEWAY_UNSUPPORTED_HARNESSES.has(harness)) {
-      // Short-circuit BEFORE createActor: `authenticatedActor` unconditionally
-      // PUTs a gateway selection for the requested harness, and the server
-      // correctly 400s that PUT for a gateway-unsupported harness (cursor
-      // carries an account key, not a provider key — see
-      // gateway-unsupported-harnesses.ts). That 400 is by design, not a
-      // failure to mask; type this cell blocked the same way LOCAL-2/LOCAL-4
-      // already do for the identical fact.
+    const unsupportedMessage = gatewayQualificationUnsupportedMessage(
+      harness,
+      "integration-audit",
+      "its LOCAL-7 MCP integration evidence contract cannot be qualified",
+    );
+    if (unsupportedMessage) {
+      // Short-circuit BEFORE createActor. Cursor would hit the server's correct
+      // no-gateway-slot 400; Grok can route through the gateway, but the
+      // integration-audit evidence contract is temporarily unsupported. Both
+      // stay explicit blocked cells with no fabricated evidence.
       entries.push({
         cell,
         ok: false,
         status: "blocked",
-        message: gatewayUnsupportedMessage(harness, "its LOCAL-7 MCP integration turn cannot run on the gateway-enrolled world"),
+        message: unsupportedMessage,
       });
       continue;
     }
@@ -780,11 +789,11 @@ export async function selectSessionModeInUi(page: ProductPage, modeId: string): 
  */
 export async function approvePendingPermissionIfPresent(page: Page): Promise<boolean> {
   const labels = [
-    "Allow all server tools for this session",
-    "Allow tool for this session",
-    "Always Allow",
-    "Allow once",
-    "Allow",
+    /^(?:\d+\s+)?allow all server tools for this session$/i,
+    /^(?:\d+\s+)?allow tool for this session$/i,
+    /^(?:\d+\s+)?always allow$/i,
+    /^(?:\d+\s+)?allow once$/i,
+    /^(?:\d+\s+)?allow$/i,
   ];
   for (const label of labels) {
     const action = page.getByRole("button", { name: label, exact: true }).first();

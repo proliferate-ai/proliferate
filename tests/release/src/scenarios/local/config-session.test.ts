@@ -232,7 +232,7 @@ function makeConfigDriver(
 
 test("LOCAL-4: green per-harness cells carry local_config_matrix evidence with accepted controls", async () => {
   const { driver } = makeConfigDriver();
-  const cells = [cfgCell("claude"), cfgCell("grok")];
+  const cells = [cfgCell("claude"), cfgCell("codex")];
   const outcomes = await collectLocal4ConfigCells(fakeCtx(), cells, driver);
 
   assert.equal(outcomes.length, 2);
@@ -250,38 +250,15 @@ test("LOCAL-4: green per-harness cells carry local_config_matrix evidence with a
   assert.equal(claude.known_1063_expected_fail, false);
 });
 
-test("LOCAL-4: Grok records a distinct model-picker value on its existing baseline session", async () => {
-  const { driver } = makeConfigDriver({
-    controls: [control({
-      key: "model",
-      rawConfigId: "model",
-      currentValue: "model-grok",
-      values: ["model-grok", "grok-code-fast-1"],
-      surface: "model",
-    })],
-  });
-  let seen: { harness?: string; sessionId?: string; value?: string } = {};
-  driver.selectConfigValueInUi = async (context, _control, value) => {
-    seen = { harness: context.harness, sessionId: context.sessionId, value };
-    return { accepted: true, readback: value };
-  };
+test("LOCAL-4: Grok config is temporarily typed unsupported before route selection or a baseline turn", async () => {
+  const { driver, calls } = makeConfigDriver();
   const [outcome] = await collectLocal4ConfigCells(fakeCtx(), [cfgCell("grok")], driver);
-  assert.equal(outcome?.status, "green");
-  assert.deepEqual(seen, {
-    harness: "grok",
-    sessionId: "sess-grok",
-    value: "grok-code-fast-1",
-  });
-  const evidence = outcome?.evidence as {
-    model_id: string;
-    controls: Array<{ control_key: string; accepted_value: string }>;
-  };
-  assert.equal(evidence.model_id, "model-grok");
-  assert.deepEqual(evidence.controls, [{
-    control_key: "model",
-    accepted_value: "grok-code-fast-1",
-    rejected: false,
-  }]);
+  assert.equal(outcome?.status, "blocked");
+  assert.equal(outcome?.reason?.code, "scenario_blocked");
+  assert.match(outcome?.reason?.message ?? "", /temporary product policy/);
+  assert.match(outcome?.reason?.message ?? "", /only one model and no independently settable qualification control/);
+  assert.equal(outcome?.evidence, undefined);
+  assert.ok(!calls.includes("selectGatewayRoute:grok"));
 });
 
 test("LOCAL-4: selects the gateway route for EVERY runnable harness before the page boots", async () => {
@@ -292,19 +269,21 @@ test("LOCAL-4: selects the gateway route for EVERY runnable harness before the p
   const { driver, calls } = makeConfigDriver();
   const outcomes = await collectLocal4ConfigCells(
     fakeCtx(),
-    [cfgCell("claude"), cfgCell("grok"), cfgCell("cursor")],
+    [cfgCell("claude"), cfgCell("codex"), cfgCell("grok"), cfgCell("cursor")],
     driver,
   );
-  for (const harness of ["claude", "grok"]) {
+  for (const harness of ["claude", "codex"]) {
     assert.ok(calls.includes(`selectGatewayRoute:${harness}`), `expected a gateway selection for ${harness}`);
   }
-  // Cursor ships no gateway slot — it must never be selected for.
+  // Cursor has no gateway slot and Grok config is temporarily unsupported.
   assert.ok(!calls.includes("selectGatewayRoute:cursor"), "cursor must not get a gateway selection");
+  assert.ok(!calls.includes("selectGatewayRoute:grok"), "unsupported Grok config must not get a gateway selection");
   // All selections happen before the page opens.
   const firstOpen = calls.indexOf("openPage");
   assert.ok(firstOpen === -1 || calls.filter((c) => c.startsWith("selectGatewayRoute:")).every((c) => calls.indexOf(c) < firstOpen));
-  // The claude/grok cells still finish green (cursor stays blocked).
-  assert.equal(outcomes.find((o) => (o.evidence as { harness?: string } | undefined)?.harness === "grok")?.status, "green");
+  // Supported cells finish green; Grok and cursor stay explicit blocked cells.
+  assert.equal(outcomes.find((o) => (o.evidence as { harness?: string } | undefined)?.harness === "codex")?.status, "green");
+  assert.equal(outcomes.find((o) => o.cellId.endsWith("harness=grok"))?.status, "blocked");
 });
 
 test("LOCAL-4: cursor is typed unsupported (blocked, no evidence), never green", async () => {
@@ -351,8 +330,8 @@ test("LOCAL-4: a rejected value restores last-accepted — accepted sibling keep
 });
 
 test("LOCAL-4: no settable control round-tripping fails that cell only, siblings survive", async () => {
-  const { driver } = makeConfigDriver({ baselineThrowFor: "grok" });
-  const outcomes = await collectLocal4ConfigCells(fakeCtx(), [cfgCell("claude"), cfgCell("grok")], driver);
+  const { driver } = makeConfigDriver({ baselineThrowFor: "opencode" });
+  const outcomes = await collectLocal4ConfigCells(fakeCtx(), [cfgCell("claude"), cfgCell("opencode")], driver);
   assert.equal(outcomes[0]!.status, "green");
   assert.equal(outcomes[1]!.status, "failed");
   assert.match(outcomes[1]!.reason?.message ?? "", /baseline blew up/);
@@ -395,6 +374,25 @@ test("cycleConfigControls: requires at least one control to round-trip", async (
     cycleConfigControls(fakePage(), [control({ settable: false })], { selectConfigValueInUi: async () => ({ accepted: true, readback: "x" }) }),
     /no settable/,
   );
+});
+
+test("cycleConfigControls: mutates model last so dependent controls are not stale (#1063)", async () => {
+  const applied: string[] = [];
+  await cycleConfigControls(
+    fakePage(),
+    [
+      control({ key: "model", surface: "model", currentValue: "gpt-a", values: ["gpt-a", "gpt-b"] }),
+      control({ key: "reasoning", surface: "reasoning", currentValue: "low", values: ["low", "high"] }),
+      control({ key: "mode", surface: "mode", currentValue: "default", values: ["default", "plan"] }),
+    ],
+    {
+      selectConfigValueInUi: async (_page, configControl, value) => {
+        applied.push(configControl.key);
+        return { accepted: true, readback: value };
+      },
+    },
+  );
+  assert.deepEqual(applied, ["reasoning", "mode", "model"]);
 });
 
 // ── LOCAL-5 ──────────────────────────────────────────────────────────────────
@@ -594,7 +592,7 @@ test("buildLocalSessionTabsEvidence pins the four proofs true and hashes each se
   }
 });
 
-test("enumerateControls keeps only UI-drivable controls and drops a reasoning ladder shadowed by effort", async () => {
+test("enumerateControls keeps only promoted UI controls and drops shadowed reasoning and mode aliases", async () => {
   const liveConfig = {
     rawConfigOptions: [],
     sourceSeq: 1,
@@ -623,6 +621,14 @@ test("enumerateControls keeps only UI-drivable controls and drops a reasoning la
         settable: true,
         values: [{ value: "on", label: "On" }, { value: "off", label: "Off" }],
       },
+      collaboration_mode: {
+        key: "collaboration_mode",
+        rawConfigId: "collaboration_mode",
+        label: "Working mode",
+        currentValue: "default",
+        settable: true,
+        values: [{ value: "default", label: "Default" }, { value: "plan", label: "Plan" }],
+      },
       mode: {
         key: "mode",
         rawConfigId: "permission_mode",
@@ -640,7 +646,7 @@ test("enumerateControls keeps only UI-drivable controls and drops a reasoning la
   const controls = await defaultLocalConfigDriver.enumerateControls(world, "session-1", "claude", "claude-haiku");
   assert.deepEqual(
     controls.map((control) => `${control.key}:${control.surface}`).sort(),
-    ["effort:reasoning", "mode:mode"],
+    ["collaboration_mode:mode", "effort:reasoning"],
   );
 });
 
@@ -727,6 +733,46 @@ test("Grok catalog model control resolves one distinct allowlisted live-probed p
     selectDistinctEligibleModel("grok-4-fast", ["grok-4-fast"], probed),
     null,
   );
+});
+
+test("Grok materializes its catalog-backed model control when ACP omits the raw model option", async () => {
+  const probed = ["grok-4", "grok-4-fast", "grok-code-fast-1"];
+  const world = {
+    ...fakeWorld(),
+    runtime: {
+      baseUrl: "http://fake",
+      client: {
+        getLiveConfig: async () => ({
+          rawConfigOptions: [],
+          sourceSeq: 1,
+          normalizedControls: {},
+        }),
+        getGatewayModels: async () => probed.map((id) => ({ id })),
+      },
+    },
+    gateway: {
+      preflight: async () => ({
+        adminReachable: true,
+        allowlistModels: probed,
+        eligibleClaudeModels: [],
+      }),
+    },
+  } as unknown as ReadyLocalWorld;
+
+  const controls = await defaultLocalConfigDriver.enumerateControls(
+    world,
+    "session-grok",
+    "grok",
+    "grok-4-fast",
+  );
+  assert.deepEqual(controls, [{
+    key: "model",
+    rawConfigId: "catalog:model",
+    currentValue: "grok-4-fast",
+    settable: true,
+    values: ["grok-4-fast", "grok-code-fast-1"],
+    surface: "model",
+  }]);
 });
 
 test("default Grok model picker proof preserves the session and correlates one post-switch turn", async () => {

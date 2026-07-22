@@ -60,7 +60,8 @@ export const t3Chat1: MatrixScenarioDefinition = {
   lanes: ["local", "sandbox"],
   requiredEnv: [],
   kind: "matrix",
-  expandCells: async ({ agents }) => chatCellSpecs(agents),
+  expandCells: async ({ agents, runtimeLane }) =>
+    chatCellSpecs(agents, { includeLocalWorldEnv: runtimeLane === "local" }),
   planCell: ({ runtimeLane }, cell) => {
     const harness = cell.dimensions.harness;
     return [
@@ -102,9 +103,21 @@ export const t3Chat1: MatrixScenarioDefinition = {
  * explicit `--agents` selection produces one cell per selected harness. The
  * same expansion applies independently to each runtime lane.
  */
-export async function chatCellSpecs(agentsSelector: readonly string[]): Promise<ScenarioCellSpec[]> {
+export const LOCAL_WORLD_OPTIONAL_ENV = [
+  "AGENT_GATEWAY_LITELLM_BASE_URL",
+  "AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL",
+  "AGENT_GATEWAY_LITELLM_MASTER_KEY",
+] as const;
+
+export async function chatCellSpecs(
+  agentsSelector: readonly string[],
+  options: { includeLocalWorldEnv?: boolean } = {},
+): Promise<ScenarioCellSpec[]> {
   const harnesses = agentsSelector.includes("all") ? await shippedHarnessKinds() : [...agentsSelector];
-  return harnesses.map((harness) => ({ dimensions: { harness } }));
+  return harnesses.map((harness) => ({
+    dimensions: { harness },
+    ...(options.includeLocalWorldEnv ? { optionalEnv: LOCAL_WORLD_OPTIONAL_ENV } : {}),
+  }));
 }
 
 /** Every cataloged agent kind, in catalog order. */

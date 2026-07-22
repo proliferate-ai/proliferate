@@ -205,10 +205,24 @@ composes shipped registry/catalog intent, product policy and overlays, and the
 live AnyHarness/ACP probe. The live probe is authoritative for what an
 installed harness can actually select.
 
-For each supported harness, the runner chooses the cheapest bounded model from
-the intersection of the qualification allowlist and the live probed model
-set. It first completes one real turn. Only after that proof does it exercise
-every visible probed mode, reasoning option, and configuration control.
+For each supported harness, the runner chooses a bounded model from the
+intersection of the qualification allowlist and the live probed model set.
+The default policy is cheapest-first. Codex qualification is pinned to the
+exact `gpt-5.2` id; if that id is absent from the intersection, the Codex cell
+is blocked rather than falling back to another model. The runner first
+completes one real turn. Only after that proof does it exercise every visible
+probed mode, reasoning option, and configuration control.
+
+Temporary product-policy ruling (2026-07-22): Grok remains supported and
+required for `T3-AUTHROUTE-1`, including its user-key path. Grok is currently
+unsupported for the `LOCAL-2` strict chat-spend contract (the live turn has no
+attributable token/spend totals), `LOCAL-4` configuration contract (one live
+model and no independent settable control), and `LOCAL-7` integration-audit
+contract (no post-baseline product audit row). A direct selection of those
+cells returns explicit `blocked` with null evidence. Strict acceptance selects
+only supported cells; because the agent selector is cross-scenario, Grok
+`T3-AUTHROUTE-1` is proven as a separate exact-head strict slice. Removing this
+ruling requires new live evidence for the corresponding capability.
 
 GitHub Actions exercises managed gateway and user API-key routes. Native agent
 authentication is not part of this qualification matrix.

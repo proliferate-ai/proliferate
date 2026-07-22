@@ -553,13 +553,17 @@ Gateway test-model set — one cheapest model per provider family the harnesses
 need, pinned in the test key's allowlist (exact IDs resolved against the
 catalog at build time):
 - Anthropic: Haiku-class (Claude Code; also OpenCode's default lane)
-- OpenAI: the cheapest Codex-supported tier (Codex)
+- OpenAI: exact `gpt-5.2` for Codex qualification (no fallback)
 - Google: Flash-class (Gemini CLI)
 - xAI: the cheap code tier (Grok, if cataloged for the release)
 - One OSS/aggregator lane if OpenCode is asserted beyond Anthropic (e.g. GLM)
 Everything flows through the gateway — no direct provider keys in scenarios.
 Same env var names locally and in CI (`env-vars.yaml`), keys in GH Actions
 secrets and the local credentials file respectively.
+
+Temporary product-policy ruling (2026-07-22): Grok's strict chat-spend cell is
+typed unsupported because the live turn does not emit attributable token/spend
+totals. Its `T3-AUTHROUTE-1` user-key coverage remains required.
 
 ### T3-UPDATE-1: harness convergence, both lanes (pre-verification of tier 4)
 The catalog-convergence chain (tier-4 registry rows) is asserted in both
@@ -582,6 +586,10 @@ survives every switch. Options are **enumerated from the catalog at build
 time, never hardcoded**, so a new option is automatically in scope.
 Per-harness × per-option red. Runs in the local lane by default (cheap);
 sandbox lane on the release train.
+
+Temporary product-policy ruling (2026-07-22): Grok's configuration cell is
+typed unsupported while its live qualification probe exposes one model and no
+independent settable control.
 
 ### T3-SEC-MAT-1: secrets materialize
 Steps: set personal + org env-var secret and a workspace file secret → create
@@ -608,6 +616,10 @@ the agent session calls a tool through the integrations gateway.
 Assert: tool call succeeds per harness × lane (per-harness red, like
 T3-CHAT-1); audit row written; org-policy toggle off → same call returns
 enumerated scope/policy error (toggle asserted once, not per harness).
+
+Temporary product-policy ruling (2026-07-22): Grok's integration-audit cell is
+typed unsupported while the live call emits no post-baseline product audit
+row.
 
 ### T3-REPO-1: repo settings take effect — both lanes
 Steps: configure default branch + environment vars/scripts on the repo

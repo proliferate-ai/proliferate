@@ -26,7 +26,7 @@ import { mkdir, rename, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { ApiClient } from "./http.js";
+import { ApiClient, ApiRequestError } from "./http.js";
 
 export const GATEWAY_DOTFILE_NAME = "integration-gateway.json";
 
@@ -58,6 +58,40 @@ export interface GatewayGrant {
   mcpUrl: string;
 }
 
+const ENROLL_VISIBILITY_MAX_ATTEMPTS = 20;
+const ENROLL_VISIBILITY_POLL_MS = 100;
+
+interface EnrollmentVisibilityRetryOptions {
+  maxAttempts?: number;
+  pollMs?: number;
+  sleepFn?: (ms: number) => Promise<void>;
+}
+
+/**
+ * Retry only the explicit "ticket not visible" response produced while the
+ * preceding ticket-mint request's yield dependency is still committing. The
+ * token is one-shot, so every ambiguous outcome remains terminal.
+ */
+export async function enrollAfterTicketVisibility<T>(
+  attemptEnroll: () => Promise<T>,
+  options: EnrollmentVisibilityRetryOptions = {},
+): Promise<T> {
+  const maxAttempts = options.maxAttempts ?? ENROLL_VISIBILITY_MAX_ATTEMPTS;
+  const pollMs = options.pollMs ?? ENROLL_VISIBILITY_POLL_MS;
+  const sleepFn = options.sleepFn ?? sleep;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      return await attemptEnroll();
+    } catch (error) {
+      if (!(error instanceof ApiRequestError) || error.status !== 401 || attempt === maxAttempts) {
+        throw error;
+      }
+      await sleepFn(pollMs);
+    }
+  }
+  throw new Error("worker enrollment retry loop exhausted without a terminal outcome");
+}
+
 /**
  * Provisions a real gateway grant for the durable user by driving the same two
  * endpoints the desktop app drives. `organizationId` scopes the grant so the
@@ -73,14 +107,24 @@ export async function enrollGatewayWorker(
     "/v1/cloud/workers/desktop/enrollment",
     { desktopInstallId, organizationId: options.organizationId },
   );
-  const enrolled = await new ApiClient({ baseUrl: options.serverUrl }).post<{
-    workerId: string;
-    integrationGateway: { url: string; authorization: string };
-  }>("/v1/cloud/worker/enroll", {
-    enrollmentToken: enrollment.enrollmentToken,
-    machineFingerprint: desktopInstallId,
-    hostname: "release-e2e-runner",
-  });
+  const workerClient = new ApiClient({ baseUrl: options.serverUrl });
+  // The user-authenticated ticket endpoint and the unauthenticated worker
+  // endpoint use separate requests/transactions. Fast local worlds can reach
+  // worker/enroll before the ticket-creation transaction is visible on the
+  // second connection, which truthfully returns 401 without consuming the
+  // token. A received 401 is therefore safe to retry with the SAME token: no
+  // worker was created. Never retry a success, a transport ambiguity, or any
+  // other status because the ticket is one-shot.
+  const enrolled = await enrollAfterTicketVisibility(() =>
+    workerClient.post<{
+      workerId: string;
+      integrationGateway: { url: string; authorization: string };
+    }>("/v1/cloud/worker/enroll", {
+      enrollmentToken: enrollment.enrollmentToken,
+      machineFingerprint: desktopInstallId,
+      hostname: "release-e2e-runner",
+    }),
+  );
   // Take the bearer from the real enroll response, but construct the URL from
   // the loopback server URL the runner actually reaches: the enroll response's
   // `url` derives from the server's configured public cloud base URL, which in
@@ -92,6 +136,10 @@ export async function enrollGatewayWorker(
     authorization: enrolled.integrationGateway.authorization,
     mcpUrl,
   };
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**
@@ -335,6 +383,28 @@ export function findCorrelatedToolCallEvent(
       event.runtimeWorkerId === expected.correlation.runtimeWorkerId &&
       event.organizationId === expected.correlation.organizationId,
   );
+}
+
+/** Bounded, credential-free diagnostics for a failed exact correlation. Event
+ * ids are deliberately omitted (they are evidence identities); the remaining
+ * fields are the same safe correlation dimensions already named by LOCAL-7. */
+export function summarizeNewToolCallEvents(
+  events: readonly ToolCallEvent[],
+  correlation: ToolCallAuditCorrelation,
+  maxRows = 8,
+): string {
+  const baselineIds = new Set(correlation.baselineEventIds);
+  const fresh = events.filter((event) => !baselineIds.has(event.id)).slice(-maxRows);
+  if (fresh.length === 0) {
+    return "none";
+  }
+  return fresh
+    .map(
+      (event) =>
+        `tool=${JSON.stringify(event.toolName)}, ok=${event.ok}, error=${JSON.stringify(event.errorCode)}, ` +
+        `worker=${JSON.stringify(event.runtimeWorkerId)}, org=${JSON.stringify(event.organizationId)}`,
+    )
+    .join("; ");
 }
 
 /**

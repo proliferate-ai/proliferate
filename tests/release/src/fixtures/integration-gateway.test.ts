@@ -3,7 +3,9 @@ import { test } from "node:test";
 
 import {
   buildIntegrationAuditProbeEnv,
+  enrollAfterTicketVisibility,
   findCorrelatedToolCallEvent,
+  summarizeNewToolCallEvents,
   parseIntegrationAuditProbeResult,
   pickSearchTool,
   requireIntegrationAuditProbeEvents,
@@ -11,6 +13,7 @@ import {
   type ToolCallAuditCorrelation,
   type ToolCallEvent,
 } from "./integration-gateway.js";
+import { ApiRequestError } from "./http.js";
 
 function toolCallEvent(overrides: Partial<ToolCallEvent> = {}): ToolCallEvent {
   return {
@@ -32,6 +35,67 @@ const correlation: ToolCallAuditCorrelation = {
   runtimeWorkerId: "worker-current",
   organizationId: "org-current",
 };
+
+test("worker enrollment retries only an explicit pre-commit 401 and preserves the one-shot attempt", async () => {
+  const calls: number[] = [];
+  const sleeps: number[] = [];
+  const grant = await enrollAfterTicketVisibility(
+    async () => {
+      calls.push(calls.length + 1);
+      if (calls.length < 3) {
+        throw new ApiRequestError("POST", "/v1/cloud/worker/enroll", 401, { code: "not_visible_yet" });
+      }
+      return { workerId: "worker-current" };
+    },
+    {
+      maxAttempts: 4,
+      pollMs: 7,
+      sleepFn: async (ms) => {
+        sleeps.push(ms);
+      },
+    },
+  );
+  assert.deepEqual(grant, { workerId: "worker-current" });
+  assert.deepEqual(calls, [1, 2, 3]);
+  assert.deepEqual(sleeps, [7, 7]);
+});
+
+test("worker enrollment never retries transport ambiguity, another status, or the final 401", async () => {
+  for (const error of [
+    new Error("connection reset after write"),
+    new ApiRequestError("POST", "/v1/cloud/worker/enroll", 409, { code: "conflict" }),
+  ]) {
+    let calls = 0;
+    await assert.rejects(
+      enrollAfterTicketVisibility(
+        async () => {
+          calls += 1;
+          throw error;
+        },
+        {
+          maxAttempts: 3,
+          pollMs: 0,
+          sleepFn: async () => undefined,
+        },
+      ),
+      (caught) => caught === error,
+    );
+    assert.equal(calls, 1);
+  }
+
+  let calls = 0;
+  await assert.rejects(
+    enrollAfterTicketVisibility(
+      async () => {
+        calls += 1;
+        throw new ApiRequestError("POST", "/v1/cloud/worker/enroll", 401, { code: "still_absent" });
+      },
+      { maxAttempts: 3, pollMs: 0, sleepFn: async () => undefined },
+    ),
+    (error: unknown) => error instanceof ApiRequestError && error.status === 401,
+  );
+  assert.equal(calls, 3);
+});
 
 test("pickSearchTool prefers a web_search-shaped tool and fills a query arg", () => {
   const picked = pickSearchTool(
@@ -213,4 +277,16 @@ test("audit correlation accepts the new successful row from the exact worker and
     }),
     exact,
   );
+});
+
+test("unmatched audit diagnostics are bounded and omit event ids", () => {
+  const events = [
+    toolCallEvent({ id: "audit-old" }),
+    toolCallEvent({ id: "secret-event-id", toolName: "other_tool", runtimeWorkerId: "worker-other" }),
+  ];
+  const summary = summarizeNewToolCallEvents(events, correlation, 1);
+
+  assert.match(summary, /tool="other_tool"/);
+  assert.match(summary, /worker="worker-other"/);
+  assert.doesNotMatch(summary, /secret-event-id|audit-old/);
 });

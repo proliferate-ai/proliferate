@@ -19,6 +19,30 @@ import type { LocalHarnessKind } from "../evidence/schema.js";
 export const GATEWAY_UNSUPPORTED_HARNESSES: ReadonlySet<LocalHarnessKind> = new Set<LocalHarnessKind>(["cursor"]);
 
 /**
+ * Capability-specific qualification cells that the product cannot currently
+ * prove for an otherwise gateway-capable harness. Keep these narrower than
+ * `GATEWAY_UNSUPPORTED_HARNESSES`: Grok's gateway route is supported and its
+ * AUTHROUTE cell must continue to run, while only the evidence contracts below
+ * are temporarily unsupported.
+ */
+export type GatewayQualificationCapability = "chat-spend" | "config" | "integration-audit";
+
+const TEMPORARILY_UNSUPPORTED_CAPABILITIES: ReadonlyMap<
+  LocalHarnessKind,
+  ReadonlySet<GatewayQualificationCapability>
+> = new Map([
+  ["grok", new Set<GatewayQualificationCapability>(["chat-spend", "config", "integration-audit"])],
+]);
+
+export function isGatewayQualificationCapabilityUnsupported(
+  harness: LocalHarnessKind,
+  capability: GatewayQualificationCapability,
+): boolean {
+  return GATEWAY_UNSUPPORTED_HARNESSES.has(harness)
+    || (TEMPORARILY_UNSUPPORTED_CAPABILITIES.get(harness)?.has(capability) ?? false);
+}
+
+/**
  * The shared typed-unsupported message body for a gateway-unsupported
  * harness. `context` names the specific cell/journey action that cannot run
  * (e.g. "its LOCAL-4 baseline turn cannot run on the gateway-enrolled world"),
@@ -30,4 +54,28 @@ export function gatewayUnsupportedMessage(harness: LocalHarnessKind, context: st
     `[${harness}] ships with no gateway auth slot; ${context} (typed unsupported: it carries an account key, ` +
     "not a provider key)"
   );
+}
+
+/** Returns the truthful typed-unsupported reason for one qualification cell. */
+export function gatewayQualificationUnsupportedMessage(
+  harness: LocalHarnessKind,
+  capability: GatewayQualificationCapability,
+  context: string,
+): string | null {
+  if (GATEWAY_UNSUPPORTED_HARNESSES.has(harness)) {
+    return gatewayUnsupportedMessage(harness, context);
+  }
+  if (!TEMPORARILY_UNSUPPORTED_CAPABILITIES.get(harness)?.has(capability)) {
+    return null;
+  }
+
+  const fact: Record<GatewayQualificationCapability, string> = {
+    "chat-spend":
+      "the live Grok turn succeeds, but LiteLLM currently emits no attributable token or spend totals for the cell",
+    config:
+      "the live Grok probe currently exposes only one model and no independently settable qualification control",
+    "integration-audit":
+      "the live Grok integration call currently emits no post-baseline product audit row",
+  };
+  return `[${harness}] ${context} (typed unsupported, temporary product policy: ${fact[capability]})`;
 }
