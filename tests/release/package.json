@@ -9,7 +9,7 @@
     "test": "tsx --test \"src/**/*.test.ts\""
   },
   "dependencies": {
-    "e2b": "^2.34.0"
+    "e2b": "^2.35.3"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",
