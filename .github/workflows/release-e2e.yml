@@ -7,9 +7,11 @@ name: Release E2E (tier 3)
 #
 # Cadence: release-train, NOT per-PR. It burns real money/time (E2B sandboxes,
 # gateway LLM calls) so it runs on a schedule and on demand, never on
-# `pull_request`. Per the README CI mapping it is non-blocking: failures file
-# issues and block the staging->production promotion, they never gate merges.
-# Every job is `continue-on-error` while the runner earns a flake-free record.
+# `pull_request`. Tier 3 never gates ordinary merges. The scheduled legacy
+# local/staging jobs remain provisional and `continue-on-error`; the manual
+# protected-Qualification jobs are strict, preserve red exits, and upload V4
+# evidence for their selected exact-head scope. Production promotion does not
+# yet consume a complete Tier-3/Tier-4 aggregate.
 #
 # Honest scoping (the runner self-reports blocked/expected-fail per scenario
 # for anything it lacks credentials for; the gates below just avoid booting a
