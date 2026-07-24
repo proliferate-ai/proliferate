@@ -144,18 +144,20 @@ STANDARD_Z_RE = re.compile(r"(?<![A-Za-z0-9_-])z-(?:0|10|20|30|40|50)(?![A-Za-z0
 ARBITRARY_GAP_RE = re.compile(r"(?<![A-Za-z0-9_-])gap-\[[^\]]+\]")
 ARBITRARY_SIZE_RE = re.compile(r"(?<![A-Za-z0-9_-])size-\[[^\]]+\]")
 OLD_SHADOW_RE = re.compile(
-    r"(?<![A-Za-z0-9_-])shadow-(?:floating(?:-dark)?|lg|\[[^\]]+\])(?![A-Za-z0-9_-])"
+    r"(?<![A-Za-z0-9_-])shadow-(?:floating(?:-dark)?|keystone|lg|\[[^\]]+\])"
+    r"(?![A-Za-z0-9_-])"
 )
 OLD_ACCENT_RE = re.compile(
     r"(?<![A-Za-z0-9_-])(?:[^\s\"'`]*:)*bg-(?:sidebar-)?accent"
     r"(?:/[^\s\"'`]+)?(?![A-Za-z0-9_-])"
 )
-INTERACTION_FOREGROUND_ALPHA_RE = re.compile(
-    r"(?P<class>(?:[^\s\"'`]*"
-    r"(?:hover|active|focus|focus-visible|focus-within|group-hover|group-focus|"
-    r"data-\[state=(?:open|active|selected)\])"
-    r"[^\s\"'`]*:)+bg-foreground/"
-    r"(?P<alpha>\[(?:0?\.)?[0-9]+\]|[0-9]+))"
+FOREGROUND_ALPHA_RE = re.compile(
+    r"(?P<class>"
+    r"(?:[^\s\"'`]*(?:hover|active|focus|focus-visible|focus-within|group-hover|group-focus|"
+    r"data-\[state=(?:open|active|selected)\])[^\s\"'`]*:)+bg-foreground/"
+    r"(?P<interaction_alpha>\[(?:0?\.)?[0-9]+\]|[0-9]+)"
+    r"|(?:[^\s\"'`]*:)*bg-foreground/(?P<static_alpha>\[(?:0?\.)?[0-9]+\])"
+    r")"
 )
 NUMERIC_DURATION_UTILITY_RE = re.compile(
     r"(?<![A-Za-z0-9_-])duration-(?:\[[^\]]+\]|[0-9]+)(?![A-Za-z0-9_-])"
@@ -382,14 +384,15 @@ def check_foundation_source(path: Path, source: str) -> list[Violation]:
                 Violation(rule_id, path, line_number(source, match.start()), message)
             )
 
-    for match in INTERACTION_FOREGROUND_ALPHA_RE.finditer(source_without_comments):
-        if interaction_alpha_percent(match.group("alpha")) <= 10:
+    for match in FOREGROUND_ALPHA_RE.finditer(source_without_comments):
+        raw_alpha = match.group("interaction_alpha") or match.group("static_alpha")
+        if interaction_alpha_percent(raw_alpha) <= 10:
             violations.append(
                 Violation(
-                    "foreground-alpha-interaction",
+                    "foreground-alpha-foundation",
                     path,
                     line_number(source, match.start()),
-                    "use bg-hover/bg-active/bg-selected instead of a <=10% foreground overlay",
+                    "use a ruled semantic state or static surface instead of a <=10% foreground overlay",
                 )
             )
 

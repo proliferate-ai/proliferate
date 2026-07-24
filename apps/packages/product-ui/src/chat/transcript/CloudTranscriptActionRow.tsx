@@ -180,7 +180,7 @@ export function CloudTranscriptDetailsPanel({
   children: ReactNode;
 }) {
   return (
-    <div className="overflow-hidden rounded-md border border-border/60 bg-foreground/[0.04]">
+    <div className="overflow-hidden rounded-md border border-border/60 bg-surface-elevated-secondary">
       {children}
     </div>
   );

@@ -112,7 +112,7 @@ function CalendarDaySection({
       ref={(element) => setSectionRef(day.id, element)}
       className={twMerge(
         "scroll-mt-24 rounded-lg px-4 py-3",
-        active ? "bg-foreground/[0.035]" : "",
+        active ? "bg-selected" : "",
       )}
       aria-label={day.sectionLabel}
     >

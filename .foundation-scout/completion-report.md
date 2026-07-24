@@ -6,7 +6,9 @@ Branch: `ui-foundation-pass`
 
 Base: `9a1ca08b9`
 
-Implementation head before this report: `a18db6a31`
+Initial implementation head before this report: `a18db6a31`
+
+Round-one review base: `1d38e88ae`
 
 ## Outcome
 
@@ -88,7 +90,7 @@ reviewer as required by the handoff.
 
 - Expanded `scripts/check_appearance_scaling.py`, the CI-enforced source-check
   path, to cover the full foundation vocabulary.
-- Added 21 focused unit tests for the gate.
+- Added 22 focused unit tests for the gate.
 - Added checked-in baselines for the 95 sanctioned standard numeric z
   occurrences and 29 existing long-list signatures. These baselines may only
   shrink.
@@ -99,7 +101,7 @@ Final unmigrated counts:
 - generic `text-xs` / `text-sm` / `text-base` / `text-lg` / `text-xl`: 0
 - arbitrary text-size, radius, z, ruled gap, and ruled icon-size utilities: 0
 - historical accent interaction/selection consumers: 0
-- foreground-alpha interaction overlays at 10% or lower: 0
+- foreground-alpha interaction and ruled static fills at 10% or lower: 0
 - deprecated/arbitrary shadow consumers covered by the frozen map: 0
 - numeric finite motion and inline easing consumers covered by the map: 0
 - scoped raw-hex violations: 0
@@ -111,11 +113,11 @@ Final unmigrated counts:
 All final commands below passed:
 
 - `python3 -m unittest scripts/test_check_appearance_scaling.py`
-  — 21 tests.
+  — 22 tests.
 - `python3 scripts/check_appearance_scaling.py`
   — complete source gate.
 - `python3 scripts/check_docs.py`
-  — 232 Markdown files.
+  — 233 Markdown files.
 - `python3 -m py_compile scripts/check_appearance_scaling.py scripts/test_check_appearance_scaling.py`.
 - `git diff --check`.
 - `pnpm --filter @proliferate/design build`
@@ -130,6 +132,11 @@ All final commands below passed:
 - `pnpm --filter @proliferate/product-ui typecheck`.
 - `pnpm --filter @proliferate/product-ui exec vitest run --maxWorkers=1 --minWorkers=1`
   — 43 files, 235 tests.
+- After round-one review,
+  `pnpm --filter @proliferate/ui exec vitest run test/Button.test.tsx --maxWorkers=1 --minWorkers=1`
+  and the targeted product-UI Markdown/Workspaces run both passed
+  (1 UI test and 7 product-UI tests), followed by clean UI and product-UI
+  typechecks.
 - `pnpm --filter @proliferate/product-client typecheck`.
 - `NODE_OPTIONS='--localstorage-file=/tmp/ui-foundation-node-localstorage' pnpm --filter @proliferate/product-client exec vitest run --maxWorkers=1 --minWorkers=1`
   — 634 files, 3,826 tests.
@@ -165,6 +172,13 @@ remained at memory-pressure level 2 with heavily used swap.
   command produced a successful build.
 - The successful Vite build retained existing non-fatal warnings for runtime
   Geist font URL resolution, a mixed static/dynamic import, and large chunks.
+- Claude's first adversarial review found seven migration omissions: the
+  removed keystone shadow utility on the primary button, a dropped
+  `leading-none` on the confirmation title, and five section 5.1.1 owners
+  containing six raw foreground-alpha fills. All were repaired according to
+  their frozen roles. The source gate now rejects the removed keystone
+  utility and both interaction and bracket-authored static foreground fills
+  at 10% or lower, closing the detection gap that allowed the omissions.
 
 ## Deviations and founder judgment
 

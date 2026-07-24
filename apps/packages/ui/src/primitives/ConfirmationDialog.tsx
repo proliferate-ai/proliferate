@@ -35,7 +35,7 @@ export function ConfirmationDialog({
       description={description}
       headerContent={(
         <header className="flex flex-col gap-1.5 text-left">
-          <div className="text-heading font-semibold tracking-tight text-foreground">{title}</div>
+          <div className="text-heading font-semibold leading-none tracking-tight text-foreground">{title}</div>
           {description ? (
             <div className="text-body text-muted-foreground">
               {description}

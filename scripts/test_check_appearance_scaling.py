@@ -162,9 +162,20 @@ export function Example() {
                 "arbitrary-size",
                 "retired-shadow",
                 "retired-accent-state",
-                "foreground-alpha-interaction",
+                "foreground-alpha-foundation",
                 "numeric-duration",
             },
+        )
+
+    def test_rejects_removed_keystone_shadow_and_static_foreground_alpha(self) -> None:
+        source = '''
+export function Example() {
+  return <div className="shadow-keystone bg-foreground/[0.04]" />;
+}
+'''
+        self.assertEqual(
+            {violation.rule_id for violation in check_source(Path("Example.tsx"), source)},
+            {"retired-shadow", "foreground-alpha-foundation"},
         )
 
     def test_accepts_closed_semantic_foundation_vocabulary(self) -> None:

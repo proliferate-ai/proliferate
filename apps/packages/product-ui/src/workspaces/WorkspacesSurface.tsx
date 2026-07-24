@@ -274,8 +274,8 @@ function ToolbarIconButton({
       className={twMerge(
         "relative flex size-8 items-center justify-center rounded-full border text-muted-foreground transition-colors hover:border-border/65 hover:bg-hover hover:text-foreground active:bg-active disabled:opacity-45",
         pressed
-          ? "border-border/65 bg-foreground/[0.075] text-foreground"
-          : "border-border/45 bg-foreground/[0.028]",
+          ? "border-border/65 bg-selected text-foreground"
+          : "border-border/45 bg-surface-control",
       )}
     >
       {children}
