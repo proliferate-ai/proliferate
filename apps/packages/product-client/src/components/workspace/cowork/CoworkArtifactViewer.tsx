@@ -22,7 +22,7 @@ export function CoworkArtifactViewer({
 
   if (!artifactDetail) {
     return (
-      <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
+      <div className="flex h-full items-center justify-center px-6 text-center text-ui-sm text-muted-foreground">
         Select an artifact to preview it here.
       </div>
     );
@@ -30,7 +30,7 @@ export function CoworkArtifactViewer({
 
   if (isLoading) {
     return (
-      <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
+      <div className="flex h-full items-center justify-center px-6 text-center text-ui-sm text-muted-foreground">
         Loading artifact preview.
       </div>
     );
@@ -38,7 +38,7 @@ export function CoworkArtifactViewer({
 
   if (errorMessage) {
     return (
-      <div className="flex h-full items-center justify-center px-6 text-center text-sm text-destructive">
+      <div className="flex h-full items-center justify-center px-6 text-center text-ui text-destructive">
         {errorMessage}
       </div>
     );
@@ -46,7 +46,7 @@ export function CoworkArtifactViewer({
 
   if (controlPlaneHealth.isLoading) {
     return (
-      <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
+      <div className="flex h-full items-center justify-center px-6 text-center text-ui-sm text-muted-foreground">
         Checking preview runtime.
       </div>
     );
@@ -54,7 +54,7 @@ export function CoworkArtifactViewer({
 
   if (!previewAvailable) {
     return (
-      <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
+      <div className="flex h-full items-center justify-center px-6 text-center text-ui-sm text-muted-foreground">
         Preview is unavailable without a reachable control plane. Artifact listing still works.
       </div>
     );
@@ -63,7 +63,7 @@ export function CoworkArtifactViewer({
   return (
     <div className="flex h-full flex-col gap-2">
       {runtimeError?.method === "ReportError" && (
-        <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+        <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-ui text-destructive">
           {runtimeError.payload.type === "UnsupportedImports"
             ? `Unsupported imports: ${runtimeError.payload.modules.join(", ")}`
             : runtimeError.payload.type === "LibraryLoadFailed"

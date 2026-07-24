@@ -40,10 +40,10 @@ export function SubagentRosterRow({ subagent, nowMs, onOpen }: SubagentRosterRow
     <>
       <GitFork className={twMerge("mt-0.5 icon-paired shrink-0", TONE_CLASSNAME[tone])} aria-hidden />
       <div className="min-w-0 flex-1">
-        <p className="truncate text-xs text-foreground" data-telemetry-mask title={displayTitle}>
+        <p className="truncate text-ui text-foreground" data-telemetry-mask title={displayTitle}>
           {displayTitle}
         </p>
-        <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground">
+        <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-ui-sm text-muted-foreground">
           <span className={TONE_CLASSNAME[tone]}>{subagentStatusLabel(subagent)}</span>
           {subagent.model && (
             <>
@@ -65,7 +65,7 @@ export function SubagentRosterRow({ subagent, nowMs, onOpen }: SubagentRosterRow
           )}
         </div>
         {subagent.status.status === "completed" && subagent.status.summary && (
-          <p className="mt-0.5 truncate text-xs text-muted-foreground" data-telemetry-mask>
+          <p className="mt-0.5 truncate text-ui-sm text-muted-foreground" data-telemetry-mask>
             {subagent.status.summary}
           </p>
         )}
@@ -76,7 +76,7 @@ export function SubagentRosterRow({ subagent, nowMs, onOpen }: SubagentRosterRow
   if (!onOpen) {
     return (
       <div
-        className="flex w-full items-start gap-2 rounded-md px-1.5 py-1.5 text-left text-xs"
+        className="flex w-full items-start gap-2 rounded-md px-1.5 py-1.5 text-left text-ui"
         data-subagent-roster-row
         data-subagent-id={subagent.id}
       >
@@ -90,7 +90,7 @@ export function SubagentRosterRow({ subagent, nowMs, onOpen }: SubagentRosterRow
       variant="unstyled"
       size="unstyled"
       type="button"
-      className="flex w-full items-start gap-2 rounded-md px-1.5 py-1.5 text-left text-xs hover:bg-muted/40"
+      className="flex w-full items-start gap-2 rounded-md px-1.5 py-1.5 text-left text-ui hover:bg-hover active:bg-active"
       onClick={() => onOpen(subagent.id)}
       data-subagent-roster-row
       data-subagent-id={subagent.id}

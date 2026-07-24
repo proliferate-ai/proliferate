@@ -45,7 +45,7 @@ export function RadioCardGroup<Value extends string>({
             className={twMerge(
               "relative flex gap-2.5 rounded-lg border bg-background py-3 pl-[13px] pr-[34px] text-left transition-colors disabled:pointer-events-none disabled:opacity-50",
               horizontal ? "min-w-[150px] flex-1 flex-col" : "items-start",
-              selected ? "border-special" : "border-input hover:bg-accent",
+              selected ? "border-special" : "border-input hover:bg-hover active:bg-active",
             )}
             onClick={() => onChange(option.value)}
           >
@@ -60,18 +60,18 @@ export function RadioCardGroup<Value extends string>({
               </span>
             ) : null}
             <span className="min-w-0">
-              <span className="block text-ui font-medium leading-[1.3] text-foreground">
+              <span className="block text-ui font-medium text-foreground">
                 {option.label}
               </span>
               {option.description ? (
-                <span className="mt-[3px] block text-ui-sm leading-[1.45] text-muted-foreground">
+                <span className="mt-[3px] block text-ui-sm text-muted-foreground">
                   {option.description}
                 </span>
               ) : null}
             </span>
             <span
               className={twMerge(
-                "absolute right-[11px] top-[11px] flex size-[18px] shrink-0 items-center justify-center rounded-full border transition-colors",
+                "absolute right-[11px] top-[11px] flex size-5 shrink-0 items-center justify-center rounded-full border text-ui transition-colors [&_svg]:icon-compact",
                 selected ? "border-special bg-special text-background" : "border-input text-transparent",
               )}
             >

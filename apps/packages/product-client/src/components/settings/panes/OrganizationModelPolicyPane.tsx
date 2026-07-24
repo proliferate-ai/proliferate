@@ -113,18 +113,18 @@ export function OrganizationModelPolicyPane() {
         description="Which agents and auth routes organization members can use."
       />
 
-      <p className="text-sm text-muted-foreground">
+      <p className="text-body text-muted-foreground">
         Restricting members to specific models (per-model allowlists) is coming soon.
       </p>
 
       {policy.isLoading ? (
-        <div className="text-sm text-muted-foreground">Loading policy…</div>
+        <div className="text-ui-sm text-muted-foreground">Loading policy…</div>
       ) : policy.isError ? (
-        <div className="text-sm text-muted-foreground">Policy could not be loaded.</div>
+        <div className="text-ui-sm text-muted-foreground">Policy could not be loaded.</div>
       ) : (
         <>
           {!editable ? (
-            <div className="text-sm text-muted-foreground">
+            <div className="text-ui-sm text-muted-foreground">
               Editing the agent policy requires a paid plan.
             </div>
           ) : null}
@@ -163,7 +163,7 @@ export function OrganizationModelPolicyPane() {
 
           {/* Save */}
           {updatePolicy.isError ? (
-            <div className="text-sm text-destructive">
+            <div className="text-ui text-destructive">
               {updatePolicy.error instanceof Error
                 ? updatePolicy.error.message
                 : "Policy could not be saved."}
@@ -186,13 +186,13 @@ export function OrganizationModelPolicyPane() {
           <SettingsSection title="Conflicts" description="Existing member selections outside this policy. New selections are blocked; these stay flagged until each member updates them.">
             <div className="overflow-clip rounded-lg bg-foreground/5">
               {violations.isLoading ? (
-                <div className="px-3.5 py-3.5 text-sm text-muted-foreground">Checking…</div>
+                <div className="px-3.5 py-3.5 text-ui-sm text-muted-foreground">Checking…</div>
               ) : violations.isError ? (
-                <div className="px-3.5 py-3.5 text-sm text-muted-foreground">
+                <div className="px-3.5 py-3.5 text-ui-sm text-muted-foreground">
                   Conflicts could not be loaded.
                 </div>
               ) : violationRows.length === 0 ? (
-                <div className="px-3.5 py-3.5 text-sm text-muted-foreground">
+                <div className="px-3.5 py-3.5 text-ui-sm text-muted-foreground">
                   No conflicts with current policy.
                 </div>
               ) : (
@@ -211,16 +211,16 @@ export function OrganizationModelPolicyPane() {
                         key={`${violation.userId}-${violation.harnessKind}-${violation.surface}`}
                         className="border-b border-border-light last:border-b-0"
                       >
-                        <td className="px-3.5 py-2.5 text-sm text-foreground">
+                        <td className="px-3.5 py-2.5 text-ui text-foreground">
                           {violation.displayName ?? violation.email ?? violation.userId}
                         </td>
-                        <td className="px-3.5 py-2.5 text-sm text-muted-foreground">
+                        <td className="px-3.5 py-2.5 text-ui text-muted-foreground">
                           {HARNESS_OPTIONS.find((o) => o.value === violation.harnessKind)?.label ?? violation.harnessKind}
                         </td>
-                        <td className="px-3.5 py-2.5 text-sm capitalize text-muted-foreground">
+                        <td className="px-3.5 py-2.5 text-ui capitalize text-muted-foreground">
                           {violation.surface}
                         </td>
-                        <td className="px-3.5 py-2.5 text-sm text-muted-foreground">
+                        <td className="px-3.5 py-2.5 text-ui text-muted-foreground">
                           {ROUTE_OPTIONS.find((o) => o.value === violation.sourceKind)?.label ?? violation.sourceKind}
                         </td>
                       </tr>
@@ -250,7 +250,7 @@ function PolicySwitchRow({
   onChange: () => void;
 }) {
   return (
-    <div className="flex min-h-[3.5rem] flex-col gap-2 border-b border-border-light px-3.5 py-3.5 text-sm last:border-b-0 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex min-h-[3.5rem] flex-col gap-2 border-b border-border-light px-3.5 py-3.5 text-ui last:border-b-0 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
         <div className="font-medium text-foreground">{label}</div>
         <div className="text-muted-foreground">{description}</div>

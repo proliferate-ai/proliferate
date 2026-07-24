@@ -53,7 +53,7 @@ export function SidebarNavRow({
       ) : shortcutLabel ? (
         <ShortcutBadge
           label={shortcutLabel}
-          className={`shrink-0 text-sidebar-muted-foreground opacity-0 transition-opacity ${
+          className={`shrink-0 text-sidebar-muted-foreground opacity-0 transition-opacity duration-hover ${
             shortcutRevealVisible ? "opacity-100" : "group-hover:opacity-100 group-focus-within:opacity-100"
           }`}
         />

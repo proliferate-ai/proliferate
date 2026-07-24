@@ -39,7 +39,7 @@ export function TodoTrackerPanel({ entries }: TodoTrackerPanelProps) {
       <span className="h-0.5 w-10 shrink-0 overflow-hidden rounded-full bg-foreground/10">
         <span
           data-todo-progress
-          className="block h-full w-full origin-left rounded-full bg-foreground/40 transition-transform duration-500 ease-out"
+          className="block h-full w-full origin-left rounded-full bg-foreground/40 transition-transform duration-emphasized ease-out"
           style={{ transform: `scaleX(${progress})` }}
         />
       </span>

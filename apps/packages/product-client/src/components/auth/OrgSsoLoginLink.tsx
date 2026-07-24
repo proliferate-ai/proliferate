@@ -35,7 +35,7 @@ export function OrgSsoLoginLink() {
         variant="ghost"
         size="sm"
         onClick={() => setExpanded(true)}
-        className="inline h-auto px-0 py-0 text-sm text-muted-foreground underline underline-offset-4 hover:bg-transparent hover:text-foreground"
+        className="inline h-auto px-0 py-0 text-body text-muted-foreground underline underline-offset-4 hover:bg-transparent hover:text-foreground"
       >
         Sign in with SSO
       </Button>
@@ -59,7 +59,7 @@ export function OrgSsoLoginLink() {
           }
         }}
         placeholder="your-organization"
-        className="text-sm"
+        className="text-body"
         disabled={submitting}
         autoFocus
         autoCapitalize="none"
@@ -77,7 +77,7 @@ export function OrgSsoLoginLink() {
         {!submitting && <ProviderBrandIcon provider="sso" className="icon-control shrink-0" />}
         Continue with SSO
       </Button>
-      {error ? <p className="text-sm text-destructive">{error}</p> : null}
+      {error ? <p className="text-ui text-destructive">{error}</p> : null}
     </form>
   );
 }

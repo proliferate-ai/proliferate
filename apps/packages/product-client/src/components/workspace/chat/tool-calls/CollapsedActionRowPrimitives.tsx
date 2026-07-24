@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { FileReferenceBadge } from "#product/components/workspace/file-references/FileReferenceBadge";
 
-const CHAT_BUTTON_TEXT_CLASS = "text-chat leading-[var(--text-chat--line-height)]";
+const CHAT_BUTTON_TEXT_CLASS = "text-chat";
 
 export function PlainActionRow({
   label,
@@ -16,7 +16,7 @@ export function PlainActionRow({
   return (
     <div
       title={label}
-      className={`inline-flex min-w-0 max-w-full items-center gap-1.5 text-chat leading-[var(--text-chat--line-height)] ${
+      className={`inline-flex min-w-0 max-w-full items-center gap-1.5 text-chat ${
         tone === "failed" ? "text-destructive/80" : "text-foreground/60"
       }`}
     >

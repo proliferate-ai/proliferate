@@ -214,7 +214,7 @@ export function NavigationClosePrototype() {
             {activeChild ? (
               <SubagentIdentityGlyph
                 seed={activeChild.id}
-                size={18}
+                className="text-ui icon-large"
                 dimmed={activeChild.status === "closed"}
                 label={`Identity mark for ${activeChild.title}`}
               />

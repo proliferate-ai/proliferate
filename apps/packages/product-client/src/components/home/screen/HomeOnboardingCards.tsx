@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { RowActionIconButton } from "@proliferate/ui/layout/RowActionIconButton";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { GitHub, Settings, SlidersHorizontal, Spinner, X } from "@proliferate/ui/icons";
 import { ProviderIcon } from "@proliferate/ui/provider-icons";
@@ -47,7 +48,7 @@ function OnboardingCard({
   selectLabel: string;
 }) {
   return (
-    <div className="group relative flex min-w-0 flex-col gap-2 rounded-xl border border-border bg-card p-3.5 text-left transition-colors hover:bg-accent">
+    <div className="group relative flex min-w-0 flex-col gap-2 rounded-xl border border-border bg-card p-3.5 text-left transition-colors hover:bg-hover active:bg-active">
       {onSelect ? (
         <Button
           type="button"
@@ -68,23 +69,13 @@ function OnboardingCard({
         </span>
       </span>
       {onDismiss ? (
-        // Out of flow (absolute) so it fades in place, and transform-gpu +
-        // will-change keep it on a persistent compositing layer — otherwise
-        // WKWebView promotes/demotes the layer around the opacity transition
-        // and the glyph re-snaps to the pixel grid (subtle down-right drift).
-        <Button
-          type="button"
-          variant="unstyled"
-          size="unstyled"
-          aria-label={`Dismiss: ${selectLabel}`}
-          onClick={(event) => {
-            event.stopPropagation();
-            onDismiss();
-          }}
-          className="absolute right-3 top-3 z-20 flex size-4 transform-gpu items-center justify-center rounded-full text-muted-foreground opacity-0 transition-opacity duration-150 will-change-[opacity] hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
+        <RowActionIconButton
+          label={`Dismiss: ${selectLabel}`}
+          onClick={onDismiss}
+          className="absolute right-1.5 top-1.5 z-raised transform-gpu will-change-[opacity]"
         >
-          <X className="icon-paired" />
-        </Button>
+          <X />
+        </RowActionIconButton>
       ) : null}
       <span className="pointer-events-none z-10 flex min-w-0 flex-col gap-0.5">
         <span className="truncate text-ui font-medium text-foreground">

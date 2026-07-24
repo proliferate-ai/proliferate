@@ -76,7 +76,7 @@ describe("useAppearancePreferenceLifecycle", () => {
       expect(document.documentElement.dataset.uiFontSize).toBe("default");
       expect(document.documentElement.dataset.readableCodeFontSize).toBe("default");
       expect(document.documentElement.dataset.windowZoom).toBe("default");
-      expect(document.documentElement.style.getPropertyValue("--text-chat")).toBe("11px");
+      expect(document.documentElement.style.getPropertyValue("--text-chat")).toBe("13px");
       expect(document.documentElement.style.getPropertyValue("--text-workspace-title")).toBe("14px");
       expect(document.documentElement.style.getPropertyValue("--proliferate-window-zoom")).toBe("1");
     });
@@ -100,7 +100,7 @@ describe("useAppearancePreferenceLifecycle", () => {
       expect(document.documentElement.dataset.uiFontSize).toBe("large");
       expect(document.documentElement.dataset.readableCodeFontSize).toBe("xlarge");
       expect(document.documentElement.dataset.windowZoom).toBe("zoom90");
-      expect(document.documentElement.style.getPropertyValue("--text-chat")).toBe("12px");
+      expect(document.documentElement.style.getPropertyValue("--text-chat")).toBe("14px");
       expect(document.documentElement.style.getPropertyValue("--text-workspace-title")).toBe("15px");
       expect(document.documentElement.style.getPropertyValue("--readable-code-font-size")).toBe("15px");
       expect(document.documentElement.style.getPropertyValue("--proliferate-window-zoom")).toBe("0.9");

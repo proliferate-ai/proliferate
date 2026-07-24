@@ -276,7 +276,7 @@ function SetupHintRows({
           return (
             <Label
               key={hint.id}
-              className="mb-0 flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 hover:bg-foreground/5"
+              className="mb-0 flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 hover:bg-hover active:bg-active"
             >
               <Checkbox
                 checked={checked}
@@ -290,7 +290,7 @@ function SetupHintRows({
               <span className="min-w-0 flex-1 truncate font-mono text-ui-sm text-foreground">
                 {hint.suggestedCommand}
               </span>
-              <span className="shrink-0 text-base text-muted-foreground">
+              <span className="shrink-0 text-ui-sm text-muted-foreground">
                 {hint.detectedFile}
               </span>
             </Label>

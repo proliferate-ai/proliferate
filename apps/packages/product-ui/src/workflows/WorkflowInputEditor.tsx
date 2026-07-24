@@ -25,8 +25,8 @@ export function WorkflowInputEditor({
     <section className="rounded-lg border border-border bg-card p-4">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-sm font-medium text-foreground">Inputs</h2>
-          <p className="mt-0.5 text-xs leading-4 text-muted-foreground">
+          <h2 className="text-heading font-medium text-foreground">Inputs</h2>
+          <p className="mt-0.5 text-ui-sm leading-4 text-muted-foreground">
             Scalar values referenced as {"{{inputs.name}}"} in prompts and goals.
           </p>
         </div>
@@ -46,7 +46,7 @@ export function WorkflowInputEditor({
       </div>
 
       {inputs.length === 0 ? (
-        <p className="mt-4 rounded-md bg-foreground/5 px-3 py-2 text-xs text-muted-foreground">
+        <p className="mt-4 rounded-md bg-foreground/5 px-3 py-2 text-ui-sm text-muted-foreground">
           This workflow has no inputs.
         </p>
       ) : (
@@ -73,7 +73,7 @@ export function WorkflowInputEditor({
                     }, onChange)}
                   />
                   {nameIssue ? (
-                    <p className="mt-1 text-xs text-destructive" role="alert">
+                    <p className="mt-1 text-ui text-destructive" role="alert">
                       {nameIssue.message}
                     </p>
                   ) : null}
@@ -104,7 +104,7 @@ export function WorkflowInputEditor({
                       required: checked === true,
                     }, onChange)}
                   />
-                  <Label htmlFor={requiredId} className="mb-0 text-sm text-foreground">
+                  <Label htmlFor={requiredId} className="mb-0 text-body text-foreground">
                     Required
                   </Label>
                 </div>

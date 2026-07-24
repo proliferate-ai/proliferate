@@ -154,7 +154,7 @@ function SplitCollapsedCells({
         onClick={onExpand}
         aria-label={`Expand ${section.lineCount} unmodified lines`}
         title={`${section.lineCount} unmodified lines`}
-        className="diff-content-cell flex min-h-[var(--diffs-line-height)] cursor-pointer items-center justify-start border-0 bg-[var(--codex-diffs-separator-surface)] p-0 text-left font-[inherit] text-[inherit] leading-[inherit] text-muted-foreground/60 transition-colors hover:text-foreground"
+        className="diff-content-cell flex min-h-[var(--diffs-line-height)] cursor-pointer items-center justify-start border-0 bg-[var(--codex-diffs-separator-surface)] p-0 text-left font-[inherit] text-muted-foreground/60 transition-colors hover:text-foreground"
       >
         <DiffCollapsedContentLabel
           lineCount={section.lineCount}
@@ -199,7 +199,7 @@ function SplitGapCells({
         ) : (
           <span
             style={{ position: "sticky", left: "var(--diffs-column-number-width)" }}
-            className="w-max px-2 text-[length:var(--readable-code-font-size)] leading-[var(--diffs-line-height)] text-muted-foreground/50"
+            className="w-max px-2 text-readable-code text-muted-foreground/50"
           >
             {formatUnmodifiedLinesLabel(gap.lineCount)}
           </span>
@@ -430,7 +430,7 @@ export function SplitDiffViewer({
           data-interactive-line-numbers=""
           tabIndex={0}
           style={preStyle}
-          className={`m-0 grid bg-[var(--codex-diffs-surface)] p-0 font-[family:var(--diffs-font-family)] text-[length:var(--diffs-font-size)] leading-[var(--diffs-line-height)] text-[color:var(--diffs-fg)] ${
+          className={`m-0 grid bg-[var(--codex-diffs-surface)] p-0 font-[family:var(--diffs-font-family)] text-readable-code text-foreground ${
             wrapLongLines
               ? "w-full min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"
               : "w-full min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"

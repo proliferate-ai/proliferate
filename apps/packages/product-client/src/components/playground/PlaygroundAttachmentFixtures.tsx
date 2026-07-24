@@ -156,7 +156,7 @@ export function PlaygroundAttachmentTranscript() {
   }
   return (
     <div className="space-y-3">
-      <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+      <div className="text-ui-sm font-medium tracking-wide text-muted-foreground uppercase">
         Submitted attachments
       </div>
       <UserMessage
@@ -211,7 +211,7 @@ export function PlaygroundAttachmentPreviewAside() {
           </div>
         </>
       ) : (
-        <div className="flex flex-1 items-center justify-center p-8 text-center text-sm text-muted-foreground">
+        <div className="flex flex-1 items-center justify-center p-8 text-center text-body text-muted-foreground">
           Select a draft or submitted attachment to preview it here.
         </div>
       )}

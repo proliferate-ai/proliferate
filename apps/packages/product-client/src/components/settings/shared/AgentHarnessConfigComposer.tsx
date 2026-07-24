@@ -65,8 +65,8 @@ export function AgentHarnessConfigComposer({
           className="pointer-events-none h-[1.125rem] min-h-[1.125rem] overflow-hidden"
         />
       </ComposerTextareaFrame>
-      <div className="mb-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-[5px] px-2">
-        <div className={`flex min-w-0 flex-wrap items-center gap-[5px] ${
+      <div className="mb-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-1.5 px-2">
+        <div className={`flex min-w-0 flex-wrap items-center gap-1.5 ${
           canUseControls ? "" : "pointer-events-none opacity-55"
         }`}
         >

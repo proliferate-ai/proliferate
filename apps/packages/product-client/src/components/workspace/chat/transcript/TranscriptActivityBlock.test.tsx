@@ -68,7 +68,7 @@ describe("TranscriptActivityBlock entry motion", () => {
 
     expect(section).toContain("opacity: 0");
     expect(section).toContain("transform: translateX(-4px)");
-    expect(section).toContain("150ms cubic-bezier(0.19, 1, 0.22, 1)");
+    expect(section).toContain("var(--duration-enter) var(--ease-out-quint)");
     expect(section).toContain("@media (prefers-reduced-motion: reduce)");
     expect(section).not.toContain("height:");
     expect(section).not.toContain("margin:");

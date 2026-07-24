@@ -21,7 +21,7 @@ describe("ReleaseNoticeCard", () => {
       name: "What's new in 0.3.25: Introducing Grok",
     })).not.toBeNull();
     const badge = screen.getByText("NEW");
-    expect(badge.className).toContain("bg-sidebar-accent");
+    expect(badge.className).toContain("bg-surface-control");
     expect(badge.className).toContain("text-sidebar-muted-foreground");
     expect(screen.queryByText("UPDATE")).toBeNull();
     expect(screen.getByText("Introducing Grok")).not.toBeNull();

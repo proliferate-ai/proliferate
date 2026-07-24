@@ -158,12 +158,12 @@ function CoworkCodingHint({
         </span>
       )}
       {meta && (
-        <span className="min-w-0 max-w-[180px] truncate text-sm text-muted-foreground">
+        <span className="min-w-0 max-w-[180px] truncate text-chat text-muted-foreground">
           {meta}
         </span>
       )}
       {eventSummary && (
-        <span className="shrink-0 text-sm text-muted-foreground">
+        <span className="shrink-0 text-chat text-muted-foreground">
           {eventSummary}
         </span>
       )}

@@ -356,7 +356,7 @@ function PublishActionRow({
         loading
           ? <Spinner className="icon-paired shrink-0 text-muted-foreground" />
           : (
-            <kbd className="inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-md bg-current/10 px-1.5 font-sans text-xs leading-4 text-current opacity-80">
+            <kbd className="inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-md bg-current/10 px-1.5 font-sans text-ui leading-4 text-current opacity-80">
               ⌘⏎
             </kbd>
           )

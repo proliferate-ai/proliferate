@@ -1,6 +1,7 @@
 import { twMerge } from "@proliferate/ui/utils/tw-merge";
 import { ExternalLink } from "lucide-react";
 
+import { RowActionIndicator } from "@proliferate/ui/layout/RowActionIconButton";
 import { Button } from "@proliferate/ui/primitives/Button";
 import type { WorkspaceInventoryItemView } from "@proliferate/product-domain/workspaces/inventory";
 
@@ -25,15 +26,15 @@ export function InventoryRow({
   const subtitle = rowSubtitle(item);
 
   const rowClass = twMerge(
-    "group relative grid h-12 w-full grid-cols-[18px_minmax(0,1fr)_3.5rem] items-center gap-x-3 rounded-[5px] px-3 py-1 text-left text-sm",
+    "group relative grid h-12 w-full grid-cols-[18px_minmax(0,1fr)_3.5rem] items-center gap-x-3 rounded-sm px-3 py-1 text-left text-body",
     suppressSourceLabel
       ? "sm:grid-cols-[18px_7.5rem_minmax(0,1fr)_3.5rem] lg:grid-cols-[18px_7.5rem_minmax(0,1fr)_minmax(8rem,14rem)_6.75rem_3.5rem]"
       : "sm:grid-cols-[18px_5.5rem_minmax(0,1fr)_3.5rem] md:grid-cols-[18px_5.5rem_7.5rem_minmax(0,1fr)_3.5rem] lg:grid-cols-[18px_5.5rem_7.5rem_minmax(0,1fr)_minmax(8rem,14rem)_6.75rem_3.5rem]",
     "transition-colors",
     hasAction
-      ? "cursor-pointer hover:bg-foreground/[0.04] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-[-2px]"
+      ? "cursor-pointer hover:bg-hover active:bg-active focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-[-2px]"
       : "cursor-default",
-    item.active ? "bg-foreground/[0.05]" : "",
+    item.active ? "bg-selected" : "",
   );
 
   const inner = (
@@ -55,11 +56,11 @@ export function InventoryRow({
       />
 
       <span className="min-w-0" title={item.title}>
-        <span className="block min-w-0 truncate text-sm font-medium leading-5 text-foreground">
+        <span className="block min-w-0 truncate text-body-emphasis font-medium text-foreground">
           {item.title}
         </span>
         {subtitle ? (
-          <span className="block min-w-0 truncate text-xs leading-4 text-muted-foreground">
+          <span className="block min-w-0 truncate text-ui-sm leading-4 text-muted-foreground">
             {subtitle}
           </span>
         ) : null}
@@ -76,7 +77,7 @@ export function InventoryRow({
         label={item.statusLabel}
       />
 
-      <span className="relative flex min-w-0 items-center justify-end text-right text-xs tabular-nums leading-4 text-muted-foreground">
+      <span className="relative flex min-w-0 items-center justify-end text-right text-ui-sm tabular-nums leading-4 text-muted-foreground">
         <span
           className={twMerge(
             "truncate transition-opacity",
@@ -86,17 +87,14 @@ export function InventoryRow({
           {item.updatedLabel ?? ""}
         </span>
         {showExternalOpenAction && (
-          <span
-            className="pointer-events-none absolute right-0 flex size-7 items-center justify-center text-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
-            aria-hidden
-          >
-            <ExternalLink className="icon-paired" />
-          </span>
+          <RowActionIndicator className="absolute right-0 text-foreground group-focus-visible:opacity-100">
+            <ExternalLink />
+          </RowActionIndicator>
         )}
       </span>
 
       {!showExternalOpenAction && item.ownerLabel === "Unclaimed" && !suppressOwnerLabel && (
-        <span className="pointer-events-none absolute right-16 hidden text-xs font-medium leading-4 text-foreground/0 transition-colors group-hover:text-foreground group-focus-visible:text-foreground xl:block">
+        <span className="pointer-events-none absolute right-16 hidden text-ui font-medium leading-4 text-foreground/0 transition-colors duration-hover group-hover:text-foreground group-focus-visible:text-foreground xl:block">
           Claim
         </span>
       )}
@@ -142,7 +140,7 @@ function MetadataCell({
   return (
     <span
       className={twMerge(
-        "min-w-0 items-center gap-1.5 text-xs leading-4",
+        "min-w-0 items-center gap-1.5 text-ui-sm leading-4",
         subtle ? "text-muted-foreground/70" : "text-muted-foreground",
         className,
       )}

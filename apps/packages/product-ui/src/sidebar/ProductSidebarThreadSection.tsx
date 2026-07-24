@@ -45,7 +45,6 @@ function ChatRow({
       scope="chat"
       itemId={row.id}
       onAction={onAction}
-      alwaysVisible
     />
   ));
 

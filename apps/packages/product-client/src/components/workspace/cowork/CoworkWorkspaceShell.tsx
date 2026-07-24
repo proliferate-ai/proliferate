@@ -130,7 +130,7 @@ export function CoworkWorkspaceShell({
       >
         <div
           id="cowork-sidebar"
-          className={`flex shrink-0 flex-col overflow-hidden bg-sidebar transition-[width] duration-150 ease-in-out ${resolveMainSidebarEdgeClassName({
+          className={`flex shrink-0 flex-col overflow-hidden bg-sidebar transition-[width] duration-panel ease-in-out ${resolveMainSidebarEdgeClassName({
             desktop: desktopHost,
             transparent: transparentChromeEnabled,
           })}`}
@@ -230,7 +230,7 @@ export function CoworkWorkspaceShell({
             )}
 
             <div
-              className="shrink-0 overflow-hidden transition-[width] duration-150 ease-in-out"
+              className="shrink-0 overflow-hidden transition-[width] duration-panel ease-in-out"
               style={{ width: canShowArtifactPanel && rightPanelOpen ? rightPanelWidth : 0 }}
             >
               <div className="h-full" style={{ minWidth: 320 }}>

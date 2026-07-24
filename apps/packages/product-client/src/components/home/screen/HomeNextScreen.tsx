@@ -160,7 +160,7 @@ export function HomeNextScreen() {
                           variant="unstyled"
                           size="unstyled"
                           aria-label={`Change project: ${promptTarget}`}
-                          className="relative z-0 inline-block cursor-pointer whitespace-pre outline-none after:absolute after:-inset-x-1.5 after:inset-y-0 after:-z-10 after:rounded-xl after:content-[''] hover:after:bg-accent focus-visible:after:bg-accent data-[state=open]:after:bg-accent"
+                          className="relative z-0 inline-block cursor-pointer whitespace-pre outline-none after:absolute after:-inset-x-1.5 after:inset-y-0 after:-z-10 after:rounded-xl after:content-[''] hover:after:bg-hover focus-visible:after:bg-hover data-[state=open]:after:bg-active"
                         >
                           {promptTarget}
                         </Button>

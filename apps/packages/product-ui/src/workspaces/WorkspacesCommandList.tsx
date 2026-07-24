@@ -130,13 +130,13 @@ export function WorkspacesCommandList({
             forceMount
             value="__create-workspace__"
             onSelect={() => onCreate()}
-            className="mt-2 w-full gap-2 border border-dashed border-border px-2.5 py-2 font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground data-[selected=true]:text-foreground"
-          >
-            <FolderPlus className="icon-paired shrink-0" aria-hidden />
-            <span>Create</span>
-            <span className="ml-auto text-base text-faint opacity-0 transition-opacity group-hover:opacity-100 group-data-[selected=true]:opacity-100">
-              {createShortcutLabel}
-            </span>
+            className="mt-2 w-full gap-2 border border-dashed border-border px-2.5 py-2 font-medium text-muted-foreground transition-colors hover:bg-hover hover:text-foreground active:bg-active data-[selected=true]:text-foreground"
+            >
+              <FolderPlus className="icon-paired shrink-0" aria-hidden />
+              <span>Create</span>
+              <span className="ml-auto text-ui-sm text-faint opacity-0 transition-opacity duration-hover group-hover:opacity-100 group-data-[selected=true]:opacity-100">
+                {createShortcutLabel}
+              </span>
           </CommandItem>
         ) : null}
       </CommandList>

@@ -114,7 +114,7 @@ export function CollapsiblePlanCard({
       </div>
       {note}
       {!hasContent ? (
-        <div className="px-4 py-3 text-sm text-muted-foreground">
+        <div className="px-4 py-3 text-chat text-muted-foreground">
           {emptyContent}
         </div>
       ) : expanded ? (
@@ -154,7 +154,7 @@ export function CollapsiblePlanCard({
               size="pill"
               data-chat-transcript-ignore
               onClick={() => setExpanded(true)}
-              className="pointer-events-auto px-3 py-0.5 text-sm"
+              className="pointer-events-auto px-3 py-0.5 text-chat"
             >
               Expand plan
             </Button>

@@ -51,10 +51,10 @@ export function AuthStartPanel({
           {provider.label}
         </AuthProviderButton>
       ))}
-      {note ? <p className="mt-2 text-xs leading-5 text-muted-foreground">{note}</p> : null}
+      {note ? <p className="mt-2 text-ui-sm text-muted-foreground">{note}</p> : null}
       {error ? (
         <div
-          className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm leading-5 text-destructive"
+          className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-ui text-destructive"
           role="alert"
         >
           {error}
@@ -69,7 +69,7 @@ function AuthDivider() {
   return (
     <div className="flex items-center gap-3" aria-hidden="true">
       <div className="h-px flex-1 bg-border-light" />
-      <span className="text-base uppercase tracking-wide text-faint">or</span>
+      <span className="text-ui-sm uppercase tracking-wide text-faint">or</span>
       <div className="h-px flex-1 bg-border-light" />
     </div>
   );

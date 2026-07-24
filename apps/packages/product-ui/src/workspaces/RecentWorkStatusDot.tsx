@@ -26,7 +26,7 @@ export function RecentWorkStatusDot({
         } ${indicator.live ? "animate-pulse motion-reduce:animate-none" : ""}`}
       />
       {showLabel ? (
-        <span className="min-w-0 truncate text-xs leading-4">
+        <span className="min-w-0 truncate text-ui-sm leading-4">
           {indicator.label}
         </span>
       ) : null}

@@ -29,12 +29,12 @@ export function SelectionRow({
       title={title}
       onClick={onClick}
       className={[
-        "flex w-full items-center gap-3 rounded-lg border px-4 py-3 text-left transition-colors duration-150",
+        "flex w-full items-center gap-3 rounded-lg border px-4 py-3 text-left transition-colors duration-hover",
         disabled
           ? "cursor-not-allowed border-border bg-transparent opacity-55"
           : selected
-          ? "border-foreground/25 bg-foreground/5"
-          : "border-border bg-transparent hover:bg-foreground/[0.03]",
+          ? "border-foreground/25 bg-selected"
+          : "border-border bg-transparent hover:bg-hover active:bg-active",
       ].join(" ")}
     >
       {icon && <span className="flex shrink-0 items-center">{icon}</span>}
@@ -46,7 +46,7 @@ export function SelectionRow({
       </span>
       <span
         className={[
-          "flex size-5 shrink-0 items-center justify-center rounded-full border transition-colors duration-150",
+          "flex size-5 shrink-0 items-center justify-center rounded-full border transition-colors duration-hover",
           selected
             ? "border-foreground bg-foreground text-background"
             : "border-border bg-transparent",

@@ -32,7 +32,7 @@ export function CoworkArtifactTurnCard({
 
   return (
     <div className="space-y-1.5 py-0.5">
-      <div className="inline-flex min-w-0 max-w-full items-center gap-1 rounded-md pl-0.5 pr-1.5 text-sm leading-5 text-muted-foreground">
+      <div className="inline-flex min-w-0 max-w-full items-center gap-1 rounded-md pl-0.5 pr-1.5 text-chat leading-5 text-muted-foreground">
         <FileText className="icon-compact text-faint" />
         <span className="text-inherit">{completedActionLabel}</span>
       </div>
@@ -40,28 +40,28 @@ export function CoworkArtifactTurnCard({
       <div className="rounded-md border border-border/60 bg-muted/25 px-3 py-2">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <div className="truncate text-sm font-medium text-foreground/90">
+            <div className="truncate text-chat font-medium text-foreground/90">
               {displayTitle}
             </div>
             {displayPath && (
-              <div className="truncate pt-0.5 text-xs text-muted-foreground">
+              <div className="truncate pt-0.5 text-chat text-muted-foreground">
                 {displayPath}
               </div>
             )}
             {(typeLabel || !presentation.summary?.exists) && (
-              <div className="pt-1 text-base uppercase tracking-[0.08em] text-muted-foreground">
+              <div className="pt-1 text-chat uppercase tracking-[0.08em] text-muted-foreground">
                 {[typeLabel, presentation.summary?.exists === false ? "File missing" : null]
                   .filter((value): value is string => Boolean(value))
                   .join(" · ")}
               </div>
             )}
             {displayDescription && (
-              <div className="pt-2 text-xs leading-relaxed text-muted-foreground">
+              <div className="pt-2 text-chat leading-relaxed text-muted-foreground">
                 {displayDescription}
               </div>
             )}
             {presentation.failureMessage && (
-              <div className="pt-2 text-xs leading-relaxed text-destructive">
+              <div className="pt-2 text-chat leading-relaxed text-destructive">
                 {presentation.failureMessage}
               </div>
             )}

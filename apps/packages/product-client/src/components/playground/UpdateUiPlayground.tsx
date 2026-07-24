@@ -16,13 +16,13 @@ export function UpdateUiPlayground() {
       <header className="border-b border-border/60 px-7 py-5">
         <div className="mx-auto flex max-w-6xl items-end justify-between gap-6">
           <div className="space-y-1">
-            <p className="text-xs font-medium uppercase text-muted-foreground">
+            <p className="text-ui-sm font-medium uppercase text-muted-foreground">
               Dev preview
             </p>
-            <h1 className="text-xl font-medium tracking-tight">
+            <h1 className="text-title font-medium tracking-tight">
               Desktop Update UI
             </h1>
-            <p className="max-w-2xl text-sm text-muted-foreground">
+            <p className="max-w-2xl text-body text-muted-foreground">
               Forced render of updater states without touching the real updater workflow.
             </p>
           </div>
@@ -36,10 +36,10 @@ export function UpdateUiPlayground() {
           description="What the ?update=1 OS window would look like: its own window (mac chrome), mono-dark, version compare, auto-update opt-in, Install Update on our primary accent (not Sparkle blue). This is the exact UpdateDialogContent the real window will host."
         >
           <div className="flex justify-center rounded-xl border border-border/50 bg-background/40 px-6 py-12">
-            <div className="w-[540px] overflow-hidden rounded-[12px] border border-border/70 bg-card shadow-floating-dark">
+            <div className="w-[540px] overflow-hidden rounded-2xl border border-border/70 bg-card shadow-modal">
               <div className="flex items-center gap-2 px-4 pt-4">
-                <span className="size-3 rounded-full bg-[#ff5f57]" />
-                <span className="size-3 rounded-full bg-[#febc2e]" />
+                <span className="size-3 rounded-full bg-window-control-close" />
+                <span className="size-3 rounded-full bg-window-control-minimize" />
                 <span className="size-3 rounded-full bg-foreground/20" />
               </div>
               <UpdateDialogContent
@@ -68,7 +68,7 @@ export function UpdateUiPlayground() {
                   onDownloadUpdate={() => {}}
                   onOpenRestartPrompt={() => {}}
                 />
-                <span className="text-xs text-muted-foreground">{p}</span>
+                <span className="text-ui-sm text-muted-foreground">{p}</span>
               </div>
             ))}
           </div>
@@ -107,12 +107,12 @@ export function UpdateUiPlayground() {
                 className="rounded-lg border border-border bg-card/60 p-4"
               >
                 <div className="flex items-start justify-between gap-3">
-                  <h3 className="text-sm font-medium">{state.title}</h3>
+                  <h3 className="text-heading font-medium">{state.title}</h3>
                   <Badge>{state.phase}</Badge>
                 </div>
-                <p className="mt-1 text-sm text-muted-foreground">{state.description}</p>
-                <p className="mt-0.5 text-xs text-muted-foreground/80">{state.detail}</p>
-                <p className="mt-3 text-xs text-muted-foreground">
+                <p className="mt-1 text-body text-muted-foreground">{state.description}</p>
+                <p className="mt-0.5 text-ui-sm text-muted-foreground/80">{state.detail}</p>
+                <p className="mt-3 text-ui-sm text-muted-foreground">
                   {state.primaryAction}
                   {state.secondaryAction ? ` · ${state.secondaryAction}` : ""}
                 </p>
@@ -137,8 +137,8 @@ function PreviewSection({
   return (
     <section className="grid gap-3">
       <div className="space-y-1">
-        <h2 className="text-sm font-medium">{title}</h2>
-        <p className="max-w-3xl text-sm text-muted-foreground">{description}</p>
+        <h2 className="text-heading font-medium">{title}</h2>
+        <p className="max-w-3xl text-body text-muted-foreground">{description}</p>
       </div>
       {children}
     </section>

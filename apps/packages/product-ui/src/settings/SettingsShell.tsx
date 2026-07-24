@@ -47,7 +47,7 @@ export function SettingsShell({
     >
       <aside className="flex h-full w-[240px] shrink-0 flex-col border-r border-sidebar-border bg-sidebar px-3 py-4 text-sidebar-foreground">
         <div className="mb-4 flex items-center gap-2 px-2">
-          <div className="text-base font-semibold leading-6 tracking-normal text-sidebar-foreground">Settings</div>
+          <div className="text-sidebar-nav font-semibold leading-6 tracking-normal text-sidebar-foreground">Settings</div>
         </div>
 
         {onNavigateHome ? (
@@ -55,7 +55,7 @@ export function SettingsShell({
             <SidebarRowSurface
               as="button"
               onPress={onNavigateHome}
-              className="h-8 px-2.5 text-sm leading-4"
+              className="h-8 px-2.5 text-sidebar-row leading-4"
             >
               <span className="truncate">Back to app</span>
             </SidebarRowSurface>
@@ -66,7 +66,7 @@ export function SettingsShell({
           {groups.map((group, groupIndex) => (
             <div key={group.label ?? `settings-group-${groupIndex}`} className="space-y-1">
               {group.label ? (
-                <div className="px-2.5 pb-1 text-base font-medium tracking-normal text-sidebar-muted-foreground">
+                <div className="px-2.5 pb-1 text-sidebar-nav font-medium tracking-normal text-sidebar-muted-foreground">
                   {group.label}
                 </div>
               ) : null}
@@ -77,7 +77,7 @@ export function SettingsShell({
                   active={item.id === activeSectionId}
                   disabled={item.disabled}
                   onPress={() => onSelectSection(item.id)}
-                  className="h-8 gap-2 px-2.5 text-sm leading-5"
+                  className="h-8 gap-2 px-2.5 text-sidebar-row leading-5"
                 >
                   <span className="flex icon-paired shrink-0 items-center justify-center text-sidebar-muted-foreground transition-colors group-data-[active=true]:text-sidebar-foreground">
                     {item.icon}

@@ -126,14 +126,14 @@ describe("resolveTurnTrailingStatus", () => {
     expect(container.innerHTML).not.toContain("motion-safe:animate-status-crossfade");
   });
 
-  it("renders a transient thought at text-chat, not the old 8px text-xs", () => {
+  it("renders a transient thought at the semantic chat role", () => {
     const { container } = render(
       <>{resolveTurnTrailingStatus(STARTED_AT, "working", "Reading workspace flow")}</>,
     );
 
     expect(container.querySelector("[data-trailing-status='transient']")).not.toBeNull();
     expect(container.textContent).toContain("Reading workspace flow");
-    expect(container.innerHTML).toContain("text-[length:var(--text-chat)]");
+    expect(container.innerHTML).toContain("text-chat");
     expect(container.innerHTML).toContain("icon-paired");
     expect(container.innerHTML).not.toContain("text-xs");
   });

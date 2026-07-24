@@ -85,7 +85,7 @@ export function CloudEnvironmentList({
                 variant="unstyled"
                 size="unstyled"
                 onClick={onAddCloudEnvironment}
-                className="mt-1 flex w-full items-center gap-2 rounded-md border border-dashed border-border px-2.5 py-2 text-ui-sm font-medium text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground"
+                className="mt-1 flex w-full items-center gap-2 rounded-md border border-dashed border-border px-2.5 py-2 text-ui-sm font-medium text-muted-foreground transition-colors hover:bg-hover hover:text-foreground active:bg-active"
               >
                 <Plus className="icon-paired" />
                 Add cloud environment

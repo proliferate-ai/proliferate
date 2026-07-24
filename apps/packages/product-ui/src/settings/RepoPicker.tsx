@@ -41,7 +41,7 @@ export function RepoPicker({
           variant="unstyled"
           size="unstyled"
           aria-label="Select repository"
-          className="flex h-8 w-[200px] items-center gap-2 rounded-md border border-input bg-background px-2 text-ui-sm transition-colors hover:bg-accent data-[state=open]:bg-accent"
+          className="flex h-8 w-[200px] items-center gap-2 rounded-md border border-input bg-background px-2 text-ui-sm transition-colors hover:bg-hover active:bg-active data-[state=open]:bg-active"
         >
           <RepoChip kind={selected?.kind ?? "local"} />
           <span className="min-w-0 flex-1 truncate text-left">
@@ -89,7 +89,7 @@ function RepoChip({ kind }: { kind: RepoPickerItem["kind"] }) {
   // glyph. Neutral chip, not the old blue folder.
   const Icon = kind === "cloud" ? Cloud : GitHub;
   return (
-    <span className="flex size-[15px] shrink-0 items-center justify-center rounded bg-surface-control text-ui-sm text-muted-foreground [&>svg]:icon-compact">
+    <span className="flex size-5 shrink-0 items-center justify-center rounded bg-surface-control text-ui text-muted-foreground [&>svg]:icon-compact">
       <Icon />
     </span>
   );

@@ -166,7 +166,7 @@ export function NewChatSurface({
           ) : null}
 
           {commandMessage ? (
-            <p className="mt-2 px-2 text-center text-xs text-muted-foreground">
+            <p className="mt-2 px-2 text-center text-chat text-muted-foreground">
               {commandMessage}
             </p>
           ) : null}
@@ -201,7 +201,7 @@ export function NewChatSurface({
                     disabled={action.disabled}
                     loading={action.loading}
                     onClick={() => onAction?.(action.id)}
-                    className="h-auto w-full justify-start gap-2 rounded-lg px-3 py-2 text-left text-sm font-normal text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
+                    className="h-auto w-full justify-start gap-2 rounded-lg px-3 py-2 text-left text-chat font-normal text-muted-foreground hover:bg-hover hover:text-foreground active:bg-active"
                   >
                     {action.icon ? <span className="shrink-0">{action.icon}</span> : null}
                     <span className="min-w-0 flex-1 truncate">{action.label}</span>
@@ -262,7 +262,7 @@ function NoticeRow({ notice }: { notice: NoticeView }) {
         : "border-border bg-card text-muted-foreground";
 
   return (
-    <div className={`flex items-center gap-3 rounded-lg border px-3 py-2 text-sm ${toneClass}`}>
+    <div className={`flex items-center gap-3 rounded-lg border px-3 py-2 text-chat ${toneClass}`}>
       <span className="min-w-0 flex-1">{notice.text}</span>
       {notice.action ? (
         <Button
@@ -291,7 +291,7 @@ function RecentWorkList({
   return (
     <section className="mt-8">
       <header className="mb-2 flex items-center px-1">
-        <h2 className="text-sm font-medium leading-5 text-muted-foreground">
+        <h2 className="text-chat font-medium text-muted-foreground">
           Recent work
         </h2>
       </header>
@@ -330,7 +330,7 @@ function RecentWorkRow({
       variant="unstyled"
       size="unstyled"
       onClick={() => onSelect?.(item)}
-      className="group flex h-10 w-full min-w-0 items-center justify-between gap-3 rounded-lg bg-foreground/5 px-3 text-left text-sm leading-5 text-foreground whitespace-normal hover:bg-foreground/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+      className="group flex h-10 w-full min-w-0 items-center justify-between gap-3 rounded-lg bg-surface-control px-3 text-left text-chat text-foreground whitespace-normal hover:bg-hover active:bg-active focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
     >
       <span className="flex min-w-0 flex-1 items-center gap-3">
         <span className="flex w-[6.75rem] shrink-0 items-center">
@@ -349,11 +349,11 @@ function RecentWorkRow({
       </span>
       <span className="flex shrink-0 items-center gap-2 text-muted-foreground">
         {item.repoLabel ? (
-          <span className="hidden max-w-[11rem] truncate text-xs sm:block">
+          <span className="hidden max-w-[11rem] truncate text-chat sm:block">
             {item.repoLabel}
           </span>
         ) : null}
-        <span className="min-w-6 text-right text-xs tabular-nums">
+        <span className="min-w-6 text-right text-chat tabular-nums">
           {item.lastActivityLabel}
         </span>
         <ChevronRight className="icon-paired transition-colors group-hover:text-foreground" />

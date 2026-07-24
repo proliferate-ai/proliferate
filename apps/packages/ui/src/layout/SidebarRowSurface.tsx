@@ -24,16 +24,16 @@ export function SidebarRowSurface({
   // stronger than a transient hover (previously both used the same accent, so
   // hovering any row looked identical to the active one).
   const stateClass = active
-    ? "bg-sidebar-accent text-sidebar-foreground"
+    ? "bg-selected text-sidebar-foreground"
     : disabled
       ? "text-sidebar-muted-foreground"
-      : "text-sidebar-foreground hover:bg-sidebar-accent/70";
+      : "text-sidebar-foreground hover:bg-hover active:bg-active";
 
   // Codex sidebar row geometry (UX spec §0.1): 30px rows, 10px radius.
   // twMerge so a caller-provided size token (text-sidebar-nav etc.) actually
   // replaces a baseline size instead of fighting it on stylesheet order.
   const rowClassName = twMerge(
-    `group relative flex w-full min-w-0 items-center rounded-[10px] text-left font-[430] transition-[background-color,color,opacity] duration-150 ${
+    `group relative flex w-full min-w-0 items-center rounded-sm text-left font-control transition-[background-color,color,opacity] duration-hover ${
       interactive ? "cursor-pointer select-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-sidebar-ring" : ""
     } ${
       disabled ? "cursor-not-allowed opacity-60" : ""

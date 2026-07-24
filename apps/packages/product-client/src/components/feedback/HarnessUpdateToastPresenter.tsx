@@ -69,8 +69,8 @@ function HarnessProgressToastCard({
               aria-label={`${targetLabel} agent tools download progress`}
               aria-valuetext={byteLabel}
               value={percent}
-              className="mt-2 h-1 w-full overflow-hidden rounded-full bg-accent"
-              indicatorClassName="h-full rounded-full bg-special transition-[width] duration-300"
+              className="mt-2 h-1 w-full overflow-hidden rounded-full bg-surface-control"
+              indicatorClassName="h-full rounded-full bg-special transition-[width] duration-emphasized"
             />
           ) : null}
         </div>

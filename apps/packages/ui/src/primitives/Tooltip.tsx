@@ -41,8 +41,8 @@ export function Tooltip({
           }
           className={
             singleLine
-              ? "z-[70] max-w-[min(18rem,calc(100vw-1.5rem))] overflow-hidden text-ellipsis whitespace-nowrap rounded-full"
-              : "z-[70] overflow-hidden rounded-lg text-left"
+              ? "z-tooltip max-w-[min(18rem,calc(100vw-1.5rem))] overflow-hidden text-ellipsis whitespace-nowrap rounded-full"
+              : "z-tooltip overflow-hidden rounded-lg text-left"
           }
         >
           {singleLine

@@ -106,7 +106,7 @@ export function AutomationSelectPopover({
               trailing={option.value === value ? <Check className="icon-paired text-foreground/70" /> : null}
             >
               {option.description && (
-                <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                <span className="mt-0.5 block truncate text-ui-sm text-muted-foreground">
                   {option.description}
                 </span>
               )}
@@ -173,7 +173,7 @@ export function AutomationSchedulePopover({
               onClick={() => selectPreset("custom")}
               trailing={schedulePreset === "custom" ? <Check className="icon-paired text-foreground/70" /> : null}
             >
-              <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+              <span className="mt-0.5 block truncate text-ui-sm text-muted-foreground">
                 Edit the RRULE directly
               </span>
             </PopoverMenuItem>
@@ -200,7 +200,7 @@ export function AutomationSchedulePopover({
                   onChange={(event) => onRruleChange(event.target.value)}
                   onBlur={onRruleBlur}
                   rows={3}
-                  className="font-mono text-[length:var(--readable-code-font-size)] leading-[var(--readable-code-line-height)]"
+                  className="font-mono text-readable-code"
                 />
               </div>
             )}
@@ -255,7 +255,7 @@ export function AutomationTemplatePopover({ onSelectTemplate }: AutomationTempla
                 close();
               }}
             >
-              <span className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+              <span className="mt-0.5 line-clamp-2 text-ui-sm text-muted-foreground">
                 {template.prompt}
               </span>
             </PopoverMenuItem>

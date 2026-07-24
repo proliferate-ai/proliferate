@@ -18,12 +18,12 @@ export function CreditGrantBreakdown({ plan }: { plan: BillingPlanView }) {
     <div className="space-y-3 border-t border-border-light pt-4">
       <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <div className="text-sm font-medium text-foreground">Usage by credit grant</div>
-          <p className="text-xs leading-5 text-muted-foreground">
+          <div className="text-heading font-medium text-foreground">Usage by credit grant</div>
+          <p className="text-ui-sm text-muted-foreground">
             Consumed PCUs across free trial, included, top-up, and Core period grants.
           </p>
         </div>
-        <div className="text-xs text-muted-foreground">
+        <div className="text-ui-sm text-muted-foreground">
           {formatCredits(grants.reduce((total, grant) => total + secondsToHours(grant.consumedSeconds), 0))} used
         </div>
       </div>
@@ -37,7 +37,7 @@ export function CreditGrantBreakdown({ plan }: { plan: BillingPlanView }) {
             : 0;
           return (
             <div key={`${grant.grantType}:${grant.totalSeconds}:${grant.active}`} className="space-y-1.5">
-              <div className="flex items-center gap-2 text-xs">
+              <div className="flex items-center gap-2 text-ui">
                 <span className="min-w-0 flex-1 truncate font-medium text-foreground">
                   {grantTypeLabel(grant.grantType)}
                 </span>
@@ -49,7 +49,7 @@ export function CreditGrantBreakdown({ plan }: { plan: BillingPlanView }) {
               <div className="h-1 overflow-hidden rounded-full bg-foreground/10">
                 <div className="h-full rounded-full bg-foreground/70" style={{ width: `${percent}%` }} />
               </div>
-              <div className="text-xs text-muted-foreground">
+              <div className="text-ui-sm text-muted-foreground">
                 {grant.active ? `${formatCredits(remainingHours)} remaining` : "No longer active"}
               </div>
             </div>

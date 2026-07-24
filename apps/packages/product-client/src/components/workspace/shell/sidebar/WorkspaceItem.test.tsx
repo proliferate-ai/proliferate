@@ -117,6 +117,29 @@ describe("WorkspaceItem", () => {
     expect(onCopyBranchName).toHaveBeenCalledTimes(1);
   });
 
+  it("uses the semantic row-action trigger without selecting the workspace", () => {
+    const onSelect = vi.fn();
+
+    renderWithProductHost(
+      <WorkspaceItem
+        name="Feature worktree"
+        variant="worktree"
+        onSelect={onSelect}
+        onMarkDone={vi.fn()}
+      />,
+    );
+
+    const trigger = screen.getByRole("button", { name: "Workspace actions" });
+    expect(trigger.className).toContain("size-7");
+    expect(trigger.className).toContain("rounded-md");
+    expect(trigger.className).toContain("hover:bg-hover");
+    expect(trigger.className).toContain("data-[state=open]:bg-active");
+    expect(trigger.className).toContain("[&_svg]:icon-control");
+
+    fireEvent.click(trigger);
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
   it("renders PR status as a compact git detail glyph", () => {
     renderWithProductHost(
       <WorkspaceItem

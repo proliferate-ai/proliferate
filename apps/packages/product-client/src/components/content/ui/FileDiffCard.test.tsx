@@ -1,7 +1,7 @@
-import { readFileSync } from "node:fs";
 import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup as renderReactToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { themeTokens } from "@proliferate/design/tokens";
 import type { ProductHost } from "@proliferate/product-client/host/product-host";
 import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
 import { FileChangesCard } from "#product/components/content/ui/FileChangesCard";
@@ -41,7 +41,7 @@ describe("FileChangesCard and FileDiffCard", () => {
     expect(html).toContain(">+4</span>");
     expect(html).toContain(">-1</span>");
     expect(html).toContain("bg-[var(--color-diff-panel-surface)]");
-    expect(html).toContain("text-chat leading-[var(--text-chat--line-height)]");
+    expect(html).toContain("text-chat");
     expect(html).not.toContain("thread-diff-virtualized");
     expect(html).toContain("--codex-diffs-surface:var(--codex-diffs-surface-override, var(--color-diff-panel-surface))");
     expect(html).toContain("data-diff-surface=\"sidebar\"");
@@ -54,24 +54,19 @@ describe("FileChangesCard and FileDiffCard", () => {
     expect(html).toContain("data-app-action-review-file-expanded=\"true\"");
     expect(html).toContain("data-app-action-review-file-toggle=\"\"");
     expect(html).toContain("text-sidebar-foreground");
-    expect(html).toContain("hover:bg-sidebar-accent");
+    expect(html).toContain("hover:bg-hover");
+    expect(html).toContain("active:bg-active");
     expect(html).toContain("diff body");
   });
 
   it("keeps diff header theme variables free of hard-coded dark surfaces", () => {
-    const desktopCss = readFileSync(
-      new URL("../../../../../../packages/design/src/css/product.css", import.meta.url),
-      "utf8",
-    );
-    const rootDiffVariables =
-      desktopCss.match(/\/\* -- Git diff backgrounds[\s\S]*?:root \{(?<body>[\s\S]*?)--diffs-min-number-column-width:/)
-        ?.groups?.body ?? "";
+    const headerSurface = themeTokens["--color-diff-chat-file-header-surface"];
 
-    expect(rootDiffVariables).not.toContain("#232323");
-    expect(rootDiffVariables).not.toContain("#2b2b2b");
-    expect(rootDiffVariables).toContain(
-      "--color-diff-chat-file-header-surface: var(--color-diff-surface);",
-    );
+    expect(headerSurface).toEqual({
+      dark: "var(--color-diff-surface)",
+      light: "var(--color-diff-surface)",
+      provenance: "[SHIPPED]",
+    });
   });
 
   it("keeps absolute paths compact in diff headers", () => {

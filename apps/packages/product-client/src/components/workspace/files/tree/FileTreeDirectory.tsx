@@ -193,7 +193,7 @@ function FileTreeStatus({
     <p
       role="status"
       className={twMerge(
-        "flex items-center text-[length:var(--text-message)] text-sidebar-muted-foreground",
+        "flex items-center text-sidebar-row text-sidebar-muted-foreground",
         compact ? "h-7" : "px-1 py-3",
         tone === "error" && "text-destructive",
       )}

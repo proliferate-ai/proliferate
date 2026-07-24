@@ -69,19 +69,19 @@ export function WorkflowRunDetail({
           <StatusCard label="Freshness" value={presentation.freshness.label} tone={presentation.freshness.tone} />
         </section>
 
-        {presentation.notice ? <p className="rounded-md border border-warning/30 bg-warning/5 px-3 py-2 text-sm text-warning" role="status">{presentation.notice}</p> : null}
+        {presentation.notice ? <p className="rounded-md border border-warning/30 bg-warning/5 px-3 py-2 text-ui text-warning" role="status">{presentation.notice}</p> : null}
         {presentation.canStartDelivery && !deliveryCapabilityEnabled ? (
-          <p className="rounded-md border border-border bg-surface-raised px-3 py-2 text-sm text-muted-foreground" role="status">
+          <p className="rounded-md border border-border bg-surface-raised px-3 py-2 text-ui text-muted-foreground" role="status">
             Managed Workflow delivery is not enabled on this server. This prepared run remains available.
           </p>
         ) : null}
-        {presentation.failure ? <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive" role="alert">{presentation.failure}</p> : null}
-        {actionError ? <p className="text-sm text-destructive" role="alert">{actionError}</p> : null}
-        {openSessionUnavailable ? <p className="text-sm text-muted-foreground" role="status">{openSessionUnavailable}</p> : null}
+        {presentation.failure ? <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-ui text-destructive" role="alert">{presentation.failure}</p> : null}
+        {actionError ? <p className="text-ui text-destructive" role="alert">{actionError}</p> : null}
+        {openSessionUnavailable ? <p className="text-ui text-muted-foreground" role="status">{openSessionUnavailable}</p> : null}
 
         <section className="rounded-lg border border-border bg-card p-4">
-          <h2 className="text-sm font-medium text-foreground">Run details</h2>
-          <dl className="mt-3 grid gap-3 text-xs sm:grid-cols-2">
+          <h2 className="text-heading font-medium text-foreground">Run details</h2>
+          <dl className="mt-3 grid gap-3 text-ui-sm sm:grid-cols-2">
             <Detail label="Created" value={formatDateTime(run.createdAt)} />
             <Detail label="Placement" value={run.placement.kind === "scratch" ? "Scratch workspace" : "Repository worktree"} />
             <Detail label="Run ID" value={run.id} />
@@ -90,12 +90,12 @@ export function WorkflowRunDetail({
         </section>
 
         <details className="rounded-lg border border-border bg-card p-4">
-          <summary className="cursor-pointer text-sm font-medium text-foreground">
+          <summary className="cursor-pointer text-heading font-medium text-foreground">
             Inputs ({Object.keys(run.arguments).length})
           </summary>
           <dl className="mt-3 space-y-2" data-telemetry-mask>
             {Object.entries(run.arguments).map(([name, value]) => (
-              <div key={name} className="flex items-start justify-between gap-4 text-xs">
+              <div key={name} className="flex items-start justify-between gap-4 text-ui-sm">
                 <dt className="font-mono text-muted-foreground">{name}</dt>
                 <dd className="max-w-[70%] break-words text-right text-foreground">{String(value)}</dd>
               </div>
@@ -104,13 +104,13 @@ export function WorkflowRunDetail({
         </details>
 
         <section className="rounded-lg border border-border bg-card p-4">
-          <h2 className="text-sm font-medium text-foreground">Steps</h2>
+          <h2 className="text-heading font-medium text-foreground">Steps</h2>
           {managed.execution?.steps.length ? managed.execution.steps.map((step) => (
-            <div key={step.index} className="mt-3 flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm">
+            <div key={step.index} className="mt-3 flex items-center justify-between rounded-md border border-border px-3 py-2 text-body">
               <span>Prompt</span>
               <span className="text-muted-foreground">{step.status}</span>
             </div>
-          )) : <p className="mt-2 text-xs text-muted-foreground">Waiting for runtime acceptance.</p>}
+          )) : <p className="mt-2 text-ui-sm text-muted-foreground">Waiting for runtime acceptance.</p>}
         </section>
       </div>
     </ProductPageShell>
@@ -121,7 +121,7 @@ function StatusCard({ label, value, tone }: { label: string; value: string; tone
   return (
     <div className="rounded-lg border border-border bg-card p-3">
       <p className="text-ui-sm uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className={`mt-1 text-sm font-medium ${toneClass(tone)}`}>{value}</p>
+      <p className={`mt-1 text-body-emphasis font-medium ${toneClass(tone)}`}>{value}</p>
     </div>
   );
 }

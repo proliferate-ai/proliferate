@@ -62,11 +62,11 @@ function TechnicalDetails({
   reportStatus: RenderErrorReportStatus;
 }) {
   return (
-    <details className="border-t border-border/50 pt-3 text-xs text-muted-foreground">
-      <summary className="w-fit cursor-pointer rounded-sm py-1 pr-1 text-xs outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background">
+    <details className="border-t border-border/50 pt-3 text-ui-sm text-muted-foreground">
+      <summary className="w-fit cursor-pointer rounded-sm py-1 pr-1 text-ui outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background">
         Technical details
       </summary>
-      <dl className="mt-3 space-y-3 border-l border-border/50 pl-3 text-[length:var(--text-ui-sm)] leading-[var(--text-ui-sm--line-height)]">
+      <dl className="mt-3 space-y-3 border-l border-border/50 pl-3 text-ui-sm">
         <div>
           <dt className="font-medium text-foreground/90">Error message</dt>
           <dd className="mt-1 break-words">{details.message}</dd>
@@ -74,7 +74,7 @@ function TechnicalDetails({
         <div>
           <dt className="font-medium text-foreground/90">Component stack</dt>
           <dd>
-            <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono text-[length:var(--readable-code-font-size)] leading-[var(--readable-code-line-height)]">
+            <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono text-readable-code">
               {details.componentStack}
             </pre>
           </dd>
@@ -167,20 +167,20 @@ export function AppErrorRecoverySurface({
     >
       <div className="w-full max-w-lg space-y-5">
         <header className="space-y-2">
-          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+          <p className="text-ui-sm font-medium uppercase tracking-wider text-muted-foreground">
             Proliferate recovery
           </p>
-          <h1 className="text-[length:var(--text-title)] font-semibold leading-[var(--text-title--line-height)] tracking-tight">
+          <h1 className="text-title font-semibold tracking-tight">
             The app needs a quick reload
           </h1>
-          <p className="text-sm leading-relaxed text-muted-foreground">
+          <p className="text-body leading-relaxed text-muted-foreground">
             Sorry about that. Something unexpected interrupted this view, but
             the recovery tools are still available.
           </p>
         </header>
 
         <div
-          className="flex min-h-5 items-start gap-2 text-sm leading-relaxed"
+          className="flex min-h-5 items-start gap-2 text-body leading-relaxed"
           role="status"
           aria-live="polite"
           data-report-appearance="neutral"
@@ -218,7 +218,7 @@ export function AppErrorRecoverySurface({
             variant="unstyled"
             size="unstyled"
             onClick={handleCopyDetails}
-            className="rounded-sm text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            className="rounded-sm text-ui-sm text-muted-foreground underline underline-offset-4 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
             {copyState === "copied" ? "Copied" : "Copy details"}
           </Button>
@@ -228,7 +228,7 @@ export function AppErrorRecoverySurface({
               variant="unstyled"
               size="unstyled"
               onClick={handleContactSupport}
-              className="rounded-sm text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+              className="rounded-sm text-ui-sm text-muted-foreground underline underline-offset-4 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             >
               Contact support
             </Button>
@@ -236,7 +236,7 @@ export function AppErrorRecoverySurface({
         </div>
 
         {actionNotice ? (
-          <p className="-mt-2 text-xs text-muted-foreground" aria-live="polite">
+          <p className="-mt-2 text-ui-sm text-muted-foreground" aria-live="polite">
             {actionNotice}
           </p>
         ) : null}

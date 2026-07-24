@@ -93,7 +93,7 @@ export function CloudChatSurface({
           <div className={CHAT_COLUMN_CLASSNAME}>
             <CloudChatComposer composer={composer} />
             {commandMessage ? (
-              <p className="mt-2 text-xs text-muted-foreground">
+              <p className="mt-2 text-chat text-muted-foreground">
                 {commandMessage}
               </p>
             ) : null}

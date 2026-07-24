@@ -27,10 +27,10 @@ const ICONS: Record<ComputeTargetIconId, ComponentType<SVGProps<SVGSVGElement>>>
 };
 
 const SWATCH_SIZE_CLASSES: Record<SwatchSize, string> = {
-  inherit: "size-full rounded-[0.25em]",
-  xs: "icon-paired rounded-[4px]",
-  sm: "icon-large rounded-md",
-  md: "icon-display rounded-lg",
+  inherit: "size-full rounded-sm text-ui [&_svg]:icon-compact",
+  xs: "size-4 rounded-sm text-ui [&_svg]:icon-compact",
+  sm: "size-5 rounded-md text-ui [&_svg]:icon-compact",
+  md: "size-7 rounded-lg text-ui [&_svg]:icon-control",
 };
 
 export function ComputeTargetSwatch({
@@ -56,7 +56,7 @@ export function ComputeTargetSwatch({
       )}
       style={style}
     >
-      <Icon className="size-[62.5%]" aria-hidden="true" />
+      <Icon aria-hidden="true" />
     </span>
   );
 }

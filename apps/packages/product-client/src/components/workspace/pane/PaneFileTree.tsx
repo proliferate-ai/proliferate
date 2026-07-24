@@ -56,27 +56,27 @@ export function PaneFileTree<TData = unknown>({
     <div className={twMerge("flex h-full min-h-0 flex-col bg-sidebar-background", className)}>
       {hasSearch && (
         <div className="border-b border-sidebar-border/70 p-2">
-          <div className="flex h-7 items-center gap-1.5 rounded-lg bg-sidebar-accent px-2 text-sidebar-muted-foreground">
+          <div className="flex h-7 items-center gap-1.5 rounded-lg bg-surface-control px-2 text-sidebar-muted-foreground">
             <Search className="icon-compact shrink-0" />
             <Input
               value={searchValue ?? ""}
               onChange={(event) => onSearchChange?.(event.target.value)}
               placeholder={searchPlaceholder}
               autoFocus={searchAutoFocus}
-              className="h-full border-0 bg-transparent px-0 text-xs text-sidebar-foreground placeholder:text-sidebar-muted-foreground focus:ring-0"
+              className="h-full border-0 bg-transparent px-0 text-ui text-sidebar-foreground placeholder:text-sidebar-muted-foreground focus:ring-0"
             />
           </div>
         </div>
       )}
       <AutoHideScrollArea className="min-h-0 flex-1" viewportClassName="px-1.5 py-1.5">
         {!hasSections ? (
-          <p className="px-2 py-3 text-xs text-sidebar-muted-foreground">{emptyMessage}</p>
+          <p className="px-2 py-3 text-ui-sm text-sidebar-muted-foreground">{emptyMessage}</p>
         ) : (
           <div className="flex flex-col gap-1">
             {sections.map((section) => (
               <div key={section.id} className="flex flex-col gap-px">
                 {section.label && (
-                  <div className="flex h-6 items-center justify-between gap-2 px-2 text-sm font-medium uppercase tracking-wide text-sidebar-muted-foreground">
+                  <div className="flex h-6 items-center justify-between gap-2 px-2 text-sidebar-row font-medium uppercase tracking-wide text-sidebar-muted-foreground">
                     <span className="min-w-0 truncate">{section.label}</span>
                     {section.trailing}
                   </div>
@@ -133,9 +133,9 @@ function PaneFileTreeNodeRow<TData>({
         }}
         title={node.title ?? node.path}
         className={twMerge(
-          "h-6 w-full justify-start gap-1.5 rounded-md px-2 text-sm hover:bg-sidebar-accent",
+          "h-6 w-full justify-start gap-1.5 rounded-md px-2 text-sidebar-row hover:bg-hover active:bg-active",
           isDirectory ? "text-sidebar-muted-foreground" : "text-sidebar-foreground",
-          node.selected && "bg-sidebar-accent text-sidebar-foreground",
+          node.selected && "bg-selected text-sidebar-foreground",
         )}
         style={{ paddingLeft: rowPaddingLeft }}
       >
@@ -184,7 +184,7 @@ export function PaneFileTreeBadge({
   return (
     <span
       className={twMerge(
-        "rounded bg-sidebar-accent px-1 py-px text-[length:var(--text-ui-sm)] font-medium leading-none text-sidebar-muted-foreground",
+        "rounded bg-surface-control px-1 py-px text-ui-sm font-medium leading-none text-sidebar-muted-foreground",
         className,
       )}
     >

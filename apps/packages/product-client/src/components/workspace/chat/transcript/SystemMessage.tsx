@@ -16,7 +16,7 @@ export function SystemMessage({ content }: SystemMessageProps) {
         variant="ghost"
         data-chat-transcript-ignore
         onClick={() => setSystemExpanded(!systemExpanded)}
-        className="flex h-auto w-full justify-start gap-2 rounded-none bg-transparent px-3 py-1.5 text-left font-sans text-xs text-muted-foreground transition-colors hover:bg-transparent hover:text-foreground"
+        className="flex h-auto w-full justify-start gap-2 rounded-none bg-transparent px-3 py-1.5 text-left font-sans text-chat text-muted-foreground transition-colors hover:bg-transparent hover:text-foreground"
       >
         <Settings
           aria-hidden="true"
@@ -28,7 +28,7 @@ export function SystemMessage({ content }: SystemMessageProps) {
       </Button>
       {systemExpanded && (
         <div
-          className="mt-1 rounded-md border border-border bg-card px-3.5 py-2.5 font-sans text-[length:var(--text-chat)] leading-[var(--text-chat--line-height)] tracking-[-0.01em] whitespace-pre-wrap text-muted-foreground select-text"
+          className="mt-1 rounded-md border border-border bg-card px-3.5 py-2.5 font-sans text-chat tracking-[-0.01em] whitespace-pre-wrap text-muted-foreground select-text"
         >
           {content}
         </div>

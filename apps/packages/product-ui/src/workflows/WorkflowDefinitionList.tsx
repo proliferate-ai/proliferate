@@ -35,7 +35,7 @@ export function WorkflowDefinitionList({
       telemetryBlocked
     >
       {loading ? (
-        <p className="py-6 text-sm text-muted-foreground" role="status">
+        <p className="py-6 text-body text-muted-foreground" role="status">
           Loading workflows
         </p>
       ) : error ? (
@@ -77,14 +77,14 @@ export function WorkflowDefinitionList({
                 <Workflow className="icon-paired" aria-hidden />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-medium text-foreground">
+                <span className="block truncate text-body-emphasis font-medium text-foreground">
                   {definition.title}
                 </span>
-                <span className="mt-0.5 block line-clamp-2 text-xs leading-4 text-muted-foreground">
+                <span className="mt-0.5 block line-clamp-2 text-ui-sm leading-4 text-muted-foreground">
                   {definition.description || workflowSummary(definition)}
                 </span>
               </span>
-              <span className="shrink-0 pt-1 text-xs text-muted-foreground">
+              <span className="shrink-0 pt-1 text-ui-sm text-muted-foreground">
                 {formatUpdatedAt(definition.updatedAt)}
               </span>
             </Button>

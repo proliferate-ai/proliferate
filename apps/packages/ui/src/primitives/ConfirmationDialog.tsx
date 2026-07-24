@@ -35,9 +35,9 @@ export function ConfirmationDialog({
       description={description}
       headerContent={(
         <header className="flex flex-col gap-1.5 text-left">
-          <div className="text-lg font-semibold leading-none tracking-tight text-foreground">{title}</div>
+          <div className="text-heading font-semibold tracking-tight text-foreground">{title}</div>
           {description ? (
-            <div className="text-base leading-6 text-muted-foreground">
+            <div className="text-body text-muted-foreground">
               {description}
             </div>
           ) : null}
@@ -47,7 +47,7 @@ export function ConfirmationDialog({
       headerClassName="shrink-0 px-6 pb-0 pt-6 pr-14"
       bodyClassName="hidden"
       overlayClassName="bg-background/60 backdrop-blur-[2px]"
-      panelClassName="!rounded-xl border-border/80 bg-card shadow-floating"
+      panelClassName="!rounded-xl border-border/80 bg-card shadow-modal"
       footerClassName="flex shrink-0 items-center justify-end gap-2 px-6 pb-6 pt-6"
       footer={(
         <>
@@ -55,7 +55,7 @@ export function ConfirmationDialog({
             type="button"
             variant="ghost"
             size="md"
-            className="h-9 rounded-lg px-3 text-sm"
+            className="h-9 rounded-lg px-3 text-ui"
             disabled={loading}
             onClick={onClose}
           >
@@ -65,7 +65,7 @@ export function ConfirmationDialog({
             type="button"
             variant={confirmVariant}
             size="md"
-            className="h-9 min-w-0 rounded-lg px-4 text-sm shadow-none"
+            className="h-9 min-w-0 rounded-lg px-4 text-ui shadow-none"
             loading={loading}
             disabled={loading}
             onClick={onConfirm}

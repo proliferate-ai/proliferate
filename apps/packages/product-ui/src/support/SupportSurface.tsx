@@ -59,13 +59,13 @@ export function SupportSurface({ onSubmit }: SupportSurfaceProps) {
   return (
     <div className="space-y-4">
       <form onSubmit={handleSubmit}>
-        <section className="overflow-hidden rounded-lg border border-border-light bg-surface-elevated shadow-subtle">
+        <section className="overflow-hidden rounded-lg border border-border-light bg-surface-elevated">
           <div className="border-b border-border-light px-4 py-3">
-            <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+            <div className="flex items-center gap-2 text-heading font-medium text-foreground">
               <LifeBuoy className="icon-paired" />
               Contact support
             </div>
-            <p className="mt-1 max-w-2xl text-xs leading-4 text-muted-foreground">
+            <p className="mt-1 max-w-2xl text-ui-sm leading-4 text-muted-foreground">
               Share what happened, what you expected, and the workspace, workflow, or billing flow involved.
             </p>
           </div>
@@ -82,12 +82,12 @@ export function SupportSurface({ onSubmit }: SupportSurfaceProps) {
                   }
                 }}
                 variant="ghost"
-                className="min-h-[12rem] w-full resize-none text-sm leading-5"
+                className="min-h-[12rem] w-full resize-none text-body"
                 placeholder="What happened?"
                 data-telemetry-mask
               />
               <div className="mt-3 flex items-center justify-between gap-3 border-t border-border-light pt-3">
-                <Label className="mb-0 flex min-w-0 cursor-pointer items-start gap-2 text-xs leading-4 text-muted-foreground">
+                <Label className="mb-0 flex min-w-0 cursor-pointer items-start gap-2 text-ui-sm leading-4 text-muted-foreground">
                   <Checkbox
                     checked={publicContentConsent}
                     onCheckedChange={(checked) => setPublicContentConsent(checked === true)}
@@ -114,7 +114,7 @@ export function SupportSurface({ onSubmit }: SupportSurfaceProps) {
               <div
                 role="status"
                 aria-live="polite"
-                className={`flex items-center gap-2 rounded-md border px-3 py-2 text-sm ${
+                className={`flex items-center gap-2 rounded-md border px-3 py-2 text-ui ${
                   notice.tone === "success"
                     ? "border-success/30 bg-success/10 text-success"
                     : "border-destructive/30 bg-destructive/10 text-destructive"
@@ -150,9 +150,9 @@ function InfoCard({
   description: string;
 }) {
   return (
-    <div className="rounded-lg border border-border-light bg-surface-elevated px-4 py-3 shadow-subtle">
-      <div className="text-sm font-medium text-foreground">{title}</div>
-      <p className="mt-1 text-xs leading-4 text-muted-foreground">{description}</p>
+    <div className="rounded-lg border border-border-light bg-surface-elevated px-4 py-3">
+      <div className="text-heading font-medium text-foreground">{title}</div>
+      <p className="mt-1 text-ui-sm leading-4 text-muted-foreground">{description}</p>
     </div>
   );
 }

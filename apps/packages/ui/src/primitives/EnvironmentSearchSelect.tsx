@@ -57,7 +57,7 @@ export function EnvironmentSearchSelect({
           variant="outline"
           size="sm"
           disabled={disabled}
-          className={`h-8 justify-between rounded-xl border-transparent bg-accent px-3 text-ui font-[430] leading-4 text-foreground shadow-none hover:bg-accent/80 data-[state=open]:bg-accent/80 ${className}`}
+          className={`h-8 justify-between rounded-xl border-transparent bg-surface-control px-3 text-ui font-control leading-4 text-foreground shadow-none hover:bg-hover active:bg-active data-[state=open]:bg-active ${className}`}
         >
           {leading}
           <span className="min-w-0 flex-1 truncate text-left">{label}</span>

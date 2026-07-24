@@ -17,7 +17,7 @@ const RESOLVED_MS = 1_400;
  * Looping pending→resolved fixture for the composer dock's active-card
  * motion. It drives the REAL presence controller
  * (useComposerDockCardPresence), so what plays here is exactly the product
- * grammar: chip-enter mount (280ms rise out of the composer), 150ms opacity
+ * grammar: emphasized spring mount (300ms rise out of the composer), 120ms opacity
  * fade on resolve, and an instant swap when a different interaction takes
  * the slot. The cycle alternates an approval card and a question card so
  * both the entrance and the exit replay continuously.

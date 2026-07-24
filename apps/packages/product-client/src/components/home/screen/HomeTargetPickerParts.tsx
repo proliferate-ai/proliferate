@@ -118,7 +118,7 @@ export const HomeTargetRowItem = forwardRef<HTMLButtonElement, HomeTargetRowItem
         variant="unstyled"
         size="unstyled"
         className={twMerge(
-          "flex h-6 min-w-0 select-none items-center gap-1 whitespace-nowrap rounded-full border border-transparent px-1.5 py-0 text-ui text-muted-foreground outline-none transition-colors enabled:hover:bg-accent enabled:hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 data-[state=open]:bg-accent data-[state=open]:text-foreground",
+          "flex h-6 min-w-0 select-none items-center gap-1 whitespace-nowrap rounded-full border border-transparent px-1.5 py-0 text-ui text-muted-foreground outline-none transition-colors enabled:hover:bg-hover enabled:active:bg-active enabled:hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 data-[state=open]:bg-active data-[state=open]:text-foreground",
           className,
         )}
         {...props}

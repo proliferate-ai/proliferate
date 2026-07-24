@@ -1,4 +1,5 @@
 import { forwardRef, type ButtonHTMLAttributes, type MouseEvent, type ReactNode } from "react";
+import { motion } from "@proliferate/design/motion";
 import { ComposerControlButton } from "./ComposerControlButton";
 
 interface Level {
@@ -87,7 +88,7 @@ function LevelBarsIcon({
           minHeight: formatEm(LEVEL_BAR_MIN_HEIGHT_EM),
           width: barWidthEm,
           opacity: lit ? 1 : 0.3,
-          animationDelay: wave ? `${i * 110}ms` : undefined,
+          animationDelay: wave ? motion.cssMs(i * motion.delay.levelBarStaggerMs) : undefined,
         }}
       />
     );

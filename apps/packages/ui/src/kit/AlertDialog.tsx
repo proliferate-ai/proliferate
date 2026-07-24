@@ -56,7 +56,7 @@ function AlertDialogContent({
         className={cn(
           // Canonical modal surface (matches ModalShell / Dialog): bg-background
           // panel, not the lighter bg-popover tint.
-          "fixed left-1/2 top-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-background p-5 text-foreground shadow-lg",
+          "fixed left-1/2 top-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-background p-5 text-foreground shadow-modal",
           className,
         )}
         {...props}
@@ -111,7 +111,7 @@ function AlertDialogDescription({
   return (
     <AlertDialogPrimitive.Description
       data-slot="alert-dialog-description"
-      className={cn("text-ui-sm leading-[1.45] text-muted-foreground", className)}
+      className={cn("text-ui-sm text-muted-foreground", className)}
       {...props}
     />
   );
@@ -125,7 +125,7 @@ function AlertDialogAction({
     <AlertDialogPrimitive.Action
       data-slot="alert-dialog-action"
       className={cn(
-        "h-8 rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground hover:bg-primary/90",
+        "h-8 rounded-md bg-primary px-3 text-ui font-medium text-primary-foreground hover:bg-primary/90",
         className,
       )}
       {...props}
@@ -141,7 +141,7 @@ function AlertDialogCancel({
     <AlertDialogPrimitive.Cancel
       data-slot="alert-dialog-cancel"
       className={cn(
-        "h-8 rounded-md border border-input px-3 text-xs text-muted-foreground hover:bg-accent",
+        "h-8 rounded-md border border-input px-3 text-ui text-muted-foreground hover:bg-hover active:bg-active",
         className,
       )}
       {...props}

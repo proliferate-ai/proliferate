@@ -36,13 +36,11 @@ const OCTAGON_POINTS =
 
 export function SubagentIdentityGlyph({
   seed,
-  size = 20,
   dimmed = false,
-  className = "",
+  className = "text-ui icon-control",
   label,
 }: {
   seed: string;
-  size?: number;
   dimmed?: boolean;
   className?: string;
   label?: string;
@@ -54,8 +52,8 @@ export function SubagentIdentityGlyph({
   return (
     <svg
       viewBox="0 0 24 24"
-      width={size}
-      height={size}
+      width="1em"
+      height="1em"
       role={label ? "img" : undefined}
       aria-label={label}
       aria-hidden={label ? undefined : true}

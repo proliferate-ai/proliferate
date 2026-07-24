@@ -60,15 +60,15 @@ export const COMPUTE_TARGET_COLOR_OPTIONS: Array<{
   label: string;
   value: string;
 }> = [
-  { id: "slate", label: "Slate", value: "#6b7280" },
-  { id: "red", label: "Red", value: "#b04444" },
-  { id: "orange", label: "Orange", value: "#b56b3a" },
-  { id: "amber", label: "Amber", value: "#b59a3a" },
-  { id: "green", label: "Green", value: "#4a8d5a" },
-  { id: "teal", label: "Teal", value: "#3c8a86" },
-  { id: "blue", label: "Blue", value: "#4a72b5" },
-  { id: "purple", label: "Purple", value: "#7a5ab0" },
-  { id: "pink", label: "Pink", value: "#b0567c" },
+  { id: "slate", label: "Slate", value: "var(--color-compute-target-slate)" },
+  { id: "red", label: "Red", value: "var(--color-compute-target-red)" },
+  { id: "orange", label: "Orange", value: "var(--color-compute-target-orange)" },
+  { id: "amber", label: "Amber", value: "var(--color-compute-target-amber)" },
+  { id: "green", label: "Green", value: "var(--color-compute-target-green)" },
+  { id: "teal", label: "Teal", value: "var(--color-compute-target-teal)" },
+  { id: "blue", label: "Blue", value: "var(--color-compute-target-blue)" },
+  { id: "purple", label: "Purple", value: "var(--color-compute-target-purple)" },
+  { id: "pink", label: "Pink", value: "var(--color-compute-target-pink)" },
 ];
 
 const ICON_OPTIONS_BY_ID = new Map(

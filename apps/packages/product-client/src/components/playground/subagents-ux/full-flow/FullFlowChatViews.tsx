@@ -99,7 +99,7 @@ export function ChildChatView({
       <div className="flex shrink-0 items-center gap-2 border-b border-border px-4 py-2.5">
         <SubagentIdentityGlyph
           seed={child.id}
-          size={18}
+          className="text-ui icon-large"
           label={`Identity mark for ${child.label}`}
         />
         <div className="min-w-0 flex-1">
@@ -108,7 +108,7 @@ export function ChildChatView({
             {statusLine} · Delegated by {parent.title}
           </p>
         </div>
-        <span className="shrink-0 font-mono text-xs text-muted-foreground">{child.harness}</span>
+        <span className="shrink-0 font-mono text-ui-sm text-muted-foreground">{child.harness}</span>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-2xl px-10 py-4">
@@ -131,7 +131,7 @@ export function ArchivedChatView({ session }: { session: FullFlowArchivedSession
       <div className="flex shrink-0 items-center gap-2 border-b border-border px-4 py-2.5">
         <SubagentIdentityGlyph
           seed={session.id}
-          size={18}
+          className="text-ui icon-large"
           dimmed
           label={`Identity mark for ${session.label}`}
         />
@@ -153,7 +153,7 @@ export function ArchivedChatView({ session }: { session: FullFlowArchivedSession
           read-only footer stating the session is closed. */}
       <footer className="mx-auto w-full max-w-2xl px-5 pb-6">
         <div className="flex items-center gap-2 rounded-md border border-border/60 bg-foreground/5 px-3 py-2 text-ui-sm text-muted-foreground">
-          <Archive className="size-3.5 shrink-0" aria-hidden="true" />
+          <Archive className="text-ui icon-compact shrink-0" aria-hidden="true" />
           <span>This session is closed. The transcript is read-only; no new prompts can be sent.</span>
         </div>
       </footer>

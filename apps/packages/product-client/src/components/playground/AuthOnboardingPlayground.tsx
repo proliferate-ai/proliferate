@@ -49,7 +49,7 @@ function TransitionReplay({ replayKey }: { replayKey: number }) {
       <LoginScreen {...MOCK_LOGIN_PROPS} />
       {phase !== "done" && (
         <div
-          className={`fixed inset-0 z-40 bg-background transition-opacity duration-200 ${
+          className={`fixed inset-0 z-40 bg-background transition-opacity duration-enter ease-out-quint ${
             phase === "fading" ? "opacity-0" : "opacity-100"
           }`}
         >
@@ -88,9 +88,9 @@ export function AuthOnboardingPlayground() {
         </>
       )}
 
-      <div className="fixed left-1/2 top-4 z-[100] flex -translate-x-1/2 flex-col items-center gap-2">
+      <div className="fixed left-1/2 top-4 z-toast flex -translate-x-1/2 flex-col items-center gap-2">
         {/* Surface switch */}
-        <div className="flex items-center gap-1.5 rounded-full border border-border bg-card/90 px-3 py-2 shadow-lg backdrop-blur">
+        <div className="flex items-center gap-1.5 rounded-full border border-border bg-card/90 px-3 py-2 shadow-popover backdrop-blur">
           <Button
             type="button"
             size="sm"
@@ -111,8 +111,8 @@ export function AuthOnboardingPlayground() {
 
         {/* Per-surface controls */}
         {surface === "shared" ? (
-          <div className="flex items-center gap-1.5 rounded-full border border-border bg-card/90 px-3 py-2 shadow-lg backdrop-blur">
-            <span className="pr-1 text-xs text-muted-foreground">Mode</span>
+          <div className="flex items-center gap-1.5 rounded-full border border-border bg-card/90 px-3 py-2 shadow-popover backdrop-blur">
+            <span className="pr-1 text-ui-sm text-muted-foreground">Mode</span>
             <Button
               type="button"
               size="sm"
@@ -131,8 +131,8 @@ export function AuthOnboardingPlayground() {
             </Button>
           </div>
         ) : (
-          <div className="flex items-center gap-1.5 rounded-full border border-border bg-card/90 px-3 py-2 shadow-lg backdrop-blur">
-            <span className="pr-1 text-xs text-muted-foreground">View</span>
+          <div className="flex items-center gap-1.5 rounded-full border border-border bg-card/90 px-3 py-2 shadow-popover backdrop-blur">
+            <span className="pr-1 text-ui-sm text-muted-foreground">View</span>
             <Button
               type="button"
               size="sm"

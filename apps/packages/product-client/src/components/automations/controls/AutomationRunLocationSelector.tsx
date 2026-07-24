@@ -100,7 +100,7 @@ export function AutomationRunLocationSelector({
   return (
     <div className="flex min-w-0 flex-col gap-1">
       <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <span className="shrink-0 text-sm text-muted-foreground">Run in</span>
+        <span className="shrink-0 text-ui-sm text-muted-foreground">Run in</span>
         <PopoverButton
           trigger={(
             <PillControlButton
@@ -185,11 +185,11 @@ export function AutomationRunLocationSelector({
           )}
         </PopoverButton>
         {!canChangeOwner ? (
-          <span className="shrink-0 text-xs text-muted-foreground">Scope locked</span>
+          <span className="shrink-0 text-ui-sm text-muted-foreground">Scope locked</span>
         ) : null}
       </div>
       {disabledReason ? (
-        <p className="text-xs leading-5 text-muted-foreground">
+        <p className="text-ui-sm text-muted-foreground">
           {disabledReason}
         </p>
       ) : null}

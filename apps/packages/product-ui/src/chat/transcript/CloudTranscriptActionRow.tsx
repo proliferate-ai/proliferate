@@ -52,7 +52,7 @@ export function CloudTranscriptActionRow({
           data-cloud-transcript-action-row
           data-chat-transcript-ignore
           aria-expanded={expanded}
-          className={`group/tool-action-row inline-flex min-w-0 max-w-full cursor-pointer items-center ${iconLabelGapClassName} rounded-none bg-transparent p-0 text-left text-chat font-normal leading-[var(--text-chat--line-height)] outline-none focus-visible:underline ${
+          className={`group/tool-action-row inline-flex min-w-0 max-w-full cursor-pointer items-center ${iconLabelGapClassName} rounded-none bg-transparent p-0 text-left text-chat font-normal outline-none focus-visible:underline ${
             status === "failed"
               ? "text-destructive/80 hover:text-destructive"
               : "text-muted-foreground hover:text-foreground"
@@ -72,7 +72,7 @@ export function CloudTranscriptActionRow({
       ) : (
         <div
           data-cloud-transcript-action-row
-          className={`inline-flex min-w-0 max-w-full items-center ${iconLabelGapClassName} text-chat leading-[var(--text-chat--line-height)] ${
+          className={`inline-flex min-w-0 max-w-full items-center ${iconLabelGapClassName} text-chat ${
             status === "failed" ? "text-destructive/80" : "text-muted-foreground"
           }`}
         >
@@ -142,7 +142,7 @@ function CloudTranscriptActionLeadingAffordance({
   return (
     <span className="relative flex icon-paired shrink-0 items-center justify-center text-current">
       <span
-        className={`absolute inset-0 flex items-center justify-center transition-all duration-150 ${
+        className={`absolute inset-0 flex items-center justify-center transition-all duration-disclosure ${
           expandable
             ? expanded
               ? "scale-75 opacity-0"
@@ -150,12 +150,12 @@ function CloudTranscriptActionLeadingAffordance({
             : "scale-100 opacity-100"
         }`}
       >
-        <span className="flex icon-paired items-center justify-center text-xs leading-none text-current [&_svg]:icon-paired [&_svg]:text-current">
+        <span className="flex icon-paired items-center justify-center text-chat leading-none text-current [&_svg]:icon-paired [&_svg]:text-current">
           {icon}
         </span>
       </span>
       <span
-        className={`absolute inset-0 flex items-center justify-center transition-all duration-150 ${
+        className={`absolute inset-0 flex items-center justify-center transition-all duration-disclosure ${
           expandable
             ? expanded
               ? "scale-100 opacity-100"
@@ -205,7 +205,7 @@ export function CloudTurnSeparator({
         size="sm"
         data-chat-transcript-ignore
         onClick={onClick}
-        className="group/turn-separator h-auto max-w-full justify-start gap-1 whitespace-normal rounded-md border border-transparent bg-transparent px-0 py-0 text-chat leading-[var(--text-chat--line-height)] font-normal text-muted-foreground hover:bg-transparent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="group/turn-separator h-auto max-w-full justify-start gap-1 whitespace-normal rounded-md border border-transparent bg-transparent px-0 py-0 text-chat font-normal text-muted-foreground hover:bg-transparent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         aria-expanded={expanded}
       >
         <span className="min-w-0 truncate">{label}</span>
@@ -222,7 +222,7 @@ export function CloudTurnSeparator({
   }
 
   return (
-    <div className="text-chat leading-[var(--text-chat--line-height)] text-muted-foreground">
+    <div className="text-chat text-muted-foreground">
       {label}
     </div>
   );

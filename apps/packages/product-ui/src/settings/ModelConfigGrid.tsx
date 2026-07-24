@@ -37,10 +37,10 @@ export function ModelConfigGrid({ models, onToggle, className }: ModelConfigGrid
               <Badge tone="neutral">{model.provider}</Badge>
             </div>
             {model.version ? (
-              <span className="text-ui-sm leading-[1.45] text-muted-foreground">{model.version}</span>
+              <span className="text-ui-sm text-muted-foreground">{model.version}</span>
             ) : null}
             <div className="mt-1 flex items-center justify-between gap-2 border-t border-border pt-2.5">
-              <span className="text-ui-sm font-medium leading-[1.45] text-muted-foreground">Enabled</span>
+              <span className="text-ui-sm font-medium text-muted-foreground">Enabled</span>
               <Switch
                 checked={model.enabled}
                 disabled={model.disabled}

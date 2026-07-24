@@ -24,10 +24,10 @@ export function PlaygroundScenarioBar({
 
   return (
     <header className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-3">
-      <div className="mr-3 text-sm font-semibold">Chat UI playground</div>
+      <div className="mr-3 text-heading font-semibold">Chat UI playground</div>
       <Link
         to="/"
-        className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+        className="rounded-md border border-border px-2 py-1 text-ui text-muted-foreground transition-colors hover:text-foreground"
       >
         ← Back to app
       </Link>
@@ -41,7 +41,7 @@ export function PlaygroundScenarioBar({
             variant={active ? "inverted" : "secondary"}
             size="sm"
             onClick={() => onSelectFixture(key)}
-            className="text-xs font-medium"
+            className="text-ui font-medium"
           >
             {SCENARIOS[key].label}
           </Button>
@@ -50,7 +50,7 @@ export function PlaygroundScenarioBar({
       {showRecordings && (
         <>
           <div className="mx-3 h-5 w-px bg-border" />
-          <div className="text-xs font-medium text-muted-foreground">Recordings</div>
+          <div className="text-ui-sm font-medium text-muted-foreground">Recordings</div>
           {replay.recordings.map((recording) => {
             const active = selection.kind === "recording"
               && selection.recordingId === recording.id;
@@ -61,7 +61,7 @@ export function PlaygroundScenarioBar({
                 variant={active ? "inverted" : "secondary"}
                 size="sm"
                 onClick={() => onSelectRecording(recording.id)}
-                className="text-xs font-medium"
+                className="text-ui font-medium"
               >
                 {recording.label}
               </Button>
@@ -70,7 +70,7 @@ export function PlaygroundScenarioBar({
         </>
       )}
       {replay.enabled && replay.isLoadingRecordings && (
-        <span className="text-xs text-muted-foreground">Loading recordings...</span>
+        <span className="text-ui-sm text-muted-foreground">Loading recordings...</span>
       )}
     </header>
   );

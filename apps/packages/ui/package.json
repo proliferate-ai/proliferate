@@ -51,6 +51,10 @@
       "types": "./dist/layout/PageHeader.d.ts",
       "import": "./dist/layout/PageHeader.js"
     },
+    "./layout/RowActionIconButton": {
+      "types": "./dist/layout/RowActionIconButton.d.ts",
+      "import": "./dist/layout/RowActionIconButton.js"
+    },
     "./layout/PaneIconButton": {
       "types": "./dist/layout/PaneIconButton.d.ts",
       "import": "./dist/layout/PaneIconButton.js"

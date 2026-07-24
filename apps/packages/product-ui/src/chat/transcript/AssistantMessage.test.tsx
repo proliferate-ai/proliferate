@@ -4,6 +4,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { act, cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { motion } from "@proliferate/design/motion";
 import {
   AssistantMessage,
 } from "./AssistantMessage";
@@ -296,10 +297,15 @@ describe("AssistantMessage streaming reveal", () => {
 
     expect(section).toContain("@keyframes stream-word-in");
     expect(section).toContain(".stream-word");
-    expect(section).toContain("animation: stream-word-in 320ms linear both");
+    expect(section).toContain(
+      "animation: stream-word-in var(--activity-stream-reveal-fade) linear both",
+    );
     expect(section).toContain("from { opacity: 0.08; }");
     expect(section).not.toContain("mask-image");
-    expect(STREAM_REVEAL_FADE_MS).toBe(320);
+    expect(STREAM_REVEAL_FADE_MS).toBe(motion.activity.streamRevealFadeMs);
+    expect(STREAM_REVEAL_HANDOFF_DELAY_MS).toBe(
+      motion.activity.streamRevealHandoffDelayMs,
+    );
     expect(STREAM_REVEAL_SETTLE_MS).toBe(
       STREAM_REVEAL_FADE_MS + STREAM_REVEAL_HANDOFF_DELAY_MS,
     );
@@ -312,7 +318,7 @@ describe("AssistantMessage streaming reveal", () => {
     );
     if (existsSync(generatedCssPath)) {
       expect(readFileSync(generatedCssPath, "utf8")).toContain(
-        "animation: stream-word-in 320ms linear both",
+        "animation: stream-word-in var(--activity-stream-reveal-fade) linear both",
       );
     }
   });

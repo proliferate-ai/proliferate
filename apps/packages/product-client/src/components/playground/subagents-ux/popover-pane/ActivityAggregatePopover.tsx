@@ -60,7 +60,7 @@ export function ActivityAggregatePopover({
           size="unstyled"
           // Same cap treatment as the production activity card: cancel the
           // dock's px-5 inset so the cap shares the composer's outer edges.
-          className="-mx-5 flex h-9 w-[calc(100%+2.5rem)] min-w-0 items-center justify-start rounded-t-[var(--radius-composer,1rem)] border-x-[0.5px] border-t-[0.5px] border-[var(--color-composer-border)] bg-[var(--color-composer-background)] px-3 text-left text-ui-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-border"
+          className="-mx-5 flex h-9 w-[calc(100%+2.5rem)] min-w-0 items-center justify-start rounded-t-xl border-x-[0.5px] border-t-[0.5px] border-[var(--color-composer-border)] bg-[var(--color-composer-background)] px-3 text-left text-ui-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-border"
           aria-label={`Workspace activity: ${facts.map((fact) => fact.label).join(", ")}`}
         >
           <span className="flex min-w-0 flex-1 items-center overflow-hidden">
@@ -81,9 +81,9 @@ export function ActivityAggregatePopover({
           className="w-[min(300px,calc(100vw-1rem))] overflow-hidden"
         >
           <PopoverSection title="Source control" flush={aggregate.total === 0}>
-            <PopoverFactRow icon={<GitBranch className="size-4" />} label={git.branch} />
+            <PopoverFactRow icon={<GitBranch className="text-ui icon-control" />} label={git.branch} />
             <PopoverFactRow
-              icon={<StackedFiles className="size-4" />}
+              icon={<StackedFiles className="text-ui icon-control" />}
               label={git.changedFiles === 0
                 ? "No changes"
                 : `${git.changedFiles} ${git.changedFiles === 1 ? "change" : "changes"}`}
@@ -91,23 +91,23 @@ export function ActivityAggregatePopover({
             />
             {git.conflictedFiles > 0 ? (
               <PopoverFactRow
-                icon={<CircleAlert className="size-4 text-destructive" />}
+                icon={<CircleAlert className="text-ui icon-control text-destructive" />}
                 label={`${git.conflictedFiles} ${git.conflictedFiles === 1 ? "conflict" : "conflicts"}`}
               />
             ) : null}
             {syncLabel ? (
-              <PopoverFactRow icon={<ArrowUp className="size-4" />} label={syncLabel} />
+              <PopoverFactRow icon={<ArrowUp className="text-ui icon-control" />} label={syncLabel} />
             ) : null}
             {git.pullRequestLabel ? (
               <PopoverFactRow
-                icon={<GitPullRequest className="size-4" />}
+                icon={<GitPullRequest className="text-ui icon-control" />}
                 label={git.pullRequestLabel}
               />
             ) : null}
             <div className="mt-1 flex flex-col gap-0.5 border-t border-border/60 pt-1">
               {git.changedFiles > 0 ? (
                 <PopoverActionRow
-                  icon={<StackedFiles className="size-4" />}
+                  icon={<StackedFiles className="text-ui icon-control" />}
                   label="Review changes"
                   onClick={() => {
                     onSourceControlAction?.("review");
@@ -117,7 +117,7 @@ export function ActivityAggregatePopover({
               ) : null}
               {git.changedFiles > 0 ? (
                 <PopoverActionRow
-                  icon={<GitCommit className="size-4" />}
+                  icon={<GitCommit className="text-ui icon-control" />}
                   label="Commit…"
                   onClick={() => {
                     onSourceControlAction?.("commit");
@@ -126,7 +126,7 @@ export function ActivityAggregatePopover({
                 />
               ) : null}
               <PopoverActionRow
-                icon={<ArrowUp className="size-4" />}
+                icon={<ArrowUp className="text-ui icon-control" />}
                 label={git.ahead > 0 ? "Push changes" : "Publish branch"}
                 onClick={() => {
                   onSourceControlAction?.("publish");
@@ -134,7 +134,7 @@ export function ActivityAggregatePopover({
                 }}
               />
               <PopoverActionRow
-                icon={<GitPullRequest className="size-4" />}
+                icon={<GitPullRequest className="text-ui icon-control" />}
                 label={git.pullRequestLabel ? "Open pull request" : "Create pull request"}
                 onClick={() => {
                   onSourceControlAction?.("pull-request");
@@ -162,12 +162,12 @@ export function ActivityAggregatePopover({
                     {aggregate.total} {aggregate.total === 1 ? "subagent" : "subagents"}
                   </span>
                   {countsLine ? (
-                    <span className="block truncate text-xs text-muted-foreground">
+                    <span className="block truncate text-ui-sm text-muted-foreground">
                       {countsLine}
                     </span>
                   ) : null}
                 </span>
-                <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" />
+                <ChevronRight className="text-ui icon-compact shrink-0 text-muted-foreground" />
               </Button>
             </PopoverSection>
           ) : null}
@@ -248,7 +248,7 @@ function PopoverFactRow({
     <div className="flex min-h-7 min-w-0 items-center gap-2 py-1 text-ui-sm text-muted-foreground">
       <span className="flex w-[18px] shrink-0 items-center justify-start">{icon}</span>
       <span className="min-w-0 flex-1 truncate">{label}</span>
-      {meta ? <span className="shrink-0 text-xs text-faint">{meta}</span> : null}
+      {meta ? <span className="shrink-0 text-ui-sm text-faint">{meta}</span> : null}
     </div>
   );
 }

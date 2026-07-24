@@ -256,7 +256,7 @@ export function UserInputCard({
                   : "Enter your answer"}
                 autoComplete="off"
                 data-telemetry-mask="true"
-                className="flex-1 cursor-text border-0 bg-transparent px-0 py-1 text-ui text-foreground shadow-none outline-none placeholder:text-[color:color-mix(in_oklab,var(--color-muted-foreground)_40%,transparent)] focus:ring-0"
+                className="flex-1 cursor-text border-0 bg-transparent px-0 py-1 text-ui text-foreground shadow-none outline-none placeholder:text-muted-foreground/40 focus:ring-0"
               />
             ) : (
               <Textarea
@@ -276,7 +276,7 @@ export function UserInputCard({
                   : "Enter your answer"}
                 autoComplete="off"
                 data-telemetry-mask="true"
-                className="flex-1 cursor-text px-0 py-1 text-ui text-foreground placeholder:text-[color:color-mix(in_oklab,var(--color-muted-foreground)_40%,transparent)]"
+                className="flex-1 cursor-text px-0 py-1 text-ui text-foreground placeholder:text-muted-foreground/40"
               />
             )}
           </div>
@@ -334,8 +334,8 @@ function SyntheticOptionRow({
         onMouseEnter={onHover}
         aria-selected={highlighted || undefined}
         className={twMerge(
-          "group/option flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-accent",
-          selected || highlighted ? "bg-accent" : "",
+          "group/option flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-hover active:bg-active",
+          selected || highlighted ? "bg-selected" : "",
         )}
       >
         <ComposerOptionKeyBadge>{index + 1}</ComposerOptionKeyBadge>

@@ -21,4 +21,16 @@ describe("SidebarNavRow", () => {
     expect(well?.className).toContain("w-[var(--icon-paired)]");
     expect(well?.className).toContain("[&>svg]:icon-paired");
   });
+
+  it("uses the semantic hover duration for the shortcut reveal", () => {
+    const { getByText } = render(
+      <SidebarNavRow
+        label="New chat"
+        shortcutLabel="⌘N"
+        onPress={vi.fn()}
+      />,
+    );
+
+    expect(getByText("⌘N").className).toContain("duration-hover");
+  });
 });

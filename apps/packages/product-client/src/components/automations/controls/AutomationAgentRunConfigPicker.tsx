@@ -22,7 +22,7 @@ interface AutomationAgentRunConfigPickerProps {
   onSelect: (config: AutomationAgentRunConfigOption | null) => void;
 }
 
-const POPOVER_CLASS = "w-80 rounded-xl border border-border bg-popover p-1 shadow-floating";
+const POPOVER_CLASS = "w-80 rounded-xl border border-border bg-popover p-1 shadow-popover";
 
 export function AutomationAgentRunConfigPicker({
   configs,

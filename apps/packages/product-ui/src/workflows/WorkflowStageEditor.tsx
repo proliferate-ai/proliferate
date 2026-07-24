@@ -56,8 +56,8 @@ export function WorkflowStageEditor({
     <section className="rounded-lg border border-border bg-card p-4">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-sm font-medium text-foreground">Stage {stageIndex + 1}</h2>
-          <p className="mt-0.5 text-xs leading-4 text-muted-foreground">
+          <h2 className="text-heading font-medium text-foreground">Stage {stageIndex + 1}</h2>
+          <p className="mt-0.5 text-ui-sm leading-4 text-muted-foreground">
             One agent session. Prompt steps run sequentially in the same session.
           </p>
         </div>
@@ -234,7 +234,7 @@ function PromptStepEditor({
   return (
     <div className="rounded-lg bg-foreground/5 p-3">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-xs font-medium text-muted-foreground">Prompt {stepIndex + 1}</p>
+        <p className="text-ui font-medium text-muted-foreground">Prompt {stepIndex + 1}</p>
         <Button
           type="button"
           variant="ghost"
@@ -328,7 +328,7 @@ function issuesAt(
 
 function FieldIssue({ issue }: { issue: WorkflowValidationIssue | null }) {
   return issue ? (
-    <p className="mt-1 text-xs text-destructive" role="alert">{issue.message}</p>
+    <p className="mt-1 text-ui text-destructive" role="alert">{issue.message}</p>
   ) : null;
 }
 
@@ -339,7 +339,7 @@ function IssueList({ issues }: { issues: readonly WorkflowValidationIssue[] }) {
   return (
     <div className="mt-1 space-y-1" role="alert">
       {issues.map((issue, index) => (
-        <p key={`${issue.path}:${issue.message}:${index}`} className="text-xs text-destructive">
+        <p key={`${issue.path}:${issue.message}:${index}`} className="text-ui text-destructive">
           {issue.message}
         </p>
       ))}

@@ -33,7 +33,7 @@ function DropdownItem({
       label={label}
       trailing={shortcut ? (
         <span className="inline-flex shrink-0 items-center pl-1">
-          <span className="text-xs leading-4 text-muted-foreground/80 transition-colors group-hover/menu-item:text-muted-foreground group-focus/menu-item:text-muted-foreground">
+          <span className="text-ui-sm leading-4 text-muted-foreground/80 transition-colors group-hover/menu-item:text-muted-foreground group-focus/menu-item:text-muted-foreground">
             {shortcut}
           </span>
         </span>

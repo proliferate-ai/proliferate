@@ -69,8 +69,8 @@ export function RedirectCallbackScreen({
             </div>
             <div className="space-y-2.5">
               <h1 className="text-hero font-semibold leading-tight text-foreground">{title}</h1>
-              <p className="text-sm text-muted-foreground">{description}</p>
-              {detail ? <p className="text-sm text-muted-foreground">{detail}</p> : null}
+              <p className="text-body text-muted-foreground">{description}</p>
+              {detail ? <p className="text-body text-muted-foreground">{detail}</p> : null}
             </div>
           </div>
 
@@ -91,14 +91,14 @@ export function RedirectCallbackScreen({
         {brandMark ? (
           <div className="flex items-center gap-3 text-foreground">
             <span className="flex size-10 shrink-0 items-center justify-start">{brandMark}</span>
-            {brandLabel ? <span className="text-sm font-semibold">{brandLabel}</span> : null}
+            {brandLabel ? <span className="text-body-emphasis font-semibold">{brandLabel}</span> : null}
           </div>
         ) : null}
 
         <div className="space-y-5">
           <div
             className={twMerge(
-              "inline-flex max-w-full items-center gap-2 rounded-md px-2.5 py-1 text-xs font-medium",
+              "inline-flex max-w-full items-center gap-2 rounded-md px-2.5 py-1 text-ui font-medium",
               toneClasses[tone],
             )}
           >
@@ -108,9 +108,9 @@ export function RedirectCallbackScreen({
 
           <div className="space-y-2.5">
             <h1 className="text-hero font-semibold leading-tight text-foreground">{title}</h1>
-            <p className="text-sm leading-6 text-muted-foreground">{description}</p>
+            <p className="text-body text-muted-foreground">{description}</p>
             {detail ? (
-              <p className="text-sm leading-6 text-muted-foreground">{detail}</p>
+              <p className="text-body text-muted-foreground">{detail}</p>
             ) : null}
           </div>
         </div>

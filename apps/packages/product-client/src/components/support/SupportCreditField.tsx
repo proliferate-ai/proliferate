@@ -33,7 +33,7 @@ export function SupportCreditField({
       </Label>
 
       <div
-        className="grid transition-[grid-template-rows] duration-200 ease-out"
+        className="grid transition-[grid-template-rows] duration-disclosure ease-out-quint"
         style={{ gridTemplateRows: creditConsent ? "1fr" : "0fr" }}
       >
         <div className="overflow-hidden pl-6">

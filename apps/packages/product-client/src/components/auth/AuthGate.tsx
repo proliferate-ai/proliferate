@@ -96,7 +96,7 @@ export function BootstrappedRoute() {
         className={twMerge(
           "fixed inset-0 z-50 bg-background",
           destination === "app"
-          && "transition-opacity duration-200 motion-reduce:transition-none",
+          && "transition-opacity duration-enter ease-out-quint motion-reduce:transition-none",
           isFadingOut ? "opacity-0" : "opacity-100",
         )}
         onTransitionEnd={isFadingOut ? handleFadeComplete : undefined}

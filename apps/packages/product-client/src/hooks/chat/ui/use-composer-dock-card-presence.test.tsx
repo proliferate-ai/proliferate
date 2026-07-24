@@ -2,6 +2,7 @@
 
 import { act, cleanup, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
+import { motion } from "@proliferate/design/motion";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   useComposerDockCardPresence,
@@ -35,7 +36,7 @@ describe("useComposerDockCardPresence", () => {
       .toContain("composer-dock-card-enter");
   });
 
-  it("keeps the card rendered with the exit class for 150ms, then unmounts", () => {
+  it("keeps the card rendered for the shared exit duration, then unmounts", () => {
     vi.useFakeTimers();
     const { rerender } = render(
       <PresenceHarness entryKey="permission:r1">
@@ -50,7 +51,7 @@ describe("useComposerDockCardPresence", () => {
     expect(exiting?.className).toContain("pointer-events-none");
 
     act(() => {
-      vi.advanceTimersByTime(150);
+      vi.advanceTimersByTime(motion.duration.exitMs);
     });
 
     expect(screen.queryByTestId("card")).toBeNull();

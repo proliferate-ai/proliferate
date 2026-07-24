@@ -51,7 +51,7 @@ export function MacWindowControlsSafeArea() {
   return (
     <div
       aria-hidden="true"
-      className="app-region-no-drag fixed left-0 top-0 z-[2147483647] h-10 w-[82px]"
+      className="app-region-no-drag fixed left-0 top-0 z-top h-10 w-[82px]"
       data-tauri-window-controls-safe-area
     />
   );

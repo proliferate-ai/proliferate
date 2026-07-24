@@ -1,6 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-
-const SWAP_DURATION_MS = 240;
+import { motion } from "@proliferate/design/motion";
 
 interface AnimatedSwapTextProps {
   /** Stable semantic key for the rendered value. */
@@ -52,7 +51,7 @@ export function AnimatedSwapText({ valueKey, value }: AnimatedSwapTextProps) {
     const transitionId = transition.id;
     const timeout = window.setTimeout(() => {
       setTransition((current) => current?.id === transitionId ? null : current);
-    }, SWAP_DURATION_MS);
+    }, motion.duration.panelMs);
     return () => window.clearTimeout(timeout);
   }, [transition]);
 

@@ -261,7 +261,7 @@ export function GoalBar({
     <div
       data-session-goal-bar
       aria-label="Session goal"
-      className="relative overflow-clip rounded-t-[13px] border-x-[0.5px] border-t-[0.5px] border-border bg-[color:color-mix(in_oklab,var(--color-foreground)_2%,var(--color-background))]"
+      className="relative overflow-clip rounded-t-xl border-x-[0.5px] border-t-[0.5px] border-border bg-[color:color-mix(in_oklab,var(--color-foreground)_2%,var(--color-background))]"
     >
       <div
         className={twMerge(

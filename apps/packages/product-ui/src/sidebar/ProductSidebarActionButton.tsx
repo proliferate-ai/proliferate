@@ -1,4 +1,4 @@
-import { SidebarActionButton } from "@proliferate/ui/layout/SidebarActionButton";
+import { RowActionIconButton } from "@proliferate/ui/layout/RowActionIconButton";
 
 import type { SidebarActionEvent, SidebarActionScope, SidebarActionView } from "./ProductSidebarModel";
 
@@ -16,18 +16,16 @@ export function SidebarActionIconButton({
   alwaysVisible?: boolean;
 }) {
   return (
-    <SidebarActionButton
-      title={action.label}
-      alwaysVisible={alwaysVisible}
+    <RowActionIconButton
+      label={action.label}
+      visibility={alwaysVisible ? "always" : "reveal"}
       disabled={action.disabled}
-      onClick={(event) => {
-        event.stopPropagation();
+      onClick={() => {
         onAction({ scope, itemId, actionId: action.id });
       }}
-      className={`${action.destructive ? "text-destructive hover:text-destructive" : ""
-        } ${alwaysVisible ? "" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100"}`}
+      className={action.destructive ? "text-destructive hover:text-destructive" : undefined}
     >
-      {action.icon ?? <span className="text-sm leading-none">...</span>}
-    </SidebarActionButton>
+      {action.icon ?? <span className="text-ui leading-none">...</span>}
+    </RowActionIconButton>
   );
 }

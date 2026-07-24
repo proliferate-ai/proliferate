@@ -62,12 +62,12 @@ export function PromptAttachmentCard({
             event.stopPropagation();
             onOpenAttachment(part);
           }}
-          className="absolute inset-0 z-0 h-full w-full rounded-[inherit] bg-transparent p-0 hover:bg-foreground/[0.045] focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset"
+          className="absolute inset-0 z-0 h-full w-full rounded-inherit bg-transparent p-0 hover:bg-hover active:bg-active focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset"
           aria-label={`Preview ${part.name}`}
         />
       ) : null}
       <div className={isImage
-        ? "pointer-events-none relative z-10 size-full overflow-hidden rounded-[inherit]"
+        ? "pointer-events-none relative z-10 size-full overflow-hidden rounded-inherit"
         : "pointer-events-none relative z-10 flex size-full min-w-0 items-center gap-2 p-2 pr-7"}
       >
         <PromptAttachmentPreview
@@ -77,11 +77,11 @@ export function PromptAttachmentCard({
         />
         {!isImage ? (
           <div className="min-w-0 flex-1">
-            <div className="truncate text-sm font-medium text-foreground">
+            <div className="truncate text-chat font-medium text-foreground">
               {part.name}
             </div>
             {metadata ? (
-              <div className="truncate text-xs leading-4 text-muted-foreground">
+              <div className="truncate text-ui-sm leading-4 text-muted-foreground">
                 {metadata}
               </div>
             ) : null}

@@ -57,17 +57,18 @@ describe("appearance-owned glyph sizing", () => {
     expect(item.className).toContain("[&_svg]:icon-paired");
   });
 
-  it("scales sidebar action glyphs without scaling their pointer target", () => {
+  it("owns the sanctioned sidebar action glyph and pointer target", () => {
     const { getByRole } = render(
       <SidebarActionButton title="Add repository">
-        <svg className="icon-compact" aria-hidden />
+        <svg aria-hidden />
       </SidebarActionButton>,
     );
 
     const button = getByRole("button", { name: "Add repository" });
-    expect(button.className).toContain("[font-size:var(--text-sidebar-row)]");
-    expect(button.className).toContain("size-6");
-    expect(button.querySelector("svg")?.className.baseVal).toContain("icon-compact");
+    expect(button.className).toContain("text-ui");
+    expect(button.className).toContain("size-7");
+    expect(button.className).toContain("[&_svg]:icon-control");
+    expect(button.querySelector("svg")?.className.baseVal).toBe("");
   });
 
   it("lets a caller replace one semantic optical tier with another", () => {

@@ -77,7 +77,7 @@ function PromptAttachmentViewerSurface({
       data-prompt-attachment-viewer
       data-telemetry-mask
     >
-      <div className="flex h-8 shrink-0 items-center gap-2 border-b border-border/60 px-3 text-xs text-muted-foreground">
+      <div className="flex h-8 shrink-0 items-center gap-2 border-b border-border/60 px-3 text-ui-sm text-muted-foreground">
         {target.attachmentKind === "image" ? (
           <FileIcon className="icon-paired shrink-0 [font-size:var(--text-sidebar-row)]" />
         ) : (
@@ -104,7 +104,7 @@ function PromptAttachmentViewerSurface({
             />
           </div>
         ) : (
-          <pre className="size-full overflow-auto p-3 font-mono text-[length:var(--readable-code-font-size)] leading-[var(--readable-code-line-height)] text-foreground">
+          <pre className="size-full overflow-auto p-3 font-mono text-readable-code text-foreground">
             <code className={target.attachmentSource === "paste" ? "whitespace-pre-wrap" : "whitespace-pre"}>
               {text}
             </code>
@@ -128,8 +128,8 @@ function PreviewStatus({
     <div className="flex size-full items-center justify-center p-6 text-center">
       <div className="flex max-w-64 flex-col items-center gap-2 text-muted-foreground">
         {icon}
-        <div className="text-sm font-medium text-foreground">{label}</div>
-        {detail ? <div className="text-xs leading-5">{detail}</div> : null}
+        <div className="text-ui font-medium text-foreground">{label}</div>
+        {detail ? <div className="text-ui-sm leading-5">{detail}</div> : null}
       </div>
     </div>
   );

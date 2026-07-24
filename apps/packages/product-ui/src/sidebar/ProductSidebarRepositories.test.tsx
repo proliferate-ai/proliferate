@@ -47,4 +47,19 @@ describe("ProductSidebarWorkspaceRow trailing slot", () => {
     const date = screen.getByText("4h");
     expect(date.closest(".grid")?.className).toContain("min-w-[26px]");
   });
+
+  it("delegates hover-action reveal to the shared control and keeps companion motion semantic", () => {
+    render(
+      <ProductSidebarWorkspaceRow
+        label="Action workspace"
+        trailingLabel="4h"
+        hoverAction={<button type="button" data-testid="row-action">Open</button>}
+      />,
+    );
+
+    const actionWrapper = screen.getByTestId("row-action").parentElement;
+    expect(actionWrapper?.className).not.toContain("opacity-0");
+    expect(actionWrapper?.className).not.toContain("transition-opacity");
+    expect(screen.getByText("4h").className).toContain("duration-hover");
+  });
 });

@@ -1,5 +1,6 @@
 import { forwardRef, type MouseEventHandler, type ReactNode } from "react";
-import { IconButton } from "../primitives/IconButton";
+
+import { RowActionIconButton } from "./RowActionIconButton";
 
 export type SidebarActionButtonVariant = "default" | "section";
 
@@ -28,25 +29,21 @@ export const SidebarActionButton = forwardRef<HTMLButtonElement, SidebarActionBu
     const isAlwaysVisible = alwaysVisible || variant === "section";
 
     return (
-      <IconButton
+      <RowActionIconButton
         ref={ref}
-        tone="sidebar"
-        size="sm"
-        title={title}
+        label={title}
         onClick={onClick}
         disabled={disabled}
-        className={`size-6 rounded-md border border-transparent [font-size:var(--text-sidebar-row)] transition-all ${
-          active ? "bg-sidebar-accent text-sidebar-accent-foreground" : ""
-        } ${
-          isAlwaysVisible ? "" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-        } ${
+        active={active}
+        visibility={isAlwaysVisible ? "always" : "reveal"}
+        className={`text-sidebar-muted-foreground hover:text-sidebar-foreground focus-visible:text-sidebar-foreground ${
           variant === "section"
             ? "opacity-75 hover:opacity-100 focus-visible:opacity-100 disabled:cursor-not-allowed disabled:opacity-40"
             : ""
         } ${className}`}
       >
         {children}
-      </IconButton>
+      </RowActionIconButton>
     );
   },
 );

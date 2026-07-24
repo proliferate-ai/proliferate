@@ -53,7 +53,7 @@ export function CodeBlock({
       className="relative my-[14px] w-full min-w-0 overflow-clip rounded-lg border border-transparent bg-[var(--color-code-block-background,var(--color-card))]"
       data-markdown-code-block="true"
     >
-      <div className="flex select-none items-center justify-between gap-2 py-1 pl-2 pr-1.5 text-[length:var(--text-chat-meta,11px)] text-muted-foreground">
+      <div className="flex select-none items-center justify-between gap-2 py-1 pl-2 pr-1.5 text-chat text-muted-foreground">
         {label ? (
           <span className="min-w-0 flex-1 truncate">{label}</span>
         ) : (
@@ -71,7 +71,7 @@ export function CodeBlock({
         </Button>
       </div>
       <div
-        className="overflow-x-auto overflow-y-auto p-3 font-mono text-[length:var(--text-chat)] font-normal leading-[1.5]"
+        className="overflow-x-auto overflow-y-auto p-3 font-mono text-chat font-normal"
         data-markdown-code-content="true"
       >
         {children ?? (tokens ? (
@@ -80,11 +80,11 @@ export function CodeBlock({
             renderToken={renderToken}
             showLineNumbers={showLineNumbers}
             lineNumberStart={lineNumberStart}
-            className="text-[length:var(--text-chat)] leading-[1.5] text-foreground"
+            className="text-chat text-foreground"
           />
         ) : (
           <pre className="m-0 p-0">
-            <code className="whitespace-pre font-mono text-[length:var(--text-chat)] font-normal leading-[1.5] text-foreground">
+            <code className="whitespace-pre font-mono text-chat font-normal text-foreground">
               {code}
             </code>
           </pre>

@@ -149,7 +149,7 @@ export function AccountSettingsPane({
       ) : null}
 
       {/* 4. Footer */}
-      {error ? <p className="text-sm text-destructive">{error}</p> : null}
+      {error ? <p className="text-ui text-destructive">{error}</p> : null}
       {actions.signOut ? (
         <div className="flex">
           <AccountAction action={actions.signOut} variant="secondary" />
@@ -178,9 +178,9 @@ function AccountProfileHeader({
         displayName={displayName}
       />
       <div className="min-w-0 flex-1 space-y-1">
-        <div className="truncate text-lg font-medium text-foreground">{displayName}</div>
-        <div className="truncate text-sm text-muted-foreground">{email}</div>
-        <p className="text-sm leading-6 text-muted-foreground">{profileSummary}</p>
+        <div className="truncate text-title font-medium text-foreground">{displayName}</div>
+        <div className="truncate text-body text-muted-foreground">{email}</div>
+        <p className="text-body text-muted-foreground">{profileSummary}</p>
       </div>
     </div>
   );
@@ -197,7 +197,7 @@ function AccountAvatar({
   const showAvatar = Boolean(avatarUrl) && !avatarFailed;
 
   return (
-    <div className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border-light bg-foreground/5 text-lg font-medium text-muted-foreground">
+    <div className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border-light bg-surface-control text-title font-medium text-muted-foreground">
       {showAvatar ? (
         <img
           src={avatarUrl ?? ""}

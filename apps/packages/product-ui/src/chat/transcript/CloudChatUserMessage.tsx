@@ -57,7 +57,7 @@ export function CloudChatUserMessage({
           >
             <div
               ref={textRef}
-              className={`break-words select-text text-[length:var(--text-message)] leading-[var(--text-message--line-height)]${
+              className={`break-words select-text text-message${
                 !expanded ? " line-clamp-5" : ""
               }`}
             >
@@ -71,7 +71,7 @@ export function CloudChatUserMessage({
                   size="sm"
                   data-chat-transcript-ignore
                   onClick={() => setExpanded((value) => !value)}
-                  className="h-auto px-1 py-0 text-base text-muted-foreground hover:bg-transparent hover:text-foreground"
+                  className="h-auto px-1 py-0 text-chat text-muted-foreground hover:bg-transparent hover:text-foreground"
                 >
                   {expanded ? "Show less" : "Show more"}
                 </Button>
@@ -80,7 +80,7 @@ export function CloudChatUserMessage({
           </div>
         ) : null}
         {visibleStatus ? (
-          <div className="inline-flex items-center gap-1 pr-1 text-chat leading-[var(--text-chat--line-height)] text-muted-foreground">
+          <div className="inline-flex items-center gap-1 pr-1 text-chat text-muted-foreground">
             {visibleStatus}
           </div>
         ) : null}

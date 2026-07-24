@@ -141,11 +141,11 @@ export function ComposerRichTextEditor({
                 if (event.key === "Enter" || event.key === "Tab" || event.defaultPrevented) return;
                 onKeyDown?.(event);
               }}
-              className={`relative w-full resize-none bg-transparent text-[length:var(--text-composer)] leading-[var(--text-composer--line-height)] text-foreground outline-none ${disabled ? "opacity-60" : ""} ${className}`}
+              className={`relative w-full resize-none bg-transparent text-composer text-foreground outline-none ${disabled ? "opacity-60" : ""} ${className}`}
             />
           )}
           placeholder={(
-            <div className="pointer-events-none absolute inset-x-0 top-0 truncate text-[length:var(--text-composer)] leading-[var(--text-composer--line-height)] text-muted-foreground">
+            <div className="pointer-events-none absolute inset-x-0 top-0 truncate text-composer text-muted-foreground">
               {placeholder}
             </div>
           )}

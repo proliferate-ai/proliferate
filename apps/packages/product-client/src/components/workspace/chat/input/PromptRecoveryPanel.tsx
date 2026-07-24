@@ -22,7 +22,7 @@ export function PromptRecoveryPanel({
   }
   return (
     <div
-      className="relative overflow-hidden rounded-t-[13px] border-x-[0.5px] border-t-[0.5px] border-border bg-[color:color-mix(in_oklab,var(--color-foreground)_2%,var(--color-background))] px-1.5 py-1.5"
+      className="relative overflow-hidden rounded-t-xl border-x-[0.5px] border-t-[0.5px] border-border bg-[color:color-mix(in_oklab,var(--color-foreground)_2%,var(--color-background))] px-1.5 py-1.5"
       data-telemetry-mask
       role="region"
       aria-label="Messages not sent"
@@ -36,10 +36,10 @@ export function PromptRecoveryPanel({
           return (
             <div
               key={recovery.id}
-              className="group/recovery flex min-h-8 items-center gap-2 rounded-lg px-2 py-1 hover:bg-accent"
+              className="group/recovery flex min-h-8 items-center gap-2 rounded-lg px-2 py-1 hover:bg-hover active:bg-active"
             >
               <div className="min-w-0 flex-1">
-                <div className="truncate text-ui leading-[var(--text-ui--line-height)]" title={label}>
+                <div className="truncate text-ui" title={label}>
                   {label}
                 </div>
                 <div

@@ -124,7 +124,7 @@ function WorkspaceCommandPaletteContent({
         ))}
         {!state.hasEntries && (
           <div
-            className="px-3 py-8 text-center text-xs text-muted-foreground"
+            className="px-3 py-8 text-center text-ui-sm text-muted-foreground"
             data-telemetry-mask
           >
             No results
@@ -132,7 +132,7 @@ function WorkspaceCommandPaletteContent({
         )}
         {state.fileSearchError && (
           <div
-            className="px-3 py-2 text-xs text-muted-foreground"
+            className="px-3 py-2 text-ui-sm text-muted-foreground"
             data-telemetry-mask
           >
             Failed to search files.

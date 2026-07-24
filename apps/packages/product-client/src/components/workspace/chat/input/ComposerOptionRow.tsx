@@ -12,7 +12,7 @@ import { twMerge } from "@proliferate/ui/utils/tw-merge";
 
 export function ComposerOptionKeyBadge({ children }: { children: ReactNode }) {
   return (
-    <span className="flex size-5 shrink-0 items-center justify-center rounded-[4px] bg-surface-control text-ui-sm leading-none text-faint">
+    <span className="flex size-5 shrink-0 items-center justify-center rounded-sm bg-surface-control text-ui-sm leading-none text-faint">
       {children}
     </span>
   );
@@ -52,8 +52,8 @@ export function ComposerOptionRow({
       onMouseEnter={onHover}
       aria-selected={highlighted || undefined}
       className={twMerge(
-        "group/option flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-accent disabled:cursor-default disabled:opacity-60 disabled:hover:bg-transparent",
-        selected || highlighted ? "bg-accent" : "",
+        "group/option flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-hover active:bg-active disabled:cursor-default disabled:opacity-60 disabled:hover:bg-transparent",
+        selected || highlighted ? "bg-selected" : "",
       )}
     >
       <ComposerOptionKeyBadge>{index + 1}</ComposerOptionKeyBadge>

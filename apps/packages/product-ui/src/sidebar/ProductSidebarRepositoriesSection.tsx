@@ -75,12 +75,12 @@ function ProductSidebarSectionMessage({
           </span>
         ) : null}
         <div className="min-w-0">
-          <p className={`text-sm leading-4 ${message.tone === "danger" ? "text-destructive" : "text-sidebar-foreground"
+          <p className={`text-sidebar-row leading-4 ${message.tone === "danger" ? "text-destructive" : "text-sidebar-foreground"
             }`}>
             {message.title}
           </p>
           {message.description ? (
-            <p className="mt-1 text-xs leading-4 text-sidebar-muted-foreground">
+            <p className="mt-1 text-ui-sm leading-4 text-sidebar-muted-foreground">
               {message.description}
             </p>
           ) : null}
@@ -141,7 +141,7 @@ function WorkspaceGroup({
             />
           ))}
           {group.rows.length === 0 ? (
-            <p className="px-3 py-2 text-xs text-sidebar-muted-foreground">
+            <p className="px-3 py-2 text-ui-sm text-sidebar-muted-foreground">
               This repository has no workspaces yet.
             </p>
           ) : null}
@@ -169,7 +169,6 @@ function WorkspaceRow({
       scope="workspace"
       itemId={row.id}
       onAction={onAction}
-      alwaysVisible
     />
   ));
 

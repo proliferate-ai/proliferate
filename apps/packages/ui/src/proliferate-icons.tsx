@@ -21,6 +21,7 @@ const PROLIFERATE_ORBIT_NODES = [
   { x: 305, y: 387.67, size: 24.67 },
   { x: 346.33, y: 346.33, size: 24.67 },
 ];
+/* activity-motion */
 const PROLIFERATE_ORBIT_DELAY_CLASSES = [
   "[animation-delay:0s]",
   "[animation-delay:0.2s]",

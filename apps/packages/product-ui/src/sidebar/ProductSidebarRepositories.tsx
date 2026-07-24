@@ -144,7 +144,7 @@ export function ProductSidebarWorkspaceRow({
       {...props}
     >
       {hoverAction ? (
-        <div className="absolute right-0 top-0 z-10 mr-0.5 flex h-full items-center justify-center pr-0.5 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100 has-[[data-state=open]]:opacity-100">
+        <div className="absolute right-0 top-0 z-10 mr-0.5 flex h-full items-center justify-center pr-0.5">
           {hoverAction}
         </div>
       ) : null}
@@ -191,7 +191,7 @@ export function ProductSidebarWorkspaceRow({
 
             {trailingStatus ? (
               <div
-                className={`col-start-1 row-start-1 flex h-5 items-center justify-end transition-opacity duration-150 ${shortcutLabel && shortcutRevealVisible
+                className={`col-start-1 row-start-1 flex h-5 items-center justify-end transition-opacity duration-hover ${shortcutLabel && shortcutRevealVisible
                     ? "opacity-0"
                     : "group-hover:opacity-0 group-focus-within:opacity-0"
                   }`}
@@ -201,7 +201,7 @@ export function ProductSidebarWorkspaceRow({
             ) : unreadDot ? (
               <Tooltip
                 content="Unseen activity"
-                className={`col-start-1 row-start-1 flex h-5 items-center justify-end transition-opacity duration-150 ${shortcutLabel && shortcutRevealVisible
+                className={`col-start-1 row-start-1 flex h-5 items-center justify-end transition-opacity duration-hover ${shortcutLabel && shortcutRevealVisible
                     ? "opacity-0"
                     : "group-hover:opacity-0 group-focus-within:opacity-0"
                   }`}
@@ -213,7 +213,7 @@ export function ProductSidebarWorkspaceRow({
                 />
               </Tooltip>
             ) : trailingLabel ? (
-              <div className={`col-start-1 row-start-1 flex items-center justify-end overflow-visible truncate whitespace-nowrap text-right text-ui tabular-nums text-faint transition-opacity duration-150 ${shortcutLabel && shortcutRevealVisible
+              <div className={`col-start-1 row-start-1 flex items-center justify-end overflow-visible truncate whitespace-nowrap text-right text-ui tabular-nums text-faint transition-opacity duration-hover ${shortcutLabel && shortcutRevealVisible
                   ? "opacity-0"
                   : "group-hover:opacity-0 group-focus-within:opacity-0"
                 }`}>
@@ -224,7 +224,7 @@ export function ProductSidebarWorkspaceRow({
             {shortcutLabel ? (
               <ShortcutBadge
                 label={shortcutLabel}
-                className={`col-start-1 row-start-1 h-fit !w-0 shrink-0 text-sidebar-muted-foreground opacity-0 transition-opacity duration-150 ${shortcutRevealVisible ? "opacity-100" : ""
+                className={`col-start-1 row-start-1 h-fit !w-0 shrink-0 text-sidebar-muted-foreground opacity-0 transition-opacity duration-hover ${shortcutRevealVisible ? "opacity-100" : ""
                   }`}
               />
             ) : null}

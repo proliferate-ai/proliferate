@@ -62,7 +62,7 @@ export function PlaygroundThinkingTimingControls() {
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
-          <h2 className="text-sm font-medium text-foreground">Thinking timing lab</h2>
+          <h2 className="text-heading font-medium text-foreground">Thinking timing lab</h2>
           <p className="text-ui-sm text-muted-foreground">
             Drives the real product knobs (--thinking-text-duration /
             --thinking-text-easing) on the shipped band sweep.
@@ -128,7 +128,7 @@ export function PlaygroundThinkingTimingControls() {
       </div>
 
       <p
-        className="rounded-md bg-foreground/5 px-3 py-2 font-mono text-base leading-5 text-muted-foreground"
+        className="rounded-md bg-foreground/5 px-3 py-2 font-mono text-ui-sm text-muted-foreground"
         data-thinking-timing-summary
       >
         --thinking-text-duration: {timing.durationMs}ms;{" "}
@@ -167,7 +167,7 @@ function TimingRangeControl({
         <Label htmlFor={id} className="mb-0 text-foreground">
           {label}
         </Label>
-        <span className="font-mono text-base text-muted-foreground">
+        <span className="font-mono text-ui-sm text-muted-foreground">
           {formatValue(value)}
         </span>
       </div>

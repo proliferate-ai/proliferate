@@ -68,15 +68,15 @@ class SettingsContentErrorBoundary extends React.Component<
     return (
       <section className="space-y-4 py-8">
         <div className="space-y-1">
-          <h2 className="text-lg font-medium">{SETTINGS_COPY.errorTitle}</h2>
-          <p className="text-sm text-muted-foreground">
+          <h2 className="text-heading font-medium">{SETTINGS_COPY.errorTitle}</h2>
+          <p className="text-body text-muted-foreground">
             {SETTINGS_COPY.errorDescription}
           </p>
         </div>
         <Button variant="secondary" onClick={this.handleRetry}>
           {SETTINGS_COPY.errorRetry}
         </Button>
-        <details className="rounded-lg border border-border/60 bg-surface-elevated-secondary px-4 py-3 text-sm">
+        <details className="rounded-lg border border-border/60 bg-surface-elevated-secondary px-4 py-3 text-body">
           <summary className="cursor-pointer select-none text-muted-foreground">
             {SETTINGS_COPY.errorDetailsLabel}
           </summary>
