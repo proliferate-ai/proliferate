@@ -457,7 +457,11 @@ The body-step tracking values through 14px are ruled verbatim. Claude approved
 `--tracking-heading: -0.01em` for 16px and the shared
 `--tracking-tight: -0.025em` for both 19px title and 26px hero. Generated
 role letter-spacing properties resolve through those named tracking tokens;
-there is no independent third title-tracking value.
+there is no independent third title-tracking value. The appearance table
+stores the resolved string (`-0.01em` or `-0.025em`) because it writes runtime
+root overrides. CSS drift tests normalize a generated
+`var(--tracking-heading)` / `var(--tracking-tight)` reference through the
+same generated block before comparing it with that resolved appearance value.
 
 `text-message` is a generated CSS alias of the shared reading metrics
 (currently emitted through `text-composer`), not an independent appearance
@@ -493,7 +497,12 @@ the existing semantic slots `uiSm`, `ui`, `chat`, `composer`,
 - The characteristic interactive-control weight is `450`. Controls/rows
   currently authored at `430` or `500` migrate to the generated
   `--font-weight-control: 450`; content emphasis and authored headings do not
-  get flattened to control weight.
+  get flattened to control weight. The exact `430` callsites in this retune
+  are `CloudChatModelConfigControl`, `SidebarRowSurface`, `SettingsMenu`, and
+  `EnvironmentSearchSelect`; the exact `500` owners are the generated
+  workspace-shell action weight and `.right-panel-tab-system`. The shipped
+  `html, body { font-weight: 430; }` is base prose rendering, not an
+  interactive-control weight, and remains unchanged.
 - The explicit `font-medium`, `font-semibold`, uppercase tracking, and
   `tracking-*` classes remain author overrides where they communicate
   hierarchy. In their absence, the semantic text utility supplies the ramp's
@@ -626,8 +635,16 @@ matching rule:
    `--readable-code-line-height`). Monospace metadata remains a UI role.
 3. Use the semantic context matrix in 4.3.2. The original generic class never
    decides semantics.
-4. If context remains genuinely ambiguous, apply the DEFAULT mapping in 4.3.4
-   and add the stable escalation tag in 4.3.5.
+4. If context remains genuinely ambiguous, apply the DEFAULT mapping in
+   4.3.4. Add the stable escalation tag in 4.3.5 only when that deterministic
+   fallback looks visually or contextually wrong.
+
+The frozen source baseline across the four migration roots
+(`ui`, `product-ui`, `product-client`, and Desktop TS/TSX) is **756 literal
+occurrences**: `text-xs=330`, `text-sm=341`, `text-base=67`, `text-lg=12`,
+and `text-xl=6`. This reconciles the older target/scout prose counts to the
+actual commit. Phase 5 reports the final zero count, except for the gate's own
+explicit negative fixtures.
 
 Keep responsive/selector prefixes on the replacement:
 `sm:text-sm -> sm:text-ui`, `[&_*]:text-base -> [&_*]:text-chat`, etc.
@@ -807,9 +824,12 @@ expect(UI_FONT_SCALES.default).toEqual({
 
 #### 4.4.2 `appearance-css-drift.test.ts`
 
-1. The theme parser already matches `--text-*`; its structural equality must
-   now include every `--letter-spacing` key emitted by
-   `DEFAULT_UI_TEXT_SCALE_CSS_VARIABLES`.
+1. After the design prebuild, parse the generated
+   `apps/packages/design/dist/theme.css`, not the now-token-free
+   `dom.css`/`product.css`, for the canonical `@theme` text/icon/default-code
+   values. Structural equality includes every `--letter-spacing` key emitted
+   by `DEFAULT_UI_TEXT_SCALE_CSS_VARIABLES`; normalize named tracking
+   `var(...)` references through the same generated block before comparison.
 2. Update the workspace ordering assertion to exact default metrics:
    workspace `14/21` and composer `13/20`.
 3. Replace the old `typography.size`/`typography.lineHeight` loop with a loop
@@ -827,11 +847,17 @@ expect(UI_FONT_SCALES.default).toEqual({
 
 `message` and `readable-code` may be sanctioned utility aliases rather than
 appearance slots, but `twMerge` must preserve them against a text-color
-class.
-5. Keep the CSS-source conflict check and exact table equality; do not weaken
-   either because theme generation is being consolidated.
+class. Compare `TEXT_SIZE_TOKEN_IDS` directly with this exact array; do not
+derive it from every `--text-*` key. If a generated-token discovery helper is
+also retained, it selects only base `--text-<role>` declarations and
+explicitly rejects the `--line-height` / `--letter-spacing` suffixes.
+5. Replace the old two-authored-CSS conflict check with an assertion that
+   `dom.css` and `product.css` declare no global theme tokens, and keep exact
+   generated-theme-to-appearance table equality. Do not weaken either
+   boundary.
 6. Right-panel pins remain on `--text-ui-sm` and `--icon-control`; update the
-   control weight expectation from `500` to `450`.
+   control weight expectation from literal `500` to
+   `var(--font-weight-control)`.
 7. Glyph-default equality updates only `--icon-paired` to `1.230769em`.
 8. Code CSS pins remain unchanged (`13px` default code size).
 9. Add an assertion that `dom.css :root` uses
