@@ -75,6 +75,9 @@ reviewer as required by the handoff.
 - Migrated arbitrary radii, arbitrary z layers, ruled 5px gaps, arbitrary icon
   geometry, deprecated shadows, numeric motion utilities, and animation-owned
   JavaScript constants to the frozen vocabulary.
+- Recorded `[ICON-04]` for the playground/prototype-only glyph normalization:
+  fixed `size-3`/`size-3.5`/`size-4` classes and numeric `AgentGlyph` props
+  moved to the nearest semantic tier, producing the audited ±1–2px shifts.
 - Preserved the ruled raw-color exclusions for playground/fixture assets and
   the two explicit production cases; all other scoped raw colors use design
   authority.

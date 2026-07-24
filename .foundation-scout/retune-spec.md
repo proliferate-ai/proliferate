@@ -1549,67 +1549,71 @@ code reshaping, and exact-value raw-hex moves are non-visual and have no id.
 20. `[ICON-03] Icon-button boxes` — freehand icon-only targets → legal
     20/24/28px boxes; arbitrary 15/16/18/26px tiles, indicators, and
     controls adopt the exact section-5.8 box/tier pairing.
-21. `[STATE-01] Hover overlay / static-tint split` — mixed 1.5%, 2%, 3%,
+21. `[ICON-04] Playground glyph tier normalization` — fixed
+    `size-3`/`size-3.5`/`size-4` classes and numeric `AgentGlyph` size props
+    → nearest semantic icon tier, shifting glyphs by ±1–2px in
+    playground/prototype surfaces only.
+22. `[STATE-01] Hover overlay / static-tint split` — mixed 1.5%, 2%, 3%,
     3.5%, 4%, 4.5%, 5%, 6%, 7%, 7.4%, 7.5%, 8%, 9%, and 10% overlays →
     7.8%; rows, menus, composer, sidebar, tabs, and row actions. Static
     arbitrary 1.8–4.75% foreground panels and historical static accent fills
     move to their ruled `surface-control`, `surface-elevated-secondary`, or
     diff-surface role rather than inheriting hover.
-22. `[STATE-02] Active overlay` — reused hover/accent and workspace-tab 8%
+23. `[STATE-02] Active overlay` — reused hover/accent and workspace-tab 8%
     → 5.2%; pressed/open/focused-editing controls, resize feedback, and
     active workspace tab.
-23. `[STATE-03] Selected overlay` — roughly 3.5–10% selected fills → 3.2%;
+24. `[STATE-03] Selected overlay` — roughly 3.5–10% selected fills → 3.2%;
     workspace, automation, sidebar, file-tree, menu, and multi-selected tabs.
-24. `[STATE-04] Border alpha` — base 8% → 8.4%, collapsing composer 10%,
+25. `[STATE-04] Border alpha` — base 8% → 8.4%, collapsing composer 10%,
     sidebar 7.9%, and popover ring 8%; general and floating borders.
-25. `[RAD-01] Rows` — 5px/10px → 6px; automation/workspace/sidebar rows.
-26. `[RAD-02] Controls` — freehand 4–6px → 8px; checkboxes, segmented
+26. `[RAD-01] Rows` — 5px/10px → 6px; automation/workspace/sidebar rows.
+27. `[RAD-02] Controls` — freehand 4–6px → 8px; checkboxes, segmented
     controls, tab controls, and row actions.
-27. `[RAD-03] Cards/popovers` — the globally generated `rounded-lg`
+28. `[RAD-03] Cards/popovers` — the globally generated `rounded-lg`
     12px → 10px, plus arbitrary 8px/20px/26px → 10px; every existing
     `rounded-lg` consumer, warnings, search, menus/detail cards, and empty
     chat.
-28. `[RAD-04] Composer` — 16px/13px → 12px; home/chat composer, attached
+29. `[RAD-04] Composer` — 16px/13px → 12px; home/chat composer, attached
     panel top corners, footer, and drag target.
-29. `[RAD-05] Modals/large shell` — 12px/20px/22px → 16px; runtime
+30. `[RAD-05] Modals/large shell` — 12px/20px/22px → 16px; runtime
     pressure, update dialog, and opaque workspace content-shell top-left
     corner.
-30. `[RAD-06] Micro shapes` — 0.25em/2/3/4/5px → ruled 6px/8px role;
+31. `[RAD-06] Micro shapes` — 0.25em/2/3/4/5px → ruled 6px/8px role;
     provider/compute/repository tiles, chips, and composer options.
-31. `[RAD-07] Workspace tabs` — 10px → 6px.
-32. `[SPACE-01] Five-pixel control gaps` — five `gap-[5px]` composer/config
+32. `[RAD-07] Workspace tabs` — 10px → 6px.
+33. `[SPACE-01] Five-pixel control gaps` — five `gap-[5px]` composer/config
     control sites → `gap-1.5` (6px).
-33. `[SHADOW-01] Composer elevation` — two-layer 3px/20px and composer-card
+34. `[SHADOW-01] Composer elevation` — two-layer 3px/20px and composer-card
     ring shadow → subtle 1px/2px or border-led ring.
-34. `[SHADOW-02] Popover elevation` — ring/legacy floating stacks and
+35. `[SHADOW-02] Popover elevation` — ring/legacy floating stacks and
     `0 8px 16px -4px` → `0 4px 12px`; popovers, menus, tooltips, floating
     side panels, and playground floating notices.
-35. `[SHADOW-03] Modal elevation` — light floating/`shadow-lg` dialog stacks
+36. `[SHADOW-03] Modal elevation` — light floating/`shadow-lg` dialog stacks
     → `0 25px 50px -12px`; dialogs/overlays, while matching dark modal values
     stay unchanged. Non-floating card/control/dock shadows are removed.
-36. `[SHADOW-04] Keystone removal` — button double-shadow → border/surface
+37. `[SHADOW-04] Keystone removal` — button double-shadow → border/surface
     treatment.
-37. `[MOTION-01] Hover/reveal` — 100/150/200ms → 120ms; sidebar,
+38. `[MOTION-01] Hover/reveal` — 100/150/200ms → 120ms; sidebar,
     transcript/file actions, rows, controls, workspace chrome, and right-panel
     tabs.
-38. `[MOTION-02] Entrances` — 150/200ms and keyword `ease-out` → 160ms
+39. `[MOTION-02] Entrances` — 150/200ms and keyword `ease-out` → 160ms
     out-quint; modal, popover, toast, status, transcript, content, and auth
     entrances; modal exits use the 120ms exit role.
-39. `[MOTION-03] Disclosure` — 150/300ms → 200ms; collapsibles, diff/file
+40. `[MOTION-03] Disclosure` — 150/300ms → 200ms; collapsibles, diff/file
     chevrons, tool actions.
-40. `[MOTION-04] Panels` — 150/220ms → 240ms; sidebars, right rail, terminal
+41. `[MOTION-04] Panels` — 150/220ms → 240ms; sidebars, right rail, terminal
     panel, and panel-in recipe.
-41. `[MOTION-05] Emphasized/spring` — 500ms or 280ms → 300ms; duplicate
+42. `[MOTION-05] Emphasized/spring` — 500ms or 280ms → 300ms; duplicate
     `(0.23,1,0.32,1)` → spring `(0.16,1,0.3,1)` on todo progress,
     composer dock cards, value swaps, chips, and update entrances. Value
     swaps retain their 240ms panel duration.
-42. `[MOTION-06] Composer dock exit` — 150ms → 120ms with CSS and JS timer
+43. `[MOTION-06] Composer dock exit` — 150ms → 120ms with CSS and JS timer
     together.
-43. `[LAYER-01] Semantic stack` — arbitrary 1–2147483647 → 0–80 semantic
+44. `[LAYER-01] Semantic stack` — arbitrary 1–2147483647 → 0–80 semantic
     roles; isolated local order preserved, including local raised composer
     submenu order, and cross-surface overlap corrected. Existing standard
     numeric-z sites remain outside this change.
-44. `[ROW-ACTION-01] Row actions` — bare/undersized 13–16px glyphs and
+45. `[ROW-ACTION-01] Row actions` — bare/undersized 13–16px glyphs and
     16/20/24px or full-height targets → 16px glyph, 28px target, 8px radius,
     7.8% hover fill, shared reveal/focus/open/pointer behavior at all 20
     census sites.
