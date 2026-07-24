@@ -48,6 +48,20 @@ async function runFailingQuery(
   })).rejects.toBe(error);
 }
 
+function modelGatedError(instance?: string): AnyHarnessError {
+  return new AnyHarnessError({
+    type: "about:blank",
+    title: "Model gated",
+    status: 400,
+    detail: "caller-visible gating detail",
+    code: "SESSION_MODEL_GATED",
+    ...(instance === undefined ? {} : { instance }),
+  });
+}
+
+const VALID_RUNTIME_INCIDENT_RECEIPT =
+  "urn:proliferate:anyharness:incident:8fd6ea9a-1246-4ef0-a526-9cc5f86ed960";
+
 describe("createAppQueryClient query telemetry", () => {
   it.each([
     ["AbortError", new DOMException("Aborted", "AbortError")],
@@ -204,6 +218,49 @@ describe("createAppQueryClient query telemetry", () => {
     });
   });
 
+  it("suppresses global query capture for a cause-wrapped runtime incident receipt", async () => {
+    const captureException = vi.fn();
+    const client = createAppQueryClient({ captureException });
+    const cause = modelGatedError(VALID_RUNTIME_INCIDENT_RECEIPT);
+    const error = Object.assign(new Error("Failed to open chat"), { cause });
+    const queryKey = ["session", "create"];
+
+    await runFailingQuery(client, queryKey, error);
+
+    expect(captureException).not.toHaveBeenCalled();
+    expect(client.getQueryState(queryKey)).toMatchObject({
+      status: "error",
+      error,
+    });
+  });
+
+  it.each([
+    ["an old runtime without a receipt", undefined],
+    ["a malformed receipt", "urn:proliferate:anyharness:incident:not-a-uuid"],
+    [
+      "a foreign receipt",
+      "urn:proliferate:server:incident:8fd6ea9a-1246-4ef0-a526-9cc5f86ed960",
+    ],
+  ])("keeps global query capture for %s", async (_name, instance) => {
+    const captureException = vi.fn();
+    const client = createAppQueryClient({ captureException });
+    const error = modelGatedError(instance);
+    const queryKey = ["session", "create", _name];
+
+    await runFailingQuery(client, queryKey, error);
+
+    expect(captureException).toHaveBeenCalledTimes(1);
+    const [capturedError] = captureException.mock.calls[0];
+    expect(capturedError).toMatchObject({
+      name: "AnyHarnessError",
+      message: "AnyHarness request failed (SESSION_MODEL_GATED)",
+      status: 400,
+      code: "SESSION_MODEL_GATED",
+    });
+    expect("problem" in capturedError).toBe(false);
+    expect("cause" in capturedError).toBe(false);
+  });
+
   it("captures an AnyHarness mutation failure without its caller-facing detail", async () => {
     const captureException = vi.fn();
     const client = createAppQueryClient({ captureException });
@@ -246,6 +303,56 @@ describe("createAppQueryClient query telemetry", () => {
         mutation_key: hashAppQueryKey(mutationKey),
       },
     });
+  });
+
+  it("suppresses global mutation capture for a runtime incident receipt", async () => {
+    const captureException = vi.fn();
+    const client = createAppQueryClient({ captureException });
+    const error = modelGatedError(VALID_RUNTIME_INCIDENT_RECEIPT);
+    const mutation = client.getMutationCache().build(client, {
+      mutationKey: ["session", "create"],
+      mutationFn: async () => {
+        throw error;
+      },
+      retry: false,
+    });
+
+    await expect(mutation.execute(undefined)).rejects.toBe(error);
+
+    expect(captureException).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["an old runtime without a receipt", undefined],
+    ["a malformed receipt", "urn:proliferate:anyharness:incident:not-a-uuid"],
+    [
+      "a foreign receipt",
+      "urn:proliferate:server:incident:8fd6ea9a-1246-4ef0-a526-9cc5f86ed960",
+    ],
+  ])("keeps global mutation capture for %s", async (_name, instance) => {
+    const captureException = vi.fn();
+    const client = createAppQueryClient({ captureException });
+    const error = modelGatedError(instance);
+    const mutation = client.getMutationCache().build(client, {
+      mutationKey: ["session", "create", _name],
+      mutationFn: async () => {
+        throw error;
+      },
+      retry: false,
+    });
+
+    await expect(mutation.execute(undefined)).rejects.toBe(error);
+
+    expect(captureException).toHaveBeenCalledTimes(1);
+    const [capturedError] = captureException.mock.calls[0];
+    expect(capturedError).toMatchObject({
+      name: "AnyHarnessError",
+      message: "AnyHarness request failed (SESSION_MODEL_GATED)",
+      status: 400,
+      code: "SESSION_MODEL_GATED",
+    });
+    expect("problem" in capturedError).toBe(false);
+    expect("cause" in capturedError).toBe(false);
   });
 
   it("preserves the explicit telemetryHandled query override", async () => {

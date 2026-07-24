@@ -16,7 +16,7 @@ use super::mcp_bindings::model::SessionMcpServer;
 use super::mcp_bindings::product_catalog::ProductMcpLaunchCatalog;
 use super::model::SessionRecord;
 use super::plan_references::{PlanInteractionLinkResolver, PlanReferenceResolver};
-use super::service::SessionService;
+use super::service::{ModelGatedContext, SessionService};
 use crate::domains::agents::route_auth::{GatewayModelResolve, RouteAuthError};
 use crate::domains::sessions::extensions::SessionExtension;
 use crate::domains::workspaces::access_gate::{WorkspaceAccessError, WorkspaceAccessGate};
@@ -89,11 +89,7 @@ pub enum CreateAndStartSessionError {
     /// A known model is gated behind inactive auth contexts. Carries the
     /// unlock condition (`required_contexts`) for the API layer; an
     /// unresolvable model uses `ModelUnsupported` instead.
-    ModelGated {
-        agent_kind: String,
-        model_id: String,
-        required_contexts: Vec<String>,
-    },
+    ModelGated(ModelGatedContext),
     ModeUnsupported {
         agent_kind: String,
         mode_id: String,

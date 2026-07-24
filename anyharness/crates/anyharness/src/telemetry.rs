@@ -1,7 +1,16 @@
-use std::path::PathBuf;
+use std::{borrow::Cow, path::PathBuf, sync::Arc, time::Duration};
 
-use anyharness_lib::{app::default_runtime_home, observability::AGENT_STDERR_TRACING_TARGET};
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Layer};
+use anyharness_lib::{
+    app::default_runtime_home,
+    observability::{AGENT_STDERR_TRACING_TARGET, RUNTIME_INCIDENT_TRACING_TARGET},
+};
+use tracing::Subscriber;
+use tracing_subscriber::{
+    layer::{Context as LayerContext, SubscriberExt},
+    registry::LookupSpan,
+    util::SubscriberInitExt,
+    Layer,
+};
 
 use crate::{
     cli::Commands,
@@ -9,7 +18,45 @@ use crate::{
     file_logging::create_file_log_sink,
 };
 
+mod scrub;
+
 const ANYHARNESS_TELEMETRY_MODE: &str = "hosted_product";
+const RUNTIME_ENV_TAG: &str = "runtime_env";
+const RUNTIME_INCIDENT_FINGERPRINT: &str = "anyharness:session_model_gated";
+
+#[derive(Clone)]
+struct ScrubbedTransportFactory;
+
+impl sentry::TransportFactory for ScrubbedTransportFactory {
+    fn create_transport_with_options(
+        &self,
+        options: sentry::TransportOptions,
+    ) -> Arc<dyn sentry::Transport> {
+        let inner = sentry::TransportFactory::create_transport_with_options(
+            &sentry::transports::DefaultTransportFactory,
+            options,
+        );
+        Arc::new(ScrubbedTransport { inner })
+    }
+}
+
+struct ScrubbedTransport {
+    inner: Arc<dyn sentry::Transport>,
+}
+
+impl sentry::Transport for ScrubbedTransport {
+    fn send_envelope(&self, envelope: sentry::Envelope) {
+        self.inner.send_envelope(scrub::envelope(envelope));
+    }
+
+    fn flush(&self, timeout: Duration) -> bool {
+        self.inner.flush(timeout)
+    }
+
+    fn shutdown(&self, timeout: Duration) -> bool {
+        self.inner.shutdown(timeout)
+    }
+}
 
 pub struct TelemetryGuards {
     _sentry: Option<sentry::ClientInitGuard>,
@@ -69,6 +116,48 @@ fn sentry_event_filter(metadata: &tracing::Metadata<'_>) -> sentry_tracing::Even
     )
 }
 
+fn sentry_event_mapper<S>(
+    event: &tracing::Event<'_>,
+    context: LayerContext<'_, S>,
+) -> sentry_tracing::EventMapping
+where
+    S: Subscriber + for<'lookup> LookupSpan<'lookup>,
+{
+    let filter = sentry_event_filter(event.metadata());
+    if filter.is_empty() {
+        return sentry_tracing::EventMapping::Ignore;
+    }
+
+    // The prior event-filter layer left span-attribute inheritance disabled,
+    // so ordinary events continue without parent span fields; Sentry's active
+    // scope still supplies their trace context. Only the incident target opts
+    // into bounded request/flow fields from active spans.
+    let is_runtime_incident = event.metadata().target() == RUNTIME_INCIDENT_TRACING_TARGET;
+    let span_context = is_runtime_incident.then_some(&context);
+    let mut mappings = Vec::new();
+
+    if filter.contains(sentry_tracing::EventFilter::Breadcrumb) {
+        mappings.push(sentry_tracing::EventMapping::Breadcrumb(
+            sentry_tracing::breadcrumb_from_event(event, span_context),
+        ));
+    }
+    if filter.contains(sentry_tracing::EventFilter::Event) {
+        let mut sentry_event = sentry_tracing::event_from_event(event, span_context);
+        if is_runtime_incident {
+            sentry_event.fingerprint =
+                Cow::Owned(vec![Cow::Borrowed(RUNTIME_INCIDENT_FINGERPRINT)]);
+        }
+        mappings.push(sentry_tracing::EventMapping::Event(sentry_event));
+    }
+    if filter.contains(sentry_tracing::EventFilter::Log) {
+        mappings.push(sentry_tracing::EventMapping::Log(
+            sentry_tracing::log_from_event(event, span_context),
+        ));
+    }
+
+    sentry_tracing::EventMapping::Combined(mappings.into())
+}
+
 fn runtime_home_from_serve(args: &ServeArgs) -> PathBuf {
     args.runtime_home
         .as_ref()
@@ -105,9 +194,17 @@ pub fn init(command: &Commands) -> TelemetryGuards {
                 environment: Some(
                     env_or_default("ANYHARNESS_SENTRY_ENVIRONMENT", "trusted-beta").into(),
                 ),
-                release: Some(env_or_default("ANYHARNESS_SENTRY_RELEASE", &default_release()).into()),
+                release: Some(
+                    env_or_default("ANYHARNESS_SENTRY_RELEASE", &default_release()).into(),
+                ),
                 traces_sample_rate: sample_rate("ANYHARNESS_SENTRY_TRACES_SAMPLE_RATE", 1.0),
                 attach_stacktrace: true,
+                send_default_pii: false,
+                server_name: Some(scrub::SAFE_SERVER_NAME.into()),
+                before_send: Some(Arc::new(scrub::event)),
+                before_breadcrumb: Some(Arc::new(scrub::breadcrumb)),
+                before_send_log: Some(Arc::new(scrub::log)),
+                transport: Some(Arc::new(ScrubbedTransportFactory)),
                 ..Default::default()
             },
         ))
@@ -129,7 +226,7 @@ pub fn init(command: &Commands) -> TelemetryGuards {
 
     tracing_subscriber::registry()
         .with(console_layer)
-        .with(sentry_tracing::layer().event_filter(sentry_event_filter))
+        .with(sentry_tracing::layer().event_mapper(sentry_event_mapper))
         .with(file_sink.as_ref().map(|sink| {
             tracing_subscriber::fmt::layer()
                 .with_ansi(false)
@@ -186,8 +283,8 @@ fn sentry_scope_tags() -> Vec<(&'static str, String)> {
         ("telemetry_mode", ANYHARNESS_TELEMETRY_MODE.to_string()),
     ];
 
-    let runtime_env = std::env::var("PROLIFERATE_RUNTIME_ENV")
-        .unwrap_or_else(|_| "local".to_string());
+    let runtime_env =
+        std::env::var("PROLIFERATE_RUNTIME_ENV").unwrap_or_else(|_| "local".to_string());
     tags.push(("runtime_env", runtime_env));
 
     if let Ok(org_id) = std::env::var("PROLIFERATE_ORG_ID") {
@@ -215,170 +312,4 @@ fn sentry_scope_tags() -> Vec<(&'static str, String)> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{
-        default_release, log_path_for_command, runtime_home_from_install, runtime_home_from_serve,
-        sentry_event_filter, sentry_event_filter_for_target, sentry_scope_tags,
-        sentry_user_from_id, stamped_git_sha,
-    };
-    use crate::{
-        cli::Commands,
-        commands::{install_agents::InstallAgentsArgs, serve::ServeArgs},
-    };
-    use anyharness_lib::observability::AGENT_STDERR_TRACING_TARGET;
-
-    #[test]
-    fn tracing_error_reaches_the_sentry_client() {
-        // Regression (B2 amendment): PR #684 bumped `sentry` to 0.48 while
-        // `sentry-tracing` stayed at 0.47, linking two `sentry-core` instances.
-        // The tracing layer then captured events into the 0.47 Hub — which has
-        // no client — so every runtime ERROR event was silently dropped in
-        // production from 2026-06-14. This test binds a test client to the same
-        // `sentry-core` the layer uses; it fails (0 events) whenever the two
-        // crates diverge again.
-        use tracing_subscriber::layer::SubscriberExt;
-        let subscriber = tracing_subscriber::registry()
-            .with(sentry_tracing::layer().event_filter(sentry_event_filter));
-        let events = sentry::test::with_captured_events(|| {
-            tracing::subscriber::with_default(subscriber, || {
-                tracing::error!("sentry emission regression probe");
-            });
-        });
-        assert_eq!(events.len(), 1, "tracing ERROR must reach the Sentry client");
-        assert_eq!(events[0].level, sentry::Level::Error);
-    }
-
-    #[test]
-    fn agent_stderr_stays_out_of_sentry_while_runtime_errors_remain_visible() {
-        use tracing_subscriber::layer::SubscriberExt;
-        let subscriber = tracing_subscriber::registry()
-            .with(sentry_tracing::layer().event_filter(sentry_event_filter));
-        let events = sentry::test::with_captured_events(|| {
-            tracing::subscriber::with_default(subscriber, || {
-                tracing::error!(
-                    target: AGENT_STDERR_TRACING_TARGET,
-                    "raw child-process stderr"
-                );
-                tracing::error!("ordinary runtime failure");
-            });
-        });
-
-        assert_eq!(events.len(), 1, "agent stderr must be ignored by Sentry");
-        assert_eq!(
-            events[0].message.as_deref(),
-            Some("ordinary runtime failure")
-        );
-    }
-
-    #[test]
-    fn agent_stderr_filter_ignores_every_sentry_signal_type() {
-        let all_signal_types = sentry_tracing::EventFilter::Event
-            | sentry_tracing::EventFilter::Breadcrumb
-            | sentry_tracing::EventFilter::Log;
-
-        let filter = sentry_event_filter_for_target(AGENT_STDERR_TRACING_TARGET, all_signal_types);
-
-        assert!(
-            filter.is_empty(),
-            "agent stderr must map to EventFilter::Ignore"
-        );
-    }
-
-    #[test]
-    fn sentry_scope_tags_include_runtime_surface_and_mode() {
-        let tags = sentry_scope_tags();
-        assert!(tags.iter().any(|(k, v)| *k == "surface" && v == "anyharness_runtime"));
-        assert!(tags.iter().any(|(k, v)| *k == "telemetry_mode" && v == "hosted_product"));
-        assert!(tags.iter().any(|(k, v)| *k == "runtime_env" && !v.is_empty()));
-    }
-
-    #[test]
-    fn default_release_is_canonical_for_this_component() {
-        let release = default_release();
-        assert!(release.starts_with("anyharness@"), "{release}");
-        let expected = match stamped_git_sha() {
-            Some(sha) => {
-                assert_eq!(sha.len(), 12);
-                format!("anyharness@{}+{sha}", env!("PROLIFERATE_STAMPED_VERSION"))
-            }
-            None => format!("anyharness@{}", env!("PROLIFERATE_STAMPED_VERSION")),
-        };
-        assert_eq!(release, expected);
-    }
-
-    #[test]
-    fn sentry_user_context_is_id_only_and_trimmed() {
-        let user = sentry_user_from_id(Some("  user-1  ")).expect("user present");
-        assert_eq!(user.id.as_deref(), Some("user-1"));
-        assert!(user.email.is_none());
-        assert!(sentry_user_from_id(None).is_none());
-        assert!(sentry_user_from_id(Some("   ")).is_none());
-    }
-
-    #[test]
-    fn serve_runtime_home_uses_override_when_present() {
-        let args = ServeArgs {
-            host: "127.0.0.1".to_string(),
-            port: 8457,
-            runtime_home: Some("/tmp/anyharness-test".to_string()),
-            require_bearer_auth: false,
-            disable_cors: false,
-        };
-
-        assert_eq!(
-            runtime_home_from_serve(&args).to_string_lossy(),
-            "/tmp/anyharness-test"
-        );
-    }
-
-    #[test]
-    fn install_runtime_home_uses_override_when_present() {
-        let args = InstallAgentsArgs {
-            runtime_home: Some("/tmp/anyharness-install".to_string()),
-            reinstall: false,
-            agents: Vec::new(),
-        };
-
-        assert_eq!(
-            runtime_home_from_install(&args).to_string_lossy(),
-            "/tmp/anyharness-install"
-        );
-    }
-
-    #[test]
-    fn print_openapi_has_no_file_log_path() {
-        assert!(log_path_for_command(&Commands::PrintOpenapi).is_none());
-    }
-
-    #[test]
-    fn serve_command_log_path_lands_under_runtime_home_logs() {
-        let path = log_path_for_command(&Commands::Serve(ServeArgs {
-            host: "127.0.0.1".to_string(),
-            port: 8457,
-            runtime_home: Some("/tmp/anyharness-serve".to_string()),
-            require_bearer_auth: false,
-            disable_cors: false,
-        }))
-        .expect("serve should use file logging");
-
-        assert_eq!(
-            path.to_string_lossy(),
-            "/tmp/anyharness-serve/logs/anyharness.log"
-        );
-    }
-
-    #[test]
-    fn install_command_log_path_lands_under_runtime_home_logs() {
-        let path = log_path_for_command(&Commands::InstallAgents(InstallAgentsArgs {
-            runtime_home: Some("/tmp/anyharness-install".to_string()),
-            reinstall: false,
-            agents: Vec::new(),
-        }))
-        .expect("install should use file logging");
-
-        assert_eq!(
-            path.to_string_lossy(),
-            "/tmp/anyharness-install/logs/anyharness.log"
-        );
-    }
-}
+mod tests;

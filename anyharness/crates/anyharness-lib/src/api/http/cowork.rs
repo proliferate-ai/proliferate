@@ -258,17 +258,9 @@ fn map_create_cowork_thread_error(error: CoworkCreateThreadError) -> ApiError {
                 format!("model '{model_id}' is not supported for agent '{agent_kind}'"),
                 "SESSION_MODEL_UNSUPPORTED",
             ),
-            crate::domains::sessions::runtime::CreateAndStartSessionError::ModelGated {
-                agent_kind,
-                model_id,
-                required_contexts,
-            } => ApiError::model_gated(
-                format!(
-                    "model '{model_id}' for agent '{agent_kind}' is gated behind auth contexts \
-                     {required_contexts:?}"
-                ),
-                required_contexts,
-            ),
+            crate::domains::sessions::runtime::CreateAndStartSessionError::ModelGated(context) => {
+                ApiError::model_gated(context)
+            }
             crate::domains::sessions::runtime::CreateAndStartSessionError::ModeUnsupported {
                 agent_kind,
                 mode_id,
@@ -522,6 +514,30 @@ mod tests {
     use super::CoworkCreateThreadError;
     use crate::domains::agents::route_auth::RouteAuthError;
     use crate::domains::sessions::runtime::CreateAndStartSessionError;
+    use crate::domains::sessions::service::ModelGatedContext;
+
+    #[test]
+    fn model_gate_uses_the_shared_runtime_incident_mapping() {
+        let error = CoworkCreateThreadError::CreateSession(CreateAndStartSessionError::ModelGated(
+            ModelGatedContext {
+                workspace_id: "workspace-cowork".to_string(),
+                attempted_session_id: None,
+                agent_kind: "claude".to_string(),
+                requested_model_id: "opus[1m]".to_string(),
+                canonical_model_id: "opus[1m]".to_string(),
+                active_contexts: vec!["anthropic-oauth".to_string()],
+                required_contexts: vec!["anthropic-api".to_string()],
+                catalog_version: "2026-07-18".to_string(),
+            },
+        ));
+
+        let mapped = super::map_create_cowork_thread_error(error);
+        assert_eq!(mapped.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(mapped.code(), Some("SESSION_MODEL_GATED"));
+        assert!(mapped
+            .instance()
+            .is_some_and(|instance| instance.starts_with("urn:proliferate:anyharness:incident:")));
+    }
 
     /// Materialization IO / malformed-state route-auth failures are server-side
     /// problems → 500, matching the sessions API (not a client 409).

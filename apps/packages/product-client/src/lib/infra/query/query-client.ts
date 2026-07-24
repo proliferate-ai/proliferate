@@ -4,7 +4,10 @@ import {
   QueryCache,
   QueryClient,
 } from "@tanstack/react-query";
-import { toAnyHarnessTelemetryError } from "@anyharness/sdk";
+import {
+  hasAnyHarnessRuntimeIncidentReceipt,
+  toAnyHarnessTelemetryError,
+} from "@anyharness/sdk";
 import {
   isExpectedMutationTelemetryError,
   isExpectedQueryTelemetryError,
@@ -99,11 +102,14 @@ export function hashAppQueryKey(queryKey: unknown): string {
 }
 
 export function shouldCaptureAppQueryError(error: unknown): boolean {
-  return !isCancelledError(error) && !isExpectedQueryTelemetryError(error);
+  return !hasAnyHarnessRuntimeIncidentReceipt(error)
+    && !isCancelledError(error)
+    && !isExpectedQueryTelemetryError(error);
 }
 
 export function shouldCaptureAppMutationError(error: unknown): boolean {
-  return !isExpectedMutationTelemetryError(error);
+  return !hasAnyHarnessRuntimeIncidentReceipt(error)
+    && !isExpectedMutationTelemetryError(error);
 }
 
 export function createAppQueryClient({

@@ -1,9 +1,9 @@
 /* @vitest-environment jsdom */
 
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { CoworkThread } from "@anyharness/sdk";
+import { AnyHarnessError, type CoworkThread } from "@anyharness/sdk";
 import { CoworkThreadsSection } from "#product/components/workspace/cowork/sidebar/CoworkThreadsSection";
 import {
   buildPendingWorkspaceUiKey,
@@ -153,6 +153,25 @@ describe("CoworkThreadsSection", () => {
 
   afterEach(() => {
     cleanup();
+  });
+
+  it("consumes receipt-bearing create failures at the intentional UI boundary", async () => {
+    const rejection = Promise.reject(new AnyHarnessError({
+      type: "about:blank",
+      title: "Model is not available",
+      status: 400,
+      code: "SESSION_MODEL_GATED",
+      instance: "urn:proliferate:anyharness:incident:8fd6ea9a-1246-4ef0-a526-9cc5f86ed960",
+    }));
+    const catchSpy = vi.spyOn(rejection, "catch");
+    coworkState.createThread.mockReturnValueOnce(rejection);
+    render(<CoworkThreadsSection />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Start a new thread" }));
+
+    expect(coworkState.createThread).toHaveBeenCalledOnce();
+    expect(catchSpy).toHaveBeenCalledOnce();
+    await Promise.resolve();
   });
 
   it("shows a pending cowork thread while the real thread list loads", () => {

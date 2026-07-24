@@ -14,7 +14,7 @@ provider state and are not repository law.
 | Desktop native shell | Native telemetry mode is `hosted_product` and `PROLIFERATE_DESKTOP_SENTRY_DSN` is available at runtime or baked into the build | Native tracing failures and stack traces with Desktop-native release/environment and surface/runtime tags | Other modes or a missing DSN retain console/file logging without Sentry. |
 | Hosted Web | Telemetry is not disabled and `VITE_PROLIFERATE_SENTRY_DSN` is nonempty | Scrubbed React errors, traces, breadcrumbs, id-only user, Web release/environment, and `surface=web` | The SDK remains uninitialized when disabled or unconfigured. |
 | Hosted Mobile | Telemetry is not disabled and `EXPO_PUBLIC_PROLIFERATE_SENTRY_DSN` is nonempty | Scrubbed React Native errors, native crashes, traces, breadcrumbs, id-only user, Mobile release/environment, and `surface=mobile` | The SDK remains uninitialized when disabled or unconfigured. |
-| AnyHarness runtime | Hosted deployment/launch supplies `ANYHARNESS_SENTRY_DSN` | Rust tracing failures and stack traces, AnyHarness release/environment, runtime surface/environment, and available user/org/sandbox/target identity | A missing DSN preserves console/file logging without Sentry. Supported self-managed deployment leaves the Proliferate vendor DSN unset. |
+| AnyHarness runtime | Hosted deployment/launch supplies `ANYHARNESS_SENTRY_DSN` | Scrubbed Rust tracing failures and stack traces, AnyHarness release/environment, runtime surface/environment, and available user/org/sandbox/target identity | A missing DSN preserves console/file logging without Sentry. Supported self-managed deployment leaves the Proliferate vendor DSN unset. |
 | Managed Worker and Supervisor | Hosted bootstrap supplies `PROLIFERATE_TARGET_SENTRY_DSN` | Scrubbed Rust events/logs/breadcrumbs, component-specific release, environment, runtime surface, and available user/org/sandbox/target identity | A missing DSN preserves normal tracing without Sentry. |
 
 Source owners:
@@ -61,8 +61,8 @@ workflow.
 
 ## Privacy and replay
 
-The server, renderer clients, Worker, and Supervisor disable default PII and
-scrub sensitive keys and values before sending. The client scrubbers remove
+The server, renderer clients, AnyHarness, Worker, and Supervisor disable
+default PII and scrub sensitive keys and values before sending. The client scrubbers remove
 frame source context and variables, redact request bodies/cookies, reduce users
 to `id`, and sanitize URLs, paths, breadcrumbs, transactions, and spans. Server
 scrubbing redacts request data and cookies, removes user IP addresses, and
@@ -89,6 +89,15 @@ projection both at its explicit exception facade and its global React Query
 capture boundary while preserving the original detail for UI.
 Raw provider output is not a safe Sentry grouping key or exception message.
 
+When a handled AnyHarness problem genuinely prevents an operation, the runtime
+may emit one error-level incident before returning the truthful non-5xx
+problem. The event uses a stable message and fingerprint plus bounded,
+allowlisted launch-selection metadata; it never uses the problem detail or raw
+provider output as its message. A runtime-minted incident UUID is returned in
+the existing RFC 7807 `instance` field as a capability receipt so callers can
+avoid reporting the same failure again. The receipt attests runtime ownership,
+not successful provider delivery.
+
 Two exact, bounded fields are deliberately preserved through the scrubbers
 because they are deployment identity, not a raw process-environment map:
 
@@ -101,8 +110,9 @@ because they are deployment identity, not a raw process-environment map:
 - The `runtime_env` tag on Worker and Supervisor events, whose only allowed
   live value is `e2b`. Every other env-like tag key stays redacted.
 
-Nothing beyond user ID, sandbox ID, bounded runtime environment, deployment
-environment, release version, and source revision is added to any event.
+Outside the bounded handled-incident contract above, nothing beyond user ID,
+sandbox ID, target ID, bounded runtime environment, deployment environment,
+release version, and source revision is added to any event.
 
 Replay defaults are deliberately narrow:
 
@@ -114,11 +124,11 @@ Replay defaults are deliberately narrow:
   `[data-telemetry-block]` / `[data-telemetry-mask]` are honored.
 - Server and Rust runtime components do not initialize a replay integration.
 
-Known current privacy gaps: Desktop-native and AnyHarness attach stack traces
-but do not install explicit before-send event/breadcrumb scrubbers, and Desktop
-renderer error replay can retain identifier-bearing route metadata despite
-text/input masking. Callers must keep user content and secrets out of tracing
-fields. Worker and Supervisor do have explicit event, breadcrumb, and log
+Known current privacy gaps: Desktop-native attaches stack traces but does not
+install an explicit before-send event/breadcrumb scrubber, and Desktop renderer
+error replay can retain identifier-bearing route metadata despite text/input
+masking. Callers must keep user content and secrets out of tracing fields.
+AnyHarness, Worker, and Supervisor do have explicit event, breadcrumb, and log
 scrubbers.
 
 ## Correlation
@@ -141,6 +151,12 @@ for CloudWatch/Grafana evaluation; Sentry is the exception/trace source. The
 two surfaces correlate through release and request/product identifiers rather
 than by copying full evidence bodies between systems.
 
+Managed-cloud launch binds the logical cloud sandbox as AnyHarness `target_id`
+and the provider sandbox as `sandbox_id`; the two identifiers must remain
+distinct. A handled AnyHarness incident adds a fresh incident UUID and the
+bounded request/session selection context needed to connect its runtime event
+to the caller-visible RFC 7807 problem without copying user content.
+
 [Issue Lifecycle](../issue-lifecycle/README.md) owns polling or receiving this
 provider evidence, deduplicating it, routing it into canonical issues, and
 following up with reporters. Observability does not own tracker state.
@@ -155,6 +171,8 @@ following up with reporters. Observability does not own tracker state.
   debug file exists.
 - Provider delivery is diagnostic and must not become a product request's
   success condition.
+- An AnyHarness incident receipt proves that the runtime owned the capture
+  attempt; it does not prove that Sentry accepted or persisted the event.
 - Local file or structured logs remain the primary fallback when Sentry is
   absent or unavailable.
 - The Rust workspace's `sentry`, `sentry-anyhow`, and `sentry-tracing`

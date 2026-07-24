@@ -119,7 +119,7 @@ impl AgentRuntime {
         })
     }
 
-    #[tracing::instrument(skip_all, err, fields(
+    #[tracing::instrument(skip_all, fields(
         agent = %kind,
         reinstall = request.reinstall,
         native_version = ?request.native_version,
@@ -141,7 +141,7 @@ impl AgentRuntime {
         let install_runtime_home = self.runtime_home.clone();
         let install_descriptor = descriptor.clone();
         let catalog_pins = self.catalog_service.pin_overrides(kind);
-        let installed_artifacts = tokio::task::spawn_blocking(move || {
+        let install_result = tokio::task::spawn_blocking(move || {
             installer::install_agent_with_pins(
                 &install_descriptor,
                 &install_runtime_home,
@@ -149,8 +149,26 @@ impl AgentRuntime {
                 catalog_pins.as_ref(),
             )
         })
-        .await
-        .map_err(AgentRuntimeError::InstallTaskFailed)??;
+        .await;
+        let installed_artifacts = match install_result {
+            Ok(Ok(installed_artifacts)) => installed_artifacts,
+            Ok(Err(error)) => {
+                tracing::error!(
+                    agent_kind = %kind,
+                    error_kind = install_error_kind(&error),
+                    "agent install failed"
+                );
+                return Err(AgentRuntimeError::Install(error));
+            }
+            Err(error) => {
+                tracing::error!(
+                    agent_kind = %kind,
+                    error_kind = "task_join",
+                    "agent install failed"
+                );
+                return Err(AgentRuntimeError::InstallTaskFailed(error));
+            }
+        };
 
         self.seed_store.refresh_from_state(&self.runtime_home);
         let agent = resolve_agent(&descriptor, &self.runtime_home);
@@ -306,4 +324,35 @@ impl AgentRuntime {
 
 fn descriptor_for_kind(kind: &str) -> Result<AgentDescriptor, AgentRuntimeError> {
     super::registry::descriptor(kind).ok_or_else(|| AgentRuntimeError::NotFound(kind.to_string()))
+}
+
+fn install_error_kind(error: &InstallError) -> &'static str {
+    match error {
+        InstallError::NotInstallable => "not_installable",
+        InstallError::UnsupportedPlatform => "unsupported_platform",
+        InstallError::InvalidInstallSpec(_) => "invalid_install_spec",
+        InstallError::CommandFailed { .. } => "command_failed",
+        InstallError::MissingManagedArtifact(_) => "missing_managed_artifact",
+        InstallError::FetchFailed { .. } => "fetch_failed",
+        InstallError::RegistryFailed(_) => "registry_failed",
+        InstallError::ChecksumMismatch { .. } => "checksum_mismatch",
+        InstallError::NoPinForPlatform(_) => "no_pin_for_platform",
+        InstallError::Io(_) => "io",
+    }
+}
+
+#[cfg(test)]
+mod telemetry_tests {
+    use super::{install_error_kind, InstallError};
+
+    #[test]
+    fn install_errors_emit_only_stable_classifications() {
+        let error = InstallError::CommandFailed {
+            program: "provider-installer".to_string(),
+            message: "Bearer raw-provider-secret at /Users/customer/private".to_string(),
+        };
+
+        assert_eq!(install_error_kind(&error), "command_failed");
+        assert!(!install_error_kind(&error).contains("raw-provider-secret"));
+    }
 }

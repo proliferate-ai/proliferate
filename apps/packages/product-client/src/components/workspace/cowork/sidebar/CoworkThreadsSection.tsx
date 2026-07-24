@@ -118,7 +118,7 @@ export function CoworkThreadsSection() {
             </SidebarActionButton>
           )}
           <SidebarActionButton
-            onClick={() => { void createThread(); }}
+            onClick={() => { void createThread().catch(() => undefined); }}
             disabled={isCreatingThread}
             title="Start a new thread"
             variant="section"

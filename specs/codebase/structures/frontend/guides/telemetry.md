@@ -65,6 +65,11 @@ session replay, and telemetry-related provider and hook ownership.
 
 - Vendor exception capture (Sentry) is hosted-product only in v1.
 - Prefer one capture path per failure.
+- For a handled AnyHarness failure, suppress ProductClient capture only when
+  the cause chain contains an exact
+  `urn:proliferate:anyharness:incident:<uuid>` RFC 7807 instance. Old runtimes,
+  malformed or foreign instances, transport failures, and unrelated errors
+  retain the sanitized client capture path.
 - If a query or mutation hook captures its own exception, mark it with
   `meta.telemetryHandled = true` so the global React Query handlers do not
   report it again.

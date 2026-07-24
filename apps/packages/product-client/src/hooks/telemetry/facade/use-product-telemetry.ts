@@ -1,5 +1,8 @@
 import { useMemo } from "react";
-import { toAnyHarnessTelemetryError } from "@anyharness/sdk";
+import {
+  hasAnyHarnessRuntimeIncidentReceipt,
+  toAnyHarnessTelemetryError,
+} from "@anyharness/sdk";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import type {
   ErrorContext,
@@ -54,6 +57,9 @@ export function useProductTelemetry(): ProductTelemetryFacade {
         });
       },
       captureException(error, context) {
+        if (hasAnyHarnessRuntimeIncidentReceipt(error)) {
+          return;
+        }
         telemetry.captureException(toAnyHarnessTelemetryError(error), context);
       },
       setUser(user) {

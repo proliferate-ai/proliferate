@@ -59,6 +59,12 @@ Owns shared identifier aliases used by the public API surface.
 Owns `ProblemDetails`, the canonical wire error shape returned by HTTP
 endpoints.
 
+For handled runtime incidents, `instance` is the mixed-deployment capability
+receipt. AnyHarness mints one UUID, emits one bounded runtime-owned event, and
+returns `urn:proliferate:anyharness:incident:<uuid>` in that existing field.
+Callers may suppress their duplicate capture only after exact receipt
+validation; absent, malformed, or foreign instances retain legacy capture.
+
 ### `health.rs`
 
 Owns health-check response types.

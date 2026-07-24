@@ -102,6 +102,15 @@ is outside the active contexts returns `SESSION_MODEL_GATED` as HTTP 400, with
 `required_contexts` equal to the model's `availability.anyOf`. Unrelated errors
 do not carry `required_contexts`.
 
+Because this handled response genuinely blocks a launch, AnyHarness emits one
+runtime-owned, error-level incident while preserving the HTTP 400 contract.
+The incident records the requested and canonical model, active and required
+auth-context IDs, catalog version, and an explicit `model_gated` outcome;
+effective model and route remain `none` because no launch selection occurred.
+Its RFC 7807 `instance` receipt lets compatible clients avoid a duplicate Web,
+Desktop, or Mobile Sentry issue without changing behavior against older
+runtimes.
+
 ### Claude And Bedrock
 
 `CLAUDE_CODE_USE_BEDROCK=1` is the routing signal for the ordered Bedrock auth

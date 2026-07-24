@@ -110,6 +110,60 @@ describe("useProductTelemetry", () => {
     });
   });
 
+  it("suppresses explicit capture when the runtime returned a valid incident receipt", () => {
+    const telemetry = spyTelemetry();
+    const { result } = renderFacade(telemetry);
+    const cause = new AnyHarnessError({
+      type: "about:blank",
+      title: "Model gated",
+      status: 400,
+      detail: "caller-visible gating detail",
+      code: "SESSION_MODEL_GATED",
+      instance: "urn:proliferate:anyharness:incident:8fd6ea9a-1246-4ef0-a526-9cc5f86ed960",
+    });
+
+    const error = Object.assign(new Error("Failed to open chat"), { cause });
+
+    result.current.captureException(error, {
+      tags: { action: "create_session_with_resolved_config" },
+    });
+
+    expect(telemetry.captureException).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["an old runtime without a receipt", undefined],
+    ["a malformed receipt", "urn:proliferate:anyharness:incident:not-a-uuid"],
+    [
+      "a foreign receipt",
+      "urn:proliferate:server:incident:8fd6ea9a-1246-4ef0-a526-9cc5f86ed960",
+    ],
+  ])("keeps explicit host capture for %s", (_name, instance) => {
+    const telemetry = spyTelemetry();
+    const { result } = renderFacade(telemetry);
+    const error = new AnyHarnessError({
+      type: "about:blank",
+      title: "Model gated",
+      status: 400,
+      detail: "caller-visible gating detail",
+      code: "SESSION_MODEL_GATED",
+      ...(instance === undefined ? {} : { instance }),
+    });
+
+    result.current.captureException(error);
+
+    expect(telemetry.captureException).toHaveBeenCalledTimes(1);
+    const [capturedError] = vi.mocked(telemetry.captureException).mock.calls[0];
+    expect(capturedError).toMatchObject({
+      name: "AnyHarnessError",
+      message: "AnyHarness request failed (SESSION_MODEL_GATED)",
+      status: 400,
+      code: "SESSION_MODEL_GATED",
+    });
+    expect("problem" in (capturedError as object)).toBe(false);
+    expect("cause" in (capturedError as object)).toBe(false);
+  });
+
   it("returns a stable adapter identity while the host is unchanged", () => {
     const telemetry = spyTelemetry();
     const { result, rerender } = renderFacade(telemetry);

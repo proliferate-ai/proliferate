@@ -38,6 +38,21 @@ impl CreateSessionOutcome {
     }
 }
 
+/// Complete provenance for a catalog-known model rejected by the active auth
+/// context. The service constructs this before returning so the API boundary
+/// can emit one authoritative incident without reconstructing lost context.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ModelGatedContext {
+    pub workspace_id: String,
+    pub attempted_session_id: Option<String>,
+    pub agent_kind: String,
+    pub requested_model_id: String,
+    pub canonical_model_id: String,
+    pub active_contexts: Vec<String>,
+    pub required_contexts: Vec<String>,
+    pub catalog_version: String,
+}
+
 #[derive(Debug)]
 pub enum CreateSessionError {
     WorkspaceNotFound(String),
@@ -56,11 +71,7 @@ pub enum CreateSessionError {
     /// are not active. Distinct from `ModelUnsupported` (unresolvable model):
     /// the client can unlock it by satisfying one of
     /// `required_contexts` (the model's `availability.anyOf`).
-    ModelGated {
-        agent_kind: String,
-        model_id: String,
-        required_contexts: Vec<String>,
-    },
+    ModelGated(ModelGatedContext),
     ModeUnsupported {
         agent_kind: String,
         mode_id: String,

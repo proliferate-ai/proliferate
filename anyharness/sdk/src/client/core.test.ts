@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   AnyHarnessError,
   AnyHarnessTransport,
+  hasAnyHarnessRuntimeIncidentReceipt,
   toAnyHarnessTelemetryError,
 } from "./core.js";
 
@@ -191,6 +192,133 @@ describe("AnyHarnessTransport problem details", () => {
     expect((telemetryError as Error).stack).not.toContain(rawTail);
     expect(JSON.stringify(telemetryError)).not.toContain(rawTail);
   });
+
+  it("parses an exact runtime incident receipt through a wrapping cause chain", async () => {
+    const cause = await requestError(problemResponse({
+      type: "about:blank",
+      title: "Model gated",
+      status: 400,
+      code: "SESSION_MODEL_GATED",
+      instance: "urn:proliferate:anyharness:incident:8fd6ea9a-1246-4ef0-a526-9cc5f86ed960",
+    }, 400));
+    const wrapper = new Error("Failed to open chat", { cause });
+
+    expect(hasAnyHarnessRuntimeIncidentReceipt(wrapper)).toBe(true);
+  });
+
+  it.each([
+    ["missing instance", undefined],
+    ["null instance", null],
+    ["legacy path instance", "/v1/sessions/session-1"],
+    [
+      "foreign namespace",
+      "urn:proliferate:server:incident:8fd6ea9a-1246-4ef0-a526-9cc5f86ed960",
+    ],
+    ["missing UUID", "urn:proliferate:anyharness:incident:"],
+    ["malformed UUID", "urn:proliferate:anyharness:incident:not-a-uuid"],
+    [
+      "nil UUID",
+      "urn:proliferate:anyharness:incident:00000000-0000-0000-0000-000000000000",
+    ],
+    [
+      "UUIDv1",
+      "urn:proliferate:anyharness:incident:8fd6ea9a-1246-1ef0-a526-9cc5f86ed960",
+    ],
+    [
+      "non-RFC variant",
+      "urn:proliferate:anyharness:incident:8fd6ea9a-1246-4ef0-7526-9cc5f86ed960",
+    ],
+    [
+      "uppercase UUID",
+      "urn:proliferate:anyharness:incident:8FD6EA9A-1246-4EF0-A526-9CC5F86ED960",
+    ],
+    [
+      "receipt suffix",
+      "urn:proliferate:anyharness:incident:8fd6ea9a-1246-4ef0-a526-9cc5f86ed960?delivered=true",
+    ],
+  ])("rejects a runtime incident receipt with %s", (_name, instance) => {
+    const error = new AnyHarnessError({
+      type: "about:blank",
+      title: "Request failed",
+      status: 400,
+      code: "SESSION_MODEL_GATED",
+      ...(instance === undefined ? {} : { instance }),
+    });
+
+    expect(hasAnyHarnessRuntimeIncidentReceipt(error)).toBe(false);
+  });
+
+  it("finds a valid receipt behind a nonmatching AnyHarness error", () => {
+    const receipt = new AnyHarnessError({
+      type: "about:blank",
+      title: "Model gated",
+      status: 400,
+      code: "SESSION_MODEL_GATED",
+      instance: "urn:proliferate:anyharness:incident:8fd6ea9a-1246-4ef0-a526-9cc5f86ed960",
+    });
+    const outer = new AnyHarnessError({
+      type: "about:blank",
+      title: "Outer runtime failure",
+      status: 500,
+      instance: "/legacy/instance",
+    }, receipt);
+
+    expect(hasAnyHarnessRuntimeIncidentReceipt(outer)).toBe(true);
+  });
+
+  it("fails closed when a receipt-bearing cause chain contains a cycle", () => {
+    const error = new AnyHarnessError({
+      type: "about:blank",
+      title: "Model gated",
+      status: 400,
+      code: "SESSION_MODEL_GATED",
+      instance: "urn:proliferate:anyharness:incident:8fd6ea9a-1246-4ef0-a526-9cc5f86ed960",
+    });
+    (error as Error & { cause?: unknown }).cause = error;
+
+    expect(hasAnyHarnessRuntimeIncidentReceipt(error)).toBe(false);
+  });
+
+  it("accepts a receipt within the bounded cause-chain depth", () => {
+    let error: Error = runtimeIncidentError();
+    for (let depth = 1; depth < 8; depth += 1) {
+      error = new Error(`wrapper ${depth}`, { cause: error });
+    }
+
+    expect(hasAnyHarnessRuntimeIncidentReceipt(error)).toBe(true);
+  });
+
+  it("fails closed when the cause chain exceeds the bounded depth", () => {
+    let error: Error = runtimeIncidentError();
+    for (let depth = 0; depth < 8; depth += 1) {
+      error = new Error(`wrapper ${depth}`, { cause: error });
+    }
+
+    expect(hasAnyHarnessRuntimeIncidentReceipt(error)).toBe(false);
+  });
+
+  it("fails closed when reading a cause throws", () => {
+    const error = runtimeIncidentError();
+    Object.defineProperty(error, "cause", {
+      configurable: true,
+      get() {
+        throw new Error("cause access failed");
+      },
+    });
+
+    expect(() => hasAnyHarnessRuntimeIncidentReceipt(error)).not.toThrow();
+    expect(hasAnyHarnessRuntimeIncidentReceipt(error)).toBe(false);
+  });
+
+  it("rejects a matching-looking receipt outside an AnyHarness error", () => {
+    const error = Object.assign(new Error("foreign failure"), {
+      problem: {
+        instance: "urn:proliferate:anyharness:incident:8fd6ea9a-1246-4ef0-a526-9cc5f86ed960",
+      },
+    });
+
+    expect(hasAnyHarnessRuntimeIncidentReceipt(error)).toBe(false);
+  });
 });
 
 async function requestError(response: Response): Promise<AnyHarnessError> {
@@ -218,5 +346,15 @@ function problemResponse(
     status,
     statusText,
     headers: { "content-type": "application/problem+json" },
+  });
+}
+
+function runtimeIncidentError(): AnyHarnessError {
+  return new AnyHarnessError({
+    type: "about:blank",
+    title: "Model gated",
+    status: 400,
+    code: "SESSION_MODEL_GATED",
+    instance: "urn:proliferate:anyharness:incident:8fd6ea9a-1246-4ef0-a526-9cc5f86ed960",
   });
 }

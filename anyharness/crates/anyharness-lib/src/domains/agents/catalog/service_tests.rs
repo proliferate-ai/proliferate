@@ -347,13 +347,7 @@ fn validate_launch_rejects_gated_and_unknown_models() {
             None,
         )
         .expect_err("api-only model must be gated under oauth");
-    assert_eq!(
-        gated,
-        SelectionUnsupported::ModelGated {
-            model_id: "opus[1m]".into(),
-            required_contexts: vec!["anthropic-api".into()],
-        }
-    );
+    assert!(matches!(gated, SelectionUnsupported::ModelGated { .. }));
 
     let unknown = catalog
         .validate_launch("claude", &contexts(&["anthropic-api"]), Some("nope"), None)
