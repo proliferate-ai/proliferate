@@ -11,9 +11,9 @@ Conventions:
   server + desktop web build (`pnpm dev` on `PROLIFERATE_WEB_PORT`) driven by
   Playwright. Desktop-web fallback behavior applies: auth persists to
   localStorage; `open_external` becomes `window.open` (handle popups).
-- **Do not touch** flows routed through `lib/access/tauri/credentials.ts`
-  (env-var secret storage, `restartRuntime`) in tier 2 — no web fallback
-  exists; they throw outside Tauri.
+- **Do not touch** Tauri-only flows such as `restartRuntime`
+  (`lib/access/tauri/runtime.ts`) in tier 2 — no web fallback exists; they
+  throw outside Tauri.
 - Seeding uses the layer-B auth story (`SINGLE_ORG_MODE` where noted,
   password accounts) per `specs/developing/local/feature-worktree-auth.md`.
 - IDs in brackets map to `flows.md` rows.

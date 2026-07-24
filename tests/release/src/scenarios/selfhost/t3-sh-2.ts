@@ -10,8 +10,8 @@ import { ScenarioBlockedError } from "../types.js";
  * beta, exercising the `set_app_config` write, the app relaunch, and the OS
  * credential store. Per self-hosting.md §4 this slice is unreachable from
  * desktop-web (the connect affordance is Tauri-gated at
- * apps/desktop/src/components/auth/LoginScreen.tsx:117, and
- * lib/access/tauri/credentials.ts throws outside Tauri), so T2-SH-1 covers the
+ * apps/desktop/src/components/auth/LoginScreen.tsx:117, and the Tauri invoke
+ * in lib/access/tauri/config.ts throws outside Tauri), so T2-SH-1 covers the
  * dialog/validation logic and this scenario owns the native slice.
  *
  * Driving it needs a real desktop build plus a headless native driver invoking

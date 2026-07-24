@@ -33,7 +33,7 @@ split by boundary:
   retired Bifrost-era architecture and were removed; rewrites are planned. The
   owning code is `server/proliferate/server/cloud/agent_gateway/`,
   `server/proliferate/integrations/litellm/`, and
-  `anyharness-lib/src/domains/agents/route_auth/`.
+  `anyharness/crates/anyharness-lib/src/domains/agents/route_auth/`.
 
 Create a dedicated `structures/auth-gateway/` spec only if the gateway becomes
 a separately deployed or separately owned codebase boundary. Until then, keep

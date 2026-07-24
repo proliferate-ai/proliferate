@@ -13,7 +13,7 @@
 //   signed-out state.
 //
 // Desktop-web conventions (scenarios.md): auth falls back to localStorage;
-// nothing here goes near lib/access/tauri/credentials.ts.
+// nothing here goes near Tauri-only flows (e.g. lib/access/tauri/runtime.ts).
 
 import { expect, test, type Page } from "@playwright/test";
 import {
