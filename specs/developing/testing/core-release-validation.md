@@ -639,42 +639,65 @@ than copied or treated as target coverage by name.
 
 ## Current enforcement exception
 
-Current main is materially fail-open and no current run may claim qualification
-from this contract:
+Current main can produce strict qualification evidence for an explicitly
+selected exact-head cell set, but production promotion does not yet consume a
+complete release aggregate. A selected-cell pass therefore qualifies only its
+recorded scope; it does not claim that this complete target contract is
+enforced.
 
-- both Tier 2 workflow jobs use `continue-on-error`; the billing job skips all
-  billing specs when `STRIPE_TEST_SECRET_KEY` is absent;
-- every Tier 3/4 workflow job is advisory, and whole-lane preflights can skip
-  cleanly when credentials or public infrastructure are absent;
-- the release runner converts missing dependencies, explicit blocked errors,
-  and expected failures into a successful process exit when no ordinary error
-  was thrown; some matrix scenarios also swallow individual harness failures;
-- only red scenarios write structured reports, so green, blocked, missing, and
-  expected-fail cells have no immutable aggregate evidence;
+The runner and the manual qualification worlds now enforce these foundations:
+
+- every executed cell reaches one normalized terminal state and the runner
+  writes a schema-validated V4 report for green and non-green results, including
+  candidate, world, run, shard, attempt, verdict, and cleanup evidence;
+- strict behavior exits non-zero when any selected cell is non-green or a
+  runner/integrity error occurs; diagnostic behavior is always
+  non-qualifying;
+- the manual Tier 2, local-runtime, managed-cloud, and self-host qualification
+  jobs are not `continue-on-error`, run through the protected `Qualification`
+  environment, preserve the runner's exit code, and upload their V4 evidence;
+  and
+- the scheduled legacy local and staging lanes remain explicitly provisional,
+  `continue-on-error`, and capable of skipping their whole lane when a
+  preflight dependency is absent. Their output is diagnostic signal, never
+  qualification.
+
+The remaining enforcement exceptions are:
+
+- the two broad Tier 2 jobs in `intent-tests.yml` remain
+  `continue-on-error`, and the broad billing job skips when
+  `STRIPE_TEST_SECRET_KEY` is absent. The manual strict Tier 2 qualification
+  job fails closed on that missing key, while only the focused workflow
+  definition lifecycle cell currently gates ordinary CI;
 - production promotion validates staging deployment evidence but does not
-  invoke or verify Tier 3/4 qualification evidence;
+  invoke or verify a trusted Tier 3/4 qualification aggregate for the same
+  source SHA and artifact digests;
+- the target manifest still records the complete guarantee set as
+  planned/deferred rather than deriving an enforced baseline from collector
+  metadata and accepted evidence;
 - hosted Web is not booted by the existing Tier 2 world;
-- the Tier 4 Desktop and cloud update journeys cannot qualify in CI today; and
+- the Tier 4 Desktop and cloud update journeys cannot qualify in CI today;
 - canonical agent-auth primitive docs still describe Bifrost as the managed
   data plane even though the settled target is LiteLLM only. Those product
   specs and owning code must be reconciled before their collectors can be
   audited; the stale Bifrost contract does not override this target; and
-- product billing constants still encode the prior `$5` free managed-LLM grant
-  and twenty managed-cloud hours per seat rather than the settled `$2` free and
-  Core `$5 LLM + $15 compute` allocation.
+- server billing policy now encodes the settled `$2` lifetime free
+  managed-LLM grant and Core `$5 LLM + $15 compute` allocation, but the upgrade
+  surface still advertises the prior fixed twenty managed-cloud hours per seat
+  instead of the price-derived compute allowance.
 
-The foundation closes these gaps in this order:
+The remaining migration closes these gaps in this order:
 
-1. restore this target contract and bind composed journeys into the target
-   manifest;
-2. add collector metadata and bidirectional manifest/collection audits;
-3. always emit per-cell run summaries with candidate and world identity;
-4. add strict runner behavior and make missing Stripe credentials fail trusted
-   CI;
-5. wire exact-SHA qualification evidence into production promotion;
-6. build and validate each world foundation as a vertical slice; and
-7. fan out scenario implementation and bug fixing in parallel, ratcheting the
-   enforced baseline upward until every core cell is required.
+1. reconcile the stale agent-auth and billing product surfaces with current
+   LiteLLM and allocation truth;
+2. add the remaining collector metadata and bidirectional
+   manifest/collection audits, then promote accepted cells into the enforced
+   baseline;
+3. graduate the broad Tier 2 jobs to fail-closed trusted CI;
+4. wire exact-SHA, exact-artifact qualification evidence into production
+   promotion;
+5. complete the hosted-client and Tier 4 target journeys; and
+6. ratchet the enforced baseline upward until every core cell is required.
 
 `continue-on-error` may remain only on explicitly diagnostic callers during
 the migration. It is never allowed on a job or matrix cell whose output is
