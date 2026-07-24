@@ -44,6 +44,25 @@ One line each: the registry answers "how would you get and run this, in
 principle"; the catalog answers "exactly which bytes, and what those bytes
 were observed to do."
 
+The split is really a split of consumers, and the most important consequence
+is what the registry's install method is NOT for: no installer on any
+machine ever reads it. It exists to be resolved, not to be installed from.
+
+| Content | Written by | Sole consumer |
+| --- | --- | --- |
+| Registry: install method (npm/git/ACP-registry specs, fallbacks) | humans | the producer pipeline (`resolve-pins.mjs`), which resolves it into catalog pins |
+| Registry: auth and launch vocabulary (auth slots, env vars, discovery kinds, login policy, executable names) | humans | the runtime, for credential classification, detection, and catalog pairing validation |
+| Catalog: pins and probe-observed facts | the pipeline | the installer and the runtime's projections |
+
+Without the registry's install section the nightly resolution would have
+nowhere reviewed to look ("is there a new opencode?" needs a declared
+source), and changing how a harness installs (say, moving an adapter to our
+fork) would be a change to pipeline tooling instead of a diffable document
+edit. The runtime still bundles the registry, but only for the vocabulary
+row above and for validating the catalog against it at load
+(`validate_agent_catalog_registry_pairing`); the install fence in
+[Installation](#installation) guarantees the method is never a fallback.
+
 Observed facts live in the lockfile because they are only true of a version:
 "codex 0.144.5 advertises these models" sits next to the pin it was observed
 on. That makes one document the revert unit: rolling back a catalog PR
