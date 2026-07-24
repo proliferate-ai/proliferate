@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { PROLIFERATE_DARK_THEME } from "@proliferate/product-ui/code/code-theme-tokens";
 import { highlightMarkdownDiffLines } from "#product/lib/infra/editor/highlighting";
 
 describe("highlightMarkdownDiffLines", () => {
   it("keeps fenced Markdown code plain while highlighting Markdown syntax", () => {
+    const colors = PROLIFERATE_DARK_THEME.palette;
     const tokens = highlightMarkdownDiffLines(
       [
         "## Development",
@@ -16,30 +18,30 @@ describe("highlightMarkdownDiffLines", () => {
       "dark",
     );
 
-    expect(tokens[0]).toEqual([{ content: "## Development", color: "#F22C3D" }]);
+    expect(tokens[0]).toEqual([{ content: "## Development", color: colors.heading }]);
     expect(tokens[2]).toEqual([
-      { content: "```", color: "#FFFFFF80" },
-      { content: "bash", color: "#FFFFFF" },
+      { content: "```", color: colors.muted },
+      { content: "bash", color: colors.foreground },
     ]);
     expect(tokens[3]).toEqual([
-      { content: "make test             # Rust workspace tests", color: "#FFFFFF" },
+      { content: "make test             # Rust workspace tests", color: colors.foreground },
     ]);
     expect(tokens[5]).toEqual([
-      { content: "-", color: "#F22C3D" },
-      { content: " Run ", color: "#FFFFFF" },
-      { content: "`", color: "#FFFFFF80" },
-      { content: "make dev", color: "#00A67D" },
-      { content: "`", color: "#FFFFFF80" },
-      { content: " now", color: "#FFFFFF" },
+      { content: "-", color: colors.heading },
+      { content: " Run ", color: colors.foreground },
+      { content: "`", color: colors.muted },
+      { content: "make dev", color: colors.string },
+      { content: "`", color: colors.muted },
+      { content: " now", color: colors.foreground },
     ]);
     expect(tokens[6]).toEqual([
-      { content: "See ", color: "#FFFFFF" },
-      { content: "[", color: "#FFFFFF80" },
-      { content: "`", color: "#FFFFFF80" },
-      { content: "specs/developing/local/dev-profiles.md", color: "#00A67D" },
-      { content: "`", color: "#FFFFFF80" },
-      { content: "]", color: "#FFFFFF80" },
-      { content: "(specs/developing/local/dev-profiles.md)", color: "#F22C3D" },
+      { content: "See ", color: colors.foreground },
+      { content: "[", color: colors.muted },
+      { content: "`", color: colors.muted },
+      { content: "specs/developing/local/dev-profiles.md", color: colors.string },
+      { content: "`", color: colors.muted },
+      { content: "]", color: colors.muted },
+      { content: "(specs/developing/local/dev-profiles.md)", color: colors.heading },
     ]);
   });
 });

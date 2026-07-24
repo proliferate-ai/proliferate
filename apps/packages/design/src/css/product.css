@@ -1179,7 +1179,7 @@ body {
   color: var(--right-panel-tab-text-secondary);
   font-size: var(--text-ui-sm);
   line-height: var(--text-ui-sm--line-height);
-  font-weight: 500;
+  font-weight: var(--font-weight-control);
 }
 
 :root[data-mode="light"] .right-panel-tab-system {

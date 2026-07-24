@@ -9,16 +9,21 @@ import { extendTailwindMerge } from "tailwind-merge";
  * token must be listed here or it will vanish from merged class lists.
  */
 export const TEXT_SIZE_TOKEN_IDS = [
-  "ui",
   "ui-sm",
+  "ui",
+  "chat",
   "composer",
+  "body",
   "workspace-title",
+  "body-emphasis",
+  "heading",
   "title",
   "hero",
-  "chat",
   "sidebar-nav",
   "sidebar-row",
   "sidebar-brand",
+  "message",
+  "readable-code",
 ] as const;
 
 export const ICON_SIZE_TOKEN_IDS = [
