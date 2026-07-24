@@ -22,8 +22,10 @@ Out of scope:
   [Product Auth](../auth/README.md)
 - server auth/resource-access structure, owned by
   [../../../structures/server/guides/auth.md](../../../structures/server/guides/auth.md)
-- managed-credit, BYOK, and Bifrost data-plane contracts, owned by
-  [../../../platforms/product/agent-auth-bifrost-byok.md](../../../platforms/product/agent-auth-bifrost-byok.md)
+- managed-credit and LiteLLM gateway contracts (platform document removed as
+  stale Bifrost-era content; rewrite planned — owning code is
+  `server/proliferate/server/cloud/agent_gateway/` and
+  `server/proliferate/integrations/litellm/`)
 - billing authorization and Stripe subscription/refill behavior, owned by
   [../../../platforms/product/billing.md](../../../platforms/product/billing.md)
 - managed workspace creation, owned by
@@ -36,8 +38,8 @@ Out of scope:
    password accounts, reviewer accounts, and GitHub readiness.
 3. [Settings and Admin Information Architecture](../settings/information-architecture.md) for where account, provider,
    billing, team, and configuration states appear.
-4. [../../../platforms/product/agent-auth-bifrost-byok.md](../../../platforms/product/agent-auth-bifrost-byok.md)
-   for managed credits, BYOK, Bifrost virtual keys, and gateway QA.
+4. The managed model gateway platform (document removed; rewrite planned) for
+   managed credits, virtual keys, and gateway QA.
 5. [../../../platforms/product/billing.md](../../../platforms/product/billing.md) for credit budgets,
    free allocations, Stripe checkout, refill, and billing state.
 6. [../../../platforms/product/workspace-provisioning.md](../../../platforms/product/workspace-provisioning.md)

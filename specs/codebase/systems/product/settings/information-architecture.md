@@ -7,8 +7,8 @@ Current gap: the managed-Target UI described here is not implemented.
 Date: 2026-05-20.
 
 Depends on: [`sandbox-provisioning.md`](../../../platforms/product/sandbox-provisioning.md),
-[`mcp-skills.md`](../../../platforms/product/mcp-skills.md),
-[`agent-auth.md`](../../../platforms/product/agent-auth.md).
+[`mcp-skills.md`](../../../platforms/product/mcp-skills.md), and the agent auth
+platform (its Bifrost-era document was removed; a rewrite is planned).
 
 This spec defines the settings shell, sidebar navigation, page ownership,
 shared UI primitives, and shared vocabulary used by every other spec
@@ -116,9 +116,11 @@ Hard:
 - [`mcp-skills.md`](../../../platforms/product/mcp-skills.md): Plugins page
   rows show `enabled`, `public_to_org`, `auth_status`,
   `runtime_apply_status`.
-- [`agent-auth.md`](../../../platforms/product/agent-auth.md): Agent Authentication pane
-  composes `CloudAgentAuthLibrary` + `ComputeTargetAgentAuthCard`;
-  `CredentialPicker` is defined here and consumed there.
+- Agent auth platform (document removed; rewrite planned): this spec's Agent
+  Authentication pane (`CloudAgentAuthLibrary` + `ComputeTargetAgentAuthCard`,
+  `CredentialPicker`) described the removed Bifrost-era UI. The shipped UI is
+  per-harness settings sections (`agent-claude`, `agent-codex`,
+  `agent-opencode`, `agent-grok`, `agent-api-keys`).
 
 Soft:
 

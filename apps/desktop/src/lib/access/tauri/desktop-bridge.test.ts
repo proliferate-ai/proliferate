@@ -3,9 +3,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   getRuntimeInfo: vi.fn(),
   restartRuntime: vi.fn(),
-  listConfiguredEnvVarNames: vi.fn(),
-  setEnvVarSecret: vi.fn(),
-  deleteEnvVarSecret: vi.fn(),
   pickFolder: vi.fn(),
   getHomeDir: vi.fn(),
   pathIsDirectory: vi.fn(),
@@ -45,11 +42,6 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/access/tauri/runtime", () => ({
   getRuntimeInfo: mocks.getRuntimeInfo,
-}));
-vi.mock("@/lib/access/tauri/credentials", () => ({
-  listConfiguredEnvVarNames: mocks.listConfiguredEnvVarNames,
-  setEnvVarSecret: mocks.setEnvVarSecret,
-  deleteEnvVarSecret: mocks.deleteEnvVarSecret,
   restartRuntime: mocks.restartRuntime,
 }));
 vi.mock("@/lib/access/tauri/shell", () => ({
@@ -233,24 +225,6 @@ describe("files", () => {
 
     await desktopBridge.files.openTarget("cursor", "/repo");
     expect(mocks.openTarget).toHaveBeenCalledWith("cursor", "/repo");
-  });
-});
-
-describe("localCredentials", () => {
-  it("delegates list/set/remove to the credentials wrappers", async () => {
-    mocks.listConfiguredEnvVarNames.mockResolvedValue(["OPENAI_API_KEY"]);
-    mocks.setEnvVarSecret.mockResolvedValue(undefined);
-    mocks.deleteEnvVarSecret.mockResolvedValue(undefined);
-
-    await expect(desktopBridge.localCredentials.listConfigured()).resolves.toEqual([
-      "OPENAI_API_KEY",
-    ]);
-
-    await desktopBridge.localCredentials.set("OPENAI_API_KEY", "sk-1");
-    expect(mocks.setEnvVarSecret).toHaveBeenCalledWith("OPENAI_API_KEY", "sk-1");
-
-    await desktopBridge.localCredentials.remove("OPENAI_API_KEY");
-    expect(mocks.deleteEnvVarSecret).toHaveBeenCalledWith("OPENAI_API_KEY");
   });
 });
 

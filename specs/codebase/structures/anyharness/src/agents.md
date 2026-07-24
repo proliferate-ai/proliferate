@@ -225,7 +225,7 @@ Important install cases:
   lookup, or fallback — a role with no pin is a hard error (see
   `agent-catalog-readiness` Banned Shapes)
 - the ACP-mode launch args for registry-backed adapters (e.g. cursor `acp`,
-  gemini `--acp`) are frozen into the pin and baked into the managed launcher;
+  opencode `acp`) are frozen into the pin and baked into the managed launcher;
   multi-file adapter bundles (cursor) keep their whole extracted tree
 - direct binary/tarball native installs write into the managed artifact dir;
   managed npm/git installs create a managed launcher surface under runtime home

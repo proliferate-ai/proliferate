@@ -5,8 +5,10 @@ integration MCP gateway, and the Worker identity that gives AnyHarness scoped
 access to that gateway. Provider credentials remain encrypted in Cloud;
 AnyHarness receives only a Proliferate gateway bearer.
 
-Harness model credentials and the LLM gateway are separate owners:
-[Agent auth](agent-auth.md) and [Agent gateway / BYOK](agent-auth-bifrost-byok.md).
+Harness model credentials and the LLM gateway are separate owners; see the
+Agent auth and Managed model gateway rows in [README.md](README.md) (their
+platform documents are being rewritten after the Bifrost-era versions were
+removed).
 
 ## Mental Model
 

@@ -9,3 +9,7 @@ export interface RuntimeInfo {
 export async function getRuntimeInfo(): Promise<RuntimeInfo> {
   return invoke<RuntimeInfo>("get_runtime_info");
 }
+
+export async function restartRuntime(): Promise<RuntimeInfo> {
+  return invoke<RuntimeInfo>("restart_runtime");
+}

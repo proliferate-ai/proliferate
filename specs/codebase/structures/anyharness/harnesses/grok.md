@@ -41,12 +41,10 @@ Provider id `xai`. Readiness is satisfied by `XAI_API_KEY` / `GROK_API_KEY`, or
 by a cached login token at `~/.grok/auth.json` (produced by `grok login`). The
 registry auth slot uses `syncedFiles` materialization for `.grok/auth.json`
 (discovery `grok`, fact `grok-auth-json-oauth`). ACP `authMethods` are
-`cached_token` (the file) and `grok.com` (browser sign-in). Grok is not a
-gateway/BYOK provider, so it does not surface in the cloud BYOK credential UI.
-Cloud auth is via `XAI_API_KEY` / `GROK_API_KEY`: the registry declares
-`syncedFiles` for `~/.grok/auth.json`, but Desktop does not yet export that file
-(the Tauri credential exporter covers claude/codex/gemini only), so syncing a
-local Grok login into a cloud sandbox is not wired today.
+`cached_token` (the file) and `grok.com` (browser sign-in). Cloud auth is via
+the gateway or an `XAI_API_KEY` selection: the registry declares `syncedFiles`
+for `~/.grok/auth.json`, but nothing exports that file to a cloud sandbox, so
+syncing a local Grok login into a cloud sandbox is not wired today.
 
 ## ACP Capabilities and Vendor Extensions
 
