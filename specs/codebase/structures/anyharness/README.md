@@ -249,7 +249,7 @@ Specs:
 - [specs/session-actor.md](specs/session-actor.md) for the target
   `live/sessions/actor` state-machine split, actor-owned state, command
   handling, turn loop, config, notifications, interactions, and shutdown.
-- [../../platforms/product/agent-catalog-readiness.md](../../platforms/product/agent-catalog-readiness.md) for
+- [../../platforms/product/agent-distribution.md](../../platforms/product/agent-distribution.md) for
   the agents catalog/readiness model: single catalog input, trusted
   descriptor/model projection, install/readiness topology, seed artifacts, and
   launch resolution.
@@ -302,7 +302,7 @@ which guide to read and where the code belongs.
 | Session durable records, event rows, session config, pending prompts | `anyharness-lib/src/domains/sessions/**` | `domains/sessions/**` | [guides/domains.md](guides/domains.md), [specs/session-engine.md](specs/session-engine.md), [src/sessions.md](src/sessions.md) |
 | Live running agent process, session actor loop, ACP client, event sink, interactions | `anyharness-lib/src/live/sessions/**`, with remaining ACP helpers in `anyharness-lib/src/acp/**` | `live/sessions/**` plus earned `integrations/acp/**` | [guides/live-runtime.md](guides/live-runtime.md), [specs/session-engine.md](specs/session-engine.md), [src/acp.md](src/acp.md) |
 | Workspace durable lifecycle, materialization, purge/retire, retention policy | `anyharness-lib/src/domains/workspaces/**` | `domains/workspaces/**` | [guides/domains.md](guides/domains.md), [src/workspaces.md](src/workspaces.md) |
-| Agent catalog, install, credentials, readiness, supported-agent meaning | `anyharness-lib/src/domains/agents/**` | `domains/agents/**` | [guides/domains.md](guides/domains.md), [../../platforms/product/agent-catalog-readiness.md](../../platforms/product/agent-catalog-readiness.md), [src/agents.md](src/agents.md) |
+| Agent catalog, install, credentials, readiness, supported-agent meaning | `anyharness-lib/src/domains/agents/**` | `domains/agents/**` | [guides/domains.md](guides/domains.md), [../../platforms/product/agent-distribution.md](../../platforms/product/agent-distribution.md), [src/agents.md](src/agents.md) |
 | Provider CLI install/probe/path/version mechanics | `anyharness-lib/src/integrations/agent_cli/**`, provider-specific ACP code | `integrations/agent_cli/**` | [guides/integrations.md](guides/integrations.md), [guides/harnesses.md](guides/harnesses.md) |
 | Provider-specific behavior such as Claude/Codex extension support or live controls | `anyharness-lib/src/live/sessions/**`, `anyharness-lib/src/acp/**`, `specs/codebase/structures/anyharness/harnesses/**` | harness doc plus owning live runtime/integration module | [guides/harnesses.md](guides/harnesses.md), provider doc under `harnesses/**` |
 | File browsing, file reads/writes, workspace file capabilities | `anyharness-lib/src/adapters/files/**` | `adapters/files/**` | [guides/adapters.md](guides/adapters.md), [src/files.md](src/files.md) |

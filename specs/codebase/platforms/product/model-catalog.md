@@ -16,7 +16,7 @@ Scope:
 
 Related docs:
 
-- `specs/codebase/platforms/product/agent-catalog-readiness.md`
+- `specs/codebase/platforms/product/agent-distribution.md`
 - `specs/codebase/structures/frontend/README.md`
 - `specs/codebase/structures/server/README.md`
 
@@ -42,8 +42,8 @@ specs/codebase/platforms/product/
     and launch resolution.
 
 specs/codebase/platforms/product/
-  agent-catalog-readiness.md
-    AnyHarness catalog/readiness migration rules. Links here for dynamic model
+  agent-distribution.md
+    AnyHarness catalog and distribution contract. Links here for dynamic model
     registry snapshots.
 
 anyharness/crates/anyharness-contract/src/v1/

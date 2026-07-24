@@ -23,7 +23,7 @@ expectations, but it is not the owner of a full user workflow.
 | Claiming | One-way shared workspace claim, claim audit state, direct-attach tokens, and per-token revocation. | [claiming.md](claiming.md) |
 | Billing | Credit authorization, Stripe subscription/refill behavior, budget reconciliation, billing state in product responses, and billing QA. | [billing.md](billing.md) |
 | Model catalog | Model catalog source of truth, projection, availability, and selector-facing catalog behavior. | [model-catalog.md](model-catalog.md) |
-| Agent catalog readiness | Agent descriptor catalog, readiness projection, install topology, seed artifacts, and launch resolution. | [agent-catalog-readiness.md](agent-catalog-readiness.md) |
+| Agent distribution | Registry/catalog document contract, pinned install and seed topology, catalog convergence transports, the probe pipeline, and readiness projection. | [agent-distribution.md](agent-distribution.md) (Status: target) |
 
 ## Naming Notes
 

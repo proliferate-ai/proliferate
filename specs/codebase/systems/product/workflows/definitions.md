@@ -9,7 +9,7 @@ Read with:
 
 - [`../../../platforms/product/model-catalog.md`](../../../platforms/product/model-catalog.md) for the
   probe-generated agent and model catalog;
-- [`../../../platforms/product/agent-catalog-readiness.md`](../../../platforms/product/agent-catalog-readiness.md)
+- [`../../../platforms/product/agent-distribution.md`](../../../platforms/product/agent-distribution.md)
   for catalog distribution and target readiness;
 - [`../../../structures/server/README.md`](../../../structures/server/README.md) for server
   ownership boundaries;
