@@ -2,66 +2,83 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import {
-  colors,
-  radius,
-  shadows,
-  typography,
-} from "../dist/tokens.js";
+import { themeTokens } from "../dist/tokens.js";
 
 const root = dirname(fileURLToPath(new URL("../package.json", import.meta.url)));
+const entries = Object.entries(themeTokens);
 
-function kebab(value) {
-  return value.replace(/[A-Z]/g, (match) => `-${match.toLowerCase()}`);
+function declarations(mode, indent = "  ") {
+  return entries
+    .map(([name, value]) => {
+      const renderedValue =
+        mode === "theme" ? (value.themeFallback ?? value.dark) : value[mode];
+      return `${indent}${name}: ${renderedValue};`;
+    })
+    .join("\n");
 }
 
-function px(value) {
-  return `${value / 16}rem`;
+function utility(name, property, tokenName = name) {
+  return `@utility ${name} {
+  ${property}: var(--${tokenName});
+}`;
 }
 
-const colorLines = Object.entries(colors)
-  .map(([name, value]) => `  --color-${kebab(name)}: ${value};`)
-  .join("\n");
+const zUtilities = [
+  "base",
+  "raised",
+  "sticky",
+  "overlay",
+  "popover",
+  "toast",
+  "tooltip",
+  "top",
+].map((name) => utility(`z-${name}`, "z-index"));
 
-const radiusLines = [
-  `  --radius: ${px(radius.lg)};`,
-  `  --radius-sm: ${px(radius.sm)};`,
-  `  --radius-md: ${px(radius.md)};`,
-  `  --radius-lg: ${px(radius.lg)};`,
-  `  --radius-xl: ${px(radius.xl)};`,
-  "  --radius-full: 9999px;",
-  `  --radius-composer: ${px(radius.lg)};`,
-].join("\n");
+const durationUtilities = [
+  "hover",
+  "enter",
+  "exit",
+  "disclosure",
+  "panel",
+  "emphasized",
+].map((name) => utility(`duration-${name}`, "transition-duration"));
 
-const fontSizeLines = Object.entries(typography.size)
-  .flatMap(([name, value]) => {
-    const lineHeight = typography.lineHeight[name];
-    const tokenName = kebab(name);
-    return [
-      `  --text-${tokenName}: ${px(value)};`,
-      `  --text-${tokenName}--line-height: ${px(lineHeight)};`,
-    ];
-  })
-  .join("\n");
+const easeUtilities = [
+  "out-quint",
+  "spring",
+  "standard",
+  "linear",
+].map((name) => utility(`ease-${name}`, "transition-timing-function"));
 
-const shadowLines = Object.entries(shadows)
-  .map(([name, value]) => `  --shadow-${kebab(name)}: ${value};`)
-  .join("\n");
+const iconButtonSizeUtilities = ["sm", "md", "lg"].map(
+  (name) => `@utility size-icon-button-${name} {
+  width: var(--size-icon-button-${name});
+  height: var(--size-icon-button-${name});
+}`,
+);
 
 const css = `@theme {
   --color-*: initial;
+  --text-*: initial;
 
-  --font-sans: ${typography.fontSans};
-  --font-mono: ${typography.fontMono};
-
-${colorLines}
-
-${radiusLines}
-
-${fontSizeLines}
-
-${shadowLines}
+${declarations("theme")}
 }
+
+:root {
+${declarations("dark")}
+}
+
+:root[data-mode="light"] {
+${declarations("light")}
+}
+
+${[
+  "@utility rounded-inherit {\n  border-radius: inherit;\n}",
+  ...zUtilities,
+  ...durationUtilities,
+  ...easeUtilities,
+  ...iconButtonSizeUtilities,
+].join("\n\n")}
 
 @keyframes proliferate-spinner-rotate {
   to {
@@ -72,6 +89,7 @@ ${shadowLines}
 /* Keep the inline layout box stationary. Rotating it changes its transformed
    bounding box throughout the cycle and makes compact tab/sidebar spinners
    appear to orbit instead of spinning in place. */
+/* activity-motion */
 .proliferate-spinner > svg {
   display: block;
   animation: proliferate-spinner-rotate 1.4s linear infinite;
@@ -81,6 +99,15 @@ ${shadowLines}
 }
 
 @media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-hover: 0ms;
+    --duration-enter: 0ms;
+    --duration-exit: 0ms;
+    --duration-disclosure: 0ms;
+    --duration-panel: 0ms;
+    --duration-emphasized: 0ms;
+  }
+
   .proliferate-spinner > svg {
     animation: none;
     transform: rotate(22deg);
