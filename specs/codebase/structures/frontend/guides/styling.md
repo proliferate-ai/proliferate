@@ -29,18 +29,23 @@ supported themes instead of dropping palette classes into a component.
 Shared token ownership:
 
 - `apps/packages/design/src/tokens.ts` owns serializable cross-client token
-  values.
-- `apps/packages/design/dist/theme.css` is generated from those tokens and exposes
-  shared CSS theme variables plus shared non-product animation utilities for
-  Desktop/Web. Do not hand-edit generated theme output.
+  values, including colors, type, radii, elevation, layers, code palettes, and
+  the complete theme disposition.
+- `apps/packages/design/src/motion.ts` owns finite interaction timing/easing
+  and the named activity cadences shared with TypeScript consumers.
+- `apps/packages/design/dist/theme.css` is generated from those authorities and
+  exposes the sole Desktop/Web `@theme`, dark root, flattened light root,
+  compatibility aliases, semantic utilities, and reduced-motion overrides.
+  Do not hand-edit generated theme output.
 - `apps/packages/design/src/css/dom.css` owns the shared Desktop/Web DOM entrypoint:
   Tailwind setup, shared package `@source` entries, shared reset/root/body
   defaults, shared scrollbar utilities, and shared Proliferate global classes.
-  Apps import this as `@proliferate/design/dom.css`.
+  It contains rules, not theme-token declarations. Apps import this as
+  `@proliferate/design/dom.css`.
 - `apps/packages/design/src/css/product.css` owns the shared Desktop/Web
-  product theme and global styles: fonts, theme presets, and global runtime
-  selectors. Desktop imports this as `@proliferate/design/product.css`; Web
-  will import it at its later cutover.
+  product rules and global runtime selectors. Theme/font values remain
+  generated from `tokens.ts`. Desktop imports this as
+  `@proliferate/design/product.css`; Web will import it at its later cutover.
 - `apps/packages/design/src/css/desktop.css` owns genuine Desktop/native-only
   CSS (drag regions and other Tauri-specific overrides). Desktop imports this
   as `@proliferate/design/desktop.css`.
@@ -66,18 +71,25 @@ Do not use raw palette classes such as:
 
 Theme decisions belong in tokens, not ad hoc callsite classes.
 
-## Sidebar Tokens
+## State and Sidebar Tokens
 
 Components rendered inside the right panel or sidebar background
-(`bg-sidebar-background`) must use sidebar-specific tokens:
+(`bg-sidebar-background`) keep sidebar-specific structural tokens:
 
-- `bg-sidebar-accent` / `hover:bg-sidebar-accent` for hover and active states
 - `text-sidebar-foreground` / `text-sidebar-muted-foreground` for text
 - `border-sidebar-border` for borders
 
-Do not use generic `bg-accent` or `hover:bg-muted` inside sidebar surfaces —
-those resolve to different colors and look wrong against the sidebar
-background.
+Interaction meaning is shared across surfaces:
+
+- `bg-hover` for pointer/roving-focus hover
+- `bg-active` for pressed, editing, or transient-open controls
+- `bg-selected` for committed selection
+
+Do not author `bg-accent`, `bg-sidebar-accent`, opacity variants of those
+historical aliases, or low-alpha foreground fills for interaction state.
+Static tinted panels are not interaction states; use their owning surface
+role, normally `bg-surface-control` or
+`bg-surface-elevated-secondary`.
 
 ## No Partial-Opacity Hover Transitions on Glyphs
 
@@ -105,8 +117,15 @@ pattern below is fine because the element starts invisible.
 
 ## Hover Reveal Pattern
 
-Use `group` + `opacity-0 group-hover:opacity-100` for actions that should
-appear on hover. Name the group when nesting is possible:
+Row actions must use
+`@proliferate/ui/layout/RowActionIconButton` (or an ownership-correct adapter)
+so hover, focus-within, open, disabled, pointer-event, target-size, and glyph
+behavior stay unified. A whole-row action with no nested button uses its
+`RowActionIndicator` companion.
+
+For non-action reveal companions, use `group` + `opacity-0
+group-hover:opacity-100` and keep the matching focus/open visibility. Name the
+group when nesting is possible:
 
 ```tsx
 <div className="group/file-diff ...">
@@ -117,9 +136,8 @@ appear on hover. Name the group when nesting is possible:
 </div>
 ```
 
-Use `transition-opacity duration-200` for smooth reveal. Keep the always-
-visible element (like a chevron or status indicator) outside the hidden
-container.
+Use `transition-opacity duration-hover` for reveal motion. Keep unrelated
+always-visible content outside the hidden container.
 
 ## Card Surfaces
 
@@ -161,14 +179,17 @@ Use Shiki for syntax-highlighted code outside of the Monaco editor:
 - Use `highlightCode()` for full HTML blocks (code panels, previews)
 - Hooks own the async Shiki call; components render the result
 
-The `proliferate-dark` and `proliferate-light` Shiki themes live in
-`highlighting.ts`. When adding new token scopes, update both themes.
+The `proliferate-dark` and `proliferate-light` Shiki definitions live in
+`@proliferate/product-ui/code/code-theme-tokens`. Their scope shape is stable
+and their colors derive from `@proliferate/design/tokens`. When adding a
+scope, update both definitions and the exact shape test.
 
 ## Monaco Editor
 
-Use the custom `proliferate-dark` / `proliferate-light` Monaco themes defined
-in `lib/infra/monaco-theme.ts`. Register both in `beforeMount` and select
-based on `useResolvedMode()`.
+Use the custom `proliferate-dark` / `proliferate-light` Monaco adapters defined
+in `lib/infra/editor/monaco-theme.ts`. Their editor-key/rule shape remains
+local, but palette values derive from the design code authority. Register both
+in `beforeMount` and select based on `useResolvedMode()`.
 
 Key options to preserve:
 - `useShadows: false` on scrollbar (no scroll shadow)

@@ -1,16 +1,12 @@
 # Appearance Scaling
 
-Status: target
+Status: current
 
-Current gap: Desktop/Web already persist and apply independent UI font,
-readable-code font, and window-zoom preferences, but the visible contract is
-incomplete. At the frozen base, Default message/composer text is 13px while
-Default readable code is 10px; a production scan also finds 32 fixed text-size
-declarations across 20 files and 107 fixed-size vector-glyph call sites. Those
-fixed consumers respond to whole-window zoom but generally do not respond to
-the UI font preference.
-
-Frozen delivery base: `ec2aafc2cf1d0d254adfce1bb0084a90e06e4b38`.
+Desktop/Web persist and apply independent UI font, readable-code font, and
+window-zoom preferences. Product text uses the closed semantic type roles,
+readable code has same-preset parity with composer text, and owned glyphs use
+the semantic optical ladder. The repository source guard rejects reopening
+the retired generic/fixed vocabulary.
 
 ## Outcome and boundary
 
@@ -42,8 +38,8 @@ equivalent native setting.
   smaller than surrounding reading text, label/icon optical sizing that moves
   together, and stable compact-control hit areas.
 - **Intentional differences:** Proliferate retains eight independent UI and
-  readable-code presets, existing fonts and hierarchy, the 46rem chat column,
-  themes, and separate window zoom.
+  readable-code presets, the Geist UI / Geist Mono code family, the 46rem chat
+  column, themes, and separate window zoom.
 - **Founder-approved Proliferate mock:**
   [Default and Extra Large scale contract](appearance-scaling-mock.svg). The
   founder approved the mock direction and complete-coverage rule on
@@ -102,6 +98,12 @@ and greater than their font sizes; they do not need to equal prose line height.
 - Every user-visible owned string resolves through a semantic text role,
   including badges, counts, keyboard hints, empty states, dialogs, errors,
   auth/brand text, terminal-login text, and code-adjacent labels.
+- The closed appearance-owned roles are `ui-sm`, `ui`, `chat`, `composer`,
+  `body`, `body-emphasis`, `workspace-title`, `heading`, `title`, `hero`,
+  `sidebar-nav`, `sidebar-row`, and `sidebar-brand`. `message` and
+  `readable-code` are sanctioned generated utility aliases, not independent
+  appearance slots. Generic `text-xs/sm/base/lg/xl` utilities are retired in
+  product source.
 - Every owned vector mark resolves through a semantic optical tier, including
   icons, chevrons, close controls, disclosure glyphs, status symbols, dirty
   markers, provider marks, and icon-font characters.
@@ -109,8 +111,9 @@ and greater than their font sizes; they do not need to equal prose line height.
   untyped owned strings and icon-only controls. Role-specific utilities still
   override that fallback, and the unchanged `html` root keeps rem-based layout
   geometry independent from the UI font preference.
-- Paired row/button icons default to `1.15em` of their owning label. Compact,
-  large, and display tiers remain proportional to a semantic text owner.
+- Paired row/button icons default to `1.230769em` of their owning label (16px
+  at the Default 13px reading rung). Compact, control, large, and display tiers
+  remain proportional to a semantic text owner.
 - Visible glyphs scale inside their existing accessible target. Pointer hit
   areas and structural row heights stay fixed unless an existing responsive
   contract already scales them.
@@ -129,13 +132,16 @@ targets are not glyph icons and do not become font-relative.
 - `apps/packages/product-client/src/config/theme.ts` applies the resolved text
   and readable-code root variables through `applyAppearancePreference`; the
   stable `em` glyph ratios resolve from design CSS against those text owners.
-- `apps/packages/design/src/css/dom.css` and `product.css` own Default CSS
-  fallbacks and global semantic utilities.
+- `apps/packages/design/src/tokens.ts` and `src/motion.ts` own the serializable
+  foundation authority. The design generator emits the Default CSS fallbacks,
+  semantic utilities, dark/light roots, and reduced-motion overrides.
+- `apps/packages/design/src/css/dom.css` and `product.css` own non-token rules;
+  they do not declare a competing global theme or font stack.
 - `apps/packages/ui/src/utils/tw-merge.ts` preserves custom semantic utilities
   where Tailwind merge classification requires registration.
 - Production consumers live under
-  `apps/packages/{ui,product-ui,product-client}`. Component-local aliases must
-  not preserve a fixed-size path.
+  `apps/packages/{ui,product-ui,product-client}` and `apps/desktop/src`.
+  Component-local aliases must not preserve a fixed-size path.
 - Focused appearance/drift tests and a repository source guard own regression
   enforcement.
 
@@ -146,15 +152,17 @@ properties; wrappers keep owning fixed pointer-target and row geometry.
 
 ## Repository enforcement
 
-Repo checks must reject raw fixed production text or glyph sizing at product
-call sites. The migration inventory is generated from the final PR head and
-must reach zero.
+Repo checks reject raw fixed text or glyph sizing and the retired foundation
+vocabulary at product call sites.
 
-`scripts/check_appearance_scaling.py` is the no-allowlist production guard. It
-runs in the repo-shape CI job and from the Desktop design-system check; its
-focused unit test locks fixed text, imported/custom/inline SVG, descendant
-selectors, component-local glyph props/aliases/defaults, status-dot, and global
-CSS-alias failure cases.
+`scripts/check_appearance_scaling.py` is the CI source guard. It scans source,
+tests, stories, playgrounds, and fixtures across all four roots for generic or
+arbitrary text, fixed owned glyphs, arbitrary radius/z/gap/size, retired
+state/elevation classes, unowned finite motion, raw colors, and authored
+backdrop filters. Raw-color lint alone excludes the ruled playground/fixture
+categories and exact brand/emergency-renderer sources. Checked-in manifests
+freeze the standard numeric-z and unvirtualized long-list baselines; they may
+shrink but cannot gain sites.
 
 Allowed numeric definitions are limited to:
 
@@ -164,8 +172,8 @@ Allowed numeric definitions are limited to:
   active preference.
 
 There is no open-ended allowlist. Every structural exception names its semantic
-reason in the guard. A developer adding a fixed `size={16}` glyph must get a
-failing repository check before merge.
+reason in the guard. A developer adding a fixed `size={16}` glyph or a retired
+foundation utility must get a failing repository check before merge.
 
 ## Failure behavior
 
@@ -183,8 +191,7 @@ failing repository check before merge.
 ## Non-goals
 
 - Mobile/native appearance controls.
-- Font-family, weight, color, spacing/density, chat-width, or window-zoom
-  redesign.
+- Weight, color, spacing/density, chat-width, or window-zoom redesign.
 - Scaling raster media, avatars, borders, shadows, or hit targets as glyphs.
 - Redesigning individual product surfaces while migrating semantic sizing.
 - Raising bundle caps or absorbing unrelated JavaScript/Rust failures.
