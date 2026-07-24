@@ -390,6 +390,8 @@ text-role values at the default preset are defined in section 4.
 | `--ease-spring` | `cubic-bezier(0.16, 1, 0.3, 1)` | same | `[RETUNE:motion/roles]` |
 | `--ease-standard` | `cubic-bezier(0.4, 0, 0.2, 1)` | same | `[RETUNE:motion/roles]` |
 | `--ease-linear` | `linear` | same | `[RETUNE:motion/roles]` |
+| `--activity-stream-reveal-fade` | `320ms` | same | `[SHIPPED:motion/authority]` |
+| `--activity-update-ready-sweep` | `700ms` | same | `[SHIPPED:motion/authority]` |
 | `--z-base` / `--z-raised` / `--z-sticky` | `0` / `10` / `20` | same | `[RETUNE:layering/scale]` |
 | `--z-overlay` / `--z-popover` | `40` / `50` | same | `[RETUNE:layering/scale]` |
 | `--z-toast` / `--z-tooltip` / `--z-top` | `60` / `70` / `80` | same | `[RETUNE:layering/scale]` |
@@ -882,7 +884,7 @@ explicitly rejects the `--line-height` / `--letter-spacing` suffixes.
 
 
 
-## 5. State, radii, shadows, motion, layering, raw hex, and row actions
+## 5. State, radii, shadows, motion, layering, raw hex, row actions, and spacing
 
 ### 5.1 State
 
@@ -904,23 +906,82 @@ Every distinct state-like census literal maps as follows:
 
 | Census literal/value | Exact replacement | Interpretation / exception |
 | --- | --- | --- |
+| `hover:bg-foreground/[0.02]` | `hover:bg-hover active:bg-active` | Harness auth option. |
+| `hover:bg-foreground/[0.03]` | `hover:bg-hover active:bg-active` | Collapsible and selection rows. |
 | `hover:bg-foreground/[0.04]` | `hover:bg-hover active:bg-active` | Automation/workspace rows and filters. |
 | `hover:bg-foreground/[0.045]` | `hover:bg-hover active:bg-active` | Prompt attachment and inventory-group hover. |
 | `hover:bg-foreground/[0.06]` (button found at the row-action owner in `AutomationInventoryList`) | `hover:bg-hover active:bg-active` | Row-action button. |
-| `hover:bg-accent` | `hover:bg-hover active:bg-active` | Only when `accent` is being used as an interaction state. |
-| `bg-foreground/[0.075]` / `bg-foreground/[0.05]` / active `bg-sidebar-accent` | `bg-selected` | Committed tab/row selection. |
-| open-state `bg-accent` / `data-[state=open]:bg-accent` | `data-[state=open]:bg-active` | Transient open control, not selection. |
-| `bg-foreground/[0.035]` | `bg-surface-elevated-secondary` | Static automation panels/segmented-control trough; not a state. |
+| `hover:bg-foreground/[0.07]` | `hover:bg-hover active:bg-active` | Cloud chat header control; its resting `.045` fill becomes `bg-surface-control`. |
+| `hover:bg-foreground/[0.075] focus:bg-foreground/[0.075]` | `hover:bg-hover focus:bg-active` | Plan-handoff editor: hover is hover, focused editing is active. |
+| overlay `hover:bg-foreground/5`, `hover:bg-foreground/8`, `hover:bg-foreground/10`, or `hover:!bg-foreground/10` | same-prefix `hover:bg-hover` | Remaining 5–10% neutral overlay interactions. Solid-button ink modulation at `hover:bg-foreground/80` or `/90` is not an overlay and remains unchanged. |
+| `hover:bg-accent`, `hover:bg-accent/40`, `hover:bg-accent/50`, `hover:bg-accent/60`, `hover:bg-accent/70`, `hover:bg-accent/80`, and sidebar equivalents | `hover:bg-hover active:bg-active` with the same selector prefix | Interaction states do not retain opacity variants of the historical alias. |
+| `focus:bg-accent`, `focus-visible:bg-accent`, and sidebar equivalents | `focus:bg-hover` / `focus-visible:bg-hover` | Roving focus mirrors hover unless the control is open. |
+| selected `bg-foreground/[0.075]` / `bg-foreground/[0.05]` / `bg-foreground/[0.035]` / `bg-foreground/5` / active `bg-sidebar-accent` | `bg-selected` | Committed tab/row/section/toggle selection. |
+| open-state `bg-accent` / `data-[state=open]:bg-accent` / `data-[state=open]:bg-sidebar-accent` | `data-[state=open]:bg-active` | Transient open control, not selection. |
+| `hover:bg-foreground/5 data-[state=open]:bg-foreground/5` | `hover:bg-hover data-[state=open]:bg-active` | `SettingsMenu` neutral trigger. |
+| static `bg-foreground/[0.018]` or `bg-foreground/[0.025]` | `bg-surface-elevated-secondary` | Markdown stripe and plan-handoff modal footer. |
+| static `bg-foreground/[0.02]`, `bg-foreground/[0.03]`, or `bg-foreground/[0.04]` panel | `bg-surface-elevated-secondary` | Static settings, billing, transcript-tool, and notice surfaces are not interaction states. |
+| static `bg-foreground/[0.028]` control | `bg-surface-control` | Resting `WorkspacesSurface` icon-control fill. |
+| static `bg-foreground/[0.045]` control/chip | `bg-surface-control` | Cloud-chat header control and status chip. |
+| static diff-panel `bg-foreground/[0.0475]` | `bg-diff-panel-surface` | `TurnDiffPanel` and `TranscriptPatchTurnDiffPanel` use the existing diff surface role. |
+| static `bg-foreground/[0.035]` | `bg-surface-elevated-secondary` | Static automation panels, segmented-control trough, and Markdown table header; the active calendar section is the selected exception above. |
 | `bg-foreground/[0.042]` | `bg-surface-elevated-secondary` | Static automation/workspace group header; not a state. |
+| indicator `bg-foreground/[0.18]` / `bg-foreground/[0.6]` | unchanged | `AutomationSurface` binary indicator strength is glyph/status feedback, not a surface overlay. |
+| static `bg-accent`, `bg-accent/50`, `bg-sidebar-accent`, and opacity variants | owning `bg-surface-control` or `bg-surface-elevated-secondary` role from the exhaustive table | Historical state aliases are not static-surface tokens. |
 | `bg-card/95`, `bg-popover`, `bg-sidebar-background`, `bg-surface-control`, `bg-transparent` | unchanged semantic surface class | Not state literals. |
-| `bg-warning/5`, `bg-destructive/5`, `bg-primary/5`, `bg-foreground/5` | retain only where the alpha is a semantic tone/surface tint | Do not rewrite these to interaction state tokens merely because the numeric alpha is similar. |
+| `bg-warning/5`, `bg-destructive/5`, `bg-primary/5`, `bg-foreground/5` | retain only where the alpha is a semantic tone/surface tint and no interaction/selection exception above applies | Do not rewrite these to interaction state tokens merely because the numeric alpha is similar. |
 | `opacity-0` → `opacity-100` reveal pairs | primitive-owned reveal classes (section 5.6) | Visibility state, not a color state. |
 | `opacity-50`, `opacity-80` | retain only for disabled/drag feedback; remove from row-action resting style | The new row action uses semantic ink rather than a permanently half-opacity glyph. |
 
+#### 5.1.1 Exact live historical-accent consumer disposition
+
+This census is required before the aliases in section 3.1 are emitted.
+Migrate every production class below; no `bg-accent`,
+`bg-sidebar-accent`, hover/focus/open variant of either name, or opacity
+variant of either name remains in production source. Tests assert the
+canonical replacement. Playground specimens follow the same row as the
+primitive or product surface they demonstrate.
+
+| Final role | Exact current consumers |
+| --- | --- |
+| foreground-alpha interactions → `hover:bg-hover active:bg-active` (or the exact focus/open rule in the literal table) | `.02`: `HarnessAuthSection:351`; `.03`: `CollapsibleSummaryRow:21`, `SelectionRow:37`; `.04`: `workspace-chrome.ts:134`, `AutomationCalendarView:60,168`, `AutomationInventoryList:93`, `AutomationRunsList:71`, `AutomationSurface:171,198`, `WorkspaceInventoryRow:34`; `.045`: `PromptAttachmentCard:65`, `WorkspaceInventoryGroup:73`; `.05`: `AgentsPlaygroundPage:66`, `SettingsMenu:47`, `CloudEnvironmentList:88`, `NewChatSurface:204`, and `RepoActionsPane:279`; `.06`: `AutomationInventoryList:288`, `WorkspacesSurface:275`; `.07`: `CloudChatHeader:141` (resting `.045` becomes `bg-surface-control`); `.075`: `PlanHandoffDialog:115` (`focus:bg-active`); `.08`: `TabGroupPill:30`; `.10`: `NewChatSurface:333`, `UpdateToastPresenter:234`, `WorktreeStorageSection:151,171`, `PlanHandoffDialog:96`, `AppearancePane:100,114`, and `SidebarUpdatePill:125,126`. Solid `hover:bg-foreground/80` and `hover:bg-foreground/90` button treatments remain. |
+| `hover:bg-hover active:bg-active` (preserve `enabled:`, `group-*`, and other selector prefixes) | `SidebarAccountFooter:107`; `SidebarConsumptionCard:240`; `SidebarHelpFooter:47`; `FileDiffCard:67`; `HomeOnboardingCards:50`; `HomeTargetPickerParts:121`; `OrganizationBudgetsPane:320`; `HarnessAllModelsSection:298`; `SettingsScreen:146`; `PlanReferenceAttachmentCard:34,36,37,71`; `ComposerOptionRow:55`; `ComposerSlashCommandSearch:125`; `PromptRecoveryPanel:39`; `UserInputCard:337`; `TurnMetadata:69`; `FileTreeRow:48`; `GitPanelReviewChrome:40`; `GitReviewEmptyState:73`; `GitReviewFileSectionShell:9`; `GitReviewTargetSelector:106`; `PaneFileTree:136`; `KeyboardShortcutsDialog:24`; both `ChromeWorkspaceTab` close controls at `103,167`; `ClosedChatTabsMenu:27`; `TerminalCommandFloatingAction:36`; `TerminalTopBar:74,98`; `AddRepoFlow:173`; `CloudRepoPicker:251`; `SecretEditorDialog:58`; `ModelTable:161`; `RepoPicker:44`; `WorkspacesCommandList:133`; `AlertDialog:144`; `ListRow:26`; all hover variants in `PaneIconButton:6`, `SidebarNavItem:27`, `SidebarRowSurface:30`, `AuthProviderButton:31`, `Button:27,29,31,37`, `GridTile:17`, `IconButton:22,24`, `PillControlButton:46,47`, `PopoverMenuItem:37`, `RadioCardGroup:48`, `SegmentedControl:46`, `Toggle:20`; the non-selected branch of `EnvironmentSearchSelect:60`; and the explicit foreground-alpha hover sites listed in the table above. |
+| `focus:bg-hover` / `focus-visible:bg-hover` | `ComposerSlashCommandSearch:125`, `AddRepoFlow:173`, `HomeNextScreen:163`, and the focus branch of `PopoverMenuItem:37`. Open-state selectors at those owners instead use `bg-active`. |
+| `bg-active` / `data-[state=open]:bg-active` | open branches in `SidebarAccountFooter:107`, `SidebarConsumptionCard:240`, `SidebarHelpFooter:47`, `HomeNextScreen:163`, `HomeTargetPickerParts:121`, `RepoPicker:44`, `PaneIconButton:6`, `PillControlButton:46,47`, `EnvironmentSearchSelect:60`, and `SettingsMenu:47`; `rightPanelOpen` in `CoworkWorkspaceHeader:50`; `active` in `PaneIconButton:30` and `SidebarActionButton:39`; focused editing at `PlanHandoffDialog:115`; and resize feedback in `FileTreeOverlay:96`. |
+| direct historical state-variable consumers | `ComposerControlButton:39` becomes `hover:bg-hover data-[state=open]:bg-active`; enabled `ComposerFastModeToggle:34` becomes `bg-selected` and its exact test pin is updated; `authenticated.css:208-214` replaces both the 30%-of-list-hover mix and raw 3.5% hover mix with `background: var(--color-hover)`. |
+| `bg-selected` | `ComposerOptionRow:56`, `ComposerSlashCommandSearch:126`, `ComposerFastModeToggle:34`, `UserInputCard:338`, `FileTreeRow:49`, `AttachedPaneShell:155`, `PaneFileTree:138`, `ChatTabsMenu:151,211`, `ClosedChatTabsMenu:27`, `ModelTable:66`, `WorkspacesSurface:350`, `Table:46`, `SidebarNavItem:26`, `SidebarRowSurface:27`, `Tabs:61`, and `Toggle:19`; plus foreground-alpha selections at `AutomationCalendarView:61,115`, `AutomationSurface:170`, `WorkspacesSurface:277`, `WorkspaceInventoryRow:36`, `HarnessAuthSection:350`, and `SelectionRow:36`. The current `/70` selected modifiers are deleted, not transferred. |
+| `bg-surface-control` | the account/avatar/icon tiles at `SidebarAccountFooter:110`, `AccountIdentityCard:21`, `ProductSidebarAccountFooter:14`, `CloudWorkspaceList:68`, and `Avatar:43`; update-progress tracks at `HarnessUpdateToastPresenter:72` and `UpdateToastPresenter:62`; the API-key chip at `HarnessAuthApiKeyRow:95`; file-search controls at `FileTreeOverlay:146` and `PaneFileTree:59`; the badge in `PaneFileTree:187`; both static Cloud-chat header fills at `CloudChatHeader:141,194`; the resting icon-control fill at `WorkspacesSurface:278`; `CloudSidebarStatusDefinition.ready` in `cloud-sidebar.ts:36`; all skeleton overrides at `CoworkManagedWorkspaceList:58`, `CoworkThreadsSection:153,154`, `GitPanel:63,67,73,77`, `GitPanelReviewBody:85,86,87`, and `SidebarWorkspaceContent:78,79,80`; every neutral/accent/sidebar background in `Badge:18,19,24`; and the resting control surface in `EnvironmentSearchSelect:60`. Preserve an existing `/70` or `/80` modifier only on skeleton opacity variants. |
+| `bg-surface-elevated-secondary` | static `.018` stripe at `MarkdownBody:172`; static `.025` footer at `PlanHandoffDialog:61`; static `.02` panels at `BillingPlanManagementDialog:99`, `PlaygroundToolTranscript:139,146`, `HarnessSettingsSection:70`, `HarnessPane:205,247`, `ApiKeysPane:230`, and `OrganizationBudgetsPane:180,189,220,234,246`; static `.03` panels at `BillingPlanComparison:176,206` and `UpdateRestartDialog:82`; static `.035` panels at `AutomationDetailSurface:139`, `AutomationSurface:155`, and `MarkdownBody:178`; static `.04` panels at `BillingPlanComparison:93`, `CloudTranscriptActionRow:183`, `CollapsedCommandActionRow:29`, `CollapsedEditActionRows:155`, `CollapsedGenericActionRow:41`, and `ToolActionDetailsPanel:15`; static `.042` group headers at `AutomationDetailSurface:103`, `AutomationInventoryList:38`, and `WorkspaceInventoryGroup:59`; static Git review notices at `GitPanelReviewChrome:26,55`; and the model-table header at `ModelTable:43`. |
+| `bg-diff-panel-surface` | `TranscriptPatchTurnDiffPanel:92` and `TurnDiffPanel:106` replace their static `.0475` foreground tint with the existing diff-panel role. |
+
+The playground state specimens are not grandfathered. `FullFlowTabs:31-44`
+and `NavigationCloseTabs:64-76` use `bg-selected` and `hover:bg-hover`;
+`NavigationClosePaneRow:22,56` and `SubagentsPanePrototype:145,179` use
+`bg-selected` for focused/selected branches and `hover:bg-hover` for hover;
+`GlobalAgentsPanePrototype:68,116,161` and
+`SubagentCreationReceipt:55` use `hover:bg-hover`.
+`GitReviewV2Playground:223,396,410` uses `hover:bg-hover`, while its static
+badge at `373` uses `bg-surface-control`; `PlaygroundLoadingStates:127-129`
+uses `bg-surface-control` with the existing skeleton opacity modifiers.
+The static `AgentsPlaygroundPage:53` header uses
+`bg-surface-elevated-secondary`. These exact mappings cover all three
+`subagents-ux` specimen families captured by the migration census.
+
+Exact class pins change with their owners:
+`workspace-chrome.test.ts:83,88` expects `hover:bg-hover`;
+`FileDiffCard.test.tsx:57` expects `hover:bg-hover`; and
+`ReleaseNoticeCard.test.tsx:24` expects `bg-surface-control`.
+`TurnDiffPanel.test.tsx:124,128` expects `bg-diff-panel-surface`.
+The existing negative old-class assertions in `GitPanel.test.tsx:255-256`
+remain valid and become redundant defense behind the source gate.
+
 The exact still-live compatibility aliases are frozen in section 3.1 and must
 carry `/* legacy-alias */`. Migrated interaction sites use canonical
-`hover`, `active`, and `selected` utilities. Static uses of historical
-accent names must first be assigned a surface role.
+`hover`, `active`, and `selected` utilities. The historical accent utility
+names are forbidden after this exhaustive class migration. Custom-property
+aliases remain only where listed in section 3.1, including existing
+component-CSS/runtime API compatibility; they do not license
+repository-authored accent utility classes.
 
 ### 5.2 Radii
 
@@ -959,13 +1020,23 @@ Every distinct `rounded-[…]` value in the census:
 | `rounded-[var(--radius-composer)]` | `rounded-xl` | chat drop target |
 | `rounded-[var(--radius-composer,1rem)]` | `rounded-xl` | chat composer and cloud composer footer |
 | `rounded-[var(--workspace-shell-tab-radius,0.625rem)]` | `rounded-md` | both Chrome workspace-tab layers |
+| `rounded-t-[13px]` | `rounded-t-xl` | `ComposerAttachedPanel`, `PendingPromptList`, `PromptRecoveryPanel`, and `GoalBar`; attached composer panels use the 12px composer radius. |
+| `rounded-t-[var(--radius-composer,1rem)]` | `rounded-t-xl` | `WorkspaceActivityComposerCard` and playground `ActivityAggregatePopover`. |
+| `rounded-tl-[22px]` | `rounded-tl-2xl` | both opaque workspace content-shell branches in `workspace-chrome.ts:90,108`; update `workspace-chrome.test.ts:33,63`. |
 
-No radius literal is allowlisted. `rounded-full` remains legal.
+The current generated `rounded-lg` utility resolves from
+`--radius-lg: 0.75rem` (12px). Changing that global token to
+`0.625rem` (10px) retunes every existing `rounded-lg` consumer, not only the
+arbitrary-literal sites above; `[RAD-03]` owns that exhaustive 12px → 10px
+class-level change. No radius literal or directional radius literal is
+allowlisted. `rounded-full` remains legal.
 
 ### 5.3 Layering
 
-Emit explicit utilities (`z-base`, `z-raised`, and so on); do not depend on
-Tailwind's numeric `z-*` defaults.
+Emit explicit utilities (`z-base`, `z-raised`, and so on) for the arbitrary-z
+migration census. Existing standard Tailwind numeric utilities
+`z-0|10|20|30|40|50` are outside this pass and keep their current local
+stacking behavior; this pass neither expands nor newly adopts that vocabulary.
 
 | Token/class | Value |
 | --- | ---: |
@@ -993,15 +1064,19 @@ Every distinct arbitrary z value in the census:
 | `z-[60]` | `z-overlay` | manual group editor scrim |
 | `z-[61]` | `z-popover` | manual group editor panel |
 | `z-[70]` | `z-tooltip` for `Tooltip` and delegated hover cards; `z-popover` for `ChatTabsMenu` | semantic split of one numeric value |
-| `z-[80]` | `z-popover` | composer model/config menu |
-| `z-[81]` | `z-tooltip` | nested composer submenu above its parent popover |
+| `z-[80]` | `z-popover` | outer composer model/config menu |
+| `z-[81]` | `z-raised` inside an `isolate z-popover` outer wrapper | nested composer submenu is locally raised above its sibling; it is not mislabeled as a tooltip. |
 | `z-[100]` | `z-toast` | auth-onboarding playground notice |
 | `z-[999]` | `z-overlay` | command-palette scrim |
 | `z-[2147483647]` | `z-top` | macOS window-controls safe area |
 
 The header tab strip must remain an isolated stacking context; otherwise
 mapping its internal 1–6 ordering into the global scale can escape the strip.
-There is no z-index allowlist.
+The outer composer model/config wrapper likewise becomes
+`isolate z-popover`; its submenu uses local `z-raised`. There is no
+arbitrary-z allowlist. The gate freezes the current standard numeric-z
+baseline and rejects additions rather than pretending those 95 existing
+local-order uses were part of this census.
 
 ### 5.4 Motion mapping
 
@@ -1009,6 +1084,8 @@ There is no z-index allowlist.
 
 `apps/packages/design/src/motion.ts` is the shared JS authority and is exported
 as `@proliferate/design/motion`. The CSS generator consumes the same values.
+It also exports `motion.cssMs(value)` so a consumer never hand-appends an
+`ms` literal to a shared numeric timing.
 
 | JS key | CSS token / exact class | Value |
 | --- | --- | ---: |
@@ -1022,6 +1099,8 @@ as `@proliferate/design/motion`. The CSS generator consumes the same values.
 | `motion.ease.spring` | `--ease-spring` / `ease-spring` | `cubic-bezier(0.16, 1, 0.3, 1)` |
 | `motion.ease.standard` | `--ease-standard` / `ease-standard` | `cubic-bezier(0.4, 0, 0.2, 1)` |
 | `motion.ease.linear` | `--ease-linear` / `ease-linear` | `linear` |
+| `motion.activity.streamRevealFadeMs` | `--activity-stream-reveal-fade` | `320ms` |
+| `motion.activity.updateReadySweepMs` | `--activity-update-ready-sweep` | `700ms` |
 
 #### 5.4.2 Every distinct census duration/easing literal
 
@@ -1039,11 +1118,60 @@ as `@proliferate/design/motion`. The CSS generator consumes the same values.
 | `duration-300` on tool disclosure chevrons | `duration-disclosure` (`200ms`) |
 | `duration-500` on todo progress transform | `duration-emphasized` (`300ms`) |
 | `300ms cubic-bezier(0.16, 1, 0.3, 1)` in `authenticated.css` | `var(--duration-emphasized) var(--ease-spring)`; rendered value stays `300ms` and the curve is named |
-| `` `${i * 110}ms` `` in `LevelBarsButton` | `` `${i * motion.delay.levelBarStaggerMs}ms` `` with `levelBarStaggerMs = 110`; activity-family exception |
+| `` `${i * 110}ms` `` in `LevelBarsButton` | `motion.cssMs(i * motion.delay.levelBarStaggerMs)` with `levelBarStaggerMs = 110`; the shared formatter owns the `ms` suffix and this remains an activity-family exception. |
 | `150ms cubic-bezier(0.19, 1, 0.22, 1)` test assertion | `var(--duration-enter) var(--ease-out-quint)` (or assert the generated resolved values); entrance becomes `160ms` |
 | documented/implemented `280ms cubic-bezier(0.23,1,0.32,1)` | `var(--duration-emphasized) var(--ease-spring)` (`300ms cubic-bezier(0.16,1,0.3,1)`) |
 
-#### 5.4.3 Named JS constant triage
+#### 5.4.3 Exhaustive finite-motion disposition in design CSS
+
+The migration census intentionally excluded the design package, but its
+component CSS is not exempt from the new motion authority. Every finite
+interaction declaration below is rewritten to generated variables; no
+numeric duration or authored easing remains on these selectors.
+
+| Current design CSS site/value | Exact final declaration |
+| --- | --- |
+| `dom.css:320` content fade, `150ms ease-out` | `animation: content-fade-in var(--duration-enter) var(--ease-out-quint)` |
+| `dom.css:470` brand settle, `300ms ease-out` | `animation: brand-mark-settle var(--duration-emphasized) var(--ease-standard)` |
+| `dom.css:493` web sidebar slide, `220ms` spring | `animation: web-sidebar-panel-slide-in var(--duration-panel) var(--ease-spring)` |
+| generated `--animate-popover-in`, current `150ms` out-quint | `popover-in var(--duration-enter) var(--ease-out-quint)` |
+| `product.css:1119` `panel-in 150ms ease-out` | `panel-in var(--duration-panel) var(--ease-out-quint)` |
+| `product.css:1162,1168` modal overlay/panel enter, `150ms` out-quint | `var(--duration-enter) var(--ease-out-quint)` |
+| `product.css:1165,1171` modal overlay/panel exit, `120ms ease-in` | `var(--duration-exit) var(--ease-standard)` |
+| `product.css:1217` composer-dock enter, `280ms` legacy spring | `var(--duration-emphasized) var(--ease-spring)` |
+| `product.css:1221` composer-dock exit, `150ms ease-out` | `var(--duration-exit) var(--ease-out-quint)`; the JS unmount timer changes in lockstep. |
+| `product.css:1288,1296` composer value enter/exit, `240ms` legacy spring | `var(--duration-panel) var(--ease-spring)`; `SWAP_DURATION_MS` uses the same shared `240`. |
+| `product.css:1364` chip enter, `280ms` legacy spring | `var(--duration-emphasized) var(--ease-spring)` |
+| `product.css:1427` status crossfade, `150ms ease-out` | `var(--duration-enter) var(--ease-out-quint)` |
+| `product.css:1446` transcript-activity enter, `150ms` out-quint | `var(--duration-enter) var(--ease-out-quint)` |
+| `product.css:1511` update-pill enter, `280ms` legacy spring | `var(--duration-emphasized) var(--ease-spring)` |
+| `product.css:1673` toast enter, `200ms ease-out` | `var(--duration-enter) var(--ease-out-quint)` |
+| `product.css:1691` dialog pop-in, `160ms ease-out` | `var(--duration-enter) var(--ease-out-quint)` |
+| `product.css:1789` workspace-shell background/color/border transitions, `150ms` | each duration becomes `var(--duration-hover)` and timing becomes `var(--ease-standard)`. |
+| `product.css:2010,2101-2102,2113,2289` right-panel tab edge/color/fill/close transitions, `100ms ease` | `var(--duration-hover) var(--ease-standard)` in the existing longhand or shorthand form. |
+
+Finite activity feedback is named, not confused with interaction motion:
+`dom.css:339` stream reveal uses generated
+`--activity-stream-reveal-fade: 320ms`; the paired JS handoff remains
+`motion.activity.streamRevealHandoffDelayMs = 160`.
+`product.css:1483,1495` update-ready sweep keeps 700ms through generated
+`--activity-update-ready-sweep`. Both selectors carry the exact
+`/* activity-motion */` marker.
+
+Infinite activity recipes (caret, skeleton, thinking, brand breathe,
+level-bar wave, ripple, loading, snake, braille, spinners, and celebration
+loops) retain their current cadence and carry `/* activity-motion */`
+immediately before the owning rule. The design-CSS gate scopes that marker to
+one rule and permits raw numeric time only in that rule's `animation` and
+`animation-delay` declarations when its animation is `infinite`; this covers
+existing duration/delay fallbacks without exempting neighboring selectors.
+Finite activity timing must instead flow through a generated `--activity-*`
+variable. The gate strips ordinary comments before scanning, so prose such as
+the snake recipe's `0.08s` explanation is not source authority. It does not
+exempt a whole file or permit finite interaction literals merely because they
+live under `apps/packages/design`.
+
+#### 5.4.4 Named JS constant triage
 
 | Census constant | Current | Final authority | Decision |
 | --- | ---: | --- | --- |
@@ -1063,7 +1191,7 @@ the motion-token lint. The extra streaming cadence constants adjacent to the
 two named stream constants (`16`, `32`, `240`, and the derived settle value)
 may live beside the streaming algorithm; they are not CSS animation mirrors.
 
-#### 5.4.4 Reduced motion
+#### 5.4.5 Reduced motion
 
 At the generated token layer:
 
@@ -1105,7 +1233,6 @@ of the component's accessibility contract.
 | `#b0567c` | `--color-compute-target-pink`; option value becomes `var(--color-compute-target-pink)`. |
 | `#F22C3D`, `#FFFFFF80`, `#FFFFFF`, `#00A67D` in `highlighting.test.ts` | Replace expected literals with imported generated code-palette constants. No test-file allowlist. |
 | `#1c1c1c`, `#232323`, `#2b2b2b` in negative diff assertions | Exact matcher exception for `.not.toContain(<hex>)`; these prove forbidden colors are absent and do not style output. |
-| `#fb7185`, `#7c3aed`, `#171717`, `#fff` in `PlaygroundAttachmentFixtures.tsx` | Exact-file allowlist as an embedded SVG fixture asset (same treatment as authored SVG assets); never available as app classes. |
 | `#ff5f57`, `#febc2e` | Design tokens `--color-window-control-close` and `--color-window-control-minimize`; playground uses `bg-window-control-close` / `bg-window-control-minimize`. |
 | `#823`, `#737`, `#381`, `#1333`, `#1042`, `#123`, `#124`, `#125`, and URL fragment `#caf…` | Not colors. The gate must parse color-bearing syntax or explicitly reject issue/PR/URL-fragment contexts rather than allowlisting their files. |
 
@@ -1113,22 +1240,42 @@ The four census-excluded source groups retain their stated policy:
 brand/provider SVG paths are exact-file allowlisted; Shiki and Monaco palette
 outputs are generated from design and their generated output files are
 allowlisted. Hand-authored raw hex is not allowed in those generated palette
-consumers. No other raw-hex allowlist is implied.
+consumers.
+
+Playground and test-fixture paths are outside the raw-hex lint scope as
+categories, not through per-file exceptions. The categorical matcher is a
+normalized path segment named `playground` or `fixtures`, or a source basename
+ending in `Fixture`/`Fixtures`; it does not exclude all `.test.*` files.
+Consequently the embedded SVG data in
+`PlaygroundAttachmentFixtures.tsx` remains byte-for-byte unchanged and does
+not create `fixtureColors` or production design tokens. This scope rule also
+prevents PR/issue fixture strings from being mistaken for colors. Production
+code, including non-fixture tests of generated palette behavior, still
+follows the dispositions above. No additional production raw-hex allowlist is
+implied.
 
 ### 5.6 Row-action icon-button contract and census adoption
 
 The sanctioned primitive is
 `@proliferate/ui/layout/RowActionIconButton`:
 
-- native `<button>` via `IconButton`; `type="button"`;
+- `forwardRef<HTMLButtonElement, RowActionIconButtonProps>` over the native
+  `<button>` from `IconButton`; `type="button"`. Forwarding is mandatory
+  because `WorkspaceItemMenu` measures the trigger ref for its native-menu
+  fallback;
 - fixed `size-7` (28px) hit target, `rounded-md` (8px);
 - 16px glyph via `text-ui [&_svg]:icon-control`;
 - resting semantic muted ink, `hover:bg-hover`,
   `active:bg-active`, hover/focus ink promotion;
 - default reveal contract:
-  `opacity-0 group-hover:opacity-100 group-focus-within:opacity-100
-  focus-visible:opacity-100 data-[state=open]:opacity-100`;
-- `visibility="always"` removes only reveal opacity classes;
+  `pointer-events-none opacity-0
+  group-hover:pointer-events-auto group-hover:opacity-100
+  group-focus-within:pointer-events-auto
+  group-focus-within:opacity-100 focus-visible:pointer-events-auto
+  focus-visible:opacity-100 data-[state=open]:pointer-events-auto
+  data-[state=open]:opacity-100 disabled:!pointer-events-none`;
+- `visibility="always"` removes the hidden opacity and pointer-event classes,
+  leaving the button pointer-active;
 - open/active state uses `bg-active`;
 - requires `label` and supplies both `aria-label` and `title`;
 - stops click propagation before invoking its callback, because its owning row
@@ -1172,17 +1319,61 @@ whole-row navigation affordance into a second nested button.
 
 ### 5.7 Shadow migration
 
-| Current value/name | Final token/value | Visible use |
+| Current value/name | Final token/value | Exact consumers |
 | --- | --- | --- |
-| `--shadow-subtle: 0 1px 2px 0 rgb(0 0 0 / 0.05)` | unchanged `--shadow-subtle` | composer/card subtle elevation |
-| composer two-layer `0 3px 7.5px …, 0 0 20px …` | `--shadow-subtle` | composer becomes near-flat |
-| popover ring + `0 8px 16px -4px` | `--shadow-popover: 0 4px 12px rgb(0 0 0 / 0.12)` | menus/popovers/tooltips |
-| light floating stack and current floating aliases | `--shadow-modal: 0 25px 50px -12px rgb(0 0 0 / 0.5)` | dialogs/overlays |
-| `--shadow-floating-dark` same modal value | compatibility alias only; pixel-identical | existing dark floating consumers |
-| `--shadow-keystone` double shadow | removed | buttons become border/surface-led |
+| `--shadow-subtle: 0 1px 2px 0 rgb(0 0 0 / 0.05)` | unchanged `--shadow-subtle` | generated composer/card elevation only |
+| composer two-layer `0 3px 7.5px …, 0 0 20px …` / `--shadow-composer` | `--shadow-subtle` | generated composer surface |
+| current `--shadow-popover` ring + `0 8px 16px -4px` | `--shadow-popover: 0 4px 12px rgb(0 0 0 / 0.12)` | all existing `shadow-popover` menus/popovers/tooltips |
+| `shadow-floating` on popover/floating controls | `shadow-popover` | `AutomationAgentRunConfigPicker:25`, `WorkspaceArrivalAttachedPanel:80,190`, `TerminalCommandFloatingAction:36`, `TerminalTopBar:81` |
+| `shadow-floating` on dialogs | `shadow-modal` | `UpgradeGateDialog:37`, `ConfirmationDialog:50` |
+| `shadow-floating-dark` on large overlays/dialogs | `shadow-modal` | `UpdateRestartDialog:41`, `CommandPalette:143`, and playground `UpdateUiPlayground:39` |
+| `shadow-floating-dark` on floating side panels | `shadow-popover` | `FileTreeOverlay:85`, `PaneSideOverlay:64` |
+| `shadow-lg` on dialogs | `shadow-modal` | `AutomationEditorDialog:125`, `AlertDialog:59`, `Dialog:62`, and `ModalShell:50` |
+| `shadow-lg` on floating playground notices | `shadow-popover` | `AuthOnboardingPlayground:93,114,134` |
+| `shadow-lg` on non-floating content/control | remove the class (`shadow-none` only if merge precedence requires it) | `ChatSurfaceCard:29` and `Switch:40` |
+| three-layer arbitrary popover shadow | `shadow-popover` | `ComposerIntegrationsControl:74`, `WorkspaceStatusComposerControl:178` |
+| three-layer arbitrary modal shadow | `shadow-modal` | `RuntimePressureDetailsDialog:53` |
+| `0 8px 16px -4px` arbitrary search shadow | `shadow-popover` | `SessionContentSearchOverlay:118` |
+| composer-card ring encoded as `shadow-[0_0_0_0.5px_…]` | remove arbitrary shadow; use `ring-1 ring-border` | `WorkspaceActivityComposerCard:97` |
+| lateral `-8px 0 16px -8px` dock shadow | remove; retain border-led separation | `RightPanelFrame:99` |
+| `shadow-subtle` on non-floating support cards | remove | `SupportSurface:62,153` |
+| `shadow-subtle` on active workspace-chrome tabs | remove from both branches and their exact test pins | `workspace-chrome.ts:121,122` |
+| `--shadow-keystone` double shadow | removed | primary buttons become border/surface-led |
 
-Only floating layers use shadows. Non-floating cards and controls use borders
-and surface roles.
+Only floating layers and the generated composer surface keep shadows.
+Non-floating cards and controls use borders and surface roles. All repository
+class consumers of `shadow-floating` and `shadow-floating-dark` are migrated
+before the compatibility aliases are emitted; a source gate asserts zero
+remaining class consumers. The aliases may therefore point to
+`--shadow-modal` for external/runtime compatibility without accidentally
+giving a live popover the modal stack.
+
+### 5.8 Spacing and arbitrary-size closure
+
+The only arbitrary gap value is closed by Claude's ruling:
+
+| Current sites | Exact replacement |
+| --- | --- |
+| `AgentHarnessConfigComposer:68,69`; `CloudChatComposerControls:71,75,87`, all `gap-[5px]` | `gap-1.5` (6px) |
+
+All current `size-[…]` sites migrate through the ruled icon/container laws:
+
+| Current site/value | Exact replacement |
+| --- | --- |
+| `ComputeTargetSwatch:59`, inner `size-[62.5%]` | replace the percentage contract with per-variant semantic geometry: `inherit`/`xs`/`sm` own a `text-ui [&_svg]:icon-compact` 12px glyph; `md` owns `text-ui [&_svg]:icon-control` 16px. The swatch boxes become `size-full`, `size-4`, `size-5`, and `size-7` respectively. |
+| `IntegrationIcon:172`, inner `size-[62%]` in a 32px tile | container owns `text-ui [&_svg]:icon-large`, exactly 20px; glyph carries no size class. |
+| `PlanHandoffDialog:100`, `size-[26px]` icon tile | `size-7` (28px) with its paired 16px glyph. |
+| `CollapsedActions:118`, `size-[1em]` icon-only disclosure button | `size-5` (20px) control box; child remains `text-ui icon-compact` (12px). |
+| `TranscriptToolKindIcon:14`, `size-[1.143em]` | `icon-paired` (16px at the 13px chat base). |
+| `RepoPicker:92`, `size-[15px]` chip icon tile | `size-5` (20px) with `text-ui icon-compact`. |
+| `WorkspaceInventoryGlyphs:63`, `size-[18px]` | `size-5` (20px) wrapper; child uses the owning compact/paired icon tier. |
+| `RadioCardGroup:74`, `size-[18px]` selection indicator | `size-5` (20px), `text-ui icon-compact`. |
+| playground `FullFlowTabs:95`, `size-[16px]` agent bubble | `size-5` (20px). |
+| playground `AgentGlyph:35`, `size-[18px]` agent bubble | `size-5` (20px). |
+
+No arbitrary `gap-[…]` or `size-[…]` remains. Standard spacing utilities and
+the legal icon-control boxes `size-5|6|7` remain available; this rule does not
+ban layout width/height geometry, which is outside this pass.
 
 ## 6. Code palettes and React Native bridge
 
@@ -1223,8 +1414,32 @@ and surface roles.
 - Add exact Shiki/Monaco export-shape tests and prove both palettes derive
   from design. Preserve `highlighting.ts` direct `.palette` reads.
 - Add row-action behavior/markup tests: 28px box class, 16px glyph tier,
-  hover/active state classes, reveal/focus/open visibility, label/title,
-  disabled semantics, and stopped row propagation.
+  hover/active state classes, hidden pointer-event suppression,
+  group-hover/group-focus/open/focus-visible pointer restoration,
+  disabled pointer suppression after restoration, `visibility="always"`,
+  forwarded-ref identity and measurement,
+  reveal/focus/open visibility, label/title, disabled semantics, and stopped
+  row propagation.
+- Add exact source-census tests proving production contains no historical
+  accent state classes, no foreground-alpha interaction-overlay classes at
+  10% or lower, and no
+  `shadow-floating`, `shadow-floating-dark`, `shadow-lg`, or arbitrary-shadow
+  consumers. Assert each static owner from sections 5.1.1 and 5.7 uses its
+  exact ruled surface/shadow disposition.
+- Assert all direct and directional arbitrary radius forms are absent,
+  including the ten previously uncaptured `rounded-t-*`/`rounded-tl-*`
+  sites; pin global `rounded-lg` to 10px and update its 12px → 10px visual
+  contract.
+- Add a design-CSS finite-motion source test: every selector in section
+  5.4.3 uses the exact duration/easing variables, every raw-literal infinite
+  activity rule has `/* activity-motion */`, finite activity timing uses only
+  generated `--activity-*` variables, and no unmarked numeric finite
+  animation/transition value remains.
+- Assert the arbitrary-z census is empty, the composer outer wrapper is
+  `isolate z-popover`, its submenu is local `z-raised`, and the pre-existing
+  standard numeric-z baseline has no additions.
+- Assert all five `gap-[5px]` sites became `gap-1.5`, all ten arbitrary-size
+  sites match section 5.8, and neither arbitrary pattern remains.
 - Update tests that assert numeric `duration-*`, arbitrary radius/z, generic
   type, old state classes, or old palette hex to assert the semantic
   replacement.
@@ -1235,19 +1450,39 @@ Extend the pure-Python `check_appearance_scaling.py` path used by the
 `repo-shape` CI job, with unit fixtures for every accept/reject rule. Do not
 rely only on `check-design-system.sh`, which is a local/pretest gate.
 
-Reject in production roots outside the design authority:
+Reject in production roots:
 
 - `text-xs`, `text-sm`, `text-base`, `text-lg`, `text-xl`, arbitrary
   `text-[…]`, fixed glyph-size classes, and unowned `leading-[…]`;
-- `rounded-[…]`, arbitrary `z-[…]`, and new numeric z classes not mapped to
-  the semantic scale;
-- raw hex except the exact section-5.5 allowlist, inline `cubic-bezier`, and
-  interaction `ms`/`s` literals;
-- arbitrary icon-button `size-[…]`/freehand boxes after the 20/24/28 scale
-  migration, plus ruled arbitrary gap/size patterns;
+- `rounded-\[[^]]+\]` and
+  `rounded-(t|b|l|r|tl|tr|bl|br|s|e|ss|se|es|ee)-\[[^]]+\]`; arbitrary
+  `z-[…]`; and any
+  addition to the checked-in manifest of existing standard
+  `z-0|10|20|30|40|50` sites;
+- repository-authored `bg-accent`, `bg-sidebar-accent`, their selector or
+  opacity variants, and foreground-alpha interaction-overlay fills at 10% or
+  lower; only generated compatibility alias declarations may contain the
+  historical token names, while solid primary-button
+  `hover:bg-foreground/80|90` modulation remains legal;
+- raw hex outside design token/palette authority, with the production
+  exceptions in section 5.5; the exact segment/basename categories for
+  playground and test-fixture paths are excluded from the raw-hex lint scope
+  rather than file-allowlisted;
+- inline `cubic-bezier` and interaction `ms`/`s` literals outside design;
+- inside design CSS, every numeric finite animation/transition duration or
+  literal easing. Only animation/animation-delay declarations in the exact
+  one-rule scope of an `/* activity-motion */`-marked infinite activity, plus
+  generated `--activity-*` variables, are motion exceptions;
+- every `gap-\[[^]]+\]` and `size-\[[^]]+\]`. The five gap sites must be
+  `gap-1.5`; icon/control geometry must use the exact section-5.8 standard
+  box and semantic icon classes;
+- `shadow-floating`, `shadow-floating-dark`, `shadow-lg`, and
+  `shadow-[…]` in component classes after the section-5.7 migration;
 - token declarations in `product.css`/`dom.css`, untagged legacy aliases,
   and duplicate literal values for aliases;
-- backdrop-filter outside the existing composer/light-mode owner allowlist;
+- authored `backdrop-filter:` declarations outside the generated
+  light-composer declaration and the existing composer surface rule; Tailwind
+  `backdrop-blur*` utility usage is not matched by this CSS-property gate;
 - newly introduced unvirtualized long-list surfaces.
 
 Allow only:
@@ -1255,11 +1490,12 @@ Allow only:
 - exact brand/provider SVG files and generated Shiki/Monaco outputs;
 - the dev boot-stall emergency overlay;
 - the Chrome tab alpha mask;
-- the embedded playground SVG fixture;
-- negative gate fixtures and exact `.not.toContain(<hex>)` assertions;
+- playground/test-fixture paths, excluded categorically from raw-hex lint
+  only (all other foundation gates still scan them);
 - non-color PR/issue/URL fragments parsed as such;
 - non-motion clocks such as network timeouts, polling, cache windows,
-  batching, and measurement thresholds.
+  batching, and measurement thresholds;
+- marked infinite activity motion and generated `--activity-*` variables.
 
 ### 7.3 Required proofs
 
@@ -1311,51 +1547,72 @@ code reshaping, and exact-value raw-hex moves are non-visual and have no id.
 19. `[ICON-02] Compact glyph base` — accidental 7.5/9/10px generic bases →
     `text-ui icon-compact`, exactly 12px.
 20. `[ICON-03] Icon-button boxes` — freehand icon-only targets → legal
-    20/24/28px boxes.
-21. `[STATE-01] Hover overlay` — mixed 4%, 4.5%, 5%, 6%, 7.4%, and 9%
-    overlays → 7.8%; rows, menus, composer, sidebar, tabs, and row actions.
+    20/24/28px boxes; arbitrary 15/16/18/26px tiles, indicators, and
+    controls adopt the exact section-5.8 box/tier pairing.
+21. `[STATE-01] Hover overlay / static-tint split` — mixed 1.5%, 2%, 3%,
+    3.5%, 4%, 4.5%, 5%, 6%, 7%, 7.4%, 7.5%, 8%, 9%, and 10% overlays →
+    7.8%; rows, menus, composer, sidebar, tabs, and row actions. Static
+    arbitrary 1.8–4.75% foreground panels and historical static accent fills
+    move to their ruled `surface-control`, `surface-elevated-secondary`, or
+    diff-surface role rather than inheriting hover.
 22. `[STATE-02] Active overlay` — reused hover/accent and workspace-tab 8%
-    → 5.2%; pressed/open controls and active workspace tab.
-23. `[STATE-03] Selected overlay` — roughly 5–10% selected fills → 3.2%;
+    → 5.2%; pressed/open/focused-editing controls, resize feedback, and
+    active workspace tab.
+23. `[STATE-03] Selected overlay` — roughly 3.5–10% selected fills → 3.2%;
     workspace, automation, sidebar, file-tree, menu, and multi-selected tabs.
 24. `[STATE-04] Border alpha` — base 8% → 8.4%, collapsing composer 10%,
     sidebar 7.9%, and popover ring 8%; general and floating borders.
 25. `[RAD-01] Rows` — 5px/10px → 6px; automation/workspace/sidebar rows.
 26. `[RAD-02] Controls` — freehand 4–6px → 8px; checkboxes, segmented
     controls, tab controls, and row actions.
-27. `[RAD-03] Cards/popovers` — 8px/20px/26px → 10px; warnings, search,
-    menus/detail cards, and empty chat.
-28. `[RAD-04] Composer` — 16px → 12px; home/chat composer, footer, drag
-    target.
-29. `[RAD-05] Modals` — 12px/20px → 16px; runtime pressure and update dialog.
+27. `[RAD-03] Cards/popovers` — the globally generated `rounded-lg`
+    12px → 10px, plus arbitrary 8px/20px/26px → 10px; every existing
+    `rounded-lg` consumer, warnings, search, menus/detail cards, and empty
+    chat.
+28. `[RAD-04] Composer` — 16px/13px → 12px; home/chat composer, attached
+    panel top corners, footer, and drag target.
+29. `[RAD-05] Modals/large shell` — 12px/20px/22px → 16px; runtime
+    pressure, update dialog, and opaque workspace content-shell top-left
+    corner.
 30. `[RAD-06] Micro shapes` — 0.25em/2/3/4/5px → ruled 6px/8px role;
     provider/compute/repository tiles, chips, and composer options.
 31. `[RAD-07] Workspace tabs` — 10px → 6px.
-32. `[SHADOW-01] Composer elevation` — two-layer 3px/20px → subtle 1px/2px.
-33. `[SHADOW-02] Popover elevation` — ring + `0 8px 16px -4px` →
-    `0 4px 12px`; popovers, menus, tooltips.
-34. `[SHADOW-03] Modal elevation` — light floating stack → `0 25px 50px
-    -12px`; dialogs/overlays, while the matching dark value is unchanged.
-35. `[SHADOW-04] Keystone removal` — button double-shadow → border/surface
+32. `[SPACE-01] Five-pixel control gaps` — five `gap-[5px]` composer/config
+    control sites → `gap-1.5` (6px).
+33. `[SHADOW-01] Composer elevation` — two-layer 3px/20px and composer-card
+    ring shadow → subtle 1px/2px or border-led ring.
+34. `[SHADOW-02] Popover elevation` — ring/legacy floating stacks and
+    `0 8px 16px -4px` → `0 4px 12px`; popovers, menus, tooltips, floating
+    side panels, and playground floating notices.
+35. `[SHADOW-03] Modal elevation` — light floating/`shadow-lg` dialog stacks
+    → `0 25px 50px -12px`; dialogs/overlays, while matching dark modal values
+    stay unchanged. Non-floating card/control/dock shadows are removed.
+36. `[SHADOW-04] Keystone removal` — button double-shadow → border/surface
     treatment.
-36. `[MOTION-01] Hover/reveal` — 150/200ms → 120ms; sidebar, transcript/file
-    actions, rows, controls.
-37. `[MOTION-02] Entrances` — 150/200ms → 160ms out-quint; modal, popover,
-    content, and auth entrances.
-38. `[MOTION-03] Disclosure` — 150/300ms → 200ms; collapsibles, diff/file
+37. `[MOTION-01] Hover/reveal` — 100/150/200ms → 120ms; sidebar,
+    transcript/file actions, rows, controls, workspace chrome, and right-panel
+    tabs.
+38. `[MOTION-02] Entrances` — 150/200ms and keyword `ease-out` → 160ms
+    out-quint; modal, popover, toast, status, transcript, content, and auth
+    entrances; modal exits use the 120ms exit role.
+39. `[MOTION-03] Disclosure` — 150/300ms → 200ms; collapsibles, diff/file
     chevrons, tool actions.
-39. `[MOTION-04] Panels` — 150ms → 240ms; sidebars, right rail, terminal
-    panel.
-40. `[MOTION-05] Emphasized/spring` — 500ms or 280ms and duplicate
-    `(0.23,1,0.32,1)` → 300ms spring `(0.16,1,0.3,1)`; todo progress and
-    composer dock cards.
-41. `[MOTION-06] Composer dock exit` — 150ms → 120ms with CSS and JS timer
+40. `[MOTION-04] Panels` — 150/220ms → 240ms; sidebars, right rail, terminal
+    panel, and panel-in recipe.
+41. `[MOTION-05] Emphasized/spring` — 500ms or 280ms → 300ms; duplicate
+    `(0.23,1,0.32,1)` → spring `(0.16,1,0.3,1)` on todo progress,
+    composer dock cards, value swaps, chips, and update entrances. Value
+    swaps retain their 240ms panel duration.
+42. `[MOTION-06] Composer dock exit` — 150ms → 120ms with CSS and JS timer
     together.
-42. `[LAYER-01] Semantic stack` — arbitrary 1–2147483647 → 0–80 semantic
-    roles; isolated local order preserved, cross-surface overlap corrected.
-43. `[ROW-ACTION-01] Row actions` — bare/undersized 13–16px glyphs and
+43. `[LAYER-01] Semantic stack` — arbitrary 1–2147483647 → 0–80 semantic
+    roles; isolated local order preserved, including local raised composer
+    submenu order, and cross-surface overlap corrected. Existing standard
+    numeric-z sites remain outside this change.
+44. `[ROW-ACTION-01] Row actions` — bare/undersized 13–16px glyphs and
     16/20/24px or full-height targets → 16px glyph, 28px target, 8px radius,
-    7.8% hover fill, shared reveal/focus/open behavior at all 20 census sites.
+    7.8% hover fill, shared reveal/focus/open/pointer behavior at all 20
+    census sites.
 
 Every visually suspect deterministic fallback retains its replacement and
 gets `ui-foundation-escalation: <reason>`; those sites are reported beneath
