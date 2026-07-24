@@ -135,8 +135,9 @@ Two transports deliver a new active catalog, split by cost:
   (`runtime.rs::spawn_startup_pass`) reconciles installed agents against
   them. This is the only transport on desktop: the app updates on the
   nightly release train, and each update converges harnesses at next
-  launch. Desktop deliberately has no faster lane; hot-swapping harness
-  binaries under a live session is worse than a one-day lag.
+  launch. Desktop has no faster lane because the release train already
+  delivers the catalog daily; a live sync layer would add
+  desktop-to-server plumbing to save at most that one day.
 - **The heartbeat carries the catalog (cloud only).** Sandboxes are
   long-lived and catalog changes are frequent, so pin changes must land
   without a runtime binary roll. The server advertises its served catalog
