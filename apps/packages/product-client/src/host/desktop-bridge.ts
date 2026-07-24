@@ -17,7 +17,6 @@ import type { DesktopUpdaterBridge } from "./desktop-updater-bridge";
 export interface DesktopBridge {
   runtime: DesktopRuntimeBridge;
   files: DesktopFilesBridge;
-  localCredentials: DesktopCredentialsBridge;
   nativeUi: DesktopNativeUiBridge;
   updater: DesktopUpdaterBridge;
   worker: DesktopWorkerBridge;
@@ -104,18 +103,6 @@ export interface DesktopFilesBridge {
 
   reveal(path: string): Promise<void>;
   openTerminal(path: string): Promise<void>;
-}
-
-// --- Local agent credentials ------------------------------------------------
-
-/**
- * Local model/provider credentials (not Proliferate login credentials — those
- * remain owned by `host.auth`).
- */
-export interface DesktopCredentialsBridge {
-  listConfigured(): Promise<string[]>;
-  set(name: string, secret: string): Promise<void>;
-  remove(name: string): Promise<void>;
 }
 
 // --- Native UI --------------------------------------------------------------

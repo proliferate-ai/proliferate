@@ -16,7 +16,7 @@ operator procedures; those belong under `systems/`, `platforms/`, and
 | Proliferate Supervisor | Target process supervisor, worker/runtime spawn loops, install layout, service generation, update staging, rollback, and target smoke behavior. | [proliferate-supervisor/README.md](proliferate-supervisor/README.md) |
 | Server | FastAPI/cloud control plane domains, API/service/store layering, auth/resource access boundaries, database access, workers, integrations, config, and error shape. | [server/README.md](server/README.md), guides under [server/guides/](server/guides/) |
 | SDKs | AnyHarness TypeScript SDK generation/build ownership, generated-code boundaries, React SDK ownership, and contract-consumer rules. | [sdk/README.md](sdk/README.md) |
-| Auth Gateway (split-owned today) | Product account auth, server auth/resource access, and agent LLM gateway/BYOK/managed-credit materialization. | [../systems/product/auth/README.md](../systems/product/auth/README.md), [server/guides/auth.md](server/guides/auth.md), [../platforms/product/agent-auth.md](../platforms/product/agent-auth.md), [../platforms/product/agent-auth-bifrost-byok.md](../platforms/product/agent-auth-bifrost-byok.md); see note below |
+| Auth Gateway (split-owned today) | Product account auth, server auth/resource access, and agent LLM gateway/managed-credit materialization. | [../systems/product/auth/README.md](../systems/product/auth/README.md), [server/guides/auth.md](server/guides/auth.md); see note below |
 
 ## Auth Gateway Ownership
 
@@ -27,9 +27,13 @@ split by boundary:
   [../systems/product/auth/README.md](../systems/product/auth/README.md).
 - Server authentication, resource access, authorization helpers, and product
   policy layering live in [server/guides/auth.md](server/guides/auth.md).
-- Agent LLM gateway, BYOK, managed credits, and sandbox auth materialization
-  live in [../platforms/product/agent-auth.md](../platforms/product/agent-auth.md) and
-  [../platforms/product/agent-auth-bifrost-byok.md](../platforms/product/agent-auth-bifrost-byok.md).
+- Agent LLM auth (key vault, selections, `state.json` materialization) and the
+  LiteLLM-backed managed model gateway have no current platform document. The
+  prior `agent-auth.md` / `agent-auth-bifrost-byok.md` docs described the
+  retired Bifrost-era architecture and were removed; rewrites are planned. The
+  owning code is `server/proliferate/server/cloud/agent_gateway/`,
+  `server/proliferate/integrations/litellm/`, and
+  `anyharness-lib/src/domains/agents/route_auth/`.
 
 Create a dedicated `structures/auth-gateway/` spec only if the gateway becomes
 a separately deployed or separately owned codebase boundary. Until then, keep

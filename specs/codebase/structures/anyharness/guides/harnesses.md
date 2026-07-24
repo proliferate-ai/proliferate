@@ -38,7 +38,7 @@ Use one file per provider:
 ```text
 harnesses/claude.md
 harnesses/codex.md
-harnesses/gemini.md
+harnesses/grok.md
 ```
 
 Each provider doc should answer:

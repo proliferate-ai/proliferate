@@ -15,13 +15,7 @@ import type {
   DesktopUpdateDownloadProgress,
 } from "@proliferate/product-client/host/desktop-updater-bridge";
 
-import { getRuntimeInfo } from "./runtime";
-import {
-  deleteEnvVarSecret,
-  listConfiguredEnvVarNames,
-  restartRuntime,
-  setEnvVarSecret,
-} from "./credentials";
+import { getRuntimeInfo, restartRuntime } from "./runtime";
 import {
   getHomeDir,
   listAvailableEditors,
@@ -121,16 +115,6 @@ export const desktopBridge: DesktopBridge = {
     openTarget,
     reveal: revealInFinder,
     openTerminal: openInTerminal,
-  },
-
-  localCredentials: {
-    listConfigured: listConfiguredEnvVarNames,
-    set(name: string, secret: string): Promise<void> {
-      return setEnvVarSecret(name, secret);
-    },
-    remove(name: string): Promise<void> {
-      return deleteEnvVarSecret(name);
-    },
   },
 
   nativeUi: {

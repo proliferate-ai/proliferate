@@ -118,9 +118,9 @@ Hard:
 
 Soft:
 
-- [`agent-auth.md`](agent-auth.md) — MCP credentials are different
-  from agent LLM auth, but the worker fulfillment endpoints reuse the same
-  pattern.
+- Agent LLM auth (see the Agent auth row in [README.md](README.md)) — MCP
+  credentials are different from agent LLM auth, but the worker fulfillment
+  endpoints reuse the same pattern.
 - [`billing.md`](billing.md) — runtime config readiness affects
   launch-preflight; billing readiness is checked alongside it.
 

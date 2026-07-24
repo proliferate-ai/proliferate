@@ -293,38 +293,6 @@ fn ensure_runtime_data_key() -> Result<String, String> {
 }
 
 #[tauri::command]
-pub async fn list_configured_env_var_names() -> Result<Vec<String>, String> {
-    let map = read_env_secrets_map()?;
-    Ok(KNOWN_ENV_VARS
-        .iter()
-        .filter(|var| map.contains_key(**var))
-        .map(|var| var.to_string())
-        .collect())
-}
-
-#[tauri::command]
-pub async fn set_env_var_secret(name: String, value: String) -> Result<(), String> {
-    let _guard = SECRET_FILE_LOCK
-        .lock()
-        .map_err(|_| "secret file lock poisoned".to_string())?;
-    let mut map = read_env_secrets_map()?;
-    map.insert(name, value);
-    write_secret_file(&env_secrets_path()?, &map)
-}
-
-#[tauri::command]
-pub async fn delete_env_var_secret(name: String) -> Result<(), String> {
-    let _guard = SECRET_FILE_LOCK
-        .lock()
-        .map_err(|_| "secret file lock poisoned".to_string())?;
-    let mut map = read_env_secrets_map()?;
-    if map.remove(&name).is_some() {
-        write_secret_file(&env_secrets_path()?, &map)?;
-    }
-    Ok(())
-}
-
-#[tauri::command]
 pub async fn get_auth_session() -> Result<Option<AuthSessionRecord>, String> {
     // The boot read is also the natural point to purge any session/creds an older
     // build left in the keychain (runs at most once per process).
