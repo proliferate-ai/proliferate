@@ -304,7 +304,7 @@ test.describe("T2-WS-2: local + worktree create (desktop-web limits apply)", () 
 // - Local repo creation's success path (a real native folder picker
 //   selection -> addRepoFromPath -> repo registered) — Tauri-only, no web
 //   fallback exists for the OS file dialog itself, regardless of the
-//   lib/access/tauri/credentials.ts carve-out (this is a different Tauri
+//   Tauri-only carve-out in scenarios.md (this is a different Tauri
 //   surface with the same "no web equivalent" property).
 // - The cloud branch's happy path past the readiness blocker (repo search,
 //   validate, save) — this operator-incomplete deployment stops at the gate-1

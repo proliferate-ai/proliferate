@@ -166,8 +166,8 @@ never renders it**. Per the prefer-desktop-web ruling:
   UI into (used by tests/playground) — covers dialog logic, validation, trust
   screen, copy (`copy/auth/auth-copy.ts` `CONNECT_SERVER_LABELS`).
 - The `set_app_config` write + relaunch + credential store cannot be faked
-  (`lib/access/tauri/credentials.ts` throws outside Tauri) — that slice lives
-  only in T3-SH-2 with a real build.
+  (the Tauri `invoke` in `lib/access/tauri/config.ts` throws outside Tauri) —
+  that slice lives only in T3-SH-2 with a real build.
 
 ## 5. Why the artifact-chain gate exists (incident, 2026-07-09)
 
