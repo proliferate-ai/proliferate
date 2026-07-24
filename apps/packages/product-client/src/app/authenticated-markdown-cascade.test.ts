@@ -82,7 +82,7 @@ describe("authenticated Markdown stylesheet cascade", () => {
     try {
       await page.goto(fixtureUrl, { waitUntil: "networkidle" });
 
-      const result = await page.evaluate(() => {
+      const result = await page.evaluate(async () => {
         const px = (element: Element | null) => {
           if (!element) throw new Error("Expected fixture element was not rendered.");
           return Number.parseFloat(getComputedStyle(element).fontSize);
@@ -121,6 +121,10 @@ describe("authenticated Markdown stylesheet cascade", () => {
           throw new Error("Table overflow fixture was not rendered.");
         }
 
+        const eagerHref = document.querySelector<HTMLLinkElement>(
+          'link[data-sheet="eager"]',
+        )?.href;
+        const eagerResponse = eagerHref ? await fetch(eagerHref) : null;
         return {
           stylesheets: Array.from(
             document.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]'),
@@ -130,6 +134,7 @@ describe("authenticated Markdown stylesheet cascade", () => {
           highlightedDefault: metrics("highlighted-default"),
           highlightedLarge: metrics("highlighted-large"),
           proposalHeadings: headings("proposal-default"),
+          eagerStylesheetStatus: eagerResponse?.status ?? null,
           table: {
             rootWidth: tableRoot.clientWidth,
             shellWidth: tableShell.clientWidth,
@@ -142,8 +147,9 @@ describe("authenticated Markdown stylesheet cascade", () => {
       });
 
       expect(result.stylesheets).toEqual(["eager", "authenticated"]);
-      expect(result.defaultTranscript.headings).toEqual([18, 15, 14.0004]);
-      expect(result.largeTranscript.headings).toEqual([19, 16, 15.1671]);
+      expect(result.eagerStylesheetStatus).toBe(200);
+      expect(result.defaultTranscript.headings).toEqual([18, 16, 14]);
+      expect(result.largeTranscript.headings).toEqual([19, 17, 15]);
       expect(result.proposalHeadings).toEqual([11, 11, 10]);
 
       expect(result.defaultTranscript.prose).toBe(12);
@@ -198,6 +204,8 @@ function renderFixtureHtml(): string {
             --text-ui-sm: 10px;
             --text-chat: 10px;
             --text-chat--line-height: 18px;
+            --text-body-emphasis: 14px;
+            --text-heading: 16px;
             --text-title: 18px;
             --prose-text-size: 12px;
             --prose-text-line-height: 20px;
@@ -207,6 +215,8 @@ function renderFixtureHtml(): string {
             --text-ui-sm: 11px;
             --text-chat: 11px;
             --text-chat--line-height: 19px;
+            --text-body-emphasis: 15px;
+            --text-heading: 17px;
             --text-title: 19px;
             --prose-text-size: 13px;
             --prose-text-line-height: 21px;

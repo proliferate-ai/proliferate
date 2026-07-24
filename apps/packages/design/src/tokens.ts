@@ -1323,8 +1323,8 @@ export const themeTokens = {
     provenance: "[RETUNE:elevation/near-flat]",
   },
   "--shadow-modal": {
-    dark: "0 25px 50px -12px rgb(0 0 0",
-    light: "0 25px 50px -12px rgb(0 0 0",
+    dark: "0 25px 50px -12px rgb(0 0 0 / 0.5)",
+    light: "0 25px 50px -12px rgb(0 0 0 / 0.5)",
     provenance: "[RETUNE:elevation/near-flat]",
   },
   "--shadow-popover": {

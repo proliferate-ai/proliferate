@@ -1,9 +1,10 @@
 @import "tailwindcss";
+@import "../theme.css";
+
 @source "../../../ui/src";
 @source "../../../product-ui/src";
 @source "../../../product-surfaces/src";
 @source "../../../product-client/src";
-@import "../theme.css";
 
 @utility icon-status {
   width: var(--icon-status);

@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { compile } from "tailwindcss";
 
 import {
   colors,
@@ -191,6 +192,7 @@ function topLevelBlocks(css) {
 
 const output = await readFile(resolve(root, "dist/theme.css"), "utf8");
 assert(output === expectedCss, "dist/theme.css drifted from an independent authority projection");
+await compile(output, { base: root });
 assert(Object.keys(currentTokenDispositions).length === 285, "expected exactly 285 frozen dispositions");
 assert(removedTokenNames.length === 70, "expected exactly 70 removed global names");
 assert(legacyAliasNames.length === 15, "expected exactly 15 compatibility aliases");
@@ -454,6 +456,14 @@ for (const sourceName of ["dom.css", "product.css"]) {
 
 const domCss = cssSources["dom.css"];
 const productCss = cssSources["product.css"];
+const tailwindImportIndex = domCss.indexOf('@import "tailwindcss";');
+const themeImportIndex = domCss.indexOf('@import "../theme.css";');
+const firstSourceIndex = domCss.indexOf("@source ");
+assert(tailwindImportIndex >= 0, "dom.css must import Tailwind");
+assert(
+  themeImportIndex > tailwindImportIndex && themeImportIndex < firstSourceIndex,
+  "dom.css must import generated theme.css before @source so CSS import order stays valid",
+);
 const domRoot = topLevelBlocks(domCss).find(({ selector }) => selector === ":root")?.body ?? "";
 assert(
   /font-family:\s*var\(--font-sans\);/.test(domRoot),
