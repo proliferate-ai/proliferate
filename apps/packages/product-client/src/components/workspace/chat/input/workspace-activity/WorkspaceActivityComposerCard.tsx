@@ -91,10 +91,16 @@ export function WorkspaceActivityComposerCard({
           // own stroke below — a real border paints inside the box instead,
           // which reads ~0.5px narrower and creates a visible jog at the
           // cap/surface seam even though both boxes share the same width.
-          // The shadow's bottom edge bleeds into the surface's box, but the
-          // surface is later in DOM (paints on top) and opaque, so that
-          // sliver is covered — no separate bottom-only clip needed.
-          className="-mx-5 flex h-9 w-[calc(100%+2.5rem)] min-w-0 items-center justify-start rounded-t-xl bg-[var(--color-composer-background)] px-3 text-left text-ui-sm text-muted-foreground ring-1 ring-border hover:text-foreground"
+          //
+          // [CHAT-01] made `--color-composer-background` translucent (dark is
+          // 96% of a lifted gray), which retires the old "the surface below is
+          // opaque, so the ring's bottom bleed is covered" reasoning: at 96%
+          // alpha, 4% of that sliver now reads through as a stray line at the
+          // seam. Fill, backdrop treatment and the bottom-only clip therefore
+          // come from `.chat-composer-surface--cap` — the composer's own design
+          // CSS, which owns both the translucent role and `backdrop-filter`,
+          // rather than authored utilities here.
+          className="chat-composer-surface--cap -mx-5 flex h-9 w-[calc(100%+2.5rem)] min-w-0 items-center justify-start rounded-t-xl px-3 text-left text-ui-sm text-muted-foreground ring-1 ring-border hover:text-foreground"
           aria-label={`Workspace activity: ${shownFacts.map((fact) => fact.label).join(", ")}`}
           data-workspace-activity-trigger="true"
           data-telemetry-mask

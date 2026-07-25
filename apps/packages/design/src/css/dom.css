@@ -152,6 +152,23 @@ body {
   backdrop-filter: var(--color-composer-backdrop-filter);
 }
 
+/* [CHAT-01] The cap variant of that same surface: composer chrome attached
+   ABOVE the input box (the workspace-activity cap). It is the composer surface,
+   so it takes the identical translucent fill and backdrop treatment — a cap
+   that skipped the blur would be translucent over an unblurred transcript one
+   pixel above a surface translucent over a blurred one, reading as two
+   different greys at the seam. It carries no elevation shadow (it is not the
+   floating edge); its 1px stroke is painted outside the border-box by the
+   consumer (ring-*) to line up with the surface's 0.5px shadow stroke, and the
+   bottom of that stroke is clipped here because the surface below is no longer
+   opaque enough to cover the bleed at 96% alpha. */
+.chat-composer-surface--cap {
+  background-color: var(--color-composer-background);
+  -webkit-backdrop-filter: var(--color-composer-backdrop-filter);
+  backdrop-filter: var(--color-composer-backdrop-filter);
+  clip-path: inset(-2px -2px 0 -2px);
+}
+
 /* The composer uses a fail-safe one-pixel visual caret because current macOS
    WebKit paints its redesigned native caret at two CSS pixels. Layout-critical
    styles are inline on the overlay; this rule is the native fallback whenever
