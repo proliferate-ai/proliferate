@@ -1,19 +1,20 @@
 # Agent Distribution
 
-Status: target. The body is written in the ideal state. Every difference from
-`main` today is listed in [Current gaps](#current-gaps); the list shrinks as
-follow-up PRs land, and the label comes off when it is empty.
+Status: target. The body is written in the ideal state. Every difference from `main` today is listed in [Current gaps](#current-gaps); the list shrinks as follow-up PRs land, and the label comes off when it is empty.
 
-This document replaces `agent-catalog-readiness.md`, which was written as a
-migration playbook and had served its purpose.
+This document replaces `agent-catalog-readiness.md`, which was written as a migration playbook and had served its purpose.
 
 ## Purpose
 
 Agent distribution answers five questions for the coding-agent harnesses
-(claude, codex, opencode, cursor, grok): what an agent is, how it gets onto a
-machine, how a machine knows it is current, how the definitions themselves get
-updated, and what the product sees. Everything downstream (auth selection,
-model pickers, session launch) consumes this platform's answers.
+(claude, codex, opencode, cursor, grok): 
+- What an agent is
+- How it gets onto amachine
+- How a machine knows it is current
+- How the definitions / installation instructions themselves get updated
+- What the product sees.
+
+Everything downstream (auth selection, model pickers, session launch) consumes this platform's answers.
 
 Boundaries: which credential a user selects for a harness and `state.json`
 materialization belong to agent-auth. Model snapshot freshness and
