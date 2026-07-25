@@ -35,7 +35,7 @@ describe("useComposerDockCardPresence", () => {
       .toContain("composer-dock-card-enter");
   });
 
-  it("keeps the card rendered with the exit class for 150ms, then unmounts", () => {
+  it("keeps the card rendered with the exit class for 120ms, then unmounts", () => {
     vi.useFakeTimers();
     const { rerender } = render(
       <PresenceHarness entryKey="permission:r1">
@@ -50,7 +50,7 @@ describe("useComposerDockCardPresence", () => {
     expect(exiting?.className).toContain("pointer-events-none");
 
     act(() => {
-      vi.advanceTimersByTime(150);
+      vi.advanceTimersByTime(120);
     });
 
     expect(screen.queryByTestId("card")).toBeNull();
