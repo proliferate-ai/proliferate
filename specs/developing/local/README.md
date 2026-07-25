@@ -42,7 +42,7 @@ make git-hooks
 
 `scripts/git-hooks/pre-commit` runs the frontend foundation checks against the
 **staged** files only, so it costs a fraction of a second: the appearance-scaling
-and design-vocabulary guard for staged `apps/packages/{ui,product-ui,product-client}/src`
+and design-vocabulary guard for staged `apps/packages/{ui,product-ui,product-surfaces,product-client}/src`
 and `apps/desktop/src` sources, plus the generated-theme byte-equality check when
 anything under `apps/packages/design/` is staged.
 
