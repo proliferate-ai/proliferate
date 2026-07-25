@@ -87,8 +87,8 @@ requires separately approved remediation scope and the applicable runbook.
   renderer and AnyHarness timing baselines.
 - [../operating/stripe-webhook-failure.md](../operating/stripe-webhook-failure.md):
   inspect and recover Stripe webhook delivery failures.
-- [../operating/e2b-template-rollback.md](../operating/e2b-template-rollback.md):
-  roll back a managed-cloud E2B runtime release.
+- [../operating/e2b-template-operations.md](../operating/e2b-template-operations.md):
+  publish, promote, or roll back a managed-cloud E2B runtime template.
 - [../operating/analytics/sentry.md](../operating/analytics/sentry.md): inspect
   Sentry projects, releases, alerts, privacy behavior, and support tags.
 - [../deploying/ci-cd.md](../deploying/ci-cd.md): investigate deploy and release
