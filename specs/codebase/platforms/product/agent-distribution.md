@@ -34,8 +34,9 @@ harness supports the gateway route, never which models it serves.
 
 ## The two documents
 
-An agent is defined by two JSON documents in `catalogs/agents/`, split by
-who writes them:
+An agent is defined by two JSON documents in
+[`catalogs/agents/`](../../../../catalogs/agents/), split by who writes
+them:
 
 - `registry.json` is the **method document**: hand-written, reviewed intent.
   Per harness it declares how to install in the abstract (an npm package
@@ -61,7 +62,7 @@ machine ever reads it. It exists to be resolved, not to be installed from.
 
 | Content | Written by | Sole consumer |
 | --- | --- | --- |
-| Registry: install method (npm/git/ACP-registry specs, fallbacks) | humans | the producer pipeline (`resolve-pins.mjs`), which resolves it into catalog pins |
+| Registry: install method (npm/git/ACP-registry specs, fallbacks) | humans | the producer pipeline ([`resolve-pins.mjs`](../../../../scripts/agent-catalog/resolve-pins.mjs)), which resolves it into catalog pins |
 | Registry: auth and launch vocabulary (auth slots, env vars, discovery kinds, login policy, executable names) | humans | the runtime, for credential classification, detection, and catalog pairing validation |
 | Catalog: pins and probe-observed facts | the pipeline | the installer and the runtime's projections |
 
@@ -96,7 +97,8 @@ Document laws:
   `gateway` auth context). Harness-role choices for gateway models (which
   model serves cheap subtasks) are gateway-side configuration.
 - Versions follow `YYYY-MM-DD.revision` and strictly increase whenever
-  content changes (`scripts/agent-catalog/check-version-discipline.mjs`).
+  content changes
+  ([`scripts/agent-catalog/check-version-discipline.mjs`](../../../../scripts/agent-catalog/check-version-discipline.mjs)).
 - `catalog.draft.json` under `scripts/agent-catalog/` and the bundled
   `catalogs/agents/catalog.json` are byte-identical; the draft is the
   pipeline's output and the lockfile is its promotion.
@@ -106,7 +108,7 @@ Document laws:
 The installer materializes exactly what the catalog pin says and nothing
 else. Downloads are sha256-verified; npm and git installs use the pinned
 specifier. Fail-closed rules, enforced in code
-(`anyharness-lib/src/domains/agents/installer/`):
+([`anyharness-lib/src/domains/agents/installer/`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/installer/)):
 
 - No pin for the platform means no install. There is no fallback to "npm
   latest", no resolving the registry spec at install time, no adopting a
@@ -121,10 +123,13 @@ specifier. Fail-closed rules, enforced in code
 Installation is automatic. Every harness supported on a surface converges
 with no user action: absent means install, drifted means reinstall, and
 both are the same mechanism — the reconcile job
-(`installer/reconcile/execution.rs`), triggered by the startup pass on
-every runtime boot (`runtime.rs::spawn_startup_pass`),
+([`installer/reconcile/execution.rs`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/installer/reconcile/execution.rs)),
+triggered by the startup pass on every runtime boot
+(`spawn_startup_pass` in
+[`runtime.rs`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/runtime.rs)),
 walks the supported set and installs whatever the drift planner
-(`installer/install_policy.rs`) says is absent or stale. A user
+([`installer/install_policy.rs`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/installer/install_policy.rs))
+says is absent or stale. A user
 authenticates harnesses; they never install them. Completed installs
 poke the model-snapshot reconciler ([model-catalog.md](model-catalog.md))
 so a newly converged harness re-probes its models without extra wiring.
@@ -140,8 +145,8 @@ download:
 
 | Surface | claude, codex | opencode, grok | cursor |
 | --- | --- | --- | --- |
-| Desktop | Seeded: the app bundles a prebuilt seed archive (`scripts/build-agent-seed.mjs`), hydrated into the runtime home at launch | Auto-installed in the background by the first startup pass | Auto-installed in the background (local only) |
-| Cloud (E2B) | Baked into the template image at build (`scripts/build-template.mjs`) | Auto-installed at first boot by the startup pass | Not supported in cloud |
+| Desktop | Seeded: the app bundles a prebuilt seed archive ([`scripts/build-agent-seed.mjs`](../../../../scripts/build-agent-seed.mjs)), hydrated into the runtime home at launch | Auto-installed in the background by the first startup pass | Auto-installed in the background (local only) |
+| Cloud (E2B) | Baked into the template image at build ([`scripts/build-template.mjs`](../../../../scripts/build-template.mjs)) | Auto-installed at first boot by the startup pass | Not supported in cloud |
 
 The seed and the bake are the same install run executed early; both write
 the same manifests, so the reconcile below treats seeded, baked, and
@@ -154,7 +159,8 @@ runtime startup — install when absent, reinstall on drift. There is no
 "detect what changed" step anywhere: every boot fires an idempotent
 reconcile, and the reconcile itself discovers the work by diffing pins
 against install manifests. One planner owns that diff
-(`installer/install_policy.rs`), per agent and per artifact role (the ACP
+([`installer/install_policy.rs`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/installer/install_policy.rs)),
+per agent and per artifact role (the ACP
 adapter and the wrapped native CLI drift independently): compare the
 manifest's recorded version and sha256 against the active pin and
 reinstall in precedence order requested reinstall, version drift, missing
@@ -168,8 +174,9 @@ The reconcile runs from two pokes, both covering the full supported set
 for the surface (PATH-provided agents excluded, cursor excluded in
 cloud):
 
-- the startup pass (`runtime.rs::spawn_startup_pass`) on every runtime
-  boot, after seed hydration;
+- the startup pass (`spawn_startup_pass` in
+  [`runtime.rs`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/runtime.rs))
+  on every runtime boot, after seed hydration;
 - an explicit request (the settings pane's reinstall action, or a scoped
   `POST /v1/agents/reconcile`).
 
@@ -178,13 +185,16 @@ converged sequentially, internal pokes waiting out a busy slot
 (250ms retry) rather than dropping. Progress is polled, not pushed:
 `GET /v1/agents/reconcile` reports per-agent, per-role phase and
 download progress, and the desktop polls it continuously
-(`sdk-react/hooks/agents.ts::useAgentReconcileStatusQuery` — 1.5s while a
-job runs, 750ms while downloading, 30s idle discovery).
+(`useAgentReconcileStatusQuery` in
+[`sdk-react/src/hooks/agents.ts`](../../../../anyharness/sdk-react/src/hooks/agents.ts)
+— 1.5s while a job runs, 750ms while downloading, 30s idle discovery).
 
 One transport delivers a new active catalog, on every surface: **the
 runtime binary carries it.** `catalog.json` is compiled into the runtime
-(`include_str!` in `catalog/bundled.rs`; a document that fails validation
-fails the build), so which harness pins a machine is on is answered by
+(`include_str!` in
+[`catalog/bundled.rs`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/bundled.rs);
+a document that fails validation fails the build), so which harness pins
+a machine is on is answered by
 one number — the runtime version — and a runtime binary update delivers
 new pins by definition. The startup pass after the swap is the entire
 convergence story; there is no document push, no second version to
@@ -217,26 +227,29 @@ sidecars, replaced only by an app update; neither ever self-swaps).
 
 The pin's provenance: release CI stamps `RUNTIME_VERSION` (and
 `WORKER_VERSION`) into the server image at build time
-(`server/version.py`); every heartbeat ack advertises them as
+([`server/version.py`](../../../../server/proliferate/server/version.py));
+every heartbeat ack advertises them as
 `desired_versions`. A server deploy is therefore the fleet trigger — each
 sandbox converges within one heartbeat interval (~30s). A per-sandbox
 override column exists for targeted pinning ahead of or behind the fleet.
 
 The worker never touches processes or binaries. On mismatch it writes an
 update request (exact version and artifact URL) into the supervisor's
-file mailbox (`proliferate-worker/src/supervisor_bridge/mailbox.rs`) and
-moves on. The supervisor drains the mailbox — on child exit and on a
+file mailbox
+([`proliferate-worker/src/supervisor_bridge/mailbox.rs`](../../../../anyharness/crates/proliferate-worker/src/supervisor_bridge/mailbox.rs))
+and moves on. The supervisor drains the mailbox — on child exit and on a
 periodic poll tick — and runs the swap state machine
-(`proliferate-supervisor/src/update/activate/`): download, sha256
+([`proliferate-supervisor/src/update/activate/`](../../../../anyharness/crates/proliferate-supervisor/src/update/activate/)):
+download, sha256
 re-verify, stage, journal-protected atomic swap (a crash mid-swap is
 repaired at next boot from the journal), restart in dependency order
 (runtime before worker), health-gate against `/health` (which must
 report the desired version), roll back to the `.prev` copy on any
 failure. A failed pin is recorded and not retried until a newer pin
 supersedes it. The supervisor's run loop
-(`proliferate-supervisor/src/process/mod.rs`) also restarts either child
-on crash with backoff, so a sandbox never depends on server-side
-reconnect to recover its runtime.
+([`proliferate-supervisor/src/process/mod.rs`](../../../../anyharness/crates/proliferate-supervisor/src/process/mod.rs))
+also restarts either child on crash with backoff, so a sandbox never
+depends on server-side reconnect to recover its runtime.
 
 Binary swaps do not wait for live sessions: the supervisor kills and
 restarts the runtime even mid-conversation. That is the intended
@@ -260,7 +273,8 @@ The catalog is regenerated by the probe pipeline, nightly and on demand
 `make catalog-update`):
 
 1. Resolve fresh pins from the registry
-   (`scripts/agent-catalog/resolve-pins.mjs`). The registry's install
+   ([`scripts/agent-catalog/resolve-pins.mjs`](../../../../scripts/agent-catalog/resolve-pins.mjs)).
+   The registry's install
    spec declares, per artifact, exactly where "latest" is asked for, and
    the resolver dispatches on the spec's `kind`: `direct_binary` GETs the
    declared `latestVersionUrl` (a provider-published text file whose body
@@ -295,18 +309,20 @@ back) is
 
 Three CI gates hold the documents honest:
 
-- `scripts/validate-agent-catalog.mjs`: structural invariants without a
-  Rust toolchain, including registry pairing and snapshot-evidence
-  cross-checks.
-- The Rust validation (`catalog/validation.rs`, exercised by every test
-  and at binary load): an invalid checked-in catalog cannot boot.
-- `scripts/agent-catalog/check-version-discipline.mjs`: version format
-  and monotonicity against the PR base.
+- [`scripts/validate-agent-catalog.mjs`](../../../../scripts/validate-agent-catalog.mjs):
+  structural invariants without a Rust toolchain, including registry
+  pairing and snapshot-evidence cross-checks.
+- The Rust validation
+  ([`catalog/validation.rs`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/validation.rs),
+  exercised by every test and at binary load): an invalid checked-in
+  catalog cannot boot.
+- [`scripts/agent-catalog/check-version-discipline.mjs`](../../../../scripts/agent-catalog/check-version-discipline.mjs):
+  version format and monotonicity against the PR base.
 
 ## Readiness projection
 
 Per target and harness, the runtime answers what the product may offer
-(`anyharness-lib/src/domains/agents/readiness/`):
+([`anyharness-lib/src/domains/agents/readiness/`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/readiness/)):
 
 | State | Meaning |
 | --- | --- |
@@ -333,13 +349,13 @@ options in the composer.
 
 | Layer | Path | Owns |
 | --- | --- | --- |
-| Documents | `catalogs/agents/` | registry.json (method), catalog.json (lockfile), registry.schema.json |
-| Document handling | `anyharness-lib/src/domains/agents/{catalog,registry}/` | Parsing, validation, registry pairing, bundled copies, read routes |
-| Install | `anyharness-lib/src/domains/agents/installer/` | Pin materialization, manifests, seed hydration, the reconcile job |
-| Readiness | `anyharness-lib/src/domains/agents/readiness/` | Artifact resolution, compatibility gates, credential classification, launch validation |
-| Producer | `scripts/agent-catalog/` | resolve-pins, probe runner, collation, version discipline, draft |
-| Cloud binary transport | `anyharness/crates/proliferate-worker/src/supervisor_bridge/` + `anyharness/crates/proliferate-supervisor/` | Worker-written update requests; supervisor-owned swap, restart, rollback |
-| Version pins | `server/proliferate/server/version.py` | Release-CI-stamped `RUNTIME_VERSION`/`WORKER_VERSION` advertised in heartbeat acks |
+| Documents | [`catalogs/agents/`](../../../../catalogs/agents/) | registry.json (method), catalog.json (lockfile), registry.schema.json |
+| Document handling | [`anyharness-lib/src/domains/agents/catalog/`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/), [`registry/`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/registry/) | Parsing, validation, registry pairing, bundled copies, read routes |
+| Install | [`anyharness-lib/src/domains/agents/installer/`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/installer/) | Pin materialization, manifests, seed hydration, the reconcile job |
+| Readiness | [`anyharness-lib/src/domains/agents/readiness/`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/readiness/) | Artifact resolution, compatibility gates, credential classification, launch validation |
+| Producer | [`scripts/agent-catalog/`](../../../../scripts/agent-catalog/) | resolve-pins, probe runner, collation, version discipline, draft |
+| Cloud binary transport | [`proliferate-worker/src/supervisor_bridge/`](../../../../anyharness/crates/proliferate-worker/src/supervisor_bridge/) + [`proliferate-supervisor/`](../../../../anyharness/crates/proliferate-supervisor/) | Worker-written update requests; supervisor-owned swap, restart, rollback |
+| Version pins | [`server/proliferate/server/version.py`](../../../../server/proliferate/server/version.py) | Release-CI-stamped `RUNTIME_VERSION`/`WORKER_VERSION` advertised in heartbeat acks |
 
 ## Failure modes
 
@@ -377,27 +393,32 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       lands, the producer sections of the old readiness doc are the only
       writeup.
 - [ ] The legacy cloud topology still exists beside the supervisor:
-      `proliferate-worker/src/anyharness_update.rs` (worker-owned
-      pgrep/kill/swap of the runtime), the worker's self-`exec` update
-      (`self_update.rs`), the server's non-supervisor provision branch,
-      and the D5 bridge that migrates legacy sandboxes. All of it — plus
-      the `PROLIFERATE_SUPERVISOR_OWNED_RUNTIME` gate itself — deletes
-      once the fleet is fully supervisor-owned.
+      [`proliferate-worker/src/anyharness_update.rs`](../../../../anyharness/crates/proliferate-worker/src/anyharness_update.rs)
+      (worker-owned pgrep/kill/swap of the runtime), the worker's
+      self-`exec` update
+      ([`self_update.rs`](../../../../anyharness/crates/proliferate-worker/src/self_update.rs)),
+      the server's non-supervisor provision branch, and the D5 bridge
+      that migrates legacy sandboxes. All of it — plus the
+      `PROLIFERATE_SUPERVISOR_OWNED_RUNTIME` gate itself — deletes once
+      the fleet is fully supervisor-owned.
 - [ ] The heartbeat catalog transport still exists: the server
       advertises its served catalog version in heartbeat acks
-      (`runtime_workers/service.py::record_heartbeat`), the worker
-      pushes the document into the runtime
-      (`proliferate-worker/src/catalog_sync.rs`), and the runtime
-      accepts it (`PUT /v1/catalogs/agents`, `catalog/sync.rs` with its
-      catalog-applied reconcile poke, and the server-side
-      `server/proliferate/server/catalogs/` ETag serving that feeds it).
-      All of it deletes under the binary-only transport law above; the
-      runtime keeps only the read routes (`GET
-      /v1/catalogs/agents{,/version}`).
+      (`record_heartbeat` in
+      [`runtime_workers/service.py`](../../../../server/proliferate/server/cloud/runtime_workers/service.py)),
+      the worker pushes the document into the runtime
+      ([`proliferate-worker/src/catalog_sync.rs`](../../../../anyharness/crates/proliferate-worker/src/catalog_sync.rs)),
+      and the runtime accepts it (`PUT /v1/catalogs/agents`,
+      [`catalog/sync.rs`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/sync.rs)
+      with its catalog-applied reconcile poke, and the server-side
+      [`server/proliferate/server/catalogs/`](../../../../server/proliferate/server/catalogs/)
+      ETag serving that feeds it). All of it deletes under the
+      binary-only transport law above; the runtime keeps only the read
+      routes (`GET /v1/catalogs/agents{,/version}`).
 - [ ] Installs are not yet automatic: the startup pass runs an
-      `installed_only` reconcile
-      (`runtime.rs::reconcile_installed_when_idle` hardcodes it), so an
-      absent opencode/grok stays `InstallRequired` until a user clicks
-      install, and session creation rejects a non-`Ready` harness rather
-      than converging it. The auto-install law above (full supported
-      set, PATH and cloud-cursor carve-outs) is not yet implemented.
+      `installed_only` reconcile (`reconcile_installed_when_idle` in
+      [`runtime.rs`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/runtime.rs)
+      hardcodes it), so an absent opencode/grok stays `InstallRequired`
+      until a user clicks install, and session creation rejects a
+      non-`Ready` harness rather than converging it. The auto-install
+      law above (full supported set, PATH and cloud-cursor carve-outs)
+      is not yet implemented.
