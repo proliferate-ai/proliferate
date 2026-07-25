@@ -4,7 +4,7 @@ Status: current procedure
 
 Use this runbook to provision, rotate, revoke, audit, or manually verify the
 daily `Catalog Probe` workflow. The durable catalog producer contract lives in
-[Agent Catalog And Readiness](../../codebase/platforms/product/agent-catalog-readiness.md),
+[Agent Distribution](../../codebase/platforms/product/agent-distribution.md),
 and the workflow's delivery role lives in the
 [Delivery system](../../codebase/systems/engineering/delivery/README.md).
 

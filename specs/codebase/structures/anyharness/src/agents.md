@@ -223,7 +223,7 @@ Important install cases:
   sha256-verified per-platform binary/archive download, or a pinned npm/git
   specifier. There is no install-time latest-fetch, PATH adoption, ACP-registry
   lookup, or fallback — a role with no pin is a hard error (see
-  `agent-catalog-readiness` Banned Shapes)
+  `agent-distribution.md` install laws)
 - the ACP-mode launch args for registry-backed adapters (e.g. cursor `acp`,
   opencode `acp`) are frozen into the pin and baked into the managed launcher;
   multi-file adapter bundles (cursor) keep their whole extracted tree

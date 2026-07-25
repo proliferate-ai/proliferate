@@ -1,9 +1,6 @@
 # Model Gateway
 
-Status: target. This document describes the accepted destination for the
-model gateway. The body is written in the ideal state. Every difference from
-`main` today is listed in [Current gaps](#current-gaps); the list shrinks as
-follow-up PRs land, and the label comes off when it is empty.
+Status: target. This document describes the accepted destination for the model gateway. The body is written in the ideal state. Every difference from `main` today is listed in [Current gaps](#current-gaps); the list shrinks as follow-up PRs land, and the label comes off when it is empty.
 
 ## Purpose
 

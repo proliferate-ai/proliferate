@@ -22,7 +22,7 @@ expectations, but it is not the owner of a full user workflow.
 | Model gateway | LiteLLM proxy artifact and deployment, enrollment/teams/virtual keys, budgets, access-group model gating, usage import. | [model-gateway.md](model-gateway.md) (Status: target) |
 | Billing | Credit authorization, Stripe subscription/refill behavior, budget reconciliation, billing state in product responses, and billing QA. | [billing.md](billing.md) |
 | Model catalog | Model catalog source of truth, projection, availability, and selector-facing catalog behavior. | [model-catalog.md](model-catalog.md) |
-| Agent catalog readiness | Agent descriptor catalog, readiness projection, install topology, seed artifacts, and launch resolution. | [agent-catalog-readiness.md](agent-catalog-readiness.md) |
+| Agent distribution | Registry/catalog document contract, pinned auto-install and seed topology, binary-carried catalog convergence, supervisor-owned runtime binary convergence, the probe pipeline, and readiness projection. | [agent-distribution.md](agent-distribution.md) (Status: target) |
 
 ## Naming Notes
 
