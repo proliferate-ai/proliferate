@@ -37,6 +37,7 @@ import { SidebarWorkspaceGitGlyph } from "./SidebarWorkspaceGitGlyph";
 import { WorkspaceItemMenu } from "./WorkspaceItemMenu";
 import { WorkspaceRenamePopover } from "./WorkspaceRenamePopover";
 import { ProductSidebarWorkspaceRow } from "@proliferate/product-ui/sidebar/ProductSidebarRepositories";
+import { PR_STATUS_TONE } from "@proliferate/product-ui/workspaces/PrStatusBadge";
 
 interface WorkspaceItemProps {
   workspaceId?: string;
@@ -206,14 +207,16 @@ export function WorkspaceItem({
     />
   ) : null;
 
-  // Leading well (§3.2): PR glyph + dot for real PR states only — rows with
-  // no PR (null/unknown or authoritative "none") leave the well empty.
+  // Leading well (§3.2): PR glyph colored per state for real PR rows only.
+  // Rows with no PR (null/unknown or authoritative "none") leave the well empty.
   // Activity indicators live in the row's RIGHT slot (trailingStatus).
   // Relative timestamp (trailingLabel) is also in the RIGHT slot, with lower
   // precedence than trailingStatus and unreadDot.
   const gitGlyph = sidebarGitGlyphForStatus(gitStatus);
   const prStatusView = gitGlyph ? prStatusViewFromGitStatus(gitStatus) : null;
-  const leadingGlyph = gitGlyph ? <SidebarWorkspaceGitGlyph glyph={gitGlyph} /> : null;
+  const leadingGlyph = gitGlyph ? (
+    <SidebarWorkspaceGitGlyph colorClass={prStatusView ? PR_STATUS_TONE[prStatusView.kind] : undefined} />
+  ) : null;
 
   const timestampLabel = lastInteracted ? formatSidebarRelativeTime(lastInteracted) : null;
 

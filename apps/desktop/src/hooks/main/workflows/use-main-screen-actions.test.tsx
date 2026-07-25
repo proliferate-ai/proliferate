@@ -64,6 +64,7 @@ describe("useMainScreenActions publish actions", () => {
     expect(spies.setPublishDialog).toHaveBeenLastCalledWith({
       open: true,
       initialIntent: "commit",
+      initialStep: "actions",
       workspaceId: "workspace-1",
     });
 
@@ -71,6 +72,7 @@ describe("useMainScreenActions publish actions", () => {
     expect(spies.setPublishDialog).toHaveBeenLastCalledWith({
       open: true,
       initialIntent: "publish",
+      initialStep: "actions",
       workspaceId: "workspace-1",
     });
 
@@ -78,6 +80,7 @@ describe("useMainScreenActions publish actions", () => {
     expect(spies.setPublishDialog).toHaveBeenLastCalledWith({
       open: true,
       initialIntent: "pull_request",
+      initialStep: "pull_request",
       workspaceId: "workspace-1",
     });
 
@@ -259,6 +262,7 @@ function mainScreenLayout(overrides: Partial<MainScreenLayoutState> = {}): {
       publishDialog: {
         open: false,
         initialIntent: "commit",
+        initialStep: "actions",
         workspaceId: null,
       },
       setPublishDialog,

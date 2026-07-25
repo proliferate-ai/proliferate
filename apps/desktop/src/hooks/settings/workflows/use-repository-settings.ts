@@ -199,6 +199,8 @@ export function useRepositorySettings(repository: SettingsRepositoryEntry | null
     setSetupDraft: (setupScript: string) => setDraft({ setupScript }),
     runCommandDraft: state.draft.runCommand,
     setRunCommandDraft: (runCommand: string) => setDraft({ runCommand }),
+    gitPublishInstructionsDraft: state.draft.gitPublishInstructions,
+    setGitPublishInstructionsDraft: (gitPublishInstructions: string) => setDraft({ gitPublishInstructions }),
     setExplicitDefaultBranch: (branchName: string | null) => {
       setDraft({ defaultBranch: branchName });
     },

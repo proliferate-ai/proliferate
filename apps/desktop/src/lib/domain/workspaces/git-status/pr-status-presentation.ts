@@ -75,9 +75,10 @@ export function prStatusCompoundLabel(
 }
 
 /**
- * Maps a composed git status to the PrStatusBadge view (§3.3 dot table).
- * Returns null when PR data is unknown (`pr: null`) or authoritatively absent
- * (`state: "none"`) — no dot is rendered in either case.
+ * Maps a composed git status to the PrStatusBadge view (§3.3). Returns null
+ * when PR data is unknown (`pr: null`) or authoritatively absent (`state:
+ * "none"`). Conflict attention escalates the kind to `checks_failing` so the
+ * icon renders in destructive tone, and prepends "Merge conflicts" to the label.
  */
 export function prStatusViewFromGitStatus(
   status: WorkspaceGitStatus | null | undefined,
@@ -86,14 +87,22 @@ export function prStatusViewFromGitStatus(
   if (!status || !pr) {
     return null;
   }
-  const kind = prStatusKind(pr);
+  let kind = prStatusKind(pr);
   if (!kind) {
     return null;
   }
+  const conflicted = status.attention === "conflicts";
+  if (conflicted) {
+    kind = "checks_failing";
+  }
+  const baseLabel = prStatusCompoundLabel(status);
+  const label = conflicted && baseLabel
+    ? `Merge conflicts · ${baseLabel}`
+    : baseLabel;
   return {
     kind,
     number: pr.number,
-    label: prStatusCompoundLabel(status),
+    label,
   };
 }
 

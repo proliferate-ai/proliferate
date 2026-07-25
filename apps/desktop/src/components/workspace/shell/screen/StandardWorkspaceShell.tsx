@@ -4,7 +4,7 @@ import {
   useEffect,
   useMemo,
 } from "react";
-import { PublishDialog } from "@/components/workspace/git/PublishDialog";
+import { CommitDialog } from "@/components/workspace/git/CommitDialog";
 import { ChatView } from "@/components/workspace/chat/ChatView";
 import { GlobalHeader } from "@/components/workspace/shell/topbar/GlobalHeader";
 import { WorkspaceContentView } from "@/components/workspace/shell/screen/WorkspaceContentView";
@@ -328,10 +328,10 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
                         </DebugProfiler>
 
                         {hasRuntimeReadyWorkspace && (
-                          <PublishDialog
+                          <CommitDialog
                             open={publishDialog.open}
                             workspaceId={publishDialog.workspaceId}
-                            initialIntent={publishDialog.initialIntent}
+                            initialStep={publishDialog.initialStep}
                             runtimeBlockedReason={runtimeBlockedReason}
                             repoDefaultBranch={publishRepoDefaultBranch}
                             onClose={actions.closePublishDialog}

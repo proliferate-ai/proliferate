@@ -13,6 +13,7 @@ describe("repo preferences", () => {
       defaultBranch: "main",
       setupScript: "pnpm install",
       runCommand: "",
+      gitPublishInstructions: "",
     });
   });
 
@@ -24,6 +25,7 @@ describe("repo preferences", () => {
       defaultBranch: null,
       setupScript: "",
       runCommand: "pnpm dev",
+      gitPublishInstructions: "",
     });
   });
 
@@ -36,11 +38,13 @@ describe("repo preferences", () => {
         defaultBranch: "main",
         setupScript: "",
         runCommand: "",
+        gitPublishInstructions: "",
       },
       "/repo-b": {
         defaultBranch: null,
         setupScript: "uv sync",
         runCommand: "uv run pytest",
+        gitPublishInstructions: "",
       },
     });
   });
@@ -52,10 +56,12 @@ describe("repo preferences", () => {
       defaultBranch: "main",
       setupScript: "pnpm install",
       runCommand: "pnpm dev",
+      gitPublishInstructions: "Use conventional commits",
     })).toEqual({
       defaultBranch: "release",
       setupScript: "pnpm install",
       runCommand: "pnpm dev",
+      gitPublishInstructions: "Use conventional commits",
     });
   });
 });

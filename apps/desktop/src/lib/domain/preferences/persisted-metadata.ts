@@ -69,6 +69,7 @@ export function selectPersistedUserPreferencesSlice(
     pasteAttachmentsEnabled: preferences.pasteAttachmentsEnabled,
     reviewDefaultsByKind: preferences.reviewDefaultsByKind,
     reviewPersonalitiesByKind: preferences.reviewPersonalitiesByKind,
+    gitPublishInstructions: preferences.gitPublishInstructions,
   };
 }
 

@@ -174,3 +174,140 @@ class TestAiMagicApi:
         assert first.status_code == 200
         assert second.status_code == 429
         assert second.json()["detail"]["code"] == "ai_magic_rate_limited"
+
+    @pytest.mark.asyncio
+    async def test_generate_git_publish_commit_message(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        ai_magic_service._git_publish_windows.clear()
+        session = await _register_and_login(client, "git-publish-commit@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+        monkeypatch.setattr(settings, "anthropic_api_key", "test-key")
+
+        async def fake_generate_message_text(**_: object) -> str:
+            return "fix(auth): resolve token refresh race condition"
+
+        monkeypatch.setattr(
+            "proliferate.server.ai_magic.service.generate_message_text",
+            fake_generate_message_text,
+        )
+
+        response = await client.post(
+            "/v1/ai_magic/git-publish/generate",
+            headers=headers,
+            json={
+                "promptText": "Fixed race condition in auth token refresh logic.",
+                "mode": "commit_message",
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["commitMessage"] == "fix(auth): resolve token refresh race condition"
+        assert data["prTitle"] is None
+        assert data["prBody"] is None
+
+    @pytest.mark.asyncio
+    async def test_generate_git_publish_pull_request(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        ai_magic_service._git_publish_windows.clear()
+        session = await _register_and_login(client, "git-publish-pr@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+        monkeypatch.setattr(settings, "anthropic_api_key", "test-key")
+
+        async def fake_generate_message_text(**_: object) -> str:
+            return '{"title": "Fix auth token refresh", "body": "Resolves race condition in refresh logic.\\n\\n- Fixed timing issue\\n- Added tests"}'
+
+        monkeypatch.setattr(
+            "proliferate.server.ai_magic.service.generate_message_text",
+            fake_generate_message_text,
+        )
+
+        response = await client.post(
+            "/v1/ai_magic/git-publish/generate",
+            headers=headers,
+            json={
+                "promptText": "Fixed race condition in auth token refresh logic.",
+                "mode": "pull_request",
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["commitMessage"] is None
+        assert data["prTitle"] == "Fix auth token refresh"
+        assert "race condition" in data["prBody"]
+
+    @pytest.mark.asyncio
+    async def test_generate_git_publish_with_instructions(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        ai_magic_service._git_publish_windows.clear()
+        session = await _register_and_login(client, "git-publish-instr@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+        monkeypatch.setattr(settings, "anthropic_api_key", "test-key")
+
+        async def fake_generate_message_text(**_: object) -> str:
+            return "chore(deps): update Claude SDK to v2.1.0"
+
+        monkeypatch.setattr(
+            "proliferate.server.ai_magic.service.generate_message_text",
+            fake_generate_message_text,
+        )
+
+        response = await client.post(
+            "/v1/ai_magic/git-publish/generate",
+            headers=headers,
+            json={
+                "promptText": "Updated Claude SDK dependency.",
+                "mode": "commit_message",
+                "instructions": "Use conventional commits with scope",
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["commitMessage"] == "chore(deps): update Claude SDK to v2.1.0"
+
+    @pytest.mark.asyncio
+    async def test_generate_git_publish_rate_limits(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        ai_magic_service._git_publish_windows.clear()
+        session = await _register_and_login(client, "git-publish-limit@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+        monkeypatch.setattr(settings, "anthropic_api_key", "test-key")
+        monkeypatch.setattr(ai_magic_service, "GIT_PUBLISH_RATE_LIMIT_REQUESTS", 1)
+        monkeypatch.setattr(ai_magic_service, "GIT_PUBLISH_RATE_LIMIT_WINDOW_SECONDS", 600)
+
+        async def fake_generate_message_text(**_: object) -> str:
+            return "fix: resolve issue"
+
+        monkeypatch.setattr(
+            "proliferate.server.ai_magic.service.generate_message_text",
+            fake_generate_message_text,
+        )
+
+        first = await client.post(
+            "/v1/ai_magic/git-publish/generate",
+            headers=headers,
+            json={"promptText": "Fixed issue.", "mode": "commit_message"},
+        )
+        second = await client.post(
+            "/v1/ai_magic/git-publish/generate",
+            headers=headers,
+            json={"promptText": "Fixed issue.", "mode": "commit_message"},
+        )
+
+        assert first.status_code == 200
+        assert second.status_code == 429
+        assert second.json()["detail"]["code"] == "ai_magic_rate_limited"

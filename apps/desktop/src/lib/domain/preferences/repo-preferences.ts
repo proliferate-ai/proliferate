@@ -2,18 +2,21 @@ export interface RepoConfig {
   defaultBranch: string | null;
   setupScript: string;
   runCommand: string;
+  gitPublishInstructions: string;
 }
 
 export type PersistedRepoConfigInput = Record<string, {
   defaultBranch?: string | null;
   setupScript?: string;
   runCommand?: string;
+  gitPublishInstructions?: string;
 }>;
 
 export const DEFAULT_REPO_CONFIG: RepoConfig = {
   defaultBranch: null,
   setupScript: "",
   runCommand: "",
+  gitPublishInstructions: "",
 };
 
 export function normalizeRepoConfig(
@@ -35,6 +38,10 @@ export function normalizeRepoConfig(
       config.runCommand === undefined
         ? current.runCommand
         : config.runCommand,
+    gitPublishInstructions:
+      config.gitPublishInstructions === undefined
+        ? current.gitPublishInstructions
+        : config.gitPublishInstructions,
   };
 }
 

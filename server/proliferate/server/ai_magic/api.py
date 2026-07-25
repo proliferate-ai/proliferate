@@ -5,12 +5,15 @@ from fastapi import APIRouter, Depends
 from proliferate.auth.dependencies import current_product_user
 from proliferate.db.models.auth import User
 from proliferate.server.ai_magic.models import (
+    GenerateGitPublishRequest,
+    GenerateGitPublishResponse,
     GenerateSessionTitleRequest,
     GenerateSessionTitleResponse,
     GenerateWorkspaceNameRequest,
     GenerateWorkspaceNameResponse,
 )
 from proliferate.server.ai_magic.service import (
+    generate_git_publish,
     generate_session_title,
     generate_workspace_name,
 )
@@ -34,3 +37,21 @@ async def generate_workspace_name_endpoint(
 ) -> GenerateWorkspaceNameResponse:
     name = await generate_workspace_name(user.id, prompt_text=body.prompt_text)
     return GenerateWorkspaceNameResponse(name=name)
+
+
+@router.post("/git-publish/generate", response_model=GenerateGitPublishResponse, response_model_by_alias=True)
+async def generate_git_publish_endpoint(
+    body: GenerateGitPublishRequest,
+    user: User = Depends(current_product_user),
+) -> GenerateGitPublishResponse:
+    result = await generate_git_publish(
+        user.id,
+        prompt_text=body.prompt_text,
+        mode=body.mode,
+        instructions=body.instructions,
+    )
+    return GenerateGitPublishResponse(
+        commit_message=result["commit_message"],
+        pr_title=result["pr_title"],
+        pr_body=result["pr_body"],
+    )

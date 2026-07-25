@@ -6,6 +6,7 @@ import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPag
 import { Button } from "@proliferate/ui/primitives/Button";
 import { SettingsMenu } from "@proliferate/ui/primitives/SettingsMenu";
 import { Switch } from "@proliferate/ui/primitives/Switch";
+import { Textarea } from "@proliferate/ui/primitives/Textarea";
 import { OpenTargetIcon } from "@/components/workspace/open-target/OpenTargetIcon";
 import { useAvailableEditors } from "@/hooks/access/tauri/shell/use-available-editors";
 import { resolvePreferredOpenTarget } from "@/lib/domain/chat/composer/preference-resolvers";
@@ -50,6 +51,7 @@ export function GeneralPane() {
     subagentsEnabled: state.subagentsEnabled,
     coworkWorkspaceDelegationEnabled: state.coworkWorkspaceDelegationEnabled,
     pasteAttachmentsEnabled: state.pasteAttachmentsEnabled,
+    gitPublishInstructions: state.gitPublishInstructions,
     set: state.set,
   })));
 
@@ -148,6 +150,21 @@ export function GeneralPane() {
             <Switch
               checked={preferences.pasteAttachmentsEnabled}
               onChange={(value) => preferences.set("pasteAttachmentsEnabled", value)}
+            />
+          </SettingsRow>
+      </SettingsSection>
+
+      <SettingsSection title="Git publishing">
+          <SettingsRow
+            label="Commit & pull request instructions"
+            description="Default instructions for AI-generated commit messages and PR descriptions. Per-repo instructions (Repo settings > Actions) override this."
+          >
+            <Textarea
+              value={preferences.gitPublishInstructions}
+              onChange={(e) => preferences.set("gitPublishInstructions", e.target.value)}
+              placeholder="e.g., Use conventional commits with scope"
+              rows={3}
+              className="w-full resize-none"
             />
           </SettingsRow>
       </SettingsSection>

@@ -33,3 +33,25 @@ export async function generateWorkspaceName(
     })
   ).data!;
 }
+
+export interface GenerateGitPublishRequest {
+  promptText: string;
+  mode: "commit_message" | "pull_request";
+  instructions?: string | null;
+}
+
+export interface GenerateGitPublishResponse {
+  commitMessage: string | null;
+  prTitle: string | null;
+  prBody: string | null;
+}
+
+export async function generateGitPublish(
+  request: GenerateGitPublishRequest,
+): Promise<GenerateGitPublishResponse> {
+  return (
+    await getProliferateClient().POST("/v1/ai_magic/git-publish/generate" as any, {
+      body: request,
+    })
+  ).data! as GenerateGitPublishResponse;
+}

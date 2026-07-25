@@ -9,6 +9,7 @@ import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSectio
 import { Checkbox } from "@proliferate/ui/primitives/Checkbox";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@proliferate/ui/primitives/Label";
+import { Textarea } from "@proliferate/ui/primitives/Textarea";
 import { SkeletonBlock, shimmerDelay } from "@/components/feedback/Skeleton";
 import { RunCommandHelp } from "@/components/settings/shared/RunCommandHelp";
 import { useCloudRepoEnvironmentEditor } from "@/hooks/settings/workflows/use-cloud-repo-environment-editor";
@@ -169,6 +170,8 @@ function ActionsLocalEditor({ repository }: { repository: SettingsRepositoryEntr
     setSetupDraft,
     runCommandDraft,
     setRunCommandDraft,
+    gitPublishInstructionsDraft,
+    setGitPublishInstructionsDraft,
     canSave,
     canRevert,
     save,
@@ -241,6 +244,21 @@ function ActionsLocalEditor({ repository }: { repository: SettingsRepositoryEntr
           />
           <RunCommandHelp scope="selected workspace" className="text-ui-sm text-muted-foreground/80" />
         </div>
+      </SettingsSection>
+      <SettingsSection title="Git publishing">
+        <SettingsRow
+          label="Commit & pull request instructions"
+          description="Steer AI-generated commit messages and PR descriptions for this repo. Overrides your user-level default when set."
+        >
+          <Textarea
+            aria-label="Git publish instructions for this repo"
+            value={gitPublishInstructionsDraft}
+            onChange={(e) => setGitPublishInstructionsDraft(e.target.value)}
+            placeholder="Use conventional commits. Reference the JIRA ticket from the branch name. Keep PR bodies under 5 bullets."
+            rows={3}
+            className="w-full resize-none"
+          />
+        </SettingsRow>
       </SettingsSection>
       <SettingsSaveFooter
         saveDisabled={!canSave}

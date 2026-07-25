@@ -1,4 +1,3 @@
-import { useCallback } from "react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -54,13 +53,6 @@ interface WorkspaceActionsMenuProps {
  */
 export function WorkspaceActionsMenu({ session, git }: WorkspaceActionsMenuProps) {
   const gitDisabled = git.gitActionsDisabledReason !== null;
-  const handlePr = useCallback(() => {
-    if (git.hasExistingPr) {
-      git.onViewPr();
-    } else {
-      git.onCreatePr();
-    }
-  }, [git]);
 
   return (
     <DropdownMenu>
@@ -121,14 +113,6 @@ export function WorkspaceActionsMenu({ session, git }: WorkspaceActionsMenuProps
         <DropdownMenuItem
           disabled={gitDisabled}
           title={git.gitActionsDisabledReason ?? undefined}
-          onSelect={handlePr}
-        >
-          <GitPullRequest className="size-4" />
-          {git.hasExistingPr ? "Open PR" : "Create PR"}
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          disabled={gitDisabled}
-          title={git.gitActionsDisabledReason ?? undefined}
           onSelect={git.onCommit}
         >
           <GitCommit className="size-4" />
@@ -142,6 +126,25 @@ export function WorkspaceActionsMenu({ session, git }: WorkspaceActionsMenuProps
           <ArrowUp className="size-4" />
           Push
         </DropdownMenuItem>
+        {git.hasExistingPr ? (
+          <DropdownMenuItem
+            disabled={gitDisabled}
+            title={git.gitActionsDisabledReason ?? undefined}
+            onSelect={git.onViewPr}
+          >
+            <GitPullRequest className="size-4" />
+            View pull request
+          </DropdownMenuItem>
+        ) : (
+          <DropdownMenuItem
+            disabled={gitDisabled}
+            title={git.gitActionsDisabledReason ?? undefined}
+            onSelect={git.onCreatePr}
+          >
+            <GitPullRequest className="size-4" />
+            Create pull request…
+          </DropdownMenuItem>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );

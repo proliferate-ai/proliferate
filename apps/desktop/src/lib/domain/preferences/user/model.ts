@@ -49,6 +49,7 @@ export interface UserPreferences {
   pasteAttachmentsEnabled: boolean;
   reviewDefaultsByKind: ReviewDefaultsByKind;
   reviewPersonalitiesByKind: ReviewPersonalitiesByKind;
+  gitPublishInstructions: string;
 }
 
 export const NEW_USER_DEFAULTS: UserPreferences = {
@@ -74,6 +75,7 @@ export const NEW_USER_DEFAULTS: UserPreferences = {
   pasteAttachmentsEnabled: true,
   reviewDefaultsByKind: { plan: null, code: null },
   reviewPersonalitiesByKind: { plan: [], code: [] },
+  gitPublishInstructions: "",
 };
 
 export const PERSISTED_RECORD_BACKFILL: UserPreferences = {
@@ -101,6 +103,7 @@ export const PERSISTED_RECORD_BACKFILL: UserPreferences = {
   pasteAttachmentsEnabled: true,
   reviewDefaultsByKind: { plan: null, code: null },
   reviewPersonalitiesByKind: { plan: [], code: [] },
+  gitPublishInstructions: "",
 };
 
 export const USER_PREFERENCE_DEFAULTS = NEW_USER_DEFAULTS;

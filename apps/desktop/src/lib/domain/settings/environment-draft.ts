@@ -2,6 +2,7 @@ export interface LocalEnvironmentDraft {
   defaultBranch: string | null;
   setupScript: string;
   runCommand: string;
+  gitPublishInstructions: string;
 }
 
 function normalizeNullableText(value: string | null | undefined): string | null {
@@ -20,6 +21,7 @@ export function normalizeLocalEnvironmentDraft(
     defaultBranch: normalizeNullableText(config?.defaultBranch),
     setupScript: normalizeText(config?.setupScript),
     runCommand: normalizeText(config?.runCommand),
+    gitPublishInstructions: normalizeText(config?.gitPublishInstructions),
   };
 }
 
@@ -31,7 +33,8 @@ export function isLocalEnvironmentDraftDirty(
   const normalizedBaseline = normalizeLocalEnvironmentDraft(baseline);
   return normalizedDraft.defaultBranch !== normalizedBaseline.defaultBranch
     || normalizedDraft.setupScript !== normalizedBaseline.setupScript
-    || normalizedDraft.runCommand !== normalizedBaseline.runCommand;
+    || normalizedDraft.runCommand !== normalizedBaseline.runCommand
+    || normalizedDraft.gitPublishInstructions !== normalizedBaseline.gitPublishInstructions;
 }
 
 export function buildLocalEnvironmentSavePatch(
