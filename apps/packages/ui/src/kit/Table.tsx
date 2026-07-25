@@ -43,7 +43,7 @@ function TableRow({ className, ...props }: ComponentProps<"tr">) {
     <tr
       data-slot="table-row"
       className={cn(
-        "border-b border-border transition-colors hover:bg-accent/50 data-[state=selected]:bg-accent",
+        "border-b border-border transition-colors hover:bg-hover data-[state=selected]:bg-selected",
         className,
       )}
       {...props}
@@ -56,7 +56,7 @@ function TableHead({ className, ...props }: ComponentProps<"th">) {
     <th
       data-slot="table-head"
       className={cn(
-        "h-8 px-2 text-left align-middle font-mono text-base font-medium uppercase tracking-[0.06em] text-muted-foreground",
+        "h-8 px-2 text-left align-middle font-mono text-ui-sm font-medium uppercase tracking-[0.06em] text-muted-foreground",
         className,
       )}
       {...props}

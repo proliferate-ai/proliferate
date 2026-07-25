@@ -57,8 +57,8 @@ function TabButton({ active, className = "", children, type = "button", ...props
       aria-selected={active}
       data-active={active ? "" : undefined}
       className={twMerge(
-        "inline-flex h-7 items-center justify-center rounded-md px-3 text-xs font-medium transition-colors disabled:pointer-events-none disabled:opacity-50",
-        active ? "bg-accent text-foreground" : "text-muted-foreground hover:text-foreground",
+        "inline-flex h-7 items-center justify-center rounded-md px-3 text-ui font-medium transition-colors disabled:pointer-events-none disabled:opacity-50",
+        active ? "bg-selected text-foreground" : "text-muted-foreground hover:bg-hover hover:text-foreground active:bg-active",
         className,
       )}
       {...props}

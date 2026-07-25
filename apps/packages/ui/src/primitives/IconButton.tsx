@@ -19,9 +19,9 @@ interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const toneClasses: Record<IconButtonTone, string> = {
-  default: "text-muted-foreground hover:bg-accent hover:text-foreground",
+  default: "text-muted-foreground hover:bg-hover hover:text-foreground active:bg-active",
   sidebar:
-    "text-sidebar-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-sidebar-ring",
+    "text-sidebar-muted-foreground hover:bg-hover hover:text-sidebar-foreground active:bg-active focus-visible:outline focus-visible:outline-2 focus-visible:outline-sidebar-ring",
 };
 
 const sizeClasses: Record<IconButtonSize, string> = {
@@ -47,7 +47,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
     ref,
   ) {
     const base =
-      "inline-flex cursor-pointer items-center gap-2 whitespace-nowrap font-[450] text-xs justify-center rounded-md border border-transparent ring-offset-background focus-visible:outline-none focus-visible:ring-none disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 transition-colors";
+      "inline-flex cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-md border border-transparent font-control text-ui ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-none disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0";
 
     return (
       <button

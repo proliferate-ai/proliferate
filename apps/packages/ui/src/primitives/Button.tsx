@@ -28,17 +28,17 @@ const variantClasses: Record<ButtonVariant, string> = {
   primary:
     "bg-primary text-primary-foreground font-medium hover:bg-primary/90",
   secondary:
-    "border border-border bg-card text-card-foreground hover:bg-accent transition-colors",
+    "border border-border bg-card text-card-foreground transition-colors hover:bg-hover active:bg-active",
   outline:
-    "border border-input text-muted-foreground hover:bg-accent",
+    "border border-input text-muted-foreground hover:bg-hover active:bg-active",
   ghost:
-    "text-muted-foreground hover:bg-accent hover:text-foreground",
+    "text-muted-foreground hover:bg-hover hover:text-foreground active:bg-active",
   destructive:
     "bg-destructive text-destructive-foreground font-medium hover:bg-destructive/90",
   inverted:
     "bg-foreground text-background hover:bg-foreground/80",
   sidebar:
-    "font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-sidebar-ring",
+    "font-medium text-sidebar-foreground hover:bg-hover hover:text-sidebar-foreground active:bg-active focus-visible:outline focus-visible:outline-2 focus-visible:outline-sidebar-ring",
   "sidebar-link":
     "text-ui font-medium text-sidebar-foreground underline decoration-sidebar-muted-foreground/60 underline-offset-2 hover:decoration-sidebar-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-sidebar-ring",
   unstyled: "",

@@ -10,7 +10,7 @@ export const RangeSlider = forwardRef<HTMLInputElement, RangeSliderProps>(
         ref={ref}
         type="range"
         className={twMerge(
-          "h-2 w-full cursor-pointer appearance-none rounded-full bg-foreground/10 accent-foreground disabled:cursor-not-allowed disabled:opacity-50",
+          "h-2 w-full cursor-pointer appearance-none rounded-full bg-input accent-foreground disabled:cursor-not-allowed disabled:opacity-50",
           className,
         )}
         {...props}

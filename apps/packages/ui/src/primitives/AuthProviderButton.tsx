@@ -28,7 +28,7 @@ export const AuthProviderButton = forwardRef<HTMLButtonElement, AuthProviderButt
           "relative flex h-11 w-full items-center justify-center gap-2.5 rounded-lg border px-4 text-ui font-semibold transition-colors disabled:pointer-events-none disabled:opacity-60",
           variant === "primary"
             ? "border-transparent bg-foreground text-background hover:bg-foreground/90"
-            : "border-border bg-card text-foreground hover:bg-accent",
+            : "border-border bg-card text-foreground hover:bg-hover active:bg-active",
           className,
         )}
         {...props}

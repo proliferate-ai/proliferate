@@ -8,7 +8,7 @@ type ComposerTextareaProps = TextareaHTMLAttributes<HTMLTextAreaElement>;
 // font+8 leading; placeholder --muted-foreground at 55% so it sits well below
 // typed text in both mono dark and light themes.
 const COMPOSER_TEXTAREA_CLASSNAME =
-  "min-h-0 resize-none rounded-none border-0 bg-transparent px-0 py-0 text-composer text-foreground shadow-none outline-none placeholder:text-[color:color-mix(in_oklab,var(--color-muted-foreground)_55%,transparent)] focus:ring-0";
+  "min-h-0 resize-none rounded-none border-0 bg-transparent px-0 py-0 text-composer text-foreground shadow-none outline-none placeholder:text-muted-foreground/55 focus:ring-0";
 
 export const ComposerTextarea = forwardRef<HTMLTextAreaElement, ComposerTextareaProps>(
   function ComposerTextarea({ className = "", ...props }, ref) {

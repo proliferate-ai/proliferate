@@ -666,6 +666,9 @@ importers:
 
   apps/packages/ui:
     dependencies:
+      '@proliferate/design':
+        specifier: workspace:*
+        version: link:../design
       '@radix-ui/react-alert-dialog':
         specifier: ^1.1.19
         version: 1.1.19(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
