@@ -4235,7 +4235,7 @@ dependencies = [
 
 [[package]]
 name = "proliferate"
-version = "0.3.41"
+version = "0.3.44"
 dependencies = [
  "base64 0.22.1",
  "chrono",
