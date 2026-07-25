@@ -44,15 +44,15 @@ export function TurnDiffPanelHeader({
           <FileDiff className="icon-display" />
         </span>
         <span className="flex min-w-0 flex-1 flex-col">
-          <span className="truncate text-chat font-medium leading-[var(--text-chat--line-height)] text-foreground">
+          <span className="truncate text-chat font-medium text-foreground">
             {title}
           </span>
-          <span className="relative block min-h-4 min-w-0 text-xs leading-4 text-muted-foreground">
+          <span className="relative block min-h-4 min-w-0 text-chat leading-4 text-muted-foreground">
             <span className="turn-diff-default-subtitle inline-flex truncate">
               <FileChangeStats
                 additions={totalAdditions}
                 deletions={totalDeletions}
-                className="text-xs"
+                className="text-chat"
                 rolling
               />
             </span>

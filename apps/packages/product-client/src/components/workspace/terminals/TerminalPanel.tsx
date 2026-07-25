@@ -68,7 +68,7 @@ export function TerminalPanel({
           <TerminalEmptyState label={errorMessage} />
         ) : terminals.length === 0 || !activeTerminalId ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
-            <p className="text-xs text-muted-foreground">No terminal selected</p>
+            <p className="text-ui-sm text-muted-foreground">No terminal selected</p>
             <Button onClick={onNewTerminal} size="sm" disabled={!isRuntimeReady}>
               <TerminalIcon className="icon-paired [font-size:var(--text-sidebar-row)]" />
               New terminal
@@ -103,7 +103,7 @@ export function TerminalPanel({
 function TerminalEmptyState({ label }: { label: string }) {
   return (
     <div className="flex h-full items-center justify-center px-6 text-center">
-      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="text-ui-sm text-muted-foreground">{label}</p>
     </div>
   );
 }

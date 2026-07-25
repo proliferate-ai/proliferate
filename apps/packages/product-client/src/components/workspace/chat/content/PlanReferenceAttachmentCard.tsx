@@ -31,10 +31,10 @@ export function PlanReferenceAttachmentCard({
   }
 
   const className = isDraft
-    ? "group relative inline-flex max-w-[260px] items-center gap-1 rounded-full border border-border bg-card px-2 py-1.5 text-sm text-foreground transition-colors hover:bg-accent"
+    ? "group relative inline-flex max-w-[260px] items-center gap-1 rounded-full border border-border bg-card px-2 py-1.5 text-chat text-foreground transition-colors hover:bg-hover"
     : isCompact
-      ? "inline-flex min-w-0 max-w-full items-center gap-1 rounded-full border border-border/70 bg-card px-2 py-1.5 text-xs text-foreground transition-colors hover:bg-accent"
-      : "inline-flex min-w-0 max-w-[260px] items-center gap-1 rounded-full border border-border bg-card px-2 py-1.5 text-sm text-foreground transition-colors hover:bg-accent";
+      ? "inline-flex min-w-0 max-w-full items-center gap-1 rounded-full border border-border/70 bg-card px-2 py-1.5 text-chat text-foreground transition-colors hover:bg-hover"
+      : "inline-flex min-w-0 max-w-[260px] items-center gap-1 rounded-full border border-border bg-card px-2 py-1.5 text-chat text-foreground transition-colors hover:bg-hover";
 
   return (
     <>
@@ -57,7 +57,7 @@ export function PlanReferenceAttachmentCard({
           <span className="relative min-w-0 flex-1 truncate pr-1 font-medium">
             {plan.title}
           </span>
-          <span className="shrink-0 text-xs text-muted-foreground">
+          <span className="shrink-0 text-ui-sm text-muted-foreground">
             Plan
           </span>
         </Button>
@@ -68,7 +68,7 @@ export function PlanReferenceAttachmentCard({
             size="icon-sm"
             data-chat-transcript-ignore
             onClick={() => onRemove(plan.id)}
-            className="pointer-events-none absolute inset-y-0 right-0 h-full w-7 rounded-full bg-card/95 px-0 opacity-0 transition-opacity hover:bg-accent group-hover:pointer-events-auto group-hover:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100"
+            className="pointer-events-none absolute inset-y-0 right-0 h-full w-7 rounded-full bg-card/95 px-0 opacity-0 transition-opacity hover:bg-hover group-hover:pointer-events-auto group-hover:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100"
             aria-label={`Remove ${plan.title}`}
           >
             <X className="icon-compact" />
@@ -89,7 +89,7 @@ function PlanReferenceTranscriptCard({ plan }: { plan: PromptDisplayPlanPart }) 
     <CollapsiblePlanCard
       title={plan.title}
       content={plan.bodyMarkdown}
-      subtitle={<span className="shrink-0 text-sm text-muted-foreground">Attached plan</span>}
+      subtitle={<span className="shrink-0 text-ui-sm text-muted-foreground">Attached plan</span>}
       emptyContent="No plan content"
       copyLabel="Copy attached plan"
       collapseLabel="Collapse attached plan"

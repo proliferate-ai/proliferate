@@ -152,7 +152,7 @@ function AttachedPaneResizeGutter({
       onPointerDown={onPointerDown}
       className={twMerge(
         "group relative z-10 w-1 shrink-0 cursor-col-resize bg-sidebar-background outline-none",
-        active && "bg-sidebar-accent",
+        active && "bg-selected",
       )}
     >
       <div

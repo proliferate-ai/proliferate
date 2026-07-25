@@ -76,10 +76,10 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
       >
         <span
           aria-hidden="true"
-          className="workspace-shell-tab__surface pointer-events-none absolute inset-0 rounded-[var(--workspace-shell-tab-radius,0.625rem)] border transition-[background-color,border-color] duration-150"
+          className="workspace-shell-tab__surface pointer-events-none absolute inset-0 rounded-md border transition-[background-color,border-color] duration-hover"
         />
         <div
-          className={`absolute inset-0 flex items-center overflow-hidden rounded-[var(--workspace-shell-tab-radius,0.625rem)] py-1 ${
+          className={`absolute inset-0 flex items-center overflow-hidden rounded-md py-1 ${
             isMini ? "gap-1 px-1" : isSmall ? "gap-1 px-2" : "gap-2 px-2"
           }`}
         >
@@ -100,7 +100,7 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
                   }}
                   title="Close tab"
                   aria-label="Close tab"
-                  className="workspace-shell-tab__close hidden size-4 shrink-0 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground group-hover/tab:inline-flex group-focus-within/tab:inline-flex focus-visible:inline-flex"
+                  className="workspace-shell-tab__close hidden size-4 shrink-0 rounded-md text-muted-foreground hover:bg-hover hover:text-foreground active:bg-active group-hover/tab:inline-flex group-focus-within/tab:inline-flex focus-visible:inline-flex"
                 >
                   <X className="icon-compact" />
                 </Button>
@@ -139,7 +139,7 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
               </span>
             )}
             {showBadge && badge && (
-              <span className="flex shrink-0 items-center transition-opacity duration-150 group-hover/tab:opacity-0 group-focus-within/tab:opacity-0">
+              <span className="flex shrink-0 items-center transition-opacity duration-hover group-hover/tab:opacity-0 group-focus-within/tab:opacity-0">
                 {badge}
               </span>
             )}
@@ -147,7 +147,7 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
           {showShortcut && shortcutLabel ? (
             <ShortcutBadge
               label={shortcutLabel}
-              className={`pointer-events-none absolute right-2 top-1/2 z-20 -translate-y-1/2 text-muted-foreground opacity-0 transition-opacity duration-150 ${
+              className={`pointer-events-none absolute right-2 top-1/2 z-20 -translate-y-1/2 text-muted-foreground opacity-0 transition-opacity duration-hover ${
                 shortcutRevealVisible ? "opacity-100" : ""
               }`}
             />
@@ -164,7 +164,7 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
               }}
               title="Close tab"
               aria-label="Close tab"
-              className="workspace-shell-tab__close absolute right-1.5 top-1/2 z-20 hidden size-4 shrink-0 -translate-y-1/2 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground group-hover/tab:inline-flex group-focus-within/tab:inline-flex focus-visible:inline-flex"
+              className="workspace-shell-tab__close absolute right-1.5 top-1/2 z-20 hidden size-4 shrink-0 -translate-y-1/2 rounded-md text-muted-foreground hover:bg-hover hover:text-foreground active:bg-active group-hover/tab:inline-flex group-focus-within/tab:inline-flex focus-visible:inline-flex"
             >
               <X className="icon-compact" />
             </Button>

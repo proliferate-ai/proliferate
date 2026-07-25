@@ -24,7 +24,7 @@ export function ClosedChatTabsMenu({
           <div
             key={row.id}
             data-telemetry-mask="true"
-            className={`group/row flex items-center gap-2 rounded-md px-2 py-1.5 transition-colors hover:bg-accent ${row.isActive ? "bg-accent/70" : ""}`}
+            className={`group/row flex items-center gap-2 rounded-md px-2 py-1.5 transition-colors hover:bg-hover active:bg-active ${row.isActive ? "bg-selected" : ""}`}
           >
             <Button
               type="button"
@@ -36,7 +36,7 @@ export function ClosedChatTabsMenu({
               <span className="flex size-4 shrink-0 items-center justify-center">
                 {renderIcon(row)}
               </span>
-              <span className="flex-1 truncate text-left text-xs font-medium text-foreground">
+              <span className="flex-1 truncate text-left text-ui font-medium text-foreground">
                 {row.title}
               </span>
             </Button>
@@ -52,7 +52,7 @@ export function ClosedChatTabsMenu({
               <Trash className="icon-compact" />
             </Button>
             {row.closedAt && (
-              <span className="shrink-0 text-xs text-muted-foreground">
+              <span className="shrink-0 text-ui-sm text-muted-foreground">
                 {formatRelativeTime(row.closedAt)}
               </span>
             )}

@@ -114,7 +114,7 @@ export function ChatTabsMenu({
 
   return (
     <div className="flex max-h-[70vh] flex-col overflow-hidden">
-      <div className="shrink-0 px-2 pb-1 pt-1.5 text-base font-medium uppercase tracking-[0.08em] text-muted-foreground">
+      <div className="shrink-0 px-2 pb-1 pt-1.5 text-ui-sm font-medium uppercase tracking-[0.08em] text-muted-foreground">
         Chat tabs
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
@@ -148,11 +148,11 @@ export function ChatTabsMenu({
                     )}
                   </span>
                 )}
-                className={row.isActive ? "bg-accent/70" : ""}
+                className={row.isActive ? "bg-selected" : ""}
                 onClick={() => onOpenSession(row.id)}
               >
                 {!row.isVisible && (
-                  <span className="block truncate text-sm leading-4 text-muted-foreground">
+                  <span className="block truncate text-ui-sm leading-4 text-muted-foreground">
                     Hidden
                   </span>
                 )}
@@ -194,7 +194,7 @@ function SubagentFlyout({
   return (
     <div
       data-telemetry-mask="true"
-      className={`fixed z-[70] max-h-[70vh] overflow-y-auto ${POPOVER_SURFACE_CLASS}`}
+      className={`fixed z-popover max-h-[70vh] overflow-y-auto ${POPOVER_SURFACE_CLASS}`}
       style={{
         top: position.top,
         left: position.left,
@@ -208,7 +208,7 @@ function SubagentFlyout({
           key={child.sessionLinkId}
           label={child.title}
           trailing={renderSubagentTrailing(child)}
-          className={child.isActive ? "bg-accent/70" : ""}
+          className={child.isActive ? "bg-selected" : ""}
           disabled={child.source === "review"}
           title={child.source === "review" ? "Review agents are managed by the review run" : undefined}
           onClick={() => {
@@ -225,7 +225,7 @@ function SubagentFlyout({
           }}
         >
           {child.meta && (
-            <span className="block truncate text-sm leading-4 text-muted-foreground">
+            <span className="block truncate text-ui-sm leading-4 text-muted-foreground">
               {child.meta}
             </span>
           )}
@@ -254,16 +254,16 @@ function computeFlyoutPosition(rect: DOMRect, childCount: number): FlyoutState["
 
 function renderSubagentTrailing(child: HeaderSubagentChildRow): ReactNode {
   if (child.wakeScheduled) {
-    return <span className="text-xs text-foreground">Wake scheduled</span>;
+    return <span className="text-ui text-foreground">Wake scheduled</span>;
   }
   if (child.statusLabel === "Failed") {
-    return <span className="text-xs text-destructive">Failed</span>;
+    return <span className="text-ui text-destructive">Failed</span>;
   }
   if (child.statusLabel === "Working") {
-    return <span className="text-xs text-foreground">Working</span>;
+    return <span className="text-ui text-foreground">Working</span>;
   }
   if (child.isActive) {
     return <span className="icon-status rounded-full bg-foreground/70 [font-size:var(--text-sidebar-row)]" />;
   }
-  return <span className="text-xs leading-4 text-muted-foreground">{child.statusLabel}</span>;
+  return <span className="text-ui-sm leading-4 text-muted-foreground">{child.statusLabel}</span>;
 }

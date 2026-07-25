@@ -54,12 +54,12 @@ export function RepoSetupModal({
         </>
       }
     >
-      <div className="rounded-lg border border-border bg-foreground/5 p-3">
+      <div className="rounded-lg border border-border bg-surface-elevated-secondary p-3">
         <div className="flex min-w-0 items-start gap-3">
           <CheckCircleFilled className="mt-0.5 icon-large shrink-0 text-muted-foreground" />
           <div className="min-w-0">
-            <div className="truncate text-sm font-medium text-foreground">{repoName}</div>
-            <div className="truncate text-xs text-muted-foreground">{sourceRoot}</div>
+            <div className="truncate text-ui font-medium text-foreground">{repoName}</div>
+            <div className="truncate text-ui-sm text-muted-foreground">{sourceRoot}</div>
           </div>
         </div>
       </div>

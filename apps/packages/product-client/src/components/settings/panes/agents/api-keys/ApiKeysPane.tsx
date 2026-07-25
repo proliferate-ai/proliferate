@@ -203,7 +203,7 @@ export function ApiKeysPane() {
               label={
                 <span className="flex min-w-0 items-center gap-2">
                   <span className="truncate">{key.title}</span>
-                  <span className="font-mono text-xs font-normal text-muted-foreground">
+                  <span className="font-mono text-ui-sm font-normal text-muted-foreground">
                     {key.redactedHint}
                   </span>
                 </span>
@@ -227,7 +227,7 @@ export function ApiKeysPane() {
         description={AGENT_API_KEYS_COPY.addSectionDescription}
       >
         <form
-          className="flex flex-col gap-2 rounded-lg border border-border bg-foreground/[0.02] p-3.5 sm:flex-row"
+          className="flex flex-col gap-2 rounded-lg border border-border bg-surface-elevated-secondary p-3.5 sm:flex-row"
           onSubmit={handleSubmit}
         >
           <div className="sm:flex-1">

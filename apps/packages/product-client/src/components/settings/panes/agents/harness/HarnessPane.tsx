@@ -202,7 +202,7 @@ function HarnessSurfaceCloud({
 
   return (
     <>
-      <div className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-foreground/[0.02]">
+      <div className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-surface-elevated-secondary">
         <HarnessAuthSection
           harnessKind={harnessKind}
           displayName={displayName}
@@ -244,7 +244,7 @@ function HarnessSurfaceLocal({
 
   return (
     <>
-      <div className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-foreground/[0.02]">
+      <div className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-surface-elevated-secondary">
         <HarnessAuthSection
           harnessKind={harnessKind}
           displayName={displayName}

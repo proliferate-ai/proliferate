@@ -23,7 +23,7 @@ export function GitLastTurnUndoAction({
   onUndo: () => void;
 }) {
   return (
-    <div className="flex items-center gap-2 rounded-md border border-sidebar-border/70 bg-sidebar-accent/35 px-2.5 py-2 text-xs leading-5 text-sidebar-muted-foreground">
+    <div className="flex items-center gap-2 rounded-md border border-sidebar-border/70 bg-surface-elevated-secondary px-2.5 py-2 text-ui-sm leading-5 text-sidebar-muted-foreground">
       <Undo className="icon-paired shrink-0" />
       <span className="min-w-0 flex-1 truncate">
         {fileCount > 0
@@ -37,7 +37,7 @@ export function GitLastTurnUndoAction({
         disabled={busy || Boolean(disabledReason)}
         title={disabledReason ?? "Undo last turn changes"}
         onClick={onUndo}
-        className="h-7 shrink-0 gap-1 rounded-md px-2 text-xs text-sidebar-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground disabled:cursor-not-allowed disabled:opacity-45"
+        className="h-7 shrink-0 gap-1 rounded-md px-2 text-ui-sm text-sidebar-muted-foreground hover:bg-hover hover:text-sidebar-foreground active:bg-active disabled:cursor-not-allowed disabled:opacity-45"
       >
         <Undo className="icon-paired" />
         {busy ? "Undoing" : "Undo"}
@@ -52,7 +52,7 @@ export function GitReviewDiffPolicyNotice({ summary }: { summary: DiffDisplayPol
     ? `${summary.tooLargeInline} too large to render inline`
     : null;
   return (
-    <div className="rounded-md border border-sidebar-border/70 bg-sidebar-accent/35 px-2.5 py-2 text-xs leading-5 text-sidebar-muted-foreground">
+    <div className="rounded-md border border-sidebar-border/70 bg-surface-elevated-secondary px-2.5 py-2 text-ui-sm leading-5 text-sidebar-muted-foreground">
       <span>
         {hiddenLabel} collapsed to keep review responsive.
       </span>

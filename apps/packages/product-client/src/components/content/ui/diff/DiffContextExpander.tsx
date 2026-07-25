@@ -123,7 +123,7 @@ export function DiffGapContentLabel({
           onClick={() => onExpand("all")}
           aria-label={`Expand all ${label}`}
           title="Expand all"
-          className="ml-1.5 shrink-0 cursor-pointer rounded border-0 bg-transparent px-1 text-[length:inherit] leading-[inherit] text-muted-foreground/60 transition-colors hover:text-foreground"
+          className="ml-1.5 shrink-0 cursor-pointer rounded border-0 bg-transparent px-1 text-muted-foreground/60 transition-colors hover:text-foreground"
         >
           Expand all
         </Button>
@@ -259,7 +259,7 @@ export function DiffContextExpander({
             onClick={() => onExpand("all")}
             aria-label={`Expand all ${label}`}
             title="Expand all"
-            className="ml-1.5 shrink-0 cursor-pointer rounded border-0 bg-transparent px-1 text-[length:inherit] leading-[inherit] text-muted-foreground/60 transition-colors hover:text-foreground"
+            className="ml-1.5 shrink-0 cursor-pointer rounded border-0 bg-transparent px-1 text-muted-foreground/60 transition-colors hover:text-foreground"
           >
             Expand all
           </Button>

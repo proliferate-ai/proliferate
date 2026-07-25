@@ -81,6 +81,7 @@ describe("thinking gleam css contract", () => {
     const section = thinkingSection();
     expect(section).toContain("var(--thinking-text-duration");
     expect(section).toContain("var(--thinking-text-easing");
+    /* activity-motion */
     expect(section.match(/animation-delay: var\(--thinking-text-delay, 0ms\)/g)).toHaveLength(2);
   });
 

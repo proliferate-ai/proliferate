@@ -33,7 +33,7 @@ export function TerminalCommandFloatingAction({
         type="button"
         size="sm"
         variant="ghost"
-        className="pointer-events-auto border border-border/60 bg-background/95 shadow-floating backdrop-blur hover:bg-accent"
+        className="pointer-events-auto border border-border/60 bg-background/95 shadow-popover backdrop-blur hover:bg-hover active:bg-active"
         disabled={isRerunning || rerunSetup.isPending}
         onClick={() => {
           setIsRerunning(true);

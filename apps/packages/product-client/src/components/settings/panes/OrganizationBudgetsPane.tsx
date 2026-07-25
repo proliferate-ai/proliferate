@@ -177,7 +177,7 @@ function BudgetBalanceCard({
 }: BudgetBalanceView & { loading?: boolean }) {
   if (loading) {
     return (
-      <div className="space-y-3 rounded-lg border border-border-light bg-foreground/[0.02] p-4">
+      <div className="space-y-3 rounded-lg border border-border-light bg-surface-elevated-secondary p-4">
         <SkeletonBlock className="h-4 w-24" style={shimmerDelay(0)} />
         <SkeletonBlock className="h-6 w-32" style={shimmerDelay(1)} />
         <SkeletonBlock className="h-4 w-full" style={shimmerDelay(2)} />
@@ -186,7 +186,7 @@ function BudgetBalanceCard({
   }
 
   return (
-    <div className="space-y-3 rounded-lg border border-border-light bg-foreground/[0.02] p-4">
+    <div className="space-y-3 rounded-lg border border-border-light bg-surface-elevated-secondary p-4">
       <div className="space-y-1">
         <div className="text-ui font-medium text-foreground">{label}</div>
         <div className="text-title font-semibold tracking-tight text-foreground">{available}</div>
@@ -217,7 +217,7 @@ function UsageBarChart({
 }) {
   if (loading) {
     return (
-      <div className="flex h-48 items-end gap-2 rounded-lg border border-border-light bg-foreground/[0.02] p-4">
+      <div className="flex h-48 items-end gap-2 rounded-lg border border-border-light bg-surface-elevated-secondary p-4">
         {Array.from({ length: 8 }, (_, index) => (
           <SkeletonBlock
             key={index}
@@ -231,7 +231,7 @@ function UsageBarChart({
 
   if (points.length === 0) {
     return (
-      <div className="flex h-48 items-center justify-center rounded-lg border border-border-light bg-foreground/[0.02] text-ui-sm text-muted-foreground">
+      <div className="flex h-48 items-center justify-center rounded-lg border border-border-light bg-surface-elevated-secondary text-ui-sm text-muted-foreground">
         No usage in this range.
       </div>
     );
@@ -243,7 +243,7 @@ function UsageBarChart({
   const maxLlm = chartMax(points.map((point) => point.llmCostUsd));
 
   return (
-    <div className="rounded-lg border border-border-light bg-foreground/[0.02] p-4">
+    <div className="rounded-lg border border-border-light bg-surface-elevated-secondary p-4">
       <div className="flex flex-wrap items-center gap-4 pb-3 text-ui-sm text-muted-foreground">
         {showCompute ? (
           <span className="inline-flex items-center gap-1.5">
@@ -317,7 +317,7 @@ function OrgUsageTable({
             variant="unstyled"
             size="unstyled"
             onClick={() => onSelectUser(row.userId)}
-            className="flex w-full items-center justify-between gap-4 border-t border-border py-3 text-left first:border-t-0 hover:bg-accent/40"
+            className="flex w-full items-center justify-between gap-4 border-t border-border py-3 text-left first:border-t-0 hover:bg-hover active:bg-active"
           >
             <div className="min-w-0">
               <div className="truncate text-ui font-medium text-foreground">{row.name}</div>

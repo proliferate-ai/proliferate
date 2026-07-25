@@ -191,7 +191,7 @@ function FileBreadcrumbs({
           our body-minus-one that scales with appearance presets. The line
           height must clear descenders — leading-none clips "g"/"p" inside the
           nav's scroll container. */}
-      <ol className="flex min-w-max flex-1 items-center gap-1 text-[length:var(--text-ui)] leading-[var(--text-ui--line-height)] text-muted-foreground">
+      <ol className="flex min-w-max flex-1 items-center gap-1 text-ui text-muted-foreground">
         {crumbs.map((part, index) => {
           const isLast = index === crumbs.length - 1;
           const isWorkspaceCrumb = workspaceName && index === 0;

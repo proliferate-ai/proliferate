@@ -12,7 +12,7 @@ export function ToolActionDetailsPanel({
 }: ToolActionDetailsPanelProps) {
   return (
     <div
-      className={`overflow-hidden rounded-md border border-border/60 bg-foreground/[0.04] ${className}`}
+      className={`overflow-hidden rounded-md border border-border/60 bg-surface-elevated-secondary ${className}`}
     >
       {children}
     </div>

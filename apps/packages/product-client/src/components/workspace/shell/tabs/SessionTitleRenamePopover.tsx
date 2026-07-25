@@ -132,7 +132,7 @@ function SessionTitleRenamePanel({
           {error}
         </div>
       )}
-      <div className="flex items-center justify-between px-0.5 text-base text-muted-foreground">
+      <div className="flex items-center justify-between px-0.5 text-ui-sm text-muted-foreground">
         <span>{isSaving ? "Saving…" : "↵ save · esc cancel"}</span>
         <Button
           variant="ghost"

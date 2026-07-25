@@ -53,7 +53,7 @@ function CrashRecoveryProbe({ scenario }: { scenario: Scenario }) {
   if (scenario !== "retry" || retryShouldThrow) throw PLAYGROUND_ERROR;
   return (
     <main className="flex min-h-screen items-center justify-center bg-background text-foreground">
-      <p className="text-sm">Recovery retry succeeded.</p>
+      <p className="text-body">Recovery retry succeeded.</p>
     </main>
   );
 }

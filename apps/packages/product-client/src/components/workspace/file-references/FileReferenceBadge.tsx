@@ -126,13 +126,13 @@ function resolveBadgeClassName(
 ): string {
   if (variant === "chip") {
     return [
-      "inline-flex h-auto min-w-0 max-w-full items-center gap-px rounded-sm border border-border/60 bg-muted/45 px-1 py-px font-mono text-sm leading-none text-foreground/90 shadow-none transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-border",
+      "inline-flex h-auto min-w-0 max-w-full items-center gap-px rounded-sm border border-border/60 bg-muted/45 px-1 py-px font-mono text-ui leading-none text-foreground/90 shadow-none transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-border",
       className,
     ].filter(Boolean).join(" ");
   }
 
   return [
-    `group/inline-mention m-0 inline appearance-none whitespace-normal break-words border-0 bg-transparent px-0.5 py-0 text-left align-baseline font-[inherit] font-medium leading-[inherit] shadow-none hover:bg-transparent ${CHAT_TRANSCRIPT_LINK_CLASS}`,
+    `group/inline-mention m-0 inline appearance-none whitespace-normal break-words border-0 bg-transparent px-0.5 py-0 text-left align-baseline font-[inherit] font-medium shadow-none hover:bg-transparent ${CHAT_TRANSCRIPT_LINK_CLASS}`,
     className,
   ].filter(Boolean).join(" ");
 }

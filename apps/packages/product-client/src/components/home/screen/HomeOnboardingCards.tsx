@@ -47,7 +47,7 @@ function OnboardingCard({
   selectLabel: string;
 }) {
   return (
-    <div className="group relative flex min-w-0 flex-col gap-2 rounded-xl border border-border bg-card p-3.5 text-left transition-colors hover:bg-accent">
+    <div className="group relative flex min-w-0 flex-col gap-2 rounded-xl border border-border bg-card p-3.5 text-left transition-colors hover:bg-hover active:bg-active">
       {onSelect ? (
         <Button
           type="button"
@@ -81,7 +81,7 @@ function OnboardingCard({
             event.stopPropagation();
             onDismiss();
           }}
-          className="absolute right-3 top-3 z-20 flex size-4 transform-gpu items-center justify-center rounded-full text-muted-foreground opacity-0 transition-opacity duration-150 will-change-[opacity] hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
+          className="absolute right-3 top-3 z-20 flex size-4 transform-gpu items-center justify-center rounded-full text-muted-foreground opacity-0 transition-opacity duration-hover will-change-[opacity] hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
         >
           <X className="icon-paired" />
         </Button>

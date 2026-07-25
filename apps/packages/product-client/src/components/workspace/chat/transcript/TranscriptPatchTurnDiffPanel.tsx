@@ -89,7 +89,7 @@ export function TranscriptPatchTurnDiffPanel({
   );
 
   return (
-    <div className="mb-2 flex max-w-full flex-col overflow-hidden rounded-lg border border-border bg-foreground/[0.0475] text-base text-foreground [--turn-diff-row-padding-x:0.75rem] [--turn-diff-row-padding-y:0.25rem]">
+    <div className="mb-2 flex max-w-full flex-col overflow-hidden rounded-lg border border-border bg-diff-panel-surface text-chat text-foreground [--turn-diff-row-padding-x:0.75rem] [--turn-diff-row-padding-y:0.25rem]">
       <ChatDiffLineWrapContextMenu trigger={header} />
       {!singleFile && (
         <div className="flex flex-col border-t border-border [--codex-diffs-header-padding-x:var(--turn-diff-row-padding-x)] [--codex-diffs-header-padding-y:var(--turn-diff-row-padding-y)]">
@@ -137,7 +137,7 @@ export function TranscriptPatchTurnDiffPanel({
               size="sm"
               onClick={() => setShowAllFiles((value) => !value)}
               aria-expanded={showAllFiles}
-              className="group/show-files flex h-9 w-full justify-start gap-2 rounded-none bg-transparent px-[var(--turn-diff-row-padding-x)] py-[var(--turn-diff-row-padding-y)] text-left text-chat leading-[var(--text-chat--line-height)] text-foreground hover:bg-list-hover/30"
+              className="group/show-files flex h-9 w-full justify-start gap-2 rounded-none bg-transparent px-[var(--turn-diff-row-padding-x)] py-[var(--turn-diff-row-padding-y)] text-left text-chat text-foreground hover:bg-list-hover/30"
             >
               {showAllFiles ? "Collapse files" : `Show ${hiddenFileCount} more files`}
               <ChevronDown
@@ -165,7 +165,7 @@ function DiffDisplayPolicyPlaceholder({
   description: string;
 }) {
   return (
-    <div className="px-3 py-4 text-xs text-muted-foreground">
+    <div className="px-3 py-4 text-chat text-muted-foreground">
       <p className="font-medium text-foreground">{title}</p>
       <p className="mt-0.5 leading-5">{description}</p>
     </div>

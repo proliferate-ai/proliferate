@@ -409,7 +409,7 @@ export function CloudRepoActionDialogHost() {
         data-telemetry-block
       >
         <DialogHeader>
-          <DialogTitle className="text-[length:var(--text-workspace-title)] font-semibold leading-[var(--text-workspace-title--line-height)]">
+          <DialogTitle className="text-workspace-title font-semibold">
             {cloning ? "Clone from GitHub" : "Set up in Cloud"}
           </DialogTitle>
         </DialogHeader>
@@ -417,7 +417,7 @@ export function CloudRepoActionDialogHost() {
           {blocker ? (
             <CloudRepoPickerBlocker blocker={blocker} />
           ) : (
-            <p className="text-ui-sm leading-[1.45] text-muted-foreground" role="status">
+            <p className="text-ui-sm text-muted-foreground" role="status">
               {cloning
                 ? "Preparing this repository on this Mac…"
                 : "Preparing this repository for Proliferate Cloud…"}

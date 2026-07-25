@@ -47,7 +47,7 @@ export function HighlightedCodeBlock({
   return (
     <div className={`group/code relative overflow-clip rounded-lg border border-input bg-[var(--color-code-block-background,var(--color-card))] ${className}`}>
       {(showLanguageLabel || showCopyButton) && (
-        <div className="sticky top-0 z-10 flex items-center justify-between px-2 py-1 text-sm text-muted-foreground select-none">
+        <div className="sticky top-0 z-10 flex items-center justify-between px-2 py-1 text-ui-sm text-muted-foreground select-none">
           {showLanguageLabel && displayLang ? (
             <span className="min-w-0 truncate">{displayLang}</span>
           ) : <span />}
@@ -57,7 +57,7 @@ export function HighlightedCodeBlock({
               variant="ghost"
               size="sm"
               onClick={handleCopy}
-              className="h-6 rounded-md bg-transparent px-1.5 py-0 text-sm text-muted-foreground opacity-0 transition-colors hover:bg-muted hover:text-foreground group-hover/code:opacity-100"
+              className="h-6 rounded-md bg-transparent px-1.5 py-0 text-ui text-muted-foreground opacity-0 transition-colors hover:bg-muted hover:text-foreground group-hover/code:opacity-100"
               aria-label="Copy"
             >
               {copied ? "Copied!" : "Copy"}
@@ -66,17 +66,17 @@ export function HighlightedCodeBlock({
         </div>
       )}
 
-      <div className={`overflow-x-auto overflow-y-auto p-2 font-mono text-[length:var(--readable-code-font-size)] leading-[var(--readable-code-line-height)] font-medium ${contentClassName}`}>
+      <div className={`overflow-x-auto overflow-y-auto p-2 font-mono text-readable-code font-medium ${contentClassName}`}>
         {tokens ? (
           <CodeBlockTokenContent
             lines={tokens}
             showLineNumbers={showLineNumbers}
             lineNumberStart={lineNumberStart}
-            className="text-[length:var(--readable-code-font-size)] leading-[var(--readable-code-line-height)] text-foreground"
+            className="text-readable-code text-foreground"
           />
         ) : (
           <pre className="m-0 p-0">
-            <code className="whitespace-pre font-mono text-[length:var(--readable-code-font-size)] leading-[var(--readable-code-line-height)] font-medium text-foreground">
+            <code className="whitespace-pre font-mono text-readable-code font-medium text-foreground">
               {code}
             </code>
           </pre>

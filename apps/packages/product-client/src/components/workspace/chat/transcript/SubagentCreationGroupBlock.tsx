@@ -13,7 +13,7 @@ import {
 import { buildDelegatedAgentIdentity } from "#product/lib/domain/delegated-work/identity";
 import { useTranscriptOpenSession } from "./TranscriptContexts";
 
-const CHAT_BUTTON_TEXT_CLASS = "text-[length:var(--text-chat)] leading-[var(--text-chat--line-height)]";
+const CHAT_BUTTON_TEXT_CLASS = "text-chat";
 
 export function SubagentCreationGroupBlock({
   itemIds,
@@ -38,7 +38,7 @@ export function SubagentCreationGroupBlock({
   }
 
   return (
-    <div className="min-w-0 text-chat leading-[var(--text-chat--line-height)]">
+    <div className="min-w-0 text-chat">
       <Button
         type="button"
         variant="ghost"
@@ -159,7 +159,7 @@ function SubagentFinishedRow({
             </Button>
           )}
           {summary && (
-            <div className="text-chat leading-[var(--text-chat--line-height)] text-foreground/90">
+            <div className="text-chat text-foreground/90">
               <MarkdownBody
                 content={summary}
                 className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0"

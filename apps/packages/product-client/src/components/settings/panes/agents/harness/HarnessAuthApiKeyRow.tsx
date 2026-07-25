@@ -84,7 +84,7 @@ export function HarnessAuthApiKeyRow({
               className="font-mono"
             />
             {invalidName ? (
-              <p className="mt-1 text-xs text-destructive">
+              <p className="mt-1 text-ui-sm text-destructive">
                 Use SCREAMING_SNAKE_CASE (A-Z, 0-9, _).
               </p>
             ) : null}
@@ -92,7 +92,7 @@ export function HarnessAuthApiKeyRow({
         ) : (
           <div className="flex items-center gap-1.5">
             <span
-              className="truncate rounded bg-accent px-2 py-1.5 font-mono text-xs text-muted-foreground"
+              className="truncate rounded bg-surface-control px-2 py-1.5 font-mono text-ui-sm text-muted-foreground"
               title={row.envVarName}
             >
               {row.envVarName || HARNESS_PANE_COPY.envVarPlaceholder}

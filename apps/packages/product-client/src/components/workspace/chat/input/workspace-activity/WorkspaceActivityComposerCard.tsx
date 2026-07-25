@@ -94,7 +94,7 @@ export function WorkspaceActivityComposerCard({
           // The shadow's bottom edge bleeds into the surface's box, but the
           // surface is later in DOM (paints on top) and opaque, so that
           // sliver is covered — no separate bottom-only clip needed.
-          className="-mx-5 flex h-9 w-[calc(100%+2.5rem)] min-w-0 items-center justify-start rounded-t-[var(--radius-composer,1rem)] bg-[var(--color-composer-background)] px-3 text-left text-ui-sm text-muted-foreground shadow-[0_0_0_0.5px_var(--color-composer-border)] hover:text-foreground"
+          className="-mx-5 flex h-9 w-[calc(100%+2.5rem)] min-w-0 items-center justify-start rounded-t-xl bg-[var(--color-composer-background)] px-3 text-left text-ui-sm text-muted-foreground ring-1 ring-border hover:text-foreground"
           aria-label={`Workspace activity: ${shownFacts.map((fact) => fact.label).join(", ")}`}
           data-workspace-activity-trigger="true"
           data-telemetry-mask
@@ -139,7 +139,7 @@ export function WorkspaceActivityComposerCard({
                     <FileChangeStats
                       additions={model.git.additions}
                       deletions={model.git.deletions}
-                      className="text-xs"
+                      className="text-chat"
                     />
                   )}
                   onSelect={() => {
@@ -269,7 +269,7 @@ function WorkspaceActivitySection({
       <header className="flex h-7 min-w-0 items-center gap-2 px-3.5 pb-0.5 text-ui-sm text-muted-foreground">
         <span className="shrink-0">{title}</span>
         {detail ? (
-          <span className="min-w-0 flex-1 truncate text-right font-mono text-xs">
+          <span className="min-w-0 flex-1 truncate text-right font-mono text-ui-sm">
             {detail}
           </span>
         ) : null}
@@ -300,7 +300,7 @@ function ActivityDetailRow({
     <div className="flex min-h-7 min-w-0 items-center gap-2 py-1 text-ui-sm text-muted-foreground">
       <span className="flex w-[18px] shrink-0 items-center justify-start">{icon}</span>
       <span className="min-w-0 flex-1 truncate">{label}</span>
-      {meta ? <span className="shrink-0 text-xs text-faint">{meta}</span> : null}
+      {meta ? <span className="shrink-0 text-ui-sm text-faint">{meta}</span> : null}
     </div>
   );
 }
@@ -336,7 +336,7 @@ function ActivityActionRow({
         {icon}
       </span>
       <span className="min-w-0 flex-1 truncate">{label}</span>
-      {meta ? <span className="shrink-0 text-xs text-muted-foreground">{meta}</span> : null}
+      {meta ? <span className="shrink-0 text-ui-sm text-muted-foreground">{meta}</span> : null}
       {trailing ? <span className="shrink-0 text-muted-foreground">{trailing}</span> : null}
     </Button>
   );

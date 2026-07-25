@@ -161,7 +161,7 @@ export function WorkspaceItemMenu({
                   <span className="min-w-0">
                     <span className="block">{command.label}</span>
                     {command.blocker ? (
-                      <span className="block text-xs leading-[1.4] text-muted-foreground">
+                      <span className="block text-ui-sm leading-4 text-muted-foreground">
                         {command.blocker}
                       </span>
                     ) : null}

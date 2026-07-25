@@ -23,7 +23,7 @@ export interface AutomationRunLocationConfigureTarget {
 }
 
 const RUN_LOCATION_SECTION_CLASS =
-  "flex min-h-6 items-center truncate px-2 py-1 text-sm leading-4 text-muted-foreground";
+  "flex min-h-6 items-center truncate px-2 py-1 text-ui-sm text-muted-foreground";
 
 export function RunLocationSectionHeader({ label }: { label: string }) {
   return (
@@ -242,7 +242,7 @@ export function RunLocationMenuItem({
 
 function RunLocationEmptyRow({ label }: { label: string }) {
   return (
-    <div className="px-2 py-1 text-sm leading-4 text-muted-foreground">
+    <div className="px-2 py-1 text-ui-sm text-muted-foreground">
       {label}
     </div>
   );

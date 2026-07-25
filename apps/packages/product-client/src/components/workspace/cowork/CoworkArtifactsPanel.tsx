@@ -56,7 +56,7 @@ export function CoworkArtifactsPanel({
               Back
             </Button>
             {selectedArtifact.description && (
-              <div className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+              <div className="min-w-0 flex-1 truncate text-ui-sm text-muted-foreground">
                 {selectedArtifact.description}
               </div>
             )}

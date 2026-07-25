@@ -32,8 +32,8 @@ export function AgentsPopoverSubagentSection({
           }}
         >
           <span className="min-w-0">
-            <span className="block truncate text-sm font-medium text-foreground">Parent agent</span>
-            <span className="block truncate text-xs text-muted-foreground">
+            <span className="block truncate text-ui font-medium text-foreground">Parent agent</span>
+            <span className="block truncate text-ui-sm text-muted-foreground">
               {subagents.parent.label}
             </span>
           </span>
@@ -87,10 +87,10 @@ function SubagentPopoverRow({
           className={`size-3.5 shrink-0 ${row.identity.textColorClassName}`}
         />
         <span className="min-w-0">
-          <span className="block truncate text-sm font-medium text-foreground">
+          <span className="block truncate text-ui font-medium text-foreground">
             {row.identity.displayName}
           </span>
-          <span className="block truncate text-xs font-normal text-muted-foreground">
+          <span className="block truncate text-ui-sm font-normal text-muted-foreground">
             {secondaryLabel}
           </span>
         </span>

@@ -103,7 +103,7 @@ export function OrganizationIntegrationsPane() {
           />
         </SettingsSection>
       ) : definitionsQuery.isLoading ? (
-        <div className="text-xs text-muted-foreground">Loading integrations...</div>
+        <div className="text-ui-sm text-muted-foreground">Loading integrations...</div>
       ) : definitionsQuery.isError ? (
         <SettingsEmptyState
           size="compact"
@@ -146,10 +146,10 @@ export function OrganizationIntegrationsPane() {
                 <div className="flex min-w-0 items-center gap-3">
                   <IntegrationIcon namespace={definition.namespace} className="icon-display [font-size:var(--text-sidebar-brand)]" />
                   <div className="min-w-0">
-                    <div className="truncate text-sm font-medium text-foreground">
+                    <div className="truncate text-ui font-medium text-foreground">
                       {definition.displayName}
                     </div>
-                    <div className="mt-0.5 truncate text-sm text-muted-foreground">
+                    <div className="mt-0.5 truncate text-ui-sm text-muted-foreground">
                       {definition.namespace}
                     </div>
                   </div>
@@ -159,10 +159,10 @@ export function OrganizationIntegrationsPane() {
                     {adminIntegrationSourceLabel(definition.source)}
                   </Badge>
                 </div>
-                <div className="min-w-0 truncate text-sm text-muted-foreground">
+                <div className="min-w-0 truncate text-ui-sm text-muted-foreground">
                   {adminIntegrationAuthKindLabel(definition.authKind)}
                 </div>
-                <div className="min-w-0 truncate text-right text-xs text-muted-foreground">
+                <div className="min-w-0 truncate text-right text-ui-sm text-muted-foreground">
                   {enabledView.provenance}
                 </div>
                 <div className="flex justify-end">

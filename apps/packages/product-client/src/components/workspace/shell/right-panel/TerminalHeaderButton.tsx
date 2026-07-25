@@ -94,7 +94,7 @@ export function TerminalHeaderButton({
         {shortcutLabel ? (
           <ShortcutBadge
             label={shortcutLabel}
-            className={`right-panel-shortcut-badge opacity-0 transition-opacity duration-150 ${
+            className={`right-panel-shortcut-badge opacity-0 transition-opacity duration-hover ${
               shortcutRevealVisible ? "opacity-100" : ""
             }`}
           />

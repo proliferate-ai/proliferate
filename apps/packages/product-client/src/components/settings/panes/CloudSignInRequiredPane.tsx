@@ -40,7 +40,7 @@ export function CloudSignInRequiredPane() {
                   : AUTH_ACCOUNT_LABELS.signIn}
             </Button>
             {signInError && (
-              <p className="text-sm text-destructive">{signInError}</p>
+              <p className="text-ui text-destructive">{signInError}</p>
             )}
           </>
         }

@@ -71,7 +71,7 @@ export function ComposerIntegrationsControl() {
         // card, so every composer popover speaks one UI language.
         <ComposerPopoverSurface
           variant="summary"
-          className="w-[min(300px,calc(100vw-1rem))] overflow-hidden rounded-[1.25rem] p-0 pt-2.5 ring-0 shadow-[0_0_0_0.5px_var(--color-popover-ring),0_3px_7.5px_rgba(0,0,0,0.25),0_0_20px_rgba(0,0,0,0.28)]"
+          className="w-[min(300px,calc(100vw-1rem))] overflow-hidden rounded-lg p-0 pt-2.5 ring-0 shadow-popover"
         >
           <div className="flex max-h-[min(34rem,calc(100vh-8rem))] flex-col gap-3 overflow-y-auto pb-3">
             <StatusSection

@@ -116,7 +116,7 @@ export function ApiKeyDetails({
         </div>
       ) : (
         <div className="space-y-3">
-          <p className="py-3 text-sm text-muted-foreground">
+          <p className="py-3 text-ui-sm text-muted-foreground">
             No API key configured.
           </p>
           <div>

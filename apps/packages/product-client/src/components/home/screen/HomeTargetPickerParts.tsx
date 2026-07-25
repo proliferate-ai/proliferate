@@ -18,7 +18,7 @@ import type { ComputeLaunchTargetOption } from "#product/lib/domain/compute/targ
 import type { HomeNextRepoLaunchKind } from "#product/lib/domain/home/home-next-launch";
 
 export const TARGET_PICKER_SURFACE_CLASS = `w-60 min-w-[175px] ${POPOVER_SURFACE_CLASS}`;
-export const TARGET_PICKER_DIVIDER_CLASS = "mx-1 my-1.5 h-px scale-y-50 bg-foreground/10";
+export const TARGET_PICKER_DIVIDER_CLASS = "mx-1 my-1.5 h-px scale-y-50 bg-border";
 
 const TARGET_PICKER_SECTION_CLASS =
   "flex min-h-6 items-center truncate px-2.5 py-1 text-ui-sm text-muted-foreground";
@@ -118,7 +118,7 @@ export const HomeTargetRowItem = forwardRef<HTMLButtonElement, HomeTargetRowItem
         variant="unstyled"
         size="unstyled"
         className={twMerge(
-          "flex h-6 min-w-0 select-none items-center gap-1 whitespace-nowrap rounded-full border border-transparent px-1.5 py-0 text-ui text-muted-foreground outline-none transition-colors enabled:hover:bg-accent enabled:hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 data-[state=open]:bg-accent data-[state=open]:text-foreground",
+          "flex h-6 min-w-0 select-none items-center gap-1 whitespace-nowrap rounded-full border border-transparent px-1.5 py-0 text-ui text-muted-foreground outline-none transition-colors enabled:hover:bg-hover enabled:active:bg-active enabled:hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 data-[state=open]:bg-active data-[state=open]:text-foreground",
           className,
         )}
         {...props}

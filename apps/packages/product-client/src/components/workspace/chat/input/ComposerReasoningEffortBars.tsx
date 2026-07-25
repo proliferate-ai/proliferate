@@ -16,11 +16,11 @@ import { LevelBarsButton } from "@proliferate/ui/primitives/LevelBarsButton";
 // button's base `hover:text-current` would otherwise wash the tint back to
 // plain ink); gray tiers keep the standard muted→full hover promotion.
 const TIER_TONE_CLASSES: Readonly<Record<ReasoningEffortTierTone, string>> = {
-  muted: "text-[color:var(--color-composer-control-muted-foreground)]",
+  muted: "text-composer-control-muted-foreground",
   secondary: "text-foreground-secondary hover:!text-foreground",
   foreground: "text-foreground",
-  special: "text-[color:var(--color-special)] hover:!text-[color:var(--color-special)]",
-  ultra: "text-[color:var(--color-pr-merged)] hover:!text-[color:var(--color-pr-merged)]",
+  special: "text-special hover:!text-special",
+  ultra: "text-pr-merged hover:!text-pr-merged",
 };
 
 interface ComposerReasoningEffortBarsProps {

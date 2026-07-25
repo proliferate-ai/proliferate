@@ -41,7 +41,7 @@ describe("FileChangesCard and FileDiffCard", () => {
     expect(html).toContain(">+4</span>");
     expect(html).toContain(">-1</span>");
     expect(html).toContain("bg-[var(--color-diff-panel-surface)]");
-    expect(html).toContain("text-chat leading-[var(--text-chat--line-height)]");
+    expect(html).toContain("text-chat");
     expect(html).not.toContain("thread-diff-virtualized");
     expect(html).toContain("--codex-diffs-surface:var(--codex-diffs-surface-override, var(--color-diff-panel-surface))");
     expect(html).toContain("data-diff-surface=\"sidebar\"");
@@ -54,7 +54,8 @@ describe("FileChangesCard and FileDiffCard", () => {
     expect(html).toContain("data-app-action-review-file-expanded=\"true\"");
     expect(html).toContain("data-app-action-review-file-toggle=\"\"");
     expect(html).toContain("text-sidebar-foreground");
-    expect(html).toContain("hover:bg-sidebar-accent");
+    expect(html).toContain("hover:bg-hover");
+    expect(html).toContain("active:bg-active");
     expect(html).toContain("diff body");
   });
 
