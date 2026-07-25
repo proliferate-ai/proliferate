@@ -115,6 +115,59 @@ export function normalizeGatewayModels(
     }));
 }
 
+// The runtime's resolved launch catalog for one harness (the same bundled
+// catalog-v2 model list that feeds the session model picker via
+// `useAgentLaunchOptionsQuery`). For the multi-source harness (opencode) the
+// All-Models table unions this native OSS universe with the gateway-served
+// models regardless of the active auth route (contract §5 / native
+// coexistence): opencode keeps its own `opencode auth login` providers reachable
+// alongside any injected gateway/api_key source, so at runtime it can run BOTH.
+// There's no per-model override layered onto this source (the runtime doesn't
+// know about cloud catalog overrides), so every resolved model is marked
+// enabled; the table decides toggle-ability per row from the model's source.
+export function normalizeLaunchOptionsModels(
+  harnessKind: string,
+  launchOptions: AgentLaunchOptionsResponse | undefined,
+): HarnessCatalogModel[] {
+  const agent = launchOptions?.agents.find((entry) => entry.kind === harnessKind);
+  if (!agent) {
+    return [];
+  }
+  return agent.models
+    .filter((model) => model.id.length > 0)
+    .map((model) => ({
+      id: model.id,
+      displayName: normalizeString(model.displayName) ?? model.id,
+      description: normalizeString(model.description),
+      provider: normalizeString(model.provider),
+      status: normalizeString(model.status),
+      effort: normalizeEffort(model.effort),
+      fastMode: typeof model.fastMode === "boolean" ? model.fastMode : null,
+      modes: normalizeModes(model.modes),
+      enabled: true,
+    }));
+}
+
+// Union helper for the multi-source harness: keep the FIRST row seen for each id.
+// Callers order gateway rows first, so a colliding id (unlikely across the
+// gateway vs native namespaces, but guarded) keeps the gateway-enriched row.
+// Generic over `{ id }` so a source-tagged row type is preserved through the
+// dedupe (the caller tags each row `gateway`/`native` to drive toggle-ability).
+export function dedupeById<T extends { id: string }>(
+  models: readonly T[],
+): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const model of models) {
+    if (seen.has(model.id)) {
+      continue;
+    }
+    seen.add(model.id);
+    out.push(model);
+  }
+  return out;
+}
+
 // native/api_key routes probe on the CLIENT (catalog.py's refresh_catalog
 // contract): rich live probing is deferred, so v1 sources the payload from the
 // local AnyHarness runtime's already-resolved launch catalog (the same
