@@ -102,12 +102,16 @@ catches and logs it; everything above sees the typed 402.
 
 `load_cloud_sandbox_runtime_access` is the single choke point for turning a
 sandbox row into runtime coordinates (base URL, bearer, data key). Any of
-the three missing → HTTP 409 `cloud_sandbox_runtime_not_ready`. There is no
-separate runtime-status route: readiness is carried on the sandbox and
-workspace payloads (`pending | materializing | needs_rematerialization |
-ready | archived | error`, derived client-side in
-[cloud-workspace-status.ts](../../../../apps/packages/product-client/src/lib/domain/workspaces/cloud/cloud-workspace-status.ts)),
-and the 409 is what a caller gets for jumping the gun.
+the three missing → HTTP 409 `cloud_sandbox_runtime_not_ready`. Readiness
+is readable two ways, both DB-derived: on the workspace payloads
+themselves (`pending | materializing | needs_rematerialization | ready |
+archived | error`, derived client-side in
+[cloud-workspace-status.ts](../../../../apps/packages/product-client/src/lib/domain/workspaces/cloud/cloud-workspace-status.ts))
+and via `GET /workspaces/{id}/runtime-status`
+([workspaces/api.py](../../../../server/proliferate/server/cloud/workspaces/api.py)),
+which adds the runtime and sandbox status axes for one workspace. Neither
+performs a live runtime call; the 409 is what a caller gets for jumping
+the gun.
 
 Per the lifecycle ruling, this layer is a *policy* gate, not a liveness
 gate: a paused-but-permitted sandbox is forwarded to and wakes under the
@@ -180,7 +184,8 @@ worktrees:
    schedule.
 3. The AnyHarness client calls `GET /v1/worktrees/inventory` through the
    gateway with a freshly minted product token; if the VM was paused, it
-   wakes under this very request.
+   wakes under this very request (the ruled policy-gate behavior — today's
+   liveness gate 409s instead; see Current gaps).
 
 No ensure, no wake verb, no bespoke polling — the same three shapes, the
 same one choreography.
