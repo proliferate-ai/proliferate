@@ -11,11 +11,19 @@ import { extendTailwindMerge } from "tailwind-merge";
  *
  * The stock generic steps (xs/sm/base/lg/xl) are deleted from the theme, so
  * they are deliberately absent rather than merely unlisted.
+ *
+ * COMPLETENESS IS THE CONTRACT, not the subset anyone happens to use: this list
+ * must name EVERY emitted `--text-*` font-size id, including ids that carry no
+ * `--line-height` sibling (`chat-meta`). Membership is asserted against the
+ * generated theme in appearance-css-drift.test.ts, because an id missing here
+ * fails silently and only at the exact call sites the arbitrary-utility bans push
+ * consumers toward.
  */
 export const TEXT_SIZE_TOKEN_IDS = [
   "ui-sm",
   "ui",
   "chat",
+  "chat-meta",
   "composer",
   "body",
   "workspace-title",

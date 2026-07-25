@@ -34,11 +34,19 @@ const generatedThemeCss = readFileSync(resolve(designDir, "dist/theme.css"), "ut
 const domCss = readFileSync(resolve(designCssDir, "dom.css"), "utf8");
 const productCss = readFileSync(resolve(designCssDir, "product.css"), "utf8");
 
-/** The closed semantic font-size vocabulary, incl. the two sanctioned aliases. */
+/**
+ * The closed semantic font-size vocabulary, incl. the two sanctioned aliases.
+ *
+ * This is EVERY emitted `--text-*` font-size id, not the subset that also has a
+ * `--line-height` sibling: `chat-meta` is derived (calc off --text-chat) and has
+ * no sibling metrics, but Tailwind still emits a `.text-chat-meta` utility, so
+ * omitting it from this set is what let it go unregistered with twMerge.
+ */
 const EXPECTED_TEXT_SIZE_TOKEN_IDS = [
   "ui-sm",
   "ui",
   "chat",
+  "chat-meta",
   "composer",
   "body",
   "workspace-title",
@@ -177,24 +185,47 @@ describe("generated design-package semantic text tokens", () => {
     }
   });
 
-  it("declares only the closed semantic font-size ids, including sanctioned aliases", () => {
-    const generatedBaseIds = Object.keys(generatedTextDeclarations)
-      .filter((property) => !property.endsWith("--line-height"))
-      .filter((property) => !property.endsWith("--letter-spacing"))
-      .filter((property) => `${property}--line-height` in generatedTextDeclarations)
-      .map((property) => property.replace(/^--text-/, ""));
+  /**
+   * Every emitted font-size id. Derived from the generated theme WITHOUT
+   * requiring a `--line-height` sibling: that filter is what previously hid
+   * `--text-chat-meta` (a calc off --text-chat with no sibling metrics) from
+   * both assertions below, even though Tailwind emits `.text-chat-meta`.
+   */
+  const generatedFontSizeIds = Object.keys(generatedTextDeclarations)
+    .filter((property) => !property.endsWith("--line-height"))
+    .filter((property) => !property.endsWith("--letter-spacing"))
+    .map((property) => property.replace(/^--text-/, ""));
 
-    expect([...generatedBaseIds].sort()).toEqual([...EXPECTED_TEXT_SIZE_TOKEN_IDS].sort());
+  it("declares only the closed semantic font-size ids, including sanctioned aliases", () => {
+    expect([...generatedFontSizeIds].sort()).toEqual([...EXPECTED_TEXT_SIZE_TOKEN_IDS].sort());
     for (const removedId of ["xs", "sm", "base", "lg", "xl"]) {
-      expect(generatedBaseIds).not.toContain(removedId);
+      expect(generatedFontSizeIds).not.toContain(removedId);
     }
   });
 
-  it("registers the exact semantic size set with twMerge", () => {
+  it("registers every emitted font-size id with twMerge", () => {
+    // Completeness against the GENERATED set, not against the constant's own
+    // order: an id that ships a utility but is unknown to tailwind-merge is
+    // classified as a text COLOR and silently dropped when a real color follows.
+    expect([...TEXT_SIZE_TOKEN_IDS].sort()).toEqual([...generatedFontSizeIds].sort());
     expect(TEXT_SIZE_TOKEN_IDS).toEqual(EXPECTED_TEXT_SIZE_TOKEN_IDS);
-    for (const id of EXPECTED_TEXT_SIZE_TOKEN_IDS) {
+    for (const id of generatedFontSizeIds) {
       expect(twMerge(`text-${id} text-muted-foreground`)).toBe(`text-${id} text-muted-foreground`);
     }
+  });
+
+  it("drops an unregistered size id, which is why the set must be complete", () => {
+    // Guards the guard: proves the failure mode is real, so the completeness
+    // assertion above cannot be dismissed as bookkeeping. An id twMerge does not
+    // know is classified as a text COLOR and vanishes when a real color follows —
+    // which is exactly what `text-chat-meta` did before it was registered.
+    expect(TEXT_SIZE_TOKEN_IDS).not.toContain("not-a-registered-size");
+    expect(twMerge("text-not-a-registered-size text-muted-foreground")).toBe(
+      "text-muted-foreground",
+    );
+    expect(twMerge("text-chat-meta text-muted-foreground")).toBe(
+      "text-chat-meta text-muted-foreground",
+    );
   });
 });
 
