@@ -1606,6 +1606,179 @@ export interface paths {
         patch: operations["update_agent_run_config_endpoint_v1_cloud_agent_run_configs__config_id__patch"];
         trace?: never;
     };
+    "/v1/cloud/workflows/runs/{run_id}/credentials/exchange": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Exchange Credential Endpoint
+         * @description §5.3: over the authenticated control channel, exchange a one-use handle for
+         *     a short-lived integration credential bound to run/plan-hash/generation/slot/
+         *     session. Durable-before-response; identical unacknowledged retry → same
+         *     generation; wrong-session/post-ACK reuse denied.
+         */
+        post: operations["exchange_credential_endpoint_v1_cloud_workflows_runs__run_id__credentials_exchange_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workflows/runs/{run_id}/credentials/ack": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ack Credential Endpoint
+         * @description §5.3: the runtime confirms it installed the credential — consume the handle
+         *     and close any bounded rotation-overlap by revoking superseded generations.
+         */
+        post: operations["ack_credential_endpoint_v1_cloud_workflows_runs__run_id__credentials_ack_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workflows/runs/{run_id}/credentials/rotate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rotate Credential Endpoint
+         * @description §5.3: rotate the presented integration credential to its next generation
+         *     (scope unchanged); the old generation stays valid until the runtime ACKs.
+         */
+        post: operations["rotate_credential_endpoint_v1_cloud_workflows_runs__run_id__credentials_rotate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workflows/runs/{run_id}/activations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Register Activation Endpoint
+         * @description §7.3: register a required-invocation activation BEFORE the agent turn
+         *     starts. Durable-before-response; an identical retry (same activationId +
+         *     identity) returns the same row, a conflicting reuse is a typed 409.
+         */
+        post: operations["register_activation_endpoint_v1_cloud_workflows_runs__run_id__activations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workflows/runs/{run_id}/activations/{activation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Activation Endpoint
+         * @description §7.3 recovery: the runtime queries the authoritative record by activation
+         *     identity. ``receipt: null`` means absent -> corrective re-prompt (within the
+         *     frozen budget); a present receipt means complete (whatever its outcome).
+         */
+        get: operations["get_activation_endpoint_v1_cloud_workflows_runs__run_id__activations__activation_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workflows/runs/{run_id}/receipts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Receipts Endpoint
+         * @description §7.3: list every receipt for one (run, slot, step, attempt) — the exact
+         *     input the runtime (or ``domain.gate.gate_satisfied`` server-side) evaluates
+         *     to decide complete / corrective-re-prompt / exhausted.
+         */
+        get: operations["list_receipts_endpoint_v1_cloud_workflows_runs__run_id__receipts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workflows/executor/local/claims": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Claim Local Workflow Runs Endpoint
+         * @description Claim a batch of this owner's ``claimable`` (or stale-reclaimable) local
+         *     scheduled runs for a desktop executor (the 10s claim poll).
+         */
+        post: operations["claim_local_workflow_runs_endpoint_v1_cloud_workflows_executor_local_claims_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workflows/executor/local/runs/{run_id}/heartbeat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Heartbeat Local Workflow Run Endpoint
+         * @description Renew a live claim's TTL (the 30s heartbeat). ``accepted=false`` means the
+         *     claim was lost (reclaimed / terminal / expired) and the executor must stop.
+         */
+        post: operations["heartbeat_local_workflow_run_endpoint_v1_cloud_workflows_executor_local_runs__run_id__heartbeat_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/workflows": {
         parameters: {
             query?: never;
@@ -1686,6 +1859,34 @@ export interface paths {
         put?: never;
         /** Report Run Status Endpoint */
         post: operations["report_run_status_endpoint_v1_cloud_workflows_runs__run_id__status_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workflows/runs/{run_id}/observations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Report Observation Endpoint
+         * @description Revisioned observed-run report (spec §5.4). The runtime (WS5c) POSTs a whole
+         *     ``ObservedRun`` snapshot; the server accepts it only at the exact next revision
+         *     for the matching delivery identity.
+         *
+         *     Result -> HTTP: ``applied`` / ``retry_noop`` / ``stale_rejected`` return 200
+         *     with the acked revision (the runtime advances or is a benign no-op);
+         *     ``future_rejected`` (gap), ``conflict`` (audited), and ``terminal_immutable``
+         *     return 409 carrying ``ackedRevision`` so the runtime replays its ordered
+         *     outbox from ``ackedRevision + 1``.
+         */
+        post: operations["report_observation_endpoint_v1_cloud_workflows_runs__run_id__observations_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1778,48 +1979,6 @@ export interface paths {
          *     transitions are monotonic — so no state is added here.
          */
         post: operations["run_ping_endpoint_v1_cloud_workflows_runs__run_id__ping_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/cloud/workflows/executor/local/claims": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Claim Local Workflow Runs Endpoint
-         * @description Claim a batch of this owner's ``claimable`` (or stale-reclaimable) local
-         *     scheduled runs for a desktop executor (the 10s claim poll).
-         */
-        post: operations["claim_local_workflow_runs_endpoint_v1_cloud_workflows_executor_local_claims_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/cloud/workflows/executor/local/runs/{run_id}/heartbeat": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Heartbeat Local Workflow Run Endpoint
-         * @description Renew a live claim's TTL (the 30s heartbeat). ``accepted=false`` means the
-         *     claim was lost (reclaimed / terminal / expired) and the executor must stop.
-         */
-        post: operations["heartbeat_local_workflow_run_endpoint_v1_cloud_workflows_executor_local_runs__run_id__heartbeat_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3137,6 +3296,51 @@ export interface components {
             githubIdentityId: string | null;
             /** Githubgrantstatus */
             githubGrantStatus: string | null;
+        };
+        /** ActivationReceiptResponse */
+        ActivationReceiptResponse: {
+            activation: components["schemas"]["ActivationResponse"];
+            receipt?: components["schemas"]["ReceiptResponse"] | null;
+        };
+        /** ActivationRegisterRequest */
+        ActivationRegisterRequest: {
+            /** Planhash */
+            planHash: string;
+            /** Slotid */
+            slotId: string;
+            /** Sessionid */
+            sessionId: string;
+            /** Stepkey */
+            stepKey: string;
+            /** Attempt */
+            attempt: number;
+            /** Activationid */
+            activationId: string;
+            /** Capabilitykey */
+            capabilityKey: string;
+            /** Turnid */
+            turnId?: string | null;
+        };
+        /** ActivationResponse */
+        ActivationResponse: {
+            /** Activationid */
+            activationId: string;
+            /** Planhash */
+            planHash: string;
+            /** Slotid */
+            slotId: string;
+            /** Sessionid */
+            sessionId: string;
+            /** Stepkey */
+            stepKey: string;
+            /** Attempt */
+            attempt: number;
+            /** Capabilitykey */
+            capabilityKey: string;
+            /** Turnid */
+            turnId: string | null;
+            /** Createdat */
+            createdAt: string;
         };
         /** AdminIntegrationDefinitionResponse */
         AdminIntegrationDefinitionResponse: {
@@ -4568,6 +4772,51 @@ export interface components {
                 [key: string]: string;
             } | null;
         };
+        /**
+         * CredentialAckRequest
+         * @description Acknowledge the runtime installed the credential (consume the handle).
+         */
+        CredentialAckRequest: {
+            /** Handle */
+            handle: string;
+            /** Sessionid */
+            sessionId: string;
+        };
+        /**
+         * CredentialExchangeRequest
+         * @description Exchange a per-slot one-use handle for a session-bound integration credential.
+         */
+        CredentialExchangeRequest: {
+            /** Handle */
+            handle: string;
+            /** Sessionid */
+            sessionId: string;
+        };
+        /** CredentialResponse */
+        CredentialResponse: {
+            /** Authorization */
+            authorization: string;
+            /** Audience */
+            audience: string;
+            /** Generation */
+            generation: number;
+            /** Slotid */
+            slotId: string;
+            /** Sessionid */
+            sessionId: string;
+            /** Expiresat */
+            expiresAt: string;
+        };
+        /**
+         * CredentialRotateRequest
+         * @description Rotate the presented integration credential to its next generation.
+         */
+        CredentialRotateRequest: {
+            /** Credential */
+            credential: string;
+            /** Generation */
+            generation: number;
+        };
         /** CurrentTeamCheckoutResponse */
         CurrentTeamCheckoutResponse: {
             intent?: components["schemas"]["TeamCheckoutIntentResponse"] | null;
@@ -5038,6 +5287,23 @@ export interface components {
             enabled: boolean;
             /** Client Id */
             client_id?: string | null;
+        };
+        /**
+         * ObservedRunReportResponse
+         * @description Revisioned observation report result (spec §5.4; WS5c consumes this).
+         *
+         *     ``result`` is the CAS/identity verdict (``applied`` / ``retry_noop`` /
+         *     ``stale_rejected`` / ``future_rejected`` / ``conflict`` / ``terminal_immutable``);
+         *     ``ackedRevision`` is the highest revision the server has durably accepted, so
+         *     the runtime replays its ordered outbox from ``ackedRevision + 1``. ``run`` is
+         *     the (secret-free) mirrored run row, present only when an observation applied.
+         */
+        ObservedRunReportResponse: {
+            /** Result */
+            result: string;
+            /** Ackedrevision */
+            ackedRevision: number;
+            run?: components["schemas"]["WorkflowRunResponse"] | null;
         };
         /**
          * OrgAgentPolicyResponse
@@ -5713,6 +5979,49 @@ export interface components {
             path: string;
             /** Content */
             content: string;
+        };
+        /** ReceiptListResponse */
+        ReceiptListResponse: {
+            /** Receipts */
+            receipts: components["schemas"]["ReceiptResponse"][];
+        };
+        /**
+         * ReceiptResponse
+         * @description §7.3: the receipt's full public shape — no arguments, headers, or
+         *     secrets ever land in any of these fields (the schema itself has no column
+         *     for them).
+         */
+        ReceiptResponse: {
+            /** Activationid */
+            activationId: string;
+            /** Slotid */
+            slotId: string;
+            /** Sessionid */
+            sessionId: string;
+            /** Stepkey */
+            stepKey: string;
+            /** Attempt */
+            attempt: number;
+            /** Capabilitykind */
+            capabilityKind: string;
+            /** Providerdefinitionid */
+            providerDefinitionId?: string | null;
+            /** Providerrevision */
+            providerRevision?: string | null;
+            /** Toolname */
+            toolName?: string | null;
+            /** Functiondefinitionid */
+            functionDefinitionId?: string | null;
+            /** Semanticrevision */
+            semanticRevision?: number | null;
+            /** Authorizationdecision */
+            authorizationDecision: string;
+            /** Outcome */
+            outcome: string;
+            /** Createdat */
+            createdAt: string;
+            /** Completedat */
+            completedAt?: string | null;
         };
         /** RefreshRequest */
         RefreshRequest: {
@@ -10667,6 +10976,279 @@ export interface operations {
             };
         };
     };
+    exchange_credential_endpoint_v1_cloud_workflows_runs__run_id__credentials_exchange_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CredentialExchangeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CredentialResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ack_credential_endpoint_v1_cloud_workflows_runs__run_id__credentials_ack_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CredentialAckRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rotate_credential_endpoint_v1_cloud_workflows_runs__run_id__credentials_rotate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CredentialRotateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CredentialResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    register_activation_endpoint_v1_cloud_workflows_runs__run_id__activations_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ActivationRegisterRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_activation_endpoint_v1_cloud_workflows_runs__run_id__activations__activation_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+                activation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivationReceiptResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_receipts_endpoint_v1_cloud_workflows_runs__run_id__receipts_get: {
+        parameters: {
+            query: {
+                slotId: string;
+                stepKey: string;
+                attempt: number;
+            };
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReceiptListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    claim_local_workflow_runs_endpoint_v1_cloud_workflows_executor_local_claims_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LocalWorkflowClaimRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocalWorkflowClaimListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    heartbeat_local_workflow_run_endpoint_v1_cloud_workflows_executor_local_runs__run_id__heartbeat_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LocalWorkflowClaimActionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocalWorkflowClaimMutationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_workflows_endpoint_v1_cloud_workflows_get: {
         parameters: {
             query?: {
@@ -10859,6 +11441,43 @@ export interface operations {
             };
         };
     };
+    report_observation_endpoint_v1_cloud_workflows_runs__run_id__observations_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ObservedRunReportResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     cancel_run_endpoint_v1_cloud_workflows_runs__run_id__cancel_post: {
         parameters: {
             query?: never;
@@ -10970,74 +11589,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    claim_local_workflow_runs_endpoint_v1_cloud_workflows_executor_local_claims_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["LocalWorkflowClaimRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LocalWorkflowClaimListResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    heartbeat_local_workflow_run_endpoint_v1_cloud_workflows_executor_local_runs__run_id__heartbeat_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                run_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["LocalWorkflowClaimActionRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LocalWorkflowClaimMutationResponse"];
                 };
             };
             /** @description Validation Error */
