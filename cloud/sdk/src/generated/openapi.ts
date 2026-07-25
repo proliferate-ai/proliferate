@@ -2636,7 +2636,9 @@ export interface components {
             /** Sources */
             sources: components["schemas"]["AgentAuthSourceInput"][];
             /** Settings */
-            settings?: Record<string, unknown> | null;
+            settings?: {
+                [key: string]: unknown;
+            } | null;
         };
         /**
          * AgentAuthSourceInput
@@ -2667,7 +2669,9 @@ export interface components {
             /** Sources */
             sources: components["schemas"]["AgentAuthStateSource"][];
             /** Settings */
-            settings?: Record<string, unknown> | null;
+            settings?: {
+                [key: string]: unknown;
+            } | null;
         };
         /**
          * AgentAuthStateResponse
@@ -5535,6 +5539,8 @@ export interface components {
             worker?: string | null;
             /** Anyharness */
             anyharness: string;
+            /** Catalogversion */
+            catalogVersion?: string | null;
         };
         /** WorkerEnrollRequest */
         WorkerEnrollRequest: {
