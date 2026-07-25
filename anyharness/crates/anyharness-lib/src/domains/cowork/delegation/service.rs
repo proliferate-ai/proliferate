@@ -8,6 +8,9 @@ use super::model::{
 };
 use crate::domains::cowork::model::{CoworkManagedWorkspaceRecord, CoworkThreadRecord};
 use crate::domains::cowork::service::CoworkService;
+use crate::domains::cowork::store::{
+    InsertCodingSessionLinkOutcome, InsertManagedWorkspaceOutcome,
+};
 use crate::domains::sessions::delegation::{self, DelegatedEventSlice};
 use crate::domains::sessions::links::completions::{
     LinkCompletionRecord, LinkCompletionStore, LinkWakeScheduleRecord, ScheduleLinkWakeOutcome,
@@ -108,7 +111,7 @@ impl CoworkDelegationService {
             .session_store
             .find_by_id(parent_session_id)?
             .ok_or_else(|| CoworkDelegationError::CoworkThreadNotFound(parent_session_id.into()))?;
-        if parent.closed_at.is_some() || parent.status == "closed" {
+        if parent.closed_at.is_some() || matches!(parent.status.as_str(), "closing" | "closed") {
             return Err(CoworkDelegationError::Closed);
         }
         if !thread.workspace_delegation_enabled {
@@ -170,10 +173,12 @@ impl CoworkDelegationService {
             .cowork_service
             .insert_managed_workspace_with_limit(record, MAX_MANAGED_WORKSPACES_PER_COWORK_SESSION)
             .map_err(map_unique_error)?;
-        if inserted {
-            Ok(())
-        } else {
-            Err(CoworkDelegationError::WorkspaceLimit)
+        match inserted {
+            InsertManagedWorkspaceOutcome::Inserted => Ok(()),
+            InsertManagedWorkspaceOutcome::WorkspaceLimit => {
+                Err(CoworkDelegationError::WorkspaceLimit)
+            }
+            InsertManagedWorkspaceOutcome::ParentUnavailable => Err(CoworkDelegationError::Closed),
         }
     }
 
@@ -280,10 +285,12 @@ impl CoworkDelegationService {
                 MAX_CODING_SESSIONS_PER_MANAGED_WORKSPACE,
             )
             .map_err(map_unique_error)?;
-        if inserted {
-            Ok(record)
-        } else {
-            Err(CoworkDelegationError::SessionLimit)
+        match inserted {
+            InsertCodingSessionLinkOutcome::Inserted => Ok(record),
+            InsertCodingSessionLinkOutcome::SessionLimit => {
+                Err(CoworkDelegationError::SessionLimit)
+            }
+            InsertCodingSessionLinkOutcome::ParentUnavailable => Err(CoworkDelegationError::Closed),
         }
     }
 

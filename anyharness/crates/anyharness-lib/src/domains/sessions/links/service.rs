@@ -1,7 +1,7 @@
 use uuid::Uuid;
 
 use super::model::{SessionLinkRecord, SessionLinkRelation, SessionLinkWorkspaceRelation};
-use super::store::{InsertSubagentLinkOutcome, SessionLinkStore};
+use super::store::{InsertSessionLinkOutcome, InsertSubagentLinkOutcome, SessionLinkStore};
 use crate::domains::sessions::store::SessionStore;
 
 #[derive(Debug, Clone)]
@@ -19,6 +19,8 @@ pub struct CreateSessionLinkInput {
 pub enum CreateSessionLinkError {
     #[error("parent session not found: {0}")]
     ParentNotFound(String),
+    #[error("parent session is closing or closed: {0}")]
+    ParentUnavailable(String),
     #[error("child session not found: {0}")]
     ChildNotFound(String),
     #[error("session cannot be linked to itself")]
@@ -106,14 +108,19 @@ impl SessionLinkService {
             created_at: chrono::Utc::now().to_rfc3339(),
             closed_at: None,
         };
-        self.store.insert(&record).map_err(|error| {
+        let outcome = self.store.insert_if_parent_open(&record).map_err(|error| {
             if is_unique_constraint_error(&error) {
                 CreateSessionLinkError::Duplicate
             } else {
                 CreateSessionLinkError::Store(error)
             }
         })?;
-        Ok(record)
+        match outcome {
+            InsertSessionLinkOutcome::Inserted => Ok(record),
+            InsertSessionLinkOutcome::ParentUnavailable => Err(
+                CreateSessionLinkError::ParentUnavailable(record.parent_session_id),
+            ),
+        }
     }
 
     pub fn create_subagent_link_with_child_limit(
@@ -190,6 +197,9 @@ impl SessionLinkService {
         match outcome {
             InsertSubagentLinkOutcome::Inserted => Ok(record),
             InsertSubagentLinkOutcome::FanoutLimit => Err(CreateSessionLinkError::FanoutLimit),
+            InsertSubagentLinkOutcome::ParentUnavailable => Err(
+                CreateSessionLinkError::ParentUnavailable(record.parent_session_id),
+            ),
         }
     }
 
@@ -300,7 +310,16 @@ impl SessionLinkService {
         if record.public_id.is_none() {
             record.public_id = Some(new_public_id(record.relation));
         }
-        self.store.import_link(&record)
+        if record.closed_at.is_some() {
+            return self.store.insert_historical_import(&record);
+        }
+        match self.store.insert_if_parent_open(&record)? {
+            InsertSessionLinkOutcome::Inserted => Ok(()),
+            InsertSessionLinkOutcome::ParentUnavailable => anyhow::bail!(
+                "cannot import open session link under closing or closed parent {}",
+                record.parent_session_id
+            ),
+        }
     }
 }
 

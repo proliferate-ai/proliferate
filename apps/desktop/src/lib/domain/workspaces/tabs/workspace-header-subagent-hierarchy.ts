@@ -323,6 +323,8 @@ function formatSessionStatus(status: string): string {
       return "Failed";
     case "starting":
       return "Starting";
+    case "closing":
+      return "Closing";
     case "closed":
       return "Closed";
     default:

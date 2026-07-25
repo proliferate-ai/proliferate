@@ -173,6 +173,7 @@ impl SubagentService {
             .create_subagent_link_with_child_limit(input, MAX_SUBAGENTS_PER_PARENT)
             .map_err(|error| match error {
                 CreateSessionLinkError::FanoutLimit => SubagentError::FanoutLimit,
+                CreateSessionLinkError::ParentUnavailable(_) => SubagentError::Closed,
                 other => SubagentError::Link(other),
             })
     }

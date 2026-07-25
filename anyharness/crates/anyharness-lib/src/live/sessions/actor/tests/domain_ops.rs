@@ -130,9 +130,11 @@ async fn live_plan_context(
         Some("native-1".to_string()),
         SessionExecutionPhase::Running,
     ));
-    handle
-        .add_pending_interaction(pending_permission_summary(pending_options))
-        .await;
+    assert!(
+        handle
+            .try_add_pending_interaction(pending_permission_summary(pending_options))
+            .await
+    );
     let broker = Arc::new(InteractionRendezvous::new());
     let wait = broker
         .register_permission("session-1", "request-1", &rendezvous_options)

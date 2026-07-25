@@ -48,8 +48,8 @@ impl InboundDoor {
                 .register_user_input(&self.session_id, &request_id, &questions)
                 .await;
 
-            self.live_session_handle
-                .add_pending_interaction(PendingInteractionSummary {
+            let accepted = self
+                .accept_registered_interaction(PendingInteractionSummary {
                     request_id: request_id.clone(),
                     kind: InteractionKind::UserInput,
                     title: title.clone(),
@@ -64,14 +64,16 @@ impl InboundDoor {
                 })
                 .await;
 
-            sink.interaction_requested(InteractionRequestedEvent {
-                request_id: request_id.clone(),
-                kind: InteractionKind::UserInput,
-                title,
-                description,
-                source,
-                payload,
-            });
+            if accepted {
+                sink.interaction_requested(InteractionRequestedEvent {
+                    request_id: request_id.clone(),
+                    kind: InteractionKind::UserInput,
+                    title,
+                    description,
+                    source,
+                    payload,
+                });
+            }
 
             pending_wait
         };
@@ -141,8 +143,8 @@ impl InboundDoor {
                 .register_user_input(&self.session_id, &request_id, &questions)
                 .await;
 
-            self.live_session_handle
-                .add_pending_interaction(PendingInteractionSummary {
+            let accepted = self
+                .accept_registered_interaction(PendingInteractionSummary {
                     request_id: request_id.clone(),
                     kind: InteractionKind::UserInput,
                     title: title.clone(),
@@ -157,14 +159,16 @@ impl InboundDoor {
                 })
                 .await;
 
-            sink.interaction_requested(InteractionRequestedEvent {
-                request_id: request_id.clone(),
-                kind: InteractionKind::UserInput,
-                title,
-                description,
-                source,
-                payload,
-            });
+            if accepted {
+                sink.interaction_requested(InteractionRequestedEvent {
+                    request_id: request_id.clone(),
+                    kind: InteractionKind::UserInput,
+                    title,
+                    description,
+                    source,
+                    payload,
+                });
+            }
 
             pending_wait
         };

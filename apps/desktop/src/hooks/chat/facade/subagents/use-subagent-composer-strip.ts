@@ -236,6 +236,8 @@ function formatSessionStatus(status: ChildSubagentSummary["status"]): string {
       return "Failed";
     case "starting":
       return "Starting";
+    case "closing":
+      return "Closing";
     case "closed":
       return "Closed";
     default: {

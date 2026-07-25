@@ -264,3 +264,63 @@ fn delete_session_removes_parent_and_child_links() {
         .expect("list by child")
         .is_empty());
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn close_fence_is_atomic_with_subagent_link_insert() {
+    assert_close_fence_is_atomic_with_link_insert(SessionLinkRelation::Subagent, true).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn close_fence_is_atomic_with_review_link_insert() {
+    assert_close_fence_is_atomic_with_link_insert(SessionLinkRelation::ReviewAgent, false).await;
+}
+
+async fn assert_close_fence_is_atomic_with_link_insert(
+    relation: SessionLinkRelation,
+    enforce_subagent_limit: bool,
+) {
+    use std::sync::{Arc, Barrier};
+
+    let (_db, session_store, service) = service_fixture();
+    let barrier = Arc::new(Barrier::new(2));
+
+    let close_store = session_store.clone();
+    let close_service = service.clone();
+    let close_barrier = barrier.clone();
+    let close = tokio::task::spawn_blocking(move || {
+        close_barrier.wait();
+        close_store
+            .mark_closing("parent-1", "2026-03-25T00:01:00Z")
+            .expect("mark parent closing");
+        close_service
+            .list_by_parent("parent-1")
+            .expect("enumerate children after close fence")
+    });
+
+    let link_service = service.clone();
+    let link_barrier = barrier.clone();
+    let insert = tokio::task::spawn_blocking(move || {
+        link_barrier.wait();
+        let mut input = create_input("parent-1", "child-1");
+        input.relation = relation;
+        if enforce_subagent_limit {
+            link_service.create_subagent_link_with_child_limit(input, 8)
+        } else {
+            link_service.create_link(input)
+        }
+    });
+
+    let enumerated = close.await.expect("close task");
+    let inserted = insert.await.expect("insert task");
+    match inserted {
+        Ok(link) => assert!(
+            enumerated.iter().any(|candidate| candidate.id == link.id),
+            "a link inserted before the close fence must be in the post-fence snapshot"
+        ),
+        Err(CreateSessionLinkError::ParentUnavailable(id)) => {
+            assert_eq!(id, "parent-1");
+            assert!(enumerated.is_empty());
+        }
+        Err(error) => panic!("unexpected link outcome: {error:?}"),
+    }
+}

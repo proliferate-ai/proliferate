@@ -251,6 +251,64 @@ fn stop_active_run_for_parent_stops_review_and_returns_reviewer_sessions() {
     assert_eq!(stopped.status, ReviewRunStatus::Stopped);
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn close_fence_is_atomic_with_review_start() {
+    use std::sync::{Arc, Barrier};
+
+    let (service, session_store) = service_fixture();
+    let barrier = Arc::new(Barrier::new(2));
+
+    let close_service = service.clone();
+    let close_barrier = barrier.clone();
+    let close = tokio::task::spawn_blocking(move || {
+        close_barrier.wait();
+        session_store
+            .mark_closing("parent-1", "2026-03-25T00:01:00Z")
+            .expect("mark parent closing");
+        close_service
+            .stop_active_run_for_parent("parent-1")
+            .expect("stop post-fence review run");
+    });
+
+    let start_service = service.clone();
+    let start_barrier = barrier.clone();
+    let start = tokio::task::spawn_blocking(move || {
+        start_barrier.wait();
+        start_service.start_review(StartReviewInput {
+            workspace_id: "workspace-1".to_string(),
+            parent_session_id: "parent-1".to_string(),
+            kind: ReviewKind::Code,
+            title: "Review current changes".to_string(),
+            target_plan: None,
+            target_code_manifest: None,
+            max_rounds: 2,
+            auto_iterate: true,
+            reviewers: vec![reviewer()],
+        })
+    });
+
+    close.await.expect("close task");
+    match start.await.expect("start task") {
+        Ok(run) => {
+            let persisted = service
+                .store()
+                .find_run(&run.id)
+                .expect("read review run")
+                .expect("run exists");
+            assert_eq!(persisted.status, ReviewRunStatus::Stopped);
+        }
+        Err(ReviewError::Link(detail)) => {
+            assert!(detail.contains("closing or closed"));
+            assert!(service
+                .store()
+                .find_active_run_for_parent("parent-1")
+                .expect("read active review")
+                .is_none());
+        }
+        Err(error) => panic!("unexpected review start outcome: {error:?}"),
+    }
+}
+
 #[test]
 fn parent_review_mcp_detection_uses_internal_review_binding_summary() {
     let (service, session_store) = service_fixture();

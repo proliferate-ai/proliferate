@@ -13,10 +13,14 @@ import {
   resolveWorkspaceExecutionViewState,
 } from "./activity";
 
-function executionSummary(phase: "running" | "awaiting_interaction" | "errored" | "idle") {
+function executionSummary(
+  phase: "running" | "awaiting_interaction" | "closing" | "errored" | "idle",
+) {
   return {
     phase,
-    hasLiveHandle: phase === "running" || phase === "awaiting_interaction",
+    hasLiveHandle: phase === "running"
+      || phase === "awaiting_interaction"
+      || phase === "closing",
     pendingInteractions: [],
     updatedAt: "2026-04-06T00:00:00Z",
   };
@@ -32,8 +36,8 @@ function sidebarSlot({
 }: {
   sessionId: string;
   workspaceId?: string;
-  status: "running" | "idle" | "errored";
-  phase: "running" | "awaiting_interaction" | "errored" | "idle";
+  status: "running" | "closing" | "idle" | "errored";
+  phase: "running" | "awaiting_interaction" | "closing" | "errored" | "idle";
   errorAttentionKey: string | null;
   isStreaming?: boolean;
 }) {
@@ -53,6 +57,23 @@ function sidebarSlot({
 }
 
 describe("session activity", () => {
+  it("keeps closing sessions active until actor exit", () => {
+    const slot = {
+      status: "closing" as const,
+      executionSummary: executionSummary("closing"),
+      streamConnectionState: "open" as const,
+      transcript: {
+        isStreaming: false,
+        pendingInteractions: [],
+      },
+    };
+
+    expect(resolveSessionExecutionPhase(slot)).toBe("closing");
+    expect(resolveSessionViewState(slot)).toBe("working");
+    expect(resolveSessionSidebarActivityState(slot)).toBe("iterating");
+    expect(isSessionSlotBusy(slot)).toBe(true);
+  });
+
   it("maps awaiting interaction to needs_input", () => {
     expect(resolveSessionViewState({
       status: "running",

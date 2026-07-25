@@ -69,6 +69,7 @@ export function shouldClearOptimisticPromptAfterSessionSummary(
   return status === "idle"
     || status === "completed"
     || status === "errored"
+    || status === "closing"
     || status === "closed";
 }
 

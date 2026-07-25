@@ -103,6 +103,11 @@ impl SessionRuntime {
                     SendPromptError::Internal(anyhow::anyhow!("failed to enqueue prompt: {detail}"))
                 }
                 LiveSessionCommandError::Rejected(PromptAcceptError::Closing) => {
+                    let _ = prepared.cleanup_attachments(
+                        self.session_service.store(),
+                        self.session_service.attachment_storage(),
+                        session_id,
+                    );
                     SendPromptError::SessionClosed
                 }
             })?;

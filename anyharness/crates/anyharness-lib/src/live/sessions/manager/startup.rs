@@ -60,6 +60,12 @@ impl LiveSessionManager {
             );
         }
 
+        if self.has_retiring_session(&session_id).await {
+            anyhow::bail!(
+                "session {session_id} still has a retiring actor; wait for actor exit before restarting"
+            );
+        }
+
         // The manager owns the last-seq read: it must happen under the
         // live-sessions write lock (start/inject critical section), so any
         // caller-provided value is overwritten here.
@@ -100,6 +106,8 @@ impl LiveSessionManager {
         let actor_start_started = Instant::now();
         let pending = spawn_session_actor_pending(config)?;
         let handle = pending.handle.clone();
+        self.track_session_exit(session_id.clone(), handle.exit_signal.clone())
+            .await;
         let (startup_tx, startup_rx) = watch::channel::<StartupReadinessState>(None);
         sessions.insert(session_id.clone(), handle.clone());
         self.pending_startups

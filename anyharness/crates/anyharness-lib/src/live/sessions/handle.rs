@@ -116,7 +116,11 @@ impl LiveSessionExitSignal {
         }
     }
 
-    async fn wait(&self) {
+    pub(in crate::live::sessions) fn is_exited(&self) -> bool {
+        self.exited.load(Ordering::Acquire)
+    }
+
+    pub(in crate::live::sessions) async fn wait(&self) {
         loop {
             if self.exited.load(Ordering::Acquire) {
                 return;
@@ -199,6 +203,21 @@ impl LiveSessionHandle {
         self.busy.load(Ordering::Acquire)
     }
 
+    pub(in crate::live::sessions) fn is_closing(&self) -> bool {
+        self.closing.load(Ordering::Acquire)
+    }
+
+    /// Establishes close intent before the Close command enters the actor
+    /// mailbox. Actor-side handoff paths consult this level-triggered flag so
+    /// provider completion cannot start queued work while Close is waiting to
+    /// be consumed.
+    pub(in crate::live::sessions) async fn begin_closing(&self) {
+        self.closing.store(true, Ordering::Release);
+        let mut execution = self.execution.write().await;
+        execution.phase = SessionExecutionPhase::Closing;
+        execution.updated_at = chrono::Utc::now().to_rfc3339();
+    }
+
     pub(in crate::live::sessions) fn set_busy(&self, busy: bool) {
         self.busy.store(busy, Ordering::Release);
     }
@@ -219,17 +238,23 @@ impl LiveSessionHandle {
         execution.updated_at = chrono::Utc::now().to_rfc3339();
     }
 
-    pub(in crate::live::sessions) async fn add_pending_interaction(
+    pub(in crate::live::sessions) async fn try_add_pending_interaction(
         &self,
         pending_interaction: PendingInteractionSummary,
-    ) {
+    ) -> bool {
         let mut execution = self.execution.write().await;
+        if self.closing.load(Ordering::Acquire) {
+            execution.phase = SessionExecutionPhase::Closing;
+            execution.updated_at = chrono::Utc::now().to_rfc3339();
+            return false;
+        }
         execution.phase = SessionExecutionPhase::AwaitingInteraction;
         execution
             .pending_interactions
             .retain(|pending| pending.request_id != pending_interaction.request_id);
         execution.pending_interactions.push(pending_interaction);
         execution.updated_at = chrono::Utc::now().to_rfc3339();
+        true
     }
 
     /// Mirror a plan linkage into the pending-interaction snapshot. Safe to
@@ -465,9 +490,7 @@ impl LiveSessionHandle {
 
     pub async fn close(&self) -> anyhow::Result<()> {
         let _gate = self.prompt_close_gate.lock().await;
-        self.closing.store(true, Ordering::Release);
-        self.set_execution_phase(SessionExecutionPhase::Closing)
-            .await;
+        self.begin_closing().await;
         self.send_request(|respond_to| SessionCommand::Close { respond_to })
             .await
             .map_err(anyhow_command_error)

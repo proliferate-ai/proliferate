@@ -6,10 +6,10 @@ use super::super::model::{
     ReviewRoundRecord, ReviewRoundStatus, ReviewRunRecord, ReviewRunStatus,
 };
 
-pub(super) fn insert_run(
+pub(super) fn insert_run_if_parent_open(
     conn: &rusqlite::Connection,
     run: &ReviewRunRecord,
-) -> rusqlite::Result<()> {
+) -> rusqlite::Result<usize> {
     conn.execute(
         "INSERT INTO review_runs (
             id, workspace_id, parent_session_id, kind, status, target_plan_id,
@@ -17,7 +17,14 @@ pub(super) fn insert_run(
             auto_iterate, active_round_id, current_round_number,
             parent_can_signal_revision_via_mcp, failure_reason, failure_detail,
             stopped_at, created_at, updated_at
-         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)",
+         )
+         SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19
+         WHERE EXISTS (
+            SELECT 1 FROM sessions parent
+            WHERE parent.id = ?3
+              AND parent.closed_at IS NULL
+              AND parent.status NOT IN ('closing', 'closed')
+         )",
         params![
             run.id,
             run.workspace_id,
@@ -32,15 +39,18 @@ pub(super) fn insert_run(
             if run.auto_iterate { 1 } else { 0 },
             run.active_round_id,
             run.current_round_number,
-            if run.parent_can_signal_revision_via_mcp { 1 } else { 0 },
+            if run.parent_can_signal_revision_via_mcp {
+                1
+            } else {
+                0
+            },
             run.failure_reason,
             run.failure_detail,
             run.stopped_at,
             run.created_at,
             run.updated_at,
         ],
-    )?;
-    Ok(())
+    )
 }
 
 pub(super) fn insert_round(

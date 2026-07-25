@@ -3,7 +3,7 @@ pub(super) mod feedback;
 mod iteration;
 mod rounds;
 mod rows;
-mod runs;
+pub(crate) mod runs;
 
 use crate::domains::sessions::deletion::SessionDeleteParticipant;
 use crate::persistence::Db;

@@ -1,8 +1,14 @@
 use rusqlite::{params, OptionalExtension};
 
-use super::rows::{insert_assignment, insert_round, insert_run, map_run};
+use super::rows::{insert_assignment, insert_round, insert_run_if_parent_open, map_run};
 use super::ReviewStore;
 use crate::domains::reviews::model::{ReviewAssignmentRecord, ReviewRoundRecord, ReviewRunRecord};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CreateReviewRunOutcome {
+    Created,
+    ParentUnavailable,
+}
 
 impl ReviewStore {
     pub fn create_run(
@@ -10,9 +16,11 @@ impl ReviewStore {
         run: &ReviewRunRecord,
         round: &ReviewRoundRecord,
         assignments: &[ReviewAssignmentRecord],
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<CreateReviewRunOutcome> {
         self.db.with_tx(|tx| {
-            insert_run(tx, run)?;
+            if insert_run_if_parent_open(tx, run)? == 0 {
+                return Ok(CreateReviewRunOutcome::ParentUnavailable);
+            }
             insert_round(tx, round)?;
             tx.execute(
                 "UPDATE review_runs SET active_round_id = ?1 WHERE id = ?2",
@@ -21,7 +29,7 @@ impl ReviewStore {
             for assignment in assignments {
                 insert_assignment(tx, assignment)?;
             }
-            Ok(())
+            Ok(CreateReviewRunOutcome::Created)
         })
     }
 

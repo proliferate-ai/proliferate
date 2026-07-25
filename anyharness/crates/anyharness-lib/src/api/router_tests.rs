@@ -1749,6 +1749,130 @@ async fn close_subagent_keeps_active_turn_visible_until_actor_exit() {
 }
 
 #[tokio::test]
+async fn close_waits_for_busy_actor_hidden_by_dismiss() {
+    let _lock = test_support::ENV_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("expected env mutex");
+    let _guard = test_support::set_bearer_token_env(None);
+    let state = test_state(false);
+    test_support::seed_workspace_with_repo_root(
+        &state.db,
+        "workspace-subagent-close",
+        "local",
+        "/tmp/workspace-dismiss-close",
+    );
+    let store = SessionStore::new(state.db.clone());
+    store
+        .insert(&subagent_route_session_record(
+            "dismiss-close",
+            "Busy session",
+        ))
+        .expect("insert session");
+    let mut actor = state
+        .acp_manager
+        .install_draining_dismiss_handle_for_test("dismiss-close")
+        .await;
+
+    state
+        .session_runtime
+        .dismiss_live_session("dismiss-close")
+        .await
+        .expect("dismiss session");
+    actor.wait_for_close().await;
+    assert!(state
+        .acp_manager
+        .get_handle("dismiss-close")
+        .await
+        .is_none());
+    assert!(
+        state
+            .acp_manager
+            .has_retiring_session("dismiss-close")
+            .await
+    );
+
+    let runtime = state.session_runtime.clone();
+    let mut close = tokio::spawn(async move { runtime.close_live_session("dismiss-close").await });
+    tokio::select! {
+        result = &mut close => panic!("close crossed actor-exit boundary early: {result:?}"),
+        _ = tokio::time::sleep(Duration::from_millis(20)) => {}
+    }
+    assert_eq!(
+        store
+            .find_by_id("dismiss-close")
+            .expect("read session")
+            .expect("session exists")
+            .status,
+        "closing"
+    );
+
+    actor.release();
+    let closed = close.await.expect("close task").expect("close session");
+    assert_eq!(closed.status, "closed");
+    assert!(closed.closed_at.is_some());
+}
+
+#[tokio::test]
+async fn close_waits_for_actor_hidden_by_startup_timeout() {
+    let _lock = test_support::ENV_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("expected env mutex");
+    let _guard = test_support::set_bearer_token_env(None);
+    let state = test_state(false);
+    test_support::seed_workspace_with_repo_root(
+        &state.db,
+        "workspace-subagent-close",
+        "local",
+        "/tmp/workspace-startup-close",
+    );
+    let store = SessionStore::new(state.db.clone());
+    store
+        .insert(&subagent_route_session_record(
+            "startup-close",
+            "Starting session",
+        ))
+        .expect("insert session");
+    let mut actor = state
+        .acp_manager
+        .install_startup_timeout_exit_for_test("startup-close")
+        .await;
+    actor.wait_for_close().await;
+    assert!(state
+        .acp_manager
+        .get_handle("startup-close")
+        .await
+        .is_none());
+    assert!(
+        state
+            .acp_manager
+            .has_retiring_session("startup-close")
+            .await
+    );
+
+    let runtime = state.session_runtime.clone();
+    let mut close = tokio::spawn(async move { runtime.close_live_session("startup-close").await });
+    tokio::select! {
+        result = &mut close => panic!("close crossed startup actor-exit boundary early: {result:?}"),
+        _ = tokio::time::sleep(Duration::from_millis(20)) => {}
+    }
+    assert_eq!(
+        store
+            .find_by_id("startup-close")
+            .expect("read session")
+            .expect("session exists")
+            .status,
+        "closing"
+    );
+
+    actor.release();
+    let closed = close.await.expect("close task").expect("close session");
+    assert_eq!(closed.status, "closed");
+    assert!(closed.closed_at.is_some());
+}
+
+#[tokio::test]
 async fn restart_recovery_finalizes_closing_subagent_and_clears_wake() {
     let _lock = test_support::ENV_MUTEX
         .get_or_init(|| Mutex::new(()))

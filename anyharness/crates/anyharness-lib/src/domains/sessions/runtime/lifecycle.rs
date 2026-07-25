@@ -139,7 +139,8 @@ impl SessionRuntime {
         &self,
         session_id: &str,
     ) -> Result<(), SessionLifecycleError> {
-        if let Some(handle) = self.acp_manager.get_handle(session_id).await {
+        let handle = self.acp_manager.get_handle(session_id).await;
+        if let Some(handle) = handle.as_ref() {
             // Close acknowledges intent immediately, including during an
             // active provider turn. The actor remains observable and the row
             // remains `closing` until the actor thread actually exits.
@@ -150,15 +151,23 @@ impl SessionRuntime {
                     "close acknowledgement was unavailable; waiting for actor exit"
                 );
             }
-            tokio::time::timeout(CLOSE_DRAIN_TIMEOUT, handle.wait_for_exit())
-                .await
-                .map_err(|_| {
-                    SessionLifecycleError::Internal(anyhow::anyhow!(
-                        "session {session_id} did not finish closing within {} seconds; it remains closing",
-                        CLOSE_DRAIN_TIMEOUT.as_secs()
-                    ))
-                })?;
         }
+
+        let wait_for_exit = async {
+            if !self.acp_manager.wait_for_session_exit(session_id).await {
+                if let Some(handle) = handle {
+                    handle.wait_for_exit().await;
+                }
+            }
+        };
+        tokio::time::timeout(CLOSE_DRAIN_TIMEOUT, wait_for_exit)
+            .await
+            .map_err(|_| {
+                SessionLifecycleError::Internal(anyhow::anyhow!(
+                    "session {session_id} did not finish closing within {} seconds; it remains closing",
+                    CLOSE_DRAIN_TIMEOUT.as_secs()
+                ))
+            })?;
 
         let now = chrono::Utc::now().to_rfc3339();
         self.session_service

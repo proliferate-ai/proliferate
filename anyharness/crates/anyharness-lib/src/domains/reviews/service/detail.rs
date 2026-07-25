@@ -249,6 +249,9 @@ pub(super) fn map_link_error(error: CreateSessionLinkError) -> ReviewError {
         CreateSessionLinkError::ParentNotFound(id) | CreateSessionLinkError::ChildNotFound(id) => {
             ReviewError::SessionNotFound(id)
         }
+        CreateSessionLinkError::ParentUnavailable(id) => {
+            ReviewError::Link(format!("parent session is closing or closed: {id}"))
+        }
         other => ReviewError::Link(other.to_string()),
     }
 }

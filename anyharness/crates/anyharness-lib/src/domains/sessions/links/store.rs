@@ -11,9 +11,16 @@ pub struct SessionLinkStore {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InsertSessionLinkOutcome {
+    Inserted,
+    ParentUnavailable,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InsertSubagentLinkOutcome {
     Inserted,
     FanoutLimit,
+    ParentUnavailable,
 }
 
 impl SessionLinkStore {
@@ -21,7 +28,110 @@ impl SessionLinkStore {
         Self { db }
     }
 
-    pub fn insert(&self, record: &SessionLinkRecord) -> anyhow::Result<()> {
+    pub fn insert_if_parent_open(
+        &self,
+        record: &SessionLinkRecord,
+    ) -> anyhow::Result<InsertSessionLinkOutcome> {
+        self.db.with_conn(|conn| {
+            let inserted = conn.execute(
+                "INSERT INTO session_links (
+                    id, public_id, relation, parent_session_id, child_session_id,
+                    workspace_relation, label, created_by_turn_id,
+                    created_by_tool_call_id, created_at, closed_at
+                 )
+                 SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11
+                 WHERE EXISTS (
+                    SELECT 1 FROM sessions parent
+                    WHERE parent.id = ?4
+                      AND parent.closed_at IS NULL
+                      AND parent.status NOT IN ('closing', 'closed')
+                 )",
+                params![
+                    record.id,
+                    record.public_id,
+                    record.relation.as_str(),
+                    record.parent_session_id,
+                    record.child_session_id,
+                    record.workspace_relation.as_str(),
+                    record.label,
+                    record.created_by_turn_id,
+                    record.created_by_tool_call_id,
+                    record.created_at,
+                    record.closed_at,
+                ],
+            )?;
+            Ok(if inserted > 0 {
+                InsertSessionLinkOutcome::Inserted
+            } else {
+                InsertSessionLinkOutcome::ParentUnavailable
+            })
+        })
+    }
+
+    pub fn insert_subagent_with_child_limit(
+        &self,
+        record: &SessionLinkRecord,
+        max_children: usize,
+    ) -> anyhow::Result<InsertSubagentLinkOutcome> {
+        self.db.with_conn(|conn| {
+            let inserted = conn.execute(
+                "INSERT INTO session_links (
+                    id, public_id, relation, parent_session_id, child_session_id,
+                    workspace_relation, label, created_by_turn_id,
+                    created_by_tool_call_id, created_at, closed_at
+                 )
+                 SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11
+                 WHERE (
+                    SELECT COUNT(*)
+                    FROM session_links
+                    WHERE relation = 'subagent' AND parent_session_id = ?4
+                      AND closed_at IS NULL
+                 ) < ?12
+                   AND EXISTS (
+                    SELECT 1 FROM sessions parent
+                    WHERE parent.id = ?4
+                      AND parent.closed_at IS NULL
+                      AND parent.status NOT IN ('closing', 'closed')
+                 )",
+                params![
+                    record.id,
+                    record.public_id,
+                    record.relation.as_str(),
+                    record.parent_session_id,
+                    record.child_session_id,
+                    record.workspace_relation.as_str(),
+                    record.label,
+                    record.created_by_turn_id,
+                    record.created_by_tool_call_id,
+                    record.created_at,
+                    record.closed_at,
+                    max_children as i64,
+                ],
+            )?;
+            if inserted > 0 {
+                return Ok(InsertSubagentLinkOutcome::Inserted);
+            }
+            let parent_open = conn.query_row(
+                "SELECT EXISTS(
+                    SELECT 1 FROM sessions
+                    WHERE id = ?1 AND closed_at IS NULL
+                      AND status NOT IN ('closing', 'closed')
+                 )",
+                [record.parent_session_id.as_str()],
+                |row| row.get::<_, bool>(0),
+            )?;
+            Ok(if parent_open {
+                InsertSubagentLinkOutcome::FanoutLimit
+            } else {
+                InsertSubagentLinkOutcome::ParentUnavailable
+            })
+        })
+    }
+
+    pub(super) fn insert_historical_import(
+        &self,
+        record: &SessionLinkRecord,
+    ) -> anyhow::Result<()> {
         self.db.with_conn(|conn| {
             conn.execute(
                 "INSERT INTO session_links (
@@ -45,52 +155,6 @@ impl SessionLinkStore {
             )?;
             Ok(())
         })
-    }
-
-    pub fn insert_subagent_with_child_limit(
-        &self,
-        record: &SessionLinkRecord,
-        max_children: usize,
-    ) -> anyhow::Result<InsertSubagentLinkOutcome> {
-        self.db.with_conn(|conn| {
-            let inserted = conn.execute(
-                "INSERT INTO session_links (
-                    id, public_id, relation, parent_session_id, child_session_id,
-                    workspace_relation, label, created_by_turn_id,
-                    created_by_tool_call_id, created_at, closed_at
-                 )
-                 SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11
-                 WHERE (
-                    SELECT COUNT(*)
-                    FROM session_links
-                    WHERE relation = 'subagent' AND parent_session_id = ?4
-                      AND closed_at IS NULL
-                 ) < ?12",
-                params![
-                    record.id,
-                    record.public_id,
-                    record.relation.as_str(),
-                    record.parent_session_id,
-                    record.child_session_id,
-                    record.workspace_relation.as_str(),
-                    record.label,
-                    record.created_by_turn_id,
-                    record.created_by_tool_call_id,
-                    record.created_at,
-                    record.closed_at,
-                    max_children as i64,
-                ],
-            )?;
-            Ok(if inserted == 0 {
-                InsertSubagentLinkOutcome::FanoutLimit
-            } else {
-                InsertSubagentLinkOutcome::Inserted
-            })
-        })
-    }
-
-    pub fn import_link(&self, record: &SessionLinkRecord) -> anyhow::Result<()> {
-        self.insert(record)
     }
 
     pub fn find_by_id(&self, id: &str) -> anyhow::Result<Option<SessionLinkRecord>> {

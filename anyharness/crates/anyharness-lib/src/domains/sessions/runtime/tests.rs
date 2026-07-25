@@ -11,7 +11,9 @@ use crate::domains::agents::registry::built_in_registry;
 use crate::domains::sessions::links::model::{
     SessionLinkRecord, SessionLinkRelation, SessionLinkWorkspaceRelation,
 };
-use crate::domains::sessions::links::service::SessionLinkService;
+use crate::domains::sessions::links::service::{
+    CreateSessionLinkError, CreateSessionLinkInput, SessionLinkService,
+};
 use crate::domains::sessions::links::store::SessionLinkStore;
 use crate::domains::sessions::mcp_bindings::assembly::join_system_prompt_append;
 use crate::domains::sessions::{
@@ -674,7 +676,17 @@ fn fork_link_child_unique_index_rejects_multiple_fork_parents() {
         "parent-two",
         "fork-child",
     );
-    let link_store = SessionLinkStore::new(db);
-
-    assert!(link_store.insert(&second_link).is_err());
+    let link_service = SessionLinkService::new(SessionLinkStore::new(db), store);
+    let error = link_service
+        .create_link(CreateSessionLinkInput {
+            relation: second_link.relation,
+            parent_session_id: second_link.parent_session_id,
+            child_session_id: second_link.child_session_id,
+            workspace_relation: second_link.workspace_relation,
+            label: second_link.label,
+            created_by_turn_id: second_link.created_by_turn_id,
+            created_by_tool_call_id: second_link.created_by_tool_call_id,
+        })
+        .expect_err("second fork parent must be rejected");
+    assert!(matches!(error, CreateSessionLinkError::Duplicate));
 }

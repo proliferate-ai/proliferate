@@ -265,7 +265,7 @@ impl SessionActor {
 
             self.resume_replay_filter.disable();
 
-            if exit_after_prompt.is_some() || broken_session {
+            if exit_after_prompt.is_some() || broken_session || self.handle.is_closing() {
                 break 'drain;
             }
 

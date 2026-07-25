@@ -246,6 +246,8 @@ function formatStatusLabel(status: string | null): string | null {
       return "Failed";
     case "starting":
       return "Starting";
+    case "closing":
+      return "Closing";
     case "queued":
       return "Queued";
     case "closed":

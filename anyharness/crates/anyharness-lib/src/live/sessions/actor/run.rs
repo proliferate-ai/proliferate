@@ -2,6 +2,7 @@ use agent_client_protocol as acp;
 use anyharness_contract::v1::SessionExecutionPhase;
 use tokio::sync::{mpsc, oneshot};
 
+use crate::live::sessions::actor::command::PromptAcceptError;
 use crate::live::sessions::actor::command::{Resolution, SessionCommand};
 use crate::live::sessions::actor::shutdown::types::ActorExitDisposition;
 use crate::live::sessions::actor::state::SessionActor;
@@ -84,6 +85,10 @@ impl SessionActor {
                 from_queue_seq,
                 respond_to,
             } => {
+                if self.handle.is_closing() {
+                    let _ = respond_to.send(Err(PromptAcceptError::Closing));
+                    return None;
+                }
                 self.run_turn(
                     ActivePromptRequest {
                         payload,

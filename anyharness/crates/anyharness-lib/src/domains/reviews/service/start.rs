@@ -8,6 +8,7 @@ use crate::domains::reviews::model::{
     ReviewModeVerificationStatus, ReviewRoundRecord, ReviewRoundStatus, ReviewRunRecord,
     ReviewRunStatus,
 };
+use crate::domains::reviews::store::runs::CreateReviewRunOutcome;
 use crate::domains::sessions::links::model::{SessionLinkRelation, SessionLinkWorkspaceRelation};
 use crate::domains::sessions::links::service::CreateSessionLinkInput;
 
@@ -22,6 +23,12 @@ impl ReviewService {
             .ok_or_else(|| ReviewError::SessionNotFound(input.parent_session_id.clone()))?;
         if parent.workspace_id != input.workspace_id {
             return Err(ReviewError::WorkspaceNotFound(input.workspace_id));
+        }
+        if parent.closed_at.is_some() || matches!(parent.status.as_str(), "closing" | "closed") {
+            return Err(ReviewError::Link(format!(
+                "parent session is closing or closed: {}",
+                parent.id
+            )));
         }
         if self
             .store
@@ -89,10 +96,17 @@ impl ReviewService {
             updated_at: now.clone(),
         };
         let assignments = build_assignments(&run, &round, &input.reviewers, &now);
-        self.store
+        let create_outcome = self
+            .store
             .create_run(&run, &round, &assignments)
             .map_err(ReviewError::Internal)?;
-        Ok(run)
+        match create_outcome {
+            CreateReviewRunOutcome::Created => Ok(run),
+            CreateReviewRunOutcome::ParentUnavailable => Err(ReviewError::Link(format!(
+                "parent session is closing or closed: {}",
+                input.parent_session_id
+            ))),
+        }
     }
 
     pub fn link_reviewer_session(

@@ -3,8 +3,8 @@ use anyharness_contract::v1::{SessionExecutionPhase, StopReason};
 use tokio::sync::mpsc;
 
 use crate::acp::provider_errors::{
-    classify_network_connection_error, classify_provider_rate_limit_error,
-    NETWORK_CONNECTION_CODE, PROVIDER_RATE_LIMIT_CODE,
+    classify_network_connection_error, classify_provider_rate_limit_error, NETWORK_CONNECTION_CODE,
+    PROVIDER_RATE_LIMIT_CODE,
 };
 use crate::domains::sessions::extensions::SessionTurnOutcome;
 use crate::live::sessions::actor::config::queue::apply_pending_config_changes_if_idle;
@@ -165,19 +165,21 @@ impl SessionActor {
                         error_details: None,
                     });
                 }
-                if let Err(error) = apply_pending_config_changes_if_idle(
-                    &self.conn,
-                    &self.native_session_id,
-                    &self.agent_kind,
-                    &self.session_id,
-                    self.caps.state.as_ref(),
-                    &self.event_sink,
-                    &mut self.persisted_config_state,
-                    &mut self.startup_state,
-                )
-                .await
-                {
-                    tracing::warn!(session_id = %self.session_id, error = %error, "failed to apply pending config changes after turn end");
+                if !self.handle.is_closing() {
+                    if let Err(error) = apply_pending_config_changes_if_idle(
+                        &self.conn,
+                        &self.native_session_id,
+                        &self.agent_kind,
+                        &self.session_id,
+                        self.caps.state.as_ref(),
+                        &self.event_sink,
+                        &mut self.persisted_config_state,
+                        &mut self.startup_state,
+                    )
+                    .await
+                    {
+                        tracing::warn!(session_id = %self.session_id, error = %error, "failed to apply pending config changes after turn end");
+                    }
                 }
                 false
             }
@@ -208,7 +210,9 @@ impl SessionActor {
                 let error_message = e.to_string();
                 let (error_details, error_code) =
                     match classify_provider_rate_limit_error(&error_message) {
-                        Some(details) => (Some(details), Some(PROVIDER_RATE_LIMIT_CODE.to_string())),
+                        Some(details) => {
+                            (Some(details), Some(PROVIDER_RATE_LIMIT_CODE.to_string()))
+                        }
                         None => match classify_network_connection_error(&error_message) {
                             Some(details) => {
                                 (Some(details), Some(NETWORK_CONNECTION_CODE.to_string()))

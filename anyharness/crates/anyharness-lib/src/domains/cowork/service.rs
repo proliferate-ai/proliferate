@@ -1,5 +1,5 @@
 use super::model::{CoworkManagedWorkspaceRecord, CoworkRootRecord, CoworkThreadRecord};
-use super::store::CoworkStore;
+use super::store::{CoworkStore, InsertCodingSessionLinkOutcome, InsertManagedWorkspaceOutcome};
 use crate::domains::sessions::links::model::SessionLinkRecord;
 
 #[derive(Clone)]
@@ -82,7 +82,7 @@ impl CoworkService {
         &self,
         record: &CoworkManagedWorkspaceRecord,
         max_workspaces: usize,
-    ) -> anyhow::Result<bool> {
+    ) -> anyhow::Result<InsertManagedWorkspaceOutcome> {
         self.store
             .insert_managed_workspace_with_limit(record, max_workspaces)
     }
@@ -109,7 +109,7 @@ impl CoworkService {
         record: &SessionLinkRecord,
         workspace_id: &str,
         max_sessions_per_workspace: usize,
-    ) -> anyhow::Result<bool> {
+    ) -> anyhow::Result<InsertCodingSessionLinkOutcome> {
         self.store.insert_coding_session_link_with_workspace_limit(
             record,
             workspace_id,

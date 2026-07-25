@@ -30,6 +30,11 @@ impl LiveSessionManager {
                 },
             ));
         }
+        if self.has_retiring_session(&session_id).await {
+            anyhow::bail!(
+                "session {session_id} still has a retiring actor; wait for actor exit before replay"
+            );
+        }
 
         let (event_tx, _) = broadcast::channel::<SessionEventEnvelope>(4096);
         let live_sessions = self.live_sessions.clone();
@@ -54,6 +59,8 @@ impl LiveSessionManager {
             on_exit: Some(on_exit),
         };
         let (handle, ready) = spawn_replay_actor(config)?;
+        self.track_session_exit(session_id.clone(), handle.exit_signal.clone())
+            .await;
         sessions.insert(session_id, handle.clone());
         Ok((handle, ready))
     }

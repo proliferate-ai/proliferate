@@ -19,6 +19,8 @@ export function resolveStatusFromExecutionSummary(
     case "running":
     case "awaiting_interaction":
       return "running";
+    case "closing":
+      return "closing";
     case "idle":
       return "idle";
     case "errored":
@@ -42,7 +44,11 @@ export function resolveSessionStatus(
   }
 
   const reconciledStatus = resolveStatusFromExecutionSummary(input.executionSummary, status);
-  if (reconciledStatus === "closed" || reconciledStatus === "errored") {
+  if (
+    reconciledStatus === "closing"
+    || reconciledStatus === "closed"
+    || reconciledStatus === "errored"
+  ) {
     return reconciledStatus;
   }
   const hasActionablePending = hasActionablePendingInteractions(input);
@@ -158,6 +164,9 @@ export function resolveSessionExecutionPhase(
   if (slot.status === "closed") {
     return "closed";
   }
+  if (slot.status === "closing") {
+    return "closing";
+  }
   if (slot.status === "errored") {
     return "errored";
   }
@@ -185,6 +194,7 @@ export function resolveSessionViewState(
   switch (resolveSessionExecutionPhase(slot)) {
     case "starting":
     case "running":
+    case "closing":
       return "working";
     case "awaiting_interaction":
       return "needs_input";
@@ -224,6 +234,7 @@ export function resolveSessionSidebarActivityState(
   switch (resolveSessionExecutionPhase(slot)) {
     case "starting":
     case "running":
+    case "closing":
       return "iterating";
     case "awaiting_interaction":
       return "waiting_input";

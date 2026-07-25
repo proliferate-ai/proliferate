@@ -20,6 +20,12 @@ impl InboundDoor {
     ) -> acp::Result<acp::schema::RequestPermissionResponse> {
         let request_id = uuid::Uuid::new_v4().to_string();
 
+        if self.live_session_handle.is_closing() {
+            return Ok(acp::schema::RequestPermissionResponse::new(
+                acp::schema::RequestPermissionOutcome::Cancelled,
+            ));
+        }
+
         let title = args
             .tool_call
             .fields
@@ -95,11 +101,15 @@ impl InboundDoor {
                     persisted_events,
                 } => {
                     sink.publish_persisted_events(persisted_events);
-                    let outcome = match selected_option_id {
-                        Some(option_id) => acp::schema::RequestPermissionOutcome::Selected(
-                            acp::schema::SelectedPermissionOutcome::new(option_id),
-                        ),
-                        None => acp::schema::RequestPermissionOutcome::Cancelled,
+                    let outcome = if self.live_session_handle.is_closing() {
+                        acp::schema::RequestPermissionOutcome::Cancelled
+                    } else {
+                        match selected_option_id {
+                            Some(option_id) => acp::schema::RequestPermissionOutcome::Selected(
+                                acp::schema::SelectedPermissionOutcome::new(option_id),
+                            ),
+                            None => acp::schema::RequestPermissionOutcome::Cancelled,
+                        }
                     };
                     return Ok(acp::schema::RequestPermissionResponse::new(outcome));
                 }
@@ -126,8 +136,8 @@ impl InboundDoor {
                 .register_permission(&self.session_id, &request_id, &args.options)
                 .await;
 
-            self.live_session_handle
-                .add_pending_interaction(PendingInteractionSummary {
+            let accepted = self
+                .accept_registered_interaction(PendingInteractionSummary {
                     request_id: request_id.clone(),
                     kind: InteractionKind::Permission,
                     title: title.clone(),
@@ -142,14 +152,16 @@ impl InboundDoor {
                 })
                 .await;
 
-            sink.interaction_requested(InteractionRequestedEvent {
-                request_id: request_id.clone(),
-                kind: InteractionKind::Permission,
-                title: title.clone(),
-                description: None,
-                source: source.clone(),
-                payload,
-            });
+            if accepted {
+                sink.interaction_requested(InteractionRequestedEvent {
+                    request_id: request_id.clone(),
+                    kind: InteractionKind::Permission,
+                    title: title.clone(),
+                    description: None,
+                    source: source.clone(),
+                    payload,
+                });
+            }
 
             pending_wait
         };

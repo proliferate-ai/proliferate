@@ -12,6 +12,20 @@ pub struct CoworkStore {
     db: Db,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InsertManagedWorkspaceOutcome {
+    Inserted,
+    WorkspaceLimit,
+    ParentUnavailable,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InsertCodingSessionLinkOutcome {
+    Inserted,
+    SessionLimit,
+    ParentUnavailable,
+}
+
 impl CoworkStore {
     pub fn new(db: Db) -> Self {
         Self { db }
@@ -161,7 +175,7 @@ impl CoworkStore {
         &self,
         record: &CoworkManagedWorkspaceRecord,
         max_workspaces: usize,
-    ) -> anyhow::Result<bool> {
+    ) -> anyhow::Result<InsertManagedWorkspaceOutcome> {
         self.db.with_conn(|conn| {
             let inserted = conn.execute(
                 "INSERT INTO cowork_managed_workspaces (
@@ -174,7 +188,13 @@ impl CoworkStore {
                     FROM cowork_managed_workspaces
                     WHERE parent_session_id = ?3
                       AND closed_at IS NULL
-                 ) < ?9",
+                 ) < ?9
+                   AND EXISTS (
+                    SELECT 1 FROM sessions parent
+                    WHERE parent.id = ?3
+                      AND parent.closed_at IS NULL
+                      AND parent.status NOT IN ('closing', 'closed')
+                 )",
                 params![
                     record.id,
                     record.public_id,
@@ -187,7 +207,23 @@ impl CoworkStore {
                     max_workspaces as i64,
                 ],
             )?;
-            Ok(inserted > 0)
+            if inserted > 0 {
+                return Ok(InsertManagedWorkspaceOutcome::Inserted);
+            }
+            let parent_open = conn.query_row(
+                "SELECT EXISTS(
+                    SELECT 1 FROM sessions
+                    WHERE id = ?1 AND closed_at IS NULL
+                      AND status NOT IN ('closing', 'closed')
+                 )",
+                [record.parent_session_id.as_str()],
+                |row| row.get::<_, bool>(0),
+            )?;
+            Ok(if parent_open {
+                InsertManagedWorkspaceOutcome::WorkspaceLimit
+            } else {
+                InsertManagedWorkspaceOutcome::ParentUnavailable
+            })
         })
     }
 
@@ -231,7 +267,7 @@ impl CoworkStore {
         record: &SessionLinkRecord,
         workspace_id: &str,
         max_sessions_per_workspace: usize,
-    ) -> anyhow::Result<bool> {
+    ) -> anyhow::Result<InsertCodingSessionLinkOutcome> {
         self.db.with_conn(|conn| {
             let inserted = conn.execute(
                 "INSERT INTO session_links (
@@ -248,7 +284,13 @@ impl CoworkStore {
                       AND links.parent_session_id = ?4
                       AND child.workspace_id = ?12
                       AND links.closed_at IS NULL
-                 ) < ?13",
+                 ) < ?13
+                   AND EXISTS (
+                    SELECT 1 FROM sessions parent
+                    WHERE parent.id = ?4
+                      AND parent.closed_at IS NULL
+                      AND parent.status NOT IN ('closing', 'closed')
+                 )",
                 params![
                     record.id,
                     record.public_id,
@@ -265,7 +307,23 @@ impl CoworkStore {
                     max_sessions_per_workspace as i64,
                 ],
             )?;
-            Ok(inserted > 0)
+            if inserted > 0 {
+                return Ok(InsertCodingSessionLinkOutcome::Inserted);
+            }
+            let parent_open = conn.query_row(
+                "SELECT EXISTS(
+                    SELECT 1 FROM sessions
+                    WHERE id = ?1 AND closed_at IS NULL
+                      AND status NOT IN ('closing', 'closed')
+                 )",
+                [record.parent_session_id.as_str()],
+                |row| row.get::<_, bool>(0),
+            )?;
+            Ok(if parent_open {
+                InsertCodingSessionLinkOutcome::SessionLimit
+            } else {
+                InsertCodingSessionLinkOutcome::ParentUnavailable
+            })
         })
     }
 }
@@ -375,5 +433,135 @@ pub fn new_managed_workspace_record(
         label,
         created_at: chrono::Utc::now().to_rfc3339(),
         closed_at: None,
+    }
+}
+
+#[cfg(test)]
+mod closing_tests {
+    use std::sync::{Arc, Barrier};
+
+    use super::{CoworkStore, InsertCodingSessionLinkOutcome, InsertManagedWorkspaceOutcome};
+    use crate::app::test_support;
+    use crate::domains::cowork::model::CoworkManagedWorkspaceRecord;
+    use crate::domains::sessions::links::model::{
+        SessionLinkRecord, SessionLinkRelation, SessionLinkWorkspaceRelation,
+    };
+    use crate::domains::sessions::links::store::SessionLinkStore;
+    use crate::domains::sessions::store::SessionStore;
+    use crate::persistence::Db;
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn close_fence_is_atomic_with_cowork_coding_link_insert() {
+        let db = Db::open_in_memory().expect("open db");
+        test_support::seed_workspace_with_repo_root(
+            &db,
+            "workspace-1",
+            "local",
+            "/tmp/workspace-1",
+        );
+        db.with_conn(|conn| {
+            for id in ["parent-1", "child-1"] {
+                conn.execute(
+                    "INSERT INTO sessions (
+                        id, workspace_id, agent_kind, status, created_at, updated_at
+                     ) VALUES (?1, 'workspace-1', 'claude', 'idle', 'now', 'now')",
+                    [id],
+                )?;
+            }
+            Ok(())
+        })
+        .expect("seed sessions");
+        let record = SessionLinkRecord {
+            id: "cowork-link-1".to_string(),
+            public_id: Some("cowork_agent_1".to_string()),
+            relation: SessionLinkRelation::CoworkCodingSession,
+            parent_session_id: "parent-1".to_string(),
+            child_session_id: "child-1".to_string(),
+            workspace_relation: SessionLinkWorkspaceRelation::CoworkManagedWorkspace,
+            label: Some("Coder".to_string()),
+            created_by_turn_id: None,
+            created_by_tool_call_id: None,
+            created_at: "2026-03-25T00:00:00Z".to_string(),
+            closed_at: None,
+        };
+
+        let barrier = Arc::new(Barrier::new(2));
+        let close_store = SessionStore::new(db.clone());
+        let close_links = SessionLinkStore::new(db.clone());
+        let close_barrier = barrier.clone();
+        let close = tokio::task::spawn_blocking(move || {
+            close_barrier.wait();
+            close_store
+                .mark_closing("parent-1", "2026-03-25T00:01:00Z")
+                .expect("mark parent closing");
+            close_links
+                .list_by_parent("parent-1")
+                .expect("enumerate children after close fence")
+        });
+
+        let cowork_store = CoworkStore::new(db);
+        let insert_barrier = barrier.clone();
+        let insert = tokio::task::spawn_blocking(move || {
+            insert_barrier.wait();
+            cowork_store
+                .insert_coding_session_link_with_workspace_limit(&record, "workspace-1", 4)
+                .expect("insert outcome")
+        });
+
+        let enumerated = close.await.expect("close task");
+        match insert.await.expect("insert task") {
+            InsertCodingSessionLinkOutcome::Inserted => assert!(enumerated
+                .iter()
+                .any(|candidate| candidate.id == "cowork-link-1")),
+            InsertCodingSessionLinkOutcome::ParentUnavailable => {
+                assert!(enumerated.is_empty())
+            }
+            InsertCodingSessionLinkOutcome::SessionLimit => {
+                panic!("unexpected session limit")
+            }
+        }
+    }
+
+    #[test]
+    fn closing_parent_rejects_late_managed_workspace_insert() {
+        let db = Db::open_in_memory().expect("open db");
+        test_support::seed_workspace_with_repo_root(
+            &db,
+            "workspace-1",
+            "local",
+            "/tmp/workspace-1",
+        );
+        test_support::seed_workspace_with_repo_root(
+            &db,
+            "managed-workspace",
+            "local",
+            "/tmp/managed-workspace",
+        );
+        db.with_conn(|conn| {
+            conn.execute(
+                "INSERT INTO sessions (
+                    id, workspace_id, agent_kind, status, created_at, updated_at
+                 ) VALUES ('parent-1', 'workspace-1', 'claude', 'closing', 'now', 'now')",
+                [],
+            )?;
+            Ok(())
+        })
+        .expect("seed closing parent");
+        let outcome = CoworkStore::new(db)
+            .insert_managed_workspace_with_limit(
+                &CoworkManagedWorkspaceRecord {
+                    id: "managed-1".to_string(),
+                    public_id: Some("cowork_workspace_1".to_string()),
+                    parent_session_id: "parent-1".to_string(),
+                    workspace_id: "managed-workspace".to_string(),
+                    source_workspace_id: Some("workspace-1".to_string()),
+                    label: Some("Workspace".to_string()),
+                    created_at: "now".to_string(),
+                    closed_at: None,
+                },
+                4,
+            )
+            .expect("insert outcome");
+        assert_eq!(outcome, InsertManagedWorkspaceOutcome::ParentUnavailable);
     }
 }

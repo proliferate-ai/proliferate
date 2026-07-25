@@ -178,7 +178,7 @@ async fn run_replay_actor(
         match event {
             SessionEvent::InteractionRequested(interaction) => {
                 handle
-                    .add_pending_interaction(pending_summary_from_interaction(&interaction))
+                    .try_add_pending_interaction(pending_summary_from_interaction(&interaction))
                     .await;
                 match wait_for_interaction(&mut command_rx, &handle, &interaction.request_id).await
                 {

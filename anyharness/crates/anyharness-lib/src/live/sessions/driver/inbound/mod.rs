@@ -1,13 +1,14 @@
 use std::sync::Arc;
 
 use agent_client_protocol as acp;
+use anyharness_contract::v1::PendingInteractionSummary;
 use serde::Serialize;
 use serde_json::value::RawValue;
 use tokio::sync::{mpsc, Mutex};
 
 use crate::live::sessions::handle::LiveSessionHandle;
 use crate::live::sessions::model::PermissionAdvisor;
-use crate::live::sessions::rendezvous::broker::InteractionRendezvous;
+use crate::live::sessions::rendezvous::broker::{InteractionCancelOutcome, InteractionRendezvous};
 use crate::live::sessions::sink::SessionEventSink;
 
 mod mcp_elicitation;
@@ -81,6 +82,42 @@ impl InboundDoor {
             _ => Err(acp::Error::method_not_found()),
         }
     }
+
+    /// Commits a broker registration to the live execution snapshot. Close
+    /// intent is the linearization fence: registrations that lose the race
+    /// are immediately cancelled and must not publish an interaction event.
+    async fn accept_registered_interaction(
+        &self,
+        pending_interaction: PendingInteractionSummary,
+    ) -> bool {
+        accept_registered_interaction(
+            &self.interaction_broker,
+            &self.live_session_handle,
+            &self.session_id,
+            pending_interaction,
+        )
+        .await
+    }
+}
+
+async fn accept_registered_interaction(
+    interaction_broker: &InteractionRendezvous,
+    live_session_handle: &LiveSessionHandle,
+    session_id: &str,
+    pending_interaction: PendingInteractionSummary,
+) -> bool {
+    let request_id = pending_interaction.request_id.clone();
+    if live_session_handle
+        .try_add_pending_interaction(pending_interaction)
+        .await
+    {
+        return true;
+    }
+
+    let _ = interaction_broker
+        .cancel(session_id, &request_id, InteractionCancelOutcome::Cancelled)
+        .await;
+    false
 }
 
 pub(crate) fn raw_ext_response<T: Serialize>(value: T) -> acp::Result<acp::schema::ExtResponse> {
@@ -107,5 +144,155 @@ pub(crate) fn session_update_kind(update: &acp::schema::SessionUpdate) -> &'stat
         UserMessageChunk(_) => "user_message_chunk",
         #[allow(unreachable_patterns)]
         _ => "other",
+    }
+}
+
+#[cfg(test)]
+mod closing_tests {
+    use std::sync::Arc;
+
+    use agent_client_protocol::schema::{
+        CreateElicitationRequest, ElicitationFormMode, ElicitationSchema, ElicitationSessionScope,
+    };
+    use anyharness_contract::v1::{
+        InteractionKind, PendingInteractionPayloadSummary, PendingInteractionSource,
+        PendingInteractionSummary, SessionEventEnvelope, SessionExecutionPhase, UserInputQuestion,
+    };
+    use tokio::sync::{broadcast, mpsc};
+
+    use super::accept_registered_interaction;
+    use crate::live::sessions::actor::command::SessionCommand;
+    use crate::live::sessions::handle::LiveSessionHandle;
+    use crate::live::sessions::rendezvous::broker::{
+        InteractionRendezvous, PermissionOutcome, UserInputOutcome,
+    };
+    use crate::live::sessions::rendezvous::mcp_elicitation::{
+        normalize_standard_mcp_elicitation, McpElicitationOutcome,
+    };
+
+    fn handle() -> Arc<LiveSessionHandle> {
+        let (command_tx, _command_rx) = mpsc::channel::<SessionCommand>(4);
+        let (event_tx, _) = broadcast::channel::<SessionEventEnvelope>(4);
+        Arc::new(LiveSessionHandle::new_for_test(
+            "session-1",
+            command_tx,
+            event_tx,
+            Some("native-1".to_string()),
+            SessionExecutionPhase::Running,
+        ))
+    }
+
+    fn summary(
+        request_id: &str,
+        kind: InteractionKind,
+        payload: PendingInteractionPayloadSummary,
+    ) -> PendingInteractionSummary {
+        PendingInteractionSummary {
+            request_id: request_id.to_string(),
+            kind,
+            title: "Request".to_string(),
+            description: None,
+            source: PendingInteractionSource {
+                tool_call_id: None,
+                tool_kind: None,
+                tool_status: None,
+                linked_plan_id: None,
+            },
+            payload,
+        }
+    }
+
+    #[tokio::test]
+    async fn close_fence_cancels_permission_user_input_and_mcp_registrations() {
+        let handle = handle();
+        let broker = InteractionRendezvous::new();
+        handle.begin_closing().await;
+
+        let permission_wait = broker
+            .register_permission(
+                "session-1",
+                "permission",
+                &[agent_client_protocol::schema::PermissionOption::new(
+                    "allow",
+                    "Allow",
+                    agent_client_protocol::schema::PermissionOptionKind::AllowOnce,
+                )],
+            )
+            .await;
+        assert!(
+            !accept_registered_interaction(
+                &broker,
+                &handle,
+                "session-1",
+                summary(
+                    "permission",
+                    InteractionKind::Permission,
+                    PendingInteractionPayloadSummary::Permission {
+                        options: Vec::new(),
+                        context: None,
+                    },
+                ),
+            )
+            .await
+        );
+        assert_eq!(permission_wait.wait().await, PermissionOutcome::Cancelled);
+
+        let questions = vec![UserInputQuestion {
+            question_id: "question-1".to_string(),
+            header: "Header".to_string(),
+            question: "Question?".to_string(),
+            is_other: false,
+            is_secret: false,
+            options: Vec::new(),
+        }];
+        let user_input_wait = broker
+            .register_user_input("session-1", "user-input", &questions)
+            .await;
+        assert!(
+            !accept_registered_interaction(
+                &broker,
+                &handle,
+                "session-1",
+                summary(
+                    "user-input",
+                    InteractionKind::UserInput,
+                    PendingInteractionPayloadSummary::UserInput { questions },
+                ),
+            )
+            .await
+        );
+        assert_eq!(user_input_wait.wait().await, UserInputOutcome::Cancelled);
+
+        let normalized = normalize_standard_mcp_elicitation(CreateElicitationRequest::new(
+            ElicitationFormMode::new(
+                ElicitationSessionScope::new("native-1"),
+                ElicitationSchema::new().string("account", true),
+            ),
+            "Pick account",
+        ))
+        .expect("normalize MCP elicitation");
+        let mcp_wait = broker
+            .register_mcp_elicitation("session-1", "mcp", normalized.pending)
+            .await;
+        assert!(
+            !accept_registered_interaction(
+                &broker,
+                &handle,
+                "session-1",
+                summary(
+                    "mcp",
+                    InteractionKind::McpElicitation,
+                    PendingInteractionPayloadSummary::McpElicitation {
+                        payload: normalized.payload,
+                    },
+                ),
+            )
+            .await
+        );
+        assert_eq!(mcp_wait.wait().await, McpElicitationOutcome::Cancelled);
+
+        let snapshot = handle.execution_snapshot().await;
+        assert_eq!(snapshot.phase, SessionExecutionPhase::Closing);
+        assert!(snapshot.pending_interactions.is_empty());
     }
 }

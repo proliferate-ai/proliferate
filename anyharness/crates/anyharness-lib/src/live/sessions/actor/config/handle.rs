@@ -100,6 +100,13 @@ impl SessionActor {
         catalog_authorized_model: bool,
     ) -> Result<ConfigApplyState, crate::live::sessions::actor::command::SetConfigOptionCommandError>
     {
+        if self.handle.is_closing() {
+            return Err(
+                crate::live::sessions::actor::command::SetConfigOptionCommandError::Rejected(
+                    "session is closing".to_string(),
+                ),
+            );
+        }
         apply_specific_config_option(
             &self.conn,
             &self.native_session_id,
@@ -123,6 +130,13 @@ impl SessionActor {
         catalog_authorized_model: bool,
     ) -> Result<ConfigApplyState, crate::live::sessions::actor::command::SetConfigOptionCommandError>
     {
+        if self.handle.is_closing() {
+            return Err(
+                crate::live::sessions::actor::command::SetConfigOptionCommandError::Rejected(
+                    "session is closing".to_string(),
+                ),
+            );
+        }
         let option = find_select_option_for_request(&self.startup_state.config_options, config_id);
         queue_pending_config_change(
             self.caps.state.as_ref(),

@@ -9,7 +9,8 @@ use crate::live::sessions::actor::command::{
     PromptAcceptError, PromptAcceptance, QueueMutationError,
 };
 use crate::live::sessions::actor::state::SessionActor;
-use crate::live::sessions::model::AttachmentSource;
+use crate::live::sessions::handle::LiveSessionHandle;
+use crate::live::sessions::model::{AttachmentSource, QueueDurable};
 
 impl SessionActor {
     pub(in crate::live::sessions::actor) async fn handle_busy_prompt_queue(
@@ -18,6 +19,9 @@ impl SessionActor {
         prompt_id: Option<String>,
         from_queue_seq: Option<i64>,
     ) -> Result<PromptAcceptance, PromptAcceptError> {
+        if self.handle.is_closing() {
+            return Err(PromptAcceptError::Closing);
+        }
         if let Some(seq) = from_queue_seq {
             self.emit_prequeued_pending_prompt_added(seq).await;
             return Ok(PromptAcceptance::Queued { seq });
@@ -85,20 +89,37 @@ impl SessionActor {
     pub(in crate::live::sessions::actor) fn next_pending_prompt_for_drain(
         &self,
     ) -> Option<(PromptPayload, Option<String>, i64)> {
-        match self.caps.queue.peek_head_pending_prompt(&self.session_id) {
-            Ok(Some(next)) => Some((next.prompt_payload(), next.prompt_id, next.seq)),
-            Ok(None) => None,
-            Err(error) => {
-                tracing::warn!(
-                    session_id = %self.session_id,
-                    error = %error,
-                    "failed to peek pending prompt queue after turn end",
-                );
-                None
-            }
+        next_pending_prompt_for_drain(
+            self.handle.as_ref(),
+            self.caps.queue.as_ref(),
+            &self.session_id,
+        )
+    }
+}
+
+fn next_pending_prompt_for_drain(
+    handle: &LiveSessionHandle,
+    queue: &dyn QueueDurable,
+    session_id: &str,
+) -> Option<(PromptPayload, Option<String>, i64)> {
+    if handle.is_closing() {
+        return None;
+    }
+    match queue.peek_head_pending_prompt(session_id) {
+        Ok(Some(next)) => Some((next.prompt_payload(), next.prompt_id, next.seq)),
+        Ok(None) => None,
+        Err(error) => {
+            tracing::warn!(
+                session_id = %session_id,
+                error = %error,
+                "failed to peek pending prompt queue after turn end",
+            );
+            None
         }
     }
+}
 
+impl SessionActor {
     pub(in crate::live::sessions::actor) async fn handle_edit_pending_prompt(
         &self,
         seq: i64,
@@ -256,5 +277,88 @@ pub(in crate::live::sessions::actor) fn delete_pending_attachment_files(
                 "failed to delete pending prompt attachment file"
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod closing_tests {
+    use std::sync::Arc;
+
+    use anyharness_contract::v1::{SessionEventEnvelope, SessionExecutionPhase};
+    use tokio::sync::{broadcast, mpsc, Barrier};
+
+    use super::next_pending_prompt_for_drain;
+    use crate::app::test_support;
+    use crate::domains::sessions::prompt::PromptPayload;
+    use crate::domains::sessions::store::SessionStore;
+    use crate::live::sessions::actor::command::SessionCommand;
+    use crate::live::sessions::handle::LiveSessionHandle;
+    use crate::persistence::Db;
+
+    #[tokio::test]
+    async fn close_intent_wins_provider_completion_before_queue_drain() {
+        let db = Db::open_in_memory().expect("open db");
+        test_support::seed_workspace_with_repo_root(
+            &db,
+            "workspace-1",
+            "local",
+            "/tmp/workspace-1",
+        );
+        db.with_conn(|conn| {
+            conn.execute(
+                "INSERT INTO sessions (
+                    id, workspace_id, agent_kind, status, created_at, updated_at
+                 ) VALUES ('session-1', 'workspace-1', 'claude', 'running', 'now', 'now')",
+                [],
+            )?;
+            Ok(())
+        })
+        .expect("seed session");
+        let queue = Arc::new(SessionStore::new(db));
+        let queued = queue
+            .insert_pending_prompt_payload(
+                "session-1",
+                &PromptPayload::text("queued work".to_string()),
+                Some("queued-prompt"),
+            )
+            .expect("queue prompt");
+
+        let (command_tx, _command_rx) = mpsc::channel::<SessionCommand>(4);
+        let (event_tx, _) = broadcast::channel::<SessionEventEnvelope>(4);
+        let handle = Arc::new(LiveSessionHandle::new_for_test(
+            "session-1",
+            command_tx,
+            event_tx,
+            Some("native-1".to_string()),
+            SessionExecutionPhase::Running,
+        ));
+
+        // This is the exact lost-race ordering: provider completion is ready,
+        // close intent is established, and the Close mailbox command has not
+        // yet been consumed when queue drain decides whether to hand off work.
+        let provider_completed = Arc::new(Barrier::new(2));
+        let close_fenced = Arc::new(Barrier::new(2));
+        let closing_handle = handle.clone();
+        let closing_provider_completed = provider_completed.clone();
+        let closing_close_fenced = close_fenced.clone();
+        let close_task = tokio::spawn(async move {
+            closing_provider_completed.wait().await;
+            closing_handle.begin_closing().await;
+            closing_close_fenced.wait().await;
+        });
+
+        provider_completed.wait().await;
+        close_fenced.wait().await;
+        assert!(next_pending_prompt_for_drain(&handle, queue.as_ref(), "session-1").is_none());
+        close_task.await.expect("close fence task");
+
+        let still_queued = queue
+            .find_pending_prompt("session-1", queued.seq)
+            .expect("read queue row");
+        assert!(still_queued.is_some(), "queued row must remain unstarted");
+        assert_eq!(
+            handle.execution_snapshot().await.phase,
+            SessionExecutionPhase::Closing
+        );
     }
 }

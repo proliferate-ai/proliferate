@@ -41,8 +41,8 @@ impl InboundDoor {
                 .register_mcp_elicitation(&self.session_id, &request_id, normalized.pending)
                 .await;
 
-            self.live_session_handle
-                .add_pending_interaction(PendingInteractionSummary {
+            let accepted = self
+                .accept_registered_interaction(PendingInteractionSummary {
                     request_id: request_id.clone(),
                     kind: InteractionKind::McpElicitation,
                     title: title.clone(),
@@ -57,14 +57,16 @@ impl InboundDoor {
                 })
                 .await;
 
-            sink.interaction_requested(InteractionRequestedEvent {
-                request_id: request_id.clone(),
-                kind: InteractionKind::McpElicitation,
-                title,
-                description,
-                source,
-                payload: InteractionPayload::McpElicitation(payload),
-            });
+            if accepted {
+                sink.interaction_requested(InteractionRequestedEvent {
+                    request_id: request_id.clone(),
+                    kind: InteractionKind::McpElicitation,
+                    title,
+                    description,
+                    source,
+                    payload: InteractionPayload::McpElicitation(payload),
+                });
+            }
 
             pending_wait
         };
@@ -105,8 +107,8 @@ impl InboundDoor {
                 .register_mcp_elicitation(&self.session_id, &request_id, normalized.pending)
                 .await;
 
-            self.live_session_handle
-                .add_pending_interaction(PendingInteractionSummary {
+            let accepted = self
+                .accept_registered_interaction(PendingInteractionSummary {
                     request_id: request_id.clone(),
                     kind: InteractionKind::McpElicitation,
                     title: title.clone(),
@@ -121,14 +123,16 @@ impl InboundDoor {
                 })
                 .await;
 
-            sink.interaction_requested(InteractionRequestedEvent {
-                request_id: request_id.clone(),
-                kind: InteractionKind::McpElicitation,
-                title,
-                description,
-                source,
-                payload: InteractionPayload::McpElicitation(payload),
-            });
+            if accepted {
+                sink.interaction_requested(InteractionRequestedEvent {
+                    request_id: request_id.clone(),
+                    kind: InteractionKind::McpElicitation,
+                    title,
+                    description,
+                    source,
+                    payload: InteractionPayload::McpElicitation(payload),
+                });
+            }
 
             pending_wait
         };

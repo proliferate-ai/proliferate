@@ -120,7 +120,10 @@ impl ReviewService {
         Ok(self
             .session_store
             .find_by_id(session_id)?
-            .is_some_and(|session| session.closed_at.is_some() || session.status == "closed"))
+            .is_some_and(|session| {
+                session.closed_at.is_some()
+                    || matches!(session.status.as_str(), "closing" | "closed")
+            }))
     }
 
     pub fn get_plan(&self, plan_id: &str) -> anyhow::Result<Option<PlanRecord>> {
