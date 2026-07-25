@@ -9,7 +9,7 @@ value.
 *why* the system looks the way it does;
 [tokens.ts](../../../../apps/packages/design/src/tokens.ts) is the value
 authority and the only artifact that can settle a number, with its inline
-`[RETUNE:…]` / `RT-TOK-xxx` provenance comments carrying per-value attribution.
+`[RETUNE:…]` provenance comments carrying per-value attribution.
 Where the two disagree about a value, `tokens.ts` is right and this document is
 stale. The reference-alignment pass that produced these rulings
 (`ui-foundation-target-v2.md`, `ui-foundation-chat-addendum.md`, and the
@@ -32,7 +32,7 @@ the gate script's own contract
 or the historical capture evidence behind each adopted value (the archived
 rulings record above).
 
-## Where the system lives
+## Where The System Lives
 
 ```text
 apps/packages/design/
@@ -49,7 +49,7 @@ scripts/git-hooks/pre-commit          staged-file gate; documents the load-beari
 Makefile                              wires the hook (core.hooksPath scripts/git-hooks) via the git-hooks target
 ```
 
-## Design philosophy
+## Design Philosophy
 
 **Codex-first reference precedence (R-V2-1, ruled Pablo 2026-07-25):** "Codex UI
 is preferred in general; Conductor is authority only where the product's shape
@@ -73,7 +73,7 @@ Operationalized:
   row actions, Codex-soft radii); this precedence is that pattern made law
   rather than decided case-by-case.
 
-## Clean-redo laws
+## Clean-Redo Laws
 
 These laws exist because #1484 broke each one. They are kept because the gate
 or stage named under each is what caught the failure.
@@ -93,9 +93,10 @@ or stage named under each is what caught the failure.
 > (neither regex, nor any `ARBITRARY_*_RE`, existed in the 311-line version of
 > that script this system replaced).
 
-> **Adversarial review is a planned stage, not a favor.** It caught the seven
-> gaps last time; an independent review agent sweeps the census after
-> migration and its findings must reach zero before the founder checkpoint.
+> **Adversarial review is a stage, not a favor.** It caught the seven gaps
+> last time; during the pass, an independent review agent swept the census
+> after migration and its findings had to reach zero before the founder
+> checkpoint.
 
 > **Known collision points are re-derived, never pattern-copied.**
 > [RepoActionsPane.tsx](../../../../apps/packages/product-client/src/components/settings/panes/repo/RepoActionsPane.tsx)
@@ -105,7 +106,7 @@ or stage named under each is what caught the failure.
 > files out of #1484's 473-file footprint.
 
 > **Rendered visual verification is in scope.** #1484 deferred it and shipped
-> visual defects the token diff could not show; the served build is inspected
+> visual defects the token diff could not show; the served build was inspected
 > per-surface against the reference contact sheets before the checkpoint.
 
 > **No exception without a sanction trail.** Baselines that can grow silently
@@ -113,7 +114,7 @@ or stage named under each is what caught the failure.
 > requires a written sanction in the component catalog or spec, so baseline
 > files only shrink.
 
-## Ruled retune decisions that define the system's look
+## Ruled Retune Decisions
 
 ### Type ramp
 Closed body ramp — authored px, paired line-height AND letter-spacing per
@@ -125,7 +126,7 @@ converge):
 - `14/21 −0.005em` → body emphasis, workspace title
 - Titles: `16/23 −0.01em`, `19/24 −0.025em`; hero `26/34 −0.025em`.
 - Nothing else is legal. Generic Tailwind steps (`text-xs/sm/base/lg/xl`) are
-  deleted; all 756 census sites migrate to the semantic roles.
+  deleted; all 756 census sites were migrated to the semantic roles.
 
 ### Control weight 450 → system-stack rendering
 One characteristic control weight: **450** (`--font-weight-control`, provenance
@@ -148,7 +149,7 @@ value. Geist Mono still ships as `--font-mono`.
 
 ### Composer anatomy ([CHAT-01]/[CHAT-02])
 - **Radius: 12px** (`--radius-composer: 0.75rem`) — a *conscious deviation*
-  from Codex's literal authored composer radius (20px `--radius-3xl`, or
+  from Codex's literal authored composer radius (20px, Codex's own `--radius-3xl`, or
   25px at the 1.25 corner-radius scale). Kept because [RAD-04] already rules
   it and [CHAT-01]'s own prose cites it explicitly.
 - **Control-row gaps: 8px** (`gap-2`) — [CHAT-02] wins over [SPACE-01]'s
@@ -247,12 +248,15 @@ sidebar kebab, archive, tab close, file-row actions), shipped as
 a `size-7` box with `[&_svg]:icon-control` glyph, translucent hover per Codex,
 group-hover reveal per Conductor.
 
-## Change-control model
+## Change-Control Model
 
 - **All rulings are recorded, not silently applied.** Each deliberate value
   change carries a ruling ID (`D-V2-1`..`D-V2-4`, `R-V2-1`, `R-V2-2`) or a
   retune ID (`[CHAT-01..05]`, `[RAD-04]`, `[SPACE-01]`, `[STATE-02]`,
-  `RT-TOK-xxx`, etc.), each with a cited evidence path (computed.json /
+  `RT-TOK-…`, etc.). These IDs — wherever they appear in this document — cite
+  entries in the archived rulings record (readable via
+  `git show origin/ui-foundation-pass:<file>`), not identifiers in code; each
+  carries a cited evidence path (computed.json /
   dom.html / css line / tokens.md row). Anything not on the enumerated
   changelog is verified unchanged (screenshot/computed-style comparison);
   any visual shift not on the list is a bug by definition.
@@ -293,23 +297,23 @@ group-hover reveal per Conductor.
   completion. The archived addendum's format (evidence path → maps-to column →
   flagged conflict) is the template for any future reference-alignment pass.
 
-## Failure modes
+## Failure Modes
 
 | Condition | What a consumer observes | Recovery |
 | --- | --- | --- |
 | `tokens.ts` edited without rebuilding | `check-theme.mjs` fails byte-equality (or, worse, passes on a stale `dist/theme.css` if `tsc` was skipped) | run `pnpm --filter @proliferate/design build`; never run the generator alone |
 | A token value is syntactically invalid CSS | Tailwind's `compile()` pass in `check-theme.mjs` fails; unguarded, the JIT stylesheet 500s at runtime and the app renders unstyled | fix the value in `tokens.ts`; the compile pass is the gate that keeps this pre-merge |
-| A banned class (arbitrary radius/z/gap/size, stock/keystone shadow, `bg-foreground/<alpha>`, numeric duration) is introduced | `check_appearance_scaling.py` fails in pre-commit and CI, naming file and match | replace with the ruled token utility, or obtain a written sanction — baseline growth is not a fix |
+| A banned class (arbitrary radius/z/gap/size, stock/keystone shadow, `bg-foreground/<alpha>` at ≤ 10%, numeric duration) is introduced | `check_appearance_scaling.py` fails in pre-commit and CI, naming file and match | replace with the ruled token utility, or obtain a written sanction — baseline growth is not a fix |
 | A hard-coded value lands in `product.css`/`dom.css` instead of `tokens.ts` | the token-declaration case *is* gated: `check_design_css_source` emits `authored-root-token` for any `--x:` in a global `:root`/`:root[…]` block and `authored-theme-block` for any `@theme`. Only a non-token literal inside a component rule (e.g. `background: #212121` in `.foo`) escapes, since `RAW_HEX_RE` is not run over design CSS — that one silently becomes a second source of truth and diverges mode-to-mode | move the value into `tokens.ts` and regenerate |
 | Hook not installed (fresh clone, `core.hooksPath` unset) | local commits skip both gates; failure surfaces only in CI | run the `Makefile` target that sets `core.hooksPath scripts/git-hooks` |
 
-## Current gaps
+## Current Gaps
 
 Everything above describes current behavior. These are the places where a rule
 this document states is not actually enforced anywhere, and the one known stale
 claim in the code.
 
-- [ ] Icon-button container sizes are asserted as the legal scale but are not
+- Icon-button container sizes are asserted as the legal scale but are not
       enforced: no gate rule restricts freehand `size-N` on icon buttons
       (`ARBITRARY_SIZE_RE` in
       [check_appearance_scaling.py](../../../../scripts/check_appearance_scaling.py)
@@ -323,16 +327,16 @@ claim in the code.
       [Button.tsx](../../../../apps/packages/ui/src/primitives/Button.tsx)
       (line 52, `icon-sm` = `h-7 w-7`). Closing it means either a gate rule or
       dropping the claim.
-- [ ] [tokens.ts](../../../../apps/packages/design/src/tokens.ts):1094-1095
+- [tokens.ts](../../../../apps/packages/design/src/tokens.ts):1094-1095
       claims the appearance gate bans arbitrary `max-w` bracket widths. It does
       not — the gate has no `max-w` rule, so the `--container-transcript-*`
       namespacing is a consistency choice. The comment should be corrected to
       match the Transcript section above.
-- [ ] `apps/packages/design/dist/theme.css` is generated, not checked in, so a
+- `apps/packages/design/dist/theme.css` is generated, not checked in, so a
       fresh checkout has no emitted file to read; the generated-CSS statements
       here are verified against `src/tokens.ts` plus the generator and checker
       scripts.
-- [ ] No automated rendered-visual check exists. The change-control model
+- No automated rendered-visual check exists. The change-control model
       requires per-surface inspection of the served build against the reference
       contact sheets before a founder checkpoint, and that step is human-run
       with no artifact retained.
