@@ -48,6 +48,25 @@ export const ICON_SIZE_TOKEN_IDS = [
 ] as const;
 
 /**
+ * The generated `size-icon-button-*` control-box tiers
+ * (`--size-icon-button-sm|md|lg` → `@utility size-icon-button-*` in
+ * dist/theme.css, which sets BOTH width and height).
+ *
+ * These belong to tailwind-merge's stock `size` group, not to a group of their
+ * own: `size-icon-button-sm` conflicts with `size-6`, `h-7`, and `w-7` exactly
+ * the way `size-5` does, and only membership in `size` carries the stock
+ * `size → [w, h]` conflict mapping. Unregistered, a consumer that overrides a
+ * component's own `h-7 w-7` with `size-icon-button-sm` gets BOTH in the merged
+ * list and loses on generated-CSS source order — the same silent-drop failure
+ * mode as an unregistered font size, only inverted (the token survives the
+ * merge but never wins the cascade).
+ *
+ * Locked against the generated theme's emitted utilities in
+ * appearance-css-drift.test.ts.
+ */
+export const ICON_BUTTON_SIZE_TOKEN_IDS = ["sm", "md", "lg"] as const;
+
+/**
  * The one true twMerge: knows the design-package font-size tokens. Import it
  * from here — never from "tailwind-merge" directly. check-design-system.sh
  * enforces this across desktop, web, and the shared UI packages — every
@@ -59,6 +78,7 @@ export const twMerge = extendTailwindMerge<"icon-size">({
     classGroups: {
       "font-size": [{ text: [...TEXT_SIZE_TOKEN_IDS] }],
       "icon-size": [{ icon: [...ICON_SIZE_TOKEN_IDS] }],
+      size: [{ size: ICON_BUTTON_SIZE_TOKEN_IDS.map((step) => `icon-button-${step}`) }],
     },
   },
 });

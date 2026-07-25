@@ -2,7 +2,11 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { TEXT_SIZE_TOKEN_IDS, twMerge } from "@proliferate/ui/utils/tw-merge";
+import {
+  ICON_BUTTON_SIZE_TOKEN_IDS,
+  TEXT_SIZE_TOKEN_IDS,
+  twMerge,
+} from "@proliferate/ui/utils/tw-merge";
 import { typography } from "@proliferate/design/tokens";
 import {
   DEFAULT_APPEARANCE_SIZE_ID,
@@ -226,6 +230,32 @@ describe("generated design-package semantic text tokens", () => {
     expect(twMerge("text-chat-meta text-muted-foreground")).toBe(
       "text-chat-meta text-muted-foreground",
     );
+  });
+
+  it("registers every generated size-icon-button tier in twMerge's size group", () => {
+    // The generated control-box utilities set BOTH width and height, so they
+    // conflict with `size-*`, `h-*`, and `w-*` exactly as `size-5` does. Only
+    // membership in the stock `size` group carries that conflict mapping.
+    const generatedIconButtonSteps = [
+      ...stripCssComments(generatedThemeCss).matchAll(
+        /@utility size-icon-button-([a-z]+)\s*\{/g,
+      ),
+    ].map((match) => match[1]);
+
+    expect(generatedIconButtonSteps.length).toBeGreaterThan(0);
+    expect([...ICON_BUTTON_SIZE_TOKEN_IDS].sort()).toEqual([...generatedIconButtonSteps].sort());
+
+    for (const step of generatedIconButtonSteps) {
+      // A consumer override must WIN over a component's own box, not coexist
+      // with it and lose on generated-CSS source order (which is what
+      // ChromeWorkspaceTab's 20px close button did: Button's `h-7 w-7`
+      // survived the merge and kept it at 28px).
+      expect(twMerge(`h-7 w-7 rounded-full px-0 size-icon-button-${step}`)).toBe(
+        `rounded-full px-0 size-icon-button-${step}`,
+      );
+      // And it must itself be overridable by a later stock box.
+      expect(twMerge(`size-icon-button-${step} size-6`)).toBe("size-6");
+    }
   });
 });
 

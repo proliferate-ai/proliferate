@@ -84,7 +84,12 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
           }`}
         >
           {isMini ? (
-            <span className="workspace-shell-tab__leading relative z-20 flex size-4 shrink-0 items-center justify-center">
+            // [CHAT-05] RULED: the close button's hit target is 20px
+            // (--size-icon-button-sm), so the mini tab's leading slot — which
+            // swaps the 16px file glyph for that button on hover — is sized to
+            // the LARGER of the two. At the glyph's old 16px the 20px button
+            // overflowed its own slot by 2px per side and shifted the label.
+            <span className="workspace-shell-tab__leading relative z-20 flex size-icon-button-sm shrink-0 items-center justify-center">
               <span className="workspace-shell-tab__icon flex size-4 shrink-0 items-center justify-center group-hover/tab:hidden group-focus-within/tab:hidden">
                 {icon}
               </span>
