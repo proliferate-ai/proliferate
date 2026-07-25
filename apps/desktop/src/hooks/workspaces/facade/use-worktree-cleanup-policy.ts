@@ -12,6 +12,7 @@ import {
 } from "@/lib/domain/preferences/user/worktree-auto-delete";
 import { useAuthStore } from "@/stores/auth/auth-store";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
+import { isSignedInAuthStatus } from "@/lib/domain/auth/auth-state-mapping";
 
 export interface WorktreeCleanupPolicyState {
   value: number;
@@ -63,7 +64,7 @@ export function useWorktreeCleanupPolicy(
         `Enter a value from ${WORKTREE_AUTO_DELETE_LIMIT_MIN} to ${WORKTREE_AUTO_DELETE_LIMIT_MAX}.`,
       );
     }
-    if (authStatus === "authenticated" && !syncState.cloudPolicyUnavailable) {
+    if (isSignedInAuthStatus(authStatus) && !syncState.cloudPolicyUnavailable) {
       if (syncState.cloudLoading) {
         throw new Error("Cloud policy is still loading.");
       }

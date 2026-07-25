@@ -35,6 +35,7 @@ import { OrganizationSwitchDialog } from "./OrganizationSwitchDialog";
 import { SidebarAppVersionRow } from "./SidebarAppVersionRow";
 import { SidebarHelpSection } from "./SidebarHelpSection";
 import { ConsumptionCard } from "./SidebarConsumptionCard";
+import { isSignedInAuthStatus } from "@/lib/domain/auth/auth-state-mapping";
 
 /**
  * The single sidebar bottom-left account block, shared verbatim by the main
@@ -59,7 +60,7 @@ export function SidebarAccountFooter() {
   const capabilities = useAppCapabilities();
   const webApp = useWebAppTarget();
   const { data: billingPlan } = useCloudBilling();
-  const { data: usageSummary } = useUsageSummary(undefined, authStatus === "authenticated");
+  const { data: usageSummary } = useUsageSummary(undefined, isSignedInAuthStatus(authStatus));
   const {
     activeOrganization,
     activeOrganizationId,
@@ -68,7 +69,7 @@ export function SidebarAccountFooter() {
     setActiveOrganizationId,
   } = useActiveOrganization();
   const pendingInvitationsQuery = useCurrentUserOrganizationInvitations(
-    authStatus === "authenticated",
+    isSignedInAuthStatus(authStatus),
   );
   const actions = useOrganizationActions(activeOrganizationId);
   const { activateJoinedOrganization, activatingJoinedOrganization } =

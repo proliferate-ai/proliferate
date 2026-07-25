@@ -3,6 +3,7 @@ import { useCallback } from "react";
 import { getIntegrationHealth } from "@proliferate/cloud-sdk/client/integrations";
 import { useAuthStore } from "@/stores/auth/auth-store";
 import { cloudIntegrationsHealthKey, cloudIntegrationsRootKey } from "./query-keys";
+import { isSignedInAuthStatus } from "@/lib/domain/auth/auth-state-mapping";
 
 export function useIntegrationHealth(
   organizationId: string | null,
@@ -15,7 +16,7 @@ export function useIntegrationHealth(
   const authStatus = useAuthStore((state) => state.status);
   return useQuery({
     queryKey: cloudIntegrationsHealthKey(organizationId),
-    enabled: authStatus === "authenticated" && (options?.enabled ?? true),
+    enabled: isSignedInAuthStatus(authStatus) && (options?.enabled ?? true),
     refetchInterval: options?.refetchInterval ?? false,
     refetchOnWindowFocus: options?.refetchOnWindowFocus ?? true,
     queryFn: () => getIntegrationHealth({ organizationId }),

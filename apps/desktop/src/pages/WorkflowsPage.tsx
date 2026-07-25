@@ -6,6 +6,7 @@ import { APP_ROUTES } from "@/config/app-routes";
 import { WORKFLOW_AUTH_COPY } from "@/copy/workflows/workflow-copy";
 import { isDevAuthBypassed } from "@/lib/domain/auth/auth-mode";
 import { useAuthStore } from "@/stores/auth/auth-store";
+import { isSignedInAuthStatus } from "@/lib/domain/auth/auth-state-mapping";
 
 export function WorkflowsPage() {
   const location = useLocation();
@@ -23,7 +24,7 @@ export function WorkflowsPage() {
     );
   }
 
-  if (authStatus !== "authenticated") {
+  if (!isSignedInAuthStatus(authStatus)) {
     const returnTo = `${location.pathname}${location.search}${location.hash}`;
     return (
       <WorkflowDefinitionsAccessScreen

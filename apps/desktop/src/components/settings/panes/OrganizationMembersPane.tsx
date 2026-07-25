@@ -20,6 +20,7 @@ import {
 } from "@/lib/domain/organizations/organization-records";
 import { useAuthStore } from "@/stores/auth/auth-store";
 import { useToastStore } from "@/stores/toast/toast-store";
+import { isSignedInAuthStatus } from "@/lib/domain/auth/auth-state-mapping";
 
 const EMPTY_MEMBERS: OrganizationMemberRecord[] = [];
 const EMPTY_INVITATIONS: OrganizationInvitationRecord[] = [];
@@ -77,10 +78,10 @@ export function OrganizationMembersPane() {
     });
   }
 
-  const shouldShowSignInState = authStatus !== "authenticated";
-  const shouldShowLoadingState = authStatus === "authenticated" && organizationsQuery.isLoading;
-  const shouldShowErrorState = authStatus === "authenticated" && organizationsQuery.isError;
-  const shouldShowEmptyState = authStatus === "authenticated"
+  const shouldShowSignInState = !isSignedInAuthStatus(authStatus);
+  const shouldShowLoadingState = isSignedInAuthStatus(authStatus) && organizationsQuery.isLoading;
+  const shouldShowErrorState = isSignedInAuthStatus(authStatus) && organizationsQuery.isError;
+  const shouldShowEmptyState = isSignedInAuthStatus(authStatus)
     && organizationsQuery.isSuccess
     && organizations.length === 0;
 

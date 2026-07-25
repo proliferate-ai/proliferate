@@ -9,6 +9,7 @@ import { ProliferateClientError } from "@/lib/access/cloud/client";
 import { useAuthStore } from "@/stores/auth/auth-store";
 import { cloudIntegrationAdminDefinitionsKey } from "./query-keys";
 import { useInvalidateCloudIntegrations } from "./use-integration-health";
+import { isSignedInAuthStatus } from "@/lib/domain/auth/auth-state-mapping";
 
 export function useAdminIntegrationDefinitions(
   organizationId: string | null,
@@ -18,7 +19,7 @@ export function useAdminIntegrationDefinitions(
   return useQuery({
     queryKey: cloudIntegrationAdminDefinitionsKey(organizationId),
     enabled:
-      authStatus === "authenticated"
+      isSignedInAuthStatus(authStatus)
       && Boolean(organizationId)
       && (options?.enabled ?? true),
     queryFn: () => listAdminIntegrationDefinitions(organizationId!),

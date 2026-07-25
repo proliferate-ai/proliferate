@@ -3,6 +3,7 @@ import { Navigate, Outlet } from "react-router-dom"
 import { twMerge } from "@proliferate/ui/utils/tw-merge"
 import { AuthShell } from "@/components/auth/AuthShell"
 import { isProductAuthRequired } from "@/lib/domain/auth/auth-mode"
+import { isSignedInAuthStatus } from "@/lib/domain/auth/auth-state-mapping"
 import { useAuthStore } from "@/stores/auth/auth-store"
 
 // Where the gate resolves to once auth state is known:
@@ -21,7 +22,9 @@ function resolveDestination(
   if (status === "bootstrapping") {
     return "loading"
   }
-  if (status === "authenticated" || !authRequired) {
+  // "unreachable" keeps the signed-in workspace: the principal and
+  // generation are retained under a transient outage.
+  if (isSignedInAuthStatus(status) || !authRequired) {
     return "app"
   }
   return "login"
@@ -113,7 +116,7 @@ export function BootstrappedRoute() {
 export function PublicOnlyRoute() {
   const status = useAuthStore((state) => state.status)
 
-  if (status === "authenticated") {
+  if (isSignedInAuthStatus(status)) {
     return <Navigate to="/" replace />
   }
 

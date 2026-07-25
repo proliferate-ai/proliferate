@@ -3,11 +3,10 @@ import type { AuthSignInSource, AuthTelemetryProvider } from "@/lib/domain/telem
 import { checkControlPlaneReachable } from "@/lib/access/cloud/health";
 import { AuthRequestError } from "@/lib/integrations/auth/proliferate-auth";
 import { signInWithDesktopPassword } from "@/lib/integrations/auth/proliferate-auth-password";
+import { desktopAuthCoordinator } from "./auth-coordinator-instance";
 import {
-  applyAuthenticatedState,
   applyDevBypassState,
   toError,
-  type AuthOrchestrationDeps,
 } from "./orchestration-effects";
 
 export interface PasswordSignInCredentials {
@@ -19,13 +18,12 @@ export interface PasswordSignInCredentials {
 // is no PKCE handoff: the server returns the desktop token pair in one call.
 export async function signInWithPassword(
   credentials: PasswordSignInCredentials,
-  deps: AuthOrchestrationDeps,
 ): Promise<{
   provider: AuthTelemetryProvider;
   source: AuthSignInSource;
 }> {
   if (isDevAuthBypassed()) {
-    applyDevBypassState(deps);
+    await applyDevBypassState();
     return {
       provider: "dev_bypass",
       source: "dev_bypass",
@@ -40,17 +38,28 @@ export async function signInWithPassword(
     );
   }
 
+  // Password sign-in has no PKCE pending record; it still runs as a
+  // coordinator sign-in transaction so a competing flow supersedes it.
+  const transactionId = `password:${crypto.randomUUID()}`;
+  desktopAuthCoordinator.beginSignInTransaction(transactionId);
   try {
     const session = await signInWithDesktopPassword(
       credentials.email,
       credentials.password,
     );
-    await applyAuthenticatedState(deps, session);
+    const committed = await desktopAuthCoordinator.commitSignInSession({
+      transactionId,
+      session,
+    });
+    if (!committed) {
+      throw new AuthRequestError("Sign-in was superseded by another auth flow.", 409);
+    }
     return {
       provider: "password",
       source: "password_form",
     };
   } catch (error) {
+    desktopAuthCoordinator.cancelSignInTransaction(transactionId);
     throw toError(error, "Sign-in failed");
   }
 }

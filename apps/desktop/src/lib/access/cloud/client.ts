@@ -10,23 +10,16 @@ import {
   type ProliferateCloudClient,
 } from "@proliferate/cloud-sdk";
 import { applySelectedOrganizationHeaders } from "@/lib/access/cloud/owner-context-headers";
-import {
-  clearStoredAuthSession,
-  getStoredAuthSession,
-  setStoredAuthSession,
-  type StoredAuthSession,
-} from "@/lib/access/tauri/auth";
 import { isDevAuthBypassed } from "@/lib/domain/auth/auth-mode";
-import { getCurrentAuthSession } from "@/lib/domain/auth/current-auth-session";
 import { getProliferateApiBaseUrl } from "@/lib/infra/proliferate-api";
 import { recordMeasurementMetric } from "@/lib/infra/measurement/debug-measurement";
 import type { MeasurementOperationId } from "@/lib/infra/measurement/debug-measurement-catalog-types";
 import { isAnyHarnessTimingEnabled } from "@/lib/infra/measurement/debug-measurement-env";
-import {
-  isDefinitiveAuthRejection,
-  isSessionExpiring,
-  refreshDesktopUserSession,
-} from "@/lib/integrations/auth/proliferate-auth";
+import { desktopAuthCoordinator } from "@/lib/integrations/auth/auth-coordinator-instance";
+import type {
+  AuthorityStamp,
+  AuthRejectionOutcome,
+} from "@/lib/integrations/auth/auth-coordinator";
 
 export type * from "@proliferate/cloud-sdk/types";
 export {
@@ -34,76 +27,27 @@ export {
   ProliferateClientError,
 };
 
-async function loadValidSession(): Promise<StoredAuthSession | null> {
-  const current = getCurrentAuthSession();
-  const stored = await getStoredAuthSession();
-  const candidate = current ?? stored;
-  if (!candidate) return null;
-  if (!isSessionExpiring(candidate)) {
-    return candidate;
-  }
-  try {
-    const refreshed = await refreshDesktopUserSession(candidate.refresh_token);
-    await setStoredAuthSession(refreshed);
-    return refreshed;
-  } catch (error) {
-    // Only a definitive server rejection invalidates the stored session; a
-    // network blip during refresh must not sign the user out.
-    if (isDefinitiveAuthRejection(error)) {
-      await clearStoredAuthSession();
-    }
-    return null;
-  }
+// The credentials each outgoing request actually used. A late 401 hands this
+// stamp back to the auth coordinator so an old generation/revision can never
+// invalidate or overwrite newer credentials (spec §4.2). All stored-credential
+// writes/clears happen inside the coordinator — never here.
+const requestCredentialStamps = new WeakMap<Request, AuthorityStamp>();
+
+function sessionExpiredError(): ProliferateClientError {
+  return new ProliferateClientError(
+    "Session expired. Please sign in again.",
+    401,
+    "unauthorized",
+  );
 }
 
-async function refreshSessionOrThrow(
-  session: StoredAuthSession,
-): Promise<StoredAuthSession> {
-  const refreshed = await refreshDesktopUserSession(session.refresh_token);
-  await setStoredAuthSession(refreshed);
-  return refreshed;
+function refreshUnavailableError(): ProliferateClientError {
+  return new ProliferateClientError(
+    "Could not refresh your session due to a network problem. Please retry.",
+    503,
+    "auth_refresh_unavailable",
+  );
 }
-
-const authMiddleware: Middleware = {
-  async onRequest({ request }) {
-    return prepareDesktopCloudRequest(request);
-  },
-
-  async onResponse({ response, request }) {
-    if (response.status === 401) {
-      const stored = await getStoredAuthSession();
-      if (!stored) {
-        await clearStoredAuthSession();
-        throw new ProliferateClientError(
-          "Session expired. Please sign in again.",
-          401,
-          "unauthorized",
-        );
-      }
-      try {
-        const refreshed = await refreshSessionOrThrow(stored);
-        const retryHeaders = new Headers(request.headers);
-        retryHeaders.set("authorization", `Bearer ${refreshed.access_token}`);
-        return fetch(new Request(request, { headers: retryHeaders }));
-      } catch (error) {
-        if (isDefinitiveAuthRejection(error)) {
-          await clearStoredAuthSession();
-          throw new ProliferateClientError(
-            "Session expired. Please sign in again.",
-            401,
-            "unauthorized",
-          );
-        }
-        throw new ProliferateClientError(
-          "Could not refresh your session due to a network problem. Please retry.",
-          503,
-          "auth_refresh_unavailable",
-        );
-      }
-    }
-    return response;
-  },
-};
 
 async function prepareDesktopCloudRequest(request: Request): Promise<Request> {
   if (isDevAuthBypassed()) {
@@ -113,8 +57,8 @@ async function prepareDesktopCloudRequest(request: Request): Promise<Request> {
       "dev_auth_bypass",
     );
   }
-  const session = await loadValidSession();
-  if (!session) {
+  const snapshot = await desktopAuthCoordinator.getFreshCredentialSnapshot();
+  if (!snapshot) {
     throw new ProliferateClientError(
       "You must sign in to use cloud workspaces.",
       401,
@@ -124,13 +68,58 @@ async function prepareDesktopCloudRequest(request: Request): Promise<Request> {
   if (!request.headers.has("accept")) {
     request.headers.set("accept", "application/json");
   }
-  request.headers.set("authorization", `Bearer ${session.access_token}`);
+  request.headers.set("authorization", `Bearer ${snapshot.session.access_token}`);
   applySelectedOrganizationHeaders(request.headers);
   if (request.body && !request.headers.has("content-type")) {
     request.headers.set("content-type", "application/json");
   }
+  requestCredentialStamps.set(request, {
+    authGeneration: snapshot.authGeneration,
+    credentialRevision: snapshot.credentialRevision,
+  });
   return request;
 }
+
+// Resolves a 401 through the coordinator. Returns the session to retry with,
+// or throws the terminal error. Only a same-generation request may retry:
+// a stale-authority request must never obtain the newer authority's token.
+async function resolveCloudAuthRejection(request: Request): Promise<string> {
+  const stamp =
+    requestCredentialStamps.get(request)
+    ?? desktopAuthCoordinator.getAuthorityStamp();
+  const outcome: AuthRejectionOutcome =
+    await desktopAuthCoordinator.handleCloudAuthRejection(stamp);
+  switch (outcome.kind) {
+    case "refreshed":
+    case "superseded":
+      return outcome.session.access_token;
+    case "unavailable":
+      throw refreshUnavailableError();
+    case "invalidated":
+    case "stale-authority":
+      throw sessionExpiredError();
+  }
+}
+
+const authMiddleware: Middleware = {
+  async onRequest({ request }) {
+    return prepareDesktopCloudRequest(request);
+  },
+
+  async onResponse({ response, request }) {
+    if (response.status === 401) {
+      const accessToken = await resolveCloudAuthRejection(request);
+      const retryHeaders = new Headers(request.headers);
+      retryHeaders.set("authorization", `Bearer ${accessToken}`);
+      return fetch(new Request(request, { headers: retryHeaders }));
+    }
+    if (response.ok) {
+      // The deployment answered: recover a retained unreachable authority.
+      void desktopAuthCoordinator.markReachable();
+    }
+    return response;
+  },
+};
 
 export async function getDesktopCloudAccessToken(): Promise<string> {
   if (isDevAuthBypassed()) {
@@ -140,15 +129,15 @@ export async function getDesktopCloudAccessToken(): Promise<string> {
       "dev_auth_bypass",
     );
   }
-  const session = await loadValidSession();
-  if (!session) {
+  const snapshot = await desktopAuthCoordinator.getFreshCredentialSnapshot();
+  if (!snapshot) {
     throw new ProliferateClientError(
       "You must sign in to use cloud workspaces.",
       401,
       "unauthorized",
     );
   }
-  return session.access_token;
+  return snapshot.session.access_token;
 }
 
 async function fetchDesktopCloudStream(
@@ -163,39 +152,13 @@ async function fetchDesktopCloudStream(
     return response;
   }
 
-  const stored = await getStoredAuthSession();
-  if (!stored) {
-    await clearStoredAuthSession();
-    throw new ProliferateClientError(
-      "Session expired. Please sign in again.",
-      401,
-      "unauthorized",
-    );
-  }
-
-  try {
-    const refreshed = await refreshSessionOrThrow(stored);
-    const retryHeaders = new Headers(request.headers);
-    retryHeaders.set("authorization", `Bearer ${refreshed.access_token}`);
-    return fetch(new Request(input.url, {
-      headers: retryHeaders,
-      signal: input.signal,
-    }));
-  } catch (error) {
-    if (isDefinitiveAuthRejection(error)) {
-      await clearStoredAuthSession();
-      throw new ProliferateClientError(
-        "Session expired. Please sign in again.",
-        401,
-        "unauthorized",
-      );
-    }
-    throw new ProliferateClientError(
-      "Could not refresh your session due to a network problem. Please retry.",
-      503,
-      "auth_refresh_unavailable",
-    );
-  }
+  const accessToken = await resolveCloudAuthRejection(request);
+  const retryHeaders = new Headers(request.headers);
+  retryHeaders.set("authorization", `Bearer ${accessToken}`);
+  return fetch(new Request(input.url, {
+    headers: retryHeaders,
+    signal: input.signal,
+  }));
 }
 
 configureCloudRequestMeasurement({

@@ -16,8 +16,8 @@ import {
 import {
   captureTelemetryException,
 } from "@/lib/integrations/telemetry/client";
+import { desktopAuthCoordinator } from "./auth-coordinator-instance";
 import {
-  applyAuthenticatedState,
   clearPendingGitHubAuth,
   handleDesktopNavigationUrl,
   markPendingCallbackUrl,
@@ -92,7 +92,12 @@ export async function handleDesktopCallbackUrl(
 
     resolveGitHubSignIn(pending.state, session);
     await clearStoredPendingAuthSession();
-    await applyAuthenticatedState(deps, session);
+    // CAS on the sign-in transaction: the commit is discarded if another
+    // auth flow superseded this one while the browser round-trip ran.
+    await desktopAuthCoordinator.commitSignInSession({
+      transactionId: pending.state,
+      session,
+    });
     return true;
   } catch (error) {
     const latestPending = await getStoredPendingAuthSession();

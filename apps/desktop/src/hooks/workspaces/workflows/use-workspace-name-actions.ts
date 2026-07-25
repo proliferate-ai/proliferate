@@ -9,6 +9,7 @@ import {
   workspaceHasOtherPromptedSession,
 } from "@/hooks/workspaces/workflows/workspace-name-eligibility";
 import { useAuthStore } from "@/stores/auth/auth-store";
+import { isSignedInAuthStatus } from "@/lib/domain/auth/auth-state-mapping";
 
 const requestedAutoWorkspaceNames = new Map<string, number>();
 const MAX_TRACKED_AUTO_WORKSPACE_NAMES = 500;
@@ -44,7 +45,7 @@ export function useWorkspaceNameActions() {
     if (!trimmedPrompt) {
       return;
     }
-    if (useAuthStore.getState().status !== "authenticated") {
+    if (!isSignedInAuthStatus(useAuthStore.getState().status)) {
       return;
     }
 

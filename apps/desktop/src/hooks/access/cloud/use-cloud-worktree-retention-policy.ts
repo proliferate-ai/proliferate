@@ -9,6 +9,7 @@ import {
 } from "@proliferate/cloud-sdk/client/worktree-policy";
 import { useAuthStore } from "@/stores/auth/auth-store";
 import { cloudWorktreeRetentionPolicyKey } from "@/hooks/access/cloud/query-keys";
+import { isSignedInAuthStatus } from "@/lib/domain/auth/auth-state-mapping";
 
 export function useCloudWorktreeRetentionPolicy() {
   const authStatus = useAuthStore((state) => state.status);
@@ -16,7 +17,7 @@ export function useCloudWorktreeRetentionPolicy() {
   return useQuery<CloudWorktreeRetentionPolicyResponse>({
     queryKey: cloudWorktreeRetentionPolicyKey(userId),
     queryFn: getCloudWorktreeRetentionPolicy,
-    enabled: authStatus === "authenticated" && userId !== null,
+    enabled: isSignedInAuthStatus(authStatus) && userId !== null,
     staleTime: 30_000,
     refetchOnWindowFocus: false,
   });

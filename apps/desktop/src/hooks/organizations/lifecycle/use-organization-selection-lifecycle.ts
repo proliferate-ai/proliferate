@@ -7,6 +7,7 @@ import {
 } from "@/lib/access/browser/organization-selection-cookie";
 import { useOrganizationStore } from "@/stores/organizations/organization-store";
 import { useAuthStore } from "@/stores/auth/auth-store";
+import { isSignedInAuthStatus } from "@/lib/domain/auth/auth-state-mapping";
 
 export function useOrganizationSelectionLifecycle() {
   const authStatus = useAuthStore((state) => state.status);
@@ -24,7 +25,7 @@ export function useOrganizationSelectionLifecycle() {
     if (authStatus === "bootstrapping") {
       return;
     }
-    if (authStatus !== "authenticated" || !authUserId) {
+    if (!isSignedInAuthStatus(authStatus) || !authUserId) {
       hydratedUserIdRef.current = null;
       clearSelectedOrganizationCookie();
       clearActiveOrganizationId();
@@ -43,7 +44,7 @@ export function useOrganizationSelectionLifecycle() {
   }, [authStatus, authUserId, clearActiveOrganizationId, setActiveOrganizationId]);
 
   useEffect(() => {
-    if (authStatus !== "authenticated" || !organizationsQuery.isSuccess) {
+    if (!isSignedInAuthStatus(authStatus) || !organizationsQuery.isSuccess) {
       return;
     }
     const organizations = organizationsQuery.data.organizations;

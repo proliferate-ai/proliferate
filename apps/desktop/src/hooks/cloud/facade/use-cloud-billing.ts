@@ -10,6 +10,7 @@ import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { useAppCapabilities } from "@/hooks/capabilities/derived/use-app-capabilities";
 import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
 import { useAuthStore } from "@/stores/auth/auth-store";
+import { isSignedInAuthStatus } from "@/lib/domain/auth/auth-state-mapping";
 
 function billingOwnerKey(owner?: CloudOwnerSelection) {
   return {
@@ -29,7 +30,7 @@ export function useCloudBilling(
   const billingAccessible = billingEnabled
     && (
       ownerKey.ownerScope === "organization"
-        ? authStatus === "authenticated" && Boolean(ownerKey.organizationId)
+        ? isSignedInAuthStatus(authStatus) && Boolean(ownerKey.organizationId)
         : cloudActive
     );
 

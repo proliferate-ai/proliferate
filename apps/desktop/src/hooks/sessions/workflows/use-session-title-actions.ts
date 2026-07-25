@@ -11,6 +11,7 @@ import { getMeasurementRequestOptions } from "@/lib/infra/measurement/debug-meas
 import { useSessionSummaryActions } from "@/hooks/sessions/workflows/use-session-summary-actions";
 import { useWorkspaceSessionCache } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
 import { useAuthStore } from "@/stores/auth/auth-store";
+import { isSignedInAuthStatus } from "@/lib/domain/auth/auth-state-mapping";
 
 const requestedAutoSessionTitles = new Map<string, number>();
 const MAX_TRACKED_AUTO_SESSION_TITLES = 500;
@@ -88,7 +89,7 @@ export function useSessionTitleActions() {
     if (!trimmedPrompt) {
       return;
     }
-    if (useAuthStore.getState().status !== "authenticated") {
+    if (!isSignedInAuthStatus(useAuthStore.getState().status)) {
       return;
     }
 

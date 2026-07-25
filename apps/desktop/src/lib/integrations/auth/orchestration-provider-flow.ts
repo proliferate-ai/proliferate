@@ -3,6 +3,7 @@ import {
   setStoredPendingAuthSession,
   clearStoredPendingAuthSession,
 } from "@/lib/access/tauri/auth";
+import type { StoredAuthSession } from "@/lib/domain/auth/stored-auth-session";
 import {
   getActiveGitHubSignIn,
   resolveGitHubSignIn,
@@ -29,14 +30,30 @@ import {
 } from "@/lib/integrations/auth/proliferate-sso-auth";
 import { checkControlPlaneReachable } from "@/lib/access/cloud/health";
 import { revokeDesktopWorkerServerSide } from "@/lib/workflows/cloud/ensure-desktop-worker";
+import { desktopAuthCoordinator } from "./auth-coordinator-instance";
 import {
-  applyAnonymousState,
-  applyAuthenticatedState,
   applyDevBypassState,
+  applySignedOutState,
   clearPendingGitHubAuth,
   toError,
   type AuthOrchestrationDeps,
 } from "./orchestration-effects";
+
+// Commits an interactive sign-in through the coordinator's transaction CAS.
+// A superseded transaction (another flow started meanwhile) fails the sign-in
+// instead of overwriting the newer flow's credentials.
+async function commitInteractiveSignIn(
+  transactionId: string,
+  session: StoredAuthSession,
+): Promise<void> {
+  const committed = await desktopAuthCoordinator.commitSignInSession({
+    transactionId,
+    session,
+  });
+  if (!committed) {
+    throw new AuthRequestError("Sign-in was superseded by another auth flow.", 409);
+  }
+}
 
 export async function signInWithGitHub(
   options: GitHubDesktopSignInOptions | undefined,
@@ -46,7 +63,7 @@ export async function signInWithGitHub(
   source: AuthSignInSource;
 }> {
   if (isDevAuthBypassed()) {
-    applyDevBypassState(deps);
+    await applyDevBypassState();
     return {
       provider: "dev_bypass",
       source: "dev_bypass",
@@ -82,6 +99,7 @@ export async function signInWithGitHub(
 
   const pending = createPendingGitHubDesktopAuth();
   await setStoredPendingAuthSession(pending);
+  desktopAuthCoordinator.beginSignInTransaction(pending.state);
 
   const controller = startGitHubSignIn(pending.state);
 
@@ -119,7 +137,7 @@ export async function signInWithGitHub(
     }
 
     await clearStoredPendingAuthSession();
-    await applyAuthenticatedState(deps, session);
+    await commitInteractiveSignIn(pending.state, session);
     return {
       provider: "github",
       source,
@@ -181,6 +199,7 @@ export async function linkDesktopProvider(
 
   const pending = createPendingGitHubDesktopAuth();
   await setStoredPendingAuthSession(pending);
+  desktopAuthCoordinator.beginSignInTransaction(pending.state);
   const controller = startGitHubSignIn(pending.state);
 
   try {
@@ -222,7 +241,7 @@ export async function linkDesktopProvider(
     }
 
     await clearStoredPendingAuthSession();
-    await applyAuthenticatedState(deps, session);
+    await commitInteractiveSignIn(pending.state, session);
     return {
       provider,
       source,
@@ -238,13 +257,12 @@ export async function linkDesktopProvider(
 
 export async function signInWithSso(
   options: DesktopSsoSignInOptions | undefined,
-  deps: AuthOrchestrationDeps,
 ): Promise<{
   provider: AuthTelemetryProvider;
   source: AuthSignInSource;
 }> {
   if (isDevAuthBypassed()) {
-    applyDevBypassState(deps);
+    await applyDevBypassState();
     return {
       provider: "dev_bypass",
       source: "dev_bypass",
@@ -282,6 +300,7 @@ export async function signInWithSso(
 
   const pending = createPendingGitHubDesktopAuth();
   await setStoredPendingAuthSession(pending);
+  desktopAuthCoordinator.beginSignInTransaction(pending.state);
   const controller = startGitHubSignIn(pending.state);
 
   try {
@@ -323,7 +342,7 @@ export async function signInWithSso(
     }
 
     await clearStoredPendingAuthSession();
-    await applyAuthenticatedState(deps, session);
+    await commitInteractiveSignIn(pending.state, session);
     return {
       provider: "sso",
       source,
@@ -342,19 +361,27 @@ export async function signOut(deps: AuthOrchestrationDeps): Promise<{
 }> {
   if (isDevAuthBypassed()) {
     await clearPendingGitHubAuth();
-    applyDevBypassState(deps);
+    await applyDevBypassState();
     return {
       provider: "dev_bypass",
     };
   }
 
+  // The sign-out belongs to the authority the user was signed into when they
+  // clicked it: capture the generation BEFORE the async revoke so a sign-in
+  // that lands mid-flight wins the CAS and this stale clear is discarded.
+  const { authGeneration } = desktopAuthCoordinator.getAuthorityStamp();
+
   // Revoke the desktop worker + gateway token server-side while the auth
-  // session is still valid; once applyAnonymousState clears it the request
-  // can only fail. The enrollment hook's teardown (fired by the store
-  // flipping to anonymous) handles the local process + dotfile cleanup.
+  // session is still valid; once the coordinator clears it the request can
+  // only fail. The enrollment hook's teardown (fired by the store flipping
+  // to anonymous) handles the local process + dotfile cleanup.
   await revokeDesktopWorkerServerSide();
   await clearPendingGitHubAuth();
-  await applyAnonymousState(deps, { clearPendingAuth: true });
+  await applySignedOutState(deps, {
+    expectedGeneration: authGeneration,
+    clearPendingAuth: true,
+  });
   return {
     provider: "github",
   };

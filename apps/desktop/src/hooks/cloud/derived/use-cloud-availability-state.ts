@@ -3,6 +3,7 @@ import { useGitHubDesktopAuthAvailability } from "@/hooks/access/cloud/auth/use-
 import { useAppCapabilities } from "@/hooks/capabilities/derived/use-app-capabilities";
 import { logStartupDebug } from "@/lib/infra/measurement/debug-startup";
 import { useAuthStore } from "@/stores/auth/auth-store";
+import { isSignedInAuthStatus } from "@/lib/domain/auth/auth-state-mapping";
 
 export function useCloudAvailabilityState() {
   const authStatus = useAuthStore((state) => state.status);
@@ -15,7 +16,7 @@ export function useCloudAvailabilityState() {
   const cloudSignInChecking = cloudEnabled && githubDesktopAuthAvailabilityPending;
   const cloudSignInAvailable = cloudEnabled && githubDesktopAuthAvailable?.enabled === true;
   const cloudAuthUnavailable = cloudEnabled && !cloudSignInChecking && !cloudSignInAvailable;
-  const cloudActive = cloudComputeEnabled && authStatus === "authenticated";
+  const cloudActive = cloudComputeEnabled && isSignedInAuthStatus(authStatus);
   const cloudRequiresSignIn = cloudSignInAvailable && authStatus === "anonymous";
 
   useEffect(() => {

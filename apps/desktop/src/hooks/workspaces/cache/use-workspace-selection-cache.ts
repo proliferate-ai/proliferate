@@ -12,6 +12,7 @@ import type { CloudMobilityWorkspaceSummary } from "@/lib/access/cloud/client";
 import { cloudBillingKey, cloudMobilityWorkspacesKey } from "@/hooks/access/cloud/query-keys";
 import { useAuthStore } from "@/stores/auth/auth-store";
 import type { WorkspaceCollections } from "@/lib/domain/workspaces/cloud/collections";
+import { isSignedInAuthStatus } from "@/lib/domain/auth/auth-state-mapping";
 import {
   getWorkspaceCollectionsFromCache,
   workspaceCollectionsScopeKey,
@@ -42,7 +43,7 @@ export function useWorkspaceSelectionCache() {
     workspaceCollections: getWorkspaceCollectionsFromCache(
       queryClient,
       runtimeUrl,
-      authStatus === "authenticated" ? authUserId : null,
+      isSignedInAuthStatus(authStatus) ? authUserId : null,
     ),
     cloudMobilityWorkspaces: queryClient.getQueryData<CloudMobilityWorkspaceSummary[]>(
       cloudMobilityWorkspacesKey(),

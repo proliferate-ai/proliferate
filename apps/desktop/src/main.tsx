@@ -24,6 +24,9 @@ import {
 import { installDebugMeasurement } from "./lib/infra/measurement/debug-measurement-install";
 import { startLayoutShiftObserver } from "./lib/infra/measurement/debug-layout-shift";
 import { logRendererEvent } from "./lib/access/tauri/diagnostics";
+import { getStoredAuthSession } from "./lib/access/tauri/auth";
+import { isDevAuthBypassed } from "./lib/domain/auth/auth-mode";
+import { desktopAuthCoordinator } from "./lib/integrations/auth/auth-coordinator-instance";
 import { AppProviders } from "./providers/AppProviders";
 import "./index.css";
 
@@ -31,6 +34,7 @@ const IS_TAURI_DESKTOP =
   typeof window !== "undefined"
   && "__TAURI_INTERNALS__" in (window as unknown as Record<string, unknown>);
 const API_CONFIG_STARTUP_BUDGET_MS = 1500;
+const AUTH_AUTHORITY_STARTUP_BUDGET_MS = 700;
 
 document.documentElement.dataset.proliferateClient = "desktop";
 initializeTheme();
@@ -178,6 +182,33 @@ function startTelemetryOnce(): void {
   startAnonymousTelemetry();
 }
 
+// Resolve the initial session authority BEFORE the first render so no remote
+// provider ever mounts without a resolved authority (spec §5.1/§5.2): the
+// stored session yields a provisional user authority, otherwise anonymous.
+// Bootstrap validation later confirms it (same generation), replaces it
+// (generation advance), or marks it unreachable (retained). On a slow/failed
+// keychain read we resolve anonymous; a stored session found afterwards is a
+// normal authority replacement.
+async function resolveInitialAuthorityForStartup(): Promise<void> {
+  recordRendererStartupEvent("auth_authority.start");
+  try {
+    const stored = isDevAuthBypassed()
+      ? null
+      : await Promise.race([
+        getStoredAuthSession(),
+        new Promise<null>((resolve) => {
+          window.setTimeout(() => resolve(null), AUTH_AUTHORITY_STARTUP_BUDGET_MS);
+        }),
+      ]);
+    await desktopAuthCoordinator.resolveProvisionalAuthority(stored);
+    recordRendererStartupEvent("auth_authority.completed");
+  } catch (error) {
+    await desktopAuthCoordinator.resolveProvisionalAuthority(null);
+    recordRendererStartupEvent("auth_authority.failed");
+    warnStartupFailure("Failed to resolve initial auth authority", error);
+  }
+}
+
 async function bootstrapApiConfigForStartup(): Promise<boolean> {
   recordRendererStartupEvent("api_config.start");
   const bootstrapPromise = bootstrapProliferateApiConfig()
@@ -216,10 +247,14 @@ void (async () => {
     startTelemetryOnce();
   }
 
+  await resolveInitialAuthorityForStartup();
+
   renderAppOnce();
   recordRendererStartupEvent("startup.completed");
 })().catch((error) => {
   recordRendererStartupEvent("startup.failed");
   warnStartupFailure("Failed to start desktop app", error);
-  renderAppOnce();
+  void desktopAuthCoordinator.resolveProvisionalAuthority(null).finally(() => {
+    renderAppOnce();
+  });
 });

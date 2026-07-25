@@ -5,10 +5,8 @@ import {
   clearStoredPendingAuthSession,
   getStoredAuthSession,
   getStoredPendingAuthSession,
-  setStoredAuthSession,
 } from "@/lib/access/tauri/auth";
 import {
-  anonymousAuthState,
   bootstrappingAuthStatePatch,
 } from "@/lib/domain/auth/auth-state-mapping";
 import { isDevAuthBypassed } from "@/lib/domain/auth/auth-mode";
@@ -22,15 +20,12 @@ import {
   startStartupTimer,
   summarizeStartupError,
 } from "@/lib/infra/measurement/debug-startup";
-import {
-  applyPersistedAuthenticatedAuthState,
-  applyVolatileAuthenticatedAuthState,
-} from "@/lib/workflows/auth/apply-auth-state";
 import { storedSessionWithValidatedUser } from "@/lib/domain/auth/session-mapping";
+import { desktopAuthCoordinator } from "./auth-coordinator-instance";
 import { handleDesktopCallbackUrl } from "./orchestration-callback";
 import {
-  applyAnonymousState,
   applyDevBypassState,
+  applySignedOutState,
   clearPendingGitHubAuth,
   isTransientBootstrapError,
   recoverValidatedSessionAfterTransientFailure,
@@ -46,7 +41,7 @@ export async function bootstrapAuth(deps: AuthOrchestrationDeps): Promise<void> 
 
   if (isDevAuthBypassed()) {
     await clearStoredPendingAuthSession();
-    applyDevBypassState(deps);
+    await applyDevBypassState();
     logStartupDebug("auth.bootstrap.dev_bypass", {
       elapsedMs: elapsedStartupMs(startedAt),
     });
@@ -54,20 +49,34 @@ export async function bootstrapAuth(deps: AuthOrchestrationDeps): Promise<void> 
   }
 
   const storedSession = await getStoredAuthSession();
+  // Normally a no-op: the host resolves the provisional authority before the
+  // first render (main.tsx) so remote providers never mount unresolved.
+  await desktopAuthCoordinator.resolveProvisionalAuthority(storedSession);
+  const { authGeneration } = desktopAuthCoordinator.getAuthorityStamp();
+
   const controlPlaneReachable = await checkControlPlaneReachable();
   if (!controlPlaneReachable) {
     await clearStoredPendingAuthSession();
     deps.clearSessionRuntimeState();
 
     if (storedSession) {
-      applyVolatileAuthenticatedAuthState({ session: storedSession }, deps);
+      // Transient authenticated outage: retain the resolved principal and
+      // generation underneath the normalized "unreachable" status.
+      await desktopAuthCoordinator.commitBootstrapSession({
+        expectedGeneration: authGeneration,
+        session: storedSession,
+        persist: false,
+        reachable: false,
+      });
       logStartupDebug("auth.bootstrap.control_plane_unreachable.cached_session", {
         elapsedMs: elapsedStartupMs(startedAt),
       });
       return;
     }
 
-    deps.setAuthState(anonymousAuthState());
+    await desktopAuthCoordinator.publishBootstrapAnonymous({
+      expectedGeneration: authGeneration,
+    });
     logStartupDebug("auth.bootstrap.control_plane_unreachable.anonymous", {
       elapsedMs: elapsedStartupMs(startedAt),
     });
@@ -85,7 +94,9 @@ export async function bootstrapAuth(deps: AuthOrchestrationDeps): Promise<void> 
   }
 
   if (!storedSession) {
-    deps.setAuthState(anonymousAuthState());
+    await desktopAuthCoordinator.publishBootstrapAnonymous({
+      expectedGeneration: authGeneration,
+    });
     logStartupDebug("auth.bootstrap.no_stored_session", {
       elapsedMs: elapsedStartupMs(startedAt),
     });
@@ -96,19 +107,24 @@ export async function bootstrapAuth(deps: AuthOrchestrationDeps): Promise<void> 
     logStartupDebug("auth.bootstrap.validate_stored_session.start");
     const { session, user } = await validateSession(storedSession);
     const persistedSession = storedSessionWithValidatedUser(session, user);
-    await applyPersistedAuthenticatedAuthState(
-      { session: persistedSession, user },
-      {
-        setStoredAuthSession,
-        setAuthState: deps.setAuthState,
-      },
-    );
+    await desktopAuthCoordinator.commitBootstrapSession({
+      expectedGeneration: authGeneration,
+      session: persistedSession,
+      user,
+      persist: true,
+      reachable: true,
+    });
     logStartupDebug("auth.bootstrap.validate_stored_session.completed", {
       elapsedMs: elapsedStartupMs(startedAt),
     });
   } catch (error) {
     if (isTransientBootstrapError(error)) {
-      applyVolatileAuthenticatedAuthState({ session: storedSession }, deps);
+      await desktopAuthCoordinator.commitBootstrapSession({
+        expectedGeneration: authGeneration,
+        session: storedSession,
+        persist: false,
+        reachable: false,
+      });
       logStartupDebug("auth.bootstrap.transient_failure_background_recovery", {
         elapsedMs: elapsedStartupMs(startedAt),
         ...summarizeStartupError(error),
@@ -117,7 +133,10 @@ export async function bootstrapAuth(deps: AuthOrchestrationDeps): Promise<void> 
       return;
     }
 
-    await applyAnonymousState(deps);
+    await applySignedOutState(deps, {
+      expectedGeneration: authGeneration,
+      viaInvalidation: true,
+    });
     logStartupDebug("auth.bootstrap.failed_anonymous", {
       elapsedMs: elapsedStartupMs(startedAt),
       ...summarizeStartupError(error),

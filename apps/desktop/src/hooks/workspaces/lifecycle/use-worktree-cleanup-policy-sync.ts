@@ -12,6 +12,7 @@ import {
 import type { WorktreeSettingsTarget } from "@/lib/domain/workspaces/worktrees/worktree-settings-target";
 import { useAuthStore } from "@/stores/auth/auth-store";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
+import { isSignedInAuthStatus } from "@/lib/domain/auth/auth-state-mapping";
 
 const seededCloudPolicyRuntimeKeys = new Set<string>();
 const syncedPolicyKeys = new Set<string>();
@@ -63,17 +64,17 @@ export function useWorktreeCleanupPolicySync(
       return null;
     }
     if (
-      authStatus === "authenticated"
+      isSignedInAuthStatus(authStatus)
       && cloudPolicy.data === undefined
       && !cloudPolicy.isError
     ) {
       return null;
     }
-    if (authStatus === "authenticated" && cloudPolicy.data?.source === "persisted") {
+    if (isSignedInAuthStatus(authStatus) && cloudPolicy.data?.source === "persisted") {
       return cloudPolicy.data.maxMaterializedWorktreesPerRepo;
     }
     if (
-      authStatus === "authenticated"
+      isSignedInAuthStatus(authStatus)
       && cloudPolicy.data?.source === "default"
       && adoptionPending
       && !localPolicyQuery.isError
@@ -99,7 +100,7 @@ export function useWorktreeCleanupPolicySync(
       return;
     }
 
-    if (authStatus === "authenticated" && cloudPolicy.data?.source === "persisted") {
+    if (isSignedInAuthStatus(authStatus) && cloudPolicy.data?.source === "persisted") {
       setPreference("worktreeAutoDeleteLimit", cloudPolicy.data.maxMaterializedWorktreesPerRepo);
       void markWorktreeAutoDeleteLimitAdopted();
       return;
@@ -111,7 +112,7 @@ export function useWorktreeCleanupPolicySync(
     }
 
     if (
-      authStatus === "authenticated"
+      isSignedInAuthStatus(authStatus)
       && cloudPolicy.data?.source === "default"
       && localPolicyValue !== WORKTREE_AUTO_DELETE_LIMIT_DEFAULT
     ) {
@@ -131,7 +132,7 @@ export function useWorktreeCleanupPolicySync(
       return;
     }
 
-    if (authStatus !== "authenticated" || cloudPolicy.data?.source === "default") {
+    if (!isSignedInAuthStatus(authStatus) || cloudPolicy.data?.source === "default") {
       setPreference("worktreeAutoDeleteLimit", localPolicyValue);
       void markWorktreeAutoDeleteLimitAdopted();
     }
@@ -176,10 +177,10 @@ export function useWorktreeCleanupPolicySync(
     targets,
   ]);
 
-  const cloudLoading = authStatus === "authenticated"
+  const cloudLoading = isSignedInAuthStatus(authStatus)
     && cloudPolicy.isLoading
     && cloudPolicy.data === undefined;
-  const cloudPolicyUnavailable = authStatus === "authenticated" && cloudPolicy.isError;
+  const cloudPolicyUnavailable = isSignedInAuthStatus(authStatus) && cloudPolicy.isError;
   const statusMessage = localErrorMessage
     ?? (adoptionPending ? "Waiting for existing runtime policy." : null)
     ?? (cloudPolicyUnavailable

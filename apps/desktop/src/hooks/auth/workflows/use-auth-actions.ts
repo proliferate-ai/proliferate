@@ -58,7 +58,7 @@ export function useAuthActions() {
     }, [authEffects]),
     signInWithPassword: useCallback(async (credentials: PasswordSignInCredentials) => {
       try {
-        const result = await signInWithPassword(credentials, authEffects);
+        const result = await signInWithPassword(credentials);
         trackProductEvent("auth_signed_in", {
           provider: result.provider,
           source: result.source,
@@ -86,7 +86,7 @@ export function useAuthActions() {
     }, [authEffects]),
     signInWithSso: useCallback(async (options?: DesktopSsoSignInOptions) => {
       try {
-        const result = await signInWithSso(options, authEffects);
+        const result = await signInWithSso(options);
         trackProductEvent("auth_signed_in", {
           provider: result.provider,
           source: result.source,

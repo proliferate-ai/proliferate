@@ -32,6 +32,7 @@ import { getWorkspaceCollectionsFromCache } from "@/hooks/workspaces/cache/query
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useAuthStore } from "@/stores/auth/auth-store";
+import { anonymousAuthority } from "@/lib/domain/auth/auth-authority";
 import { buildAnyHarnessCacheScopeKey } from "@/lib/domain/auth/anyharness-cache-scope";
 import { getProliferateApiBaseUrl } from "@/lib/infra/proliferate-api";
 import { withFreshCloudSandboxGatewayAccessToken } from "@/lib/access/cloud/cloud-sandbox-gateway";
@@ -64,6 +65,14 @@ async function resolveWorkspaceConnectionWithCache(
 
 export function AppProviders({ children }: { children: ReactNode }) {
   const cloudClient = useMemo(() => getProliferateClient(), []);
+  // The host resolves the initial authority before the first render
+  // (main.tsx), so in production this gate is already open at mount. No
+  // remote provider may mount before an authority resolves (spec §5.1).
+  const authorityResolved = useAuthStore((state) => state.authority !== null);
+
+  if (!authorityResolved) {
+    return <QueryClientProvider client={appQueryClient}>{children}</QueryClientProvider>;
+  }
 
   return (
     <QueryClientProvider client={appQueryClient}>
@@ -79,13 +88,19 @@ export function AppProviders({ children }: { children: ReactNode }) {
 function WorkspaceProviders({ children }: { children: ReactNode }) {
   const location = useLocation();
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
-  const authStatus = useAuthStore((state) => state.status);
-  const authUserId = useAuthStore((state) => state.user?.id ?? null);
+  // Scope identity is deployment + explicit authority + authGeneration. The
+  // coordinator keeps the authority object referentially stable across
+  // same-authority commits, and presentation status (bootstrapping/
+  // unreachable) never participates, so this memo cannot churn a retained
+  // authority's scope key.
+  const authority = useAuthStore((state) => state.authority);
+  const authGeneration = useAuthStore((state) => state.authGeneration);
+  const resolvedAuthority = authority ?? anonymousAuthority();
   const cacheScopeKey = useMemo(() => buildAnyHarnessCacheScopeKey({
     apiBaseUrl: getProliferateApiBaseUrl(),
-    authStatus,
-    authUserId,
-  }), [authStatus, authUserId]);
+    authority: resolvedAuthority,
+    authGeneration,
+  }), [resolvedAuthority, authGeneration]);
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const selectedLogicalWorkspaceId = useSessionSelectionStore((state) => state.selectedLogicalWorkspaceId);
   const providerWorkspaceId = resolveRouteScopedWorkspaceProviderId({
@@ -98,7 +113,7 @@ function WorkspaceProviders({ children }: { children: ReactNode }) {
       const workspaceCollections = getWorkspaceCollectionsFromCache(
         appQueryClient,
         runtimeUrl,
-        authStatus === "authenticated" ? authUserId : null,
+        resolvedAuthority.kind === "user" ? resolvedAuthority.userId : null,
       );
       const cloudMobilityWorkspaces = appQueryClient.getQueryData<CloudMobilityWorkspaceSummary[]>(
         cloudMobilityWorkspacesKey(),
@@ -171,7 +186,7 @@ function WorkspaceProviders({ children }: { children: ReactNode }) {
 
       return resolveWorkspaceConnectionWithCache(runtimeUrl, workspaceId);
     },
-    [authStatus, authUserId, cacheScopeKey, runtimeUrl, selectedWorkspaceId],
+    [resolvedAuthority, cacheScopeKey, runtimeUrl, selectedWorkspaceId],
   );
 
   return (

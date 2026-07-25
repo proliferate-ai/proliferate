@@ -1,7 +1,5 @@
 import {
-  clearStoredAuthSession,
   clearStoredPendingAuthSession,
-  setStoredAuthSession,
   setStoredPendingAuthSession,
   type StoredPendingAuthSession,
 } from "@/lib/access/tauri/auth";
@@ -12,8 +10,8 @@ import {
 } from "@/lib/domain/auth/github-signin-state";
 import { createDevBypassSession } from "@/lib/domain/auth/auth-mode";
 import {
-  anonymousAuthState,
   authErrorStatePatch,
+  isSignedInAuthStatus,
   type AuthClientState,
   type AuthClientStatePatch,
 } from "@/lib/domain/auth/auth-state-mapping";
@@ -31,11 +29,7 @@ import {
 import {
   captureTelemetryException,
 } from "@/lib/integrations/telemetry/client";
-import {
-  applyAnonymousAuthState,
-  applyPersistedAuthenticatedAuthState,
-  applyVolatileAuthenticatedAuthState,
-} from "@/lib/workflows/auth/apply-auth-state";
+import { desktopAuthCoordinator } from "./auth-coordinator-instance";
 
 export interface AuthOrchestrationDeps {
   getAuthState(): AuthClientState;
@@ -46,9 +40,9 @@ export interface AuthOrchestrationDeps {
   navigateDesktopRoute(target: string): void;
 }
 
-export function applyDevBypassState(deps: AuthOrchestrationDeps): void {
+export async function applyDevBypassState(): Promise<void> {
   const session = createDevBypassSession();
-  applyVolatileAuthenticatedAuthState({ session }, deps);
+  await desktopAuthCoordinator.commitVolatileSession(session);
 }
 
 export function isTransientBootstrapError(error: unknown): boolean {
@@ -86,37 +80,37 @@ export async function recoverValidatedSessionAfterTransientFailure(
   storedSession: StoredAuthSession,
   deps: AuthOrchestrationDeps,
 ): Promise<void> {
-  const expectedRefreshToken = storedSession.refresh_token;
+  // The recovery belongs to the authority generation it started under; any
+  // later sign-in/sign-out advances the generation and fences this loop.
+  const expectedGeneration = deps.getAuthState().authGeneration;
 
   for (let attempt = 0; attempt < 10; attempt += 1) {
     await wait(1000);
 
-    const currentSession = deps.getAuthState().session;
-    if (currentSession?.refresh_token !== expectedRefreshToken) {
+    if (deps.getAuthState().authGeneration !== expectedGeneration) {
       return;
     }
 
     try {
       const { session, user } = await validateSession(storedSession);
       const persistedSession = storedSessionWithValidatedUser(session, user);
-      await setStoredAuthSession(persistedSession);
-
-      if (deps.getAuthState().session?.refresh_token !== expectedRefreshToken) {
-        return;
-      }
-
-      applyVolatileAuthenticatedAuthState({ session: persistedSession, user }, deps);
+      await desktopAuthCoordinator.commitBootstrapSession({
+        expectedGeneration,
+        session: persistedSession,
+        user,
+        persist: true,
+        reachable: true,
+      });
       return;
     } catch (error) {
       if (isTransientBootstrapError(error)) {
         continue;
       }
 
-      if (deps.getAuthState().session?.refresh_token !== expectedRefreshToken) {
-        return;
-      }
-
-      await applyAnonymousState(deps);
+      await applySignedOutState(deps, {
+        expectedGeneration,
+        viaInvalidation: true,
+      });
       return;
     }
   }
@@ -130,33 +124,37 @@ export function toError(error: unknown, fallback: string): Error {
   return new Error(fallback);
 }
 
-export async function applyAnonymousState(
-  deps: AuthOrchestrationDeps,
-  options?: {
-    clearPendingAuth?: boolean;
-  },
-): Promise<void> {
-  await applyAnonymousAuthState(options ?? {}, {
-    clearStoredAuthSession,
-    clearStoredPendingAuthSession,
-    clearSessionRuntimeState: deps.clearSessionRuntimeState,
-    closeRepoSetupModal: deps.closeRepoSetupModal,
-    setAuthState: deps.setAuthState,
-  });
+export interface ApplySignedOutStateOptions {
+  expectedGeneration: number;
+  // Definitive rejection/revocation (vs an explicit user sign-out).
+  viaInvalidation?: boolean;
+  clearPendingAuth?: boolean;
 }
 
-export async function applyAuthenticatedState(
+// Compare-and-swapped sign-out/invalidation. Stored credentials are cleared
+// and anonymous state published only if the authority is still the expected
+// one; a stale completion also skips the runtime teardown so it cannot wipe
+// a newer authority's session state. Returns whether the CAS applied.
+export async function applySignedOutState(
   deps: AuthOrchestrationDeps,
-  session: StoredAuthSession,
-): Promise<void> {
-  await applyPersistedAuthenticatedAuthState({ session }, {
-    setStoredAuthSession,
-    setAuthState: deps.setAuthState,
-  });
-}
-
-export function applyAnonymousClientState(deps: AuthOrchestrationDeps): void {
-  deps.setAuthState(anonymousAuthState());
+  options: ApplySignedOutStateOptions,
+): Promise<boolean> {
+  const applied = options.viaInvalidation
+    ? await desktopAuthCoordinator.invalidateAuthority({
+      expectedGeneration: options.expectedGeneration,
+    })
+    : await desktopAuthCoordinator.signOut({
+      expectedGeneration: options.expectedGeneration,
+    });
+  if (!applied) {
+    return false;
+  }
+  if (options.clearPendingAuth) {
+    await clearStoredPendingAuthSession();
+  }
+  deps.clearSessionRuntimeState();
+  deps.closeRepoSetupModal();
+  return true;
 }
 
 export function reportBackgroundAuthError(
@@ -164,7 +162,7 @@ export function reportBackgroundAuthError(
   deps: AuthOrchestrationDeps,
 ): void {
   deps.showToast(message);
-  if (deps.getAuthState().status !== "authenticated") {
+  if (!isSignedInAuthStatus(deps.getAuthState().status)) {
     deps.setAuthState(authErrorStatePatch(message));
   }
   captureTelemetryException(new Error(message), {
@@ -194,6 +192,7 @@ export async function clearPendingGitHubAuth(
   state?: string,
   error?: Error,
 ): Promise<void> {
+  desktopAuthCoordinator.cancelSignInTransaction(state);
   await clearStoredPendingAuthSession();
   cancelGitHubSignIn(state, error);
 }

@@ -39,6 +39,7 @@ import type { OrganizationInvitationRecord } from "@/lib/domain/organizations/or
 import { useAuthStore } from "@/stores/auth/auth-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { buildGitHubAppUserAuthorizationServiceView } from "./account/GitHubAppUserAuthorizationService";
+import { isSignedInAuthStatus } from "@/lib/domain/auth/auth-state-mapping";
 
 const EMPTY_INVITATIONS: OrganizationInvitationRecord[] = [];
 
@@ -61,7 +62,7 @@ export function AccountPane() {
   const [providerLinkError, setProviderLinkError] = useState<string | null>(null);
   const githubAppAuthorizationRefreshTimersRef = useRef<number[]>([]);
   const devAuthBypassed = isDevAuthBypassed();
-  const isAuthenticated = status === "authenticated";
+  const isAuthenticated = isSignedInAuthStatus(status);
   const authViewerCacheScope = user?.id
     ? `desktop-account:${user.id}`
     : "desktop-account:anonymous";

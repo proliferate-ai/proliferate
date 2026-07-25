@@ -53,7 +53,9 @@ export function useDesktopWorkerEnrollment(): void {
   const showToast = useToastStore((state) => state.show);
   const [retryNonce, setRetryNonce] = useState(0);
   useEffect(() => {
-    if (authStatus === "bootstrapping") {
+    if (authStatus === "bootstrapping" || authStatus === "unreachable") {
+      // Unreachable retains the signed-in authority: keep the enrolled worker
+      // and do not attempt (or tear down) enrollment while offline.
       return;
     }
     if (authStatus !== "authenticated" || !authUserId) {

@@ -1,4 +1,5 @@
 import { useAuthStore } from "@/stores/auth/auth-store";
+import { isSignedInAuthStatus } from "@/lib/domain/auth/auth-state-mapping";
 
 export interface SupportAvailability {
   /** True only when a real Cloud session exists (uploads will succeed). */
@@ -21,7 +22,7 @@ export interface SupportAvailability {
 export function useSupportAvailability(): SupportAvailability {
   const status = useAuthStore((state) => state.status);
 
-  if (status === "authenticated") {
+  if (isSignedInAuthStatus(status)) {
     return { canSubmit: true, disabledReason: null };
   }
   if (status === "bootstrapping") {

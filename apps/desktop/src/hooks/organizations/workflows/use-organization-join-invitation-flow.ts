@@ -26,6 +26,7 @@ import {
   isOfficialHostedApiBaseUrl,
 } from "@/lib/infra/proliferate-api";
 import { useAuthStore } from "@/stores/auth/auth-store";
+import { isSignedInAuthStatus } from "@/lib/domain/auth/auth-state-mapping";
 
 /**
  * Normalize a URL to its origin (scheme + host + port, no path or trailing
@@ -131,7 +132,7 @@ export function useOrganizationJoinInvitationFlow(): UseOrganizationJoinInvitati
   useEffect(() => {
     if (
       !transientJoinOrganizationId
-      || authStatus !== "authenticated"
+      || !isSignedInAuthStatus(authStatus)
     ) {
       return;
     }
@@ -245,7 +246,7 @@ export function useOrganizationJoinInvitationFlow(): UseOrganizationJoinInvitati
     clearJoinTarget,
     statusMessage,
     setStatusMessage,
-    unauthenticatedJoin: Boolean(transientJoinOrganizationId && authStatus !== "authenticated"),
+    unauthenticatedJoin: Boolean(transientJoinOrganizationId && !isSignedInAuthStatus(authStatus)),
     connectServer,
   };
 }
