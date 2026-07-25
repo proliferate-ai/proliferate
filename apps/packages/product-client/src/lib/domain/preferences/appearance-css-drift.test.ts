@@ -373,8 +373,8 @@ describe("appearance scaling CSS defaults", () => {
     }
   });
 
-  it("loads Geist through the generated font token and gives untyped text the UI fallback", () => {
-    expect(themeDeclarations["--font-sans"]).toMatch(/^"Geist",/);
+  it("uses the Codex native system stack through the generated font token and gives untyped text the UI fallback", () => {
+    expect(themeDeclarations["--font-sans"]).toMatch(/^-apple-system, BlinkMacSystemFont,/);
     const rootRule = readRule(domCss, /:root\s*\{([\s\S]*?)\}/);
     expect(rootRule).toContain("font-family: var(--font-sans);");
 

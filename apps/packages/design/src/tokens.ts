@@ -1246,9 +1246,9 @@ export const themeTokens = {
     provenance: "[SHIPPED]",
   },
   "--font-sans": {
-    dark: "\"Geist\", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
-    light: "\"Geist\", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
-    provenance: "[RETUNE:type/Geist]",
+    dark: "-apple-system, BlinkMacSystemFont, ui-sans-serif, system-ui, \"Segoe UI\", sans-serif",
+    light: "-apple-system, BlinkMacSystemFont, ui-sans-serif, system-ui, \"Segoe UI\", sans-serif",
+    provenance: "[RETUNE:type/Geist] — trial: Codex native system stack per reference/codex (computed fontFamily: -apple-system, system-ui, Segoe UI); Geist variant preserved in git history, swap back = revert this value",
   },
   "--font-weight-control": {
     dark: "450",
