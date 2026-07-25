@@ -321,8 +321,8 @@ CPU/memory/disk rows
 when disk crosses the pressure threshold the client surfaces "your cloud
 machine is running low — here are your worktrees" backed by the inventory
 and its delete actions. No server-side notification job exists or is
-planned; the screens and copy belong to the cloud workspace system document
-(planned, PR 5 of this program).
+planned; the screens and copy belong to
+[cloud-workspace.md](../../systems/product/workspaces/cloud-workspace.md).
 
 ## When the VM dies
 
