@@ -336,6 +336,12 @@ const MODEL_DISPLAY_OVERRIDES = {
   codex: {
     "openai.gpt-5.4-cmb": "GPT-5.4 on Bedrock",
     "openai.gpt-5.4-cmb/xhigh": "GPT-5.4 (xhigh) on Bedrock",
+    "gpt-5.6-sol": "5.6 Sol",
+    "gpt-5.6-terra": "5.6 Terra",
+    "gpt-5.6-luna": "5.6 Luna",
+    "openai.gpt-5.6-sol": "5.6 Sol",
+    "openai.gpt-5.6-terra": "5.6 Terra",
+    "openai.gpt-5.6-luna": "5.6 Luna",
   },
 };
 

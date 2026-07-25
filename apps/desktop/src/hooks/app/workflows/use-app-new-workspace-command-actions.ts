@@ -1,7 +1,10 @@
 import { useCallback, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import type { Workspace } from "@anyharness/sdk";
-import { useRepositories } from "@proliferate/cloud-sdk-react";
+import {
+  useGitHubRepoAuthority,
+  useRepositories,
+} from "@proliferate/cloud-sdk-react";
 import { APP_ROUTES } from "@/config/app-routes";
 import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
 import { useCloudBilling } from "@/hooks/cloud/facade/use-cloud-billing";
@@ -14,6 +17,7 @@ import { useWorkspaceNavigationWorkflow } from "@/hooks/workspaces/workflows/use
 import { buildCloudRepoSettingsHref } from "@/lib/domain/settings/navigation";
 import {
   buildConfiguredCloudRepoKeys,
+  resolveGitHubRepoAuthorityBlockedReason,
   resolveCloudRepoActionState,
 } from "@/lib/domain/workspaces/cloud/cloud-workspace-creation";
 import {
@@ -129,6 +133,13 @@ export function useAppNewWorkspaceCommandActions(): AppNewWorkspaceCommandAction
       newWorkspaceCommandScope?.cloudRepoTarget,
     ],
   );
+  const commandCloudRepoAuthority = useGitHubRepoAuthority(
+    {
+      gitOwner: newWorkspaceCommandScope?.cloudRepoTarget?.gitOwner,
+      gitRepoName: newWorkspaceCommandScope?.cloudRepoTarget?.gitRepoName,
+    },
+    cloudActive && commandCloudRepoAction.kind === "create",
+  );
 
   const showDisabledShortcutToast = useCallback((
     invocation: AppCommandInvocation,
@@ -200,11 +211,20 @@ export function useAppNewWorkspaceCommandActions(): AppNewWorkspaceCommandAction
     showToast,
   ]);
 
+  const cloudAuthorityUnavailableReason = commandCloudRepoAction.kind !== "create"
+    ? null
+    : commandCloudRepoAuthority.isLoading
+      ? "Checking GitHub App access."
+      : commandCloudRepoAuthority.isError
+        ? "Couldn't check GitHub App access."
+        : commandCloudRepoAuthority.data
+          ? resolveGitHubRepoAuthorityBlockedReason(commandCloudRepoAuthority.data)
+          : "Checking GitHub App access.";
   const cloudUnavailableReason = !cloudActive
     ? "Cloud workspaces are unavailable."
     : cloudWorkspaceBlocked
       ? "Cloud workspaces are blocked by billing."
-      : null;
+      : cloudAuthorityUnavailableReason;
   const newCloudCommandTarget = useMemo(() => resolveNewWorkspaceCommandTarget({
     commandKind: "cloud",
     scope: newWorkspaceCommandScope,
@@ -230,7 +250,6 @@ export function useAppNewWorkspaceCommandActions(): AppNewWorkspaceCommandAction
       return;
     }
 
-    navigateToWorkspaceShell();
     const latencyFlowId = startLatencyFlow({
       flowKind: "cloud_workspace_create",
       source: invocation,
@@ -238,6 +257,16 @@ export function useAppNewWorkspaceCommandActions(): AppNewWorkspaceCommandAction
     void createCloudWorkspaceAndEnter(newCloudCommandTarget.target, {
       latencyFlowId,
       repoGroupKeyToExpand: newCloudCommandTarget.repoGroupKeyToExpand,
+    }).then((result) => {
+      if (result.status === "interrupted") {
+        failLatencyFlow(latencyFlowId, "cloud_workspace_create_interrupted");
+        showToast(result.failureMessage ?? "Cloud workspace creation was interrupted.");
+        return;
+      }
+      navigateToWorkspaceShell();
+    }).catch((error) => {
+      failLatencyFlow(latencyFlowId, "cloud_workspace_create_failed");
+      showToast(error instanceof Error ? error.message : "Failed to create cloud workspace.");
     });
   }, [
     createCloudWorkspaceAndEnter,
@@ -245,6 +274,7 @@ export function useAppNewWorkspaceCommandActions(): AppNewWorkspaceCommandAction
     navigateToWorkspaceShell,
     newCloudCommandTarget,
     showDisabledShortcutToast,
+    showToast,
   ]);
 
   return useMemo<AppNewWorkspaceCommandActions>(() => ({

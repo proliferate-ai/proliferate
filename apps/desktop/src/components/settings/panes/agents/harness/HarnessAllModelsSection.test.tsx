@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { HarnessAllModelsSection } from "./HarnessAllModelsSection";
 
 const state = vi.hoisted(() => ({
@@ -40,6 +40,9 @@ const state = vi.hoisted(() => ({
     },
     isLoading: false,
   },
+  runtimeAvailability: "ready" as "connecting" | "ready" | "unavailable",
+  isAgentSeedHydrating: false,
+  localInstallState: "installed" as "installed" | "installing" | "install_required",
 }));
 
 const refreshCatalog = vi.hoisted(() => vi.fn());
@@ -50,7 +53,7 @@ const showToast = vi.hoisted(() => vi.fn());
 const authSelectionsQuery = vi.hoisted(() => vi.fn());
 const cloudCatalogQuery = vi.hoisted(() => vi.fn());
 const gatewayModelsQuery = vi.hoisted(() => vi.fn());
-const launchOptionsQuery = vi.hoisted(() => vi.fn());
+const localLaunchOptionsHook = vi.hoisted(() => vi.fn());
 
 vi.mock("@proliferate/cloud-sdk-react", () => ({
   useAuthSelections: (...args: unknown[]) => {
@@ -74,13 +77,28 @@ vi.mock("@anyharness/sdk-react", () => ({
     mutate: refreshGatewayModels,
     isPending: false,
   }),
-  useAgentLaunchOptionsQuery: (...args: unknown[]) => {
-    launchOptionsQuery(...args);
+}));
+
+vi.mock("@/hooks/access/anyharness/agents/use-local-agent-launch-options", () => ({
+  useLocalAgentLaunchOptions: (...args: unknown[]) => {
+    localLaunchOptionsHook(...args);
     return {
-      ...state.launchOptions,
-      refetch: refetchLaunchOptions,
+      query: {
+        ...state.launchOptions,
+        refetch: refetchLaunchOptions,
+      },
+      availability: state.runtimeAvailability,
+      isAgentSeedHydrating: state.isAgentSeedHydrating,
     };
   },
+}));
+
+vi.mock("@/hooks/agents/derived/use-agent-catalog", () => ({
+  useAgentCatalog: () => ({
+    agentsByKind: new Map([
+      ["codex", { installState: state.localInstallState }],
+    ]),
+  }),
 }));
 
 vi.mock("@/hooks/cloud/derived/use-cloud-availability-state", () => ({
@@ -92,11 +110,29 @@ vi.mock("@/stores/toast/toast-store", () => ({
     selector({ show: showToast }),
 }));
 
-afterEach(() => {
-  cleanup();
+beforeEach(() => {
   vi.clearAllMocks();
   state.cloudActive = false;
+  state.runtimeAvailability = "ready";
+  state.isAgentSeedHydrating = false;
+  state.localInstallState = "installed";
+  state.launchOptions.data = {
+    agents: [{
+      kind: "codex",
+      displayName: "Codex",
+      defaultModelId: "gpt-5.5",
+      models: [{ id: "gpt-5.5", displayName: "GPT 5.5", isDefault: true }],
+    }],
+  };
+  state.launchOptions.isLoading = false;
+  state.launchOptions.isFetching = false;
+  refetchLaunchOptions.mockImplementation(async () => ({
+    data: state.launchOptions.data,
+    isError: false,
+  }));
 });
+
+afterEach(cleanup);
 
 describe("HarnessAllModelsSection signed-out behavior", () => {
   it("lists local runtime models read-only and refreshes without Cloud mutations", () => {
@@ -117,7 +153,7 @@ describe("HarnessAllModelsSection signed-out behavior", () => {
       false,
     );
     expect(gatewayModelsQuery).toHaveBeenCalledWith("codex", { enabled: false });
-    expect(launchOptionsQuery).toHaveBeenCalledWith({ enabled: true });
+    expect(localLaunchOptionsHook).toHaveBeenCalledWith(true, true);
 
     fireEvent.click(screen.getByRole("button", { name: /^Refresh$/ }));
 
@@ -147,6 +183,92 @@ describe("HarnessAllModelsSection signed-out behavior", () => {
       false,
     );
     expect(gatewayModelsQuery).toHaveBeenCalledWith("codex", { enabled: false });
-    expect(launchOptionsQuery).toHaveBeenCalledWith({ enabled: false });
+    expect(localLaunchOptionsHook).toHaveBeenCalledWith(false, false);
+  });
+
+  it("keeps refresh disabled while the local runtime is connecting", () => {
+    state.runtimeAvailability = "connecting";
+
+    render(
+      <HarnessAllModelsSection
+        harnessKind="codex"
+        displayName="Codex"
+        surface="local"
+      />,
+    );
+
+    expect(screen.getByText("Local runtime is starting...")).toBeTruthy();
+    expect((screen.getByRole("button", { name: /^Refresh$/ }) as HTMLButtonElement).disabled)
+      .toBe(true);
+    expect(showToast).not.toHaveBeenCalled();
+  });
+
+  it("keeps refresh disabled while Codex is updating automatically", () => {
+    state.localInstallState = "installing";
+    state.launchOptions.data = { agents: [] };
+
+    render(
+      <HarnessAllModelsSection
+        harnessKind="codex"
+        displayName="Codex"
+        surface="local"
+      />,
+    );
+
+    expect(screen.getAllByText("Codex is updating automatically...")).toHaveLength(1);
+    expect((screen.getByRole("button", { name: /^Refresh$/ }) as HTMLButtonElement).disabled)
+      .toBe(true);
+    expect(refetchLaunchOptions).not.toHaveBeenCalled();
+  });
+
+  it("uses generic setup copy during seed hydration", () => {
+    state.isAgentSeedHydrating = true;
+    state.launchOptions.data = { agents: [] };
+
+    render(
+      <HarnessAllModelsSection
+        harnessKind="opencode"
+        displayName="OpenCode"
+        surface="local"
+      />,
+    );
+
+    expect(screen.getAllByText("Local agent setup is finishing...")).toHaveLength(1);
+    expect(screen.queryByText("OpenCode is updating automatically...")).toBeNull();
+    expect((screen.getByRole("button", { name: /^Refresh$/ }) as HTMLButtonElement).disabled)
+      .toBe(true);
+  });
+
+  it("distinguishes a failed runtime read from an agent with no ready models", async () => {
+    refetchLaunchOptions.mockResolvedValueOnce({ data: undefined, isError: true });
+
+    render(
+      <HarnessAllModelsSection
+        harnessKind="codex"
+        displayName="Codex"
+        surface="local"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /^Refresh$/ }));
+
+    await waitFor(() => {
+      expect(showToast).toHaveBeenCalledWith(
+        "Local runtime unavailable — could not read Codex models.",
+      );
+    });
+
+    showToast.mockClear();
+    refetchLaunchOptions.mockResolvedValueOnce({
+      data: { agents: [{ kind: "codex", displayName: "Codex", models: [] }] },
+      isError: false,
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^Refresh$/ }));
+
+    await waitFor(() => {
+      expect(showToast).toHaveBeenCalledWith(
+        "Codex is not ready yet — finish setup before refreshing models.",
+      );
+    });
   });
 });

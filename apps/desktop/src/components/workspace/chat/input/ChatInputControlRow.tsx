@@ -14,9 +14,11 @@ import {
 import { ChatComposerControlRowFrame } from "@proliferate/product-ui/chat/composer/ChatComposerControlRowFrame";
 import { Plus, Target } from "@proliferate/ui/icons";
 import { ComposerControlButton } from "@proliferate/ui/primitives/ComposerControlButton";
+import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
 import { deriveGoalBarState } from "@proliferate/product-domain/activity/goal";
 import { useSessionGoal } from "@/hooks/activity/derived/use-session-goal";
 import { useGoalBarStore } from "@/stores/activity/goal-bar-store";
+import { resolveSessionControlTooltip } from "@/lib/domain/chat/session-controls/session-control-tooltip";
 
 export interface ChatInputControlRowProps {
   runtimeControlsDisabled: boolean;
@@ -41,12 +43,11 @@ export interface ComposerLeadingControlsProps {
   modelSelectorProps: ModelSelectorProps;
   agentKind: string | null;
   sessionConfigControls: LiveSessionControlDescriptor[];
-  activeSessionId: string | null;
 }
 
 /**
- * The leading control cluster (model selector, reasoning bars, fast mode, mode, goal,
- * integrations). Shared verbatim between the in-session chat composer
+ * The leading control cluster (model selector, working mode, reasoning bars,
+ * fast mode). Shared verbatim between the in-session chat composer
  * (ChatInputControlRow) and the home/new-chat composer (HomeNextScreen slot):
  * home feeds it launch-time control descriptors instead of live-session
  * ones, and session-only controls (goal) hide via their own gating.
@@ -56,19 +57,8 @@ export function ComposerLeadingControls({
   modelSelectorProps,
   agentKind,
   sessionConfigControls,
-  activeSessionId,
 }: ComposerLeadingControlsProps) {
   const controlGroups = buildComposerSessionControlGroups(sessionConfigControls);
-
-  const sessionGoal = useSessionGoal();
-  const beginComposingGoal = useGoalBarStore((state) => state.beginComposing);
-  // Goal is a live-session affordance: it attaches an objective to an active
-  // session, so it self-gates on activeSessionId (null pre-session and on
-  // home) in addition to capability support.
-  const canSetGoal = !!activeSessionId
-    && !!sessionGoal
-    && sessionGoal.capabilities.supported
-    && deriveGoalBarState(sessionGoal.goal).kind !== "live";
 
   return (
     <>
@@ -81,29 +71,7 @@ export function ComposerLeadingControls({
         <ComposerModelSelectorControl modelSelectorProps={modelSelectorProps} />
       </div>
 
-      {/* 2. Reasoning/effort bars */}
-      {controlGroups.reasoningEffortControl && (
-        <span
-          className={`inline-flex shrink-0 ${
-            runtimeControlsDisabled ? "pointer-events-none opacity-55" : ""
-          }`}
-        >
-          <ComposerReasoningEffortBars control={controlGroups.reasoningEffortControl} />
-        </span>
-      )}
-
-      {/* 3. Fast mode toggle */}
-      {controlGroups.fastModeControl && (
-        <span
-          className={`inline-flex shrink-0 ${
-            runtimeControlsDisabled ? "pointer-events-none opacity-55" : ""
-          }`}
-        >
-          <ComposerFastModeToggle control={controlGroups.fastModeControl} />
-        </span>
-      )}
-
-      {/* 4. Primary working mode control (bypass/plan/etc) */}
+      {/* 2. Primary working mode control (bypass/plan/etc) */}
       {controlGroups.modeControl && (
         <span
           className={`inline-flex min-w-0 ${
@@ -118,23 +86,27 @@ export function ComposerLeadingControls({
         </span>
       )}
 
-      {/* 5. Goal button */}
-      {canSetGoal && (
-        <ComposerControlButton
-          icon={<Target className="size-4" />}
-          label="Set goal"
-          title="Give the agent an objective to keep pursuing."
-          onClick={() => {
-            if (activeSessionId) {
-              beginComposingGoal(activeSessionId);
-            }
-          }}
-          className="max-w-[12rem]"
-        />
+      {/* 3. Reasoning/effort bars */}
+      {controlGroups.reasoningEffortControl && (
+        <span
+          className={`inline-flex shrink-0 ${
+            runtimeControlsDisabled ? "pointer-events-none opacity-55" : ""
+          }`}
+        >
+          <ComposerReasoningEffortBars control={controlGroups.reasoningEffortControl} />
+        </span>
       )}
 
-      {/* 6. Integrations control */}
-      <ComposerIntegrationsControl />
+      {/* 4. Fast mode toggle */}
+      {controlGroups.fastModeControl && (
+        <span
+          className={`inline-flex shrink-0 ${
+            runtimeControlsDisabled ? "pointer-events-none opacity-55" : ""
+          }`}
+        >
+          <ComposerFastModeToggle control={controlGroups.fastModeControl} />
+        </span>
+      )}
     </>
   );
 }
@@ -171,6 +143,15 @@ export function ComposerTrailingControls({
   activeSessionId,
   onAttachFile,
 }: ComposerTrailingControlsProps) {
+  const sessionGoal = useSessionGoal();
+  const beginComposingGoal = useGoalBarStore((state) => state.beginComposing);
+  // Goal is a live-session utility: it attaches an objective to an active
+  // session, so it self-gates on activeSessionId (null pre-session and on
+  // home) in addition to capability support.
+  const canSetGoal = !!activeSessionId
+    && !!sessionGoal
+    && sessionGoal.capabilities.supported
+    && deriveGoalBarState(sessionGoal.goal).kind !== "live";
   const canUseUtilityActions =
     !isEditingQueuedPrompt && !chatDisabled && !runtimeControlsDisabled && !isSubmitting;
   const controlGroups = buildComposerSessionControlGroups(sessionConfigControls);
@@ -185,23 +166,47 @@ export function ComposerTrailingControls({
 
   return (
     <>
-      {/* 7. Plus button — direct file attach */}
-      {!isEditingQueuedPrompt && (
-        <ComposerControlButton
-          iconOnly
-          icon={<Plus className="size-4" />}
-          label="Add file"
-          title={attachFileDetail}
-          aria-label="Add file"
-          disabled={!canAttachFile}
-          onClick={onAttachFile}
-        />
+      {/* 5. Session utilities */}
+      {canSetGoal && (
+        <Tooltip content={resolveSessionControlTooltip({
+          label: "Set goal",
+          description: "Give the agent an objective to keep pursuing.",
+        })}>
+          <ComposerControlButton
+            icon={<Target className="size-4" />}
+            label="Set goal"
+            onClick={() => {
+              if (activeSessionId) {
+                beginComposingGoal(activeSessionId);
+              }
+            }}
+            className="max-w-[12rem]"
+          />
+        </Tooltip>
       )}
+      <ComposerIntegrationsControl />
 
-      {/* 8. Runtime pressure */}
+      {/* 6. Runtime usage/pressure — immediately left of Add */}
       <RuntimePressureIndicator />
 
-      {/* 9. Overflow three-dots */}
+      {/* 7. Plus button — direct file attach */}
+      {!isEditingQueuedPrompt && (
+        <Tooltip content={resolveSessionControlTooltip({
+          label: "Add file",
+          description: attachFileDetail,
+        })}>
+          <ComposerControlButton
+            iconOnly
+            icon={<Plus className="size-4" />}
+            label="Add file"
+            aria-label="Add file"
+            disabled={!canAttachFile}
+            onClick={onAttachFile}
+          />
+        </Tooltip>
+      )}
+
+      {/* 8. Overflow three-dots */}
       <span
         className={`inline-flex shrink-0 ${
           runtimeControlsDisabled ? "pointer-events-none opacity-55" : ""
@@ -241,7 +246,6 @@ export function ChatInputControlRow({
           modelSelectorProps={modelSelectorProps}
           agentKind={agentKind}
           sessionConfigControls={sessionConfigControls}
-          activeSessionId={activeSessionId}
         />
       )}
       trailing={(

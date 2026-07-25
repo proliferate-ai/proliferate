@@ -4,13 +4,14 @@ import type {
   SessionLiveConfigSnapshot,
 } from "@anyharness/sdk";
 
-// "submitting" — request in flight (shows a spinner).
-// "queued"     — queued behind a running turn (shows a clock).
+// "submitting" — request in flight.
+// "queued"     — queued behind a running turn.
 // "settling"   — the backend already applied the value; we are only holding the
 //                optimistic value until the authoritative live config reflects
-//                it. Renders NO indicator: showing a spinner here looks stuck if
-//                the confirming `config_option_update` is delayed or never fires
-//                (e.g. no-op switches emit none).
+//                it. Compact UI keeps all three states out of trigger geometry;
+//                saving/queued feedback may appear in tooltips, while settling
+//                renders no pending feedback because the backend already applied
+//                the value and a delayed/missing confirmation must not look stuck.
 export type PendingSessionConfigChangeStatus = "submitting" | "queued" | "settling";
 
 export interface PendingSessionConfigChange {

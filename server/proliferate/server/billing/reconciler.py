@@ -17,7 +17,9 @@ from proliferate.constants.billing import (
     BILLING_DECISION_ORG_LIMIT_PAUSE,
     BILLING_DECISION_USER_LIMIT_PAUSE,
     BILLING_MODE_ENFORCE,
+    BILLING_PRICE_CLASS_PRO,
     BILLING_RECONCILE_INTERVAL_SECONDS,
+    PRO_PERIOD_GRANT_TYPE,
     USAGE_SEGMENT_CLOSED_BY_QUOTA_ENFORCEMENT,
     USAGE_SEGMENT_CLOSED_BY_RECONCILER,
 )
@@ -37,6 +39,10 @@ from proliferate.db.store.billing_runtime_usage import (
     release_billing_reconciler_lock,
     try_acquire_billing_reconciler_lock,
 )
+from proliferate.db.store.billing_subjects import ensure_billing_grant_record
+from proliferate.db.store.billing_subscriptions import (
+    list_current_pro_period_grant_candidates,
+)
 from proliferate.db.store.cloud_sandboxes import (
     load_cloud_sandbox_by_id,
     mark_cloud_sandbox_destroyed,
@@ -51,12 +57,63 @@ from proliferate.integrations.sentry import report_critical
 from proliferate.server.billing.accounting_pass import run_billing_accounting_pass
 from proliferate.server.billing.budget_limits import window_bounds
 from proliferate.server.billing.models import BillingSnapshot
+from proliferate.server.billing.pricing import (
+    classify_monthly_price_id,
+    configured_pro_monthly_price_id,
+)
+from proliferate.server.billing.seats import (
+    pro_period_grant_hours,
+    pro_period_grant_source_ref,
+)
 from proliferate.server.billing.snapshots import get_billing_snapshot_for_subject
 from proliferate.utils.time import utcnow
 
 logger = logging.getLogger("proliferate.billing.reconciler")
 
 _reconciler_task: asyncio.Task[None] | None = None
+
+
+async def reconcile_current_pro_period_grants(db: AsyncSession) -> int:
+    """Repair Pro grants skipped while ``PRO_BILLING_ENABLED`` was false.
+
+    Stripe subscription webhooks persisted the paid period even while the
+    rollout flag was disabled, but ``invoice.paid`` intentionally skipped the
+    numeric grant. Reusing the invoice handler's deterministic source ref makes
+    this safe across deploy retries and concurrent API task starts.
+    """
+    if not settings.pro_billing_enabled:
+        return 0
+    pro_monthly_price_id = configured_pro_monthly_price_id()
+    if classify_monthly_price_id(pro_monthly_price_id) != BILLING_PRICE_CLASS_PRO:
+        return 0
+    candidates = await list_current_pro_period_grant_candidates(
+        db,
+        pro_monthly_price_id=pro_monthly_price_id,
+        now=utcnow(),
+    )
+    for candidate in candidates:
+        await ensure_billing_grant_record(
+            db,
+            user_id=candidate.user_id,
+            billing_subject_id=candidate.billing_subject_id,
+            grant_type=PRO_PERIOD_GRANT_TYPE,
+            hours_granted=pro_period_grant_hours(
+                seat_quantity=candidate.seat_quantity,
+            ),
+            effective_at=candidate.current_period_start,
+            expires_at=candidate.current_period_end,
+            source_ref=pro_period_grant_source_ref(
+                subscription_id=candidate.stripe_subscription_id,
+                period_start_unix=int(candidate.current_period_start.timestamp()),
+            ),
+            top_up_existing=True,
+        )
+    if candidates:
+        logger.info(
+            "reconciled current Pro period grants",
+            extra={"subscription_count": len(candidates)},
+        )
+    return len(candidates)
 
 
 async def close_usage_segment_for_sandbox(

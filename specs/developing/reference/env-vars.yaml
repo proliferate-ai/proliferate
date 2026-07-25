@@ -292,7 +292,7 @@
 - name: PROLIFERATE_SSO_OIDC_TOKEN_ENDPOINT_AUTH_METHOD
   secret: false
   default: "client_secret_basic"
-  description: OIDC token endpoint auth method: client_secret_basic, client_secret_post, or none
+  description: "OIDC token endpoint auth method: client_secret_basic, client_secret_post, or none"
   tags: [local-dev, self-hosted, production]
 
 - name: PROLIFERATE_SSO_OIDC_ALLOW_PRIVATE_PROVIDER_URLS
@@ -316,6 +316,98 @@
   default: ""
   description: GitHub OAuth client secret for the shared /auth/github/callback sign-in flow
   tags: [local-dev, self-hosted, production]
+
+# ═══════════════════════════════════════════════════════════════════════
+# Server: Managed Cloud GitHub App
+# ═══════════════════════════════════════════════════════════════════════
+
+- name: GITHUB_APP_ID
+  secret: false
+  default: ""
+  description: Numeric GitHub App id used for managed-cloud repository authority
+  tags: [local-dev, self-hosted, production]
+
+- name: GITHUB_APP_SLUG
+  secret: false
+  default: ""
+  description: GitHub App slug used to build organization installation URLs
+  tags: [local-dev, self-hosted, production]
+
+- name: GITHUB_APP_CLIENT_ID
+  secret: false
+  default: ""
+  description: GitHub App OAuth client id used for user authorization and token refresh
+  tags: [local-dev, self-hosted, production]
+
+- name: GITHUB_APP_CLIENT_SECRET
+  secret: true
+  default: ""
+  description: GitHub App OAuth client secret used for user authorization and token refresh
+  tags: [local-dev, self-hosted, production]
+
+- name: GITHUB_APP_WEBHOOK_SECRET
+  secret: true
+  default: ""
+  description: GitHub App webhook signature secret
+  tags: [local-dev, self-hosted, production]
+
+- name: GITHUB_APP_CALLBACK_BASE_URL
+  secret: false
+  default: ""
+  description: Public API origin used to build GitHub App user-authorization and installation callbacks; falls back to API_BASE_URL
+  tags: [local-dev, self-hosted, production]
+
+- name: GITHUB_APP_PRIVATE_KEY
+  secret: true
+  default: ""
+  description: Inline PEM private key used for GitHub App installation API authentication
+  tags: [local-dev, self-hosted, production]
+
+- name: GITHUB_APP_PRIVATE_KEY_PATH
+  secret: false
+  default: ""
+  description: Mounted PEM private-key path used when GITHUB_APP_PRIVATE_KEY is not supplied
+  tags: [self-hosted, production]
+
+- name: MANAGED_CLOUD_GITHUB_APP_ID
+  secret: false
+  default: ""
+  description: Hosted deploy input mapped to the server GITHUB_APP_ID runtime variable
+  tags: [production, ci]
+  ci_type: var
+  workflow: _deploy-server
+
+- name: MANAGED_CLOUD_GITHUB_APP_SLUG
+  secret: false
+  default: ""
+  description: Hosted deploy input mapped to the server GITHUB_APP_SLUG runtime variable
+  tags: [production, ci]
+  ci_type: var
+  workflow: _deploy-server
+
+- name: MANAGED_CLOUD_GITHUB_APP_CLIENT_ID
+  secret: false
+  default: ""
+  description: Hosted deploy input mapped to the server GITHUB_APP_CLIENT_ID runtime variable
+  tags: [production, ci]
+  ci_type: var
+  workflow: _deploy-server
+
+- name: MANAGED_CLOUD_GITHUB_APP_CALLBACK_BASE_URL
+  secret: false
+  default: ""
+  description: Hosted deploy input mapped to the server GITHUB_APP_CALLBACK_BASE_URL runtime variable
+  tags: [production, ci]
+  ci_type: var
+  workflow: _deploy-server
+
+- name: MANAGED_CLOUD_GITHUB_APP_SECRET_ARN
+  secret: false
+  default: ""
+  description: Hosted deploy source Secrets Manager ARN whose JSON contains GITHUB_APP_CLIENT_SECRET, GITHUB_APP_WEBHOOK_SECRET, and GITHUB_APP_PRIVATE_KEY
+  tags: [production, ci]
+  ci_type: var
+  workflow: _deploy-server
 
 # ═══════════════════════════════════════════════════════════════════════
 # Server: Managed E2B Sandbox Provider
@@ -388,7 +480,7 @@
 - name: PRO_BILLING_ENABLED
   secret: false
   default: "false"
-  description: Enables Pro billing policy, free-v2 trial behavior, and Pro response fields
+  description: Enables Pro billing policy, free-v2 trial behavior, and Pro response fields; hosted ECS deploys pin this to true
   tags: [production]
 
 - name: STRIPE_SECRET_KEY

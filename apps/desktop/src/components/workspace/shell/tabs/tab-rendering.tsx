@@ -23,15 +23,11 @@ export function renderChatTabIcon(
   }
 
   if (tab.isResolvingSession) {
-    return <SkeletonBlock className="size-3 rounded-sm" />;
+    return renderChatTabIconSlot(<SkeletonBlock className="size-3 rounded-sm" />);
   }
 
   if (tab.viewState === "working") {
-    return (
-      <span className="flex size-4 shrink-0 items-center justify-center">
-        <Spinner className="size-3.5 text-foreground" />
-      </span>
-    );
+    return renderChatTabIconSlot(<Spinner className="size-3.5 text-foreground" />);
   }
 
   if (tab.viewState === "needs_input") {
@@ -39,17 +35,26 @@ export function renderChatTabIcon(
   }
 
   if (tab.viewState === "errored") {
-    return (
-      <span className="flex size-4 shrink-0 items-center justify-center">
-        <CircleAlert className="size-3 shrink-0 text-destructive" />
-      </span>
+    return renderChatTabIconSlot(
+      <CircleAlert className="size-3 shrink-0 text-destructive" />,
     );
   }
 
-  return tab.agentKind ? (
-    <ProviderIcon kind={tab.agentKind} className="size-3 shrink-0" />
-  ) : (
-    <MessageSquare className="size-3 shrink-0" />
+  return renderChatTabIconSlot(
+    tab.agentKind
+      ? <ProviderIcon kind={tab.agentKind} className="size-3 shrink-0" />
+      : <MessageSquare className="size-3 shrink-0" />,
+  );
+}
+
+function renderChatTabIconSlot(icon: ReactNode): ReactNode {
+  return (
+    <span
+      data-chat-tab-icon-slot
+      className="flex size-4 shrink-0 items-center justify-center"
+    >
+      {icon}
+    </span>
   );
 }
 
@@ -57,6 +62,7 @@ function renderDelegatedAgentIcon(agent: DelegatedWorkTabIdentity): ReactNode {
   const badgeClassName = delegatedAgentStatusDotClassName(agent.statusCategory);
   return (
     <span
+      data-chat-tab-icon-slot
       className={`relative flex size-4 shrink-0 items-center justify-center ${agent.identity.textColorClassName}`}
       title={agent.hoverTitle}
     >
@@ -91,10 +97,8 @@ function delegatedAgentStatusDotClassName(
 }
 
 function renderChatTabActivityIcon(colorClassName: string): ReactNode {
-  return (
-    <span className="flex size-4 shrink-0 items-center justify-center">
-      <Clock className={`size-3 shrink-0 ${colorClassName}`} />
-    </span>
+  return renderChatTabIconSlot(
+    <Clock className={`size-3 shrink-0 ${colorClassName}`} />,
   );
 }
 

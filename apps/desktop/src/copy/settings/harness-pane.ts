@@ -67,11 +67,24 @@ export const HARNESS_PANE_COPY = {
     `Could not refresh the ${displayName} model catalog.`,
   catalogRefreshRuntimeUnavailable: (displayName: string) =>
     `Local runtime unavailable — could not read ${displayName} models.`,
+  catalogRefreshAgentNotReady: (displayName: string) =>
+    `${displayName} is not ready yet — finish setup before refreshing models.`,
+  localRuntimeStarting: "Local runtime is starting...",
+  localRuntimeUnavailable: "Local runtime unavailable.",
+  localAgentSetupFinishing: "Local agent setup is finishing...",
+  localAgentModelsUpdating: (displayName: string) =>
+    `${displayName} is updating automatically...`,
   catalogOverrideError: (displayName: string) =>
     `Could not update the ${displayName} model catalog.`,
   installAction: "Install",
   retryInstallAction: "Retry install",
   installingAction: "Installing...",
+  automaticUpdateTitle: (displayName: string) => `Updating ${displayName}...`,
+  automaticUpdateDetail: (displayName: string) =>
+    `Proliferate is updating ${displayName} automatically.`,
+  seedSetupTitle: "Finishing local agent setup...",
+  seedSetupDetail:
+    "Proliferate is preparing bundled agent tools; install options return when setup finishes.",
   installError: (displayName: string) =>
     `Could not install ${displayName}.`,
   readyToast: (displayName: string) => `${displayName} is ready.`,

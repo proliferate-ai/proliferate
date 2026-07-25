@@ -1,8 +1,8 @@
 import {
-  resolveSessionControlTooltip,
   resolveSessionToggleControlPresentation,
   resolveSessionToggleControlStateLabel,
 } from "@/lib/domain/chat/session-controls/session-toggle-control";
+import { resolveSessionControlTooltip } from "@/lib/domain/chat/session-controls/session-control-tooltip";
 import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-controls/session-controls";
 import type { ConfiguredSessionControlKey } from "@/lib/domain/chat/session-controls/presentation";
 import { Brain, Check, Zap } from "@proliferate/ui/icons";
@@ -68,11 +68,12 @@ function ToggleControl({ control }: { control: LiveSessionControlDescriptor }) {
     const presentation = resolveSessionToggleControlPresentation(control.key);
     const Icon = presentation.icon === "brain" ? Brain : Zap;
     const stateLabel = resolveSessionToggleControlStateLabel(control.key, !!control.isEnabled);
-    const tooltip = resolveSessionControlTooltip(
-      control.label,
-      control.detail,
-      selectedOption?.description,
-    );
+    const tooltip = resolveSessionControlTooltip({
+      label: control.label,
+      value: control.detail,
+      description: selectedOption?.description,
+      pendingState: control.pendingState,
+    });
     const triggerLabel = control.key === "fast_mode" ? stateLabel : control.label;
 
     return (
@@ -83,7 +84,7 @@ function ToggleControl({ control }: { control: LiveSessionControlDescriptor }) {
           icon={<Icon className={`size-3.5 ${control.isEnabled ? "" : "opacity-65"}`} />}
           label={triggerLabel}
           trailing={<PendingConfigIndicator pendingState={control.pendingState} />}
-          aria-label={tooltip}
+          aria-label={`${control.label}: ${control.detail ?? stateLabel}`}
           className="max-w-[12rem]"
           onClick={() => {
             if (nextValue) {

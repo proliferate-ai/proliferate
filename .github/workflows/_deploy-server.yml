@@ -45,6 +45,11 @@ jobs:
       WEB_URL: ${{ vars.WEB_URL }}
       API_HEALTH_PATH: ${{ vars.API_HEALTH_PATH || '/api/health' }}
       E2B_TEMPLATE_REF: ${{ vars.E2B_TEMPLATE_REF }}
+      MANAGED_CLOUD_GITHUB_APP_ID: ${{ vars.MANAGED_CLOUD_GITHUB_APP_ID }}
+      MANAGED_CLOUD_GITHUB_APP_SLUG: ${{ vars.MANAGED_CLOUD_GITHUB_APP_SLUG }}
+      MANAGED_CLOUD_GITHUB_APP_CLIENT_ID: ${{ vars.MANAGED_CLOUD_GITHUB_APP_CLIENT_ID }}
+      MANAGED_CLOUD_GITHUB_APP_CALLBACK_BASE_URL: ${{ vars.MANAGED_CLOUD_GITHUB_APP_CALLBACK_BASE_URL || vars.API_URL }}
+      MANAGED_CLOUD_GITHUB_APP_SECRET_ARN: ${{ vars.MANAGED_CLOUD_GITHUB_APP_SECRET_ARN }}
       SUPPORT_REPORT_S3_BUCKET: ${{ vars.SUPPORT_REPORT_S3_BUCKET }}
       SUPPORT_REPORT_S3_PREFIX: ${{ vars.SUPPORT_REPORT_S3_PREFIX || 'support/reports' }}
       SUPPORT_REPORT_S3_REGION: ${{ vars.SUPPORT_REPORT_S3_REGION || vars.AWS_REGION || 'us-east-1' }}
@@ -89,6 +94,11 @@ jobs:
           : "${API_BASE_URL:?Set API_BASE_URL on the GitHub environment.}"
           : "${WEB_URL:?Set WEB_URL on the GitHub environment.}"
           : "${E2B_TEMPLATE_REF:?Set E2B_TEMPLATE_REF on the GitHub environment.}"
+          : "${MANAGED_CLOUD_GITHUB_APP_ID:?Set MANAGED_CLOUD_GITHUB_APP_ID on the GitHub environment.}"
+          : "${MANAGED_CLOUD_GITHUB_APP_SLUG:?Set MANAGED_CLOUD_GITHUB_APP_SLUG on the GitHub environment.}"
+          : "${MANAGED_CLOUD_GITHUB_APP_CLIENT_ID:?Set MANAGED_CLOUD_GITHUB_APP_CLIENT_ID on the GitHub environment.}"
+          : "${MANAGED_CLOUD_GITHUB_APP_CALLBACK_BASE_URL:?Set MANAGED_CLOUD_GITHUB_APP_CALLBACK_BASE_URL or API_URL on the GitHub environment.}"
+          : "${MANAGED_CLOUD_GITHUB_APP_SECRET_ARN:?Set MANAGED_CLOUD_GITHUB_APP_SECRET_ARN on the GitHub environment.}"
           if [ "$SUPPORT_TRACKER_ENABLED" = "true" ]; then
             : "${SUPPORT_GITHUB_APP_ID:?Set SUPPORT_GITHUB_APP_ID when support tracker is enabled.}"
             : "${SUPPORT_GITHUB_APP_INSTALLATION_ID:?Set SUPPORT_GITHUB_APP_INSTALLATION_ID when support tracker is enabled.}"
@@ -169,6 +179,10 @@ jobs:
             --query taskDefinition \
             > task-definition.raw.json
 
+          aws secretsmanager describe-secret \
+            --secret-id "$MANAGED_CLOUD_GITHUB_APP_SECRET_ARN" \
+            >/dev/null
+
           support_github_private_key_parameter="$SUPPORT_GITHUB_APP_PRIVATE_KEY_PARAMETER_NAME"
           if [ -z "$support_github_private_key_parameter" ] && [ "$SUPPORT_TRACKER_ENABLED" = "true" ]; then
             support_github_private_key_parameter="/proliferate/${DEPLOY_ENVIRONMENT}/support/github-app-private-key"
@@ -211,6 +225,10 @@ jobs:
             --arg frontend "$WEB_URL" \
             --arg environment "$DEPLOY_ENVIRONMENT" \
             --arg e2b "$E2B_TEMPLATE_REF" \
+            --arg github_app_id "$MANAGED_CLOUD_GITHUB_APP_ID" \
+            --arg github_app_slug "$MANAGED_CLOUD_GITHUB_APP_SLUG" \
+            --arg github_app_client_id "$MANAGED_CLOUD_GITHUB_APP_CLIENT_ID" \
+            --arg github_app_callback_base_url "$MANAGED_CLOUD_GITHUB_APP_CALLBACK_BASE_URL" \
             --arg git "$GIT_SHA" \
             --arg release "proliferate-server@${server_version}+${short_sha}" \
             --arg support_report_bucket "$SUPPORT_REPORT_S3_BUCKET" \
@@ -243,6 +261,11 @@ jobs:
               {"name":"API_PATH_PREFIX","value":"/api"},
               {"name":"SANDBOX_PROVIDER","value":"e2b"},
               {"name":"E2B_TEMPLATE_NAME","value":$e2b},
+              {"name":"GITHUB_APP_ID","value":$github_app_id},
+              {"name":"GITHUB_APP_SLUG","value":$github_app_slug},
+              {"name":"GITHUB_APP_CLIENT_ID","value":$github_app_client_id},
+              {"name":"GITHUB_APP_CALLBACK_BASE_URL","value":$github_app_callback_base_url},
+              {"name":"PRO_BILLING_ENABLED","value":"true"},
               {"name":"SERVER_GIT_SHA","value":$git},
               {"name":"ANYHARNESS_GIT_SHA","value":$git},
               {"name":"PROLIFERATE_TELEMETRY_MODE","value":"hosted_product"},
@@ -278,9 +301,22 @@ jobs:
             ]' > env-updates.json
 
           jq -n \
+            --arg github_app_secret_arn "$MANAGED_CLOUD_GITHUB_APP_SECRET_ARN" \
             --arg support_github_private_key_parameter "$support_github_private_key_parameter" \
             --arg support_linear_api_key_parameter "$support_linear_api_key_parameter" \
             '[
+              {
+                "name":"GITHUB_APP_CLIENT_SECRET",
+                "valueFrom":($github_app_secret_arn + ":GITHUB_APP_CLIENT_SECRET::")
+              },
+              {
+                "name":"GITHUB_APP_WEBHOOK_SECRET",
+                "valueFrom":($github_app_secret_arn + ":GITHUB_APP_WEBHOOK_SECRET::")
+              },
+              {
+                "name":"GITHUB_APP_PRIVATE_KEY",
+                "valueFrom":($github_app_secret_arn + ":GITHUB_APP_PRIVATE_KEY::")
+              },
               (
                 if $support_github_private_key_parameter == "" then empty else
                 {
@@ -308,7 +344,13 @@ jobs:
               def merge_environment($updates):
                 (.environment // []) as $current
                 | ($updates[0] | map(.name)) as $updated_names
-                | ["SUPPORT_GITHUB_APP_PRIVATE_KEY", "SUPPORT_LINEAR_API_KEY"] as $secret_names
+                | [
+                    "GITHUB_APP_CLIENT_SECRET",
+                    "GITHUB_APP_WEBHOOK_SECRET",
+                    "GITHUB_APP_PRIVATE_KEY",
+                    "SUPPORT_GITHUB_APP_PRIVATE_KEY",
+                    "SUPPORT_LINEAR_API_KEY"
+                  ] as $secret_names
                 | ($current | map(select(
                     .name as $name
                     | ($updated_names | index($name) | not)

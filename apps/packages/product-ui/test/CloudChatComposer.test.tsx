@@ -84,6 +84,49 @@ describe("CloudChatComposer", () => {
     expect(onSelect).toHaveBeenCalledWith("opencode");
   });
 
+  it("keeps optimistic controls visually stable while updates are pending", () => {
+    const { container } = render(
+      <CloudChatComposer
+        composer={{
+          value: "",
+          placeholder: "Send a prompt",
+          canSubmit: false,
+          onChange: vi.fn(),
+          onSubmit: vi.fn(),
+          controls: [
+            {
+              id: "model",
+              key: "model",
+              label: "Model",
+              placement: "trailing",
+              pendingState: "sending",
+              groups: [{
+                id: "models",
+                options: [{ id: "sonnet", label: "Sonnet 4.6", selected: true }],
+              }],
+            },
+          ],
+          footerControls: [{
+            id: "remote-access",
+            label: "Remote access",
+            icon: "globe",
+            pending: true,
+          }],
+        }}
+      />,
+    );
+
+    const modelControl = screen.getByRole("button", {
+      name: "Model and configuration: Sonnet 4.6",
+    });
+    const footerControl = screen.getByRole("button", { name: "Remote access" });
+    expect(modelControl.getAttribute("aria-busy")).toBe("true");
+    expect(footerControl.getAttribute("aria-busy")).toBe("true");
+    expect(container.querySelector(".animate-spin")).toBeNull();
+    expect(container.querySelector(".lucide-loader-circle")).toBeNull();
+    expect(container.textContent).not.toContain("Updating");
+  });
+
   it("shows every agent model group directly in the model menu", () => {
     const onSelect = vi.fn();
 

@@ -46,6 +46,11 @@ const stateMocks = vi.hoisted(() => {
     },
     cloudRepoAction: { kind: "create" },
     cloudRepoActionBySourceRoot: {},
+    cloudRepoAuthority: {
+      data: { authorized: true, status: "ready", action: null, message: null },
+      isLoading: false,
+      isError: false,
+    },
     launchTarget: { kind: "local", sourceRoot: "/repo" },
   } as any;
   const mode = {
@@ -103,6 +108,11 @@ function resetMocks() {
     gitRepoName: "repo",
   };
   stateMocks.repository.cloudRepoAction = { kind: "create" };
+  stateMocks.repository.cloudRepoAuthority = {
+    data: { authorized: true, status: "ready", action: null, message: null },
+    isLoading: false,
+    isError: false,
+  };
   stateMocks.repository.launchTarget = { kind: "local", sourceRoot: "/repo" };
   stateMocks.computeTargets.sshTargetOptions = [];
   stateMocks.computeTargets.isLoading = false;
@@ -174,5 +184,34 @@ describe("useHomeNextState", () => {
     const noBranch = renderHomeNextState({ destination: "repository", repoLaunchKind: "worktree" });
     expect(noBranch.result.current.targetDisabledReason).toBe("Choose a base branch");
     noBranch.unmount();
+  });
+
+  it("blocks cloud launch until GitHub App authority is ready", () => {
+    stateMocks.repository.launchTarget = {
+      kind: "cloud",
+      gitOwner: "owner",
+      gitRepoName: "repo",
+      baseBranch: "main",
+    };
+    stateMocks.repository.cloudRepoAuthority = {
+      data: {
+        authorized: false,
+        status: "missing_user_authorization",
+        action: "authorize_user",
+        message: null,
+      },
+      isLoading: false,
+      isError: false,
+    };
+
+    const state = renderHomeNextState({
+      destination: "repository",
+      repoLaunchKind: "cloud",
+    });
+
+    expect(state.result.current.targetDisabledReason).toBe(
+      "Connect GitHub App to use cloud workspaces",
+    );
+    expect(state.result.current.canLaunchTarget).toBe(false);
   });
 });

@@ -27,6 +27,7 @@ const screenMocks = vi.hoisted(() => {
     cloudRepoActionBySourceRoot: {},
     cloudRepoTarget: null,
     cloudRepoAction: { kind: "create" },
+    cloudRepoAuthority: { data: { authorized: true, status: "ready" }, refetch: vi.fn() },
     modelGroups: [],
     selectedModel: null,
     modeOptions: [],
@@ -110,6 +111,9 @@ vi.mock("@/components/home/screen/HomeTargetPicker", () => ({
         <button type="button" onClick={() => props.onSelectRuntime("local")}>
           Mock local
         </button>
+        <button type="button" onClick={() => props.onSelectRuntime("cloud")}>
+          Mock cloud
+        </button>
         <button type="button" onClick={() => props.onSelectRuntime("ssh", "ssh-target-1")}>
           Mock ssh
         </button>
@@ -192,6 +196,9 @@ function resetHomeNext() {
   screenMocks.homeNext.canLaunchTarget = true;
   screenMocks.homeNext.effectiveModelSelection = { kind: "codex", modelId: "gpt-5.4" };
   screenMocks.homeNext.launchTarget = { kind: "cowork" };
+  screenMocks.homeNext.cloudRepoAuthority = {
+    data: { authorized: true, status: "ready" }, refetch: vi.fn(),
+  };
   screenMocks.onboardingCards.splice(0);
   screenMocks.homeNext.sshTargetOptions = [];
   screenMocks.homeNext.sshTargetsLoading = false;
@@ -235,7 +242,7 @@ describe("HomeNextScreen model availability notices", () => {
 
     expect(screen.getByText("Finish agent setup to start a chat.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Agents" }));
-    expect(screenMocks.handleHomeAction).toHaveBeenCalledWith("agent-settings");
+    expect(screenMocks.handleHomeAction).toHaveBeenCalledWith("agent-settings", "codex");
     expect(screen.queryByText(/configured/i)).toBeNull();
   });
 
@@ -280,6 +287,24 @@ describe("HomeNextScreen model availability notices", () => {
     fireEvent.change(screen.getByLabelText("Prompt"), { target: { value: "hello" } });
 
     expect(screen.getByText("Choose a repository")).toBeTruthy();
+  });
+
+  it("routes an unauthorized cloud launch to the actionable repository gate", () => {
+    screenMocks.homeNext.targetDisabledReason = "Connect GitHub App to use cloud workspaces";
+    screenMocks.homeNext.canLaunchTarget = false;
+    screenMocks.homeNext.cloudRepoTarget = { gitOwner: "acme", gitRepoName: "rocket" };
+    screenMocks.homeNext.cloudRepoAuthority = {
+      data: { authorized: false, status: "missing_user_authorization", action: "authorize_user" },
+      refetch: vi.fn(),
+    };
+    render(<HomeNextScreen />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Mock cloud" }));
+    fireEvent.change(screen.getByLabelText("Prompt"), { target: { value: "ship it" } });
+    fireEvent.click(screen.getByRole("button", { name: "Connect GitHub App" }));
+    expect(screenMocks.navigate).toHaveBeenCalledWith(
+      expect.stringContaining("settings"),
+    );
   });
 
   it("does not render a submitted preview below the composer for cowork launches", () => {
@@ -365,7 +390,6 @@ describe("HomeNextScreen composer control-row parity", () => {
     expect(screenMocks.leadingControlsProps).toMatchObject({
       runtimeControlsDisabled: false,
       agentKind: "codex",
-      activeSessionId: null,
     });
     expect(screenMocks.leadingControlsProps.modelSelectorProps).toMatchObject({
       connectionState: "healthy",

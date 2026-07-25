@@ -1062,8 +1062,10 @@ def _lease_refresh_after(*, now: datetime, expires_at: datetime) -> datetime:
 token is already inside that safety window, the server returns an immediate
 refresh point and the next Worker cycle will request a new lease again.
 
-If the GitHub refresh request returns `invalid_grant`, the server marks the
-authorization `needs_reauth` and returns `github_app_authorization_expired`.
+If the GitHub refresh request returns GitHub's documented
+`bad_refresh_token` (or the OAuth-compatible `invalid_grant`), the server marks
+the authorization `needs_reauth` and returns
+`github_app_authorization_expired`.
 
 ```python
 try:

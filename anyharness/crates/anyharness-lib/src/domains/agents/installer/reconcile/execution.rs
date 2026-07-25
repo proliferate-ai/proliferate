@@ -11,6 +11,21 @@ use crate::domains::agents::installer::InstallOptions;
 use crate::domains::agents::model::{AgentDescriptor, AgentKind, ResolvedArtifact};
 use crate::domains::agents::readiness::service::resolve_agent;
 
+/// Whether an installed-only reconcile owns this agent on the current target.
+///
+/// Keep this predicate shared with the HTTP projection: the runtime executes
+/// reconciles sequentially, but every still-unprocessed managed agent covered
+/// by the active job is already queued work and must not be presented as a
+/// separate manual-install opportunity.
+pub(crate) fn is_installed_only_reconcile_eligible(
+    resolved: &crate::domains::agents::model::ResolvedAgent,
+) -> bool {
+    let is_managed = |artifact: &ResolvedArtifact| {
+        artifact.installed && artifact.source.as_deref() == Some("managed")
+    };
+    is_managed(&resolved.agent_process) || resolved.native.as_ref().map(is_managed).unwrap_or(false)
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AgentReconcileJobStatus {
     Idle,
@@ -247,13 +262,8 @@ async fn run_reconcile_job(
             // install over a PATH-provided agent would fail, and missing agents
             // install on demand at session start. resolve_agent is side-effect-free.
             if installed_only {
-                let is_managed = |artifact: &ResolvedArtifact| {
-                    artifact.installed && artifact.source.as_deref() == Some("managed")
-                };
                 let resolved = resolve_agent(&descriptor, &agent_runtime_home);
-                let managed_installed = is_managed(&resolved.agent_process)
-                    || resolved.native.as_ref().map(is_managed).unwrap_or(false);
-                if !managed_installed {
+                if !is_installed_only_reconcile_eligible(&resolved) {
                     return AgentReconcileResult {
                         kind: descriptor.kind.clone(),
                         outcome: AgentReconcileOutcome::Skipped,

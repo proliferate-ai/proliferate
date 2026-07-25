@@ -3,6 +3,7 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import { ComposerControlButton } from "@proliferate/ui/primitives/ComposerControlButton";
 import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
+import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
 import { Blocks, Settings } from "@proliferate/ui/icons";
 import { ComposerPopoverSurface } from "@proliferate/product-ui/chat/composer/ComposerPopoverSurface";
 import { IntegrationIcon } from "@/components/settings/panes/integrations/IntegrationIcon";
@@ -12,6 +13,7 @@ import {
   type ComposerIntegrationProvider,
 } from "@/lib/domain/cloud/composer-integrations";
 import { buildSettingsHref } from "@/lib/domain/settings/navigation";
+import { resolveSessionControlTooltip } from "@/lib/domain/chat/session-controls/session-control-tooltip";
 
 /**
  * The single composer integrations control. Hidden when nothing is connected;
@@ -37,57 +39,67 @@ export function ComposerIntegrationsControl() {
   const triggerAriaLabel = isUrgent
     ? `${reauthLabel}. Open connected integrations.`
     : `${connectedCount} connected ${connectedCount === 1 ? "integration" : "integrations"}. Open connected integrations.`;
+  const tooltip = resolveSessionControlTooltip({
+    label: "Integrations",
+    value: isUrgent ? reauthLabel : String(connectedCount),
+    description: isUrgent
+      ? "Reconnect an integration to keep using it."
+      : `${connectedCount} connected ${connectedCount === 1 ? "integration" : "integrations"}.`,
+    hint: "Click to manage.",
+  });
 
   return (
-    <PopoverButton
-      align="end"
-      side="top"
-      offset={8}
-      className="w-auto border-0 bg-transparent p-0 shadow-none"
-      trigger={(
-        <ComposerControlButton
-          label={triggerLabel}
-          aria-label={triggerAriaLabel}
-          icon={
-            isUrgent ? (
-              <span
-                aria-hidden="true"
-                className="block size-1.5 rounded-full bg-warning/70"
-              />
-            ) : (
-              <Blocks aria-hidden="true" className="size-4" />
-            )
-          }
-        />
-      )}
-    >
-      {(close) => (
-        <ComposerPopoverSurface className="w-72 p-1.5">
-          <div className="space-y-0.5">
-            {providers.map((provider) => (
-              <ProviderRow
-                key={provider.definitionId}
-                provider={provider}
-                onReconnect={() => {
+    <Tooltip content={tooltip}>
+      <PopoverButton
+        align="end"
+        side="top"
+        offset={8}
+        className="w-auto border-0 bg-transparent p-0 shadow-none"
+        trigger={(
+          <ComposerControlButton
+            label={triggerLabel}
+            aria-label={triggerAriaLabel}
+            icon={
+              isUrgent ? (
+                <span
+                  aria-hidden="true"
+                  className="block size-1.5 rounded-full bg-warning/70"
+                />
+              ) : (
+                <Blocks aria-hidden="true" className="size-4" />
+              )
+            }
+          />
+        )}
+      >
+        {(close) => (
+          <ComposerPopoverSurface className="w-72 p-1.5">
+            <div className="space-y-0.5">
+              {providers.map((provider) => (
+                <ProviderRow
+                  key={provider.definitionId}
+                  provider={provider}
+                  onReconnect={() => {
+                    goToIntegrations();
+                    close();
+                  }}
+                />
+              ))}
+            </div>
+            <div className="mt-1 border-t border-border pt-1">
+              <PopoverMenuItem
+                icon={<Settings className="size-4" />}
+                label="Manage integrations"
+                onClick={() => {
                   goToIntegrations();
                   close();
                 }}
               />
-            ))}
-          </div>
-          <div className="mt-1 border-t border-border pt-1">
-            <PopoverMenuItem
-              icon={<Settings className="size-4" />}
-              label="Manage integrations"
-              onClick={() => {
-                goToIntegrations();
-                close();
-              }}
-            />
-          </div>
-        </ComposerPopoverSurface>
-      )}
-    </PopoverButton>
+            </div>
+          </ComposerPopoverSurface>
+        )}
+      </PopoverButton>
+    </Tooltip>
   );
 }
 

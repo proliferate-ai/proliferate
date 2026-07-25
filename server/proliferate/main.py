@@ -44,6 +44,7 @@ from proliferate.server.artifact_runtime.api import router as artifact_runtime_r
 # from proliferate.server.automations.api import router as automations_router
 from proliferate.server.billing.api import router as billing_router
 from proliferate.server.billing.reconciler import (
+    reconcile_current_pro_period_grants,
     start_billing_reconciler,
     stop_billing_reconciler,
 )
@@ -208,6 +209,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Reconcile the built-in integration seed definitions into the database.
     async with db_engine.async_session_factory() as db, db.begin():
         await sync_seed_definitions(db)
+    # A hosted rollout can turn Pro billing on after Stripe events were already
+    # persisted. Repair the deterministic period grants before accepting any
+    # request so a paid subscriber never observes a transient zero balance.
+    if settings.pro_billing_enabled:
+        async with db_engine.async_session_factory() as db, db.begin():
+            await reconcile_current_pro_period_grants(db)
     if settings.cloud_billing_mode in {"observe", "enforce"}:
         start_billing_reconciler()
     anonymous_telemetry_task = await start_server_anonymous_telemetry_sender()

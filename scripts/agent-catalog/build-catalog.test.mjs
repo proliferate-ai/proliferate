@@ -143,6 +143,28 @@ test("focused complete probes preserve every unselected agent unchanged", () => 
   });
 });
 
+test("Codex 5.6 family labels use the curated product names in every auth context", () => {
+  withFixture((root) => {
+    const script = join(root, "scripts", "agent-catalog", "build-catalog.mjs");
+    execFileSync(process.execPath, [script]);
+
+    const draft = JSON.parse(
+      readFileSync(join(root, "scripts", "agent-catalog", "catalog.draft.json"), "utf8"),
+    );
+    const codex = draft.agents.find((agent) => agent.kind === "codex");
+    const labels = Object.fromEntries(
+      codex.session.models.map((model) => [model.id, model.displayName]),
+    );
+
+    assert.equal(labels["gpt-5.6-sol"], "5.6 Sol");
+    assert.equal(labels["gpt-5.6-terra"], "5.6 Terra");
+    assert.equal(labels["gpt-5.6-luna"], "5.6 Luna");
+    assert.equal(labels["openai.gpt-5.6-sol"], "5.6 Sol");
+    assert.equal(labels["openai.gpt-5.6-terra"], "5.6 Terra");
+    assert.equal(labels["openai.gpt-5.6-luna"], "5.6 Luna");
+  });
+});
+
 test("candidate native versions compare across vendor output formats", () => {
   withFixture((root) => {
     alignProbeVersions(root);

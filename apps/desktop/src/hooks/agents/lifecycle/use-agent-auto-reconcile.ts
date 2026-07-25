@@ -18,7 +18,10 @@ import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
 export function useAgentAutoReconcile() {
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const connectionState = useHarnessConnectionStore((state) => state.connectionState);
-  const { invalidateAgentListResources } = useAgentResourcesCache();
+  const {
+    invalidateAgentListResources,
+    invalidateAgentSetupResources,
+  } = useAgentResourcesCache();
   const {
     isReconciling,
     reconcileDataUpdatedAt,
@@ -34,30 +37,59 @@ export function useAgentAutoReconcile() {
     pollWhileAgentSeedHydrating: true,
   });
   const agentSeedStatus = runtimeHealth?.agentSeed?.status;
+  const healthReconcileStatus = runtimeHealth?.agentReconcile?.status;
   const previousAgentSeedStatus = useRef<string | null>(null);
+  const observedHealthRuntimeUrl = useRef<string | null>(null);
 
   // Keep agents fresh during seed hydration and force one final refresh when hydration completes.
   useEffect(() => {
     const normalizedRuntimeUrl = runtimeUrl.trim();
-    const previousStatus = previousAgentSeedStatus.current;
-    previousAgentSeedStatus.current = agentSeedStatus ?? null;
-
-    if (!normalizedRuntimeUrl || runtimeHealthDataUpdatedAt === 0) {
+    if (connectionState !== "healthy") {
+      observedHealthRuntimeUrl.current = null;
+      previousAgentSeedStatus.current = null;
       return;
     }
+    if (
+      !normalizedRuntimeUrl
+      || runtimeHealthDataUpdatedAt === 0
+      || !agentSeedStatus
+    ) {
+      return;
+    }
+
+    const isFirstObservationForRuntime =
+      observedHealthRuntimeUrl.current !== normalizedRuntimeUrl;
+    const previousStatus = isFirstObservationForRuntime
+      ? null
+      : previousAgentSeedStatus.current;
+    observedHealthRuntimeUrl.current = normalizedRuntimeUrl;
+    previousAgentSeedStatus.current = agentSeedStatus;
 
     const isHydrating = agentSeedStatus === "hydrating";
     const completedHydration =
       previousStatus === "hydrating" && agentSeedStatus !== "hydrating";
 
-    if (!isHydrating && !completedHydration) {
+    if (isHydrating) {
+      void invalidateAgentListResources(normalizedRuntimeUrl);
       return;
     }
 
-    void invalidateAgentListResources(normalizedRuntimeUrl);
+    const healthReportsActiveReconcile =
+      healthReconcileStatus === "queued" || healthReconcileStatus === "running";
+    if (isFirstObservationForRuntime || completedHydration || healthReportsActiveReconcile) {
+      // Reconcile is queued immediately after hydration. Refresh its idle
+      // snapshot as well as the agent list so the status query starts polling
+      // the active job through completion. The first settled health response
+      // also refreshes: fast/no-op hydration can finish before Desktop ever
+      // observes the intermediate `hydrating` state.
+      void invalidateAgentSetupResources(normalizedRuntimeUrl);
+    }
   }, [
     agentSeedStatus,
+    connectionState,
+    healthReconcileStatus,
     invalidateAgentListResources,
+    invalidateAgentSetupResources,
     runtimeHealthDataUpdatedAt,
     runtimeUrl,
   ]);

@@ -183,10 +183,9 @@ SETTINGS_CONTENT_SECTIONS = [
 ]
 ```
 
-**Shortcuts**: Cmd-digit section shortcuts are per-scope.
-`SETTINGS_SHORTCUT_SECTION_ORDER` is filtered to the sections visible in
-the active scope's sidebar, so Cmd-1…N always maps to the rows currently
-on screen.
+**Shortcuts**: Cmd-digit section shortcuts are per-scope. The shortcut target
+order is derived from the active scope's visible sidebar groups, so Cmd-1…N
+always maps to the rows currently on screen in their rendered order.
 
 **Panes** (in `apps/desktop/src/components/settings/panes/`):
 

@@ -302,6 +302,18 @@ NOT handled: invoice.upcoming, customer.subscription.trial_will_end,
 payment_intent.*, charge.*
 ```
 
+**Hosted Pro-flag rollout repair**:
+
+`invoice.paid` persists the Stripe subscription even when
+`PRO_BILLING_ENABLED=false`, but intentionally skips its numeric `pro_period`
+grant. On startup with Pro billing enabled, the API therefore reconciles every
+persisted `active`/`trialing` Pro subscription whose current period has complete,
+current bounds. It reuses the invoice path's deterministic
+`stripe:pro-period:<subscription>:<period-start>` source ref and top-up semantics,
+so rolling deploys, retries, and later webhook delivery cannot duplicate hours.
+The repair runs before the API accepts requests and does not convert explicitly
+configured legacy Cloud subscriptions.
+
 **E2B webhook** (`server/proliferate/server/cloud/webhooks/`):
 
 ```text

@@ -39,6 +39,11 @@ export function normalizeSettingsSection(value: string | null): SettingsSection 
     // AGENT DEFAULTS PAGE REMOVED: legacy links land on the Claude harness page.
     return "agent-claude";
   }
+  if (value === "agents") {
+    // Legacy scope links land on the first concrete harness page instead of
+    // falling through to unrelated General settings.
+    return "agent-claude";
+  }
   if (value === "agent-authentication") {
     // The Bifrost-era authentication pane was replaced by the API key pool page.
     return "agent-api-keys";

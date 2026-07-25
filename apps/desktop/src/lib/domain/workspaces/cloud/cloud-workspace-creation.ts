@@ -3,7 +3,11 @@ import {
   type CloudWorkspaceSummary,
   type CreateCloudWorkspaceRequest,
 } from "@/lib/domain/workspaces/cloud/cloud-workspace-model";
-import type { RepoConfigResponse } from "@proliferate/cloud-sdk";
+import type {
+  GitHubRepoAuthorityAction,
+  GitHubRepoAuthorityResponse,
+  RepoConfigResponse,
+} from "@proliferate/cloud-sdk";
 import type { AuthUser } from "@/lib/domain/auth/auth-user";
 import type { BranchPrefixType } from "@/lib/domain/preferences/user/model";
 import { generateWorkspaceSlug } from "@/lib/domain/workspaces/creation/workspace-slug";
@@ -27,6 +31,72 @@ export type CloudRepoActionState =
   | { kind: "loading"; label: "Loading cloud..." }
   | { kind: "configure"; label: "Configure cloud" }
   | { kind: "create"; label: "New cloud workspace" };
+
+export function resolveGitHubRepoAuthorityAction(
+  authority: Pick<GitHubRepoAuthorityResponse, "status" | "action">,
+): GitHubRepoAuthorityAction | null {
+  if (authority.action) {
+    return authority.action;
+  }
+  switch (authority.status) {
+    case "missing_user_authorization":
+      return "authorize_user";
+    case "expired_user_authorization":
+      return "reauthorize_user";
+    case "missing_installation":
+      return "install_app";
+    case "repo_not_covered":
+      return "grant_repo_access";
+    case "missing_user_repo_access":
+      return "authorize_user";
+    default:
+      return null;
+  }
+}
+
+export function resolveGitHubRepoAuthorityActionLabel(
+  authority: Pick<GitHubRepoAuthorityResponse, "status" | "action">,
+): string {
+  if (authority.status === "error") {
+    return "Retry";
+  }
+  switch (resolveGitHubRepoAuthorityAction(authority)) {
+    case "authorize_user":
+      return authority.status === "missing_user_repo_access"
+        ? "Reconnect GitHub App"
+        : "Connect GitHub App";
+    case "reauthorize_user":
+      return "Reconnect GitHub App";
+    case "install_app":
+      return "Install GitHub App";
+    case "grant_repo_access":
+      return "Grant repository access";
+    default:
+      return "Review GitHub access";
+  }
+}
+
+export function resolveGitHubRepoAuthorityBlockedReason(
+  authority: Pick<GitHubRepoAuthorityResponse, "authorized" | "status" | "message">,
+): string | null {
+  if (authority.authorized) {
+    return null;
+  }
+  switch (authority.status) {
+    case "missing_user_authorization":
+      return "Connect GitHub App to use cloud workspaces";
+    case "expired_user_authorization":
+      return "Reconnect GitHub App to use cloud workspaces";
+    case "missing_installation":
+      return "Install GitHub App for this repository";
+    case "repo_not_covered":
+      return "Grant GitHub App access to this repository";
+    case "missing_user_repo_access":
+      return "Your GitHub account needs access to this repository";
+    default:
+      return authority.message?.trim() || "Couldn't verify GitHub App access";
+  }
+}
 
 interface CloudRepoActionRepository {
   sourceRoot: string;

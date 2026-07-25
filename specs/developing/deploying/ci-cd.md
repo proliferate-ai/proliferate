@@ -54,7 +54,8 @@ Configuration and secret locations:
   `AWS_REGION`, `AWS_DEPLOY_ROLE_ARN`, `VERCEL_*`, `WEB_URL`, `API_*`,
   `MOBILE_DEPLOY_ENABLED`, `EAS_*`, `DESKTOP_DEPLOY_ENABLED`,
   `DESKTOP_DOWNLOADS_BASE_URL`, `WORKERS_DEPLOY_ENABLED`, E2B template refs,
-  and non-secret support tracker ids/labels/limits.
+  managed-cloud GitHub App metadata/secret ARN, and non-secret support tracker
+  ids/labels/limits.
 - GitHub environment secrets hold deploy credentials used directly by Actions,
   including `VERCEL_TOKEN`, `EXPO_TOKEN`, `E2B_API_KEY`, `E2B_ACCESS_TOKEN`,
   `SUPPORT_GITHUB_APP_PRIVATE_KEY`, and `SUPPORT_LINEAR_API_KEY`.
@@ -847,7 +848,10 @@ Hosted flow:
    - builds and pushes an ECR image tagged by short SHA
    - renders a new ECS task definition from the live service task definition
    - updates non-secret runtime environment such as `API_URL`, `API_BASE_URL`,
-     release SHA, and E2B template ref
+     release SHA, E2B template ref, managed-cloud GitHub App metadata, and
+     `PRO_BILLING_ENABLED=true`
+   - replaces the three managed-cloud GitHub App secret bindings from the
+     environment-specific `MANAGED_CLOUD_GITHUB_APP_SECRET_ARN`
    - runs `alembic upgrade head` as a one-off Fargate task
    - rolls the ECS service
    - smokes `${API_URL}${API_HEALTH_PATH:-/api/health}`
@@ -970,6 +974,11 @@ ECS_SERVER_SERVICE
 ECS_SERVER_CONTAINER_NAME
 API_HEALTH_PATH
 E2B_TEMPLATE_REF
+MANAGED_CLOUD_GITHUB_APP_ID
+MANAGED_CLOUD_GITHUB_APP_SLUG
+MANAGED_CLOUD_GITHUB_APP_CLIENT_ID
+MANAGED_CLOUD_GITHUB_APP_CALLBACK_BASE_URL
+MANAGED_CLOUD_GITHUB_APP_SECRET_ARN
 SUPPORT_REPORT_S3_BUCKET
 SUPPORT_REPORT_S3_PREFIX
 SUPPORT_REPORT_S3_REGION
@@ -992,9 +1001,13 @@ SUPPORT_LINEAR_LABEL_IDS
 SUPPORT_LINEAR_PRIVATE_DETAILS_LABEL_ID
 SUPPORT_LINEAR_API_KEY_PARAMETER_NAME
 
+# workflow-owned hosted server policy (not a GitHub environment variable)
+PRO_BILLING_ENABLED=true
+
 # server support tracker secrets
 SUPPORT_GITHUB_APP_PRIVATE_KEY
 SUPPORT_LINEAR_API_KEY # optional; omit to run GitHub-only support tracking
+```
 
 The server deploy workflow writes support tracker secrets to SSM SecureString
 parameters and injects them into ECS through task-definition `secrets`, not
@@ -1002,6 +1015,17 @@ plain container environment values. If a secret already exists in SSM, the
 GitHub secret can be omitted and the corresponding `*_PARAMETER_NAME` variable
 will be used as the ECS `valueFrom`.
 
+`MANAGED_CLOUD_GITHUB_APP_SECRET_ARN` is the base AWS Secrets Manager ARN for a JSON secret
+containing `GITHUB_APP_CLIENT_SECRET`, `GITHUB_APP_WEBHOOK_SECRET`, and
+`GITHUB_APP_PRIVATE_KEY`. The hosted workflow references those JSON keys
+through ECS task-definition `secrets`; it never copies their values into plain
+task-definition environment fields or GitHub workflow output. The four
+`MANAGED_CLOUD_GITHUB_APP_*` metadata inputs are non-secret GitHub environment
+variables and are mapped to the server's `GITHUB_APP_*` runtime variables.
+The longer prefix is required because GitHub reserves variable names beginning
+with `GITHUB_` and rejects attempts to create them.
+
+```text
 # E2B
 E2B_PUBLIC_TEMPLATE_FAMILY
 E2B_TEAM_ID
@@ -1052,6 +1076,18 @@ production equivalents.
 API base URL and keeps the mounted `/api` prefix, such as
 `https://staging-app.proliferate.com/api`.
 
+Hosted ECS revisions always set `PRO_BILLING_ENABLED=true` in
+`_deploy-server.yml`; the Terraform bootstrap task definition sets the same
+value. This must remain workflow-owned so a missing GitHub environment variable
+cannot silently reinterpret paid subscriptions as legacy unlimited plans. The
+server's `false` default remains available to self-hosted deployments that have
+not enabled Pro billing.
+
+Hosted ECS revisions also replace every managed-cloud GitHub App runtime
+binding from the target GitHub environment on each deploy. This avoids relying
+on stale values inherited from the previous ECS task definition and prevents a
+task-definition rebuild from silently dropping token-refresh credentials.
+
 Current hosted staging inventory:
 
 ```text
@@ -1079,6 +1115,11 @@ API_URL=https://staging-app.proliferate.com
 API_BASE_URL=https://staging-app.proliferate.com/api
 API_HEALTH_PATH=/api/health
 E2B_TEMPLATE_REF=pablo-5391/proliferate-runtime-cloud:staging
+MANAGED_CLOUD_GITHUB_APP_ID=<managed-cloud-github-app-id>
+MANAGED_CLOUD_GITHUB_APP_SLUG=proliferate-cloud-staging
+MANAGED_CLOUD_GITHUB_APP_CLIENT_ID=<managed-cloud-github-app-client-id>
+MANAGED_CLOUD_GITHUB_APP_CALLBACK_BASE_URL=https://staging-app.proliferate.com
+MANAGED_CLOUD_GITHUB_APP_SECRET_ARN=<staging-managed-cloud-github-app-secrets-manager-arn>
 E2B_PUBLIC_TEMPLATE_FAMILY=pablo-5391/proliferate-runtime-cloud
 E2B_TEAM_ID=18587c49-ea26-407a-8f22-def12957005f
 SUPPORT_REPORT_S3_BUCKET=proliferate-support-reports-dev

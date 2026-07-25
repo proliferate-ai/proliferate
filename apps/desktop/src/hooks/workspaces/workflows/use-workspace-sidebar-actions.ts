@@ -174,16 +174,29 @@ export function useWorkspaceSidebarActions() {
       return;
     }
 
-    navigateToWorkspaceShell();
     const latencyFlowId = startLatencyFlow({
       flowKind: "cloud_workspace_create",
       source: "sidebar",
     });
-    void createCloudWorkspaceAndEnter(target, { latencyFlowId, repoGroupKeyToExpand });
+    void createCloudWorkspaceAndEnter(target, { latencyFlowId, repoGroupKeyToExpand }).then(
+      (result) => {
+        if (result.status === "interrupted") {
+          failLatencyFlow(latencyFlowId, "cloud_workspace_create_interrupted");
+          showToast(result.failureMessage ?? "Cloud workspace creation was interrupted.");
+          return;
+        }
+        navigateToWorkspaceShell();
+      },
+      (error) => {
+        failLatencyFlow(latencyFlowId, "cloud_workspace_create_failed");
+        showToast(error instanceof Error ? error.message : "Failed to create cloud workspace.");
+      },
+    );
   }, [
     createCloudWorkspaceAndEnter,
     isCreatingCloudWorkspace,
     navigateToWorkspaceShell,
+    showToast,
   ]);
 
   return {

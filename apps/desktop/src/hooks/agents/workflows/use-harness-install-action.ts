@@ -4,12 +4,19 @@ import { HARNESS_PANE_COPY } from "@/copy/settings/harness-pane";
 import { useAgentInstallationActions } from "@/hooks/agents/workflows/use-agent-installation-actions";
 import { useToastStore } from "@/stores/toast/toast-store";
 
-export interface HarnessInstallAction {
-  label: string;
-  loading: boolean;
-  disabled: boolean;
-  onInstall: () => void;
-}
+export type HarnessInstallAction =
+  | {
+      kind: "action";
+      label: string;
+      loading: boolean;
+      disabled: boolean;
+      onInstall: () => void;
+    }
+  | {
+      kind: "progress";
+      label: string;
+      detail: string;
+    };
 
 export function useHarnessInstallAction(
   agent: AgentSummary | null,
@@ -42,10 +49,32 @@ export function useHarnessInstallAction(
   }, [agent, canInstall, installAgent, refreshAgentResources, showToast]);
 
   return useMemo(() => {
-    if (!agent || !canInstall) {
+    if (!agent) {
       return null;
     }
+
+    if (agent.installState === "installing") {
+      return {
+        kind: "progress",
+        label: HARNESS_PANE_COPY.automaticUpdateTitle(agent.displayName),
+        detail: HARNESS_PANE_COPY.automaticUpdateDetail(agent.displayName),
+      };
+    }
+
+    if (isAgentSeedHydrating && canInstall) {
+      return {
+        kind: "progress",
+        label: HARNESS_PANE_COPY.seedSetupTitle,
+        detail: HARNESS_PANE_COPY.seedSetupDetail,
+      };
+    }
+
+    if (!canInstall) {
+      return null;
+    }
+
     return {
+      kind: "action",
       label: isInstallingAgent
         ? HARNESS_PANE_COPY.installingAction
         : agent.installState === "failed"

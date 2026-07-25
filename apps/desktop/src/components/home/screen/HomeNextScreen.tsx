@@ -20,6 +20,7 @@ import {
 import { type HomeNextModelSelection } from "@/lib/domain/home/home-next-launch";
 import { resolveHomeModelProbeCardState } from "@/lib/domain/home/home-screen";
 import { resolveHomeTargetLaunchKindForRepository } from "@/lib/domain/home/home-target-picker";
+import { resolveGitHubRepoAuthorityActionLabel } from "@/lib/domain/workspaces/cloud/cloud-workspace-creation";
 
 export function HomeNextScreen() {
   const {
@@ -62,6 +63,7 @@ export function HomeNextScreen() {
     },
   });
   const configureCloud = useHomeCloudRepoSettingsNavigation(homeNext.cloudRepoTarget);
+  const cloudRepoAuthority = homeNext.cloudRepoAuthority.data;
   // Unified composer (owner rev 2026-07-01, extended 2026-07-07): home renders
   // the SAME control clusters as the chat input (ComposerLeadingControls +
   // ComposerTrailingControls from ChatInputControlRow), fed by launch-time
@@ -184,7 +186,6 @@ export function HomeNextScreen() {
                 modelSelectorProps={homeModelSelectorProps}
                 agentKind={homeAgentKind}
                 sessionConfigControls={homeSessionConfigControls}
-                activeSessionId={null}
               />
             )}
             controlsTrailingSlot={(
@@ -249,7 +250,7 @@ export function HomeNextScreen() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => handleHomeAction("agent-settings")}
+                    onClick={() => handleHomeAction("agent-settings", homeAgentKind)}
                     className="h-auto px-0 py-0 text-foreground underline underline-offset-4 hover:text-muted-foreground"
                   >
                     {modelAvailabilityNotice.actionLabel}
@@ -267,6 +268,27 @@ export function HomeNextScreen() {
                 >
                   Configure
                 </Button>
+              ) : repoLaunchKind === "cloud"
+                && homeNext.cloudRepoAction.kind === "create"
+                && (homeNext.cloudRepoAuthority.isError
+                  || (cloudRepoAuthority && !cloudRepoAuthority.authorized)) ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      if (homeNext.cloudRepoAuthority.isError
+                        || cloudRepoAuthority?.status === "error") {
+                        void homeNext.cloudRepoAuthority.refetch();
+                        return;
+                      }
+                      configureCloud();
+                    }}
+                    className="h-auto px-0 py-0 text-foreground underline underline-offset-4 hover:text-muted-foreground"
+                  >
+                    {cloudRepoAuthority
+                      ? resolveGitHubRepoAuthorityActionLabel(cloudRepoAuthority)
+                      : "Retry"}
+                  </Button>
               ) : null
             }
             onboardingSlot={(
@@ -275,7 +297,7 @@ export function HomeNextScreen() {
                 isAddingRepo={isAddingRepo}
                 onSelect={(card) => handleHomeAction(card.id)}
                 modelProbe={modelProbeState}
-                onOpenAgents={() => handleHomeAction("agent-settings")}
+                onOpenAgents={() => handleHomeAction("agent-settings", homeAgentKind)}
                 onDismissModelProbe={dismissModelProbeCard}
               />
             )}

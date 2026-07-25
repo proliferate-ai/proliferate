@@ -16,6 +16,7 @@ import {
   buildCloudRepoSettingsHref,
   buildSettingsHref,
 } from "@/lib/domain/settings/navigation";
+import { resolveAgentSettingsLandingSection } from "@/lib/domain/settings/navigation-presentation";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 
@@ -64,6 +65,10 @@ export function useHomeScreen() {
   const defaultChatAgentKind =
     useUserPreferencesStore((state) => state.defaultChatAgentKind);
   const hiddenRepoRootIds = useWorkspaceUiStore((s) => s.hiddenRepoRootIds);
+  const agentSettingsSection = resolveAgentSettingsLandingSection(
+    defaultChatAgentKind,
+    readyAgents.map((agent) => agent.kind),
+  );
 
   const repositories = useMemo(() => {
     const hiddenRepoRootIdSet = new Set(hiddenRepoRootIds);
@@ -104,16 +109,24 @@ export function useHomeScreen() {
     }),
     [repoConfigs?.repositories, repositories],
   );
-  function handleHomeAction(actionId: HomeActionId) {
+  function handleHomeAction(
+    actionId: HomeActionId,
+    preferredHarnessKind?: string | null,
+  ) {
     switch (actionId) {
       case "add-repository":
         openAddRepoFlow();
         return;
       case "agent-defaults":
-        navigate("/settings?section=agents");
+        navigate(buildSettingsHref({ section: agentSettingsSection }));
         return;
       case "agent-settings":
-        navigate("/settings?section=agents");
+        navigate(buildSettingsHref({
+          section: resolveAgentSettingsLandingSection(
+            preferredHarnessKind ?? defaultChatAgentKind,
+            readyAgents.map((agent) => agent.kind),
+          ),
+        }));
         return;
       case "repository-settings": {
         const firstRepository = repositoryToConfigure ?? repositories[0];

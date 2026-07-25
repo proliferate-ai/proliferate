@@ -347,7 +347,29 @@ async def create_github_app_installation_url(
     org_user: CurrentOrgUser,
     return_to: str | None = None,
 ) -> GitHubAppInstallationStartResponse:
-    del db
+    try:
+        await ensure_fresh_github_app_authorization(
+            db,
+            user_id=org_user.actor_user_id,
+        )
+    except CloudApiError as exc:
+        if exc.code in {
+            "github_app_authorization_required",
+            "github_app_authorization_expired",
+        }:
+            reconnect = exc.code == "github_app_authorization_expired"
+            raise CloudApiError(
+                exc.code,
+                (
+                    "Reconnect the Proliferate GitHub App before installing it "
+                    "for an organization."
+                    if reconnect
+                    else "Connect the Proliferate GitHub App before installing it "
+                    "for an organization."
+                ),
+                status_code=409,
+            ) from exc
+        raise
     slug = settings.github_app_slug.strip()
     if not slug:
         raise CloudApiError(

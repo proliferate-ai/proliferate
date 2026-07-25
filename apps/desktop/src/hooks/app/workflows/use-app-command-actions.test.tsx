@@ -19,6 +19,11 @@ const hookMocks = vi.hoisted(() => ({
   selectedWorkspaceId: null as string | null,
   selectedLogicalWorkspace: null as unknown,
   activeNewWorkspaceScope: null as unknown,
+  githubRepoAuthority: {
+    data: { authorized: true, status: "ready", action: null, message: null },
+    isLoading: false,
+    isError: false,
+  } as any,
   homeTargetSelection: {
     destination: "repository",
     repositorySelection: { kind: "repository", sourceRoot: "/repo-b" },
@@ -52,6 +57,7 @@ vi.mock("@/hooks/cloud/facade/use-cloud-billing", () => ({
 }));
 
 vi.mock("@proliferate/cloud-sdk-react", () => ({
+  useGitHubRepoAuthority: () => hookMocks.githubRepoAuthority,
   useRepositories: () => ({
     data: {
       repositories: [{
@@ -198,6 +204,11 @@ describe("useAppCommandActions", () => {
     hookMocks.showToast.mockClear();
     hookMocks.selectedWorkspaceId = null;
     hookMocks.activeNewWorkspaceScope = null;
+    hookMocks.githubRepoAuthority = {
+      data: { authorized: true, status: "ready", action: null, message: null },
+      isLoading: false,
+      isError: false,
+    };
     hookMocks.homeTargetSelection.baseBranchOverride = "stale/from-other-repo";
     hookMocks.homeRepositorySelection.selectedBranchName = "main";
     webAppMocks.webApp = { available: true, baseUrl: "https://web.proliferate.com" };
@@ -224,6 +235,28 @@ describe("useAppCommandActions", () => {
       latencyFlowId: "latency-flow-1",
       repoGroupKeyToExpand: "/repo-b",
     }));
+  });
+
+  it("disables cloud workspace commands when GitHub App authority is missing", () => {
+    hookMocks.githubRepoAuthority = {
+      data: {
+        authorized: false,
+        status: "missing_user_authorization",
+        action: "authorize_user",
+        message: null,
+      },
+      isLoading: false,
+      isError: false,
+    };
+    const { result } = renderHook(() => useAppCommandActions(), { wrapper });
+
+    expect(result.current.newCloudWorkspace.disabledReason).toBe(
+      "Connect GitHub App to use cloud workspaces",
+    );
+    act(() => {
+      result.current.newCloudWorkspace.execute("shortcut");
+    });
+    expect(hookMocks.createCloudWorkspaceAndEnter).not.toHaveBeenCalled();
   });
 
   it("opens the web app with the configured base URL", () => {

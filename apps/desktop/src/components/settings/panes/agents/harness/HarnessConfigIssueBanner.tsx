@@ -5,15 +5,11 @@ import {
   configurationDetailForAgent,
 } from "@/lib/domain/agents/configuration-issues-presentation";
 import { getAgentStatusDisplay } from "@/lib/domain/agents/status-presentation";
+import type { HarnessInstallAction } from "@/hooks/agents/workflows/use-harness-install-action";
 
 interface HarnessConfigIssueBannerProps {
   agent: AgentSummary;
-  installAction?: {
-    label: string;
-    loading: boolean;
-    disabled: boolean;
-    onInstall: () => void;
-  } | null;
+  installAction?: HarnessInstallAction | null;
 }
 
 /**
@@ -25,30 +21,35 @@ export function HarnessConfigIssueBanner({
   installAction = null,
 }: HarnessConfigIssueBannerProps) {
   const status = getAgentStatusDisplay(agent, {});
+  const progress = installAction?.kind === "progress" ? installAction : null;
+  const action = installAction?.kind === "action" ? installAction : null;
 
   return (
-    <div className="flex items-start gap-3 rounded-md border-l-4 border-warning bg-warning/10 p-4">
+    <div
+      className="flex items-start gap-3 rounded-md border-l-4 border-warning bg-warning/10 p-4"
+      aria-live={progress ? "polite" : undefined}
+    >
       <span className="mt-0.5 inline-flex size-6 shrink-0 items-center justify-center text-warning">
         <ProviderIcon kind={agent.kind} className="size-4" />
       </span>
       <div className="min-w-0 flex-1 space-y-0.5">
         <p className="text-ui font-medium text-foreground">
-          {status.label}
+          {progress?.label ?? status.label}
         </p>
         <p className="text-ui-sm text-muted-foreground">
-          {configurationDetailForAgent(agent)}
+          {progress?.detail ?? configurationDetailForAgent(agent)}
         </p>
       </div>
-      {installAction ? (
+      {action ? (
         <Button
           variant="outline"
           size="sm"
-          loading={installAction.loading}
-          disabled={installAction.disabled}
-          onClick={installAction.onInstall}
+          loading={action.loading}
+          disabled={action.disabled}
+          onClick={action.onInstall}
           className="shrink-0"
         >
-          {installAction.label}
+          {action.label}
         </Button>
       ) : null}
     </div>

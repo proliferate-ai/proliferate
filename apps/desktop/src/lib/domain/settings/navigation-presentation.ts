@@ -186,6 +186,27 @@ export function getSettingsSectionForHarnessKind(
   return null;
 }
 
+/**
+ * Picks the most relevant per-harness settings page for entry points that know
+ * a preferred harness and/or the currently usable harnesses.
+ */
+export function resolveAgentSettingsLandingSection(
+  preferredHarnessKind: string | null | undefined,
+  fallbackHarnessKinds: readonly string[],
+): SettingsSection {
+  const candidates = [preferredHarnessKind, ...fallbackHarnessKinds];
+  for (const candidate of candidates) {
+    if (!candidate) {
+      continue;
+    }
+    const section = getSettingsSectionForHarnessKind(candidate);
+    if (section) {
+      return section;
+    }
+  }
+  return "agent-claude";
+}
+
 /** Global help actions — shown at the sidebar footer regardless of scope. */
 export const SETTINGS_HELP_ITEMS: SettingsNavItem[] = [
   { kind: "action", id: "support", label: "Support", iconId: "support" },

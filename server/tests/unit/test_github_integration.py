@@ -6,7 +6,9 @@ import httpx
 import pytest
 
 from proliferate.integrations import github
+from proliferate.integrations.github import app_user_tokens
 from proliferate.integrations.github import (
+    GitHubAppInvalidGrant,
     GitHubIntegrationError,
     GitHubInvalidCursor,
     GitHubRateLimited,
@@ -36,6 +38,25 @@ class _FakeGitHubClient:
         return self.result
 
 
+class _FakeGitHubTokenClient:
+    def __init__(self, response: httpx.Response) -> None:
+        self.response = response
+
+    async def __aenter__(self) -> _FakeGitHubTokenClient:
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None:
+        return None
+
+    async def post(self, *_args: object, **_kwargs: object) -> httpx.Response:
+        return self.response
+
+
 def _github_response(status_code: int, payload: object) -> httpx.Response:
     return httpx.Response(
         status_code,
@@ -56,6 +77,31 @@ def _github_response_with_headers(
         headers=headers,
         request=httpx.Request("GET", "https://api.github.com/user/repos"),
     )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("error_code", ["bad_refresh_token", "invalid_grant"])
+async def test_refresh_github_app_token_maps_expired_credentials_to_reauth(
+    monkeypatch: pytest.MonkeyPatch,
+    error_code: str,
+) -> None:
+    response = httpx.Response(
+        400,
+        json={"error": error_code},
+        request=httpx.Request("POST", "https://github.com/login/oauth/access_token"),
+    )
+    monkeypatch.setattr(
+        app_user_tokens.httpx,
+        "AsyncClient",
+        lambda **_kwargs: _FakeGitHubTokenClient(response),
+    )
+    monkeypatch.setattr(app_user_tokens.settings, "github_app_client_id", "client-id")
+    monkeypatch.setattr(app_user_tokens.settings, "github_app_client_secret", "client-secret")
+
+    with pytest.raises(GitHubAppInvalidGrant):
+        await app_user_tokens.refresh_github_app_user_authorization(
+            refresh_token="expired-refresh-token",
+        )
 
 
 @pytest.mark.asyncio

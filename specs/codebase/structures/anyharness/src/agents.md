@@ -395,6 +395,13 @@ snapshot (`GET /v1/agents/reconcile`) to display per-agent status and refreshes 
 list as the job transitions. Missing non-seeded agents are not auto-installed at startup;
 they install on demand at session start or via an explicit per-agent install.
 
+Because reconcile executes agents sequentially, `GET /v1/agents` projects every
+still-unprocessed, install-required managed agent covered by an active reconcile as
+`installState=installing`, not only `currentAgent`. This is queued automatic work, so
+clients must present it as updating and must not offer a duplicate manual install. An
+installed-only job does not claim missing or PATH-only agents; those retain their normal
+manual/on-demand setup state.
+
 Seed hydration verifies the archive `.sha256`, validates the manifest target and
 schema, rejects unsafe tar entries, extracts into a staging directory under the
 same runtime home, preserves executable bits, and strips

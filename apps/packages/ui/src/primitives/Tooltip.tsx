@@ -19,6 +19,8 @@ export function Tooltip({
   className = "inline-flex shrink-0",
   singleLine = false,
 }: TooltipProps) {
+  const structured = !singleLine && content.includes("\n");
+
   return (
     <TooltipProvider delayDuration={0}>
       <KitTooltip>
@@ -42,7 +44,9 @@ export function Tooltip({
           className={
             singleLine
               ? "z-[70] max-w-[min(18rem,calc(100vw-1.5rem))] overflow-hidden text-ellipsis whitespace-nowrap rounded-full"
-              : "z-[70] overflow-hidden rounded-lg text-left"
+              : structured
+                ? "z-[70] overflow-hidden rounded-xl px-3 py-2.5 text-left"
+                : "z-[70] overflow-hidden rounded-lg text-left"
           }
         >
           {singleLine
@@ -50,6 +54,11 @@ export function Tooltip({
             : content.split("\n").map((line, index) => (
               <span
                 key={`${index}-${line}`}
+                className={structured
+                  ? index === 0
+                    ? "text-ui font-medium text-popover-foreground"
+                    : "mt-1 text-ui-sm font-normal leading-snug text-muted-foreground"
+                  : undefined}
                 style={{
                   display: "block",
                   maxWidth: "100%",

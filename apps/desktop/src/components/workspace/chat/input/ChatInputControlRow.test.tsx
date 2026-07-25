@@ -21,7 +21,7 @@ vi.mock("@/hooks/sessions/lifecycle/use-runtime-pressure-state", () => ({
   useRuntimePressureState: () => null,
 }));
 vi.mock("./RuntimePressureIndicator", () => ({
-  RuntimePressureIndicator: () => null,
+  RuntimePressureIndicator: () => <span data-testid="runtime-pressure" />,
 }));
 
 afterEach(() => {
@@ -163,7 +163,10 @@ describe("ChatInputControlRow", () => {
   it("renders effort bars control", () => {
     renderControlRow();
     const reasoning = screen.getByRole("button", { name: "Reasoning: Medium" });
-    expect(reasoning.getAttribute("title")?.startsWith("Reasoning: Medium")).toBe(true);
+    expect(reasoning.getAttribute("title")).toBeNull();
+    fireEvent.focus(reasoning.parentElement!);
+    expect(screen.getAllByText("Reasoning: Medium").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Click to cycle.").length).toBeGreaterThan(0);
     expect(screen.getByText("Medium").className).toContain("sr-only");
   });
 
@@ -186,7 +189,7 @@ describe("ChatInputControlRow", () => {
     expect(mode.querySelector("svg")).toBeNull();
   });
 
-  it("orders model, reasoning bars, fast mode, and working mode in the visible row", () => {
+  it("orders model, working mode, reasoning bars, and fast mode in the visible row", () => {
     renderControlRow();
 
     const model = screen.getByRole("button", { name: "Model: Opus 4.1" });
@@ -194,12 +197,56 @@ describe("ChatInputControlRow", () => {
     const fast = screen.getByRole("button", { name: "Fast mode: Slow" });
     const mode = screen.getByRole("button", { name: "Mode: Default" });
 
-    expect(model.compareDocumentPosition(reasoning) & Node.DOCUMENT_POSITION_FOLLOWING)
+    expect(model.compareDocumentPosition(mode) & Node.DOCUMENT_POSITION_FOLLOWING)
+      .toBeTruthy();
+    expect(mode.compareDocumentPosition(reasoning) & Node.DOCUMENT_POSITION_FOLLOWING)
       .toBeTruthy();
     expect(reasoning.compareDocumentPosition(fast) & Node.DOCUMENT_POSITION_FOLLOWING)
       .toBeTruthy();
-    expect(fast.compareDocumentPosition(mode) & Node.DOCUMENT_POSITION_FOLLOWING)
+  });
+
+  it("places runtime usage immediately before Add in the utility cluster", () => {
+    renderControlRow();
+
+    const pressure = screen.getByTestId("runtime-pressure");
+    const add = screen.getByRole("button", { name: "Add file" });
+    expect(pressure.compareDocumentPosition(add) & Node.DOCUMENT_POSITION_FOLLOWING)
       .toBeTruthy();
+    expect(pressure.nextElementSibling?.contains(add)).toBe(true);
+  });
+
+  it("keeps compact optimistic controls fixed while updates are pending", () => {
+    const controls = createControls().map((control) => ({
+      ...control,
+      pendingState: control.key === "effort" ? "queued" as const : "submitting" as const,
+    }));
+    const { container } = renderControlRow({
+      sessionConfigControls: controls,
+      modelSelectorProps: createModelSelectorProps({
+        currentModel: {
+          kind: "claude",
+          displayName: "Opus 4.1",
+          pendingState: "submitting",
+        },
+      }),
+    });
+
+    const model = screen.getByRole("button", { name: "Model: Opus 4.1" });
+    const mode = screen.getByRole("button", { name: "Mode: Default" });
+    const reasoning = screen.getByRole("button", { name: "Reasoning: Medium" });
+    const fast = screen.getByRole("button", { name: "Fast mode: Slow" });
+
+    expect(model.getAttribute("aria-busy")).toBe("true");
+    expect(mode.getAttribute("aria-busy")).toBe("true");
+    expect(reasoning.getAttribute("aria-busy")).toBe("true");
+    expect(fast.getAttribute("aria-busy")).toBe("true");
+    expect(mode.querySelectorAll("svg")).toHaveLength(1);
+    expect(reasoning.querySelectorAll("svg")).toHaveLength(1);
+    expect(fast.querySelectorAll("svg")).toHaveLength(1);
+    expect(container.querySelector(".animate-spin")).toBeNull();
+
+    fireEvent.focus(reasoning.parentElement!);
+    expect(screen.getAllByText("Applies after the current turn.").length).toBeGreaterThan(0);
   });
 
   it("renders plus button for file attach", () => {

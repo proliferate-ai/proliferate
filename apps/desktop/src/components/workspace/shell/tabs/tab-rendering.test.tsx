@@ -49,6 +49,29 @@ describe("renderChatTabIcon", () => {
     }));
 
     expect(html).toContain("bg-muted");
+    expect(html).toContain("data-chat-tab-icon-slot");
+    expect(html).toContain("size-4");
     expect(html).not.toContain("data-jank-canary=\"braille\"");
+  });
+
+  it("keeps the same fixed-width icon slot while a tab starts working", () => {
+    const idleHtml = renderToStaticMarkup(renderChatTabIcon({
+      agentKind: "codex",
+      viewState: "idle",
+      isResolvingSession: false,
+      delegatedAgent: null,
+    }));
+    const workingHtml = renderToStaticMarkup(renderChatTabIcon({
+      agentKind: "codex",
+      viewState: "working",
+      isResolvingSession: false,
+      delegatedAgent: null,
+    }));
+
+    expect(idleHtml).toContain("data-chat-tab-icon-slot");
+    expect(workingHtml).toContain("data-chat-tab-icon-slot");
+    expect(idleHtml).toContain("flex size-4 shrink-0 items-center justify-center");
+    expect(workingHtml).toContain("flex size-4 shrink-0 items-center justify-center");
+    expect(workingHtml).toContain("data-loading-spinner");
   });
 });

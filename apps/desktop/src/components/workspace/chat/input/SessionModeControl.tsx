@@ -2,6 +2,10 @@ import { CHAT_MODE_CONTROL_LABELS } from "@/copy/chat/chat-copy";
 import {
   resolveSessionControlPresentation,
 } from "@/lib/domain/chat/session-controls/session-mode-control";
+import {
+  isSessionControlUpdatePending,
+  resolveSessionControlTooltip,
+} from "@/lib/domain/chat/session-controls/session-control-tooltip";
 import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-controls/session-controls";
 import type { ConfiguredSessionControlKey } from "@/lib/domain/chat/session-controls/presentation";
 import { SessionControlIcon } from "@/components/session-controls/SessionControlIcon";
@@ -9,6 +13,7 @@ import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives
 import { Check, ChevronDown } from "@proliferate/ui/icons";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import { ComposerControlButton } from "@proliferate/ui/primitives/ComposerControlButton";
+import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
 import { PendingConfigIndicator } from "./PendingConfigIndicator";
 
 type ModeControlDescriptor = LiveSessionControlDescriptor & {
@@ -40,10 +45,13 @@ export function SessionModeControl({
   const triggerIcon = compactTrigger
     ? undefined
     : <SessionControlIcon icon={currentPresentation.icon} className="size-3.5" />;
-  const triggerTrailing = control.pendingState || (compactTrigger && control.settable)
+  const showPendingIndicator = !compactTrigger && control.pendingState;
+  const triggerTrailing = showPendingIndicator || (compactTrigger && control.settable)
     ? (
       <span className="flex items-center gap-1">
-        <PendingConfigIndicator pendingState={control.pendingState} />
+        {showPendingIndicator && (
+          <PendingConfigIndicator pendingState={control.pendingState} />
+        )}
         {compactTrigger && control.settable && (
           <ChevronDown
             className="size-3 shrink-0 text-[color:var(--color-composer-control-muted-foreground)]"
@@ -53,9 +61,18 @@ export function SessionModeControl({
       </span>
     )
     : null;
+  const tooltip = resolveSessionControlTooltip({
+    label: control.label,
+    value: currentOption?.label ?? currentDetail,
+    description: currentOption?.description ?? null,
+    hint: compactTrigger && control.settable
+      ? `${CHAT_MODE_CONTROL_LABELS.shortcut} cycles modes.`
+      : null,
+    pendingState: compactTrigger ? control.pendingState : null,
+  });
 
   if (!control.settable) {
-    return (
+    const trigger = (
       <ComposerControlButton
         disabled
         emphasizeLabel={triggerStyle === "value"}
@@ -66,9 +83,12 @@ export function SessionModeControl({
         className="max-w-[12rem]"
       />
     );
+    return compactTrigger
+      ? <Tooltip content={tooltip}>{trigger}</Tooltip>
+      : trigger;
   }
 
-  return (
+  const popover = (
     <PopoverButton
       trigger={
         <ComposerControlButton
@@ -77,8 +97,8 @@ export function SessionModeControl({
           label={triggerLabel}
           detail={triggerDetail}
           trailing={triggerTrailing}
-          title={`${CHAT_MODE_CONTROL_LABELS.cycleHint} (${CHAT_MODE_CONTROL_LABELS.shortcut})`}
           aria-label={`${control.label}: ${currentOption?.label ?? currentDetail ?? ""}`}
+          aria-busy={compactTrigger && isSessionControlUpdatePending(control.pendingState)}
           className="max-w-[12rem]"
         />
       }
@@ -110,4 +130,8 @@ export function SessionModeControl({
       )}
     </PopoverButton>
   );
+
+  return compactTrigger
+    ? <Tooltip content={tooltip}>{popover}</Tooltip>
+    : popover;
 }

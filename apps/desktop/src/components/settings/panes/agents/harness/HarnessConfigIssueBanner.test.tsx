@@ -21,6 +21,7 @@ it("renders the managed install action beside an install-required warning", () =
     <HarnessConfigIssueBanner
       agent={agent}
       installAction={{
+        kind: "action",
         label: "Install",
         loading: false,
         disabled: false,
@@ -34,6 +35,23 @@ it("renders the managed install action beside an install-required warning", () =
   expect(onInstall).toHaveBeenCalledOnce();
   expect(screen.getByText("Install required")).toBeTruthy();
   expect(screen.getByText("Install this managed harness to use it in this profile.")).toBeTruthy();
+});
+
+it("replaces the manual action with stable automatic-update copy", () => {
+  render(
+    <HarnessConfigIssueBanner
+      agent={{ ...agent, installState: "installing" }}
+      installAction={{
+        kind: "progress",
+        label: "Updating Codex...",
+        detail: "Proliferate is updating Codex automatically.",
+      }}
+    />,
+  );
+
+  expect(screen.getByText("Updating Codex...")).toBeTruthy();
+  expect(screen.getByText("Proliferate is updating Codex automatically.")).toBeTruthy();
+  expect(screen.queryByRole("button")).toBeNull();
 });
 
 it("keeps non-install configuration warnings actionless", () => {

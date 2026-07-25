@@ -6,11 +6,15 @@ import { SettingsEmptyState } from "@proliferate/product-ui/settings/SettingsEmp
 import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
 import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
 import { Button } from "@proliferate/ui/primitives/Button";
-import type { GitHubRepoAuthorityAction } from "@proliferate/cloud-sdk";
+import type {
+  GitHubRepoAuthorityAction,
+  GitHubRepoAuthorityResponse,
+} from "@proliferate/cloud-sdk";
 import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
 import { useGitHubAppInstallation } from "@/hooks/settings/workflows/use-github-app-installation";
 import { useGitHubAppUserAuthorization } from "@/hooks/settings/workflows/use-github-app-user-authorization";
 import { type CloudRepoEnvironmentEditor } from "@/hooks/settings/workflows/use-cloud-repo-environment-editor";
+import { resolveGitHubRepoAuthorityAction } from "@/lib/domain/workspaces/cloud/cloud-workspace-creation";
 
 // Land the GitHub authorization callback on the cloud environments settings
 // surface (the same return target the add-repo flow uses).
@@ -98,9 +102,14 @@ export function RepoCloudGate({
 
   if (editor.authority.isError) {
     return (
-      <CloudEnvironmentNotice
-        label="Access check failed"
-        description="GitHub App access for this repository could not be checked."
+      <RepoAuthorityActionState
+        title="Couldn't verify GitHub App access"
+        description="GitHub App access for this repository could not be checked. Retry before creating a cloud workspace."
+        actionLabel="Retry"
+        error={null}
+        onAction={() => {
+          void editor.authority.refetch();
+        }}
       />
     );
   }
@@ -165,7 +174,7 @@ function RepoCloudAuthorizationRequired({
   message,
   onAuthorizationReturn,
 }: {
-  status: string;
+  status: GitHubRepoAuthorityResponse["status"];
   action: GitHubRepoAuthorityAction | null;
   message: string | null;
   onAuthorizationReturn: () => void;
@@ -180,9 +189,11 @@ function RepoCloudAuthorizationRequired({
     returnTo: INSTALLATION_RETURN_TO,
     onInstallationReturn: onAuthorizationReturn,
   });
+  const effectiveAction = resolveGitHubRepoAuthorityAction({ status, action });
 
-  if (action === "authorize_user" || action === "reauthorize_user") {
-    const reconnect = action === "reauthorize_user";
+  if (effectiveAction === "authorize_user" || effectiveAction === "reauthorize_user") {
+    const reconnect = effectiveAction === "reauthorize_user"
+      || status === "missing_user_repo_access";
     const actionLabel = userAuthorization.authorizing
       ? "Opening GitHub…"
       : reconnect
@@ -206,7 +217,7 @@ function RepoCloudAuthorizationRequired({
     );
   }
 
-  if (action === "install_app" && activeOrganizationId) {
+  if (effectiveAction === "install_app" && activeOrganizationId) {
     return (
       <RepoAuthorityActionState
         title="Install Proliferate GitHub App"
@@ -222,7 +233,7 @@ function RepoCloudAuthorizationRequired({
     );
   }
 
-  if (action === "grant_repo_access") {
+  if (effectiveAction === "grant_repo_access") {
     return (
       <RepoAuthorityActionState
         title="Grant repository access"
@@ -233,6 +244,18 @@ function RepoCloudAuthorizationRequired({
         actionLabel="Grant repository access"
         error={installation.error}
         onAction={installation.openInstallationSettings}
+      />
+    );
+  }
+
+  if (status === "error") {
+    return (
+      <RepoAuthorityActionState
+        title="Couldn't verify GitHub App access"
+        description={message ?? "GitHub App access could not be checked. Retry before creating a cloud workspace."}
+        actionLabel="Retry"
+        error={null}
+        onAction={onAuthorizationReturn}
       />
     );
   }

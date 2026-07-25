@@ -99,10 +99,15 @@ showing the raw session values that required the mapping.
 The chat and Home composers use the same control partition and visible order:
 
 1. model/harness selector
-2. one reasoning-level control rendered as increasing bars (`effort` takes
+2. the primary working mode selector
+3. one reasoning-level control rendered as increasing bars (`effort` takes
    precedence over `reasoning` when both describe the same tuning dimension)
-3. `fast_mode` rendered as the zap control
-4. the primary working mode selector
+4. `fast_mode` rendered as the zap control
+
+Session utilities live in the right cluster. Goal and integration controls
+come first when present, followed by the runtime usage/pressure ring, Add,
+additional configuration, and Send/Stop. The usage ring is immediately left
+of Add so resource context and the action cluster remain visually stable.
 
 Reasoning/effort renders as bars only; its level remains available through a
 `Reasoning: <level>` tooltip and accessible label. The primary working mode is
@@ -111,8 +116,12 @@ The Fast zap remains visibly outlined when off, then fills and uses the active
 control treatment when on.
 
 Visible controls use one consistent inter-item rhythm. Compact controls must
-not reserve a trailing pending-state slot when no pending state exists; that
-empty flex child shifts icon-only controls and creates uneven visual gaps.
+never add a spinner, clock, or trailing pending-state slot to their trigger;
+optimistic values remain selected in place, while queued/saving feedback lives
+in the tooltip and accessible busy state. This keeps every neighboring control
+fixed while an update is in flight. Composer tooltips use a clear first-line
+title with quieter description, interaction hint, and transient status lines;
+do not pair those Radix tooltips with duplicate native `title` attributes.
 
 `collaboration_mode` is the primary working mode whenever it exposes a choice.
 Otherwise a legacy fused `mode` control is primary only when its choices carry

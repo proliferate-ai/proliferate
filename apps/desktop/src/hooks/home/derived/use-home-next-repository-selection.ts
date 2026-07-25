@@ -1,7 +1,10 @@
 import { useMemo } from "react";
 import type { GitBranchRef, RepoRoot, Workspace } from "@anyharness/sdk";
 import { useRepoRootGitBranchesQuery } from "@anyharness/sdk-react";
-import { useRepositories } from "@proliferate/cloud-sdk-react";
+import {
+  useGitHubRepoAuthority,
+  useRepositories,
+} from "@proliferate/cloud-sdk-react";
 import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
 import { useLogicalWorkspaces } from "@/hooks/workspaces/derived/use-logical-workspaces";
 import { useStandardRepoProjection } from "@/hooks/workspaces/derived/use-standard-repo-projection";
@@ -155,6 +158,13 @@ export function useHomeNextRepositorySelection({
     }),
     [cloudRepoConfigsInitialLoading, cloudRepoTarget, configuredCloudRepoKeys],
   );
+  const cloudRepoAuthority = useGitHubRepoAuthority(
+    {
+      gitOwner: cloudRepoTarget?.gitOwner,
+      gitRepoName: cloudRepoTarget?.gitRepoName,
+    },
+    cloudActive && repoLaunchKind === "cloud" && cloudRepoAction.kind === "create",
+  );
 
   const launchTarget = useMemo<HomeLaunchTarget | null>(() =>
     resolveHomeLaunchTarget({
@@ -185,6 +195,7 @@ export function useHomeNextRepositorySelection({
     cloudActive,
     cloudRepoAction,
     cloudRepoActionBySourceRoot,
+    cloudRepoAuthority,
     cloudRepoTarget,
     cloudRepoConfigsInitialLoading,
     launchTarget,

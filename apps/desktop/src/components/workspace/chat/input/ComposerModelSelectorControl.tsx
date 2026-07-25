@@ -17,7 +17,11 @@ import { ArrowUpRight, Check, Plus, Settings } from "@proliferate/ui/icons";
 import { ProviderIcon } from "@proliferate/ui/provider-icons";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import { ComposerPopoverSurface } from "@proliferate/product-ui/chat/composer/ComposerPopoverSurface";
-import { PendingConfigIndicator } from "./PendingConfigIndicator";
+import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
+import {
+  isSessionControlUpdatePending,
+  resolveSessionControlTooltip,
+} from "@/lib/domain/chat/session-controls/session-control-tooltip";
 
 interface ComposerModelSelectorControlProps {
   modelSelectorProps: ModelSelectorProps;
@@ -37,6 +41,12 @@ export function ComposerModelSelectorControl({
   } = modelSelectorProps;
   const selectorEnabled = connectionState === "healthy" && !isLoading && hasAgents;
   const triggerLabel = resolveTriggerLabel(modelSelectorProps);
+  const tooltip = resolveSessionControlTooltip({
+    label: "Model",
+    value: triggerLabel,
+    hint: selectorEnabled ? "Choose a model." : null,
+    pendingState: currentModel?.pendingState ?? null,
+  });
 
   // UX_SPEC S5: adding a harness routes to Settings -> per-harness agent pages.
   const handleAddProvider = useCallback(() => {
@@ -52,53 +62,55 @@ export function ComposerModelSelectorControl({
 
   if (!selectorEnabled) {
     return (
-      <ComposerControlButton
-        disabled
-        icon={currentModel ? <ProviderIcon kind={currentModel.kind} className="size-4 shrink-0" /> : undefined}
-        label={triggerLabel}
-        className="max-w-[15rem]"
-      />
+      <Tooltip content={tooltip}>
+        <ComposerControlButton
+          disabled
+          icon={currentModel ? <ProviderIcon kind={currentModel.kind} className="size-4 shrink-0" /> : undefined}
+          label={triggerLabel}
+          className="max-w-[15rem]"
+        />
+      </Tooltip>
     );
   }
 
   return (
-    <PopoverButton
-      trigger={(
-        <ComposerControlButton
-          emphasizeLabel
-          icon={currentModel ? <ProviderIcon kind={currentModel.kind} className="size-4 shrink-0" /> : undefined}
-          label={triggerLabel}
-          trailing={currentModel?.pendingState
-            ? <PendingConfigIndicator pendingState={currentModel.pendingState} />
-            : null}
-          aria-label={`Model: ${triggerLabel}`}
-          className="max-w-[15rem]"
-        />
-      )}
-      side="top"
-      align="start"
-      offset={2}
-      className="w-auto border-0 bg-transparent p-0 shadow-none"
-    >
-      {(close) => (
-        <ComposerModelPickerPopover
-          groups={groups}
-          currentModel={currentModel}
-          onSelect={(selection) => {
-            onSelect(selection);
-            close();
-          }}
-          onAddProvider={() => {
-            handleAddProvider();
-            close();
-          }}
-          onSettings={() => {
-            handleSettings();
-            close();
-          }}
-        />
-      )}
-    </PopoverButton>
+    <Tooltip content={tooltip}>
+      <PopoverButton
+        trigger={(
+          <ComposerControlButton
+            emphasizeLabel
+            icon={currentModel ? <ProviderIcon kind={currentModel.kind} className="size-4 shrink-0" /> : undefined}
+            label={triggerLabel}
+            aria-label={`Model: ${triggerLabel}`}
+            aria-busy={isSessionControlUpdatePending(currentModel?.pendingState)}
+            className="max-w-[15rem]"
+          />
+        )}
+        side="top"
+        align="start"
+        offset={2}
+        className="w-auto border-0 bg-transparent p-0 shadow-none"
+      >
+        {(close) => (
+          <ComposerModelPickerPopover
+            groups={groups}
+            currentModel={currentModel}
+            onSelect={(selection) => {
+              onSelect(selection);
+              close();
+            }}
+            onAddProvider={() => {
+              handleAddProvider();
+              close();
+            }}
+            onSettings={() => {
+              handleSettings();
+              close();
+            }}
+          />
+        )}
+      </PopoverButton>
+    </Tooltip>
   );
 }
 

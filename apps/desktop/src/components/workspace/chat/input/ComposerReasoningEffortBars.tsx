@@ -1,10 +1,12 @@
 import { useMemo } from "react";
 import { resolveReasoningEffortPresentation } from "@/lib/domain/chat/session-controls/session-reasoning-effort-control";
-import { resolveSessionControlTooltip } from "@/lib/domain/chat/session-controls/session-toggle-control";
+import {
+  isSessionControlUpdatePending,
+  resolveSessionControlTooltip,
+} from "@/lib/domain/chat/session-controls/session-control-tooltip";
 import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-controls/session-controls";
 import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
 import { LevelBarsButton } from "@proliferate/ui/primitives/LevelBarsButton";
-import { PendingConfigIndicator } from "./PendingConfigIndicator";
 
 interface ComposerReasoningEffortBarsProps {
   control: LiveSessionControlDescriptor;
@@ -27,30 +29,13 @@ export function ComposerReasoningEffortBars({ control }: ComposerReasoningEffort
   const currentLevel =
     currentPresentation.shortLabel ?? control.detail ?? control.label;
   const ariaLabel = `Reasoning: ${currentLevel}`;
-  const tooltip = resolveSessionControlTooltip(
-    "Reasoning",
-    currentLevel,
-    currentOption?.description ?? null,
-  ) + ". Click to step.";
-
-  if (control.pendingState) {
-    return (
-      <Tooltip content={tooltip}>
-        <span className="inline-flex items-center gap-1">
-          <LevelBarsButton
-            levels={levels}
-            currentIndex={effectiveIndex}
-            onStep={(nextValue: string) => control.onSelect(nextValue)}
-            iconOnly
-            disabled={!control.settable}
-            title={tooltip}
-            aria-label={ariaLabel}
-          />
-          <PendingConfigIndicator pendingState={control.pendingState} />
-        </span>
-      </Tooltip>
-    );
-  }
+  const tooltip = resolveSessionControlTooltip({
+    label: "Reasoning",
+    value: currentLevel,
+    description: currentOption?.description ?? null,
+    hint: control.settable ? "Click to cycle." : null,
+    pendingState: control.pendingState,
+  });
 
   return (
     <Tooltip content={tooltip}>
@@ -60,8 +45,8 @@ export function ComposerReasoningEffortBars({ control }: ComposerReasoningEffort
         onStep={(nextValue: string) => control.onSelect(nextValue)}
         iconOnly
         disabled={!control.settable}
-        title={tooltip}
         aria-label={ariaLabel}
+        aria-busy={isSessionControlUpdatePending(control.pendingState)}
       />
     </Tooltip>
   );

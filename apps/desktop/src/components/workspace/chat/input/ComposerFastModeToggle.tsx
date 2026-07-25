@@ -1,12 +1,14 @@
 import {
-  resolveSessionControlTooltip,
   resolveSessionToggleControlStateLabel,
 } from "@/lib/domain/chat/session-controls/session-toggle-control";
+import {
+  isSessionControlUpdatePending,
+  resolveSessionControlTooltip,
+} from "@/lib/domain/chat/session-controls/session-control-tooltip";
 import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-controls/session-controls";
 import { Zap } from "@proliferate/ui/icons";
 import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
 import { ComposerControlButton } from "@proliferate/ui/primitives/ComposerControlButton";
-import { PendingConfigIndicator } from "./PendingConfigIndicator";
 
 interface ComposerFastModeToggleProps {
   control: LiveSessionControlDescriptor;
@@ -16,11 +18,13 @@ export function ComposerFastModeToggle({ control }: ComposerFastModeToggleProps)
   const nextValue = control.isEnabled ? control.disabledValue : control.enabledValue;
   const selectedOption = control.options.find((option) => option.selected) ?? null;
   const stateLabel = resolveSessionToggleControlStateLabel("fast_mode", !!control.isEnabled);
-  const tooltip = resolveSessionControlTooltip(
-    control.label,
-    stateLabel,
-    selectedOption?.description,
-  );
+  const tooltip = resolveSessionControlTooltip({
+    label: control.label,
+    value: stateLabel,
+    description: selectedOption?.description,
+    hint: control.settable ? "Click to toggle." : null,
+    pendingState: control.pendingState,
+  });
 
   return (
     <Tooltip content={tooltip}>
@@ -39,11 +43,8 @@ export function ComposerFastModeToggle({ control }: ComposerFastModeToggleProps)
           />
         }
         label="Fast"
-        trailing={control.pendingState
-          ? <PendingConfigIndicator pendingState={control.pendingState} />
-          : null}
-        aria-label={tooltip}
-        title={tooltip}
+        aria-label={`${control.label}: ${stateLabel}`}
+        aria-busy={isSessionControlUpdatePending(control.pendingState)}
         onClick={() => {
           if (nextValue) {
             control.onSelect(nextValue);

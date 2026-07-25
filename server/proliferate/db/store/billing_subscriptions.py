@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -15,6 +16,16 @@ from proliferate.constants.billing import (
 )
 from proliferate.db.models.billing import BillingHold, BillingSubject, BillingSubscription
 from proliferate.utils.time import utcnow
+
+
+@dataclass(frozen=True)
+class ProPeriodGrantCandidate:
+    billing_subject_id: UUID
+    user_id: UUID | None
+    stripe_subscription_id: str
+    current_period_start: datetime
+    current_period_end: datetime
+    seat_quantity: int | None
 
 
 def coerce_utc(value: datetime | None) -> datetime | None:
@@ -59,6 +70,49 @@ async def list_subscriptions(
         )
         .scalars()
         .all()
+    )
+
+
+async def list_current_pro_period_grant_candidates(
+    db: AsyncSession,
+    *,
+    pro_monthly_price_id: str,
+    now: datetime,
+) -> tuple[ProPeriodGrantCandidate, ...]:
+    """Return paid periods that are safe to reconcile from persisted Stripe state."""
+    if not pro_monthly_price_id:
+        return ()
+    current_time = coerce_utc(now) or now
+    rows = (
+        await db.execute(
+            select(BillingSubscription, BillingSubject.user_id)
+            .join(
+                BillingSubject,
+                BillingSubject.id == BillingSubscription.billing_subject_id,
+            )
+            .where(
+                BillingSubscription.status.in_(["active", "trialing"]),
+                BillingSubscription.cloud_monthly_price_id == pro_monthly_price_id,
+                BillingSubscription.current_period_start.is_not(None),
+                BillingSubscription.current_period_start <= current_time,
+                BillingSubscription.current_period_end.is_not(None),
+                BillingSubscription.current_period_end > current_time,
+            )
+            .order_by(BillingSubscription.created_at.asc())
+        )
+    ).all()
+    return tuple(
+        ProPeriodGrantCandidate(
+            billing_subject_id=subscription.billing_subject_id,
+            user_id=user_id,
+            stripe_subscription_id=subscription.stripe_subscription_id,
+            current_period_start=subscription.current_period_start,
+            current_period_end=subscription.current_period_end,
+            seat_quantity=subscription.seat_quantity,
+        )
+        for subscription, user_id in rows
+        if subscription.current_period_start is not None
+        and subscription.current_period_end is not None
     )
 
 

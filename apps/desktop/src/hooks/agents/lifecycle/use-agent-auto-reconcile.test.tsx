@@ -5,7 +5,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { useAgentAutoReconcile } from "./use-agent-auto-reconcile";
 
 const mocks = vi.hoisted(() => ({
+  connectionState: "healthy",
   invalidateAgentListResources: vi.fn(),
+  invalidateAgentSetupResources: vi.fn(),
   useAgentCatalog: vi.fn(),
   useHarnessConnectionStore: vi.fn(),
   useRuntimeHealthQuery: vi.fn(),
@@ -22,6 +24,7 @@ vi.mock("@/stores/sessions/harness-connection-store", () => ({
 vi.mock("@/hooks/access/anyharness/agents/use-agent-resources-cache", () => ({
   useAgentResourcesCache: () => ({
     invalidateAgentListResources: mocks.invalidateAgentListResources,
+    invalidateAgentSetupResources: mocks.invalidateAgentSetupResources,
   }),
 }));
 
@@ -51,16 +54,81 @@ describe("useAgentAutoReconcile", () => {
     rerender();
 
     await waitFor(() => {
+      expect(mocks.invalidateAgentSetupResources).toHaveBeenCalledTimes(1);
+    });
+    expect(mocks.invalidateAgentSetupResources)
+      .toHaveBeenLastCalledWith("http://runtime.test");
+    expect(mocks.invalidateAgentListResources).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps agents fresh as the automatic reconcile runs and completes", async () => {
+    arrange();
+    setRuntimeHealth("ready", 1);
+    setAgentCatalog({
+      isReconciling: true,
+      reconcileDataUpdatedAt: 1,
+      reconcileStatus: "running",
+    });
+
+    const { rerender } = renderHook(() => useAgentAutoReconcile());
+
+    await waitFor(() => {
+      expect(mocks.invalidateAgentListResources).toHaveBeenCalledTimes(1);
+    });
+
+    setAgentCatalog({
+      isReconciling: false,
+      reconcileDataUpdatedAt: 2,
+      reconcileStatus: "completed",
+    });
+    rerender();
+
+    await waitFor(() => {
       expect(mocks.invalidateAgentListResources).toHaveBeenCalledTimes(2);
     });
-    expect(mocks.invalidateAgentListResources)
-      .toHaveBeenLastCalledWith("http://runtime.test");
+  });
+
+  it("refreshes a stale idle snapshot when the first health response is already settled", async () => {
+    arrange();
+    setRuntimeHealth("ready", 1, "idle");
+
+    renderHook(() => useAgentAutoReconcile());
+
+    await waitFor(() => {
+      expect(mocks.invalidateAgentSetupResources).toHaveBeenCalledOnce();
+    });
+    expect(mocks.invalidateAgentSetupResources)
+      .toHaveBeenCalledWith("http://runtime.test");
+  });
+
+  it("treats a same-url sidecar restart as a new health observation", async () => {
+    arrange();
+    setRuntimeHealth("ready", 1);
+
+    const { rerender } = renderHook(() => useAgentAutoReconcile());
+
+    await waitFor(() => {
+      expect(mocks.invalidateAgentSetupResources).toHaveBeenCalledOnce();
+    });
+
+    mocks.connectionState = "connecting";
+    rerender();
+    mocks.invalidateAgentSetupResources.mockClear();
+
+    mocks.connectionState = "healthy";
+    rerender();
+
+    await waitFor(() => {
+      expect(mocks.invalidateAgentSetupResources).toHaveBeenCalledOnce();
+    });
   });
 
 });
 
 function arrange() {
+  mocks.connectionState = "healthy";
   mocks.invalidateAgentListResources.mockResolvedValue(undefined);
+  mocks.invalidateAgentSetupResources.mockResolvedValue(undefined);
   mocks.useHarnessConnectionStore.mockImplementation((
     selector: (state: {
       connectionState: string;
@@ -68,7 +136,7 @@ function arrange() {
     }) => unknown,
   ) =>
     selector({
-      connectionState: "healthy",
+      connectionState: mocks.connectionState,
       runtimeUrl: "http://runtime.test",
     })
   );
@@ -96,11 +164,18 @@ function setAgentCatalog(
   });
 }
 
-function setRuntimeHealth(status: string, dataUpdatedAt: number) {
+function setRuntimeHealth(
+  status: string,
+  dataUpdatedAt: number,
+  reconcileStatus: string = "idle",
+) {
   mocks.useRuntimeHealthQuery.mockReturnValue({
     data: {
       agentSeed: {
         status,
+      },
+      agentReconcile: {
+        status: reconcileStatus,
       },
     },
     dataUpdatedAt,

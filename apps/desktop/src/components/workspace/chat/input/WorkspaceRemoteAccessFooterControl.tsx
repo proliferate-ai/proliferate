@@ -1,4 +1,4 @@
-import { Smartphone, Spinner } from "@proliferate/ui/icons";
+import { Smartphone } from "@proliferate/ui/icons";
 import { useWorkspaceShellActions } from "@/components/workspace/shell/providers/WorkspaceShellActionsContext";
 import { ComposerControlButton } from "@proliferate/ui/primitives/ComposerControlButton";
 
@@ -14,10 +14,11 @@ export function WorkspaceRemoteAccessFooterControl() {
 
   return (
     <ComposerControlButton
-      icon={isPending ? <Spinner className="size-3.5" /> : <Smartphone className="size-3.5" />}
-      label={isPending ? "Updating access" : label}
+      icon={<Smartphone className="size-3.5" />}
+      label={label}
       active={isEnabled}
       disabled={disabled}
+      aria-busy={isPending}
       onClick={handleClick}
       title={title}
       className="shrink-0"

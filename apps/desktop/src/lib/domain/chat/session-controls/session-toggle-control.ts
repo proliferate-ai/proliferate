@@ -34,12 +34,3 @@ export function resolveSessionToggleControlStateLabel(
       return isEnabled ? "Fast" : "Slow";
   }
 }
-
-export function resolveSessionControlTooltip(
-  label: string,
-  detail: string | null,
-  description?: string | null,
-): string {
-  const title = detail ? `${label}: ${detail}` : label;
-  return description ? `${title} — ${description}` : title;
-}

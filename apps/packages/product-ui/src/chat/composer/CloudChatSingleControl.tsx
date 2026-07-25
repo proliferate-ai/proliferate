@@ -10,7 +10,6 @@ import {
 } from "./CloudChatComposerControlModel";
 import {
   ComposerControlMenuRows,
-  PendingComposerConfigIndicator,
   iconNodeForComposerControl,
 } from "./CloudChatComposerControlParts";
 import type { CloudChatComposerControlView } from "./CloudChatComposerView";
@@ -52,7 +51,7 @@ export function CloudChatSingleControl({
         icon={icon}
         label={displayLabel}
         detail={displayDetail}
-        trailing={<PendingComposerConfigIndicator pendingState={control.pendingState ?? null} />}
+        aria-busy={Boolean(control.pendingState)}
         className="max-w-[12rem]"
       />
     );
@@ -66,16 +65,14 @@ export function CloudChatSingleControl({
         label={displayLabel}
         detail={displayDetail}
         trailing={(
-          <span className="flex items-center gap-1">
-            <PendingComposerConfigIndicator pendingState={control.pendingState ?? null} />
-            <ChevronDown
-              size={12}
-              className="shrink-0 text-[color:var(--color-composer-control-muted-foreground)]"
-            />
-          </span>
+          <ChevronDown
+            size={12}
+            className="shrink-0 text-[color:var(--color-composer-control-muted-foreground)]"
+          />
         )}
         aria-haspopup="menu"
         aria-expanded={open}
+        aria-busy={Boolean(control.pendingState)}
         aria-label={`${control.label}: ${displayLabel}${displayDetail ? `, ${displayDetail}` : ""}`}
         data-state={open ? "open" : "closed"}
         className="max-w-[12rem]"

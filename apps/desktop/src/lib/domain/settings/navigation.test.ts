@@ -81,6 +81,18 @@ describe("settings navigation", () => {
     });
   });
 
+  it("redirects the legacy Agents scope link to the first harness page", () => {
+    expect(resolveSettingsSelection({
+      rawSection: "agents",
+      repositories: [],
+    })).toEqual({
+      activeSection: "agent-claude",
+      activeRepoSourceRoot: null,
+      focus: {},
+      joinOrganizationId: null,
+    });
+  });
+
   it("falls unknown sections back to general", () => {
     expect(resolveSettingsSelection({
       rawSection: "unknown",
@@ -105,12 +117,12 @@ describe("settings navigation", () => {
     });
   });
 
-  it("falls parked budget settings links back to general", () => {
+  it("resolves organization usage and limits settings", () => {
     expect(resolveSettingsSelection({
       rawSection: "organization-limits",
       repositories: [],
     })).toEqual({
-      activeSection: "general",
+      activeSection: "organization-limits",
       activeRepoSourceRoot: null,
       focus: {},
       joinOrganizationId: null,
@@ -349,9 +361,9 @@ describe("settings navigation", () => {
       rawTarget: "target-1",
       repositories: [],
     })).toEqual({
-      activeSection: "agent-authentication",
+      activeSection: "general",
       activeRepoSourceRoot: null,
-      focus: { target: "target-1" },
+      focus: {},
       joinOrganizationId: null,
     });
   });

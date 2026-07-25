@@ -426,6 +426,17 @@ async def test_create_github_app_installation_url_uses_app_slug_and_state(
     monkeypatch.setattr(service.settings, "github_app_slug", "proliferate-dev")
     org_user = _OrgUser(actor_user_id=uuid.uuid4(), organization_id=uuid.uuid4())
 
+    async def fake_ensure_fresh_github_app_authorization(db: object, *, user_id: uuid.UUID):
+        del db
+        assert user_id == org_user.actor_user_id
+        return SimpleNamespace(access_token="ghu_actor")
+
+    monkeypatch.setattr(
+        service,
+        "ensure_fresh_github_app_authorization",
+        fake_ensure_fresh_github_app_authorization,
+    )
+
     response = await service.create_github_app_installation_url(
         object(),
         org_user=org_user,
@@ -445,6 +456,17 @@ async def test_create_github_app_installation_url_allows_desktop_environment_ret
     monkeypatch.setattr(service.settings, "github_app_slug", "proliferate-dev")
     org_user = _OrgUser(actor_user_id=uuid.uuid4(), organization_id=uuid.uuid4())
 
+    async def fake_ensure_fresh_github_app_authorization(db: object, *, user_id: uuid.UUID):
+        del db
+        assert user_id == org_user.actor_user_id
+        return SimpleNamespace(access_token="ghu_actor")
+
+    monkeypatch.setattr(
+        service,
+        "ensure_fresh_github_app_authorization",
+        fake_ensure_fresh_github_app_authorization,
+    )
+
     response = await service.create_github_app_installation_url(
         object(),
         org_user=org_user,
@@ -454,3 +476,37 @@ async def test_create_github_app_installation_url_allows_desktop_environment_ret
     assert response.installation_url.startswith(
         "https://github.com/apps/proliferate-dev/installations/new?state="
     )
+
+
+@pytest.mark.asyncio
+async def test_create_github_app_installation_url_requires_fresh_user_authorization(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(service.settings, "github_app_slug", "proliferate-dev")
+    org_user = _OrgUser(actor_user_id=uuid.uuid4(), organization_id=uuid.uuid4())
+
+    async def fake_ensure_fresh_github_app_authorization(db: object, *, user_id: uuid.UUID):
+        del db
+        assert user_id == org_user.actor_user_id
+        raise CloudApiError(
+            "github_app_authorization_expired",
+            "Reconnect the Proliferate GitHub App before using GitHub Cloud repos.",
+            status_code=409,
+        )
+
+    monkeypatch.setattr(
+        service,
+        "ensure_fresh_github_app_authorization",
+        fake_ensure_fresh_github_app_authorization,
+    )
+
+    with pytest.raises(CloudApiError) as excinfo:
+        await service.create_github_app_installation_url(
+            object(),
+            org_user=org_user,
+            return_to="proliferate://settings/organization",
+        )
+
+    assert excinfo.value.code == "github_app_authorization_expired"
+    assert excinfo.value.status_code == 409
+    assert excinfo.value.message.startswith("Reconnect the Proliferate GitHub App")

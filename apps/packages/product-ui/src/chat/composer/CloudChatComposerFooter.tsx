@@ -3,7 +3,6 @@ import {
   Cloud,
   ExternalLink,
   GitBranch,
-  Loader2,
   Smartphone,
   Sparkles,
   Users,
@@ -106,9 +105,7 @@ export function CloudChatComposerFooter({
               icon={copied ? <Check size={14} /> : <Icon size={14} />}
               label={control.label}
               detail={control.detail}
-              trailing={control.pending ? (
-                <Loader2 size={12} className="shrink-0 animate-spin text-muted-foreground/70" />
-              ) : undefined}
+              aria-busy={Boolean(control.pending)}
               aria-label={copied ? copiedFeedbackLabel(control) : undefined}
               className={tooltip ? "w-full max-w-full" : "max-w-full shrink-0 sm:max-w-[18rem]"}
               data-telemetry-mask

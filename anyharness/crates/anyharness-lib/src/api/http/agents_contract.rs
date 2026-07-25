@@ -14,7 +14,7 @@ use crate::domains::agents::auth::login_terminal::{
     AgentLoginTerminalStatus as InternalAgentLoginTerminalStatus,
 };
 use crate::domains::agents::installer::reconcile::execution::{
-    AgentReconcileJobSnapshot, AgentReconcileJobStatus,
+    is_installed_only_reconcile_eligible, AgentReconcileJobSnapshot, AgentReconcileJobStatus,
 };
 use crate::domains::agents::installer::reconcile::{
     AgentReconcileOutcome, AgentReconcileResult as InternalAgentReconcileResult,
@@ -219,13 +219,10 @@ fn to_install_state(
     reconcile_snapshot: Option<&AgentReconcileJobSnapshot>,
 ) -> AgentInstallState {
     if let Some(snapshot) = reconcile_snapshot {
-        if matches!(
+        let active = matches!(
             snapshot.status,
             AgentReconcileJobStatus::Queued | AgentReconcileJobStatus::Running
-        ) && snapshot.current_agent.as_ref() == Some(&resolved.descriptor.kind)
-        {
-            return AgentInstallState::Installing;
-        }
+        );
 
         let latest_result = snapshot
             .results
@@ -237,12 +234,112 @@ fn to_install_state(
         {
             return AgentInstallState::Failed;
         }
+
+        let is_current = snapshot.current_agent.as_ref() == Some(&resolved.descriptor.kind);
+        let pending_install_required =
+            matches!(resolved.status, ResolvedAgentStatus::InstallRequired)
+                && latest_result.is_none()
+                && (!snapshot.installed_only || is_installed_only_reconcile_eligible(resolved));
+        if active && (is_current || pending_install_required) {
+            return AgentInstallState::Installing;
+        }
     }
 
     if matches!(resolved.status, ResolvedAgentStatus::InstallRequired) {
         AgentInstallState::InstallRequired
     } else {
         AgentInstallState::Installed
+    }
+}
+
+#[cfg(test)]
+mod install_state_tests {
+    use super::*;
+    use crate::domains::agents::installer::reconcile::{
+        AgentReconcileOutcome, AgentReconcileResult,
+    };
+    use crate::domains::agents::registry;
+
+    fn managed_codex() -> ResolvedAgent {
+        ResolvedAgent {
+            descriptor: registry::descriptor("codex").expect("codex descriptor"),
+            status: ResolvedAgentStatus::InstallRequired,
+            credential_state: CredentialState::Ready,
+            auth_slots: Vec::new(),
+            cli_auth_state: Some(CliAuthState::Authenticated),
+            native: Some(ResolvedArtifact {
+                role: ArtifactRole::NativeCli,
+                installed: true,
+                source: Some("managed".into()),
+                version: Some("old-native".into()),
+                path: Some("/tmp/codex".into()),
+                message: None,
+            }),
+            agent_process: ResolvedArtifact {
+                role: ArtifactRole::AgentProcess,
+                installed: true,
+                source: Some("managed".into()),
+                version: Some("old-adapter".into()),
+                path: Some("/tmp/codex-acp".into()),
+                message: None,
+            },
+            spawn: None,
+        }
+    }
+
+    fn running_installed_only_snapshot() -> AgentReconcileJobSnapshot {
+        AgentReconcileJobSnapshot {
+            status: AgentReconcileJobStatus::Running,
+            job_id: Some("startup-reconcile".into()),
+            reinstall: false,
+            installed_only: true,
+            current_agent: Some(AgentKind::Claude),
+            results: Vec::new(),
+            started_at: None,
+            finished_at: None,
+            message: None,
+        }
+    }
+
+    #[test]
+    fn queued_managed_agent_projects_as_installing_before_its_sequential_turn() {
+        let resolved = managed_codex();
+        let snapshot = running_installed_only_snapshot();
+
+        assert_eq!(
+            to_install_state(&resolved, Some(&snapshot)),
+            AgentInstallState::Installing
+        );
+    }
+
+    #[test]
+    fn installed_only_job_does_not_claim_an_unmanaged_agent() {
+        let mut resolved = managed_codex();
+        resolved.native.as_mut().expect("native").source = Some("path".into());
+        resolved.agent_process.source = Some("path".into());
+        let snapshot = running_installed_only_snapshot();
+
+        assert_eq!(
+            to_install_state(&resolved, Some(&snapshot)),
+            AgentInstallState::InstallRequired
+        );
+    }
+
+    #[test]
+    fn processed_failed_agent_projects_as_failed_while_later_agents_continue() {
+        let resolved = managed_codex();
+        let mut snapshot = running_installed_only_snapshot();
+        snapshot.results.push(AgentReconcileResult {
+            kind: AgentKind::Codex,
+            outcome: AgentReconcileOutcome::Failed,
+            message: Some("download failed".into()),
+            installed_artifacts: Vec::new(),
+        });
+
+        assert_eq!(
+            to_install_state(&resolved, Some(&snapshot)),
+            AgentInstallState::Failed
+        );
     }
 }
 

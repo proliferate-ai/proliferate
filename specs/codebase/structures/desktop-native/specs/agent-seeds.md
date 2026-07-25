@@ -146,6 +146,16 @@ Ownership can be:
 Desktop should not start reconcile while seed status is `hydrating`. After
 hydration, reconcile can install non-seeded or still-missing agents.
 
+While the runtime-owned startup reconcile is active, Desktop agent settings
+present covered agents as automatic update progress and do not offer a
+competing manual Install action. Seed health does not identify covered agents
+until hydration finishes, so during hydration install-required panes and
+runtime-backed model sections use honest, non-agent-specific local setup
+progress rather than claiming that a particular harness is being installed.
+Install options return when hydration finishes. Runtime-backed model refresh
+also waits for the local sidecar and selected agent to become ready; a
+connecting or updating runtime is not reported as a missing runtime.
+
 For dev runtimes with `not_configured_dev`, reconcile should remain a manual
 setup action. Local dev without a seed must not silently kick off long network
 installs at app boot.

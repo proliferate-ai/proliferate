@@ -15,7 +15,8 @@ import {
   getShortcutHandler,
   runShortcutHandler,
 } from "@/lib/domain/shortcuts/registry";
-import { useSupportModalStore } from "@/stores/support/support-modal-store";
+
+const supportMocks = vi.hoisted(() => ({ openBug: vi.fn() }));
 
 vi.mock("@/components/app/sidebar/SidebarAccountFooter", () => ({
   SidebarAccountFooter: () => <div data-testid="sidebar-account-footer" />,
@@ -34,6 +35,10 @@ vi.mock("@/hooks/support/derived/use-support-report-snapshot", () => ({
     defaultWorkspaceId: null,
     workspaceOptions: [],
   }),
+}));
+
+vi.mock("@/hooks/support/workflows/use-open-support-report-window", () => ({
+  useOpenSupportReportWindow: () => ({ openBug: supportMocks.openBug }),
 }));
 
 vi.mock("@/hooks/agents/derived/use-agent-catalog", () => ({
@@ -101,15 +106,11 @@ function renderSettingsSidebar({
 }
 
 describe("SettingsSidebar support modal", () => {
-  it("opens the feedback modal from Support", async () => {
+  it("opens the support report flow from Support", () => {
     renderSettingsSidebar();
 
     fireEvent.click(screen.getByRole("button", { name: "Support" }));
-
-    await waitFor(() => {
-      expect(useSupportModalStore.getState().open).toBe(true);
-      expect(useSupportModalStore.getState().kind).toBe("bug");
-    });
+    expect(supportMocks.openBug).toHaveBeenCalledOnce();
   });
 });
 
@@ -159,7 +160,6 @@ describe("SettingsSidebar layout and shortcuts", () => {
       "OpenCode",
       "Grok",
       "API keys",
-      "Defaults",
     ];
     let previousIndex = -1;
     for (const label of expectedOrder) {
@@ -289,6 +289,31 @@ describe("SettingsSidebar layout and shortcuts", () => {
       digit: 2,
     })).toBe(true);
     expect(onSelectSection).toHaveBeenLastCalledWith("general");
+  });
+
+  it("numbers Org sections in their visible sidebar order", () => {
+    vi.stubGlobal("navigator", {
+      platform: "MacIntel",
+      userAgent: "Mac OS X",
+    });
+
+    renderSettingsSidebar({ activeScope: "org", activeSection: "organization" });
+
+    const expectedRows = [
+      ["Organization settings", "⌘1"],
+      ["Members", "⌘2"],
+      ["Billing", "⌘3"],
+      ["Usage & limits", "⌘4"],
+      ["Organization secrets", "⌘5"],
+      ["Integrations", "⌘6"],
+      ["Model policy", "⌘7"],
+      ["Single sign-on", "⌘8"],
+    ] as const;
+
+    for (const [name, shortcut] of expectedRows) {
+      expect(screen.getByRole("button", { name: new RegExp(`^${name}`) }).textContent)
+        .toContain(shortcut);
+    }
   });
 
   it("keeps disabled sections in numbering but declines their shortcut", async () => {

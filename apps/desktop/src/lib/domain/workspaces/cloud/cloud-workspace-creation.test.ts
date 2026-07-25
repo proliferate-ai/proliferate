@@ -10,6 +10,9 @@ import {
   isCloudWorkspaceBranchConflictError,
   isCreateCloudWorkspaceRequest,
   resolveCloudRepoActionState,
+  resolveGitHubRepoAuthorityAction,
+  resolveGitHubRepoAuthorityActionLabel,
+  resolveGitHubRepoAuthorityBlockedReason,
   resolveCloudWorkspaceCreateFailureMessage,
 } from "./cloud-workspace-creation";
 
@@ -111,6 +114,36 @@ describe("cloud workspace creation helpers", () => {
     expect(actions["/repos/rocket"]).toEqual({ kind: "create", label: "New cloud workspace" });
     expect(actions["/repos/draft"]).toEqual({ kind: "configure", label: "Configure cloud" });
     expect(actions["/repos/local-only"]).toEqual({ kind: "hidden", label: null });
+  });
+
+  it("keeps GitHub App authority failures actionable when an older server omits action", () => {
+    const missingInstallation = {
+      authorized: false,
+      status: "missing_installation" as const,
+      action: null,
+      message: null,
+    };
+
+    expect(resolveGitHubRepoAuthorityAction(missingInstallation)).toBe("install_app");
+    expect(resolveGitHubRepoAuthorityActionLabel(missingInstallation)).toBe("Install GitHub App");
+    expect(resolveGitHubRepoAuthorityBlockedReason(missingInstallation)).toBe(
+      "Install GitHub App for this repository",
+    );
+  });
+
+  it("fails closed with retry copy when GitHub App authority cannot be checked", () => {
+    const unavailable = {
+      authorized: false,
+      status: "error" as const,
+      action: null,
+      message: "Could not refresh GitHub App authorization.",
+    };
+
+    expect(resolveGitHubRepoAuthorityAction(unavailable)).toBeNull();
+    expect(resolveGitHubRepoAuthorityActionLabel(unavailable)).toBe("Retry");
+    expect(resolveGitHubRepoAuthorityBlockedReason(unavailable)).toBe(
+      "Could not refresh GitHub App authorization.",
+    );
   });
 
   it("derives taken slugs from the active branch prefix only", () => {

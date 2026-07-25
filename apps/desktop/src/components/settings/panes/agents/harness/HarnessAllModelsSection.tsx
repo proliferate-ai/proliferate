@@ -1,14 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { AgentAuthSurface } from "@proliferate/cloud-sdk";
 import {
-  useAgentCatalog,
+  useAgentCatalog as useCloudAgentCatalog,
   useRefreshAgentCatalog,
   useAuthSelections,
   useUpsertCatalogOverride,
 } from "@proliferate/cloud-sdk-react";
 import {
   useAgentGatewayModelsQuery,
-  useAgentLaunchOptionsQuery,
   useRefreshAgentGatewayModelsMutation,
 } from "@anyharness/sdk-react";
 import { RefreshCw, Search, X } from "@proliferate/ui/icons";
@@ -17,6 +16,8 @@ import { Input } from "@proliferate/ui/primitives/Input";
 import { ModelTable, type ModelTableRow } from "@proliferate/product-ui/settings/ModelTable";
 import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
 import { HARNESS_PANE_COPY } from "@/copy/settings/harness-pane";
+import { useLocalAgentLaunchOptions } from "@/hooks/access/anyharness/agents/use-local-agent-launch-options";
+import { useAgentCatalog as useLocalAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
 import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
 import { useToastStore } from "@/stores/toast/toast-store";
 import {
@@ -59,21 +60,48 @@ export function HarnessAllModelsSection({
   // these routes, so Refresh sources one from the local AnyHarness runtime's
   // already-resolved launch catalog instead (see buildRuntimeCatalogModelsJson).
   const isRuntimeProbedRoute = route !== "gateway";
+  const requiresLocalRuntime = isRuntimeGateway || isRuntimeProbedRoute || isSignedOutLocal;
 
-  const catalogQuery = useAgentCatalog(
+  const catalogQuery = useCloudAgentCatalog(
     { harnessKind, surface, route },
     cloudActive && !isRuntimeGateway,
   );
   const refreshCatalog = useRefreshAgentCatalog();
   const upsertOverride = useUpsertCatalogOverride();
+  const {
+    query: runtimeLaunchOptionsQuery,
+    availability: localRuntimeAvailability,
+    isAgentSeedHydrating,
+  } = useLocalAgentLaunchOptions(
+    isRuntimeProbedRoute || isSignedOutLocal,
+    requiresLocalRuntime,
+  );
+  const { agentsByKind } = useLocalAgentCatalog();
+  const isAgentUpdating = agentsByKind.get(harnessKind)?.installState === "installing";
+  const runtimeSetupPending = isAgentSeedHydrating || isAgentUpdating;
 
   const gatewayModelsQuery = useAgentGatewayModelsQuery(harnessKind, {
-    enabled: cloudActive && isRuntimeGateway,
+    enabled:
+      cloudActive
+      && isRuntimeGateway
+      && localRuntimeAvailability === "ready"
+      && !runtimeSetupPending,
   });
   const refreshGatewayModels = useRefreshAgentGatewayModelsMutation();
-  const runtimeLaunchOptionsQuery = useAgentLaunchOptionsQuery({
-    enabled: isRuntimeProbedRoute || isSignedOutLocal,
-  });
+  const runtimeRefreshBlocked =
+    requiresLocalRuntime
+    && (localRuntimeAvailability !== "ready" || runtimeSetupPending);
+  const runtimeStatusLine = !requiresLocalRuntime
+    ? null
+    : isAgentUpdating
+      ? HARNESS_PANE_COPY.localAgentModelsUpdating(displayName)
+      : isAgentSeedHydrating
+        ? HARNESS_PANE_COPY.localAgentSetupFinishing
+        : localRuntimeAvailability === "connecting"
+          ? HARNESS_PANE_COPY.localRuntimeStarting
+          : localRuntimeAvailability === "unavailable"
+            ? HARNESS_PANE_COPY.localRuntimeUnavailable
+            : null;
 
   const models = useMemo(() => {
     if (isSignedOutLocal) {
@@ -119,8 +147,22 @@ export function HarnessAllModelsSection({
   }
 
   function handleRefresh() {
+    void refreshModels();
+  }
+
+  async function refreshModels() {
+    if (runtimeRefreshBlocked) {
+      return;
+    }
     if (isSignedOutLocal) {
-      void runtimeLaunchOptionsQuery.refetch();
+      const result = await runtimeLaunchOptionsQuery.refetch();
+      if (result.isError) {
+        showToast(HARNESS_PANE_COPY.catalogRefreshRuntimeUnavailable(displayName));
+        return;
+      }
+      if (normalizeRuntimeLaunchModels(harnessKind, result.data).length === 0) {
+        showToast(HARNESS_PANE_COPY.catalogRefreshAgentNotReady(displayName));
+      }
       return;
     }
     if (isRuntimeGateway) {
@@ -132,12 +174,17 @@ export function HarnessAllModelsSection({
       return;
     }
     if (isRuntimeProbedRoute) {
+      const runtimeResult = await runtimeLaunchOptionsQuery.refetch();
+      if (runtimeResult.isError) {
+        showToast(HARNESS_PANE_COPY.catalogRefreshRuntimeUnavailable(displayName));
+        return;
+      }
       const modelsJson = buildRuntimeCatalogModelsJson(
         harnessKind,
-        runtimeLaunchOptionsQuery.data,
+        runtimeResult.data,
       );
       if (modelsJson === null) {
-        showToast(HARNESS_PANE_COPY.catalogRefreshRuntimeUnavailable(displayName));
+        showToast(HARNESS_PANE_COPY.catalogRefreshAgentNotReady(displayName));
         return;
       }
       refreshCatalog.mutate(
@@ -186,7 +233,9 @@ export function HarnessAllModelsSection({
     ? runtimeLaunchOptionsQuery.isFetching
     : isRuntimeGateway
       ? refreshGatewayModels.isPending
-      : refreshCatalog.isPending;
+      : isRuntimeProbedRoute
+        ? runtimeLaunchOptionsQuery.isFetching || refreshCatalog.isPending
+        : refreshCatalog.isPending;
 
   // Auto-probe an empty catalog: landing on a resolved-but-empty catalog kicks
   // off the same refresh the button uses, exactly once per (harnessKind, surface,
@@ -201,7 +250,13 @@ export function HarnessAllModelsSection({
     isRuntimeProbedRoute
     && buildRuntimeCatalogModelsJson(harnessKind, runtimeLaunchOptionsQuery.data) === null;
   useEffect(() => {
-    if (!cloudActive || isLoading || isRefreshing || models.length > 0) {
+    if (
+      !cloudActive
+      || isLoading
+      || isRefreshing
+      || runtimeRefreshBlocked
+      || models.length > 0
+    ) {
       return;
     }
     if (autoProbedScopeRef.current === autoProbeScope) {
@@ -216,6 +271,7 @@ export function HarnessAllModelsSection({
     cloudActive,
     isLoading,
     isRefreshing,
+    runtimeRefreshBlocked,
     models.length,
     autoProbeScope,
     runtimeModelsUnavailable,
@@ -223,21 +279,24 @@ export function HarnessAllModelsSection({
   // Empty catalog with a probe in flight (auto or manual) shows the probing state
   // instead of the static empty copy.
   const isProbingEmpty = models.length === 0 && isRefreshing;
-  const freshnessLine = isSignedOutLocal
+  const catalogFreshnessLine = isSignedOutLocal
     ? ""
     : isRuntimeGateway
-    ? gatewayModelsQuery.data
-      ? gatewayModelsQuery.data.source === "probe" && gatewayModelsQuery.data.probedAt
-        ? HARNESS_PANE_COPY.allModelsFreshnessProbed(
-          new Date(gatewayModelsQuery.data.probedAt).toLocaleString(),
-        )
-        : HARNESS_PANE_COPY.allModelsFreshnessSeed
-      : ""
-    : catalogQuery.data?.probedAt
-      ? `Last refreshed ${new Date(catalogQuery.data.probedAt).toLocaleString()}`
-      : catalogQuery.data?.source
-        ? `Source: ${catalogQuery.data.source}`
-        : "";
+      ? gatewayModelsQuery.data
+        ? gatewayModelsQuery.data.source === "probe" && gatewayModelsQuery.data.probedAt
+          ? HARNESS_PANE_COPY.allModelsFreshnessProbed(
+            new Date(gatewayModelsQuery.data.probedAt).toLocaleString(),
+          )
+          : HARNESS_PANE_COPY.allModelsFreshnessSeed
+        : ""
+      : catalogQuery.data?.probedAt
+        ? `Last refreshed ${new Date(catalogQuery.data.probedAt).toLocaleString()}`
+        : catalogQuery.data?.source
+          ? `Source: ${catalogQuery.data.source}`
+          : "";
+  const freshnessLine = runtimeStatusLine && models.length > 0
+    ? runtimeStatusLine
+    : catalogFreshnessLine;
 
   const [filterText, setFilterText] = useState("");
   const filteredRows = useMemo(() => {
@@ -262,7 +321,7 @@ export function HarnessAllModelsSection({
             variant="ghost"
             size="sm"
             className="gap-2"
-            disabled={isRefreshing}
+            disabled={isRefreshing || runtimeRefreshBlocked}
             onClick={handleRefresh}
           >
             <RefreshCw
@@ -305,7 +364,11 @@ export function HarnessAllModelsSection({
           </div>
         ) : null}
 
-        {isLoading ? (
+        {runtimeRefreshBlocked && models.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            {runtimeStatusLine}
+          </p>
+        ) : isLoading ? (
           <p className="text-sm text-muted-foreground">
             {HARNESS_PANE_COPY.allModelsLoading}
           </p>

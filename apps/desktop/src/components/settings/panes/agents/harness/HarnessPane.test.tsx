@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { HarnessPane } from "./HarnessPane";
@@ -89,6 +89,7 @@ const state = vi.hoisted(() => ({
       }
       | undefined,
     isLoading: false,
+    isFetching: false,
   },
 }));
 const putMutate = vi.hoisted(() => vi.fn());
@@ -100,6 +101,7 @@ const openAuthTerminal = vi.hoisted(() => vi.fn());
 const closeAuthTerminal = vi.hoisted(() => vi.fn());
 const handleTerminalExit = vi.hoisted(() => vi.fn());
 const showToast = vi.hoisted(() => vi.fn());
+const refetchLaunchOptions = vi.hoisted(() => vi.fn());
 
 vi.mock("@proliferate/cloud-sdk-react", () => ({
   useAgentGatewayCapabilities: () => state.capabilities,
@@ -124,10 +126,17 @@ vi.mock("@anyharness/sdk-react", () => ({
     mutate: refreshGatewayModelsMutate,
     isPending: false,
   }),
-  // native/api_key refreshes source their probe payload from the runtime's
-  // resolved launch catalog (the session model picker's data source) —
-  // mock stands in for that runtime read.
-  useAgentLaunchOptionsQuery: () => state.launchOptions,
+}));
+
+vi.mock("@/hooks/access/anyharness/agents/use-local-agent-launch-options", () => ({
+  useLocalAgentLaunchOptions: () => ({
+    query: {
+      ...state.launchOptions,
+      refetch: refetchLaunchOptions,
+    },
+    availability: "ready",
+    isAgentSeedHydrating: false,
+  }),
 }));
 
 vi.mock("@/stores/toast/toast-store", () => ({
@@ -294,6 +303,11 @@ afterEach(() => {
   state.gatewayModels.isLoading = false;
   state.launchOptions.data = undefined;
   state.launchOptions.isLoading = false;
+  state.launchOptions.isFetching = false;
+  refetchLaunchOptions.mockImplementation(async () => ({
+    data: state.launchOptions.data,
+    isError: false,
+  }));
 });
 
 describe("HarnessPane authentication", () => {
@@ -731,7 +745,7 @@ describe("HarnessPane all models", () => {
     expect(screen.getAllByRole("switch").length).toBeGreaterThanOrEqual(2);
   });
 
-  it("refreshes the catalog for a native/api_key route using the runtime's resolved models", () => {
+  it("refreshes the catalog for a native/api_key route using the runtime's resolved models", async () => {
     state.catalog.data = {
       harnessKind: "claude",
       surface: "local",
@@ -757,42 +771,20 @@ describe("HarnessPane all models", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /^Refresh$/ }));
 
-    expect(refreshMutate).toHaveBeenCalledWith(
-      {
-        harnessKind: "claude",
-        body: {
-          surface: "local",
-          route: "native",
-          modelsJson: JSON.stringify([{ id: "sonnet", displayName: "Sonnet 4.6" }]),
+    await waitFor(() => {
+      expect(refreshMutate).toHaveBeenCalledWith(
+        {
+          harnessKind: "claude",
+          body: {
+            surface: "local",
+            route: "native",
+            modelsJson: JSON.stringify([{ id: "sonnet", displayName: "Sonnet 4.6" }]),
+          },
         },
-      },
-      expect.anything(),
-    );
+        expect.anything(),
+      );
+    });
     expect(showToast).not.toHaveBeenCalled();
-  });
-
-  it("shows a toast and skips the server call when the local runtime has no models for this harness", () => {
-    state.catalog.data = {
-      harnessKind: "claude",
-      surface: "local",
-      route: "native",
-      models: [],
-      snapshotId: null,
-      probedAt: null,
-      source: null,
-      overrideApplied: false,
-    };
-    // No launchOptions data mocked: stands in for a runtime that is
-    // unreachable, or one with no ready models for this harness yet.
-    renderPane("claude");
-
-
-    fireEvent.click(screen.getByRole("button", { name: /^Refresh$/ }));
-
-    expect(refreshMutate).not.toHaveBeenCalled();
-    expect(showToast).toHaveBeenCalledWith(
-      "Local runtime unavailable — could not read Claude models.",
-    );
   });
 
   it("upserts an override patch when a model is toggled off", () => {

@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import { useMutation } from "@tanstack/react-query";
+import { useValidateGitHubRepoAuthority } from "@proliferate/cloud-sdk-react";
 import type {
   CloudWorkspaceDetail,
   CreateCloudWorkspaceRequest,
@@ -13,6 +14,7 @@ import {
   buildCloudWorkspaceAttemptFromRequest,
   type CloudWorkspaceRepoTarget,
   isCloudWorkspaceBranchConflictError,
+  resolveGitHubRepoAuthorityBlockedReason,
   resolveCloudWorkspaceCreateFailureMessage,
 } from "@/lib/domain/workspaces/cloud/cloud-workspace-creation";
 import {
@@ -102,6 +104,8 @@ export function useCreateCloudWorkspace() {
     authUserId: authUser?.id ?? null,
   });
   const { upsertCloudWorkspace } = useWorkspaceCollectionsMutationCache(runtimeUrl);
+  const validateGitHubRepoAuthority = useValidateGitHubRepoAuthority();
+  const { mutateAsync: validateGitHubRepoAuthorityMutation } = validateGitHubRepoAuthority;
 
   const createMutation = useMutation<CloudWorkspaceDetail, Error, Parameters<typeof createCloudWorkspace>[0]>({
     meta: {
@@ -128,6 +132,24 @@ export function useCreateCloudWorkspace() {
   }): Promise<CloudWorkspaceEntryResult> => {
     const startedAt = startLatencyTimer();
     const repoLabel = `${args.target.gitOwner}/${args.target.gitRepoName}`;
+    try {
+      const authority = await validateGitHubRepoAuthorityMutation({
+        gitOwner: args.target.gitOwner,
+        gitRepoName: args.target.gitRepoName,
+      });
+      const blockedReason = resolveGitHubRepoAuthorityBlockedReason(authority);
+      if (blockedReason) {
+        return { status: "interrupted", failureMessage: blockedReason };
+      }
+    } catch (error) {
+      return {
+        status: "interrupted",
+        failureMessage: resolveCloudWorkspaceCreateFailureMessage(
+          error,
+          "Couldn't verify GitHub App access.",
+        ),
+      };
+    }
     const attemptId = createPendingWorkspaceAttemptId();
     const cloudWorkspaces = getWorkspaceCollections()?.cloudWorkspaces ?? [];
     const knownBranchNames = collectKnownCloudBranchNames({
@@ -308,13 +330,14 @@ export function useCreateCloudWorkspace() {
     getWorkspaceCollections,
     selectWorkspace,
     setPendingWorkspaceEntry,
+    validateGitHubRepoAuthorityMutation,
   ]);
 
   const createCloudWorkspaceAndEnter = useCallback(async (
     target: CloudWorkspaceRepoTarget,
     options?: CreateCloudWorkspaceAndEnterOptions,
   ) => {
-    await runCloudWorkspaceCreateFlow({
+    return runCloudWorkspaceCreateFlow({
       target,
       allowConflictRetry: true,
       repoGroupKeyToExpand: options?.repoGroupKeyToExpand,
@@ -350,6 +373,7 @@ export function useCreateCloudWorkspace() {
     createCloudWorkspaceAndEnter,
     createCloudWorkspaceAndEnterWithResult,
     retryCloudWorkspaceAndEnter,
-    isCreatingCloudWorkspace: createMutation.isPending,
+    isCreatingCloudWorkspace:
+      createMutation.isPending || validateGitHubRepoAuthority.isPending,
   };
 }

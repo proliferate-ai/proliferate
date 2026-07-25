@@ -48,6 +48,26 @@ variable "e2b_template_name" {
   default = ""
 }
 
+variable "github_app_id" {
+  default = ""
+}
+
+variable "github_app_slug" {
+  default = ""
+}
+
+variable "github_app_client_id" {
+  default = ""
+}
+
+variable "github_app_callback_base_url" {
+  default = ""
+}
+
+variable "github_app_secret_arn" {
+  default = ""
+}
+
 variable "telemetry_mode" {
   default = "hosted_product"
 }
@@ -381,6 +401,22 @@ resource "aws_iam_role_policy_attachment" "ecs_execution" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
+data "aws_iam_policy_document" "github_app_secret" {
+  count = var.github_app_secret_arn == "" ? 0 : 1
+
+  statement {
+    actions   = ["secretsmanager:GetSecretValue"]
+    resources = [var.github_app_secret_arn]
+  }
+}
+
+resource "aws_iam_role_policy" "github_app_secret" {
+  count  = var.github_app_secret_arn == "" ? 0 : 1
+  name   = "managed-cloud-github-app-secret"
+  role   = aws_iam_role.ecs_execution.id
+  policy = data.aws_iam_policy_document.github_app_secret[0].json
+}
+
 data "aws_iam_policy_document" "support_tracker_secret_parameters" {
   count = length(local.support_tracker_secret_parameter_arns) == 0 ? 0 : 1
 
@@ -628,9 +664,16 @@ resource "aws_ecs_task_definition" "server" {
         { name = "JWT_SECRET", value = var.jwt_secret },
         { name = "E2B_API_KEY", value = var.e2b_api_key },
         { name = "E2B_TEMPLATE_NAME", value = var.e2b_template_name },
+        { name = "GITHUB_APP_ID", value = var.github_app_id },
+        { name = "GITHUB_APP_SLUG", value = var.github_app_slug },
+        { name = "GITHUB_APP_CLIENT_ID", value = var.github_app_client_id },
+        { name = "GITHUB_APP_CALLBACK_BASE_URL", value = var.github_app_callback_base_url },
         # Billing enforcement in production: pause/deny over-limit + spend-hold
         # sandboxes (reconciler + live resume gate). config.py defaults to "off".
         { name = "CLOUD_BILLING_MODE", value = "enforce" },
+        # Hosted subscriptions use numeric Pro grants. Leaving this unset makes
+        # every paid subscription fall back to the legacy unlimited policy.
+        { name = "PRO_BILLING_ENABLED", value = "true" },
         { name = "PROLIFERATE_TELEMETRY_MODE", value = var.telemetry_mode },
         { name = "SENTRY_DSN", value = var.sentry_dsn },
         { name = "SENTRY_ENVIRONMENT", value = var.sentry_environment },
@@ -675,6 +718,20 @@ resource "aws_ecs_task_definition" "server" {
       ]
 
       secrets = concat(
+        var.github_app_secret_arn == "" ? [] : [
+          {
+            name      = "GITHUB_APP_CLIENT_SECRET"
+            valueFrom = "${var.github_app_secret_arn}:GITHUB_APP_CLIENT_SECRET::"
+          },
+          {
+            name      = "GITHUB_APP_WEBHOOK_SECRET"
+            valueFrom = "${var.github_app_secret_arn}:GITHUB_APP_WEBHOOK_SECRET::"
+          },
+          {
+            name      = "GITHUB_APP_PRIVATE_KEY"
+            valueFrom = "${var.github_app_secret_arn}:GITHUB_APP_PRIVATE_KEY::"
+          }
+        ],
         local.support_github_app_private_key_parameter_name == "" ? [] : [
           {
             name      = "SUPPORT_GITHUB_APP_PRIVATE_KEY"

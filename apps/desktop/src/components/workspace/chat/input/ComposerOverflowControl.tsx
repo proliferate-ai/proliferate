@@ -5,9 +5,11 @@ import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-con
 import { ComposerControlButton } from "@proliferate/ui/primitives/ComposerControlButton";
 import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
+import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
 import { Check, MoreHorizontal } from "@proliferate/ui/icons";
 import { ComposerPopoverSurface } from "@proliferate/product-ui/chat/composer/ComposerPopoverSurface";
 import { PendingConfigIndicator } from "./PendingConfigIndicator";
+import { resolveSessionControlTooltip } from "@/lib/domain/chat/session-controls/session-control-tooltip";
 
 interface ComposerOverflowControlProps {
   agentKind: string | null;
@@ -23,33 +25,37 @@ export function ComposerOverflowControl({
   }
 
   return (
-    <PopoverButton
-      trigger={(
-        <ComposerControlButton
-          iconOnly
-          icon={<MoreHorizontal className="size-4" />}
-          label="More options"
-          title="More configuration options"
-          aria-label="More configuration options"
-        />
-      )}
-      side="top"
-      align="end"
-      offset={8}
-      className="w-auto border-0 bg-transparent p-0 shadow-none"
-    >
-      {() => (
-        <ComposerPopoverSurface className="w-56 p-1">
-          {controls.map((control) => (
-            <OverflowControlSection
-              key={control.key}
-              agentKind={agentKind}
-              control={control}
-            />
-          ))}
-        </ComposerPopoverSurface>
-      )}
-    </PopoverButton>
+    <Tooltip content={resolveSessionControlTooltip({
+      label: "More options",
+      description: "Permissions and additional agent settings.",
+    })}>
+      <PopoverButton
+        trigger={(
+          <ComposerControlButton
+            iconOnly
+            icon={<MoreHorizontal className="size-4" />}
+            label="More options"
+            aria-label="More configuration options"
+          />
+        )}
+        side="top"
+        align="end"
+        offset={8}
+        className="w-auto border-0 bg-transparent p-0 shadow-none"
+      >
+        {() => (
+          <ComposerPopoverSurface className="w-56 p-1">
+            {controls.map((control) => (
+              <OverflowControlSection
+                key={control.key}
+                agentKind={agentKind}
+                control={control}
+              />
+            ))}
+          </ComposerPopoverSurface>
+        )}
+      </PopoverButton>
+    </Tooltip>
   );
 }
 

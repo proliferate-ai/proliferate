@@ -24,6 +24,7 @@ import { useOpenSupportReportWindow } from "@/hooks/support/workflows/use-open-s
 import { useSupportMenuAction } from "@/hooks/support/derived/use-support-menu-action";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
+import { buildSettingsHref } from "@/lib/domain/settings/navigation";
 import type {
   OrganizationInvitationRecord,
   OrganizationRecord,
@@ -235,7 +236,7 @@ export function SidebarAccountFooter() {
                     icon={<CreditCard className="size-4" />}
                     trailing={<span>{planLabel}</span>}
                     onClick={() => {
-                      navigate("/settings");
+                      navigate(buildSettingsHref({ section: "billing" }));
                       close();
                     }}
                   />
@@ -260,7 +261,7 @@ export function SidebarAccountFooter() {
                   icon={<Settings className="size-4" />}
                   trailing={<span>{getShortcutDisplayLabel(SHORTCUTS.openSettings)}</span>}
                   onClick={() => {
-                    navigate("/settings");
+                    navigate(buildSettingsHref({ section: "account" }));
                     close();
                   }}
                 />

@@ -9,6 +9,7 @@ import { useHomeNextModelSelection } from "@/hooks/home/derived/use-home-next-mo
 import { useHomeNextModeSelection } from "@/hooks/home/derived/use-home-next-mode-selection";
 import { useHomeNextRepositorySelection } from "@/hooks/home/derived/use-home-next-repository-selection";
 import { useComputeTargetOptions } from "@/hooks/compute/derived/use-compute-target-options";
+import { resolveGitHubRepoAuthorityBlockedReason } from "@/lib/domain/workspaces/cloud/cloud-workspace-creation";
 
 interface UseHomeNextStateArgs {
   destination: HomeNextDestination;
@@ -91,6 +92,21 @@ export function useHomeNextState({
       if (repository.cloudRepoAction.kind !== "create") {
         return "Cloud is unavailable for this repository";
       }
+      if (repository.cloudRepoAuthority.isLoading) {
+        return "Checking GitHub App access";
+      }
+      if (repository.cloudRepoAuthority.isError) {
+        return "Couldn't check GitHub App access";
+      }
+      if (!repository.cloudRepoAuthority.data) {
+        return "Checking GitHub App access";
+      }
+      const authorityBlockedReason = resolveGitHubRepoAuthorityBlockedReason(
+        repository.cloudRepoAuthority.data,
+      );
+      if (authorityBlockedReason) {
+        return authorityBlockedReason;
+      }
     }
 
     if (repoLaunchKind === "ssh") {
@@ -120,6 +136,9 @@ export function useHomeNextState({
     repository.branchQuery.isLoading,
     repository.cloudActive,
     repository.cloudRepoAction.kind,
+    repository.cloudRepoAuthority.data,
+    repository.cloudRepoAuthority.isError,
+    repository.cloudRepoAuthority.isLoading,
     repository.cloudRepoTarget,
     repository.launchTarget,
     repository.selectedBranchName,

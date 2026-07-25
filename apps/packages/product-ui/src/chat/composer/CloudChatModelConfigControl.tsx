@@ -15,7 +15,6 @@ import {
 import {
   ComposerControlMenuRows,
   ComposerMenuSeparator,
-  PendingComposerConfigIndicator,
   iconNodeForComposerControl,
 } from "./CloudChatComposerControlParts";
 import type { CloudChatComposerControlView } from "./CloudChatComposerView";
@@ -41,7 +40,7 @@ export function CloudChatModelConfigControl({
     : null;
   const activeConfigSubmenuControl = configControls.find((control) => control.id === activeSubmenuId) ?? null;
   const showSubmenuRows = configControls.length > 0;
-  const pendingState = controls.find((control) => control.pendingState)?.pendingState ?? null;
+  const updatePending = controls.some((control) => Boolean(control.pendingState));
   const disabled = composerDisabled || controls.every(isControlDisabled);
   const triggerLabel = selectedModel?.label ?? modelControl?.detail ?? modelControl?.label ?? "Configure";
   const triggerDetail = summarizeComposerModelConfigControls(configControls);
@@ -62,16 +61,14 @@ export function CloudChatModelConfigControl({
         label={triggerLabel}
         detail={triggerDetail}
         trailing={(
-          <span className="flex items-center gap-1">
-            <PendingComposerConfigIndicator pendingState={pendingState} />
-            <ChevronDown
-              size={12}
-              className="shrink-0 text-[color:var(--color-composer-control-muted-foreground)]"
-            />
-          </span>
+          <ChevronDown
+            size={12}
+            className="shrink-0 text-[color:var(--color-composer-control-muted-foreground)]"
+          />
         )}
         aria-haspopup="menu"
         aria-expanded={open}
+        aria-busy={updatePending}
         aria-label={`Model and configuration: ${triggerLabel}${triggerDetail ? `, ${triggerDetail}` : ""}`}
         data-state={open ? "open" : "closed"}
         className="max-w-[18rem]"
