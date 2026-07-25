@@ -78,6 +78,14 @@ const SubagentsUxPlaygroundPage = import.meta.env.DEV
     )
   : null
 
+const WorkflowsMockPlaygroundPage = import.meta.env.DEV
+  ? lazy(() =>
+      import("@/pages/WorkflowsMockPlaygroundPage").then((m) => ({
+        default: m.WorkflowsMockPlaygroundPage,
+      })),
+    )
+  : null
+
 // Thin product route/UI tree. Shared and Desktop lifecycle wiring lives above
 // this component in `ProductLifecycleRoot`, which also owns the single
 // `AppErrorBoundary` enclosing both the lifecycle hooks and this tree; `App`
@@ -170,6 +178,16 @@ function App() {
               element={
                 <Suspense fallback={null}>
                   <SubagentsUxPlaygroundPage />
+                </Suspense>
+              }
+            />
+          )}
+          {import.meta.env.DEV && WorkflowsMockPlaygroundPage && (
+            <Route
+              path="/playground/workflows"
+              element={
+                <Suspense fallback={null}>
+                  <WorkflowsMockPlaygroundPage />
                 </Suspense>
               }
             />
