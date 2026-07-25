@@ -16,21 +16,25 @@ Agent distribution answers five questions for the coding-agent harnesses
 
 Everything downstream (auth selection, model pickers, session launch) consumes this platform's answers.
 
-Boundaries: the auth split is declare vs apply. This platform owns
-*declaring* a harness's auth vocabulary — the registry's per-harness auth
-slots, env var names, discovery kinds, and login policy, plus the
-catalog's probed auth contexts — and the readiness states computed from
-them. *Applying* a credential belongs to agent-auth: which source the
-user selects (native / gateway / API key), `state.json` materialization,
-and any harness-specific application glue (env injection at spawn,
-harness config rewriting, per-harness quirks in
-`anyharness-lib/src/domains/agents/route_auth/`). Adding a new harness
-therefore touches both: its auth vocabulary is a `registry.json` edit
-here; how those slots get filled and switched is agent-auth's contract.
-Model snapshot freshness and picker-facing model data belong to the
-model catalog. Gateway model lists belong to the
-[model gateway](model-gateway.md); this platform knows only whether a
-harness supports the gateway route, never which models it serves.
+Boundaries — the auth split is declare vs apply:
+
+- **This platform *declares* auth vocabulary**: the registry's per-harness
+  auth slots, env var names, discovery kinds, and login policy, plus the
+  catalog's probed auth contexts — and the readiness states computed from
+  them.
+- **Agent-auth *applies* a credential**: which source the user selects
+  (native / gateway / API key), `state.json` materialization, and the
+  harness-specific application glue (env injection at spawn, harness
+  config rewriting, per-harness quirks in
+  `anyharness-lib/src/domains/agents/route_auth/`).
+- **A new harness touches both**: its auth vocabulary is a `registry.json`
+  edit here; how those slots get filled and switched is agent-auth's
+  contract.
+- **Model snapshot freshness and picker-facing model data** belong to the
+  model catalog.
+- **Gateway model lists** belong to the [model gateway](model-gateway.md);
+  this platform knows only whether a harness supports the gateway route,
+  never which models it serves.
 
 ## The two documents
 
