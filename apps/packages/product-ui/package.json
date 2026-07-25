@@ -75,37 +75,9 @@
       "types": "./dist/account/AccountPasswordCredentialCard.d.ts",
       "import": "./dist/account/AccountPasswordCredentialCard.js"
     },
-    "./auth/AuthLayout": {
-      "types": "./dist/auth/AuthLayout.d.ts",
-      "import": "./dist/auth/AuthLayout.js"
-    },
-    "./auth/ConnectGitHubPanel": {
-      "types": "./dist/auth/ConnectGitHubPanel.d.ts",
-      "import": "./dist/auth/ConnectGitHubPanel.js"
-    },
-    "./auth/AuthStartPanel": {
-      "types": "./dist/auth/AuthStartPanel.d.ts",
-      "import": "./dist/auth/AuthStartPanel.js"
-    },
-    "./auth/PasswordCredentialForm": {
-      "types": "./dist/auth/PasswordCredentialForm.d.ts",
-      "import": "./dist/auth/PasswordCredentialForm.js"
-    },
-    "./auth/ConnectGitHubRequiredPanel": {
-      "types": "./dist/auth/ConnectGitHubRequiredPanel.d.ts",
-      "import": "./dist/auth/ConnectGitHubRequiredPanel.js"
-    },
-    "./auth/GoogleGlyph": {
-      "types": "./dist/auth/GoogleGlyph.d.ts",
-      "import": "./dist/auth/GoogleGlyph.js"
-    },
     "./auth/ProviderBrandIcon": {
       "types": "./dist/auth/ProviderBrandIcon.d.ts",
       "import": "./dist/auth/ProviderBrandIcon.js"
-    },
-    "./auth/LegalLinks": {
-      "types": "./dist/auth/LegalLinks.d.ts",
-      "import": "./dist/auth/LegalLinks.js"
     },
     "./auth/RedirectCallbackScreen": {
       "types": "./dist/auth/RedirectCallbackScreen.d.ts",

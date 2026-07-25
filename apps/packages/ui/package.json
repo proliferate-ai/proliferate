@@ -15,10 +15,6 @@
       "types": "./dist/icons.d.ts",
       "import": "./dist/icons.js"
     },
-    "./layout/AppShell": {
-      "types": "./dist/layout/AppShell.d.ts",
-      "import": "./dist/layout/AppShell.js"
-    },
     "./layout/AutoHideScrollArea": {
       "types": "./dist/layout/AutoHideScrollArea.d.ts",
       "import": "./dist/layout/AutoHideScrollArea.js"
@@ -27,10 +23,6 @@
       "types": "./dist/layout/EmptyState.d.ts",
       "import": "./dist/layout/EmptyState.js"
     },
-    "./layout/EnvironmentLayout": {
-      "types": "./dist/layout/EnvironmentLayout.d.ts",
-      "import": "./dist/layout/EnvironmentLayout.js"
-    },
     "./layout/FixedPositionLayer": {
       "types": "./dist/layout/FixedPositionLayer.d.ts",
       "import": "./dist/layout/FixedPositionLayer.js"
@@ -38,10 +30,6 @@
     "./layout/ListRow": {
       "types": "./dist/layout/ListRow.d.ts",
       "import": "./dist/layout/ListRow.js"
-    },
-    "./layout/ListSurface": {
-      "types": "./dist/layout/ListSurface.d.ts",
-      "import": "./dist/layout/ListSurface.js"
     },
     "./layout/PageContentFrame": {
       "types": "./dist/layout/PageContentFrame.d.ts",
@@ -63,21 +51,9 @@
       "types": "./dist/layout/RowActionIconButton.d.ts",
       "import": "./dist/layout/RowActionIconButton.js"
     },
-    "./layout/SectionHeader": {
-      "types": "./dist/layout/SectionHeader.d.ts",
-      "import": "./dist/layout/SectionHeader.js"
-    },
     "./layout/ShortcutBadge": {
       "types": "./dist/layout/ShortcutBadge.d.ts",
       "import": "./dist/layout/ShortcutBadge.js"
-    },
-    "./layout/SidebarFrame": {
-      "types": "./dist/layout/SidebarFrame.d.ts",
-      "import": "./dist/layout/SidebarFrame.js"
-    },
-    "./layout/SidebarNavItem": {
-      "types": "./dist/layout/SidebarNavItem.d.ts",
-      "import": "./dist/layout/SidebarNavItem.js"
     },
     "./layout/SidebarNavRow": {
       "types": "./dist/layout/SidebarNavRow.d.ts",
@@ -90,10 +66,6 @@
     "./layout/SidebarActionButton": {
       "types": "./dist/layout/SidebarActionButton.d.ts",
       "import": "./dist/layout/SidebarActionButton.js"
-    },
-    "./layout/SizedPanel": {
-      "types": "./dist/layout/SizedPanel.d.ts",
-      "import": "./dist/layout/SizedPanel.js"
     },
     "./overlays/overlay-presence": {
       "types": "./dist/overlays/overlay-presence.d.ts",
@@ -122,10 +94,6 @@
     "./primitives/Checkbox": {
       "types": "./dist/primitives/Checkbox.d.ts",
       "import": "./dist/primitives/Checkbox.js"
-    },
-    "./primitives/CollapsibleSummaryRow": {
-      "types": "./dist/primitives/CollapsibleSummaryRow.d.ts",
-      "import": "./dist/primitives/CollapsibleSummaryRow.js"
     },
     "./primitives/CommandPalette": {
       "types": "./dist/primitives/CommandPalette.d.ts",
@@ -159,10 +127,6 @@
       "types": "./dist/primitives/EnvironmentSearchSelect.d.ts",
       "import": "./dist/primitives/EnvironmentSearchSelect.js"
     },
-    "./primitives/GridTile": {
-      "types": "./dist/primitives/GridTile.d.ts",
-      "import": "./dist/primitives/GridTile.js"
-    },
     "./primitives/IconButton": {
       "types": "./dist/primitives/IconButton.d.ts",
       "import": "./dist/primitives/IconButton.js"
@@ -186,10 +150,6 @@
     "./primitives/PopoverSearchField": {
       "types": "./dist/primitives/PopoverSearchField.d.ts",
       "import": "./dist/primitives/PopoverSearchField.js"
-    },
-    "./primitives/PillControlButton": {
-      "types": "./dist/primitives/PillControlButton.d.ts",
-      "import": "./dist/primitives/PillControlButton.js"
     },
     "./primitives/PopoverButton": {
       "types": "./dist/primitives/PopoverButton.d.ts",
@@ -219,10 +179,6 @@
       "types": "./dist/primitives/Select.d.ts",
       "import": "./dist/primitives/Select.js"
     },
-    "./primitives/SelectionRow": {
-      "types": "./dist/primitives/SelectionRow.d.ts",
-      "import": "./dist/primitives/SelectionRow.js"
-    },
     "./primitives/SettingsMenu": {
       "types": "./dist/primitives/SettingsMenu.d.ts",
       "import": "./dist/primitives/SettingsMenu.js"
@@ -243,17 +199,9 @@
       "types": "./dist/primitives/ThinkingText.d.ts",
       "import": "./dist/primitives/ThinkingText.js"
     },
-    "./primitives/Tabs": {
-      "types": "./dist/primitives/Tabs.d.ts",
-      "import": "./dist/primitives/Tabs.js"
-    },
     "./primitives/Textarea": {
       "types": "./dist/primitives/Textarea.d.ts",
       "import": "./dist/primitives/Textarea.js"
-    },
-    "./primitives/Toggle": {
-      "types": "./dist/primitives/Toggle.d.ts",
-      "import": "./dist/primitives/Toggle.js"
     },
     "./primitives/Tooltip": {
       "types": "./dist/primitives/Tooltip.d.ts",
@@ -283,17 +231,9 @@
       "types": "./dist/kit/AlertDialog.d.ts",
       "import": "./dist/kit/AlertDialog.js"
     },
-    "./kit/Avatar": {
-      "types": "./dist/kit/Avatar.d.ts",
-      "import": "./dist/kit/Avatar.js"
-    },
     "./kit/Checkbox": {
       "types": "./dist/kit/Checkbox.d.ts",
       "import": "./dist/kit/Checkbox.js"
-    },
-    "./kit/ContextMenu": {
-      "types": "./dist/kit/ContextMenu.d.ts",
-      "import": "./dist/kit/ContextMenu.js"
     },
     "./kit/Command": {
       "types": "./dist/kit/Command.d.ts",
@@ -311,21 +251,9 @@
       "types": "./dist/kit/Popover.d.ts",
       "import": "./dist/kit/Popover.js"
     },
-    "./kit/RadioGroup": {
-      "types": "./dist/kit/RadioGroup.d.ts",
-      "import": "./dist/kit/RadioGroup.js"
-    },
-    "./kit/Separator": {
-      "types": "./dist/kit/Separator.d.ts",
-      "import": "./dist/kit/Separator.js"
-    },
     "./kit/Sonner": {
       "types": "./dist/kit/Sonner.d.ts",
       "import": "./dist/kit/Sonner.js"
-    },
-    "./kit/Table": {
-      "types": "./dist/kit/Table.d.ts",
-      "import": "./dist/kit/Table.js"
     },
     "./kit/Tooltip": {
       "types": "./dist/kit/Tooltip.d.ts",
@@ -344,14 +272,10 @@
   "dependencies": {
     "@proliferate/design": "workspace:*",
     "@radix-ui/react-alert-dialog": "^1.1.19",
-    "@radix-ui/react-avatar": "^1.2.2",
     "@radix-ui/react-checkbox": "^1.3.7",
-    "@radix-ui/react-context-menu": "^2.3.3",
     "@radix-ui/react-dialog": "^1.1.19",
     "@radix-ui/react-dropdown-menu": "^2.1.20",
     "@radix-ui/react-popover": "^1.1.19",
-    "@radix-ui/react-radio-group": "^1.4.3",
-    "@radix-ui/react-separator": "^1.1.11",
     "@radix-ui/react-slot": "^1.3.0",
     "@radix-ui/react-tooltip": "^1.2.12",
     "cmdk": "^1.1.1",
