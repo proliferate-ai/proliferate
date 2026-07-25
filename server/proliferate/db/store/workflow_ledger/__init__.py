@@ -17,8 +17,9 @@ Concurrency-bearing operations and their guarantees:
 - ``acquire_session_leases``: atomic all-or-nothing reservation of every session
   for a run in one transaction, backed by the §8.2 partial unique index (one
   non-released lease per session_id).
-- ``claim_due_outbox_rows``: ``FOR UPDATE SKIP LOCKED`` claim of due pending
-  rows; a row moves pending -> delivering exactly once per claim cycle.
+- ``claim_outbox_rows`` + the fenced result CAS family (WF-OUTBOX): generation-
+  fenced, reclaimable transactional outbox — see ``outbox.py`` for the full fence
+  and authority model.
 - ``upsert_poll_inbox_item``: ``INSERT ... ON CONFLICT DO NOTHING`` over the
   ``(trigger_id, external_item_id)`` dedupe identity.
 - ``insert_gateway_receipt``: plain insert; ``activation_id`` uniqueness is the
@@ -52,15 +53,23 @@ from proliferate.db.store.workflow_ledger.observations import (
     cas_observed_snapshot,
     get_observed_snapshot,
 )
-from proliferate.db.store.workflow_ledger.outbox import (
+from proliferate.db.store.workflow_ledger.control_commands import (
     ack_control_command,
-    claim_due_outbox_rows,
-    complete_outbox_row,
     enqueue_control_command,
-    enqueue_outbox,
-    get_outbox_row,
     list_undelivered_control_commands,
     mark_control_command_delivered,
+)
+from proliferate.db.store.workflow_ledger.outbox import (
+    claim_outbox_rows,
+    complete_outbox_success,
+    complete_outbox_with_continuation,
+    dead_letter_outbox,
+    enqueue_outbox,
+    fail_outbox_terminal,
+    get_outbox_result,
+    get_outbox_row,
+    heartbeat_outbox,
+    reschedule_outbox,
 )
 from proliferate.db.store.workflow_ledger.records import (
     SESSION_LEASE_BLOCKING_STATES,
@@ -70,6 +79,8 @@ from proliferate.db.store.workflow_ledger.records import (
     GatewayReceiptRecord,
     ObservedCasResult,
     OutboxRecord,
+    OutboxResultRecord,
+    OutboxWriteResult,
     PollInboxRecord,
     SessionLeaseRecord,
 )
@@ -82,21 +93,28 @@ __all__ = [
     "GatewayReceiptRecord",
     "ObservedCasResult",
     "OutboxRecord",
+    "OutboxResultRecord",
+    "OutboxWriteResult",
     "PollInboxRecord",
     "SessionLeaseRecord",
     "ack_control_command",
     "acquire_session_leases",
     "cas_observed_snapshot",
-    "claim_due_outbox_rows",
-    "complete_outbox_row",
+    "claim_outbox_rows",
+    "complete_outbox_success",
+    "complete_outbox_with_continuation",
+    "dead_letter_outbox",
     "enqueue_control_command",
     "enqueue_outbox",
+    "fail_outbox_terminal",
     "get_action_effect",
     "get_active_session_lease",
     "get_gateway_receipt_by_activation",
     "get_observed_snapshot",
+    "get_outbox_result",
     "get_outbox_row",
     "get_poll_inbox_item",
+    "heartbeat_outbox",
     "insert_action_effect",
     "insert_capability_lease",
     "insert_gateway_receipt",
@@ -105,6 +123,7 @@ __all__ = [
     "list_session_leases_for_run",
     "list_undelivered_control_commands",
     "mark_control_command_delivered",
+    "reschedule_outbox",
     "transition_session_lease",
     "update_action_effect",
     "update_poll_inbox_item",

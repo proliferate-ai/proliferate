@@ -6,8 +6,7 @@ sit alongside the existing ``workflow_run`` / ``workflow_trigger_item`` /
 ``workflow_step_action`` tables and *nothing reads or writes them yet* except
 WS2a's own tests. WS2b/2c/3/4/7 fill them behaviourally.
 
-Each table carries the exact identity fields the shared WS1 golden fixtures
-pin, so a fixture's identity shape stores here verbatim:
+Each table carries the exact identity fields the shared WS1 golden fixtures pin:
 
 - ``ExecutionBinding`` / delivery identity (§5.2/§5.3) lives on ``workflow_run``.
 - ``CapabilityRef`` tagged union (§7.1) -> ``workflow_capability_lease``.
@@ -45,28 +44,38 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
+from proliferate.constants.workflow_outbox import (
+    FAILURE_CODE_CHECK_SQL,
+    RECEIPT_FAILURE_CODE_CHECK_SQL,
+    RESULT_KIND_CHECK_SQL,
+    STATUS_CHECK_SQL,
+    STATUS_PENDING,
+    SUBJECT_KIND_CHECK_SQL,
+)
 from proliferate.db.models.base import Base, utcnow
 
 
 class WorkflowRunOutbox(Base):
-    """Transactional outbox for workflow control-plane side effects (§6/§10.2).
+    """Generation-fenced, reclaimable transactional outbox (WF-OUTBOX; §6/§10.2).
 
-    The run intent + its outbox row commit in one transaction; a relay then
-    delivers each ``pending`` row after commit ("commit run intent and outbox
-    before delivery"). ``next_attempt_at`` gates retries; the partial due-scan
-    index is the relay's claim query.
+    The producing intent + its outbox row commit in one transaction; a relay then
+    *claims* each due row under a monotonic fence (``claim_generation`` +
+    unpredictable ``claim_id``) and an expiry lease, and every post-claim write is
+    a CAS on the exact fence. Expired claims are reclaimable by a strictly higher
+    generation; a stale claimant has zero mutation authority.
+
+    Pointer/identity-first (R10): the subject is a typed ``(subject_kind,
+    subject_id)`` pair and ``effect_key`` is an opaque, secret-free reconciliation
+    handle. There is no arbitrary-JSON payload and no free-text error column — only
+    closed ``last_failure_code`` plus an internal ``diagnostic_id`` pointer. Durable
+    per-generation result receipts live in ``WorkflowOutboxResult``.
     """
 
     __tablename__ = "workflow_run_outbox"
     __table_args__ = (
-        CheckConstraint(
-            "status IN ('pending', 'delivering', 'delivered', 'failed')",
-            name="ck_workflow_run_outbox_status",
-        ),
-        CheckConstraint(
-            "run_id IS NOT NULL OR trigger_id IS NOT NULL",
-            name="ck_workflow_run_outbox_subject",
-        ),
+        CheckConstraint(STATUS_CHECK_SQL, name="ck_workflow_run_outbox_status"),
+        CheckConstraint(SUBJECT_KIND_CHECK_SQL, name="ck_workflow_run_outbox_subject_kind"),
+        CheckConstraint(FAILURE_CODE_CHECK_SQL, name="ck_workflow_run_outbox_failure_code"),
         # The relay's due scan: pending rows whose backoff has elapsed, FIFO.
         Index(
             "ix_workflow_run_outbox_due",
@@ -75,11 +84,29 @@ class WorkflowRunOutbox(Base):
             "id",
             postgresql_where=text("status = 'pending'"),
         ),
+        # The reclaim scan: claimed rows whose lease has expired.
+        Index(
+            "ix_workflow_run_outbox_claimed_expiry",
+            "claim_expires_at",
+            postgresql_where=text("status = 'claimed'"),
+        ),
+        # Dedupe identity is namespaced per kind (R3): the same raw string under
+        # two kinds is two distinct rows. NULL dedupe_key = no dedupe.
+        Index(
+            "uq_workflow_run_outbox_dedupe",
+            "kind",
+            "dedupe_key",
+            unique=True,
+            postgresql_where=text("dedupe_key IS NOT NULL"),
+        ),
         Index("ix_workflow_run_outbox_run_id", "run_id"),
         Index("ix_workflow_run_outbox_trigger_id", "trigger_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    # Generic subject identity (R5); run_id/trigger_id are optional scoping FKs only.
+    subject_kind: Mapped[str] = mapped_column(String(32))
+    subject_id: Mapped[str] = mapped_column(String(255))
     run_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("workflow_run.id", ondelete="CASCADE"), nullable=True
     )
@@ -87,15 +114,77 @@ class WorkflowRunOutbox(Base):
         ForeignKey("workflow_trigger.id", ondelete="CASCADE"), nullable=True
     )
     kind: Mapped[str] = mapped_column(String(64))
-    payload_json: Mapped[dict[str, object]] = mapped_column(JSONB, default=dict)
-    status: Mapped[str] = mapped_column(String(32), default="pending")
+    # Opaque, secret-free handles (R3/R7/R10) — pointers, never free text.
+    effect_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    dedupe_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    status: Mapped[str] = mapped_column(String(32), default=STATUS_PENDING)
     attempt_count: Mapped[int] = mapped_column(Integer, default=0)
+    max_attempts: Mapped[int] = mapped_column(Integer, default=5, server_default="5")
     next_attempt_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Fence (D3): monotonic generation (never reset) + unpredictable per-claim id.
+    claim_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
+    claim_generation: Mapped[int] = mapped_column(
+        BigInteger, default=0, server_default="0"
+    )
+    claimed_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    claim_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_heartbeat_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # Closed failure code + internal diagnostic pointer (R10): never exception text.
+    last_failure_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    diagnostic_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
+    dead_lettered_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
     )
+
+
+class WorkflowOutboxResult(Base):
+    """Immutable per-generation result receipt for a claimed outbox row (R8/R2).
+
+    Exactly one receipt per ``(outbox_id, claim_generation)`` records that claim's
+    terminal/reschedule outcome. A same-identity result CAS retried after a lost
+    commit replays this durable receipt (distinguishable from a stale claimant),
+    even once a later generation reclaimed the row. Closed vocab + pointers only.
+    """
+
+    __tablename__ = "workflow_outbox_result"
+    __table_args__ = (
+        CheckConstraint(RESULT_KIND_CHECK_SQL, name="ck_workflow_outbox_result_kind"),
+        CheckConstraint(
+            RECEIPT_FAILURE_CODE_CHECK_SQL, name="ck_workflow_outbox_result_failure_code"
+        ),
+        UniqueConstraint(
+            "outbox_id", "claim_generation", name="uq_workflow_outbox_result_generation"
+        ),
+        Index("ix_workflow_outbox_result_outbox_id", "outbox_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    outbox_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("workflow_run_outbox.id", ondelete="CASCADE"),
+    )
+    claim_id: Mapped[uuid.UUID] = mapped_column()
+    claim_generation: Mapped[int] = mapped_column(BigInteger)
+    result_kind: Mapped[str] = mapped_column(String(32))
+    failure_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    diagnostic_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
+    effect_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # The follow-on row a fenced continuation inserted in the same txn (D8).
+    continuation_outbox_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("workflow_run_outbox.id", ondelete="SET NULL"), nullable=True
+    )
+    next_attempt_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 class WorkflowControlCommand(Base):

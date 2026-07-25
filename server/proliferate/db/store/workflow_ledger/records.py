@@ -16,6 +16,7 @@ from proliferate.db.models.cloud.workflow_ledger import (
     WorkflowCapabilityLease,
     WorkflowControlCommand,
     WorkflowGatewayReceipt,
+    WorkflowOutboxResult,
     WorkflowPollInbox,
     WorkflowRunOutbox,
     WorkflowSessionLease,
@@ -38,20 +39,63 @@ ObservedCasResult = Literal[
     "future_rejected",
 ]
 
+# Outcome of a fenced post-claim result CAS (heartbeat/complete/fail/reschedule/
+# dead-letter/continuation). ``applied`` = the CAS matched and mutated the row;
+# ``replayed`` = a same-identity retry after a lost commit returned the durable
+# receipt (R2/R8); ``stale_rejected`` = the fence did not match (rowcount 0, zero
+# side effects), never an exception (D5).
+OutboxWriteOutcome = Literal["applied", "replayed", "stale_rejected", "denied"]
+
 
 @dataclass(frozen=True)
 class OutboxRecord:
     id: UUID
+    subject_kind: str
+    subject_id: str
     run_id: UUID | None
     trigger_id: UUID | None
     kind: str
-    payload_json: dict[str, object]
+    effect_key: str | None
+    dedupe_key: str | None
     status: str
     attempt_count: int
+    max_attempts: int
     next_attempt_at: datetime
-    last_error: str | None
+    claim_id: UUID | None
+    claim_generation: int
+    claimed_by: str | None
+    claimed_at: datetime | None
+    claim_expires_at: datetime | None
+    last_heartbeat_at: datetime | None
+    last_failure_code: str | None
+    diagnostic_id: UUID | None
+    dead_lettered_at: datetime | None
     created_at: datetime
     updated_at: datetime
+
+
+@dataclass(frozen=True)
+class OutboxResultRecord:
+    id: UUID
+    outbox_id: UUID
+    claim_id: UUID
+    claim_generation: int
+    result_kind: str
+    failure_code: str | None
+    diagnostic_id: UUID | None
+    effect_key: str | None
+    continuation_outbox_id: UUID | None
+    next_attempt_at: datetime | None
+    created_at: datetime
+
+
+@dataclass(frozen=True)
+class OutboxWriteResult:
+    """Typed outcome of a fenced result CAS with its durable receipt (D5/R8)."""
+
+    outcome: OutboxWriteOutcome
+    row: OutboxRecord | None
+    receipt: OutboxResultRecord | None
 
 
 @dataclass(frozen=True)
@@ -160,16 +204,44 @@ class ActionEffectRecord:
 def record_outbox(row: WorkflowRunOutbox) -> OutboxRecord:
     return OutboxRecord(
         id=row.id,
+        subject_kind=row.subject_kind,
+        subject_id=row.subject_id,
         run_id=row.run_id,
         trigger_id=row.trigger_id,
         kind=row.kind,
-        payload_json=dict(row.payload_json or {}),
+        effect_key=row.effect_key,
+        dedupe_key=row.dedupe_key,
         status=row.status,
         attempt_count=row.attempt_count,
+        max_attempts=row.max_attempts,
         next_attempt_at=row.next_attempt_at,
-        last_error=row.last_error,
+        claim_id=row.claim_id,
+        claim_generation=row.claim_generation,
+        claimed_by=row.claimed_by,
+        claimed_at=row.claimed_at,
+        claim_expires_at=row.claim_expires_at,
+        last_heartbeat_at=row.last_heartbeat_at,
+        last_failure_code=row.last_failure_code,
+        diagnostic_id=row.diagnostic_id,
+        dead_lettered_at=row.dead_lettered_at,
         created_at=row.created_at,
         updated_at=row.updated_at,
+    )
+
+
+def record_outbox_result(row: WorkflowOutboxResult) -> OutboxResultRecord:
+    return OutboxResultRecord(
+        id=row.id,
+        outbox_id=row.outbox_id,
+        claim_id=row.claim_id,
+        claim_generation=row.claim_generation,
+        result_kind=row.result_kind,
+        failure_code=row.failure_code,
+        diagnostic_id=row.diagnostic_id,
+        effect_key=row.effect_key,
+        continuation_outbox_id=row.continuation_outbox_id,
+        next_attempt_at=row.next_attempt_at,
+        created_at=row.created_at,
     )
 
 
