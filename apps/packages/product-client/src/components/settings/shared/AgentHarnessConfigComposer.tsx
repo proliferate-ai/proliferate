@@ -65,8 +65,11 @@ export function AgentHarnessConfigComposer({
           className="pointer-events-none h-[1.125rem] min-h-[1.125rem] overflow-hidden"
         />
       </ComposerTextareaFrame>
-      <div className="mb-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-1.5 px-2">
-        <div className={`flex min-w-0 flex-wrap items-center gap-1.5 ${
+      {/* [CHAT-02] (D-V2-4): 8px control-cluster gaps, matching
+          ChatComposerControlRowFrame — this preview renders through the same
+          .chat-composer-surface, so it must read as the same control row. */}
+      <div className="mb-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-2">
+        <div className={`flex min-w-0 flex-wrap items-center gap-2 ${
           canUseControls ? "" : "pointer-events-none opacity-55"
         }`}
         >
