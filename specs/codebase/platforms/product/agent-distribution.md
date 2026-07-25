@@ -333,13 +333,41 @@ Per target and harness, the runtime answers what the product may offer
 | `Ready` | Installed, compatible, and at least one auth context is satisfied |
 
 Readiness is computed from installed artifacts plus the catalog's auth
-contexts plus detected credentials. The agent-auth route can upgrade a
+contexts plus detected credentials. One function owns the answer
+(`compute_readiness` in
+[`readiness/status.rs`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/readiness/status.rs)),
+recomputed fresh from disk on every read — no cache, so it can never be
+stale, only honest about what is on disk right now. "Installed" is file
+presence plus executable bit; the install manifest decorates the version
+string but never gates readiness. The agent-auth route can upgrade a
 credential state (a gateway selection satisfies the `gateway` context) but
 never clears `InstallRequired` or `Unsupported`; a route cannot conjure a
 binary. Launch-time validation applies the same catalog data at session
 create: an unknown model is rejected as unsupported, a model whose
 availability requires an absent auth context is rejected as gated, with
 the missing contexts named.
+
+Projection laws, each closing a way the projection could lie:
+
+- An env credential counts only if the variable is set **and non-empty**;
+  `ANTHROPIC_API_KEY=""` is absent, not present.
+- Credential detection reads only the workspace's composed env plus
+  registry-declared variables — never the host process's ambient
+  environment at large, so a global var on the machine cannot make every
+  workspace look authenticated.
+- The `Ready` gate applies at **every** live-start (create, resume,
+  fork), not only at session creation, so credentials revoked after a
+  session exists fail with the typed readiness error instead of a
+  downstream spawn failure.
+- The settings read surface and the launch path resolve readiness the
+  same way (route-aware); the UI never shows `CredentialsRequired` for a
+  harness that would launch fine.
+
+Stated boundaries: readiness is an offline judgment — a revoked but
+unexpired token reads `Ready` and fails at the vendor; and opencode's
+`provider_managed` policy is structurally always-`Ready` (it resolves
+provider auth itself at prompt time), so its real auth state is
+represented by agent-auth's selection set, not this projection.
 
 This projection is the data source for the per-harness settings surface
 (install state, auth method status, login readiness) and for launch
@@ -422,3 +450,13 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       non-`Ready` harness rather than converging it. The auto-install
       law above (full supported set, PATH and cloud-cursor carve-outs)
       is not yet implemented.
+- [ ] The readiness projection laws are not yet enforced: an empty env
+      var counts as present, the credential ladder falls back to the
+      host's ambient env unbounded
+      ([`auth/credentials.rs`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/auth/credentials.rs)),
+      the `Ready` gate runs only in `create_session` (resume/fork
+      live-starts spawn without re-checking), and `GET /v1/agents`
+      resolves native-only while launch resolves route-aware, so
+      settings and launch can disagree for routed harnesses. Also
+      known: claude's Node gate shells out uncached on every read, and
+      claude/codex lack cursor/grok's launcher-integrity guard.
