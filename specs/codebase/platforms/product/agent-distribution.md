@@ -107,32 +107,77 @@ specifier. Fail-closed rules, enforced in code
   resolved binary with the pin's baked ACP args; per-session flags are
   applied by the runtime at spawn, never baked into the launcher.
 
-Install topology differs by surface:
+Installation is automatic. Every harness supported on a surface converges
+with no user action: absent means install, drifted means reinstall, and
+both are the same mechanism — the reconcile job
+(`installer/reconcile/execution.rs`), triggered by the startup pass on
+every runtime boot (`runtime.rs::spawn_startup_pass`) and by the
+catalog-applied poke after every document swap (`catalog/sync.rs`),
+walks the supported set and installs whatever the drift planner
+(`installer/install_policy.rs`) says is absent or stale. A user
+authenticates harnesses; they never install them. Completed installs
+poke the model-snapshot reconciler ([model-catalog.md](model-catalog.md))
+so a newly converged harness re-probes its models without extra wiring.
+Two carve-outs:
+
+- An agent the user already provides on PATH is left alone: it is usable
+  through readiness as-is, and a managed install would shadow their copy.
+- Cursor never installs in cloud. It is login-only with no headless
+  credential path, so a cloud install could never reach `Ready`.
+
+Install topology per surface is then only about who pays the first
+download:
 
 | Surface | claude, codex | opencode, grok | cursor |
 | --- | --- | --- | --- |
-| Desktop | Seeded: the app bundles a prebuilt seed archive (`scripts/build-agent-seed.mjs`), hydrated into the runtime home at launch | Installed on demand from the UI or at session start | Installed on demand (local only) |
-| Cloud (E2B) | Baked into the template image at build (`scripts/build-template.mjs`) | Cold-installed at session start | Not supported in cloud |
+| Desktop | Seeded: the app bundles a prebuilt seed archive (`scripts/build-agent-seed.mjs`), hydrated into the runtime home at launch | Auto-installed in the background by the first startup pass | Auto-installed in the background (local only) |
+| Cloud (E2B) | Baked into the template image at build (`scripts/build-template.mjs`) | Auto-installed at first boot by the startup pass | Not supported in cloud |
 
 The seed and the bake are the same install run executed early; both write
 the same manifests, so the reconcile below treats seeded, baked, and
-on-demand installs identically.
+auto-installed agents identically.
 
 ## Convergence
 
-One law: an installed agent converges to the active catalog's pin whenever
-the active catalog changes. One planner enforces it
-(`installer/install_policy.rs`): compare the install manifest against the
-active pin and reinstall on drift, in precedence order requested reinstall,
-missing recorded version, version drift, checksum mismatch.
+One law: every supported agent converges to the active catalog's pin
+whenever the active catalog changes — install when absent, reinstall on
+drift. There is no "detect what changed" step anywhere: activating a
+catalog (by booting a binary or applying a pushed document) fires an
+idempotent reconcile, and the reconcile itself discovers the work by
+diffing pins against install manifests. One planner owns that diff
+(`installer/install_policy.rs`), per agent and per artifact role (the ACP
+adapter and the wrapped native CLI drift independently): compare the
+manifest's recorded version and sha256 against the active pin and
+reinstall in precedence order requested reinstall, version drift, missing
+recorded version, checksum mismatch. Drift is strictly per-pin, never
+per-document: a `catalogVersion` bump whose pin for harness X is
+unchanged is a no-op for X. Drift is also directionless (`!=`, not
+"newer"): converging backward after a catalog rollback is the same code
+path as upgrading.
+
+The reconcile runs from two pokes, both covering the full supported set
+for the surface (PATH-provided agents excluded, cursor excluded in
+cloud):
+
+- the startup pass (`runtime.rs::spawn_startup_pass`) on every runtime
+  boot, after seed hydration;
+- the catalog-applied poke, fired exactly once per successful document
+  swap, never on an already-current or invalid document.
+
+Both funnel into the single observable reconcile job: one slot, agents
+converged sequentially, internal pokes waiting out a busy slot
+(250ms retry) rather than dropping. Progress is polled, not pushed:
+`GET /v1/agents/reconcile` reports per-agent, per-role phase and
+download progress, and the desktop polls it continuously
+(`sdk-react/hooks/agents.ts::useAgentReconcileStatusQuery` — 1.5s while a
+job runs, 750ms while downloading, 30s idle discovery).
 
 Two transports deliver a new active catalog, split by cost:
 
 - **The binary carries the catalog.** `catalog.json` is compiled into the
   runtime (`include_str!` in `catalog/bundled.rs`; a document that fails
   validation fails the build). A runtime binary update therefore delivers
-  new pins by definition, and the startup pass
-  (`runtime.rs::spawn_startup_pass`) reconciles installed agents against
+  new pins by definition, and the startup pass reconciles agents against
   them. This is the only transport on desktop: the app updates on the
   nightly release train, and each update converges harnesses at next
   launch. Desktop has no faster lane because the release train already
@@ -146,22 +191,70 @@ Two transports deliver a new active catalog, split by cost:
   direction the worker fetches `GET /catalogs/agents` from the server
   (ETag-aware) and PUTs the document into the runtime
   (`proliferate-worker/src/catalog_sync.rs`). The runtime validates,
-  swaps the document in memory, and pokes the same reconcile. "Either
+  swaps the document, and fires the catalog-applied poke. "Either
   direction" is the rollback story: reverting the catalog PR converges
-  the fleet backward on the next heartbeat. The applied document is not
-  persisted; a restart reverts to the bundled catalog and the next
-  heartbeat re-converges.
+  the fleet backward on the next heartbeat.
 
-The cloud runtime binary itself also converges over the heartbeat
-(`proliferate-worker/src/anyharness_update.rs`: sha-verified download,
-`--version` preflight, stop/swap/relaunch with a `.prev` rollback copy),
-so the layering on cloud is: binary update is the slow, disruptive
-transport for code; catalog sync is the fast, non-disruptive transport
-for pins.
+An applied pushed document is persisted to the runtime home
+(`catalogs/agent-catalog.json` beside the agents tree, written by the
+catalog sync service on every successful apply) and reloaded at boot
+(full schema + registry-pairing validation at load; any failure falls
+back to the bundled copy).
+Persistence keeps a restart convergence-neutral: without it, a restart
+would re-activate the older bundled catalog, downgrade every
+heartbeat-moved pin, and re-upgrade it seconds later when the heartbeat
+re-pushed — two wasted reinstalls and a stale window per restart. The
+bundled catalog remains the truth floor; persistence never outlives a
+deliberate binary rollback, because the heartbeat re-converges the
+document in either direction regardless.
 
 The registry has no live transport on purpose. It only ships inside a new
 binary: changing install method or auth vocabulary is a code-review-and-
 release event, never a runtime push.
+
+### Runtime binary convergence (cloud)
+
+The cloud runtime binary converges to a server-advertised pin, and one
+process owns the swap: `proliferate-supervisor`, the OS parent of both
+the AnyHarness runtime and the worker in every sandbox. Supervision
+differs by surface, but the invariant is shared — the process that owns
+the children is the only process that swaps their binaries. On desktop
+that owner is the app itself (the runtime and worker are bundled
+sidecars, replaced only by an app update; neither ever self-swaps).
+
+The pin's provenance: release CI stamps `RUNTIME_VERSION` (and
+`WORKER_VERSION`) into the server image at build time
+(`server/version.py`); every heartbeat ack advertises them as
+`desired_versions`. A server deploy is therefore the fleet trigger — each
+sandbox converges within one heartbeat interval (~30s). A per-sandbox
+override column exists for targeted pinning ahead of or behind the fleet.
+
+The worker never touches processes or binaries. On mismatch it writes an
+update request (exact version and artifact URL) into the supervisor's
+file mailbox (`proliferate-worker/src/supervisor_bridge/mailbox.rs`) and
+moves on. The supervisor drains the mailbox — on child exit and on a
+periodic poll tick — and runs the swap state machine
+(`proliferate-supervisor/src/update/activate/`): download, sha256
+re-verify, stage, journal-protected atomic swap (a crash mid-swap is
+repaired at next boot from the journal), restart in dependency order
+(runtime before worker), health-gate against `/health` (which must
+report the desired version), roll back to the `.prev` copy on any
+failure. A failed pin is recorded and not retried until a newer pin
+supersedes it. The supervisor's run loop
+(`proliferate-supervisor/src/process/mod.rs`) also restarts either child
+on crash with backoff, so a sandbox never depends on server-side
+reconnect to recover its runtime.
+
+Binary swaps do not wait for live sessions: the supervisor kills and
+restarts the runtime even mid-conversation. That is the intended
+behavior for now — desktop updates happen at app startup when no
+sessions exist, and in cloud the disruption window is one process
+restart on a fleet that updates at most daily. Deferring swaps around
+long-running work is a known UX gap to revisit, not an accident.
+
+The layering on cloud is then: binary update is the slow, disruptive
+transport for code; catalog sync is the fast, non-disruptive transport
+for pins.
 
 ## The update pipeline
 
@@ -170,9 +263,20 @@ The catalog is regenerated by the probe pipeline, nightly and on demand
 `make catalog-update`):
 
 1. Resolve fresh pins from the registry
-   (`scripts/agent-catalog/resolve-pins.mjs`): query npm, GitHub releases,
-   and the public ACP registry; compute or verify sha256s; reuse known
-   hashes for unchanged artifacts.
+   (`scripts/agent-catalog/resolve-pins.mjs`). The registry's install
+   spec declares, per artifact, exactly where "latest" is asked for, and
+   the resolver dispatches on the spec's `kind`: `direct_binary` GETs the
+   declared `latestVersionUrl` (a provider-published text file whose body
+   is the version) and takes checksums from the provider's manifest
+   beside the binaries; `tarball_release` asks the GitHub releases API
+   for the latest tag and uses published asset digests;
+   `registry_backed` reads the public ACP registry document and takes
+   the entry's version and distribution. Exact-pinned specs (our forked
+   adapters: a git commit for claude's, an exact npm version for
+   codex's) are carried through verbatim — the resolver never asks
+   whether they moved, which is what makes an adapter bump a reviewed
+   `registry.json` edit rather than an automatic pickup. Unknown hashes
+   are computed by downloading; known ones are reused.
 2. Install exactly those pins and launch every harness over ACP under
    every configured auth context, recording what each attested at
    `initialize` and what it advertised (models, modes, controls). Snapshot
@@ -208,7 +312,7 @@ Per target and harness, the runtime answers what the product may offer
 
 | State | Meaning |
 | --- | --- |
-| `InstallRequired` | No managed install and no manifest; the UI offers install |
+| `InstallRequired` | No managed install and no manifest; transient — the next reconcile pass auto-installs, and the UI shows its progress |
 | `Unsupported` | A runtime compatibility gate failed (for example claude's minimum Node version) |
 | `CredentialsRequired` | Installed, but no auth context's signals match the environment |
 | `LoginRequired` | Installed, credentials absent, and the harness has an interactive login path |
@@ -237,7 +341,9 @@ options in the composer.
 | Readiness | `anyharness-lib/src/domains/agents/readiness/` | Artifact resolution, compatibility gates, credential classification, launch validation |
 | Producer | `scripts/agent-catalog/` | resolve-pins, probe runner, collation, version discipline, draft |
 | Distribution | `server/proliferate/server/catalogs/` | Serving the checked-in catalog with ETag; version for heartbeats |
-| Cloud transport | `anyharness/crates/proliferate-worker/src/{catalog_sync,anyharness_update}.rs` | Heartbeat-driven document push and runtime binary self-update |
+| Cloud catalog transport | `anyharness/crates/proliferate-worker/src/catalog_sync.rs` | Heartbeat-driven document push |
+| Cloud binary transport | `anyharness/crates/proliferate-worker/src/supervisor_bridge/` + `anyharness/crates/proliferate-supervisor/` | Worker-written update requests; supervisor-owned swap, restart, rollback |
+| Version pins | `server/proliferate/server/version.py` | Release-CI-stamped `RUNTIME_VERSION`/`WORKER_VERSION` advertised in heartbeat acks |
 
 ## Failure modes
 
@@ -249,6 +355,14 @@ options in the composer.
   `InstallRequired`; retry is idempotent on the next pass.
 - Pushed catalog fails validation: the runtime rejects the PUT and keeps
   its active document; the worker retries on a later heartbeat.
+- Persisted catalog is corrupt at boot: the load falls back to the
+  bundled document; the next heartbeat re-pushes and re-persists.
+- Binary swap fails its health gate: the supervisor restores the `.prev`
+  binary, relaunches it, and records the pin as failed so the same
+  artifact is not retried; a newer pin clears the record.
+- Runtime or worker crashes: the supervisor restarts the dead child with
+  backoff; the startup pass re-runs and converges anything the crash
+  interrupted.
 - A machine misses updates (desktop on an old app version): it keeps
   working on its bundled pins; nothing depends on the fleet being on one
   catalog version simultaneously.
@@ -270,3 +384,23 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       `make catalog-update` and the probe-PR review procedure; until it
       lands, the producer sections of the old readiness doc are the only
       writeup.
+- [ ] The legacy cloud topology still exists beside the supervisor:
+      `proliferate-worker/src/anyharness_update.rs` (worker-owned
+      pgrep/kill/swap of the runtime), the worker's self-`exec` update
+      (`self_update.rs`), the server's non-supervisor provision branch,
+      and the D5 bridge that migrates legacy sandboxes. All of it — plus
+      the `PROLIFERATE_SUPERVISOR_OWNED_RUNTIME` gate itself — deletes
+      once the fleet is fully supervisor-owned.
+- [ ] The applied pushed catalog is not persisted: `catalog/sync.rs`
+      swaps it in memory only, so every runtime restart re-activates the
+      bundled document, downgrades heartbeat-moved pins, and re-upgrades
+      them when the next heartbeat re-pushes. The persistence contract
+      above (write on apply, validated load at boot, bundled fallback)
+      is not yet implemented.
+- [ ] Installs are not yet automatic: the startup pass and the
+      catalog-applied poke run `installed_only` reconciles
+      (`runtime.rs::reconcile_installed_when_idle` hardcodes it), so an
+      absent opencode/grok stays `InstallRequired` until a user clicks
+      install, and session creation rejects a non-`Ready` harness rather
+      than converging it. The auto-install law above (full supported
+      set, PATH and cloud-cursor carve-outs) is not yet implemented.
