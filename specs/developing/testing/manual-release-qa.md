@@ -33,8 +33,6 @@ Read feature specs when the release touches their workflows:
   for Web/Mobile/Desktop cloud workspace parity and fixture matrix
 - [../../codebase/systems/product/clients/mobile-cloud.md](../../codebase/systems/product/clients/mobile-cloud.md)
   for mobile cloud-client smoke coverage
-- [../../codebase/platforms/product/workspace-lifecycle.md](../../codebase/platforms/product/workspace-lifecycle.md)
-  for workspace archive, restore, cleanup, and profile-isolated QA
 - [../../codebase/platforms/product/billing.md](../../codebase/platforms/product/billing.md)
   for billing, credits, Stripe checkout, refill, and portal smoke coverage
 - [../../codebase/systems/product/chat/composer.md](../../codebase/systems/product/chat/composer.md)

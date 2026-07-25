@@ -9,7 +9,8 @@ Date: 2026-05-20.
 
 Depends on: [`sandbox-provisioning.md`](../../../platforms/product/sandbox-provisioning.md),
 the agent auth platform (document removed; rewrite planned),
-[`claiming.md`](../../../platforms/product/claiming.md),
+the claiming platform (document removed; the claim/exposure substrate this
+spec builds on was reverted from the codebase),
 [`automations.md`](target.md).
 
 Slack is a team-automation entrypoint. A Slack mention creates a

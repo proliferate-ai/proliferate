@@ -13,7 +13,7 @@ restating folder rules or low-level reusable contracts.
 | Product auth | Account sign-in, linked providers, email/password, product-readiness gates, reviewer accounts, and auth surface UX. | [auth/README.md](auth/README.md) |
 | Organization invitations | Organization invite links, pending invitation grants, desktop join behavior, and admin member/invite UX. | [organizations/invitations.md](organizations/invitations.md) |
 | Pending workspace shell | Pending workspace entry, projected session shell, optimistic prompts, and workspace/session materialization handoff. | [workspaces/pending-shell.md](workspaces/pending-shell.md) |
-| Cloud access / dispatch | Web/Mobile/Desktop cloud workspace access, dispatch UX, direct/open-in-desktop flows, commandability, and cloud/local parity. | [workspaces/cloud-dispatch.md](workspaces/cloud-dispatch.md), [clients/cloud-local-parity.md](clients/cloud-local-parity.md) |
+| Cloud access / dispatch | Web/Mobile/Desktop cloud workspace access, dispatch UX, and cloud/local parity. | [clients/cloud-local-parity.md](clients/cloud-local-parity.md); the dispatch spec built on the reverted claim/exposure substrate was removed and a rewrite is planned. |
 | Chat | Chat lifecycle, composer, and transcript behavior. | [chat/README.md](chat/README.md) |
 | Workspace files, mobility boundary, and terminals | User-facing workspace file, shell, dispatch, and terminal behavior; current migration absence and retained runtime mobility boundary. | [workspaces/README.md](workspaces/README.md) |
 | Mobile cloud client | Mobile auth, cloud chat, sessions, automations, settings, device/mobile-web smoke, and mobile acceptance matrix. | [clients/mobile-cloud.md](clients/mobile-cloud.md) |
