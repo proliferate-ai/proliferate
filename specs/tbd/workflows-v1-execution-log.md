@@ -1,5 +1,9 @@
 # Workflows v1 completion — execution log
 
+> **SUPERSEDED. HISTORICAL ONLY. DO NOT USE AS AN EXECUTION PLAN.** Follow
+> `/Users/pablohansen/.codex/recovery/workflows-v1-2026-07-11/CURRENT-WORKFLOWS-INTEGRATION.md`
+> and the current authoritative `specs/codebase/features/workflows.md`.
+
 Status: durable coordination log owned by the merge captain. Append-only per
 accepted packet. Canonical behavior: `specs/codebase/features/workflows.md`.
 Sequencing: `specs/tbd/workflows-v1-completion-plan.md`.

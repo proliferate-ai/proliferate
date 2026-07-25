@@ -1,5 +1,10 @@
 # Workflows v1 architecture alignment and completion plan
 
+> **SUPERSEDED. HISTORICAL ONLY. DO NOT EXECUTE.** The assumptions and
+> dependency program in this file are no longer product requirements. Follow
+> `/Users/pablohansen/.codex/recovery/workflows-v1-2026-07-11/CURRENT-WORKFLOWS-INTEGRATION.md`
+> and the current authoritative `specs/codebase/features/workflows.md`.
+
 Status: non-authoritative migration and delivery plan.
 
 Baseline reviewed: `workflows/gate-c-main-rebase` at
