@@ -3,24 +3,66 @@ import {
   type PersistedRepoConfigInput,
   type RepoConfig,
 } from "@/lib/domain/preferences/repo-preferences";
-import { readPersistedValue, persistValue } from "@/lib/infra/persistence/preferences-persistence";
+import {
+  readProductStorageJson,
+  writeProductStorageJson,
+  type ProductStorageContext,
+} from "@/lib/infra/persistence/product-storage";
 
 const REPO_PREFERENCES_KEY = "repo_preferences";
 const LEGACY_REPO_CONFIGS_KEY = "repoConfigs";
 
-export async function loadRepoPreferences(): Promise<Record<string, RepoConfig>> {
-  const persisted = await readPersistedValue<PersistedRepoConfigInput>(REPO_PREFERENCES_KEY);
-  if (persisted) {
-    return normalizeRepoConfigs(persisted);
+export async function loadRepoPreferences(
+  context: ProductStorageContext,
+): Promise<Record<string, RepoConfig>> {
+  const persisted = await readProductStorageJson<unknown>(
+    context,
+    REPO_PREFERENCES_KEY,
+  );
+  if (isPlainRecord(persisted)) {
+    return normalizePersistedRepoConfigs(persisted);
   }
 
   const legacyRepoConfigs =
-    await readPersistedValue<PersistedRepoConfigInput>(LEGACY_REPO_CONFIGS_KEY);
-  return normalizeRepoConfigs(legacyRepoConfigs ?? {});
+    await readProductStorageJson<unknown>(
+      context,
+      LEGACY_REPO_CONFIGS_KEY,
+    );
+  return normalizePersistedRepoConfigs(legacyRepoConfigs);
 }
 
 export async function persistRepoPreferences(
   repoConfigs: Record<string, RepoConfig>,
+  context: ProductStorageContext,
 ): Promise<void> {
-  await persistValue(REPO_PREFERENCES_KEY, repoConfigs);
+  await writeProductStorageJson(context, REPO_PREFERENCES_KEY, repoConfigs);
+}
+
+function normalizePersistedRepoConfigs(value: unknown): Record<string, RepoConfig> {
+  if (!isPlainRecord(value)) {
+    return {};
+  }
+
+  const input: PersistedRepoConfigInput = {};
+  for (const [sourceRoot, candidate] of Object.entries(value)) {
+    if (!isPlainRecord(candidate)) {
+      continue;
+    }
+    input[sourceRoot] = {
+      ...(candidate.defaultBranch === null || typeof candidate.defaultBranch === "string"
+        ? { defaultBranch: candidate.defaultBranch }
+        : {}),
+      ...(typeof candidate.setupScript === "string"
+        ? { setupScript: candidate.setupScript }
+        : {}),
+      ...(typeof candidate.runCommand === "string"
+        ? { runCommand: candidate.runCommand }
+        : {}),
+    };
+  }
+  return normalizeRepoConfigs(input);
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }

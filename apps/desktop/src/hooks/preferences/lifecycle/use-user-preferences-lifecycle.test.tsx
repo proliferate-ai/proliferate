@@ -22,8 +22,15 @@ const storeMocks = vi.hoisted(() => {
   };
 });
 
-vi.mock("@/lib/access/tauri/store", () => ({
-  getPreferencesStore: storeMocks.getPreferencesStore,
+vi.mock("@/hooks/app/facade/use-product-storage-context", () => ({
+  useProductStorageContext: () => ({}),
+}));
+
+vi.mock("@/lib/infra/persistence/product-storage", () => ({
+  readProductStorageJson: (_context: unknown, key: string) => storeMocks.get(key),
+  readProductStorageText: (_context: unknown, key: string) => storeMocks.get(key),
+  writeProductStorageJson: (_context: unknown, key: string, value: unknown) =>
+    storeMocks.set(key, value),
 }));
 
 describe("useUserPreferencesLifecycle", () => {
@@ -35,6 +42,7 @@ describe("useUserPreferencesLifecycle", () => {
     useUserPreferencesStore.setState({
       ...USER_PREFERENCE_DEFAULTS,
       _hydrated: false,
+      _persistenceRevision: 0,
       _persistedMetadata: {},
     });
   });
@@ -93,5 +101,34 @@ describe("useUserPreferencesLifecycle", () => {
     expect(persistedRecord.worktreeAutoDeleteLimitBackfilled).toBeUndefined();
     expect(persistedRecord.worktreeAutoDeleteLimit)
       .toBe(USER_PREFERENCE_DEFAULTS.worktreeAutoDeleteLimit);
+  });
+
+  it("keeps the whole live preferences record when it changes during hydration", async () => {
+    let resolveRead: (value: unknown) => void = () => undefined;
+    storeMocks.get.mockImplementationOnce(() => new Promise((resolve) => {
+      resolveRead = resolve;
+    }));
+
+    renderHook(() => useUserPreferencesLifecycle());
+    act(() => useUserPreferencesStore.getState().set("colorMode", "light"));
+    await act(async () => resolveRead({
+      ...USER_PREFERENCE_DEFAULTS,
+      colorMode: "dark",
+      turnEndSoundEnabled: true,
+    }));
+    await waitFor(() => expect(useUserPreferencesStore.getState()._hydrated).toBe(true));
+
+    expect(useUserPreferencesStore.getState().colorMode).toBe("light");
+    expect(useUserPreferencesStore.getState().turnEndSoundEnabled)
+      .toBe(USER_PREFERENCE_DEFAULTS.turnEndSoundEnabled);
+    await waitFor(() => {
+      expect(storeMocks.set).toHaveBeenCalledWith(
+        "user_preferences",
+        expect.objectContaining({
+          colorMode: "light",
+          turnEndSoundEnabled: USER_PREFERENCE_DEFAULTS.turnEndSoundEnabled,
+        }),
+      );
+    });
   });
 });

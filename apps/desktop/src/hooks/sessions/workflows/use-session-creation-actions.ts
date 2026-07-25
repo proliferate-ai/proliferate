@@ -10,11 +10,7 @@ import { pickLiveDefaultLaunchControls } from "@/lib/domain/sessions/creation/la
 import { resolveSessionCreationModeId } from "@/lib/domain/sessions/creation/mode";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import { useToastStore } from "@/stores/toast/toast-store";
-import {
-  createEmptySessionRecord,
-  getSessionRecord,
-  putSessionRecord,
-} from "@/stores/sessions/session-records";
+import { createEmptySessionRecord, getSessionRecord, putSessionRecord } from "@/stores/sessions/session-records";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import type { SessionRuntimeRecord } from "@/stores/sessions/session-types";
 import { useChatLaunchIntentStore } from "@/stores/chat/chat-launch-intent-store";
@@ -27,20 +23,14 @@ import {
 } from "@/lib/workflows/sessions/session-runtime";
 import { useSessionRuntimeActions } from "@/hooks/sessions/workflows/use-session-runtime-actions";
 import { useWorkspaceSessionCache } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
-import {
-  annotateLatencyFlow,
-  cancelLatencyFlow,
-} from "@/lib/infra/measurement/latency-flow";
+import { annotateLatencyFlow, cancelLatencyFlow } from "@/lib/infra/measurement/latency-flow";
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
 import { writeChatShellIntentForSession } from "@/hooks/workspaces/workflows/tabs/workspace-shell-intent-writer";
 import type { WorkspaceShellIntentKey } from "@/lib/domain/workspaces/tabs/shell-tabs";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { inFlightSessionCreatesByWorkspace } from "@/hooks/sessions/workflows/session-creation-in-flight";
 import { useCloudAgentCatalogCache } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
-import type {
-  CreateEmptySessionWithResolvedConfigOptions,
-  CreateSessionWithResolvedConfigOptions,
-} from "@/hooks/sessions/workflows/session-creation-types";
+import type { CreateEmptySessionWithResolvedConfigOptions, CreateSessionWithResolvedConfigOptions } from "@/hooks/sessions/workflows/session-creation-types";
 import { sessionStreamPruningDeps } from "@/hooks/sessions/workflows/session-creation-runtime";
 import { materializeSessionCreation } from "@/hooks/sessions/workflows/session-creation-materialization";
 import { useDismissSessionMutation } from "@anyharness/sdk-react";
@@ -55,9 +45,14 @@ import {
 } from "@/hooks/sessions/workflows/session-replacement-shell-preferences";
 import { cleanupSessionCreationFailure } from "@/hooks/sessions/workflows/session-creation-failure-cleanup";
 import { resolveWorkspaceUiKey } from "@/lib/domain/workspaces/selection/workspace-ui-key";
+import { useProductTelemetry } from "@/hooks/telemetry/facade/use-product-telemetry";
+import { useProductStorageContext } from "@/hooks/app/facade/use-product-storage-context";
+import { toEmptySessionCreateOptions } from "@/hooks/sessions/workflows/session-creation-empty-options";
 
 export function useSessionCreationActions() {
   const host = useProductHost();
+  const telemetry = useProductTelemetry();
+  const persistence = useProductStorageContext();
   const desktop = host.desktop;
   const cloudClient = host.cloud.client;
   const localRuntime = desktop?.runtime ?? null;
@@ -250,7 +245,13 @@ export function useSessionCreationActions() {
       replacementTransaction = beginEmptySessionReplacement(
         options.replacesSessionId,
         workspaceId,
-        { closeSessionSlotStream, removeWorkspaceSessionRecord, dismissSessionMutation },
+        {
+          closeSessionSlotStream,
+          removeWorkspaceSessionRecord,
+          dismissSessionMutation,
+          captureException: telemetry.captureException,
+          persistence,
+        },
       );
       if (replacementTransaction && currentOwnedShellWorkspaceId) {
         replacementShellPreferences = beginReplacementShellPreferences({
@@ -294,6 +295,8 @@ export function useSessionCreationActions() {
       resolvedModeId: resolvedModeId ?? null,
       upsertWorkspaceSessionRecord,
       workspaceId,
+      telemetry,
+      persistence,
     }).finally(unregisterSessionCreation);
 
     if (!hasPrompt && shouldReuseInFlightEmptySession) {
@@ -324,7 +327,10 @@ export function useSessionCreationActions() {
         replacementTransaction,
         rollbackOwnedShellIntent,
         workspaceId,
-      }, { activateSession });
+      }, {
+        activateSession,
+        captureException: telemetry.captureException,
+      });
     };
 
     const cleanupInFlight = (): void => {
@@ -369,27 +375,17 @@ export function useSessionCreationActions() {
     localRuntime,
     ssh,
     promptSession,
+    persistence,
     removeWorkspaceSessionRecord,
     showToast,
+    telemetry,
     upsertWorkspaceSessionRecord,
   ]);
 
   const createEmptySessionWithResolvedConfig = useCallback(async (
     options: CreateEmptySessionWithResolvedConfigOptions,
   ): Promise<string> => {
-    return createSessionWithResolvedConfig({
-      text: "",
-      agentKind: options.agentKind,
-      modelId: options.modelId,
-      modeId: options.modeId,
-      launchControlValues: options.launchControlValues,
-      workspaceId: options.workspaceId,
-      latencyFlowId: options.latencyFlowId,
-      clientSessionId: options.clientSessionId,
-      reuseInFlightEmptySession: options.reuseInFlightEmptySession,
-      preserveProjectedSessionOnCreateFailure: options.preserveProjectedSessionOnCreateFailure,
-      replacesSessionId: options.replacesSessionId,
-    });
+    return createSessionWithResolvedConfig(toEmptySessionCreateOptions(options));
   }, [createSessionWithResolvedConfig]);
 
   return { createEmptySessionWithResolvedConfig, createSessionWithResolvedConfig };

@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useOrganizationSelectionActions } from "@/hooks/organizations/workflows/use-organization-selection-actions";
 import { useSessionDismissActions } from "@/hooks/sessions/workflows/use-session-dismiss-actions";
+import { useProductTelemetry } from "@/hooks/telemetry/facade/use-product-telemetry";
 import { collectRunningLocalSessionIds } from "@/lib/domain/sessions/running-local-sessions";
 import { teardownDesktopWorker } from "@/lib/workflows/cloud/ensure-desktop-worker";
 import { getSessionRecords } from "@/stores/sessions/session-records";
@@ -16,6 +17,7 @@ export function useOrganizationSwitchAction() {
   const worker = useProductHost().desktop?.worker ?? null;
   const { dismissSession } = useSessionDismissActions();
   const { setActiveOrganizationId } = useOrganizationSelectionActions();
+  const { captureException } = useProductTelemetry();
   const [switchingOrganization, setSwitchingOrganization] = useState(false);
 
   const switchOrganization = useCallback(async (organizationId: string) => {
@@ -28,13 +30,13 @@ export function useOrganizationSwitchAction() {
         await dismissSession(sessionId);
       }
       if (worker !== null) {
-        await teardownDesktopWorker(worker);
+        await teardownDesktopWorker(worker, { captureException });
       }
       setActiveOrganizationId(organizationId);
     } finally {
       setSwitchingOrganization(false);
     }
-  }, [dismissSession, setActiveOrganizationId, worker]);
+  }, [captureException, dismissSession, setActiveOrganizationId, worker]);
 
   return { switchOrganization, switchingOrganization };
 }

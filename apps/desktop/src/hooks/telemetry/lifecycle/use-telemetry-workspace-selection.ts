@@ -1,13 +1,11 @@
 import { useEffect, useRef } from "react";
 import { resolveDesktopTelemetryWorkspaceKind } from "@/lib/domain/telemetry/workspace-kind";
-import {
-  setTelemetryTag,
-  trackProductEvent,
-} from "@/lib/integrations/telemetry/client";
+import { useProductTelemetry } from "@/hooks/telemetry/facade/use-product-telemetry";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 
 // Owns selected-workspace telemetry tags and events. Does not own workspace kind classification.
 export function useTelemetryWorkspaceSelection() {
+  const telemetry = useProductTelemetry();
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const previousWorkspaceIdRef = useRef<string | null>(null);
 
@@ -16,12 +14,12 @@ export function useTelemetryWorkspaceSelection() {
     previousWorkspaceIdRef.current = selectedWorkspaceId;
 
     const kind = resolveDesktopTelemetryWorkspaceKind(selectedWorkspaceId);
-    setTelemetryTag("workspace_kind", kind);
+    telemetry.setTag("workspace_kind", kind);
 
     if (kind === "none") return;
 
-    trackProductEvent("workspace_selected", {
+    telemetry.track("workspace_selected", {
       workspace_kind: kind,
     });
-  }, [selectedWorkspaceId]);
+  }, [selectedWorkspaceId, telemetry]);
 }

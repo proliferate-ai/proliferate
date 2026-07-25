@@ -7,6 +7,7 @@ import {
   ensureDesktopWorker,
   teardownDesktopWorker,
 } from "@/lib/workflows/cloud/ensure-desktop-worker";
+import { useProductTelemetry } from "@/hooks/telemetry/facade/use-product-telemetry";
 import { useOrganizationStore } from "@/stores/organizations/organization-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 
@@ -59,6 +60,7 @@ export function useDesktopWorkerEnrollment(
     (state) => state.activeOrganizationId,
   );
   const showToast = useToastStore((state) => state.show);
+  const { captureException } = useProductTelemetry();
   const [retryNonce, setRetryNonce] = useState(0);
   useEffect(() => {
     if (authStatus === "loading") {
@@ -69,7 +71,7 @@ export function useDesktopWorkerEnrollment(
       // (any user) re-enrolls with a fresh identity.
       if (enrolledIdentityKey !== null) {
         enrolledIdentityKey = null;
-        void teardownDesktopWorker(worker);
+        void teardownDesktopWorker(worker, { captureException });
       }
       return;
     }
@@ -86,6 +88,7 @@ export function useDesktopWorkerEnrollment(
     let cancelled = false;
     let retryTimer: number | null = null;
     void ensureDesktopWorker(activeOrganizationId, worker, cloudClient, {
+      captureException,
       onFailure: (error) => {
         if (cancelled || enrolledIdentityKey !== nextIdentityKey) {
           return;
@@ -117,6 +120,7 @@ export function useDesktopWorkerEnrollment(
     activeOrganizationId,
     authStatus,
     authUserId,
+    captureException,
     cloudClient,
     retryNonce,
     showToast,

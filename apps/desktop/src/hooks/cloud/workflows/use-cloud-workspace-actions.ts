@@ -19,10 +19,7 @@ import { useWorkspaceSelection } from "@/hooks/workspaces/workflows/selection/us
 import { useWorkspaceCollectionsInvalidation } from "@/hooks/workspaces/cache/use-workspace-collections-invalidation";
 import { useWorkspaceCollectionsMutationCache } from "@/hooks/workspaces/cache/use-workspace-collections-mutation-cache";
 import { clearViewedSessionErrors } from "@/stores/preferences/workspace-ui-store";
-import {
-  captureTelemetryException,
-  trackProductEvent,
-} from "@/lib/integrations/telemetry/client";
+import { useProductTelemetry } from "@/hooks/telemetry/facade/use-product-telemetry";
 import { useDeferredHomeLaunchStore } from "@/stores/home/deferred-home-launch-store";
 import { requireHostCloudClient } from "@/lib/access/cloud/host-client";
 
@@ -40,6 +37,7 @@ function resolveCloudWorkspaceRuntimeId(workspaceId: string): string {
 
 export function useCloudWorkspaceActions() {
   const cloudClient = useProductHost().cloud.client;
+  const telemetry = useProductTelemetry();
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const { clearWorkspaceRuntimeState } = useWorkspaceSelection();
   const invalidateCloudBillingState = useInvalidateCloudBillingState();
@@ -101,12 +99,12 @@ export function useCloudWorkspaceActions() {
       });
       clearDeferredLaunchesForWorkspace(runtimeWorkspaceId);
       await invalidateCloudResources();
-      trackProductEvent("cloud_workspace_deleted", {
+      telemetry.track("cloud_workspace_deleted", {
         workspace_kind: "cloud",
       });
     },
     onError: (error) => {
-      captureTelemetryException(error, {
+      telemetry.captureException(error, {
         tags: {
           action: "delete_cloud_workspace",
           domain: "cloud_workspace",
@@ -137,7 +135,7 @@ export function useCloudWorkspaceActions() {
       await invalidateWorkspaceCollections();
     },
     onError: (error) => {
-      captureTelemetryException(error, {
+      telemetry.captureException(error, {
         tags: {
           action: "archive_cloud_workspace",
           domain: "cloud_workspace",
@@ -162,7 +160,7 @@ export function useCloudWorkspaceActions() {
       await invalidateWorkspaceCollections();
     },
     onError: (error) => {
-      captureTelemetryException(error, {
+      telemetry.captureException(error, {
         tags: {
           action: "restore_cloud_workspace",
           domain: "cloud_workspace",

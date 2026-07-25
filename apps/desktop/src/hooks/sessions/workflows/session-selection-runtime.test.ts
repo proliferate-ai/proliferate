@@ -2,7 +2,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   clearReplacedSessionTombstone,
   commitReplacedSessionTombstone,
+  prepareSessionReplacementTombstonesForStorage,
   resetReplacedSessionTombstonesForTests,
+} from "@/hooks/sessions/workflows/session-replacement-tombstone-durable-operations";
+import {
+  beginSessionReplacementTombstoneHydration,
+  settleSessionReplacementTombstoneHydration,
+} from "@/hooks/sessions/workflows/session-replacement-tombstone-authority";
+import {
   stageReplacedSessionTombstone,
 } from "@/hooks/sessions/workflows/session-replacement-tombstones";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
@@ -24,6 +31,13 @@ vi.mock("@/lib/access/anyharness/runtime-bootstrap", () => ({
   bootstrapHarnessRuntime: mocks.bootstrapHarnessRuntime,
 }));
 
+const storage = {
+  getItem: vi.fn(async () => null),
+  setItem: vi.fn(async () => undefined),
+  removeItem: vi.fn(async () => undefined),
+};
+const persistence = { storage, captureException: vi.fn() };
+
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.fetchWorkspaceSessionSummaries.mockReset();
@@ -33,6 +47,9 @@ beforeEach(() => {
     error: null,
   });
   resetReplacedSessionTombstonesForTests();
+  beginSessionReplacementTombstoneHydration(storage);
+  prepareSessionReplacementTombstonesForStorage(storage);
+  settleSessionReplacementTombstoneHydration(false);
 });
 
 describe("session runtime selection", () => {
@@ -75,8 +92,13 @@ describe("selection session-list filtering", () => {
   });
 
   it("filters an out-of-order old response after authoritative cleanup", async () => {
-    commitReplacedSessionTombstone("workspace-1", "runtime-old", ["client-old"]);
-    clearReplacedSessionTombstone("workspace-1", "runtime-old");
+    await commitReplacedSessionTombstone(
+      persistence,
+      "workspace-1",
+      "runtime-old",
+      ["client-old"],
+    );
+    await clearReplacedSessionTombstone(persistence, "workspace-1", "runtime-old");
     mocks.fetchWorkspaceSessionSummaries.mockResolvedValue([{ id: "runtime-old" }]);
 
     const sessions = await fetchWorkspaceSessions("http://runtime.test", "workspace-1");

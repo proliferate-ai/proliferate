@@ -40,8 +40,10 @@ import {
   filterReplacedSessionIds,
   filterReplacedSessionTombstones,
 } from "@/hooks/sessions/workflows/session-replacement-tombstones";
+import { useSessionReplacementTombstoneAuthority } from "@/hooks/sessions/derived/use-session-replacement-tombstone-authority";
 
 export function useWorkspaceHeaderTabsViewModel() {
+  const tombstoneAuthority = useSessionReplacementTombstoneAuthority();
   const {
     activeSessionId,
     activeSessionWorkspaceId,
@@ -69,10 +71,11 @@ export function useWorkspaceHeaderTabsViewModel() {
 
   const workspaceSessionsQuery = useWorkspaceSessionsQuery({
     workspaceId: selectedWorkspaceId,
-    enabled: shouldUseLocalRuntimeWorkspaceSessionsQuery({
-      workspaceId: selectedWorkspaceId,
-      hotPaintPending,
-    }),
+    enabled: tombstoneAuthority.hydrated
+      && shouldUseLocalRuntimeWorkspaceSessionsQuery({
+        workspaceId: selectedWorkspaceId,
+        hotPaintPending,
+      }),
   });
   const workspaceSessionsLoaded = workspaceSessionsQuery.data !== undefined;
 
@@ -133,6 +136,7 @@ export function useWorkspaceHeaderTabsViewModel() {
       liveSlots,
       optimisticHeaderSessionIds,
       selectedWorkspaceId,
+      tombstoneAuthority.revision,
       workspaceSessionsQuery.data,
     ]);
   const knownSessionIds = useStableStringArray(

@@ -1,11 +1,12 @@
 import { useCallback } from "react";
 import { useSteerPendingPromptMutation } from "@anyharness/sdk-react";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
-import { trackProductEvent } from "@/lib/integrations/telemetry/client";
+import { useProductTelemetry } from "@/hooks/telemetry/facade/use-product-telemetry";
 import { getMaterializedSessionId, getSessionRecord } from "@/stores/sessions/session-records";
 
 export function useSteerPendingPrompt() {
   const mutation = useSteerPendingPromptMutation();
+  const telemetry = useProductTelemetry();
 
   return useCallback(
     async (sessionId: string, seq: number) => {
@@ -16,13 +17,13 @@ export function useSteerPendingPrompt() {
       const slot = getSessionRecord(sessionId);
       const workspaceId = slot?.workspaceId ?? null;
       await mutation.mutateAsync({ sessionId: materializedSessionId, seq });
-      trackProductEvent("chat_pending_prompt_steered", {
+      telemetry.track("chat_pending_prompt_steered", {
         agent_kind: slot?.agentKind ?? "unknown",
         workspace_kind: workspaceId && parseCloudWorkspaceSyntheticId(workspaceId)
           ? "cloud"
           : "local",
       });
     },
-    [mutation],
+    [mutation, telemetry],
   );
 }

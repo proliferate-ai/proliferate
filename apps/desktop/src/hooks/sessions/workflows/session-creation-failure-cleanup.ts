@@ -1,4 +1,4 @@
-import { captureTelemetryException } from "@/lib/integrations/telemetry/client";
+import type { ProductTelemetry } from "@proliferate/product-client/host/product-host";
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
 import { useChatLaunchIntentStore } from "@/stores/chat/chat-launch-intent-store";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
@@ -45,6 +45,7 @@ interface SessionCreationFailureCleanupInput {
 
 interface SessionCreationFailureCleanupDeps {
   activateSession: (sessionId: string) => void;
+  captureException: ProductTelemetry["captureException"];
 }
 
 export function cleanupSessionCreationFailure(
@@ -105,7 +106,7 @@ export function cleanupSessionCreationFailure(
       deps.activateSession(input.previousActiveSessionId);
     }
     clearLaunchIntent(input.launchIntentId);
-    captureCreationFailure(input.error, "replace_empty_session");
+    captureCreationFailure(input.error, "replace_empty_session", deps.captureException);
     return;
   }
 
@@ -117,6 +118,7 @@ export function cleanupSessionCreationFailure(
       input.hasPrompt
         ? "create_session_with_resolved_config"
         : "create_projected_session_materialization",
+      deps.captureException,
     );
     return;
   }
@@ -148,7 +150,11 @@ export function cleanupSessionCreationFailure(
     }
   }
   clearLaunchIntent(input.launchIntentId);
-  captureCreationFailure(input.error, "create_session_with_resolved_config");
+  captureCreationFailure(
+    input.error,
+    "create_session_with_resolved_config",
+    deps.captureException,
+  );
 }
 
 function clearLaunchIntent(launchIntentId: string | null | undefined): void {
@@ -157,8 +163,12 @@ function clearLaunchIntent(launchIntentId: string | null | undefined): void {
   }
 }
 
-function captureCreationFailure(error: unknown, action: string): void {
-  captureTelemetryException(error, {
+function captureCreationFailure(
+  error: unknown,
+  action: string,
+  captureException: ProductTelemetry["captureException"],
+): void {
+  captureException(error, {
     tags: { action, domain: "sessions" },
   });
 }

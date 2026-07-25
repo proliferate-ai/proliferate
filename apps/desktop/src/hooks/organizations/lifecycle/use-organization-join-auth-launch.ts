@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useLocation } from "react-router-dom";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
-import { writePendingOrganizationJoinTarget } from "@/lib/access/browser/organization-join-target";
+import { useProductAuthActions } from "@/hooks/auth/workflows/use-product-auth-actions";
+import { writePendingOrganizationJoinTarget } from "@/lib/workflows/organizations/organization-join-target-persistence";
 import { canFallbackToStandardInviteSignIn } from "@/lib/domain/organizations/join-auth";
+import { useProductStorageContext } from "@/hooks/app/facade/use-product-storage-context";
 
 function organizationJoinTargetFromSearch(search: string): string | null {
   const params = new URLSearchParams(search);
@@ -13,6 +15,8 @@ function organizationJoinTargetFromSearch(search: string): string | null {
 export function useOrganizationJoinAuthLaunch() {
   const location = useLocation();
   const { auth } = useProductHost();
+  const persistence = useProductStorageContext();
+  const { startLogin } = useProductAuthActions();
   const authStatus = auth.state.status;
   const startedForOrganizationRef = useRef<string | null>(null);
   const joinOrganizationId = useMemo(
@@ -24,8 +28,8 @@ export function useOrganizationJoinAuthLaunch() {
     if (!joinOrganizationId) {
       return;
     }
-    writePendingOrganizationJoinTarget(joinOrganizationId);
-  }, [joinOrganizationId]);
+    void writePendingOrganizationJoinTarget(persistence, joinOrganizationId);
+  }, [joinOrganizationId, persistence]);
 
   useEffect(() => {
     if (
@@ -37,7 +41,7 @@ export function useOrganizationJoinAuthLaunch() {
     }
 
     startedForOrganizationRef.current = joinOrganizationId;
-    void auth.startLogin({
+    void startLogin({
       kind: "sso",
       organizationId: joinOrganizationId,
       prompt: "select_account",
@@ -47,10 +51,10 @@ export function useOrganizationJoinAuthLaunch() {
       }
 
       try {
-        await auth.startLogin({ kind: "github" });
+        await startLogin({ kind: "github" });
       } catch {
         // AuthShell remains visible and lets the user retry manually.
       }
     });
-  }, [auth, authStatus, joinOrganizationId]);
+  }, [authStatus, joinOrganizationId, startLogin]);
 }

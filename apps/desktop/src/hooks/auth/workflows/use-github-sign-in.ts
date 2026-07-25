@@ -4,6 +4,7 @@ import { CAPABILITY_COPY } from "@/copy/capabilities/capability-copy";
 import { useGitHubDesktopAuthAvailability } from "@/hooks/access/cloud/auth/use-github-auth-availability";
 import { useAppCapabilities } from "@/hooks/capabilities/derived/use-app-capabilities";
 import type { LoginRequest } from "@proliferate/product-client/host/product-host";
+import { useProductAuthActions } from "@/hooks/auth/workflows/use-product-auth-actions";
 
 type GitHubSignInOptions = Pick<
   Extract<LoginRequest, { kind: "github" }>,
@@ -28,6 +29,7 @@ export interface UseGitHubSignInResult {
 // transition. The query self-guards on control-plane reachability.
 export function useGitHubSignIn(): UseGitHubSignInResult {
   const { auth } = useProductHost();
+  const { startLogin } = useProductAuthActions();
   const { cloudEnabled } = useAppCapabilities();
   const {
     data: githubDesktopAuthAvailable,
@@ -51,7 +53,7 @@ export function useGitHubSignIn(): UseGitHubSignInResult {
     setSubmitting(true);
     setError(null);
     try {
-      await auth.startLogin({ kind: "github", ...options });
+      await startLogin({ kind: "github", ...options });
     } catch (err) {
       if (isAbortError(err)) {
         setError(null);
@@ -62,7 +64,7 @@ export function useGitHubSignIn(): UseGitHubSignInResult {
     } finally {
       setSubmitting(false);
     }
-  }, [auth, signInAvailable, signInUnavailableDescription]);
+  }, [signInAvailable, signInUnavailableDescription, startLogin]);
 
   const clearError = useCallback(() => {
     setError(null);

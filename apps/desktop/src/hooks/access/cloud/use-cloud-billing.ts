@@ -11,7 +11,7 @@ import {
   updateOverageSettings,
 } from "@proliferate/cloud-sdk/client/billing";
 import { desktopBillingReturnOptions } from "@/lib/access/cloud/billing-return";
-import { captureTelemetryException } from "@/lib/integrations/telemetry/client";
+import { useProductTelemetry } from "@/hooks/telemetry/facade/use-product-telemetry";
 import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/cache/query-keys";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { cloudBillingKey, type CloudOwnerSelectionKey } from "@/hooks/access/cloud/query-keys";
@@ -108,6 +108,7 @@ export function useCloudBillingQuery(
 ) {
   const billingOwnerKey = ownerKey(owner);
   const cloudClient = useProductHost().cloud.client;
+  const telemetry = useProductTelemetry();
 
   return useQuery<BillingPlanInfo | null>({
     meta: {
@@ -121,7 +122,7 @@ export function useCloudBillingQuery(
       try {
         const billingPlan = await getCloudBillingPlan(owner, cloudClient!);
         if (!hasUsableBillingPlan(billingPlan)) {
-          captureTelemetryException(
+          telemetry.captureException(
             new Error("Received malformed billing plan payload"),
             {
               tags: {
@@ -141,7 +142,7 @@ export function useCloudBillingQuery(
         if (error instanceof ProliferateClientError && error.status === 401) {
           return null;
         }
-        captureTelemetryException(error, {
+        telemetry.captureException(error, {
           tags: {
             action: "fetch_billing_plan",
             domain: "cloud_billing",
@@ -171,6 +172,7 @@ export function useInvalidateCloudBillingState(owner?: CloudOwnerSelection) {
 
 export function useCloudBillingMutations(owner?: CloudOwnerSelection) {
   const cloudClient = useProductHost().cloud.client;
+  const telemetry = useProductTelemetry();
   const cloudCheckoutMutation = useMutation({
     mutationFn: () => createCloudCheckoutSession(
       owner,
@@ -178,7 +180,7 @@ export function useCloudBillingMutations(owner?: CloudOwnerSelection) {
       desktopBillingReturnOptions(),
     ),
     onError: (error) => {
-      captureTelemetryException(error, {
+      telemetry.captureException(error, {
         tags: {
           action: "create_cloud_checkout",
           domain: "cloud_billing",
@@ -195,7 +197,7 @@ export function useCloudBillingMutations(owner?: CloudOwnerSelection) {
       desktopBillingReturnOptions(),
     ),
     onError: (error) => {
-      captureTelemetryException(error, {
+      telemetry.captureException(error, {
         tags: {
           action: "create_billing_portal",
           domain: "cloud_billing",
@@ -212,7 +214,7 @@ export function useCloudBillingMutations(owner?: CloudOwnerSelection) {
       desktopBillingReturnOptions(),
     ),
     onError: (error) => {
-      captureTelemetryException(error, {
+      telemetry.captureException(error, {
         tags: {
           action: "create_refill_checkout",
           domain: "cloud_billing",
@@ -226,7 +228,7 @@ export function useCloudBillingMutations(owner?: CloudOwnerSelection) {
     mutationFn: (input: { enabled: boolean; capCentsPerSeat?: number | null }) =>
       updateOverageSettings(input, owner, requireHostCloudClient(cloudClient)),
     onError: (error) => {
-      captureTelemetryException(error, {
+      telemetry.captureException(error, {
         tags: {
           action: "update_overage_settings",
           domain: "cloud_billing",

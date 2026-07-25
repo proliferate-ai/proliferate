@@ -8,17 +8,20 @@ import { useSessionIntentStore, getPromptOutboxEntriesForSession } from "@/store
 import { clearViewedSessionErrors } from "@/stores/preferences/workspace-ui-store";
 import { useDismissSessionMutation } from "@anyharness/sdk-react";
 import { AnyHarnessError } from "@anyharness/sdk";
+import type { ProductTelemetry } from "@proliferate/product-client/host/product-host";
+import type { ProductStorageContext } from "@/lib/infra/persistence/product-storage";
 import {
   commitSupersededSessionCreation,
   rollbackSupersededSessionCreation,
   supersedeInFlightSessionCreation,
 } from "@/hooks/sessions/workflows/session-creation-supersession";
-import { captureTelemetryException } from "@/lib/integrations/telemetry/client";
+import {
+  commitReplacedSessionTombstone,
+  releaseReplacedSessionSuppression,
+} from "@/hooks/sessions/workflows/session-replacement-tombstone-durable-operations";
 import {
   clearStagedReplacedClientSessionAlias,
   clearStagedReplacedSessionTombstone,
-  commitReplacedSessionTombstone,
-  releaseReplacedSessionSuppression,
   retireStagedReplacedClientSessionAlias,
   retireStagedReplacedSessionTombstone,
   stageReplacedClientSessionAlias,
@@ -34,6 +37,8 @@ export interface EmptySessionReplacementDeps {
   closeSessionSlotStream: (sessionId: string) => void;
   removeWorkspaceSessionRecord: (workspaceId: string, sessionId: string) => void;
   dismissSessionMutation: ReturnType<typeof useDismissSessionMutation>;
+  captureException: ProductTelemetry["captureException"];
+  persistence: ProductStorageContext;
 }
 
 export interface EmptySessionReplacementTransaction {
@@ -138,7 +143,8 @@ export function beginEmptySessionReplacement(
           return "retired";
         }
 
-        const durablySuppressed = commitReplacedSessionTombstone(
+        const durablySuppressed = await commitReplacedSessionTombstone(
+          deps.persistence,
           resolvedWorkspaceId,
           materializedSessionId,
           [sessionId],
@@ -150,6 +156,7 @@ export function beginEmptySessionReplacement(
             materializedSessionId,
             resolvedWorkspaceId,
             deps.dismissSessionMutation,
+            deps.captureException,
           ),
         });
         if (!durablySuppressed) {
@@ -160,7 +167,8 @@ export function beginEmptySessionReplacement(
               materializedSessionId,
             );
           } catch {
-            releaseReplacedSessionSuppression(
+            await releaseReplacedSessionSuppression(
+              deps.persistence,
               resolvedWorkspaceId,
               materializedSessionId,
             );
@@ -193,6 +201,7 @@ async function dismissMaterializedSession(
   materializedSessionId: string,
   workspaceId: string,
   dismissMutation: ReturnType<typeof useDismissSessionMutation>,
+  captureException: ProductTelemetry["captureException"],
 ): Promise<void> {
   let lastError: unknown = null;
   for (const delayMs of DISMISS_RETRY_DELAYS_MS) {
@@ -220,7 +229,7 @@ async function dismissMaterializedSession(
     }
   }
   if (lastError) {
-    captureTelemetryException(lastError, {
+    captureException(lastError, {
       tags: {
         action: "dismiss_replaced_empty_session",
         domain: "sessions",

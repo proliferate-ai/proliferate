@@ -26,14 +26,16 @@ import { useToastStore } from "@/stores/toast/toast-store";
 import {
   canPersistReplacedSessionTombstones,
   releaseReplacedSessionSuppression,
-} from "@/hooks/sessions/workflows/session-replacement-tombstones";
+} from "@/hooks/sessions/workflows/session-replacement-tombstone-durable-operations";
 import {
   cancelQueuedReplacementDismissal,
   withWorkspaceReplacementRestoreFence,
 } from "@/hooks/sessions/workflows/session-replacement-dismissals";
+import { useProductStorageContext } from "@/hooks/app/facade/use-product-storage-context";
 
 export function useSessionRestoreActions() {
   const host = useProductHost();
+  const persistence = useProductStorageContext();
   const desktop = host.desktop;
   const cloudClient = host.cloud.client;
   const localRuntime = desktop?.runtime ?? null;
@@ -124,7 +126,11 @@ export function useSessionRestoreActions() {
         // Cancel stale cleanup queued while the restore mutation invalidated
         // session lists, then release runtime and client aliases before the
         // summary reaches cache so selectors can observe it in this renderer.
-        if (!releaseReplacedSessionSuppression(workspaceId, restoredSession.id)) {
+        if (!await releaseReplacedSessionSuppression(
+          persistence,
+          workspaceId,
+          restoredSession.id,
+        )) {
           // Storage changed after the preflight. Put runtime truth back into
           // the dismissed state covered by the still-durable tombstone.
           await dismissSessionMutation.mutateAsync({
@@ -185,6 +191,7 @@ export function useSessionRestoreActions() {
     cloudClient,
     getWorkspaceRuntimeBlockReason,
     localRuntime,
+    persistence,
     dismissSessionMutation,
     restoreDismissedSessionMutation,
     showToast,

@@ -8,7 +8,6 @@ import { ProductHostProvider } from "@proliferate/product-client/host/ProductHos
 import { DiffViewer } from "@/components/content/ui/DiffViewer";
 import { FileDiffCard } from "@/components/content/ui/FileDiffCard";
 import {
-  CHAT_DIFF_PREFERENCES_STORAGE_KEY,
   useChatDiffPreferencesStore,
 } from "@/stores/chat/chat-diff-preferences-store";
 import {
@@ -52,7 +51,7 @@ afterEach(() => {
 });
 
 describe("ChatDiffLineWrapContextMenu", () => {
-  it("toggles persisted line wrapping for every chat diff body", () => {
+  it("toggles line wrapping for every chat diff body", () => {
     const { container } = renderWithProductHost(
       <div>
         <DiffViewer patch={LONG_LINE_PATCH} filePath="src/one.ts" variant="chat" />
@@ -71,8 +70,7 @@ describe("ChatDiffLineWrapContextMenu", () => {
     fireEvent.contextMenu(triggers[0]);
     fireEvent.click(screen.getByRole("button", { name: "Turn line wrapping on" }));
 
-    expect(JSON.parse(window.localStorage.getItem(CHAT_DIFF_PREFERENCES_STORAGE_KEY)!))
-      .toEqual({ wrapLongLines: true });
+    expect(useChatDiffPreferencesStore.getState().wrapLongLines).toBe(true);
     for (const trigger of triggers) {
       expect(trigger.className).toContain("overflow-x-hidden");
     }

@@ -1,4 +1,5 @@
 import type { AnyHarnessClientConnection } from "@anyharness/sdk-react";
+import type { DesktopDiagnosticsBridge } from "./desktop-diagnostics-bridge";
 
 /**
  * The typed Desktop bridge: product-level native capabilities grouped by
@@ -15,6 +16,7 @@ import type { AnyHarnessClientConnection } from "@anyharness/sdk-react";
 export interface DesktopBridge {
   runtime: DesktopRuntimeBridge;
   files: DesktopFilesBridge;
+  identity: DesktopIdentityBridge;
   localCredentials: DesktopCredentialsBridge;
   nativeUi: DesktopNativeUiBridge;
   updater: DesktopUpdaterBridge;
@@ -48,6 +50,17 @@ export interface LocalRuntimeSnapshot {
 export interface DesktopRuntimeBridge {
   getConnection(): Promise<LocalRuntimeSnapshot>;
   restart(): Promise<LocalRuntimeSnapshot>;
+}
+
+// --- Desktop identity ------------------------------------------------------
+
+/**
+ * The existing anonymous Desktop installation identity used to associate a
+ * local repository environment with this installation. It intentionally
+ * remains distinct from the worker enrollment identity.
+ */
+export interface DesktopIdentityBridge {
+  getAnonymousInstallId(): Promise<string>;
 }
 
 // --- Local files and repositories -----------------------------------------
@@ -265,69 +278,4 @@ export interface ScratchWriteResult {
 export interface DesktopScratchBridge {
   read(workspaceId: string): Promise<ScratchRecord | null>;
   write(workspaceId: string, content: string): Promise<ScratchWriteResult>;
-}
-
-// --- Diagnostics and support ------------------------------------------------
-
-export interface SupportBundleLog {
-  source: string;
-  path: string;
-  bytesRead: number;
-  truncated: boolean;
-  text: string;
-}
-
-/** A support diagnostics bundle. Mirrors Desktop's collected bundle shape. */
-export interface SupportBundle {
-  schemaVersion: number;
-  manifest: {
-    appVersion: string;
-    runtimeVersion?: string | null;
-    runtimeStatus?: string | null;
-    runtimeHome?: string | null;
-    platform: string;
-    timestamp: string;
-  };
-  health?: {
-    runtimeHome: string;
-    status: string;
-    version: string;
-  } | null;
-  logs: SupportBundleLog[];
-  collectionErrors: string[];
-}
-
-export interface SaveJsonInput {
-  suggestedFileName: string;
-  contents: string;
-}
-
-export interface AttachmentInput {
-  clientFileId: string;
-  fileName: string;
-  dataBase64: string;
-}
-
-/** A narrow lifecycle marker written to Desktop's renderer-event log. */
-export interface RendererEventPayload {
-  source: string;
-  message: string;
-  route?: string | null;
-  elapsedMs?: number | null;
-}
-
-/**
- * Support UI can use native logs and attachments without importing Tauri.
- * Collection and staging return `null` outside a working native host, matching
- * Desktop's current nullability.
- */
-export interface DesktopDiagnosticsBridge {
-  logEvent(payload: RendererEventPayload): Promise<void>;
-  collectSupportBundle(): Promise<SupportBundle | null>;
-  saveJson(input: SaveJsonInput): Promise<string | null>;
-
-  /** Returns the staged attachment path, or null outside the desktop host. */
-  stageAttachment(input: AttachmentInput): Promise<string | null>;
-  readAttachment(path: string): Promise<string>;
-  deleteAttachment(path: string): Promise<void>;
 }

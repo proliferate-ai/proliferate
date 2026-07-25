@@ -14,9 +14,6 @@ const tauriMocks = vi.hoisted(() => ({
 vi.mock("@proliferate/cloud-sdk", () => ({
   enrollDesktopWorker: sdkMocks.enrollDesktopWorker,
 }));
-vi.mock("@/lib/integrations/telemetry/client", () => ({
-  captureTelemetryException: vi.fn(),
-}));
 
 import {
   ensureDesktopWorker,
@@ -29,6 +26,11 @@ const worker = {
   stop: tauriMocks.stopDesktopDispatchWorker,
 } as DesktopWorkerBridge;
 const cloudClient = {} as ProliferateCloudClient;
+const captureException = vi.fn();
+
+function ensureDeps(onFailure = vi.fn()) {
+  return { captureException, onFailure };
+}
 
 describe("ensureDesktopWorker", () => {
   beforeEach(() => {
@@ -43,7 +45,7 @@ describe("ensureDesktopWorker", () => {
 
   it("enrolls with the caller-supplied organization id", async () => {
     await expect(
-      ensureDesktopWorker("org-1", worker, cloudClient, { onFailure: vi.fn() }),
+      ensureDesktopWorker("org-1", worker, cloudClient, ensureDeps()),
     ).resolves.toBe(true);
 
     expect(sdkMocks.enrollDesktopWorker).toHaveBeenCalledWith(
@@ -59,7 +61,7 @@ describe("ensureDesktopWorker", () => {
 
   it("enrolls org-less users with a null organization id", async () => {
     await expect(
-      ensureDesktopWorker(null, worker, cloudClient, { onFailure: vi.fn() }),
+      ensureDesktopWorker(null, worker, cloudClient, ensureDeps()),
     ).resolves.toBe(true);
 
     expect(sdkMocks.enrollDesktopWorker).toHaveBeenCalledWith(
@@ -75,10 +77,13 @@ describe("ensureDesktopWorker", () => {
     sdkMocks.enrollDesktopWorker.mockRejectedValue(error);
 
     await expect(
-      ensureDesktopWorker(null, worker, cloudClient, { onFailure }),
+      ensureDesktopWorker(null, worker, cloudClient, ensureDeps(onFailure)),
     ).resolves.toBe(false);
 
     expect(tauriMocks.ensureDesktopDispatchWorker).not.toHaveBeenCalled();
+    expect(captureException).toHaveBeenCalledWith(error, {
+      tags: { action: "ensure-desktop-worker", domain: "cloud" },
+    });
     expect(onFailure).toHaveBeenCalledWith(error);
   });
 
@@ -87,6 +92,7 @@ describe("ensureDesktopWorker", () => {
 
     await expect(
       ensureDesktopWorker(null, worker, cloudClient, {
+        captureException,
         onFailure: () => {
           throw new Error("toast unavailable");
         },
@@ -97,8 +103,21 @@ describe("ensureDesktopWorker", () => {
   it("stops the local worker through the bridge", async () => {
     tauriMocks.stopDesktopDispatchWorker.mockResolvedValue(undefined);
 
-    await teardownDesktopWorker(worker);
+    await teardownDesktopWorker(worker, { captureException });
 
     expect(tauriMocks.stopDesktopDispatchWorker).toHaveBeenCalledTimes(1);
+  });
+
+  it("captures teardown failures without rejecting", async () => {
+    const error = new Error("worker stop failed");
+    tauriMocks.stopDesktopDispatchWorker.mockRejectedValue(error);
+
+    await expect(
+      teardownDesktopWorker(worker, { captureException }),
+    ).resolves.toBeUndefined();
+
+    expect(captureException).toHaveBeenCalledWith(error, {
+      tags: { action: "teardown-desktop-worker", domain: "cloud" },
+    });
   });
 });

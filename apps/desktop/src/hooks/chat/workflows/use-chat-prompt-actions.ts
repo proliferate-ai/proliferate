@@ -1,9 +1,6 @@
 import { useCallback } from "react";
 import type { ContentPart, PromptInputBlock } from "@anyharness/sdk";
-import {
-  captureTelemetryException,
-  trackProductEvent,
-} from "@/lib/integrations/telemetry/client";
+import { useProductTelemetry } from "@/hooks/telemetry/facade/use-product-telemetry";
 import { useWorkspaceSetupStatusCache } from "@/hooks/access/anyharness/workspaces/use-workspace-setup-status-cache";
 import { useSessionCreationActions } from "@/hooks/sessions/workflows/use-session-creation-actions";
 import { useSessionRuntimeActions } from "@/hooks/sessions/workflows/use-session-runtime-actions";
@@ -46,6 +43,7 @@ import { useGitPromptSnapshotEffects } from "@/hooks/workspaces/workflows/use-gi
 import { completeChatPromptSubmitSideEffects } from "@/lib/workflows/chat/complete-chat-prompt-submit-side-effects";
 
 export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
+  const telemetry = useProductTelemetry();
   const forceNewSession = options?.forceNewSession ?? false;
   const showToast = useToastStore((store) => store.show);
   const setWorkspaceArrivalEvent = useSessionSelectionStore((state) => state.setWorkspaceArrivalEvent);
@@ -234,14 +232,17 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
         agentKind: launchSelection?.kind ?? "unknown",
         reuseSession: targetSessionId !== null,
         setWorkspaceArrivalEvent,
-      }, { trackProductEvent, ...gitPromptEffects.promptSubmitDeps });
+      }, {
+        trackProductEvent: telemetry.track,
+        ...gitPromptEffects.promptSubmitDeps,
+      });
       return true;
     } catch (error) {
       if (latencyFlowId) {
         failLatencyFlow(latencyFlowId, "prompt_submit_failed");
       }
       finishOrCancelMeasurementOperation(input?.measurementOperationId, "error_sanitized");
-      captureTelemetryException(error, {
+      telemetry.captureException(error, {
         tags: {
           action: "prompt_active_session",
           domain: "chat",
@@ -272,6 +273,7 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
     setWorkspaceArrivalEvent,
     showToast,
     scopedLaunchIdentity,
+    telemetry,
   ]);
 
   const handleCancel = useCallback(() => {

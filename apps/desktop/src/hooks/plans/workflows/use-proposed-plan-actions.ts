@@ -26,7 +26,7 @@ import {
   resolvePlanImplementationTargetCheck,
   type PlanImplementationHarnessState,
 } from "@/lib/domain/plans/implementation-target";
-import { trackProductEvent } from "@/lib/integrations/telemetry/client";
+import { useProductTelemetry } from "@/hooks/telemetry/facade/use-product-telemetry";
 import {
   failLatencyFlow as failPromptLatencyFlow,
   startLatencyFlow as startPromptLatencyFlow,
@@ -167,6 +167,7 @@ function useProposedPlanDecisionActions() {
 
 // Owns implement-here submission wiring. Does not own session runtime internals.
 function usePlanImplementationActions() {
+  const telemetry = useProductTelemetry();
   const setWorkspaceArrivalEvent = useSessionSelectionStore(
     (state) => state.setWorkspaceArrivalEvent,
   );
@@ -207,7 +208,10 @@ function usePlanImplementationActions() {
             agentKind,
             reuseSession,
             setWorkspaceArrivalEvent,
-          }, { trackProductEvent, ...gitPromptEffects.promptSubmitDeps });
+          }, {
+            trackProductEvent: telemetry.track,
+            ...gitPromptEffects.promptSubmitDeps,
+          });
         },
         showToast,
       });
@@ -224,6 +228,7 @@ function usePlanImplementationActions() {
     setActiveSessionConfigOption,
     setWorkspaceArrivalEvent,
     showToast,
+    telemetry,
   ]);
 
   return {

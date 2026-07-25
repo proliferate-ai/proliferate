@@ -37,6 +37,7 @@ import { useBatchedHeaderHierarchySessionIds } from "@/hooks/workspaces/ui/tabs/
 import {
   isReplacedSessionTombstoned,
 } from "@/hooks/sessions/workflows/session-replacement-tombstones";
+import { useSessionReplacementTombstoneAuthority } from "@/hooks/sessions/derived/use-session-replacement-tombstone-authority";
 import {
   buildHierarchyQuerySignature,
   buildReviewRelationshipHintSignature,
@@ -51,6 +52,7 @@ export function useWorkspaceHeaderSubagentHierarchy(args: {
   workspaceId: string | null;
   sessionIds: string[];
 }): WorkspaceHeaderSubagentHierarchy {
+  const tombstoneAuthority = useSessionReplacementTombstoneAuthority();
   const workspace = useAnyHarnessWorkspaceContext();
   const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
@@ -94,7 +96,7 @@ export function useWorkspaceHeaderSubagentHierarchy(args: {
           workspaceId: args.workspaceId,
           sessionId,
           materializedSessionId,
-          enabledByBatch: enabledSessionIds.has(sessionId),
+          enabledByBatch: tombstoneAuthority.hydrated && enabledSessionIds.has(sessionId),
         }),
         queryFn: async ({ signal }): Promise<SessionSubagentsResponse> => {
           if (!materializedSessionId) {
@@ -124,7 +126,7 @@ export function useWorkspaceHeaderSubagentHierarchy(args: {
           workspaceId: args.workspaceId,
           sessionId,
           materializedSessionId,
-          enabledByBatch: enabledSessionIds.has(sessionId),
+          enabledByBatch: tombstoneAuthority.hydrated && enabledSessionIds.has(sessionId),
         }),
         queryFn: async ({ signal }): Promise<SessionReviewsResponse> => {
           if (!materializedSessionId) {
@@ -154,7 +156,7 @@ export function useWorkspaceHeaderSubagentHierarchy(args: {
           workspaceId: args.workspaceId,
           sessionId,
           materializedSessionId,
-          enabledByBatch: enabledSessionIds.has(sessionId),
+          enabledByBatch: tombstoneAuthority.hydrated && enabledSessionIds.has(sessionId),
         }),
         queryFn: async ({ signal }): Promise<CoworkManagedWorkspacesResponse> => {
           if (!materializedSessionId) {

@@ -18,31 +18,49 @@ import {
   persistUserPreferences,
 } from "@/lib/workflows/preferences/user-preferences-persistence";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
+import type { ProductStorageContext } from "@/lib/infra/persistence/product-storage";
 
 const storeMocks = vi.hoisted(() => {
   const values = new Map<string, unknown>();
-  const get = vi.fn(async (key: string) => values.get(key));
-  const set = vi.fn(async (key: string, value: unknown) => {
-    values.set(key, value);
+  const get = vi.fn(async (key: string) => {
+    const value = values.get(key);
+    return value === undefined ? null : JSON.stringify(value);
   });
+  const set = vi.fn(async (key: string, value: string) => {
+    values.set(key, JSON.parse(value));
+  });
+  const remove = vi.fn(async (key: string) => {
+    values.delete(key);
+  });
+  const captureException = vi.fn();
 
   return {
     values,
     get,
     set,
-    getPreferencesStore: vi.fn(async () => ({ get, set })),
+    remove,
+    captureException,
   };
 });
 
-vi.mock("@/lib/access/tauri/store", () => ({
-  getPreferencesStore: storeMocks.getPreferencesStore,
-}));
+const persistence: ProductStorageContext = {
+  storage: {
+    getItem: storeMocks.get,
+    setItem: storeMocks.set,
+    removeItem: storeMocks.remove,
+  },
+  captureException: storeMocks.captureException,
+};
 
 async function bootstrapUserPreferencesForTest(): Promise<void> {
-  const loaded = await loadUserPreferences();
+  const loaded = await loadUserPreferences(persistence);
   useUserPreferencesStore.getState().hydrate(loaded);
   if (loaded.shouldPersist) {
-    await persistUserPreferences(loaded.preferences, loaded.persistedMetadata);
+    await persistUserPreferences(
+      loaded.preferences,
+      loaded.persistedMetadata,
+      persistence,
+    );
   }
 }
 
@@ -53,6 +71,7 @@ async function markWorktreeAutoDeleteLimitAdoptedForTest(): Promise<void> {
   await persistUserPreferences(
     selectPersistedUserPreferencesSlice(useUserPreferencesStore.getState()),
     nextMetadata,
+    persistence,
   );
 }
 
@@ -61,7 +80,8 @@ describe("user preference migration", () => {
     storeMocks.values.clear();
     storeMocks.get.mockClear();
     storeMocks.set.mockClear();
-    storeMocks.getPreferencesStore.mockClear();
+    storeMocks.remove.mockClear();
+    storeMocks.captureException.mockClear();
     vi.unstubAllGlobals();
     useUserPreferencesStore.setState({
       ...USER_PREFERENCE_DEFAULTS,

@@ -1,7 +1,7 @@
 import { enrollDesktopWorker } from "@proliferate/cloud-sdk";
 import type { ProliferateCloudClient } from "@proliferate/cloud-sdk";
 import type { DesktopWorkerBridge } from "@proliferate/product-client/host/desktop-bridge";
-import { captureTelemetryException } from "@/lib/integrations/telemetry/client";
+import type { ProductTelemetry } from "@proliferate/product-client/host/product-host";
 
 // ensureDesktopWorker and teardownDesktopWorker both mutate the single
 // physical worker process, but their callers dispatch them fire-and-forget.
@@ -11,7 +11,12 @@ import { captureTelemetryException } from "@/lib/integrations/telemetry/client";
 let workerLifecycleChain: Promise<unknown> = Promise.resolve();
 
 export interface EnsureDesktopWorkerDeps {
+  captureException: ProductTelemetry["captureException"];
   onFailure: (error: unknown) => void;
+}
+
+export interface TeardownDesktopWorkerDeps {
+  captureException: ProductTelemetry["captureException"];
 }
 
 function enqueueWorkerLifecycleTask<T>(task: () => Promise<T>): Promise<T> {
@@ -48,21 +53,19 @@ export function ensureDesktopWorker(
       });
       return true;
     } catch (error) {
-      captureTelemetryException(error, {
-        tags: {
-          action: "ensure-desktop-worker",
-          domain: "cloud",
-        },
-      });
+      captureWorkerException(
+        deps.captureException,
+        error,
+        "ensure-desktop-worker",
+      );
       try {
         deps.onFailure(error);
       } catch (notificationError) {
-        captureTelemetryException(notificationError, {
-          tags: {
-            action: "notify-desktop-worker-failure",
-            domain: "cloud",
-          },
-        });
+        captureWorkerException(
+          deps.captureException,
+          notificationError,
+          "notify-desktop-worker-failure",
+        );
       }
       return false;
     }
@@ -75,17 +78,36 @@ export function ensureDesktopWorker(
 // separately in Desktop auth transport (while the auth token is still valid)
 // and via the predecessor-retiring enrollment of the next identity.
 // Never blocks or throws.
-export function teardownDesktopWorker(worker: DesktopWorkerBridge): Promise<void> {
+export function teardownDesktopWorker(
+  worker: DesktopWorkerBridge,
+  deps: TeardownDesktopWorkerDeps,
+): Promise<void> {
   return enqueueWorkerLifecycleTask(async () => {
     try {
       await worker.stop();
     } catch (error) {
-      captureTelemetryException(error, {
-        tags: {
-          action: "teardown-desktop-worker",
-          domain: "cloud",
-        },
-      });
+      captureWorkerException(
+        deps.captureException,
+        error,
+        "teardown-desktop-worker",
+      );
     }
   });
+}
+
+function captureWorkerException(
+  captureException: ProductTelemetry["captureException"],
+  error: unknown,
+  action: string,
+): void {
+  try {
+    captureException(error, {
+      tags: {
+        action,
+        domain: "cloud",
+      },
+    });
+  } catch {
+    // Telemetry is best-effort and must not change worker lifecycle behavior.
+  }
 }

@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import type { DesktopDiagnosticsBridge } from "@proliferate/product-client/host/desktop-diagnostics-bridge";
 import {
   isSessionSlotBusy,
   pendingInteractionsForActivity,
@@ -6,21 +7,20 @@ import {
   resolveSessionViewState,
 } from "@proliferate/product-domain/sessions/activity";
 import { activitySnapshotFromDirectoryEntry } from "@/lib/domain/sessions/directory/directory-activity";
-import {
-  forgetSessionActivityDebugState,
-  isSessionActivityDebugLoggingEnabled,
-  logSessionActivityTransition,
-} from "@/lib/infra/measurement/debug-session-activity";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 
 type SessionEntries = ReturnType<typeof useSessionDirectoryStore.getState>["entriesById"];
 
-function logTransitions(entries: SessionEntries, seen: Set<string>): void {
+function logTransitions(
+  entries: SessionEntries,
+  seen: Set<string>,
+  diagnostics: DesktopDiagnosticsBridge,
+): void {
   const liveIds = new Set<string>();
   for (const [sessionId, entry] of Object.entries(entries)) {
     liveIds.add(sessionId);
     const snapshot = activitySnapshotFromDirectoryEntry(entry);
-    logSessionActivityTransition(sessionId, {
+    diagnostics.logSessionActivityTransition(sessionId, {
       viewState: resolveSessionViewState(snapshot),
       executionPhase: resolveSessionExecutionPhase(snapshot),
       status: snapshot?.status ?? null,
@@ -34,7 +34,7 @@ function logTransitions(entries: SessionEntries, seen: Set<string>): void {
   }
   for (const sessionId of seen) {
     if (!liveIds.has(sessionId)) {
-      forgetSessionActivityDebugState(sessionId);
+      diagnostics.forgetSessionActivity(sessionId);
     }
   }
   seen.clear();
@@ -45,19 +45,24 @@ function logTransitions(entries: SessionEntries, seen: Set<string>): void {
 
 /** Dev tripwire for stuck busy indicators ("shows as generating long after
  * it finished"): logs every session view-state transition WITH the rule
- * inputs, so a wedged `working` names the input that held it. Enabled by
- * VITE_PROLIFERATE_DEBUG_LATENCY or
- * `localStorage.setItem("proliferate.debugSessionActivity", "1")`. */
-export function useDebugSessionActivity(): void {
+ * inputs, so a wedged `working` names the input that held it. Desktop owns the
+ * enablement flag and diagnostic sinks behind its bridge. */
+export function useDebugSessionActivity(
+  diagnostics: DesktopDiagnosticsBridge,
+): void {
   useEffect(() => {
-    if (!isSessionActivityDebugLoggingEnabled()) {
+    if (!diagnostics.isSessionActivityDebugEnabled()) {
       return;
     }
 
     const seen = new Set<string>();
-    logTransitions(useSessionDirectoryStore.getState().entriesById, seen);
+    logTransitions(
+      useSessionDirectoryStore.getState().entriesById,
+      seen,
+      diagnostics,
+    );
     const unsubscribe = useSessionDirectoryStore.subscribe((state) => {
-      logTransitions(state.entriesById, seen);
+      logTransitions(state.entriesById, seen, diagnostics);
     });
 
     // Transition logs go silent on a PERMANENTLY stuck entry (it changed
@@ -84,7 +89,7 @@ export function useDebugSessionActivity(): void {
           }];
         });
       if (holdouts.length > 0) {
-        console.info("[session-activity] busy-holdouts", holdouts);
+        diagnostics.logSessionActivityHoldouts(holdouts);
       }
     }, 10_000);
 
@@ -92,5 +97,5 @@ export function useDebugSessionActivity(): void {
       unsubscribe();
       clearInterval(holdoutTimer);
     };
-  }, []);
+  }, [diagnostics]);
 }

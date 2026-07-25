@@ -1,7 +1,8 @@
 import React, { type ErrorInfo, type ReactNode } from "react";
 import { SETTINGS_COPY } from "@/copy/settings/settings-copy";
 import type { SettingsSection } from "@/config/settings";
-import { captureTelemetryException } from "@/lib/integrations/telemetry/client";
+import type { ProductTelemetry } from "@proliferate/product-client/host/product-host";
+import { useProductTelemetry } from "@/hooks/telemetry/facade/use-product-telemetry";
 import { Button } from "@proliferate/ui/primitives/Button";
 
 interface SettingsContentBoundaryProps {
@@ -13,8 +14,12 @@ interface SettingsContentBoundaryState {
   error: Error | null;
 }
 
-export class SettingsContentBoundary extends React.Component<
-  SettingsContentBoundaryProps,
+interface SettingsContentErrorBoundaryProps extends SettingsContentBoundaryProps {
+  captureException: ProductTelemetry["captureException"];
+}
+
+class SettingsContentErrorBoundary extends React.Component<
+  SettingsContentErrorBoundaryProps,
   SettingsContentBoundaryState
 > {
   state: SettingsContentBoundaryState = {
@@ -26,7 +31,7 @@ export class SettingsContentBoundary extends React.Component<
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
-    captureTelemetryException(error, {
+    this.props.captureException(error, {
       tags: {
         action: "render_section",
         domain: "settings",
@@ -77,4 +82,16 @@ export class SettingsContentBoundary extends React.Component<
       </section>
     );
   }
+}
+
+export function SettingsContentBoundary(
+  props: SettingsContentBoundaryProps,
+) {
+  const telemetry = useProductTelemetry();
+  return (
+    <SettingsContentErrorBoundary
+      {...props}
+      captureException={telemetry.captureException}
+    />
+  );
 }

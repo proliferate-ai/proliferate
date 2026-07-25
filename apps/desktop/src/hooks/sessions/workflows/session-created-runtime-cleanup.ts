@@ -1,9 +1,12 @@
 import { AnyHarnessError } from "@anyharness/sdk";
+import type { ProductTelemetry } from "@proliferate/product-client/host/product-host";
+import type { ProductStorageContext } from "@/lib/infra/persistence/product-storage";
 import { dismissSession as dismissRuntimeSession } from "@/lib/access/anyharness/sessions";
-import { captureTelemetryException } from "@/lib/integrations/telemetry/client";
 import {
   commitReplacedSessionTombstone,
   releaseReplacedSessionSuppression,
+} from "@/hooks/sessions/workflows/session-replacement-tombstone-durable-operations";
+import {
   retireStagedReplacedSessionTombstone,
   stageReplacedSessionTombstone,
 } from "@/hooks/sessions/workflows/session-replacement-tombstones";
@@ -23,13 +26,16 @@ export async function scheduleCreatedRuntimeSessionCleanup(input: {
   workspaceId: string;
   runtimeSessionId: string;
   clientSessionId: string;
+  captureException: ProductTelemetry["captureException"];
+  persistence: ProductStorageContext;
 }): Promise<boolean> {
   stageReplacedSessionTombstone(
     input.workspaceId,
     input.runtimeSessionId,
     [input.clientSessionId],
   );
-  const durablySuppressed = commitReplacedSessionTombstone(
+  const durablySuppressed = await commitReplacedSessionTombstone(
+    input.persistence,
     input.workspaceId,
     input.runtimeSessionId,
     [input.clientSessionId],
@@ -40,6 +46,7 @@ export async function scheduleCreatedRuntimeSessionCleanup(input: {
     run: () => dismissCreatedRuntimeSessionWithRetry(
       input.connection,
       input.runtimeSessionId,
+      input.captureException,
     ),
   });
   if (durablySuppressed) {
@@ -54,8 +61,16 @@ export async function scheduleCreatedRuntimeSessionCleanup(input: {
     );
     return true;
   } catch {
-    releaseReplacedSessionSuppression(input.workspaceId, input.runtimeSessionId);
-    releaseReplacedSessionSuppression(input.workspaceId, input.clientSessionId);
+    await releaseReplacedSessionSuppression(
+      input.persistence,
+      input.workspaceId,
+      input.runtimeSessionId,
+    );
+    await releaseReplacedSessionSuppression(
+      input.persistence,
+      input.workspaceId,
+      input.clientSessionId,
+    );
     return false;
   }
 }
@@ -63,6 +78,7 @@ export async function scheduleCreatedRuntimeSessionCleanup(input: {
 async function dismissCreatedRuntimeSessionWithRetry(
   connection: Parameters<typeof dismissRuntimeSession>[0],
   sessionId: string,
+  captureException: ProductTelemetry["captureException"],
 ): Promise<void> {
   let lastError: unknown = null;
   for (const delayMs of DISMISS_RETRY_DELAYS_MS) {
@@ -82,7 +98,7 @@ async function dismissCreatedRuntimeSessionWithRetry(
     }
   }
   if (lastError) {
-    captureTelemetryException(lastError, {
+    captureException(lastError, {
       tags: {
         action: "dismiss_superseded_session_creation",
         domain: "sessions",

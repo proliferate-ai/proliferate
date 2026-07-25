@@ -142,6 +142,24 @@ export type ProductProviderAuthPurpose =
   | "link"
   | "required_github_link";
 
+/** Normalized provider metadata returned after a host auth operation settles. */
+export type ProductAuthProvider = AuthMethod | "dev_bypass";
+
+export type ProductAuthSignInSource =
+  | "desktop_callback"
+  | "dev_bypass"
+  | "interactive_poll"
+  | "password_form";
+
+export interface ProductLoginResult {
+  provider: ProductAuthProvider;
+  source: ProductAuthSignInSource;
+}
+
+export interface ProductLogoutResult {
+  provider: ProductAuthProvider;
+}
+
 /** Host-decoded provider callback. The raw callback URL and OAuth/PKCE proof
  * never cross this boundary. */
 export type AuthCallback =
@@ -159,11 +177,11 @@ export interface ProductAuthHost {
   state: AuthState;
 
   restoreSession(): Promise<void>;
-  startLogin(request: LoginRequest): Promise<void>;
+  startLogin(request: LoginRequest): Promise<ProductLoginResult>;
   finishLogin(callback: AuthCallback): Promise<void>;
   /** Abandon an in-flight provider/OAuth login before it completes. */
   cancelLogin(): Promise<void>;
-  logout(): Promise<void>;
+  logout(): Promise<ProductLogoutResult>;
 }
 
 /**
@@ -293,6 +311,12 @@ export interface ProductSupportTelemetryContext {
   telemetryRefs?: ProductSupportTelemetryRefs;
 }
 
+/** Product-classified route metadata supplied to the host telemetry transport. */
+export interface ProductRouteChange {
+  pathname: string;
+  routeId: string;
+}
+
 /**
  * Shared product telemetry. ProductClient emits the same events on both hosts;
  * each host constructs the implementation (Sentry/PostHog/native diagnostics)
@@ -307,7 +331,7 @@ export interface ProductTelemetry {
    * Host-owned route instrumentation. ProductClient calls this after shared
    * routing settles; the host may attach vendor tracing and route metadata.
    */
-  routeChanged(pathname: string): void;
+  routeChanged(change: ProductRouteChange): void;
   /** Release/correlation metadata attached to support-report submissions. */
   getSupportContext(): ProductSupportTelemetryContext;
 }

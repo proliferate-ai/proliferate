@@ -9,6 +9,7 @@ import type { WorkspaceShellIntentKey, WorkspaceShellTabKey } from "@/lib/domain
 
 export interface WorkspaceUiState {
   _hydrated: boolean;
+  _persistenceRevision: number;
   archivedWorkspaceIds: string[];
   hiddenRepoRootIds: string[];
   collapsedRepoGroups: string[];
@@ -125,6 +126,15 @@ export interface WorkspaceUiState {
   setVisibleChatSessionIdsForWorkspace: (workspaceId: string, sessionIds: string[]) => void;
   rememberHiddenChatSessionForWorkspace: (workspaceId: string, sessionId: string) => void;
   clearHiddenChatSessionsForWorkspace: (workspaceId: string, sessionIds: string[]) => void;
+  materializeWorkspaceHeaderTabFallbacks: (
+    workspaceId: string,
+    fallback: {
+      collapsedChatGroupIds?: string[];
+      manualChatGroups?: ManualChatGroup[];
+      recentlyHiddenChatSessionIds?: string[];
+      visibleChatSessionIds?: string[];
+    },
+  ) => void;
   toggleChatGroupCollapsedForWorkspace: (workspaceId: string, parentSessionId: string) => void;
   clearChatGroupCollapsedForWorkspace: (workspaceId: string, parentSessionIds: string[]) => void;
   setManualChatGroupsForWorkspace: (workspaceId: string, groups: ManualChatGroup[]) => void;

@@ -1,5 +1,5 @@
 import type { AnyHarnessResolvedConnection } from "@anyharness/sdk-react";
-import type { SupportBundle } from "@proliferate/product-client/host/desktop-bridge";
+import type { SupportBundle } from "@proliferate/product-client/host/desktop-diagnostics-bridge";
 import { sanitizeSupportUploadPayload } from "@/lib/domain/support/report-upload-sanitizer";
 import type {
   SupportReportJob,

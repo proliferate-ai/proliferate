@@ -15,11 +15,19 @@ import {
   captureReplacedSessionTombstoneGeneration,
   clearReplacedSessionTombstoneFromAuthoritativeList,
   committedReplacedSessionTombstonesForWorkspace,
+} from "@/hooks/sessions/workflows/session-replacement-tombstone-durable-operations";
+import {
   filterReplacedSessionTombstones,
 } from "@/hooks/sessions/workflows/session-replacement-tombstones";
 import {
   runTrackedReplacementDismissal,
 } from "@/hooks/sessions/workflows/session-replacement-dismissals";
+import { useSessionReplacementTombstoneAuthority } from "@/hooks/sessions/derived/use-session-replacement-tombstone-authority";
+import {
+  waitForSessionReplacementTombstoneHydration,
+} from "@/hooks/sessions/workflows/session-replacement-tombstone-authority";
+import { useProductStorageContext } from "@/hooks/app/facade/use-product-storage-context";
+import type { ProductStorageContext } from "@/lib/infra/persistence/product-storage";
 
 export type CacheDecision = "hit" | "stale" | "miss";
 
@@ -37,6 +45,10 @@ interface FetchWorkspaceSessionsInput {
   includeDismissed?: boolean;
   requestOptions?: AnyHarnessRequestOptions;
   timeoutMs?: number;
+}
+
+interface FetchWorkspaceSessionsWithPersistenceInput extends FetchWorkspaceSessionsInput {
+  persistence: ProductStorageContext;
 }
 
 function requestOptionsWithSignal(
@@ -77,8 +89,9 @@ async function withAbortTimeout<T>(
 }
 
 async function fetchWorkspaceSessionsWithConnection(
-  input: FetchWorkspaceSessionsInput,
+  input: FetchWorkspaceSessionsWithPersistenceInput,
 ): Promise<WorkspaceSession[]> {
+  await waitForSessionReplacementTombstoneHydration();
   const tombstoneGenerationAtRequestStart =
     captureReplacedSessionTombstoneGeneration();
   const sessions = await withAbortTimeout(
@@ -93,8 +106,10 @@ async function fetchWorkspaceSessionsWithConnection(
       return await listWorkspaceSessions(input.workspaceConnection, requestOptions);
     },
   );
+  await waitForSessionReplacementTombstoneHydration();
   const visibleSessions = filterReplacedSessionTombstones(input.workspaceId, sessions) ?? [];
   reconcileReplacedSessionTombstones(
+    input.persistence,
     input,
     sessions,
     tombstoneGenerationAtRequestStart,
@@ -106,6 +121,7 @@ async function fetchWorkspaceSessionsWithConnection(
 }
 
 export function reconcileReplacedSessionTombstones(
+  persistence: ProductStorageContext,
   input: FetchWorkspaceSessionsInput,
   sessions: readonly { id: string }[],
   requestStartGeneration = captureReplacedSessionTombstoneGeneration(),
@@ -115,7 +131,8 @@ export function reconcileReplacedSessionTombstones(
     input.workspaceId,
   )) {
     if (!listedSessionIds.has(sessionId)) {
-      clearReplacedSessionTombstoneFromAuthoritativeList(
+      void clearReplacedSessionTombstoneFromAuthoritativeList(
+        persistence,
         input.workspaceId,
         sessionId,
         requestStartGeneration,
@@ -137,26 +154,33 @@ export function reconcileReplacedSessionTombstones(
 
 // Owns AnyHarness React Query cache shape needed during workspace activation.
 export function useWorkspaceBootstrapCache() {
+  const persistence = useProductStorageContext();
+  const tombstoneAuthority = useSessionReplacementTombstoneAuthority();
   const queryClient = useQueryClient();
   const cacheScopeKey = useAnyHarnessCacheScopeKey();
 
   const getWorkspaceSessionsCacheDecision = useCallback((
     workspaceId: string,
   ): CacheDecision => {
+    if (!tombstoneAuthority.hydrated) return "miss";
     const queryKey = anyHarnessSessionsKey(cacheScopeKey, workspaceId);
     const cacheState = queryClient.getQueryState(queryKey);
     return cacheState?.dataUpdatedAt
       ? cacheState.isInvalidated ? "stale" : "hit"
       : "miss";
-  }, [cacheScopeKey, queryClient]);
+  }, [cacheScopeKey, queryClient, tombstoneAuthority.hydrated]);
 
   const fetchWorkspaceSessions = useCallback((
     input: FetchWorkspaceSessionsInput,
-  ): Promise<WorkspaceSession[]> => fetchWorkspaceSessionsWithConnection(input), []);
+  ): Promise<WorkspaceSession[]> => fetchWorkspaceSessionsWithConnection({
+    ...input,
+    persistence,
+  }), [persistence]);
 
   const loadWorkspaceSessions = useCallback(async (
     input: LoadWorkspaceSessionsInput,
   ): Promise<WorkspaceSession[]> => {
+    await waitForSessionReplacementTombstoneHydration();
     const queryKey = anyHarnessSessionsKey(cacheScopeKey, input.workspaceId);
     const cacheState = queryClient.getQueryState(queryKey);
     const cachedSessions = queryClient.getQueryData<WorkspaceSession[]>(queryKey);
@@ -176,6 +200,7 @@ export function useWorkspaceBootstrapCache() {
     // joining a possibly hung automatic session-list query triggered by
     // selectedWorkspaceId subscribers, then seed React Query for those surfaces.
     const sessions = await fetchWorkspaceSessionsWithConnection({
+      persistence,
       workspaceConnection: input.workspaceConnection,
       workspaceId: input.workspaceId,
       requestOptions: input.requestOptions,
@@ -183,7 +208,7 @@ export function useWorkspaceBootstrapCache() {
     });
     queryClient.setQueryData(queryKey, sessions);
     return sessions;
-  }, [cacheScopeKey, queryClient]);
+  }, [cacheScopeKey, persistence, queryClient, tombstoneAuthority.revision]);
 
   return {
     fetchWorkspaceSessions,

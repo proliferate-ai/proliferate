@@ -10,14 +10,21 @@ const persistenceMocks = vi.hoisted(() => ({
   persistValue: vi.fn(),
 }));
 
-vi.mock("@/lib/infra/persistence/preferences-persistence", () => ({
-  readPersistedValue: persistenceMocks.readPersistedValue,
-  persistValue: persistenceMocks.persistValue,
+vi.mock("@/hooks/app/facade/use-product-storage-context", () => ({
+  useProductStorageContext: () => ({}),
+}));
+
+vi.mock("@/lib/infra/persistence/product-storage", () => ({
+  readProductStorageJson: (_context: unknown, key: string) =>
+    persistenceMocks.readPersistedValue(key),
+  writeProductStorageJson: (_context: unknown, key: string, value: unknown) =>
+    persistenceMocks.persistValue(key, value),
 }));
 
 function resetSelectionStore(): void {
   useSessionSelectionStore.setState({
     _hydrated: false,
+    _persistenceRevision: 0,
     pendingWorkspaceEntry: null,
     selectedLogicalWorkspaceId: null,
     selectedWorkspaceId: null,
@@ -145,4 +152,27 @@ describe("useSessionSelectionLifecycle", () => {
     expect(useSessionSelectionStore.getState().selectedLogicalWorkspaceId).toBeNull();
     expect(persistenceMocks.persistValue).not.toHaveBeenCalled();
   });
+
+  it("keeps a live selection that changes during hydration", async () => {
+    let resolveRead: (value: string) => void = () => undefined;
+    persistenceMocks.readPersistedValue.mockReturnValueOnce(new Promise((resolve) => {
+      resolveRead = resolve;
+    }));
+
+    renderHook(() => useSessionSelectionLifecycle());
+    act(() => {
+      useSessionSelectionStore.getState()
+        .setSelectedLogicalWorkspaceId("logical-workspace-live");
+    });
+    await act(async () => resolveRead("logical-workspace-persisted"));
+    await waitFor(() => expect(useSessionSelectionStore.getState()._hydrated).toBe(true));
+
+    expect(useSessionSelectionStore.getState().selectedLogicalWorkspaceId)
+      .toBe("logical-workspace-live");
+    expect(persistenceMocks.persistValue).toHaveBeenCalledWith(
+      "selected_logical_workspace_id",
+      "logical-workspace-live",
+    );
+  });
+
 });

@@ -58,10 +58,7 @@ vi.mock("@/lib/integrations/telemetry/client", () => ({
   getSupportReportTelemetryRefs: mocks.getSupportReportTelemetryRefs,
 }));
 
-import {
-  __resetDesktopTelemetryRouteForTest,
-  desktopTelemetry,
-} from "./desktop-product-host";
+import { desktopTelemetry } from "./desktop-product-host";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -105,22 +102,11 @@ describe("desktopTelemetry", () => {
     expect(mocks.setTelemetryTag).toHaveBeenCalledWith("k", "v");
   });
 
-  it("routeChanged emits once per resolved route and suppresses repeats", () => {
-    __resetDesktopTelemetryRouteForTest();
+  it("routeChanged attaches product-classified route metadata only", () => {
+    desktopTelemetry.routeChanged({ pathname: "/settings", routeId: "settings" });
 
-    desktopTelemetry.routeChanged("/");
-    desktopTelemetry.routeChanged("/");
-    desktopTelemetry.routeChanged("/settings");
-
-    // "main" (from "/") emits once, the repeat is suppressed, "settings" emits.
-    expect(mocks.trackProductEvent.mock.calls).toEqual([
-      ["screen_viewed", { route: "main" }],
-      ["screen_viewed", { route: "settings" }],
-    ]);
-    expect(mocks.setTelemetryTag.mock.calls).toEqual([
-      ["route", "main"],
-      ["route", "settings"],
-    ]);
+    expect(mocks.setTelemetryTag).toHaveBeenCalledWith("route", "settings");
+    expect(mocks.trackProductEvent).not.toHaveBeenCalled();
   });
 
   it("getSupportContext reads the release id and telemetry refs", () => {

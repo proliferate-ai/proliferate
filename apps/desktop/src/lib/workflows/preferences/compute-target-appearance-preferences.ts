@@ -40,7 +40,7 @@ export async function getComputeTargetAppearancePreferences(
 export async function setComputeTargetAppearancePreference(
   preference: ComputeTargetAppearancePreference,
   dependencies: ComputeTargetAppearancePreferencesDependencies,
-): Promise<void> {
+): Promise<Record<string, ComputeTargetAppearancePreference>> {
   const normalized = normalizeComputeTargetAppearancePreference(preference);
   if (!normalized) {
     throw new Error("Target appearance requires a target id.");
@@ -48,4 +48,5 @@ export async function setComputeTargetAppearancePreference(
   const preferences = await readAppearancePreferences(dependencies);
   preferences[normalized.targetId] = normalized;
   await dependencies.persistValue(COMPUTE_TARGET_APPEARANCE_KEY, preferences);
+  return preferences;
 }

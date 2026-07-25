@@ -372,6 +372,7 @@ The bridge groups are:
 | --- | --- |
 | `runtime` | Discover or restart the local AnyHarness runtime and return its base URL/token connection. |
 | `files` | Pick a local directory, inspect basic path availability, list/open editor/finder/terminal/copy targets, reveal paths, and open terminals. |
+| `identity` | Read the existing anonymous Desktop install id used by local-repository environment records; this remains distinct from the worker enrollment id. |
 | `localCredentials` | Read and update local agent/provider credentials; never Proliferate login credentials. |
 | `nativeUi` | Render native context menus, receive native commands, set running-agent quit protection, update Dock attention, and control WebView zoom. |
 | `updater` | Report updater support/version, check, download with progress, install, and relaunch while preserving the opaque native update handle. |
@@ -633,12 +634,20 @@ links, and clipboard behavior through the mounted host while product source
 remains in Desktop. The complete contract is
 [`web-desktop-client-unification-d1d.md`](web-desktop-client-unification-d1d.md).
 
-Route Shared Identity and Navigation Through ProductHost is the current review
-slice. It normalizes Desktop auth identity/readiness,
+Route Shared Identity and Navigation Through ProductHost is reviewed and green
+in open PR #1176 at head `d016cb5d25ce9ef39c5037c76895164fbff350c7`.
+It normalizes Desktop auth identity/readiness,
 deployment and Cloud authority, and lossless inbound ProductEntry routing
 through the mounted host while product source remains in Desktop. It starts
 from exact base `0eab251fd35d26022165f7f0852db2885a8c4093` and does not begin
 persistence, telemetry, extraction, or Web replacement work.
+
+Route Shared Persistence and Telemetry Through ProductHost is the current
+implementation slice. It routes non-secret product persistence and typed
+product telemetry through the mounted host and establishes the final in-place
+provider/lifecycle envelope before extraction. It starts from exact reviewed
+base `d016cb5d25ce9ef39c5037c76895164fbff350c7` and does not move product
+source or begin Web work.
 
 Related authoritative docs:
 

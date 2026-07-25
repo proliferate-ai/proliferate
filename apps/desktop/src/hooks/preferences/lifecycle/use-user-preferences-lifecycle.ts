@@ -9,52 +9,66 @@ import {
   persistUserPreferences,
 } from "@/lib/workflows/preferences/user-preferences-persistence";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
-
-function sameJson(left: unknown, right: unknown): boolean {
-  return JSON.stringify(left) === JSON.stringify(right);
-}
+import { useProductStorageContext } from "@/hooks/app/facade/use-product-storage-context";
+import type { ProductStorageContext } from "@/lib/infra/persistence/product-storage";
 
 function persistSnapshot(
   preferences: UserPreferences,
   persistedMetadata: PersistedUserPreferencesMetadata,
-): void {
-  void persistUserPreferences(preferences, persistedMetadata);
+  context: ProductStorageContext,
+): Promise<void> {
+  return persistUserPreferences(preferences, persistedMetadata, context);
 }
 
 // Owns loading persisted user preferences and syncing store changes to disk.
 // Does not own preference UI actions or worktree policy adoption.
 export function useUserPreferencesLifecycle(): void {
+  const persistence = useProductStorageContext();
+
   useEffect(() => {
     let cancelled = false;
     let unsubscribe: (() => void) | null = null;
+    const startingRevision = useUserPreferencesStore.getState()._persistenceRevision;
 
     const bootstrap = async () => {
-      const loaded = await loadUserPreferences();
+      const loaded = await loadUserPreferences(persistence);
       if (cancelled) {
         return;
       }
-
-      useUserPreferencesStore.getState().hydrate(loaded);
-      if (loaded.shouldPersist) {
-        persistSnapshot(loaded.preferences, loaded.persistedMetadata);
-      }
+      const current = useUserPreferencesStore.getState();
+      const liveStateWon = current._persistenceRevision !== startingRevision;
+      const preferences = liveStateWon
+        ? selectPersistedUserPreferencesSlice(current)
+        : loaded.preferences;
+      const persistedMetadata = liveStateWon
+        ? current._persistedMetadata
+        : loaded.persistedMetadata;
+      current.hydrate({ preferences, persistedMetadata });
 
       unsubscribe = useUserPreferencesStore.subscribe((state, prev) => {
-        if (!state._hydrated || !prev._hydrated) {
-          return;
-        }
-
-        const currentPreferences = selectPersistedUserPreferencesSlice(state);
-        const previousPreferences = selectPersistedUserPreferencesSlice(prev);
         if (
-          sameJson(currentPreferences, previousPreferences)
-          && sameJson(state._persistedMetadata, prev._persistedMetadata)
+          !state._hydrated
+          || !prev._hydrated
+          || state._persistenceRevision === prev._persistenceRevision
         ) {
           return;
         }
 
-        persistSnapshot(currentPreferences, state._persistedMetadata);
+        const currentPreferences = selectPersistedUserPreferencesSlice(state);
+        void persistSnapshot(
+          currentPreferences,
+          state._persistedMetadata,
+          persistence,
+        );
       });
+
+      if (liveStateWon || loaded.shouldPersist) {
+        void persistSnapshot(
+          preferences,
+          persistedMetadata,
+          persistence,
+        );
+      }
     };
 
     void bootstrap();
@@ -63,5 +77,5 @@ export function useUserPreferencesLifecycle(): void {
       cancelled = true;
       unsubscribe?.();
     };
-  }, []);
+  }, [persistence]);
 }

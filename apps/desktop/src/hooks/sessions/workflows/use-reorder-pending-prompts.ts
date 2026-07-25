@@ -1,11 +1,12 @@
 import { useCallback } from "react";
 import { useReorderPendingPromptsMutation } from "@anyharness/sdk-react";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
-import { trackProductEvent } from "@/lib/integrations/telemetry/client";
+import { useProductTelemetry } from "@/hooks/telemetry/facade/use-product-telemetry";
 import { getMaterializedSessionId, getSessionRecord } from "@/stores/sessions/session-records";
 
 export function useReorderPendingPrompts() {
   const mutation = useReorderPendingPromptsMutation();
+  const telemetry = useProductTelemetry();
 
   return useCallback(
     async (sessionId: string, expectedSeqs: number[], desiredSeqs: number[]) => {
@@ -20,7 +21,7 @@ export function useReorderPendingPrompts() {
         expectedSeqs,
         desiredSeqs,
       });
-      trackProductEvent("chat_pending_prompts_reordered", {
+      telemetry.track("chat_pending_prompts_reordered", {
         agent_kind: slot?.agentKind ?? "unknown",
         workspace_kind: workspaceId && parseCloudWorkspaceSyntheticId(workspaceId)
           ? "cloud"
@@ -28,6 +29,6 @@ export function useReorderPendingPrompts() {
         count: desiredSeqs.length,
       });
     },
-    [mutation],
+    [mutation, telemetry],
   );
 }

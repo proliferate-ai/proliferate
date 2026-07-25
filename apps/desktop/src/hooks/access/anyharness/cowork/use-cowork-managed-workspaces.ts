@@ -5,6 +5,7 @@ import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-st
 import {
   isReplacedSessionTombstonedInAnyWorkspace,
 } from "@/hooks/sessions/workflows/session-replacement-tombstones";
+import { useSessionReplacementTombstoneAuthority } from "@/hooks/sessions/derived/use-session-replacement-tombstone-authority";
 
 const EMPTY_MANAGED_WORKSPACES: CoworkManagedWorkspaceSummary[] = [];
 
@@ -12,6 +13,7 @@ export function useCoworkManagedWorkspaces(
   sessionId: string | null | undefined,
   enabled = true,
 ) {
+  const tombstoneAuthority = useSessionReplacementTombstoneAuthority();
   // The runtime only knows materialized session ids; hot client-keyed
   // sessions (client-session:<kind>:...) 404 forever (and react-query
   // retries forever) if the raw id leaks into the request.
@@ -26,6 +28,7 @@ export function useCoworkManagedWorkspaces(
     : null;
   const query = useCoworkManagedWorkspacesQuery(materializedSessionId, {
     enabled: enabled
+      && tombstoneAuthority.hydrated
       && !!materializedSessionId
       && !isPendingSessionId(materializedSessionId)
       && !isReplacedSessionTombstonedInAnyWorkspace(materializedSessionId),

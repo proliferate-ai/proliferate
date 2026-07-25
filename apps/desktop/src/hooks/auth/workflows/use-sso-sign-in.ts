@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import type { LoginRequest } from "@proliferate/product-client/host/product-host";
 import { useSsoDiscovery } from "@/hooks/access/cloud/auth/use-sso-discovery";
+import { useProductAuthActions } from "@/hooks/auth/workflows/use-product-auth-actions";
 import { useAppCapabilities } from "@/hooks/capabilities/derived/use-app-capabilities";
 
 type SsoSignInOptions = Omit<
@@ -25,6 +26,7 @@ export interface UseSsoSignInResult {
 // access hook so the login surface can render only when deployment SSO is enabled.
 export function useSsoSignIn(): UseSsoSignInResult {
   const { auth } = useProductHost();
+  const { startLogin } = useProductAuthActions();
   const { cloudEnabled } = useAppCapabilities();
   const {
     data: ssoDiscovery,
@@ -48,7 +50,7 @@ export function useSsoSignIn(): UseSsoSignInResult {
     setSubmitting(true);
     setError(null);
     try {
-      await auth.startLogin({
+      await startLogin({
         kind: "sso",
         organizationId: ssoDiscovery?.organizationId ?? undefined,
         connectionId: ssoDiscovery?.connectionId ?? undefined,
@@ -68,7 +70,7 @@ export function useSsoSignIn(): UseSsoSignInResult {
   }, [
     signInAvailable,
     signInUnavailableDescription,
-    auth,
+    startLogin,
     ssoDiscovery?.connectionId,
     ssoDiscovery?.organizationId,
   ]);

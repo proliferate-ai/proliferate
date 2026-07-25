@@ -29,6 +29,7 @@ import {
   getGitHubStatusLabel,
 } from "@/lib/domain/auth/account-profile-presentation";
 import { useGitHubSignIn } from "@/hooks/auth/workflows/use-github-sign-in";
+import { useProductAuthActions } from "@/hooks/auth/workflows/use-product-auth-actions";
 import { useOrganizationJoinInvitationFlow } from "@/hooks/organizations/workflows/use-organization-join-invitation-flow";
 import { useJoinedOrganizationActivation } from "@/hooks/organizations/workflows/use-joined-organization-activation";
 import { buildGitHubOAuthAppSettingsUrl } from "@/lib/integrations/auth/proliferate-auth";
@@ -42,6 +43,7 @@ const EMPTY_INVITATIONS: OrganizationInvitationRecord[] = [];
 export function AccountPane() {
   const navigate = useNavigate();
   const host = useProductHost();
+  const { startLogin, logout } = useProductAuthActions();
   const status = host.auth.state.status;
   const user = host.auth.state.status === "authenticated" ? host.auth.state.user : null;
   const { links } = host;
@@ -164,7 +166,7 @@ export function AccountPane() {
   async function handleSignOut() {
     setSigningOut(true);
     try {
-      await host.auth.logout();
+      await logout();
       navigate("/login", { replace: true });
     } finally {
       setSigningOut(false);
@@ -175,7 +177,7 @@ export function AccountPane() {
     setLinkingGoogle(true);
     setProviderLinkError(null);
     try {
-      await host.auth.startLogin({ kind: "google", purpose: "link" });
+      await startLogin({ kind: "google", purpose: "link" });
       await authViewer.refetch();
     } catch (error) {
       setProviderLinkError(error instanceof Error ? error.message : "Google linking failed");

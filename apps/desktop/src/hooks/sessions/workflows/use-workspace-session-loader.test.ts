@@ -4,6 +4,8 @@ import { cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   resetReplacedSessionTombstonesForTests,
+} from "@/hooks/sessions/workflows/session-replacement-tombstone-durable-operations";
+import {
   stageReplacedSessionTombstone,
 } from "@/hooks/sessions/workflows/session-replacement-tombstones";
 import { useWorkspaceSessionLoader } from "./use-workspace-session-loader";
@@ -23,6 +25,12 @@ vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
   useProductHost: () => ({
     cloud: { client: mocks.cloudClient },
     desktop: { runtime: mocks.localRuntime, ssh: mocks.ssh },
+    storage: {
+      getItem: vi.fn(async () => null),
+      setItem: vi.fn(async () => {}),
+      removeItem: vi.fn(async () => {}),
+    },
+    telemetry: { captureException: vi.fn() },
   }),
 }));
 

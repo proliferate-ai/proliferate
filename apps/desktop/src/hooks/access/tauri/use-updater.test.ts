@@ -12,6 +12,11 @@ const updaterMocks = vi.hoisted(() => ({
   isSupported: vi.fn(() => true),
 }));
 
+const telemetryMocks = vi.hoisted(() => ({
+  track: vi.fn(),
+  captureException: vi.fn(),
+}));
+
 vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
   useProductHost: () => ({ desktop: { updater: updaterMocks } }),
 }));
@@ -21,9 +26,8 @@ vi.mock("@/lib/infra/persistence/preferences-persistence", () => ({
   readPersistedValue: vi.fn(async () => null),
 }));
 
-vi.mock("@/lib/integrations/telemetry/client", () => ({
-  trackProductEvent: vi.fn(),
-  captureTelemetryException: vi.fn(),
+vi.mock("@/hooks/telemetry/facade/use-product-telemetry", () => ({
+  useProductTelemetry: () => telemetryMocks,
 }));
 
 vi.mock("@/lib/domain/telemetry/failures", () => ({
@@ -64,6 +68,10 @@ describe("useUpdater", () => {
     expect(useUpdaterStore.getState().phase).toBe("current");
     expect(useUpdaterStore.getState().manualCheckCompletedAt).toEqual(expect.any(Number));
     expect(result.current.manualCheckCompletedAt).toEqual(expect.any(Number));
+    expect(telemetryMocks.track).toHaveBeenCalledWith(
+      "app_update_check_started",
+      undefined,
+    );
 
     act(() => {
       result.current.clearManualCheckCompleted();
@@ -115,6 +123,16 @@ describe("useUpdater", () => {
     expect(useUpdaterStore.getState().errorMessage).toBe("release feed unreachable");
     expect(useUpdaterStore.getState().errorSource).toBe("check");
     expect(result.current.errorSource).toBe("check");
+    expect(telemetryMocks.captureException).toHaveBeenCalledWith(
+      expect.objectContaining({ message: "release feed unreachable" }),
+      {
+        tags: {
+          action: "check_for_update",
+          domain: "updater",
+          route: "settings",
+        },
+      },
+    );
   });
 
   it("attributes a failed download to the download step", async () => {
@@ -136,6 +154,10 @@ describe("useUpdater", () => {
     expect(useUpdaterStore.getState().errorMessage).toBe("disk full");
     expect(useUpdaterStore.getState().errorSource).toBe("download");
     expect(result.current.errorSource).toBe("download");
+    expect(telemetryMocks.track).toHaveBeenCalledWith(
+      "app_update_install_failed",
+      { failure_kind: "unknown", version: "0.2.0" },
+    );
   });
 
   it("passes the exact checked update back to the bridge and maps progress", async () => {

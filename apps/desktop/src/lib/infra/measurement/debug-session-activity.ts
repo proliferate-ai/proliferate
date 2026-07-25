@@ -1,4 +1,8 @@
 import { isLatencyDebugLoggingEnabled } from "@/lib/infra/measurement/debug-latency";
+import type {
+  SessionActivityDiagnosticHoldout,
+  SessionActivityDiagnosticSnapshot,
+} from "@proliferate/product-client/host/desktop-diagnostics-bridge";
 
 function browserFlagEnabled(): boolean {
   if (typeof window === "undefined") {
@@ -23,21 +27,11 @@ export function isSessionActivityDebugLoggingEnabled(): boolean {
 /** The full input set of the busy/view-state rules, captured per transition
  * so a stuck "working" names the input that held it (executionSummary.phase
  * vs transcript streaming vs status vs pending interactions). */
-export interface SessionActivityDebugSnapshot {
-  viewState: string;
-  executionPhase: string | null;
-  status: string | null;
-  transcriptIsStreaming: boolean;
-  streamConnectionState: string | null;
-  pendingInteractionCount: number;
-  executionSummaryUpdatedAt: string | null;
-}
-
-const lastBySessionId = new Map<string, SessionActivityDebugSnapshot>();
+const lastBySessionId = new Map<string, SessionActivityDiagnosticSnapshot>();
 
 export function logSessionActivityTransition(
   sessionId: string,
-  next: SessionActivityDebugSnapshot,
+  next: SessionActivityDiagnosticSnapshot,
 ): void {
   if (!isSessionActivityDebugLoggingEnabled()) {
     return;
@@ -60,9 +54,15 @@ export function forgetSessionActivityDebugState(sessionId: string): void {
   lastBySessionId.delete(sessionId);
 }
 
+export function logSessionActivityHoldouts(
+  holdouts: SessionActivityDiagnosticHoldout[],
+): void {
+  console.info("[session-activity] busy-holdouts", holdouts);
+}
+
 function snapshotsEqual(
-  a: SessionActivityDebugSnapshot,
-  b: SessionActivityDebugSnapshot,
+  a: SessionActivityDiagnosticSnapshot,
+  b: SessionActivityDiagnosticSnapshot,
 ): boolean {
   return a.viewState === b.viewState
     && a.executionPhase === b.executionPhase

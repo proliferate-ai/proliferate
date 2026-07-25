@@ -1,8 +1,8 @@
 import { useCallback, useState } from "react";
-import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
+import { useProductAuthActions } from "@/hooks/auth/workflows/use-product-auth-actions";
 
 export function useRequiredGitHubLink() {
-  const { auth } = useProductHost();
+  const { startLogin, logout: productLogout } = useProductAuthActions();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -13,7 +13,7 @@ export function useRequiredGitHubLink() {
     setLoading(true);
     setError(null);
     try {
-      await auth.startLogin({
+      await startLogin({
         kind: "github",
         purpose: "required_github_link",
         prompt: "select_account",
@@ -27,11 +27,11 @@ export function useRequiredGitHubLink() {
     } finally {
       setLoading(false);
     }
-  }, [auth, loading]);
+  }, [loading, startLogin]);
 
   const logout = useCallback(async () => {
-    await auth.logout();
-  }, [auth]);
+    await productLogout();
+  }, [productLogout]);
 
   return { connect, error, loading, logout };
 }

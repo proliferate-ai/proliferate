@@ -60,6 +60,19 @@ import {
   saveDiagnosticJson,
 } from "./diagnostics";
 import {
+  recordBootDiagnostic,
+  recordBootDiagnosticOnce,
+} from "@/lib/infra/measurement/boot-stall-diagnostics";
+import { logStartupDebug } from "@/lib/infra/measurement/debug-startup";
+import {
+  forgetSessionActivityDebugState,
+  isSessionActivityDebugLoggingEnabled,
+  logSessionActivityHoldouts,
+  logSessionActivityTransition,
+} from "@/lib/infra/measurement/debug-session-activity";
+import { reportReactRenderError } from "@/lib/integrations/telemetry/native-diagnostics";
+import { loadAnonymousTelemetryBootstrap } from "@/lib/integrations/telemetry/anonymous-storage";
+import {
   deleteStagedSupportReportAttachment,
   readStagedSupportReportAttachment,
   stageSupportReportAttachment,
@@ -99,6 +112,12 @@ export const desktopBridge: DesktopBridge = {
     openTarget,
     reveal: revealInFinder,
     openTerminal: openInTerminal,
+  },
+
+  identity: {
+    async getAnonymousInstallId(): Promise<string> {
+      return (await loadAnonymousTelemetryBootstrap()).installId;
+    },
   },
 
   localCredentials: {
@@ -226,6 +245,38 @@ export const desktopBridge: DesktopBridge = {
 
   diagnostics: {
     logEvent: logRendererEvent,
+    recordBootEvent({ label, metadata }) {
+      recordBootDiagnostic(label, metadata);
+    },
+    recordBootEventOnce({ label, metadata }) {
+      recordBootDiagnosticOnce(label, metadata);
+    },
+    recordStartupEvent({ message, elapsedMs, authStatus }) {
+      recordBootDiagnostic(
+        `app_bootstrap.${message}`,
+        elapsedMs === undefined ? undefined : { elapsedMs },
+      );
+      void logRendererEvent({
+        source: "app_bootstrap",
+        message,
+        elapsedMs,
+      }).catch(() => {
+        // Desktop startup diagnostics are best-effort by design.
+      });
+      const debugFields = {
+        ...(elapsedMs === undefined ? {} : { elapsedMs }),
+        ...(authStatus === undefined ? {} : { authStatus }),
+      };
+      logStartupDebug(
+        message,
+        Object.keys(debugFields).length === 0 ? undefined : debugFields,
+      );
+    },
+    isSessionActivityDebugEnabled: isSessionActivityDebugLoggingEnabled,
+    logSessionActivityTransition,
+    forgetSessionActivity: forgetSessionActivityDebugState,
+    logSessionActivityHoldouts,
+    reportReactRenderError,
     collectSupportBundle: collectSupportDiagnostics,
     saveJson(input) {
       return saveDiagnosticJson(input.suggestedFileName, input.contents);

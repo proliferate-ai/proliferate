@@ -25,6 +25,7 @@ interface EnterPendingWorkspaceShellOptions {
 
 interface SessionSelectionState {
   _hydrated: boolean;
+  _persistenceRevision: number;
   pendingWorkspaceEntry: PendingWorkspaceEntry | null;
   selectedLogicalWorkspaceId: string | null;
   selectedWorkspaceId: string | null;
@@ -54,6 +55,7 @@ interface SessionSelectionState {
 
 export const useSessionSelectionStore = create<SessionSelectionState>((set, get) => ({
   _hydrated: false,
+  _persistenceRevision: 0,
   pendingWorkspaceEntry: null,
   selectedLogicalWorkspaceId: null,
   selectedWorkspaceId: null,
@@ -65,12 +67,16 @@ export const useSessionSelectionStore = create<SessionSelectionState>((set, get)
   hotPaintGate: null,
 
   setSelectedLogicalWorkspaceId: (selectedLogicalWorkspaceId) => {
-    set({ selectedLogicalWorkspaceId });
+    set((state) => ({
+      selectedLogicalWorkspaceId,
+      _persistenceRevision: state._persistenceRevision + 1,
+    }));
   },
 
   enterPendingWorkspaceShell: (pendingWorkspaceEntry, options) => set((state) => {
     const activeSessionId = options?.initialActiveSessionId ?? null;
     return {
+      _persistenceRevision: state._persistenceRevision + 1,
       pendingWorkspaceEntry,
       selectedLogicalWorkspaceId: buildPendingWorkspaceUiKey(pendingWorkspaceEntry),
       selectedWorkspaceId: null,
@@ -96,6 +102,7 @@ export const useSessionSelectionStore = create<SessionSelectionState>((set, get)
 
   activateWorkspace: (options) => {
     set((state) => ({
+      _persistenceRevision: state._persistenceRevision + 1,
       pendingWorkspaceEntry: options.clearPending === false
         ? state.pendingWorkspaceEntry
         : null,
@@ -117,6 +124,7 @@ export const useSessionSelectionStore = create<SessionSelectionState>((set, get)
 
   activateHotWorkspace: (options) => {
     set((state) => ({
+      _persistenceRevision: state._persistenceRevision + 1,
       pendingWorkspaceEntry: options.clearPending === false
         ? state.pendingWorkspaceEntry
         : null,
@@ -146,6 +154,7 @@ export const useSessionSelectionStore = create<SessionSelectionState>((set, get)
 
   deselectWorkspacePreservingSessions: () => set((state) => {
     return {
+      _persistenceRevision: state._persistenceRevision + 1,
       pendingWorkspaceEntry: null,
       selectedLogicalWorkspaceId: null,
       selectedWorkspaceId: null,
@@ -163,6 +172,7 @@ export const useSessionSelectionStore = create<SessionSelectionState>((set, get)
 
   clearSelection: () => set((state) => {
     return {
+      _persistenceRevision: state._persistenceRevision + 1,
       pendingWorkspaceEntry: null,
       selectedLogicalWorkspaceId: null,
       selectedWorkspaceId: null,

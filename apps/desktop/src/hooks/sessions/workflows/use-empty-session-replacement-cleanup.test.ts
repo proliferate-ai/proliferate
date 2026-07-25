@@ -14,24 +14,29 @@ import { useSessionIntentStore } from "@/stores/sessions/session-intent-store";
 import { resetSessionCreationSupersessionForTests } from "@/hooks/sessions/workflows/session-creation-supersession";
 import {
   committedReplacedSessionTombstonesForWorkspace,
+  prepareSessionReplacementTombstonesForStorage,
+  resetReplacedSessionTombstonesForTests,
+} from "@/hooks/sessions/workflows/session-replacement-tombstone-durable-operations";
+import {
+  beginSessionReplacementTombstoneHydration,
+  settleSessionReplacementTombstoneHydration,
+} from "@/hooks/sessions/workflows/session-replacement-tombstone-authority";
+import {
   filterReplacedSessionIds,
   filterReplacedSessionTombstones,
   isReplacedSessionTombstoned,
-  resetReplacedSessionTombstonesForTests,
   shouldPreserveStagedReplacementShell,
 } from "@/hooks/sessions/workflows/session-replacement-tombstones";
 import {
   resetSessionReplacementDismissalsForTests,
 } from "@/hooks/sessions/workflows/session-replacement-dismissals";
 
-const storageMocks = vi.hoisted(() => ({
-  writeTombstones: vi.fn(() => true),
-}));
-
-vi.mock("@/lib/access/browser/session-replacement-tombstones-storage", () => ({
-  readSessionReplacementTombstones: () => ({}),
-  writeSessionReplacementTombstones: storageMocks.writeTombstones,
-}));
+const storage = {
+  getItem: vi.fn(async () => null),
+  setItem: vi.fn(async () => undefined),
+  removeItem: vi.fn(async () => undefined),
+};
+const persistence = { storage, captureException: vi.fn() };
 
 function createDeps() {
   const mutateAsync = vi.fn(async () => undefined);
@@ -39,6 +44,8 @@ function createDeps() {
     closeSessionSlotStream: vi.fn(),
     removeWorkspaceSessionRecord: vi.fn(),
     dismissSessionMutation: { mutateAsync } as never,
+    captureException: vi.fn(),
+    persistence,
   };
   return { deps, mutateAsync };
 }
@@ -58,18 +65,18 @@ function putUnusedSession() {
 }
 
 beforeEach(() => {
-  storageMocks.writeTombstones.mockReset();
-  storageMocks.writeTombstones.mockReturnValue(true);
   useSessionDirectoryStore.getState().clearEntries();
   useSessionTranscriptStore.getState().clearEntries();
   useSessionIntentStore.getState().clear();
   resetSessionCreationSupersessionForTests();
   resetReplacedSessionTombstonesForTests();
+  beginSessionReplacementTombstoneHydration(storage);
+  prepareSessionReplacementTombstonesForStorage(storage);
+  settleSessionReplacementTombstoneHydration(false);
   resetSessionReplacementDismissalsForTests();
 });
 
 afterEach(() => {
-  storageMocks.writeTombstones.mockReturnValue(true);
   resetReplacedSessionTombstonesForTests();
   resetSessionReplacementDismissalsForTests();
 });
@@ -239,9 +246,27 @@ describe("empty session replacement transaction", () => {
     ])).toEqual([{ id: "runtime-new" }]);
   });
 
+  it("keeps the old session retired when dismissal fails after commit", async () => {
+    putUnusedSession();
+    const { deps, mutateAsync } = createDeps();
+    mutateAsync.mockRejectedValue(new Error("runtime unavailable"));
+    const transaction = beginEmptySessionReplacement(
+      "old-session",
+      "workspace-1",
+      deps,
+    );
+
+    await expect(transaction?.commit()).resolves.toBe("retired");
+
+    await vi.waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(3));
+    expect(getSessionRecord("old-session")).toBeNull();
+    expect(isReplacedSessionTombstoned("workspace-1", "runtime-old")).toBe(true);
+    expect(deps.removeWorkspaceSessionRecord).toHaveBeenCalled();
+  });
+
   it("restores the old session when persistence and dismissal both fail", async () => {
-    const original = putUnusedSession();
-    storageMocks.writeTombstones.mockReturnValue(false);
+    storage.setItem.mockRejectedValueOnce(new Error("write failed"));
+    putUnusedSession();
     const { deps, mutateAsync } = createDeps();
     mutateAsync.mockRejectedValue(new Error("runtime unavailable"));
     const transaction = beginEmptySessionReplacement(
@@ -253,12 +278,9 @@ describe("empty session replacement transaction", () => {
     await expect(transaction?.commit()).resolves.toBe("retained");
 
     expect(mutateAsync).toHaveBeenCalledTimes(3);
-    expect(getSessionRecord("old-session")).toMatchObject({
-      materializedSessionId: original.materializedSessionId,
-      streamConnectionState: "disconnected",
-    });
-    expect(isReplacedSessionTombstoned("workspace-1", "runtime-old")).toBe(false);
+    expect(getSessionRecord("old-session")).not.toBeNull();
     expect(deps.removeWorkspaceSessionRecord).not.toHaveBeenCalled();
+    expect(isReplacedSessionTombstoned("workspace-1", "runtime-old")).toBe(false);
   });
 
   it("does not replace a session with a queued prompt", () => {

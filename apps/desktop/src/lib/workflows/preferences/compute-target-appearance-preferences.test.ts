@@ -54,7 +54,7 @@ describe("compute target appearance preference persistence", () => {
       },
     });
 
-    await setComputeTargetAppearancePreference(
+    const saved = await setComputeTargetAppearancePreference(
       {
         targetId: " target-2 ",
         displayName: " Remote ",
@@ -64,6 +64,20 @@ describe("compute target appearance preference persistence", () => {
       dependencies,
     );
 
+    expect(saved).toEqual({
+      existing: {
+        targetId: "existing",
+        displayName: null,
+        iconId: "cloud",
+        colorId: "blue",
+      },
+      "target-2": {
+        targetId: "target-2",
+        displayName: "Remote",
+        iconId: "terminal",
+        colorId: "green",
+      },
+    });
     expect(mocks.persistValue).toHaveBeenCalledWith(
       "compute_target_appearance_preferences",
       {

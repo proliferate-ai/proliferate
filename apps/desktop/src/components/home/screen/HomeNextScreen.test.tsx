@@ -4,7 +4,11 @@ import type { ReactNode, TextareaHTMLAttributes } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { HomeNextScreen } from "./HomeNextScreen";
-import { HOME_NEXT_TARGET_SELECTION_STORAGE_KEY } from "@/hooks/home/ui/use-home-next-target-selection-state";
+import {
+  hydrateHomeNextTargetSelectionState,
+  readHomeNextTargetSelectionRevision,
+  resetHomeNextTargetSelectionForTests,
+} from "@/hooks/home/ui/use-home-next-target-selection-state";
 import { HOME_CHAT_COMPOSER_INPUT } from "@/config/chat";
 
 const screenMocks = vi.hoisted(() => {
@@ -177,6 +181,7 @@ function installLocalStorageMock(options?: { throwOnSet?: boolean }) {
 }
 
 function resetHomeNext() {
+  resetHomeNextTargetSelectionForTests();
   screenMocks.homeNext.targetDisabledReason = null;
   screenMocks.homeNext.modelAvailabilityState = "launchable";
   screenMocks.homeNext.canLaunchTarget = true;
@@ -414,7 +419,7 @@ describe("HomeNextScreen composer control-row parity", () => {
   });
 });
 
-describe("HomeNextScreen target selection persistence", () => {
+describe("HomeNextScreen target selection state", () => {
   beforeEach(() => {
     installLocalStorageMock();
     resetHomeNext();
@@ -425,14 +430,14 @@ describe("HomeNextScreen target selection persistence", () => {
     cleanup();
   });
 
-  it("hydrates the last selected launch target into home next state", () => {
-    window.localStorage.setItem(HOME_NEXT_TARGET_SELECTION_STORAGE_KEY, JSON.stringify({
+  it("renders a hydrated launch target", () => {
+    hydrateHomeNextTargetSelectionState({
       destination: "repository",
       repositorySelection: { kind: "repository", sourceRoot: "/repo-a" },
       repoLaunchKind: "ssh",
       selectedSshTargetId: "ssh-target-1",
       baseBranchOverride: "feature/sticky",
-    }));
+    }, readHomeNextTargetSelectionRevision());
 
     render(<HomeNextScreen />);
 
@@ -445,46 +450,43 @@ describe("HomeNextScreen target selection persistence", () => {
     });
   });
 
-  it("persists repository, branch, and runtime choices from the target picker", () => {
+  it("keeps repository, branch, and runtime choices in shared state", () => {
     render(<HomeNextScreen />);
 
     fireEvent.click(screen.getByRole("button", { name: "Mock repo" }));
     fireEvent.click(screen.getByRole("button", { name: "Mock branch" }));
     fireEvent.click(screen.getByRole("button", { name: "Mock ssh" }));
 
-    expect(JSON.parse(window.localStorage.getItem(HOME_NEXT_TARGET_SELECTION_STORAGE_KEY)!))
-      .toMatchObject({
+    expect(screenMocks.homeNextStateArgs).toMatchObject({
         destination: "repository",
         repositorySelection: { kind: "repository", sourceRoot: "/repo-b" },
         repoLaunchKind: "ssh",
         selectedSshTargetId: "ssh-target-1",
         baseBranchOverride: "feature/sticky",
-      });
+    });
   });
 
   it("keeps the selected branch when switching to a local runtime", () => {
-    window.localStorage.setItem(HOME_NEXT_TARGET_SELECTION_STORAGE_KEY, JSON.stringify({
+    hydrateHomeNextTargetSelectionState({
       destination: "repository",
       repositorySelection: { kind: "repository", sourceRoot: "/repo-a" },
       repoLaunchKind: "worktree",
       selectedSshTargetId: null,
       baseBranchOverride: "feature/sticky",
-    }));
+    }, readHomeNextTargetSelectionRevision());
     render(<HomeNextScreen />);
 
     fireEvent.click(screen.getByRole("button", { name: "Mock local" }));
 
-    expect(JSON.parse(window.localStorage.getItem(HOME_NEXT_TARGET_SELECTION_STORAGE_KEY)!))
-      .toMatchObject({
+    expect(screenMocks.homeNextStateArgs).toMatchObject({
         destination: "repository",
         repositorySelection: { kind: "repository", sourceRoot: "/repo-a" },
         repoLaunchKind: "local",
         baseBranchOverride: "feature/sticky",
-      });
+    });
   });
 
-  it("keeps target selection in memory when localStorage writes fail", () => {
-    installLocalStorageMock({ throwOnSet: true });
+  it("keeps target selection in memory independently of persistence", () => {
     resetHomeNext();
     render(<HomeNextScreen />);
 
@@ -494,6 +496,5 @@ describe("HomeNextScreen target selection persistence", () => {
       destination: "repository",
       repositorySelection: { kind: "repository", sourceRoot: "/repo-b" },
     });
-    expect(window.localStorage.getItem(HOME_NEXT_TARGET_SELECTION_STORAGE_KEY)).toBeNull();
   });
 });

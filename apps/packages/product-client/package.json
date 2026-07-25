@@ -13,6 +13,10 @@
       "types": "./dist/host/desktop-bridge.d.ts",
       "import": "./dist/host/desktop-bridge.js"
     },
+    "./host/desktop-diagnostics-bridge": {
+      "types": "./dist/host/desktop-diagnostics-bridge.d.ts",
+      "import": "./dist/host/desktop-diagnostics-bridge.js"
+    },
     "./host/ProductHostProvider": {
       "types": "./dist/host/ProductHostProvider.d.ts",
       "import": "./dist/host/ProductHostProvider.js"

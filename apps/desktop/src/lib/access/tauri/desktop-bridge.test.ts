@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => ({
   isTauriPackaged: vi.fn(),
   relaunch: vi.fn(),
   getDesktopInstallId: vi.fn(),
+  loadAnonymousTelemetryBootstrap: vi.fn(),
   ensureDesktopDispatchWorker: vi.fn(),
   stopDesktopDispatchWorker: vi.fn(),
   getSshDirectTargetProfile: vi.fn(),
@@ -34,6 +35,14 @@ const mocks = vi.hoisted(() => ({
   readWorkspaceScratchPad: vi.fn(),
   writeWorkspaceScratchPad: vi.fn(),
   logRendererEvent: vi.fn(),
+  recordBootDiagnostic: vi.fn(),
+  recordBootDiagnosticOnce: vi.fn(),
+  logStartupDebug: vi.fn(),
+  isSessionActivityDebugLoggingEnabled: vi.fn(),
+  logSessionActivityTransition: vi.fn(),
+  forgetSessionActivityDebugState: vi.fn(),
+  logSessionActivityHoldouts: vi.fn(),
+  reportReactRenderError: vi.fn(),
   collectSupportDiagnostics: vi.fn(),
   saveDiagnosticJson: vi.fn(),
   stageSupportReportAttachment: vi.fn(),
@@ -83,6 +92,9 @@ vi.mock("@/lib/access/tauri/updater", () => ({
 vi.mock("@/lib/access/tauri/desktop-install-id", () => ({
   getDesktopInstallId: mocks.getDesktopInstallId,
 }));
+vi.mock("@/lib/integrations/telemetry/anonymous-storage", () => ({
+  loadAnonymousTelemetryBootstrap: mocks.loadAnonymousTelemetryBootstrap,
+}));
 vi.mock("@/lib/access/tauri/cloud-worker", () => ({
   ensureDesktopDispatchWorker: mocks.ensureDesktopDispatchWorker,
   stopDesktopDispatchWorker: mocks.stopDesktopDispatchWorker,
@@ -103,6 +115,23 @@ vi.mock("@/lib/access/tauri/diagnostics", () => ({
   logRendererEvent: mocks.logRendererEvent,
   collectSupportDiagnostics: mocks.collectSupportDiagnostics,
   saveDiagnosticJson: mocks.saveDiagnosticJson,
+}));
+vi.mock("@/lib/infra/measurement/boot-stall-diagnostics", () => ({
+  recordBootDiagnostic: mocks.recordBootDiagnostic,
+  recordBootDiagnosticOnce: mocks.recordBootDiagnosticOnce,
+}));
+vi.mock("@/lib/infra/measurement/debug-startup", () => ({
+  logStartupDebug: mocks.logStartupDebug,
+}));
+vi.mock("@/lib/infra/measurement/debug-session-activity", () => ({
+  isSessionActivityDebugLoggingEnabled:
+    mocks.isSessionActivityDebugLoggingEnabled,
+  logSessionActivityTransition: mocks.logSessionActivityTransition,
+  forgetSessionActivityDebugState: mocks.forgetSessionActivityDebugState,
+  logSessionActivityHoldouts: mocks.logSessionActivityHoldouts,
+}));
+vi.mock("@/lib/integrations/telemetry/native-diagnostics", () => ({
+  reportReactRenderError: mocks.reportReactRenderError,
 }));
 vi.mock("@/lib/access/tauri/support", () => ({
   stageSupportReportAttachment: mocks.stageSupportReportAttachment,
@@ -161,6 +190,24 @@ describe("runtime", () => {
       connection: { runtimeUrl: "http://127.0.0.1:9000" },
       status: "starting",
     });
+  });
+});
+
+describe("identity", () => {
+  it("returns the existing anonymous telemetry install id", async () => {
+    mocks.loadAnonymousTelemetryBootstrap.mockResolvedValue({
+      installId: "anonymous-install-1",
+      appVersion: "1.0.0",
+      platform: "darwin",
+      arch: "arm64",
+      state: {},
+    });
+
+    await expect(
+      desktopBridge.identity.getAnonymousInstallId(),
+    ).resolves.toBe("anonymous-install-1");
+    expect(mocks.loadAnonymousTelemetryBootstrap).toHaveBeenCalledTimes(1);
+    expect(mocks.getDesktopInstallId).not.toHaveBeenCalled();
   });
 });
 
@@ -485,6 +532,108 @@ describe("scratch", () => {
 });
 
 describe("diagnostics", () => {
+  it("delegates retained boot and startup diagnostics without changing payloads", async () => {
+    mocks.logRendererEvent.mockResolvedValue(undefined);
+
+    desktopBridge.diagnostics.recordBootEvent({
+      label: "app_runtime.render.pass",
+      metadata: { count: 1 },
+    });
+    desktopBridge.diagnostics.recordBootEventOnce({
+      label: "app_runtime.render.before_return",
+      metadata: { authStatus: "authenticated" },
+    });
+    desktopBridge.diagnostics.recordStartupEvent({
+      message: "app.auth_bootstrap.completed",
+      elapsedMs: 12,
+      authStatus: "authenticated",
+    });
+
+    expect(mocks.recordBootDiagnostic).toHaveBeenNthCalledWith(
+      1,
+      "app_runtime.render.pass",
+      { count: 1 },
+    );
+    expect(mocks.recordBootDiagnosticOnce).toHaveBeenCalledWith(
+      "app_runtime.render.before_return",
+      { authStatus: "authenticated" },
+    );
+    expect(mocks.recordBootDiagnostic).toHaveBeenNthCalledWith(
+      2,
+      "app_bootstrap.app.auth_bootstrap.completed",
+      { elapsedMs: 12 },
+    );
+    expect(mocks.logRendererEvent).toHaveBeenCalledWith({
+      source: "app_bootstrap",
+      message: "app.auth_bootstrap.completed",
+      elapsedMs: 12,
+    });
+    expect(mocks.logStartupDebug).toHaveBeenCalledWith(
+      "app.auth_bootstrap.completed",
+      { elapsedMs: 12, authStatus: "authenticated" },
+    );
+  });
+
+  it("preserves startup auth status when elapsed time is absent", () => {
+    desktopBridge.diagnostics.recordStartupEvent({
+      message: "app.runtime_bootstrap.start",
+      authStatus: "ready",
+    });
+
+    expect(mocks.recordBootDiagnostic).toHaveBeenCalledWith(
+      "app_bootstrap.app.runtime_bootstrap.start",
+      undefined,
+    );
+    expect(mocks.logRendererEvent).toHaveBeenCalledWith({
+      source: "app_bootstrap",
+      message: "app.runtime_bootstrap.start",
+      elapsedMs: undefined,
+    });
+    expect(mocks.logStartupDebug).toHaveBeenCalledWith(
+      "app.runtime_bootstrap.start",
+      { authStatus: "ready" },
+    );
+  });
+
+  it("delegates session-activity and React-render diagnostics to Desktop owners", () => {
+    mocks.isSessionActivityDebugLoggingEnabled.mockReturnValue(true);
+    const snapshot = {
+      viewState: "working",
+      executionPhase: "executing",
+      status: "running",
+      transcriptIsStreaming: true,
+      streamConnectionState: "connected",
+      pendingInteractionCount: 1,
+      executionSummaryUpdatedAt: "2026-07-14T00:00:00Z",
+    };
+    const holdouts = [{ sessionId: "session-1" }] as never;
+    const error = new Error("render failed");
+
+    expect(
+      desktopBridge.diagnostics.isSessionActivityDebugEnabled(),
+    ).toBe(true);
+    desktopBridge.diagnostics.logSessionActivityTransition(
+      "session-1",
+      snapshot,
+    );
+    desktopBridge.diagnostics.forgetSessionActivity("session-1");
+    desktopBridge.diagnostics.logSessionActivityHoldouts(holdouts);
+    desktopBridge.diagnostics.reportReactRenderError(error, "at Product");
+
+    expect(mocks.logSessionActivityTransition).toHaveBeenCalledWith(
+      "session-1",
+      snapshot,
+    );
+    expect(mocks.forgetSessionActivityDebugState).toHaveBeenCalledWith(
+      "session-1",
+    );
+    expect(mocks.logSessionActivityHoldouts).toHaveBeenCalledWith(holdouts);
+    expect(mocks.reportReactRenderError).toHaveBeenCalledWith(
+      error,
+      "at Product",
+    );
+  });
+
   it("delegates logEvent and collectSupportBundle", async () => {
     mocks.logRendererEvent.mockResolvedValue(undefined);
     mocks.collectSupportDiagnostics.mockResolvedValue(null);

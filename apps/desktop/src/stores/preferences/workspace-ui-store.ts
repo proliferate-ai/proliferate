@@ -1,5 +1,9 @@
 import { create } from "zustand";
 import { WORKSPACE_UI_DEFAULTS } from "@/lib/domain/preferences/workspace-ui/model";
+import {
+  getChangedWorkspaceUiStateKeys,
+  isNonPersistedWorkspaceUiStateKey,
+} from "@/lib/domain/preferences/workspace-ui/persistence";
 import type { PersistedWorkspaceGitStatusSnapshot } from "@/lib/domain/workspaces/git-status/workspace-git-status-model";
 import { createWorkspaceUiActivityActions } from "@/stores/preferences/workspace-ui-activity-actions";
 import { createWorkspaceUiChatTabActions } from "@/stores/preferences/workspace-ui-chat-tab-actions";
@@ -9,31 +13,51 @@ import { createWorkspaceUiRightPanelActions } from "@/stores/preferences/workspa
 import { createWorkspaceUiShellActions } from "@/stores/preferences/workspace-ui-shell-actions";
 import { createWorkspaceUiSidebarActions } from "@/stores/preferences/workspace-ui-sidebar-actions";
 import type { WorkspaceUiState } from "@/stores/preferences/workspace-ui-store-types";
+import type { WorkspaceUiSet } from "@/stores/preferences/workspace-ui-store-types";
 
 export type { ShellIntentResult, WorkspaceUiState } from "@/stores/preferences/workspace-ui-store-types";
 
-export const useWorkspaceUiStore = create<WorkspaceUiState>((set, get) => ({
-  ...WORKSPACE_UI_DEFAULTS,
-  _hydrated: false,
-  shellActivationEpochByWorkspace: {},
-  pendingChatActivationByWorkspace: {},
-  urgentHighlightedChatSessionByWorkspace: {},
-
-  hydrate: (state) => {
-    set({
-      ...state,
-      _hydrated: true,
+export const useWorkspaceUiStore = create<WorkspaceUiState>((set, get) => {
+  const setWithPersistenceRevision: WorkspaceUiSet = (partial) => {
+    set((state) => {
+      const next = typeof partial === "function" ? partial(state) : partial;
+      if (next === state) {
+        return state;
+      }
+      const candidate = { ...state, ...next };
+      const persistedStateChanged = getChangedWorkspaceUiStateKeys(state, candidate)
+        .some((key) => !isNonPersistedWorkspaceUiStateKey(key));
+      return {
+        ...next,
+        _persistenceRevision: state._persistenceRevision + (persistedStateChanged ? 1 : 0),
+      };
     });
-  },
+  };
 
-  ...createWorkspaceUiSidebarActions(set, get),
-  ...createWorkspaceUiRightPanelActions(set),
-  ...createWorkspaceUiShellActions(set, get),
-  ...createWorkspaceUiActivityActions(set, get),
-  ...createWorkspaceUiDismissalActions(set, get),
-  ...createWorkspaceUiChatTabActions(set, get),
-  ...createWorkspaceUiGitStatusActions(set, get),
-}));
+  return {
+    ...WORKSPACE_UI_DEFAULTS,
+    _hydrated: false,
+    _persistenceRevision: 0,
+    shellActivationEpochByWorkspace: {},
+    pendingChatActivationByWorkspace: {},
+    urgentHighlightedChatSessionByWorkspace: {},
+
+    hydrate: (state) => {
+      set({
+        ...state,
+        _hydrated: true,
+      });
+    },
+
+    ...createWorkspaceUiSidebarActions(setWithPersistenceRevision, get),
+    ...createWorkspaceUiRightPanelActions(setWithPersistenceRevision),
+    ...createWorkspaceUiShellActions(setWithPersistenceRevision, get),
+    ...createWorkspaceUiActivityActions(setWithPersistenceRevision, get),
+    ...createWorkspaceUiDismissalActions(setWithPersistenceRevision, get),
+    ...createWorkspaceUiChatTabActions(setWithPersistenceRevision, get),
+    ...createWorkspaceUiGitStatusActions(setWithPersistenceRevision, get),
+  };
+});
 
 export function trackWorkspaceInteraction(workspaceId: string, timestamp: string) {
   useWorkspaceUiStore.getState().updateWorkspaceLastInteracted(workspaceId, timestamp);

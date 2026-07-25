@@ -19,9 +19,15 @@ const persistenceMocks = vi.hoisted(() => {
   };
 });
 
-vi.mock("@/lib/infra/persistence/preferences-persistence", () => ({
-  readPersistedValue: persistenceMocks.readPersistedValue,
-  persistValue: persistenceMocks.persistValue,
+vi.mock("@/hooks/app/facade/use-product-storage-context", () => ({
+  useProductStorageContext: () => ({}),
+}));
+
+vi.mock("@/lib/infra/persistence/product-storage", () => ({
+  readProductStorageJson: (_context: unknown, key: string) =>
+    persistenceMocks.readPersistedValue(key),
+  writeProductStorageJson: (_context: unknown, key: string, value: unknown) =>
+    persistenceMocks.persistValue(key, value),
 }));
 
 describe("useRepoPreferencesLifecycle", () => {
@@ -32,6 +38,7 @@ describe("useRepoPreferencesLifecycle", () => {
     persistenceMocks.persistValue.mockClear();
     useRepoPreferencesStore.setState({
       _hydrated: false,
+      _persistenceRevision: 0,
       repoConfigs: {},
     });
   });
@@ -106,6 +113,41 @@ describe("useRepoPreferencesLifecycle", () => {
           runCommand: "",
         },
       });
+    });
+  });
+
+  it("keeps the whole live repo record when it changes during hydration", async () => {
+    let resolveRead: (value: unknown) => void = () => undefined;
+    persistenceMocks.readPersistedValue.mockReturnValueOnce(new Promise((resolve) => {
+      resolveRead = resolve;
+    }));
+
+    renderHook(() => useRepoPreferencesLifecycle());
+    act(() => {
+      useRepoPreferencesStore.getState().setRepoConfig("/repo-live", {
+        defaultBranch: "feature/live",
+      });
+    });
+    await act(async () => resolveRead({
+      "/repo-persisted": {
+        defaultBranch: "main",
+        setupScript: "pnpm install",
+      },
+    }));
+    await waitFor(() => expect(useRepoPreferencesStore.getState()._hydrated).toBe(true));
+
+    expect(useRepoPreferencesStore.getState().repoConfigs).toEqual({
+      "/repo-live": {
+        defaultBranch: "feature/live",
+        setupScript: "",
+        runCommand: "",
+      },
+    });
+    await waitFor(() => {
+      expect(persistenceMocks.persistValue).toHaveBeenCalledWith(
+        "repo_preferences",
+        useRepoPreferencesStore.getState().repoConfigs,
+      );
     });
   });
 });

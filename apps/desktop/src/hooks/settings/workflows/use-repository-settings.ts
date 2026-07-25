@@ -4,6 +4,7 @@ import {
   useRepoRootGitBranchesQuery,
 } from "@anyharness/sdk-react";
 import { useRepositories, useSaveRepoEnvironment } from "@proliferate/cloud-sdk-react";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import {
   buildLocalEnvironmentSavePatch,
   isLocalEnvironmentDraftDirty,
@@ -12,7 +13,6 @@ import {
 } from "@/lib/domain/settings/environment-draft";
 import { resolveAutoDetectedBranch } from "@/lib/domain/settings/branch-selection";
 import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
-import { loadAnonymousTelemetryBootstrap } from "@/lib/integrations/telemetry/anonymous-storage";
 import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-store";
 
 const EMPTY_BRANCHES: GitBranchRef[] = [];
@@ -20,6 +20,7 @@ const EMPTY_BRANCHES: GitBranchRef[] = [];
 // Owns repository settings form state and save/revert actions.
 // Does not own repository discovery or workspace cache updates.
 export function useRepositorySettings(repository: SettingsRepositoryEntry | null) {
+  const desktopIdentity = useProductHost().desktop?.identity ?? null;
   const sourceRoot = repository?.sourceRoot ?? null;
   const repoConfig = useRepoPreferencesStore((state) =>
     sourceRoot ? state.repoConfigs[sourceRoot] : undefined,
@@ -46,9 +47,14 @@ export function useRepositorySettings(repository: SettingsRepositoryEntry | null
   );
 
   useEffect(() => {
+    if (desktopIdentity === null) {
+      setDesktopInstallId(null);
+      return;
+    }
+
     let cancelled = false;
-    void loadAnonymousTelemetryBootstrap()
-      .then(({ installId }) => {
+    void desktopIdentity.getAnonymousInstallId()
+      .then((installId) => {
         if (!cancelled) {
           setDesktopInstallId(installId);
         }
@@ -61,7 +67,7 @@ export function useRepositorySettings(repository: SettingsRepositoryEntry | null
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [desktopIdentity]);
 
   const persistedCloudLocalDraft = useMemo(() => {
     if (!repository?.gitOwner || !repository.gitRepoName || !sourceRoot || !desktopInstallId) {
@@ -146,11 +152,12 @@ export function useRepositorySettings(repository: SettingsRepositoryEntry | null
       repository?.gitOwner
       && repository.gitRepoName
       && (repository.gitProvider ?? "github").toLowerCase() === "github"
+      && desktopIdentity !== null
     ) {
       const { gitOwner, gitRepoName } = repository;
       void (async () => {
         const installId = desktopInstallId
-          ?? (await loadAnonymousTelemetryBootstrap()).installId;
+          ?? await desktopIdentity.getAnonymousInstallId();
         await saveEnvironment.mutateAsync({
           gitOwner,
           gitRepoName,
@@ -175,6 +182,7 @@ export function useRepositorySettings(repository: SettingsRepositoryEntry | null
     }));
   }, [
     desktopInstallId,
+    desktopIdentity,
     repository,
     saveEnvironment,
     setRepoConfig,

@@ -12,15 +12,31 @@ const workflowMocks = vi.hoisted(() => ({
       organizationId: string | null,
       worker: DesktopWorkerBridge,
       cloudClient: ProliferateCloudClient,
-      deps: { onFailure: (error: unknown) => void },
+      deps: {
+        captureException: (error: unknown) => void;
+        onFailure: (error: unknown) => void;
+      },
     ) => Promise<boolean>
   >(),
-  teardownDesktopWorker: vi.fn<(worker: DesktopWorkerBridge) => Promise<void>>(),
+  teardownDesktopWorker: vi.fn<
+    (
+      worker: DesktopWorkerBridge,
+      deps: { captureException: (error: unknown) => void },
+    ) => Promise<void>
+  >(),
+}));
+const telemetryMocks = vi.hoisted(() => ({
+  captureException: vi.fn(),
 }));
 
 vi.mock("@/lib/workflows/cloud/ensure-desktop-worker", () => ({
   ensureDesktopWorker: workflowMocks.ensureDesktopWorker,
   teardownDesktopWorker: workflowMocks.teardownDesktopWorker,
+}));
+vi.mock("@/hooks/telemetry/facade/use-product-telemetry", () => ({
+  useProductTelemetry: () => ({
+    captureException: telemetryMocks.captureException,
+  }),
 }));
 
 function authUser(id: string): ProductAuthUser {
@@ -78,6 +94,7 @@ describe("useDesktopWorkerEnrollment", () => {
   beforeEach(() => {
     workflowMocks.ensureDesktopWorker.mockReset();
     workflowMocks.teardownDesktopWorker.mockReset();
+    telemetryMocks.captureException.mockReset();
     workflowMocks.ensureDesktopWorker.mockResolvedValue(true);
     workflowMocks.teardownDesktopWorker.mockResolvedValue(undefined);
   });
@@ -160,7 +177,10 @@ describe("useDesktopWorkerEnrollment", () => {
       "org-2",
       worker,
       cloudClient,
-      expect.objectContaining({ onFailure: expect.any(Function) }),
+      expect.objectContaining({
+        captureException: telemetryMocks.captureException,
+        onFailure: expect.any(Function),
+      }),
     );
     expect(workflowMocks.teardownDesktopWorker).not.toHaveBeenCalled();
   });
@@ -199,6 +219,9 @@ describe("useDesktopWorkerEnrollment", () => {
     harness.signOut();
     await waitFor(() => {
       expect(workflowMocks.teardownDesktopWorker).toHaveBeenCalledTimes(1);
+    });
+    expect(workflowMocks.teardownDesktopWorker).toHaveBeenCalledWith(worker, {
+      captureException: telemetryMocks.captureException,
     });
 
     // Guard was reset, so even the same user re-enrolls with a fresh identity.

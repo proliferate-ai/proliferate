@@ -11,7 +11,10 @@ import {
   shouldBackfillCloudDisplayNameFromRuntime,
   type CloudDisplayNameSyncState,
 } from "@/lib/domain/workspaces/cloud/cloud-display-name-sync";
-import { isCloudDisplayNameBackfillSuppressed } from "./cloud-display-name-backfill-suppression";
+import {
+  isCloudDisplayNameBackfillSuppressed,
+  useCloudDisplayNameBackfillSuppressionAuthority,
+} from "./cloud-display-name-backfill-suppression";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { getWorkspace } from "@/lib/access/anyharness/workspaces";
 import { activitySnapshotFromDirectoryEntry } from "@/lib/domain/sessions/directory/directory-activity";
@@ -28,6 +31,7 @@ const WORKSPACE_METADATA_POLL_INTERVAL_MS = 250;
 // Owns mounted metadata synchronization for the selected workspace.
 // Display state and user-triggered workspace actions live in sibling hook folders.
 export function useWorkspaceMetadataSync() {
+  const displayNameSuppression = useCloudDisplayNameBackfillSuppressionAuthority();
   const cloudClient = useProductHost().cloud.client;
   const syncingCloudDisplayNameRef = useRef<string | null>(null);
   const cloudDisplayNameSyncStateRef = useRef<CloudDisplayNameSyncState | null>(null);
@@ -74,6 +78,7 @@ export function useWorkspaceMetadataSync() {
     if (
       !selectedCloudWorkspace
       || !cloudClient
+      || !displayNameSuppression.hydrated
       || selectedCloudWorkspace.displayName?.trim()
       || selectedCloudRuntime.state?.phase !== "ready"
       || !selectedCloudRuntime.connectionInfo
@@ -147,6 +152,8 @@ export function useWorkspaceMetadataSync() {
   }, [
     invalidateWorkspaceCollections,
     cloudClient,
+    displayNameSuppression.hydrated,
+    displayNameSuppression.revision,
     runtimeUrl,
     selectedCloudRuntime.connectionInfo,
     selectedCloudRuntime.state?.phase,

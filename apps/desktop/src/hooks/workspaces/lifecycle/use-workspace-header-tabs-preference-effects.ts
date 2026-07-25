@@ -6,8 +6,6 @@ import {
 } from "@/lib/domain/workspaces/tabs/manual-groups";
 import {
   sameStringArray,
-  shouldWriteReferencePreference,
-  shouldWriteStringArrayPreference,
   type WorkspaceFallbackResult,
 } from "@/lib/domain/workspaces/selection/workspace-keyed-preferences";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
@@ -61,6 +59,9 @@ export function useWorkspaceHeaderTabsPreferenceEffects({
   const setManualChatGroupsForWorkspace = useWorkspaceUiStore(
     (s) => s.setManualChatGroupsForWorkspace,
   );
+  const materializeWorkspaceHeaderTabFallbacks = useWorkspaceUiStore(
+    (s) => s.materializeWorkspaceHeaderTabFallbacks,
+  );
 
   useEffect(() => {
     if (!workspaceUiKey) {
@@ -75,72 +76,40 @@ export function useWorkspaceHeaderTabsPreferenceEffects({
       return;
     }
 
-    const state = useWorkspaceUiStore.getState();
-    const patch: Partial<ReturnType<typeof useWorkspaceUiStore.getState>> = {};
+    const fallback: Parameters<
+      typeof materializeWorkspaceHeaderTabFallbacks
+    >[1] = {};
     if (
       persistedVisibleFallback.shouldWriteBack
       && persistedVisibleFallback.value !== undefined
-      && shouldWriteStringArrayPreference(
-        state.visibleChatSessionIdsByWorkspace,
-        workspaceUiKey,
-        persistedVisibleFallback.value,
-      )
     ) {
-      patch.visibleChatSessionIdsByWorkspace = {
-        ...state.visibleChatSessionIdsByWorkspace,
-        [workspaceUiKey]: persistedVisibleFallback.value,
-      };
+      fallback.visibleChatSessionIds = persistedVisibleFallback.value;
     }
     if (
       recentlyHiddenFallback.shouldWriteBack
       && recentlyHiddenFallback.value !== undefined
-      && shouldWriteStringArrayPreference(
-        state.recentlyHiddenChatSessionIdsByWorkspace,
-        workspaceUiKey,
-        recentlyHiddenFallback.value,
-      )
     ) {
-      patch.recentlyHiddenChatSessionIdsByWorkspace = {
-        ...state.recentlyHiddenChatSessionIdsByWorkspace,
-        [workspaceUiKey]: recentlyHiddenFallback.value,
-      };
+      fallback.recentlyHiddenChatSessionIds = recentlyHiddenFallback.value;
     }
     if (
       collapsedParentFallback.shouldWriteBack
       && collapsedParentFallback.value !== undefined
-      && shouldWriteStringArrayPreference(
-        state.collapsedChatGroupsByWorkspace,
-        workspaceUiKey,
-        collapsedParentFallback.value,
-      )
     ) {
-      patch.collapsedChatGroupsByWorkspace = {
-        ...state.collapsedChatGroupsByWorkspace,
-        [workspaceUiKey]: collapsedParentFallback.value,
-      };
+      fallback.collapsedChatGroupIds = collapsedParentFallback.value;
     }
     if (
       manualGroupsFallback.shouldWriteBack
       && manualGroupsFallback.value !== undefined
-      && shouldWriteReferencePreference(
-        state.manualChatGroupsByWorkspace,
-        workspaceUiKey,
-        manualGroupsFallback.value,
-      )
     ) {
-      patch.manualChatGroupsByWorkspace = {
-        ...state.manualChatGroupsByWorkspace,
-        [workspaceUiKey]: manualGroupsFallback.value,
-      };
+      fallback.manualChatGroups = manualGroupsFallback.value;
     }
-    if (Object.keys(patch).length > 0) {
-      useWorkspaceUiStore.setState(patch);
-    }
+    materializeWorkspaceHeaderTabFallbacks(workspaceUiKey, fallback);
   }, [
     collapsedParentFallback.shouldWriteBack,
     collapsedParentFallback.value,
     manualGroupsFallback.shouldWriteBack,
     manualGroupsFallback.value,
+    materializeWorkspaceHeaderTabFallbacks,
     persistedVisibleFallback.shouldWriteBack,
     persistedVisibleFallback.value,
     recentlyHiddenFallback.shouldWriteBack,

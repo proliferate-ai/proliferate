@@ -31,8 +31,8 @@ const mocks = vi.hoisted(() => {
     createWorktree,
     getAnyHarnessClient,
     ensureRuntimeReady: vi.fn(async () => "http://localhost:7007"),
-    trackProductEvent: vi.fn(),
-    captureTelemetryException: vi.fn(),
+    track: vi.fn(),
+    captureException: vi.fn(),
   };
 });
 
@@ -44,6 +44,14 @@ vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
   useProductHost: () => ({
     auth: { state: { status: "anonymous", methods: [] } },
     desktop: { runtime: mocks.localRuntime },
+    telemetry: {
+      track: mocks.track,
+      captureException: mocks.captureException,
+      setUser: vi.fn(),
+      setTag: vi.fn(),
+      routeChanged: vi.fn(),
+      getSupportContext: vi.fn(() => ({ clientReleaseId: "test" })),
+    },
   }),
 }));
 
@@ -75,11 +83,6 @@ vi.mock("@/stores/sessions/harness-connection-store", () => {
   );
   return { useHarnessConnectionStore };
 });
-
-vi.mock("@/lib/integrations/telemetry/client", () => ({
-  captureTelemetryException: mocks.captureTelemetryException,
-  trackProductEvent: mocks.trackProductEvent,
-}));
 
 afterEach(() => {
   cleanup();
@@ -114,9 +117,12 @@ describe("useWorkspaceActions local workspace creation", () => {
     });
     expect(mocks.resolveFromPath).not.toHaveBeenCalled();
     expect(mocks.ensureRuntimeReady).toHaveBeenCalledWith(mocks.localRuntime);
-    expect(mocks.trackProductEvent).toHaveBeenCalledWith("workspace_created", {
-      workspace_kind: "local",
-      creation_kind: "local",
+    expect(mocks.track).toHaveBeenCalledWith({
+      name: "workspace_created",
+      properties: {
+        workspace_kind: "local",
+        creation_kind: "local",
+      },
     });
   });
 
@@ -178,8 +184,8 @@ describe("useWorkspaceActions local workspace creation", () => {
 
     expect(thrown).toBe(error);
     expect(mocks.resolveFromPath).not.toHaveBeenCalled();
-    expect(mocks.trackProductEvent).not.toHaveBeenCalled();
-    expect(mocks.captureTelemetryException).toHaveBeenCalledWith(error, {
+    expect(mocks.track).not.toHaveBeenCalled();
+    expect(mocks.captureException).toHaveBeenCalledWith(error, {
       tags: {
         action: "create_local_workspace",
         domain: "workspace",

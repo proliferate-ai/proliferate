@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
+import { useProductAuthActions } from "@/hooks/auth/workflows/use-product-auth-actions";
 
 // A slug that does not resolve to enabled SSO returns the same generic answer
 // whether the org is missing, has no SSO, or has it disabled, so we surface one
@@ -18,7 +18,7 @@ export interface UseOrgSlugSsoSignInResult {
 // the org's SSO connection, then hand off to the existing native SSO machinery
 // (system browser + proliferate://auth/callback deep link).
 export function useOrgSlugSsoSignIn(): UseOrgSlugSsoSignInResult {
-  const { auth } = useProductHost();
+  const { startLogin } = useProductAuthActions();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -31,7 +31,7 @@ export function useOrgSlugSsoSignIn(): UseOrgSlugSsoSignInResult {
     setSubmitting(true);
     setError(null);
     try {
-      await auth.startLogin({ kind: "sso", slug: trimmed });
+      await startLogin({ kind: "sso", slug: trimmed });
       return true;
     } catch (err) {
       if (err instanceof Error && err.name === "AbortError") {
@@ -43,7 +43,7 @@ export function useOrgSlugSsoSignIn(): UseOrgSlugSsoSignInResult {
     } finally {
       setSubmitting(false);
     }
-  }, [auth]);
+  }, [startLogin]);
 
   const clearError = useCallback(() => setError(null), []);
 

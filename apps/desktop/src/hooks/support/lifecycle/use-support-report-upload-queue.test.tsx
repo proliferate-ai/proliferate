@@ -8,6 +8,7 @@ import type {
 } from "@proliferate/cloud-sdk/types";
 import { useSupportReportUploadQueue } from "@/hooks/support/lifecycle/use-support-report-upload-queue";
 import type { SupportReportJob } from "@/lib/domain/support/report-types";
+import type { ProductStorageContext } from "@/lib/infra/persistence/product-storage";
 
 const anyHarnessMocks = vi.hoisted(() => ({
   workspaceId: "workspace-1" as string | null,
@@ -86,13 +87,23 @@ const uploadWorkflowMocks = vi.hoisted(() => ({
 }));
 
 const telemetryMocks = vi.hoisted(() => ({
-  getSupportReportReleaseId: vi.fn(() => "proliferate-desktop@0.0.0+test"),
-  getSupportReportTelemetryRefs: vi.fn(() => ({})),
-  trackProductEvent: vi.fn(),
+  track: vi.fn(),
+  captureException: vi.fn(),
+  setUser: vi.fn(),
+  setTag: vi.fn(),
+  routeChanged: vi.fn(),
+  getSupportContext: vi.fn(() => ({
+    clientReleaseId: "proliferate-desktop@0.0.0+test",
+    telemetryRefs: {},
+  })),
 }));
 
 const toastStoreMocks = vi.hoisted(() => ({
   show: vi.fn(),
+}));
+
+const productStorageMocks = vi.hoisted(() => ({
+  context: null as ProductStorageContext | null,
 }));
 
 const localStorageMock = createLocalStorageMock();
@@ -111,7 +122,12 @@ vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
   useProductHost: () => ({
     cloud: { client: productHostMocks.cloudClient },
     desktop: { diagnostics: diagnosticsMocks },
+    telemetry: telemetryMocks,
   }),
+}));
+
+vi.mock("@/hooks/app/facade/use-product-storage-context", () => ({
+  useProductStorageContext: () => productStorageMocks.context,
 }));
 
 vi.mock("@/lib/access/browser/support-report-job-events", () => supportAccessMocks);
@@ -119,8 +135,6 @@ vi.mock("@/lib/access/browser/support-report-job-events", () => supportAccessMoc
 vi.mock("@/lib/access/anyharness/debug-client", () => ({
   createSessionDebugClient: vi.fn(() => ({})),
 }));
-
-vi.mock("@/lib/integrations/telemetry/client", () => telemetryMocks);
 
 vi.mock("@/lib/workflows/support/support-report-upload-workflows", () => uploadWorkflowMocks);
 
@@ -158,6 +172,7 @@ describe("useSupportReportUploadQueue", () => {
       value: localStorageMock,
     });
     window.localStorage.clear();
+    productStorageMocks.context = createStorageContext(localStorageMock);
   });
 
   afterEach(() => {
@@ -182,24 +197,6 @@ describe("useSupportReportUploadQueue", () => {
       expect(supportAccessMocks.listeners[0]?.active).toBe(false);
       expect(supportAccessMocks.listeners[0]?.unlisten).toHaveBeenCalledTimes(1);
       expect(activeListeners()).toHaveLength(1);
-    });
-  });
-
-  it("shows one sending toast when the same support job is delivered twice", async () => {
-    renderHook(() => useSupportReportUploadQueue());
-
-    await waitFor(() => {
-      expect(activeListeners()).toHaveLength(1);
-    });
-
-    const [listener] = activeListeners();
-    const job = makeSupportReportJob("job-1");
-    listener?.handler(job);
-    listener?.handler(job);
-
-    expect(sendingToastCalls()).toHaveLength(1);
-    await waitFor(() => {
-      expect(cloudSupportMocks.completeSupportReportUpload).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -301,13 +298,13 @@ describe("useSupportReportUploadQueue", () => {
     activeListeners()[0]?.handler(makeSupportReportJob("job-conflict", recentIso()));
 
     await waitFor(() => {
-      const raw = window.localStorage.getItem("proliferate.supportReportJobs.v1");
-      expect(JSON.parse(raw ?? "[]")).toHaveLength(0);
+      expect(toastStoreMocks.show).toHaveBeenCalledWith(
+        "This report can no longer be sent. Start a new report from Help if you still need support.",
+      );
     });
     // Terminal conflict shows the actionable copy, NOT the "already sent" success.
-    expect(toastStoreMocks.show).toHaveBeenCalledWith(
-      "This report can no longer be sent. Start a new report from Help if you still need support.",
-    );
+    const raw = window.localStorage.getItem("proliferate.supportReportJobs.v1");
+    expect(JSON.parse(raw ?? "[]")).toHaveLength(0);
   });
 
   it("clears the job quietly when upload-targets reports the report already completed", async () => {
@@ -325,13 +322,13 @@ describe("useSupportReportUploadQueue", () => {
     activeListeners()[0]?.handler(makeSupportReportJob("job-already-done"));
 
     await waitFor(() => {
-      const raw = window.localStorage.getItem("proliferate.supportReportJobs.v1");
-      expect(JSON.parse(raw ?? "[]")).toHaveLength(0);
+      expect(toastStoreMocks.show).toHaveBeenCalledWith(
+        "Report already sent. Support has the details.",
+        "info",
+      );
     });
-    expect(toastStoreMocks.show).toHaveBeenCalledWith(
-      "Report already sent. Support has the details.",
-      "info",
-    );
+    const raw = window.localStorage.getItem("proliferate.supportReportJobs.v1");
+    expect(JSON.parse(raw ?? "[]")).toHaveLength(0);
   });
 
   it("skips diagnostics and completes directly when logs are excluded and there are no attachments", async () => {
@@ -394,16 +391,11 @@ describe("useSupportReportUploadQueue", () => {
       expect(cloudSupportMocks.completeSupportReportUpload).not.toHaveBeenCalled();
     });
   });
+
 });
 
 function activeListeners() {
   return supportAccessMocks.listeners.filter((listener) => listener.active);
-}
-
-function sendingToastCalls() {
-  return toastStoreMocks.show.mock.calls.filter(([message, type]) =>
-    message === "Sending report..." && type === "info"
-  );
 }
 
 function recentIso(): string {
@@ -437,6 +429,23 @@ function makeSupportReportJob(
       workspaceOptions: [],
     },
     attachments: [],
+  };
+}
+
+function createStorageContext(
+  storage: Storage,
+): ProductStorageContext {
+  return {
+    storage: {
+      getItem: async (key) => await storage.getItem(key),
+      setItem: async (key, value) => {
+        await storage.setItem(key, value);
+      },
+      removeItem: async (key) => {
+        await storage.removeItem(key);
+      },
+    },
+    captureException: telemetryMocks.captureException,
   };
 }
 

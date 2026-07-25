@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
-  clearStagedReplacedSessionTombstone,
   resetReplacedSessionTombstonesForTests,
+} from "@/hooks/sessions/workflows/session-replacement-tombstone-durable-operations";
+import {
+  clearStagedReplacedSessionTombstone,
   stageReplacedSessionTombstone,
 } from "@/hooks/sessions/workflows/session-replacement-tombstones";
 import {

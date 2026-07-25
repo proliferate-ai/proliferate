@@ -37,8 +37,8 @@ canonical feature spec are the durable handoff.
 
 Current handoff:
 
-- Current PR: Route Shared Identity and Navigation Through ProductHost — review.
-- Next PR: Route Shared Persistence and Telemetry Through ProductHost — provisional.
+- Current PR: Route Shared Persistence and Telemetry Through ProductHost — implementation.
+- Next PR: Prove ProductClient Extraction Mechanics — provisional.
 
 - Repository: `proliferate-ai/proliferate`.
 - Canonical contract:
@@ -69,8 +69,11 @@ Current handoff:
   PR #1168 merge `de249faf06c629e094c20e33f94f33d4e6c4c8f2` from
   reviewed head `23e9b2f89e998b9d53dd05f5acce7c95a2ddc9cf`.
 - Route Shared Identity and Navigation Through ProductHost starts from exact
-  base `0eab251fd35d26022165f7f0852db2885a8c4093`.
-- Current role: review. Material scope changes are decided with the
+  base `0eab251fd35d26022165f7f0852db2885a8c4093`; reviewed open PR #1176 is
+  green at head `d016cb5d25ce9ef39c5037c76895164fbff350c7`.
+- Route Shared Persistence and Telemetry Through ProductHost starts from exact
+  reviewed base `d016cb5d25ce9ef39c5037c76895164fbff350c7`.
+- Current role: implementation. Material scope changes are decided with the
   founder and recorded before the slice broadens.
 
 | Slice | Outcome | Final evidence | State |
@@ -83,12 +86,12 @@ Current handoff:
 | Desktop Native UI Adoption | Route native menus, native commands, Dock attention, and Desktop zoom through the mounted bridge while product files remain in Desktop. | [`web-desktop-client-unification-d1b.md`](../../codebase/features/web-desktop-client-unification-d1b.md); PR #1165 merge `736d181575e4d81389d19ba7a78afd14566e1fda` | Complete |
 | Desktop Local Runtime Adoption | Route product-owned local AnyHarness discovery, restart, readiness, and connection through the Desktop bridge while raw sidecar/process startup remains Desktop-owned. | [`web-desktop-client-unification-d1c.md`](../../codebase/features/web-desktop-client-unification-d1c.md); PR #1167 merge `36e96e7bea1c409dfde1797b3a691003f82d8f5a` | Complete |
 | Finish the Desktop Capability Boundary | Route real remaining Desktop-only product consumers plus shared links/clipboard through the mounted host while native implementations stay Desktop-owned. | [`web-desktop-client-unification-d1d.md`](../../codebase/features/web-desktop-client-unification-d1d.md); PR #1168 merge `de249faf06c629e094c20e33f94f33d4e6c4c8f2` | Complete |
-| Route Shared Identity and Navigation Through ProductHost | Normalize auth identity/readiness, deployment and Cloud authority, and lossless inbound ProductEntry routing through the mounted host while source remains in Desktop. | Exact base `0eab251fd35d26022165f7f0852db2885a8c4093`; focused auth, Cloud, and routing proof required. | Review |
-| Route Shared Persistence and Telemetry Through ProductHost | Route shared product persistence and telemetry through the host and establish the final provider envelope in place. | Reconcile against the reviewed identity/navigation head. | Provisional |
+| Route Shared Identity and Navigation Through ProductHost | Normalize auth identity/readiness, deployment and Cloud authority, and lossless inbound ProductEntry routing through the mounted host while source remains in Desktop. | Open PR #1176; reviewed green head `d016cb5d25ce9ef39c5037c76895164fbff350c7`. | Reviewed |
+| Route Shared Persistence and Telemetry Through ProductHost | Route shared product persistence and telemetry through the host and establish the final provider envelope in place. | Exact base `d016cb5d25ce9ef39c5037c76895164fbff350c7`; focused persistence, telemetry, provider-root, and lifecycle proof required. | Implementation |
 | Prove ProductClient Extraction Mechanics | Prove the host envelope, compiled assets/builds, move ledger/codemod, minimal browser host, and fail-closed boundaries. | Reconcile against the reviewed persistence/telemetry head. | Directional |
 | Mechanical Desktop extraction | Move the working Desktop product into ProductClient and leave Desktop as a thin native host. | Exact file ledger, landing window, codemod, builds, and behavior proof required. | Directional |
 | Legacy Web replacement | Delete the duplicate Web product and mount the same ProductClient from a thin browser host with `desktop: null`. | Browser host/auth contract and shared-product proof required. | Directional |
-| Hosted Web qualification and cutover | Qualify both hosts, Web performance, managed-cloud flows, and every external callback/return producer. | §8 external-configuration gate applies. | Directional |
+| Hosted Web qualification and cutover | Qualify both hosts, Web performance, managed-cloud flows, and every external callback/return producer. | §9 external-configuration gate applies. | Directional |
 | Self-hosted Web | Add self-hosted Web configuration, deployment, and documentation after hosted Web is clean. | Separate follow-up contract. | Deferred follow-up |
 
 The superseded auth-generation, runtime-lifecycle, PR-1 intake, and
@@ -195,7 +198,7 @@ The implementation merged in PR #1168 at
 frontend boundary/structure checks, CodeQL, and independent correctness and
 migration-boundary review passed at the accepted tree.
 
-## 6. Route Shared Identity and Navigation Through ProductHost working record
+## 6. Route Shared Identity and Navigation Through ProductHost review record
 
 This slice publishes normalized auth identity/readiness, deployment and Cloud
 authority, and lossless ProductEntry locations through the existing one
@@ -208,7 +211,26 @@ The exact implementation base is
 extraction mechanics, source movement, and Web replacement remain outside this
 slice.
 
-## 7. Remaining migration map and gates
+The implementation is reviewed and green in open PR #1176 at head
+`d016cb5d25ce9ef39c5037c76895164fbff350c7`. Focused auth, Cloud-authority,
+navigation, provider, and terminal tests; both host builds; Rust and SDK
+checks; CodeQL; Vercel; and provisional intent lanes pass. The PR remains
+unmerged while the next reviewable branch is stacked from that exact head.
+
+## 7. Route Shared Persistence and Telemetry Through ProductHost working record
+
+This slice routes non-secret device-local product persistence and typed product
+telemetry through the mounted ProductHost, then splits the current provider and
+lifecycle composition into the host-owned and product-owned roots that later
+move intact. Credentials, native configuration, diagnostics storage, vendor
+telemetry bootstrap, and raw transport remain Desktop-owned.
+
+The exact implementation base is
+`d016cb5d25ce9ef39c5037c76895164fbff350c7`. ProductClient source movement,
+extraction mechanics, Web replacement, CSS/assets, and self-hosted Web remain
+outside this slice.
+
+## 8. Remaining migration map and gates
 
 The plain sequence after the current PR is:
 
@@ -235,10 +257,10 @@ external-configuration table, and release-record template are retired. Before
 a later Web-cutover slice, reconcile current deployment workflows and external
 configuration, then shape a slice-specific rollout checklist with its own
 exact base and acceptance proof. The durable external-configuration evidence
-requirements in §8 remain binding. Do not reuse retired phase mechanics by
+requirements in §9 remain binding. Do not reuse retired phase mechanics by
 implication.
 
-## 8. Later Web cutover external-configuration gate
+## 9. Later Web cutover external-configuration gate
 
 The future Web cutover must inventory every external producer of a hosted Web
 URL, including OAuth registrations, Stripe checkout/portal return URLs,

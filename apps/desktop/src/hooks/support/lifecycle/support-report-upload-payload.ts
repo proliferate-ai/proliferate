@@ -10,11 +10,8 @@ import type {
   SupportReportServerCorrelation,
   SupportReportWorkspaceOption,
 } from "@/lib/domain/support/report-types";
-import {
-  getSupportReportReleaseId,
-  getSupportReportTelemetryRefs,
-  trackProductEvent,
-} from "@/lib/integrations/telemetry/client";
+import type { ProductSupportTelemetryContext } from "@proliferate/product-client/host/product-host";
+import type { TrackProductEvent } from "@/hooks/telemetry/facade/use-product-telemetry";
 
 export const DIAGNOSTICS_MAX_BYTES = 25 * 1024 * 1024;
 const ATTACHMENT_MAX_BYTES = 25 * 1024 * 1024;
@@ -23,6 +20,7 @@ const TOTAL_ATTACHMENT_MAX_BYTES = 100 * 1024 * 1024;
 export function buildCreateReportRequest(
   job: SupportReportJob,
   attachmentCount: number,
+  supportContext: ProductSupportTelemetryContext,
 ): SupportReportCreateRequest {
   return {
     clientJobId: job.jobId,
@@ -31,7 +29,7 @@ export function buildCreateReportRequest(
     context: job.snapshot.context,
     scope: job.scope,
     workspaceRefs: workspaceRefsForJob(job),
-    telemetryRefs: getSupportReportTelemetryRefs(),
+    telemetryRefs: supportContext.telemetryRefs,
     expectedClientUploads: {
       diagnostics: job.includeLogs !== false,
       attachmentCount,
@@ -40,7 +38,7 @@ export function buildCreateReportRequest(
     kind: job.kind ?? "bug",
     creditConsent: job.creditConsent ?? false,
     creditName: job.creditName ?? null,
-    clientReleaseId: getSupportReportReleaseId(),
+    clientReleaseId: supportContext.clientReleaseId,
     urgent: job.urgent ?? false,
     notifyMe: job.notifyMe ?? false,
   };
@@ -83,9 +81,10 @@ export function trackSupportReportSubmitted(
   job: SupportReportJob,
   correlation: SupportReportServerCorrelation,
   attachmentCount: number,
+  track: TrackProductEvent,
 ): void {
   const workspaceIds = workspaceIdsForJob(job);
-  trackProductEvent("support_report_submitted", {
+  track("support_report_submitted", {
     source_surface: "desktop",
     scope_kind: job.scope.kind,
     public_content_consent: job.publicContentConsent !== false,

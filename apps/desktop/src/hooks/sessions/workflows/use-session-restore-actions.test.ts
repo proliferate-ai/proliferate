@@ -5,8 +5,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   clearReplacedSessionTombstone,
   commitReplacedSessionTombstone,
-  isReplacedSessionTombstoned,
+  prepareSessionReplacementTombstonesForStorage,
   resetReplacedSessionTombstonesForTests,
+} from "@/hooks/sessions/workflows/session-replacement-tombstone-durable-operations";
+import {
+  beginSessionReplacementTombstoneHydration,
+  settleSessionReplacementTombstoneHydration,
+} from "@/hooks/sessions/workflows/session-replacement-tombstone-authority";
+import {
+  isReplacedSessionTombstoned,
 } from "@/hooks/sessions/workflows/session-replacement-tombstones";
 import {
   resetSessionReplacementDismissalsForTests,
@@ -29,19 +36,26 @@ const mocks = vi.hoisted(() => ({
   resolveRuntimeUrlForWorkspaceSessions: vi.fn(async () => "http://runtime.test"),
   showToast: vi.fn(),
   upsertWorkspaceSessionRecord: vi.fn(),
-  writeSessionReplacementTombstones: vi.fn(() => true),
+  storage: {
+    getItem: vi.fn(async () => null),
+    setItem: vi.fn(async () => undefined),
+    removeItem: vi.fn(async () => undefined),
+  },
+  captureException: vi.fn(),
 }));
+
+const persistence = {
+  storage: mocks.storage,
+  captureException: mocks.captureException,
+};
 
 vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
   useProductHost: () => ({
     cloud: { client: mocks.cloudClient },
     desktop: { runtime: mocks.localRuntime },
+    storage: mocks.storage,
+    telemetry: { captureException: mocks.captureException },
   }),
-}));
-
-vi.mock("@/lib/access/browser/session-replacement-tombstones-storage", () => ({
-  readSessionReplacementTombstones: () => ({}),
-  writeSessionReplacementTombstones: mocks.writeSessionReplacementTombstones,
 }));
 
 vi.mock("@anyharness/sdk-react", () => ({
@@ -85,8 +99,10 @@ function deferred() {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.writeSessionReplacementTombstones.mockReturnValue(true);
   resetReplacedSessionTombstonesForTests();
+  beginSessionReplacementTombstoneHydration(mocks.storage);
+  prepareSessionReplacementTombstonesForStorage(mocks.storage);
+  settleSessionReplacementTombstoneHydration(false);
   resetSessionReplacementDismissalsForTests();
   useSessionSelectionStore.getState().clearSelection();
   useSessionSelectionStore.getState().activateWorkspace({
@@ -98,23 +114,14 @@ beforeEach(() => {
 afterEach(() => cleanup());
 
 describe("useSessionRestoreActions", () => {
-  it("does not restore when cleanup state cannot be persisted", async () => {
-    mocks.writeSessionReplacementTombstones.mockReturnValue(false);
-    const { result } = renderHook(() => useSessionRestoreActions());
-
-    await act(async () => {
-      await expect(result.current.restoreLastDismissedSession()).rejects.toThrow(
-        "Could not save session cleanup state",
-      );
-    });
-
-    expect(mocks.restoreMutateAsync).not.toHaveBeenCalled();
-    expect(mocks.upsertWorkspaceSessionRecord).not.toHaveBeenCalled();
-  });
-
   it("releases retired runtime and client aliases before cache upsert", async () => {
-    commitReplacedSessionTombstone("workspace-1", "runtime-old", ["client-old"]);
-    clearReplacedSessionTombstone("workspace-1", "runtime-old");
+    await commitReplacedSessionTombstone(
+      persistence,
+      "workspace-1",
+      "runtime-old",
+      ["client-old"],
+    );
+    await clearReplacedSessionTombstone(persistence, "workspace-1", "runtime-old");
     expect(isReplacedSessionTombstoned("workspace-1", "runtime-old")).toBe(true);
     expect(isReplacedSessionTombstoned("workspace-1", "client-old")).toBe(true);
     const restored = { id: "runtime-old" };
@@ -143,6 +150,27 @@ describe("useSessionRestoreActions", () => {
       "workspace-1",
       restored,
     );
+  });
+
+  it("re-dismisses a restored runtime when durable tombstone removal fails", async () => {
+    await commitReplacedSessionTombstone(persistence, "workspace-1", "runtime-old");
+    mocks.storage.removeItem.mockRejectedValueOnce(new Error("write failed"));
+    mocks.restoreMutateAsync.mockResolvedValue({ id: "runtime-old" });
+    mocks.dismissMutateAsync.mockResolvedValue(undefined);
+    const { result } = renderHook(() => useSessionRestoreActions());
+
+    await act(async () => {
+      await expect(result.current.restoreLastDismissedSession()).rejects.toThrow(
+        "Could not save restored session state",
+      );
+    });
+
+    expect(mocks.dismissMutateAsync).toHaveBeenCalledWith({
+      workspaceId: "workspace-1",
+      sessionId: "runtime-old",
+    });
+    expect(isReplacedSessionTombstoned("workspace-1", "runtime-old")).toBe(true);
+    expect(mocks.upsertWorkspaceSessionRecord).not.toHaveBeenCalled();
   });
 
   it("waits for an in-flight replacement dismissal before restoring", async () => {

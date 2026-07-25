@@ -7,7 +7,7 @@ import {
   type ClipboardEvent,
   type DragEvent,
 } from "react";
-import type { DesktopDiagnosticsBridge } from "@proliferate/product-client/host/desktop-bridge";
+import type { DesktopDiagnosticsBridge } from "@proliferate/product-client/host/desktop-diagnostics-bridge";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import type {
   SupportReportAttachmentPayload,

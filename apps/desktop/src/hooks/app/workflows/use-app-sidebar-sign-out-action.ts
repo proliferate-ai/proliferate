@@ -1,15 +1,15 @@
 import { useCallback } from "react";
-import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
+import { useProductAuthActions } from "@/hooks/auth/workflows/use-product-auth-actions";
 import { useOrganizationSelectionActions } from "@/hooks/organizations/workflows/use-organization-selection-actions";
 import { useToastStore } from "@/stores/toast/toast-store";
 
 export function useAppSidebarSignOutAction() {
-  const { auth } = useProductHost();
+  const { logout } = useProductAuthActions();
   const { clearActiveOrganizationId } = useOrganizationSelectionActions();
   const showToast = useToastStore((state) => state.show);
 
   return useCallback(() => {
-    void auth.logout()
+    void logout()
       .then(() => {
         clearActiveOrganizationId();
       })
@@ -17,5 +17,5 @@ export function useAppSidebarSignOutAction() {
         const message = error instanceof Error ? error.message : "Could not sign out.";
         showToast(message);
       });
-  }, [auth, clearActiveOrganizationId, showToast]);
+  }, [clearActiveOrganizationId, logout, showToast]);
 }

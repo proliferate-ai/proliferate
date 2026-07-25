@@ -1,16 +1,25 @@
-import { Component, type ErrorInfo, type ReactNode } from "react";
+import {
+  Component,
+  useCallback,
+  type ErrorInfo,
+  type ReactNode,
+} from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { reportReactRenderError } from "@/lib/integrations/telemetry/native-diagnostics";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 
 interface Props {
   children: ReactNode;
+}
+
+interface BoundaryProps extends Props {
+  reportError(error: Error, componentStack?: string | null): void;
 }
 
 interface State {
   error: Error | null;
 }
 
-export class AppErrorBoundary extends Component<Props, State> {
+class ProductErrorBoundary extends Component<BoundaryProps, State> {
   state: State = { error: null };
 
   static getDerivedStateFromError(error: Error): State {
@@ -18,7 +27,7 @@ export class AppErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    reportReactRenderError(error, info.componentStack);
+    this.props.reportError(error, info.componentStack);
     console.error("[AppErrorBoundary] Uncaught render error:", error);
     console.error("[AppErrorBoundary] Component stack:", info.componentStack);
   }
@@ -46,4 +55,34 @@ export class AppErrorBoundary extends Component<Props, State> {
 
     return this.props.children;
   }
+}
+
+/** Host-backed wrapper around the movable product error boundary. */
+export function AppErrorBoundary({ children }: Props) {
+  const { desktop, telemetry } = useProductHost();
+  const diagnostics = desktop?.diagnostics ?? null;
+  const reportError = useCallback(
+    (error: Error, componentStack?: string | null) => {
+      if (diagnostics !== null) {
+        diagnostics.reportReactRenderError(error, componentStack);
+        return;
+      }
+      telemetry.captureException(error, {
+        tags: {
+          action: "react_render",
+          domain: "app",
+        },
+        extras: {
+          componentStack: componentStack ?? null,
+        },
+      });
+    },
+    [diagnostics, telemetry],
+  );
+
+  return (
+    <ProductErrorBoundary reportError={reportError}>
+      {children}
+    </ProductErrorBoundary>
+  );
 }

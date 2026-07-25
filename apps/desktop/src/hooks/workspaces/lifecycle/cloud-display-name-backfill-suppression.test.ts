@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   clearCloudDisplayNameBackfillSuppression,
   isCloudDisplayNameBackfillSuppressed,
+  resetCloudDisplayNameBackfillSuppressionForTests,
   suppressCloudDisplayNameBackfill,
 } from "./cloud-display-name-backfill-suppression";
 
@@ -9,6 +10,7 @@ describe("cloud display name backfill suppression", () => {
   const storage = new Map<string, string>();
 
   beforeEach(() => {
+    resetCloudDisplayNameBackfillSuppressionForTests();
     storage.clear();
     vi.stubGlobal("window", {
       localStorage: {

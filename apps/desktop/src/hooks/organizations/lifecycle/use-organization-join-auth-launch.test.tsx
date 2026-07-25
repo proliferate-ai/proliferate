@@ -8,7 +8,24 @@ import { useAuthStore } from "@/stores/auth/auth-store";
 import { useOrganizationJoinAuthLaunch } from "./use-organization-join-auth-launch";
 
 const authActionMocks = vi.hoisted(() => ({
-  startLogin: vi.fn<(_options?: unknown) => Promise<void>>(),
+  startLogin: vi.fn(),
+}));
+
+const hostMocks = vi.hoisted(() => ({
+  storageValues: new Map<string, string>(),
+  storage: {
+    getItem: vi.fn(async (key: string) => hostMocks.storageValues.get(key) ?? null),
+    setItem: vi.fn(async (key: string, value: string) => {
+      hostMocks.storageValues.set(key, value);
+    }),
+    removeItem: vi.fn(async (key: string) => {
+      hostMocks.storageValues.delete(key);
+    }),
+  },
+  telemetry: {
+    track: vi.fn(),
+    captureException: vi.fn(),
+  },
 }));
 
 vi.mock("@proliferate/product-client/host/ProductHostProvider", async () => {
@@ -25,14 +42,12 @@ vi.mock("@proliferate/product-client/host/ProductHostProvider", async () => {
               : { status: "anonymous" as const, methods: [] },
           startLogin: authActionMocks.startLogin,
         },
+        storage: hostMocks.storage,
+        telemetry: hostMocks.telemetry,
       };
     },
   };
 });
-
-function clearTestStorage() {
-  window.localStorage?.clear();
-}
 
 function renderJoinAuthLaunch() {
   function Wrapper({ children }: { children: ReactNode }) {
@@ -50,9 +65,17 @@ function renderJoinAuthLaunch() {
 
 describe("useOrganizationJoinAuthLaunch", () => {
   beforeEach(() => {
-    clearTestStorage();
+    hostMocks.storageValues.clear();
+    hostMocks.storage.getItem.mockClear();
+    hostMocks.storage.setItem.mockClear();
+    hostMocks.storage.removeItem.mockClear();
+    hostMocks.telemetry.track.mockClear();
+    hostMocks.telemetry.captureException.mockClear();
     authActionMocks.startLogin.mockReset();
-    authActionMocks.startLogin.mockResolvedValue(undefined);
+    authActionMocks.startLogin.mockResolvedValue({
+      provider: "github",
+      source: "desktop_callback",
+    });
     useAuthStore.setState({
       status: "anonymous",
       session: null,
@@ -64,7 +87,7 @@ describe("useOrganizationJoinAuthLaunch", () => {
 
   afterEach(() => {
     cleanup();
-    clearTestStorage();
+    hostMocks.storageValues.clear();
     useAuthStore.setState({
       status: "bootstrapping",
       session: null,
@@ -82,6 +105,7 @@ describe("useOrganizationJoinAuthLaunch", () => {
         organizationId: "org-1",
         prompt: "select_account",
       });
+      expect(hostMocks.storageValues.has("proliferate.organizationJoinTarget")).toBe(true);
     });
     expect(authActionMocks.startLogin).toHaveBeenCalledTimes(1);
   });

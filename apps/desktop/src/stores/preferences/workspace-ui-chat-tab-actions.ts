@@ -9,7 +9,11 @@ import {
   rememberHiddenChatSessionId,
   uniqueIds,
 } from "@/lib/domain/workspaces/tabs/visibility";
-import { sameStringArray } from "@/lib/domain/workspaces/selection/workspace-keyed-preferences";
+import {
+  sameStringArray,
+  shouldWriteReferencePreference,
+  shouldWriteStringArrayPreference,
+} from "@/lib/domain/workspaces/selection/workspace-keyed-preferences";
 import type { WorkspaceUiGet, WorkspaceUiSet, WorkspaceUiState } from "@/stores/preferences/workspace-ui-store-types";
 
 type WorkspaceUiChatTabActions = Pick<
@@ -19,6 +23,7 @@ type WorkspaceUiChatTabActions = Pick<
   | "setVisibleChatSessionIdsForWorkspace"
   | "rememberHiddenChatSessionForWorkspace"
   | "clearHiddenChatSessionsForWorkspace"
+  | "materializeWorkspaceHeaderTabFallbacks"
   | "toggleChatGroupCollapsedForWorkspace"
   | "clearChatGroupCollapsedForWorkspace"
   | "setManualChatGroupsForWorkspace"
@@ -102,6 +107,65 @@ export function createWorkspaceUiChatTabActions(
           ...get().recentlyHiddenChatSessionIdsByWorkspace,
           [workspaceId]: next,
         },
+      });
+    },
+
+    materializeWorkspaceHeaderTabFallbacks: (workspaceId, fallback) => {
+      set((state) => {
+        const patch: Partial<WorkspaceUiState> = {};
+        if (
+          fallback.visibleChatSessionIds !== undefined
+          && shouldWriteStringArrayPreference(
+            state.visibleChatSessionIdsByWorkspace,
+            workspaceId,
+            fallback.visibleChatSessionIds,
+          )
+        ) {
+          patch.visibleChatSessionIdsByWorkspace = {
+            ...state.visibleChatSessionIdsByWorkspace,
+            [workspaceId]: fallback.visibleChatSessionIds,
+          };
+        }
+        if (
+          fallback.recentlyHiddenChatSessionIds !== undefined
+          && shouldWriteStringArrayPreference(
+            state.recentlyHiddenChatSessionIdsByWorkspace,
+            workspaceId,
+            fallback.recentlyHiddenChatSessionIds,
+          )
+        ) {
+          patch.recentlyHiddenChatSessionIdsByWorkspace = {
+            ...state.recentlyHiddenChatSessionIdsByWorkspace,
+            [workspaceId]: fallback.recentlyHiddenChatSessionIds,
+          };
+        }
+        if (
+          fallback.collapsedChatGroupIds !== undefined
+          && shouldWriteStringArrayPreference(
+            state.collapsedChatGroupsByWorkspace,
+            workspaceId,
+            fallback.collapsedChatGroupIds,
+          )
+        ) {
+          patch.collapsedChatGroupsByWorkspace = {
+            ...state.collapsedChatGroupsByWorkspace,
+            [workspaceId]: fallback.collapsedChatGroupIds,
+          };
+        }
+        if (
+          fallback.manualChatGroups !== undefined
+          && shouldWriteReferencePreference(
+            state.manualChatGroupsByWorkspace,
+            workspaceId,
+            fallback.manualChatGroups,
+          )
+        ) {
+          patch.manualChatGroupsByWorkspace = {
+            ...state.manualChatGroupsByWorkspace,
+            [workspaceId]: fallback.manualChatGroups,
+          };
+        }
+        return Object.keys(patch).length > 0 ? patch : state;
       });
     },
 

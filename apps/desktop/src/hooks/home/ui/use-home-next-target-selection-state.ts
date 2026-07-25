@@ -25,9 +25,8 @@ const DEFAULT_HOME_NEXT_TARGET_SELECTION: HomeNextTargetSelectionState = {
   baseBranchOverride: null,
 };
 const homeNextTargetSelectionListeners = new Set<() => void>();
-let cachedHomeNextTargetSelectionRaw: string | null | undefined;
 let cachedHomeNextTargetSelection = DEFAULT_HOME_NEXT_TARGET_SELECTION;
-let hasHomeNextTargetSelectionMemoryOverride = false;
+let homeNextTargetSelectionRevision = 0;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -83,69 +82,35 @@ export function normalizeHomeNextTargetSelectionState(
   };
 }
 
-function getLocalStorage(): Storage | null {
-  try {
-    if (typeof window === "undefined") return null;
-    return window.localStorage;
-  } catch {
-    return null;
-  }
-}
-
-function readPersistedTargetSelection(): HomeNextTargetSelectionState {
-  if (hasHomeNextTargetSelectionMemoryOverride) {
-    return cachedHomeNextTargetSelection;
-  }
-
-  const storage = getLocalStorage();
-  if (!storage) {
-    return cachedHomeNextTargetSelection;
-  }
-
-  let raw: string | null = null;
-  try {
-    raw = storage.getItem(HOME_NEXT_TARGET_SELECTION_STORAGE_KEY);
-    if (raw === cachedHomeNextTargetSelectionRaw) {
-      return cachedHomeNextTargetSelection;
-    }
-    cachedHomeNextTargetSelectionRaw = raw;
-    if (!raw) {
-      cachedHomeNextTargetSelection = DEFAULT_HOME_NEXT_TARGET_SELECTION;
-      return cachedHomeNextTargetSelection;
-    }
-    cachedHomeNextTargetSelection = normalizeHomeNextTargetSelectionState(JSON.parse(raw));
-    return cachedHomeNextTargetSelection;
-  } catch {
-    cachedHomeNextTargetSelectionRaw = raw;
-    cachedHomeNextTargetSelection = DEFAULT_HOME_NEXT_TARGET_SELECTION;
-    return cachedHomeNextTargetSelection;
-  }
-}
-
-function persistTargetSelection(selection: HomeNextTargetSelectionState): void {
-  const raw = JSON.stringify(selection);
-  cachedHomeNextTargetSelectionRaw = raw;
+function updateTargetSelection(selection: HomeNextTargetSelectionState): void {
   cachedHomeNextTargetSelection = selection;
-
-  const storage = getLocalStorage();
-  if (storage) {
-    try {
-      storage.setItem(HOME_NEXT_TARGET_SELECTION_STORAGE_KEY, raw);
-      hasHomeNextTargetSelectionMemoryOverride = false;
-    } catch {
-      hasHomeNextTargetSelectionMemoryOverride = true;
-    }
-  } else {
-    hasHomeNextTargetSelectionMemoryOverride = true;
-  }
-
+  homeNextTargetSelectionRevision += 1;
   for (const listener of homeNextTargetSelectionListeners) {
     listener();
   }
 }
 
 export function readHomeNextTargetSelectionState(): HomeNextTargetSelectionState {
-  return readPersistedTargetSelection();
+  return cachedHomeNextTargetSelection;
+}
+
+export function readHomeNextTargetSelectionRevision(): number {
+  return homeNextTargetSelectionRevision;
+}
+
+export function hydrateHomeNextTargetSelectionState(
+  value: unknown,
+  expectedRevision: number,
+): boolean {
+  if (homeNextTargetSelectionRevision !== expectedRevision) {
+    return false;
+  }
+  updateTargetSelection(normalizeHomeNextTargetSelectionState(value));
+  return true;
+}
+
+export function resetHomeNextTargetSelectionForTests(): void {
+  updateTargetSelection(DEFAULT_HOME_NEXT_TARGET_SELECTION);
 }
 
 export function subscribeHomeNextTargetSelectionState(listener: () => void): () => void {
@@ -171,7 +136,7 @@ export function useHomeNextTargetSelectionState() {
       ...readHomeNextTargetSelectionState(),
       ...patch,
     });
-    persistTargetSelection(next);
+    updateTargetSelection(next);
   }, []);
 
   return {

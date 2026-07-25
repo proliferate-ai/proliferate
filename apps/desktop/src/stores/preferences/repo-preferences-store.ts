@@ -7,6 +7,7 @@ import {
 
 export interface RepoPreferencesState {
   _hydrated: boolean;
+  _persistenceRevision: number;
   repoConfigs: Record<string, RepoConfig>;
   setRepoConfig: (sourceRoot: string, patch: Partial<RepoConfig>) => void;
   getRepoConfig: (sourceRoot: string) => RepoConfig | undefined;
@@ -15,9 +16,11 @@ export interface RepoPreferencesState {
 
 export const useRepoPreferencesStore = create<RepoPreferencesState>((set, get) => ({
   _hydrated: false,
+  _persistenceRevision: 0,
   repoConfigs: {},
 
   setRepoConfig: (sourceRoot, patch) => set((state) => ({
+    _persistenceRevision: state._persistenceRevision + 1,
     repoConfigs: {
       ...state.repoConfigs,
       [sourceRoot]: normalizeRepoConfig(

@@ -7,6 +7,7 @@ import {
 } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
+import { useProductAuthActions } from "@/hooks/auth/workflows/use-product-auth-actions";
 import {
   useConnectServer,
   type UseConnectServerResult,
@@ -18,11 +19,12 @@ import {
   clearPendingOrganizationJoinTarget,
   readPendingOrganizationJoinTarget,
   writePendingOrganizationJoinTarget,
-} from "@/lib/access/browser/organization-join-target";
+} from "@/lib/workflows/organizations/organization-join-target-persistence";
 import { buildSettingsHref } from "@/lib/domain/settings/navigation";
 import {
   isOfficialHostedApiBaseUrl,
 } from "@/lib/infra/proliferate-api";
+import { useProductStorageContext } from "@/hooks/app/facade/use-product-storage-context";
 
 /**
  * Normalize a URL to its origin (scheme + host + port, no path or trailing
@@ -74,6 +76,8 @@ export function useOrganizationJoinInvitationFlow(): UseOrganizationJoinInvitati
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const host = useProductHost();
+  const persistence = useProductStorageContext();
+  const { startLogin } = useProductAuthActions();
   const authStatus = host.auth.state.status;
   const connectServer = useConnectServer();
   const signInStartedRef = useRef(false);
@@ -88,7 +92,7 @@ export function useOrganizationJoinInvitationFlow(): UseOrganizationJoinInvitati
     [searchParams],
   );
   const [transientJoinOrganizationId, setTransientJoinOrganizationId] = useState(
-    () => joinOrganizationId ?? readPendingOrganizationJoinTarget(),
+    () => joinOrganizationId,
   );
   // The origin only ever arrives on the URL (never persisted): the relaunch
   // that a switch triggers restarts the app pointed AT that origin, so the
@@ -99,6 +103,19 @@ export function useOrganizationJoinInvitationFlow(): UseOrganizationJoinInvitati
     () => searchJoinServerOrigin,
   );
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (joinOrganizationId) return;
+    let cancelled = false;
+    void readPendingOrganizationJoinTarget(persistence).then((pendingTarget) => {
+      if (!cancelled && pendingTarget) {
+        setTransientJoinOrganizationId(pendingTarget);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [joinOrganizationId, persistence]);
 
   const requiresServerSwitch = Boolean(
     transientJoinServerOrigin
@@ -114,21 +131,21 @@ export function useOrganizationJoinInvitationFlow(): UseOrganizationJoinInvitati
       return;
     }
     // Persist the target BEFORE any trust-confirm/relaunch: the relaunch drops
-    // the URL params, so localStorage is what lets the flow resume against the
+    // the URL params, so ProductStorage lets the flow resume against the
     // now-correct server.
-    writePendingOrganizationJoinTarget(joinOrganizationId);
+    void writePendingOrganizationJoinTarget(persistence, joinOrganizationId);
     signInStartedRef.current = false;
     setTransientJoinOrganizationId(joinOrganizationId);
     setTransientJoinServerOrigin(searchJoinServerOrigin);
     // Account is reachable by every signed-in user (Members is admin-only),
     // so this is where a non-admin invitee can actually see and accept.
     navigate(buildSettingsHref({ section: "account" }), { replace: true });
-  }, [joinOrganizationId, searchJoinServerOrigin, navigate]);
+  }, [joinOrganizationId, searchJoinServerOrigin, navigate, persistence]);
 
   const clearJoinTarget = useCallback(() => {
-    clearPendingOrganizationJoinTarget();
+    void clearPendingOrganizationJoinTarget(persistence);
     setTransientJoinOrganizationId(null);
-  }, []);
+  }, [persistence]);
 
   useEffect(() => {
     if (
@@ -209,7 +226,7 @@ export function useOrganizationJoinInvitationFlow(): UseOrganizationJoinInvitati
 
       setStatusMessage("Opening organization sign-in to accept this invitation.");
       try {
-        await host.auth.startLogin({
+        await startLogin({
           kind: "sso",
           organizationId: transientJoinOrganizationId,
           prompt: "select_account",
@@ -224,7 +241,7 @@ export function useOrganizationJoinInvitationFlow(): UseOrganizationJoinInvitati
 
         setStatusMessage("Opening sign-in to accept this invitation.");
         try {
-          await host.auth.startLogin({ kind: "github" });
+          await startLogin({ kind: "github" });
         } catch {
           setStatusMessage(
             "Sign in could not start. Use Account settings to sign in, then reopen the invite link.",
@@ -236,6 +253,7 @@ export function useOrganizationJoinInvitationFlow(): UseOrganizationJoinInvitati
     authStatus,
     requiresServerSwitch,
     host.auth,
+    startLogin,
     transientJoinOrganizationId,
   ]);
 

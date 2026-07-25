@@ -8,9 +8,9 @@ import {
 } from "@/lib/infra/persistence/preferences-persistence";
 import type { UpdaterErrorSource, UpdaterPhase } from "@/stores/updater/updater-store";
 import {
-  trackProductEvent,
-  captureTelemetryException,
-} from "@/lib/integrations/telemetry/client";
+  useProductTelemetry,
+  type ProductTelemetryFacade,
+} from "@/hooks/telemetry/facade/use-product-telemetry";
 import { classifyTelemetryFailure } from "@/lib/domain/telemetry/failures";
 import { normalizeReleaseTitle } from "@/lib/domain/updates/release-notice";
 import {
@@ -34,6 +34,11 @@ let checkInFlight = false;
 let autoCheckConsumerCount = 0;
 let stopAutoCheckScheduler: (() => void) | null = null;
 
+type UpdaterTelemetry = Pick<
+  ProductTelemetryFacade,
+  "track" | "captureException"
+>;
+
 interface UpdaterMetadata {
   lastCheckedAt: string | null;
 }
@@ -54,6 +59,7 @@ async function loadLastCheckedAt(): Promise<string | null> {
 
 async function runUpdateCheck(
   updater: DesktopUpdaterBridge,
+  telemetry: UpdaterTelemetry,
   options: { userInitiated?: boolean } = {},
 ): Promise<void> {
   const store = useUpdaterStore.getState();
@@ -63,7 +69,7 @@ async function runUpdateCheck(
   checkInFlight = true;
 
   store.setPhase("checking");
-  trackProductEvent("app_update_check_started", undefined);
+  telemetry.track("app_update_check_started", undefined);
 
   try {
     const result = await updater.check();
@@ -76,7 +82,7 @@ async function runUpdateCheck(
         result,
         normalizeReleaseTitle(result.title),
       );
-      trackProductEvent("app_update_available", { version: result.version });
+      telemetry.track("app_update_available", { version: result.version });
     } else {
       useUpdaterStore.getState().setPhase("current");
       if (options.userInitiated) {
@@ -88,7 +94,7 @@ async function runUpdateCheck(
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     useUpdaterStore.getState().setError(message, "check");
-    captureTelemetryException(error, {
+    telemetry.captureException(error, {
       tags: {
         action: "check_for_update",
         domain: "updater",
@@ -102,6 +108,7 @@ async function runUpdateCheck(
 
 async function runDownloadAndPrepareRestart(
   updater: DesktopUpdaterBridge,
+  telemetry: UpdaterTelemetry,
 ): Promise<void> {
   const store = useUpdaterStore.getState();
   const update = store._update;
@@ -112,7 +119,7 @@ async function runDownloadAndPrepareRestart(
 
   store.setPhase("downloading");
   store.setDownloadProgress(0);
-  trackProductEvent("app_update_download_started", { version });
+  telemetry.track("app_update_download_started", { version });
 
   try {
     await updater.downloadAndInstall(update, (fraction) => {
@@ -122,15 +129,15 @@ async function runDownloadAndPrepareRestart(
     });
 
     useUpdaterStore.getState().setReady();
-    trackProductEvent("app_update_install_succeeded", { version });
+    telemetry.track("app_update_install_succeeded", { version });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     useUpdaterStore.getState().setError(message, "download");
-    trackProductEvent("app_update_install_failed", {
+    telemetry.track("app_update_install_failed", {
       failure_kind: classifyTelemetryFailure(error),
       version,
     });
-    captureTelemetryException(error, {
+    telemetry.captureException(error, {
       tags: {
         action: "download_and_relaunch",
         domain: "updater",
@@ -140,7 +147,10 @@ async function runDownloadAndPrepareRestart(
   }
 }
 
-async function ensureAutoCheckScheduler(updater: DesktopUpdaterBridge): Promise<void> {
+async function ensureAutoCheckScheduler(
+  updater: DesktopUpdaterBridge,
+  telemetry: UpdaterTelemetry,
+): Promise<void> {
   const lastChecked = await loadLastCheckedAt();
   if (lastChecked) {
     useUpdaterStore.getState().setChecked(lastChecked);
@@ -155,12 +165,12 @@ async function ensureAutoCheckScheduler(updater: DesktopUpdaterBridge): Promise<
 
   if (elapsed >= CHECK_INTERVAL_MS) {
     timeout = window.setTimeout(() => {
-      void runUpdateCheck(updater);
+      void runUpdateCheck(updater, telemetry);
     }, INITIAL_CHECK_DELAY_MS);
   }
 
   interval = window.setInterval(() => {
-    void runUpdateCheck(updater);
+    void runUpdateCheck(updater, telemetry);
   }, CHECK_INTERVAL_MS);
 
   stopAutoCheckScheduler = () => {
@@ -178,6 +188,7 @@ async function ensureAutoCheckScheduler(updater: DesktopUpdaterBridge): Promise<
 
 export function useUpdater() {
   const updater = useProductHost().desktop?.updater ?? null;
+  const telemetry = useProductTelemetry();
   const storePhase = useUpdaterStore((s) => s.phase);
   const storeAvailableVersion = useUpdaterStore((s) => s.availableVersion);
   const storeAvailableTitle = useUpdaterStore((s) => s.availableTitle);
@@ -250,8 +261,8 @@ export function useUpdater() {
     if (!isPackaged || updater === null) {
       return;
     }
-    await runUpdateCheck(updater, { userInitiated: true });
-  }, [devMock, isPackaged, updater]);
+    await runUpdateCheck(updater, telemetry, { userInitiated: true });
+  }, [devMock, isPackaged, telemetry, updater]);
 
   const clearManualCheckCompleted = useCallback(() => {
     if (devMock) {
@@ -272,8 +283,8 @@ export function useUpdater() {
     if (!isPackaged || updater === null) {
       return;
     }
-    await runDownloadAndPrepareRestart(updater);
-  }, [devMock, isPackaged, updater]);
+    await runDownloadAndPrepareRestart(updater, telemetry);
+  }, [devMock, isPackaged, telemetry, updater]);
 
   const openRestartPrompt = useCallback(() => {
     if (devMock) {
@@ -328,7 +339,7 @@ export function useUpdater() {
 
     autoCheckConsumerCount += 1;
     if (autoCheckConsumerCount === 1 && !stopAutoCheckScheduler) {
-      void ensureAutoCheckScheduler(updater);
+      void ensureAutoCheckScheduler(updater, telemetry);
     }
 
     return () => {
@@ -337,7 +348,7 @@ export function useUpdater() {
         stopAutoCheckScheduler?.();
       }
     };
-  }, [isPackaged, updater]);
+  }, [isPackaged, telemetry, updater]);
 
   return {
     phase,

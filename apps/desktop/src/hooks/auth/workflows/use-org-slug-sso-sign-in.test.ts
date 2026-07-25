@@ -4,11 +4,26 @@ import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  startLogin: vi.fn(async () => {}),
+  startLogin: vi.fn(async () => ({
+    provider: "sso",
+    source: "desktop_callback",
+  })),
+  track: vi.fn(),
+  captureException: vi.fn(),
 }));
 
 vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
-  useProductHost: () => ({ auth: { startLogin: mocks.startLogin } }),
+  useProductHost: () => ({
+    auth: { startLogin: mocks.startLogin },
+    telemetry: {
+      track: mocks.track,
+      captureException: mocks.captureException,
+      setUser: vi.fn(),
+      setTag: vi.fn(),
+      routeChanged: vi.fn(),
+      getSupportContext: vi.fn(() => ({ clientReleaseId: "test" })),
+    },
+  }),
 }));
 
 import { useOrgSlugSsoSignIn } from "./use-org-slug-sso-sign-in";
@@ -16,7 +31,10 @@ import { useOrgSlugSsoSignIn } from "./use-org-slug-sso-sign-in";
 afterEach(() => {
   cleanup();
   mocks.startLogin.mockReset();
-  mocks.startLogin.mockResolvedValue(undefined);
+  mocks.startLogin.mockResolvedValue({
+    provider: "sso",
+    source: "desktop_callback",
+  });
 });
 
 describe("useOrgSlugSsoSignIn", () => {

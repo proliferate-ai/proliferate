@@ -11,13 +11,25 @@ import { ProductHostProvider } from "@proliferate/product-client/host/ProductHos
 
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 
 const runtimeMocks = vi.hoisted(() => ({
   bootstrapHarnessRuntime: vi.fn().mockResolvedValue(undefined),
 }));
 const lifecycleMocks = vi.hoisted(() => ({
+  useDebugSessionActivity: vi.fn(),
+  useAgentAutoReconcile: vi.fn(),
+  useFirstRunAuthAdoption: vi.fn(),
+  useLocalAuthStateSync: vi.fn(),
+  useGatewayCatalogMirrorSync: vi.fn(),
+  useLocalAutomationExecutor: vi.fn(),
   useUpdateRestartWatcher: vi.fn(),
   useDesktopWorkerEnrollment: vi.fn(),
+  useLocalWorktreeSettingsTarget: vi.fn(() => ({
+    targets: ["workspace-target"],
+    syncPolicyToTarget: vi.fn(),
+  })),
+  useWorktreeCleanupPolicySync: vi.fn(),
 }));
 
 vi.mock("@/lib/access/anyharness/runtime-bootstrap", () => ({
@@ -26,8 +38,41 @@ vi.mock("@/lib/access/anyharness/runtime-bootstrap", () => ({
 vi.mock("@/hooks/access/tauri/use-update-restart-watcher", () => ({
   useUpdateRestartWatcher: lifecycleMocks.useUpdateRestartWatcher,
 }));
+vi.mock("@/hooks/app/lifecycle/use-debug-session-activity", () => ({
+  useDebugSessionActivity: lifecycleMocks.useDebugSessionActivity,
+}));
 vi.mock("@/hooks/cloud/lifecycle/use-desktop-worker-enrollment", () => ({
   useDesktopWorkerEnrollment: lifecycleMocks.useDesktopWorkerEnrollment,
+}));
+vi.mock("@/hooks/agents/lifecycle/use-agent-auto-reconcile", () => ({
+  useAgentAutoReconcile: lifecycleMocks.useAgentAutoReconcile,
+}));
+vi.mock("@/hooks/agents/lifecycle/use-first-run-auth-adoption", () => ({
+  useFirstRunAuthAdoption: lifecycleMocks.useFirstRunAuthAdoption,
+}));
+vi.mock("@/hooks/agents/lifecycle/use-local-auth-state-sync", () => ({
+  useLocalAuthStateSync: lifecycleMocks.useLocalAuthStateSync,
+}));
+vi.mock("@/hooks/agents/lifecycle/use-gateway-catalog-mirror-sync", () => ({
+  useGatewayCatalogMirrorSync: lifecycleMocks.useGatewayCatalogMirrorSync,
+}));
+vi.mock("@/hooks/automations/lifecycle/use-local-automation-executor", () => ({
+  useLocalAutomationExecutor: lifecycleMocks.useLocalAutomationExecutor,
+}));
+vi.mock("@/hooks/workspaces/facade/use-local-worktree-settings-target", () => ({
+  useLocalWorktreeSettingsTarget: lifecycleMocks.useLocalWorktreeSettingsTarget,
+}));
+vi.mock("@/hooks/workspaces/lifecycle/use-worktree-cleanup-policy-sync", () => ({
+  useWorktreeCleanupPolicySync: lifecycleMocks.useWorktreeCleanupPolicySync,
+}));
+vi.mock("@/components/app/chrome/MacWindowControlsSafeArea", () => ({
+  MacWindowControlsSafeArea: () => null,
+}));
+vi.mock("@/components/feedback/UpdateRestartDialog", () => ({
+  UpdateRestartDialog: () => null,
+}));
+vi.mock("@/components/feedback/UpdateToastPresenter", () => ({
+  UpdateToastPresenter: () => null,
 }));
 
 vi.mock("@proliferate/product-domain/sessions/activity", () => ({
@@ -67,6 +112,9 @@ function makeBridge(
     },
     diagnostics: {
       logEvent: vi.fn().mockResolvedValue(undefined),
+      recordBootEvent: vi.fn(),
+      recordBootEventOnce: vi.fn(),
+      recordStartupEvent: vi.fn(),
     },
     updater: {
       isSupported: vi.fn(() => true),
@@ -93,10 +141,10 @@ function makeHost(
       authRequired: true,
       state: makeAuthState(authStatus),
       restoreSession: async () => {},
-      startLogin: async () => {},
+      startLogin: async () => ({ provider: "github", source: "desktop_callback" }),
       finishLogin: async () => {},
       cancelLogin: async () => {},
-      logout: async () => {},
+      logout: async () => ({ provider: "github" }),
     },
     cloud: { client: null },
     storage: {
@@ -149,6 +197,7 @@ beforeEach(() => {
   runtimeMocks.bootstrapHarnessRuntime.mockResolvedValue(undefined);
   setEntries({});
   useHarnessConnectionStore.getState().resetConnectionState();
+  useUserPreferencesStore.setState({ _hydrated: false });
 });
 
 afterEach(() => {
@@ -226,13 +275,25 @@ describe("DesktopProductLifecycleRoot", () => {
   it("wires Desktop product lifecycles only through the mounted bridge", () => {
     const setWorkspaceActivity = vi.fn().mockResolvedValue(undefined);
     const setZoom = vi.fn().mockResolvedValue(undefined);
+    const subscribeMenuCommands = vi.fn(() => () => {});
     const bridge = makeBridge(vi.fn().mockResolvedValue(undefined), {
       setWorkspaceActivity,
       setZoom,
+      subscribeMenuCommands,
     });
 
+    useUserPreferencesStore.setState({ _hydrated: true });
     renderRoot(makeHost(bridge));
 
+    expect(lifecycleMocks.useAgentAutoReconcile).toHaveBeenCalledTimes(1);
+    expect(lifecycleMocks.useDebugSessionActivity).toHaveBeenCalledTimes(1);
+    expect(lifecycleMocks.useDebugSessionActivity).toHaveBeenCalledWith(
+      bridge.diagnostics,
+    );
+    expect(lifecycleMocks.useFirstRunAuthAdoption).toHaveBeenCalledTimes(1);
+    expect(lifecycleMocks.useLocalAuthStateSync).toHaveBeenCalledTimes(1);
+    expect(lifecycleMocks.useGatewayCatalogMirrorSync).toHaveBeenCalledTimes(1);
+    expect(lifecycleMocks.useLocalAutomationExecutor).toHaveBeenCalledTimes(1);
     expect(useWorkspaceActivityIndicator).toHaveBeenCalledWith(setWorkspaceActivity);
     expect(useDesktopZoomPreferenceLifecycle).toHaveBeenCalledWith(setZoom);
     expect(lifecycleMocks.useUpdateRestartWatcher).toHaveBeenCalledWith(bridge.updater);
@@ -241,18 +302,30 @@ describe("DesktopProductLifecycleRoot", () => {
       makeAuthState("loading"),
       null,
     );
+    expect(subscribeMenuCommands).toHaveBeenCalledTimes(1);
+    expect(lifecycleMocks.useLocalWorktreeSettingsTarget).toHaveBeenCalledTimes(1);
+    const settings = lifecycleMocks.useLocalWorktreeSettingsTarget.mock.results[0]?.value;
+    expect(lifecycleMocks.useWorktreeCleanupPolicySync).toHaveBeenCalledWith(
+      settings.targets,
+      settings.syncPolicyToTarget,
+    );
 
     cleanup();
-    vi.mocked(useWorkspaceActivityIndicator).mockClear();
-    vi.mocked(useDesktopZoomPreferenceLifecycle).mockClear();
-    lifecycleMocks.useUpdateRestartWatcher.mockClear();
-    lifecycleMocks.useDesktopWorkerEnrollment.mockClear();
+    vi.clearAllMocks();
     renderRoot(makeHost(null));
 
+    expect(lifecycleMocks.useAgentAutoReconcile).not.toHaveBeenCalled();
+    expect(lifecycleMocks.useDebugSessionActivity).not.toHaveBeenCalled();
+    expect(lifecycleMocks.useFirstRunAuthAdoption).not.toHaveBeenCalled();
+    expect(lifecycleMocks.useLocalAuthStateSync).not.toHaveBeenCalled();
+    expect(lifecycleMocks.useGatewayCatalogMirrorSync).not.toHaveBeenCalled();
+    expect(lifecycleMocks.useLocalAutomationExecutor).not.toHaveBeenCalled();
     expect(useWorkspaceActivityIndicator).not.toHaveBeenCalled();
     expect(useDesktopZoomPreferenceLifecycle).not.toHaveBeenCalled();
     expect(lifecycleMocks.useUpdateRestartWatcher).not.toHaveBeenCalled();
     expect(lifecycleMocks.useDesktopWorkerEnrollment).not.toHaveBeenCalled();
+    expect(lifecycleMocks.useLocalWorktreeSettingsTarget).not.toHaveBeenCalled();
+    expect(lifecycleMocks.useWorktreeCleanupPolicySync).not.toHaveBeenCalled();
   });
 
   it("exports only changed counts as sessions go busy and idle", () => {

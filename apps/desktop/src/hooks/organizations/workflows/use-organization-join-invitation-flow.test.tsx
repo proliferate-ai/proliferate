@@ -8,7 +8,7 @@ import { useAuthStore } from "@/stores/auth/auth-store";
 import { useOrganizationJoinInvitationFlow } from "./use-organization-join-invitation-flow";
 
 const authActionMocks = vi.hoisted(() => ({
-  startLogin: vi.fn<(_options?: unknown) => Promise<void>>(),
+  startLogin: vi.fn(),
 }));
 
 const connectServerMocks = vi.hoisted(() => ({
@@ -24,6 +24,20 @@ const apiMocks = vi.hoisted(() => ({
 
 const hostMocks = vi.hoisted(() => ({
   methods: ["github"] as Array<"password" | "github" | "sso">,
+  storageValues: new Map<string, string>(),
+  storage: {
+    getItem: vi.fn(async (key: string) => hostMocks.storageValues.get(key) ?? null),
+    setItem: vi.fn(async (key: string, value: string) => {
+      hostMocks.storageValues.set(key, value);
+    }),
+    removeItem: vi.fn(async (key: string) => {
+      hostMocks.storageValues.delete(key);
+    }),
+  },
+  telemetry: {
+    track: vi.fn(),
+    captureException: vi.fn(),
+  },
 }));
 
 vi.mock("@proliferate/product-client/host/ProductHostProvider", async () => {
@@ -41,6 +55,8 @@ vi.mock("@proliferate/product-client/host/ProductHostProvider", async () => {
           startLogin: authActionMocks.startLogin,
         },
         deployment: { apiBaseUrl: apiMocks.apiBaseUrl },
+        storage: hostMocks.storage,
+        telemetry: hostMocks.telemetry,
       };
     },
   };
@@ -58,32 +74,6 @@ vi.mock("@/lib/infra/proliferate-api", () => ({
   isOfficialHostedApiBaseUrl: apiMocks.isOfficialHostedApiBaseUrl,
 }));
 
-function clearTestStorage() {
-  window.localStorage?.clear();
-}
-
-function installTestStorage() {
-  const values = new Map<string, string>();
-  const storage: Storage = {
-    get length() {
-      return values.size;
-    },
-    clear: () => values.clear(),
-    getItem: (key) => values.get(key) ?? null,
-    key: (index) => Array.from(values.keys())[index] ?? null,
-    removeItem: (key) => {
-      values.delete(key);
-    },
-    setItem: (key, value) => {
-      values.set(key, String(value));
-    },
-  };
-  Object.defineProperty(window, "localStorage", {
-    configurable: true,
-    value: storage,
-  });
-}
-
 function renderJoinInvitationFlow(initialEntry: string) {
   function Wrapper({ children }: { children: ReactNode }) {
     return <MemoryRouter initialEntries={[initialEntry]}>{children}</MemoryRouter>;
@@ -97,10 +87,17 @@ const PENDING_JOIN_STORAGE_KEY = "proliferate.organizationJoinTarget";
 
 describe("useOrganizationJoinInvitationFlow", () => {
   beforeEach(() => {
-    installTestStorage();
-    clearTestStorage();
+    hostMocks.storageValues.clear();
+    hostMocks.storage.getItem.mockClear();
+    hostMocks.storage.setItem.mockClear();
+    hostMocks.storage.removeItem.mockClear();
+    hostMocks.telemetry.track.mockClear();
+    hostMocks.telemetry.captureException.mockClear();
     authActionMocks.startLogin.mockReset();
-    authActionMocks.startLogin.mockResolvedValue(undefined);
+    authActionMocks.startLogin.mockResolvedValue({
+      provider: "github",
+      source: "desktop_callback",
+    });
     connectServerMocks.available = true;
     connectServerMocks.step = "closed";
     connectServerMocks.openForUrl.mockReset();
@@ -116,7 +113,7 @@ describe("useOrganizationJoinInvitationFlow", () => {
 
   afterEach(() => {
     cleanup();
-    clearTestStorage();
+    hostMocks.storageValues.clear();
     useAuthStore.setState({ status: "bootstrapping", session: null, user: null, error: null });
   });
 
@@ -204,7 +201,7 @@ describe("useOrganizationJoinInvitationFlow", () => {
   it("resumes one persisted join after authentication and clears it explicitly", async () => {
     const arrival = renderJoinInvitationFlow(ORIGIN_LESS);
     await waitFor(() => {
-      expect(window.localStorage.getItem(PENDING_JOIN_STORAGE_KEY)).not.toBeNull();
+      expect(hostMocks.storageValues.get(PENDING_JOIN_STORAGE_KEY)).toBeDefined();
       expect(authActionMocks.startLogin).toHaveBeenCalledTimes(1);
     });
     arrival.unmount();
@@ -225,15 +222,17 @@ describe("useOrganizationJoinInvitationFlow", () => {
 
     act(() => resumed.result.current.clearJoinTarget());
     expect(resumed.result.current.joinOrganizationId).toBeNull();
-    expect(window.localStorage.getItem(PENDING_JOIN_STORAGE_KEY)).toBeNull();
+    await waitFor(() => {
+      expect(hostMocks.storageValues.has(PENDING_JOIN_STORAGE_KEY)).toBe(false);
+    });
     resumed.unmount();
 
     const afterClear = renderJoinInvitationFlow("/settings?section=account");
     expect(afterClear.result.current.joinOrganizationId).toBeNull();
   });
 
-  it("drops an expired persisted join instead of resuming it", () => {
-    window.localStorage.setItem(
+  it("drops an expired persisted join instead of resuming it", async () => {
+    hostMocks.storageValues.set(
       PENDING_JOIN_STORAGE_KEY,
       JSON.stringify({
         organizationId: "org-expired",
@@ -247,7 +246,9 @@ describe("useOrganizationJoinInvitationFlow", () => {
     const { result } = renderJoinInvitationFlow("/settings?section=account");
 
     expect(result.current.joinOrganizationId).toBeNull();
-    expect(window.localStorage.getItem(PENDING_JOIN_STORAGE_KEY)).toBeNull();
+    await waitFor(() => {
+      expect(hostMocks.storageValues.has(PENDING_JOIN_STORAGE_KEY)).toBe(false);
+    });
     expect(authActionMocks.startLogin).not.toHaveBeenCalled();
   });
 });

@@ -1,13 +1,18 @@
 import type { MutableRefObject } from "react";
-import type {
-  SupportReportJob,
-} from "@/lib/domain/support/report-types";
+
+import type { SupportReportJob } from "@/lib/domain/support/report-types";
 import type {
   SupportReportUploadFailure,
   SupportReportUploadFailureKind,
 } from "@/lib/domain/support/report-upload-failure";
+import {
+  readProductStorageJson,
+  writeProductStorageJson,
+  type ProductStorageContext,
+} from "@/lib/infra/persistence/product-storage";
 
 const STORAGE_KEY = "proliferate.supportReportJobs.v1";
+const MAX_PERSISTED_JOBS = 10;
 
 export interface PersistedSupportReportJob {
   job: SupportReportJob;
@@ -19,12 +24,15 @@ export interface PersistedSupportReportJob {
   lastFailureToastKind?: SupportReportUploadFailureKind | null;
 }
 
-export function persistSupportReportJob(job: SupportReportJob): boolean {
-  const current = readPersistedJobs();
+export async function persistSupportReportJob(
+  context: ProductStorageContext,
+  job: SupportReportJob,
+): Promise<boolean> {
+  const current = await readPersistedJobs(context);
   if (current.some((entry) => entry.job.jobId === job.jobId)) {
     return false;
   }
-  writePersistedJobs([
+  await writePersistedJobs(context, [
     ...current,
     {
       job,
@@ -36,17 +44,27 @@ export function persistSupportReportJob(job: SupportReportJob): boolean {
   return true;
 }
 
-export function removePersistedJob(jobId: string): void {
-  writePersistedJobs(readPersistedJobs().filter((entry) => entry.job.jobId !== jobId));
+export async function removePersistedJob(
+  context: ProductStorageContext,
+  jobId: string,
+): Promise<void> {
+  await writePersistedJobs(
+    context,
+    (await readPersistedJobs(context)).filter(
+      (entry) => entry.job.jobId !== jobId,
+    ),
+  );
 }
 
-export function markPersistedJobFailed(
+export async function markPersistedJobFailed(
+  context: ProductStorageContext,
   jobId: string,
   failure: SupportReportUploadFailure,
   failedAt: Date,
   markedToastShown: boolean,
-): void {
-  writePersistedJobs(readPersistedJobs().map((entry) => {
+): Promise<void> {
+  const current = await readPersistedJobs(context);
+  await writePersistedJobs(context, current.map((entry) => {
     if (entry.job.jobId !== jobId) {
       return entry;
     }
@@ -69,35 +87,35 @@ export function markPersistedJobFailed(
   }));
 }
 
-export function scheduleNextRetry(
+export async function scheduleNextRetry(
+  context: ProductStorageContext,
   processQueue: () => void,
   retryTimerRef: MutableRefObject<number | null>,
-): void {
+): Promise<void> {
   if (retryTimerRef.current != null) {
     window.clearTimeout(retryTimerRef.current);
     retryTimerRef.current = null;
   }
-  const next = readPersistedJobs()
+  const next = (await readPersistedJobs(context))
     .map((entry) => entry.nextAttemptAt ? Date.parse(entry.nextAttemptAt) : Date.now())
     .filter(Number.isFinite)
     .sort((a, b) => a - b)[0];
   if (next == null) {
     return;
   }
-  retryTimerRef.current = window.setTimeout(processQueue, Math.max(1000, next - Date.now()));
+  retryTimerRef.current = window.setTimeout(
+    processQueue,
+    Math.max(1000, next - Date.now()),
+  );
 }
 
-export function readPersistedJobs(): PersistedSupportReportJob[] {
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      return [];
-    }
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+export async function readPersistedJobs(
+  context: ProductStorageContext,
+): Promise<PersistedSupportReportJob[]> {
+  const persisted = await readProductStorageJson<unknown>(context, STORAGE_KEY);
+  return Array.isArray(persisted)
+    ? persisted as PersistedSupportReportJob[]
+    : [];
 }
 
 export async function deleteSupportReportJobAttachments(
@@ -111,6 +129,13 @@ export async function deleteSupportReportJobAttachments(
   }));
 }
 
-function writePersistedJobs(jobs: PersistedSupportReportJob[]): void {
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(jobs.slice(-10)));
+async function writePersistedJobs(
+  context: ProductStorageContext,
+  jobs: PersistedSupportReportJob[],
+): Promise<void> {
+  await writeProductStorageJson(
+    context,
+    STORAGE_KEY,
+    jobs.slice(-MAX_PERSISTED_JOBS),
+  );
 }

@@ -3,7 +3,7 @@ import {
   QueryCache,
   QueryClient,
 } from "@tanstack/react-query";
-import { captureTelemetryException } from "@/lib/integrations/telemetry/client";
+import type { ProductTelemetry } from "@proliferate/product-client/host/product-host";
 
 function isPlainObject(value: object): boolean {
   const prototype = Object.getPrototypeOf(value);
@@ -77,7 +77,9 @@ export function hashAppQueryKey(queryKey: unknown): string {
   }
 }
 
-function createAppQueryClient() {
+export function createAppQueryClient(
+  captureException: ProductTelemetry["captureException"],
+) {
   return new QueryClient({
     queryCache: new QueryCache({
       onError: (error, query) => {
@@ -85,7 +87,7 @@ function createAppQueryClient() {
           return;
         }
 
-        captureTelemetryException(error, {
+        captureException(error, {
           tags: {
             action: "query_error",
             domain: "react_query",
@@ -103,7 +105,7 @@ function createAppQueryClient() {
         }
 
         const mutationKey = mutation.options.mutationKey;
-        captureTelemetryException(error, {
+        captureException(error, {
           tags: {
             action: "mutation_error",
             domain: "react_query",
@@ -130,5 +132,3 @@ function createAppQueryClient() {
     },
   });
 }
-
-export const appQueryClient = createAppQueryClient();

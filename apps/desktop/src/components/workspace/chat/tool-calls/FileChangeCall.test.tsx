@@ -5,7 +5,40 @@ import type { ProductHost } from "@proliferate/product-client/host/product-host"
 import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
 import { FileChangeCall } from "./FileChangeCall";
 
-const webTestHost = { desktop: null } as ProductHost;
+const webTestHost = {
+  surface: "web",
+  deployment: { apiBaseUrl: "https://app.test" },
+  auth: {
+    authRequired: true,
+    state: { status: "loading" },
+    restoreSession: async () => {},
+    startLogin: async () => ({ provider: "password", source: "password_form" }),
+    finishLogin: async () => {},
+    cancelLogin: async () => {},
+    logout: async () => ({ provider: "password" }),
+  },
+  cloud: { client: null },
+  storage: {
+    getItem: async () => null,
+    setItem: async () => {},
+    removeItem: async () => {},
+  },
+  links: {
+    openExternal: async () => {},
+    buildReturnUrl: () => "https://app.test",
+    observeInboundEntries: () => () => {},
+  },
+  clipboard: { writeText: async () => {} },
+  telemetry: {
+    track: () => {},
+    captureException: () => {},
+    setUser: () => {},
+    setTag: () => {},
+    routeChanged: () => {},
+    getSupportContext: () => ({ clientReleaseId: "test" }),
+  },
+  desktop: null,
+} satisfies ProductHost;
 
 function renderToStaticMarkup(ui: ReactElement) {
   return renderReactToStaticMarkup(

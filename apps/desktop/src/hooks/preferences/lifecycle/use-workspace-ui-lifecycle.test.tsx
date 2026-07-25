@@ -27,9 +27,15 @@ const persistenceMocks = vi.hoisted(() => {
   };
 });
 
-vi.mock("@/lib/infra/persistence/preferences-persistence", () => ({
-  readPersistedValue: persistenceMocks.readPersistedValue,
-  persistValue: persistenceMocks.persistValue,
+vi.mock("@/hooks/app/facade/use-product-storage-context", () => ({
+  useProductStorageContext: () => ({}),
+}));
+
+vi.mock("@/lib/infra/persistence/product-storage", () => ({
+  readProductStorageJson: (_context: unknown, key: string) =>
+    persistenceMocks.readPersistedValue(key),
+  writeProductStorageJson: (_context: unknown, key: string, value: unknown) =>
+    persistenceMocks.persistValue(key, value),
 }));
 
 function currentWorkspaceUiState(): PersistedWorkspaceUiState {
@@ -51,6 +57,7 @@ function resetWorkspaceUiStore(): void {
     ...current,
     ...WORKSPACE_UI_DEFAULTS,
     _hydrated: false,
+    _persistenceRevision: 0,
     shellActivationEpochByWorkspace: {},
     pendingChatActivationByWorkspace: {},
     urgentHighlightedChatSessionByWorkspace: {},
@@ -149,5 +156,96 @@ describe("useWorkspaceUiLifecycle", () => {
 
     expect(useWorkspaceUiStore.getState().sidebarOpen).toBe(true);
     expect(persistenceMocks.persistValue).not.toHaveBeenCalled();
+  });
+
+  it("hydrates persisted settings despite a transient pending-chat action", async () => {
+    let resolveRead: (value: unknown) => void = () => undefined;
+    persistenceMocks.readPersistedValue.mockReturnValueOnce(new Promise((resolve) => {
+      resolveRead = resolve;
+    }));
+    renderHook(() => useWorkspaceUiLifecycle());
+
+    act(() => {
+      useWorkspaceUiStore.getState().setPendingChatActivation({
+        workspaceId: "workspace-1",
+        pending: {
+          attemptId: "attempt-1",
+          sessionId: "session-1",
+          intent: "chat:session-1",
+          guardToken: 1,
+          workspaceSelectionNonce: 1,
+          shellEpochAtWrite: 1,
+          sessionActivationEpochAtWrite: 1,
+        },
+      });
+    });
+    expect(useWorkspaceUiStore.getState()._persistenceRevision).toBe(0);
+
+    await act(async () => resolveRead({
+      ...currentWorkspaceUiState(),
+      sidebarOpen: true,
+    }));
+    await waitFor(() => expect(useWorkspaceUiStore.getState()._hydrated).toBe(true));
+
+    expect(useWorkspaceUiStore.getState().sidebarOpen).toBe(true);
+    expect(
+      useWorkspaceUiStore.getState()
+        .pendingChatActivationByWorkspace["workspace-1"]?.attemptId,
+    ).toBe("attempt-1");
+    expect(persistenceMocks.persistValue).not.toHaveBeenCalled();
+  });
+
+  it("keeps the whole live workspace UI record when it changes during hydration", async () => {
+    let resolveRead: (value: unknown) => void = () => undefined;
+    persistenceMocks.readPersistedValue.mockReturnValueOnce(new Promise((resolve) => {
+      resolveRead = resolve;
+    }));
+
+    renderHook(() => useWorkspaceUiLifecycle());
+    act(() => useWorkspaceUiStore.getState().setShowArchived(true));
+    await act(async () => resolveRead({
+      ...currentWorkspaceUiState(),
+      showArchived: false,
+      sidebarOpen: true,
+    }));
+    await waitFor(() => expect(useWorkspaceUiStore.getState()._hydrated).toBe(true));
+
+    expect(useWorkspaceUiStore.getState().showArchived).toBe(true);
+    expect(useWorkspaceUiStore.getState().sidebarOpen)
+      .toBe(WORKSPACE_UI_DEFAULTS.sidebarOpen);
+    await waitFor(() => {
+      expect(persistenceMocks.persistValue).toHaveBeenCalledWith(
+        "workspace_ui",
+        expect.objectContaining({
+          showArchived: true,
+          sidebarOpen: WORKSPACE_UI_DEFAULTS.sidebarOpen,
+        }),
+      );
+    });
+  });
+
+  it("persists header-tab fallback materialization through the tracked action", async () => {
+    persistenceMocks.values.set("workspace_ui", currentWorkspaceUiState());
+    renderHook(() => useWorkspaceUiLifecycle());
+    await waitFor(() => expect(useWorkspaceUiStore.getState()._hydrated).toBe(true));
+    persistenceMocks.persistValue.mockClear();
+
+    act(() => {
+      useWorkspaceUiStore.getState().materializeWorkspaceHeaderTabFallbacks(
+        "workspace-new",
+        { visibleChatSessionIds: ["session-from-fallback"] },
+      );
+    });
+
+    await waitFor(() => {
+      expect(persistenceMocks.persistValue).toHaveBeenCalledWith(
+        "workspace_ui",
+        expect.objectContaining({
+          visibleChatSessionIdsByWorkspace: {
+            "workspace-new": ["session-from-fallback"],
+          },
+        }),
+      );
+    });
   });
 });

@@ -17,32 +17,15 @@ import {
   executeLocalAutomationRun,
   LocalAutomationExecutorError,
 } from "@/lib/workflows/automations/local-automation-executor";
-import { readPersistedValue, persistValue } from "@/lib/infra/persistence/preferences-persistence";
+import { getProductStorageLocalAutomationExecutorId } from "@/lib/workflows/automations/local-automation-executor-identity";
 import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-store";
 import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
+import { useProductStorageContext } from "@/hooks/app/facade/use-product-storage-context";
 
-const AUTOMATION_LOCAL_EXECUTOR_ID_KEY = "automationLocalExecutorId";
 const LOCAL_EXECUTOR_POLL_MS = 10_000;
 const LOCAL_EXECUTOR_HEARTBEAT_MS = 30_000;
 
 let localExecutorMounted = false;
-let executorIdPromise: Promise<string> | null = null;
-
-async function getLocalExecutorId(): Promise<string> {
-  if (executorIdPromise) {
-    return executorIdPromise;
-  }
-  executorIdPromise = (async () => {
-    const existing = await readPersistedValue<string>(AUTOMATION_LOCAL_EXECUTOR_ID_KEY);
-    if (existing?.trim()) {
-      return existing.trim();
-    }
-    const next = `desktop:${crypto.randomUUID()}`;
-    await persistValue(AUTOMATION_LOCAL_EXECUTOR_ID_KEY, next);
-    return next;
-  })();
-  return executorIdPromise;
-}
 
 // Owns the singleton local automation claim loop and heartbeat cleanup.
 // Does not own cloud mutation cache shape or AnyHarness client construction.
@@ -54,6 +37,8 @@ export function useLocalAutomationClaimPoller(args: {
   const createRuntimeClient = useLocalAutomationRuntimeClientFactory();
   const { invalidateAfterLocalAutomationRun } = useLocalAutomationExecutorCache();
   const files = useProductHost().desktop?.files ?? null;
+  const persistence = useProductStorageContext();
+  const executorIdPromiseRef = useRef<Promise<string> | null>(null);
   const workspacesQuery = useWorkspaces();
   const activeRef = useRef(false);
   const candidates = useMemo(
@@ -64,6 +49,10 @@ export function useLocalAutomationClaimPoller(args: {
       }),
     [workspacesQuery.data],
   );
+
+  useEffect(() => {
+    executorIdPromiseRef.current = null;
+  }, [persistence.storage]);
 
   useEffect(() => {
     if (!args.enabled || !args.runtimeUrl.trim() || candidates.length === 0 || !files) {
@@ -82,7 +71,11 @@ export function useLocalAutomationClaimPoller(args: {
       }
       activeRef.current = true;
       try {
-        const executorId = await getLocalExecutorId();
+        const executorId = await getProductStorageLocalAutomationExecutorId(
+          persistence,
+          executorIdPromiseRef,
+          () => crypto.randomUUID(),
+        );
         const response = await runClaims.claimRuns({
           executorId,
           limit: 1,
@@ -134,6 +127,7 @@ export function useLocalAutomationClaimPoller(args: {
     createRuntimeClient,
     files,
     invalidateAfterLocalAutomationRun,
+    persistence,
     runClaims,
   ]);
 }

@@ -1,8 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   committedReplacedSessionTombstonesForWorkspace,
-  isReplacedSessionTombstoned,
+  prepareSessionReplacementTombstonesForStorage,
   resetReplacedSessionTombstonesForTests,
+} from "@/hooks/sessions/workflows/session-replacement-tombstone-durable-operations";
+import {
+  beginSessionReplacementTombstoneHydration,
+  settleSessionReplacementTombstoneHydration,
+} from "@/hooks/sessions/workflows/session-replacement-tombstone-authority";
+import {
+  isReplacedSessionTombstoned,
 } from "@/hooks/sessions/workflows/session-replacement-tombstones";
 import {
   resetSessionReplacementDismissalsForTests,
@@ -27,8 +34,18 @@ const mocks = vi.hoisted(() => ({
   createSession: vi.fn(),
   dismissSession: vi.fn(() => new Promise<void>(() => undefined)),
   resolveDesktopRuntimeUrlForWorkspace: vi.fn(async () => "http://runtime.test"),
-  writeTombstones: vi.fn(() => true),
 }));
+
+const telemetry = {
+  track: vi.fn(),
+  captureException: vi.fn(),
+};
+const storage = {
+  getItem: vi.fn(async () => null),
+  setItem: vi.fn(async () => undefined),
+  removeItem: vi.fn(async () => undefined),
+};
+const persistence = { storage, captureException: telemetry.captureException };
 
 vi.mock("@/lib/access/anyharness/sessions", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/lib/access/anyharness/sessions")>(),
@@ -61,20 +78,16 @@ vi.mock("@/lib/access/anyharness/direct-session-create-guard", () => ({
   assertDirectSessionCreateSupported: vi.fn(),
 }));
 
-vi.mock("@/lib/access/browser/session-replacement-tombstones-storage", () => ({
-  readSessionReplacementTombstones: () => ({}),
-  writeSessionReplacementTombstones: mocks.writeTombstones,
-}));
-
 beforeEach(() => {
   mocks.dismissSession.mockClear();
   mocks.dismissSession.mockImplementation(() => new Promise<void>(() => undefined));
-  mocks.writeTombstones.mockReset();
-  mocks.writeTombstones.mockReturnValue(true);
   mocks.applySessionLaunchDefaults.mockReset();
   mocks.createSession.mockReset();
   mocks.resolveDesktopRuntimeUrlForWorkspace.mockClear();
   resetReplacedSessionTombstonesForTests();
+  beginSessionReplacementTombstoneHydration(storage);
+  prepareSessionReplacementTombstonesForStorage(storage);
+  settleSessionReplacementTombstoneHydration(false);
   resetSessionReplacementDismissalsForTests();
   resetSessionCreationSupersessionForTests();
 });
@@ -86,6 +99,8 @@ describe("created runtime cleanup", () => {
       workspaceId: "workspace-1",
       runtimeSessionId: "runtime-created",
       clientSessionId: "client-created",
+      captureException: telemetry.captureException,
+      persistence,
     });
 
     await expect(result).resolves.toBe(true);
@@ -98,8 +113,7 @@ describe("created runtime cleanup", () => {
     expect(isReplacedSessionTombstoned("workspace-1", "client-created")).toBe(true);
   });
 
-  it("releases suppression when neither persistence nor dismissal can retire the runtime", async () => {
-    mocks.writeTombstones.mockReturnValue(false);
+  it("keeps suppression when eventual dismissal fails", async () => {
     mocks.dismissSession.mockRejectedValue(new Error("runtime unavailable"));
 
     await expect(scheduleCreatedRuntimeSessionCleanup({
@@ -107,14 +121,34 @@ describe("created runtime cleanup", () => {
       workspaceId: "workspace-1",
       runtimeSessionId: "runtime-created",
       clientSessionId: "client-created",
+      captureException: telemetry.captureException,
+      persistence,
+    })).resolves.toBe(true);
+
+    await vi.waitFor(() => expect(mocks.dismissSession).toHaveBeenCalledTimes(3));
+    expect(isReplacedSessionTombstoned("workspace-1", "runtime-created")).toBe(true);
+    expect(isReplacedSessionTombstoned("workspace-1", "client-created")).toBe(true);
+  });
+
+  it("reports unsafe cleanup when persistence and dismissal both fail", async () => {
+    storage.setItem.mockRejectedValueOnce(new Error("write failed"));
+    mocks.dismissSession.mockRejectedValue(new Error("runtime unavailable"));
+
+    await expect(scheduleCreatedRuntimeSessionCleanup({
+      connection: {} as never,
+      workspaceId: "workspace-1",
+      runtimeSessionId: "runtime-created",
+      clientSessionId: "client-created",
+      captureException: telemetry.captureException,
+      persistence,
     })).resolves.toBe(false);
 
     expect(mocks.dismissSession).toHaveBeenCalledTimes(3);
+    expect(committedReplacedSessionTombstonesForWorkspace("workspace-1")).toEqual([]);
     expect(isReplacedSessionTombstoned("workspace-1", "runtime-created")).toBe(false);
-    expect(isReplacedSessionTombstoned("workspace-1", "client-created")).toBe(false);
   });
 
-  it("publishes a created runtime when launch failure cleanup cannot retire it", async () => {
+  it("keeps a failed launch runtime suppressed instead of republishing it", async () => {
     const pendingSessionId = "pending-retained-runtime";
     const projectedRecord = createEmptySessionRecord(pendingSessionId, "claude", {
       workspaceId: "workspace-1",
@@ -130,7 +164,6 @@ describe("created runtime cleanup", () => {
       status: "idle",
     });
     mocks.applySessionLaunchDefaults.mockRejectedValue(new Error("defaults failed"));
-    mocks.writeTombstones.mockReturnValue(false);
     mocks.dismissSession.mockRejectedValue(new Error("runtime unavailable"));
     const upsertWorkspaceSessionRecord = vi.fn();
     const localRuntime = { getConnection: vi.fn(), restart: vi.fn() };
@@ -150,22 +183,21 @@ describe("created runtime cleanup", () => {
       resolvedModeId: null,
       upsertWorkspaceSessionRecord,
       workspaceId: "workspace-1",
-    })).resolves.toBe(pendingSessionId);
+      telemetry,
+      persistence,
+    })).rejects.toThrow("defaults failed");
 
     expect(mocks.resolveDesktopRuntimeUrlForWorkspace).toHaveBeenCalledWith(
       "workspace-1",
       localRuntime,
     );
-    expect(getSessionRecord(pendingSessionId)?.materializedSessionId)
-      .toBe("runtime-retained");
-    expect(upsertWorkspaceSessionRecord).toHaveBeenCalledWith(
-      "workspace-1",
-      expect.objectContaining({ id: "runtime-retained" }),
-    );
+    expect(getSessionRecord(pendingSessionId)?.materializedSessionId).toBeNull();
+    expect(upsertWorkspaceSessionRecord).not.toHaveBeenCalled();
+    expect(isReplacedSessionTombstoned("workspace-1", "runtime-retained")).toBe(true);
     removeSessionRecord(pendingSessionId);
   });
 
-  it("recreates a removed superseded shell when its runtime cannot be retired", async () => {
+  it("keeps a superseded runtime suppressed when dismissal fails", async () => {
     const pendingSessionId = "pending-superseded-runtime";
     const projectedRecord = createEmptySessionRecord(pendingSessionId, "claude", {
       workspaceId: "workspace-1",
@@ -181,7 +213,6 @@ describe("created runtime cleanup", () => {
       status: string;
     }>();
     mocks.createSession.mockReturnValueOnce(createGate.promise);
-    mocks.writeTombstones.mockReturnValue(false);
     mocks.dismissSession.mockRejectedValue(new Error("runtime unavailable"));
     const upsertWorkspaceSessionRecord = vi.fn();
     const unregister = registerSessionCreation(pendingSessionId);
@@ -200,6 +231,8 @@ describe("created runtime cleanup", () => {
       resolvedModeId: null,
       upsertWorkspaceSessionRecord,
       workspaceId: "workspace-1",
+      telemetry,
+      persistence,
     });
     await vi.waitFor(() => expect(mocks.createSession).toHaveBeenCalledTimes(1));
     supersedeInFlightSessionCreation(pendingSessionId);
@@ -214,12 +247,10 @@ describe("created runtime cleanup", () => {
     });
 
     await expect(materialization).resolves.toBe(pendingSessionId);
-    expect(getSessionRecord(pendingSessionId)?.materializedSessionId)
-      .toBe("runtime-superseded-retained");
-    expect(upsertWorkspaceSessionRecord).toHaveBeenCalledWith(
-      "workspace-1",
-      expect.objectContaining({ id: "runtime-superseded-retained" }),
-    );
+    expect(getSessionRecord(pendingSessionId)).toBeNull();
+    expect(upsertWorkspaceSessionRecord).not.toHaveBeenCalled();
+    expect(isReplacedSessionTombstoned("workspace-1", "runtime-superseded-retained"))
+      .toBe(true);
     expect(mocks.applySessionLaunchDefaults).not.toHaveBeenCalled();
     unregister();
     removeSessionRecord(pendingSessionId);
@@ -262,6 +293,8 @@ describe("created runtime cleanup", () => {
       resolvedModeId: null,
       upsertWorkspaceSessionRecord: vi.fn(),
       workspaceId: "workspace-1",
+      telemetry,
+      persistence,
     });
     await vi.waitFor(() => {
       expect(mocks.applySessionLaunchDefaults).toHaveBeenCalledTimes(1);

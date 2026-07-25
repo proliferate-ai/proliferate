@@ -7,12 +7,17 @@ import {
   AnyHarnessRuntime,
   anyHarnessSessionsKey,
 } from "@anyharness/sdk-react";
+import type { ProductHost } from "@proliferate/product-client/host/product-host";
+import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   commitReplacedSessionTombstone,
   committedReplacedSessionTombstonesForWorkspace,
-  isReplacedSessionTombstoned,
+  prepareSessionReplacementTombstonesForStorage,
   resetReplacedSessionTombstonesForTests,
+} from "@/hooks/sessions/workflows/session-replacement-tombstone-durable-operations";
+import {
+  isReplacedSessionTombstoned,
   stageReplacedSessionTombstone,
 } from "@/hooks/sessions/workflows/session-replacement-tombstones";
 import {
@@ -22,19 +27,30 @@ import {
 import {
   resetSessionReplacementDismissalsForTests,
 } from "@/hooks/sessions/workflows/session-replacement-dismissals";
+import {
+  beginSessionReplacementTombstoneHydration,
+  settleSessionReplacementTombstoneHydration,
+} from "@/hooks/sessions/workflows/session-replacement-tombstone-authority";
 
 const mocks = vi.hoisted(() => ({
   dismissSession: vi.fn(async () => undefined),
   listWorkspaceSessions: vi.fn(),
-  writeSessionReplacementTombstones: vi.fn(() => true),
 }));
 
 const CACHE_SCOPE_KEY = "desktop:test-user";
-
-vi.mock("@/lib/access/browser/session-replacement-tombstones-storage", () => ({
-  readSessionReplacementTombstones: () => ({}),
-  writeSessionReplacementTombstones: mocks.writeSessionReplacementTombstones,
-}));
+const storage = {
+  getItem: vi.fn(async () => null),
+  setItem: vi.fn(async () => {}),
+  removeItem: vi.fn(async () => {}),
+};
+const host = {
+  storage,
+  telemetry: { captureException: vi.fn() },
+} as unknown as ProductHost;
+const persistence = {
+  storage,
+  captureException: host.telemetry.captureException,
+};
 
 vi.mock("@/lib/access/anyharness/sessions", () => ({
   dismissSession: mocks.dismissSession,
@@ -44,9 +60,10 @@ vi.mock("@/lib/access/anyharness/sessions", () => ({
 beforeEach(() => {
   mocks.dismissSession.mockClear();
   mocks.listWorkspaceSessions.mockClear();
-  mocks.writeSessionReplacementTombstones.mockClear();
-  mocks.writeSessionReplacementTombstones.mockReturnValue(true);
   resetReplacedSessionTombstonesForTests();
+  beginSessionReplacementTombstoneHydration(storage);
+  prepareSessionReplacementTombstonesForStorage(storage);
+  settleSessionReplacementTombstoneHydration(false);
   resetSessionReplacementDismissalsForTests();
 });
 
@@ -56,25 +73,27 @@ describe("replacement tombstone reconciliation", () => {
       workspaceConnection: {} as never,
       workspaceId: "workspace-1",
     };
-    commitReplacedSessionTombstone("workspace-1", "runtime-old");
+    await commitReplacedSessionTombstone(persistence, "workspace-1", "runtime-old");
 
-    reconcileReplacedSessionTombstones(input, [{ id: "runtime-old" }]);
+    reconcileReplacedSessionTombstones(persistence, input, [{ id: "runtime-old" }]);
 
     await vi.waitFor(() => {
       expect(mocks.dismissSession).toHaveBeenCalledWith({}, "runtime-old");
     });
     expect(isReplacedSessionTombstoned("workspace-1", "runtime-old")).toBe(true);
 
-    reconcileReplacedSessionTombstones(input, []);
+    reconcileReplacedSessionTombstones(persistence, input, []);
 
-    expect(committedReplacedSessionTombstonesForWorkspace("workspace-1")).toEqual([]);
+    await vi.waitFor(() => {
+      expect(committedReplacedSessionTombstonesForWorkspace("workspace-1")).toEqual([]);
+    });
     expect(isReplacedSessionTombstoned("workspace-1", "runtime-old")).toBe(true);
   });
 
   it("does not dismiss a staged replacement during an authoritative list", () => {
     stageReplacedSessionTombstone("workspace-1", "runtime-old", ["client-old"]);
 
-    reconcileReplacedSessionTombstones({
+    reconcileReplacedSessionTombstones(persistence, {
       workspaceConnection: {} as never,
       workspaceId: "workspace-1",
     }, [{ id: "runtime-old" }]);
@@ -122,7 +141,11 @@ describe("replacement tombstone reconciliation", () => {
     });
     await vi.waitFor(() => expect(mocks.listWorkspaceSessions).toHaveBeenCalledTimes(1));
 
-    commitReplacedSessionTombstone("workspace-1", "runtime-created-later");
+    await commitReplacedSessionTombstone(
+      persistence,
+      "workspace-1",
+      "runtime-created-later",
+    );
     listGate.resolve([]);
     await firstList;
 
@@ -134,18 +157,28 @@ describe("replacement tombstone reconciliation", () => {
       workspaceConnection: {} as never,
       workspaceId: "workspace-1",
     });
-    expect(committedReplacedSessionTombstonesForWorkspace("workspace-1")).toEqual([]);
+    await vi.waitFor(() => {
+      expect(committedReplacedSessionTombstonesForWorkspace("workspace-1")).toEqual([]);
+    });
   });
 });
 
 function createWrapper(queryClient: QueryClient, runtimeUrl: string) {
   return ({ children }: { children: ReactNode }) => createElement(
-    QueryClientProvider,
-    { client: queryClient },
-    createElement(
-      AnyHarnessRuntime,
-      { runtimeUrl, cacheScopeKey: CACHE_SCOPE_KEY, children },
-    ),
+    ProductHostProvider,
+    {
+      host,
+      children: createElement(
+      QueryClientProvider,
+        {
+          client: queryClient,
+          children: createElement(
+            AnyHarnessRuntime,
+            { runtimeUrl, cacheScopeKey: CACHE_SCOPE_KEY, children },
+          ),
+        },
+      ),
+    },
   );
 }
 

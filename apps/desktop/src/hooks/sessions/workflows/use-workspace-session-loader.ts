@@ -16,8 +16,13 @@ import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-
 import {
   filterReplacedSessionTombstones,
 } from "@/hooks/sessions/workflows/session-replacement-tombstones";
+import { useSessionReplacementTombstoneAuthority } from "@/hooks/sessions/derived/use-session-replacement-tombstone-authority";
+import {
+  waitForSessionReplacementTombstoneHydration,
+} from "@/hooks/sessions/workflows/session-replacement-tombstone-authority";
 
 export function useWorkspaceSessionLoader() {
+  const tombstoneAuthority = useSessionReplacementTombstoneAuthority();
   const host = useProductHost();
   const desktop = host.desktop;
   const cloudClient = host.cloud.client;
@@ -33,6 +38,7 @@ export function useWorkspaceSessionLoader() {
     workspaceId: string,
     options?: SessionLatencyFlowOptions,
   ): Promise<WorkspaceSession[]> => {
+    await waitForSessionReplacementTombstoneHydration();
     const blockedReason = getWorkspaceRuntimeBlockReason(workspaceId);
     if (blockedReason) {
       throw new Error(blockedReason);
@@ -92,6 +98,7 @@ export function useWorkspaceSessionLoader() {
     localRuntime,
     setWorkspaceSessions,
     ssh,
+    tombstoneAuthority.revision,
   ]);
 
   return { ensureWorkspaceSessions };
