@@ -5,6 +5,9 @@ import {
   useMemo,
 } from "react";
 import { PublishDialog } from "@/components/workspace/git/PublishDialog";
+import { CommitModal } from "@/components/workspace/git/CommitModal";
+import { MergeConfirmDialog } from "@/components/workspace/git/MergeConfirmDialog";
+import { ArchiveWorktreeOffer } from "@/components/workspace/git/ArchiveWorktreeOffer";
 import { ChatView } from "@/components/workspace/chat/ChatView";
 import { GlobalHeader } from "@/components/workspace/shell/topbar/GlobalHeader";
 import { WorkspaceContentView } from "@/components/workspace/shell/screen/WorkspaceContentView";
@@ -131,26 +134,60 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
     workspaceWebActions,
     workspaceRemoteAccessActions,
   }), [actions.openTerminalPanel, workspaceRemoteAccessActions, workspaceWebActions]);
-  const workspaceActionsMenuProps = useMemo(() => ({
-    branchName: data.gitStatus?.currentBranch?.trim() || null,
-    hasExistingPr: data.existingPr !== null,
-    gitActionsDisabledReason: hasRuntimeReadyWorkspace
-      ? runtimeBlockedReason
-      : "Workspace runtime is not ready.",
-    onCommit: actions.handleCommitOpen,
-    onPush: actions.handlePushOpen,
-    onCreatePr: actions.handlePrOpen,
-    onViewPr: actions.handleViewPr,
-  }), [
-    actions.handleCommitOpen,
-    actions.handlePrOpen,
-    actions.handlePushOpen,
-    actions.handleViewPr,
+  const gitInfoProps = useMemo(() => {
+    const branchName = data.gitStatus?.currentBranch?.trim() || null;
+    if (!branchName && !hasRuntimeReadyWorkspace) return null;
+    const pr = data.existingPr;
+    // PullRequestSummary (from getCurrent) doesn't carry checks/reviewDecision;
+    // those are only in BranchPullRequestSummary. Safe fallback to "none".
+    const prChecks = (pr as { checks?: string })?.checks;
+    return {
+      data: {
+        branchName,
+        additions: data.gitStatus?.summary?.additions ?? 0,
+        deletions: data.gitStatus?.summary?.deletions ?? 0,
+        hasExistingPr: pr !== null,
+        prNumber: pr?.number ?? null,
+        prUrl: pr?.url ?? null,
+        prChecksOk: prChecks === "passing",
+        prChecksFailing: prChecks === "failing",
+        prMerged: pr?.state === "merged",
+        gitActionsDisabledReason: hasRuntimeReadyWorkspace
+          ? runtimeBlockedReason
+          : "Workspace runtime is not ready.",
+      },
+      actions: {
+        onOpenChangesPanel: () => actions.onSetRightPanelTool("git"),
+        onCopyBranch: () => actions.handleCopyBranch(branchName),
+        onCommitOrPush: actions.handleCommitOpen,
+        onCreatePr: actions.handlePrOpen,
+        onViewPr: actions.handleViewPr,
+        onMergePr: actions.handleMergePrOpen,
+      },
+    };
+  }, [
+    actions,
     data.existingPr,
     data.gitStatus?.currentBranch,
+    data.gitStatus?.summary?.additions,
+    data.gitStatus?.summary?.deletions,
     hasRuntimeReadyWorkspace,
     runtimeBlockedReason,
   ]);
+  const commitModalData = useMemo(() => {
+    const files = data.gitStatus?.files ?? [];
+    const changedPaths = files.map((f) => f.path);
+    // Build a diff excerpt from file list (path + status) for AI commit message gen.
+    const MAX_EXCERPT = 20_000;
+    let excerpt = "";
+    for (const f of files) {
+      const line = `${f.status} ${f.path} (+${f.additions} -${f.deletions})\n`;
+      if (excerpt.length + line.length > MAX_EXCERPT) break;
+      excerpt += line;
+    }
+    return { changedPaths, diffExcerpt: excerpt || null };
+  }, [data.gitStatus?.files]);
+
   const repoSettingsHref = useMemo(() => resolveWorkspaceRepoSettingsHref({
     cloudRepoOwner: selectedCloudWorkspace?.repo?.owner,
     cloudRepoName: selectedCloudWorkspace?.repo?.name,
@@ -281,7 +318,7 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
                             runLoading={runCommand.isLaunching}
                             runLabel={runCommand.runLabel}
                             runTitle={runCommand.runTitle}
-                            workspaceActions={workspaceActionsMenuProps}
+                            git={gitInfoProps}
                             onRun={runCommand.onRun}
                             onTogglePanel={actions.toggleRightPanel}
                           />
@@ -336,6 +373,35 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
                             onViewPr={actions.handlePublishDialogViewPr}
                           />
                         )}
+
+                        {hasRuntimeReadyWorkspace && (
+                          <CommitModal
+                            open={actions.commitModalOpen}
+                            workspaceId={selectedWorkspaceId}
+                            branchName={data.gitStatus?.currentBranch?.trim() ?? null}
+                            additions={data.gitStatus?.summary?.additions ?? 0}
+                            deletions={data.gitStatus?.summary?.deletions ?? 0}
+                            diffExcerpt={commitModalData.diffExcerpt}
+                            changedPaths={commitModalData.changedPaths}
+                            onClose={actions.closeCommitModal}
+                          />
+                        )}
+
+                        <MergeConfirmDialog
+                          open={actions.mergePrOpen}
+                          workspaceId={selectedWorkspaceId}
+                          repoRootId={selectedRepoRoot?.id ?? null}
+                          prNumber={data.existingPr?.number ?? null}
+                          prChecksFailing={gitInfoProps?.data.prChecksFailing ?? false}
+                          onClose={actions.closeMergePrDialog}
+                          onMerged={actions.handleMerged}
+                        />
+
+                        <ArchiveWorktreeOffer
+                          open={actions.archiveWorktreeOfferOpen}
+                          onArchive={actions.closeArchiveWorktreeOffer}
+                          onKeep={actions.closeArchiveWorktreeOffer}
+                        />
                       </>
                     ) : (
                       <HomeNextScreen />

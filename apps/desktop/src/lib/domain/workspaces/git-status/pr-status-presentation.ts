@@ -152,3 +152,29 @@ export function gitAheadBehindLabel(
   }
   return parts.length > 0 ? parts.join(" ") : null;
 }
+
+/**
+ * Sidebar dirty dot: a small muted indicator when the workspace has uncommitted
+ * changes (dirty === true). Always quieter than conflicted/checks-failing (those
+ * already surface via the PR glyph's destructive tone).
+ */
+export interface SidebarDirtyDot {
+  visible: boolean;
+  tooltip: string;
+}
+
+export function sidebarDirtyDotForStatus(
+  status: WorkspaceGitStatus | null | undefined,
+): SidebarDirtyDot | null {
+  if (!status || status.dirty !== true) {
+    return null;
+  }
+  // Never show dirty dot if there's already an attention signal (conflicts/ci)
+  if (status.attention !== "none") {
+    return null;
+  }
+  return {
+    visible: true,
+    tooltip: "Uncommitted changes",
+  };
+}

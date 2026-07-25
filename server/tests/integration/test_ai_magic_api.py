@@ -174,3 +174,135 @@ class TestAiMagicApi:
         assert first.status_code == 200
         assert second.status_code == 429
         assert second.json()["detail"]["code"] == "ai_magic_rate_limited"
+
+    @pytest.mark.asyncio
+    async def test_generate_commit_message_returns_message(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        ai_magic_service._commit_message_windows.clear()
+        session = await _register_and_login(client, "ai-magic-commit@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+        monkeypatch.setattr(settings, "anthropic_api_key", "test-key")
+
+        async def fake_generate_message_text(**_: object) -> str:
+            return "fix(auth): resolve token refresh race condition"
+
+        monkeypatch.setattr(
+            "proliferate.server.ai_magic.service.generate_message_text",
+            fake_generate_message_text,
+        )
+
+        response = await client.post(
+            "/v1/ai_magic/commit-messages/generate",
+            headers=headers,
+            json={
+                "diffStat": " 2 files changed, 10 insertions(+), 3 deletions(-)",
+                "diffExcerpt": "diff --git a/auth.py b/auth.py\n-old\n+new",
+            },
+        )
+
+        assert response.status_code == 200
+        assert response.json() == {
+            "message": "fix(auth): resolve token refresh race condition"
+        }
+
+    @pytest.mark.asyncio
+    async def test_generate_commit_message_strips_code_fences(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        ai_magic_service._commit_message_windows.clear()
+        session = await _register_and_login(client, "ai-magic-commit-fence@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+        monkeypatch.setattr(settings, "anthropic_api_key", "test-key")
+
+        async def fake_generate_message_text(**_: object) -> str:
+            return '```\nfeat: add commit message generation\n```'
+
+        monkeypatch.setattr(
+            "proliferate.server.ai_magic.service.generate_message_text",
+            fake_generate_message_text,
+        )
+
+        response = await client.post(
+            "/v1/ai_magic/commit-messages/generate",
+            headers=headers,
+            json={
+                "diffStat": " 1 file changed",
+                "diffExcerpt": "diff --git a/foo.py b/foo.py\n+new line",
+            },
+        )
+
+        assert response.status_code == 200
+        assert response.json() == {"message": "feat: add commit message generation"}
+
+    @pytest.mark.asyncio
+    async def test_generate_commit_message_rate_limits_per_user(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        ai_magic_service._commit_message_windows.clear()
+        session = await _register_and_login(
+            client, "ai-magic-commit-limit@example.com"
+        )
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+        monkeypatch.setattr(settings, "anthropic_api_key", "test-key")
+        monkeypatch.setattr(ai_magic_service, "COMMIT_MESSAGE_RATE_LIMIT_REQUESTS", 1)
+        monkeypatch.setattr(
+            ai_magic_service, "COMMIT_MESSAGE_RATE_LIMIT_WINDOW_SECONDS", 600
+        )
+
+        async def fake_generate_message_text(**_: object) -> str:
+            return "fix: something"
+
+        monkeypatch.setattr(
+            "proliferate.server.ai_magic.service.generate_message_text",
+            fake_generate_message_text,
+        )
+
+        first = await client.post(
+            "/v1/ai_magic/commit-messages/generate",
+            headers=headers,
+            json={
+                "diffStat": " 1 file changed",
+                "diffExcerpt": "diff --git a/x.py b/x.py\n+x",
+            },
+        )
+        second = await client.post(
+            "/v1/ai_magic/commit-messages/generate",
+            headers=headers,
+            json={
+                "diffStat": " 1 file changed",
+                "diffExcerpt": "diff --git a/x.py b/x.py\n+x",
+            },
+        )
+
+        assert first.status_code == 200
+        assert second.status_code == 429
+        assert second.json()["detail"]["code"] == "ai_magic_rate_limited"
+
+    @pytest.mark.asyncio
+    async def test_generate_commit_message_empty_input_rejected(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        ai_magic_service._commit_message_windows.clear()
+        session = await _register_and_login(
+            client, "ai-magic-commit-empty@example.com"
+        )
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+        monkeypatch.setattr(settings, "anthropic_api_key", "test-key")
+
+        response = await client.post(
+            "/v1/ai_magic/commit-messages/generate",
+            headers=headers,
+            json={"diffStat": "", "diffExcerpt": ""},
+        )
+
+        assert response.status_code == 400
+        assert response.json()["detail"]["code"] == "commit_message_input_empty"

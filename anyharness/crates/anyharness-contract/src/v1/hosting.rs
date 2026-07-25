@@ -56,6 +56,23 @@ pub struct CreatePullRequestResponse {
 }
 
 // ---------------------------------------------------------------------------
+// Merge pull request
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct MergePullRequestRequest {
+    /// Merge method. Only "squash" is supported.
+    pub method: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct MergePullRequestResponse {
+    pub pull_request: BranchPullRequestSummary,
+}
+
+// ---------------------------------------------------------------------------
 // Repo-root pull-request statuses
 // ---------------------------------------------------------------------------
 

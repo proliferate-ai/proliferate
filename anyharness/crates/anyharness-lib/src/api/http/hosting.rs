@@ -1,7 +1,8 @@
 use anyharness_contract::v1::{
     BranchPullRequestStatus as ContractBranchPullRequestStatus,
     BranchPullRequestSummary as ContractBranchPullRequestSummary, CreatePullRequestRequest,
-    CreatePullRequestResponse, CurrentPullRequestResponse,
+    CreatePullRequestResponse, CurrentPullRequestResponse, MergePullRequestRequest,
+    MergePullRequestResponse,
     PullRequestChecksState as ContractPullRequestChecksState,
     PullRequestReviewDecision as ContractPullRequestReviewDecision,
     PullRequestState as ContractPullRequestState, PullRequestSummary as ContractPullRequestSummary,
@@ -17,7 +18,7 @@ use super::blocking::run_blocking;
 use super::error::ApiError;
 use crate::adapters::hosting::types::{
     BranchPullRequestStatus as InternalBranchPullRequestStatus, CreatePullRequestResult,
-    CurrentPullRequestResult, HostingServiceError,
+    CurrentPullRequestResult, HostingServiceError, MergePullRequestResult,
     PullRequestChecksState as InternalPullRequestChecksState,
     PullRequestReviewDecision as InternalPullRequestReviewDecision,
     PullRequestState as InternalPullRequestState, PullRequestSummary as InternalPullRequestSummary,
@@ -156,6 +157,50 @@ pub async fn create_pull_request(
     Ok(Json(response))
 }
 
+#[utoipa::path(
+    post,
+    path = "/v1/workspaces/{workspace_id}/hosting/pull-requests/{pr_number}/merge",
+    params(
+        ("workspace_id" = String, Path, description = "Workspace ID"),
+        ("pr_number" = u64, Path, description = "Pull request number"),
+    ),
+    request_body = MergePullRequestRequest,
+    responses(
+        (status = 200, description = "Pull request merged", body = MergePullRequestResponse),
+        (status = 404, description = "Workspace not found", body = anyharness_contract::v1::ProblemDetails),
+        (status = 400, description = "Hosting error", body = anyharness_contract::v1::ProblemDetails),
+    ),
+    tag = "hosting"
+)]
+pub async fn merge_pull_request(
+    State(state): State<AppState>,
+    Path((workspace_id, pr_number)): Path<(String, u64)>,
+    Json(req): Json<MergePullRequestRequest>,
+) -> Result<Json<MergePullRequestResponse>, ApiError> {
+    if req.method != "squash" {
+        return Err(ApiError::bad_request(
+            format!("Unsupported merge method: {}. Only \"squash\" is supported.", req.method),
+            "HOSTING_UNSUPPORTED_MERGE_METHOD",
+        ));
+    }
+
+    let pr_status_cache = state.pr_status_cache.clone();
+    let response = run_hosting_task(
+        &state,
+        workspace_id,
+        HostingTaskAccess::Write,
+        "merge pull request",
+        move |workspace_path| {
+            HostingService::merge_pull_request(&workspace_path, pr_number, &pr_status_cache)
+                .map(merge_pull_request_to_contract)
+                .map_err(map_hosting_error)
+        },
+    )
+    .await?;
+
+    Ok(Json(response))
+}
+
 #[derive(Debug, Default, serde::Deserialize)]
 pub struct RepoPullRequestStatusesQuery {
     /// "1" requests a refresh (honored with a 10s floor); anything else uses
@@ -244,6 +289,9 @@ fn map_hosting_error(error: HostingServiceError) -> ApiError {
         HostingServiceError::PullRequestCreateFailed(message) => {
             ApiError::bad_request(message, "HOSTING_PR_CREATE_FAILED")
         }
+        HostingServiceError::PullRequestMergeFailed(message) => {
+            ApiError::bad_request(message, "HOSTING_PR_MERGE_FAILED")
+        }
     }
 }
 
@@ -322,6 +370,12 @@ fn create_pull_request_to_contract(result: CreatePullRequestResult) -> CreatePul
     CreatePullRequestResponse {
         pull_request: pull_request_summary_to_contract(result.pull_request),
         manual_url: result.manual_url,
+    }
+}
+
+fn merge_pull_request_to_contract(result: MergePullRequestResult) -> MergePullRequestResponse {
+    MergePullRequestResponse {
+        pull_request: branch_pull_request_summary_to_contract(result.pull_request),
     }
 }
 

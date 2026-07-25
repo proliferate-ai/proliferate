@@ -29,6 +29,7 @@ pub enum HostingServiceError {
     RemoteUnsupported(String),
     PullRequestViewFailed(String),
     PullRequestCreateFailed(String),
+    PullRequestMergeFailed(String),
 }
 
 impl std::fmt::Display for HostingServiceError {
@@ -40,7 +41,8 @@ impl std::fmt::Display for HostingServiceError {
             HostingServiceError::GhAuthRequired(message)
             | HostingServiceError::RemoteUnsupported(message)
             | HostingServiceError::PullRequestViewFailed(message)
-            | HostingServiceError::PullRequestCreateFailed(message) => {
+            | HostingServiceError::PullRequestCreateFailed(message)
+            | HostingServiceError::PullRequestMergeFailed(message) => {
                 write!(f, "{message}")
             }
         }
@@ -89,4 +91,9 @@ pub struct CurrentPullRequestResult {
 pub struct CreatePullRequestResult {
     pub pull_request: PullRequestSummary,
     pub manual_url: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct MergePullRequestResult {
+    pub pull_request: PullRequestSummary,
 }

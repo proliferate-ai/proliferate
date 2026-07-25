@@ -2,6 +2,8 @@ import type {
   CreatePullRequestRequest,
   CreatePullRequestResponse,
   CurrentPullRequestResponse,
+  MergePullRequestRequest,
+  MergePullRequestResponse,
   RepoPullRequestStatusesResponse,
 } from "../types/hosting.js";
 import type { AnyHarnessRequestOptions, AnyHarnessTransport } from "./core.js";
@@ -25,6 +27,17 @@ export class PullRequestsClient {
   ): Promise<CreatePullRequestResponse> {
     return this.transport.post<CreatePullRequestResponse>(
       `/v1/workspaces/${encodeURIComponent(workspaceId)}/hosting/pull-requests`,
+      input,
+    );
+  }
+
+  async merge(
+    workspaceId: string,
+    prNumber: number,
+    input: MergePullRequestRequest,
+  ): Promise<MergePullRequestResponse> {
+    return this.transport.post<MergePullRequestResponse>(
+      `/v1/workspaces/${encodeURIComponent(workspaceId)}/hosting/pull-requests/${prNumber}/merge`,
       input,
     );
   }

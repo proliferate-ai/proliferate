@@ -206,6 +206,7 @@ export {
   useCurrentPullRequestQuery,
   useRepoPullRequestStatusesQuery,
   useCreatePullRequestMutation,
+  useMergePullRequestMutation,
 } from "./hooks/pull-requests.js";
 export {
   useWorkspaceFilesQuery,

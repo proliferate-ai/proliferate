@@ -4,6 +4,7 @@ import {
   prNumberLabelFromGitStatus,
   prStatusCompoundLabel,
   prStatusViewFromGitStatus,
+  sidebarDirtyDotForStatus,
   sidebarGitGlyphForStatus,
 } from "@/lib/domain/workspaces/git-status/pr-status-presentation";
 import type {
@@ -214,5 +215,36 @@ describe("gitAheadBehindLabel", () => {
     expect(gitAheadBehindLabel(status({ ahead: 2, behind: 1 }))).toBe("↑2 ↓1");
     expect(gitAheadBehindLabel(status({ ahead: 2, behind: 0 }))).toBe("↑2");
     expect(gitAheadBehindLabel(status({ ahead: 0, behind: 3 }))).toBe("↓3");
+  });
+});
+
+describe("sidebarDirtyDotForStatus", () => {
+  it("returns null when status is null or undefined", () => {
+    expect(sidebarDirtyDotForStatus(null)).toBeNull();
+    expect(sidebarDirtyDotForStatus(undefined)).toBeNull();
+  });
+
+  it("returns null when not dirty", () => {
+    expect(sidebarDirtyDotForStatus(status({ dirty: false }))).toBeNull();
+    expect(sidebarDirtyDotForStatus(status({ dirty: null }))).toBeNull();
+  });
+
+  it("returns a dot when dirty and no attention", () => {
+    const result = sidebarDirtyDotForStatus(status({ dirty: true, attention: "none" }));
+    expect(result).not.toBeNull();
+    expect(result!.visible).toBe(true);
+    expect(result!.tooltip).toBe("Uncommitted changes");
+  });
+
+  it("returns null when dirty but attention is conflicts", () => {
+    expect(sidebarDirtyDotForStatus(
+      status({ dirty: true, attention: "conflicts" }),
+    )).toBeNull();
+  });
+
+  it("returns null when dirty but attention is ci_failing", () => {
+    expect(sidebarDirtyDotForStatus(
+      status({ dirty: true, attention: "ci_failing" }),
+    )).toBeNull();
   });
 });

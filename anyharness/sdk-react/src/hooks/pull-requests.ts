@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { CreatePullRequestRequest } from "@anyharness/sdk";
+import type { CreatePullRequestRequest, MergePullRequestRequest } from "@anyharness/sdk";
 import {
   useAnyHarnessWorkspaceContext,
   resolveWorkspaceConnectionFromContext,
@@ -12,6 +12,7 @@ import { getAnyHarnessClient } from "../lib/client-cache.js";
 import {
   anyHarnessPullRequestKey,
   anyHarnessRepoRootPullRequestsKey,
+  anyHarnessRepoRootsKey,
 } from "../lib/query-keys.js";
 import { requestOptionsWithSignal } from "../lib/request-options.js";
 
@@ -90,6 +91,50 @@ export function useCreatePullRequestMutation(options?: { workspaceId?: string | 
       await queryClient.invalidateQueries({
         queryKey: anyHarnessPullRequestKey(runtimeUrl, workspaceId),
       });
+    },
+  });
+}
+
+export function useMergePullRequestMutation(options?: {
+  workspaceId?: string | null;
+  repoRootId?: string | null;
+}) {
+  const workspace = useAnyHarnessWorkspaceContext();
+  const queryClient = useQueryClient();
+  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const workspaceId = options?.workspaceId ?? workspace.workspaceId;
+  const repoRootId = options?.repoRootId ?? null;
+
+  return useMutation({
+    mutationFn: async (input: MergePullRequestRequest & { prNumber: number }) => {
+      const { prNumber, ...body } = input;
+      const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
+      const client = getAnyHarnessClient(resolved.connection);
+      return client.pullRequests.merge(resolved.connection.anyharnessWorkspaceId, prNumber, body);
+    },
+    onSuccess: async () => {
+      const invalidations = [
+        queryClient.invalidateQueries({
+          queryKey: anyHarnessPullRequestKey(runtimeUrl, workspaceId),
+        }),
+      ];
+      if (repoRootId) {
+        invalidations.push(
+          queryClient.invalidateQueries({
+            queryKey: anyHarnessRepoRootPullRequestsKey(runtimeUrl, repoRootId),
+          }),
+        );
+      } else {
+        // Fallback: invalidate all repo-root PR-status queries for this runtime.
+        invalidations.push(
+          queryClient.invalidateQueries({
+            queryKey: anyHarnessRepoRootsKey(runtimeUrl),
+            predicate: (query) =>
+              query.queryKey[query.queryKey.length - 1] === "pull-requests",
+          }),
+        );
+      }
+      await Promise.all(invalidations);
     },
   });
 }

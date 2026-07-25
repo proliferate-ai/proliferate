@@ -1,10 +1,11 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { useRenameGitBranchMutation } from "@anyharness/sdk-react";
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/derived/use-workspace-runtime-block";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { updateCloudWorkspaceDisplayName } from "@proliferate/cloud-sdk/client/workspaces";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import { useWorkspaceCollectionsInvalidation } from "@/hooks/workspaces/cache/use-workspace-collections-invalidation";
+import { useWorkspaceCopyActions } from "@/hooks/workspaces/workflows/use-workspace-copy-actions";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useToastStore } from "@/stores/toast/toast-store";
@@ -41,7 +42,11 @@ export function useMainScreenActions({
   const renameBranchMutation = useRenameGitBranchMutation({ workspaceId: selectedWorkspaceId });
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
   const { openExternal } = useTauriShellActions();
+  const { copyBranchName } = useWorkspaceCopyActions();
   const showToast = useToastStore((state) => state.show);
+  const [mergePrOpen, setMergePrOpen] = useState(false);
+  const [commitModalOpen, setCommitModalOpen] = useState(false);
+  const [archiveWorktreeOfferOpen, setArchiveWorktreeOfferOpen] = useState(false);
   const {
     rightPanelOpen,
     rightPanelState,
@@ -158,8 +163,12 @@ export function useMainScreenActions({
   }, [setPublishDialog]);
 
   const handleCommitOpen = useCallback(() => {
-    openPublishDialog("commit");
-  }, [openPublishDialog]);
+    setCommitModalOpen(true);
+  }, []);
+
+  const closeCommitModal = useCallback(() => {
+    setCommitModalOpen(false);
+  }, []);
 
   const handlePushOpen = useCallback(() => {
     openPublishDialog("publish");
@@ -189,6 +198,26 @@ export function useMainScreenActions({
     showToast,
   ]);
 
+  const handleCopyBranch = useCallback((branchName?: string | null) => {
+    void copyBranchName(branchName);
+  }, [copyBranchName]);
+
+  const handleMergePrOpen = useCallback(() => {
+    setMergePrOpen(true);
+  }, []);
+
+  const closeMergePrDialog = useCallback(() => {
+    setMergePrOpen(false);
+  }, []);
+
+  const handleMerged = useCallback(() => {
+    setArchiveWorktreeOfferOpen(true);
+  }, []);
+
+  const closeArchiveWorktreeOffer = useCallback(() => {
+    setArchiveWorktreeOfferOpen(false);
+  }, []);
+
   return {
     renameBranch,
     onToggleSidebar: () => setSidebarOpen((value) => !value),
@@ -203,6 +232,15 @@ export function useMainScreenActions({
     handleViewPr,
     handlePublishDialogViewPr,
     closePublishDialog,
+    handleCopyBranch,
+    handleMergePrOpen,
+    mergePrOpen,
+    closeMergePrDialog,
+    handleMerged,
+    commitModalOpen,
+    closeCommitModal,
+    archiveWorktreeOfferOpen,
+    closeArchiveWorktreeOffer,
     onCommandPaletteClose: () => setCommandPaletteOpen(false),
   };
 }

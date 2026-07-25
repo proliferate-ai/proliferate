@@ -312,6 +312,10 @@ pub fn build_router(state: AppState) -> Router {
             "/workspaces/{workspace_id}/hosting/pull-requests",
             post(hosting::create_pull_request),
         )
+        .route(
+            "/workspaces/{workspace_id}/hosting/pull-requests/{pr_number}/merge",
+            post(hosting::merge_pull_request),
+        )
         // Hosting (repo-root-scoped, branch PR statuses via gh GraphQL)
         .route(
             "/repo-roots/{repo_root_id}/hosting/pull-requests",

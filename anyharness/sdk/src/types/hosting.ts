@@ -38,6 +38,14 @@ export interface BranchPullRequestStatus {
   pullRequest?: BranchPullRequestSummary | null;
 }
 
+export interface MergePullRequestRequest {
+  method: "squash" | "merge" | "rebase";
+}
+
+export interface MergePullRequestResponse {
+  pullRequest: BranchPullRequestSummary;
+}
+
 export interface RepoPullRequestStatusesResponse {
   entries: BranchPullRequestStatus[];
   fetchedAt: string;

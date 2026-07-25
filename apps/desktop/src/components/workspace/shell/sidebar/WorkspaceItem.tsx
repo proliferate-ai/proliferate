@@ -25,6 +25,7 @@ import type {
 } from "@/lib/domain/workspaces/sidebar/sidebar-indicators";
 import {
   prStatusViewFromGitStatus,
+  sidebarDirtyDotForStatus,
   sidebarGitGlyphForStatus,
 } from "@/lib/domain/workspaces/git-status/pr-status-presentation";
 import type { WorkspaceGitStatus } from "@/lib/domain/workspaces/git-status/workspace-git-status-model";
@@ -153,7 +154,8 @@ export function WorkspaceItem({
     onUnarchive: handleUnarchiveCommand,
     onMarkDone: handleMarkDoneCommand,
   });
-  const detail = detailIndicators.length > 0 || cloudStatusDefinition ? (
+  const dirtyDot = sidebarDirtyDotForStatus(gitStatus);
+  const detail = detailIndicators.length > 0 || cloudStatusDefinition || dirtyDot ? (
     <>
       <SidebarDetailIndicatorsView
         indicators={detailIndicators}
@@ -164,6 +166,12 @@ export function WorkspaceItem({
         <span className={`shrink-0 rounded-full border px-1.5 py-0 text-xs uppercase tracking-[0.12em] ${cloudStatusDefinition.className}`}>
           {cloudStatusDefinition.label}
         </span>
+      )}
+      {dirtyDot && (
+        <span
+          className="size-1.5 shrink-0 rounded-full bg-muted-foreground/40"
+          title={dirtyDot.tooltip}
+        />
       )}
     </>
   ) : null;

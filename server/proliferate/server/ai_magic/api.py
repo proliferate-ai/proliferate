@@ -5,12 +5,15 @@ from fastapi import APIRouter, Depends
 from proliferate.auth.dependencies import current_product_user
 from proliferate.db.models.auth import User
 from proliferate.server.ai_magic.models import (
+    GenerateCommitMessageRequest,
+    GenerateCommitMessageResponse,
     GenerateSessionTitleRequest,
     GenerateSessionTitleResponse,
     GenerateWorkspaceNameRequest,
     GenerateWorkspaceNameResponse,
 )
 from proliferate.server.ai_magic.service import (
+    generate_commit_message,
     generate_session_title,
     generate_workspace_name,
 )
@@ -34,3 +37,17 @@ async def generate_workspace_name_endpoint(
 ) -> GenerateWorkspaceNameResponse:
     name = await generate_workspace_name(user.id, prompt_text=body.prompt_text)
     return GenerateWorkspaceNameResponse(name=name)
+
+
+@router.post("/commit-messages/generate", response_model=GenerateCommitMessageResponse)
+async def generate_commit_message_endpoint(
+    body: GenerateCommitMessageRequest,
+    user: User = Depends(current_product_user),
+) -> GenerateCommitMessageResponse:
+    message = await generate_commit_message(
+        user.id,
+        diff_stat=body.diff_stat,
+        diff_excerpt=body.diff_excerpt,
+        branch_name=body.branch_name,
+    )
+    return GenerateCommitMessageResponse(message=message)

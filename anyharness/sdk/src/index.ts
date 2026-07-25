@@ -456,6 +456,8 @@ export type {
   CurrentPullRequestResponse,
   CreatePullRequestRequest,
   CreatePullRequestResponse,
+  MergePullRequestRequest,
+  MergePullRequestResponse,
   PullRequestChecksState,
   PullRequestReviewDecision,
   BranchPullRequestSummary,

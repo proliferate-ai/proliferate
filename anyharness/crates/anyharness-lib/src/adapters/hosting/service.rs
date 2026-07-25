@@ -1,10 +1,10 @@
 use std::path::Path;
 
-use super::operations::{create_pr, current_pr, list_prs};
+use super::operations::{create_pr, current_pr, list_prs, merge_pr};
 use super::pr_status_cache::PrStatusCache;
 use super::types::{
     CreatePullRequestResult, CurrentPullRequestResult, HostingServiceError,
-    RepoPullRequestStatusesResult,
+    MergePullRequestResult, RepoPullRequestStatusesResult,
 };
 
 pub struct HostingService;
@@ -32,6 +32,14 @@ impl HostingService {
             draft,
             pr_status_cache,
         )
+    }
+
+    pub fn merge_pull_request(
+        workspace_path: &Path,
+        pr_number: u64,
+        pr_status_cache: &PrStatusCache,
+    ) -> Result<MergePullRequestResult, HostingServiceError> {
+        merge_pr::merge_pull_request(workspace_path, pr_number, pr_status_cache)
     }
 
     pub async fn list_repo_pull_requests(

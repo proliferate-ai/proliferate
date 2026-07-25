@@ -38,6 +38,8 @@ const GIT_CREDENTIAL_HELPER_PATH = path.join(
 );
 // Keep this aligned with the cloud-supported agent set in server/proliferate/constants/cloud.py.
 const TEMPLATE_AGENT_KINDS = ["claude", "codex"];
+// https://github.com/cli/cli/releases
+const GH_CLI_VERSION = "2.62.0";
 
 function printUsage() {
   console.log(`Build a runtime-ready E2B dev template for local Proliferate development.
@@ -319,6 +321,15 @@ function buildTemplateDefinition() {
       ],
       { user: "root" }
     )
+    .runCmd(
+      [
+        `curl -fsSL -o /tmp/gh.tar.gz https://github.com/cli/cli/releases/download/v${GH_CLI_VERSION}/gh_${GH_CLI_VERSION}_linux_amd64.tar.gz`,
+        "tar -xzf /tmp/gh.tar.gz -C /tmp",
+        `install -m 0755 /tmp/gh_${GH_CLI_VERSION}_linux_amd64/bin/gh /usr/local/bin/gh`,
+        `rm -rf /tmp/gh.tar.gz /tmp/gh_${GH_CLI_VERSION}_linux_amd64`,
+      ].join(" && "),
+      { user: "root" }
+    )
     .setUser("user")
     .runCmd(
       'bash -lc "curl https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal"'
@@ -359,6 +370,7 @@ function buildTemplateDefinition() {
         "npm --version",
         "cargo --version",
         "git --version",
+        "gh --version",
         "/home/user/anyharness --version",
         "/home/user/.proliferate/bin/proliferate-worker --version",
         "/home/user/.proliferate/bin/proliferate-supervisor --version",

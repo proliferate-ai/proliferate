@@ -1,10 +1,42 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use super::types::{
     BranchPullRequestStatus, PullRequestChecksState, PullRequestReviewDecision, PullRequestState,
     PullRequestSummary,
 };
+
+// ---------------------------------------------------------------------------
+// GH_TOKEN injection for cloud sandboxes
+// ---------------------------------------------------------------------------
+
+/// Returns the path to the credential-lease token file used by the git
+/// credential helper: `$HOME/.proliferate/git/github.com/token`.
+fn gh_token_path() -> Option<PathBuf> {
+    let home = std::env::var("HOME").ok()?;
+    Some(PathBuf::from(home).join(".proliferate/git/github.com/token"))
+}
+
+/// Read the lease token (if the file exists and is non-empty). Trims
+/// whitespace/newlines. Returns `None` when the file is absent or empty (local
+/// machines that rely on gh's own auth store).
+fn read_gh_token() -> Option<String> {
+    let path = gh_token_path()?;
+    let contents = std::fs::read_to_string(&path).ok()?;
+    let trimmed = contents.trim().to_string();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed)
+    }
+}
+
+/// Apply GH_TOKEN to a Command when the lease token file is present.
+fn apply_gh_token(command: &mut Command) {
+    if let Some(token) = read_gh_token() {
+        command.env("GH_TOKEN", token);
+    }
+}
 
 /// Max branches per `gh api graphql` request. Each branch adds an aliased
 /// `pullRequests` selection; 40 stays well under GraphQL complexity limits
@@ -42,19 +74,18 @@ pub struct GithubRepo {
 }
 
 pub fn check_gh_installed() -> Result<(), GhError> {
-    Command::new("gh")
-        .arg("--version")
-        .output()
-        .map_err(|_| GhError::NotInstalled)?;
+    let mut cmd = Command::new("gh");
+    cmd.arg("--version");
+    apply_gh_token(&mut cmd);
+    cmd.output().map_err(|_| GhError::NotInstalled)?;
     Ok(())
 }
 
 pub fn check_gh_auth(cwd: &Path) -> Result<(), GhError> {
-    let output = Command::new("gh")
-        .args(["auth", "status"])
-        .current_dir(cwd)
-        .output()
-        .map_err(|_| GhError::NotInstalled)?;
+    let mut cmd = Command::new("gh");
+    cmd.args(["auth", "status"]).current_dir(cwd);
+    apply_gh_token(&mut cmd);
+    let output = cmd.output().map_err(|_| GhError::NotInstalled)?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr).to_string();
@@ -155,6 +186,7 @@ pub fn fetch_branch_prs(
         for (index, branch) in chunk.iter().enumerate() {
             command.arg("-f").arg(format!("b{index}={branch}"));
         }
+        apply_gh_token(&mut command);
 
         let output = command
             .current_dir(cwd)
@@ -319,16 +351,16 @@ fn classify_gh_failure(stderr: String) -> GhError {
 pub fn get_current_pr(cwd: &Path) -> Result<Option<PullRequestSummary>, GhError> {
     check_gh_installed()?;
 
-    let output = Command::new("gh")
-        .args([
-            "pr",
-            "view",
-            "--json",
-            "number,title,url,state,isDraft,headRefName,baseRefName,reviewDecision,statusCheckRollup",
-        ])
-        .current_dir(cwd)
-        .output()
-        .map_err(|_| GhError::NotInstalled)?;
+    let mut cmd = Command::new("gh");
+    cmd.args([
+        "pr",
+        "view",
+        "--json",
+        "number,title,url,state,isDraft,headRefName,baseRefName,reviewDecision,statusCheckRollup",
+    ])
+    .current_dir(cwd);
+    apply_gh_token(&mut cmd);
+    let output = cmd.output().map_err(|_| GhError::NotInstalled)?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr).to_string();
@@ -405,11 +437,10 @@ pub fn create_pr(
     }
 
     let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
-    let output = Command::new("gh")
-        .args(&arg_refs)
-        .current_dir(cwd)
-        .output()
-        .map_err(|_| GhError::NotInstalled)?;
+    let mut cmd = Command::new("gh");
+    cmd.args(&arg_refs).current_dir(cwd);
+    apply_gh_token(&mut cmd);
+    let output = cmd.output().map_err(|_| GhError::NotInstalled)?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr).to_string();
@@ -436,6 +467,127 @@ pub fn create_pr(
             })
         }
     }
+}
+
+/// Squash-merge a pull request by number via `gh pr merge <number> --squash`.
+/// Does NOT pass `--delete-branch` — the remote branch is left intact.
+pub fn merge_pr(cwd: &Path, pr_number: u64) -> Result<PullRequestSummary, GhError> {
+    check_gh_installed()?;
+    check_gh_auth(cwd)?;
+
+    let number_str = pr_number.to_string();
+    let mut cmd = Command::new("gh");
+    cmd.args(["pr", "merge", &number_str, "--squash"])
+        .current_dir(cwd);
+    apply_gh_token(&mut cmd);
+    let output = cmd.output().map_err(|_| GhError::NotInstalled)?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        // Treat "already merged" as idempotent success.
+        if stderr.contains("already been merged") || stderr.contains("MERGED") {
+            return Ok(PullRequestSummary {
+                number: pr_number,
+                title: String::new(),
+                url: String::new(),
+                state: PullRequestState::Merged,
+                draft: false,
+                head_branch: String::new(),
+                base_branch: String::new(),
+                checks: None,
+                review_decision: None,
+            });
+        }
+        if stderr.contains("auth") || stderr.contains("login") {
+            return Err(GhError::AuthRequired(stderr));
+        }
+        return Err(GhError::CommandFailed(stderr));
+    }
+
+    // Read back the (now-merged) PR status so we can return a full summary.
+    // If this readback fails, return a best-effort summary since the merge itself succeeded.
+    let mut view_cmd = Command::new("gh");
+    view_cmd
+        .args([
+            "pr",
+            "view",
+            &number_str,
+            "--json",
+            "number,title,url,state,isDraft,headRefName,baseRefName,reviewDecision,statusCheckRollup",
+        ])
+        .current_dir(cwd);
+    apply_gh_token(&mut view_cmd);
+    let view_output = match view_cmd.output() {
+        Ok(o) => o,
+        Err(_) => {
+            return Ok(PullRequestSummary {
+                number: pr_number,
+                title: String::new(),
+                url: String::new(),
+                state: PullRequestState::Merged,
+                draft: false,
+                head_branch: String::new(),
+                base_branch: String::new(),
+                checks: None,
+                review_decision: None,
+            });
+        }
+    };
+
+    if !view_output.status.success() {
+        // Merge succeeded but readback failed — return best-effort summary.
+        return Ok(PullRequestSummary {
+            number: pr_number,
+            title: String::new(),
+            url: String::new(),
+            state: PullRequestState::Merged,
+            draft: false,
+            head_branch: String::new(),
+            base_branch: String::new(),
+            checks: None,
+            review_decision: None,
+        });
+    }
+
+    let stdout = String::from_utf8_lossy(&view_output.stdout);
+    let json: serde_json::Value = match serde_json::from_str(&stdout) {
+        Ok(v) => v,
+        Err(_) => {
+            return Ok(PullRequestSummary {
+                number: pr_number,
+                title: String::new(),
+                url: String::new(),
+                state: PullRequestState::Merged,
+                draft: false,
+                head_branch: String::new(),
+                base_branch: String::new(),
+                checks: None,
+                review_decision: None,
+            });
+        }
+    };
+
+    let number = json["number"].as_u64().unwrap_or(pr_number);
+    let title = json["title"].as_str().unwrap_or("").to_string();
+    let url = json["url"].as_str().unwrap_or("").to_string();
+    let state_str = json["state"].as_str().unwrap_or("MERGED");
+    let is_draft = json["isDraft"].as_bool().unwrap_or(false);
+    let head_branch = json["headRefName"].as_str().unwrap_or("").to_string();
+    let base_branch = json["baseRefName"].as_str().unwrap_or("").to_string();
+    let checks = reduce_check_rollup(&json["statusCheckRollup"]);
+    let review_decision = parse_review_decision(json["reviewDecision"].as_str());
+
+    Ok(PullRequestSummary {
+        number,
+        title,
+        url,
+        state: parse_pr_state(state_str),
+        draft: is_draft,
+        head_branch,
+        base_branch,
+        checks: Some(checks),
+        review_decision: Some(review_decision),
+    })
 }
 
 #[cfg(test)]

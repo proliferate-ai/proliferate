@@ -9,8 +9,12 @@ import { resolvePreferredOpenTarget } from "@/lib/domain/chat/composer/preferenc
 import { HeaderTabs } from "@/components/workspace/shell/topbar/HeaderTabs";
 import {
   WorkspaceActionsMenuContainer,
-  type WorkspaceActionsMenuContainerProps,
 } from "@/components/workspace/shell/topbar/WorkspaceActionsMenuContainer";
+import {
+  GitInfoPopover,
+  type GitInfoPopoverData,
+  type GitInfoPopoverActions,
+} from "@/components/workspace/shell/topbar/GitInfoPopover";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { DebugProfiler } from "@/components/diagnostics/DebugProfiler";
 import { SplitButton } from "@/components/workspace/open-target/SplitButton";
@@ -30,6 +34,11 @@ import { workspaceHeaderTitle } from "@/lib/domain/workspaces/display/workspace-
 const HEADER_ICON_BUTTON_CLASS = "workspace-shell-icon-button";
 const HEADER_RUN_BUTTON_CLASS = "workspace-shell-action-button font-medium";
 
+export interface GlobalHeaderGitProps {
+  data: GitInfoPopoverData;
+  actions: GitInfoPopoverActions;
+}
+
 interface GlobalHeaderProps {
   selectedWorkspace: Workspace | undefined;
   workspacePath?: string | null;
@@ -38,7 +47,7 @@ interface GlobalHeaderProps {
   runLoading?: boolean;
   runLabel?: string;
   runTitle?: string;
-  workspaceActions: WorkspaceActionsMenuContainerProps;
+  git: GlobalHeaderGitProps | null;
   onRun: () => void;
   onTogglePanel: () => void;
 }
@@ -51,7 +60,7 @@ export const GlobalHeader = memo(function GlobalHeader({
   runLoading = false,
   runLabel = "Run",
   runTitle = "Run workspace command",
-  workspaceActions,
+  git,
   onRun,
   onTogglePanel,
 }: GlobalHeaderProps) {
@@ -95,7 +104,9 @@ export const GlobalHeader = memo(function GlobalHeader({
           {title}
         </div>
 
-        <WorkspaceActionsMenuContainer {...workspaceActions} />
+        <WorkspaceActionsMenuContainer />
+
+        {git && <GitInfoPopover data={git.data} actions={git.actions} />}
 
         <div className="flex min-w-0 flex-1 items-center overflow-hidden">
           <HeaderTabs />

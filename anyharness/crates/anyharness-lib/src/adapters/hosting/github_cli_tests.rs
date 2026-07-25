@@ -262,3 +262,53 @@ fn classifies_gh_failures() {
         GhError::CommandFailed(_)
     ));
 }
+
+#[test]
+fn gh_token_path_uses_home_env() {
+    // gh_token_path reads HOME; verify the path structure is correct.
+    let path = gh_token_path();
+    if let Some(p) = path {
+        assert!(p.ends_with(".proliferate/git/github.com/token"));
+    }
+    // On CI or machines without HOME set, None is acceptable.
+}
+
+#[test]
+fn read_gh_token_returns_none_for_nonexistent_file() {
+    // With HOME pointing to a non-existent directory, read_gh_token must
+    // return None (no panic, no error propagation).
+    let original = std::env::var("HOME").ok();
+    std::env::set_var("HOME", "/tmp/nonexistent-proliferate-test-dir");
+    let result = read_gh_token();
+    assert!(result.is_none());
+    // Restore.
+    if let Some(val) = original {
+        std::env::set_var("HOME", val);
+    }
+}
+
+#[test]
+fn read_gh_token_trims_whitespace() {
+    // Write a temp token file and verify trimming.
+    let dir = std::env::temp_dir().join("proliferate-gh-token-test");
+    let token_dir = dir.join(".proliferate/git/github.com");
+    std::fs::create_dir_all(&token_dir).unwrap();
+    let token_file = token_dir.join("token");
+    std::fs::write(&token_file, "  ghs_abc123\n\n").unwrap();
+
+    let original = std::env::var("HOME").ok();
+    std::env::set_var("HOME", dir.to_str().unwrap());
+    let result = read_gh_token();
+    assert_eq!(result, Some("ghs_abc123".to_string()));
+
+    // Empty token file should return None.
+    std::fs::write(&token_file, "  \n").unwrap();
+    let result = read_gh_token();
+    assert!(result.is_none());
+
+    // Cleanup.
+    if let Some(val) = original {
+        std::env::set_var("HOME", val);
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
