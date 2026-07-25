@@ -14,6 +14,12 @@ roles:
   test pointers; it is not yet ID-complete.
 - [`scenarios.md`](scenarios.md) records implementation detail for individual
   scenarios.
+- [`release-worlds-and-fixtures.md`](release-worlds-and-fixtures.md) owns
+  candidate artifacts, world topology, infrastructure lifetime, and readiness.
+- [`tier-3-scenario-contract.md`](tier-3-scenario-contract.md) owns the agreed
+  Tier 3 journey composition beneath the target IDs in this manifest.
+- [`tier-4-scenario-contract.md`](tier-4-scenario-contract.md) owns the two
+  standing upgrade journeys and their retained-production artifact contract.
 - [`core-release-scenario-manifest.json`](core-release-scenario-manifest.json)
   is the machine-checked target inventory and implementation-state ledger.
   Presence is not coverage: `planned` means unqualified until the row is
@@ -107,13 +113,14 @@ mutable staging state:
 - fresh owner, admin, member, removed member, and outsider identities;
 - separate personal and organization billing subjects for free, funded,
   exhausted, overage, payment-failed, and cancelled states;
-- separate personal managed-credit allocation/free-entitlement/budget states
-  and activated Team organization budget states for funded, exhausted, capped,
-  and needs-review paths;
+- separate personal managed-LLM allocation/free-entitlement/budget states and
+  activated Core organization budget states for funded, exhausted, capped,
+  top-up-enabled, top-up-declined, and needs-review paths;
 - Stripe test customers, subscriptions, payment methods, checkout sessions,
   and test clocks;
-- Bifrost provider keys and target/selection-scoped Bifrost virtual keys with
-  cheap-model, token, and spend caps;
+- LiteLLM provider configuration and subject-scoped LiteLLM virtual keys with
+  cheap-model, token, and spend caps; administrative credentials remain private
+  to the server/provisioner;
 - fresh E2B sandboxes built from the candidate template;
 - dedicated GitHub repositories or branches and GitHub App grants;
 - run-scoped integration credentials, poll feeds, email capture, and Slack
@@ -140,7 +147,7 @@ HTTP response:
 - locally exported compute-overage cents equal Stripe's accepted meter
   quantity under the declared rounding/remainder rule and never exceed the
   configured cap;
-- for managed-credit events, Bifrost-recorded LLM cost equals the imported
+- for managed-LLM events, LiteLLM-recorded LLM cost equals the imported
   event and entitlement debit after bounded reconciliation; BYOK cost may be
   imported for attribution but never debits managed credit;
 - one paid invoice issues at most one grant; every billable second is consumed,
@@ -156,10 +163,10 @@ HTTP response:
 - compute seconds and managed-LLM currency are separate ledgers: a mutation in
   one cannot refill, debit, hold, or attribute the other without an explicit
   product transition;
-- Bifrost budgets bound runtime spend while Proliferate's imported ledger is
+- LiteLLM budgets bound runtime spend while Proliferate's imported ledger is
   canonical; missing, zero, or unsafe cost remains `needs_review` and blocks
   new managed launches until reconciled;
-- Stripe, Postgres, Bifrost, E2B, billing APIs, workspace events, and every
+- Stripe, Postgres, LiteLLM, E2B, billing APIs, workspace events, and every
   supported visible billing surface agree after bounded convergence.
 
 ## Tier 2 required manifest
@@ -249,12 +256,12 @@ credential fails the required check.
 
 | ID | Required validation |
 | --- | --- |
-| `T2-BILL-1` | Checkout to subscription/grant, ordered consumption, cutoff, personal legacy refill/reactivation, Pro subscription/payment recovery, duplicate checkout, and lost-response idempotency. Unsupported organization or Pro refill attempts fail with the declared typed error and grant nothing. |
-| `T2-BILL-2` | Free/paid repo, policy, workspace, and managed-credit budget entitlements; a Pro budget upgrade converges within one webhook plus reconciler tick, while clean cancellation retains entitlement through `current_period_end` and then downgrades. |
+| `T2-BILL-1` | Checkout to subscription/grant, ordered consumption, cutoff, LLM and compute top-up/reactivation, Core subscription/payment recovery, duplicate checkout, and lost-response idempotency. Unsupported top-up attempts fail with the declared typed error and grant nothing. |
+| `T2-BILL-2` | A GitHub-deduplicated free personal identity receives one lifetime `$2` managed-LLM grant. Core costs `$20` per active billed seat per month and contributes `$5` managed-LLM plus `$15`-equivalent compute allocation per seat to separate shared organization pools. Cancellation retains period entitlement through `current_period_end`, then downgrades. |
 | `T2-BILL-3` | Seat invite/accept/remove/reinvite, exact Stripe quantity, prorated grant once, no refund/double grant, retry exhaustion, and later convergence. |
-| `T2-BILL-4` | Team checkout pending organization, successful activation, staged invites, failed billing state, 24-hour expiry, replay, and absence of orphan active organizations. |
+| `T2-BILL-4` | Core checkout pending organization, successful activation only after verified payment, staged invites, failed billing state, 24-hour expiry, replay, and absence of orphan active organizations. |
 | `T2-BILL-5` | Compute overage seconds-to-cents conversion, remainder carry, Stripe export idempotency, per-seat cap, writeoff after cap, and immediate cutoff when disabled. |
-| `T2-BILL-6` | Managed-LLM credit exhaustion, organization/per-user caps, Bifrost virtual-key disablement, and quiet-tick recovery after an entitlement/cap change. BYOK is an alternate spend/auth path; Team upgrade creates/selects an organization entitlement rather than refilling the personal one. Managed credit never auto-charges or auto-grants after exhaustion. |
+| `T2-BILL-6` | Managed-LLM exhaustion disables the scoped LiteLLM virtual key and blocks managed turns without pausing compute; a valid user API key remains usable. Explicit LLM auto-top-up is independent from compute overage/top-up: successful payment grants and reactivates once, while disabled or declined top-up charges/grants nothing and stays blocked. |
 | `T2-BILL-7` | Stripe webhook signature, exact replay, concurrent duplicate, handler crash/reclaim, out-of-order convergence, and one notification per real transition. |
 | `T2-BILL-8` | Payment-failed hold/recovery, period-end and immediate cancellation, clean deletion versus dunning, rollover grace, and off/observe/enforce behavior. `invoice.upcoming` and `trial_will_end` each emit one informational decision/patch and never hold or block. |
 | `T2-BILL-9` | Free cloud-compute allocation uniqueness by verified GitHub identity, allocation kind, and canonical period; concurrent claim safety, cross-account deduplication, and explicit no-identity UX/state. |
@@ -262,8 +269,8 @@ credential fails the required check.
 | `T2-BILL-11` | Reconciler startup, singleton/advisory lock, concurrent workers, crash after claim/export/charge, restart, shutdown, and exactly-once convergence. |
 | `T2-BILL-12` | Usage summary, timeseries, per-user attribution, LLM balance, billing settings, portal/refill actions, blocked-state copy, and audit values match seeded ledger truth. Workspace billing envelopes and `billing_patch` SSE update every matching workspace and no unrelated workspace, including warning, hold/block reason, remaining seconds, cap, and used cents. |
 | `T2-BILL-13` | Every create/ensure/resume/connect/wake/command/workflow/automation and managed-credit start/turn seam covers allowed, compute-exhausted, cap-exhausted, payment-held, organization-capped, and user-capped subjects. Compute gates the sandbox; managed-credit exhaustion gates managed starts without requiring an immediate sandbox pause; compute holds also block managed turns; BYOK still obeys the compute gate. Denial precedes downstream delivery and records one typed decision. |
-| `T2-BILL-14` | Personal onboarding alone creates `allocation_kind=agent_gateway_free_credits`, guarded by GitHub provider id plus canonical period across concurrent/cross-account attempts; missing identity gets no allocation. Activated Team creates an organization budget subject, not a personal free entitlement. Allocation, budget, provider key, and target/selection-scoped Bifrost virtual key are idempotent with explicit allowed models/provider-key ids and no raw admin/provider credential. Mocked Bifrost no-key/unlisted-provider/model/key, admin outage, missing returned secret, and auth-apply failure leave no incomplete plan, block launch, expose typed pending/failed state, and recover idempotently; lifecycle changes disable old keys and audit. |
-| `T2-BILL-15` | Bifrost usage import uses overlap-window pagination, resumes its cursor, deduplicates router logs, resolves payer/materialization, and debits managed credit once. Unknown cost becomes `needs_review` and fails closed; crashes around event/cursor writes and remote-disable failure converge. Concurrent keys enforce the configured shared budget; any permitted in-flight allowance must be defined by the owning primitive and recorded in evidence before this row can pass. |
+| `T2-BILL-14` | Personal onboarding creates the `$2` `agent_gateway_free_credits` allocation once, guarded by GitHub provider id across concurrent/cross-account attempts; missing identity gets no allocation. Activated Core creates an organization budget subject, not another personal free entitlement. Budget, provider configuration, and subject-scoped LiteLLM virtual key are idempotent with explicit allowed models and no raw administrative credential. Mocked LiteLLM no-key/unlisted-provider/model/key, admin outage, missing returned secret, and auth-apply failure leave no incomplete plan, block launch, expose typed pending/failed state, and recover idempotently; lifecycle changes disable old keys and audit. |
+| `T2-BILL-15` | LiteLLM usage import uses overlap-window pagination, resumes its cursor, deduplicates spend logs, resolves payer/materialization, and debits managed credit once. Unknown cost becomes `needs_review` and fails closed; crashes around event/cursor writes and remote-disable failure converge. Concurrent keys enforce the configured shared budget; any permitted in-flight allowance must be defined by the owning primitive and recorded in evidence before this row can pass. |
 
 ### Self-hosted and degraded configuration
 
@@ -318,7 +325,7 @@ valid for that target.
 | ID | Required validation |
 | --- | --- |
 | `T3-CHAT-1` | Every registry-supported, target-compatible harness installs its trusted pin, selects the cheapest eligible real model, completes a bounded turn, and reopens history in every valid lane. Cataloged-but-incompatible entries return truthful typed unsupported/readiness state; every matrix cell is independently required. |
-| `T3-AUTHROUTE-1` | Every harness/auth route valid for each explicit target lane—native, Bifrost-managed, user API key, OAuth/portable auth, and supported BYOK—passes one bounded turn; invalid, revoked, or lane-incompatible routes fail closed. |
+| `T3-AUTHROUTE-1` | Every harness/auth route valid for each explicit target lane—managed LiteLLM, user API key, and any separately supported native/OAuth portable route—passes one bounded turn; invalid, revoked, or lane-incompatible routes fail closed. Route choice is frozen per agent process: a setting change affects a new session or explicit process restart, never an existing process in place. |
 | `T3-AGENT-1` | Install a missing harness, reinstall/update it from its trusted pin, and switch harnesses inside one workspace without leaking config/credentials; existing sessions remain attached to their original harness. |
 | `T3-CFG-1` | Create-time model/mode/defaults derive from the bundled catalog. In an existing session, mutate only controls and values advertised by live ACP, read back exactly, apply on the next turn, and survive reconnect; stale/unknown values fail without mutating state. |
 | `T3-SESSION-1` | Queued prompts, config-while-busy, cancel, fork, dismiss/restore, runtime restart, worker restart, and sandbox pause/resume preserve exact event ordering and execute effects at most once. |
@@ -328,7 +335,7 @@ valid for that target.
 | `T3-PERM-1` | Every production harness's permission adapter performs a bounded file/shell action: allow-once executes exactly once, deny executes zero times, and allow-always persists only in intended scope. Read-only/plan cannot write; supported bypass completes unattended; unsupported modes fail preflight. Malformed/duplicate/wrong-session resolution and crash/reconnect settle once. |
 | `T3-MCP-1` | Each product MCP server and required third-party MCP completes one real read and permitted mutation; capability tokens enforce workspace/session/read-only/expiry/revocation/frozen-target boundaries. |
 | `T3-CRASH-1` | Scripted and real-agent process kills at prompt, tool, permission, persistence, and terminal-event boundaries recover without missing/duplicated events or external effects. |
-| `T3-BYOK-1` | Personal/organization BYOK create provider keys and target/agent/selection-scoped Bifrost virtual keys; raw credentials never enter sandboxes. Unlisted provider/model/key makes zero provider data-plane calls; private/metadata destinations receive zero bytes; unsafe redirects never reach forbidden targets; wrong Bedrock ExternalId performs one denied STS exchange and zero inference. Lifecycle changes disable old keys and repair orphans. |
+| `T3-BYOK-1` | Personal/organization user API keys materialize only into the explicitly permitted runtime target and bypass managed LiteLLM spend. Unlisted provider/model/key makes zero provider data-plane calls; private/metadata destinations receive zero bytes; unsafe redirects never reach forbidden targets; wrong Bedrock ExternalId performs one denied STS exchange and zero inference. Lifecycle changes remove old materializations and repair orphans. |
 | `T3-AGENTAUTH-1` | Synced-file auth revoke, share revoke, profile disable, and selection replacement apply allowlisted cleanup paths, report `applied_cleanup_paths`, and force-restart/fence old sessions where required. Near-expiry grants rotate with bounded overlap; target replacement rematerializes; failed cleanup/apply remains unapplied and blocks launch without deleting unallowlisted paths. |
 | `T3-RUNTIMECFG-1` | In cloud, install a plugin with MCP/skill children: Server compiles, Worker fetches hash-pinned artifacts/materializes credentials, AnyHarness resolves, and a real agent uses both. In Desktop-local, the same compiled intent applies directly to AnyHarness without a Worker. Restart re-resolves safely; disable/revoke removes capability before launch; no legacy bundle bypass exists. |
 | `T3-MODELREG-1` | Dynamic discovery refreshes locally and Cloud-to-Worker-to-runtime; Web/mobile/Slack see the same scoped list. Alias resolves to the exact live id, stale online refreshes, stale offline fails explicitly, workspace-scoped models do not leak, and harness update invalidates the snapshot. |
@@ -376,17 +383,17 @@ are real.
 
 | ID | Required validation |
 | --- | --- |
-| `T3-BILL-1` | Real Stripe test checkout and webhook delivery create the correct subscription, plan, seats, and grants exactly once; portal and product UI agree. |
-| `T3-BILL-2` | A real organization-bound Bifrost turn and real E2B running interval produce LLM and compute events attributed to the correct subjects. Compute ledger/API quantities reconcile to Stripe compute meters; the Bifrost log reconciles through the importer cursor and `AgentGatewayLlmUsageEvent` to the managed-credit debit. |
-| `T3-BILL-3` | Compute exhaustion pauses/blocks E2B. Managed-credit exhaustion disables or replaces the scoped Bifrost virtual key, blocks the next managed launch before scheduling, permits clean stop, and offers BYOK/Team recovery. Direct create/resume, stale session, forced provider resume, old key, second member, workflow, and automation cannot bypass the applicable gate. |
-| `T3-BILL-4` | Personal legacy refill restores the personal compute subject; subscription payment-hold recovery restores the affected personal or organization compute subject, without duplicate grants/effects. Managed credit recovers only through entitlement renewal or cap change; Team upgrade creates organization entitlement and valid BYOK is alternate auth/spend. One ledger never refills another. |
-| `T3-BILL-5` | Compute overage bills exact cents to cap, then writes off and blocks without overcharge. Managed credit remains hard capped and never auto-charges or auto-grants; exhaustion fails closed until a supported entitlement or BYOK transition. |
-| `T3-BILL-6` | Test-clock renewal, seat change, payment failure, dunning recovery, voluntary cancellation, immediate cancellation, and webhook replay transition product and Stripe state identically without losing or duplicating money. |
-| `T3-BILL-7` | Billing plan controls compute entitlement and plan-derived managed-credit budget; selected agent-auth policy and the Bifrost virtual key control provider/model access. Existing/new materializations converge with explicit allowed models and provider-key ids. Missing keys, unlisted provider/model/key, and revoked old keys fail at Bifrost; the public inference URL remains separate from the protected admin URL/token, which never reaches a sandbox. |
-| `T3-BILL-8` | Real team checkout activates one organization only after verified payment; staged invites, concurrent seat add/remove/re-add, Stripe quantity/proration, period grant, organization budget subject, Bifrost team/customer state, managed/BYOK policy, virtual-key materialization, target revision, expiry, failure, and replay all reconcile exactly. |
-| `T3-BILL-9` | Delay/drop/replay real E2B and Stripe callbacks; restart server/reconciler/worker/Bifrost and the usage importer; overlap/replay log pages and materialization drift. Provider polling and repair converge, each interval/log imports once, held sandboxes re-pause inline, and no receipt/export/cursor stays stuck. E2B timeout closes at the provider timestamp as `webhook_timeout`, pauses, and creates no billing hold. |
-| `T3-BILL-10` | A brand-new web-only personal user with no Team or provider key starts cloud work on managed credit by default. The real sandbox receives only the Bifrost public URL and scoped virtual key; a cheap turn correlates log, key, model, tokens/cost, imported event, payer, and visible balance. Missing or unauthorized key/provider/model fails; exhaustion disables reuse and offers BYOK/Team; valid BYOK restores LLM access without exposing the raw key. |
-| `T3-BILL-11` | Two real sandboxes/virtual keys spend the same nearly exhausted personal or Team entitlement concurrently. Usage stays within the configured shared budget plus only an owning-spec-defined and evidenced in-flight allowance; both keys converge disabled, a third launch fails before scheduling, every log imports once, and personal/Team balances remain isolated. An undefined allowance fails qualification. |
+| `T3-BILL-1` | A fresh GitHub-backed personal identity receives one lifetime `$2` managed-LLM grant across concurrent/replayed enrollment and cross-account attempts. A real LiteLLM turn debits the exact imported USD cost; a real user-key turn debits nothing. |
+| `T3-BILL-2` | Real Core Stripe test checkout activates only after verified payment at `$20` per active billed seat. Seat add/remove/re-add and proration produce exactly `$5` managed-LLM plus `$15`-equivalent compute allocation per billed seat; Stripe, portal, product UI, and ledgers agree. |
+| `T3-BILL-3` | Real organization-member LiteLLM turns and a real E2B running interval debit their separate shared organization pools while retaining correct member attribution. Personal grants remain unchanged; LiteLLM spend logs, imported LLM events, E2B segments, and compute ledger reconcile exactly. |
+| `T3-BILL-4` | Test-clock renewal, payment failure, dunning recovery, voluntary/immediate cancellation, and webhook replay transition subscription and period grants identically. Only a paid invoice creates one per-seat grant in each ledger; finalized, failed, open, or uncollected invoices grant nothing. |
+| `T3-BILL-5` | Managed-LLM exhaustion disables or rejects the scoped LiteLLM key and blocks existing/new managed turns with a typed error, but does not pause E2B. No charge or grant occurs when LLM auto-top-up is disabled; a valid user API key remains usable. |
+| `T3-BILL-6` | Explicit LLM auto-top-up is independent from compute overage/top-up. Crossing its threshold creates at most one Stripe payment attempt; successful payment grants once, rematerializes/reactivates the scoped key, and permits a real managed turn. Decline grants nothing, remains blocked, preserves user-key use, and cannot charge-storm. |
+| `T3-BILL-7` | Compute exhaustion creates the owned hold and pauses/blocks real E2B without changing LLM credit. Direct create/ensure/resume/wake, stale session, forced provider resume, old token, second member, workflow, and automation cannot bypass the gate; provider-side resume is re-paused. |
+| `T3-BILL-8` | A successful compute top-up or paid Core renewal grants compute once, clears the applicable hold, genuinely wakes E2B, and preserves repository/workspace/session/filesystem state. Failed or uncollected payment grants nothing. Compute recovery never refills LLM credit, and LLM recovery never clears a compute hold. |
+| `T3-BILL-9` | Compute overage bills exact cents to the configured per-seat cap, then writes off and blocks without overcharge. Enabling compute overage never authorizes an LLM top-up, charge, or grant. |
+| `T3-BILL-10` | Delay/drop/replay real E2B, LiteLLM, and Stripe callbacks; restart server, reconciler, Worker, and usage importers; overlap spend-log pages and materialization drift. Provider polling and repair converge, every interval/log/payment/grant imports once, held sandboxes re-pause inline, and no receipt/export/cursor stays stuck. |
+| `T3-BILL-11` | Concurrent sandboxes/virtual keys spend the same nearly exhausted personal or Core organization pool. Usage stays within its configured budget plus only an owning-spec-defined evidenced in-flight allowance; all keys/gates converge, a later launch fails before scheduling, every event imports once, and personal/organization plus LLM/compute balances remain isolated. An undefined allowance fails qualification. |
 
 ### Workflows and automations
 
@@ -423,19 +430,26 @@ upstream calls, never by agent prose.
 ## Tier 4 required manifest
 
 Tier 4 boots kept N-1 artifacts and data, then exercises the shipped upgrade
-mechanism to N. Affected-surface rows are mandatory before publishing or
-promoting that surface. The full matrix also runs nightly.
+mechanism to N. The standing core is `T4-DESKTOP-1` plus `T4-RUNTIME-1`, with
+the applicable `T4-CATALOG-1` assertions composed into both rather than run as
+a third live world. [`tier-4-scenario-contract.md`](tier-4-scenario-contract.md)
+owns their exact artifact, fixture, action, and evidence contract.
+
+Every other row below is mandatory when its trigger changed. Nightly may run
+the broadest implemented compatibility set, but the table does not create 27
+always-on deployed worlds or require unrelated permutations. Public artifact
+integrity remains an every-release gate without becoming a third upgrade world.
 
 | ID | Trigger | Required validation |
 | --- | --- | --- |
 | `T4-WORKER-1` | Worker artifact or update protocol changes | N-1 Worker observes desired N, writes the atomic mailbox request, and stays out of download/swap/restart ownership. Supervisor consumes the mailbox, downloads/verifies and atomically swaps Worker N, restarts it, health-gates convergence, and rolls back to last-good on corrupt or unhealthy N. Identity, cursors, pending results, and a live session survive. |
-| `T4-RUNTIME-1` | AnyHarness artifact or runtime-update protocol changes | Worker observes desired runtime N and writes the atomic mailbox request rather than activating it. Supervisor quiesces the dependency pair, downloads/verifies and atomically swaps AnyHarness N, restarts in dependency order, health-gates, and rolls back on failure. Worker reconnects/reconciles, the durable session resumes, and event sequence remains monotonic. |
+| `T4-RUNTIME-1` | Standing core when AnyHarness/runtime artifacts are promoted | A sandbox from the exact retained production N-1 E2B template completes a turn while its target-scoped desired version remains N-1. After only that target changes to exact candidate N, Worker writes the atomic mailbox request rather than activating it; Supervisor verifies/stages and swaps AnyHarness N, restarts in dependency order, health-gates N, and rolls back on failed activation; AnyHarness reconciles installed agents from N's bundled inputs. Worker state and the completed durable session remain commandable, event sequence stays monotonic, and a post-update turn succeeds. |
 | `T4-SUPERVISOR-1` | Supervisor artifact, config, install layout, service, mailbox, or update-staging changes | N Supervisor consumes Worker-authored component mailbox requests, verifies and privately stages artifacts, rejects invalid component/path/size/checksum, swaps/restarts/health-gates Worker and AnyHarness in dependency order, and rolls either component back to last-good. Managed-cloud and SSH-generated service/config layouts provide the explicit child environment. Supervisor self-upgrade activation remains a separate unclaimed mechanism until its owner is specified and tested. |
-| `T4-CATALOG-1` | Bundled catalog, trusted registry, agent pins, installer, or reconciliation changes | N runtime/Desktop/template contains the N bundled catalog and trusted registry inputs; installed-only reconcile verifies sources/pins, updates drifted CLIs, preserves sessions, and leaves converged agents alone. No server-pushed catalog becomes a trusted runtime input. |
+| `T4-CATALOG-1` | Bundled catalog, trusted registry, agent pins, installer, or reconciliation changes | Embedded in both standing worlds rather than a third live world: N AnyHarness contains the N bundled catalog and trusted registry inputs; installed-only reconcile verifies sources/pins, updates naturally drifted managed native CLIs and ACP agent processes, preserves sessions, and leaves equal pins alone. No server-pushed catalog becomes a trusted runtime input. |
 | `T4-MODELREG-1` | Model catalog, registry, alias, visibility, or saved-intent changes | N-1 saved intents, aliases, snapshots, visibility overrides, Automation defaults, and Slack defaults resolve under N without silent model-class substitution. Renames canonicalize; removed/unavailable models surface repair or only the explicitly stored fallback. |
 | `T4-RUNTIMECFG-1` | MCP/skill/plugin schema, compiler, manifest, artifact, or launch-contract changes | N-1 configured items, publicization, revisions, artifacts, and OAuth state upgrade and recompile idempotently; Worker applies and existing sessions relaunch with intended tools. Secrets stay absent, lazy resolution survives restart, and no legacy bundle path reactivates. |
 | `T4-SEED-1` | Desktop agent seed, launcher, or bundled agent resources change | Seed-owned unchanged/missing artifacts upgrade or repair; user-owned or modified artifacts remain untouched; unsafe archive/checksum/target fails; launchers resolve the final runtime home. |
-| `T4-DESKTOP-1` | Desktop/updater/sidecar changes | Real signed N-1 Desktop discovers, verifies, installs, and relaunches N; bundled runtime/worker versions and post-update agent reconciliation are correct; user data and auth persist. |
+| `T4-DESKTOP-1` | Standing core when Desktop artifacts are promoted | A disposable copy of the exact retained production N-1 Desktop with real sidecars/seed completes a turn, then discovers, verifies, installs, and actually relaunches the exact signed candidate N from an isolated feed without moving public stable. Bundled runtime/worker identities and installed native/ACP agent pins converge to N; the same runtime home, auth, workspace, completed session, and transcript persist; a post-update turn succeeds. |
 | `T4-MOBILE-1` | Native mobile release, storage, auth, or deep-link changes | N-1→N preserves secure auth and navigation state, applies storage migrations, and still completes login/deep-link/chat on supported platforms. |
 | `T4-DATA-1` | Alembic, SQLite, event, catalog, or persisted-contract changes | Kept N-1 Postgres, AnyHarness SQLite, and Worker SQLite migrate forward once and repeatedly idempotently. Realistic product rows plus Worker identity, applied revision/backoff state, upload cursor/gap state, exposure cache, command-result outbox, and pending reconciliation remain readable and commandable. |
 | `T4-MOBILITY-1` | Mobility schema, executor, exposure, or cleanup changes | Upgrade moves in preparing, transferring, pre-cutover, cleanup-pending, cleanup-failed, and repair-required states. N preserves canonical side/attestation, never repeats import/cutover, fences N-1 reports, resumes each cleanup item once, and leaves no orphan exposure/projection/cursor. |
@@ -447,10 +461,10 @@ promoting that surface. The full matrix also runs nightly.
 | `T4-ROLLING-1` | Server/API/Worker/runtime deployment order changes | Supported mixed-version rollout orders preserve health, command/event continuity, and in-flight work while components drain/restart; rollback returns to the last-good operational set. Wire-shape compatibility belongs to `T4-CONTRACT-1`. |
 | `T4-CONTRACT-1` | AnyHarness/OpenAPI/SDK/event/Worker wire contract changes | N-1 SDK/Desktop/Worker with N peers and N clients with supported N-1 peers complete workspace/session/stream flows. Empty resume bodies, optional fields, unknown events, enum/error casing, generated artifacts, and reducers remain compatible; unsupported breaks fail explicitly instead of corrupting or misrouting. |
 | `T4-DISPATCH-1` | Cowork API key, exposure, live stream, or deep-link contract changes | N-1 Desktop/Web/mobile and API keys remain within the supported N server window; exposure and SSE resume without lost/duplicate patches, revoked keys stay revoked, auto-cascade converges once, and deep links retain workspace/session identity after client upgrade. |
-| `T4-CREDENTIAL-1` | Auth, secret, integration, keychain, or materialization schema changes | Existing native/provider auth, Bifrost/agent-auth keys, integrations, and secret materializations survive or rotate through upgrade without plaintext leakage or stale authorization. |
+| `T4-CREDENTIAL-1` | Auth, secret, integration, keychain, or materialization schema changes | Existing native/provider auth, LiteLLM/agent-auth keys, integrations, and secret materializations survive or rotate through upgrade without plaintext leakage or stale authorization. |
 | `T4-GHAPP-1` | GitHub App auth, Worker lease, helper, or repository-authority schema changes | N-1 encrypted authorization/install/cache and active lease metadata migrate; N refreshes and Git fetch succeeds. Revoked/expired authority stays revoked, old token files stop working, and no product-OAuth fallback appears. |
-| `T4-BILL-1` | Billing, managed-credit, Bifrost-materialization/importer, accounting, webhook, price, meter, or entitlement schema changes | N-1 subjects/subscriptions/grants/segments/holds/receipts/exports/remainders/limits plus allocation guard/period key, `AgentGatewayBudgetSubject`, `AgentGatewayFreeCreditEntitlement`, `SandboxAgentAuthSelection`, router materialization/usage/import cursor, auth revision, encrypted key references, and audit rows upgrade with conservation intact; new and replayed N-1 events process once. Compatibility `litellm_*` fields remain readable without implying a LiteLLM data plane. |
-| `T4-BILL-2` | Server, worker, runtime, template, or billing reconciler changes | Checkout, billed sandbox interval, Bifrost request/log import, compute meter export, and webhook in flight across N-1→N produce no lost/duplicate charge, grant, debit, log, or export. Import cursor and scoped key state survive; desired-state key replacement is atomic and no provider/admin secret leaks. |
+| `T4-BILL-1` | Billing, managed-credit, LiteLLM-materialization/importer, accounting, webhook, price, meter, or entitlement schema changes | N-1 subjects/subscriptions/grants/segments/holds/receipts/exports/remainders/limits plus allocation guard, `AgentGatewayBudgetSubject`, `AgentGatewayFreeCreditEntitlement`, `SandboxAgentAuthSelection`, LiteLLM materialization/usage/import cursor, auth revision, encrypted key references, and audit rows upgrade with conservation intact; new and replayed N-1 events process once. |
+| `T4-BILL-2` | Server, worker, runtime, template, or billing reconciler changes | Checkout, billed sandbox interval, LiteLLM request/spend-log import, compute meter export, and webhook in flight across N-1→N produce no lost/duplicate charge, grant, debit, log, or export. Import cursor and scoped key state survive; desired-state key replacement is atomic and no provider/admin secret leaks. |
 | `T4-BILL-3` | Stripe catalog or public billing artifact changes | Historic N-1 subscriptions continue renewal, seats, cancellation, overage, and replay under N while new checkout uses the N test catalog; account mode, currency, prices, meter names, webhook endpoint, and API version are verified before promotion. |
 | `T4-BILL-4` | Desktop, SDK, billing envelope, SSE, or typed-error changes | N-1 Desktop/SDK against N server, then upgraded N client, can read plan/usage/hold envelopes, consume billing patches, open Checkout/Portal, and handle typed denials. Additive fields remain compatible and a stale client cannot bypass a new server-side gate. |
 | `T4-SELFHOST-1` | Self-host bundle, compose, migration, or update script changes | Production N-1 updates to N over real TLS and preserves data/auth/config through success plus injected image-pull, migration/restart, and post-update-health failures. N is never reported healthy early; N-1 stays recoverable; retry converges without reopening setup or duplicating effects; a post-update agent turn succeeds. |
@@ -468,7 +482,7 @@ Trusted CI emits one immutable qualification artifact containing:
   AnyHarness/Worker SQLite schema revisions;
 - every required scenario id, lane, status, duration, attempt, and correlation
   id;
-- sanitized Stripe, E2B, Bifrost provider-key/virtual-key/router-log,
+- sanitized Stripe, E2B, LiteLLM provider/key/spend-log,
   router-materialization, budget-subject, free-entitlement, and import-cursor
   identifiers plus repository, integration, and notification fixture ids;
 - separate compute-conservation and managed-credit-reconciliation results;

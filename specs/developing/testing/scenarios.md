@@ -280,17 +280,18 @@ zero export rows.
 ### T2-BILL-6: managed LLM credits — exhaustion, caps, and alternate auth
 Three distinct gate states that must not bleed into each other:
 - **exhaustion**: drive `remaining_usd` ≤ 0 on a managed-credit subject → the
-  target/selection-scoped Bifrost virtual key is disabled and
-  `budget_status='exhausted'`; a supported entitlement renewal/change may
-  reactivate managed access.
+  subject-scoped LiteLLM virtual key is disabled and
+  `budget_status='exhausted'`; a paid renewal or explicit successful LLM
+  auto-top-up may reactivate managed access.
 - **admin cap** (`billing_budget_limit` kind=`llm`, org-wide and per-user
   independently): over cap → `budget_status='limit_reached'`; credit refill
   does **not** clear it (deliberate); raising/disabling the cap does, even
   with zero new spend (the quiet-tick sweep).
-- **alternate auth/spend**: BYOK remains separate from managed credit, while a
-  Team upgrade creates/selects an organization entitlement rather than
-  refilling the personal one. Managed credit never automatically charges or
-  grants after exhaustion.
+- **alternate auth/spend**: a user API key remains separate from managed
+  credit, while Core creates/selects an organization entitlement rather than
+  refilling the personal one. LLM auto-top-up is a separate explicit opt-in
+  from compute overage; a successful Stripe payment grants once, while disabled
+  or declined top-up grants nothing.
 Also assert `is_gateway_budget_available` flips correctly for launch gating.
 
 ### T2-BILL-7: webhook robustness — idempotency, replay, ordering
@@ -657,10 +658,11 @@ and a small per-seat cap:
   arrive in Stripe (test mode) for the overage price, sandbox stays UP while
   under cap; cross the cap → hard block flips on (`cap_exhausted`), further
   usage written off, no more billing.
-- **managed LLM**: exhaust the entitlement → the scoped Bifrost key disables,
-  no Stripe charge or grant occurs, and subsequent managed launches fail
-  closed. An entitlement/cap change may recover managed access; valid BYOK is
-  an alternate path and never debits managed credit.
+- **managed LLM**: exhaust the entitlement → the scoped LiteLLM key disables
+  and subsequent managed launches fail closed. With LLM auto-top-up disabled,
+  no Stripe charge or grant occurs. With it explicitly enabled, only successful
+  payment grants/reactivates; a valid user API key is an alternate path and
+  never debits managed credit.
 Assert amounts end-to-end: seconds consumed → cents exported → Stripe event
 totals match (the fractional-cent remainder logic is under test here too).
 
@@ -679,7 +681,7 @@ deferred because finding #5 is still open — E2B webhooks to
 `POST /api/v1/cloud/webhooks/e2b` still all return **401
 `invalid_webhook_signature`** (zero 2xx), so `usage_segment` rows never open and
 no `proliferate_managed_cloud_overage_cents` meter event is emitted; and the
-managed-credit Bifrost import path still needs a disposable scoped key and
+managed-credit LiteLLM import path still needs a disposable scoped key and
 entitlement fixture. Tier-2 T2-BILL-* proves the
 metered arithmetic against Stripe test clocks per-PR. Note also: with
 `PRO_BILLING_ENABLED=true`, personal `refill-checkout` returns

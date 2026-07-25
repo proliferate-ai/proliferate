@@ -6,6 +6,15 @@ must add. [`core-release-validation.md`](core-release-validation.md) is the
 complete normative Tier 2/3/4 qualification manifest. `flows.md` maps the
 currently implemented subset to collected tests, and `scenarios.md` records
 implementation detail; neither is complete enough to qualify a release today.
+[`release-worlds-and-fixtures.md`](release-worlds-and-fixtures.md) defines the
+shared artifact preparation, infrastructure lifetimes, live worlds, and core
+upgrade fixtures used to execute that manifest locally and in GitHub Actions.
+[`tier-3-scenario-contract.md`](tier-3-scenario-contract.md) defines how the
+Tier 3 fixtures and target IDs compose into bounded local-runtime,
+managed-cloud, and self-host journeys without a Cartesian retest.
+[`tier-4-scenario-contract.md`](tier-4-scenario-contract.md) defines the two
+standing production N-1 to candidate N journeys and separates them from the
+broader change-triggered compatibility inventory.
 `core-release-scenario-manifest.json` is the machine-checked target ID
 inventory. `core-release-execution-manifest.json` is the separate exact,
 machine-checked inventory of what Tier 2 currently collects; an execution row
@@ -158,23 +167,34 @@ sandboxes. Two constraints:
 ## Tier 4 — upgrade path
 
 Fresh-install testing never catches a broken updater, and a broken updater
-strands every existing user. There is no single "upgrade path." The table
-below tracks the principal mechanisms that already have concrete runner
-designs; the complete required upgrade, data, compatibility, credential,
-billing, self-hosted, mobile, and artifact matrix lives in
-[`core-release-validation.md`](core-release-validation.md). The general
-pattern is:
-boot N−1 from kept artifacts with seeded N−1 data, stub the *feed* (the
-artifacts it serves are real), trigger the mechanism, assert convergence.
+strands existing users. The standing core has exactly two composed worlds:
 
-| Mechanism | Learns via | Feed knob | Testable today? |
+1. the actual retained production Desktop N-1 updates through Tauri to the
+   already-built candidate N, then its bundled AnyHarness reconciles installed
+   native and ACP agent artifacts; and
+2. a sandbox from the actual retained production N-1 E2B template receives a
+   target-scoped desired AnyHarness N, then Worker request, Supervisor
+   activation, AnyHarness reconcile, and a post-update turn complete.
+
+[`tier-4-scenario-contract.md`](tier-4-scenario-contract.md) owns their exact
+setup and evidence. The broader upgrade, data, compatibility, credential,
+billing, self-hosted, mobile, and artifact rows in
+[`core-release-validation.md`](core-release-validation.md) are selected when
+their owning surface changes; they are not 27 permanent live worlds.
+
+The general pattern is: boot the actual last-production-qualified N-1 artifact
+and data, control only the feed or desired-version channel, consume immutable
+candidate N artifacts, and assert full convergence. The table records mechanism
+ownership and current implementation reality:
+
+| Mechanism | Learns via | Feed knob | Current reality |
 | --- | --- | --- | --- |
-| Worker target update (sandbox only) | Worker compares heartbeat `desiredVersions.worker` and writes an atomic mailbox request; it never downloads/swaps/restarts itself | Server pin plus the feed Supervisor consumes while activating the request | Required: Supervisor verifies, swaps, restarts, health-gates, and rolls back |
-| Bundled catalog/registry convergence (existing sandboxes + local runtimes) | N runtime/Desktop/template ships the trusted inputs; installed-only reconcile repairs drifted CLIs | Candidate runtime/Desktop/template artifact | **Yes** — full-chain test; no server-pushed catalog may become a trusted runtime input |
-| AnyHarness target update (sandbox only) | Worker compares `desiredVersions.anyharness` and writes an atomic mailbox request; it does not perform activation | Server pin plus the feed Supervisor consumes while activating the request | Required: Supervisor verifies, swaps, restarts in dependency order, health-gates, and rolls back; the current direct-Worker scenario is historical signal only |
-| Desktop app (Tauri updater; bundles anyharness/worker sidecars) | 30-min poll of `latest.json` | Shipped default hardcoded in `tauri.conf.json`; **build-overridable** via a `tauri build --config` overlay (`make desktop-test-build UPDATER_URL=...`) — the shipped build is untouched | **Yes** — build an N−1 app pointed at a local feed and drive a real update. See [desktop-update-testing.md](./desktop-update-testing.md) |
-| E2B template | Build-time only; rolling `:staging`/`:production` tags affect **new** sandboxes only | `E2B_TEMPLATE_NAME` / `E2B_TEMPLATE_REF` | Yes — new-sandbox-gets-new-template + old-workspace-still-wakes |
-| SQLite/Alembic migrations | Ships inside the new binary/server | — | Yes — forward-apply on kept N−1 data |
+| Worker target update (sandbox only) | Worker compares heartbeat `desiredVersions.worker` and writes an atomic mailbox request; it never downloads/swaps/restarts itself | Target-scoped desired version plus immutable candidate manifest | Target design; current Worker directly self-swaps |
+| Bundled catalog/registry convergence | N AnyHarness ships trusted inputs; installed-only reconcile repairs drifted managed artifacts | Candidate AnyHarness/Desktop artifact | Focused logic exists; composed N-1 to N qualification is missing |
+| AnyHarness target update (sandbox only) | Worker compares target-scoped `desiredVersions.anyharness` and writes the mailbox request | Supervisor consumes the manifest-bound request | Target design; current Worker directly swaps/restarts AnyHarness |
+| Desktop app | Tauri updater checks its trusted `latest.json` | Isolated manifest serving the exact signed candidate N artifact | Bundle-swap mechanism prototype exists; it uses placeholder sidecars and does not relaunch the product |
+| E2B template | Build-time only; immutable template identity | Candidate template ID | Tier 3 proves new N sandboxes; Tier 4 keeps the existing N-1 image and updates supported components only |
+| SQLite/Alembic migrations | Ships inside the new binary/server | Retained N-1 data | Change-triggered; focused migrations plus the smallest retained-data live smoke |
 
 The heartbeat-driven request mechanisms are priority coverage because they run
 unattended against customer sandboxes. Tests must preserve the ownership cut:
@@ -182,7 +202,9 @@ Worker observes desired state, persists the request, and later reports
 convergence; it never downloads, swaps, restarts, or rolls back itself.
 Supervisor consumes the mailbox, owns component download/verification, atomic
 swap, dependency-ordered restart, health gating, and rollback. A qualifying
-test drives that full chain and keeps a live session intact.
+test drives that full chain and keeps a completed durable session readable and
+commandable. It does not claim an in-flight turn survives unless a separate
+triggered contract requires that guarantee.
 
 Desktop receives a new AnyHarness only through the app bundle. Supervisor
 self-update is a separate mechanism with no activation claim until its owner is

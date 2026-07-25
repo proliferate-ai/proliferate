@@ -1,6 +1,14 @@
 # AnyHarness Binary Self-Update (Cloud Sandboxes) — v1
 
-Status: design. Owns the mechanism by which a **running cloud sandbox** swaps
+Status: superseded historical design. It documents the currently implemented
+direct-Worker activation path but no longer owns the intended update boundary.
+The authoritative ownership is Worker observes and persists, Supervisor
+activates, and AnyHarness reconciles installed agents. See
+[`specs/codebase/structures/proliferate-worker/README.md`](../codebase/structures/proliferate-worker/README.md),
+[`specs/codebase/structures/proliferate-supervisor/README.md`](../codebase/structures/proliferate-supervisor/README.md),
+and [`specs/developing/testing/tier-4-scenario-contract.md`](../developing/testing/tier-4-scenario-contract.md).
+
+Historical scope: this document described how a **running cloud sandbox** swaps
 its AnyHarness runtime binary in place onto the server's pinned version, plus
 the catalog-document model restatement and the doc fixes that follow from it.
 Companion to `runtime-worker-supervisor-design.md` (identity/lifecycle) and
@@ -8,8 +16,8 @@ Companion to `runtime-worker-supervisor-design.md` (identity/lifecycle) and
 gap flagged by `versions.rs` (no launcher exports the runtime version) and the
 "known non-mechanism" note in `specs/developing/testing/README.md` §Tier 4.
 
-Not yet built. This spec is the contract for the build; it does not describe
-current behavior except where it cites it as ground truth.
+Do not extend the rulings below. They remain only to explain the legacy path
+that the first Supervisor-ownership bridge must retire.
 
 ## 0. Rulings (fixed; do not relitigate)
 

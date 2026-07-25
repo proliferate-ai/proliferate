@@ -3,7 +3,11 @@
 How to build an N−1 desktop app that points at a local update feed, stage an N
 artifact there, and watch the real Tauri auto-updater converge. This is the
 tier-4 "Desktop app" mechanism from the [testing README](./README.md); read that
-first for the tier model.
+first for the tier model. The complete production-artifact, real-sidecar,
+relaunch, persistence, agent-reconciliation, and post-update-turn contract
+lives in [`tier-4-scenario-contract.md`](tier-4-scenario-contract.md). The
+current runner described here is an updater-engine/bundle-swap prototype and is
+not by itself `T4-DESKTOP-1` qualification evidence.
 
 Read the product and UI acceptance contract in
 [`desktop-updates.md`](../../codebase/features/desktop-updates.md) alongside
@@ -122,11 +126,14 @@ The mock app reports package version `0.1.0`, so a feed serving `>0.1.0` yields
 - The materialized `updater-test.conf.json` is gitignored; only the `.template`
   is committed. Never commit a real endpoint override.
 
-## Running the T4 scenario
+## Running the current T4 mechanism prototype
 
-The steps above are wired into one scenario, **T4-DESKTOP-1**, under the
-release-e2e runner (`tests/release/`). It builds both apps, stages the feed, and
-drives the real updater headlessly — no GUI clicking.
+The steps above are wired under the historical **T4-DESKTOP-1** runner label in
+the release-e2e runner (`tests/release/`). It builds both apps, stages the feed,
+and drives the real updater headlessly—no GUI clicking. Because it rebuilds
+candidate source at two version strings, uses placeholder sidecars, and never
+launches the updated product, that label is not an implementation claim for the
+normative row.
 
 **Pieces:**
 
