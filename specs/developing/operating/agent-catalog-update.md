@@ -34,9 +34,10 @@ operation:
    - An install-source change (npm to git, new download host) with no
      matching registry change in the same PR.
 3. Merge when the diff matches upstream reality. The merge moves the
-   fleet: the next server deploy advertises the new version to cloud
-   sandboxes over heartbeats, and the nightly app build carries it to
-   desktops.
+   fleet by riding the next runtime release: the nightly app build
+   carries it to desktops, and the runtime binary roll (server deploy
+   advertising the new `RUNTIME_VERSION` over heartbeats) carries it to
+   cloud sandboxes.
 
 If the scheduled run fails instead of opening a PR, the workflow files a
 deduplicated `ops(agent-catalog)` issue; failure response and credential
@@ -87,16 +88,18 @@ in `registry.json`, which is hand-edited and reviewed like code:
 
 ## Roll back
 
-Revert the catalog PR. Cloud sandboxes converge backward on the next
-heartbeat (the runtime applies any version that differs from its active
-one, older included); desktops pick the revert up with the next app
-update. The version-discipline check still applies: the revert commit
-must carry a new, higher `catalogVersion`, which `git revert` does not
-produce on its own; re-run `make catalog-pin` after the revert if needed
-so the promoted document gets a fresh version.
+Revert the catalog PR, or repin the fleet to the previous runtime
+version — both work because the runtime binary is the catalog's only
+transport, so the runtime version is the rollback unit: it carries the
+code, the pins, and the probe-observed behavior back together. A revert
+reaches desktops with the next app update and cloud sandboxes with the
+next runtime binary roll. The version-discipline check still applies: the
+revert commit must carry a new, higher `catalogVersion`, which
+`git revert` does not produce on its own; re-run `make catalog-pin` after
+the revert if needed so the promoted document gets a fresh version.
 
 Rolling back a registry change is the same revert plus the release-train
-delay, since the method document only ships in binaries.
+delay, since both documents only ship in binaries.
 
 ## Verification
 
@@ -104,9 +107,9 @@ delay, since the method document only ships in binaries.
    tests, and `scripts/agent-catalog/check-version-discipline.mjs` all
    pass. A red pin test on a lone document edit is the review tripwire
    working.
-2. After merge and deploy: a cloud sandbox heartbeat converges the
-   runtime (`GET /v1/catalogs/agents/version` on the runtime reports the
-   new `catalogVersion`), and its reconcile installs the new pins.
+2. After merge and the next runtime release: the runtime reports the new
+   catalog (`GET /v1/catalogs/agents/version` reports the new
+   `catalogVersion`), and its startup reconcile installs the new pins.
 3. `cd scripts/agent-catalog && node render-catalog.mjs` renders the
    promoted document to HTML for a human-readable check of models,
    controls, and pins.
@@ -121,10 +124,10 @@ delay, since the method document only ships in binaries.
   credential for that auth context on the probing machine; the pipeline
   carries the previous entry forward, so a failed probe never degrades
   the shipped catalog.
-- The fleet does not pick up a merged catalog: cloud requires a server
-  deploy (heartbeats advertise the served version, and the server reads
-  the file from its own checkout); desktop requires the next app build.
-  Neither converges from the merge alone.
+- The fleet does not pick up a merged catalog: the catalog only ships
+  inside a runtime binary, so cloud requires a runtime binary roll (a
+  server deploy advertising the new `RUNTIME_VERSION`) and desktop
+  requires the next app build. Neither converges from the merge alone.
 - Version-discipline check fails on an otherwise-correct PR: the content
   changed without a `catalogVersion`/`registryVersion` bump, or a bump
   landed without content change. Both directions are rejected.

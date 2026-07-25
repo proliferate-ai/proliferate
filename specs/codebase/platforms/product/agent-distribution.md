@@ -9,18 +9,28 @@ This document replaces `agent-catalog-readiness.md`, which was written as a migr
 Agent distribution answers five questions for the coding-agent harnesses
 (claude, codex, opencode, cursor, grok): 
 - What an agent is
-- How it gets onto amachine
+- How it gets onto a machine
 - How a machine knows it is current
 - How the definitions / installation instructions themselves get updated
 - What the product sees.
 
 Everything downstream (auth selection, model pickers, session launch) consumes this platform's answers.
 
-Boundaries: which credential a user selects for a harness and `state.json`
-materialization belong to agent-auth. Model snapshot freshness and
-picker-facing model data belong to the model catalog. Gateway model lists
-belong to the [model gateway](model-gateway.md); this platform knows only
-whether a harness supports the gateway route, never which models it serves.
+Boundaries: the auth split is declare vs apply. This platform owns
+*declaring* a harness's auth vocabulary — the registry's per-harness auth
+slots, env var names, discovery kinds, and login policy, plus the
+catalog's probed auth contexts — and the readiness states computed from
+them. *Applying* a credential belongs to agent-auth: which source the
+user selects (native / gateway / API key), `state.json` materialization,
+and any harness-specific application glue (env injection at spawn,
+harness config rewriting, per-harness quirks in
+`anyharness-lib/src/domains/agents/route_auth/`). Adding a new harness
+therefore touches both: its auth vocabulary is a `registry.json` edit
+here; how those slots get filled and switched is agent-auth's contract.
+Model snapshot freshness and picker-facing model data belong to the
+model catalog. Gateway model lists belong to the
+[model gateway](model-gateway.md); this platform knows only whether a
+harness supports the gateway route, never which models it serves.
 
 ## The two documents
 
@@ -112,8 +122,7 @@ Installation is automatic. Every harness supported on a surface converges
 with no user action: absent means install, drifted means reinstall, and
 both are the same mechanism — the reconcile job
 (`installer/reconcile/execution.rs`), triggered by the startup pass on
-every runtime boot (`runtime.rs::spawn_startup_pass`) and by the
-catalog-applied poke after every document swap (`catalog/sync.rs`),
+every runtime boot (`runtime.rs::spawn_startup_pass`),
 walks the supported set and installs whatever the drift planner
 (`installer/install_policy.rs`) says is absent or stale. A user
 authenticates harnesses; they never install them. Completed installs
@@ -140,12 +149,11 @@ auto-installed agents identically.
 
 ## Convergence
 
-One law: every supported agent converges to the active catalog's pin
-whenever the active catalog changes — install when absent, reinstall on
-drift. There is no "detect what changed" step anywhere: activating a
-catalog (by booting a binary or applying a pushed document) fires an
-idempotent reconcile, and the reconcile itself discovers the work by
-diffing pins against install manifests. One planner owns that diff
+One law: every supported agent converges to the bundled catalog's pin at
+runtime startup — install when absent, reinstall on drift. There is no
+"detect what changed" step anywhere: every boot fires an idempotent
+reconcile, and the reconcile itself discovers the work by diffing pins
+against install manifests. One planner owns that diff
 (`installer/install_policy.rs`), per agent and per artifact role (the ACP
 adapter and the wrapped native CLI drift independently): compare the
 manifest's recorded version and sha256 against the active pin and
@@ -162,8 +170,8 @@ cloud):
 
 - the startup pass (`runtime.rs::spawn_startup_pass`) on every runtime
   boot, after seed hydration;
-- the catalog-applied poke, fired exactly once per successful document
-  swap, never on an already-current or invalid document.
+- an explicit request (the settings pane's reinstall action, or a scoped
+  `POST /v1/agents/reconcile`).
 
 Both funnel into the single observable reconcile job: one slot, agents
 converged sequentially, internal pokes waiting out a busy slot
@@ -173,45 +181,29 @@ download progress, and the desktop polls it continuously
 (`sdk-react/hooks/agents.ts::useAgentReconcileStatusQuery` — 1.5s while a
 job runs, 750ms while downloading, 30s idle discovery).
 
-Two transports deliver a new active catalog, split by cost:
+One transport delivers a new active catalog, on every surface: **the
+runtime binary carries it.** `catalog.json` is compiled into the runtime
+(`include_str!` in `catalog/bundled.rs`; a document that fails validation
+fails the build), so which harness pins a machine is on is answered by
+one number — the runtime version — and a runtime binary update delivers
+new pins by definition. The startup pass after the swap is the entire
+convergence story; there is no document push, no second version to
+reason about, and no faster lane on any surface. The nightly release
+train already delivers the catalog daily; a live document-sync layer
+would save at most that one day and give up the invariant that makes
+this design stable: **the active catalog is immutable for the lifetime
+of the runtime process.** Pins can never move under a machine mid-work;
+harness installs mutate only across a restart, when nothing is running.
 
-- **The binary carries the catalog.** `catalog.json` is compiled into the
-  runtime (`include_str!` in `catalog/bundled.rs`; a document that fails
-  validation fails the build). A runtime binary update therefore delivers
-  new pins by definition, and the startup pass reconciles agents against
-  them. This is the only transport on desktop: the app updates on the
-  nightly release train, and each update converges harnesses at next
-  launch. Desktop has no faster lane because the release train already
-  delivers the catalog daily; a live sync layer would add
-  desktop-to-server plumbing to save at most that one day.
-- **The heartbeat carries the catalog (cloud only).** Sandboxes are
-  long-lived and catalog changes are frequent, so pin changes must land
-  without a runtime binary roll. The server advertises its served catalog
-  version in every worker heartbeat
-  (`runtime_workers/service.py::record_heartbeat`); on mismatch in either
-  direction the worker fetches `GET /catalogs/agents` from the server
-  (ETag-aware) and PUTs the document into the runtime
-  (`proliferate-worker/src/catalog_sync.rs`). The runtime validates,
-  swaps the document, and fires the catalog-applied poke. "Either
-  direction" is the rollback story: reverting the catalog PR converges
-  the fleet backward on the next heartbeat.
+This also makes the runtime version the single rollback unit. Repinning
+the fleet to a previous runtime version rolls back the code, the catalog
+pins, and the probe-observed behavior together, atomically — there is no
+document state that can race the binary or survive it.
 
-An applied pushed document is persisted to the runtime home
-(`catalogs/agent-catalog.json` beside the agents tree, written by the
-catalog sync service on every successful apply) and reloaded at boot
-(full schema + registry-pairing validation at load; any failure falls
-back to the bundled copy).
-Persistence keeps a restart convergence-neutral: without it, a restart
-would re-activate the older bundled catalog, downgrade every
-heartbeat-moved pin, and re-upgrade it seconds later when the heartbeat
-re-pushed — two wasted reinstalls and a stale window per restart. The
-bundled catalog remains the truth floor; persistence never outlives a
-deliberate binary rollback, because the heartbeat re-converges the
-document in either direction regardless.
-
-The registry has no live transport on purpose. It only ships inside a new
-binary: changing install method or auth vocabulary is a code-review-and-
-release event, never a runtime push.
+Neither document has a live transport, on purpose. Catalog and registry
+both ship only inside a new binary: changing pins, install method, or
+auth vocabulary is a code-review-and-release event, never a runtime
+push.
 
 ### Runtime binary convergence (cloud)
 
@@ -253,9 +245,13 @@ sessions exist, and in cloud the disruption window is one process
 restart on a fleet that updates at most daily. Deferring swaps around
 long-running work is a known UX gap to revisit, not an accident.
 
-The layering on cloud is then: binary update is the slow, disruptive
-transport for code; catalog sync is the fast, non-disruptive transport
-for pins.
+Because the binary is the only catalog transport, this swap is also how
+cloud sandboxes receive new harness pins: a merged catalog PR rides the
+next runtime release, the server deploy advertises the new
+`RUNTIME_VERSION`, the supervisor swaps the binary, and the startup pass
+converges the harnesses. Catalog freshness in cloud is therefore bounded
+by the runtime release cadence (the nightly train), the same bound
+desktop already has.
 
 ## The update pipeline
 
@@ -286,8 +282,9 @@ The catalog is regenerated by the probe pipeline, nightly and on demand
    for freshly probed agents, carry unchanged agents forward, and promote
    the draft to the lockfile byte-for-byte.
 4. A separate job with no provider credentials opens the PR. A human
-   reviews the diff and merges; the merge is what moves the fleet (server
-   deploy feeds heartbeats, the nightly app build feeds desktops).
+   reviews the diff and merges; the merge moves the fleet by riding the
+   next runtime release (the nightly app build for desktops, the runtime
+   binary roll for cloud sandboxes).
 
 The scheduled run's credentials live only in the protected `Catalog Probe`
 GitHub environment; provisioning, rotation, revocation, and failure
@@ -337,12 +334,10 @@ options in the composer.
 | Layer | Path | Owns |
 | --- | --- | --- |
 | Documents | `catalogs/agents/` | registry.json (method), catalog.json (lockfile), registry.schema.json |
-| Document handling | `anyharness-lib/src/domains/agents/{catalog,registry}/` | Parsing, validation, registry pairing, catalog sync service, bundled copies |
+| Document handling | `anyharness-lib/src/domains/agents/{catalog,registry}/` | Parsing, validation, registry pairing, bundled copies, read routes |
 | Install | `anyharness-lib/src/domains/agents/installer/` | Pin materialization, manifests, seed hydration, the reconcile job |
 | Readiness | `anyharness-lib/src/domains/agents/readiness/` | Artifact resolution, compatibility gates, credential classification, launch validation |
 | Producer | `scripts/agent-catalog/` | resolve-pins, probe runner, collation, version discipline, draft |
-| Distribution | `server/proliferate/server/catalogs/` | Serving the checked-in catalog with ETag; version for heartbeats |
-| Cloud catalog transport | `anyharness/crates/proliferate-worker/src/catalog_sync.rs` | Heartbeat-driven document push |
 | Cloud binary transport | `anyharness/crates/proliferate-worker/src/supervisor_bridge/` + `anyharness/crates/proliferate-supervisor/` | Worker-written update requests; supervisor-owned swap, restart, rollback |
 | Version pins | `server/proliferate/server/version.py` | Release-CI-stamped `RUNTIME_VERSION`/`WORKER_VERSION` advertised in heartbeat acks |
 
@@ -354,10 +349,6 @@ options in the composer.
 - Install fails (checksum mismatch, fetch failure, no pin for platform):
   the reconcile outcome records the error and the agent stays at
   `InstallRequired`; retry is idempotent on the next pass.
-- Pushed catalog fails validation: the runtime rejects the PUT and keeps
-  its active document; the worker retries on a later heartbeat.
-- Persisted catalog is corrupt at boot: the load falls back to the
-  bundled document; the next heartbeat re-pushes and re-persists.
 - Binary swap fails its health gate: the supervisor restores the `.prev`
   binary, relaunches it, and records the pin as failed so the same
   artifact is not retried; a newer pin clears the record.
@@ -392,14 +383,19 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       and the D5 bridge that migrates legacy sandboxes. All of it — plus
       the `PROLIFERATE_SUPERVISOR_OWNED_RUNTIME` gate itself — deletes
       once the fleet is fully supervisor-owned.
-- [ ] The applied pushed catalog is not persisted: `catalog/sync.rs`
-      swaps it in memory only, so every runtime restart re-activates the
-      bundled document, downgrades heartbeat-moved pins, and re-upgrades
-      them when the next heartbeat re-pushes. The persistence contract
-      above (write on apply, validated load at boot, bundled fallback)
-      is not yet implemented.
-- [ ] Installs are not yet automatic: the startup pass and the
-      catalog-applied poke run `installed_only` reconciles
+- [ ] The heartbeat catalog transport still exists: the server
+      advertises its served catalog version in heartbeat acks
+      (`runtime_workers/service.py::record_heartbeat`), the worker
+      pushes the document into the runtime
+      (`proliferate-worker/src/catalog_sync.rs`), and the runtime
+      accepts it (`PUT /v1/catalogs/agents`, `catalog/sync.rs` with its
+      catalog-applied reconcile poke, and the server-side
+      `server/proliferate/server/catalogs/` ETag serving that feeds it).
+      All of it deletes under the binary-only transport law above; the
+      runtime keeps only the read routes (`GET
+      /v1/catalogs/agents{,/version}`).
+- [ ] Installs are not yet automatic: the startup pass runs an
+      `installed_only` reconcile
       (`runtime.rs::reconcile_installed_when_idle` hardcodes it), so an
       absent opencode/grok stays `InstallRequired` until a user clicks
       install, and session creation rejects a non-`Ready` harness rather
