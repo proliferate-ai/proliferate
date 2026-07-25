@@ -213,7 +213,7 @@ export function TranscriptScrollToBottomButton({
         tabIndex={visible ? 0 : -1}
         data-chat-transcript-ignore
         onClick={onClick}
-        className={`size-8 rounded-full border border-border bg-background text-muted-foreground shadow-none transition-opacity duration-150 ease-in-out hover:bg-background hover:text-foreground ${
+        className={`size-8 rounded-full border border-border bg-background text-muted-foreground shadow-none transition-opacity duration-hover ease-in-out hover:bg-background hover:text-foreground ${
           visible
             ? "pointer-events-auto opacity-100"
             : "opacity-0"

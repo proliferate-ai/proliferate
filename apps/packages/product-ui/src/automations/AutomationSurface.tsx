@@ -85,13 +85,13 @@ export function AutomationSurface({
       </div>
 
       {actionError ? (
-        <div className="rounded-[8px] border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+        <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-ui text-destructive">
           {actionError}
         </div>
       ) : null}
 
       {loading ? (
-        <div className="py-4 text-xs text-muted-foreground" role="status" aria-live="polite">
+        <div className="py-4 text-ui-sm text-muted-foreground" role="status" aria-live="polite">
           Loading workflows
         </div>
       ) : error ? (
@@ -152,7 +152,7 @@ function ViewModeTabs({
     { id: "calendar", label: "Calendar", icon: CalendarClock },
   ];
   return (
-    <div className="flex items-center gap-1 rounded-[8px] bg-foreground/[0.035] p-1">
+    <div className="flex items-center gap-1 rounded-lg bg-surface-elevated-secondary p-1">
       {items.map((item) => {
         const active = item.id === mode;
         const Icon = item.icon;
@@ -165,10 +165,10 @@ function ViewModeTabs({
             onClick={() => onChange(item.id)}
             aria-pressed={active}
             className={twMerge(
-              "flex h-7 items-center gap-1.5 rounded-[6px] px-2.5 text-xs transition-colors",
+              "flex h-7 items-center gap-1.5 rounded-md px-2.5 text-ui transition-colors",
               active
-                ? "bg-foreground/[0.075] font-medium text-foreground"
-                : "text-muted-foreground hover:bg-foreground/[0.04] hover:text-foreground",
+                ? "bg-selected font-medium text-foreground"
+                : "text-muted-foreground hover:bg-hover hover:text-foreground active:bg-active",
             )}
           >
             <Icon className="icon-paired" aria-hidden />
@@ -195,7 +195,7 @@ function IncludePausedSwitch({
       role="switch"
       aria-checked={checked}
       onClick={() => onChange(!checked)}
-      className="flex items-center gap-2 rounded-[6px] px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-foreground/[0.04] hover:text-foreground"
+      className="flex items-center gap-2 rounded-md px-2 py-1 text-ui-sm text-muted-foreground transition-colors hover:bg-hover hover:text-foreground active:bg-active"
     >
       <span>Include paused</span>
       <span

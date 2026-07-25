@@ -53,7 +53,7 @@ describe("Cloud chat transcript optical spacing", () => {
 
     const motionShell = container.querySelector("[data-animated-collapsible-content]");
     expect(motionShell?.getAttribute("data-expanded")).toBe("true");
-    expect(motionShell?.className).toContain("duration-200");
+    expect(motionShell?.className).toContain("duration-disclosure");
 
     fireEvent.click(screen.getByRole("button", { name: "Worked for 12s" }));
     expect(motionShell?.getAttribute("data-expanded")).toBe("false");

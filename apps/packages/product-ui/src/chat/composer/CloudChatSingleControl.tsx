@@ -71,7 +71,7 @@ export function CloudChatSingleControl({
         trailing={(
           <span className="flex items-center gap-1">
             <PendingComposerConfigIndicator pendingState={control.pendingState ?? null} />
-            <ChevronDown className="icon-paired shrink-0 text-[color:var(--color-composer-control-muted-foreground)]" />
+            <ChevronDown className="icon-paired shrink-0 text-composer-control-muted-foreground" />
           </span>
         )}
         aria-haspopup="menu"
@@ -98,7 +98,7 @@ export function CloudChatSingleControl({
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
                   placeholder={`Search ${control.label.toLowerCase()}`}
-                  className="h-auto min-w-0 border-0 bg-transparent px-0 py-0 text-sm shadow-none focus:ring-0"
+                  className="h-auto min-w-0 border-0 bg-transparent px-0 py-0 text-ui shadow-none focus:ring-0"
                   data-telemetry-mask
                 />
               </div>
@@ -114,7 +114,7 @@ export function CloudChatSingleControl({
                 }}
               />
             ) : (
-              <p className="px-3 py-4 text-center text-sm text-muted-foreground">
+              <p className="px-3 py-4 text-center text-ui text-muted-foreground">
                 No matches
               </p>
             )}

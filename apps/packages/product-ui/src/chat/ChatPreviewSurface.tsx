@@ -50,7 +50,7 @@ export function ChatPreviewSurface({
           <ArrowLeft className="icon-paired" />
         </IconButton>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <div className="flex items-center gap-2 text-chat text-muted-foreground">
             {eyebrowItems.map((item, index) => (
               <span key={`${item}-${index}`} className="contents">
                 {index > 0 ? <span>-</span> : null}
@@ -58,7 +58,7 @@ export function ChatPreviewSurface({
               </span>
             ))}
           </div>
-          <h1 className="truncate text-sm font-semibold">{title}</h1>
+          <h1 className="truncate text-heading font-semibold">{title}</h1>
         </div>
         {primaryAction ? (
           <Button variant={primaryAction.kind === "claim" ? "secondary" : "outline"} size="sm" onClick={primaryAction.onClick}>
@@ -73,7 +73,7 @@ export function ChatPreviewSurface({
 
       <div className="proliferate-scrollbar min-h-0 flex-1 overflow-y-auto">
         <div className={`${CHAT_COLUMN_CLASSNAME} px-6 py-6`}>
-          <div className="mb-4 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          <div className="mb-4 flex flex-wrap items-center gap-2 text-chat text-muted-foreground">
             <span className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1">
               <GitBranchIcon className="icon-paired" />
               {branchLabel}
@@ -92,10 +92,10 @@ export function ChatPreviewSurface({
                   message.role === "assistant" ? "bg-card" : "bg-background"
                 }`}
               >
-                <div className="mb-2 text-xs font-medium uppercase text-muted-foreground">
+                <div className="mb-2 text-chat font-medium uppercase text-muted-foreground">
                   {message.role}
                 </div>
-                <p className="text-sm leading-6 text-foreground">{message.body}</p>
+                <p className="text-message text-foreground">{message.body}</p>
               </article>
             ))}
           </div>
@@ -106,7 +106,7 @@ export function ChatPreviewSurface({
         <div className={`${CHAT_COLUMN_CLASSNAME} flex items-end gap-2 rounded-lg border border-input bg-card p-2`}>
           <Textarea
             rows={2}
-            className="min-h-10 flex-1 resize-none bg-transparent px-2 py-1 text-sm text-foreground outline-none placeholder:text-muted-foreground"
+            className="min-h-10 flex-1 resize-none bg-transparent px-2 py-1 text-composer text-foreground outline-none placeholder:text-muted-foreground"
             placeholder="Message this session"
           />
           <Button size="icon" aria-label="Send message">

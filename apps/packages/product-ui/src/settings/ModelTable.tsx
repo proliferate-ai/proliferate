@@ -40,7 +40,7 @@ export interface ModelTableProps {
 // compact header on `accent`, hairline-divided body rows (dense reference table),
 // first row un-bordered.
 const TH_CLASS =
-  "border-b border-border bg-accent px-4 py-1.5 text-left text-base font-medium whitespace-nowrap text-faint";
+  "border-b border-border bg-surface-elevated-secondary px-4 py-1.5 text-left text-ui-sm font-medium whitespace-nowrap text-faint";
 const TD_CLASS =
   "border-t border-border px-4 py-2 align-top text-ui-sm whitespace-nowrap";
 
@@ -61,9 +61,9 @@ function EffortChips({ effort }: { effort?: ModelTableEffort | null }) {
             key={value}
             data-default={isDefault ? "true" : undefined}
             className={twMerge(
-              "whitespace-nowrap rounded-[5px] border px-1.5 py-px text-base",
+              "whitespace-nowrap rounded-sm border px-1.5 py-px text-ui-sm",
               isDefault
-                ? "border-border bg-accent font-medium text-foreground"
+                ? "border-border bg-selected font-medium text-foreground"
                 : "border-border text-muted-foreground",
             )}
           >
@@ -106,13 +106,13 @@ function ModesPills({ modes }: { modes?: readonly string[] | null }) {
       {visible.map((mode) => (
         <span
           key={mode}
-          className="whitespace-nowrap rounded-[5px] border border-border px-1.5 py-px text-base text-muted-foreground"
+          className="whitespace-nowrap rounded-sm border border-border px-1.5 py-px text-ui-sm text-muted-foreground"
         >
           {mode}
         </span>
       ))}
       {overflowCount > 0 ? (
-        <span className="whitespace-nowrap rounded-[5px] border border-border px-1.5 py-px text-base text-muted-foreground">
+        <span className="whitespace-nowrap rounded-sm border border-border px-1.5 py-px text-ui-sm text-muted-foreground">
           +{overflowCount}
         </span>
       ) : null}
@@ -132,7 +132,7 @@ export function ModelTable({ models, onToggle, className }: ModelTableProps) {
   return (
     <div
       className={twMerge(
-        "overflow-x-auto overscroll-contain rounded-[var(--radius)] border border-border",
+        "overflow-x-auto overscroll-contain rounded-lg border border-border",
         className,
       )}
     >
@@ -158,7 +158,7 @@ export function ModelTable({ models, onToggle, className }: ModelTableProps) {
               <tr
                 key={model.id}
                 className={twMerge(
-                  "transition-colors hover:bg-accent/40",
+                  "transition-colors hover:bg-hover",
                   !model.enabled && "opacity-55",
                 )}
               >
@@ -170,11 +170,11 @@ export function ModelTable({ models, onToggle, className }: ModelTableProps) {
                     {model.displayName}
                   </div>
                   {hasDescription ? (
-                    <div className="mt-[2px] truncate text-base leading-[1.4] text-muted-foreground">
+                    <div className="mt-[2px] truncate text-ui-sm text-muted-foreground">
                       {model.description}
                     </div>
                   ) : showId ? (
-                    <div className="mt-[2px] truncate font-mono text-[length:var(--readable-code-font-size)] leading-[var(--readable-code-line-height)] text-faint">
+                    <div className="mt-[2px] truncate font-mono text-readable-code text-faint">
                       {model.id}
                     </div>
                   ) : null}

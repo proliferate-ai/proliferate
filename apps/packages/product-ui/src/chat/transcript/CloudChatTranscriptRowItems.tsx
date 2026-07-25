@@ -59,7 +59,7 @@ export function CloudChatThoughtRow({ row }: { row: CloudChatTranscriptRowView }
             // (desktop CollapsedActions parity); completed rows go static.
             <ThinkingText
               text={labelText}
-              className="block max-w-full truncate font-normal leading-[inherit]"
+              className="block max-w-full truncate font-normal"
             />
           ) : (
             labelText
@@ -73,7 +73,7 @@ export function CloudChatThoughtRow({ row }: { row: CloudChatTranscriptRowView }
         {body ? (
           <CloudTranscriptDetailsPanel>
             <pre
-              className="max-h-72 overflow-auto whitespace-pre-wrap px-3 py-2.5 font-mono text-xs leading-5 text-muted-foreground"
+              className="max-h-72 overflow-auto whitespace-pre-wrap px-3 py-2.5 font-mono text-chat leading-5 text-muted-foreground"
               data-telemetry-mask
             >
               {body}
@@ -99,7 +99,7 @@ export function CloudChatToolRow({ row }: { row: CloudChatTranscriptRowView }) {
           ? (
             <ThinkingText
               text={row.title ?? titleForRow(row)}
-              className="block max-w-full truncate font-normal leading-[inherit]"
+              className="block max-w-full truncate font-normal"
             />
           )
           : row.title ?? titleForRow(row)}
@@ -293,12 +293,12 @@ export function CloudChatSystemRow({
             setExpanded((value) => !value);
           }
         }}
-        className="flex h-auto w-full justify-start gap-2 rounded-none bg-transparent px-3 py-1.5 text-left font-sans text-chat leading-[var(--text-chat--line-height)] text-muted-foreground transition-colors hover:bg-transparent hover:text-foreground"
+        className="flex h-auto w-full justify-start gap-2 rounded-none bg-transparent px-3 py-1.5 text-left font-sans text-chat text-muted-foreground transition-colors hover:bg-transparent hover:text-foreground"
         aria-expanded={expanded}
       >
         <ChevronRight
           aria-hidden="true"
-          className={`icon-paired shrink-0 transition-transform duration-150 ${
+          className={`icon-paired shrink-0 transition-transform duration-disclosure ${
             expanded ? "rotate-90" : ""
           }`}
         />
@@ -308,7 +308,7 @@ export function CloudChatSystemRow({
         <div className="mt-1 space-y-1.5">
           {body ? (
             <div
-              className="whitespace-pre-wrap rounded-md border border-border bg-card px-3.5 py-2.5 font-sans text-[length:var(--text-chat)] leading-[var(--text-chat--line-height)] text-muted-foreground select-text"
+              className="whitespace-pre-wrap rounded-md border border-border bg-card px-3.5 py-2.5 font-sans text-chat text-muted-foreground select-text"
               data-telemetry-mask
             >
               {body}
@@ -334,7 +334,7 @@ export function CloudChatErrorRow({ row }: { row: CloudChatTranscriptRowView }) 
   const hasDetails = body.length > 0 && body !== description;
 
   return (
-    <article className="rounded-lg border border-destructive/20 bg-destructive/[0.04] px-3 py-2 text-sm">
+    <article className="rounded-lg border border-destructive/20 bg-destructive/[0.04] px-3 py-2 text-chat">
       <div className="flex min-w-0 items-start gap-2">
         <AlertTriangle className="mt-0.5 icon-paired shrink-0 text-destructive/80" />
         <div className="min-w-0 flex-1">
@@ -349,7 +349,7 @@ export function CloudChatErrorRow({ row }: { row: CloudChatTranscriptRowView }) 
       {row.status || hasDetails ? (
         <div className="mt-2 flex flex-wrap items-center gap-2 pl-6">
           {row.status ? (
-            <span className="text-chat leading-[var(--text-chat--line-height)] text-muted-foreground">{row.status}</span>
+            <span className="text-chat text-muted-foreground">{row.status}</span>
           ) : null}
           {hasDetails ? (
             <Button
@@ -358,7 +358,7 @@ export function CloudChatErrorRow({ row }: { row: CloudChatTranscriptRowView }) 
               size="sm"
               data-chat-transcript-ignore
               onClick={() => setDetailsExpanded((value) => !value)}
-              className="gap-1 px-1.5 text-chat leading-[var(--text-chat--line-height)] text-muted-foreground hover:text-foreground"
+              className="gap-1 px-1.5 text-chat text-muted-foreground hover:text-foreground"
               aria-expanded={detailsExpanded}
             >
               <ChevronRight
@@ -372,7 +372,7 @@ export function CloudChatErrorRow({ row }: { row: CloudChatTranscriptRowView }) 
       ) : null}
       {detailsExpanded && hasDetails ? (
         <div
-          className="mt-2 whitespace-pre-wrap rounded-md border border-border/70 bg-background/70 px-2.5 py-2 font-mono text-xs leading-5 text-muted-foreground select-text"
+          className="mt-2 whitespace-pre-wrap rounded-md border border-border/70 bg-background/70 px-2.5 py-2 font-mono text-chat leading-5 text-muted-foreground select-text"
           data-telemetry-mask
         >
           {body}

@@ -19,7 +19,7 @@ export function AutomationRunsList({
 }: AutomationRunsListProps) {
   if (loading) {
     return (
-      <div className="py-4 text-xs text-muted-foreground" role="status" aria-live="polite">
+      <div className="py-4 text-ui-sm text-muted-foreground" role="status" aria-live="polite">
         Loading runs
       </div>
     );
@@ -27,7 +27,7 @@ export function AutomationRunsList({
 
   if (runs.length === 0) {
     return (
-      <div className="py-4 text-xs text-muted-foreground">
+      <div className="py-4 text-ui-sm text-muted-foreground">
         No runs queued yet.
       </div>
     );
@@ -66,9 +66,9 @@ function AutomationRunRow({
     ? `${run.timestampLabel} · ${run.openDisabledReason}`
     : run.timestampLabel;
   const rowClass = twMerge(
-    "group relative grid h-12 w-full grid-cols-[18px_minmax(0,1fr)_4rem] items-center gap-x-3 rounded-[5px] px-3 py-1 text-left transition-colors sm:grid-cols-[18px_minmax(0,1fr)_7rem_4rem] md:grid-cols-[18px_minmax(0,1fr)_7rem_8rem_4rem]",
+    "group relative grid h-12 w-full grid-cols-[18px_minmax(0,1fr)_4rem] items-center gap-x-3 rounded-sm px-3 py-1 text-left transition-colors sm:grid-cols-[18px_minmax(0,1fr)_7rem_4rem] md:grid-cols-[18px_minmax(0,1fr)_7rem_8rem_4rem]",
     openable
-      ? "cursor-pointer hover:bg-foreground/[0.04] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-[-2px]"
+      ? "cursor-pointer hover:bg-hover active:bg-active focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-[-2px]"
       : "cursor-default",
   );
 
@@ -79,10 +79,10 @@ function AutomationRunRow({
       </span>
 
       <span className="min-w-0" title={run.errorLabel ?? run.title}>
-        <span className="block min-w-0 truncate text-sm font-medium leading-5 text-foreground">
+        <span className="block min-w-0 truncate text-body-emphasis font-medium text-foreground">
           {run.title}
         </span>
-        <span className="block min-w-0 truncate text-xs leading-4 text-muted-foreground" title={secondaryLabel}>
+        <span className="block min-w-0 truncate text-ui-sm leading-4 text-muted-foreground" title={secondaryLabel}>
           {secondaryLabel}
         </span>
       </span>
@@ -90,7 +90,7 @@ function AutomationRunRow({
       <MetadataCell className="hidden sm:flex" label={run.triggerLabel} />
       <MetadataCell className="hidden md:flex" label={run.targetLabel} />
 
-      <span className="relative flex min-w-0 items-center justify-end text-right text-xs leading-4 text-muted-foreground">
+      <span className="relative flex min-w-0 items-center justify-end text-right text-ui-sm leading-4 text-muted-foreground">
         <span
           className={twMerge(
             "truncate transition-opacity",
@@ -145,7 +145,7 @@ function MetadataCell({
 }) {
   return (
     <span
-      className={twMerge("min-w-0 items-center text-xs leading-4 text-muted-foreground", className)}
+      className={twMerge("min-w-0 items-center text-ui-sm leading-4 text-muted-foreground", className)}
       title={label}
     >
       <span className="min-w-0 truncate">{label}</span>

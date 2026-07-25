@@ -38,10 +38,10 @@ export function TerminalRosterRow({ process, nowMs, onOpen }: TerminalRosterRowP
     <>
       <SquareTerminal className={twMerge("mt-0.5 icon-paired shrink-0", TONE_CLASSNAME[tone])} aria-hidden />
       <div className="min-w-0 flex-1">
-        <p className="truncate font-mono text-xs text-foreground" data-telemetry-mask title={process.command}>
+        <p className="truncate font-mono text-ui text-foreground" data-telemetry-mask title={process.command}>
           {process.command}
         </p>
-        <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground">
+        <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-ui-sm text-muted-foreground">
           <span className={TONE_CLASSNAME[tone]}>{processStatusLabel(process)}</span>
           <span aria-hidden>·</span>
           <span>{processElapsedLabel(process, nowMs)}</span>
@@ -65,7 +65,7 @@ export function TerminalRosterRow({ process, nowMs, onOpen }: TerminalRosterRowP
   if (!onOpen) {
     return (
       <div
-        className="flex w-full items-start gap-2 rounded-md px-1.5 py-1.5 text-left text-xs"
+        className="flex w-full items-start gap-2 rounded-md px-1.5 py-1.5 text-left text-ui"
         data-terminal-roster-row
         data-process-id={process.id}
       >
@@ -79,7 +79,7 @@ export function TerminalRosterRow({ process, nowMs, onOpen }: TerminalRosterRowP
       variant="unstyled"
       size="unstyled"
       type="button"
-      className="flex w-full items-start gap-2 rounded-md px-1.5 py-1.5 text-left text-xs hover:bg-muted/40"
+      className="flex w-full items-start gap-2 rounded-md px-1.5 py-1.5 text-left text-ui hover:bg-hover active:bg-active"
       onClick={() => onOpen(process.id)}
       data-terminal-roster-row
       data-process-id={process.id}

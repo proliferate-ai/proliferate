@@ -96,7 +96,7 @@ export function BillingPlanManagementDialog({
             action={coreAction}
             actionVariant="primary"
           >
-            <div className="grid gap-2 rounded-lg border border-border-light bg-foreground/[0.02] p-3 text-sm">
+            <div className="grid gap-2 rounded-lg border border-border-light bg-surface-elevated-secondary p-3 text-body">
               <PlanUnitRow label="Monthly compute units" value="20 PCUs / month" />
               <PlanUnitRow label="Monthly LLM credits" value="2,500 LLM credits / month" />
             </div>
@@ -167,21 +167,21 @@ function PlanOptionCard({
     <section className="flex min-h-[34rem] flex-col rounded-xl border border-border-light bg-surface-elevated p-5">
       <div className="space-y-4">
         <div className="flex min-h-6 items-center justify-between gap-3">
-          <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{eyebrow}</div>
+          <div className="text-ui-sm font-medium uppercase tracking-wide text-muted-foreground">{eyebrow}</div>
           {badge ? <Badge tone="success">{badge}</Badge> : null}
         </div>
 
         <div className="space-y-1">
           <h3 className="text-title font-semibold tracking-tight text-foreground">{title}</h3>
-          <p className="text-sm leading-5 text-muted-foreground">{description}</p>
+          <p className="text-body text-muted-foreground">{description}</p>
         </div>
 
-        <div className="text-lg font-semibold text-foreground">{summary}</div>
+        <div className="text-title font-semibold text-foreground">{summary}</div>
       </div>
 
       <div className="mt-5 space-y-3">
         {features.map((feature) => (
-          <div key={feature} className="flex gap-2 text-sm leading-5 text-foreground">
+          <div key={feature} className="flex gap-2 text-body text-foreground">
             <Check className="mt-0.5 icon-paired shrink-0 text-success" />
             <span>{feature}</span>
           </div>

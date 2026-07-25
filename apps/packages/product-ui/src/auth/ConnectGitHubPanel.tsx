@@ -24,8 +24,8 @@ export function ConnectGitHubPanel({
       className={twMerge("rounded-lg border border-border bg-card p-5 text-center", className)}
       {...props}
     >
-      <h2 className="text-base font-semibold text-foreground">{title}</h2>
-      <p className="mt-2 text-sm leading-5 text-muted-foreground">{description}</p>
+      <h2 className="text-heading font-semibold text-foreground">{title}</h2>
+      <p className="mt-2 text-body text-muted-foreground">{description}</p>
       <Button className="mt-5 w-full" size="md" loading={loading} onClick={onConnect}>
         {actionLabel}
       </Button>

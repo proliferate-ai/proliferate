@@ -141,10 +141,10 @@ function mdComponent(tag: MdTag, className: string) {
 }
 
 const STATIC_MARKDOWN_COMPONENTS = {
-  h1: mdComponent("h1", "mb-2.5 mt-5 font-semibold leading-[1.25] text-foreground"),
-  h2: mdComponent("h2", "mb-2.5 mt-5 font-semibold leading-[1.3] text-foreground"),
-  h3: mdComponent("h3", "mb-2.5 mt-5 font-semibold leading-[1.35] text-foreground"),
-  h4: mdComponent("h4", "mb-2 mt-4 font-semibold leading-[1.4] text-foreground"),
+  h1: mdComponent("h1", "mb-2.5 mt-5 text-title font-semibold text-foreground"),
+  h2: mdComponent("h2", "mb-2.5 mt-5 text-heading font-semibold text-foreground"),
+  h3: mdComponent("h3", "mb-2.5 mt-5 text-body-emphasis font-semibold text-foreground"),
+  h4: mdComponent("h4", "mb-2 mt-4 text-body-emphasis font-semibold text-foreground"),
   h5: mdComponent("h5", "mb-1.5 mt-4 font-semibold uppercase tracking-wide text-muted-foreground"),
   h6: mdComponent("h6", "mb-1.5 mt-4 font-semibold uppercase tracking-wide text-muted-foreground"),
   strong: mdComponent("strong", "font-semibold"),
@@ -169,13 +169,13 @@ const STATIC_MARKDOWN_COMPONENTS = {
       >
         {mdHtmlElement(
           "table",
-          "w-max min-w-full max-w-none border-collapse [&_tbody_tr:nth-child(2n)]:bg-foreground/[0.018] [&_tbody_tr:last-child_td]:border-b-0",
+          "w-max min-w-full max-w-none border-collapse [&_tbody_tr:nth-child(2n)]:bg-surface-elevated-secondary [&_tbody_tr:last-child_td]:border-b-0",
           props,
         )}
       </div>
     </div>
   ),
-  th: mdComponent("th", "border-b bg-foreground/[0.035] px-3 py-2 text-left font-medium text-foreground"),
+  th: mdComponent("th", "border-b bg-surface-elevated-secondary px-3 py-2 text-left font-medium text-foreground"),
   td: mdComponent("td", "border-b px-3 py-2 align-top"),
   pre: ({ children, dangerouslySetInnerHTML, node: _node, ...rest }: MdElementProps & { children?: ReactNode }) => {
     if (dangerouslySetInnerHTML) {

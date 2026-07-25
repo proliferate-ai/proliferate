@@ -87,22 +87,22 @@ export function AutomationDetailSurface({
 
         {notFound ? (
           <section className="py-3">
-            <p className="text-sm font-medium text-foreground">Workflow not found</p>
-            <p className="mt-1 text-sm text-muted-foreground">
+            <p className="text-heading font-medium text-foreground">Workflow not found</p>
+            <p className="mt-1 text-body text-muted-foreground">
               It may have been deleted or you may not have access to it.
             </p>
           </section>
         ) : loadingAutomation && !automation ? (
-          <div className="py-4 text-xs text-muted-foreground" role="status" aria-live="polite">
+          <div className="py-4 text-ui-sm text-muted-foreground" role="status" aria-live="polite">
             Loading workflow
           </div>
         ) : (
           <>
             <AutomationSummaryPanel summary={summary} />
             <section className="min-w-0">
-              <div className="mt-1 flex h-9 w-full items-center gap-2 rounded-[10px] bg-foreground/[0.042] px-3">
-                <span className="text-sm font-medium leading-5 text-foreground">Run history</span>
-                <span className="text-sm tabular-nums text-muted-foreground">{runs.length}</span>
+              <div className="mt-1 flex h-9 w-full items-center gap-2 rounded-sm bg-surface-elevated-secondary px-3">
+                <span className="text-heading font-medium text-foreground">Run history</span>
+                <span className="text-ui-sm tabular-nums text-muted-foreground">{runs.length}</span>
               </div>
               <AutomationRunsList
                 runs={runs}
@@ -136,14 +136,14 @@ function AutomationSummaryPanel({
   return (
     <section
       aria-label="Workflow summary"
-      className="mb-4 rounded-[10px] bg-foreground/[0.035] px-3 py-3"
+      className="mb-4 rounded-lg bg-surface-elevated-secondary px-3 py-3"
     >
       {prompt ? (
         <div className="min-w-0">
-          <p className="text-base font-medium uppercase tracking-normal text-muted-foreground">
+          <p className="text-ui-sm font-medium uppercase tracking-normal text-muted-foreground">
             Prompt
           </p>
-          <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-5 text-foreground">
+          <p className="mt-1 whitespace-pre-wrap break-words text-body text-foreground">
             {prompt}
           </p>
         </div>
@@ -152,10 +152,10 @@ function AutomationSummaryPanel({
         <dl className={`grid gap-3 ${prompt ? "mt-3 border-t border-border/60 pt-3" : ""} sm:grid-cols-3`}>
           {details.map((item) => (
             <div key={item.label} className="min-w-0">
-              <dt className="text-base font-medium uppercase tracking-normal text-muted-foreground">
+              <dt className="text-ui-sm font-medium uppercase tracking-normal text-muted-foreground">
                 {item.label}
               </dt>
-              <dd className="mt-0.5 truncate text-sm leading-5 text-foreground" title={item.value}>
+              <dd className="mt-0.5 truncate text-body text-foreground" title={item.value}>
                 {item.value}
               </dd>
             </div>

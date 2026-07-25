@@ -40,12 +40,12 @@ export function ConnectGitHubRequiredPanel({
         {actionLabel}
       </AuthProviderButton>
       {error ? (
-        <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm leading-5 text-destructive">
+        <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-ui text-destructive">
           {error}
         </div>
       ) : null}
       <Button
-        className="h-10 justify-center text-xs text-muted-foreground"
+        className="h-10 justify-center text-ui text-muted-foreground"
         variant="ghost"
         onClick={onSignOut}
       >

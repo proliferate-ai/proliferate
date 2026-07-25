@@ -40,7 +40,7 @@ export function SettingsRow({
       <div className="min-w-0 space-y-1">
         <div className="text-ui font-medium leading-5 text-foreground">{label}</div>
         {description ? (
-          <div className="max-w-2xl text-ui-sm leading-[1.45] text-muted-foreground">{description}</div>
+          <div className="max-w-2xl text-ui-sm text-muted-foreground">{description}</div>
         ) : null}
       </div>
       {children ? (

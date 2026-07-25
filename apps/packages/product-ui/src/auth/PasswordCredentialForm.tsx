@@ -77,7 +77,7 @@ export function PasswordCredentialForm({
         />
       </div>
       {error ? (
-        <p className="text-sm leading-5 text-destructive" role="alert">
+        <p className="text-ui text-destructive" role="alert">
           {error}
         </p>
       ) : null}

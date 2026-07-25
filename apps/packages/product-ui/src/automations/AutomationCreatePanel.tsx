@@ -79,8 +79,8 @@ export function AutomationCreatePanel({
       <form onSubmit={handleSubmit}>
         <div className="flex items-start justify-between gap-4 border-b border-border pb-3">
           <div className="min-w-0 space-y-1">
-            <div className="text-sm font-medium text-foreground">New workflow</div>
-            <p className="max-w-2xl text-xs leading-4 text-muted-foreground">
+            <div className="text-heading font-medium text-foreground">New workflow</div>
+            <p className="max-w-2xl text-ui-sm leading-4 text-muted-foreground">
               Schedule a cloud workflow against a configured repo and agent harness.
             </p>
           </div>
@@ -97,7 +97,7 @@ export function AutomationCreatePanel({
         </div>
 
         {error ? (
-          <div className="border-b border-border py-3 text-sm text-destructive">
+          <div className="border-b border-border py-3 text-ui text-destructive">
             {error}
           </div>
         ) : null}
@@ -247,12 +247,12 @@ function Field({
 }) {
   return (
     <div className="min-w-0 space-y-1.5">
-      <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+      <div className="flex items-center gap-1.5 text-ui font-medium text-muted-foreground">
         {icon ? <span className="flex icon-paired items-center justify-center">{icon}</span> : null}
         <span>{title}</span>
       </div>
       {children}
-      {description ? <p className="text-xs leading-4 text-muted-foreground">{description}</p> : null}
+      {description ? <p className="text-ui-sm leading-4 text-muted-foreground">{description}</p> : null}
     </div>
   );
 }

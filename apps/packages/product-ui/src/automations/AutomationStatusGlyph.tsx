@@ -32,7 +32,7 @@ export function AutomationStatusGlyph({
       <svg
         viewBox="0 0 14 14"
         className={twMerge(
-          "icon-paired shrink-0 text-sm",
+          "icon-paired shrink-0 text-ui",
           STATUS_GLYPH_CLASSES[status],
           className,
         )}
@@ -57,7 +57,7 @@ export function AutomationStatusGlyph({
       <svg
         viewBox="0 0 14 14"
         className={twMerge(
-          "icon-paired shrink-0 text-sm",
+          "icon-paired shrink-0 text-ui",
           STATUS_GLYPH_CLASSES[status],
           className,
         )}
@@ -73,7 +73,7 @@ export function AutomationStatusGlyph({
     <svg
       viewBox="0 0 14 14"
       className={twMerge(
-        "icon-paired shrink-0 text-sm",
+        "icon-paired shrink-0 text-ui",
         STATUS_GLYPH_CLASSES[status],
         className,
       )}

@@ -46,7 +46,7 @@ export function ScriptBlock({
         value={value}
         placeholder={placeholder}
         disabled={disabled}
-        className="min-h-[120px] w-full resize-y px-2.5 py-2 font-mono text-ui-sm leading-[1.45]"
+        className="min-h-[120px] w-full resize-y px-2.5 py-2 font-mono text-ui-sm leading-relaxed"
         onChange={(event: ChangeEvent<HTMLTextAreaElement>) => onChange(event.currentTarget.value)}
       />
     </div>

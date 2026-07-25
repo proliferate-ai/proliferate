@@ -24,7 +24,7 @@ export function CloudChatComposerControlRow({ composer }: { composer: CloudChatC
             iconOnly
             label="Add context"
             disabled={composer.disabled}
-            className="text-[color:var(--color-composer-control-foreground)]"
+            className="text-composer-control-foreground"
           />
           {leadingControls.map((control) => (
             <CloudChatSingleControl
@@ -68,11 +68,11 @@ export function CloudChatComposerControlStrip({
   return (
     <div
       className={twMerge(
-        "grid min-w-0 flex-1 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-[5px]",
+        "grid min-w-0 flex-1 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1.5",
         className,
       )}
     >
-      <div className="flex min-w-0 items-center gap-[5px]">
+      <div className="flex min-w-0 items-center gap-1.5">
         {leadingControls.map((control) => (
           <CloudChatSingleControl
             key={control.id}
@@ -84,7 +84,7 @@ export function CloudChatComposerControlStrip({
 
       <div className="min-w-0" aria-hidden="true" />
 
-      <div className="flex min-w-0 items-center gap-[5px]">
+      <div className="flex min-w-0 items-center gap-1.5">
         {modelConfigControls.length > 0 ? (
           <CloudChatModelConfigControl
             controls={modelConfigControls}
