@@ -182,8 +182,13 @@ for (const [currentName, finalName] of Object.entries(currentTokenDispositions))
   if (provenance === "[SHIPPED]") shipped += 1;
   if (provenance.startsWith("[RETUNE:")) retuned += 1;
 }
-assert(shipped === 176, `expected 176 shipped dispositions, got ${shipped}`);
-assert(retuned === 39, `expected 39 retuned dispositions, got ${retuned}`);
+// [CHAT-01] moved `--color-composer-background` from [SHIPPED] to
+// [RETUNE:surface/composer-translucent], so one disposition crosses from the
+// shipped tally into the retuned one. The 285-name disposition census itself is
+// unchanged: the three [CHAT-04] additions are net-new tokens, and this map is
+// frozen to the names that existed BEFORE the retune.
+assert(shipped === 175, `expected 175 shipped dispositions, got ${shipped}`);
+assert(retuned === 40, `expected 40 retuned dispositions, got ${retuned}`);
 
 for (const [name, value] of tokenEntries) {
   assert(value.provenance.length > 0, `${name} is missing provenance`);

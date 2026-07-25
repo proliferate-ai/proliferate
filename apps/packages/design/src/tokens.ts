@@ -434,10 +434,30 @@ export const themeTokens = {
     light: "blur(16px)",
     provenance: "[SHIPPED]",
   },
+  /**
+   * [CHAT-01] The composer is a translucent input surface floating over the app
+   * background, not an opaque card. The dark half is Codex's own input-surface
+   * role verbatim — `--color-token-input-background` → `rgba(45,45,45,.96)`
+   * (`reference/codex/tokens.md` "Input surface";
+   * `ui-foundation-chat-addendum.md` [CHAT-01] surface row, the gap that retune
+   * exists to close) — expressed in the house `color-mix()` form and landing on
+   * the same 96%-of-a-lifted-gray treatment `--color-surface-control` already
+   * uses in dark.
+   *
+   * The light half keeps its shipped `rgba(255,255,255,0.864)`: light was
+   * already translucent, so the addendum found no light-mode gap, and light is
+   * the only mode that carries `--color-composer-backdrop-filter: blur(16px)`
+   * (dark stays `none` on purpose — WKWebView re-blurs the whole transcript on
+   * every keystroke; see ChatComposerDock's PERF note). Raising light's alpha to
+   * match dark's 96% would cancel that blur rather than derive from it, so the
+   * ruled translucency law applies per mode at the alpha each mode's backdrop
+   * treatment was tuned for.
+   */
   "--color-composer-background": {
-    dark: "#212121",
+    dark: "color-mix(in oklab, #2d2d2d 96%, transparent)",
     light: "rgba(255, 255, 255, 0.864)",
-    provenance: "[SHIPPED]",
+    themeFallback: "rgba(45, 45, 45, 0.96)",
+    provenance: "[RETUNE:surface/composer-translucent]",
   },
   "--color-composer-border": {
     dark: "var(--color-border) /* legacy-alias */",
@@ -1064,6 +1084,26 @@ export const themeTokens = {
     light: "#febc2e",
     provenance: "[SHIPPED:raw-hex-move]",
   },
+  /**
+   * [CHAT-04] Transcript measure. Codex caps readable Markdown prose at
+   * `--thread-content-max-width: 40rem` and lets wide blocks (tables, images,
+   * code) spill to `--markdown-wide-block-max-width: 64rem`
+   * (`reference/codex/css/26.721.31836.css:284` / `:7374`, tabled in
+   * `ui-foundation-chat-addendum.md` [CHAT-04]; ADOPTED by that doc's RULED
+   * block). Named in Tailwind's `--container-*` namespace so consumers write
+   * `max-w-transcript-readable` / `max-w-transcript-wide` instead of an
+   * arbitrary bracket width — which the appearance gate bans.
+   */
+  "--container-transcript-readable": {
+    dark: "40rem",
+    light: "40rem",
+    provenance: "[RETUNE:layout/transcript-measure]",
+  },
+  "--container-transcript-wide": {
+    dark: "64rem",
+    light: "64rem",
+    provenance: "[RETUNE:layout/transcript-measure]",
+  },
   "--diffs-addition-color-override": {
     dark: "var(--color-diff-added)",
     light: "var(--color-diff-added)",
@@ -1369,6 +1409,24 @@ export const themeTokens = {
     dark: "1.25rem",
     light: "1.25rem",
     provenance: "[RETUNE:icons/control-boxes]",
+  },
+  /**
+   * [CHAT-04] Vertical rhythm between top-level transcript turns. Codex renders
+   * its virtualized turn stack at an inline `gap: 12px`
+   * (`reference/codex/pages/thread/dom.html:4307`), sitting between its own
+   * authored 16px/4px conversation-item roles; the addendum's RULED block adds
+   * it as a token rather than leaving inter-turn spacing to each consuming
+   * layout. Lives in Tailwind's `--spacing-*` namespace so
+   * `gap-transcript-turn` (and `mt-`/`p-`/`py-` on the same name) resolves
+   * without an arbitrary gap value, which the appearance gate bans. Note
+   * Tailwind v4 does NOT derive `space-y-*` from the spacing namespace, so a
+   * `space-y-4` turn stack converts to a flex column with
+   * `gap-transcript-turn`, not to a `space-y-` variant of this name.
+   */
+  "--spacing-transcript-turn": {
+    dark: "0.75rem",
+    light: "0.75rem",
+    provenance: "[RETUNE:layout/transcript-measure]",
   },
   "--text-body": {
     dark: "13px",
