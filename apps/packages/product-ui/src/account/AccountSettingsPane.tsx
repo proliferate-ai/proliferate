@@ -1,4 +1,5 @@
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
+import { UserAvatar } from "@proliferate/ui/primitives/UserAvatar";
 
 import { SettingsSection } from "../settings/SettingsSection";
 import {
@@ -172,10 +173,11 @@ function AccountProfileHeader({
 }) {
   return (
     <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-      <AccountAvatar
+      <UserAvatar
         key={avatarUrl ?? "account-avatar"}
         avatarUrl={avatarUrl}
         displayName={displayName}
+        className="size-16 rounded-full text-title font-medium"
       />
       <div className="min-w-0 flex-1 space-y-1">
         <div className="truncate text-title font-medium text-foreground">{displayName}</div>
@@ -184,42 +186,4 @@ function AccountProfileHeader({
       </div>
     </div>
   );
-}
-
-function AccountAvatar({
-  avatarUrl,
-  displayName,
-}: {
-  avatarUrl: string | null;
-  displayName: string;
-}) {
-  const [avatarFailed, setAvatarFailed] = useState(false);
-  const showAvatar = Boolean(avatarUrl) && !avatarFailed;
-
-  return (
-    <div className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border-light bg-surface-control text-title font-medium text-muted-foreground">
-      {showAvatar ? (
-        <img
-          src={avatarUrl ?? ""}
-          alt={`${displayName} profile`}
-          className="size-full object-cover"
-          referrerPolicy="no-referrer"
-          onError={() => setAvatarFailed(true)}
-        />
-      ) : (
-        <span>{initialsForName(displayName)}</span>
-      )}
-    </div>
-  );
-}
-
-function initialsForName(name: string): string {
-  const parts = name
-    .split(/\s+/u)
-    .map((part) => part.trim())
-    .filter(Boolean);
-  if (parts.length >= 2) {
-    return `${parts[0]?.[0] ?? ""}${parts[1]?.[0] ?? ""}`.toUpperCase();
-  }
-  return (parts[0]?.slice(0, 2) || "P").toUpperCase();
 }

@@ -1,12 +1,9 @@
-import {
-  CloudChatAssistantLoadingRow,
-  CloudChatThoughtRow,
-} from "@proliferate/product-ui/chat/transcript/CloudChatTranscriptRowItems";
-import { CloudChatSurface } from "@proliferate/product-ui/chat/CloudChatSurface";
 import { SessionCheckScreen } from "#product/components/auth/SessionCheckScreen";
 import { SkeletonBlock, shimmerDelay } from "#product/components/feedback/Skeleton";
 import { ThinkingText } from "#product/components/feedback/ThinkingText";
 import { LoadingState } from "#product/components/feedback/LoadingIllustration";
+import { ChatLoadingHero } from "#product/components/workspace/chat/surface/ChatLoadingHero";
+import { ChatPreMessageCanvas } from "#product/components/workspace/chat/surface/ChatPreMessageCanvas";
 import { PlaygroundThinkingTimingControls } from "#product/components/playground/loading/PlaygroundThinkingTimingControls";
 import { StreamingIndicator } from "#product/components/workspace/chat/transcript/StreamingIndicator";
 import { TranscriptSwitchingPlaceholder } from "#product/components/workspace/chat/surface/TranscriptSwitchingPlaceholder";
@@ -20,32 +17,11 @@ export function PlaygroundLoadingStates() {
           <TranscriptSwitchingPlaceholder label="Desktop switching alignment" />
         </div>
         <div className="flex flex-col overflow-hidden rounded-md border border-border" style={{ height: "22rem" }}>
-          <CloudChatSurface
-            header={{
-              workspaceLabel: "Typography",
-              status: { label: "Loading", tone: "info", live: true },
-              sessionSwitcher: {
-                workspaceLabel: "Typography",
-                activeSessionId: "session-1",
-                activeSessionLabel: "Layout alignment",
-                sessions: [{ id: "session-1", label: "Layout alignment" }],
-                newSessionLabel: "New session",
-                onSelectSession: () => {},
-                onNewSession: () => {},
-              },
-            }}
-            transcriptRows={[]}
-            transcriptLoading
-            emptyTitle="No transcript yet"
-            composer={{
-              value: "",
-              placeholder: "Describe a task",
-              canSubmit: false,
-              controls: [],
-              onChange: () => {},
-              onSubmit: () => {},
-            }}
-          />
+          {/* The REAL "session-loading" chat surface — ChatView routes here
+              while a session is loading/hydrating. No fixture-only clone. */}
+          <ChatPreMessageCanvas bottomInsetPx={0}>
+            <ChatLoadingHero />
+          </ChatPreMessageCanvas>
         </div>
       </section>
 
@@ -73,35 +49,6 @@ export function PlaygroundLoadingStates() {
             <SkeletonBlock className="h-3 w-5/6 bg-muted/45" style={shimmerDelay(2)} />
             <SkeletonBlock className="h-3 w-1/2 bg-muted/35" style={shimmerDelay(3)} />
           </div>
-        </div>
-      </section>
-
-      {/* The REAL shared cloud-transcript rows (product-ui): the assistant
-          loading row and a live thought row both ride the same ThinkingText
-          band sweep as the desktop transcript. */}
-      <section className="space-y-3">
-        <h2 className="text-heading font-medium text-foreground">
-          Cloud transcript thinking rows
-        </h2>
-        <div className="flex flex-col gap-1 rounded-md border border-border p-4">
-          <CloudChatAssistantLoadingRow
-            row={{ id: "playground-loading", kind: "assistant", streaming: true }}
-          />
-          <CloudChatThoughtRow
-            row={{
-              id: "playground-thought-live",
-              kind: "thought",
-              streaming: true,
-              body: "Weighing the trade-offs between the two dock-slot owners.",
-            }}
-          />
-          <CloudChatThoughtRow
-            row={{
-              id: "playground-thought-done",
-              kind: "thought",
-              body: "Chose the compact row migration.",
-            }}
-          />
         </div>
       </section>
 
