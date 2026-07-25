@@ -192,8 +192,9 @@ Resolution from a cloud workspace to a live connection is one chain
    `accessToken` → `authToken` and hands it to the same generic client.
 
 Retry is uniform and typed: `workspace_not_ready`, any 5xx, and network
-`TypeError` are retryable, 8 attempts at 750 ms, wired identically into
-the direct wrapper and the React Query options (30 s staleTime). Long-open
+`TypeError` are retryable, 8 retries at 750 ms after the first attempt,
+wired identically into the direct wrapper and the React Query options
+(30 s staleTime). Long-open
 transports re-resolve on failure — a terminal socket dropping invalidates
 the cached connection and refetches; chat SSE reconnects with exponential
 backoff capped at 15 s from its last durable sequence. Before any fresh
@@ -243,7 +244,7 @@ apps/packages/product-client/src/
 ├── lib/access/cloud/
 │   ├── cloud-sandbox-gateway.ts              connection resolution + token refresh
 │   ├── sandbox-gateway-access.ts             host-armed token pointer
-│   └── workspace-connection-retry.ts         typed retry policy (8 × 750 ms)
+│   └── workspace-connection-retry.ts         typed retry policy (8 retries × 750 ms)
 └── providers/CloudAnyHarnessRuntimeProvider.tsx  per-request bearer injection
 anyharness/sdk/src/streams/
 ├── sessions.ts                               chat SSE (header auth, after_seq resume)
