@@ -41,8 +41,9 @@ Config laws, enforced by review (the file's comments restate them):
   manifest, never invented. The manifest also prices spend for usage
   import; an unknown id can pass traffic while mispricing it.
 - Every entry carries `model_info: {access_groups: [...]}` naming the
-  harness group(s) it belongs to (`claude-code`, `codex`, `opencode`,
-  `cursor`, `grok-cli`); see LiteLLM's
+  harness group(s) it belongs to. Group names are exactly the harness
+  `harness_kind` identifiers (`claude`, `codex`, `opencode`, `cursor`,
+  `grok`) — no translation table; see LiteLLM's
   [model access groups](https://docs.litellm.ai/docs/proxy/model_access_groups).
   This one reviewed file is therefore also the harness-to-model map; no
   client-side model filtering exists anywhere.
@@ -116,7 +117,7 @@ subject; the budget lives on the team and mirrors the subject's remaining
 credit. Inside the team, one
 [virtual key](https://docs.litellm.ai/docs/proxy/virtual_keys) per
 (subject, harness), each granted its harness's access group by name
-(`{"models": ["claude-code"]}` at `/key/generate`). The key is the whole
+(`{"models": ["claude"]}` at `/key/generate`). The key is the whole
 differentiator: one deployment, one public URL, and what a key can see and
 invoke is determined proxy-side by its group grant and team budget.
 
