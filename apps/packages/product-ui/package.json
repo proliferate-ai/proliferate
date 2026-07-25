@@ -27,10 +27,6 @@
       "types": "./dist/code/CodeBlockTokenContent.d.ts",
       "import": "./dist/code/CodeBlockTokenContent.js"
     },
-    "./code/VirtualizedCodeContent": {
-      "types": "./dist/code/VirtualizedCodeContent.d.ts",
-      "import": "./dist/code/VirtualizedCodeContent.js"
-    },
     "./activity/GoalBar": {
       "types": "./dist/activity/GoalBar.d.ts",
       "import": "./dist/activity/GoalBar.js"
@@ -58,14 +54,6 @@
     "./activity/AgentsRosterPanel": {
       "types": "./dist/activity/AgentsRosterPanel.d.ts",
       "import": "./dist/activity/AgentsRosterPanel.js"
-    },
-    "./account/AccountIdentityCard": {
-      "types": "./dist/account/AccountIdentityCard.d.ts",
-      "import": "./dist/account/AccountIdentityCard.js"
-    },
-    "./account/ConnectedProviderRow": {
-      "types": "./dist/account/ConnectedProviderRow.d.ts",
-      "import": "./dist/account/ConnectedProviderRow.js"
     },
     "./account/AccountSettingsPane": {
       "types": "./dist/account/AccountSettingsPane.d.ts",
@@ -139,10 +127,6 @@
       "types": "./dist/billing/BillingOwnerCard.d.ts",
       "import": "./dist/billing/BillingOwnerCard.js"
     },
-    "./brand/ProliferateMark": {
-      "types": "./dist/brand/ProliferateMark.d.ts",
-      "import": "./dist/brand/ProliferateMark.js"
-    },
     "./brand/ProliferateLivingMark": {
       "types": "./dist/brand/ProliferateLivingMark.d.ts",
       "import": "./dist/brand/ProliferateLivingMark.js"
@@ -150,10 +134,6 @@
     "./chat/ClaimBanner": {
       "types": "./dist/chat/ClaimBanner.d.ts",
       "import": "./dist/chat/ClaimBanner.js"
-    },
-    "./chat/ChatPreviewSurface": {
-      "types": "./dist/chat/ChatPreviewSurface.d.ts",
-      "import": "./dist/chat/ChatPreviewSurface.js"
     },
     "./chat/ChatColumn": {
       "types": "./dist/chat/ChatColumn.d.ts",
@@ -251,14 +231,6 @@
       "types": "./dist/layout/ProductPageShell.d.ts",
       "import": "./dist/layout/ProductPageShell.js"
     },
-    "./settings/InstallGate": {
-      "types": "./dist/settings/InstallGate.d.ts",
-      "import": "./dist/settings/InstallGate.js"
-    },
-    "./settings/ModelConfigGrid": {
-      "types": "./dist/settings/ModelConfigGrid.d.ts",
-      "import": "./dist/settings/ModelConfigGrid.js"
-    },
     "./settings/ModelTable": {
       "types": "./dist/settings/ModelTable.d.ts",
       "import": "./dist/settings/ModelTable.js"
@@ -295,10 +267,6 @@
       "types": "./dist/settings/SettingsSaveFooter.d.ts",
       "import": "./dist/settings/SettingsSaveFooter.js"
     },
-    "./settings/SettingsShell": {
-      "types": "./dist/settings/SettingsShell.d.ts",
-      "import": "./dist/settings/SettingsShell.js"
-    },
     "./settings/OrganizationSsoSettingsSurface": {
       "types": "./dist/settings/OrganizationSsoSettingsSurface.d.ts",
       "import": "./dist/settings/OrganizationSsoSettingsSurface.js"
@@ -306,14 +274,6 @@
     "./secrets/SecretManagementPanel": {
       "types": "./dist/secrets/SecretManagementPanel.d.ts",
       "import": "./dist/secrets/SecretManagementPanel.js"
-    },
-    "./sidebar/ProductSidebar": {
-      "types": "./dist/sidebar/ProductSidebar.d.ts",
-      "import": "./dist/sidebar/ProductSidebar.js"
-    },
-    "./sidebar/ProductSidebarFooter": {
-      "types": "./dist/sidebar/ProductSidebarFooter.d.ts",
-      "import": "./dist/sidebar/ProductSidebarFooter.js"
     },
     "./sidebar/ProductSidebarLayout": {
       "types": "./dist/sidebar/ProductSidebarLayout.d.ts",
@@ -367,10 +327,6 @@
       "types": "./dist/environments/ScriptBlock.d.ts",
       "import": "./dist/environments/ScriptBlock.js"
     },
-    "./workspaces/WorkspaceRow": {
-      "types": "./dist/workspaces/WorkspaceRow.d.ts",
-      "import": "./dist/workspaces/WorkspaceRow.js"
-    },
     "./workspaces/WorkspaceReconciliationBody": {
       "types": "./dist/workspaces/WorkspaceReconciliationBody.d.ts",
       "import": "./dist/workspaces/WorkspaceReconciliationBody.js"
@@ -383,17 +339,9 @@
       "types": "./dist/workspaces/PrStatusBadge.d.ts",
       "import": "./dist/workspaces/PrStatusBadge.js"
     },
-    "./workspaces/CloudWorkspaceList": {
-      "types": "./dist/workspaces/CloudWorkspaceList.d.ts",
-      "import": "./dist/workspaces/CloudWorkspaceList.js"
-    },
     "./workspaces/WorkspaceInventory": {
       "types": "./dist/workspaces/WorkspaceInventory.d.ts",
       "import": "./dist/workspaces/WorkspaceInventory.js"
-    },
-    "./workspaces/WorkspacesSurface": {
-      "types": "./dist/workspaces/WorkspacesSurface.d.ts",
-      "import": "./dist/workspaces/WorkspacesSurface.js"
     },
     "./workspaces/WorkspacesCommandList": {
       "types": "./dist/workspaces/WorkspacesCommandList.d.ts",
