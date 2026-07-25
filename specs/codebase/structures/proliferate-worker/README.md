@@ -136,7 +136,6 @@ For behavior outside the crate, use the current owners:
 - [AnyHarness structure](../anyharness/README.md)
 - [Sandbox provisioning](../../platforms/product/sandbox-provisioning.md)
 - [Repository environments and workspace provisioning](../../platforms/product/workspace-provisioning.md)
-- [Workspace lifecycle](../../platforms/product/workspace-lifecycle.md)
 - [Billing](../../platforms/product/billing.md)
 
 ## Dependency Direction

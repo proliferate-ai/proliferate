@@ -248,9 +248,8 @@ bounded number of branch-uniqueness races.
   AnyHarness workspace ids unchanged, without guaranteeing those ids remain
   reachable.
 
-The broader desired lifecycle remains explicitly labeled as a target in
-[Workspace lifecycle](workspace-lifecycle.md). Do not treat its unimplemented
-portions as current creation behavior.
+The broader desired lifecycle has no current document; the stale target spec
+was removed and a rewrite is planned as part of the sandbox spec program.
 
 ## Ownership Map
 

@@ -11,7 +11,8 @@ Depends on: [`sandbox-provisioning.md`](../../../platforms/product/sandbox-provi
 [`mcp-skills.md`](../../../platforms/product/mcp-skills.md),
 the agent auth platform (document removed; rewrite planned),
 [`settings-admin-ia.md`](../settings/information-architecture.md),
-[`claiming.md`](../../../platforms/product/claiming.md).
+the claiming platform (document removed; the claim/exposure substrate this
+spec builds on was reverted from the codebase).
 
 Automations are scheduled or manually-triggered work that uses the
 same sandbox profile, runtime config, agent auth, command queue,
