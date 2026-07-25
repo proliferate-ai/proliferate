@@ -11,10 +11,6 @@
       "types": "./dist/settings/BillingSettingsSurface.d.ts",
       "import": "./dist/settings/BillingSettingsSurface.js"
     },
-    "./settings/CloudSecretsSettingsSurface": {
-      "types": "./dist/settings/CloudSecretsSettingsSurface.d.ts",
-      "import": "./dist/settings/CloudSecretsSettingsSurface.js"
-    },
     "./settings/CloudOrganizationSsoSettingsSurface": {
       "types": "./dist/settings/CloudOrganizationSsoSettingsSurface.d.ts",
       "import": "./dist/settings/CloudOrganizationSsoSettingsSurface.js"
