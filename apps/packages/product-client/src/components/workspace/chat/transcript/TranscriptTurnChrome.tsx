@@ -24,8 +24,17 @@ export type PendingInteractionMarkerKind = "permission" | "question";
 
 const TURN_HORIZONTAL_PADDING = "px-0";
 const ASSISTANT_ACTION_SLOT_HEIGHT = "h-6";
-/** Exact Codex conversation-item rhythm shared by pending and materialized turns. */
-export const TURN_ITEM_GAP_CLASS = "gap-4";
+/**
+ * Exact Codex conversation-item rhythm shared by pending and materialized
+ * turns. [CHAT-04] RULED block: that rhythm is the 12px
+ * `--spacing-transcript-turn` token (Codex's virtualized turn stack sits at an
+ * inline 12px gap), not the former 16px `gap-4`. This constant is the LIVE
+ * transcript's turn stack — every real chat surface (MessageList →
+ * TurnItemSequence, TranscriptTurnRow, TranscriptPendingPromptRow,
+ * ToolCallSummary, ChatLaunchIntentPane) reads it — so the token has to land
+ * here and not only in the playground-only CloudChatTranscriptRows.
+ */
+export const TURN_ITEM_GAP_CLASS = "gap-transcript-turn";
 
 export function TurnShell({
   children,

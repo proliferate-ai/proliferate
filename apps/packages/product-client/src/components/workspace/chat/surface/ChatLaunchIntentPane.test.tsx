@@ -61,7 +61,7 @@ describe("ChatLaunchIntentPane", () => {
     expect(anchorFrame?.className ?? "").not.toContain("mt-auto");
     expect(anchorFrame?.parentElement?.className).toContain("flex");
     expect(anchorFrame?.parentElement?.className).toContain("min-h-full");
-    expect(turn?.className).toContain("gap-4");
+    expect(turn?.className).toContain("gap-transcript-turn");
     expect(statusFrame?.className).toContain("h-6");
     expect(frontier?.nextElementSibling).toBe(footer);
     expect(footer?.querySelector("[data-turn-assistant-footer-slot]")?.className).toContain("h-6");

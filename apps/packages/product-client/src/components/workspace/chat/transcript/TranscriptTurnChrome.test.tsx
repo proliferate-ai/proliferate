@@ -18,8 +18,10 @@ afterEach(() => {
 });
 
 describe("TurnShell", () => {
-  it("shares Codex's 16px item gap across pending and materialized turns", () => {
-    expect(TURN_ITEM_GAP_CLASS).toBe("gap-4");
+  it("shares the ruled 12px transcript-turn token across pending and materialized turns", () => {
+    // [CHAT-04] RULED: the live transcript's turn rhythm is the
+    // --spacing-transcript-turn token (12px), not a raw gap-4 (16px).
+    expect(TURN_ITEM_GAP_CLASS).toBe("gap-transcript-turn");
   });
 
   it("uses one vertical rhythm for every row", () => {
