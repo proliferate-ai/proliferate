@@ -186,7 +186,7 @@ function ConnectedServiceRow({
   service: AccountConnectedServiceView;
 }) {
   return (
-    <div className="flex flex-col gap-3 border-b border-border-light px-3 py-2.5 text-sm last:border-b-0 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex flex-col gap-3 border-t border-border py-2.5 text-sm first:border-t-0 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0 space-y-1">
         <div className="flex flex-wrap items-center gap-2 font-medium text-foreground">
           <span>{service.label}</span>
@@ -222,7 +222,7 @@ function AccountProfileHeader({
   profileSummary: string;
 }) {
   return (
-    <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center">
+    <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
       <AccountAvatar
         key={avatarUrl ?? "account-avatar"}
         avatarUrl={avatarUrl}
@@ -294,7 +294,7 @@ function ProviderRow({ provider }: { provider: AccountProviderView }) {
     : "Not connected";
 
   return (
-    <div className="flex items-center justify-between gap-3 border-b border-border-light px-3 py-2.5 text-sm last:border-b-0">
+    <div className="flex items-center justify-between gap-3 border-t border-border py-2.5 text-sm first:border-t-0">
       <div className="min-w-0">
         <div className="flex items-center gap-2 font-medium text-foreground">
           <ProviderBrandIcon

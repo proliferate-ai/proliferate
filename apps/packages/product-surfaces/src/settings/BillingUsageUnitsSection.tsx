@@ -26,25 +26,19 @@ export function BillingUsageUnitsSection({
   addCreditsDisabled: boolean;
 }) {
   return (
-    <SettingsSection>
-      <div className="space-y-6 p-5">
-        <div className="space-y-1.5">
-          <h2 className="text-lg font-semibold text-foreground">Usage units</h2>
-          <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-            Compute units and LLM credits are tracked, budgeted, and topped up separately.
-          </p>
-        </div>
-
-        <div className="grid gap-4">
-          {unitBalances.map((unitBalance) => (
-            <BillingUnitPoolCard
-              key={unitBalance.kind}
-              unitBalance={unitBalance}
-              addCreditsLoading={addCreditsLoading}
-              addCreditsDisabled={addCreditsDisabled}
-            />
-          ))}
-        </div>
+    <SettingsSection
+      title="Usage units"
+      description="Compute units and LLM credits are tracked, budgeted, and topped up separately."
+    >
+      <div className="grid gap-4 pt-2">
+        {unitBalances.map((unitBalance) => (
+          <BillingUnitPoolCard
+            key={unitBalance.kind}
+            unitBalance={unitBalance}
+            addCreditsLoading={addCreditsLoading}
+            addCreditsDisabled={addCreditsDisabled}
+          />
+        ))}
       </div>
     </SettingsSection>
   );

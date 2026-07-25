@@ -57,7 +57,7 @@ export function BillingOwnerCard({ view }: { view: BillingOwnerCardView }) {
 
   return (
     <SettingsSection>
-      <div className="space-y-5 p-4">
+      <div className="space-y-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex min-w-0 gap-3">
             <div className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border-light bg-foreground/5 text-muted-foreground">
@@ -98,7 +98,7 @@ export function BillingOwnerCard({ view }: { view: BillingOwnerCardView }) {
           />
         ) : null}
 
-        <div className="space-y-3 border-t border-border-light pt-4">
+        <div className="space-y-3 border-t border-border pt-4">
           <div className="grid gap-3 sm:grid-cols-3">
             <Metric
               icon={<CreditCard className="size-4" />}
@@ -155,7 +155,7 @@ export function BillingOwnerCard({ view }: { view: BillingOwnerCardView }) {
         <CreditGrantBreakdown plan={plan} />
 
         {overage ? (
-          <div className="flex flex-col gap-3 border-t border-border-light pt-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0 space-y-1">
               <div className="flex items-center gap-2 text-sm font-medium text-foreground">
                 {overage.title}

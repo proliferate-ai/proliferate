@@ -28,9 +28,8 @@ export function BillingPlanCard({
   onManage: () => void;
 }) {
   return (
-    <SettingsSection>
-      <div className="space-y-4 p-5">
-        <h2 className="text-lg font-semibold text-foreground">Plan</h2>
+    <SettingsSection title="Plan">
+      <div className="space-y-4 pt-1">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0 space-y-1">
             <div className="flex flex-wrap items-center gap-1.5">
@@ -75,15 +74,11 @@ export function BillingAutoTopUpCard({
   onEnabledChange: (value: boolean) => void;
 }) {
   return (
-    <SettingsSection>
-      <div className="space-y-6 p-5">
-        <div className="space-y-1.5">
-          <h2 className="text-lg font-semibold text-foreground">Auto top-up</h2>
-          <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-            Automatically replenish compute units and LLM credits from their own thresholds.
-          </p>
-        </div>
-
+    <SettingsSection
+      title="Auto top-up"
+      description="Automatically replenish compute units and LLM credits from their own thresholds."
+    >
+      <div className="space-y-6 pt-1">
         <div className="flex items-center gap-3">
           <Switch
             checked={enabled}
@@ -122,14 +117,11 @@ export function BillingPortalCard({
   onOpenPortal: () => void;
 }) {
   return (
-    <SettingsSection>
-      <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0 space-y-1.5">
-          <h2 className="text-lg font-semibold text-foreground">Billing</h2>
-          <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-            View invoices, update payment methods, and manage cancellation in Stripe.
-          </p>
-        </div>
+    <SettingsSection
+      title="Billing"
+      description="View invoices, update payment methods, and manage cancellation in Stripe."
+    >
+      <div className="pt-1">
         <Button
           type="button"
           variant="primary"
