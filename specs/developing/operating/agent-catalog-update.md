@@ -86,6 +86,26 @@ in `registry.json`, which is hand-edited and reviewed like code:
    there is no live push for the method document. Plan for the change to
    take effect at the next release train, not the next heartbeat.
 
+ACP adapter bumps are a case of this flow, and the work depends on where
+the adapter comes from:
+
+- Forked adapters (claude's `claude-agent-acp` git pin, codex's
+  `@proliferate-ai/codex-acp` npm pin) are carried verbatim by the
+  resolver — it never checks whether the fork moved. Bumping one is a
+  two-repo operation: first land the change in the fork and produce a
+  new pinnable artifact (a merged commit SHA for claude's; a published
+  `@proliferate-ai/codex-acp@x.y.z-proliferate.N` for codex's), then
+  edit the pin in `registry.json` and follow the steps above.
+- Registry-backed adapters (cursor, opencode, grok) resolve from the
+  public ACP registry, so upstream adapter movement arrives in the
+  nightly probe PR with no registry edit.
+
+An adapter bump that chases a native CLI change needs no extra
+sequencing inside the catalog: the focused `catalog-update` installs the
+new adapter and native pins together and probes them over ACP as a
+pair, so a mismatched adapter/CLI combination fails the probe and never
+promotes.
+
 ## Roll back
 
 Revert the catalog PR, or repin the fleet to the previous runtime
