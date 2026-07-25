@@ -71,34 +71,6 @@
       "types": "./dist/auth/RedirectCallbackScreen.d.ts",
       "import": "./dist/auth/RedirectCallbackScreen.js"
     },
-    "./automations/AutomationCreatePanel": {
-      "types": "./dist/automations/AutomationCreatePanel.d.ts",
-      "import": "./dist/automations/AutomationCreatePanel.js"
-    },
-    "./automations/AutomationDetailSurface": {
-      "types": "./dist/automations/AutomationDetailSurface.d.ts",
-      "import": "./dist/automations/AutomationDetailSurface.js"
-    },
-    "./automations/AutomationCalendarView": {
-      "types": "./dist/automations/AutomationCalendarView.d.ts",
-      "import": "./dist/automations/AutomationCalendarView.js"
-    },
-    "./automations/AutomationInventoryList": {
-      "types": "./dist/automations/AutomationInventoryList.d.ts",
-      "import": "./dist/automations/AutomationInventoryList.js"
-    },
-    "./automations/AutomationRunsList": {
-      "types": "./dist/automations/AutomationRunsList.d.ts",
-      "import": "./dist/automations/AutomationRunsList.js"
-    },
-    "./automations/AutomationStatusGlyph": {
-      "types": "./dist/automations/AutomationStatusGlyph.d.ts",
-      "import": "./dist/automations/AutomationStatusGlyph.js"
-    },
-    "./automations/AutomationSurface": {
-      "types": "./dist/automations/AutomationSurface.d.ts",
-      "import": "./dist/automations/AutomationSurface.js"
-    },
     "./workflows/WorkflowDefinitionEditor": {
       "types": "./dist/workflows/WorkflowDefinitionEditor.d.ts",
       "import": "./dist/workflows/WorkflowDefinitionEditor.js"
