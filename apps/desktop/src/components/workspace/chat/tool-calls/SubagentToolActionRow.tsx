@@ -98,7 +98,7 @@ export function SubagentToolActionRow({
       <div
         {...(expandable ? { "data-chat-transcript-ignore": true } : {})}
         className={`group/subagent-action inline-flex min-w-0 max-w-full items-center gap-1 overflow-hidden whitespace-nowrap rounded-none bg-transparent p-0 text-left ${CHAT_ACTION_TEXT_CLASS} font-normal ${
-          failed ? "text-destructive/80" : "text-muted-foreground/60"
+          failed ? "text-destructive/80" : "text-foreground/60"
         }`}
       >
         {expandable && (

@@ -67,6 +67,8 @@ describe("ProviderLinkMention", () => {
     );
     expect(html).toContain("data-provider-link-host=\"github.com\"");
     expect(html).toContain("PR #737");
+    expect(html).toContain("--chat-inline-mention-icon-size");
+    expect(html).toContain("0.875rem");
     expect(html).not.toContain("favicon.ico");
   });
 

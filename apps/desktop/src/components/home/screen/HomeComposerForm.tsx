@@ -204,7 +204,7 @@ export function HomeComposerForm({
       {composer.submittedPreview ? (
         <div
           key={composer.submittedPreview.id}
-          className="mt-5"
+          className="chat-transcript-typography mt-5"
           data-home-submit-preview
         >
           <UserMessage

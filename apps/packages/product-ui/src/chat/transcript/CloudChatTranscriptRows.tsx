@@ -23,7 +23,7 @@ export function CloudChatTranscriptRows({
   planActions,
 }: CloudChatTranscriptRowsProps) {
   return (
-    <div className="space-y-4">
+    <div className="chat-transcript-typography space-y-4">
       {rows.map((row) => (
         <CloudChatTranscriptRow key={row.id} row={row} planActions={planActions} />
       ))}

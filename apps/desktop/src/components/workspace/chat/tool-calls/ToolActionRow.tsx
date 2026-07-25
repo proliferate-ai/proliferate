@@ -1,4 +1,5 @@
 import { useState, type KeyboardEvent, type ReactNode } from "react";
+import { ChevronRight } from "@proliferate/ui/icons";
 
 export type ToolActionStatus = "running" | "completed" | "failed";
 
@@ -60,7 +61,7 @@ export function ToolActionRow({
           className={`group/tool-action-row inline-flex min-w-0 max-w-full cursor-pointer items-center gap-1 rounded-none bg-transparent p-0 text-left text-chat leading-[var(--text-chat--line-height)] font-normal outline-none focus-visible:underline ${
             status === "failed"
               ? "text-destructive/80 hover:text-destructive"
-              : "text-muted-foreground/60 hover:text-foreground"
+              : "text-foreground/60 hover:text-foreground"
           }`}
           onClick={() => setExpanded(!expanded)}
           onKeyDown={handleKeyDown}
@@ -77,7 +78,7 @@ export function ToolActionRow({
       ) : (
         <div
           className={`inline-flex min-w-0 max-w-full items-center gap-1 text-chat leading-[var(--text-chat--line-height)] ${
-            status === "failed" ? "text-destructive/80" : "text-muted-foreground/60"
+            status === "failed" ? "text-destructive/80" : "text-foreground/60"
           }`}
         >
           <ToolActionRowContent
@@ -116,21 +117,29 @@ function ToolActionRowContent({
 }) {
   return (
     <>
-      <ToolActionLeadingAffordance
-        icon={icon}
-        expandable={expandable}
-        expanded={expanded}
-      />
       <div className="flex min-w-0 flex-1 items-center gap-1.5">
-        <div className="min-w-0 shrink-0 text-inherit">{label}</div>
-        {renderInlineHint(hint)}
-        {duration && (
-          // Inherits the row's text-chat size so status suffixes match the label.
-          <span className="ml-auto shrink-0 text-faint">
-            {duration}
-          </span>
-        )}
+        <ToolActionLeadingAffordance
+          icon={icon}
+          expandable={expandable}
+          expanded={expanded}
+        />
+        <div className="flex min-w-0 flex-1 items-center gap-1.5">
+          <div className="min-w-0 shrink-0 text-inherit">{label}</div>
+          {renderInlineHint(hint)}
+          {duration && (
+            // Inherits the row's text-chat size so status suffixes match the label.
+            <span className="ml-auto shrink-0 text-faint">
+              {duration}
+            </span>
+          )}
+        </div>
       </div>
+      {expandable && (
+        <ChevronRight
+          aria-hidden="true"
+          className={`size-3.5 shrink-0 text-foreground/40 opacity-0 transition-[opacity,transform] group-hover/tool-action-row:opacity-100 group-focus-visible/tool-action-row:opacity-100 ${expanded ? "rotate-90" : ""}`}
+        />
+      )}
     </>
   );
 }
@@ -145,14 +154,14 @@ export function ToolActionLeadingAffordance({
   expanded: boolean;
 }) {
   return (
-    <span className="relative flex h-3 w-3 shrink-0 items-center justify-center">
+    <span className="relative flex size-4 shrink-0 items-center justify-center">
       <span
-        className={`absolute inset-0 flex items-center justify-center text-xs leading-none transition-colors [&_svg]:size-2.5 ${
+        className={`absolute inset-0 flex items-center justify-center text-xs leading-none transition-colors [&_svg]:size-4 ${
           expanded
             ? "[&_svg]:text-foreground/75"
             : expandable
-              ? "[&_svg]:text-faint group-hover/tool-action-row:[&_svg]:text-muted-foreground group-focus-visible/tool-action-row:[&_svg]:text-muted-foreground"
-              : "[&_svg]:text-faint"
+              ? "[&_svg]:text-foreground/60 group-hover/tool-action-row:[&_svg]:text-foreground group-focus-visible/tool-action-row:[&_svg]:text-foreground"
+              : "[&_svg]:text-foreground/60"
         }`}
       >
         {icon}
@@ -169,13 +178,13 @@ function renderInlineHint(hint?: ReactNode) {
   if (typeof hint === "string" || typeof hint === "number") {
     // Codex parity: commands/paths render as flat muted mono text in the row —
     // no chip/pill chrome (codex mono = `--codex-chat-code-font-size`, one step
-    // under chat text; ours = `--text-chat-meta`, which tracks the transcript's
-    // chat size minus 2px). Color inherits so hover brightens the command
+    // under chat text; ours = `--text-chat-code`, which tracks the transcript's
+    // chat size minus 1px). Color inherits so hover brightens the command
     // together with the label.
     return (
       <span
         title={String(hint)}
-        className="max-w-[280px] min-w-0 shrink truncate text-[length:var(--text-chat-meta,11px)] leading-none text-current"
+        className="max-w-[280px] min-w-0 shrink truncate font-mono text-[length:var(--text-chat-code,var(--text-chat))] leading-[var(--text-chat-code--line-height,var(--text-chat--line-height))] text-current"
       >
         {hint}
       </span>

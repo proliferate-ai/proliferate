@@ -34,6 +34,15 @@ afterEach(() => {
 });
 
 describe("FullTranscriptRowList", () => {
+  it("scopes the reference transcript typography to the message column", () => {
+    const { container } = render(<FullTranscriptRowList {...makeProps(vi.fn(), 50)} />);
+
+    expect(
+      container.querySelector("[data-chat-transcript-root]")?.classList
+        .contains("chat-transcript-typography"),
+    ).toBe(true);
+  });
+
   it("continues from a newer older-history cursor while pinned at the top", async () => {
     const onLoadOlderHistory = vi.fn();
     const props = makeProps(onLoadOlderHistory, 50);

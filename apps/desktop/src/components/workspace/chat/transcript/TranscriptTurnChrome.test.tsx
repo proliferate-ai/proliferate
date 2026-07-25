@@ -4,6 +4,7 @@ import { cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   PendingInteractionMarkerView,
+  TRAILING_STATUS_MIN_HEIGHT,
   TurnAssistantActionRow,
   TurnGoalMetMarker,
   TurnShell,
@@ -17,6 +18,12 @@ afterEach(() => {
 });
 
 describe("TurnShell", () => {
+  it("reserves one assistant line, the compact gap, and the action rail", () => {
+    expect(TRAILING_STATUS_MIN_HEIGHT).toBe(
+      "min-h-[calc(var(--text-message--line-height)+26px)]",
+    );
+  });
+
   it("uses one vertical rhythm for every row", () => {
     const { container } = render(
       <TurnShell>
@@ -24,8 +31,8 @@ describe("TurnShell", () => {
       </TurnShell>,
     );
 
-    expect(container.innerHTML).toContain("pt-2");
-    expect(container.innerHTML).toContain("pb-2");
+    expect(container.innerHTML).toContain("pt-1.5");
+    expect(container.innerHTML).toContain("pb-1.5");
   });
 
   it("drops top padding on the first row only", () => {
@@ -36,7 +43,7 @@ describe("TurnShell", () => {
     );
 
     expect(container.innerHTML).toContain("pt-0");
-    expect(container.innerHTML).toContain("pb-2");
+    expect(container.innerHTML).toContain("pb-1.5");
   });
 });
 
@@ -46,14 +53,16 @@ describe("TurnAssistantActionRow", () => {
       <TurnAssistantActionRow content="reply" showCopyButton timestampLabel="5:02pm" />,
     );
     expect(container.innerHTML).toContain("opacity-0 group-hover/turn:opacity-100");
+    expect(container.innerHTML).toContain("group-focus-within/turn:opacity-100");
   });
 
-  it("keeps the copy button persistently visible when alwaysVisible (final message)", () => {
+  it("uses the compact Codex action rail geometry", () => {
     const { container } = render(
-      <TurnAssistantActionRow content="reply" showCopyButton alwaysVisible timestampLabel="5:02pm" />,
+      <TurnAssistantActionRow content="reply" showCopyButton timestampLabel="5:02pm" />,
     );
-    expect(container.innerHTML).toContain("opacity-100");
-    expect(container.innerHTML).not.toContain("opacity-0 group-hover/turn");
+    expect(container.innerHTML).toContain("-mt-2.5");
+    expect(container.innerHTML).toContain("h-5");
+    expect(container.querySelector("button")?.className).toContain("size-5");
   });
 
   it("renders the goal-met marker between the copy button and the timestamp", () => {
@@ -61,7 +70,6 @@ describe("TurnAssistantActionRow", () => {
       <TurnAssistantActionRow
         content="reply"
         showCopyButton
-        alwaysVisible
         timestampLabel="5:02pm"
         metMarker={<TurnGoalMetMarker label="Goal achieved in 40s" />}
       />,

@@ -13,6 +13,9 @@ import {
 import {
   blockBelongsToCompletedHistory,
 } from "@proliferate/product-domain/chats/transcript/transcript-rendering";
+import {
+  resolveCompletedWorkHistoryLabel,
+} from "@proliferate/product-domain/chats/transcript/transcript-action-time";
 import type { TurnPresentation } from "@proliferate/product-domain/chats/transcript/transcript-presentation";
 import {
   getTurnDisplayBlockKey,
@@ -77,7 +80,7 @@ export function TurnItemSequence({
             <ToolCallSummary
               key={`${turn.turnId}-completed-history`}
               icon={<ClipboardList />}
-              label="Work history"
+              label={resolveCompletedWorkHistoryLabel(turn)}
               summary={formatCollapsedSummary(presentation.completedHistorySummary)}
               typeIcons={buildCollapsedSummaryIcons(presentation.completedHistorySummary)}
               showFinalSeparator={tailAssistantProseRootId !== null}

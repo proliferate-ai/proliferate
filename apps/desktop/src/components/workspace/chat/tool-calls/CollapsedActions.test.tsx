@@ -43,7 +43,7 @@ describe("CollapsedActions", () => {
       read: toolItem("read", "turn-1", 1, "file_read", "in_progress"),
     };
 
-    render(
+    const { container } = render(
       <CollapsedActions
         itemIds={["read"]}
         transcript={transcript}
@@ -52,10 +52,14 @@ describe("CollapsedActions", () => {
     );
 
     expect(screen.queryByText("Reading read.ts")).toBeNull();
+    const chevron = container.querySelector("svg.size-3\\.5");
+    expect(chevron?.classList.contains("opacity-0")).toBe(true);
 
     fireEvent.click(screen.getByRole("button", { name: /Exploring 1 file/i }));
 
     expect(screen.getByText("Reading read.ts")).toBeTruthy();
+    expect(chevron?.classList.contains("rotate-90")).toBe(true);
+    expect(chevron?.classList.contains("opacity-100")).toBe(false);
   });
 
   it("marks active action batches with the live row affordance", () => {
@@ -183,7 +187,7 @@ describe("CollapsedActions", () => {
     expect(html).not.toContain("pl-4");
   });
 
-  it("renders dropdownable command rows brighter than plain ledger rows", () => {
+  it("renders expanded ledger rows at the transcript activity contrast", () => {
     const transcript = createTranscriptState("session-1");
     transcript.itemsById = {
       read: toolItem("read", "turn-1", 1, "file_read"),
@@ -200,8 +204,8 @@ describe("CollapsedActions", () => {
 
     const commandRow = screen.getByRole("button", { name: /Running: pnpm test/i });
     const readRow = screen.getByText("Read read.ts");
-    expect(commandRow.className).toContain("text-muted-foreground/75");
-    expect(readRow.className).toContain("text-muted-foreground/60");
+    expect(commandRow.className).toContain("text-foreground/60");
+    expect(readRow.className).toContain("text-foreground/60");
   });
 
   it("starts grouped edit cards closed inside the expanded action batch", () => {

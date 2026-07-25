@@ -148,4 +148,31 @@ describe("CloudChatTranscript", () => {
     expect(screen.getByText("Second number")).toBeTruthy();
     expect(document.body.innerHTML).toContain("list-decimal");
   });
+
+  it("keeps labels visible for grouped work without expandable details", () => {
+    render(
+      <CloudChatTranscript
+        emptyTitle="No transcript"
+        rows={[
+          {
+            id: "empty-tool-group",
+            kind: "tool_group",
+            title: "Checked the repository",
+          },
+          {
+            id: "empty-history",
+            kind: "system",
+            title: "Work history",
+            detail: "Worked for 4s",
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("Checked the repository")).toBeTruthy();
+    expect(screen.getByText("Worked for 4s")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Checked the repository" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Worked for 4s" })).toBeNull();
+    expect(screen.getByRole("separator", { name: "Final message" })).toBeTruthy();
+  });
 });

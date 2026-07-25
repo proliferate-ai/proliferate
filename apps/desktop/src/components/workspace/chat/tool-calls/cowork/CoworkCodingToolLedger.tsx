@@ -96,7 +96,7 @@ function CodingWorkspaceActionRow({
       variant="ghost"
       size="sm"
       data-chat-transcript-ignore
-      className={`group/action-row h-auto max-w-full justify-start gap-1 rounded-none bg-transparent p-0 text-left ${CHAT_ACTION_TEXT_CLASS} font-normal text-muted-foreground/60 hover:bg-transparent hover:text-foreground focus-visible:ring-0`}
+      className={`group/action-row h-auto max-w-full justify-start gap-1 rounded-none bg-transparent p-0 text-left ${CHAT_ACTION_TEXT_CLASS} font-normal text-foreground/60 hover:bg-transparent hover:text-foreground focus-visible:ring-0`}
       onClick={onOpen}
     >
       <span className="min-w-0 truncate">Created coding workspace</span>
@@ -121,7 +121,7 @@ function PromptActionRow({
         variant="ghost"
         size="sm"
         data-chat-transcript-ignore
-        className={`group/action-row h-auto max-w-full justify-start gap-1 rounded-none bg-transparent p-0 text-left ${CHAT_ACTION_TEXT_CLASS} font-normal text-muted-foreground/60 hover:bg-transparent hover:text-foreground focus-visible:ring-0`}
+        className={`group/action-row h-auto max-w-full justify-start gap-1 rounded-none bg-transparent p-0 text-left ${CHAT_ACTION_TEXT_CLASS} font-normal text-foreground/60 hover:bg-transparent hover:text-foreground focus-visible:ring-0`}
         aria-expanded={expanded}
         onClick={() => setExpanded((next) => !next)}
       >
@@ -143,6 +143,7 @@ function PromptActionRow({
               <div className="px-3 py-2 text-sm leading-relaxed text-muted-foreground">
                 <MarkdownBody
                   content={prompt}
+                  styleVariant="transcript"
                   className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
                   renderCodeBlock={renderDesktopCodeBlock}
                 />
@@ -179,7 +180,7 @@ function CodingSessionActionRow({
       variant="ghost"
       size="sm"
       data-chat-transcript-ignore
-      className={`group/action-row h-auto max-w-full justify-start gap-1 rounded-none bg-transparent p-0 text-left ${CHAT_ACTION_TEXT_CLASS} font-normal text-muted-foreground/60 hover:bg-transparent hover:text-foreground focus-visible:ring-0`}
+      className={`group/action-row h-auto max-w-full justify-start gap-1 rounded-none bg-transparent p-0 text-left ${CHAT_ACTION_TEXT_CLASS} font-normal text-foreground/60 hover:bg-transparent hover:text-foreground focus-visible:ring-0`}
       onClick={onOpen}
     >
       <span className="min-w-0 truncate">Created coding session</span>
@@ -199,7 +200,7 @@ function PlainCoworkCodingActionRow({
     <div
       title={label}
       className={`truncate ${CHAT_ACTION_TEXT_CLASS} ${
-        tone === "failed" ? "text-destructive/80" : "text-muted-foreground/60"
+        tone === "failed" ? "text-destructive/80" : "text-foreground/60"
       }`}
     >
       {label}

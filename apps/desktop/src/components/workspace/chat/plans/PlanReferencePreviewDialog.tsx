@@ -40,6 +40,7 @@ export function PlanReferencePreviewDialog({
           <div className="rounded-lg border border-border/70 bg-card/85 px-4 py-3">
             <PlanMarkdownBody
               content={plan.bodyMarkdown}
+              styleVariant="document"
               renderLink={renderTranscriptLink}
               renderInlineCode={renderTranscriptInlineCode}
               renderCodeBlock={renderTranscriptCodeBlock}

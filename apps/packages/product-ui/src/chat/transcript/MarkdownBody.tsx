@@ -25,6 +25,7 @@ import { MarkdownCodeBlockShell } from "./MarkdownCodeBlock";
 interface MarkdownBodyProps {
   content: string;
   className?: string;
+  styleVariant?: MarkdownBodyStyleVariant;
   renderLink?: MarkdownLinkRenderer;
   renderInlineCode?: MarkdownInlineCodeRenderer;
   renderCodeBlock?: MarkdownCodeBlockRenderer;
@@ -33,6 +34,8 @@ interface MarkdownBodyProps {
   /** Character offset into the source string: text before this was already rendered. */
   revealedUpTo?: number;
 }
+
+export type MarkdownBodyStyleVariant = "document" | "transcript";
 
 /**
  * "inline" keeps GFM task-list checkboxes in the text flow (default chat
@@ -104,6 +107,12 @@ type MdCodeProps = MdElementProps & {
 const PROSE_TEXT =
   "text-[length:var(--prose-text-size,var(--text-chat))] leading-[var(--prose-text-line-height,var(--text-chat--line-height))]";
 
+const DOCUMENT_INLINE_CODE_CLASSNAME =
+  "rounded-sm bg-[var(--color-code-block-background,var(--color-muted))] px-1.5 py-0.5 align-baseline font-mono text-[length:calc(var(--text-chat)-1px)] leading-none text-foreground";
+
+const TRANSCRIPT_INLINE_CODE_CLASSNAME =
+  "rounded-md bg-[var(--color-code-block-background,var(--color-muted))] px-1.5 py-px align-baseline font-mono text-[length:var(--text-chat-code,var(--text-chat))] text-foreground";
+
 const LI_CLASSNAME = `pl-0.5 ${PROSE_TEXT}`;
 
 // Markdown component overrides are the React element *types* for every
@@ -122,7 +131,7 @@ function mdComponent(tag: MdTag, className: string) {
   };
 }
 
-const STATIC_MARKDOWN_COMPONENTS = {
+const DOCUMENT_MARKDOWN_COMPONENTS = {
   h1: mdComponent("h1", "mb-2.5 mt-5 text-[24px] font-semibold leading-[1.25] text-foreground"),
   h2: mdComponent("h2", "mb-2.5 mt-5 text-[20px] font-semibold leading-[1.25] text-foreground"),
   h3: mdComponent("h3", "mb-2.5 mt-5 text-[17px] font-semibold leading-[22px] text-foreground"),
@@ -133,7 +142,10 @@ const STATIC_MARKDOWN_COMPONENTS = {
   ul: mdComponent("ul", `mb-[0.6875rem] mt-0 list-disc pl-[1.3125rem] ${PROSE_TEXT} text-foreground [&>li+li]:mt-2`),
   ol: mdComponent("ol", `mb-[0.6875rem] mt-0 list-decimal pl-[1.3125rem] ${PROSE_TEXT} text-foreground [&>li+li]:mt-2`),
   li: mdComponent("li", LI_CLASSNAME),
-  blockquote: mdComponent("blockquote", `my-3 border-l-2 border-border pl-4 ${PROSE_TEXT} italic text-foreground`),
+  blockquote: mdComponent(
+    "blockquote",
+    `my-3 border-l-2 border-border pl-4 ${PROSE_TEXT} italic text-foreground`,
+  ),
   hr: () => <hr className="my-3 border-border" />,
   table: (props: MdElementProps) => (
     <div
@@ -150,8 +162,53 @@ const STATIC_MARKDOWN_COMPONENTS = {
       </div>
     </div>
   ),
-  th: mdComponent("th", `border-b border-border bg-foreground/5 px-2.5 py-1.5 text-left ${PROSE_TEXT} font-semibold text-foreground`),
-  td: mdComponent("td", `border-b border-border px-2.5 py-1.5 align-top ${PROSE_TEXT}`),
+  th: mdComponent(
+    "th",
+    `border-b border-border bg-foreground/5 px-2.5 py-1.5 text-left ${PROSE_TEXT} font-semibold text-foreground`,
+  ),
+  td: mdComponent(
+    "td",
+    `border-b border-border px-2.5 py-1.5 align-top ${PROSE_TEXT}`,
+  ),
+  pre: ({ children, dangerouslySetInnerHTML, node: _node, ...rest }: MdElementProps & { children?: ReactNode }) => {
+    if (dangerouslySetInnerHTML) {
+      return <pre {...rest} dangerouslySetInnerHTML={dangerouslySetInnerHTML} />;
+    }
+    return <>{children}</>;
+  },
+};
+
+const TRANSCRIPT_MARKDOWN_COMPONENTS = {
+  h1: mdComponent("h1", "mb-2.5 mt-5 text-[24px] font-semibold leading-[1.25] text-foreground"),
+  h2: mdComponent("h2", "mb-2.5 mt-5 text-[20px] font-semibold leading-[1.25] text-foreground"),
+  h3: mdComponent("h3", "mb-2.5 mt-5 text-[17px] font-semibold leading-[22px] text-foreground"),
+  h4: mdComponent("h4", "mb-2.5 mt-5 text-[17px] font-semibold leading-[22px] text-foreground"),
+  h5: mdComponent("h5", "mb-2.5 mt-5 text-[15px] font-semibold leading-5 text-foreground"),
+  h6: mdComponent("h6", "mb-2.5 mt-5 text-[15px] font-semibold leading-5 text-foreground"),
+  p: mdComponent("p", `mb-[0.6875rem] mt-0 ${PROSE_TEXT} text-foreground`),
+  ul: mdComponent("ul", `mb-[0.6875rem] mt-0 list-disc pl-[1.3125rem] ${PROSE_TEXT} text-foreground [&>li+li]:mt-2`),
+  ol: mdComponent("ol", `mb-[0.6875rem] mt-0 list-decimal pl-[1.3125rem] ${PROSE_TEXT} text-foreground [&>li+li]:mt-2`),
+  li: mdComponent("li", LI_CLASSNAME),
+  blockquote: mdComponent(
+    "blockquote",
+    "relative mb-2 mt-0 border-0 py-2 pl-6 text-[length:var(--prose-text-size,var(--text-chat))] leading-6 not-italic text-foreground before:absolute before:inset-y-2 before:left-0 before:w-1 before:rounded-full before:bg-foreground/15 [&>p]:mb-0",
+  ),
+  hr: () => <hr className="my-7 border-0 border-t border-foreground/15 [&+*]:mt-0" />,
+  table: (props: MdElementProps) => (
+    <div
+      className="-mx-4 mb-[0.6875rem] mt-0 overflow-x-auto px-4 sm:-mx-6 sm:px-6"
+      data-wide-markdown-block="true"
+      data-wide-markdown-block-kind="table"
+    >
+      {mdHtmlElement(
+        "table",
+        `w-max min-w-[min(100%,40rem)] border-separate border-spacing-0 ${PROSE_TEXT} [&_tbody_tr:not(:last-child)_td]:border-b [&_tbody_tr:not(:last-child)_td]:border-foreground/[0.04] [&_tbody_tr:last-child_td]:pb-6`,
+        props,
+      )}
+    </div>
+  ),
+  th: mdComponent("th", "border-b border-foreground/15 py-2 pr-6 text-left text-[length:var(--prose-text-size,var(--text-chat))] leading-4 last:pr-10 font-semibold text-foreground"),
+  td: mdComponent("td", `py-2.5 pr-6 align-top last:pr-0 ${PROSE_TEXT}`),
   pre: ({ children, dangerouslySetInnerHTML, node: _node, ...rest }: MdElementProps & { children?: ReactNode }) => {
     if (dangerouslySetInnerHTML) {
       return <pre {...rest} dangerouslySetInnerHTML={dangerouslySetInnerHTML} />;
@@ -295,6 +352,7 @@ function hastTagName(node: ReactElement): string | null {
 export const MarkdownBody = memo(function MarkdownBody({
   content,
   className = "",
+  styleVariant = "document",
   renderLink,
   renderInlineCode,
   renderCodeBlock,
@@ -317,7 +375,9 @@ export const MarkdownBody = memo(function MarkdownBody({
   ].filter(Boolean).join(" ");
 
   const components = useMemo(() => ({
-    ...STATIC_MARKDOWN_COMPONENTS,
+    ...(styleVariant === "transcript"
+      ? TRANSCRIPT_MARKDOWN_COMPONENTS
+      : DOCUMENT_MARKDOWN_COMPONENTS),
     ...(taskListItems === "grid" ? { li: GridTaskListItem } : null),
     a: createMarkdownAnchor(renderLink),
     code: (props: MdCodeProps) => (
@@ -325,9 +385,10 @@ export const MarkdownBody = memo(function MarkdownBody({
         {...props}
         renderInlineCode={renderInlineCode}
         renderCodeBlock={renderCodeBlock}
+        styleVariant={styleVariant}
       />
     ),
-  }), [renderCodeBlock, renderInlineCode, renderLink, taskListItems]);
+  }), [renderCodeBlock, renderInlineCode, renderLink, styleVariant, taskListItems]);
 
   // Build reveal context value. Memoized so a re-render that changes neither
   // flag nor offset doesn't push a fresh object through context; the disabled
@@ -358,14 +419,18 @@ function MarkdownCode({
   dangerouslySetInnerHTML,
   renderInlineCode,
   renderCodeBlock,
+  styleVariant,
   node: _node,
   ...rest
-}: MdCodeProps) {
+}: MdCodeProps & { styleVariant: MarkdownBodyStyleVariant }) {
+  const inlineCodeClassName = styleVariant === "transcript"
+    ? TRANSCRIPT_INLINE_CODE_CLASSNAME
+    : DOCUMENT_INLINE_CODE_CLASSNAME;
   if (dangerouslySetInnerHTML) {
     return (
       <code
         {...rest}
-        className="rounded-sm bg-[var(--color-code-block-background,var(--color-muted))] px-1.5 py-0.5 align-baseline font-mono text-[length:calc(var(--text-chat)-1px)] leading-none text-foreground"
+        className={inlineCodeClassName}
         dangerouslySetInnerHTML={dangerouslySetInnerHTML}
       />
     );
@@ -387,7 +452,7 @@ function MarkdownCode({
   return (
     <code
       {...rest}
-      className="rounded-sm bg-[var(--color-code-block-background,var(--color-muted))] px-1.5 py-0.5 align-baseline font-mono text-[length:calc(var(--text-chat)-1px)] leading-none text-foreground"
+      className={inlineCodeClassName}
     >
       {children}
     </code>
@@ -404,7 +469,7 @@ function markdownUrlTransform(value: string): string {
 // Re-export for downstream consumers that import from this module.
 export { MarkdownCodeBlockShell } from "./MarkdownCodeBlock";
 
-// mdHtmlElement is called from within STATIC_MARKDOWN_COMPONENTS entries,
+// mdHtmlElement is called from within the stable Markdown component maps,
 // which ARE React component functions (hooks-valid call site). Each entry
 // calls useContext(MarkdownRevealContext) and passes the context state so
 // word spans can be applied without rebuilding the components map per render.

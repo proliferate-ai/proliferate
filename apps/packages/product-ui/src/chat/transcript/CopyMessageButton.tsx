@@ -31,11 +31,11 @@ export function CopyMessageButton({
       size="xs"
       onClick={handleCopy}
       title={copied ? "Copied" : "Copy message"}
-      className="rounded-md text-muted-foreground hover:text-foreground"
+      className="rounded-md text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
     >
       {copied
-        ? <Check className="size-3" />
-        : <Copy className="size-3" />}
+        ? <Check className="size-4" />
+        : <Copy className="size-4" />}
     </IconButton>
   );
 
@@ -44,7 +44,7 @@ export function CopyMessageButton({
   // snapping its fractional layout origin to device pixels and visibly
   // nudging the button sideways at the start/end of each fade.
   return (
-    <span className={`inline-flex transform-gpu items-center gap-1 text-[length:var(--text-chat-meta,11px)] text-muted-foreground transition-opacity duration-200 ${visibilityClassName}`}>
+    <span className={`inline-flex transform-gpu items-center gap-2 text-[length:var(--text-chat-meta,11px)] text-muted-foreground transition-opacity duration-200 ${visibilityClassName}`}>
       {timestampPosition === "before" && timestamp}
       {copyButton}
       {timestampPosition === "after" && timestamp}

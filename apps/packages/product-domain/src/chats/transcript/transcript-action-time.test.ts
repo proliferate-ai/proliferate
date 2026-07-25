@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   formatTranscriptActionTime,
   resolveAssistantTurnActionTime,
+  resolveCompletedWorkHistoryLabel,
   resolveOptimisticPromptActionTime,
   resolveUserMessageActionTime,
 } from "./transcript-action-time";
@@ -41,5 +42,34 @@ describe("transcript action time", () => {
       },
       now: NOW,
     })).toMatch(/:07 [ap]m$/);
+  });
+
+  it("labels completed work history with the elapsed turn duration", () => {
+    expect(resolveCompletedWorkHistoryLabel({
+      startedAt: "2026-04-28T18:00:00Z",
+      completedAt: "2026-04-28T18:13:25Z",
+    })).toBe("Worked for 13m 25s");
+
+    expect(resolveCompletedWorkHistoryLabel({
+      startedAt: "2026-04-28T18:00:00Z",
+      completedAt: "2026-04-28T19:04:25Z",
+    })).toBe("Worked for 1h 4m");
+  });
+
+  it("falls back safely when completed work history has no valid duration", () => {
+    expect(resolveCompletedWorkHistoryLabel({
+      startedAt: "2026-04-28T18:00:00Z",
+      completedAt: null,
+    })).toBe("Work history");
+
+    expect(resolveCompletedWorkHistoryLabel({
+      startedAt: "not-a-date",
+      completedAt: "2026-04-28T18:01:00Z",
+    })).toBe("Work history");
+
+    expect(resolveCompletedWorkHistoryLabel({
+      startedAt: "2026-04-28T18:01:00Z",
+      completedAt: "2026-04-28T18:00:00Z",
+    })).toBe("Work history");
   });
 });

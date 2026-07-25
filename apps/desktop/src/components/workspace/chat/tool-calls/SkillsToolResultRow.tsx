@@ -89,6 +89,7 @@ function SkillsToolResultDetails({
           </div>
           <MarkdownBody
             content={presentation.instructions}
+            styleVariant="transcript"
             className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
             renderCodeBlock={renderDesktopCodeBlock}
           />
@@ -115,6 +116,7 @@ function SkillsToolResultDetails({
           {presentation.contentType.includes("markdown") ? (
             <MarkdownBody
               content={presentation.content}
+              styleVariant="transcript"
               className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
               renderCodeBlock={renderDesktopCodeBlock}
             />

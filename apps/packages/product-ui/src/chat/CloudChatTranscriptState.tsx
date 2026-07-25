@@ -89,7 +89,7 @@ function renderCloudPendingPromptRow(
     return null;
   }
   return (
-    <div className={input.rowIndex === 0 ? "pb-2" : "pt-2 pb-2"}>
+    <div className={input.rowIndex === 0 ? "pb-1.5" : "pt-1.5 pb-1.5"}>
       <CloudChatTranscriptRows rows={rows} />
     </div>
   );
@@ -107,7 +107,7 @@ function renderCloudTranscriptTurnRow(
     return null;
   }
   return (
-    <div className={input.rowIndex === 0 ? "pb-2" : "pt-2 pb-2"}>
+    <div className={input.rowIndex === 0 ? "pb-1.5" : "pt-1.5 pb-1.5"}>
       <CloudChatTranscriptRows rows={rows} planActions={planActions} />
     </div>
   );

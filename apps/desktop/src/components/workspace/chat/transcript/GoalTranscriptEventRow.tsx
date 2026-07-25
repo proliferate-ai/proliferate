@@ -37,7 +37,7 @@ export function GoalTranscriptEventRow({ event }: { event: GoalTranscriptEvent }
           size="unstyled"
           type="button"
           disabled
-          className="inline-flex items-start gap-1.5 rounded-full border border-border/50 bg-muted/30 px-2.5 py-1 text-ui-sm text-muted-foreground disabled:cursor-default"
+          className="inline-flex min-w-0 max-w-full items-start gap-1.5 rounded-full border border-border/50 bg-muted/30 px-2.5 py-1 text-ui-sm text-muted-foreground disabled:cursor-default"
         >
           {/* items-start + line-height-matched offset: the glyph registers on
               the FIRST text line instead of floating against the block's
@@ -46,7 +46,7 @@ export function GoalTranscriptEventRow({ event }: { event: GoalTranscriptEvent }
             aria-hidden="true"
             className={`mt-[0.2em] size-3 shrink-0 ${presentation.iconClassName}`}
           />
-          <span className="truncate">
+          <span className="min-w-0 truncate">
             {presentation.label}
             {presentation.detailPreview && (
               <span className="text-faint"> — {presentation.detailPreview}</span>

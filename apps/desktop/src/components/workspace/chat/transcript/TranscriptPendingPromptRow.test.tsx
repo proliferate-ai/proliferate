@@ -119,6 +119,9 @@ describe("TranscriptPendingPromptRow", () => {
     expect(statusLine?.className).toContain("font-normal");
     expect(statusLine?.className).toContain("text-muted-foreground");
     expect(container.innerHTML).not.toContain("thinking-text");
+    expect(container.querySelector("[data-pending-tail-slot]")?.className).toContain(
+      "min-h-[calc(var(--text-message--line-height)+26px)]",
+    );
   });
 });
 

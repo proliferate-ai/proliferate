@@ -59,6 +59,10 @@ describe("VirtualizedTranscriptRowList", () => {
     const button = container.querySelector('[aria-label="Scroll to bottom"]');
     expect(button).toBeTruthy();
     expect(button?.getAttribute("aria-hidden")).toBe("true");
+    expect(
+      container.querySelector("[data-chat-transcript-root]")?.classList
+        .contains("chat-transcript-typography"),
+    ).toBe(true);
   });
 
   it("reveals the scroll-to-bottom affordance after a user wheels up", () => {

@@ -8,6 +8,7 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import { SubagentWakeBadge } from "./SubagentWakeBadge";
 import { UserMessage } from "./UserMessage";
 import {
+  TRAILING_STATUS_MIN_HEIGHT,
   TurnShell,
 } from "./TranscriptTurnChrome";
 import {
@@ -65,16 +66,14 @@ export function TranscriptPendingPromptRow({
     <TurnShell isFirst={rowIndex === 0}>
       {/* Keep in sync with TranscriptTurnRow's turn column gap so the
           pending-prompt → turn handoff does not shift content. */}
-      <div className="flex flex-col gap-3.5">
+      <div className="flex flex-col gap-4">
         <PendingPromptBody
           activeSessionId={activeSessionId}
           prompt={prompt}
         />
-        {/* ANCHOR INVARIANT: fixed-height tail slot (same h-6 as the turn
-            row's slot) so "Thinking…" appearing under a just-sent message is
-            a content swap with zero layout motion — and the pending-prompt →
-            turn handoff keeps identical bottom geometry. */}
-        <div className="flex h-6 items-center" data-pending-tail-slot>
+        {/* Reserve the first assistant line, its 6px action/status gap, and the
+            h-5 tail so pending-prompt -> materialized-turn handoff is stable. */}
+        <div className={TRAILING_STATUS_MIN_HEIGHT} data-pending-tail-slot>
           {trailingStatus}
         </div>
         {outboxControls}

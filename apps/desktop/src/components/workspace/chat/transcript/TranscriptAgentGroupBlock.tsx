@@ -245,6 +245,7 @@ function AgentResultBlock({ content }: { content: string }) {
         <div ref={contentRef} className="text-chat leading-[var(--text-chat--line-height)] select-text text-foreground">
           <MarkdownBody
             content={content}
+            styleVariant="transcript"
             className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
             renderCodeBlock={renderDesktopCodeBlock}
           />

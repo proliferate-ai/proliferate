@@ -47,7 +47,7 @@ export function GenericActionRow({ item }: { item: ToolCallItem }) {
               viewportClassName={TOOL_CALL_BODY_MAX_HEIGHT_CLASS}
               allowHorizontal
             >
-              <pre className="m-0 whitespace-pre-wrap p-2 font-mono text-[length:var(--readable-code-font-size)] leading-[var(--readable-code-line-height)] text-muted-foreground">
+              <pre className="m-0 whitespace-pre-wrap p-2 font-mono text-[length:var(--text-chat-code,var(--readable-code-font-size))] leading-[var(--text-chat-code--line-height,var(--readable-code-line-height))] text-muted-foreground">
                 <code>{output}</code>
               </pre>
             </AutoHideScrollArea>

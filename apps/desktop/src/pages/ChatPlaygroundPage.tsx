@@ -52,9 +52,7 @@ export function ChatPlaygroundPage() {
           style={{ paddingBottom: scrollBottomInsetPx }}
         >
           <div className={CHAT_SURFACE_GUTTER_CLASSNAME}>
-            {/* Mirror the transcript root's label-size override so fixtures
-                render at product parity (text-chat resolves to message size). */}
-            <div className={`${CHAT_COLUMN_CLASSNAME} flex flex-col gap-6 [--text-chat:var(--text-message)] [--text-chat--line-height:var(--text-message--line-height)] [--text-chat-meta:calc(var(--text-chat)_-_2px)]`}>
+            <div className={`${CHAT_COLUMN_CLASSNAME} chat-transcript-typography flex flex-col gap-6`}>
               <PlaygroundTranscript
                 selection={selection}
                 replay={replay}

@@ -47,7 +47,7 @@ export function FileReferenceBadge({
     && !actions.reference.workspacePath
     && Boolean(actions.reference.absolutePath);
   const iconShellClassName = variant === "inline"
-    ? "relative mr-[3px] inline-block h-[1lh] w-3.5 shrink-0 align-bottom"
+    ? "relative mr-[3px] inline-block h-[1lh] w-[var(--chat-inline-mention-icon-size,0.875rem)] shrink-0 align-bottom"
     : "inline-flex shrink-0 items-center justify-center";
 
   const handleClick = useCallback((event: MouseEvent<HTMLButtonElement>) => {
@@ -73,7 +73,7 @@ export function FileReferenceBadge({
           <span
             aria-hidden="true"
             data-external-path-reference-icon="true"
-            className="absolute left-0 top-1/2 size-3.5 -translate-y-1/2 inline-block pointer-events-none select-none [&>svg]:block [&>svg]:size-full"
+            className="pointer-events-none absolute left-0 top-1/2 inline-block size-[var(--chat-inline-mention-icon-size,0.875rem)] -translate-y-1/2 select-none [&>svg]:block [&>svg]:size-full"
           >
             <InlinePathMentionIcon />
           </span>
@@ -83,7 +83,7 @@ export function FileReferenceBadge({
             path={iconPath}
             kind="file"
             className={variant === "inline"
-              ? "absolute left-0 top-1/2 size-3.5 -translate-y-1/2 opacity-95"
+              ? "absolute left-0 top-1/2 size-[var(--chat-inline-mention-icon-size,0.875rem)] -translate-y-1/2 opacity-95"
               : "size-2.5 opacity-90"}
             toneClassName={variant === "inline" ? "text-current" : "file-reference-icon"}
           />

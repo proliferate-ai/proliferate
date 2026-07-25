@@ -77,7 +77,9 @@ blocks as bordered highlighted cards. Ownership is split by package law:
 apps/packages/product-ui/src/chat/transcript/MarkdownBody.tsx
   presentational markdown renderer; permissive urlTransform (blocks only
   javascript:/data:/vbscript:); injection props renderLink, renderInlineCode,
-  renderCodeBlock; owns the code-block shell styling
+  renderCodeBlock; owns stable `document` and `transcript` style variants plus
+  the fallback code-block shell. Transcript callsites opt into the transcript
+  variant; workspace file previews keep the default document presentation.
 
 apps/desktop/src/components/workspace/chat/transcript/transcript-markdown.tsx
   desktop renderers injected at TranscriptItemBlock, ClaudePlanCard, and
@@ -102,6 +104,13 @@ anyharness .../domains/sessions/response_formatting.rs
 
 Rules:
 
+- User and assistant message bodies both parse Markdown. User bubbles add the
+  compact prompt overrides: no outer paragraph margins, 20px between adjacent
+  top-level paragraphs, zero list-item/nested-block gaps, 24px list indent,
+  preserved source line breaks, and a 19-line collapsed max-height.
+- Transcript tables are unframed and horizontally scrollable. They bleed to
+  the 16px transcript gutter on narrow screens and to 24px from `sm` upward;
+  the document variant keeps the framed table used by file and plan previews.
 - Detection happens at render time from raw markdown; do not store parsed file
   references in transcript items.
 - Mention labels display the workspace-relative path plus a `(line N)` suffix;
@@ -173,12 +182,27 @@ reintroduce scroll/layout bumps.
 
 ### Spacing Rhythm
 
-Sibling spacing inside a turn comes solely from the turn container's `gap-2`,
-and turn rows are separated by `TurnShell`'s `pt-2 pb-2` (`pt-0` for the first
-row). Blocks must not carry external vertical padding of their own
+Sibling spacing inside a turn comes solely from the turn container's `gap-4`
+(16px), and turn rows are separated by `TurnShell`'s `pt-1.5 pb-1.5` (`pt-0`
+for the first row), producing a 12px inter-turn gap. Blocks must not carry
+external vertical padding of their own
 (`TranscriptActivityBlock` is a zero-padding marker wrapper), and spacing must
 not vary with streaming state: a turn completing is a zero-delta layout change
 for everything already rendered.
+
+### Transcript Typography
+
+`FullTranscriptRowList` and `VirtualTranscriptViewport` apply the shared
+`chat-transcript-typography` scope to the transcript column. At the default UI
+scale it derives 14px/22px conversation text, 13px/20px code text, and 12px
+metadata from the existing composer tokens. Keep this override scoped to the
+transcript: compact product UI and composer controls continue to use their own
+appearance tokens, and every appearance preset must retain the same relative
+steps.
+
+Direct cloud transcript rows, the desktop launch-intent projection, and the
+Home submitted-message preview apply the same scope because they can render
+without either row-list root.
 
 ### Stick-to-bottom engine
 
@@ -219,14 +243,18 @@ and no auto-scroll bump.
 
 | Piece | Location | Value |
 | --- | --- | --- |
-| `TRAILING_STATUS_MIN_HEIGHT` | `apps/desktop/src/components/workspace/chat/transcript/TranscriptTurnChrome.tsx` | `min-h-[calc(var(--text-chat--line-height)+1.5rem)]` |
-| Assistant copy-button slot | `apps/desktop/src/components/workspace/chat/transcript/AssistantMessage.tsx` | `h-6` (24px) |
-| Chat text line-height | `apps/packages/design/src/tokens.ts` (`typography.lineHeight.chat`) | `21px` |
+| `TRAILING_STATUS_MIN_HEIGHT` | `apps/desktop/src/components/workspace/chat/transcript/TranscriptTurnChrome.tsx` | `min-h-[calc(var(--text-message--line-height)+26px)]` |
+| Assistant action/status slot | `apps/desktop/src/components/workspace/chat/transcript/TranscriptTurnChrome.tsx` | `h-5` (20px) |
+| Copy action target | `apps/packages/product-ui/src/chat/transcript/CopyMessageButton.tsx` | `size="xs"` / 20px; must not overflow the slot |
+| Transcript message line-height | `apps/packages/design/src/css/dom.css` (`chat-transcript-typography`) | `22px` at the default appearance scale |
 
 The derivation is:
 
 ```text
-TRAILING_STATUS_MIN_HEIGHT = --text-chat--line-height + h-6
+TRAILING_STATUS_MIN_HEIGHT
+  = --text-message--line-height + effective action gap + h-5
+  = 22px + 6px + 20px
+  = 48px
 ```
 
 Additional dependencies:
@@ -242,10 +270,13 @@ Additional dependencies:
   moment the prose completes with the turn still in progress (thinking,
   preparing a tool call), the trailing indicator must return immediately —
   a completed-looking transcript with silent background work is the worst UX.
-  Both indicator variants render inside the same fixed-height (`h-6`) slot as
+  Both indicator variants render inside the same fixed-height (`h-5`) slot as
   the reserved copy-button row so the swap is a zero-delta layout change.
-- The `h-6` copy-button slot in `AssistantMessage` is gated on content, not on
-  `showCopyButton`, so the prose-owned slot remains stable while turns stream.
+- The outer turn uses a 16px sibling gap, while assistant action/status rails
+  pull up by 10px after prose. That leaves the reference's 6px visual gap
+  without changing the reserved tail height.
+- Pending prompt rows reserve the same 48px tail as a materialized turn before
+  its first assistant line, so optimistic-to-real handoff keeps its geometry.
 
 If you change any pinned value, update every file in the table at the same
 time and verify by sending a message, waiting for assistant streaming to begin,

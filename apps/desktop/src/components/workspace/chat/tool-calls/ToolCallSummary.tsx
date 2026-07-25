@@ -10,13 +10,13 @@ interface ToolCallSummaryProps {
   renderChildren?: () => React.ReactNode;
   itemCount?: number;
   defaultExpanded?: boolean;
-  /** When true, shows a "Final message" separator after the expanded content. */
+  /** When true, keeps a quiet boundary between work history and final prose. */
   showFinalSeparator?: boolean;
 }
 
 export function ToolCallSummary({
   icon: _icon,
-  label: _label = "Work history",
+  label = "Work history",
   summary,
   typeIcons: _typeIcons,
   children,
@@ -35,22 +35,21 @@ export function ToolCallSummary({
   }
 
   return (
-    <div className="py-1">
+    <div>
       <TurnSeparator
-        label={summary}
+        label={label}
+        title={summary}
         interactive
         expanded={expanded}
         onClick={() => setExpanded(!expanded)}
       />
       {expanded && (
-        <>
-          <div className="mt-2 space-y-1.5">
-            {renderedChildren}
-          </div>
-          {showFinalSeparator && (
-            <TurnSeparator label="Final message" />
-          )}
-        </>
+        <div className="mt-2 space-y-1.5">
+          {renderedChildren}
+        </div>
+      )}
+      {showFinalSeparator && (
+        <TurnSeparator label="Final message" />
       )}
     </div>
   );

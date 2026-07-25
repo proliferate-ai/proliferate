@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 
-import { cleanup, render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import type { ContentPart } from "@anyharness/sdk";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   PLAN_IMPLEMENT_HERE_PROMPT,
   PLAN_IMPLEMENT_HERE_ROW_LABEL,
@@ -11,6 +11,8 @@ import { UserMessage } from "./UserMessage";
 
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe("UserMessage", () => {
@@ -60,6 +62,75 @@ describe("UserMessage", () => {
 
     expect(container.querySelector("[data-carry-out-plan-row]")).toBeNull();
     expect(container.querySelector("[data-chat-user-message]")).toBeTruthy();
+  });
+
+  it("uses the long transcript clamp and reveals actions from keyboard focus", () => {
+    const { container } = render(
+      <UserMessage
+        sessionId="session-1"
+        content="A normal prompt"
+        showCopyButton
+      />,
+    );
+
+    const bubble = container.querySelector<HTMLElement>(".chat-user-message-bubble");
+    expect(bubble).not.toBeNull();
+    expect(bubble?.tabIndex).toBe(0);
+    expect(bubble?.className).toContain("focus-visible:ring-2");
+    expect((bubble?.firstElementChild as HTMLElement | null)?.style.maxHeight).toBe("19lh");
+    expect(container.innerHTML).toContain("group-focus-within/msg:opacity-100");
+  });
+
+  it("renders prompt markdown with the compact user-message list rhythm", () => {
+    const { container } = render(
+      <UserMessage
+        sessionId="session-1"
+        content={"A list:\n\n- First\n- Second"}
+      />,
+    );
+
+    expect(container.querySelectorAll("li")).toHaveLength(2);
+    const markdown = container.querySelector("ul")?.parentElement;
+    expect(markdown?.className).toContain("[&_li+li]:!mt-0");
+    expect(markdown?.className).toContain("[&_ul]:!pl-6");
+  });
+
+  it("remeasures clamped overflow with a rounding tolerance", () => {
+    let scrollHeight = 102;
+    const clientHeight = 100;
+    let resizeCallback: ResizeObserverCallback | null = null;
+    const observe = vi.fn();
+    const disconnect = vi.fn();
+
+    vi.spyOn(HTMLElement.prototype, "scrollHeight", "get")
+      .mockImplementation(() => scrollHeight);
+    vi.spyOn(HTMLElement.prototype, "clientHeight", "get")
+      .mockImplementation(() => clientHeight);
+    vi.stubGlobal("ResizeObserver", vi.fn().mockImplementation(
+      (callback: ResizeObserverCallback) => {
+        resizeCallback = callback;
+        return { observe, unobserve: vi.fn(), disconnect };
+      },
+    ));
+
+    const { container, queryByRole, getByRole } = render(
+      <UserMessage sessionId="session-1" content="A prompt that may wrap" />,
+    );
+
+    expect(observe).toHaveBeenCalled();
+    expect(queryByRole("button", { name: "Show more" })).toBeNull();
+
+    act(() => {
+      scrollHeight = 103;
+      resizeCallback?.([], {} as ResizeObserver);
+    });
+
+    fireEvent.click(getByRole("button", { name: "Show more" }));
+    expect(getByRole("button", { name: "Show less" })).toBeTruthy();
+    expect(
+      (container.querySelector(".chat-user-message-bubble")?.firstElementChild as HTMLElement)
+        .style.maxHeight,
+    ).toBe("");
   });
 });
 

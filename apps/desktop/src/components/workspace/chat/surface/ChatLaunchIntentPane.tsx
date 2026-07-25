@@ -86,16 +86,17 @@ export function ChatLaunchIntentPane({ bottomInsetPx }: ChatLaunchIntentPaneProp
           className={`${CHAT_SURFACE_GUTTER_CLASSNAME} pt-4`}
           style={{ paddingBottom: bottomInsetPx }}
         >
-          <div className={CHAT_COLUMN_CLASSNAME}>
-            <div className="w-full max-w-full pt-0 pb-2">
+          <div className={`${CHAT_COLUMN_CLASSNAME} chat-transcript-typography`}>
+            <div className="flex w-full max-w-full flex-col gap-4 pb-1.5 pt-0">
               <UserMessage
                 sessionId={null}
                 content={activeIntent.text}
                 contentParts={activeIntent.contentParts}
+                showCopyButton
                 footer={failureFooter}
               />
               {isPending && (
-                <div className={`mt-2 ${TRAILING_STATUS_MIN_HEIGHT}`}>
+                <div className={TRAILING_STATUS_MIN_HEIGHT}>
                   <StreamingIndicator
                     startedAt={new Date(activeIntent.createdAt).toISOString()}
                     label={CHAT_STREAMING_STATUS_LABELS.sending}

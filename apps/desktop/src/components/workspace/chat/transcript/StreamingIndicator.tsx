@@ -23,13 +23,13 @@ export function StreamingIndicator({
 
   return (
     <DebugProfiler id="streaming-indicator">
-      <div className="flex min-h-5 items-end gap-1.5 py-1 text-muted-foreground">
+      <div className="flex h-5 items-center gap-1.5 text-foreground/60">
         <ThinkingText
           text={label}
-          className="text-[length:var(--text-message)] leading-[var(--text-message--line-height)]"
+          className="text-[length:var(--text-chat)] leading-5"
         />
         {elapsedSeconds !== null && (
-          <span className="text-ui-sm leading-[var(--text-ui-sm--line-height)] tabular-nums text-faint">
+          <span className="text-[length:var(--text-chat-meta)] leading-5 tabular-nums text-foreground/40">
             {"· "}
             {elapsedSeconds}s
           </span>

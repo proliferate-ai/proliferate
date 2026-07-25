@@ -4,12 +4,14 @@ import {
   type MarkdownCodeBlockRenderer,
   type MarkdownInlineCodeRenderer,
   type MarkdownLinkRenderer,
+  type MarkdownBodyStyleVariant,
 } from "./MarkdownBody";
 
 interface PlanMarkdownBodyProps {
   content: string;
   className?: string;
   presentation?: "default" | "proposal";
+  styleVariant?: MarkdownBodyStyleVariant;
   renderLink?: MarkdownLinkRenderer;
   renderInlineCode?: MarkdownInlineCodeRenderer;
   renderCodeBlock?: MarkdownCodeBlockRenderer;
@@ -19,6 +21,7 @@ export function PlanMarkdownBody({
   content,
   className,
   presentation = "default",
+  styleVariant = "transcript",
   renderLink,
   renderInlineCode,
   renderCodeBlock,
@@ -29,6 +32,7 @@ export function PlanMarkdownBody({
   return (
     <MarkdownBody
       content={renderedContent}
+      styleVariant={styleVariant}
       renderLink={renderLink}
       renderInlineCode={renderInlineCode}
       renderCodeBlock={renderCodeBlock}

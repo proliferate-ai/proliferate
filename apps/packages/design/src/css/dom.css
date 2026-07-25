@@ -59,6 +59,33 @@
   --text-message--line-height: var(--text-composer--line-height);
 }
 
+/* The coding transcript follows the roomier Codex reading scale without
+   changing compact product UI or composer controls. Derive from the composer
+   tokens so every appearance preset keeps the same relative steps. */
+.chat-transcript-typography {
+  --text-message: calc(var(--text-composer) + 2px);
+  --text-message--line-height: calc(var(--text-composer--line-height) + 2px);
+  --text-chat: var(--text-message);
+  --text-chat--line-height: var(--text-message--line-height);
+  --text-chat-code: calc(var(--text-message) - 1px);
+  --text-chat-code--line-height: calc(var(--text-message--line-height) - 2px);
+  --text-chat-meta: calc(var(--text-message) - 2px);
+  --chat-inline-mention-icon-size: 16px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-weight: 445;
+  letter-spacing: 0;
+}
+
+.chat-user-message-bubble {
+  border-radius: 20px;
+}
+
+@supports (corner-shape: superellipse(1.5)) {
+  .chat-user-message-bubble {
+    corner-shape: superellipse(1.5);
+  }
+}
+
 * {
   box-sizing: border-box;
 }

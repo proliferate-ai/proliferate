@@ -23,7 +23,7 @@ import type { SessionViewState } from "@proliferate/product-domain/sessions/acti
 export type PendingInteractionMarkerKind = "permission" | "question";
 
 const TURN_HORIZONTAL_PADDING = "px-0";
-const ASSISTANT_ACTION_SLOT_HEIGHT = "h-6";
+const ASSISTANT_ACTION_SLOT_HEIGHT = "h-5";
 
 /**
  * Minimum height for a turn that has no assistant text yet. Once prose exists,
@@ -31,7 +31,7 @@ const ASSISTANT_ACTION_SLOT_HEIGHT = "h-6";
  * between the prose and future tool activity.
  */
 export const TRAILING_STATUS_MIN_HEIGHT =
-  "min-h-[calc(var(--text-chat--line-height)+1.5rem)]";
+  "min-h-[calc(var(--text-message--line-height)+26px)]";
 
 export function TurnShell({
   children,
@@ -40,7 +40,7 @@ export function TurnShell({
   children: ReactNode;
   isFirst?: boolean;
 }) {
-  const verticalPadding = `${isFirst ? "pt-0" : "pt-2"} pb-2`;
+  const verticalPadding = `${isFirst ? "pt-0" : "pt-1.5"} pb-1.5`;
   return (
     <div className={`${TURN_HORIZONTAL_PADDING} w-full max-w-full ${verticalPadding}`}>
       {children}
@@ -53,19 +53,12 @@ export function TurnAssistantActionRow({
   showCopyButton = false,
   reserveSlot = false,
   timestampLabel = null,
-  alwaysVisible = false,
   metMarker = null,
 }: {
   content: string | null;
   showCopyButton?: boolean;
   reserveSlot?: boolean;
   timestampLabel?: string | null;
-  /**
-   * When true the copy/action row is persistently visible (opacity-100)
-   * instead of hover-gated. Set only for the transcript's final completed AI
-   * message; every earlier message keeps hover-to-reveal.
-   */
-  alwaysVisible?: boolean;
   /**
    * Inline "✓ Goal achieved in Xs" marker rendered between the copy button
    * and the timestamp — only on the final completed message when the active
@@ -77,13 +70,12 @@ export function TurnAssistantActionRow({
     return null;
   }
 
-  const visibilityClassName = alwaysVisible
-    ? "opacity-100"
-    : "opacity-0 group-hover/turn:opacity-100";
+  const visibilityClassName =
+    "opacity-0 group-hover/turn:opacity-100 group-focus-within/turn:opacity-100";
 
   return (
-    <div className="flex justify-start relative">
-      <div className={`flex items-center gap-2 pt-0.5 ${ASSISTANT_ACTION_SLOT_HEIGHT}`}>
+    <div className="relative -mt-2.5 flex -translate-x-1 justify-start">
+      <div className={`flex items-center gap-2 ${ASSISTANT_ACTION_SLOT_HEIGHT}`}>
         {showCopyButton && (
           <CopyMessageButton
             content={content}
@@ -162,9 +154,9 @@ export function resolveTurnTrailingStatus(
     return (
       <TrailingStatusCrossfade
         statusKey="transient"
-        className={`gap-2 text-[length:var(--text-chat)] leading-[var(--text-chat--line-height)] text-muted-foreground ${ASSISTANT_ACTION_SLOT_HEIGHT}`}
+        className={`gap-2 text-[length:var(--text-chat)] leading-5 text-foreground/60 ${ASSISTANT_ACTION_SLOT_HEIGHT}`}
       >
-        <Sparkles className="size-3.5 shrink-0 text-muted-foreground" />
+        <Sparkles className="size-3.5 shrink-0 text-foreground/60" />
         <span className="min-w-0 truncate">{transientStatusText}</span>
       </TrailingStatusCrossfade>
     );
@@ -256,11 +248,11 @@ export function PendingInteractionMarkerView({
     <div className="flex items-center gap-2 text-muted-foreground">
       <Icon className="size-3.5 shrink-0" />
       {label && (
-        <span className="text-[length:var(--text-chat)] leading-[var(--text-chat--line-height)] font-medium text-foreground">
+        <span className="text-[length:var(--text-chat)] font-medium leading-5 text-foreground">
           {label}
         </span>
       )}
-      <span className="text-[length:var(--text-chat)] leading-[var(--text-chat--line-height)] uppercase tracking-wide text-muted-foreground">
+      <span className="text-[length:var(--text-chat)] leading-5 text-muted-foreground">
         Awaiting response
       </span>
     </div>

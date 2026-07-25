@@ -6,12 +6,12 @@ import { ToolActionRow } from "@/components/workspace/chat/tool-calls/ToolAction
 import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@proliferate/product-domain/chats/tools/tool-call-layout";
 
 export function TranscriptPreviewShell({ children }: { children: ReactNode }) {
-  return <div className="flex flex-col gap-3">{children}</div>;
+  return <div className="flex flex-col gap-4">{children}</div>;
 }
 
 export function TransientStatusRow({ text }: { text: string }) {
   return (
-    <div className="flex min-h-[calc(var(--text-chat--line-height)+1.5rem)] items-start gap-2 py-1 text-xs text-muted-foreground">
+    <div className="flex min-h-[calc(var(--text-message--line-height)+26px)] items-start gap-2 text-chat text-muted-foreground">
       <Sparkles className="mt-0.5 size-3.5 shrink-0" />
       <span className="min-w-0 truncate">{text}</span>
     </div>

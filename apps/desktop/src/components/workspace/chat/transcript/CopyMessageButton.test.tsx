@@ -23,6 +23,7 @@ describe("CopyMessageButton", () => {
     expect(root?.children[0]?.tagName).toBe("SPAN");
     expect(root?.children[0]?.textContent).toBe("9:41 AM");
     expect(root?.children[1]?.tagName).toBe("BUTTON");
+    expect(root?.querySelector("svg")?.classList.contains("size-4")).toBe(true);
   });
 
   it("can render the copy button before the timestamp", () => {

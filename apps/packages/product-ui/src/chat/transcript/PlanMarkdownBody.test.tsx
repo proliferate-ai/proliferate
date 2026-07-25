@@ -115,4 +115,15 @@ describe("PlanMarkdownBody", () => {
     expect(html).not.toContain("grid-cols-[auto_minmax(0,1fr)]");
     expect(html).not.toContain('<div class="min-w-0">');
   });
+
+  it("can retain framed document markdown outside the transcript", () => {
+    const html = renderToStaticMarkup(createElement(PlanMarkdownBody, {
+      content: "| A | B |\n| --- | --- |\n| 1 | 2 |",
+      styleVariant: "document",
+    }));
+
+    expect(html).toContain("rounded-lg");
+    expect(html).toContain("border-border");
+    expect(html).not.toContain("-mx-6");
+  });
 });

@@ -93,14 +93,14 @@ function EditActionRow({
             onKeyDown: handleKeyDown,
           }
           : {})}
-        className={`group/action-row inline-flex min-w-0 max-w-full items-center gap-1 rounded-none bg-transparent p-0 text-left text-chat leading-[var(--text-chat--line-height)] font-normal text-muted-foreground/60 outline-none transition-colors hover:text-foreground focus-visible:underline ${hasDetails ? "cursor-pointer" : ""}`}
+        className={`group/action-row inline-flex min-w-0 max-w-full items-center gap-1 rounded-none bg-transparent p-0 text-left text-chat leading-[var(--text-chat--line-height)] font-normal text-foreground/60 outline-none transition-colors hover:text-foreground focus-visible:underline ${hasDetails ? "cursor-pointer" : ""}`}
       >
         <FilePen
           aria-hidden="true"
-          className={`size-3 shrink-0 transition-colors ${
+          className={`mr-0.5 size-4 shrink-0 transition-colors ${
             failed
               ? "text-destructive/70"
-              : "text-faint group-hover/action-row:text-muted-foreground group-focus-visible/action-row:text-muted-foreground"
+              : "text-foreground/60 group-hover/action-row:text-foreground group-focus-visible/action-row:text-foreground"
           }`}
         />
         <span className={failed ? "shrink-0 text-destructive/80" : "shrink-0 text-inherit"}>
@@ -121,7 +121,7 @@ function EditActionRow({
         {hasDetails && (
           <ChevronRight
             aria-hidden="true"
-            className={`size-2.5 shrink-0 text-faint transition-transform group-hover/action-row:text-muted-foreground group-focus-visible/action-row:text-muted-foreground ${expanded ? "rotate-90" : ""}`}
+            className={`size-3.5 shrink-0 text-foreground/40 opacity-0 transition-[opacity,transform] group-hover/action-row:opacity-100 group-focus-visible/action-row:opacity-100 ${expanded ? "rotate-90" : ""}`}
           />
         )}
       </div>

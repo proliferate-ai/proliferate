@@ -4,6 +4,7 @@ import type {
 } from "@anyharness/sdk";
 import { Button } from "@proliferate/ui/primitives/Button";
 import {
+  ChevronRight,
   FilePen,
   FileText,
   FolderList,
@@ -55,31 +56,35 @@ export function CollapsedActions({
         data-chat-transcript-ignore
         data-active={isLiveAction ? "true" : undefined}
         aria-expanded={expanded}
-        className={`group/collapsed-actions h-auto max-w-full justify-start gap-1 rounded-none bg-transparent p-0 text-left ${CHAT_BUTTON_TEXT_CLASS} font-normal hover:bg-transparent hover:text-foreground focus-visible:ring-0 focus-visible:underline ${
-          isLiveAction ? "text-muted-foreground/75" : "text-muted-foreground/60"
-        }`}
+        className={`group/collapsed-actions h-auto max-w-full justify-start gap-1 rounded-none bg-transparent p-0 text-left ${CHAT_BUTTON_TEXT_CLASS} font-normal text-foreground/60 hover:bg-transparent hover:text-foreground focus-visible:ring-0 focus-visible:underline`}
         onClick={() => setExpanded((value) => !value)}
       >
-        <span
+        <span className="inline-flex min-w-0 items-center gap-1.5">
+          <span
+            aria-hidden="true"
+            className={`flex size-4 shrink-0 items-center justify-center transition-colors [&_svg]:size-4 ${
+              expanded
+                ? "text-foreground/70"
+                : "text-foreground/60 group-hover/collapsed-actions:text-foreground group-focus-visible/collapsed-actions:text-foreground"
+            }`}
+          >
+            {summaryIcon}
+          </span>
+          <span className="min-w-0 truncate">
+            {isLiveAction
+              ? (
+                <ThinkingText
+                  text={summary}
+                  className="block max-w-full truncate font-normal leading-[inherit]"
+                />
+              )
+              : summary}
+          </span>
+        </span>
+        <ChevronRight
           aria-hidden="true"
-          className={`flex size-3 shrink-0 items-center justify-center transition-colors [&_svg]:size-2.5 ${
-            expanded
-              ? "text-foreground/70"
-              : "text-faint group-hover/collapsed-actions:text-muted-foreground group-focus-visible/collapsed-actions:text-muted-foreground"
-          }`}
-        >
-          {summaryIcon}
-        </span>
-        <span className="min-w-0 truncate">
-          {isLiveAction
-            ? (
-              <ThinkingText
-                text={summary}
-                className="block max-w-full truncate font-normal leading-[inherit]"
-              />
-            )
-            : summary}
-        </span>
+          className={`size-3.5 shrink-0 text-foreground/40 opacity-0 transition-[opacity,transform] group-hover/collapsed-actions:opacity-100 group-focus-visible/collapsed-actions:opacity-100 ${expanded ? "rotate-90" : ""}`}
+        />
       </Button>
       {expanded && (
         <div className="mt-1 flex flex-col gap-1">

@@ -103,6 +103,7 @@ export function CloudChatToolRow({ row }: { row: CloudChatTranscriptRowView }) {
             <div className="max-h-72 overflow-auto px-3 py-2.5" data-telemetry-mask>
               <CloudChatMarkdownRenderer
                 content={body}
+                styleVariant="transcript"
                 className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0 text-muted-foreground"
               />
             </div>
@@ -127,13 +128,22 @@ export function CloudChatToolGroupRow({
   const hasExpandedContent = body.length > 0 || children.length > 0;
 
   return (
-    <article className="py-1">
-      <CloudTurnSeparator
-        label={label}
-        interactive={hasExpandedContent}
-        expanded={expanded}
-        onClick={() => setExpanded((value) => !value)}
-      />
+    <article>
+      {hasExpandedContent ? (
+        <CloudTurnSeparator
+          label={label}
+          interactive
+          expanded={expanded}
+          onClick={() => setExpanded((value) => !value)}
+        />
+      ) : (
+        <div
+          className="text-chat leading-[var(--text-chat--line-height)] text-foreground/60"
+          data-chat-transcript-ignore
+        >
+          {label}
+        </div>
+      )}
       {row.status ? (
         <div className="mt-0.5 text-center text-chat leading-[var(--text-chat--line-height)] text-muted-foreground">
           {row.status}
@@ -146,6 +156,7 @@ export function CloudChatToolGroupRow({
               <div className="max-h-72 overflow-auto px-3 py-2.5" data-telemetry-mask>
                 <CloudChatMarkdownRenderer
                   content={body}
+                  styleVariant="transcript"
                   className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0 text-muted-foreground"
                 />
               </div>
@@ -177,13 +188,22 @@ export function CloudChatWorkHistoryRow({
   const hasExpandedContent = children.length > 0 || Boolean(row.body?.trim());
 
   return (
-    <article className="py-1">
-      <CloudTurnSeparator
-        label={summary}
-        interactive={hasExpandedContent}
-        expanded={expanded}
-        onClick={() => setExpanded((value) => !value)}
-      />
+    <article>
+      {hasExpandedContent ? (
+        <CloudTurnSeparator
+          label={summary}
+          interactive
+          expanded={expanded}
+          onClick={() => setExpanded((value) => !value)}
+        />
+      ) : (
+        <div
+          className="text-chat leading-[var(--text-chat--line-height)] text-foreground/60"
+          data-chat-transcript-ignore
+        >
+          {summary}
+        </div>
+      )}
       {expanded && hasExpandedContent ? (
         <div className="mt-2 space-y-1.5">
           {row.body?.trim() ? (
@@ -191,6 +211,7 @@ export function CloudChatWorkHistoryRow({
               <div className="max-h-72 overflow-auto px-3 py-2.5" data-telemetry-mask>
                 <CloudChatMarkdownRenderer
                   content={row.body}
+                  styleVariant="transcript"
                   className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0 text-muted-foreground"
                 />
               </div>
@@ -203,9 +224,9 @@ export function CloudChatWorkHistoryRow({
               renderChildRow={renderChildRow}
             />
           ))}
-          <CloudTurnSeparator label="Final message" />
         </div>
       ) : null}
+      <CloudTurnSeparator label="Final message" />
     </article>
   );
 }

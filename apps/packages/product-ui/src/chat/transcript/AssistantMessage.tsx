@@ -108,6 +108,7 @@ function AssistantMessageContent({
       {splitContent.stableContent && (
         <MarkdownBody
           content={splitContent.stableContent}
+          styleVariant="transcript"
           className={stableClassName}
           renderLink={renderLink}
           renderInlineCode={renderInlineCode}
@@ -118,6 +119,7 @@ function AssistantMessageContent({
         <div>
           <MarkdownBody
             content={splitContent.liveContent}
+            styleVariant="transcript"
             className={liveClassName}
             renderLink={renderLink}
             renderInlineCode={renderInlineCode}
@@ -174,4 +176,3 @@ function findStableBoundary(content: string): number {
 function hasOpenCodeFence(content: string): boolean {
   return (content.match(/```/g)?.length ?? 0) % 2 === 1;
 }
-

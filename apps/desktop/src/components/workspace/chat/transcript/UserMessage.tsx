@@ -1,6 +1,14 @@
-import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import type { ContentPart } from "@anyharness/sdk";
 import { Button } from "@proliferate/ui/primitives/Button";
+import { ChevronDown } from "@proliferate/ui/icons";
+import { MarkdownBody } from "@proliferate/product-ui/chat/transcript/MarkdownBody";
 import { CarryOutPlanRow } from "./CarryOutPlanRow";
 import { CopyMessageButton } from "./CopyMessageButton";
 import { PromptContentRenderer } from "@/components/workspace/chat/content/PromptContentRenderer";
@@ -9,6 +17,11 @@ import {
   normalizeContentParts,
   type PromptDisplayPlanPart,
 } from "@proliferate/product-domain/chats/composer/prompt-display-parts";
+import {
+  renderTranscriptCodeBlock,
+  renderTranscriptInlineCode,
+  renderTranscriptLink,
+} from "./transcript-markdown";
 
 export interface UserMessageProps {
   sessionId: string | null;
@@ -18,6 +31,8 @@ export interface UserMessageProps {
   timestampLabel?: string | null;
   footer?: ReactNode;
 }
+
+const OVERFLOW_TOLERANCE_PX = 2;
 
 export function UserMessage({
   sessionId,
@@ -43,17 +58,44 @@ export function UserMessage({
     part.type === "text" && part.text.trim().length > 0
   ));
   const shouldRenderTextBubble = hasTextPart || (!hasAttachments && content.trim().length > 0);
-  const textParts = hasTextPart ? contentParts : [];
+  const messageText = displayParts
+    .filter((part) => part.type === "text")
+    .map((part) => part.text)
+    .join("\n\n") || content;
+
+  const measureOverflow = useCallback(() => {
+    if (expanded) {
+      return;
+    }
+    const element = textRef.current;
+    if (!element) {
+      return;
+    }
+    setNeedsToggle(
+      element.scrollHeight - element.clientHeight > OVERFLOW_TOLERANCE_PX,
+    );
+  }, [expanded]);
 
   useLayoutEffect(() => {
     if (!shouldRenderTextBubble) {
       setNeedsToggle(false);
       return;
     }
-    const el = textRef.current;
-    if (!el) return;
-    setNeedsToggle(el.scrollHeight > el.clientHeight);
-  }, [content, contentParts, shouldRenderTextBubble]);
+    measureOverflow();
+  }, [content, contentParts, measureOverflow, shouldRenderTextBubble]);
+
+  useLayoutEffect(() => {
+    if (!shouldRenderTextBubble) {
+      return;
+    }
+    const element = textRef.current;
+    if (!element || typeof ResizeObserver === "undefined") {
+      return;
+    }
+    const observer = new ResizeObserver(measureOverflow);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [measureOverflow, shouldRenderTextBubble]);
 
   if (carryOutPlanPart) {
     return <CarryOutPlanRow plan={carryOutPlanPart} />;
@@ -79,33 +121,43 @@ export function UserMessage({
         )}
         {shouldRenderTextBubble && (
           <div
-            className="max-w-[77%] break-words rounded-2xl bg-foreground/5 px-3 py-2 text-foreground"
+            tabIndex={0}
+            className="chat-user-message-bubble min-w-0 max-w-[77%] overflow-hidden break-words rounded-2xl bg-foreground/5 px-3 py-2 text-left text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
             data-telemetry-mask
           >
             <div
               ref={textRef}
-              className={`[--prose-text-size:var(--text-message)] [--prose-text-line-height:var(--text-message--line-height)] break-words select-text${
-                !expanded ? " line-clamp-5" : ""
-              }`}
+              className="w-full min-w-0 overflow-hidden [--prose-text-size:var(--text-message)] [--prose-text-line-height:var(--text-message--line-height)]"
+              style={expanded ? undefined : { maxHeight: "19lh" }}
             >
-              <PromptContentRenderer
-                sessionId={sessionId}
-                parts={textParts}
-                fallbackText={content}
-                includeAttachments={false}
+              <MarkdownBody
+                content={messageText}
+                styleVariant="transcript"
+                renderLink={renderTranscriptLink}
+                renderInlineCode={renderTranscriptInlineCode}
+                renderCodeBlock={renderTranscriptCodeBlock}
+                className="whitespace-pre-wrap [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_li+li]:!mt-0 [&_li>ol]:!mt-0 [&_li>p+p]:!mt-0 [&_li>ul]:!mt-0 [&_ol]:!m-0 [&_ol]:!pl-6 [&_p]:!m-0 [&_p+p]:!mt-5 [&_ul]:!m-0 [&_ul]:!pl-6"
               />
             </div>
+            {needsToggle && !expanded && (
+              <span aria-hidden="true" className="block">…</span>
+            )}
             {needsToggle && (
-              <div className="mt-1 flex justify-end">
+              <div className="mt-1.5 flex justify-start">
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
                   data-chat-transcript-ignore
+                  aria-expanded={expanded}
                   onClick={() => setExpanded((v) => !v)}
-                  className="h-auto px-1 py-0 text-base text-muted-foreground hover:bg-transparent hover:text-foreground"
+                  className="h-auto gap-1 px-0 py-0 text-[length:var(--text-chat)] font-normal leading-[var(--text-chat--line-height)] text-muted-foreground hover:bg-transparent hover:text-foreground"
                 >
-                  {expanded ? "Show less" : "Show more"}
+                  <span>{expanded ? "Show less" : "Show more"}</span>
+                  <ChevronDown
+                    aria-hidden="true"
+                    className={`size-3.5 transition-transform ${expanded ? "rotate-180" : ""}`}
+                  />
                 </Button>
               </div>
             )}
@@ -117,11 +169,11 @@ export function UserMessage({
           </div>
         ) : null}
         {showCopyButton && content && shouldRenderTextBubble && (
-          <div className="pt-0.5">
+          <div className="mx-1">
             <CopyMessageButton
               content={content}
               timestampLabel={timestampLabel}
-              visibilityClassName="opacity-0 group-hover/msg:opacity-100"
+              visibilityClassName="opacity-0 group-hover/msg:opacity-100 group-focus-within/msg:opacity-100"
             />
           </div>
         )}

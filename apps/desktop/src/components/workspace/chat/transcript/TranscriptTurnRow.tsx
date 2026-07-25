@@ -90,8 +90,8 @@ export function TranscriptTurnRow({
     hasFileBadges: turn.fileBadges.length > 0,
   });
   const isLatestCompletedTurnRow = diffPanelKind === "current";
-  // Fix 2/3: the transcript's single final completed AI message. Its action
-  // row is sticky (not hover-gated) and hosts the inline goal-met marker.
+  // The transcript's single final completed AI message can host the inline
+  // goal-met marker; normal response actions remain hover/focus revealed.
   const isFinalCompletedTurn = row.isLastTurnRow
     && !!turn.completedAt
     && turn.turnId === latestCompletedTurnId;
@@ -143,13 +143,13 @@ export function TranscriptTurnRow({
           })
         : null;
   // ANCHOR INVARIANT: while the latest turn is in progress, the turn's bottom
-  // is ALWAYS a fixed-height tail slot (same h-6 as the completed-turn action
+  // is ALWAYS a fixed-height tail slot (same h-5 as the completed-turn action
   // row). "Thinking…" appearing/disappearing, and the completion handoff to
   // the copy-actions row, are content swaps inside a constant-geometry slot —
   // the transcript's bottom line never bumps.
   const showFixedTailSlot = row.isLastTurnRow && isLatestTurnInProgress;
   const trailingStatusClassName = tailAssistantCopyContent
-    ? undefined
+    ? "-mt-2.5"
     : TRAILING_STATUS_MIN_HEIGHT;
   const revertPatchesMutation = useRevertGitPatchesMutation({ workspaceId: selectedWorkspaceId });
   const showToast = useToastStore((state) => state.show);
@@ -208,9 +208,7 @@ export function TranscriptTurnRow({
 
   return (
     <TurnShell isFirst={rowIndex === 0}>
-      {/* Codex parity: uniform block rhythm from --conversation-tool-assistant-gap
-          (16px at codex's 14px chat font) → 14px at our 13px chat scale. */}
-      <div className={`flex flex-col gap-3.5 ${tailAssistantCopyContent ? "group/turn" : ""}`}>
+      <div className={`flex flex-col gap-4 ${tailAssistantCopyContent ? "group/turn" : ""}`}>
         <TurnItemSequence
           turn={turn}
           transcript={transcript}
@@ -246,11 +244,15 @@ export function TranscriptTurnRow({
           showCopyButton={row.isLastTurnRow && !!turn.completedAt}
           reserveSlot={false}
           timestampLabel={tailAssistantActionTime}
-          alwaysVisible={isFinalCompletedTurn}
           metMarker={metMarker}
         />
         {showFixedTailSlot ? (
-          <div className="flex h-6 items-center" data-turn-tail-slot>
+          <div
+            className={tailAssistantCopyContent
+              ? "-mt-2.5 flex h-5 items-center"
+              : TRAILING_STATUS_MIN_HEIGHT}
+            data-turn-tail-slot
+          >
             {trailingStatus}
           </div>
         ) : trailingStatus ? (

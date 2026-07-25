@@ -64,6 +64,25 @@ export function resolveAssistantTurnActionTime({
   );
 }
 
+export function resolveCompletedWorkHistoryLabel(
+  turn: Pick<TurnRecord, "completedAt" | "startedAt">,
+): string {
+  const startedAt = parseValidDate(turn.startedAt);
+  const completedAt = parseValidDate(turn.completedAt);
+  if (!startedAt || !completedAt) {
+    return "Work history";
+  }
+
+  const elapsedSeconds = Math.round(
+    (completedAt.getTime() - startedAt.getTime()) / 1000,
+  );
+  if (elapsedSeconds <= 0) {
+    return "Work history";
+  }
+
+  return `Worked for ${formatElapsedDuration(elapsedSeconds)}`;
+}
+
 function parseValidDate(value: string | null | undefined): Date | null {
   if (!value) {
     return null;
@@ -84,4 +103,20 @@ function isSameLocalDate(left: Date, right: Date): boolean {
   return left.getFullYear() === right.getFullYear()
     && left.getMonth() === right.getMonth()
     && left.getDate() === right.getDate();
+}
+
+function formatElapsedDuration(totalSeconds: number): string {
+  if (totalSeconds < 60) {
+    return `${totalSeconds}s`;
+  }
+
+  const totalMinutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  if (totalMinutes < 60) {
+    return seconds > 0 ? `${totalMinutes}m ${seconds}s` : `${totalMinutes}m`;
+  }
+
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
 }

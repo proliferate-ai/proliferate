@@ -67,18 +67,18 @@ export function CodeBlock({
           {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
         </Button>
       </div>
-      <div className="overflow-x-auto overflow-y-auto p-2 font-mono text-[length:var(--text-chat)] font-normal leading-[1.5]">
+      <div className="overflow-x-auto overflow-y-auto p-2 font-mono text-[length:var(--text-chat-code,var(--text-chat))] font-normal leading-[var(--text-chat-code--line-height,1.5)]">
         {children ?? (tokens ? (
           <CodeBlockTokenContent
             lines={tokens}
             renderToken={renderToken}
             showLineNumbers={showLineNumbers}
             lineNumberStart={lineNumberStart}
-            className="text-[length:var(--text-chat)] leading-[1.5] text-foreground"
+            className="text-[length:var(--text-chat-code,var(--text-chat))] leading-[var(--text-chat-code--line-height,1.5)] text-foreground"
           />
         ) : (
           <pre className="m-0 p-0">
-            <code className="whitespace-pre font-mono text-[length:var(--text-chat)] font-normal leading-[1.5] text-foreground">
+            <code className="whitespace-pre font-mono text-[length:var(--text-chat-code,var(--text-chat))] font-normal leading-[var(--text-chat-code--line-height,1.5)] text-foreground">
               {code}
             </code>
           </pre>

@@ -2,6 +2,9 @@ import { useState, type ReactNode } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Check, Copy } from "@proliferate/ui/icons";
 
+const CODE_TEXT_CLASSNAME =
+  "text-[length:var(--text-chat-code,var(--text-chat))] leading-[var(--text-chat-code--line-height,1.5)]";
+
 /**
  * Codex-style code block card: bordered rounded shell with a header carrying
  * the language label and an always-visible copy icon button. `children`
@@ -45,10 +48,10 @@ export function MarkdownCodeBlockShell({
           {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
         </Button>
       </div>
-      <div className="overflow-x-auto overflow-y-auto p-2 font-mono text-[length:var(--text-chat)] font-normal leading-[1.5] [&_pre]:!m-0 [&_pre]:!p-0 [&_pre]:!bg-transparent [&_code]:text-[length:var(--text-chat)] [&_code]:leading-[1.5]">
+      <div className={`overflow-x-auto overflow-y-auto p-2 font-mono font-normal [&_pre]:!m-0 [&_pre]:!p-0 [&_pre]:!bg-transparent [&_code]:text-[length:var(--text-chat-code,var(--text-chat))] [&_code]:leading-[var(--text-chat-code--line-height,1.5)] ${CODE_TEXT_CLASSNAME}`}>
         {children ?? (
           <pre className="m-0 p-0">
-            <code className="whitespace-pre font-mono text-[length:var(--text-chat)] font-normal leading-[1.5] text-foreground">
+            <code className={`whitespace-pre font-mono font-normal text-foreground ${CODE_TEXT_CLASSNAME}`}>
               {code}
             </code>
           </pre>

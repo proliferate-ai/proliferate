@@ -43,7 +43,7 @@ export function SubagentCreationGroupBlock({
         variant="ghost"
         size="sm"
         data-chat-transcript-ignore
-        className={`group/collapsed-actions h-auto max-w-full justify-start gap-1.5 rounded-none bg-transparent p-0 text-left ${CHAT_BUTTON_TEXT_CLASS} font-normal text-muted-foreground/60 hover:bg-transparent hover:text-foreground focus-visible:ring-0 focus-visible:underline`}
+        className={`group/collapsed-actions h-auto max-w-full justify-start gap-1.5 rounded-none bg-transparent p-0 text-left ${CHAT_BUTTON_TEXT_CLASS} font-normal text-foreground/60 hover:bg-transparent hover:text-foreground focus-visible:ring-0 focus-visible:underline`}
         aria-expanded={expanded}
         onClick={() => setExpanded((next) => !next)}
       >
@@ -124,7 +124,7 @@ function SubagentFinishedRow({
         variant="ghost"
         size="sm"
         data-chat-transcript-ignore
-        className={`group/subagent-done h-auto max-w-full justify-start gap-1.5 rounded-none bg-transparent p-0 text-left ${CHAT_BUTTON_TEXT_CLASS} font-normal text-muted-foreground/60 hover:bg-transparent hover:text-foreground focus-visible:ring-0 focus-visible:underline`}
+        className={`group/subagent-done h-auto max-w-full justify-start gap-1.5 rounded-none bg-transparent p-0 text-left ${CHAT_BUTTON_TEXT_CLASS} font-normal text-foreground/60 hover:bg-transparent hover:text-foreground focus-visible:ring-0 focus-visible:underline`}
         aria-expanded={detailsExpanded}
         onClick={() => setDetailsExpanded((next) => !next)}
       >
@@ -150,7 +150,7 @@ function SubagentFinishedRow({
               variant="ghost"
               size="sm"
               data-chat-transcript-ignore
-              className={`h-auto max-w-full justify-start gap-1 rounded-none bg-transparent p-0 text-left ${CHAT_BUTTON_TEXT_CLASS} font-normal text-muted-foreground/60 hover:bg-transparent hover:text-foreground focus-visible:ring-0`}
+              className={`h-auto max-w-full justify-start gap-1 rounded-none bg-transparent p-0 text-left ${CHAT_BUTTON_TEXT_CLASS} font-normal text-foreground/60 hover:bg-transparent hover:text-foreground focus-visible:ring-0`}
               onClick={openChild}
             >
               <span className="min-w-0 truncate">Open subagent session</span>
@@ -160,6 +160,7 @@ function SubagentFinishedRow({
             <div className="text-chat leading-[var(--text-chat--line-height)] text-foreground/90">
               <MarkdownBody
                 content={summary}
+                styleVariant="transcript"
                 className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
                 renderCodeBlock={renderDesktopCodeBlock}
               />
