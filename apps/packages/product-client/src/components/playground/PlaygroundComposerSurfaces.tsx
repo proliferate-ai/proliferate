@@ -1,4 +1,4 @@
-import { useRef, type ReactNode } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Textarea } from "@proliferate/ui/primitives/Textarea";
 import { ArrowRight } from "@proliferate/ui/icons";
@@ -22,6 +22,7 @@ import {
   PLAYGROUND_SLASH_COMMANDS,
 } from "#product/lib/domain/chat/__fixtures__/playground/composer-surface-fixtures";
 import type { SessionSlashCommandViewModel } from "#product/lib/domain/chat/composer/session-slash-command-policy";
+import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
 import { noop } from "#product/components/playground/PlaygroundComposerActions";
 import { WorkspaceStatusComposerControl } from "#product/components/workspace/chat/input/workspace-status/WorkspaceStatusComposerControl";
 import { createPlaygroundWorkspaceStatusModel } from "#product/lib/domain/chat/__fixtures__/playground/workspace-status-fixtures";
@@ -157,6 +158,34 @@ function PlaygroundSlashCommandComposerSurface({
   );
 }
 
+/**
+ * Makes the fixture descriptors interactive: selections land in local state
+ * instead of the fixtures' no-op onSelect, so control affordances that react
+ * to stepping (reasoning level swap, fast-mode toggle) can be exercised in
+ * the playground.
+ */
+function usePlaygroundLiveControls(controls: LiveSessionControlDescriptor[]) {
+  const [selectedByKey, setSelectedByKey] = useState<Record<string, string>>({});
+  return controls.map((control) => {
+    const selectedValue = selectedByKey[control.key];
+    const options = selectedValue === undefined
+      ? control.options
+      : control.options.map((option) => ({
+        ...option,
+        selected: option.value === selectedValue,
+      }));
+    return {
+      ...control,
+      options,
+      isEnabled: control.kind === "toggle" && selectedValue !== undefined
+        ? selectedValue === control.enabledValue
+        : control.isEnabled,
+      onSelect: (value: string) =>
+        setSelectedByKey((state) => ({ ...state, [control.key]: value })),
+    };
+  });
+}
+
 function PlaygroundComposerControlRow({
   ultra = false,
   statusControl,
@@ -164,15 +193,21 @@ function PlaygroundComposerControlRow({
   ultra?: boolean;
   statusControl?: ReactNode;
 }) {
+  const baseControls = useMemo(
+    () => (ultra
+      ? createPlaygroundUltraSessionConfigControls()
+      : createPlaygroundSessionConfigControls()),
+    [ultra],
+  );
+  const sessionConfigControls = usePlaygroundLiveControls(baseControls);
+
   return (
     <ChatInputControlRow
       runtimeControlsDisabled={false}
       modelSelectorProps={createPlaygroundModelSelectorProps()}
       agentKind="codex"
       statusControl={statusControl}
-      sessionConfigControls={ultra
-        ? createPlaygroundUltraSessionConfigControls()
-        : createPlaygroundSessionConfigControls()}
+      sessionConfigControls={sessionConfigControls}
       isEditingQueuedPrompt={false}
       chatDisabled={false}
       isSubmitting={false}

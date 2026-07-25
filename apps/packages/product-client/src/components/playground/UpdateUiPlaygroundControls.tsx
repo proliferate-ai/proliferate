@@ -196,6 +196,13 @@ export function UpdateUiPlaygroundControls() {
         >
           + standard toast
         </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => useToastStore.getState().show("Couldn't save workspace", "error")}
+        >
+          + error toast
+        </Button>
         <span className="mx-1 h-5 w-px bg-border" />
         <span className="text-xs text-muted-foreground">Sessions running (mock):</span>
         {[0, 1, 3].map((count) => (

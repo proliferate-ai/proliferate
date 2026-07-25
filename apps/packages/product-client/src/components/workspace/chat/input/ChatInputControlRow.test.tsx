@@ -161,7 +161,8 @@ describe("ChatInputControlRow", () => {
     renderControlRow();
     const reasoning = screen.getByRole("button", { name: "Reasoning: Medium" });
     expect(reasoning.getAttribute("title")?.startsWith("Reasoning: Medium")).toBe(true);
-    expect(screen.getByText("Medium").className).toContain("sr-only");
+    // The level name is a visible label beside the bars, not sr-only.
+    expect(screen.getByText("Medium").className).not.toContain("sr-only");
   });
 
   it("does not reserve a pending glyph beside reasoning", () => {
@@ -175,12 +176,11 @@ describe("ChatInputControlRow", () => {
     expect(reasoning.parentElement?.querySelector("svg")).toBeNull();
   });
 
-  it("renders working mode as text with a subtle disclosure chevron", () => {
+  it("renders working mode as plain text with no disclosure chevron", () => {
     renderControlRow();
     const mode = screen.getByRole("button", { name: "Mode: Default" });
     expect(screen.getByText("Default")).toBeTruthy();
-    expect(mode.querySelectorAll("svg")).toHaveLength(1);
-    expect(mode.querySelector('path[d="m6 9 6 6 6-6"]')).toBeTruthy();
+    expect(mode.querySelector("svg")).toBeNull();
   });
 
   it("does not imply disclosure for a non-settable working mode", () => {
@@ -194,19 +194,19 @@ describe("ChatInputControlRow", () => {
     expect(mode.querySelector("svg")).toBeNull();
   });
 
-  it("orders model, reasoning bars, fast mode, and working mode in the visible row", () => {
+  it("orders model, reasoning bars, working mode, and fast mode in the visible row", () => {
     renderControlRow();
 
     const model = screen.getByRole("button", { name: "Model: Opus 4.1" });
     const reasoning = screen.getByRole("button", { name: "Reasoning: Medium" });
-    const fast = screen.getByRole("button", { name: "Fast mode: Slow" });
     const mode = screen.getByRole("button", { name: "Mode: Default" });
+    const fast = screen.getByRole("button", { name: "Fast mode: Slow" });
 
     expect(model.compareDocumentPosition(reasoning) & Node.DOCUMENT_POSITION_FOLLOWING)
       .toBeTruthy();
-    expect(reasoning.compareDocumentPosition(fast) & Node.DOCUMENT_POSITION_FOLLOWING)
+    expect(reasoning.compareDocumentPosition(mode) & Node.DOCUMENT_POSITION_FOLLOWING)
       .toBeTruthy();
-    expect(fast.compareDocumentPosition(mode) & Node.DOCUMENT_POSITION_FOLLOWING)
+    expect(mode.compareDocumentPosition(fast) & Node.DOCUMENT_POSITION_FOLLOWING)
       .toBeTruthy();
   });
 

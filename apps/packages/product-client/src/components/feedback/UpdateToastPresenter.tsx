@@ -109,7 +109,9 @@ export function UpdateToastPresenter() {
     if (manualCheckCompletedAt === null) {
       return;
     }
-    toast("You're up to date", {
+    // Same announcement anatomy as the authored update toast (badge above
+    // title) so the confirmation doesn't look like a second-class toast.
+    toast(<AuthoredUpdateTitle title="You're up to date" />, {
       id: UP_TO_DATE_TOAST_ID,
       description: currentVersion
         ? `Proliferate ${currentVersion} is the latest.`

@@ -22,6 +22,16 @@ const workflowMocks = vi.hoisted(() => ({
   teardownDesktopWorker: vi.fn<(worker: DesktopWorkerBridge) => Promise<void>>(),
 }));
 
+// Toasts now render through the unified Sonner product toast; the legacy
+// store delegates to it, so capture calls here instead of reading store state.
+const toastMocks = vi.hoisted(() => ({
+  showProductToast: vi.fn<(message: string, kind?: "error" | "info") => void>(),
+}));
+
+vi.mock("#product/components/feedback/product-toast", () => ({
+  showProductToast: toastMocks.showProductToast,
+}));
+
 vi.mock("#product/lib/workflows/cloud/ensure-desktop-worker", () => ({
   ensureDesktopWorker: workflowMocks.ensureDesktopWorker,
   teardownDesktopWorker: workflowMocks.teardownDesktopWorker,
@@ -42,13 +52,12 @@ async function loadEnrollmentHarness() {
     "#product/test/product-host-fixtures"
   );
   const { useOrganizationStore } = await import("#product/stores/organizations/organization-store");
-  const { useToastStore } = await import("#product/stores/toast/toast-store");
   const { useDesktopWorkerEnrollment } = await import("#product/hooks/cloud/lifecycle/use-desktop-worker-enrollment");
   useOrganizationStore.setState({
     activeOrganizationId: null,
     activeOrganizationValidated: false,
   });
-  useToastStore.setState({ toasts: [] });
+  toastMocks.showProductToast.mockClear();
   // The enrollment hook reads captureException through the product telemetry
   // facade (host boundary), so the harness mounts a ProductHostProvider.
   // Both provider and hook come from the same post-reset module registry so
@@ -78,7 +87,7 @@ async function loadEnrollmentHarness() {
       useOrganizationStore.getState().setActiveOrganizationId(organizationId, {
         validated: true,
       }),
-    getToasts: () => useToastStore.getState().toasts,
+    getToastCalls: () => toastMocks.showProductToast.mock.calls,
     nudgeRender: () => rendered.rerender({ ...props }),
   };
 }
@@ -274,12 +283,11 @@ describe("useDesktopWorkerEnrollment", () => {
 
     harness.signIn("user-a");
     await waitFor(() => {
-      expect(harness.getToasts()).toEqual([
-        expect.objectContaining({
-          message:
-            "Cloud integrations worker failed to start: worker exited: enrollment contract mismatch",
-          type: "error",
-        }),
+      expect(harness.getToastCalls()).toEqual([
+        [
+          "Cloud integrations worker failed to start: worker exited: enrollment contract mismatch",
+          "error",
+        ],
       ]);
     });
   });
@@ -310,6 +318,6 @@ describe("useDesktopWorkerEnrollment", () => {
       failOldEnrollment?.();
       await flushEffects();
     });
-    expect(harness.getToasts()).toEqual([]);
+    expect(harness.getToastCalls()).toEqual([]);
   });
 });

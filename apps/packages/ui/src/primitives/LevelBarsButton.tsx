@@ -1,4 +1,4 @@
-import { forwardRef, type ButtonHTMLAttributes, type MouseEvent } from "react";
+import { forwardRef, type ButtonHTMLAttributes, type MouseEvent, type ReactNode } from "react";
 import { ComposerControlButton } from "./ComposerControlButton";
 
 interface Level {
@@ -14,6 +14,8 @@ interface LevelBarsButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonEleme
   onStep: (nextValue: string) => void;
   iconOnly?: boolean;
   emphasis?: LevelBarsEmphasis;
+  /** Overrides the derived current-level label (e.g. to animate label swaps). */
+  label?: ReactNode;
 }
 
 // HTML bars, not an inline SVG: WebKit does not compositor-accelerate
@@ -82,6 +84,7 @@ export const LevelBarsButton = forwardRef<HTMLButtonElement, LevelBarsButtonProp
     onClick,
     iconOnly = false,
     emphasis = "none",
+    label,
     className = "",
     ...props
   }, ref) {
@@ -106,7 +109,7 @@ export const LevelBarsButton = forwardRef<HTMLButtonElement, LevelBarsButtonProp
         ref={ref}
         icon={<LevelBarsIcon levels={levels} currentIndex={currentIndex} emphasis={emphasis} />}
         iconOnly={iconOnly}
-        label={currentLabel}
+        label={label ?? currentLabel}
         onClick={handleClick}
         className={`${emphasisButtonClass} ${className}`}
         {...props}

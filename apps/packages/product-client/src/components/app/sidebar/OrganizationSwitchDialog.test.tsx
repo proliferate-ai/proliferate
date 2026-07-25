@@ -4,9 +4,15 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { OrganizationRecord } from "#product/lib/domain/organizations/organization-records";
 import { OrganizationSwitchDialog } from "#product/components/app/sidebar/OrganizationSwitchDialog";
-import { useToastStore } from "#product/stores/toast/toast-store";
 
 const switchMock = vi.fn<(organizationId: string) => Promise<void>>();
+
+// Toasts render through the unified Sonner product toast; the legacy store
+// delegates to it, so assert against showProductToast rather than store state.
+const showProductToastMock = vi.fn();
+vi.mock("#product/components/feedback/product-toast", () => ({
+  showProductToast: (...args: unknown[]) => showProductToastMock(...args),
+}));
 
 vi.mock("#product/hooks/organizations/workflows/use-organization-switch-action", () => ({
   useOrganizationSwitchAction: () => ({
@@ -48,7 +54,7 @@ function organization(id: string, name: string): OrganizationRecord {
 describe("OrganizationSwitchDialog", () => {
   beforeEach(() => {
     switchMock.mockReset();
-    useToastStore.setState({ toasts: [] });
+    showProductToastMock.mockReset();
   });
 
   afterEach(() => {
@@ -68,7 +74,7 @@ describe("OrganizationSwitchDialog", () => {
       expect(onClose).toHaveBeenCalledTimes(1);
     });
     expect(switchMock).toHaveBeenCalledWith("org-2");
-    expect(useToastStore.getState().toasts).toHaveLength(0);
+    expect(showProductToastMock).not.toHaveBeenCalled();
   });
 
   it("surfaces an error toast and keeps the dialog open when the switch fails", async () => {
@@ -81,11 +87,9 @@ describe("OrganizationSwitchDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Switch organization" }));
 
     await waitFor(() => {
-      expect(useToastStore.getState().toasts).toHaveLength(1);
+      expect(showProductToastMock).toHaveBeenCalledTimes(1);
     });
-    const [toast] = useToastStore.getState().toasts;
-    expect(toast.message).toBe("worker teardown failed");
-    expect(toast.type).toBe("error");
+    expect(showProductToastMock).toHaveBeenCalledWith("worker teardown failed", "error");
     // The switch failed, so the dialog stays open for a retry.
     expect(onClose).not.toHaveBeenCalled();
   });

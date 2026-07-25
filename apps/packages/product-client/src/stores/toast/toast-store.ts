@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { showProductToast } from "#product/components/feedback/product-toast";
 
 export interface Toast {
   id: string;
@@ -12,21 +13,16 @@ interface ToastStore {
   dismiss: (id: string) => void;
 }
 
-function createToastId(): string {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return crypto.randomUUID();
-  }
-
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-}
-
-export const useToastStore = create<ToastStore>((set) => ({
+/**
+ * Legacy toast entry point. The zustand shape survives so the ~70 existing
+ * `useToastStore((s) => s.show)` call sites keep working, but presentation is
+ * delegated to the unified Sonner product toast — nothing renders from this
+ * store anymore (`toasts` stays empty; Sonner owns stacking and dismissal).
+ */
+export const useToastStore = create<ToastStore>(() => ({
   toasts: [],
   show: (message, type = "error") => {
-    const id = createToastId();
-    set((s) => ({ toasts: [...s.toasts, { id, message, type }] }));
+    showProductToast(message, type);
   },
-  dismiss: (id) => {
-    set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }));
-  },
+  dismiss: () => {},
 }));
