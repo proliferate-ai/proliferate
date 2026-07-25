@@ -21,7 +21,7 @@ expectations, but it is not the owner of a full user workflow.
 | Sandbox GitHub auth | GitHub App authorization, sandbox Git credential leases, worker refresh, Git credential helper behavior, and cloud repo Git access boundaries. | [sandbox-github-auth.md](sandbox-github-auth.md) |
 | Model gateway | LiteLLM proxy artifact and deployment, enrollment/teams/virtual keys, budgets, access-group model gating, usage import. | [model-gateway.md](model-gateway.md) (Status: target) |
 | Billing | Credit authorization, Stripe subscription/refill behavior, budget reconciliation, billing state in product responses, and billing QA. | [billing.md](billing.md) |
-| Model catalog | Model catalog source of truth, projection, availability, and selector-facing catalog behavior. | [model-catalog.md](model-catalog.md) |
+| Model catalog | Probe-first model truth: machine snapshots, cloud snapshots, shipped-catalog fallback, launch validation universe, visibility, and model identity. | [model-catalog.md](model-catalog.md) (Status: target) |
 | Agent distribution | Registry/catalog document contract, pinned auto-install and seed topology, binary-carried catalog convergence, supervisor-owned runtime binary convergence, the probe pipeline, and readiness projection. | [agent-distribution.md](agent-distribution.md) (Status: target) |
 
 ## Naming Notes
