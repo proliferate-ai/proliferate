@@ -27,7 +27,7 @@ import {
 } from "#product/components/settings/panes/repo/RepoScopeStates";
 
 const SCRIPT_PLACEHOLDER = "pnpm install\npnpm prisma generate";
-const RUN_COMMAND_INPUT_CLASS = "h-8 w-72 px-2.5 font-mono text-ui-sm";
+const RUN_COMMAND_INPUT_CLASS = "h-8 w-full rounded-lg px-2.5 font-mono text-ui-sm";
 
 /**
  * Repo → Actions: scripts that run around agent workspaces for this repo, per
@@ -58,10 +58,10 @@ export function RepoActionsPane({
     );
   }
   return (
-    <section className="space-y-6">
+    <section className="space-y-5">
       <SettingsPageHeader
         title="Actions"
-        description="Scripts that run around agent workspaces for this repo."
+        description="Commands that run in agent workspaces for this repo."
       />
       {context === "cloud" ? (
         <ActionsCloud
@@ -106,8 +106,11 @@ function ActionsCloud({
       cloudSignInChecking={cloudSignInChecking}
       cloudSignInAvailable={cloudSignInAvailable}
     >
-      <SettingsSection title="Setup script">
-        <div className="space-y-2 pt-2">
+      <SettingsSection
+        title="Setup script"
+        description="Runs once when a cloud workspace is created."
+      >
+        <div>
           <ScriptBlock
             ariaLabel="Cloud setup script"
             fileLabel="setup.sh"
@@ -116,16 +119,13 @@ function ActionsCloud({
             onChange={draft.setSetupScript}
             className="w-full"
           />
-          <p className="text-ui-sm text-muted-foreground/80">
-            Runs once when a cloud workspace is created.
-          </p>
         </div>
       </SettingsSection>
       <SettingsSection
         title="Run command"
-        description="Launched by the workspace Run action in cloud workspaces."
+        description="Runs from the workspace Run action."
       >
-        <div className="pt-2">
+        <div>
           <Input
             aria-label="Cloud run command"
             value={draft.runCommand}
@@ -184,8 +184,11 @@ function ActionsLocalEditor({ repository }: { repository: SettingsRepositoryEntr
 
   return (
     <>
-      <SettingsSection title="Setup script">
-        <div className="space-y-2 pt-2">
+      <SettingsSection
+        title="Setup script"
+        description="Runs once when a local worktree is created."
+      >
+        <div className="space-y-2">
           <ScriptBlock
             ariaLabel="Local setup script"
             fileLabel="setup.sh"
@@ -195,7 +198,7 @@ function ActionsLocalEditor({ repository }: { repository: SettingsRepositoryEntr
             className="w-full"
           />
           <p className="text-ui-sm text-muted-foreground/80">
-            Runs inside the new worktree. Available vars include{" "}
+            Available variables:{" "}
             <code>PROLIFERATE_WORKTREE_DIR</code>, <code>PROLIFERATE_REPO_DIR</code>,{" "}
             <code>PROLIFERATE_BRANCH</code>, and <code>PROLIFERATE_BASE_REF</code>.
           </p>
@@ -203,7 +206,7 @@ function ActionsLocalEditor({ repository }: { repository: SettingsRepositoryEntr
         {isDetecting || hasHints ? (
           <SettingsRow
             label="Suggestions"
-            description="Detected setup commands and ignored-file sync helpers."
+            description="Detected commands and ignored-file sync helpers."
             className="sm:flex-col sm:items-stretch"
           >
             {isDetecting ? (
@@ -231,7 +234,7 @@ function ActionsLocalEditor({ repository }: { repository: SettingsRepositoryEntr
         ) : null}
       </SettingsSection>
       <SettingsSection title="Run command">
-        <div className="w-72 space-y-2 pt-2">
+        <div className="space-y-2">
           <Input
             aria-label="Local run command"
             value={runCommandDraft}
@@ -276,7 +279,7 @@ function SetupHintRows({
           return (
             <Label
               key={hint.id}
-              className="mb-0 flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 hover:bg-foreground/5"
+              className="mb-0 flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-muted/50"
             >
               <Checkbox
                 checked={checked}
