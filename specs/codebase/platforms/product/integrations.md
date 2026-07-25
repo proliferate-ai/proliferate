@@ -13,6 +13,9 @@ removed).
 ## Mental Model
 
 ```text
+seed definitions (code) sync into the catalog at server boot
+  -> org admins can add org-custom MCP definitions at runtime
+
 user connects provider
   -> Cloud stores encrypted credentials on cloud_integration_account
 
@@ -62,6 +65,52 @@ access live under
 Raw OAuth and MCP protocol clients live under
 [`server/proliferate/integrations/`](../../../../server/proliferate/integrations/)
 and do not own product persistence.
+
+### Definitions and seeds
+
+Providers enter the catalog through one of two paths:
+
+- Seed definitions are code: the `SEED_DEFINITIONS` tuple in
+  [`seeds.py`](../../../../server/proliferate/server/cloud/integrations/seeds.py).
+  Each entry is a declarative record (namespace, auth kind, OAuth client
+  mode, launch config with header/query templates and connect-form fields);
+  the connect dialog, catalog and health APIs, credential encryption, and
+  call-time header rendering are all driven from it, so most providers need
+  no provider-specific code anywhere. `sync_seed_definitions` upserts the
+  tuple into `cloud_integration_definition` at every server boot and
+  archives seeds that left the tuple, so shipping or retiring a provider is
+  a plain code deploy with no migration. Two things require code beyond the
+  seed entry: a provider whose OAuth demands a pre-registered client
+  instead of RFC 7591 dynamic registration (a namespace branch in
+  [`oauth/clients.py`](../../../../server/proliferate/server/cloud/integrations/oauth/clients.py)
+  plus environment settings; Slack is the only case), and a provider whose
+  tool surface mixes reads with external actions (a tool policy, below;
+  also only Slack). The procedure is
+  [integration-providers.md](../../../developing/operating/integration-providers.md).
+- Org-custom definitions are data: an organization admin registers any MCP
+  URL through the admin routes, Cloud probes it for OAuth support, and the
+  resulting `org_custom` row is visible only to that organization and
+  cascade-deletes with it.
+
+### Account disconnect
+
+Deleting an account (`DELETE /v1/cloud/integrations/accounts/{account_id}`)
+is a local hard delete: the account row and its tool-schema cache are
+removed, OAuth flow rows cascade, and approval rows survive as audit
+snapshots. Because the gateway resolves the account on every call, running
+agents lose access at their next tool call without being shut down, and
+`integrations.list_providers` stops listing the provider immediately.
+Nothing is materialized into sandboxes per provider, so no session
+re-materialization is involved.
+
+Disconnect deliberately does not call the provider's OAuth revocation
+endpoint. The provider-issued token existed only as ciphertext in
+`cloud_integration_account`, so deleting the row destroys the only copy;
+the token remains formally valid at the provider until it expires and the
+authorization lingers in the provider's third-party-apps list. Accepted
+tradeoff for now; a best-effort RFC 7009 revocation before delete (the
+authorization-server metadata discovered during DCR usually advertises
+`revocation_endpoint`) is the known follow-up.
 
 ### OAuth scope integrity
 
@@ -199,6 +248,26 @@ then starts the local Worker through Tauri. Desktop revoke is an idempotent
 user-authenticated operation that revokes the matching active Worker and
 gateway token.
 
+A Worker identity is an immutable (user, organization, install) triple, so a
+Desktop organization switch rotates the Worker rather than mutating it: the
+switch action closes running local sessions, stops the Worker, and deletes
+the gateway credential file before the enrollment guard re-enrolls under the
+new organization, whose ticket consumption revokes the predecessor Worker
+and gateway token server-side. An org-less user gaining their first
+organization re-enrolls in place without teardown. Cloud sandboxes never
+switch: the enrollment inherits the sandbox's scope for the sandbox's life.
+
+The organization scope on a Desktop enrollment is client-declared. Cloud
+membership-validates any claimed organization and re-validates it on every
+gateway request, but nothing forces a member to claim one; Desktop
+deliberately enrolls org-less on cold start before the active organization
+resolves. An org-less Worker sees seed definitions only and no organization
+policy overlay applies to it, so an organization member can bypass the org's
+integration policy for their personal accounts by enrolling org-less.
+Accepted v1 tradeoff: organization integration policy is governance for
+org-scoped Workers, not a security boundary against the organization's own
+members.
+
 ## Integration Gateway
 
 [`integration_gateway/dependencies.py`](../../../../server/proliferate/server/cloud/integration_gateway/dependencies.py)
@@ -332,8 +401,11 @@ bypass them.
 
 ### Frozen next Slack delivery slice
 
-The next slice is limited to actual approved delivery of
-`slack_send_message`. Its contract is:
+Everything in this subsection is future contract, not current behavior. No
+approved action is delivered today: the one-time-consumption seam
+(`consume_action_for_execution_committed`) exists with no callers, so even
+an `approved` row never reaches Slack. The next slice is limited to actual
+approved delivery of `slack_send_message`. Its contract is:
 
 1. Add only `chat:write` to the exact six-scope Slack set above and require an
    explicit OAuth reauthorization before a Slack account at the new
