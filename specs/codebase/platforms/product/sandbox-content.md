@@ -24,7 +24,8 @@ Fences, one owner per concern:
 - Cloud workspace creation choreography — request validation, GitHub
   authority checks, row transactions — belongs to
   [workspace-provisioning.md](workspace-provisioning.md). This document owns
-  what that choreography puts on disk and when it leaves.
+  what that choreography puts on disk, the two records that describe it,
+  and when it all leaves.
 - GitHub *authority* — tokens, credential leases, the credential helper —
   belongs to [sandbox-github-auth.md](sandbox-github-auth.md). This document
   owns *identity*: who the commit says it is by. (That document is scheduled
@@ -180,11 +181,76 @@ backstop, the retention pass
   managed root, and — via retire preflight and session admission fencing —
   any worktree with an admitted live session.
 
+## One workspace, two records
+
+**The runtime record.** AnyHarness records every workspace it creates in its
+own store
+([model.rs](../../../../anyharness/crates/anyharness-lib/src/domains/workspaces/model.rs),
+persisted by
+[store/row.rs](../../../../anyharness/crates/anyharness-lib/src/domains/workspaces/store/row.rs)):
+kind, repo root, path, branches, display name, lifecycle and cleanup state.
+This record is the runtime truth in every environment — the same
+`POST /v1/workspaces/worktrees` call, the same row, whether the runtime is a
+Desktop process or a cloud VM. The runtime knows nothing above itself: no
+field, import, or code path in the AnyHarness crate references the Cloud
+database.
+
+**The product record.** Cloud workspace creation wraps that same runtime
+call in a product-plane transaction
+([workspaces/service.py](../../../../server/proliferate/server/cloud/workspaces/service.py)):
+a `cloud_workspace` row — owner, kind, repository environment, display name,
+branch, base branch
+([db/models/cloud/workspaces.py](../../../../server/proliferate/db/models/cloud/workspaces.py))
+— commits first, the runtime call follows, and the returned runtime
+workspace id is stamped back onto the row. The row deliberately duplicates
+the naming and branch metadata the runtime also keeps; the link between the
+planes is that one opaque id, written server-to-runtime-and-back, never
+synced in reverse.
+
+Local creation writes no product record: the client calls the runtime
+directly
+([use-workspace-actions.ts](../../../../apps/packages/product-client/src/hooks/workspaces/workflows/use-workspace-actions.ts))
+and the runtime record is the only record. The asymmetry is the point:
+
+- A local runtime lives on the same machine as the client — alive exactly
+  when the app is — so listing local workspaces just asks the runtime
+  ([use-workspaces.ts](../../../../apps/packages/product-client/src/hooks/workspaces/cache/use-workspaces.ts));
+  a durable second record would only be a cache that can go stale.
+- A cloud runtime is usually *not* reachable: paused, killed, or the app is
+  a web tab with no VM awake. The cloud list endpoint
+  ([workspaces/api.py](../../../../server/proliferate/server/cloud/workspaces/api.py))
+  reads Postgres only — runtime status derives from the stored sandbox row,
+  never a live health call — so the product renders every cloud workspace,
+  with an honest status badge, whether or not any VM exists. The row is
+  also what makes creation optimistic: it commits before the runtime is
+  even asked, so the workspace appears under its target immediately (the
+  client seeds the same collections cache local list results land in,
+  [collections.ts](../../../../apps/packages/product-client/src/lib/domain/workspaces/cloud/collections.ts)).
+- The row is the durable half of the marked-lost design (below): when the
+  VM dies the runtime record dies with it, and the `cloud_workspace` row is
+  what survives to say this workspace existed and its content is lost.
+
+Worktrees born inside the runtime with no product row — workflow placements,
+anything created straight through the runtime API — are runtime-plane only:
+invisible to the cloud workspace list by design, retention's to collect,
+never the product's to display. There is no reconciliation job scanning the
+runtime for them, and none is planned; the product plane records what the
+product created, not everything the runtime holds.
+
 ## Git identity
 
-Resolved server-side once per user per sandbox and written as global git
-config during repository materialization (the VM is single-user; it lands
-before the first workspace exists, so no commit can precede it):
+**Every commit from a cloud sandbox is the user's commit.** A workspace
+branch fills with commits made by agents, and those commits leave the
+sandbox — pushed to GitHub, opened as PRs, counted in contribution graphs,
+read by teammates deciding who to ask about a change. An unattributed
+commit is a small permanent lie in the user's repository history, and it is
+not repairable after push. So identity is materialized before the first
+commit is possible, and a user with no resolvable identity fails typed
+rather than committing as nobody.
+
+Resolution happens server-side, once per user per sandbox, written as
+global git config during repository materialization (the VM is single-user;
+global scope is correct, and it lands before the first workspace exists):
 
 - email: GitHub account email, else the Proliferate account email, else a
   typed `git_identity_required` failure — never an anonymous fallback;
@@ -255,13 +321,19 @@ and a full disk fails writes (the typed ENOSPC receipt above). If the VM is
 killed anyway — provider incident, account action, our own kill — the
 `killed` webhook detaches the binding and the logical sandbox survives
 ([sandbox-lifecycle.md](sandbox-lifecycle.md)); the content does not.
-Recovery is rematerialization: clones re-clone, identity re-materializes,
-and each workspace re-cuts its worktree on the replacement VM at its
-recorded branch. What cannot be recovered is exactly what the durability
-law bounds: unpushed commits and uncommitted edits — which is why the
-ahead/dirty signal stays visible in the same status surface as disk, and
-why nothing in this platform ever treats sandbox disk as the only copy of
-anything else.
+
+**A killed VM is a fresh start, not a restore.** The replacement VM begins
+as a new sandbox: the environment layer rebuilds itself on demand (clones
+re-clone on the next materialization, identity re-materializes), but the
+workspaces are not rebuilt. The work inside them — the only thing that made
+each worktree worth having — died with the VM, and re-cutting empty
+worktrees under the old names would dress the loss up as recovery. Instead
+the loss is surfaced honestly: workspaces bound to the lost VM are marked
+lost, the product shows them as such, and the user starts new workspaces on
+the replacement. What survives is exactly what the durability law bounds —
+everything pushed to GitHub — which is why the ahead/dirty signal stays
+visible in the same status surface as disk, and why nothing in this
+platform ever treats sandbox disk as the only copy of anything.
 
 ## A repository's first week, worked
 
@@ -337,6 +409,9 @@ apps/packages/product-client/src/
   legitimate instance of this path, not an error to block on.
 - Concurrent creates on one sandbox: serialized by the materialization
   lock; timeout is a typed 503.
+- Runtime create fails after the product row commits: the optimistic row
+  survives with no runtime id stamped and renders as unhydrated rather than
+  pretending to be a workspace; nothing was fabricated on the runtime side.
 - Create fails after the worktree exists: an orphan worktree with no
   committed row; retention collects it, correlated through the runtime's
   workspace record.
@@ -348,9 +423,9 @@ apps/packages/product-client/src/
   pressure was visible before the failure.
 - Identity resolution finds no email: typed `git_identity_required`; no
   anonymous commit.
-- VM killed: content lost, rows survive; workspaces rematerialize on the
-  replacement VM; unpushed work is gone and was visibly flagged while it
-  existed.
+- VM killed: content lost, sandbox row survives; bound workspaces are
+  marked lost rather than restored empty; unpushed work is gone and was
+  visibly flagged while it existed.
 
 ## Proof
 
@@ -365,8 +440,8 @@ apps/packages/product-client/src/
   [deletion_tests.rs](../../../../anyharness/crates/anyharness-lib/src/domains/workspaces/deletion_tests.rs).
 - Pending, landing with the gap PRs: fetch-on-create classification tests;
   paired-reclaim integration proof (workspace delete retires, repo-env
-  delete reclaims); a live disk axis reading end to end; workspace
-  rematerialization after provider loss.
+  delete reclaims); a live disk axis reading end to end; workspaces marked
+  lost after provider loss.
 
 ## Current gaps
 
@@ -430,12 +505,13 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       generic runtime-not-ready receipt
       ([failures.py](../../../../server/proliferate/server/cloud/materialization/failures.py)).
       Detect and type it.
-- [ ] After provider loss, workspaces dangle: the replacement VM has none
-      of the old worktrees, but `cloud_workspace` rows still reference dead
-      AnyHarness workspace ids; today's recovery is manual
-      delete-and-recreate
+- [ ] After provider loss, workspaces dangle instead of being marked lost:
+      `cloud_workspace` rows still reference dead AnyHarness workspace ids
+      on the replacement VM, surfacing as opaque runtime errors, and
+      today's recovery is manual delete-and-recreate
       ([cloud-provisioning-failure.md](../../../developing/operating/cloud-provisioning-failure.md)).
-      Implement workspace rematerialization on the replacement VM.
+      On binding detach, mark the bound workspaces lost and surface that
+      state in the product; the replacement VM starts empty by design.
 - [ ] The `prune_workspace_worktree` cloud command kind is dead — an enum
       member and DB-constraint slot with no producer, payload, or consumer
       ([constants/cloud.py](../../../../server/proliferate/constants/cloud.py)).
