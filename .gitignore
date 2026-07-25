@@ -93,6 +93,9 @@ design-system/
 __pycache__/
 *.pyc
 
+# Local all-specifications bundle
+specs/generated/all-specs.md
+
 # Build-time copy of the agent catalog for @proliferate/product-client
 # (emitted by scripts/copy-product-client-assets.mjs from catalogs/agents/catalog.json)
 apps/packages/product-client/src/generated/

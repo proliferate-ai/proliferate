@@ -111,7 +111,7 @@ endif
         server-db-down server-db-ready server-redis-up server-redis-wait server-redis-down server-redis-ready \
         server-background-up server-background-logs server-background-down \
         server-litellm-up server-litellm-wait server-litellm-down db db-local db-ah server-migrate serve install \
-        check check-max-lines check-server-boundaries test test-server fmt clippy \
+        check check-max-lines check-server-boundaries specs-bundle test test-server fmt clippy \
         dev-automation-worker \
         sdk-generate sdk-build sdk-react-build cloud-sdk-build cloud-sdk-react-build shared-build dev-artifacts-ready build-rust runtime-build web-build desktop-build build-frontend build rebuild \
         desktop-test-build release-desktop-dry-run release-desktop-draft \
@@ -1419,6 +1419,9 @@ lint-server:
 	cd server && .venv/bin/ruff check proliferate/ tests/ && .venv/bin/ruff format --check proliferate/ tests/ && .venv/bin/mypy proliferate/
 
 # --- Checks ---
+
+specs-bundle:
+	python3 scripts/regenerate_specs_bundle.py
 
 check:
 	$(CARGO) check --workspace

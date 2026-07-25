@@ -6,6 +6,7 @@ owners. Do not edit generated output by hand.
 | Reference | Owner | Regenerate |
 | --- | --- | --- |
 | [`anyharness-db-schema.sql`](anyharness-db-schema.sql) | AnyHarness SQLite migrations and schema snapshot test | `cargo test -p anyharness-lib update_anyharness_schema_snapshot -- --ignored` |
+| `all-specs.md` (local, ignored) | All files under `specs/` | `make specs-bundle` |
 
 The owning test must fail when generated output drifts from its source.
 
