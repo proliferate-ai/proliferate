@@ -16,7 +16,7 @@ function fakeEvidence(overrides: Partial<RunEvidence> = {}): RunEvidence {
   return {
     schemaVersion: 1,
     run: {
-      runId: "run-1",
+      runId: "test-nonqualifying-run",
       sourceSha: "deadbeef",
       candidateManifestHash: "hash",
       retainedManifestHash: null,
@@ -24,7 +24,7 @@ function fakeEvidence(overrides: Partial<RunEvidence> = {}): RunEvidence {
       origin: "local:test",
       createdAt: new Date().toISOString(),
     },
-    shard: { runId: "run-1", shardId: "shard-1-of-1", shardIndex: 0, shardCount: 1 },
+    shard: { runId: "test-nonqualifying-run", shardId: "shard-1-of-1", shardIndex: 1, shardCount: 1 },
     behavior: "diagnostic",
     qualifying: false,
     dryRun: false,
@@ -54,7 +54,7 @@ test("JsonlEvidenceSink: finalize writes exactly one final document and a second
   const sink = new JsonlEvidenceSink(base, "test-nonqualifying-run", "shard-1-of-1");
   await sink.finalize(fakeEvidence());
   const written = JSON.parse(readFileSync(`${base}.final.json`, "utf8")) as RunEvidence;
-  assert.equal(written.run.runId, "run-1");
+  assert.equal(written.run.runId, "test-nonqualifying-run");
   await assert.rejects(() => sink.finalize(fakeEvidence()), /already finalized/);
 });
 

@@ -62,6 +62,8 @@ export class JsonlEvidenceSink implements EvidenceSink {
   }
 
   async finalize(evidence: RunEvidence): Promise<void> {
-    this.core.finalizeDocument(evidence, `${evidence.run.runId}/${evidence.shard.shardId}`);
+    // Describe with the SINK's claimed identity — malformed caller evidence
+    // must not control the error surface.
+    this.core.finalizeDocument(evidence, `${this.runId}/${this.shardId}`);
   }
 }

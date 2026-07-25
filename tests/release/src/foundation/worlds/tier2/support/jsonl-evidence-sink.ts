@@ -47,9 +47,14 @@ export class JsonlEvidenceSink implements EvidenceSink {
    * qualification-capable sink must never stamp evidence with a placeholder
    * identity. (Tests needing a throwaway identity must name one explicitly.)
    */
+  private readonly runId: string;
+  private readonly shardId: string;
+
   constructor(baseFilePath: string, runId: string, shardId: string) {
     this.eventsPath = `${baseFilePath}.events.jsonl`;
     this.finalPath = `${baseFilePath}.final.json`;
+    this.runId = runId;
+    this.shardId = shardId;
     mkdirSync(path.dirname(baseFilePath), { recursive: true });
     this.core = new DurableEvidenceCore({
       runId,
@@ -65,6 +70,6 @@ export class JsonlEvidenceSink implements EvidenceSink {
   }
 
   async finalize(evidence: RunEvidence): Promise<void> {
-    this.core.finalizeDocument(evidence, `${evidence.run.runId}/${evidence.shard.shardId}`);
+    this.core.finalizeDocument(evidence, `${this.runId}/${this.shardId}`);
   }
 }

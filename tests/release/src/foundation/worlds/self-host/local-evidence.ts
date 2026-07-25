@@ -78,7 +78,7 @@ export class LocalJsonlEvidenceSink implements EvidenceSink {
   async finalize(evidence: RunEvidence): Promise<void> {
     this.ensureCore().finalizeDocument(
       scrub(evidence as unknown as Record<string, unknown>) as object,
-      `${evidence.run.runId}/${evidence.shard.shardId}`,
+      `${this.runId}/${this.shardId}`,
     );
   }
 }

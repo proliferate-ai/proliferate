@@ -279,3 +279,66 @@ test("REGRESSION: finalize is terminal even when the SCREEN rejects (failure bef
   assert.ok(!existsSync(s.evidencePath), "no verdict was written");
   rmSync(dir, { recursive: true, force: true });
 });
+
+// ── Final evidence identity is bound to the claimed journal ──
+
+test("IDENTITY: a foreign run.runId cannot finalize under this journal (and the mismatch is terminal)", async () => {
+  const dir = tmp();
+  const s = sink(dir); // claims run-1/shard-1-of-1
+  const foreign = { ...fakeEvidence(), run: { ...fakeEvidence().run, runId: "foreign-run" } };
+  await assert.rejects(() => s.finalize(foreign as RunEvidence), /run\.runId foreign-run != sink runId run-1/);
+  assert.ok(!existsSync(s.evidencePath), "no final file was written");
+  // Mismatch is terminal: append and retry both fail.
+  await assert.rejects(() => s.append({ event: "late" }), /no further appends/);
+  await assert.rejects(() => s.finalize(fakeEvidence()), /terminal and cannot be retried/);
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("IDENTITY: a foreign shard.shardId cannot finalize under this journal", async () => {
+  const dir = tmp();
+  const s = sink(dir);
+  const base = fakeEvidence();
+  const foreign = { ...base, shard: { ...base.shard, shardId: "shard-2-of-2" } };
+  await assert.rejects(() => s.finalize(foreign as RunEvidence), /shard\.shardId shard-2-of-2 != sink shardId shard-1-of-1/);
+  assert.ok(!existsSync(s.evidencePath));
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("IDENTITY: a mismatched shard.runId (run/shard disagree) cannot finalize", async () => {
+  const dir = tmp();
+  const s = sink(dir);
+  const base = fakeEvidence();
+  const foreign = { ...base, shard: { ...base.shard, runId: "other-run" } };
+  await assert.rejects(() => s.finalize(foreign as RunEvidence), /shard\.runId other-run != sink runId run-1/);
+  assert.ok(!existsSync(s.evidencePath));
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("IDENTITY: a toJSON that swaps identity during materialization is caught by the post-materialization re-check", async () => {
+  const dir = tmp();
+  const s = sink(dir);
+  const base = fakeEvidence();
+  // Raw document carries the CORRECT identity (passes the pre-check), but its
+  // run object serializes to a foreign identity.
+  const trojanRun = {
+    ...base.run,
+    toJSON() {
+      return { ...base.run, runId: "swapped-by-tojson" };
+    },
+  };
+  const trojan = { ...base, run: trojanRun };
+  await assert.rejects(
+    () => s.finalize(trojan as unknown as RunEvidence),
+    /materialized document.*run\.runId swapped-by-tojson != sink runId run-1/s,
+  );
+  assert.ok(!existsSync(s.evidencePath), "no final file was written");
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("IDENTITY: matching identity finalizes cleanly (control)", async () => {
+  const dir = tmp();
+  const s = sink(dir);
+  await s.finalize(fakeEvidence());
+  assert.ok(existsSync(s.evidencePath));
+  rmSync(dir, { recursive: true, force: true });
+});

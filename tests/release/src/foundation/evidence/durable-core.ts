@@ -132,9 +132,16 @@ export class DurableEvidenceCore {
         `evidence already ${this.state === "sealed" ? "finalized" : "finalizing"} for ${describe}; a finalize attempt is terminal and cannot be retried under the same run/shard identity`,
       );
     }
-    // Terminal from the moment finalization begins.
+    // Terminal from the moment finalization begins — BEFORE any validation,
+    // so an identity mismatch is itself terminal (no retry with a fixed doc
+    // under the same claimed journal).
     this.state = "sealing";
     try {
+      // Identity binding: the verdict must belong to the journal this core
+      // exclusively claimed. Checked on the RAW document here and re-checked
+      // on the MATERIALIZED value in publish() — a toJSON cannot swap
+      // identities.
+      this.assertIdentity(document, "document");
       this.publish(document, describe);
       this.state = "sealed";
     } catch (error) {
@@ -143,11 +150,41 @@ export class DurableEvidenceCore {
     }
   }
 
+  /**
+   * Rejects a final document whose run/shard identity does not match the
+   * journal this core claimed: evidence.run.runId, evidence.shard.runId, and
+   * evidence.shard.shardId must all equal the sink's identity. Foreign-run or
+   * foreign-shard verdicts can never publish under this journal.
+   */
+  private assertIdentity(document: object, what: string): void {
+    const doc = document as {
+      run?: { runId?: unknown };
+      shard?: { runId?: unknown; shardId?: unknown };
+    };
+    const problems: string[] = [];
+    if (doc.run?.runId !== this.opts.runId) {
+      problems.push(`run.runId ${String(doc.run?.runId)} != sink runId ${this.opts.runId}`);
+    }
+    if (doc.shard?.runId !== this.opts.runId) {
+      problems.push(`shard.runId ${String(doc.shard?.runId)} != sink runId ${this.opts.runId}`);
+    }
+    if (doc.shard?.shardId !== this.opts.shardId) {
+      problems.push(`shard.shardId ${String(doc.shard?.shardId)} != sink shardId ${this.opts.shardId}`);
+    }
+    if (problems.length > 0) {
+      throw new Error(
+        `evidence identity does not match the claimed journal (${what}): ${problems.join("; ")}`,
+      );
+    }
+  }
+
   private publish(document: object, describe: string): void {
     if (existsSync(this.opts.finalPath)) {
       throw new Error(`evidence already finalized for ${describe}`);
     }
     const materialized = JSON.parse(JSON.stringify(document));
+    // Re-check identity binding AFTER materialization (toJSON applied).
+    this.assertIdentity(materialized, "materialized document");
     this.opts.screen(materialized);
 
     const tmpPath = `${this.opts.finalPath}.tmp-${randomUUID()}`;
