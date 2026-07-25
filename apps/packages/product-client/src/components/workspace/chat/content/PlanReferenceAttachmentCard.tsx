@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
+import { RowActionIconButton } from "@proliferate/ui/layout/RowActionIconButton";
 import { FileText, X } from "@proliferate/ui/icons";
 import { CollapsiblePlanCard } from "@proliferate/product-ui/chat/transcript/CollapsiblePlanCard";
 import {
@@ -62,17 +63,22 @@ export function PlanReferenceAttachmentCard({
           </span>
         </Button>
         {isDraft && onRemove && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
+          // Full-height reveal veil is the layout wrapper (fades the plan
+          // title behind the control); the row-action primitive itself
+          // stays visibility="always" and sits at the veil's trailing edge.
+          <div
             data-chat-transcript-ignore
-            onClick={() => onRemove(plan.id)}
-            className="pointer-events-none absolute inset-y-0 right-0 h-full w-7 rounded-full bg-card/95 px-0 opacity-0 transition-opacity hover:bg-hover group-hover:pointer-events-auto group-hover:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100"
-            aria-label={`Remove ${plan.title}`}
+            className="pointer-events-none absolute inset-y-0 right-0 flex h-full items-center rounded-full bg-card/95 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
           >
-            <X className="icon-compact" />
-          </Button>
+            <RowActionIconButton
+              label={`Remove ${plan.title}`}
+              visibility="always"
+              data-chat-transcript-ignore
+              onClick={() => onRemove(plan.id)}
+            >
+              <X />
+            </RowActionIconButton>
+          </div>
         )}
       </div>
       <PlanReferencePreviewDialog

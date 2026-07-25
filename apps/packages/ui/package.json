@@ -59,6 +59,10 @@
       "types": "./dist/layout/PaneOptionsMenuItem.d.ts",
       "import": "./dist/layout/PaneOptionsMenuItem.js"
     },
+    "./layout/RowActionIconButton": {
+      "types": "./dist/layout/RowActionIconButton.d.ts",
+      "import": "./dist/layout/RowActionIconButton.js"
+    },
     "./layout/SectionHeader": {
       "types": "./dist/layout/SectionHeader.d.ts",
       "import": "./dist/layout/SectionHeader.js"

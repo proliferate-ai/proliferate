@@ -24,7 +24,7 @@ import {
   DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from "@proliferate/ui/kit/DropdownMenu";
-import { IconButton } from "@proliferate/ui/primitives/IconButton";
+import { RowActionIconButton } from "@proliferate/ui/layout/RowActionIconButton";
 import { getShortcutDisplayLabel } from "#product/lib/domain/shortcuts/matching";
 
 interface WorkspaceItemMenuProps {
@@ -102,16 +102,12 @@ export function WorkspaceItemMenu({
   return (
     <DropdownMenu open={fallbackOpen} onOpenChange={handleOpenChange}>
       <DropdownMenuTrigger asChild>
-        <IconButton
+        <RowActionIconButton
           ref={triggerRef}
-          tone="sidebar"
-          size="xs"
-          onClick={(e) => e.stopPropagation()}
-          title="Workspace actions"
-          className="opacity-50 hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"
+          label="Workspace actions"
         >
-          <MoreHorizontal className="icon-paired" />
-        </IconButton>
+          <MoreHorizontal />
+        </RowActionIconButton>
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align="start"

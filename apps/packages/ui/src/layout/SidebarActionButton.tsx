@@ -1,5 +1,5 @@
 import { forwardRef, type MouseEventHandler, type ReactNode } from "react";
-import { IconButton } from "../primitives/IconButton";
+import { RowActionIconButton } from "./RowActionIconButton";
 
 export type SidebarActionButtonVariant = "default" | "section";
 
@@ -14,6 +14,13 @@ export interface SidebarActionButtonProps {
   variant?: SidebarActionButtonVariant;
 }
 
+/**
+ * Thin sidebar tone/variant adapter over the shared `RowActionIconButton`
+ * primitive ([ROW-ACTION-01], retune-spec.md §5.6) — not a second visual
+ * primitive. Overrides the primitive's default 28px/muted-ink treatment
+ * with the sidebar's 24px box and sidebar-foreground ink; the reveal
+ * contract and click-stop behavior come from the shared base.
+ */
 export const SidebarActionButton = forwardRef<HTMLButtonElement, SidebarActionButtonProps>(
   function SidebarActionButton({
     children,
@@ -28,17 +35,14 @@ export const SidebarActionButton = forwardRef<HTMLButtonElement, SidebarActionBu
     const isAlwaysVisible = alwaysVisible || variant === "section";
 
     return (
-      <IconButton
+      <RowActionIconButton
         ref={ref}
-        tone="sidebar"
-        size="sm"
-        title={title}
+        label={title}
         onClick={onClick}
         disabled={disabled}
-        className={`size-6 rounded-md border border-transparent [font-size:var(--text-sidebar-row)] transition-all ${
+        visibility={isAlwaysVisible ? "always" : "hover"}
+        className={`size-6 border border-transparent text-sidebar-muted-foreground [font-size:var(--text-sidebar-row)] transition-all hover:text-sidebar-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-sidebar-ring ${
           active ? "bg-selected text-sidebar-accent-foreground" : ""
-        } ${
-          isAlwaysVisible ? "" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
         } ${
           variant === "section"
             ? "opacity-75 hover:opacity-100 focus-visible:opacity-100 disabled:cursor-not-allowed disabled:opacity-40"
@@ -46,7 +50,7 @@ export const SidebarActionButton = forwardRef<HTMLButtonElement, SidebarActionBu
         } ${className}`}
       >
         {children}
-      </IconButton>
+      </RowActionIconButton>
     );
   },
 );
