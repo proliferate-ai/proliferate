@@ -36,6 +36,19 @@ pub(super) fn build_session_launch_env(
     }
 }
 
+pub(super) fn build_workflow_session_launch_env(
+    resolved_agent: &ResolvedAgent,
+    requested_model_id: Option<&str>,
+) -> anyhow::Result<BTreeMap<String, String>> {
+    match resolved_agent.descriptor.kind {
+        AgentKind::Claude => build_claude_session_launch_env(resolved_agent, requested_model_id),
+        // Native Codex launch prepares a shared CODEX_HOME by copying user auth.
+        // Workflow Codex is unavailable unless its selected env-only route can
+        // launch without that shared credential artifact.
+        _ => Ok(BTreeMap::new()),
+    }
+}
+
 fn build_claude_session_launch_env(
     resolved_agent: &ResolvedAgent,
     requested_model_id: Option<&str>,

@@ -10,6 +10,12 @@ use crate::domains::workflows::plan::Isolation;
 
 use super::executor::{failed_msg, WorkflowStepExecutorImpl};
 use super::parallel::worktree_branch_for_scope;
+use crate::live::workflows::isolation::{
+    run_workflow_command, WorkflowCommandRequest, WorkflowProcessIdentity,
+    WORKFLOW_COMMAND_COMBINED_LIMIT, WORKFLOW_COMMAND_MEMORY_LIMIT, WORKFLOW_COMMAND_PROCESS_LIMIT,
+    WORKFLOW_COMMAND_STDERR_LIMIT, WORKFLOW_COMMAND_STDOUT_LIMIT,
+};
+use crate::process_env::complete_workflow_operation_env;
 
 impl WorkflowStepExecutorImpl {
     /// M2(b): at a clean parallel-group join, merge each lane's branch back into
@@ -40,18 +46,8 @@ impl WorkflowStepExecutorImpl {
         // The merge target — the run-level worktree the lanes were based off (so
         // it exists; resolving is a memo hit). Mint defensively if somehow absent.
         let run_level_id = self.run_level_workspace_id().await?;
-        let workspace_runtime = self.deps.workspace_runtime.clone();
-        let run_id = self.run_id.clone();
-        tokio::task::spawn_blocking(move || {
-            merge_lanes_into_run_worktree_blocking(&workspace_runtime, &run_id, &run_level_id, &lane_targets)
-        })
-        .await
-        .map_err(|error| {
-            failed_msg(
-                "lane_merge_failed",
-                format!("lane merge-back task failed: {error}"),
-            )
-        })?
+        self.merge_lanes_into_run_worktree_brokered(&run_level_id, &lane_targets)
+            .await
     }
 }
 
@@ -78,80 +74,146 @@ pub(super) fn decide_lane_merge(lane_branch_is_ancestor_of_run_head: bool) -> La
 /// merge is idempotent (skipped when already an ancestor of the run HEAD — see
 /// [`decide_lane_merge`]) and a conflict aborts + fails the run
 /// (`lane_merge_conflict`), never silently dropping conflicting work.
-fn merge_lanes_into_run_worktree_blocking(
-    workspace_runtime: &crate::domains::workspaces::runtime::WorkspaceRuntime,
-    run_id: &str,
-    run_level_id: &str,
-    lane_targets: &[(String, String)],
-) -> Result<(), StepOutcome> {
-    let run_level = workspace_runtime
-        .get_workspace(run_level_id)
-        .map_err(|error| {
-            failed_msg(
-                "lane_merge_failed",
-                format!("could not load run-level worktree: {error}"),
+impl WorkflowStepExecutorImpl {
+    async fn merge_lanes_into_run_worktree_brokered(
+        &self,
+        run_level_id: &str,
+        lane_targets: &[(String, String)],
+    ) -> Result<(), StepOutcome> {
+        let run_level = self
+            .deps
+            .workspace_runtime
+            .get_workspace(run_level_id)
+            .map_err(|error| {
+                failed_msg(
+                    "lane_merge_failed",
+                    format!("could not load run-level worktree: {error}"),
+                )
+            })?
+            .ok_or_else(|| {
+                failed_msg(
+                    "lane_merge_failed",
+                    format!("run-level worktree {run_level_id} not found"),
+                )
+            })?;
+        let run_level_path = Path::new(&run_level.path);
+        for (lane_name, _lane_workspace_id) in lane_targets {
+            let lane_branch = worktree_branch_for_scope(&self.run_id, lane_name);
+            let identity = WorkflowProcessIdentity::try_lane_merge(
+                self.isolation_capability.identity().clone(),
+                lane_name,
+                run_level_path,
             )
-        })?
-        .ok_or_else(|| {
-            failed_msg(
-                "lane_merge_failed",
-                format!("run-level worktree {run_level_id} not found"),
+            .map_err(|error| {
+                failed_msg(
+                    "workflow_agent_isolation_unavailable",
+                    format!("invalid lane merge identity: {error}"),
+                )
+            })?;
+            // Idempotency guard (crash-resume): the lane branch already merged (its
+            // tip is an ancestor of the run-level HEAD) → skip, never double-merge.
+            let already_merged = run_workflow_command(
+                self.deps.workflow_isolation_broker.as_ref(),
+                &self.isolation_capability,
+                WorkflowCommandRequest {
+                    identity: identity.clone(),
+                    program: "/usr/bin/git".into(),
+                    args: vec![
+                        "merge-base".to_string(),
+                        "--is-ancestor".to_string(),
+                        lane_branch.clone(),
+                        "HEAD".to_string(),
+                    ],
+                    cwd: run_level_path.to_path_buf(),
+                    env: complete_workflow_operation_env(Vec::new()),
+                    timeout: std::time::Duration::from_secs(60),
+                    max_stdout_bytes: WORKFLOW_COMMAND_STDOUT_LIMIT,
+                    max_stderr_bytes: WORKFLOW_COMMAND_STDERR_LIMIT,
+                    max_combined_bytes: WORKFLOW_COMMAND_COMBINED_LIMIT,
+                    max_processes: WORKFLOW_COMMAND_PROCESS_LIMIT,
+                    max_memory_bytes: WORKFLOW_COMMAND_MEMORY_LIMIT,
+                },
             )
-        })?;
-    let run_level_path = Path::new(&run_level.path);
-    for (lane_name, _lane_workspace_id) in lane_targets {
-        let lane_branch = worktree_branch_for_scope(run_id, lane_name);
-        // Idempotency guard (crash-resume): the lane branch already merged (its
-        // tip is an ancestor of the run-level HEAD) → skip, never double-merge.
-        let already_merged = std::process::Command::new("git")
-            .current_dir(run_level_path)
-            .args(["merge-base", "--is-ancestor", &lane_branch, "HEAD"])
-            .status()
-            .map(|status| status.success())
+            .await
+            .map(|output| output.exit_code == Some(0))
             .unwrap_or(false);
-        if decide_lane_merge(already_merged) == LaneMergeAction::Skip {
-            tracing::info!(
-                run_id = %run_id,
-                lane = %lane_name,
-                branch = %lane_branch,
-                "lane already merged into run worktree — skipping (idempotent)"
-            );
-            continue;
-        }
-        // Default merge (no squash), non-interactive. A conflict returns non-zero;
-        // abort to leave the run-level worktree clean for inspection, then fail.
-        let output = std::process::Command::new("git")
-            .current_dir(run_level_path)
-            .args(["merge", "--no-edit", &lane_branch])
-            .output()
+            if decide_lane_merge(already_merged) == LaneMergeAction::Skip {
+                tracing::info!(
+                    run_id = %self.run_id,
+                    lane = %lane_name,
+                    branch = %lane_branch,
+                    "lane already merged into run worktree — skipping (idempotent)"
+                );
+                continue;
+            }
+            // Default merge (no squash), non-interactive. A conflict returns non-zero;
+            // abort to leave the run-level worktree clean for inspection, then fail.
+            let output = run_workflow_command(
+                self.deps.workflow_isolation_broker.as_ref(),
+                &self.isolation_capability,
+                WorkflowCommandRequest {
+                    identity: identity.clone(),
+                    program: "/usr/bin/git".into(),
+                    args: vec![
+                        "merge".to_string(),
+                        "--no-ff".to_string(),
+                        "--no-edit".to_string(),
+                        lane_branch.clone(),
+                    ],
+                    cwd: run_level_path.to_path_buf(),
+                    env: complete_workflow_operation_env(Vec::new()),
+                    timeout: std::time::Duration::from_secs(180),
+                    max_stdout_bytes: WORKFLOW_COMMAND_STDOUT_LIMIT,
+                    max_stderr_bytes: WORKFLOW_COMMAND_STDERR_LIMIT,
+                    max_combined_bytes: WORKFLOW_COMMAND_COMBINED_LIMIT,
+                    max_processes: WORKFLOW_COMMAND_PROCESS_LIMIT,
+                    max_memory_bytes: WORKFLOW_COMMAND_MEMORY_LIMIT,
+                },
+            )
+            .await
             .map_err(|error| {
                 failed_msg(
                     "lane_merge_failed",
                     format!("git merge for lane '{lane_name}' failed to spawn: {error}"),
                 )
             })?;
-        if !output.status.success() {
-            let _ = std::process::Command::new("git")
-                .current_dir(run_level_path)
-                .args(["merge", "--abort"])
-                .output();
-            return Err(failed_msg(
-                "lane_merge_conflict",
-                format!(
-                    "lane '{lane_name}' could not be merged into the run worktree \
+            if output.exit_code != Some(0) {
+                let _ = run_workflow_command(
+                    self.deps.workflow_isolation_broker.as_ref(),
+                    &self.isolation_capability,
+                    WorkflowCommandRequest {
+                        identity,
+                        program: "/usr/bin/git".into(),
+                        args: vec!["merge".to_string(), "--abort".to_string()],
+                        cwd: run_level_path.to_path_buf(),
+                        env: complete_workflow_operation_env(Vec::new()),
+                        timeout: std::time::Duration::from_secs(60),
+                        max_stdout_bytes: WORKFLOW_COMMAND_STDOUT_LIMIT,
+                        max_stderr_bytes: WORKFLOW_COMMAND_STDERR_LIMIT,
+                        max_combined_bytes: WORKFLOW_COMMAND_COMBINED_LIMIT,
+                        max_processes: WORKFLOW_COMMAND_PROCESS_LIMIT,
+                        max_memory_bytes: WORKFLOW_COMMAND_MEMORY_LIMIT,
+                    },
+                )
+                .await;
+                return Err(failed_msg(
+                    "lane_merge_conflict",
+                    format!(
+                        "lane '{lane_name}' could not be merged into the run worktree \
                      (conflicting parallel work): {}",
-                    String::from_utf8_lossy(&output.stderr).trim()
-                ),
-            ));
+                        String::from_utf8_lossy(&output.stderr).trim()
+                    ),
+                ));
+            }
+            tracing::info!(
+                run_id = %self.run_id,
+                lane = %lane_name,
+                branch = %lane_branch,
+                "merged lane into run worktree"
+            );
         }
-        tracing::info!(
-            run_id = %run_id,
-            lane = %lane_name,
-            branch = %lane_branch,
-            "merged lane into run worktree"
-        );
+        Ok(())
     }
-    Ok(())
 }
 
 #[cfg(test)]

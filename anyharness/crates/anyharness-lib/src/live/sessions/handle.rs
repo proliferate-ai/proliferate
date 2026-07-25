@@ -17,6 +17,7 @@ use crate::domains::sessions::runtime_event::{
     RuntimeEventInjectionError, RuntimeEventInjectionResult, RuntimeInjectedSessionEvent,
 };
 use crate::live::sessions::actor::command::SessionCommand;
+use crate::live::sessions::model::SessionProcessPolicy;
 
 #[derive(Debug)]
 pub enum LiveSessionCommandError<E> {
@@ -84,6 +85,7 @@ fn runtime_event_command_error(
 
 pub struct LiveSessionHandle {
     pub session_id: String,
+    pub(in crate::live::sessions) process_policy: SessionProcessPolicy,
     pub(in crate::live::sessions) command_tx: mpsc::Sender<SessionCommand>,
     pub(in crate::live::sessions) event_tx: broadcast::Sender<SessionEventEnvelope>,
     pub(in crate::live::sessions) busy: Arc<AtomicBool>,
@@ -120,6 +122,7 @@ impl LiveSessionExecutionSnapshot {
 impl LiveSessionHandle {
     pub(in crate::live::sessions) fn new(
         session_id: impl Into<String>,
+        process_policy: SessionProcessPolicy,
         command_tx: mpsc::Sender<SessionCommand>,
         event_tx: broadcast::Sender<SessionEventEnvelope>,
         native_session_id: Option<String>,
@@ -127,6 +130,7 @@ impl LiveSessionHandle {
     ) -> Self {
         Self {
             session_id: session_id.into(),
+            process_policy,
             command_tx,
             event_tx,
             busy: Arc::new(AtomicBool::new(false)),
@@ -141,6 +145,10 @@ impl LiveSessionHandle {
 
     pub fn is_busy(&self) -> bool {
         self.busy.load(Ordering::Acquire)
+    }
+
+    pub(crate) fn matches_process_policy(&self, policy: &SessionProcessPolicy) -> bool {
+        &self.process_policy == policy
     }
 
     pub(in crate::live::sessions) fn set_busy(&self, busy: bool) {
@@ -443,7 +451,33 @@ impl LiveSessionHandle {
         native_session_id: Option<String>,
         phase: SessionExecutionPhase,
     ) -> Self {
-        Self::new(session_id, command_tx, event_tx, native_session_id, phase)
+        Self::new(
+            session_id,
+            SessionProcessPolicy::Interactive,
+            command_tx,
+            event_tx,
+            native_session_id,
+            phase,
+        )
+    }
+
+    #[cfg(test)]
+    pub(in crate::live::sessions) fn new_for_test_with_process_policy(
+        session_id: impl Into<String>,
+        process_policy: SessionProcessPolicy,
+        command_tx: mpsc::Sender<SessionCommand>,
+        event_tx: broadcast::Sender<SessionEventEnvelope>,
+        native_session_id: Option<String>,
+        phase: SessionExecutionPhase,
+    ) -> Self {
+        Self::new(
+            session_id,
+            process_policy,
+            command_tx,
+            event_tx,
+            native_session_id,
+            phase,
+        )
     }
 }
 

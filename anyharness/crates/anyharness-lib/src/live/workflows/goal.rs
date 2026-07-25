@@ -17,9 +17,9 @@ use crate::domains::goals::runtime::GoalOpError;
 use crate::domains::workflows::engine::StepOutcome;
 use crate::domains::workflows::plan::{AgentPromptStep, GoalSpec, OnBlocked};
 
-use super::turn::InjectionMeta;
 use super::executor::{failed, failed_msg, WorkflowStepExecutorImpl};
 use super::observation::{goal_progress_changed, GoalSnapshot};
+use super::turn::InjectionMeta;
 
 /// Grace added to `max_wall_secs` for the actor-side goal backstop (the goal cap
 /// guard fires on turn boundaries; this catches a hung in-flight turn).
@@ -35,6 +35,7 @@ impl WorkflowStepExecutorImpl {
         agent: &AgentPromptStep,
         goal: &GoalSpec,
         step_index: usize,
+        attempt: i64,
         meta: &InjectionMeta,
         scope: &str,
     ) -> StepOutcome {
@@ -73,7 +74,9 @@ impl WorkflowStepExecutorImpl {
             if let Err(outcome) = self.send_prompt(&session_id, &prompt, meta).await {
                 return outcome;
             }
-            match await_goal_terminal(&mut events, deadline, goal.on_blocked, &mut on_progress).await {
+            match await_goal_terminal(&mut events, deadline, goal.on_blocked, &mut on_progress)
+                .await
+            {
                 GoalWait::Met { met_reason } => match &goal.verify {
                     None => {
                         return StepOutcome::Completed {
@@ -85,7 +88,19 @@ impl WorkflowStepExecutorImpl {
                             Ok(ctx) => ctx,
                             Err(outcome) => return outcome,
                         };
+                        let identity = match self.step_process_identity(
+                            &meta.step_key,
+                            attempt,
+                            crate::live::workflows::isolation::WorkflowCommandKind::Verify,
+                            &workspace_path,
+                        ) {
+                            Ok(identity) => identity,
+                            Err(outcome) => return outcome,
+                        };
                         let (exit, tail) = super::commands::run_verify_shell(
+                            self.deps.workflow_isolation_broker.as_ref(),
+                            &self.isolation_capability,
+                            identity,
                             &workspace_path,
                             &env,
                             &verify.shell,
@@ -107,7 +122,9 @@ impl WorkflowStepExecutorImpl {
                             self.clear_goal(&session_id).await;
                             return StepOutcome::Failed {
                                 code: "verify_exhausted".to_string(),
-                                message: Some(format!("verification failed {verify_attempts} times")),
+                                message: Some(format!(
+                                    "verification failed {verify_attempts} times"
+                                )),
                                 output: Some(json!({
                                     "session_id": session_id,
                                     "verify_attempts": verify_attempts,
@@ -208,25 +225,25 @@ async fn await_goal_terminal(
                     // snapshot (the callback throttles unchanged values).
                     on_progress(&payload.goal);
                     match payload.goal.status {
-                    GoalStatus::Failed => {
-                        return GoalWait::Failed {
-                            reason: payload
-                                .goal
-                                .failed_reason
-                                .clone()
-                                .unwrap_or_else(|| "goal_failed".to_string()),
+                        GoalStatus::Failed => {
+                            return GoalWait::Failed {
+                                reason: payload
+                                    .goal
+                                    .failed_reason
+                                    .clone()
+                                    .unwrap_or_else(|| "goal_failed".to_string()),
+                            }
                         }
-                    }
-                    GoalStatus::Met => {
-                        return GoalWait::Met {
-                            met_reason: payload.goal.met_reason.clone(),
+                        GoalStatus::Met => {
+                            return GoalWait::Met {
+                                met_reason: payload.goal.met_reason.clone(),
+                            }
                         }
-                    }
-                    GoalStatus::Blocked => match on_blocked {
-                        OnBlocked::Notify => continue,
-                        _ => return GoalWait::Blocked,
-                    },
-                    _ => {}
+                        GoalStatus::Blocked => match on_blocked {
+                            OnBlocked::Notify => continue,
+                            _ => return GoalWait::Blocked,
+                        },
+                        _ => {}
                     }
                 }
                 SessionEvent::GoalCleared(_) => {

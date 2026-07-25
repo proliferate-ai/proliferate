@@ -195,7 +195,12 @@ impl SessionRuntime {
         };
 
         match self
-            .start_live_session(&child, startup_strategy, child.system_prompt_append.clone())
+            .start_live_session(
+                &child,
+                startup_strategy,
+                child.system_prompt_append.clone(),
+                crate::live::sessions::model::SessionProcessPolicy::Interactive,
+            )
             .await
         {
             Ok((_handle, native_session_id)) => {

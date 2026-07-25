@@ -20,6 +20,11 @@ pub(super) const CUSTOM_FOREIGN_KEY_MIGRATIONS: &[(
     migrate_simplify_workspace_records,
 )];
 
+pub(super) const POST_CUSTOM_FOREIGN_KEY_MIGRATIONS: &[(&str, fn(&Transaction<'_>) -> rusqlite::Result<()>)] = &[(
+    "0062_workflow_materialization_exact_registration",
+    migrate_workflow_materialization_exact_registration,
+)];
+
 fn migrate_session_background_work_timestamps(tx: &Transaction<'_>) -> rusqlite::Result<()> {
     let columns = table_columns(tx, "session_background_work")?;
 
@@ -77,8 +82,19 @@ fn migrate_simplify_workspace_records(tx: &Transaction<'_>) -> rusqlite::Result<
         return Ok(());
     }
 
-    tx.execute_batch(
-        "
+    // WF-ID's 0059 migration runs before this FK rebuild on the integrated
+    // graph. Preserve the additive generation column when present while keeping
+    // the pre-WF-ID graph compatible when it is absent.
+    let preserves_workspace_generation = columns.iter().any(|column| column == "generation");
+    let replacement_generation_column = preserves_workspace_generation
+        .then_some(", generation")
+        .unwrap_or("");
+    let replacement_generation_value = preserves_workspace_generation
+        .then_some(", COALESCE(r.generation, 1)")
+        .unwrap_or("");
+
+    tx.execute_batch(&format!(
+        r#"
         INSERT OR IGNORE INTO repo_roots (
             id, kind, path, display_name, default_branch,
             remote_provider, remote_owner, remote_repo_name, remote_url,
@@ -211,7 +227,7 @@ fn migrate_simplify_workspace_records(tx: &Transaction<'_>) -> rusqlite::Result<
             git_provider, git_owner, git_repo_name, original_branch, current_branch,
             display_name, created_at, updated_at, repo_root_id, surface, origin_json,
             lifecycle_state, cleanup_state, creator_context_json, cleanup_error_message,
-            cleanup_failed_at, cleanup_attempted_at, cleanup_operation, generation
+            cleanup_failed_at, cleanup_attempted_at, cleanup_operation{replacement_generation_column}
         )
         SELECT
             lower(
@@ -243,8 +259,7 @@ fn migrate_simplify_workspace_records(tx: &Transaction<'_>) -> rusqlite::Result<
             r.cleanup_error_message,
             r.cleanup_failed_at,
             r.cleanup_attempted_at,
-            r.cleanup_operation,
-            COALESCE(r.generation, 1)
+            r.cleanup_operation{replacement_generation_value}
         FROM referenced_repo_rows r
         WHERE r.replacement_rank = 1
           AND NOT EXISTS (
@@ -499,8 +514,8 @@ fn migrate_simplify_workspace_records(tx: &Transaction<'_>) -> rusqlite::Result<
 
         DELETE FROM workspaces
         WHERE kind = 'repo';
-        ",
-    )?;
+        "#,
+    ))?;
 
     let invalid_workspace_count: i64 = tx.query_row(
         "SELECT COUNT(*)
@@ -521,8 +536,17 @@ fn migrate_simplify_workspace_records(tx: &Transaction<'_>) -> rusqlite::Result<
         return Err(rusqlite::Error::InvalidQuery);
     }
 
-    tx.execute_batch(
-        "
+    let generation_definition = preserves_workspace_generation
+        .then_some("            generation INTEGER NOT NULL DEFAULT 1 CHECK (generation > 0),\n")
+        .unwrap_or("");
+    let generation_insert_column = preserves_workspace_generation
+        .then_some("            generation,\n")
+        .unwrap_or("");
+    let generation_select_value = preserves_workspace_generation
+        .then_some("            COALESCE(generation, 1),\n")
+        .unwrap_or("");
+    tx.execute_batch(&format!(
+        r#"
         CREATE TABLE workspaces_new (
             id TEXT PRIMARY KEY,
             kind TEXT NOT NULL CHECK (kind IN ('local', 'worktree')),
@@ -540,7 +564,7 @@ fn migrate_simplify_workspace_records(tx: &Transaction<'_>) -> rusqlite::Result<
             cleanup_error_message TEXT,
             cleanup_failed_at TEXT,
             cleanup_attempted_at TEXT,
-            generation INTEGER NOT NULL DEFAULT 1 CHECK (generation > 0),
+{generation_definition}
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         );
@@ -549,7 +573,8 @@ fn migrate_simplify_workspace_records(tx: &Transaction<'_>) -> rusqlite::Result<
             id, kind, repo_root_id, path, surface, original_branch, current_branch,
             display_name, origin_json, creator_context_json, lifecycle_state, cleanup_state,
             cleanup_operation, cleanup_error_message, cleanup_failed_at, cleanup_attempted_at,
-            generation, created_at, updated_at
+{generation_insert_column}
+            created_at, updated_at
         )
         SELECT
             id,
@@ -568,7 +593,7 @@ fn migrate_simplify_workspace_records(tx: &Transaction<'_>) -> rusqlite::Result<
             cleanup_error_message,
             cleanup_failed_at,
             cleanup_attempted_at,
-            COALESCE(generation, 1),
+{generation_select_value}
             created_at,
             updated_at
         FROM workspaces
@@ -593,7 +618,162 @@ fn migrate_simplify_workspace_records(tx: &Transaction<'_>) -> rusqlite::Result<
         DROP TABLE IF EXISTS workspace_access_modes_candidates;
         DROP TABLE IF EXISTS workspace_setup_state_candidates;
         DROP TABLE IF EXISTS agent_model_registry_snapshot_candidates;
-        ",
+        "#,
+    ))?;
+
+    Ok(())
+}
+
+fn migrate_workflow_materialization_exact_registration(
+    tx: &Transaction<'_>,
+) -> rusqlite::Result<()> {
+    let columns = table_columns(tx, "workflow_materialization_operations")?;
+    let already_exact = columns.iter().any(|column| column == "source_repo_root_id");
+
+    if !already_exact {
+        let unbound_sources: i64 = tx.query_row(
+            "SELECT COUNT(*)
+             FROM workflow_materialization_operations o
+             LEFT JOIN workflow_runs r ON r.run_id = o.run_id
+             LEFT JOIN workspaces w ON w.id = r.workspace_id
+             WHERE w.repo_root_id IS NULL OR length(w.repo_root_id) = 0",
+            [],
+            |row| row.get(0),
+        )?;
+        if unbound_sources != 0 {
+            return Err(rusqlite::Error::InvalidQuery);
+        }
+
+        tx.execute_batch(
+            "DROP TRIGGER IF EXISTS workflow_runs_cleanup_ownership_before_delete;
+             DROP INDEX IF EXISTS idx_workflow_materialization_cleanup;
+             DROP INDEX IF EXISTS idx_workflow_materialization_workspace;
+
+             CREATE TABLE workflow_materialization_operations_new (
+                run_id TEXT NOT NULL REFERENCES workflow_runs(run_id),
+                scope_id TEXT NOT NULL,
+                source_repo_root_id TEXT NOT NULL REFERENCES repo_roots(id),
+                source_root TEXT NOT NULL,
+                target_root TEXT NOT NULL,
+                branch_name TEXT NOT NULL,
+                base_commit_oid TEXT NOT NULL,
+                execution_generation INTEGER NOT NULL CHECK (execution_generation > 0),
+                broker_generation INTEGER NOT NULL CHECK (broker_generation > 0),
+                state TEXT NOT NULL CHECK (state IN (
+                    'pending', 'cleanup_required', 'registered', 'cleaned'
+                )),
+                workspace_id TEXT REFERENCES workspaces(id) ON DELETE RESTRICT,
+                last_error TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY (run_id, scope_id, execution_generation, broker_generation),
+                CHECK (
+                    (state = 'registered' AND workspace_id IS NOT NULL AND length(workspace_id) > 0)
+                    OR (state <> 'registered' AND workspace_id IS NULL)
+                ),
+                CHECK (
+                    (state = 'cleanup_required' AND last_error IS NOT NULL AND length(last_error) > 0)
+                    OR (state <> 'cleanup_required' AND last_error IS NULL)
+                )
+             );
+
+             INSERT INTO workflow_materialization_operations_new (
+                run_id, scope_id, source_repo_root_id, source_root, target_root,
+                branch_name, base_commit_oid, execution_generation, broker_generation,
+                state, workspace_id, last_error, created_at, updated_at
+             )
+             SELECT
+                o.run_id,
+                o.scope_id,
+                w.repo_root_id,
+                o.source_root,
+                o.target_root,
+                o.branch_name,
+                o.base_commit_oid,
+                o.execution_generation,
+                o.broker_generation,
+                CASE WHEN o.state = 'registered' THEN 'cleanup_required' ELSE o.state END,
+                NULL,
+                CASE WHEN o.state = 'registered'
+                    THEN 'exact operation registration unavailable after ownership upgrade; broker reconciliation required'
+                    ELSE o.last_error
+                END,
+                o.created_at,
+                o.updated_at
+             FROM workflow_materialization_operations o
+             JOIN workflow_runs r ON r.run_id = o.run_id
+             JOIN workspaces w ON w.id = r.workspace_id;
+
+             PRAGMA legacy_alter_table = ON;
+             ALTER TABLE workflow_materialization_operations
+                RENAME TO workflow_materialization_operations_old;
+             ALTER TABLE workflow_materialization_operations_new
+                RENAME TO workflow_materialization_operations;
+             DROP TABLE workflow_materialization_operations_old;
+             PRAGMA legacy_alter_table = OFF;",
+        )?;
+    }
+
+    tx.execute_batch(
+        "CREATE INDEX IF NOT EXISTS idx_workflow_materialization_cleanup
+            ON workflow_materialization_operations(state, run_id);
+         CREATE INDEX IF NOT EXISTS idx_workflow_materialization_workspace
+            ON workflow_materialization_operations(workspace_id)
+            WHERE workspace_id IS NOT NULL;
+
+         CREATE TABLE IF NOT EXISTS workflow_materialization_registrations (
+            run_id TEXT NOT NULL,
+            scope_id TEXT NOT NULL,
+            execution_generation INTEGER NOT NULL CHECK (execution_generation > 0),
+            broker_generation INTEGER NOT NULL CHECK (broker_generation > 0),
+            workspace_id TEXT NOT NULL UNIQUE REFERENCES workspaces(id) ON DELETE RESTRICT,
+            registered_at TEXT NOT NULL,
+            PRIMARY KEY (run_id, scope_id, execution_generation, broker_generation),
+            FOREIGN KEY (run_id, scope_id, execution_generation, broker_generation)
+                REFERENCES workflow_materialization_operations (
+                    run_id, scope_id, execution_generation, broker_generation
+                ) ON DELETE RESTRICT
+         );
+
+         DROP TRIGGER IF EXISTS workflow_materialization_identity_immutable;
+         CREATE TRIGGER workflow_materialization_identity_immutable
+         BEFORE UPDATE OF
+            run_id, scope_id, source_repo_root_id, source_root, target_root,
+            branch_name, base_commit_oid, execution_generation, broker_generation
+         ON workflow_materialization_operations
+         BEGIN
+            SELECT RAISE(ABORT, 'workflow materialization identity is immutable');
+         END;
+
+         UPDATE workflow_materialization_operations
+         SET state = 'cleanup_required',
+             workspace_id = NULL,
+             last_error = 'exact operation registration unavailable after ownership upgrade; broker reconciliation required'
+         WHERE state = 'registered'
+           AND NOT EXISTS (
+                SELECT 1 FROM workflow_materialization_registrations r
+                WHERE r.run_id = workflow_materialization_operations.run_id
+                  AND r.scope_id = workflow_materialization_operations.scope_id
+                  AND r.execution_generation = workflow_materialization_operations.execution_generation
+                  AND r.broker_generation = workflow_materialization_operations.broker_generation
+                  AND r.workspace_id = workflow_materialization_operations.workspace_id
+           );
+
+         DROP TRIGGER IF EXISTS workflow_runs_cleanup_ownership_before_delete;
+         CREATE TRIGGER workflow_runs_cleanup_ownership_before_delete
+         BEFORE DELETE ON workflow_runs
+         BEGIN
+            SELECT CASE WHEN EXISTS (
+                SELECT 1 FROM workflow_materialization_operations
+                WHERE run_id = OLD.run_id
+                  AND state IN ('pending', 'cleanup_required', 'registered')
+            ) OR EXISTS (
+                SELECT 1 FROM workflow_cleanup_fences WHERE run_id = OLD.run_id
+            ) THEN RAISE(ABORT, 'workflow run has unresolved cleanup ownership') END;
+
+            DELETE FROM workflow_materialization_operations
+            WHERE run_id = OLD.run_id AND state = 'cleaned';
+         END;",
     )?;
 
     Ok(())

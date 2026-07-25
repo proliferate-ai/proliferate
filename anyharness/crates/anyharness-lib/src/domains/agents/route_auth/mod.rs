@@ -58,7 +58,10 @@ pub enum RouteAuthError {
     )]
     SelectionConflict { harness_kind: String, count: usize },
     #[error("agent-auth source for '{harness_kind}' is incomplete: {detail}")]
-    SelectionIncomplete { harness_kind: String, detail: String },
+    SelectionIncomplete {
+        harness_kind: String,
+        detail: String,
+    },
     #[error("agent-auth route for '{harness_kind}' is unsupported: {detail}")]
     UnsupportedRoute {
         harness_kind: String,
@@ -121,6 +124,30 @@ pub fn resolve_launch_route_auth(
         resolver,
         current_server_origin().as_deref(),
     )
+}
+
+/// Workflow launch resolves only env-only credential routes in the control
+/// process. Routes requiring credential/config materialization are unavailable
+/// until the isolation broker can create an exact per-run read-only artifact.
+pub fn resolve_workflow_launch_route_auth(
+    runtime_home: &Path,
+    harness_kind: &str,
+    resolver: &dyn GatewayModelResolve,
+) -> Result<RenderedRouteAuth, RouteAuthError> {
+    let state = load_state_file(runtime_home)?;
+    let state =
+        state.filter(|state| state.matches_server_origin(current_server_origin().as_deref()));
+    let revision = state.as_ref().map(|state| state.revision).unwrap_or(0);
+    let profile = resolve_profile(state.as_ref(), harness_kind)?;
+    let plan = resolver.resolve_gateway_models(harness_kind, revision);
+    let rendered = render_profile(&profile, &plan, runtime_home)?;
+    if !rendered.files.is_empty() {
+        return Err(RouteAuthError::UnsupportedRoute {
+            harness_kind: harness_kind.to_string(),
+            detail: "workflow route requires a broker-scoped credential artifact".to_string(),
+        });
+    }
+    Ok(rendered)
 }
 
 /// Core of [`resolve_launch_route_auth`], parameterized on the current server

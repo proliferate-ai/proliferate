@@ -3,15 +3,16 @@
 //! an approval or reaches a terminal state. The service persists the step run
 //! before/after each step, so a crash simply respawns the actor at the cursor.
 
-use anyharness_contract::v1::WorkflowRunStatus;
-
-use crate::domains::workflows::engine::{CancelToken, EngineProgress, WorkflowStepExecutor};
+use crate::domains::workflows::engine::{
+    CancelToken, EngineProgress, ProposedTerminal, WorkflowStepExecutor,
+};
 use crate::domains::workflows::plan::{self, PlanSegment};
 use crate::domains::workflows::service::WorkflowService;
 
 /// Drive the run to a resting point (terminal or suspended-for-approval),
 /// returning how it came to rest. A driver-level error (a malformed plan
-/// surfacing mid-run, or a store failure) fails the run with `engine_error`.
+/// surfacing mid-run, or a store failure) proposes `engine_error`; the manager
+/// publishes it only after quiescence.
 ///
 /// The run is driven segment-by-segment (L30): a [`PlanSegment::Sequential`] run
 /// advances the single cursor one step at a time (bounded to the segment end so
@@ -28,7 +29,12 @@ pub async fn drive_run(
     loop {
         let run = match service.get_run(run_id) {
             Ok(Some(run)) => run,
-            Ok(None) => return EngineProgress::Finished(WorkflowRunStatus::Failed),
+            Ok(None) => {
+                return EngineProgress::TerminalPending(ProposedTerminal::failed(
+                    "engine_error",
+                    Some("workflow run disappeared while its actor was driving".to_string()),
+                ))
+            }
             Err(error) => return fail_engine_error(service, run_id, &error),
         };
         if run.is_terminal() {
@@ -41,12 +47,10 @@ pub async fn drive_run(
         let step_count = plan.step_count();
         let cursor = run.step_cursor.max(0) as usize;
         if cursor >= step_count {
-            let _ = service.mark_run_terminal(run_id, WorkflowRunStatus::Completed, None, None);
-            return EngineProgress::Finished(WorkflowRunStatus::Completed);
+            return EngineProgress::TerminalPending(ProposedTerminal::completed());
         }
         let Some(segment) = plan.segment_containing(cursor) else {
-            let _ = service.mark_run_terminal(run_id, WorkflowRunStatus::Completed, None, None);
-            return EngineProgress::Finished(WorkflowRunStatus::Completed);
+            return EngineProgress::TerminalPending(ProposedTerminal::completed());
         };
         let result = match segment {
             PlanSegment::Sequential { end, .. } => {
@@ -77,17 +81,14 @@ pub async fn drive_run(
 }
 
 fn fail_engine_error(
-    service: &WorkflowService,
-    run_id: &str,
+    _service: &WorkflowService,
+    _run_id: &str,
     error: &(impl std::fmt::Display + ?Sized),
 ) -> EngineProgress {
-    let _ = service.mark_run_terminal(
-        run_id,
-        WorkflowRunStatus::Failed,
-        Some("engine_error".to_string()),
+    EngineProgress::TerminalPending(ProposedTerminal::failed(
+        "engine_error",
         Some(error.to_string()),
-    );
-    EngineProgress::Finished(WorkflowRunStatus::Failed)
+    ))
 }
 
 #[cfg(test)]
@@ -95,7 +96,7 @@ mod tests {
     use std::collections::VecDeque;
     use std::sync::{Arc, Mutex};
 
-    use anyharness_contract::v1::WorkflowStepStatus;
+    use anyharness_contract::v1::{WorkflowRunStatus, WorkflowStepStatus};
 
     use super::*;
     use crate::app::test_support;
@@ -103,10 +104,7 @@ mod tests {
     use crate::domains::workflows::engine::{StepExecContext, StepOutcome};
     use crate::domains::workflows::plan::PlanStep;
     use crate::domains::workflows::store::WorkflowStore;
-    use crate::live::workflows::gateway::{fire_run_ping, RunPingSink, WorkflowPrivateGateway};
     use crate::persistence::Db;
-
-    use crate::live::workflows::gateway::test_support::RecordingPingSink;
 
     /// A scripted executor that wires the real per-run ping seam through a
     /// recording sink: its `on_step_transition` is exactly what the live
@@ -114,20 +112,14 @@ mod tests {
     /// contract is exercised end-to-end.
     struct PingingExecutor {
         outcomes: Mutex<VecDeque<StepOutcome>>,
-        gateway: Option<WorkflowPrivateGateway>,
-        sink: Arc<RecordingPingSink>,
+        transitions: Arc<Mutex<usize>>,
     }
 
     impl PingingExecutor {
-        fn new(
-            outcomes: Vec<StepOutcome>,
-            gateway: Option<WorkflowPrivateGateway>,
-            sink: Arc<RecordingPingSink>,
-        ) -> Self {
+        fn new(outcomes: Vec<StepOutcome>, transitions: Arc<Mutex<usize>>) -> Self {
             Self {
                 outcomes: Mutex::new(outcomes.into_iter().collect()),
-                gateway,
-                sink,
+                transitions,
             }
         }
     }
@@ -145,16 +137,7 @@ mod tests {
         }
 
         fn on_step_transition(&self) {
-            fire_run_ping(self.gateway.as_ref(), self.sink.as_ref());
-        }
-    }
-
-    fn gateway() -> WorkflowPrivateGateway {
-        WorkflowPrivateGateway {
-            url: "https://cloud.test/mcp".to_string(),
-            authorization: "Bearer per-run".to_string(),
-            ping_url: "https://cloud.test/runs/run-1/ping".to_string(),
-            integrations: Vec::new(),
+            *self.transitions.lock().unwrap() += 1;
         }
     }
 
@@ -196,24 +179,23 @@ mod tests {
                 { "kind": "shell.run", "command": "b" },
                 { "kind": "shell.run", "command": "c" }]"#,
         );
-        let sink = Arc::new(RecordingPingSink::new());
+        let transitions = Arc::new(Mutex::new(0));
         let executor = PingingExecutor::new(
             vec![completed(), completed(), completed()],
-            Some(gateway()),
-            sink.clone(),
+            transitions.clone(),
         );
         let cancel = CancelToken::new();
         let progress = drive_run(&service, &executor, &run_id, &cancel).await;
         assert_eq!(
             progress,
-            EngineProgress::Finished(WorkflowRunStatus::Completed)
+            EngineProgress::TerminalPending(ProposedTerminal::completed())
         );
-        assert_eq!(sink.count(), 3, "one ping per applied transition");
-        let calls = sink.calls.lock().unwrap();
-        assert!(calls
-            .iter()
-            .all(|(url, auth)| url == "https://cloud.test/runs/run-1/ping"
-                && auth == "Bearer per-run"));
+        assert_eq!(
+            service.get_run(&run_id).unwrap().unwrap().status,
+            WorkflowRunStatus::Running,
+            "terminal completion is only proposed before quiescence"
+        );
+        assert_eq!(*transitions.lock().unwrap(), 3);
     }
 
     #[tokio::test]
@@ -223,23 +205,27 @@ mod tests {
         let (service, run_id) = service_with_run(
             r#"[{ "kind": "shell.run", "command": "x", "on_fail": { "kind": "stop" } }]"#,
         );
-        let sink = Arc::new(RecordingPingSink::new());
+        let transitions = Arc::new(Mutex::new(0));
         let executor = PingingExecutor::new(
             vec![StepOutcome::Failed {
                 code: "nonzero_exit".to_string(),
                 message: None,
                 output: None,
             }],
-            Some(gateway()),
-            sink.clone(),
+            transitions.clone(),
         );
         let cancel = CancelToken::new();
         let progress = drive_run(&service, &executor, &run_id, &cancel).await;
         assert_eq!(
             progress,
-            EngineProgress::Finished(WorkflowRunStatus::Failed)
+            EngineProgress::TerminalPending(ProposedTerminal::failed("nonzero_exit", None))
         );
-        assert_eq!(sink.count(), 1);
+        assert_eq!(
+            service.get_run(&run_id).unwrap().unwrap().status,
+            WorkflowRunStatus::Running,
+            "terminal failure is only proposed before quiescence"
+        );
+        assert_eq!(*transitions.lock().unwrap(), 1);
     }
 
     #[tokio::test]
@@ -247,15 +233,15 @@ mod tests {
         let (service, run_id) = service_with_run(
             r#"[{ "kind": "shell.run", "command": "a" }, { "kind": "shell.run", "command": "b" }]"#,
         );
-        let sink = Arc::new(RecordingPingSink::new());
-        let executor = PingingExecutor::new(vec![completed(), completed()], None, sink.clone());
+        let transitions = Arc::new(Mutex::new(0));
+        let executor = PingingExecutor::new(vec![completed(), completed()], transitions.clone());
         let cancel = CancelToken::new();
         let progress = drive_run(&service, &executor, &run_id, &cancel).await;
         assert_eq!(
             progress,
-            EngineProgress::Finished(WorkflowRunStatus::Completed)
+            EngineProgress::TerminalPending(ProposedTerminal::completed())
         );
-        assert_eq!(sink.count(), 0);
+        assert_eq!(*transitions.lock().unwrap(), 2);
     }
 
     #[tokio::test]
@@ -267,16 +253,8 @@ mod tests {
         struct InertFailingSink {
             fired: Mutex<usize>,
         }
-        impl RunPingSink for InertFailingSink {
-            fn fire(&self, _ping_url: &str, _authorization: &str) {
-                // Simulate a failed POST that is swallowed (as HttpRunPingSink
-                // does): record that we tried, return normally.
-                *self.fired.lock().unwrap() += 1;
-            }
-        }
         struct InertExecutor {
             sink: Arc<InertFailingSink>,
-            gateway: WorkflowPrivateGateway,
         }
         #[async_trait::async_trait]
         impl WorkflowStepExecutor for InertExecutor {
@@ -286,7 +264,7 @@ mod tests {
                 }
             }
             fn on_step_transition(&self) {
-                fire_run_ping(Some(&self.gateway), self.sink.as_ref());
+                *self.sink.fired.lock().unwrap() += 1;
             }
         }
 
@@ -294,15 +272,12 @@ mod tests {
         let sink = Arc::new(InertFailingSink {
             fired: Mutex::new(0),
         });
-        let executor = InertExecutor {
-            sink: sink.clone(),
-            gateway: gateway(),
-        };
+        let executor = InertExecutor { sink: sink.clone() };
         let cancel = CancelToken::new();
         let progress = drive_run(&service, &executor, &run_id, &cancel).await;
         assert_eq!(
             progress,
-            EngineProgress::Finished(WorkflowRunStatus::Completed)
+            EngineProgress::TerminalPending(ProposedTerminal::completed())
         );
         let (_, steps) = service.get_run_with_steps(&run_id).unwrap().unwrap();
         assert!(steps

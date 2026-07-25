@@ -18,6 +18,7 @@ use crate::live::sessions::model::{
 };
 use crate::live::sessions::rendezvous::broker::InteractionRendezvous;
 use crate::live::sessions::sink::SessionEventSink;
+use crate::live::workflows::isolation::{WorkflowIsolationBroker, WorkflowProcessGroupGuard};
 
 pub struct SessionActorConfig {
     /// Everything describing THIS launch (session row, agent, env, startup).
@@ -27,6 +28,7 @@ pub struct SessionActorConfig {
     /// Per-call powers (turn-finish callback, exit callback).
     pub hooks: SessionHooks,
     pub interaction_broker: Arc<InteractionRendezvous>,
+    pub workflow_isolation_broker: Arc<dyn WorkflowIsolationBroker>,
     pub event_tx: broadcast::Sender<SessionEventEnvelope>,
 }
 
@@ -67,6 +69,9 @@ pub(in crate::live::sessions::actor) struct SessionActor {
     pub(in crate::live::sessions::actor) _acp_shutdown: oneshot::Sender<()>,
     /// The agent process guard; dropped last when the actor exits.
     pub(in crate::live::sessions::actor) child: tokio::process::Child,
+    /// Workflow agent descendants are terminated through the broker when the
+    /// actor exits. Interactive launches have no broker guard.
+    pub(in crate::live::sessions::actor) workflow_process_group: Option<WorkflowProcessGroupGuard>,
 }
 
 #[derive(Debug, Clone)]

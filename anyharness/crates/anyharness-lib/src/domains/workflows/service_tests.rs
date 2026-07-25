@@ -20,7 +20,7 @@ use anyharness_contract::v1::{WorkflowRunStatus, WorkflowStepStatus};
 // "fake things at the service layer" pattern — mirrors goals/service_tests).
 // --------------------------------------------------------------------------
 
-fn test_service() -> WorkflowService {
+pub(super) fn test_service() -> WorkflowService {
     let db = Db::open_in_memory().expect("open db");
     test_support::seed_workspace_with_repo_root(&db, "workspace-1", "local", "/tmp/workspace-1");
     WorkflowService::new(WorkflowStore::new(db))
@@ -63,13 +63,9 @@ impl WorkflowStepExecutor for FakeExecutor {
             attempt: ctx.attempt,
             text,
         });
-        self.outcomes
-            .lock()
-            .unwrap()
-            .pop_front()
-            .unwrap_or(StepOutcome::Completed {
-                output: serde_json::json!({}),
-            })
+        self.outcomes.lock().unwrap().pop_front().unwrap_or(StepOutcome::Completed {
+            output: serde_json::json!({}),
+        })
     }
 }
 
@@ -145,10 +141,7 @@ fn create_run_is_idempotent_on_run_id() {
     assert!(!created_again);
     assert_eq!(again.run_id, first.run_id);
 
-    let (_, steps_rows) = service
-        .get_run_with_steps("run-1")
-        .expect("load")
-        .expect("run exists");
+    let (_, steps_rows) = service.get_run_with_steps("run-1").expect("load").expect("run exists");
     assert_eq!(steps_rows.len(), 1);
     assert_eq!(steps_rows[0].status, WorkflowStepStatus::Pending);
     assert_eq!(steps_rows[0].kind, "agent.prompt");
@@ -1090,12 +1083,7 @@ async fn crash_resume_mid_group_resumes_only_the_unfinished_lane() {
                     },
                 )?;
                 // Mark the already-run step completed.
-                let mut step = WorkflowStore::find_step_run_tx(
-                    tx,
-                    &run_id,
-                    if key == "0.a.0" { 0 } else { 1 },
-                )?
-                .unwrap();
+                let mut step = WorkflowStore::find_step_run_tx(tx, &run_id, if key == "0.a.0" { 0 } else { 1 })?.unwrap();
                 step.status = WorkflowStepStatus::Completed;
                 WorkflowStore::update_step_run(tx, &step)?;
             }

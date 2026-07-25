@@ -2,6 +2,7 @@ use anyharness_contract::v1::{ConfigApplyState, SessionLiveConfigSnapshot};
 
 use crate::domains::sessions::mcp_bindings::assembly::SESSION_RESTART_REQUIRED_DETAIL;
 use crate::domains::sessions::model::SessionRecord;
+use crate::live::sessions::model::SessionProcessPolicy;
 use crate::live::sessions::{LiveSessionCommandError, SetConfigOptionCommandError};
 
 use super::{
@@ -50,6 +51,29 @@ impl SessionRuntime {
         ),
         SetSessionConfigOptionError,
     > {
+        self.set_live_session_config_option_with_process_policy(
+            session_id,
+            config_id,
+            value,
+            SessionProcessPolicy::Interactive,
+        )
+        .await
+    }
+
+    pub(crate) async fn set_live_session_config_option_with_process_policy(
+        &self,
+        session_id: &str,
+        config_id: &str,
+        value: &str,
+        process_policy: SessionProcessPolicy,
+    ) -> Result<
+        (
+            SessionRecord,
+            Option<SessionLiveConfigSnapshot>,
+            ConfigApplyState,
+        ),
+        SetSessionConfigOptionError,
+    > {
         self.access_gate
             .assert_can_mutate_for_session(session_id)
             .map_err(SetSessionConfigOptionError::Access)?;
@@ -64,9 +88,7 @@ impl SessionRuntime {
                 }
                 // Unreachable from get_session_or_not_found (it never gates), but
                 // keep the mapping total.
-                SessionLifecycleError::Access(error) => {
-                    SetSessionConfigOptionError::Access(error)
-                }
+                SessionLifecycleError::Access(error) => SetSessionConfigOptionError::Access(error),
                 SessionLifecycleError::WorkflowHeld { run_id } => {
                     SetSessionConfigOptionError::WorkflowHeld { run_id }
                 }
@@ -75,7 +97,7 @@ impl SessionRuntime {
         // Config mutations go through the live ACP actor. If the actor is not
         // running yet, start or resume it and return its control handle.
         let handle = self
-            .ensure_live_session_handle(&record, None)
+            .ensure_live_session_handle_with_process_policy(&record, None, process_policy.clone())
             .await
             .map_err(|error| match error {
                 StartSessionError::WorkspaceNotFound => SetSessionConfigOptionError::Internal(
@@ -135,7 +157,8 @@ impl SessionRuntime {
                     detail,
                     "live model apply unavailable; switching via relaunch"
                 );
-                self.relaunch_session_with_model(&record, value).await?;
+                self.relaunch_session_with_model(&record, value, process_policy)
+                    .await?;
                 ConfigApplyState::Applied
             }
             Err(LiveSessionCommandError::ActorUnavailable) => {
@@ -176,6 +199,7 @@ impl SessionRuntime {
         &self,
         record: &crate::domains::sessions::model::SessionRecord,
         model_id: &str,
+        process_policy: SessionProcessPolicy,
     ) -> Result<(), SetSessionConfigOptionError> {
         self.session_service
             .store()
@@ -192,7 +216,7 @@ impl SessionRuntime {
             tokio::time::sleep(std::time::Duration::from_millis(50)).await;
         }
 
-        self.ensure_live_session(&record.id, None)
+        self.ensure_live_session_with_process_policy(&record.id, None, process_policy)
             .await
             .map_err(|error| {
                 SetSessionConfigOptionError::Internal(anyhow::anyhow!(

@@ -175,9 +175,6 @@ pub async fn probe_agent(options: ProbeOptions) -> anyhow::Result<ProbeSnapshot>
     }
 
     let (ready_tx, _ready_rx) = std::sync::mpsc::channel::<anyhow::Result<String>>();
-    // Credential env vars are merged into the session layer (after the
-    // workspace layer); the probe passes no other layer that could shadow
-    // them, so they reach the agent process unchanged.
     session_launch_env.extend(
         options
             .auth_env
@@ -188,6 +185,8 @@ pub async fn probe_agent(options: ProbeOptions) -> anyhow::Result<ProbeSnapshot>
         session: session_launch_env,
         ..Default::default()
     };
+    let unavailable_broker =
+        crate::live::workflows::isolation::unavailable_workflow_isolation_broker();
     let spawned = spawn_agent_process(
         &resolved,
         &workspace,
@@ -195,8 +194,11 @@ pub async fn probe_agent(options: ProbeOptions) -> anyhow::Result<ProbeSnapshot>
         PROBE_SESSION_ID,
         PROBE_WORKSPACE_ID,
         options.agent_kind.as_str(),
+        &crate::live::sessions::model::SessionProcessPolicy::Interactive,
+        &unavailable_broker,
         &ready_tx,
-    )?;
+    )
+    .await?;
     let mut child = spawned.child;
 
     let (notification_tx, mut notification_rx) =
@@ -391,8 +393,7 @@ async fn run_enumeration(
             // option, so there is no per-model config matrix to capture.
             None
         } else {
-            // ACP 0.14 removed set_session_model; harnesses that expose models
-            // via the ACP models block can no longer be switched for per-model
+            // ACP models-block harnesses can no longer be switched for per-model
             // config enumeration.
             warnings.push(format!(
                 "cannot switch to {model_id}: set_session_model removed in ACP 0.14 \

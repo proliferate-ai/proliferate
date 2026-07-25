@@ -27,7 +27,10 @@ use super::delivery::WorkflowServiceIdentityFixture;
 use super::effects::{
     self, recover_agent_turn, recover_scm, recover_shell, EffectKind, EffectResult, EffectStatus,
 };
-use super::engine::{CancelToken, StepExecContext, StepOutcome, WorkflowStepExecutor};
+use super::engine::{
+    CancelToken, EngineProgress, ProposedTerminal, StepExecContext, StepOutcome,
+    WorkflowStepExecutor,
+};
 use super::plan::PlanStep;
 use super::service::WorkflowService;
 use super::store::WorkflowStore;
@@ -37,6 +40,14 @@ use crate::persistence::Db;
 
 fn now() -> String {
     chrono::Utc::now().to_rfc3339()
+}
+
+fn terminal_proposal(progress: EngineProgress, status: WorkflowRunStatus) -> ProposedTerminal {
+    let EngineProgress::TerminalPending(proposal) = progress else {
+        panic!("expected a terminal proposal, got {progress:?}");
+    };
+    assert_eq!(proposal.status, status);
+    proposal
 }
 
 fn service_with_run(steps: &str) -> (WorkflowService, Db, String) {
@@ -240,9 +251,7 @@ fn base_executor(store: WorkflowStore, run_id: &str, kind: EffectKind) -> Ledger
         kind,
         fresh_identity: None,
         replay_key: None,
-        fresh_outcome: StepOutcome::Completed {
-            output: serde_json::json!({ "fresh": true }),
-        },
+        fresh_outcome: StepOutcome::Completed { output: serde_json::json!({ "fresh": true }) },
         agent_durable: None,
         shell_pg_alive: false,
         shell_durable_exit: None,
@@ -634,9 +643,7 @@ async fn workflow_fault_local_effect_duplicate_wake_does_not_duplicate_completed
         })
         .unwrap();
 
-    let all = store
-        .with_tx_anyhow(|tx| Ok(effects::list_effects_tx(tx, &run_id)?))
-        .unwrap();
+    let all = store.with_tx_anyhow(|tx| Ok(effects::list_effects_tx(tx, &run_id)?)).unwrap();
     assert_eq!(all.len(), 1, "duplicate wake produces no second row");
     assert_eq!(all[0].status, EffectStatus::Completed);
 }

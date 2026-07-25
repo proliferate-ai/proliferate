@@ -4,12 +4,15 @@
 
 use crate::domains::workflows::engine::StepOutcome;
 use crate::domains::workflows::plan::{Isolation, NO_LANE};
+use crate::domains::workspaces::creator_context::WorkspaceCreatorContext;
+use crate::domains::workspaces::model::WorkspaceKind;
 
 use super::parallel::{
     adoptable_run_worktree, recover_resume_worktree, resolve_effective_workspace,
-    run_worktree_base_ref, run_worktree_branch_name, run_worktree_target_path,
-    worktree_base_workspace_id, worktree_branch_for_scope, worktree_target_path_for_scope,
+    run_worktree_branch_name, run_worktree_target_path, worktree_base_workspace_id,
+    worktree_branch_for_scope, worktree_target_path_for_scope,
 };
+use super::worktree_validation::validate_recovered_worktree_metadata;
 
 fn outcome_code(outcome: &StepOutcome) -> &str {
     match outcome {
@@ -63,7 +66,10 @@ async fn worktree_isolation_mints_once_and_every_slot_shares_it() {
     .await
     .expect("memoized");
     assert_eq!(first, "ws-worktree-0");
-    assert_eq!(second, first, "all slots must share the one minted worktree");
+    assert_eq!(
+        second, first,
+        "all slots must share the one minted worktree"
+    );
     assert_eq!(
         mints.load(std::sync::atomic::Ordering::SeqCst),
         1,
@@ -79,7 +85,10 @@ async fn worktree_mint_failure_propagates_and_leaves_no_effective_workspace() {
     // checkout. A later resolution retries the mint (memo still empty).
     let memo = tokio::sync::Mutex::new(None);
     let outcome = resolve_effective_workspace(Isolation::Worktree, "ws-pinned", &memo, || async {
-        Err(failed_msg("worktree_mint_failed", "git worktree add failed: dirty"))
+        Err(failed_msg(
+            "worktree_mint_failed",
+            "git worktree add failed: dirty",
+        ))
     })
     .await
     .expect_err("mint failure must propagate");
@@ -95,7 +104,10 @@ fn adoptable_run_worktree_adopts_only_the_runs_own_branch() {
     let expected = run_worktree_branch_name("run-x");
     // Adoption: a record at the run's path on the run's OWN branch is adopted.
     assert_eq!(
-        adoptable_run_worktree(Some(("ws-wt".to_string(), Some(expected.clone()))), &expected),
+        adoptable_run_worktree(
+            Some(("ws-wt".to_string(), Some(expected.clone()))),
+            &expected
+        ),
         Some("ws-wt".to_string()),
     );
     // Run-scoped only: a record squatting the path on a DIFFERENT branch is
@@ -140,12 +152,11 @@ async fn resolve_adopts_existing_worktree_without_a_second_mint() {
         .expect("adopts the existing worktree");
     assert_eq!(first, "ws-adopted");
     // Second resolution is served from the memo, never re-adopting/minting.
-    let second =
-        resolve_effective_workspace(Isolation::Worktree, "ws-pinned", &memo, || async {
-            panic!("must not mint/adopt again once memoized")
-        })
-        .await
-        .expect("memoized");
+    let second = resolve_effective_workspace(Isolation::Worktree, "ws-pinned", &memo, || async {
+        panic!("must not mint/adopt again once memoized")
+    })
+    .await
+    .expect("memoized");
     assert_eq!(second, "ws-adopted");
     assert_eq!(mint_calls.load(std::sync::atomic::Ordering::SeqCst), 1);
     assert_eq!(memo.lock().await.as_deref(), Some("ws-adopted"));
@@ -208,6 +219,40 @@ async fn resume_prefers_a_recovered_session_and_skips_the_lookup() {
     assert_eq!(recovered, Some("ws-from-session".to_string()));
 }
 
+#[test]
+fn persisted_session_tampered_worktree_metadata_is_rejected_before_reuse() {
+    let root = std::env::temp_dir().join(format!(
+        "workflow-persisted-session-tamper-{}",
+        uuid::Uuid::new_v4()
+    ));
+    let expected = root.join("wf-run-run-x");
+    std::fs::create_dir_all(&expected).expect("worktree directory");
+    let expected_creator = WorkspaceCreatorContext::Automation {
+        automation_id: None,
+        automation_run_id: Some("run-x".to_string()),
+        label: Some("workflow-run".to_string()),
+    };
+    let attacker_creator = WorkspaceCreatorContext::Automation {
+        automation_id: None,
+        automation_run_id: Some("run-attacker".to_string()),
+        label: Some("workflow-run".to_string()),
+    };
+    let result = validate_recovered_worktree_metadata(
+        WorkspaceKind::Worktree,
+        expected.to_str().expect("utf8 path"),
+        Some("workflow-run/run-x"),
+        Some(&attacker_creator),
+        expected.to_str().expect("utf8 path"),
+        "workflow-run/run-x",
+        &expected_creator,
+    );
+    assert_eq!(
+        outcome_code(&result.expect_err("tampered creator must reject")),
+        "worktree_resume_lookup_failed"
+    );
+    let _ = std::fs::remove_dir_all(root);
+}
+
 #[tokio::test]
 async fn resume_adopts_nothing_when_no_record_and_no_session() {
     // Nothing to recover yet (no session, no record): the first step will mint.
@@ -235,6 +280,45 @@ fn run_worktree_addressing_is_run_scoped_and_deterministic() {
     assert_eq!(a_path, run_worktree_target_path(pinned, "run-aaa").unwrap());
     // The worktree lands as a sibling of the pinned checkout.
     assert_eq!(a_path, "/sandbox/wf-run-run-aaa");
+}
+
+#[test]
+fn worktree_address_projection_never_collapses_distinct_invalid_tokens() {
+    // Accepted plans reject both dotted tokens, but the projection remains
+    // injective as defense in depth. The old lossy replacement mapped both
+    // pairs to the same `-` token.
+    assert_ne!(
+        run_worktree_branch_name("run.a"),
+        run_worktree_branch_name("run-a")
+    );
+    assert_ne!(
+        run_worktree_target_path("/sandbox/repo", "run.a"),
+        run_worktree_target_path("/sandbox/repo", "run-a")
+    );
+    assert_ne!(
+        worktree_branch_for_scope("run-z", "lane.a"),
+        worktree_branch_for_scope("run-z", "lane-a")
+    );
+    assert_ne!(
+        worktree_target_path_for_scope("/sandbox/repo", "run-z", "lane.a"),
+        worktree_target_path_for_scope("/sandbox/repo", "run-z", "lane-a")
+    );
+    let upper = worktree_target_path_for_scope("/sandbox/repo", "run-z", "Lane-A").unwrap();
+    let lower = worktree_target_path_for_scope("/sandbox/repo", "run-z", "lane-a").unwrap();
+    assert_ne!(upper.to_ascii_lowercase(), lower.to_ascii_lowercase());
+    assert!(upper.rsplit('/').next().expect("worktree leaf").len() <= 255);
+
+    let maximum = "x".repeat(64);
+    let maximum_path = worktree_target_path_for_scope("/sandbox/repo", &maximum, &maximum).unwrap();
+    assert!(
+        maximum_path
+            .rsplit('/')
+            .next()
+            .expect("maximum worktree leaf")
+            .len()
+            <= 255
+    );
+    assert!(worktree_branch_for_scope(&maximum, &maximum).len() <= 255);
 }
 
 #[test]
@@ -298,7 +382,10 @@ fn lane_worktree_addressing_is_distinct_per_lane() {
     // Deterministic: the same lane always addresses the same worktree
     // (resume/adopt is safe).
     assert_eq!(a_branch, worktree_branch_for_scope(run, "a"));
-    assert_eq!(a_path, worktree_target_path_for_scope(pinned, run, "a").unwrap());
+    assert_eq!(
+        a_path,
+        worktree_target_path_for_scope(pinned, run, "a").unwrap()
+    );
 }
 
 #[test]
@@ -317,14 +404,4 @@ fn lane_worktree_adoption_is_scoped_to_the_lanes_own_branch() {
     );
     // Lane b's resume must not adopt lane a's worktree.
     assert_eq!(adoptable_run_worktree(found_on_a, &b_branch), None);
-}
-
-#[test]
-fn run_worktree_base_ref_is_none_outside_a_repo() {
-    // rev-parse fails outside a git repo → None, letting git default to the
-    // source repo's HEAD rather than passing a bogus base.
-    let dir = std::env::temp_dir().join(format!("wf-norepo-{}", uuid::Uuid::new_v4()));
-    std::fs::create_dir_all(&dir).unwrap();
-    assert!(run_worktree_base_ref(&dir.to_string_lossy()).is_none());
-    let _ = std::fs::remove_dir_all(&dir);
 }

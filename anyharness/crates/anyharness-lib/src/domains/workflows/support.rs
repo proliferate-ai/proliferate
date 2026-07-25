@@ -4,7 +4,7 @@
 
 use anyharness_contract::v1::{WorkflowRunStatus, WorkflowStepStatus};
 
-use super::engine::{EngineProgress, StepOutcome};
+use super::engine::{EngineProgress, ProposedTerminal, StepOutcome};
 use super::model::{WorkflowRunRecord, WorkflowStepRunRecord};
 use super::store::WorkflowStore;
 use super::templates::StepOutputs;
@@ -40,7 +40,9 @@ pub(super) fn skip_tail(
         if let Some(mut step) = WorkflowStore::find_step_run_tx(tx, run_id, index)? {
             if matches!(
                 step.status,
-                WorkflowStepStatus::Pending | WorkflowStepStatus::Running | WorkflowStepStatus::Waiting
+                WorkflowStepStatus::Pending
+                    | WorkflowStepStatus::Running
+                    | WorkflowStepStatus::Waiting
             ) {
                 step.status = WorkflowStepStatus::Skipped;
                 step.ended_at = Some(now.to_string());
@@ -63,8 +65,8 @@ pub(super) fn advance_or_finish(
     run.step_cursor = next;
     run.updated_at = now.to_string();
     if next as usize >= step_count {
-        run.status = WorkflowRunStatus::Completed;
-        EngineProgress::Finished(WorkflowRunStatus::Completed)
+        run.status = WorkflowRunStatus::Running;
+        EngineProgress::TerminalPending(ProposedTerminal::completed())
     } else if next as usize >= boundary {
         // Segment done, but the plan continues (a parallel group follows): the
         // cursor now sits at the group's first step; hand off to the actor.

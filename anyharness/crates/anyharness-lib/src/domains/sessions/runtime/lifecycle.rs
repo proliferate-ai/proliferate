@@ -9,18 +9,26 @@ use crate::domains::sessions::model::SessionRecord;
 use crate::domains::sessions::runtime_event::{
     RuntimeEventInjectionResult, RuntimeInjectedSessionEvent,
 };
+use crate::live::sessions::model::SessionProcessPolicy;
+use crate::live::workflows::SessionProcessTransitionGuard;
 
-use super::{SessionLifecycleError, SessionMcpRefresh, SessionRuntime};
+use super::{SessionLifecycleError, SessionRuntime};
 
 impl SessionRuntime {
-    /// Rebind a workflow-bound session's live MCP servers (addendum item 2): the
-    /// per-run gateway credential is injected only at session LAUNCH (via the
-    /// launch extension reading `WorkflowGatewaySessions`). A taken-over EXISTING
-    /// session was launched with only the worker-token binding, so we retire its
-    /// live actor and relaunch it — the relaunch reassembles MCP servers from the
-    /// extension seam, which now includes the per-run gateway (registered at
-    /// claim). Best-effort: a rebind failure is logged; the run still proceeds.
-    pub(crate) async fn relaunch_session_for_mcp_rebind(&self, session_id: &str) {
+    /// Rebind a workflow-bound session's live MCP servers: its ephemeral,
+    /// session-bound local-broker capability is contributed only at launch by
+    /// `WorkflowGatewaySessions`. A taken-over existing actor is retired and
+    /// relaunched through the workflow process policy so no prior interactive
+    /// process or remote gateway credential is reused.
+    pub(crate) async fn relaunch_session_for_workflow_rebind_under_transition(
+        &self,
+        session_id: &str,
+        process_policy: SessionProcessPolicy,
+        transition: &SessionProcessTransitionGuard,
+    ) -> Result<(), anyhow::Error> {
+        if !transition.matches(session_id) {
+            anyhow::bail!("workflow session transition identity mismatch");
+        }
         if let Some(handle) = self.acp_manager.get_handle(session_id).await {
             let _ = handle.close().await;
         }
@@ -30,22 +38,24 @@ impl SessionRuntime {
             }
             tokio::time::sleep(Duration::from_millis(50)).await;
         }
-        if let Err(error) = self
-            .ensure_live_session(
-                session_id,
-                Some(SessionMcpRefresh {
-                    mcp_servers: Vec::new(),
-                    mcp_binding_summaries: None,
-                }),
-            )
-            .await
-        {
-            tracing::warn!(
-                session_id = %session_id,
-                error = ?error,
-                "workflow gateway rebind relaunch failed (ignored)"
+        if self.has_live_session(session_id).await {
+            anyhow::bail!(
+                "bound session actor did not quiesce; refusing workflow relaunch fallback"
             );
         }
+        // This is a live launch-topology refresh, not a durable MCP-binding
+        // edit. The workflow extension contributes the ephemeral local broker
+        // server during assembly; passing a `SessionMcpRefresh` here would
+        // overwrite the user's encrypted bindings and summaries in SQLite.
+        self.ensure_live_session_with_process_policy_under_transition(
+            session_id,
+            None,
+            process_policy,
+            transition,
+        )
+        .await
+        .map(|_| ())
+        .map_err(|error| anyhow::anyhow!("workflow rebind relaunch failed: {error:?}"))
     }
 
     pub async fn cancel_live_session(

@@ -57,6 +57,12 @@ impl SessionActor {
         self.background_work_registry.shutdown();
         self.finalize_exit(exit_reason).await;
         self.handle.finish_prompt();
+        if let Some(mut process_group) = self.workflow_process_group.take() {
+            process_group
+                .quiesce()
+                .await
+                .map_err(|error| anyhow::anyhow!("workflow process cleanup required: {error}"))?;
+        }
         drop(self.child);
         Ok(())
     }

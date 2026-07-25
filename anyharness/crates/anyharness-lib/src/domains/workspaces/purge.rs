@@ -87,6 +87,9 @@ impl WorkspacePurgeService {
                     .to_string(),
             });
         }
+        if let Some(message) = self.delete_workflow.workspace_purge_blocker(workspace_id)? {
+            return Ok(WorkspacePurgeServiceOutcome::Blocked { workspace, message });
+        }
         self.session_runtime
             .force_retire_workspace_live_sessions_for_purge(workspace_id)
             .await?;

@@ -22,8 +22,13 @@ use crate::domains::sessions::live_ports::SessionAttachmentSource;
 use crate::domains::sessions::store::SessionStore;
 use crate::live::sessions::model::{ActorCapabilities, PermissionAdvisor, SessionEventObserver};
 use crate::live::sessions::LiveSessionManager;
+use crate::live::workflows::isolation::WorkflowIsolationBroker;
 use crate::live::workflows::{WorkflowAutoApproveAdvisor, WorkflowOwnedSessions};
 use crate::persistence::Db;
+
+pub(super) fn phase_a_workflow_isolation_broker() -> Arc<dyn WorkflowIsolationBroker> {
+    crate::live::workflows::isolation::unavailable_workflow_isolation_broker()
+}
 
 pub(super) struct LiveSessionsWiringDeps {
     pub db: Db,
@@ -36,6 +41,7 @@ pub(super) struct LiveSessionsWiringDeps {
     pub workflow_owned_sessions: Arc<WorkflowOwnedSessions>,
     pub loop_service: Arc<LoopService>,
     pub activity_service: Arc<ActivityService>,
+    pub workflow_isolation_broker: Arc<dyn WorkflowIsolationBroker>,
 }
 
 /// Registration order is the observer dispatch order: plans must run before
@@ -75,5 +81,8 @@ pub(super) fn wire_live_sessions(deps: &LiveSessionsWiringDeps) -> LiveSessionMa
         observers,
         permission_advisor,
     };
-    LiveSessionManager::new(caps)
+    LiveSessionManager::new_with_workflow_isolation_broker(
+        caps,
+        deps.workflow_isolation_broker.clone(),
+    )
 }

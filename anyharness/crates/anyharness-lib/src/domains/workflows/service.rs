@@ -1,8 +1,13 @@
 use anyharness_contract::v1::{WorkflowRunStatus, WorkflowStepStatus};
 
+#[cfg(test)]
+use std::sync::atomic::{AtomicUsize, Ordering};
+#[cfg(test)]
+use std::sync::Arc;
+
 use super::engine::{
-    decide_after_step, CancelToken, EngineProgress, StepDecision, StepExecContext, StepOutcome,
-    WorkflowStepExecutor,
+    decide_after_step, CancelToken, EngineProgress, ProposedTerminal, StepDecision, StepExecContext,
+    StepOutcome, WorkflowStepExecutor,
 };
 use super::model::{
     LaneStatus, WorkflowLaneCursorRecord, WorkflowObservationRecord, WorkflowRunRecord,
@@ -19,12 +24,16 @@ use super::templates;
 // WS5b line budget; the test path stays `service::lane_visible_outputs`).
 pub(super) use super::support::lane_visible_outputs;
 
+mod cleanup;
+
 #[derive(Debug, thiserror::Error)]
 pub enum WorkflowServiceError {
     #[error("workflow run not found")]
     RunNotFound,
     #[error("workspace not found")]
     WorkspaceNotFound,
+    #[error("workflow agent isolation is unavailable")]
+    AgentIsolationUnavailable,
     #[error(transparent)]
     InvalidPlan(#[from] PlanError),
     #[error("invalid workflow delivery identity: {0}")]
@@ -110,15 +119,35 @@ enum LaneStep {
 #[derive(Clone)]
 pub struct WorkflowService {
     store: WorkflowStore,
+    #[cfg(test)]
+    terminal_persist_failures: Arc<AtomicUsize>,
+    #[cfg(test)]
+    materialization_persist_failures: Arc<AtomicUsize>,
 }
 
 impl WorkflowService {
     pub fn new(store: WorkflowStore) -> Self {
-        Self { store }
+        Self {
+            store,
+            #[cfg(test)]
+            terminal_persist_failures: Arc::new(AtomicUsize::new(0)),
+            #[cfg(test)]
+            materialization_persist_failures: Arc::new(AtomicUsize::new(0)),
+        }
     }
 
     pub fn store(&self) -> &WorkflowStore {
         &self.store
+    }
+
+    #[cfg(test)]
+    pub(crate) fn fail_next_terminal_persist_for_test(&self) {
+        self.terminal_persist_failures.fetch_add(1, Ordering::SeqCst);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn fail_next_materialization_persist_for_test(&self) {
+        self.materialization_persist_failures.fetch_add(1, Ordering::SeqCst);
     }
 
     // ---------------------------------------------------------------------
@@ -187,16 +216,7 @@ impl WorkflowService {
         label: &str,
         injected_text: &str,
     ) -> anyhow::Result<()> {
-        self.store.insert_injection(
-            session_id,
-            turn_id,
-            run_id,
-            step_key,
-            kind,
-            label,
-            injected_text,
-            &now(),
-        )
+        self.store.insert_injection(session_id, turn_id, run_id, step_key, kind, label, injected_text, &now())
     }
 
     /// Upsert a live progress snapshot onto a RUNNING step's `output_json`
@@ -238,8 +258,7 @@ impl WorkflowService {
         executor: &dyn WorkflowStepExecutor,
         cancel: &CancelToken,
     ) -> Result<EngineProgress, WorkflowServiceError> {
-        self.run_next_step_bounded(run_id, executor, cancel, usize::MAX)
-            .await
+        self.run_next_step_bounded(run_id, executor, cancel, usize::MAX).await
     }
 
     /// Drive one sequential step, but treat `boundary` (an exclusive flat index)
@@ -394,12 +413,10 @@ impl WorkflowService {
             // already run to completion (join awaited them); the group's join now
             // fails the run. The cursor stays at the group start, so post-group
             // steps never execute.
-            self.mark_run_terminal(run_id, WorkflowRunStatus::Failed, Some(code), message)?;
-            return Ok(EngineProgress::Finished(WorkflowRunStatus::Failed));
+            return Ok(EngineProgress::TerminalPending(ProposedTerminal::failed(code, message)));
         }
         if any_cancelled {
-            self.mark_run_terminal(run_id, WorkflowRunStatus::Cancelled, None, None)?;
-            return Ok(EngineProgress::Finished(WorkflowRunStatus::Cancelled));
+            return Ok(EngineProgress::TerminalPending(ProposedTerminal::cancelled()));
         }
         // Clean join (M2b): every lane completed → merge each lane's branch back
         // into the run-level worktree in lane order BEFORE advancing the cursor,
@@ -413,8 +430,7 @@ impl WorkflowService {
                 StepOutcome::Failed { code, message, .. } => (code, message),
                 _ => ("lane_merge_failed".to_string(), None),
             };
-            self.mark_run_terminal(run_id, WorkflowRunStatus::Failed, Some(code), message)?;
-            return Ok(EngineProgress::Finished(WorkflowRunStatus::Failed));
+            return Ok(EngineProgress::TerminalPending(ProposedTerminal::failed(code, message)));
         }
         // Every lane merged → advance the run cursor past the group.
         Ok(self.finish_parallel_group(run_id, end, step_count)?)
@@ -438,9 +454,7 @@ impl WorkflowService {
         let node = node as i64;
         let mut idx = match self.load_or_init_lane_cursor(run_id, node, &lane.name)? {
             LaneResume::Done => return Ok(LaneResult::Completed),
-            LaneResume::Failed { code, message } => {
-                return Ok(LaneResult::Failed { code, message })
-            }
+            LaneResume::Failed { code, message } => return Ok(LaneResult::Failed { code, message }),
             LaneResume::Resume(cursor) => cursor.max(0) as usize,
         };
         loop {
@@ -448,15 +462,7 @@ impl WorkflowService {
                 return Ok(LaneResult::Cancelled);
             }
             if idx >= lane.step_indices.len() {
-                self.mark_lane_terminal(
-                    run_id,
-                    node,
-                    &lane.name,
-                    LaneStatus::Completed,
-                    None,
-                    None,
-                    idx as i64,
-                )?;
+                self.mark_lane_terminal(run_id, node, &lane.name, LaneStatus::Completed, None, None, idx as i64)?;
                 return Ok(LaneResult::Completed);
             }
             let flat = lane.step_indices[idx];
@@ -467,15 +473,11 @@ impl WorkflowService {
             // The validator already forbids referencing a sibling lane's emit; this
             // filter makes a mis-crafted plan fail CLOSED (a stray sibling ref
             // resolves to nothing) rather than leaking a sibling lane's output.
-            let outputs =
-                lane_visible_outputs(build_outputs(&step_runs), group_start, &lane.step_indices);
+            let outputs = lane_visible_outputs(build_outputs(&step_runs), group_start, &lane.step_indices);
             let existing = step_runs.iter().find(|step| step.step_index == flat as i64);
-            let resumed_after_approval = existing
-                .map(|step| step.status == WorkflowStepStatus::Waiting)
-                .unwrap_or(false);
-            let crash_resumed = existing
-                .map(|step| step.status == WorkflowStepStatus::Running)
-                .unwrap_or(false);
+            let resumed_after_approval =
+                existing.map(|step| step.status == WorkflowStepStatus::Waiting).unwrap_or(false);
+            let crash_resumed = existing.map(|step| step.status == WorkflowStepStatus::Running).unwrap_or(false);
             let attempt = existing.map(|step| step.attempt).unwrap_or(0) + 1;
             let resolved = templates::resolve_step(step_def, &outputs);
             self.begin_step(run_id, flat as i64, resolved.kind_slug(), attempt)?;
@@ -504,9 +506,7 @@ impl WorkflowService {
                 LaneStep::Advance(next) => idx = next.max(0) as usize,
                 LaneStep::Retry => { /* cursor unchanged; re-run the same step */ }
                 LaneStep::Completed => return Ok(LaneResult::Completed),
-                LaneStep::Failed { code, message } => {
-                    return Ok(LaneResult::Failed { code, message })
-                }
+                LaneStep::Failed { code, message } => return Ok(LaneResult::Failed { code, message }),
             }
         }
     }
@@ -514,12 +514,7 @@ impl WorkflowService {
     /// Read a lane's persisted cursor, initializing a fresh `running` row at 0 on
     /// first entry. A `completed`/`failed` lane short-circuits (crash-resume of a
     /// finished lane re-runs nothing — D-031 deny-path c).
-    fn load_or_init_lane_cursor(
-        &self,
-        run_id: &str,
-        node: i64,
-        lane: &str,
-    ) -> anyhow::Result<LaneResume> {
+    fn load_or_init_lane_cursor(&self, run_id: &str, node: i64, lane: &str) -> anyhow::Result<LaneResume> {
         self.store.with_tx_anyhow(|tx| {
             if let Some(record) = WorkflowStore::find_lane_cursor_tx(tx, run_id, node, lane)? {
                 return Ok(match record.status {
@@ -757,12 +752,7 @@ impl WorkflowService {
 
     /// Advance the run cursor past a joined parallel group. Completes the run when
     /// the group is the last segment, else yields `SegmentComplete`.
-    fn finish_parallel_group(
-        &self,
-        run_id: &str,
-        end: usize,
-        step_count: usize,
-    ) -> anyhow::Result<EngineProgress> {
+    fn finish_parallel_group(&self, run_id: &str, end: usize, step_count: usize) -> anyhow::Result<EngineProgress> {
         self.store.with_tx_anyhow(|tx| {
             let mut run = WorkflowStore::find_run_tx(tx, run_id)?
                 .ok_or_else(|| anyhow::anyhow!("run vanished after parallel join"))?;
@@ -770,8 +760,8 @@ impl WorkflowService {
             run.step_cursor = end as i64;
             run.updated_at = now;
             let progress = if end >= step_count {
-                run.status = WorkflowRunStatus::Completed;
-                EngineProgress::Finished(WorkflowRunStatus::Completed)
+                run.status = WorkflowRunStatus::Running;
+                EngineProgress::TerminalPending(ProposedTerminal::completed())
             } else {
                 run.status = WorkflowRunStatus::Running;
                 EngineProgress::SegmentComplete
@@ -802,9 +792,7 @@ impl WorkflowService {
         }
         let plan = plan::parse(&run.plan_json)?;
         let cursor = run.step_cursor;
-        let step = plan
-            .step(cursor as usize)
-            .ok_or(WorkflowServiceError::UnexpectedApprovalStep)?;
+        let step = plan.step(cursor as usize).ok_or(WorkflowServiceError::UnexpectedApprovalStep)?;
         let step_run = self
             .store
             .with_tx_anyhow(|tx| Ok(WorkflowStore::find_step_run_tx(tx, run_id, cursor)?))?
@@ -836,13 +824,7 @@ impl WorkflowService {
     // Persistence transitions (each atomic in one transaction)
     // ---------------------------------------------------------------------
 
-    fn begin_step(
-        &self,
-        run_id: &str,
-        step_index: i64,
-        kind_slug: &str,
-        attempt: i64,
-    ) -> anyhow::Result<()> {
+    fn begin_step(&self, run_id: &str, step_index: i64, kind_slug: &str, attempt: i64) -> anyhow::Result<()> {
         self.store.with_tx_anyhow(|tx| {
             let now = now();
             if let Some(mut step) = WorkflowStore::find_step_run_tx(tx, run_id, step_index)? {
@@ -992,12 +974,25 @@ impl WorkflowService {
         error_code: Option<String>,
         error_message: Option<String>,
     ) -> anyhow::Result<()> {
+        #[cfg(test)]
+        if self
+            .terminal_persist_failures
+            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |remaining| (remaining > 0).then(|| remaining - 1))
+            .is_ok()
+        {
+            anyhow::bail!("injected workflow terminal persistence failure");
+        }
         self.store.with_tx_anyhow(|tx| {
             let Some(mut run) = WorkflowStore::find_run_tx(tx, run_id)? else {
                 return Ok(());
             };
             if run.is_terminal() {
                 return Ok(());
+            }
+            if WorkflowStore::has_terminal_cleanup_blocker_tx(tx, run_id)? {
+                anyhow::bail!(
+                    "workflow terminal publication is fenced by unresolved cleanup ownership"
+                );
             }
             run.status = status;
             run.error_code = error_code;
@@ -1018,10 +1013,7 @@ impl WorkflowService {
     /// The next observation to report: the LOWEST unacknowledged revision (the
     /// reporter sends only this row, retries its identical canonical bytes
     /// until acknowledged, then asks again — never "the latest snapshot").
-    pub fn get_next_report(
-        &self,
-        run_id: &str,
-    ) -> anyhow::Result<Option<WorkflowObservationRecord>> {
+    pub fn get_next_report(&self, run_id: &str) -> anyhow::Result<Option<WorkflowObservationRecord>> {
         self.store.lowest_unacked(run_id)
     }
 

@@ -4,23 +4,64 @@
 //! parked, and approval cannot resume execution. WF-PLAN-V2 and WF-CRED must
 //! add the final-envelope activation edge atomically in a later packet.
 
-use std::sync::Arc;
+use std::collections::{BTreeSet, HashMap};
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
-use anyharness_contract::v1::ExecutionBinding;
+use anyharness_contract::v1::{ExecutionBinding, WorkflowRunStatus};
 
 use super::executor::WorkflowExecDeps;
+use super::isolation::{
+    cancel_workflow_run_bounded, cleanup_workflow_materialization, WorkflowDeliveryIdentity,
+    WorkflowIsolationCapability, WorkflowProcessIdentity, WorkflowWorktreeCleanupRequest,
+};
+use crate::domains::workflows::cleanup::{BROKER_CLEANUP_FENCE_KEY, BROKER_CLEANUP_FENCE_KIND};
 use crate::domains::workflows::delivery::{validate_delivery_identity, DeliveryIdentity};
+use crate::domains::workflows::engine::{CancelToken, ProposedTerminal};
 use crate::domains::workflows::model::{WorkflowRunRecord, WorkflowStepRunRecord};
 use crate::domains::workflows::service::WorkflowServiceError;
+
+mod activation;
+mod lifecycle;
 
 #[derive(Clone)]
 pub struct WorkflowRunManager {
     deps: Arc<WorkflowExecDeps>,
+    /// Cleanup-only ownership for actors minted by the future final-envelope
+    /// activation packet. WF-ID never inserts here.
+    live: Arc<Mutex<HashMap<String, LiveRunControl>>>,
+}
+
+#[derive(Clone)]
+struct LiveRunControl {
+    cancel: CancelToken,
+    capability: WorkflowIsolationCapability,
+    phase: LiveRunPhase,
+    broker_revocation: BrokerRevocationState,
+    pending_terminal: Option<ProposedTerminal>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LiveRunPhase {
+    Driving,
+    Finalizing,
+    CleanupOnly,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BrokerRevocationState {
+    Active,
+    Revoking,
+    Revoked,
 }
 
 impl WorkflowRunManager {
     pub fn new(deps: Arc<WorkflowExecDeps>) -> Self {
-        Self { deps }
+        debug_assert!(!activation::fresh_workflow_activation_available());
+        Self {
+            deps,
+            live: Arc::new(Mutex::new(HashMap::new())),
+        }
     }
 
     // ---------------------------------------------------------------------

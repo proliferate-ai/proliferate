@@ -31,7 +31,7 @@
 //! comes, so the audit trail is the structured log line, not a ledger event.
 
 use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex, RwLock, Weak};
 
 use agent_client_protocol as acp;
 
@@ -88,11 +88,48 @@ pub fn bypass_mode_for_kind(agent_kind: &str) -> Option<&'static str> {
 /// `hydrate_from_run` (crash-resume racing a terminal write) can never resurrect
 /// a released id (addendum item 3).
 #[derive(Default)]
-pub struct WorkflowOwnedSessions {
+struct WorkflowOwnershipState {
     /// session_id -> owning run_id.
-    ids: RwLock<HashMap<String, String>>,
-    /// run ids that reached terminal; [`mark`] refuses to (re-)arm these.
-    released: RwLock<HashSet<String>>,
+    ids: HashMap<String, String>,
+    /// Run ids that reached terminal; acquisition never re-arms these.
+    released: HashSet<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WorkflowSessionAcquireError {
+    TransitionMismatch,
+    RunReleased,
+    HeldByOther { run_id: String },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WorkflowSessionAcquisition {
+    Acquired,
+    AlreadyOwned,
+}
+
+/// Opaque proof that this task owns the session's launch/hold transition gate.
+/// The workflow executor holds it from ownership acquisition through actor
+/// quiesce/relaunch; public resume holds the same gate from authorization
+/// through live-handle reuse or process launch.
+pub(crate) struct SessionProcessTransitionGuard {
+    session_id: String,
+    _guard: tokio::sync::OwnedMutexGuard<()>,
+}
+
+impl SessionProcessTransitionGuard {
+    pub(crate) fn matches(&self, session_id: &str) -> bool {
+        self.session_id == session_id
+    }
+}
+
+#[derive(Default)]
+pub struct WorkflowOwnedSessions {
+    /// Ownership and release tombstones share one lock. This makes acquire,
+    /// release, and rollback linearizable: no check-then-write can resurrect a
+    /// terminal run or silently steal a session from another run.
+    state: RwLock<WorkflowOwnershipState>,
+    transition_gates: Mutex<HashMap<String, Weak<tokio::sync::Mutex<()>>>>,
 }
 
 impl WorkflowOwnedSessions {
@@ -100,29 +137,103 @@ impl WorkflowOwnedSessions {
         Self::default()
     }
 
-    /// Mark a session as owned by `run_id` (idempotent). A no-op once the run has
-    /// been released (terminal) so re-hydration can never resurrect a demoted
-    /// session (addendum item 3).
-    pub fn mark(&self, session_id: &str, run_id: &str) {
-        if self.released.read().unwrap().contains(run_id) {
-            return;
+    /// Atomically acquire a session for a run. Same-run acquisition is
+    /// idempotent; released runs and cross-run ownership are explicit errors.
+    pub(crate) fn try_acquire(
+        &self,
+        transition: &SessionProcessTransitionGuard,
+        session_id: &str,
+        run_id: &str,
+    ) -> Result<WorkflowSessionAcquisition, WorkflowSessionAcquireError> {
+        if !transition.matches(session_id) {
+            return Err(WorkflowSessionAcquireError::TransitionMismatch);
         }
-        self.ids
-            .write()
-            .unwrap()
-            .insert(session_id.to_string(), run_id.to_string());
+        let mut state = self.state.write().unwrap();
+        if state.released.contains(run_id) {
+            return Err(WorkflowSessionAcquireError::RunReleased);
+        }
+        match state.ids.get(session_id) {
+            Some(owner) if owner == run_id => Ok(WorkflowSessionAcquisition::AlreadyOwned),
+            Some(owner) => Err(WorkflowSessionAcquireError::HeldByOther {
+                run_id: owner.clone(),
+            }),
+            None => {
+                state.ids.insert(session_id.to_string(), run_id.to_string());
+                Ok(WorkflowSessionAcquisition::Acquired)
+            }
+        }
+    }
+
+    pub(crate) async fn lock_process_transition(
+        &self,
+        session_id: &str,
+    ) -> SessionProcessTransitionGuard {
+        let gate = {
+            let mut gates = self.transition_gates.lock().unwrap();
+            let gate = gates
+                .get(session_id)
+                .and_then(Weak::upgrade)
+                .unwrap_or_else(|| Arc::new(tokio::sync::Mutex::new(())));
+            gates.insert(session_id.to_string(), Arc::downgrade(&gate));
+            gate
+        };
+        SessionProcessTransitionGuard {
+            session_id: session_id.to_string(),
+            _guard: gate.lock_owned().await,
+        }
     }
 
     /// Is this session workflow-owned? (The always-bypass advisor's question.)
     pub fn is_owned(&self, session_id: &str) -> bool {
-        self.ids.read().unwrap().contains_key(session_id)
+        self.state.read().unwrap().ids.contains_key(session_id)
     }
 
     /// The run holding this session, if any — the lockout guard's question
     /// (C13). `Some(run_id)` means every mutating verb is blocked and routes to
     /// the take-over modal (E8).
     pub fn held_run(&self, session_id: &str) -> Option<String> {
-        self.ids.read().unwrap().get(session_id).cloned()
+        self.state.read().unwrap().ids.get(session_id).cloned()
+    }
+
+    /// Every live ownership-cache entry for one run, including a prepared
+    /// session whose durable slot write failed. Terminal quiescence uses this
+    /// superset of the run-row session map so prepared bindings cannot become
+    /// unreachable before cleanup.
+    pub(crate) fn session_ids_for_run(&self, run_id: &str) -> Vec<String> {
+        let mut session_ids = self
+            .state
+            .read()
+            .unwrap()
+            .ids
+            .iter()
+            .filter(|(_, owner)| owner.as_str() == run_id)
+            .map(|(session_id, _)| session_id.clone())
+            .collect::<Vec<_>>();
+        session_ids.sort();
+        session_ids
+    }
+
+    /// Roll back one not-yet-durably-registered session preparation. This does
+    /// not mark the run released; other successfully registered slots remain
+    /// owned until normal terminal cleanup.
+    pub(crate) fn unmark_prepared(
+        &self,
+        transition: &SessionProcessTransitionGuard,
+        session_id: &str,
+        run_id: &str,
+    ) -> Result<(), WorkflowSessionAcquireError> {
+        if !transition.matches(session_id) {
+            return Err(WorkflowSessionAcquireError::TransitionMismatch);
+        }
+        let mut state = self.state.write().unwrap();
+        if state
+            .ids
+            .get(session_id)
+            .is_some_and(|owner| owner == run_id)
+        {
+            state.ids.remove(session_id);
+        }
+        Ok(())
     }
 
     /// Release every session the run owned (terminal / take-over). Derived
@@ -132,15 +243,16 @@ impl WorkflowOwnedSessions {
     /// binding (addendum item 2) and demote them (item 4). Never closes a
     /// session.
     pub fn release_run(&self, run_id: &str) -> Vec<String> {
-        self.released.write().unwrap().insert(run_id.to_string());
-        let mut ids = self.ids.write().unwrap();
-        let released: Vec<String> = ids
+        let mut state = self.state.write().unwrap();
+        state.released.insert(run_id.to_string());
+        let released: Vec<String> = state
+            .ids
             .iter()
             .filter(|(_, owner)| owner.as_str() == run_id)
             .map(|(session_id, _)| session_id.clone())
             .collect();
         for session_id in &released {
-            ids.remove(session_id);
+            state.ids.remove(session_id);
         }
         released
     }
@@ -204,7 +316,6 @@ fn auto_approve_option_id(options: &[acp::schema::PermissionOption]) -> Option<S
 mod tests {
     use super::*;
     use agent_client_protocol::schema::{PermissionOption, PermissionOptionKind};
-    use std::sync::Mutex;
 
     // --- bypass_mode_for_kind -------------------------------------------
 
@@ -223,24 +334,39 @@ mod tests {
 
     // --- WorkflowOwnedSessions ------------------------------------------
 
-    #[test]
-    fn owned_registry_marks_and_reports_membership() {
+    async fn acquire(
+        owned: &WorkflowOwnedSessions,
+        session_id: &str,
+        run_id: &str,
+    ) -> Result<WorkflowSessionAcquisition, WorkflowSessionAcquireError> {
+        let transition = owned.lock_process_transition(session_id).await;
+        owned.try_acquire(&transition, session_id, run_id)
+    }
+
+    #[tokio::test]
+    async fn owned_registry_marks_and_reports_membership() {
         let owned = WorkflowOwnedSessions::new();
         assert!(!owned.is_owned("s1"));
-        owned.mark("s1", "run-1");
-        owned.mark("s1", "run-1"); // idempotent
+        assert_eq!(
+            acquire(&owned, "s1", "run-1").await,
+            Ok(WorkflowSessionAcquisition::Acquired)
+        );
+        assert_eq!(
+            acquire(&owned, "s1", "run-1").await,
+            Ok(WorkflowSessionAcquisition::AlreadyOwned)
+        );
         assert!(owned.is_owned("s1"));
         assert_eq!(owned.held_run("s1").as_deref(), Some("run-1"));
         assert!(!owned.is_owned("s2"));
         assert!(owned.held_run("s2").is_none());
     }
 
-    #[test]
-    fn release_run_unmarks_every_session_and_returns_them() {
+    #[tokio::test]
+    async fn release_run_unmarks_every_session_and_returns_them() {
         let owned = WorkflowOwnedSessions::new();
-        owned.mark("s1", "run-1");
-        owned.mark("s2", "run-1");
-        owned.mark("s3", "run-2");
+        acquire(&owned, "s1", "run-1").await.unwrap();
+        acquire(&owned, "s2", "run-1").await.unwrap();
+        acquire(&owned, "s3", "run-2").await.unwrap();
         let mut released = owned.release_run("run-1");
         released.sort();
         assert_eq!(released, vec!["s1".to_string(), "s2".to_string()]);
@@ -252,16 +378,126 @@ mod tests {
         assert_eq!(owned.held_run("s3").as_deref(), Some("run-2"));
     }
 
-    #[test]
-    fn mark_after_release_does_not_resurrect_a_demoted_session() {
+    #[tokio::test]
+    async fn mark_after_release_does_not_resurrect_a_demoted_session() {
         // addendum item 3: a crash-resume re-hydration racing a terminal write
         // must not re-arm a released run's sessions.
         let owned = WorkflowOwnedSessions::new();
-        owned.mark("s1", "run-1");
+        acquire(&owned, "s1", "run-1").await.unwrap();
         owned.release_run("run-1");
-        owned.mark("s1", "run-1"); // late hydrate_from_run
+        assert_eq!(
+            acquire(&owned, "s1", "run-1").await,
+            Err(WorkflowSessionAcquireError::RunReleased)
+        );
         assert!(!owned.is_owned("s1"));
         assert!(owned.held_run("s1").is_none());
+    }
+
+    #[tokio::test]
+    async fn concurrent_release_and_reacquire_cannot_resurrect_terminal_run() {
+        let owned = Arc::new(WorkflowOwnedSessions::new());
+        acquire(&owned, "s1", "run-1").await.unwrap();
+        let barrier = Arc::new(tokio::sync::Barrier::new(3));
+
+        let acquire = {
+            let owned = owned.clone();
+            let barrier = barrier.clone();
+            tokio::spawn(async move {
+                barrier.wait().await;
+                acquire(&owned, "s1", "run-1").await
+            })
+        };
+        let release = {
+            let owned = owned.clone();
+            let barrier = barrier.clone();
+            tokio::spawn(async move {
+                barrier.wait().await;
+                owned.release_run("run-1")
+            })
+        };
+        barrier.wait().await;
+        let acquisition = acquire.await.expect("acquire task");
+        release.await.expect("release task");
+
+        assert!(matches!(
+            acquisition,
+            Ok(WorkflowSessionAcquisition::AlreadyOwned)
+                | Err(WorkflowSessionAcquireError::RunReleased)
+        ));
+        assert!(owned.held_run("s1").is_none());
+    }
+
+    #[tokio::test]
+    async fn concurrent_runs_cannot_both_acquire_same_session() {
+        let owned = Arc::new(WorkflowOwnedSessions::new());
+        let barrier = Arc::new(tokio::sync::Barrier::new(3));
+        let spawn = |run_id: &'static str| {
+            let owned = owned.clone();
+            let barrier = barrier.clone();
+            tokio::spawn(async move {
+                barrier.wait().await;
+                (run_id, acquire(&owned, "s1", run_id).await)
+            })
+        };
+        let first = spawn("run-1");
+        let second = spawn("run-2");
+        barrier.wait().await;
+        let outcomes = [
+            first.await.expect("first acquire task"),
+            second.await.expect("second acquire task"),
+        ];
+
+        assert_eq!(
+            outcomes
+                .iter()
+                .filter(|(_, result)| {
+                    matches!(result, Ok(WorkflowSessionAcquisition::Acquired))
+                })
+                .count(),
+            1
+        );
+        assert_eq!(
+            outcomes
+                .iter()
+                .filter(|(_, result)| {
+                    matches!(result, Err(WorkflowSessionAcquireError::HeldByOther { .. }))
+                })
+                .count(),
+            1
+        );
+        let owner = owned.held_run("s1").expect("one owner");
+        assert!(owner == "run-1" || owner == "run-2");
+    }
+
+    #[tokio::test]
+    async fn rollback_transition_serializes_concurrent_preparation() {
+        let owned = Arc::new(WorkflowOwnedSessions::new());
+        let rollback_transition = owned.lock_process_transition("s1").await;
+        owned
+            .try_acquire(&rollback_transition, "s1", "run-1")
+            .unwrap();
+        let (attempted_tx, attempted_rx) = tokio::sync::oneshot::channel();
+        let prepare = {
+            let owned = owned.clone();
+            tokio::spawn(async move {
+                attempted_tx.send(()).expect("signal prepare attempt");
+                let transition = owned.lock_process_transition("s1").await;
+                owned.try_acquire(&transition, "s1", "run-1")
+            })
+        };
+        attempted_rx.await.expect("prepare attempted");
+
+        // Rollback performs revoke/quiesce/restore before this conditional
+        // unmark while retaining the transition. The competing preparation
+        // cannot observe or alter the session in the middle.
+        owned
+            .unmark_prepared(&rollback_transition, "s1", "run-1")
+            .unwrap();
+        drop(rollback_transition);
+        assert_eq!(
+            prepare.await.expect("prepare task"),
+            Ok(WorkflowSessionAcquisition::Acquired)
+        );
     }
 
     // --- auto_approve_option_id -----------------------------------------
@@ -315,10 +551,10 @@ mod tests {
         }
     }
 
-    #[test]
-    fn workflow_owned_session_is_auto_approved_without_consulting_inner() {
+    #[tokio::test]
+    async fn workflow_owned_session_is_auto_approved_without_consulting_inner() {
         let owned = Arc::new(WorkflowOwnedSessions::new());
-        owned.mark("wf-sess", "run-1");
+        acquire(&owned, "wf-sess", "run-1").await.unwrap();
         let inner = Arc::new(SpyAdvisor {
             consulted: Mutex::new(false),
         });

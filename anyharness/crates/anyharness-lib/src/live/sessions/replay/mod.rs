@@ -47,6 +47,7 @@ pub fn spawn_replay_actor(
     let (command_tx, command_rx) = mpsc::channel::<SessionCommand>(32);
     let handle = Arc::new(LiveSessionHandle::new(
         session_id.clone(),
+        crate::live::sessions::model::SessionProcessPolicy::Interactive,
         command_tx,
         config.event_tx.clone(),
         Some(native_session_id.clone()),

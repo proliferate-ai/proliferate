@@ -8,6 +8,9 @@ use super::rendezvous::broker::{
 };
 use crate::live::sessions::handle::LiveSessionHandle;
 use crate::live::sessions::model::ActorCapabilities;
+use crate::live::workflows::isolation::{
+    UnavailableWorkflowIsolationBroker, WorkflowIsolationBroker,
+};
 
 mod replay;
 mod runtime_events;
@@ -25,6 +28,7 @@ pub struct LiveSessionManager {
     /// The never-varies capability set every actor runs against; wired once
     /// at construction.
     caps: ActorCapabilities,
+    workflow_isolation_broker: Arc<dyn WorkflowIsolationBroker>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -56,12 +60,20 @@ impl From<BrokerResolveInteractionError> for RevealMcpElicitationUrlError {
 
 impl LiveSessionManager {
     pub fn new(caps: ActorCapabilities) -> Self {
+        Self::new_with_workflow_isolation_broker(caps, Arc::new(UnavailableWorkflowIsolationBroker))
+    }
+
+    pub fn new_with_workflow_isolation_broker(
+        caps: ActorCapabilities,
+        workflow_isolation_broker: Arc<dyn WorkflowIsolationBroker>,
+    ) -> Self {
         let interaction_broker = Arc::new(InteractionRendezvous::new());
         Self {
             live_sessions: Arc::new(RwLock::new(HashMap::new())),
             pending_startups: Arc::new(RwLock::new(HashMap::new())),
             interaction_broker,
             caps,
+            workflow_isolation_broker,
         }
     }
 
@@ -103,6 +115,7 @@ impl Clone for LiveSessionManager {
             pending_startups: self.pending_startups.clone(),
             interaction_broker: self.interaction_broker.clone(),
             caps: self.caps.clone(),
+            workflow_isolation_broker: self.workflow_isolation_broker.clone(),
         }
     }
 }

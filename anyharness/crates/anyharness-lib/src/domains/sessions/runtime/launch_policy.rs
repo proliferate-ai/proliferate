@@ -14,7 +14,9 @@ use crate::domains::agents::model::{AgentKind, ResolvedAgent};
 use crate::domains::agents::route_auth::RenderedRouteAuth;
 use crate::domains::sessions::mcp_bindings::model::SessionMcpServer;
 use crate::domains::sessions::model::SessionRecord;
-use crate::live::sessions::model::{LaunchEnv, SessionLaunch, SystemPromptAppends};
+use crate::live::sessions::model::{
+    LaunchEnv, SessionLaunch, SessionProcessPolicy, SystemPromptAppends,
+};
 use crate::live::sessions::SessionStartupStrategy;
 
 /// The durable facts the startup-strategy decision branches on, gathered by
@@ -183,16 +185,11 @@ pub(super) struct SessionLaunchContext {
     pub startup: SessionStartupStrategy,
     pub every_prompt_append: Option<String>,
     pub first_prompt_append: Option<String>,
+    pub process_policy: SessionProcessPolicy,
 }
 
 /// Pure assembly of the launch bundle from already-resolved facts.
 pub(super) fn assemble_session_launch(ctx: SessionLaunchContext) -> SessionLaunch {
-    // Merge settings env deltas into the route_auth layer (settings env wins
-    // over nothing, but route_auth is a good home — it lands after session env).
-    let mut route_auth_set = ctx.route_auth.set;
-    for (key, value) in ctx.settings_deltas.extra_env {
-        route_auth_set.insert(key, value);
-    }
     SessionLaunch {
         session: ctx.record,
         agent: ctx.agent,
@@ -200,7 +197,8 @@ pub(super) fn assemble_session_launch(ctx: SessionLaunchContext) -> SessionLaunc
         env: LaunchEnv {
             workspace: ctx.workspace_env,
             session: ctx.session_env,
-            route_auth: route_auth_set,
+            route_auth: ctx.route_auth.set,
+            settings: ctx.settings_deltas.extra_env,
             route_auth_remove: ctx.route_auth.remove,
             settings_extra_args: ctx.settings_deltas.extra_args,
         },
@@ -210,6 +208,7 @@ pub(super) fn assemble_session_launch(ctx: SessionLaunchContext) -> SessionLaunc
             every_prompt: ctx.every_prompt_append,
             first_prompt: ctx.first_prompt_append,
         },
+        process_policy: ctx.process_policy,
         // Overwritten by the manager under the start/inject critical section.
         last_seq: 0,
     }

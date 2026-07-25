@@ -5,6 +5,22 @@ use super::WorkspaceStore;
 use crate::domains::workspaces::model::{WorkspaceKind, WorkspaceRecord};
 
 impl WorkspaceStore {
+    pub(crate) fn workflow_materialization_base_commit_oid(
+        &self,
+        workspace_id: &str,
+    ) -> anyhow::Result<Option<String>> {
+        self.db.with_conn(|conn| {
+            conn.query_row(
+                "SELECT workflow_materialization_base_commit_oid
+                 FROM workspaces WHERE id = ?1",
+                [workspace_id],
+                |row| row.get::<_, Option<String>>(0),
+            )
+            .optional()
+            .map(Option::flatten)
+        })
+    }
+
     pub fn find_generation(&self, id: &str) -> anyhow::Result<Option<i64>> {
         self.db.with_conn(|conn| {
             conn.query_row(

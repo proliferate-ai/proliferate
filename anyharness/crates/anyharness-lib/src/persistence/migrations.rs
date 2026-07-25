@@ -1,6 +1,8 @@
 use rusqlite::{Connection, Transaction};
 
-use super::custom_migrations::{CUSTOM_FOREIGN_KEY_MIGRATIONS, CUSTOM_MIGRATIONS};
+use super::custom_migrations::{
+    CUSTOM_FOREIGN_KEY_MIGRATIONS, CUSTOM_MIGRATIONS, POST_CUSTOM_FOREIGN_KEY_MIGRATIONS,
+};
 
 pub(super) const MIGRATIONS: &[(&str, &str)] = &[
     ("0001_initial", include_str!("sql/0001_initial.sql")),
@@ -247,6 +249,21 @@ pub(super) const MIGRATIONS: &[(&str, &str)] = &[
     ),
 ];
 
+// These migrations depend on the final schema emitted by the custom/FK
+// migrations below. In particular 0049 rebuilds `workspaces`; applying 0061's
+// immutable base-commit column before that rebuild would silently discard it.
+// The post-custom FK pass then upgrades accepted 0061 databases to 0062's exact
+// operation-registration ownership without rewriting 0061 migration history.
+pub(super) const POST_CUSTOM_MIGRATIONS: &[(&str, &str)] = &[
+    // WF-BROKER-ISO-A repair: durable ownership for materialization and broker
+    // cleanup windows. WF-ID owns 0059 and 0060 and must land first; unresolved
+    // rows/fences block terminal publication.
+    (
+        "0061_workflow_cleanup_ownership",
+        include_str!("sql/0061_workflow_cleanup_ownership.sql"),
+    ),
+];
+
 pub fn run_migrations(conn: &mut Connection) -> rusqlite::Result<()> {
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS _migrations (
@@ -264,6 +281,14 @@ pub fn run_migrations(conn: &mut Connection) -> rusqlite::Result<()> {
     }
 
     for (name, apply) in CUSTOM_FOREIGN_KEY_MIGRATIONS {
+        run_named_foreign_key_migration(conn, name, |tx| apply(tx))?;
+    }
+
+    for (name, sql) in POST_CUSTOM_MIGRATIONS {
+        run_named_migration(conn, name, |tx| tx.execute_batch(sql))?;
+    }
+
+    for (name, apply) in POST_CUSTOM_FOREIGN_KEY_MIGRATIONS {
         run_named_foreign_key_migration(conn, name, |tx| apply(tx))?;
     }
 

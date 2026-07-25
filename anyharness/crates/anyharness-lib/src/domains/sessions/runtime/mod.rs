@@ -21,8 +21,10 @@ use crate::domains::agents::route_auth::{GatewayModelResolve, RouteAuthError};
 use crate::domains::sessions::extensions::SessionExtension;
 use crate::domains::workspaces::access_gate::{WorkspaceAccessError, WorkspaceAccessGate};
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
+use crate::live::sessions::model::SessionProcessPolicy;
 use crate::live::sessions::LiveSessionManager;
-use crate::live::workflows::WorkflowOwnedSessions;
+use crate::live::workflows::isolation::WorkflowProcessSubject;
+use crate::live::workflows::{WorkflowGatewaySessions, WorkflowOwnedSessions};
 
 mod config;
 mod creation;
@@ -32,6 +34,9 @@ mod launch_env;
 mod launch_policy;
 mod lifecycle;
 mod pending_prompts;
+mod process_policy;
+#[cfg(test)]
+mod process_policy_tests;
 mod prompt;
 mod replay;
 mod startup;
@@ -62,8 +67,17 @@ pub struct SessionRuntime {
     /// cache). The executor is exempt by construction: it drives sessions through
     /// the internal provenance path, never these public methods.
     workflow_owned_sessions: Arc<WorkflowOwnedSessions>,
+    workflow_gateway_sessions: Arc<WorkflowGatewaySessions>,
     loops_resolver: Arc<dyn LoopsResolver>,
     activity_roster_resolver: Arc<dyn ActivityRosterResolver>,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub(super) enum SessionProcessPolicyError {
+    #[error("session held by workflow run {run_id}")]
+    WorkflowHeld { run_id: String },
+    #[error("session process policy does not match the workflow ownership fence")]
+    WorkflowIdentityMismatch,
 }
 
 impl SessionRuntime {
@@ -77,6 +91,58 @@ impl SessionRuntime {
     /// `SESSION_WORKFLOW_HELD` and routes the UI to the take-over modal.
     fn workflow_held_run(&self, session_id: &str) -> Option<String> {
         self.workflow_owned_sessions.held_run(session_id)
+    }
+
+    /// Single authorization point for every session launch/reuse. Public
+    /// Interactive paths cannot reuse even an already-live held handle.
+    /// Workflow launches must match the exact held run + session identity.
+    fn authorize_session_process_policy(
+        &self,
+        session_id: &str,
+        process_policy: &SessionProcessPolicy,
+    ) -> Result<(), SessionProcessPolicyError> {
+        authorize_session_process_policy_for_hold(
+            self.workflow_held_run(session_id).as_deref(),
+            session_id,
+            process_policy,
+        )
+    }
+}
+
+pub(super) fn authorize_session_process_policy_for_hold(
+    held_run: Option<&str>,
+    session_id: &str,
+    process_policy: &SessionProcessPolicy,
+) -> Result<(), SessionProcessPolicyError> {
+    match process_policy {
+        SessionProcessPolicy::Interactive => match held_run {
+            Some(run_id) => Err(SessionProcessPolicyError::WorkflowHeld {
+                run_id: run_id.to_string(),
+            }),
+            None => Ok(()),
+        },
+        SessionProcessPolicy::Workflow {
+            identity,
+            capability,
+        } => {
+            let Some(held_run) = held_run else {
+                return Err(SessionProcessPolicyError::WorkflowIdentityMismatch);
+            };
+            let WorkflowProcessSubject::Session {
+                session_id: identity_session_id,
+                ..
+            } = identity.subject()
+            else {
+                return Err(SessionProcessPolicyError::WorkflowIdentityMismatch);
+            };
+            if identity.delivery() != capability.identity()
+                || identity.delivery().run_id() != held_run
+                || identity_session_id != session_id
+            {
+                return Err(SessionProcessPolicyError::WorkflowIdentityMismatch);
+            }
+            Ok(())
+        }
     }
 }
 
@@ -120,6 +186,11 @@ pub enum EnsureLiveSessionError {
     MissingDataKey,
     /// See [`CreateAndStartSessionError::RouteAuth`].
     RouteAuth(RouteAuthError),
+    /// Session is fenced by a non-terminal workflow; public resume is denied
+    /// even when a stale live handle is present.
+    WorkflowHeld {
+        run_id: String,
+    },
     Internal(anyhow::Error),
 }
 
@@ -356,6 +427,7 @@ impl SessionRuntime {
         gateway_model_resolver: Arc<dyn GatewayModelResolve>,
         active_goal_resolver: Arc<dyn ActiveGoalResolver>,
         workflow_owned_sessions: Arc<WorkflowOwnedSessions>,
+        workflow_gateway_sessions: Arc<WorkflowGatewaySessions>,
         loops_resolver: Arc<dyn LoopsResolver>,
         activity_roster_resolver: Arc<dyn ActivityRosterResolver>,
     ) -> Self {
@@ -374,6 +446,7 @@ impl SessionRuntime {
             gateway_model_resolver,
             active_goal_resolver,
             workflow_owned_sessions,
+            workflow_gateway_sessions,
             loops_resolver,
             activity_roster_resolver,
         }

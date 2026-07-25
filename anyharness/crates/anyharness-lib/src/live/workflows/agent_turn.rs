@@ -17,11 +17,24 @@ use crate::domains::workflows::model::WorkflowRunRecord;
 use crate::domains::workflows::plan::{
     worktree_scope, AgentConfigStep, Isolation, StepKind, NO_LANE,
 };
+use crate::live::sessions::model::SessionProcessPolicy;
+use crate::live::workflows::isolation::{
+    bind_workflow_local_gateway, cancel_workflow_run_bounded, WorkflowProcessIdentity,
+};
 use crate::origin::OriginContext;
 
+use super::exec_policy::WorkflowSessionAcquisition;
 use super::executor::{failed_msg, WorkflowStepExecutorImpl};
-use super::gateway::{workflow_gateway_server, WorkflowPrivateGateway};
+use super::gateway::workflow_gateway_server;
 use super::parallel::{recover_resume_worktree, worktree_branch_for_scope};
+
+mod ownership;
+mod security;
+
+use ownership::acquire_workflow_session;
+pub(super) use ownership::{
+    finalize_prepared_session_rollback, validate_bind_target, PreparedSessionRollbackEvidence,
+};
 
 /// The (session_id, harness) a slot currently owns.
 #[derive(Clone)]
@@ -37,7 +50,7 @@ impl WorkflowStepExecutorImpl {
     /// and the model folded from that slot's `agent.config` steps in the plan
     /// prefix up to the cursor. Derives everything from the persisted plan +
     /// cursor, so no extra state is stored on resume.
-    pub async fn hydrate_from_run(&self, run: &WorkflowRunRecord) {
+    pub async fn hydrate_from_run(&self, run: &WorkflowRunRecord) -> Result<(), StepOutcome> {
         self.recompute_models(run);
         // Map each slot to its worktree scope (D-031c): a parallel lane's slot →
         // its own lane worktree; every other slot → the run-level worktree
@@ -58,62 +71,81 @@ impl WorkflowStepExecutorImpl {
         // persisted session already lives in its scope's minted worktree, so its
         // workspace IS that scope's effective workspace.
         let mut recovered_by_scope: HashMap<String, String> = HashMap::new();
-        {
-            let mut current = self.current.lock().unwrap();
-            for (slot, session_id) in run.sessions() {
-                if let Ok(Some(session)) = self.deps.session_service.get_session(session_id) {
-                    if self.isolation == Isolation::Worktree {
-                        let scope = slot_scope
-                            .get(slot)
-                            .cloned()
-                            .unwrap_or_else(|| NO_LANE.to_string());
-                        recovered_by_scope
-                            .entry(scope)
-                            .or_insert_with(|| session.workspace_id.clone());
-                    }
-                    // Re-arm the always-bypass safety net for the resumed session
-                    // (the registry is in-memory, so a restart would otherwise drop
-                    // it).
-                    self.deps
-                        .workflow_owned_sessions
-                        .mark(session_id, &self.run_id);
-                    // Re-register the per-run gateway server too, so a relaunch of
-                    // the resumed session (crash-resume) re-injects it (same
-                    // in-memory registry, dropped on restart).
-                    if let Some(server) = workflow_gateway_server(self.gateway.as_ref()) {
-                        self.deps.workflow_gateway_sessions.set(session_id, server);
-                    }
-                    current.insert(
-                        slot.clone(),
-                        CurrentSession {
-                            session_id: session_id.clone(),
-                            harness: session.agent_kind,
-                        },
-                    );
+        for (slot, session_id) in run.sessions() {
+            if let Ok(Some(session)) = self.deps.session_service.get_session(session_id) {
+                if self.isolation == Isolation::Worktree {
+                    let scope = slot_scope
+                        .get(slot)
+                        .cloned()
+                        .unwrap_or_else(|| NO_LANE.to_string());
+                    self.inspect_existing_worktree_for_scope(&scope, &session.workspace_id)
+                        .await?;
+                    recovered_by_scope
+                        .entry(scope)
+                        .or_insert_with(|| session.workspace_id.clone());
                 }
+                // Recovery never reuses an existing actor. Re-arm ownership,
+                // mint/install a current broker binding, then force the same
+                // session through broker-policy relaunch before it enters the
+                // executor's current map.
+                let transition = self
+                    .deps
+                    .session_runtime
+                    .lock_session_process_transition(session_id)
+                    .await;
+                acquire_workflow_session(
+                    self.deps.workflow_owned_sessions.as_ref(),
+                    &transition,
+                    session_id,
+                    &self.run_id,
+                )?;
+                let server = self.workflow_gateway_server(slot, session_id)?;
+                self.deps.workflow_gateway_sessions.set(session_id, server);
+                let process_policy = self.workflow_process_policy(slot, session_id)?;
+                if self
+                    .deps
+                    .session_runtime
+                    .relaunch_session_for_workflow_rebind_under_transition(
+                        session_id,
+                        process_policy,
+                        &transition,
+                    )
+                    .await
+                    .is_err()
+                {
+                    self.deps.workflow_gateway_sessions.remove(session_id);
+                    return Err(failed_msg(
+                        "workflow_agent_isolation_unavailable",
+                        "recovered workflow session could not be broker-relaunched",
+                    ));
+                }
+                self.current.lock().unwrap().insert(
+                    slot.clone(),
+                    CurrentSession {
+                        session_id: session_id.clone(),
+                        harness: session.agent_kind,
+                    },
+                );
             }
-            // Drop the std guard before any await below (never hold it across .await).
         }
 
         if self.isolation != Isolation::Worktree {
-            return;
+            return Ok(());
         }
 
-        // Wave 2b crash-recovery (finding 1, belt-and-suspenders), now per scope:
-        // recover each scope's effective worktree so post-resume sessions/shells
-        // resolve to the SAME worktree instead of re-minting. A persisted session's
-        // workspace wins; otherwise — the session-less crash hole, where a shell.run
-        // / scm.open_pr prefix minted the worktree but persisted NO session to
-        // recover from — ADOPT that scope's own worktree record if one exists (keyed
-        // by the scope's deterministic path + branch). Scope-scoped only; never a
-        // general adopt.
+        // Wave 2b crash-recovery, now per scope: recover each scope's effective
+        // worktree so post-resume sessions/shells resolve to the SAME worktree
+        // instead of re-minting. A persisted session's workspace wins;
+        // otherwise, the session-less crash hole may adopt only the workspace
+        // bound by this scope's exact durable operation-registration receipt.
+        // Path/branch/creator metadata is revalidated but is never provenance.
         //
         // Run-level ([`NO_LANE`]) worktree.
         let expected_branch = worktree_branch_for_scope(&self.run_id, NO_LANE);
         let recovered = recover_resume_worktree(
             recovered_by_scope.get(NO_LANE).cloned(),
             &expected_branch,
-            || async { self.lookup_run_worktree_for_resume(NO_LANE) },
+            || self.lookup_run_worktree_for_resume(NO_LANE),
         )
         .await;
         if let Ok(Some(ws)) = recovered {
@@ -131,7 +163,7 @@ impl WorkflowStepExecutorImpl {
             let recovered = recover_resume_worktree(
                 recovered_by_scope.get(scope).cloned(),
                 &expected_branch,
-                || async { self.lookup_run_worktree_for_resume(scope) },
+                || self.lookup_run_worktree_for_resume(scope),
             )
             .await;
             if let Ok(Some(ws)) = recovered {
@@ -139,10 +171,9 @@ impl WorkflowStepExecutorImpl {
                 lanes.entry(scope.clone()).or_insert(ws);
             }
         }
+        Ok(())
     }
 
-    /// Recompute per-slot models by folding each slot's `agent.config` steps in
-    /// the plan prefix `[0, step_cursor)` over the plan's per-slot seed.
     fn recompute_models(&self, run: &WorkflowRunRecord) {
         let mut models: HashMap<String, Option<String>> = self
             .sessions
@@ -182,18 +213,6 @@ impl WorkflowStepExecutorImpl {
         slot: &str,
         scope: &str,
     ) -> Result<String, StepOutcome> {
-        // §5.3 builder obligation (L22 fail-fast): a gateway block that grants
-        // integration scopes but carries no usable gateway in this lane (empty
-        // authorization/URL, e.g. the local lane where nothing mints a per-run
-        // token) can never hand the agent its tools. Fail explicitly at the
-        // first agent step rather than silently launching with zero tools.
-        if gateway_functions_unsupported(self.gateway.as_ref()) {
-            return Err(failed_msg(
-                "functions_unsupported_local",
-                "workflow declares gateway integration grants but this run has no usable gateway \
-                 (integrations cannot be honored in this lane)",
-            ));
-        }
         if let Some(current) = self.current.lock().unwrap().get(slot) {
             return Ok(current.session_id.clone());
         }
@@ -204,145 +223,254 @@ impl WorkflowStepExecutorImpl {
             .get(slot)
             .and_then(|spec| spec.bind_session_id.clone());
 
-        let (session_id, session_harness) = if let Some(bind_id) = bind_session_id {
-            // Session binding (L29 / B8): load the pre-existing (taken-over)
-            // session instead of creating one. It must exist and its harness must
-            // match the slot — otherwise the plan is malformed (the server
-            // validates this at StartRun, but the runtime re-checks: a plan that
-            // reached here with a mismatch is a hard error, never a silent
-            // wrong-harness launch).
-            let session = self
-                .deps
-                .session_service
-                .get_session(&bind_id)
-                .map_err(|error| failed_msg("session_bind_failed", error.to_string()))?
-                .ok_or_else(|| failed_msg("session_bind_missing", bind_id.clone()))?;
-            // B8: harness must match the slot (hard plan error) and the session
-            // must not already be held by a DIFFERENT live run (hard bind
-            // rejection). Both are pure decisions, extracted to
-            // [`validate_bind_target`] so they are unit-testable without a live
-            // runtime.
-            let held_run = self.deps.workflow_owned_sessions.held_run(&bind_id);
-            validate_bind_target(
-                &bind_id,
-                &self.run_id,
-                &session.agent_kind,
-                &harness,
-                held_run.as_deref(),
-            )?;
-            // Mark ownership BEFORE the rebind relaunch so the always-bypass net
-            // + lockout are armed for the taken-over session immediately (C13).
-            self.deps
-                .workflow_owned_sessions
-                .mark(&bind_id, &self.run_id);
-            // Addendum item 2: rebind the bound session's gateway MCP binding.
-            // The per-run credential is injected only at LAUNCH; this session was
-            // launched with only the worker-token binding, so register the per-run
-            // gateway server and relaunch it so its integration calls run under
-            // the run's opt-in scope, not the owner's broad personal grant.
-            if let Some(server) = workflow_gateway_server(self.gateway.as_ref()) {
-                self.deps.workflow_gateway_sessions.set(&bind_id, server);
-                self.deps
+        let (session_id, session_harness, newly_created, ownership_acquired, transition) =
+            if let Some(bind_id) = bind_session_id {
+                // Session binding (L29 / B8): load the pre-existing (taken-over)
+                // session instead of creating one. It must exist and its harness must
+                // match the slot — otherwise the plan is malformed (the server
+                // validates this at StartRun, but the runtime re-checks: a plan that
+                // reached here with a mismatch is a hard error, never a silent
+                // wrong-harness launch).
+                let session = self
+                    .deps
+                    .session_service
+                    .get_session(&bind_id)
+                    .map_err(|error| failed_msg("session_bind_failed", error.to_string()))?
+                    .ok_or_else(|| failed_msg("session_bind_missing", bind_id.clone()))?;
+                // B8 harness validation is pure. Ownership is acquired separately
+                // under the shared process-transition gate so validation + hold +
+                // quiesce/relaunch cannot race public interactive resume.
+                validate_bind_target(&bind_id, &session.agent_kind, &harness)?;
+                let transition = self
+                    .deps
                     .session_runtime
-                    .relaunch_session_for_mcp_rebind(&bind_id)
+                    .lock_session_process_transition(&bind_id)
                     .await;
-            }
-            (bind_id, session.agent_kind)
-        } else {
-            // Exec policy (goals-and-workflows-v1 §3.3 "always bypass"): open the
-            // session in the harness's native bypass-equivalent mode so agent
-            // turns and native-goal auto-continuation never stall on a
-            // permission prompt. `None` (harness with no native bypass mode) is
-            // covered by the auto-approve safety net.
-            let mode = super::exec_policy::bypass_mode_for_kind(&harness);
-            // Wave 2b: resolve the run's effective workspace BEFORE creating the
-            // session. Under worktree isolation this mints the per-run worktree
-            // (once); a mint failure returns here, so the session is NEVER
-            // created in the shared pinned checkout.
-            let session_workspace_id = self.effective_workspace_id(scope).await?;
-            // Split create/start (as reviews/subagents do) so the per-run gateway
-            // server and workflow ownership can be registered BEFORE launch — the
-            // launch extension reads both from their in-memory registries, and MCP
-            // servers are only assembled from the extension seam (never from the
-            // durable session bindings).
-            let record = match self.deps.session_runtime.create_durable_session(
-                &session_workspace_id,
-                &harness,
-                model.as_deref(),
-                mode,
-                None,
-                Vec::new(),
-                None,
-                SessionMcpBindingPolicy::InheritWorkspace,
-                false,
-                OriginContext::system_local_runtime(),
-            ) {
-                Ok(record) => record,
-                // A definition's pinned model is authored without knowing the
-                // runner's auth contexts (a seed pinning `haiku` cannot run in a
-                // bedrock-only env, where that id is gated). An unattended run
-                // must not die on an unlock prompt no human will see — fall back
-                // to the catalog default for the ACTIVE contexts, loudly.
-                Err(CreateAndStartSessionError::ModelGated {
-                    model_id,
-                    required_contexts,
-                    ..
-                }) => {
-                    tracing::warn!(
-                        run_id = %self.run_id,
-                        slot,
-                        model_id = %model_id,
-                        ?required_contexts,
-                        "workflow slot model gated under active auth contexts; \
-                         falling back to the context default model"
-                    );
-                    self.deps
-                        .session_runtime
-                        .create_durable_session(
-                            &session_workspace_id,
-                            &harness,
-                            None,
-                            mode,
-                            None,
-                            Vec::new(),
-                            None,
-                            SessionMcpBindingPolicy::InheritWorkspace,
-                            false,
-                            OriginContext::system_local_runtime(),
-                        )
-                        .map_err(|error| failed_msg("session_start_failed", format!("{error:?}")))?
+                let acquisition = acquire_workflow_session(
+                    self.deps.workflow_owned_sessions.as_ref(),
+                    &transition,
+                    &bind_id,
+                    &self.run_id,
+                )?;
+                if acquisition == WorkflowSessionAcquisition::AlreadyOwned {
+                    return Err(failed_msg(
+                        "session_bind_held",
+                        format!(
+                            "bound session {bind_id} is already assigned to workflow run {}",
+                            self.run_id
+                        ),
+                    ));
                 }
-                Err(error) => return Err(failed_msg("session_start_failed", format!("{error:?}"))),
-            };
-            // Register the session as workflow-owned so the inbound permission
-            // advisor auto-approves for it. Done before launch/first turn.
-            self.deps
-                .workflow_owned_sessions
-                .mark(&record.id, &self.run_id);
-            // Register the per-run gateway MCP server for this session so the
-            // launch extension injects it (private run grant wins over the worker
-            // dotfile via the extension ordering + dedupe on
-            // connection_id/server_name).
-            if let Some(server) = workflow_gateway_server(self.gateway.as_ref()) {
+                let ownership_acquired = true;
+                let process_policy = match self.workflow_process_policy(slot, &bind_id) {
+                    Ok(policy) => policy,
+                    Err(error) => {
+                        self.rollback_prepared_session(
+                            slot,
+                            &bind_id,
+                            false,
+                            ownership_acquired,
+                            transition,
+                        )
+                        .await?;
+                        return Err(error);
+                    }
+                };
+                // Rebind the bound session to an ephemeral, session-bound local
+                // broker endpoint. No remote gateway bearer is placed in the plan,
+                // durable session bindings, ACP payload, or child environment.
+                let server = match self.workflow_gateway_server(slot, &bind_id) {
+                    Ok(server) => server,
+                    Err(error) => {
+                        self.rollback_prepared_session(
+                            slot,
+                            &bind_id,
+                            false,
+                            ownership_acquired,
+                            transition,
+                        )
+                        .await?;
+                        return Err(error);
+                    }
+                };
+                self.deps.workflow_gateway_sessions.set(&bind_id, server);
+                if self
+                    .deps
+                    .session_runtime
+                    .relaunch_session_for_workflow_rebind_under_transition(
+                        &bind_id,
+                        process_policy,
+                        &transition,
+                    )
+                    .await
+                    .is_err()
+                {
+                    self.rollback_prepared_session(
+                        slot,
+                        &bind_id,
+                        false,
+                        ownership_acquired,
+                        transition,
+                    )
+                    .await?;
+                    return Err(failed_msg(
+                        "workflow_agent_isolation_unavailable",
+                        "bound session could not be relaunched through the workflow broker",
+                    ));
+                }
+                (
+                    bind_id,
+                    session.agent_kind,
+                    false,
+                    ownership_acquired,
+                    transition,
+                )
+            } else {
+                // Exec policy (goals-and-workflows-v1 §3.3 "always bypass"): open the
+                // session in the harness's native bypass-equivalent mode so agent
+                // turns and native-goal auto-continuation never stall on a
+                // permission prompt. `None` (harness with no native bypass mode) is
+                // covered by the auto-approve safety net.
+                let mode = super::exec_policy::bypass_mode_for_kind(&harness);
+                // Wave 2b: resolve the run's effective workspace BEFORE creating the
+                // session. Under worktree isolation this mints the per-run worktree
+                // (once); a mint failure returns here, so the session is NEVER
+                // created in the shared pinned checkout.
+                let session_workspace_id = self.effective_workspace_id(scope).await?;
+                // Split create/start so the ephemeral local-broker server and
+                // workflow ownership can be registered BEFORE launch. MCP servers
+                // are assembled from the extension seam, never written into the
+                // durable session binding row.
+                let record = match self.deps.session_runtime.create_durable_session(
+                    &session_workspace_id,
+                    &harness,
+                    model.as_deref(),
+                    mode,
+                    None,
+                    Vec::new(),
+                    None,
+                    SessionMcpBindingPolicy::InternalOnly,
+                    false,
+                    OriginContext::system_local_runtime(),
+                ) {
+                    Ok(record) => record,
+                    // A definition's pinned model is authored without knowing the
+                    // runner's auth contexts (a seed pinning `haiku` cannot run in a
+                    // bedrock-only env, where that id is gated). An unattended run
+                    // must not die on an unlock prompt no human will see — fall back
+                    // to the catalog default for the ACTIVE contexts, loudly.
+                    Err(CreateAndStartSessionError::ModelGated {
+                        model_id,
+                        required_contexts,
+                        ..
+                    }) => {
+                        return Err(failed_msg(
+                            "workflow_model_route_unavailable",
+                            format!(
+                            "pinned model {model_id} is unavailable for the selected route ({})",
+                            required_contexts.join(",")
+                        ),
+                        ));
+                    }
+                    Err(error) => {
+                        return Err(failed_msg("session_start_failed", format!("{error:?}")))
+                    }
+                };
+                let transition = self
+                    .deps
+                    .session_runtime
+                    .lock_session_process_transition(&record.id)
+                    .await;
+                let ownership_acquired = match acquire_workflow_session(
+                    self.deps.workflow_owned_sessions.as_ref(),
+                    &transition,
+                    &record.id,
+                    &self.run_id,
+                ) {
+                    Ok(WorkflowSessionAcquisition::Acquired) => true,
+                    Ok(WorkflowSessionAcquisition::AlreadyOwned) => {
+                        return Err(failed_msg(
+                            "workflow_agent_isolation_unavailable",
+                            "fresh workflow session unexpectedly had prior ownership",
+                        ));
+                    }
+                    Err(outcome) => {
+                        let _ = self.deps.session_service.delete_session(&record.id);
+                        return Err(outcome);
+                    }
+                };
+                let process_policy = match self.workflow_process_policy(slot, &record.id) {
+                    Ok(policy) => policy,
+                    Err(error) => {
+                        self.rollback_prepared_session(
+                            slot,
+                            &record.id,
+                            true,
+                            ownership_acquired,
+                            transition,
+                        )
+                        .await?;
+                        return Err(error);
+                    }
+                };
+                // Register the session-bound local broker MCP server for launch.
+                // It replaces the generic integration-gateway connection id only
+                // in this in-memory launch assembly.
+                let server = match self.workflow_gateway_server(slot, &record.id) {
+                    Ok(server) => server,
+                    Err(error) => {
+                        self.rollback_prepared_session(
+                            slot,
+                            &record.id,
+                            true,
+                            ownership_acquired,
+                            transition,
+                        )
+                        .await?;
+                        return Err(error);
+                    }
+                };
                 self.deps.workflow_gateway_sessions.set(&record.id, server);
-            }
-            let record = self
-                .deps
-                .session_runtime
-                .start_persisted_session(&record)
-                .await
-                .map_err(|error| failed_msg("session_start_failed", format!("{error:?}")))?;
-            (record.id, harness)
-        };
-        // Register the session as workflow-owned so the inbound permission
-        // advisor auto-approves for it. Done before the first prompt/turn.
-        self.deps
-            .workflow_owned_sessions
-            .mark(&session_id, &self.run_id);
-        let _ = self
-            .deps
-            .workflow_service
-            .set_session_for_slot(&self.run_id, slot, &session_id);
+                let record = match self
+                    .deps
+                    .session_runtime
+                    .start_persisted_session_with_process_policy_under_transition(
+                        &record,
+                        process_policy,
+                        &transition,
+                    )
+                    .await
+                {
+                    Ok(record) => record,
+                    Err(error) => {
+                        self.rollback_prepared_session(
+                            slot,
+                            &record.id,
+                            true,
+                            ownership_acquired,
+                            transition,
+                        )
+                        .await?;
+                        return Err(failed_msg("session_start_failed", format!("{error:?}")));
+                    }
+                };
+                (record.id, harness, true, ownership_acquired, transition)
+            };
+        if let Err(error) =
+            self.deps
+                .workflow_service
+                .set_session_for_slot(&self.run_id, slot, &session_id)
+        {
+            self.rollback_prepared_session(
+                slot,
+                &session_id,
+                newly_created,
+                ownership_acquired,
+                transition,
+            )
+            .await?;
+            return Err(failed_msg("session_persist_failed", error.to_string()));
+        }
         self.current.lock().unwrap().insert(
             slot.to_string(),
             CurrentSession {
@@ -373,13 +501,18 @@ impl WorkflowStepExecutorImpl {
                 .get(slot)
                 .map(|s| s.session_id.clone());
             if let Some(session_id) = session_id {
+                let process_policy = match self.workflow_process_policy(slot, &session_id) {
+                    Ok(policy) => policy,
+                    Err(outcome) => return outcome,
+                };
                 let _ = self
                     .deps
                     .session_runtime
-                    .set_live_session_config_option_unlocked(
+                    .set_live_session_config_option_with_process_policy(
                         &session_id,
                         ACP_MODEL_COMPAT_CONFIG_ID,
                         model,
+                        process_policy,
                     )
                     .await;
             }
@@ -393,55 +526,4 @@ impl WorkflowStepExecutorImpl {
             output: Value::Object(output),
         }
     }
-}
-
-/// §5.3: a gateway block declaring integration grants that this lane cannot
-/// honor — non-empty `integrations` with an empty/absent credential or URL —
-/// must fail the run explicitly rather than silently launch the agent with zero
-/// tools.
-pub(super) fn gateway_functions_unsupported(gateway: Option<&WorkflowPrivateGateway>) -> bool {
-    match gateway {
-        Some(gateway) => {
-            !gateway.integrations.is_empty()
-                && (gateway.authorization.trim().is_empty() || gateway.url.trim().is_empty())
-        }
-        None => false,
-    }
-}
-
-/// B8 bind-target validation (pure decision, so it is unit-testable without a
-/// live runtime). A bound session must:
-/// 1. match the slot's harness — otherwise the plan is malformed (hard error);
-/// 2. not already be held by a *different* live run — otherwise binding would
-///    silently transfer ownership (`mark` overwrites the owner entry, and the
-///    previous owner's `release_run` would then no longer drop it), leaking the
-///    lockout. Re-binding a session THIS run already holds is idempotent and OK.
-pub(super) fn validate_bind_target(
-    bind_id: &str,
-    run_id: &str,
-    session_harness: &str,
-    slot_harness: &str,
-    held_run: Option<&str>,
-) -> Result<(), StepOutcome> {
-    if session_harness != slot_harness {
-        return Err(failed_msg(
-            "plan_malformed",
-            format!(
-                "bound session {bind_id} harness {session_harness} does not match slot harness \
-                 {slot_harness}"
-            ),
-        ));
-    }
-    if let Some(existing_run) = held_run {
-        if existing_run != run_id {
-            return Err(failed_msg(
-                "session_bind_held",
-                format!(
-                    "bound session {bind_id} is already held by workflow run {existing_run}; it \
-                     cannot be bound to run {run_id}"
-                ),
-            ));
-        }
-    }
-    Ok(())
 }

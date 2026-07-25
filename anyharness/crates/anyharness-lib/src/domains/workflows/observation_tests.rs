@@ -9,7 +9,10 @@ use anyharness_contract::v1::workflows_v2::{ObservedRun, ObservedStepStatus};
 use anyharness_contract::v1::{WorkflowRunStatus, WorkflowStepStatus};
 
 use super::delivery::{DeliveryIdentity, WorkflowServiceIdentityFixture};
-use super::engine::{CancelToken, StepExecContext, StepOutcome, WorkflowStepExecutor};
+use super::engine::{
+    CancelToken, EngineProgress, ProposedTerminal, StepExecContext, StepOutcome,
+    WorkflowStepExecutor,
+};
 use super::model::WorkflowObservationRecord;
 use super::plan::PlanStep;
 use super::service::{WorkflowService, WorkflowServiceError};
@@ -25,6 +28,10 @@ fn test_service() -> WorkflowService {
     let db = Db::open_in_memory().expect("open db");
     test_support::seed_workspace_with_repo_root(&db, "workspace-1", "local", "/tmp/workspace-1");
     service_on(&db)
+}
+
+fn assert_completed_proposal(progress: EngineProgress) {
+    assert_eq!(progress, EngineProgress::TerminalPending(ProposedTerminal::completed()));
 }
 
 /// A two-step plan carrying the full delivery identity (spec §5.3).
@@ -63,28 +70,19 @@ struct ScriptedExecutor {
 
 impl ScriptedExecutor {
     fn script(outcomes: Vec<StepOutcome>) -> Self {
-        Self {
-            outcomes: Mutex::new(outcomes.into_iter().collect()),
-        }
+        Self { outcomes: Mutex::new(outcomes.into_iter().collect()) }
     }
 }
 
 #[async_trait::async_trait]
 impl WorkflowStepExecutor for ScriptedExecutor {
     async fn execute_step(&self, _step: &PlanStep, _ctx: &StepExecContext) -> StepOutcome {
-        self.outcomes
-            .lock()
-            .unwrap()
-            .pop_front()
-            .unwrap_or(StepOutcome::Completed {
-                output: serde_json::json!({}),
-            })
+        self.outcomes.lock().unwrap().pop_front().unwrap_or(StepOutcome::Completed { output: serde_json::json!({}) })
     }
 }
 
 fn parse_snapshot(record: &WorkflowObservationRecord) -> ObservedRun {
-    serde_json::from_str(&record.canonical_snapshot_json)
-        .expect("outbox rows hold valid ObservedRun v2 snapshots")
+    serde_json::from_str(&record.canonical_snapshot_json).expect("outbox rows hold valid ObservedRun v2 snapshots")
 }
 
 // ---------------------------------------------------------------------------
@@ -526,10 +524,7 @@ async fn restart_rehydration_reconstructs_cursor_attempts_sessions_and_outbox() 
     let db = Db::open(&home).expect("reopen db");
     let service = service_on(&db);
 
-    let (run, steps) = service
-        .get_run_with_steps("run-restart")
-        .expect("get")
-        .expect("run survived restart");
+    let (run, steps) = service.get_run_with_steps("run-restart").expect("get").expect("run survived restart");
     assert_eq!(run.status, WorkflowRunStatus::Running);
     assert_eq!(run.step_cursor, 1, "cursor restored at the second step");
     assert_eq!(run.plan_hash.as_deref(), Some("sha256:ph"));

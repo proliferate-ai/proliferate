@@ -125,6 +125,7 @@ async fn actor_exit_test_context(
 
     let handle = Arc::new(LiveSessionHandle {
         session_id: "session-1".to_string(),
+        process_policy: crate::live::sessions::model::SessionProcessPolicy::Interactive,
         command_tx,
         event_tx: event_tx.clone(),
         busy: Arc::new(AtomicBool::new(false)),

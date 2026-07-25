@@ -249,6 +249,17 @@ impl ResolvedPlan {
 /// (data-contract §4). Steps in this "lane" share the run-level worktree.
 pub const NO_LANE: &str = "-";
 
+/// Exact filesystem/git identity alphabet for run and lane worktree scopes.
+/// Restricting at plan acceptance keeps addressing readable and guarantees the
+/// path/branch projection never aliases two accepted identities.
+pub(crate) fn valid_worktree_identity_token(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 64
+        && value.bytes().all(|byte| {
+            byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'-' | b'_')
+        })
+}
+
 /// A parsed structured step key `"<node>.<lane>.<step>"` (data-contract §4 / B5).
 /// The lane is the middle segment (so a slot name containing `.` still parses —
 /// node is before the first `.`, step after the last).
@@ -624,6 +635,24 @@ pub fn parse_value(value: serde_json::Value) -> Result<ResolvedPlan, PlanError> 
     }
     let plan: ResolvedPlan =
         serde_json::from_value(value).map_err(|error| PlanError::Malformed(error.to_string()))?;
+    if !valid_worktree_identity_token(&plan.run_id) {
+        return Err(PlanError::Malformed(
+            "run_id is not a strict worktree identity token".to_string(),
+        ));
+    }
+    if plan.isolation == Isolation::Worktree {
+        for step in &plan.steps {
+            let Some(key) = parse_lane_key(&step.key) else {
+                continue;
+            };
+            if key.lane != NO_LANE && !valid_worktree_identity_token(&key.lane) {
+                return Err(PlanError::Malformed(format!(
+                    "worktree lane identity is not strict: {}",
+                    key.lane
+                )));
+            }
+        }
+    }
     plan.validate_integer_domains()?;
     Ok(plan)
 }

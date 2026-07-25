@@ -9,6 +9,29 @@ pub trait WorkspaceDeleteParticipant: Send + Sync {
         conn: &rusqlite::Connection,
         workspace_id: &str,
     ) -> rusqlite::Result<()>;
+
+    /// Consume durable ownership that may be released only after the purge
+    /// caller has proven external workspace cleanup. Product domains implement
+    /// this hook; the core workspace domain does not import them directly.
+    fn prepare_workspace_purge_in_tx(
+        &self,
+        _conn: &rusqlite::Connection,
+        _workspace_id: &str,
+        _purged_at: &str,
+    ) -> rusqlite::Result<()> {
+        Ok(())
+    }
+
+    /// Race-sensitive durable ownership check performed before any live
+    /// session, filesystem, or Git cleanup. Returning a blocker keeps the
+    /// workspace and every external ownership record intact.
+    fn workspace_purge_blocker_in_tx(
+        &self,
+        _conn: &rusqlite::Connection,
+        _workspace_id: &str,
+    ) -> rusqlite::Result<Option<String>> {
+        Ok(None)
+    }
 }
 
 #[derive(Clone)]
@@ -48,6 +71,7 @@ impl WorkspaceDeleteWorkflow {
     }
 
     pub fn purge_workspace_with_sessions(&self, workspace_id: &str) -> anyhow::Result<()> {
+        let purged_at = chrono::Utc::now().to_rfc3339();
         self.db.with_tx(|conn| {
             let session_ids =
                 crate::domains::sessions::store::sessions::list_session_ids_by_workspace_in_tx(
@@ -59,8 +83,24 @@ impl WorkspaceDeleteWorkflow {
                     .delete_session_graph_in_tx(conn, &session_id)?;
             }
             self.delete_workspace_scoped_graph_rows_in_tx(conn, workspace_id)?;
+            for participant in &self.participants {
+                participant.prepare_workspace_purge_in_tx(conn, workspace_id, &purged_at)?;
+            }
             crate::domains::workspaces::store::delete_workspace_row_in_tx(conn, workspace_id)?;
             Ok(())
+        })
+    }
+
+    pub fn workspace_purge_blocker(&self, workspace_id: &str) -> anyhow::Result<Option<String>> {
+        self.db.with_conn(|conn| {
+            for participant in &self.participants {
+                if let Some(blocker) =
+                    participant.workspace_purge_blocker_in_tx(conn, workspace_id)?
+                {
+                    return Ok(Some(blocker));
+                }
+            }
+            Ok(None)
         })
     }
 

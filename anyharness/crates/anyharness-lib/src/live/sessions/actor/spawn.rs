@@ -86,6 +86,7 @@ pub fn spawn_session_actor_pending(
 
     let handle = Arc::new(LiveSessionHandle {
         session_id: session_id.clone(),
+        process_policy: config.launch.process_policy.clone(),
         command_tx,
         event_tx: event_tx.clone(),
         busy: busy.clone(),

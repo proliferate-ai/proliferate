@@ -16,14 +16,23 @@ pub(super) const WORKSPACE_COLUMNS: &str = "\
     cleanup_error_message, cleanup_failed_at, cleanup_attempted_at, created_at, updated_at";
 
 pub(super) fn insert_workspace(conn: &Connection, r: &WorkspaceRecord) -> rusqlite::Result<()> {
+    insert_workspace_with_materialization_base_commit(conn, r, None)
+}
+
+pub(crate) fn insert_workspace_with_materialization_base_commit(
+    conn: &Connection,
+    r: &WorkspaceRecord,
+    materialization_base_commit_oid: Option<&str>,
+) -> rusqlite::Result<()> {
     let origin_json = encode_origin_json(&r.origin)?;
     let creator_context_json = encode_creator_context_json(&r.creator_context)?;
     conn.execute(
         "INSERT INTO workspaces (
             id, kind, repo_root_id, path, surface, original_branch, current_branch, display_name,
             origin_json, creator_context_json, lifecycle_state, cleanup_state, cleanup_operation,
-            cleanup_error_message, cleanup_failed_at, cleanup_attempted_at, created_at, updated_at
-         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
+            cleanup_error_message, cleanup_failed_at, cleanup_attempted_at, created_at, updated_at,
+            workflow_materialization_base_commit_oid
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)",
         params![
             r.id,
             r.kind.as_str(),
@@ -43,6 +52,7 @@ pub(super) fn insert_workspace(conn: &Connection, r: &WorkspaceRecord) -> rusqli
             r.cleanup_attempted_at,
             r.created_at,
             r.updated_at,
+            materialization_base_commit_oid,
         ],
     )?;
     Ok(())

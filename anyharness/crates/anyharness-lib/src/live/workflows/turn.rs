@@ -69,7 +69,12 @@ impl WorkflowStepExecutorImpl {
         match self
             .deps
             .session_runtime
-            .send_text_prompt_with_provenance(session_id, text.to_string(), provenance)
+            .send_text_prompt_with_provenance_and_process_policy(
+                session_id,
+                text.to_string(),
+                provenance,
+                self.workflow_process_policy_for_session(session_id)?,
+            )
             .await
         {
             Ok(SendPromptOutcome::Running { turn_id, .. }) => {
@@ -146,15 +151,19 @@ impl WorkflowStepExecutorImpl {
             |_attempt, prompt| {
                 let session_id = session_id.clone();
                 async move {
-                let mut events = self.subscribe(&session_id).await?;
-                let turn_id = self.send_prompt(&session_id, &prompt, meta).await?;
-                match await_turn_ended_collecting(&mut events, turn_id.as_deref(), TURN_BACKSTOP)
+                    let mut events = self.subscribe(&session_id).await?;
+                    let turn_id = self.send_prompt(&session_id, &prompt, meta).await?;
+                    match await_turn_ended_collecting(
+                        &mut events,
+                        turn_id.as_deref(),
+                        TURN_BACKSTOP,
+                    )
                     .await
-                {
-                    (TurnWait::Ended, invoked_tools) => Ok((turn_id, invoked_tools)),
-                    (TurnWait::SessionClosed, _) => Err(failed("session_closed")),
-                    (TurnWait::Timeout, _) => Err(failed("turn_timeout")),
-                }
+                    {
+                        (TurnWait::Ended, invoked_tools) => Ok((turn_id, invoked_tools)),
+                        (TurnWait::SessionClosed, _) => Err(failed("session_closed")),
+                        (TurnWait::Timeout, _) => Err(failed("turn_timeout")),
+                    }
                 }
             },
         )
@@ -223,7 +232,9 @@ async fn await_turn_ended_collecting(
                 }
             }
             Ok(Err(broadcast::error::RecvError::Lagged(_))) => continue,
-            Ok(Err(broadcast::error::RecvError::Closed)) => return (TurnWait::SessionClosed, tools),
+            Ok(Err(broadcast::error::RecvError::Closed)) => {
+                return (TurnWait::SessionClosed, tools)
+            }
             Err(_) => return (TurnWait::Timeout, tools),
         }
     }

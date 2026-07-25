@@ -1,4 +1,5 @@
 pub mod action;
+pub mod cleanup;
 pub mod delivery;
 // WF-ID has no production persistence/activation edge. This compatibility
 // seam exists only for legacy unit fixtures until PLAN-V2 + final credentials
@@ -16,10 +17,15 @@ pub mod service;
 pub mod store;
 mod support;
 pub mod templates;
+pub mod workspace_ports;
 
+#[cfg(test)]
+mod cleanup_tests;
 #[cfg(test)]
 mod fault_tests;
 #[cfg(test)]
 mod observation_tests;
+#[cfg(test)]
+mod security_tests;
 #[cfg(test)]
 mod service_tests;

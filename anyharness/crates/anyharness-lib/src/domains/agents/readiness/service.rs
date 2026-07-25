@@ -35,8 +35,25 @@ pub fn resolve_agent_with_env(
     runtime_home: &Path,
     additional_env: &BTreeMap<String, String>,
 ) -> ResolvedAgent {
-    let home_dir = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/"));
+    resolve_agent_internal(descriptor, runtime_home, additional_env, true)
+}
 
+/// Resolve only executable artifacts for a workflow launch. Credential
+/// readiness is supplied by the separately rendered trusted route; this path
+/// never probes native HOME auth or workspace secret environment variables.
+pub fn resolve_workflow_launch_agent(
+    descriptor: &AgentDescriptor,
+    runtime_home: &Path,
+) -> ResolvedAgent {
+    resolve_agent_internal(descriptor, runtime_home, &BTreeMap::new(), false)
+}
+
+fn resolve_agent_internal(
+    descriptor: &AgentDescriptor,
+    runtime_home: &Path,
+    additional_env: &BTreeMap<String, String>,
+    inspect_native_auth: bool,
+) -> ResolvedAgent {
     let native = descriptor
         .native
         .as_ref()
@@ -73,13 +90,21 @@ pub fn resolve_agent_with_env(
         agent_process.message = Some(message.clone());
     }
 
-    let (credential_state, auth_slots) = if additional_env.is_empty() {
-        detect_auth_slots(&descriptor.auth, &home_dir)
+    let (credential_state, auth_slots, cli_auth_state) = if !inspect_native_auth {
+        (CredentialState::Ready, Vec::new(), None)
     } else {
-        detect_auth_slots_with_env(&descriptor.auth, &home_dir, additional_env)
+        let home_dir = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/"));
+        let (credential_state, auth_slots) = if additional_env.is_empty() {
+            detect_auth_slots(&descriptor.auth, &home_dir)
+        } else {
+            detect_auth_slots_with_env(&descriptor.auth, &home_dir, additional_env)
+        };
+        (
+            credential_state,
+            auth_slots,
+            detect_cli_auth_state(&descriptor.auth, &home_dir),
+        )
     };
-
-    let cli_auth_state = detect_cli_auth_state(&descriptor.auth, &home_dir);
 
     let status = compute_readiness(
         &native,

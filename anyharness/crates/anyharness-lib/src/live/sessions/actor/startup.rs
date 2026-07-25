@@ -61,13 +61,17 @@ impl SessionActor {
             &session_id,
             &workspace_id,
             &source_agent_kind,
+            &config.launch.process_policy,
+            &config.workflow_isolation_broker,
             &ready_tx,
-        )?;
+        )
+        .await?;
         let mut child = spawned.child;
         let stdin = spawned.stdin;
         let stdout = spawned.stdout;
         let stderr_tail = spawned.stderr_tail;
         let mut stderr_done = spawned.stderr_done;
+        let workflow_process_group = spawned.workflow_process_group;
 
         let (notification_tx, notification_rx) =
             mpsc::unbounded_channel::<acp::schema::SessionNotification>();
@@ -355,6 +359,7 @@ impl SessionActor {
             caps,
             hooks,
             interaction_broker,
+            workflow_isolation_broker: _,
             event_tx: _,
         } = config;
 
@@ -380,6 +385,7 @@ impl SessionActor {
             handle,
             _acp_shutdown: shutdown_tx,
             child,
+            workflow_process_group,
         };
         Ok((actor, notification_rx, background_work_rx))
     }

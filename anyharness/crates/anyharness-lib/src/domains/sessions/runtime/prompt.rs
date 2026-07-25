@@ -8,6 +8,7 @@ use crate::domains::sessions::prompt::capabilities::capabilities_from_live_confi
 use crate::domains::sessions::prompt::prepare::prepare_prompt;
 use crate::domains::sessions::prompt::provenance::PromptProvenance;
 use crate::domains::sessions::prompt::PromptPrepareContext;
+use crate::live::sessions::model::SessionProcessPolicy;
 use crate::live::sessions::{LiveSessionCommandError, PromptAcceptError, PromptAcceptance};
 
 use super::{
@@ -137,6 +138,22 @@ impl SessionRuntime {
         text: String,
         provenance: PromptProvenance,
     ) -> Result<SendPromptOutcome, SendPromptError> {
+        self.send_text_prompt_with_provenance_and_process_policy(
+            session_id,
+            text,
+            provenance,
+            SessionProcessPolicy::Interactive,
+        )
+        .await
+    }
+
+    pub(crate) async fn send_text_prompt_with_provenance_and_process_policy(
+        &self,
+        session_id: &str,
+        text: String,
+        provenance: PromptProvenance,
+        process_policy: SessionProcessPolicy,
+    ) -> Result<SendPromptOutcome, SendPromptError> {
         self.access_gate
             .assert_can_mutate_for_session(session_id)
             .map_err(|error| SendPromptError::Internal(anyhow::anyhow!(error.to_string())))?;
@@ -147,7 +164,7 @@ impl SessionRuntime {
             .get_session_or_not_found(session_id)
             .map_err(map_lifecycle_error_to_prompt)?;
         let handle = self
-            .ensure_live_session_handle(&record, None)
+            .ensure_live_session_handle_with_process_policy(&record, None, process_policy)
             .await
             .map_err(map_start_error_to_prompt)?;
         let payload =
@@ -186,9 +203,7 @@ fn map_lifecycle_error_to_prompt(error: SessionLifecycleError) -> SendPromptErro
             SendPromptError::SessionNotFound(session_id)
         }
         SessionLifecycleError::Access(error) => SendPromptError::Access(error),
-        SessionLifecycleError::WorkflowHeld { run_id } => {
-            SendPromptError::WorkflowHeld { run_id }
-        }
+        SessionLifecycleError::WorkflowHeld { run_id } => SendPromptError::WorkflowHeld { run_id },
         SessionLifecycleError::Internal(error) => SendPromptError::Internal(error),
     }
 }

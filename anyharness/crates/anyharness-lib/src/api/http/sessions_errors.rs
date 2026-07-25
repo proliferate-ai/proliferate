@@ -159,6 +159,10 @@ pub(super) fn map_ensure_live_session_error(error: EnsureLiveSessionError) -> Ap
             ApiError::internal(SessionMcpBindingsError::missing_data_key_detail())
         }
         EnsureLiveSessionError::RouteAuth(error) => map_route_auth_error(&error),
+        EnsureLiveSessionError::WorkflowHeld { run_id } => ApiError::conflict(
+            format!("session is held by workflow run {run_id}"),
+            "SESSION_WORKFLOW_HELD",
+        ),
         EnsureLiveSessionError::Internal(error) => {
             ApiError::internal(format!("resume failed: {error}"))
         }

@@ -120,6 +120,44 @@ pub enum StepDecision {
     },
 }
 
+/// A terminal outcome proposed by the engine but not yet published durably.
+///
+/// The live manager must first revoke broker authority, stop every workflow
+/// process/session, and remove ephemeral bindings. Only then may it commit this
+/// proposal as the run's terminal status and release ownership.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProposedTerminal {
+    pub status: WorkflowRunStatus,
+    pub error_code: Option<String>,
+    pub error_message: Option<String>,
+}
+
+impl ProposedTerminal {
+    pub fn completed() -> Self {
+        Self {
+            status: WorkflowRunStatus::Completed,
+            error_code: None,
+            error_message: None,
+        }
+    }
+
+    pub fn cancelled() -> Self {
+        Self {
+            status: WorkflowRunStatus::Cancelled,
+            error_code: None,
+            error_message: None,
+        }
+    }
+
+    pub fn failed(code: impl Into<String>, message: Option<String>) -> Self {
+        Self {
+            status: WorkflowRunStatus::Failed,
+            error_code: Some(code.into()),
+            error_message: message,
+        }
+    }
+}
+
 /// How far the engine got on a single `run_next_step` call.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EngineProgress {
@@ -133,7 +171,11 @@ pub enum EngineProgress {
     SegmentComplete,
     /// The run parked on a durable approval; stop driving until it resolves.
     SuspendedForApproval,
-    /// The run reached a terminal state.
+    /// Execution reached a terminal outcome, but the durable run deliberately
+    /// remains nonterminal until the live manager proves quiescence.
+    TerminalPending(ProposedTerminal),
+    /// Compatibility path for a run that was already durably terminal when the
+    /// driver loaded it. No new engine transition may produce this variant.
     Finished(WorkflowRunStatus),
 }
 
@@ -289,7 +331,11 @@ mod tests {
     fn outcome_uncertain_fails_the_run_naming_the_effect() {
         let decision = decide_after_step(on_fail(OnFailKind::Stop, 0), 1, uncertain());
         match decision {
-            StepDecision::FailRun { code, message, output } => {
+            StepDecision::FailRun {
+                code,
+                message,
+                output,
+            } => {
                 assert_eq!(code, "outcome_uncertain");
                 assert!(message.unwrap().contains("shell"));
                 let output = output.unwrap();

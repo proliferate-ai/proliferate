@@ -36,6 +36,19 @@ impl LiveSessionManager {
             let existing = existing.clone();
             let ready_native_session_id = existing.native_session_id();
             drop(sessions);
+            if existing.process_policy != launch.process_policy {
+                anyhow::bail!(
+                    "live session process policy mismatch; explicit quiesce and relaunch required"
+                );
+            }
+            if matches!(
+                launch.process_policy,
+                crate::live::sessions::model::SessionProcessPolicy::Workflow { .. }
+            ) {
+                anyhow::bail!(
+                    "workflow live session cannot be reused without a current broker rebind"
+                );
+            }
             tracing::info!(
                 session_id = %session_id,
                 elapsed_ms = started.elapsed().as_millis(),
@@ -92,6 +105,7 @@ impl LiveSessionManager {
             caps: self.caps.clone(),
             hooks,
             interaction_broker: self.interaction_broker.clone(),
+            workflow_isolation_broker: self.workflow_isolation_broker.clone(),
             event_tx,
         };
 

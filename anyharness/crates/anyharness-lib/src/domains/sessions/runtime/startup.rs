@@ -3,15 +3,20 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use crate::domains::agents::catalog::bundled::bundled_agent_catalog_document;
-use crate::domains::agents::catalog::settings::resolve_settings_deltas;
-use crate::domains::agents::readiness::service::resolve_launch_agent;
+use crate::domains::agents::catalog::settings::{resolve_settings_deltas, ResolvedSettingsDeltas};
+use crate::domains::agents::readiness::service::{
+    resolve_launch_agent, resolve_workflow_launch_agent,
+};
 use crate::domains::agents::registry;
-use crate::domains::agents::route_auth::resolve_launch_route_auth;
 use crate::domains::agents::route_auth::state::load_state_file;
+use crate::domains::agents::route_auth::{
+    resolve_launch_route_auth, resolve_workflow_launch_route_auth,
+};
 use crate::domains::sessions::extensions::{SessionStartedContext, SessionTurnFinishedContext};
 use crate::domains::sessions::links::model::SessionLinkRelation;
 use crate::domains::sessions::mcp_bindings::assembly::{
-    assemble_session_mcp_launch, SessionMcpLaunchAssemblyError,
+    assemble_session_mcp_launch, assemble_workflow_session_mcp_launch,
+    SessionMcpLaunchAssemblyError,
 };
 use crate::domains::sessions::mcp_bindings::crypto::{encrypt_bindings, SessionMcpBindingsError};
 use crate::domains::sessions::mcp_bindings::summaries::{
@@ -20,117 +25,73 @@ use crate::domains::sessions::mcp_bindings::summaries::{
 use crate::domains::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
 use crate::domains::sessions::store::SessionStore;
 use crate::live::sessions::handle::LiveSessionHandle;
-use crate::live::sessions::model::SessionHooks;
+use crate::live::sessions::model::{SessionHooks, SessionProcessPolicy};
 use crate::live::sessions::SessionStartupStrategy;
+use crate::live::workflows::SessionProcessTransitionGuard;
 
 use super::launch_policy::{
     assemble_session_launch, choose_startup_strategy, session_is_closed, SessionLaunchContext,
     SessionStartupFacts,
 };
+use super::process_policy::{
+    map_internal_start_error_to_ensure, map_process_policy_error_to_ensure,
+};
 use super::{
-    launch_env::build_session_launch_env, CreateAndStartSessionError, EnsureLiveSessionError,
-    SessionLifecycleError, SessionMcpRefresh, SessionRuntime, StartSessionError,
+    launch_env::{build_session_launch_env, build_workflow_session_launch_env},
+    CreateAndStartSessionError, EnsureLiveSessionError, SessionLifecycleError, SessionMcpRefresh,
+    SessionRuntime, StartSessionError,
 };
 
-/// Resolve steps only — gather the durable facts, then let the pure policy in
-/// `launch_policy` pick the strategy. The parent lookup is gated to fork
-/// children that have not yet run their own turn (`last_prompt_at` unset): the
-/// policy may need the parent native id to re-fork — either because the child
-/// never had a native id, or because its eagerly-recorded one is process-local
-/// and may be dead after a cold restart-before-first-prompt. This intentionally
-/// over-fetches for durable-fork (non-Claude) zero-turn children, where the
-/// policy ignores the parent id; that is a single harmless row read kept here so
-/// the resolve gate doesn't have to duplicate the adapter distinction. A fork
-/// child that has already run keeps its durable native id and skips the lookup.
-pub(super) fn choose_session_startup_strategy(
-    record: &SessionRecord,
-    session_store: &SessionStore,
-) -> anyhow::Result<SessionStartupStrategy> {
-    let is_fork_child =
-        session_store.has_inbound_link_relation(&record.id, SessionLinkRelation::Fork)?;
-    let fork_parent_native_session_id = if is_fork_child && record.last_prompt_at.is_none() {
-        session_store
-            .find_parent_by_inbound_link_relation(&record.id, SessionLinkRelation::Fork)?
-            .map(|parent| parent.native_session_id)
-    } else {
-        None
-    };
-    choose_startup_strategy(&SessionStartupFacts {
-        is_fork_child,
-        native_session_id: record.native_session_id.clone(),
-        fork_parent_native_session_id,
-        agent_kind: record.agent_kind.clone(),
-        has_last_prompt_at: record.last_prompt_at.is_some(),
-        has_turn_started_event: session_store.has_turn_started_event(&record.id)?,
-    })
-}
+mod errors;
+mod persisted;
+
+pub(super) use errors::*;
+pub(super) use persisted::choose_session_startup_strategy;
 
 impl SessionRuntime {
-    #[tracing::instrument(skip_all, fields(session_id = %record.id))]
-    pub async fn start_persisted_session(
-        &self,
-        record: &SessionRecord,
-    ) -> Result<SessionRecord, CreateAndStartSessionError> {
-        let live_start_started = Instant::now();
-        let (_handle, native_session_id) = match self
-            .start_live_session(
-                record,
-                SessionStartupStrategy::Fresh,
-                record.system_prompt_append.clone(),
-            )
-            .await
-        {
-            Ok(result) => {
-                tracing::info!(
-                    workspace_id = %record.workspace_id,
-                    session_id = %record.id,
-                    native_session_id = %result.1,
-                    elapsed_ms = live_start_started.elapsed().as_millis(),
-                    "[workspace-latency] session.runtime.live_session_started"
-                );
-                result
-            }
-            Err(error) => {
-                self.mark_session_errored(&record.id);
-                tracing::warn!(
-                    workspace_id = %record.workspace_id,
-                    session_id = %record.id,
-                    elapsed_ms = live_start_started.elapsed().as_millis(),
-                    error = ?error,
-                    "[workspace-latency] session.runtime.live_session_failed"
-                );
-                return Err(map_start_session_error_to_create(error));
-            }
-        };
-
-        let persist_started = Instant::now();
-        self.persist_live_session_state(&record.id, &native_session_id);
-        let updated = self
-            .session_service
-            .get_session(&record.id)
-            .map_err(CreateAndStartSessionError::Internal)?
-            .unwrap_or_else(|| {
-                let mut fallback = record.clone();
-                fallback.native_session_id = Some(native_session_id.clone());
-                fallback.status = "idle".into();
-                fallback
-            });
-        tracing::info!(
-            workspace_id = %updated.workspace_id,
-            session_id = %updated.id,
-            native_session_id = %updated.native_session_id.as_deref().unwrap_or_default(),
-            elapsed_ms = persist_started.elapsed().as_millis(),
-            "[workspace-latency] session.runtime.live_session_persisted"
-        );
-        Ok(updated)
-    }
-
     #[tracing::instrument(skip_all, fields(session_id = %session_id))]
     pub async fn ensure_live_session(
         &self,
         session_id: &str,
         mcp_refresh: Option<SessionMcpRefresh>,
     ) -> Result<SessionRecord, EnsureLiveSessionError> {
+        self.ensure_live_session_with_process_policy(
+            session_id,
+            mcp_refresh,
+            SessionProcessPolicy::Interactive,
+        )
+        .await
+    }
+
+    pub(crate) async fn ensure_live_session_with_process_policy(
+        &self,
+        session_id: &str,
+        mcp_refresh: Option<SessionMcpRefresh>,
+        process_policy: SessionProcessPolicy,
+    ) -> Result<SessionRecord, EnsureLiveSessionError> {
+        let transition = self.lock_session_process_transition(session_id).await;
+        self.ensure_live_session_with_process_policy_under_transition(
+            session_id,
+            mcp_refresh,
+            process_policy,
+            &transition,
+        )
+        .await
+    }
+
+    pub(crate) async fn ensure_live_session_with_process_policy_under_transition(
+        &self,
+        session_id: &str,
+        mcp_refresh: Option<SessionMcpRefresh>,
+        process_policy: SessionProcessPolicy,
+        transition: &SessionProcessTransitionGuard,
+    ) -> Result<SessionRecord, EnsureLiveSessionError> {
+        self.authorize_session_process_policy_under_transition(
+            session_id,
+            &process_policy,
+            transition,
+        )
+        .map_err(map_process_policy_error_to_ensure)?;
         self.access_gate
             .assert_can_start_live_session(session_id)
             .map_err(|error| {
@@ -147,33 +108,35 @@ impl SessionRuntime {
                     EnsureLiveSessionError::Internal(anyhow::anyhow!(error.to_string()))
                 }
                 SessionLifecycleError::WorkflowHeld { run_id } => {
-                    EnsureLiveSessionError::Internal(anyhow::anyhow!(
-                        "session held by workflow run {run_id}"
-                    ))
+                    EnsureLiveSessionError::WorkflowHeld { run_id }
                 }
             })?;
 
-        self.ensure_live_session_handle(&record, mcp_refresh)
-            .await
-            .map_err(|error| match error {
-                StartSessionError::WorkspaceNotFound => EnsureLiveSessionError::Internal(
-                    anyhow::anyhow!("workspace not found for session"),
-                ),
-                StartSessionError::AgentDescriptorNotFound(agent_kind) => {
-                    EnsureLiveSessionError::Internal(anyhow::anyhow!(
-                        "agent descriptor not found: {agent_kind}"
-                    ))
-                }
-                StartSessionError::Closed => EnsureLiveSessionError::SessionClosed,
-                StartSessionError::MissingDataKey => EnsureLiveSessionError::MissingDataKey,
-                StartSessionError::RestartRequired(detail) => {
-                    EnsureLiveSessionError::RestartRequired(detail)
-                }
-                StartSessionError::RouteAuth(error) => EnsureLiveSessionError::RouteAuth(error),
-                StartSessionError::Internal(error) | StartSessionError::AcpStart(error) => {
-                    EnsureLiveSessionError::Internal(error)
-                }
-            })?;
+        self.ensure_live_session_handle_with_process_policy_under_transition(
+            &record,
+            mcp_refresh,
+            process_policy,
+            transition,
+        )
+        .await
+        .map_err(|error| match error {
+            StartSessionError::WorkspaceNotFound => {
+                EnsureLiveSessionError::Internal(anyhow::anyhow!("workspace not found for session"))
+            }
+            StartSessionError::AgentDescriptorNotFound(agent_kind) => {
+                EnsureLiveSessionError::Internal(anyhow::anyhow!(
+                    "agent descriptor not found: {agent_kind}"
+                ))
+            }
+            StartSessionError::Closed => EnsureLiveSessionError::SessionClosed,
+            StartSessionError::MissingDataKey => EnsureLiveSessionError::MissingDataKey,
+            StartSessionError::RestartRequired(detail) => {
+                EnsureLiveSessionError::RestartRequired(detail)
+            }
+            StartSessionError::RouteAuth(error) => EnsureLiveSessionError::RouteAuth(error),
+            StartSessionError::Internal(error) => map_internal_start_error_to_ensure(error),
+            StartSessionError::AcpStart(error) => EnsureLiveSessionError::Internal(error),
+        })?;
 
         self.session_service
             .get_session(session_id)
@@ -186,6 +149,43 @@ impl SessionRuntime {
         record: &SessionRecord,
         mcp_refresh: Option<SessionMcpRefresh>,
     ) -> Result<Arc<LiveSessionHandle>, StartSessionError> {
+        self.ensure_live_session_handle_with_process_policy(
+            record,
+            mcp_refresh,
+            SessionProcessPolicy::Interactive,
+        )
+        .await
+    }
+
+    pub(super) async fn ensure_live_session_handle_with_process_policy(
+        &self,
+        record: &SessionRecord,
+        mcp_refresh: Option<SessionMcpRefresh>,
+        process_policy: SessionProcessPolicy,
+    ) -> Result<Arc<LiveSessionHandle>, StartSessionError> {
+        let transition = self.lock_session_process_transition(&record.id).await;
+        self.ensure_live_session_handle_with_process_policy_under_transition(
+            record,
+            mcp_refresh,
+            process_policy,
+            &transition,
+        )
+        .await
+    }
+
+    pub(super) async fn ensure_live_session_handle_with_process_policy_under_transition(
+        &self,
+        record: &SessionRecord,
+        mcp_refresh: Option<SessionMcpRefresh>,
+        process_policy: SessionProcessPolicy,
+        transition: &SessionProcessTransitionGuard,
+    ) -> Result<Arc<LiveSessionHandle>, StartSessionError> {
+        self.authorize_session_process_policy_under_transition(
+            &record.id,
+            &process_policy,
+            transition,
+        )
+        .map_err(|error| StartSessionError::Internal(anyhow::Error::new(error)))?;
         self.access_gate
             .assert_can_start_live_session(&record.id)
             .map_err(|error| StartSessionError::Internal(anyhow::anyhow!(error.to_string())))?;
@@ -194,6 +194,13 @@ impl SessionRuntime {
         }
         let started = Instant::now();
         if let Some(handle) = self.acp_manager.get_handle(&record.id).await {
+            if !handle.matches_process_policy(&process_policy)
+                || matches!(process_policy, SessionProcessPolicy::Workflow { .. })
+            {
+                return Err(StartSessionError::Internal(anyhow::anyhow!(
+                    "live session process policy mismatch; explicit quiesce and relaunch required"
+                )));
+            }
             tracing::info!(
                 session_id = %record.id,
                 workspace_id = %record.workspace_id,
@@ -257,10 +264,12 @@ impl SessionRuntime {
             .map_err(StartSessionError::Internal)?;
 
         let (handle, native_session_id) = self
-            .start_live_session(
+            .start_live_session_under_transition(
                 &record,
                 startup_strategy,
                 record.system_prompt_append.clone(),
+                process_policy,
+                transition,
             )
             .await?;
 
@@ -280,7 +289,33 @@ impl SessionRuntime {
         record: &SessionRecord,
         startup_strategy: SessionStartupStrategy,
         system_prompt_append: Option<String>,
+        process_policy: SessionProcessPolicy,
     ) -> Result<(Arc<LiveSessionHandle>, String), StartSessionError> {
+        let transition = self.lock_session_process_transition(&record.id).await;
+        self.start_live_session_under_transition(
+            record,
+            startup_strategy,
+            system_prompt_append,
+            process_policy,
+            &transition,
+        )
+        .await
+    }
+
+    pub(super) async fn start_live_session_under_transition(
+        &self,
+        record: &SessionRecord,
+        startup_strategy: SessionStartupStrategy,
+        system_prompt_append: Option<String>,
+        process_policy: SessionProcessPolicy,
+        transition: &SessionProcessTransitionGuard,
+    ) -> Result<(Arc<LiveSessionHandle>, String), StartSessionError> {
+        self.authorize_session_process_policy_under_transition(
+            &record.id,
+            &process_policy,
+            transition,
+        )
+        .map_err(|error| StartSessionError::Internal(anyhow::Error::new(error)))?;
         let started = Instant::now();
         let startup_strategy_label = startup_strategy.as_str();
         tracing::info!(
@@ -316,37 +351,66 @@ impl SessionRuntime {
         );
 
         let workspace_path = PathBuf::from(&workspace.path);
-        let workspace_env = self
-            .workspace_runtime
-            .workspace_env(&workspace)
-            .map_err(StartSessionError::Internal)?;
-        let readiness_env = workspace_env.clone();
+        let workflow_launch = matches!(&process_policy, SessionProcessPolicy::Workflow { .. });
+        let workspace_env = if workflow_launch {
+            std::collections::BTreeMap::from([
+                ("PROLIFERATE_WORKSPACE_ID".to_string(), workspace.id.clone()),
+                (
+                    "PROLIFERATE_WORKSPACE_KIND".to_string(),
+                    workspace.kind.as_str().to_string(),
+                ),
+                (
+                    "PROLIFERATE_WORKSPACE_DIR".to_string(),
+                    workspace.path.clone(),
+                ),
+            ])
+        } else {
+            self.workspace_runtime
+                .workspace_env(&workspace)
+                .map_err(StartSessionError::Internal)?
+        };
         let agent_resolution_started = Instant::now();
         // Route-aware launch readiness keeps the resolved agent's credential
         // state consistent with create/launch-options for gateway routes
         // (issue #1106); the live launch injects the route env below regardless.
-        let resolved_agent = resolve_launch_agent(&descriptor, &self.runtime_home, &readiness_env);
+        let resolved_agent = if workflow_launch {
+            resolve_workflow_launch_agent(&descriptor, &self.runtime_home)
+        } else {
+            resolve_launch_agent(&descriptor, &self.runtime_home, &workspace_env)
+        };
         tracing::info!(
             session_id = %record.id,
             agent_kind = %record.agent_kind,
             elapsed_ms = agent_resolution_started.elapsed().as_millis(),
             "[workspace-latency] session.runtime.start_live_session.agent_resolved"
         );
-        let session_launch_env = build_session_launch_env(
-            &resolved_agent,
-            &self.runtime_home,
-            record.requested_model_id.as_deref(),
-        )
+        let session_launch_env = if workflow_launch {
+            build_workflow_session_launch_env(&resolved_agent, record.requested_model_id.as_deref())
+        } else {
+            build_session_launch_env(
+                &resolved_agent,
+                &self.runtime_home,
+                record.requested_model_id.as_deref(),
+            )
+        }
         .map_err(StartSessionError::Internal)?;
         // Agent-auth render plane: read the declarative state file fresh and
         // render the route layer for this harness. Absent file = empty layer
         // (legacy/native); a scoped file with no selection fails the launch
         // closed with a typed error (spec §3).
-        let route_auth = resolve_launch_route_auth(
-            &self.runtime_home,
-            &record.agent_kind,
-            self.gateway_model_resolver.as_ref(),
-        )
+        let route_auth = if workflow_launch {
+            resolve_workflow_launch_route_auth(
+                &self.runtime_home,
+                &record.agent_kind,
+                self.gateway_model_resolver.as_ref(),
+            )
+        } else {
+            resolve_launch_route_auth(
+                &self.runtime_home,
+                &record.agent_kind,
+                self.gateway_model_resolver.as_ref(),
+            )
+        }
         .map_err(|error| {
             tracing::warn!(
                 session_id = %record.id,
@@ -361,12 +425,16 @@ impl SessionRuntime {
         // Launch-time lazy trigger (spec §2c): if the current revision has no
         // probe row, kick a background probe so the next launch has fresh data.
         // Never blocks this launch — it already used seed data above.
-        self.gateway_model_resolver
-            .schedule_launch_probe_if_stale(&record.agent_kind, &self.runtime_home);
+        if !workflow_launch {
+            self.gateway_model_resolver
+                .schedule_launch_probe_if_stale(&record.agent_kind, &self.runtime_home);
+        }
         // Catalog settings: resolve persisted toggle values into launch-time
         // deltas (extra CLI args, extra env vars). The surface is always "local"
         // for local runtime launches (cloud sandboxes use their own surface).
-        let settings_deltas = {
+        let settings_deltas = if workflow_launch {
+            ResolvedSettingsDeltas::default()
+        } else {
             let catalog = bundled_agent_catalog_document();
             let catalog_settings = catalog
                 .agents
@@ -385,15 +453,31 @@ impl SessionRuntime {
                 .and_then(|h| h.settings.as_ref());
             resolve_settings_deltas(catalog_settings, persisted_settings, "local")
         };
-        let mcp_launch = assemble_session_mcp_launch(
-            self.session_data_cipher.as_ref(),
-            &self.session_extensions,
-            &self.product_mcp_launch_catalog,
-            &workspace,
-            record,
-            system_prompt_append,
-        )
-        .map_err(map_mcp_launch_assembly_error_to_start)?;
+        let mcp_launch = if workflow_launch {
+            let local_broker = self
+                .workflow_gateway_sessions
+                .get_exact_local(&record.id)
+                .ok_or_else(|| {
+                    StartSessionError::Internal(anyhow::anyhow!(
+                        "exact local workflow MCP binding is unavailable"
+                    ))
+                })?;
+            // The durable append belongs to the Interactive session and may
+            // contain Product MCP authority/instructions. Workflow takeover
+            // uses a fresh exact prompt layer and leaves the durable value
+            // untouched for a future one-shot Interactive restoration.
+            assemble_workflow_session_mcp_launch(local_broker)
+        } else {
+            assemble_session_mcp_launch(
+                self.session_data_cipher.as_ref(),
+                &self.session_extensions,
+                &self.product_mcp_launch_catalog,
+                &workspace,
+                record,
+                system_prompt_append,
+            )
+            .map_err(map_mcp_launch_assembly_error_to_start)?
+        };
         if let Some(summaries_json) = mcp_launch.mcp_binding_summaries_json.clone() {
             self.session_service
                 .store()
@@ -413,6 +497,7 @@ impl SessionRuntime {
             startup: startup_strategy,
             every_prompt_append: mcp_launch.system_prompt_append,
             first_prompt_append: mcp_launch.first_prompt_system_prompt_append,
+            process_policy,
         });
         let hooks = SessionHooks {
             on_turn_finish: Some(Arc::new({
@@ -457,72 +542,5 @@ impl SessionRuntime {
         }
 
         Ok((handle, ready.native_session_id))
-    }
-}
-
-pub(super) fn map_start_session_error_to_anyhow(error: StartSessionError) -> anyhow::Error {
-    match error {
-        StartSessionError::WorkspaceNotFound => anyhow::anyhow!("workspace not found for session"),
-        StartSessionError::AgentDescriptorNotFound(agent_kind) => {
-            anyhow::anyhow!("agent descriptor not found: {agent_kind}")
-        }
-        StartSessionError::Closed => anyhow::anyhow!("session is closed"),
-        StartSessionError::MissingDataKey => {
-            anyhow::anyhow!("{}", SessionMcpBindingsError::missing_data_key_detail())
-        }
-        StartSessionError::RestartRequired(detail) => anyhow::anyhow!(detail),
-        StartSessionError::RouteAuth(error) => anyhow::Error::new(error),
-        StartSessionError::Internal(error) | StartSessionError::AcpStart(error) => error,
-    }
-}
-
-fn map_encrypt_bindings_error_to_start(error: SessionMcpBindingsError) -> StartSessionError {
-    match error {
-        SessionMcpBindingsError::MissingDataKey => StartSessionError::MissingDataKey,
-        SessionMcpBindingsError::Encrypt(error) | SessionMcpBindingsError::Decrypt(error) => {
-            StartSessionError::Internal(error)
-        }
-    }
-}
-
-fn map_mcp_summary_error_to_start(error: SessionMcpSummaryError) -> StartSessionError {
-    match error {
-        SessionMcpSummaryError::Invalid(detail) => {
-            StartSessionError::Internal(anyhow::anyhow!(detail))
-        }
-        SessionMcpSummaryError::Serialize(error) => StartSessionError::Internal(error),
-    }
-}
-
-fn map_mcp_launch_assembly_error_to_start(
-    error: SessionMcpLaunchAssemblyError,
-) -> StartSessionError {
-    match error {
-        SessionMcpLaunchAssemblyError::MissingDataKey => StartSessionError::MissingDataKey,
-        SessionMcpLaunchAssemblyError::RestartRequired(detail) => {
-            StartSessionError::RestartRequired(detail)
-        }
-        SessionMcpLaunchAssemblyError::Internal(error) => StartSessionError::Internal(error),
-    }
-}
-
-fn map_start_session_error_to_create(error: StartSessionError) -> CreateAndStartSessionError {
-    match error {
-        StartSessionError::WorkspaceNotFound => CreateAndStartSessionError::WorkspaceNotFound,
-        StartSessionError::AgentDescriptorNotFound(agent_kind) => {
-            CreateAndStartSessionError::Internal(anyhow::anyhow!(
-                "agent descriptor not found: {agent_kind}"
-            ))
-        }
-        StartSessionError::Closed => {
-            CreateAndStartSessionError::Internal(anyhow::anyhow!("session is closed"))
-        }
-        StartSessionError::MissingDataKey => CreateAndStartSessionError::MissingDataKey,
-        StartSessionError::RestartRequired(detail) => {
-            CreateAndStartSessionError::Internal(anyhow::anyhow!(detail))
-        }
-        StartSessionError::RouteAuth(error) => CreateAndStartSessionError::RouteAuth(error),
-        StartSessionError::Internal(error) => CreateAndStartSessionError::Internal(error),
-        StartSessionError::AcpStart(error) => CreateAndStartSessionError::StartFailed(error),
     }
 }

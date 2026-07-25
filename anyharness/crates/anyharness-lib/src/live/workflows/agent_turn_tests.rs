@@ -8,40 +8,13 @@ use anyharness_contract::v1::{
     TranscriptItemStatus,
 };
 
-use super::agent_turn::{gateway_functions_unsupported, validate_bind_target};
-use super::gateway::WorkflowPrivateGateway;
+use super::agent_turn::{
+    finalize_prepared_session_rollback, validate_bind_target, PreparedSessionRollbackEvidence,
+};
+use super::exec_policy::WorkflowOwnedSessions;
+use super::gateway::{workflow_gateway_server, WorkflowGatewaySessions};
+use super::isolation::TrustedLocalGatewayBinding;
 use super::turn::collect_tool_names;
-
-fn plan_gateway(integrations: Vec<String>) -> WorkflowPrivateGateway {
-    WorkflowPrivateGateway {
-        url: "https://cloud.test/mcp".to_string(),
-        authorization: "Bearer per-run".to_string(),
-        ping_url: "https://cloud.test/ping".to_string(),
-        integrations,
-    }
-}
-
-#[test]
-fn functions_unsupported_only_when_grants_lack_a_usable_gateway() {
-    // No gateway at all → supported (nothing granted).
-    assert!(!gateway_functions_unsupported(None));
-    // Gateway with no integration grants → supported (ping-only token).
-    assert!(!gateway_functions_unsupported(Some(&plan_gateway(
-        Vec::new()
-    ))));
-    // Grants + a usable gateway → supported.
-    assert!(!gateway_functions_unsupported(Some(&plan_gateway(vec![
-        "issues".to_string()
-    ]))));
-    // Grants but empty authorization → unsupported (local lane).
-    let mut gw = plan_gateway(vec!["issues".to_string()]);
-    gw.authorization = "  ".to_string();
-    assert!(gateway_functions_unsupported(Some(&gw)));
-    // Grants but empty URL → unsupported.
-    let mut gw = plan_gateway(vec!["issues".to_string()]);
-    gw.url = String::new();
-    assert!(gateway_functions_unsupported(Some(&gw)));
-}
 
 fn outcome_code(outcome: &StepOutcome) -> &str {
     match outcome {
@@ -52,38 +25,82 @@ fn outcome_code(outcome: &StepOutcome) -> &str {
 
 #[test]
 fn bind_target_ok_when_harness_matches_and_not_held() {
-    assert!(validate_bind_target("sess-1", "run-a", "claude", "claude", None).is_ok());
-}
-
-#[test]
-fn bind_target_rebinding_own_run_is_idempotent() {
-    // A session already held by THIS run may be re-bound (idempotent).
-    assert!(validate_bind_target("sess-1", "run-a", "claude", "claude", Some("run-a")).is_ok());
+    assert!(validate_bind_target("sess-1", "claude", "claude").is_ok());
 }
 
 #[test]
 fn bind_target_harness_mismatch_is_hard_plan_error() {
-    let err = validate_bind_target("sess-1", "run-a", "codex", "claude", None)
+    let err = validate_bind_target("sess-1", "codex", "claude")
         .expect_err("harness mismatch must be a hard error");
     assert_eq!(outcome_code(&err), "plan_malformed");
 }
 
-#[test]
-fn bind_target_rejects_session_held_by_a_different_run() {
-    // The double-owner hole: without this guard, run-b would silently re-own a
-    // session run-a holds, and run-a's release would no longer drop it.
-    let err = validate_bind_target("sess-1", "run-b", "claude", "claude", Some("run-a"))
-        .expect_err("a session held by another live run cannot be bound");
-    assert_eq!(outcome_code(&err), "session_bind_held");
+async fn prepared_rollback_fence() -> (
+    WorkflowOwnedSessions,
+    WorkflowGatewaySessions,
+    super::exec_policy::SessionProcessTransitionGuard,
+) {
+    let owned = WorkflowOwnedSessions::new();
+    let transition = owned.lock_process_transition("session-1").await;
+    owned
+        .try_acquire(&transition, "session-1", "run-1")
+        .expect("acquire rollback fence");
+    let gateways = WorkflowGatewaySessions::new();
+    let binding = TrustedLocalGatewayBinding::try_new(
+        "http://127.0.0.1:43891/mcp",
+        "session-1",
+        7,
+        11,
+        "rollback-test-capability",
+    )
+    .expect("binding");
+    gateways.set("session-1", workflow_gateway_server(&binding));
+    (owned, gateways, transition)
 }
 
-#[test]
-fn bind_target_harness_mismatch_takes_precedence_over_held() {
-    // Even when also held elsewhere, a harness mismatch is the malformed-plan
-    // error (checked first).
-    let err = validate_bind_target("sess-1", "run-b", "codex", "claude", Some("run-a"))
-        .expect_err("mismatch must error");
-    assert_eq!(outcome_code(&err), "plan_malformed");
+#[tokio::test]
+async fn rollback_close_timeout_retains_binding_and_ownership_fence() {
+    let (owned, gateways, transition) = prepared_rollback_fence().await;
+    let result = finalize_prepared_session_rollback(
+        &owned,
+        &gateways,
+        "session-1",
+        "run-1",
+        PreparedSessionRollbackEvidence {
+            broker_revoked: true,
+            actor_quiesced: false,
+            durable_state_safe: false,
+        },
+        true,
+        &transition,
+    );
+    assert!(result.is_err());
+    assert_eq!(owned.held_run("session-1").as_deref(), Some("run-1"));
+    assert!(gateways.get("session-1").is_some());
+}
+
+#[tokio::test]
+async fn rollback_durable_failure_removes_prepared_binding_but_retains_ownership_fence() {
+    let (owned, gateways, transition) = prepared_rollback_fence().await;
+    let result = finalize_prepared_session_rollback(
+        &owned,
+        &gateways,
+        "session-1",
+        "run-1",
+        PreparedSessionRollbackEvidence {
+            broker_revoked: true,
+            actor_quiesced: true,
+            durable_state_safe: false,
+        },
+        true,
+        &transition,
+    );
+    assert!(result.is_err());
+    assert_eq!(owned.held_run("session-1").as_deref(), Some("run-1"));
+    assert!(
+        gateways.get("session-1").is_none(),
+        "no prepared capability may survive proven broker and actor quiescence"
+    );
 }
 
 #[test]

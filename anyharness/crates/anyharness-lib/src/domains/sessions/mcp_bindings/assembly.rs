@@ -88,6 +88,23 @@ pub fn assemble_session_mcp_launch(
     })
 }
 
+/// Workflow process policy uses an exact ephemeral MCP overlay. It never
+/// resolves ordinary session extensions or the Product MCP catalog, so remote
+/// integration bearers, persisted interactive servers, runtime bearer tokens,
+/// and unrelated product capabilities cannot survive takeover. The durable
+/// record remains untouched and ordinary assembly restores it after rollback.
+pub fn assemble_workflow_session_mcp_launch(
+    local_broker: SessionMcpServer,
+) -> SessionMcpLaunchAssembly {
+    let response_append = response_formatting::system_prompt_append();
+    SessionMcpLaunchAssembly {
+        mcp_servers: vec![local_broker],
+        system_prompt_append: join_system_prompt_append(Some(response_append.clone())),
+        first_prompt_system_prompt_append: join_system_prompt_append(Some(response_append)),
+        mcp_binding_summaries_json: None,
+    }
+}
+
 fn dedupe_mcp_servers(servers: &mut Vec<SessionMcpServer>) {
     let mut seen = HashSet::new();
     servers.retain(|server| {
@@ -203,6 +220,8 @@ mod tests {
         WorkspaceCleanupState, WorkspaceKind, WorkspaceLifecycleState, WorkspaceRecord,
         WorkspaceSurface,
     };
+    use crate::live::workflows::isolation::TrustedLocalGatewayBinding;
+    use crate::live::workflows::workflow_gateway_server;
     use crate::origin::OriginContext;
 
     #[derive(Clone)]
@@ -299,6 +318,10 @@ mod tests {
             outcome: SessionMcpBindingOutcome::Applied,
             reason: None,
         }
+    }
+
+    mod workflow_tests {
+        include!("tests/assembly_workflow_tests.rs");
     }
 
     #[test]

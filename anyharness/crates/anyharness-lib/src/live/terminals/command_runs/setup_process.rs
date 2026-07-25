@@ -5,15 +5,14 @@ use std::time::{Duration, Instant};
 use tokio::io::AsyncReadExt;
 use tokio::sync::RwLock;
 
+use super::super::handle::TerminalRegistry;
+use super::super::output_sink::TerminalOutputHub;
+use super::stream_format::{terminal_command_preface, workspace_prompt, TerminalStreamFormatter};
 use crate::domains::terminals::model::ShellKind;
 use crate::domains::terminals::model::{TerminalCommandRunRecord, TerminalCommandRunStatus};
 use crate::domains::terminals::service::{
     append_bounded, complete_command_run, TerminalCommandService,
 };
-
-use super::super::handle::TerminalRegistry;
-use super::super::output_sink::TerminalOutputHub;
-use super::stream_format::{terminal_command_preface, workspace_prompt, TerminalStreamFormatter};
 
 pub(in crate::live::terminals) struct ActiveSetupTask {
     pub(in crate::live::terminals) command_run_id: String,

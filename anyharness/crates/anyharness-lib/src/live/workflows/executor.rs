@@ -20,7 +20,7 @@ use serde_json::json;
 
 use super::agent_turn::CurrentSession;
 use super::exec_policy::WorkflowOwnedSessions;
-use super::gateway::{fire_run_ping, RunPingSink, WorkflowGatewaySessions, WorkflowPrivateGateway};
+use super::gateway::WorkflowGatewaySessions;
 use super::parallel::worktree_branch_for_scope;
 use super::turn::InjectionMeta;
 use crate::domains::goals::runtime::GoalRuntime;
@@ -35,6 +35,9 @@ use crate::domains::workflows::plan::{
 use crate::domains::workflows::service::WorkflowService;
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
 use crate::live::sessions::LiveSessionManager;
+use crate::live::workflows::isolation::{
+    WorkflowIsolationBroker, WorkflowIsolationCapability,
+};
 
 /// The shared, run-independent dependencies the executor needs.
 pub struct WorkflowExecDeps {
@@ -55,8 +58,8 @@ pub struct WorkflowExecDeps {
     /// its workflow-owned session's server here before launch; the launch
     /// extension reads it (§6.4/OPEN-3(a)).
     pub workflow_gateway_sessions: Arc<WorkflowGatewaySessions>,
-    /// Fire-and-forget sink for the per-run completion ping (§3.7/L16).
-    pub run_ping_sink: Arc<dyn RunPingSink>,
+    pub workflow_isolation_broker: Arc<dyn WorkflowIsolationBroker>,
+    pub runtime_control_endpoints: Vec<String>,
 }
 
 /// One executor per run. Sessions are slot-keyed (B7): `current` maps each
@@ -107,10 +110,7 @@ pub struct WorkflowStepExecutorImpl {
     /// slot -> effective model (base `sessions[slot].model`, folded by
     /// `agent.config`).
     pub(super) models: Mutex<HashMap<String, Option<String>>>,
-    /// Private post-binding gateway material. It never resides in the logical
-    /// plan; the execution-envelope owner supplies it when constructing the
-    /// executor and must refresh it independently on resume.
-    pub(super) gateway: Option<WorkflowPrivateGateway>,
+    pub(super) isolation_capability: WorkflowIsolationCapability,
 }
 
 impl WorkflowStepExecutorImpl {
@@ -120,7 +120,7 @@ impl WorkflowStepExecutorImpl {
         workspace_id: String,
         isolation: Isolation,
         sessions: BTreeMap<String, SessionSpec>,
-        gateway: Option<WorkflowPrivateGateway>,
+        isolation_capability: WorkflowIsolationCapability,
     ) -> Self {
         let models = sessions
             .iter()
@@ -136,7 +136,7 @@ impl WorkflowStepExecutorImpl {
             sessions,
             current: Mutex::new(HashMap::new()),
             models: Mutex::new(models),
-            gateway,
+            isolation_capability,
         }
     }
 
@@ -206,7 +206,7 @@ impl WorkflowStepExecutor for WorkflowStepExecutorImpl {
                 let outcome = match &agent.goal {
                     None => self.run_prompt(slot, agent, &meta, &scope).await,
                     Some(goal) => {
-                        self.run_goal(slot, agent, goal, ctx.step_index, &meta, &scope)
+                        self.run_goal(slot, agent, goal, ctx.step_index, attempt, &meta, &scope)
                             .await
                     }
                 };
@@ -228,14 +228,14 @@ impl WorkflowStepExecutor for WorkflowStepExecutorImpl {
                     None,
                     shell.replay_key.as_deref(),
                 );
-                let outcome = self.run_shell(shell, &scope).await;
+                let outcome = self.run_shell(shell, &scope, key, attempt).await;
                 self.finish_effect(key, attempt, 0, EffectKind::Shell, &outcome);
                 outcome
             }
             StepKind::ScmOpenPr(pr) => {
                 let branch = worktree_branch_for_scope(&self.run_id, &scope);
                 self.begin_effect(key, attempt, 0, EffectKind::Scm, Some(&branch), None);
-                let outcome = self.run_scm(pr, &scope).await;
+                let outcome = self.run_scm(pr, &scope, key, attempt).await;
                 self.finish_effect(key, attempt, 0, EffectKind::Scm, &outcome);
                 outcome
             }
@@ -249,7 +249,20 @@ impl WorkflowStepExecutor for WorkflowStepExecutorImpl {
     /// §3.7/L16: fire the per-run completion ping after each applied transition.
     /// No gateway block → no ping. Fire-and-forget via the injected sink.
     fn on_step_transition(&self) {
-        fire_run_ping(self.gateway.as_ref(), self.deps.run_ping_sink.as_ref());
+        if let Err(error) = self
+            .deps
+            .workflow_isolation_broker
+            .notify_step_transition(&self.isolation_capability)
+        {
+            // This is a completion/liveness hint, not a capability-revocation
+            // or quiescence receipt. The durable observation outbox remains the
+            // source of truth, so failure is visible but cannot rewrite a step.
+            tracing::warn!(
+                run_id = %self.run_id,
+                error = %error,
+                "workflow step-transition hint could not be delivered"
+            );
+        }
     }
 
     /// M2(b): at a clean parallel-group join, merge each lane's branch back into

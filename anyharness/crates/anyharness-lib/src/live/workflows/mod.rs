@@ -15,6 +15,7 @@ mod exec_policy;
 mod executor;
 mod gateway;
 mod goal;
+pub(crate) mod isolation;
 mod manager;
 #[cfg(test)]
 mod manager_tests;
@@ -25,10 +26,12 @@ mod parallel;
 mod parallel_tests;
 mod receipts;
 mod turn;
+mod worktree_validation;
 
+pub(crate) use exec_policy::SessionProcessTransitionGuard;
 pub use exec_policy::{WorkflowAutoApproveAdvisor, WorkflowOwnedSessions};
 pub use executor::WorkflowExecDeps;
-pub use gateway::{
-    HttpRunPingSink, RunPingSink, WorkflowGatewaySessions, WorkflowRunGatewaySessionLaunchExtension,
-};
+#[cfg(test)]
+pub(crate) use gateway::workflow_gateway_server;
+pub use gateway::WorkflowGatewaySessions;
 pub use manager::WorkflowRunManager;

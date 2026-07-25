@@ -16,6 +16,21 @@ impl WorkspaceRuntime {
             anyhow::bail!("unsupported workspace kind for retire: {}", workspace.kind);
         }
         let worktree = Path::new(&workspace.path);
+        if self
+            .store
+            .workflow_materialization_base_commit_oid(&workspace.id)?
+            .is_some()
+        {
+            if worktree.exists() {
+                anyhow::bail!(
+                    "workflow broker materialization still exists; refusing control-process Git cleanup"
+                );
+            }
+            // The broker's typed receipt owns checkout, ref, and ledger cleanup.
+            // Once the path is absent, generic purge may remove only the durable
+            // workspace/session rows and never invokes Git for this origin.
+            return Ok(());
+        }
         if !worktree.exists() {
             return Ok(());
         }

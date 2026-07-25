@@ -7,6 +7,8 @@ use super::model::{
 };
 use crate::persistence::Db;
 
+mod cleanup;
+
 #[derive(Clone)]
 pub struct WorkflowStore {
     db: Db,

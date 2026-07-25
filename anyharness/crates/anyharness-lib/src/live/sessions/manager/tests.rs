@@ -20,7 +20,12 @@ use crate::domains::sessions::store::SessionStore;
 use crate::live::sessions::actor::command::SessionCommand;
 use crate::live::sessions::handle::LiveSessionHandle;
 use crate::live::sessions::model::{
-    LaunchEnv, SessionHooks, SessionLaunch, SessionStartupStrategy, SystemPromptAppends,
+    LaunchEnv, SessionHooks, SessionLaunch, SessionProcessPolicy, SessionStartupStrategy,
+    SystemPromptAppends,
+};
+use crate::live::workflows::isolation::{
+    test_isolation_capability, WorkflowDeliveryIdentity, WorkflowProcessIdentity,
+    WorkflowProcessSubject,
 };
 use crate::persistence::Db;
 
@@ -108,7 +113,29 @@ fn test_launch(startup: SessionStartupStrategy) -> SessionLaunch {
         mcp_servers: vec![],
         startup,
         prompts: SystemPromptAppends::default(),
+        process_policy: SessionProcessPolicy::Interactive,
         last_seq: 0,
+    }
+}
+
+fn workflow_process_policy() -> SessionProcessPolicy {
+    let delivery = WorkflowDeliveryIdentity::try_new(
+        "run-manager-recovery",
+        Some("sha256:1111111111111111111111111111111111111111111111111111111111111111"),
+        Some("sha256:2222222222222222222222222222222222222222222222222222222222222222"),
+        Some(1),
+    )
+    .expect("delivery identity");
+    SessionProcessPolicy::Workflow {
+        identity: WorkflowProcessIdentity::new(
+            delivery.clone(),
+            WorkflowProcessSubject::Session {
+                slot_id: "main".to_string(),
+                session_id: "session-1".to_string(),
+                root: std::path::PathBuf::from("/tmp"),
+            },
+        ),
+        capability: test_isolation_capability(delivery),
     }
 }
 
@@ -204,6 +231,39 @@ async fn reused_pending_live_handle_waits_for_shared_startup_readiness() {
 
     assert!(Arc::ptr_eq(&returned_handle, &handle));
     assert_eq!(ready.native_session_id, "fresh-native");
+}
+
+#[tokio::test]
+async fn recovered_ready_workflow_handle_requires_explicit_quiesce_and_rebind() {
+    let manager = manager_for_store(&SessionStore::new(Db::open_in_memory().expect("open db")));
+    let process_policy = workflow_process_policy();
+    let (command_tx, _command_rx) = mpsc::channel(4);
+    let (event_tx, _) = broadcast::channel::<SessionEventEnvelope>(4);
+    let handle = Arc::new(LiveSessionHandle::new_for_test_with_process_policy(
+        "session-1",
+        process_policy.clone(),
+        command_tx,
+        event_tx,
+        Some("stale-workflow-native".to_string()),
+        SessionExecutionPhase::Idle,
+    ));
+    manager
+        .live_sessions
+        .write()
+        .await
+        .insert("session-1".to_string(), handle);
+    let mut launch = test_launch(SessionStartupStrategy::LoadNative(
+        "stale-workflow-native".to_string(),
+    ));
+    launch.process_policy = process_policy;
+
+    let error = match manager.start_session(launch, SessionHooks::default()).await {
+        Ok(_) => panic!("ready workflow handle must not be reused after recovery"),
+        Err(error) => error,
+    };
+    assert!(error
+        .to_string()
+        .contains("cannot be reused without a current broker rebind"));
 }
 
 #[tokio::test]

@@ -6,15 +6,24 @@
 
 use std::path::Path;
 
+use sha2::{Digest, Sha256};
+
+use crate::domains::workflows::cleanup::{
+    WorkflowMaterializationBegin, WorkflowMaterializationIntent,
+};
 use crate::domains::workflows::engine::StepOutcome;
 use crate::domains::workflows::plan::{Isolation, NO_LANE};
 use crate::domains::workspaces::creator_context::WorkspaceCreatorContext;
-use crate::domains::workspaces::model::WorkspaceKind;
-use crate::domains::workspaces::runtime::WorkspaceRuntime;
-use crate::domains::workspaces::worktree_names::WorktreeNameConflictPolicy;
 use crate::origin::OriginContext;
+use crate::process_env::complete_workflow_operation_env;
 
 use super::executor::{failed_msg, WorkflowStepExecutorImpl};
+use super::isolation::{
+    cleanup_workflow_materialization, inspect_workflow_worktree, materialize_workflow_worktree,
+    WorkflowProcessIdentity, WorkflowWorktreeInspectionRequest,
+    WorkflowWorktreeMaterializationRequest,
+};
+use super::worktree_validation::validate_recovered_worktree_metadata;
 
 /// A worktree workspace record considered for run-scoped adoption: its id plus
 /// the branch it is checked out on.
@@ -50,12 +59,15 @@ impl WorkflowStepExecutorImpl {
                 // lazily if no pre-group step already did).
                 let run_level_id = self.run_level_workspace_id().await?;
                 let base_workspace_id =
-                    worktree_base_workspace_id(scope, &self.workspace_id, &run_level_id).to_string();
+                    worktree_base_workspace_id(scope, &self.workspace_id, &run_level_id)
+                        .to_string();
                 let mut guard = self.lane_workspaces.lock().await;
                 if let Some(id) = guard.get(scope) {
                     return Ok(id.clone());
                 }
-                let id = self.mint_worktree_for_scope(scope, base_workspace_id).await?;
+                let id = self
+                    .mint_worktree_for_scope(scope, base_workspace_id)
+                    .await?;
                 guard.insert(scope.to_string(), id.clone());
                 Ok(id)
             }
@@ -81,45 +93,29 @@ impl WorkflowStepExecutorImpl {
     /// id. Scope [`NO_LANE`] is the run-level worktree (wave 2b); a lane name is
     /// a per-lane worktree (D-031c).
     ///
-    /// The blocking git (`std::process::Command`) + synchronous DB work runs on a
-    /// `spawn_blocking` pool thread, never on the async executor worker (matching
-    /// every other `create_worktree` consumer in this crate); the memo lock is an
-    /// async [`tokio::sync::Mutex`] held across this await, so no `std` guard is
-    /// pinned across `.await`.
+    /// Materialization is a typed broker operation. Phase A has no platform
+    /// adapter, so this fails closed rather than falling back to the runtime
+    /// principal's `git worktree` implementation.
     pub(super) async fn mint_worktree_for_scope(
         &self,
         scope: &str,
         base_workspace_id: String,
     ) -> Result<String, StepOutcome> {
-        let workspace_runtime = self.deps.workspace_runtime.clone();
-        let pinned_workspace_id = self.workspace_id.clone();
-        let run_id = self.run_id.clone();
-        let scope = scope.to_string();
-        tokio::task::spawn_blocking(move || {
-            mint_or_adopt_run_worktree_blocking(
-                &workspace_runtime,
-                &pinned_workspace_id,
-                &base_workspace_id,
-                &run_id,
-                &scope,
-            )
-        })
+        mint_or_adopt_run_worktree(
+            self,
+            &self.workspace_id,
+            &base_workspace_id,
+            &self.run_id,
+            scope,
+        )
         .await
-        .map_err(|error| {
-            failed_msg(
-                "worktree_mint_failed",
-                format!("worktree mint task failed: {error}"),
-            )
-        })?
     }
 
-    /// Blocking lookup of the run's own worktree record for crash-resume
-    /// adoption: load the pinned checkout, derive this run's deterministic
-    /// worktree path, and return the active worktree workspace record there (id +
-    /// its checked-out branch) if one exists. Returns `None` (never an error that
-    /// would fail resume) when there's simply nothing to adopt; the run-scoped
-    /// branch gate is applied by [`adoptable_run_worktree`] in the caller.
-    pub(super) fn lookup_run_worktree_for_resume(
+    /// Exact operation-registration lookup for crash-resume adoption. The
+    /// generation-bound receipt selects the workspace; broker inspection and
+    /// the final branch guard then revalidate its live checkout. Returns `None`
+    /// when this operation has no durable registration to adopt.
+    pub(super) async fn lookup_run_worktree_for_resume(
         &self,
         scope: &str,
     ) -> Result<Option<AdoptedWorktree>, StepOutcome> {
@@ -128,14 +124,150 @@ impl WorkflowStepExecutorImpl {
             .workspace_runtime
             .get_workspace(&self.workspace_id)
             .map_err(|error| failed_msg("worktree_resume_lookup_failed", error.to_string()))?;
-        let Some(pinned) = pinned else {
+        let Some(_pinned) = pinned else {
             return Ok(None);
         };
-        let Some(target_path) = worktree_target_path_for_scope(&pinned.path, &self.run_id, scope)
+        let Some(registration) = self
+            .deps
+            .workflow_service
+            .registered_materialization_for_identity(
+                &self.run_id,
+                scope,
+                self.isolation_capability.identity().execution_generation(),
+                self.isolation_capability.broker_generation(),
+            )
+            .map_err(|error| {
+                failed_msg(
+                    "worktree_resume_lookup_failed",
+                    format!("could not load exact materialization registration: {error}"),
+                )
+            })?
         else {
             return Ok(None);
         };
-        Ok(lookup_run_worktree_record(&self.deps.workspace_runtime, &target_path)?)
+        let workspace_id = registration.workspace_id.ok_or_else(|| {
+            failed_msg(
+                "worktree_resume_lookup_failed",
+                "registered materialization lost its workspace id",
+            )
+        })?;
+        let record = self
+            .inspect_existing_worktree_for_scope(scope, &workspace_id)
+            .await?;
+        Ok(Some((record.id, record.current_branch)))
+    }
+
+    pub(super) async fn inspect_existing_worktree_for_scope(
+        &self,
+        scope: &str,
+        workspace_id: &str,
+    ) -> Result<crate::domains::workspaces::model::WorkspaceRecord, StepOutcome> {
+        let pinned = self
+            .deps
+            .workspace_runtime
+            .get_workspace(&self.workspace_id)
+            .map_err(|error| failed_msg("worktree_resume_lookup_failed", error.to_string()))?
+            .ok_or_else(|| {
+                failed_msg(
+                    "worktree_resume_lookup_failed",
+                    "pinned workspace missing during broker revalidation",
+                )
+            })?;
+        let expected_path = worktree_target_path_for_scope(&pinned.path, &self.run_id, scope)
+            .ok_or_else(|| {
+                failed_msg(
+                    "worktree_resume_lookup_failed",
+                    "could not derive expected workflow worktree path",
+                )
+            })?;
+        let expected_branch = worktree_branch_for_scope(&self.run_id, scope);
+        let registration = self
+            .deps
+            .workflow_service
+            .registered_materialization_for_identity(
+                &self.run_id,
+                scope,
+                self.isolation_capability.identity().execution_generation(),
+                self.isolation_capability.broker_generation(),
+            )
+            .map_err(|error| {
+                failed_msg(
+                    "worktree_resume_lookup_failed",
+                    format!("could not load exact materialization registration: {error}"),
+                )
+            })?
+            .ok_or_else(|| {
+                failed_msg(
+                    "worktree_resume_lookup_failed",
+                    "workspace is not bound to this exact materialization operation",
+                )
+            })?;
+        if registration.workspace_id.as_deref() != Some(workspace_id)
+            || registration.intent.source_repo_root_id != pinned.repo_root_id
+            || registration.intent.target_root != expected_path
+            || registration.intent.branch_name != expected_branch
+        {
+            return Err(failed_msg(
+                "worktree_resume_lookup_failed",
+                "workspace registration does not match source, path, branch, or generation",
+            ));
+        }
+        let record = self
+            .deps
+            .workspace_runtime
+            .get_workspace(workspace_id)
+            .map_err(|error| failed_msg("worktree_resume_lookup_failed", error.to_string()))?
+            .ok_or_else(|| failed_msg("worktree_resume_lookup_failed", "worktree missing"))?;
+        let expected_creator = WorkspaceCreatorContext::Automation {
+            automation_id: None,
+            automation_run_id: Some(self.run_id.clone()),
+            label: Some("workflow-run".to_string()),
+        };
+        let canonical_record = validate_recovered_worktree_metadata(
+            record.kind,
+            &record.path,
+            record.current_branch.as_deref(),
+            record.creator_context.as_ref(),
+            &expected_path,
+            &expected_branch,
+            &expected_creator,
+        )?;
+        // Stored metadata is necessary but never sufficient. Every recovered
+        // session workspace is re-inspected by the current broker capability
+        // before it is memoized or its session is relaunched.
+        let inspected = inspect_workflow_worktree(
+            self.deps.workflow_isolation_broker.as_ref(),
+            &self.isolation_capability,
+            WorkflowWorktreeInspectionRequest {
+                identity: WorkflowProcessIdentity::try_materialization(
+                    self.isolation_capability.identity().clone(),
+                    scope,
+                    &registration.intent.source_root,
+                    &registration.intent.target_root,
+                )
+                .map_err(|error| {
+                    failed_msg(
+                        "worktree_resume_lookup_failed",
+                        format!("invalid materialization identity: {error}"),
+                    )
+                })?,
+                root: canonical_record,
+            },
+        )
+        .await
+        .map_err(|error| {
+            failed_msg(
+                "worktree_resume_lookup_failed",
+                format!("broker worktree revalidation failed: {error}"),
+            )
+        })?;
+        if inspected.branch != expected_branch {
+            return Err(failed_msg(
+                "worktree_resume_lookup_failed",
+                "broker reported the wrong workflow worktree branch",
+            ));
+        }
+        Ok(record)
     }
 }
 
@@ -173,13 +305,9 @@ where
     Ok(resolved)
 }
 
-/// The run-scoped adoption gate (wave 2b crash-recovery hardening, finding 1): a
-/// worktree record `found` at the run's DETERMINISTIC path is adopted ONLY when
-/// it is the run's OWN worktree — its branch is exactly `expected_branch`
-/// (`workflow-run/<run_id>`). A record at that path on any OTHER branch is a
-/// foreign squatter and must NOT be adopted (the caller falls through to an
-/// honest mint, which then conflicts on the occupied path). This is never a
-/// general conflict-tolerant adopt — only the run's own run-scoped identifiers.
+/// Final branch guard for a worktree already selected by an exact durable
+/// operation-registration lookup. This helper is not an ownership lookup: a
+/// caller must establish run/scope/execution/broker/source provenance first.
 pub(super) fn adoptable_run_worktree(
     found: Option<AdoptedWorktree>,
     expected_branch: &str,
@@ -190,26 +318,22 @@ pub(super) fn adoptable_run_worktree(
     }
 }
 
-/// Mint OR adopt the run's git worktree, returning its workspace id. Runs the
-/// blocking git (`std::process::Command`) + synchronous DB work; the caller
-/// wraps it in `spawn_blocking`.
+/// Mint OR adopt the run's git worktree, returning its workspace id. All git
+/// materialization runs through the attested broker; the runtime only performs
+/// record lookup/registration around that trusted operation.
 ///
-/// Adoption (finding 1): a prior executor may have already minted this run's
-/// worktree AND its workspace record before crashing — e.g. a `shell.run` /
-/// `scm.open_pr` prefix that persisted NO session to recover from. Re-minting
-/// would hit the deterministic branch/path under the `Fail` conflict policy and
-/// strand the completed work, failing the run terminally on every retry. So if a
-/// workspace RECORD already exists at this run's OWN deterministic path+branch,
-/// adopt it (return its id). Run-scoped only. A git worktree on disk with NO
-/// record (half-created) is NOT adopted: we fall through to the mint, which
-/// fails honestly on the occupied path — never adopt untracked state.
-fn mint_or_adopt_run_worktree_blocking(
-    workspace_runtime: &WorkspaceRuntime,
+/// A prior executor may be adopted only through the exact generation-bound
+/// operation registration committed atomically with its workspace row. A
+/// path/branch/creator match alone is never sufficient, and an unregistered
+/// checkout falls through to the fail-closed reconciliation path.
+async fn mint_or_adopt_run_worktree(
+    executor: &WorkflowStepExecutorImpl,
     pinned_workspace_id: &str,
     base_workspace_id: &str,
     run_id: &str,
     scope: &str,
 ) -> Result<String, StepOutcome> {
+    let workspace_runtime = executor.deps.workspace_runtime.as_ref();
     let pinned = workspace_runtime
         .get_workspace(pinned_workspace_id)
         .map_err(|error| {
@@ -233,26 +357,12 @@ fn mint_or_adopt_run_worktree_blocking(
         })?;
     let branch_name = worktree_branch_for_scope(run_id, scope);
 
-    // Crash-recovery adoption: return the run's own already-minted worktree if a
-    // record for it exists (run-scoped by path + branch).
-    if let Some(id) = lookup_run_worktree_record(workspace_runtime, &target_path)?
-        .and_then(|found| adoptable_run_worktree(Some(found), &branch_name))
-    {
-        tracing::info!(
-            run_id = %run_id,
-            worktree_workspace_id = %id,
-            branch = %branch_name,
-            "workflow run adopted its existing per-run worktree (isolation=worktree, crash-recovery)"
-        );
-        return Ok(id);
-    }
-
     // Base the worktree on the BASE workspace's CURRENT HEAD (exact commit), so
     // isolation is faithful even when the base is itself a branch/worktree. For
     // the run-level worktree the base IS the pinned checkout (wave 2b, unchanged);
     // for a parallel lane the base is the RUN-LEVEL worktree (M2a), so any
-    // pre-group commit flows into every lane. Falls back to the source repo's HEAD
-    // when the SHA can't be read (base_branch=None → git's default HEAD).
+    // pre-group commit flows into every lane. The broker inspection must return
+    // an exact HEAD oid; materialization never falls back to an ambient ref.
     let base_path = if base_workspace_id == pinned_workspace_id {
         pinned.path.clone()
     } else {
@@ -272,7 +382,36 @@ fn mint_or_adopt_run_worktree_blocking(
             })?
             .path
     };
-    let base_ref = run_worktree_base_ref(&base_path);
+    let materialization_identity = || {
+        WorkflowProcessIdentity::try_materialization(
+            executor.isolation_capability.identity().clone(),
+            scope,
+            &base_path,
+            &target_path,
+        )
+        .map_err(|error| {
+            failed_msg(
+                "worktree_mint_failed",
+                format!("invalid materialization identity: {error}"),
+            )
+        })
+    };
+    let source = inspect_workflow_worktree(
+        executor.deps.workflow_isolation_broker.as_ref(),
+        &executor.isolation_capability,
+        WorkflowWorktreeInspectionRequest {
+            identity: materialization_identity()?,
+            root: std::path::PathBuf::from(&base_path),
+        },
+    )
+    .await
+    .map_err(|error| {
+        failed_msg(
+            "worktree_mint_failed",
+            format!("isolated source inspection failed: {error}"),
+        )
+    })?;
+    let base_commit_oid = source.head_oid;
     // Finding 3: tag the worktree with the run as its creator (there is no
     // free-form origin/label on `OriginContext`, but `WorkspaceCreatorContext`
     // carries `automationRunId` + `label`), so a future retention reaper can
@@ -285,24 +424,145 @@ fn mint_or_adopt_run_worktree_blocking(
         automation_run_id: Some(run_id.to_string()),
         label: Some("workflow-run".to_string()),
     };
-    let result = workspace_runtime
-        .create_worktree_with_surface(
-            &pinned.repo_root_id,
-            &target_path,
-            &branch_name,
-            base_ref.as_deref(),
-            None,
-            "standard",
-            WorktreeNameConflictPolicy::Fail,
-            OriginContext::api_local_runtime(),
-            Some(creator_context),
-        )
+    let process_identity = materialization_identity()?;
+    let intent = WorkflowMaterializationIntent {
+        run_id: run_id.to_string(),
+        scope_id: scope.to_string(),
+        source_repo_root_id: pinned.repo_root_id.clone(),
+        source_root: std::path::PathBuf::from(&base_path),
+        target_root: std::path::PathBuf::from(&target_path),
+        branch_name: branch_name.clone(),
+        base_commit_oid: base_commit_oid.clone(),
+        execution_generation: executor
+            .isolation_capability
+            .identity()
+            .execution_generation(),
+        broker_generation: executor.isolation_capability.broker_generation(),
+    };
+    if let Some(id) = executor
+        .deps
+        .workflow_service
+        .registered_workspace_for_materialization(&intent)
         .map_err(|error| {
             failed_msg(
-                "worktree_mint_failed",
-                format!("git worktree add failed: {error}"),
+                "worktree_resume_lookup_failed",
+                format!("could not load exact materialization registration: {error}"),
             )
-        })?;
+        })?
+    {
+        executor
+            .inspect_existing_worktree_for_scope(scope, &id)
+            .await?;
+        tracing::info!(
+            run_id = %run_id,
+            worktree_workspace_id = %id,
+            branch = %branch_name,
+            "workflow run adopted its exact generation-bound materialization"
+        );
+        return Ok(id);
+    }
+    prepare_materialization_operation(executor, &intent, &process_identity).await?;
+    let request = WorkflowWorktreeMaterializationRequest {
+        identity: process_identity.clone(),
+        source_root: intent.source_root.clone(),
+        target_root: intent.target_root.clone(),
+        branch: intent.branch_name.clone(),
+        base_commit_oid: intent.base_commit_oid.clone(),
+        env: complete_workflow_operation_env(Vec::new()),
+    };
+    let materialized = match materialize_workflow_worktree(
+        executor.deps.workflow_isolation_broker.as_ref(),
+        &executor.isolation_capability,
+        request,
+    )
+    .await
+    {
+        Ok(materialized) => materialized,
+        Err(error) => {
+            let journal_result = match error.cleanup_receipt {
+                Some(receipt) => executor
+                    .deps
+                    .workflow_service
+                    .record_materialization_cleanup_receipt(
+                        &durable_materialization_cleanup_receipt(&intent, receipt),
+                    ),
+                None => executor
+                    .deps
+                    .workflow_service
+                    .mark_materialization_cleanup_required(
+                    &intent,
+                    "broker materialization failed and operation artifacts could not be reconciled",
+                ),
+            };
+            if let Err(journal_error) = journal_result {
+                return Err(failed_msg(
+                    "workflow_agent_isolation_unavailable",
+                    format!(
+                        "materialization cleanup evidence could not be persisted: {journal_error}"
+                    ),
+                ));
+            }
+            return Err(failed_msg(
+                "worktree_mint_failed",
+                format!("isolated worktree materialization failed: {}", error.cause),
+            ));
+        }
+    };
+    let result = match workspace_runtime.prepare_broker_materialized_worktree(
+        &pinned.repo_root_id,
+        &materialized.canonical_target_root.to_string_lossy(),
+        &branch_name,
+        &base_commit_oid,
+        "standard",
+        OriginContext::api_local_runtime(),
+        Some(creator_context),
+    ) {
+        Ok(result) => result,
+        Err(error) => {
+            settle_materialization_cleanup(
+                executor,
+                &intent,
+                process_identity,
+                "workspace registration failed after broker materialization",
+            )
+            .await?;
+            return Err(failed_msg(
+                "worktree_mint_failed",
+                format!("could not register broker-materialized worktree: {error}"),
+            ));
+        }
+    };
+    if let Err(error) = executor
+        .deps
+        .workflow_service
+        .register_materialized_workspace(&intent, &result.workspace)
+    {
+        let committed = executor
+            .deps
+            .workflow_service
+            .registered_workspace_for_materialization(&intent)
+            .ok()
+            .flatten();
+        if committed.as_deref() != Some(result.workspace.id.as_str()) {
+            settle_materialization_cleanup(
+                executor,
+                &intent,
+                process_identity,
+                "atomic workspace registration failed after broker materialization",
+            )
+            .await?;
+            return Err(failed_msg(
+                "workflow_agent_isolation_unavailable",
+                format!("could not commit materialization ownership: {error}"),
+            ));
+        }
+        tracing::warn!(
+            run_id,
+            workspace_id = %result.workspace.id,
+            error = %error,
+            "materialization registration response was lost after exact atomic commit"
+        );
+    }
     tracing::info!(
         run_id = %run_id,
         pinned_workspace_id = %pinned_workspace_id,
@@ -314,29 +574,126 @@ fn mint_or_adopt_run_worktree_blocking(
     Ok(result.workspace.id)
 }
 
-/// Look up the active worktree workspace record at the run's deterministic
-/// `target_path` (id + its checked-out branch), for run-scoped adoption. The
-/// stored record path is the CANONICALIZED worktree path, so we canonicalize our
-/// deterministic target the same way when it exists on disk (a fresh run's path
-/// won't exist → raw path → no match → the caller mints). The run-scoped branch
-/// gate is applied by [`adoptable_run_worktree`] in the caller.
-fn lookup_run_worktree_record(
-    workspace_runtime: &WorkspaceRuntime,
-    target_path: &str,
-) -> Result<Option<AdoptedWorktree>, StepOutcome> {
-    let lookup_path = std::fs::canonicalize(target_path)
-        .map(|path| path.to_string_lossy().to_string())
-        .unwrap_or_else(|_| target_path.to_string());
-    let found = workspace_runtime
-        .find_active_workspace_by_path_and_kind(&lookup_path, WorkspaceKind::Worktree)
+async fn prepare_materialization_operation(
+    executor: &WorkflowStepExecutorImpl,
+    intent: &WorkflowMaterializationIntent,
+    identity: &WorkflowProcessIdentity,
+) -> Result<(), StepOutcome> {
+    match executor
+        .deps
+        .workflow_service
+        .begin_materialization(intent)
         .map_err(|error| {
             failed_msg(
-                "worktree_mint_failed",
-                format!("worktree adoption lookup failed: {error}"),
+                "workflow_agent_isolation_unavailable",
+                format!("could not durably own materialization intent: {error}"),
             )
-        })?
-        .map(|record| (record.id, record.current_branch));
-    Ok(found)
+        })? {
+        WorkflowMaterializationBegin::Ready(_) => Ok(()),
+        WorkflowMaterializationBegin::Registered(record) => Err(failed_msg(
+            "workflow_agent_isolation_unavailable",
+            format!(
+                "materialization was registered as workspace {:?} but was not adoptable",
+                record.workspace_id
+            ),
+        )),
+        WorkflowMaterializationBegin::Retired(_) => Err(failed_msg(
+            "workflow_agent_isolation_unavailable",
+            "materialization operation identity is retired; a new execution generation is required",
+        )),
+        WorkflowMaterializationBegin::ReconcileFirst(_) => {
+            // A prior call may have lost its response. Prove the deterministic
+            // operation absent and retire the ambiguous identity.
+            settle_materialization_cleanup(
+                executor,
+                intent,
+                identity.clone(),
+                "reconciling an ambiguous prior materialization before retry",
+            )
+            .await?;
+            Err(failed_msg(
+                "workflow_agent_isolation_unavailable",
+                "ambiguous materialization was cleaned; retry requires a new execution generation",
+            ))
+        }
+    }
+}
+
+pub(super) async fn settle_materialization_cleanup(
+    executor: &WorkflowStepExecutorImpl,
+    intent: &WorkflowMaterializationIntent,
+    identity: WorkflowProcessIdentity,
+    reason: &str,
+) -> Result<(), StepOutcome> {
+    settle_materialization_cleanup_with(
+        executor.deps.workflow_service.as_ref(),
+        executor.deps.workflow_isolation_broker.as_ref(),
+        &executor.isolation_capability,
+        intent,
+        identity,
+        reason,
+    )
+    .await
+}
+
+pub(super) async fn settle_materialization_cleanup_with(
+    service: &crate::domains::workflows::service::WorkflowService,
+    broker: &dyn super::isolation::WorkflowIsolationBroker,
+    capability: &super::isolation::WorkflowIsolationCapability,
+    intent: &WorkflowMaterializationIntent,
+    identity: WorkflowProcessIdentity,
+    reason: &str,
+) -> Result<(), StepOutcome> {
+    match cleanup_workflow_materialization(
+        broker,
+        capability,
+        super::isolation::WorkflowWorktreeCleanupRequest {
+            identity,
+            source_root: intent.source_root.clone(),
+            target_root: intent.target_root.clone(),
+            branch: intent.branch_name.clone(),
+            base_commit_oid: intent.base_commit_oid.clone(),
+        },
+    )
+    .await
+    {
+        Ok(receipt) => service
+            .record_materialization_cleanup_receipt(&durable_materialization_cleanup_receipt(
+                intent, receipt,
+            ))
+            .map_err(|error| {
+                failed_msg(
+                    "workflow_agent_isolation_unavailable",
+                    format!("cleanup succeeded but its durable receipt was not recorded: {error}"),
+                )
+            }),
+        Err(error) => {
+            let detail = format!("{reason}: {error}");
+            let _ = service.mark_materialization_cleanup_required(intent, &detail);
+            Err(failed_msg(
+                "workflow_agent_isolation_unavailable",
+                format!("materialization cleanup required: {detail}"),
+            ))
+        }
+    }
+}
+
+pub(super) fn durable_materialization_cleanup_receipt(
+    intent: &WorkflowMaterializationIntent,
+    receipt: super::isolation::WorkflowWorktreeCleanupOutput,
+) -> crate::domains::workflows::cleanup::WorkflowMaterializationCleanupReceipt {
+    crate::domains::workflows::cleanup::WorkflowMaterializationCleanupReceipt::from_validated_broker(
+        intent.clone(),
+        receipt.canonical_source_root,
+        receipt.canonical_target_root,
+        receipt.branch,
+        receipt.base_commit_oid,
+        receipt.checkout_absent,
+        receipt.branch_ref_absent,
+        receipt.all_operation_artifacts_absent,
+        receipt.execution_generation,
+        receipt.broker_generation,
+    )
 }
 
 /// Crash-resume recovery of the run's effective worktree (finding 1, belt-and-
@@ -361,35 +718,36 @@ where
     Ok(adoptable_run_worktree(lookup().await?, expected_branch))
 }
 
-/// Sanitize a run id into a path/branch-safe token (alphanumerics, `-`, `_`
-/// kept; everything else → `-`). Run ids are already uuid/`run-…`-shaped, so
-/// this is a belt-and-braces guard, not a real transform.
-fn sanitize_run_token(run_id: &str) -> String {
-    run_id
-        .chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '-' })
-        .collect()
+/// Platform-safe defense-in-depth projection. Accepted plans already use the
+/// lowercase `[a-z0-9_-]` alphabet and remain byte-identical. Invalid internal
+/// values become a fixed-length lowercase digest, so case-insensitive filesystems
+/// and component-length limits cannot alias or reject their derived path/ref.
+fn worktree_identity_token(value: &str) -> String {
+    if crate::domains::workflows::plan::valid_worktree_identity_token(value) {
+        return value.to_string();
+    }
+    // This 74-byte form is longer than the 64-byte accepted grammar, making
+    // the invalid projection domain disjoint from every accepted token.
+    format!("x-invalid-{:x}", Sha256::digest(value.as_bytes()))
 }
 
 /// The run-scoped branch name for a per-run worktree: `workflow-run/<run_id>`.
 /// Run-scoped so two runs on the same pinned workspace get distinct branches
 /// (no collision).
 pub(super) fn run_worktree_branch_name(run_id: &str) -> String {
-    format!("workflow-run/{}", sanitize_run_token(run_id))
+    format!("workflow-run/{}", worktree_identity_token(run_id))
 }
 
 /// The run-scoped worktree checkout path: a sibling of the pinned checkout named
 /// `wf-run-<run_id>`. Run-scoped so two runs get distinct paths. `None` when the
 /// pinned path has no parent (a filesystem root — never a real checkout).
 pub(super) fn run_worktree_target_path(pinned_path: &str, run_id: &str) -> Option<String> {
-    Path::new(pinned_path)
-        .parent()
-        .map(|parent| {
-            parent
-                .join(format!("wf-run-{}", sanitize_run_token(run_id)))
-                .to_string_lossy()
-                .to_string()
-        })
+    Path::new(pinned_path).parent().map(|parent| {
+        parent
+            .join(format!("wf-run-{}", worktree_identity_token(run_id)))
+            .to_string_lossy()
+            .to_string()
+    })
 }
 
 /// The branch name for a worktree SCOPE (D-031c): the run-level worktree
@@ -402,8 +760,8 @@ pub(super) fn worktree_branch_for_scope(run_id: &str, scope: &str) -> String {
     } else {
         format!(
             "workflow-run/{}/{}",
-            sanitize_run_token(run_id),
-            sanitize_run_token(scope)
+            worktree_identity_token(run_id),
+            worktree_identity_token(scope)
         )
     }
 }
@@ -424,24 +782,12 @@ pub(super) fn worktree_target_path_for_scope(
         parent
             .join(format!(
                 "wf-run-{}-{}",
-                sanitize_run_token(run_id),
-                sanitize_run_token(scope)
+                worktree_identity_token(run_id),
+                worktree_identity_token(scope)
             ))
             .to_string_lossy()
             .to_string()
     })
-}
-
-/// The pinned checkout's current HEAD commit SHA, used as the exact base for the
-/// per-run worktree ("off the checkout's current HEAD"). `None` when it can't be
-/// read, in which case the caller lets git default to the source repo's HEAD.
-pub(super) fn run_worktree_base_ref(pinned_path: &str) -> Option<String> {
-    crate::adapters::git::operations::worktrees::stdout_result(
-        Path::new(pinned_path),
-        &["rev-parse", "HEAD"],
-    )
-    .ok()
-    .filter(|sha| !sha.is_empty())
 }
 
 /// Which workspace a scope's worktree bases off at mint time (M2a), pure so the

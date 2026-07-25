@@ -50,6 +50,7 @@ use crate::domains::sessions::prompt::{PromptPayload, PromptValidationError, Res
 use crate::live::sessions::actor::command::{Resolution, ResolveInteractionCommandError};
 use crate::live::sessions::actor::turn::types::SessionTurnFinishResult;
 use crate::live::sessions::sink::SessionEventSink;
+use crate::live::workflows::isolation::{WorkflowIsolationCapability, WorkflowProcessIdentity};
 // Re-exported: the normalized-payload vocabulary observers consume. The sink
 // module itself stays private to live; these shapes are part of the doorstep.
 pub use crate::live::sessions::sink::{AcpChunkPayload, AcpToolPayload, CompletedAssistantMessage};
@@ -98,6 +99,9 @@ pub struct LaunchEnv {
     /// Rendered agent-auth route layer (gateway/api_key credentials, isolated
     /// homes). Empty for native/legacy launches.
     pub route_auth: BTreeMap<String, String>,
+    /// Catalog-authored launch settings, kept distinct from credential
+    /// provenance so workflow policy can classify them independently.
+    pub settings: BTreeMap<String, String>,
     /// Env keys the route-auth render plane requires ABSENT in the spawned
     /// process (ambient Bedrock/Vertex reroutes, stale provider keys).
     pub route_auth_remove: Vec<String>,
@@ -112,6 +116,19 @@ pub struct SystemPromptAppends {
     pub first_prompt: Option<String>,
 }
 
+/// Which process boundary a session launch must use. Interactive sessions keep
+/// the ordinary local launcher. Workflow sessions carry an immutable delivery
+/// + slot/session identity and are never allowed to fall back to that launcher.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum SessionProcessPolicy {
+    #[default]
+    Interactive,
+    Workflow {
+        identity: WorkflowProcessIdentity,
+        capability: WorkflowIsolationCapability,
+    },
+}
+
 /// Everything that describes ONE session launch: the durable session row, the
 /// resolved agent binary, where and with what environment to run it, and how
 /// to establish the native session.
@@ -123,6 +140,7 @@ pub struct SessionLaunch {
     pub mcp_servers: Vec<SessionMcpServer>,
     pub startup: SessionStartupStrategy,
     pub prompts: SystemPromptAppends,
+    pub process_policy: SessionProcessPolicy,
     /// Last persisted event seq. Owned by the manager: it re-reads this under
     /// the start/inject critical section before spawning the actor; caller
     /// values are overwritten.

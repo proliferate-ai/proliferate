@@ -1,6 +1,6 @@
 use rusqlite::{params, Connection};
 
-use super::row::insert_workspace;
+use super::row::{insert_workspace, insert_workspace_with_materialization_base_commit};
 use super::WorkspaceStore;
 use crate::domains::workspaces::model::{
     WorkspaceCleanupOperation, WorkspaceCleanupState, WorkspaceLifecycleState, WorkspaceRecord,
@@ -80,6 +80,16 @@ impl WorkspaceStore {
 
     pub fn insert(&self, record: &WorkspaceRecord) -> anyhow::Result<()> {
         self.db.with_conn(|conn| insert_workspace(conn, record))
+    }
+
+    pub(crate) fn insert_broker_materialized(
+        &self,
+        record: &WorkspaceRecord,
+        base_commit_oid: &str,
+    ) -> anyhow::Result<()> {
+        self.db.with_conn(|conn| {
+            insert_workspace_with_materialization_base_commit(conn, record, Some(base_commit_oid))
+        })
     }
 
     pub fn delete_by_id(&self, workspace_id: &str) -> anyhow::Result<()> {

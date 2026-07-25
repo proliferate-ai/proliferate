@@ -15,6 +15,64 @@ use crate::origin::OriginContext;
 const MAX_WORKTREE_NAME_ATTEMPTS: usize = 10_000;
 
 impl WorkspaceRuntime {
+    pub(crate) fn workflow_materialization_base_commit_oid(
+        &self,
+        workspace_id: &str,
+    ) -> anyhow::Result<Option<String>> {
+        self.store
+            .workflow_materialization_base_commit_oid(workspace_id)
+    }
+
+    /// Build the durable workspace record for a worktree already materialized
+    /// by the trusted workflow broker. This does not insert it: the workflow
+    /// service commits the workspace, exact operation-registration receipt, and
+    /// journal transition in one transaction.
+    pub(crate) fn prepare_broker_materialized_worktree(
+        &self,
+        repo_root_id: &str,
+        canonical_path: &str,
+        branch_name: &str,
+        base_commit_oid: &str,
+        surface: &str,
+        origin: OriginContext,
+        creator_context: Option<WorkspaceCreatorContext>,
+    ) -> anyhow::Result<CreateWorktreeResult> {
+        let started = Instant::now();
+        let canonical_path = fs::canonicalize(canonical_path)
+            .map_err(|error| {
+                anyhow::anyhow!("materialized worktree is not canonicalizable: {error}")
+            })?
+            .to_string_lossy()
+            .to_string();
+        if self.store.find_active_by_path(&canonical_path)?.is_some() {
+            anyhow::bail!("a workspace record already exists for path: {canonical_path}");
+        }
+        let source = self
+            .repo_root_service
+            .get_repo_root(repo_root_id)?
+            .ok_or_else(|| anyhow::anyhow!("repo root not found: {repo_root_id}"))?;
+        let record = build_workspace_record(
+            &source,
+            &canonical_path,
+            WorkspaceKind::Worktree,
+            WorkspaceSurface::try_from(surface)?,
+            Some(branch_name.to_string()),
+            Some(base_commit_oid.to_string()),
+            origin,
+            creator_context,
+        );
+        tracing::info!(
+            workspace_id = %record.id,
+            repo_root_id,
+            elapsed_ms = started.elapsed().as_millis(),
+            "[workspace-latency] workspace.worktree.runtime_prepare_broker_record.completed"
+        );
+        Ok(CreateWorktreeResult {
+            workspace: record,
+            setup_script: None,
+        })
+    }
+
     pub fn create_worktree(
         &self,
         repo_root_id: &str,
@@ -167,6 +225,7 @@ impl WorkspaceRuntime {
                         &canonical_path,
                         &candidate.branch_name,
                         base_branch,
+                        None,
                         checkout_mode,
                         surface,
                         origin,
@@ -229,6 +288,7 @@ impl WorkspaceRuntime {
         canonical_path: &str,
         branch_name: &str,
         base_branch: Option<&str>,
+        materialization_base_commit_oid: Option<&str>,
         checkout_mode: WorktreeCheckoutMode,
         surface: &str,
         origin: OriginContext,
@@ -246,7 +306,12 @@ impl WorkspaceRuntime {
             creator_context,
         );
         let insert_started = Instant::now();
-        self.store.insert(&record)?;
+        match materialization_base_commit_oid {
+            Some(base_commit_oid) => self
+                .store
+                .insert_broker_materialized(&record, base_commit_oid)?,
+            None => self.store.insert(&record)?,
+        }
         tracing::info!(
             workspace_id = %record.id,
             repo_root_id = %repo_root_id,
