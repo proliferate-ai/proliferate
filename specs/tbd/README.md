@@ -17,6 +17,7 @@ They are not operating law until they are promoted into `specs/codebase/**` or
 | [cloud-worker-control-loop.md](cloud-worker-control-loop.md) | Cloud worker control-loop load-reduction planning. |
 | [frontend-structure-alignment-migration.md](frontend-structure-alignment-migration.md) | Frontend structure-alignment notes. |
 | [structure-alignment-coordinator-model.md](structure-alignment-coordinator-model.md) | Coordinator model for structure-alignment planning. |
+| [workflow-execution-spine-pr2.md](workflow-execution-spine-pr2.md) | Reviewed implementation plan for Workflows V1 PR2: delivery, AnyHarness SQLite/run actor, session ownership, prompt/goal execution, cancellation, restart reconciliation, UI proof, and acceptance gates. |
 | [workspace-migration-git-durability-plan.md](workspace-migration-git-durability-plan.md) | Workspace migration git durability planning. |
 
 ## Promotion Rules
