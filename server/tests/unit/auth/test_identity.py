@@ -2,8 +2,8 @@ import uuid
 
 import pytest
 
-import proliferate.auth.identity.providers as providers
-from proliferate.auth.identity import (
+import proliferate.auth.identity_api.providers as providers
+from proliferate.auth.identity_api import (
     onboarding_state_for_user,
     user_has_product_identity,
     user_has_provider,

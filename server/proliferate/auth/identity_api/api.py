@@ -21,7 +21,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.dependencies import current_limited_user, optional_current_active_user
-from proliferate.auth.identity.models import (
+from proliferate.auth.identity_api.models import (
     AppleMobileCompleteRequest,
     AuthRefreshRequest,
     AuthSessionResponse,
@@ -32,8 +32,8 @@ from proliferate.auth.identity.models import (
     StartAuthRequest,
     StartAuthResponse,
 )
-from proliferate.auth.identity.routing import auth_route_path
-from proliferate.auth.identity.service import (
+from proliferate.auth.identity_api.routing import auth_route_path
+from proliferate.auth.identity_api.service import (
     WEB_CSRF_COOKIE,
     WEB_CSRF_HEADER,
     WEB_REFRESH_COOKIE,
@@ -49,7 +49,7 @@ from proliferate.auth.identity.service import (
     set_password_credential,
     start_provider_auth,
 )
-from proliferate.auth.identity.types import AuthProviderName
+from proliferate.auth.identity_api.types import AuthProviderName
 from proliferate.config import settings
 from proliferate.constants.auth import REFRESH_TOKEN_LIFETIME_SECONDS
 from proliferate.db.engine import get_async_session

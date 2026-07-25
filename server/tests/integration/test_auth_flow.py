@@ -14,13 +14,13 @@ from fastapi_users.jwt import generate_jwt
 from httpx import AsyncClient
 from sqlalchemy import select
 
-from proliferate.auth.desktop.models import AuthorizeParams
-from proliferate.auth.desktop import service as desktop_service
-from proliferate.auth.identity import providers as identity_providers
-from proliferate.auth.identity.service import WEB_CSRF_COOKIE
-from proliferate.auth.oauth import github_oauth_client
-from proliferate.auth.oauth import google_oauth_client
-from proliferate.auth.passwords import hash_password
+from proliferate.auth.desktop_api.models import AuthorizeParams
+from proliferate.auth.desktop_api import service as desktop_service
+from proliferate.auth.identity_api import providers as identity_providers
+from proliferate.auth.identity_api.service import WEB_CSRF_COOKIE
+from proliferate.auth.utils.oauth import github_oauth_client
+from proliferate.auth.utils.oauth import google_oauth_client
+from proliferate.auth.utils.passwords import hash_password
 from proliferate.config import settings
 from proliferate.constants.auth import DESKTOP_GITHUB_CSRF_COOKIE, REFRESH_TOKEN_LIFETIME_SECONDS
 from proliferate.db.models.auth import AuthIdentity, ProviderGrant, User

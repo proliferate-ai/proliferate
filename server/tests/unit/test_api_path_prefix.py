@@ -2,9 +2,9 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 from starlette.requests import Request
 
-from proliferate.auth.desktop.service import build_github_callback_url
-from proliferate.auth.identity.api import _web_session_cookie_path
-from proliferate.auth.identity.providers import provider_callback_url
+from proliferate.auth.desktop_api.service import build_github_callback_url
+from proliferate.auth.identity_api.api import _web_session_cookie_path
+from proliferate.auth.identity_api.providers import provider_callback_url
 from proliferate.config import settings
 from proliferate.main import create_app
 

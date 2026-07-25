@@ -23,7 +23,7 @@ from fastapi_users.router.oauth import (
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.auth.desktop.models import (
+from proliferate.auth.desktop_api.models import (
     AuthCodeCreated,
     AuthorizeParams,
     PendingTokenRequest,
@@ -33,21 +33,21 @@ from proliferate.auth.desktop.models import (
     TokenResponse,
     TokenUserInfo,
 )
-from proliferate.auth.desktop.pages import (
+from proliferate.auth.desktop_api.pages import (
     make_browser_flow_page,
     make_desktop_handoff_page,
 )
-from proliferate.auth.identity.providers import (
+from proliferate.auth.identity_api.providers import (
     parse_scope_string,
     token_expiry_from_timestamp,
     token_expiry_timestamp,
 )
-from proliferate.auth.identity.routing import auth_route_path_for_base
-from proliferate.auth.identity.service import attach_verified_identity
-from proliferate.auth.identity.types import VerifiedProviderIdentity
-from proliferate.auth.jwt import get_jwt_strategy
-from proliferate.auth.oauth import github_oauth_client
-from proliferate.auth.pkce import build_code_challenge, verify_pkce
+from proliferate.auth.identity_api.routing import auth_route_path_for_base
+from proliferate.auth.identity_api.service import attach_verified_identity
+from proliferate.auth.identity_api.types import VerifiedProviderIdentity
+from proliferate.auth.utils.jwt import get_jwt_strategy
+from proliferate.auth.utils.oauth import github_oauth_client
+from proliferate.auth.utils.pkce import build_code_challenge, verify_pkce
 from proliferate.config import settings
 from proliferate.constants.auth import (
     DESKTOP_DEEP_LINK_LAUNCH_ENABLED,

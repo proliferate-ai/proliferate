@@ -13,9 +13,9 @@ from fastapi import HTTPException, Request, status
 from httpx_oauth.exceptions import GetIdEmailError
 from jose import JWTError, jwt
 
-from proliferate.auth.identity.routing import auth_route_path_for_base
-from proliferate.auth.identity.types import AuthProviderName, VerifiedProviderIdentity
-from proliferate.auth.oauth import github_oauth_client, google_oauth_client
+from proliferate.auth.identity_api.routing import auth_route_path_for_base
+from proliferate.auth.identity_api.types import AuthProviderName, VerifiedProviderIdentity
+from proliferate.auth.utils.oauth import github_oauth_client, google_oauth_client
 from proliferate.config import settings
 from proliferate.constants.auth import GITHUB_OAUTH_SCOPES
 from proliferate.integrations.github import GitHubIntegrationError, get_github_user_profile

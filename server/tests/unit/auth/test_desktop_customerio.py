@@ -8,7 +8,7 @@ import pytest
 from fastapi import Request
 from fastapi_users.router.oauth import CSRF_TOKEN_KEY
 
-from proliferate.auth.desktop import service as desktop_service
+from proliferate.auth.desktop_api import service as desktop_service
 from proliferate.config import settings
 from proliferate.db.models.auth import User
 

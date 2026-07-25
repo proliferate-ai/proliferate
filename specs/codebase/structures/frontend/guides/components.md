@@ -12,6 +12,9 @@ and access layers own external systems.
   reusable product rules.
 - Product conditions reused across components belong in `lib/domain/**` or
   `apps/packages/product-domain/**`.
+- Reusable product components (UI) belong in `apps/packages/product-ui/**`
+- Reusable product sections and pages that ONLY interface with the cloud belong in `apps/packages/product-surfaces/**`
+- Primitives (Button, Input, etc.) may ONLY Be defined in `apps/packages/ui`
 - A component callback that coordinates stores, queries, navigation, or remote
   mutations belongs in a workflow hook.
 

@@ -6,7 +6,7 @@ from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.dependencies import current_product_user
-from proliferate.auth.identity.store import get_ready_github_grant_for_user
+from proliferate.auth.identity_api.store import get_ready_github_grant_for_user
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
 from proliferate.server.cloud.repos.domain.github_credentials import (

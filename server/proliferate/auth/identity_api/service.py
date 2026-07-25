@@ -12,13 +12,13 @@ from fastapi import HTTPException, Request
 from fastapi_users.jwt import decode_jwt, generate_jwt
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.auth.identity import providers
-from proliferate.auth.identity.models import (
+from proliferate.auth.identity_api import providers
+from proliferate.auth.identity_api.models import (
     AccountReadinessResponse,
     AuthSessionResponse,
     PasswordCredentialResponse,
 )
-from proliferate.auth.identity.store import (
+from proliferate.auth.identity_api.store import (
     consume_auth_challenge,
     create_auth_challenge,
     create_auth_user,
@@ -32,7 +32,7 @@ from proliferate.auth.identity.store import (
     upsert_identity_for_user,
     upsert_provider_grant,
 )
-from proliferate.auth.identity.types import (
+from proliferate.auth.identity_api.types import (
     AUTH_PROVIDERS,
     AccountReadiness,
     AuthChallengeSnapshot,
@@ -40,14 +40,14 @@ from proliferate.auth.identity.types import (
     AuthSession,
     VerifiedProviderIdentity,
 )
-from proliferate.auth.jwt import get_jwt_strategy
+from proliferate.auth.utils.jwt import get_jwt_strategy
 from proliferate.auth.models import (
     AuthLinkedProvider,
     AuthPasswordCredential,
     AuthProviderAvailability,
     UserRead,
 )
-from proliferate.auth.passwords import (
+from proliferate.auth.utils.passwords import (
     PasswordValidationError,
     harden_password_failure,
     hash_password,
@@ -55,7 +55,7 @@ from proliferate.auth.passwords import (
     validate_new_password,
     verify_password,
 )
-from proliferate.auth.pkce import verify_pkce
+from proliferate.auth.utils.pkce import verify_pkce
 from proliferate.config import settings
 from proliferate.constants.auth import (
     AUTH_CODE_LIFETIME_SECONDS,
@@ -429,7 +429,7 @@ def _schedule_desktop_github_login_side_effects(
     verified: VerifiedProviderIdentity,
     notify_signup: bool,
 ) -> None:
-    from proliferate.auth.desktop.service import (
+    from proliferate.auth.desktop_api.service import (
         schedule_customerio_desktop_authenticated_user_sync,
         schedule_signup_slack_notification,
     )

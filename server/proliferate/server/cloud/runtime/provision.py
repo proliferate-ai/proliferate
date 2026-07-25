@@ -12,7 +12,7 @@ from pathlib import PurePosixPath
 from urllib.parse import urlparse
 from uuid import UUID
 
-from proliferate.auth.identity.store import get_ready_github_grant_for_user
+from proliferate.auth.identity_api.store import get_ready_github_grant_for_user
 from proliferate.config import settings
 from proliferate.constants.billing import (
     USAGE_SEGMENT_CLOSED_BY_PROVISION_FAILURE,

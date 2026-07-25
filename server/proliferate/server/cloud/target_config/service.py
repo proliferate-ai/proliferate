@@ -8,7 +8,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.authorization import ActorIdentity
-from proliferate.auth.identity.store import get_ready_github_grant_for_user
+from proliferate.auth.identity_api.store import get_ready_github_grant_for_user
 from proliferate.constants.cloud import (
     SUPPORTED_GIT_PROVIDER,
     CloudCommandKind,

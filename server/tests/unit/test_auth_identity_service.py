@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from fastapi import HTTPException
 
-from proliferate.auth.identity.service import validate_redirect_uri
+from proliferate.auth.identity_api.service import validate_redirect_uri
 from proliferate.config import settings
 
 

@@ -11,7 +11,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.auth.identity.types import (
+from proliferate.auth.identity_api.types import (
     REQUIRED_GITHUB_SCOPES,
     AccountReadiness,
     AuthChallengeSnapshot,

@@ -6,7 +6,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.auth.identity.store import get_ready_github_grant_for_user
+from proliferate.auth.identity_api.store import get_ready_github_grant_for_user
 from proliferate.db.store.cloud_repo_config import (
     CloudRepoConfigLimitExceededError,
     CloudRepoConfigSummaryValue,

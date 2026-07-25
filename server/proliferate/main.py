@@ -15,8 +15,8 @@ import proliferate.db.models.cloud  # noqa: F401
 import proliferate.db.models.organizations  # noqa: F401
 import proliferate.db.models.support  # noqa: F401
 from proliferate.auth.api import router as auth_viewer_router
-from proliferate.auth.desktop.api import router as desktop_router
-from proliferate.auth.identity.api import router as identity_auth_router
+from proliferate.auth.desktop_api.api import router as desktop_router
+from proliferate.auth.identity_api.api import router as identity_auth_router
 from proliferate.auth.profile_api import router as user_profile_router
 from proliferate.config import get_cors_allow_origins, settings
 from proliferate.constants.app import APP_NAME

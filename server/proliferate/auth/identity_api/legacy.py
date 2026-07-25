@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from proliferate.auth.identity.types import (
+from proliferate.auth.identity_api.types import (
     AUTH_PROVIDERS,
     PRODUCT_IDENTITY_PROVIDER,
     AuthProviderName,

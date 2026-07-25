@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from proliferate.auth.identity import (
+from proliferate.auth.identity_api import (
     AUTH_PROVIDERS,
     AuthProvider,
     first_account_for_provider,

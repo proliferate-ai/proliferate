@@ -7,8 +7,8 @@ from uuid import UUID
 
 import httpx
 
-from proliferate.auth.desktop import service as desktop_service
-from proliferate.auth.desktop.models import AuthorizeParams
+from proliferate.auth.desktop_api import service as desktop_service
+from proliferate.auth.desktop_api.models import AuthorizeParams
 
 DEFAULT_PKCE_VERIFIER = "test-code-verifier-that-is-long-enough-for-pkce"
 

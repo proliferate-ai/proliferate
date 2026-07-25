@@ -6,8 +6,8 @@ from fastapi import Depends
 from fastapi_users import FastAPIUsers
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.auth.identity.store import get_account_readiness
-from proliferate.auth.jwt import auth_backend
+from proliferate.auth.identity_api.store import get_account_readiness
+from proliferate.auth.utils.jwt import auth_backend
 from proliferate.auth.users import get_user_manager
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User

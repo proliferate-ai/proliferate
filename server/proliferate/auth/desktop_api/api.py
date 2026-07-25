@@ -20,7 +20,7 @@ from fastapi_users.router.oauth import (
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.auth.desktop.models import (
+from proliferate.auth.desktop_api.models import (
     AuthCodeCreated,
     AuthorizeParams,
     OAuthAvailabilityResponse,
@@ -30,7 +30,7 @@ from proliferate.auth.desktop.models import (
     TokenRequest,
     TokenResponse,
 )
-from proliferate.auth.desktop.service import (
+from proliferate.auth.desktop_api.service import (
     build_github_callback_url,
     exchange_desktop_token,
     finish_github_desktop_callback,
@@ -39,13 +39,13 @@ from proliferate.auth.desktop.service import (
     refresh_desktop_access_token,
     validate_desktop_redirect_uri,
 )
-from proliferate.auth.desktop.service import (
+from proliferate.auth.desktop_api.service import (
     create_desktop_auth_code as create_desktop_auth_code_service,
 )
-from proliferate.auth.desktop.service import (
+from proliferate.auth.desktop_api.service import (
     poll_desktop_auth as poll_desktop_auth_service,
 )
-from proliferate.auth.oauth import github_oauth_client
+from proliferate.auth.utils.oauth import github_oauth_client
 from proliferate.auth.users import UserManager, get_user_manager
 from proliferate.config import settings
 from proliferate.constants.auth import (

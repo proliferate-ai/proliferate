@@ -3,7 +3,7 @@
 import base64
 import hashlib
 
-from proliferate.auth.pkce import verify_pkce
+from proliferate.auth.utils.pkce import verify_pkce
 
 
 def _make_challenge(verifier: str) -> str:

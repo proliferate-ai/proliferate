@@ -33,24 +33,13 @@ capability folder such as `mcp` is allowed when one React-facing access API
 intentionally coordinates more than one external boundary, such as cloud
 connector records plus local OAuth/native setup.
 
-Illustrative examples only, not a complete inventory:
+Example file paths:
+- `hooks/access/cloud/automations/query-keys.ts`
+- `hooks/access/cloud/automations/use-automations.ts`
+- `hooks/access/cloud/automations/use-automation-mutations.ts`
+- `hooks/access/tauri/updater/query-keys.ts`
+- `hooks/access/tauri/updater/use-updater.ts`
 
-```text
-hooks/access/cloud/automations/query-keys.ts
-hooks/access/cloud/automations/use-automations.ts
-hooks/access/cloud/automations/use-automation-mutations.ts
-
-hooks/access/cloud/billing/query-keys.ts
-hooks/access/cloud/billing/use-cloud-billing.ts
-hooks/access/cloud/billing/use-cloud-billing-mutations.ts
-
-hooks/access/tauri/updater/query-keys.ts
-hooks/access/tauri/updater/use-updater.ts
-
-hooks/access/mcp/connectors/query-keys.ts
-hooks/access/mcp/connectors/use-connectors.ts
-hooks/access/mcp/connectors/use-connector-mutations.ts
-```
 
 Do not create access folders just to mirror another app. Each app only has the
 external systems it actually uses:

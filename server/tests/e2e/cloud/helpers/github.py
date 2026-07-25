@@ -6,8 +6,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.models.auth import OAuthAccount
-from proliferate.auth.identity.store import upsert_identity_for_user, upsert_provider_grant
-from proliferate.auth.identity.types import REQUIRED_GITHUB_SCOPES, VerifiedProviderIdentity
+from proliferate.auth.identity_api.store import upsert_identity_for_user, upsert_provider_grant
+from proliferate.auth.identity_api.types import REQUIRED_GITHUB_SCOPES, VerifiedProviderIdentity
 
 
 async def seed_linked_github_account(

@@ -10,8 +10,8 @@ from urllib.parse import parse_qs, urlparse
 import pytest
 from httpx import AsyncClient
 
-from proliferate.auth.desktop import service as desktop_service
-from proliferate.auth.oauth import github_oauth_client
+from proliferate.auth.desktop_api import service as desktop_service
+from proliferate.auth.utils.oauth import github_oauth_client
 from proliferate.config import settings
 from proliferate.integrations.github import GitHubUserProfile
 

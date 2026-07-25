@@ -7,7 +7,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from proliferate.auth.identity.types import AuthProviderName
+from proliferate.auth.identity_api.types import AuthProviderName
 from proliferate.auth.models import UserRead
 from proliferate.constants.auth import PASSWORD_EMAIL_MAX_LENGTH, PASSWORD_MAX_LENGTH
 

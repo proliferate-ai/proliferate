@@ -15,7 +15,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy import func, select
 
-from proliferate.auth.passwords import hash_password, normalize_password_email
+from proliferate.auth.utils.passwords import hash_password, normalize_password_email
 from proliferate.db.engine import async_session_factory
 from proliferate.db.models.auth import User
 
