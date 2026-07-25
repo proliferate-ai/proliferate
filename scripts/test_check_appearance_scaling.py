@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 import unittest
 from unittest import mock
 
@@ -21,6 +22,7 @@ from scripts.check_appearance_scaling import (
     imported_icon_names,
     load_baselines,
     raw_hex_scope_excluded,
+    relative_path,
     staged_census,
     unsanctioned_growth,
 )
@@ -722,6 +724,49 @@ const ORBIT_DELAYS = [
         census = load_baselines()[STAGED_CENSUS_KEY]
         button = "apps/packages/ui/src/primitives/Button.tsx|retired-shadow"
         self.assertNotIn(button, census)
+
+    def test_scanned_roots_cover_every_root_tailwind_compiles(self) -> None:
+        """The product-surfaces hole, made unrepeatable.
+
+        ``@source`` in dom.css is the definition of "this tree ships utilities":
+        a root listed there is compiled into the stylesheet users load, so a root
+        listed there but absent from PRODUCTION_ROOTS holds every foundation ban
+        at zero strength — which is exactly how product-surfaces shipped a
+        `text-sm` off a REMOVED token with no gate, no census entry, and no
+        migration target. Asserting the two lists against each other means the
+        next package added to the build cannot arrive ungated: whoever adds the
+        ``@source`` line has to census the root in the same commit.
+        """
+        dom_css = next(path for path in check_module.DESIGN_CSS_FILES if path.name == "dom.css")
+        sourced = {
+            (dom_css.parent / match).resolve()
+            for match in re.findall(r'@source\s+"([^"]+)"', dom_css.read_text())
+        }
+        self.assertTrue(sourced, "dom.css must declare the roots Tailwind scans")
+        scanned = set(check_module.PRODUCTION_ROOTS)
+        self.assertEqual(
+            sorted(relative_path(path) for path in sourced - scanned),
+            [],
+            "Tailwind compiles these roots but the foundation guard never reads them",
+        )
+
+    def test_the_pre_commit_hook_owns_the_same_roots_as_ci(self) -> None:
+        """A root only CI sees is a root the local guard waves through.
+
+        The hook is the fast path developers actually feel; if its filter and
+        PRODUCTION_ROOTS disagree, a violation commits cleanly and only surfaces
+        in CI — the drift that let product-surfaces sit unenforced in both.
+        """
+        hook = (check_module.REPO_ROOT / "scripts" / "git-hooks" / "pre-commit").read_text()
+        for root in check_module.PRODUCTION_ROOTS:
+            relative = relative_path(root)
+            package = relative.removeprefix("apps/packages/").removesuffix("/src")
+            with self.subTest(root=relative):
+                self.assertTrue(
+                    f"{package}/src" in hook or f"({package}|" in hook or f"|{package}|" in hook
+                    or f"|{package})" in hook,
+                    f"{relative} is scanned by CI but not matched by the pre-commit hook",
+                )
 
 
 if __name__ == "__main__":
