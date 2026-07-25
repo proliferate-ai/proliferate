@@ -1,6 +1,7 @@
-# `cross` runs the build inside a container, so the release version stamp
+# `cross` runs the build inside a container, so the release identity stamps
 # (set by the `build-binaries` job in .github/workflows/release-runtime.yml)
 # must be forwarded into it — otherwise the aarch64-linux binaries fall back
-# to the crate's Cargo.toml version and the self-update gates never converge.
+# to the crate's Cargo.toml version or fail closed because the source SHA is
+# missing. Version and SHA must always cross the container boundary together.
 [build.env]
-passthrough = ["PROLIFERATE_BUILD_VERSION"]
+passthrough = ["PROLIFERATE_BUILD_VERSION", "PROLIFERATE_BUILD_SHA"]

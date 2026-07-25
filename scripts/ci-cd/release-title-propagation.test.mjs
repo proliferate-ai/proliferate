@@ -49,7 +49,10 @@ test("release coordinators pass the title into the desktop release lane", async 
 });
 
 test("runtime production builds stamp both version and deterministic source SHA", async () => {
-  const source = await workflow("release-runtime.yml");
+  const [source, cross] = await Promise.all([
+    workflow("release-runtime.yml"),
+    readFile(new URL("../../Cross.toml", import.meta.url), "utf8"),
+  ]);
   const resolveStep = source.slice(
     source.indexOf("- name: Resolve build version"),
     source.indexOf("- name: Install musl-tools"),
@@ -57,6 +60,10 @@ test("runtime production builds stamp both version and deterministic source SHA"
 
   assert.match(resolveStep, /PROLIFERATE_BUILD_VERSION=/);
   assert.match(resolveStep, /PROLIFERATE_BUILD_SHA=\$\(git rev-parse HEAD\)/);
+  assert.match(
+    cross,
+    /passthrough = \["PROLIFERATE_BUILD_VERSION", "PROLIFERATE_BUILD_SHA"\]/,
+  );
 });
 
 test("desktop updater publication fails closed before overwriting a released version", async () => {
