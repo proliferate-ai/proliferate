@@ -1,7 +1,10 @@
 from pathlib import Path
 import unittest
+from unittest import mock
 
+from scripts import check_appearance_scaling as check_module
 from scripts.check_appearance_scaling import (
+    CENSUS_SLACK_RULE_ID,
     SANCTION_FILES_KEY,
     SANCTION_JUSTIFICATION_KEY,
     SANCTION_KEY,
@@ -9,6 +12,7 @@ from scripts.check_appearance_scaling import (
     STAGED_RULE_IDS,
     Violation,
     apply_staged_baseline,
+    census_slack,
     check_census_additions,
     check_design_css_source,
     check_design_token_source,
@@ -484,6 +488,124 @@ const ORBIT_DELAYS = [
         reported = apply_staged_baseline(regressed, census, Path("/repo"))
         self.assertEqual([violation.lineno for violation in reported], [14])
         self.assertIn("frozen census is 2", reported[0].message)
+
+    def test_slack_census_entry_fails_and_names_the_ratchet_command(self) -> None:
+        """Absorption is anonymous, so a freed slot is a live allowance.
+
+        `apply_staged_baseline` matches on (file, rule) and never on the site
+        that earned the slot, so a census entry allocating more than its file
+        now uses would silently absorb the NEXT new violation there. Slack must
+        therefore fail, and the message must point at the one remedy that
+        cannot paper over a regression (`--write-baseline` refuses growth).
+        """
+        path = Path("/repo/apps/packages/ui/src/Legacy.tsx")
+        census = {"apps/packages/ui/src/Legacy.tsx|fixed-stock-text-utility": 3}
+        remaining = [Violation("fixed-stock-text-utility", path, 4, "m")]
+
+        # Bounded from above: the surviving hit is still absorbed.
+        self.assertEqual(apply_staged_baseline(remaining, census, Path("/repo")), [])
+
+        reported = census_slack(remaining, census, Path("/repo"))
+        self.assertEqual([violation.rule_id for violation in reported], [CENSUS_SLACK_RULE_ID])
+        self.assertIn("frozen at 3 here but the file now has 1", reported[0].message)
+        self.assertIn("--write-baseline", reported[0].message)
+
+    def test_a_fixed_site_cannot_shield_a_new_violation_of_the_same_rule(self) -> None:
+        """The exact leak: migrate 2 of 3 sites, add 1 brand-new one, and the
+        per-file count is unchanged so the upper bound sees nothing."""
+        path = Path("/repo/apps/packages/ui/src/Legacy.tsx")
+        census = {"apps/packages/ui/src/Legacy.tsx|fixed-stock-text-utility": 3}
+        after = [
+            Violation("fixed-stock-text-utility", path, 4, "m"),
+            Violation("fixed-stock-text-utility", path, 40, "brand new"),
+        ]
+        self.assertEqual(apply_staged_baseline(after, census, Path("/repo")), [])
+        self.assertEqual(
+            [violation.rule_id for violation in census_slack(after, census, Path("/repo"))],
+            [CENSUS_SLACK_RULE_ID],
+        )
+
+    def test_ratcheted_down_census_is_tight_and_then_bans_the_new_site(self) -> None:
+        """After --write-baseline the entry equals the surviving hits: no slack,
+        and the next new violation in that file fails on the upper bound."""
+        path = Path("/repo/apps/packages/ui/src/Legacy.tsx")
+        remaining = [Violation("fixed-stock-text-utility", path, 4, "m")]
+        ratcheted = staged_census(remaining, Path("/repo"))
+        self.assertEqual(ratcheted, {"apps/packages/ui/src/Legacy.tsx|fixed-stock-text-utility": 1})
+        self.assertEqual(census_slack(remaining, ratcheted, Path("/repo")), [])
+
+        regressed = [*remaining, Violation("fixed-stock-text-utility", path, 40, "new")]
+        self.assertEqual(
+            [violation.lineno for violation in apply_staged_baseline(regressed, ratcheted, Path("/repo"))],
+            [40],
+        )
+        self.assertEqual(census_slack(regressed, ratcheted, Path("/repo")), [])
+
+    def test_a_fully_migrated_file_must_lose_its_census_entry(self) -> None:
+        """Zero surviving hits is the strongest slack: the whole entry is dead
+        allowance and the file should be back under an absolute ban."""
+        census = {"apps/packages/ui/src/Legacy.tsx|retired-shadow": 2}
+        reported = census_slack([], census, Path("/repo"))
+        self.assertEqual([violation.rule_id for violation in reported], [CENSUS_SLACK_RULE_ID])
+        self.assertIn("frozen at 2 here but the file now has 0", reported[0].message)
+        self.assertEqual(census_slack([], {}, Path("/repo")), [])
+
+    def test_slack_is_only_judged_for_files_that_were_actually_scanned(self) -> None:
+        """The pre-commit hook passes an explicit file list. An unscanned file's
+        count is unknown, not zero, so scoping keeps the hook honest instead of
+        reporting every censused file in the repository as slack."""
+        path = Path("/repo/apps/packages/ui/src/Touched.tsx")
+        census = {
+            "apps/packages/ui/src/Touched.tsx|retired-shadow": 1,
+            "apps/packages/ui/src/Untouched.tsx|retired-shadow": 2,
+        }
+        touched_only = {"apps/packages/ui/src/Touched.tsx"}
+        surviving = [Violation("retired-shadow", path, 3, "m")]
+
+        self.assertEqual(
+            census_slack(surviving, census, Path("/repo"), scope=touched_only),
+            [],
+            "the untouched file was never scanned, so its 0 hits are unknown, not slack",
+        )
+        # Unscoped (the CI run) the same inputs DO report the untouched file,
+        # which is what makes the full-tree run the authority.
+        self.assertEqual(
+            [violation.path.name for violation in census_slack(surviving, census, Path("/repo"))],
+            ["Untouched.tsx"],
+        )
+        # And a genuinely slack in-scope entry is still reported by the hook.
+        self.assertEqual(
+            [
+                violation.path.name
+                for violation in census_slack([], census, Path("/repo"), scope=touched_only)
+            ],
+            ["Touched.tsx"],
+        )
+
+    def test_the_census_slack_rule_is_not_itself_staged(self) -> None:
+        """A guard that its own census could absorb is not a guard."""
+        self.assertNotIn(CENSUS_SLACK_RULE_ID, STAGED_RULE_IDS)
+        self.assertEqual(
+            staged_census(
+                [Violation(CENSUS_SLACK_RULE_ID, Path("/repo/a.tsx"), 1, "m")], Path("/repo")
+            ),
+            {},
+        )
+
+    def test_the_default_ci_path_reports_census_slack(self) -> None:
+        """The whole finding was that NOTHING ever failed on slack, so the wiring
+        is the assertion: the entry point CI runs must surface it."""
+        census = {"apps/packages/ui/src/Legacy.tsx|retired-shadow": 2}
+        with (
+            mock.patch.object(check_module, "collect_raw_violations", return_value=[]),
+            mock.patch.object(
+                check_module, "load_baselines", return_value={STAGED_CENSUS_KEY: census}
+            ),
+        ):
+            self.assertEqual(
+                [violation.rule_id for violation in check_module.collect_violations()],
+                [CENSUS_SLACK_RULE_ID],
+            )
 
     def test_unstaged_rules_are_never_absorbed_by_the_census(self) -> None:
         """Rules outside STAGED_RULE_IDS fail on their first hit, census or not."""

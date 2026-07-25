@@ -18,6 +18,13 @@ BEYOND the frozen per-file count: no new violation can be introduced anywhere,
 while the migration burns the census down. A rule whose census reaches zero
 entries is, from that moment, an absolute ban with no further bookkeeping.
 
+The census must also stay TIGHT, not merely bounded. Absorption is anonymous —
+it matches on ``(file, rule)``, never on the site that earned the slot — so a
+census entry that allocates more than its file now uses is a live allowance
+waiting to swallow the next new violation there. ``census_slack`` therefore
+fails on any entry that has gone slack, which makes the ratchet self-tightening:
+a migration must shrink the census in the same commit that fixes the sites.
+
 Counts normally only shrink. ``--write-baseline`` refuses to grow any entry that
 is not covered by ``censusGrowthSanctions`` in the baseline file (v2 §4.6: no
 exception without a written sanction trail). A sanction names a rule family AND
@@ -283,6 +290,10 @@ STAGED_RULE_IDS = frozenset({
     "raw-hex",
 })
 STAGED_CENSUS_KEY = "stagedViolations"
+# Reported when a censused (file, rule) allocates more than the file now uses.
+# Deliberately NOT a staged rule: it is the guard on the census, so it can never
+# be absorbed by the census it guards.
+CENSUS_SLACK_RULE_ID = "stale-census-allowance"
 # v2 §4.6: no exception without a sanction trail. Keyed by rule id, each value is
 # ``{"files": {<path>: <count>}, "justification": "..."}``: the written reason the
 # census is allowed to move in the one direction it is not free to move, plus the
@@ -809,6 +820,51 @@ def staged_census(violations: Iterable[Violation], repo_root: Path = REPO_ROOT) 
     return dict(sorted(counts.items()))
 
 
+def census_slack(
+    violations: Sequence[Violation],
+    baseline: Mapping[str, int],
+    repo_root: Path = REPO_ROOT,
+    scope: set[str] | None = None,
+) -> list[Violation]:
+    """Census entries that now allocate more than the tree uses.
+
+    An absorbed allowance is anonymous: ``apply_staged_baseline`` matches on
+    ``(file, rule)``, never on the specific site that earned the slot. So the
+    moment a migration fixes a site without regenerating the census, the freed
+    slot silently becomes headroom for the NEXT new violation of that rule in
+    that file — the ban leaking, dressed as a pre-existing hit. The ratchet is
+    only self-tightening if the census shrinks in lockstep with the migration,
+    which is why slack fails here instead of passing quietly. The remedy is the
+    one command that can only shrink: ``--write-baseline`` refuses growth
+    (v2 §4.6), so it cannot be used to paper over a real regression.
+
+    ``scope`` limits the check to census keys whose file was actually scanned;
+    the pre-commit hook passes an explicit file list, and an unscanned file's
+    count is unknown, not zero.
+    """
+    actual = staged_census(violations, repo_root)
+    reported: list[Violation] = []
+    for key, frozen in sorted(baseline.items()):
+        relative, _, rule_id = key.rpartition("|")
+        if scope is not None and relative not in scope:
+            continue
+        hits = actual.get(key, 0)
+        if hits >= frozen:
+            continue
+        reported.append(
+            Violation(
+                CENSUS_SLACK_RULE_ID,
+                repo_root / relative,
+                1,
+                f"stale census: [{rule_id}] is frozen at {frozen} here but the file "
+                f"now has {hits}. Run `python3 scripts/check_appearance_scaling.py "
+                f"--write-baseline` to ratchet the census down; leaving the freed "
+                f"allowance in place would let it absorb a new violation.",
+            )
+        )
+    return reported
+
+
 def apply_staged_baseline(
     violations: Sequence[Violation],
     baseline: Mapping[str, int],
@@ -816,7 +872,9 @@ def apply_staged_baseline(
 ) -> list[Violation]:
     """Drop the frozen number of pre-existing hits per (file, rule); keep the rest.
 
-    Unstaged rules pass through untouched, so they fail on the first hit.
+    Unstaged rules pass through untouched, so they fail on the first hit. This
+    bounds the census from above only; ``census_slack`` bounds it from below, and
+    both run in ``collect_violations`` because either alone leaks.
     """
     remaining = dict(baseline)
     reported: list[Violation] = []
@@ -889,7 +947,11 @@ def collect_raw_violations(paths: Sequence[Path] | None = None) -> list[Violatio
 def collect_violations(paths: Sequence[Path] | None = None) -> list[Violation]:
     raw = collect_raw_violations(paths)
     baseline = load_baselines().get(STAGED_CENSUS_KEY, {})
-    return apply_staged_baseline(raw, baseline)
+    scope = None if paths is None else {relative_path(path) for path in paths}
+    return [
+        *apply_staged_baseline(raw, baseline),
+        *census_slack(raw, baseline, scope=scope),
+    ]
 
 
 def sanctioned_growth_ceilings(
