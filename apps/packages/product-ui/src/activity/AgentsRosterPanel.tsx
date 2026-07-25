@@ -22,10 +22,10 @@ export function AgentsRosterPanel({ agents, nowMs, onOpen }: AgentsRosterPanelPr
   return (
     <div className="flex flex-col gap-1.5" data-agents-roster-panel>
       <div className="px-1 pt-0.5">
-        <span className="text-xs font-medium text-foreground">Native subagents</span>
+        <span className="text-ui font-medium text-foreground">Native subagents</span>
       </div>
       {sorted.length === 0 ? (
-        <p className="px-1 pb-1 text-xs text-muted-foreground">No active native subagents.</p>
+        <p className="px-1 pb-1 text-ui-sm text-muted-foreground">No active native subagents.</p>
       ) : (
         <ul className="flex flex-col gap-0.5">
           {sorted.map((agent) => (

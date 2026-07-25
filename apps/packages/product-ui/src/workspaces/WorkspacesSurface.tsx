@@ -74,7 +74,7 @@ export function WorkspacesSurface({
       title={title}
       description={summaryLabel}
       actions={
-        <div className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+        <div className="flex shrink-0 items-center gap-1.5 text-ui-sm text-muted-foreground">
           <span className="hidden sm:inline">{lastSyncedLabel}</span>
           <ToolbarIconButton
             ariaLabel={isRefreshing ? "Refreshing workspaces" : "Refresh workspaces"}
@@ -90,7 +90,7 @@ export function WorkspacesSurface({
       telemetryBlocked
     >
       <div className="flex flex-wrap items-center justify-between gap-3 pb-2 pt-1">
-        <div className="min-w-0 text-xs text-muted-foreground">
+        <div className="min-w-0 text-ui-sm text-muted-foreground">
           <span>{selectedFilterLabel(filterOptions, selectedFilterId)}</span>
           <span className="px-1.5 text-muted-foreground/45">·</span>
           <span>Grouped by {selectedGroupLabel(groupOptions, selectedGroupId)}</span>
@@ -118,7 +118,7 @@ export function WorkspacesSurface({
           tone="warning"
           title="Workspace refresh failed"
           description="The current workspace list is still shown. Try refreshing again when the connection is back."
-          className="rounded-[8px] border-warning/30 bg-warning/5"
+          className="rounded-lg border-warning/30 bg-warning/5"
         />
       ) : null}
 
@@ -272,10 +272,10 @@ function ToolbarIconButton({
       disabled={disabled}
       onClick={onClick}
       className={twMerge(
-        "relative flex size-8 items-center justify-center rounded-full border text-muted-foreground transition-colors hover:border-border/65 hover:bg-foreground/[0.06] hover:text-foreground disabled:opacity-45",
+        "relative flex size-8 items-center justify-center rounded-full border text-muted-foreground transition-colors hover:border-border/65 hover:bg-hover hover:text-foreground active:bg-active disabled:opacity-45",
         pressed
-          ? "border-border/65 bg-foreground/[0.075] text-foreground"
-          : "border-border/45 bg-foreground/[0.028]",
+          ? "border-border/65 bg-selected text-foreground"
+          : "border-border/45 bg-surface-control",
       )}
     >
       {children}
@@ -312,7 +312,7 @@ function WorkspaceMenuSection({ label, children }: { label: string; children: Re
     <div role="group" aria-label={label} className="space-y-0.5">
       <div
         aria-hidden
-        className="px-2 py-1 text-sm font-semibold uppercase leading-3 text-muted-foreground/70"
+        className="px-2 py-1 text-heading font-semibold uppercase leading-3 text-muted-foreground/70"
       >
         {label}
       </div>
@@ -347,7 +347,7 @@ function WorkspaceMenuOption({
           {active ? <Check className="icon-paired text-foreground/60" /> : null}
         </span>
       )}
-      className={active ? "bg-sidebar-accent text-sidebar-accent-foreground" : ""}
+      className={active ? "bg-selected text-sidebar-foreground" : ""}
       onClick={onClick}
     />
   );

@@ -160,7 +160,7 @@ export function BillingPortalCard({
           onClick={onOpenPortal}
         >
           Access billing portal
-          <ExternalLink className="size-3.5" />
+          <ExternalLink className="icon-compact" />
         </Button>
       </SettingsRow>
     </SettingsSection>

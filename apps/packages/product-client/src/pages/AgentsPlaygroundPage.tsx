@@ -50,8 +50,8 @@ export function AgentsPlaygroundPage() {
 
   return (
     <div className="flex h-screen flex-col bg-background text-foreground">
-      <header className="flex flex-wrap items-center gap-2 border-b border-border bg-accent/50 px-4 py-2">
-        <span className="text-xs font-medium text-muted-foreground">Scenario:</span>
+      <header className="flex flex-wrap items-center gap-2 border-b border-border bg-surface-elevated-secondary px-4 py-2">
+        <span className="text-ui-sm font-medium text-muted-foreground">Scenario:</span>
         <div className="flex flex-1 flex-wrap gap-1">
           {AGENTS_PLAYGROUND_SCENARIOS.map((candidate) => (
             <Button
@@ -60,10 +60,10 @@ export function AgentsPlaygroundPage() {
               size="unstyled"
               type="button"
               className={[
-                "rounded-md px-2.5 py-1 text-xs transition-colors",
+                "rounded-md px-2.5 py-1 text-ui transition-colors",
                 candidate.id === activeScenario
-                  ? "bg-foreground/10 font-medium text-foreground"
-                  : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground",
+                  ? "bg-selected font-medium text-foreground"
+                  : "text-muted-foreground hover:bg-hover active:bg-active hover:text-foreground",
               ].join(" ")}
               onClick={() => handleScenarioChange(candidate)}
             >
@@ -112,7 +112,7 @@ export function AgentsPlaygroundPage() {
         </div>
       </main>
 
-      <footer className="border-t border-border px-4 py-2 text-xs text-muted-foreground">
+      <footer className="border-t border-border px-4 py-2 text-ui-sm text-muted-foreground">
         <code className="font-mono">Agents Settings Mockbed</code>
         <span className="mx-2">·</span>
         Deterministic query/provider fixtures

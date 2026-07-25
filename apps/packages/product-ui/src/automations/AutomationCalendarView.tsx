@@ -57,19 +57,19 @@ export function AutomationCalendarView({
                 aria-pressed={active}
                 aria-controls={`automation-calendar-${day.id}`}
                 className={twMerge(
-                  "flex min-h-16 flex-col items-center gap-0.5 rounded-lg px-2 py-2 text-muted-foreground outline-none transition-colors hover:bg-foreground/[0.04] hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-[-2px]",
-                  active ? "bg-foreground/[0.075] text-foreground" : "",
+                  "flex min-h-16 flex-col items-center gap-0.5 rounded-lg px-2 py-2 text-muted-foreground outline-none transition-colors hover:bg-hover hover:text-foreground active:bg-active focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-[-2px]",
+                  active ? "bg-selected text-foreground" : "",
                 )}
               >
-                <span className="text-sm font-medium uppercase leading-3 tracking-wide">
+                <span className="text-ui font-medium uppercase leading-3 tracking-wide">
                   {day.weekdayLabel}
                 </span>
-                <span className="text-lg font-medium leading-6 tabular-nums">
+                <span className="text-title font-medium tabular-nums">
                   {day.dayNumberLabel}
                 </span>
                 <span
                   className={twMerge(
-                    "icon-status rounded-full text-sm",
+                    "icon-status rounded-full text-ui",
                     day.hasOccurrences ? "bg-muted-foreground" : "bg-transparent",
                   )}
                   aria-hidden
@@ -111,14 +111,14 @@ function CalendarDaySection({
       id={`automation-calendar-${day.id}`}
       ref={(element) => setSectionRef(day.id, element)}
       className={twMerge(
-        "scroll-mt-24 rounded-[8px] px-4 py-3",
-        active ? "bg-foreground/[0.035]" : "",
+        "scroll-mt-24 rounded-lg px-4 py-3",
+        active ? "bg-selected" : "",
       )}
       aria-label={day.sectionLabel}
     >
       <h3
         className={twMerge(
-          "mb-3 flex items-center gap-2 text-sm font-medium leading-5",
+          "mb-3 flex items-center gap-2 text-heading font-medium",
           active ? "text-foreground" : "text-muted-foreground",
         )}
       >
@@ -136,7 +136,7 @@ function CalendarDaySection({
           ))}
         </div>
       ) : (
-        <p className="text-xs leading-5 text-muted-foreground">No workflows scheduled</p>
+        <p className="text-ui-sm text-muted-foreground">No workflows scheduled</p>
       )}
     </section>
   );
@@ -151,7 +151,7 @@ function OccurrenceRow({
 }) {
   if (occurrence.overflowCount) {
     return (
-      <div className="flex h-9 items-center gap-4 rounded-[5px] px-3 text-xs leading-4 text-muted-foreground" role="listitem">
+      <div className="flex h-9 items-center gap-4 rounded-sm px-3 text-ui-sm leading-4 text-muted-foreground" role="listitem">
         <span className="w-20 shrink-0 text-right tabular-nums" />
         <span>{occurrence.title}</span>
       </div>
@@ -165,21 +165,21 @@ function OccurrenceRow({
         size="unstyled"
         type="button"
         onClick={() => onAutomationSelect(occurrence.automationId)}
-        className="group flex h-9 w-full items-center gap-4 rounded-[5px] px-3 text-left transition-colors hover:bg-foreground/[0.04] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-[-2px]"
+        className="group flex h-9 w-full items-center gap-4 rounded-sm px-3 text-left transition-colors hover:bg-hover active:bg-active focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-[-2px]"
         aria-label={`${occurrence.title}, ${occurrence.timeLabel}, ${occurrence.scopeLabel}, ${occurrence.targetLabel}, ${occurrence.statusLabel}`}
       >
-        <span className="w-20 shrink-0 text-right text-sm leading-5 text-muted-foreground tabular-nums">
+        <span className="w-20 shrink-0 text-right text-ui text-muted-foreground tabular-nums">
           {occurrence.timeLabel}
         </span>
         <span className="inline-flex shrink-0 items-center">
           <AutomationStatusGlyph status={occurrence.statusKind} className="icon-paired" />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium leading-5 text-foreground">
+          <span className="block truncate text-body-emphasis font-medium text-foreground">
             {occurrence.title}
           </span>
         </span>
-        <span className="hidden min-w-0 max-w-[42%] truncate text-xs leading-4 text-muted-foreground md:block">
+        <span className="hidden min-w-0 max-w-[42%] truncate text-ui-sm leading-4 text-muted-foreground md:block">
           {[occurrence.scopeLabel, occurrence.targetLabel, occurrence.scheduleLabel].filter(Boolean).join(" · ")}
         </span>
       </Button>

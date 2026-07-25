@@ -51,7 +51,7 @@ function DownloadProgressDetails({
 
   return (
     <span className="mt-1.5 block">
-      <span className="block text-xs tabular-nums text-muted-foreground">
+      <span className="block text-ui-sm tabular-nums text-muted-foreground">
         {byteLabel}
       </span>
       {progress !== null && (
@@ -59,8 +59,8 @@ function DownloadProgressDetails({
           aria-label="Update download progress"
           aria-valuetext={byteLabel}
           value={progress}
-          className="mt-1.5 h-0.5 w-full overflow-hidden rounded-full bg-accent"
-          indicatorClassName="h-full rounded-full bg-special transition-[width] duration-300"
+          className="mt-1.5 h-0.5 w-full overflow-hidden rounded-full bg-surface-control"
+          indicatorClassName="h-full rounded-full bg-special transition-[width] duration-emphasized"
         />
       )}
     </span>
@@ -231,7 +231,7 @@ export function UpdateToastPresenter() {
         // !important, and sonner concatenates rather than replaces classNames.
         classNames: {
           actionButton:
-            "[&&]:!bg-foreground/5 [&&]:!text-foreground [&&]:hover:!bg-foreground/10 [&&]:!border [&&]:!border-input",
+            "[&&]:!bg-surface-elevated-secondary [&&]:!text-foreground [&&]:hover:!bg-hover [&&]:active:!bg-active [&&]:!border [&&]:!border-input",
         },
       });
       return;

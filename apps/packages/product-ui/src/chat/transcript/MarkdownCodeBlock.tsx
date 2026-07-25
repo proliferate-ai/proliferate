@@ -35,7 +35,7 @@ export function MarkdownCodeBlockShell({
       className="relative my-[14px] w-full min-w-0 overflow-clip rounded-lg border border-transparent bg-[var(--color-code-block-background,var(--color-card))]"
       data-markdown-code-block="true"
     >
-      <div className="flex select-none items-center justify-between gap-2 py-1 pl-2 pr-1.5 text-[length:var(--text-chat-meta,11px)] text-muted-foreground">
+      <div className="flex select-none items-center justify-between gap-2 py-1 pl-2 pr-1.5 text-chat text-muted-foreground">
         {label ? <span className="min-w-0 flex-1 truncate">{label}</span> : <span className="min-w-0 flex-1" />}
         <Button
           type="button"
@@ -49,12 +49,12 @@ export function MarkdownCodeBlockShell({
         </Button>
       </div>
       <div
-        className="overflow-x-auto overflow-y-auto p-3 font-mono text-[length:var(--text-chat)] font-normal leading-[1.5] [&_pre]:!m-0 [&_pre]:!p-0 [&_pre]:!bg-transparent [&_code]:text-[length:var(--text-chat)] [&_code]:leading-[1.5]"
+        className="overflow-x-auto overflow-y-auto p-3 font-mono text-chat font-normal [&_pre]:!m-0 [&_pre]:!p-0 [&_pre]:!bg-transparent [&_code]:text-chat"
         data-markdown-code-content="true"
       >
         {children ?? (
           <pre className="m-0 p-0">
-            <code className="whitespace-pre font-mono text-[length:var(--text-chat)] font-normal leading-[1.5] text-foreground">
+            <code className="whitespace-pre font-mono text-chat font-normal text-foreground">
               {code}
             </code>
           </pre>

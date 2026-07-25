@@ -67,11 +67,11 @@ export function ComposerAttachedPanel({
     : header;
   const headerClickToggles = toggleOnHeaderClick && onToggleExpanded != null;
   return (
-    <div className="relative overflow-clip rounded-t-[13px] border-x-[0.5px] border-t-[0.5px] border-border bg-[color:color-mix(in_oklab,var(--color-foreground)_2%,var(--color-background))] transition-colors">
+    <div className="relative overflow-clip rounded-t-xl border-x-[0.5px] border-t-[0.5px] border-border bg-[color:color-mix(in_oklab,var(--color-foreground)_2%,var(--color-background))] transition-colors">
       {headerContent && (
         <div
           className={twMerge(
-            "flex w-full items-start justify-between gap-1.5 py-3 pr-2 pl-3 text-chat leading-[var(--text-chat--line-height)]",
+            "flex w-full items-start justify-between gap-1.5 py-3 pr-2 pl-3 text-chat",
             headerClickToggles && "cursor-pointer select-none",
           )}
           onClick={headerClickToggles ? onToggleExpanded : undefined}
@@ -124,7 +124,7 @@ export function ComposerAttachedPanelRow({
 }) {
   return (
     <div className="flex items-center gap-3 border-t border-border/40 px-4 py-2">
-      <span className="w-20 shrink-0 text-base font-medium uppercase tracking-[0.06em] text-muted-foreground/50">
+      <span className="w-20 shrink-0 text-chat font-medium uppercase tracking-[0.06em] text-muted-foreground/50">
         {label}
       </span>
       <div className="min-w-0 flex-1">{children}</div>

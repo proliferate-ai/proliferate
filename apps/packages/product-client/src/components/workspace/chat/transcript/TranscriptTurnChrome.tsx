@@ -24,8 +24,17 @@ export type PendingInteractionMarkerKind = "permission" | "question";
 
 const TURN_HORIZONTAL_PADDING = "px-0";
 const ASSISTANT_ACTION_SLOT_HEIGHT = "h-6";
-/** Exact Codex conversation-item rhythm shared by pending and materialized turns. */
-export const TURN_ITEM_GAP_CLASS = "gap-4";
+/**
+ * Exact Codex conversation-item rhythm shared by pending and materialized
+ * turns. [CHAT-04] RULED block: that rhythm is the 12px
+ * `--spacing-transcript-turn` token (Codex's virtualized turn stack sits at an
+ * inline 12px gap), not the former 16px `gap-4`. This constant is the LIVE
+ * transcript's turn stack — every real chat surface (MessageList →
+ * TurnItemSequence, TranscriptTurnRow, TranscriptPendingPromptRow,
+ * ToolCallSummary, ChatLaunchIntentPane) reads it — so the token has to land
+ * here and not only in the playground-only CloudChatTranscriptRows.
+ */
+export const TURN_ITEM_GAP_CLASS = "gap-transcript-turn";
 
 export function TurnShell({
   children,
@@ -95,7 +104,7 @@ export function TurnAssistantActionRow({
             <span aria-hidden className="h-3 w-px bg-border/60" />
             {metMarker}
             {timestampLabel && (
-              <span className="text-[length:var(--text-chat-meta,11px)] text-muted-foreground tabular-nums">
+              <span className="text-ui-sm text-muted-foreground tabular-nums">
                 {timestampLabel}
               </span>
             )}
@@ -113,7 +122,7 @@ export function TurnAssistantActionRow({
  */
 export function TurnGoalMetMarker({ label }: { label: string }): ReactNode {
   return (
-    <span className="inline-flex items-center gap-1 text-[length:var(--text-chat-meta,11px)] text-muted-foreground">
+    <span className="inline-flex items-center gap-1 text-ui-sm text-muted-foreground">
       <CircleCheck className="icon-compact shrink-0 text-muted-foreground [font-size:var(--text-chat)]" aria-hidden />
       {label}
     </span>
@@ -159,7 +168,7 @@ export function resolveTurnTrailingStatus(
     return (
       <TrailingStatusCrossfade
         statusKey="transient"
-        className={`gap-2 text-[length:var(--text-chat)] leading-[var(--text-chat--line-height)] text-muted-foreground ${ASSISTANT_ACTION_SLOT_HEIGHT}`}
+        className={`gap-2 text-chat text-muted-foreground ${ASSISTANT_ACTION_SLOT_HEIGHT}`}
       >
         <Sparkles className="icon-paired shrink-0 text-current" />
         <span className="min-w-0 truncate">{transientStatusText}</span>
@@ -267,11 +276,11 @@ export function PendingInteractionMarkerView({
     <div className="flex items-center gap-2 text-muted-foreground">
       <Icon className="icon-paired shrink-0 [font-size:var(--text-chat)]" />
       {label && (
-        <span className="text-[length:var(--text-chat)] leading-[var(--text-chat--line-height)] font-medium text-foreground">
+        <span className="text-chat font-medium text-foreground">
           {label}
         </span>
       )}
-      <span className="text-[length:var(--text-chat)] leading-[var(--text-chat--line-height)] uppercase tracking-wide text-muted-foreground">
+      <span className="text-chat uppercase tracking-wide text-muted-foreground">
         Awaiting response
       </span>
     </div>

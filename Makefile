@@ -110,7 +110,7 @@ endif
 .PHONY: catalog-view catalog-pin catalog-update setup run dev dev-init dev-list dev-local dev-desktop dev-runtime dev-server dev-mobile-auth dev-mobile-tunnel dev-web-auth seed-sso server-db-up server-db-wait \
         server-db-down server-db-ready server-redis-up server-redis-wait server-redis-down server-redis-ready \
         server-background-up server-background-logs server-background-down \
-        server-litellm-up server-litellm-wait server-litellm-down db db-local db-ah server-migrate serve install \
+        server-litellm-up server-litellm-wait server-litellm-down db db-local db-ah server-migrate serve install git-hooks \
         check check-max-lines check-server-boundaries test test-server fmt clippy \
         dev-automation-worker \
         sdk-generate sdk-build sdk-react-build cloud-sdk-build cloud-sdk-react-build shared-build dev-artifacts-ready build-rust runtime-build web-build desktop-build build-frontend build rebuild \
@@ -320,7 +320,7 @@ run: dev-artifacts-ready
 	sleep 2; \
 	(cd apps/desktop && pnpm tauri dev --runner "$$(dirname "$$PROLIFERATE_DEV_HOME")/tauri-runner.sh" --config "$$(dirname "$$PROLIFERATE_DEV_HOME")/tauri.dev.json")
 
-setup:
+setup: git-hooks
 	@if [ -z "$(PROFILE)" ]; then \
 		echo "PROFILE is required. Example: make setup PROFILE=main"; \
 		exit 1; \
@@ -1571,8 +1571,14 @@ test-agent-runtime-cloud-e2b: sdk-generate
 
 # --- Install ---
 
-install:
+install: git-hooks
 	pnpm install
+
+# Point git at the checked-in hooks. Idempotent, safe to re-run, and local to
+# this clone/worktree (never committed state). See specs/developing/local/README.md.
+git-hooks:
+	@git config core.hooksPath scripts/git-hooks
+	@echo "git hooks enabled (core.hooksPath=scripts/git-hooks); bypass a single commit with --no-verify."
 
 # --- Sidecar staging ---
 

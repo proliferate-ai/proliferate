@@ -67,7 +67,7 @@ export function CloudChatModelConfigControl({
         trailing={(
           <span className="flex items-center gap-1">
             <PendingComposerConfigIndicator pendingState={pendingState} />
-            <ChevronDown className="icon-paired shrink-0 text-[color:var(--color-composer-control-muted-foreground)]" />
+            <ChevronDown className="icon-paired shrink-0 text-composer-control-muted-foreground" />
           </span>
         )}
         aria-haspopup="menu"
@@ -88,7 +88,7 @@ export function CloudChatModelConfigControl({
       />
       {open && !disabled ? (
         <div
-          className="absolute bottom-full right-0 z-[80] mb-1"
+          className="absolute bottom-full right-0 isolate z-popover mb-1"
           onMouseLeave={() => setActiveSubmenuId(null)}
         >
           <ComposerPopoverSurface className="w-72 max-w-[calc(100vw-1rem)] p-1">
@@ -121,7 +121,7 @@ export function CloudChatModelConfigControl({
             </div>
           </ComposerPopoverSurface>
           {activeConfigSubmenuControl ? (
-            <ComposerPopoverSurface className="absolute bottom-0 left-[calc(100%+0.25rem)] z-[81] w-56 max-w-[calc(100vw-1rem)] p-1">
+            <ComposerPopoverSurface className="absolute bottom-0 left-[calc(100%+0.25rem)] z-raised w-56 max-w-[calc(100vw-1rem)] p-1">
               <ComposerControlMenuRows
                 control={activeConfigSubmenuControl}
                 onClose={() => {
@@ -160,7 +160,7 @@ function ComposerModelPickerMenu({
               value={search}
               onChange={(event) => onSearchChange(event.target.value)}
               placeholder="Search models"
-              className="h-auto min-w-0 border-0 bg-transparent px-0 py-0 text-sm shadow-none focus:ring-0"
+              className="h-auto min-w-0 border-0 bg-transparent px-0 py-0 text-ui shadow-none focus:ring-0"
               data-telemetry-mask
             />
           </div>
@@ -171,7 +171,7 @@ function ComposerModelPickerMenu({
           <div key={group.id}>
             {index > 0 ? <ComposerMenuSeparator /> : null}
             {modelGroupLabel(control, group) ? (
-              <div className="min-h-5 truncate px-2 py-0.5 text-sm font-[430] leading-4 text-muted-foreground/70">
+              <div className="min-h-5 truncate px-2 py-0.5 text-ui font-control leading-4 text-muted-foreground/70">
                 {modelGroupLabel(control, group)}
               </div>
             ) : null}
@@ -183,7 +183,7 @@ function ComposerModelPickerMenu({
           </div>
         ))}
         {!hasModelOptions ? (
-          <p className="px-3 py-4 text-center text-sm text-muted-foreground">
+          <p className="px-3 py-4 text-center text-ui text-muted-foreground">
             No models matching "{search}"
           </p>
         ) : null}

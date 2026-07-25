@@ -17,7 +17,7 @@ export class TerminalErrorBoundary extends Component<
   render() {
     if (this.state.hasError) {
       return (
-        <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+        <div className="flex h-full items-center justify-center text-ui-sm text-muted-foreground">
           Terminal crashed - switch tabs to recover
         </div>
       );

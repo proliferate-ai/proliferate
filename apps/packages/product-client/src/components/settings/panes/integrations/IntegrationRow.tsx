@@ -45,20 +45,20 @@ export function IntegrationRow({
       <div className="flex min-w-0 items-center gap-3">
         <IntegrationIcon namespace={integration.namespace} className="icon-display [font-size:var(--text-sidebar-brand)]" />
         <div className="min-w-0">
-          <div className="truncate text-sm font-medium text-foreground">
+          <div className="truncate text-ui font-medium text-foreground">
             {integration.displayName}
           </div>
           {integration.description ? (
-            <div className="mt-0.5 truncate text-sm text-muted-foreground">
+            <div className="mt-0.5 truncate text-ui-sm text-muted-foreground">
               {integration.description}
             </div>
           ) : null}
         </div>
       </div>
-      <div className="min-w-0 truncate text-sm text-muted-foreground">
+      <div className="min-w-0 truncate text-ui-sm text-muted-foreground">
         {integrationAuthKindLabel(integration.authKind)}
       </div>
-      <div className="min-w-0 truncate text-sm text-muted-foreground">
+      <div className="min-w-0 truncate text-ui-sm text-muted-foreground">
         {toolCountLabel}
       </div>
       {/*
@@ -73,7 +73,7 @@ export function IntegrationRow({
       <div className="flex flex-wrap items-center justify-end gap-2">
         {oauthPending ? (
           <>
-            <span className="min-w-0 truncate text-sm text-muted-foreground">
+            <span className="min-w-0 truncate text-ui-sm text-muted-foreground">
               Waiting for browser...
             </span>
             <Button

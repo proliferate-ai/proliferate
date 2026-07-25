@@ -141,11 +141,23 @@ export function ComposerRichTextEditor({
                 if (event.key === "Enter" || event.key === "Tab" || event.defaultPrevented) return;
                 onKeyDown?.(event);
               }}
-              className={`relative w-full resize-none bg-transparent text-[length:var(--text-composer)] leading-[var(--text-composer--line-height)] text-foreground outline-none ${disabled ? "opacity-60" : ""} ${className}`}
+              className={`relative w-full resize-none bg-transparent text-composer text-foreground outline-none ${disabled ? "opacity-60" : ""} ${className}`}
             />
           )}
           placeholder={(
-            <div className="pointer-events-none absolute inset-x-0 top-0 truncate text-[length:var(--text-composer)] leading-[var(--text-composer--line-height)] text-muted-foreground">
+            // ui-foundation-escalation: [CHAT-03] wants Codex's placeholder ink,
+            // but neither Codex reading is expressible in the ruled vocabulary.
+            // Codex's prose target is its tertiary/description role (~49.8%
+            // white) while its actual ProseMirror implementation is a separate
+            // `--color-token-input-placeholder-foreground` further multiplied by
+            // `opacity: .5` (~25-35% effective) —
+            // ui-foundation-chat-addendum.md [CHAT-03] flags exactly this split.
+            // `text-foreground-tertiary` (--color-foreground-tertiary, 50%) is
+            // the closest legal role and the addendum's recommendation; it
+            // replaces `text-muted-foreground` (70%), which was too opaque
+            // against either reading. Revisit if a placeholder-specific
+            // foreground role is ever added to the authority.
+            <div className="pointer-events-none absolute inset-x-0 top-0 truncate text-composer text-foreground-tertiary">
               {placeholder}
             </div>
           )}

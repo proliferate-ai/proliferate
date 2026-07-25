@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { motion } from "@proliferate/design/motion";
 
 /** Must match the .composer-dock-card-exit duration in product.css. */
-const CARD_EXIT_DURATION_MS = 150;
+const CARD_EXIT_DURATION_MS = motion.duration.exitMs;
 
 interface HeldSlotEntry {
   key: string;
@@ -13,9 +14,9 @@ interface HeldSlotEntry {
  * that docks there (approval, user input, MCP elicitation, todo tracker)
  * gets one shared motion grammar:
  *
- *   - mount: codex chip-enter recipe — 280ms cubic-bezier(.23,1,.32,1)
+ *   - mount: emphasized spring recipe — 300ms cubic-bezier(.16,1,.3,1)
  *     translate/scale/opacity entrance (.composer-dock-card-enter)
- *   - resolve: 150ms opacity fade-out (.composer-dock-card-exit) before the
+ *   - resolve: 120ms opacity fade-out (.composer-dock-card-exit) before the
  *     slot actually unmounts
  *
  * Both animations are compositor-only (transform/opacity) and disabled under
@@ -82,7 +83,7 @@ export function useComposerDockCardPresence(
 
 /**
  * Keeps the last non-null interaction payload so a connected card can still
- * render during the slot's 150ms exit fade. Without this the card's store
+ * render during the slot's 120ms exit fade. Without this the card's store
  * selector goes null the instant the interaction resolves and the fade would
  * have nothing to show. The exiting wrapper is pointer-events-none, so the
  * held (already-resolved) payload is never clickable.

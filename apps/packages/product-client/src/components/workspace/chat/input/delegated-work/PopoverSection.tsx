@@ -12,9 +12,9 @@ export function PopoverSection({
   return (
     <section>
       <div className="flex h-7 items-center justify-between gap-2 px-2">
-        <span className="text-xs font-medium text-foreground">{title}</span>
+        <span className="text-ui font-medium text-foreground">{title}</span>
         {detail ? (
-          <span className="shrink-0 text-xs text-muted-foreground">{detail}</span>
+          <span className="shrink-0 text-ui-sm text-muted-foreground">{detail}</span>
         ) : null}
       </div>
       {children}

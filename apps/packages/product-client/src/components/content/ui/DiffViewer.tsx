@@ -41,7 +41,7 @@ interface DiffViewerProps {
 }
 
 const ROOT_CLASS =
-  "font-mono text-[length:var(--diffs-font-size)] leading-[var(--diffs-line-height)]";
+  "font-mono text-readable-code";
 
 export function DiffViewer({
   patch,

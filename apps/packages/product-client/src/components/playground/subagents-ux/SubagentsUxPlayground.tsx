@@ -30,7 +30,7 @@ export function SubagentsUxPlayground() {
     >
       <header className="flex shrink-0 flex-wrap items-center gap-4 border-b border-border px-5 py-3">
         <div className="min-w-0 flex-1">
-          <h1 className="text-base font-semibold">Subagents UX lab</h1>
+          <h1 className="text-title font-semibold">Subagents UX lab</h1>
           <p className="truncate text-ui-sm text-muted-foreground">
             Interactive Fable drafts · fixture data only · no production session mutations
           </p>

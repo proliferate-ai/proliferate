@@ -56,7 +56,7 @@ export function PlaygroundLoadingStates() {
       {/* One motion family, side by side: the thinking-text band sweep and
           the skeleton block sweep share direction, softness, and pacing. */}
       <section className="space-y-3">
-        <h2 className="text-sm font-medium text-foreground">
+        <h2 className="text-heading font-medium text-foreground">
           Shimmer + staggered skeletons
         </h2>
         <div className="grid gap-4 md:grid-cols-2">
@@ -80,7 +80,7 @@ export function PlaygroundLoadingStates() {
           loading row and a live thought row both ride the same ThinkingText
           band sweep as the desktop transcript. */}
       <section className="space-y-3">
-        <h2 className="text-sm font-medium text-foreground">
+        <h2 className="text-heading font-medium text-foreground">
           Cloud transcript thinking rows
         </h2>
         <div className="flex flex-col gap-1 rounded-md border border-border p-4">
@@ -108,8 +108,8 @@ export function PlaygroundLoadingStates() {
       <PlaygroundThinkingTimingControls />
 
       <section className="space-y-3">
-        <h2 className="text-sm font-medium text-foreground">Session tabs</h2>
-        <div className="inline-flex h-9 min-w-48 items-center gap-2 rounded-md border border-border px-3 text-sm text-muted-foreground">
+        <h2 className="text-heading font-medium text-foreground">Session tabs</h2>
+        <div className="inline-flex h-9 min-w-48 items-center gap-2 rounded-md border border-border px-3 text-ui text-muted-foreground">
           {renderChatTabIcon({
             agentKind: "",
             viewState: "idle",
@@ -122,11 +122,11 @@ export function PlaygroundLoadingStates() {
 
       <section className="grid gap-4 md:grid-cols-2">
         <div className="space-y-3 rounded-md border border-border p-4">
-          <h2 className="text-sm font-medium text-foreground">Sidebar skeleton</h2>
+          <h2 className="text-heading font-medium text-foreground">Sidebar skeleton</h2>
           <div className="flex flex-col gap-1">
-            <SkeletonBlock className="h-7 w-full bg-sidebar-accent" />
-            <SkeletonBlock className="h-7 w-[86%] bg-sidebar-accent/80" />
-            <SkeletonBlock className="h-7 w-[70%] bg-sidebar-accent/70" />
+            <SkeletonBlock className="h-7 w-full bg-surface-control" />
+            <SkeletonBlock className="h-7 w-[86%] bg-surface-control/80" />
+            <SkeletonBlock className="h-7 w-[70%] bg-surface-control/70" />
           </div>
         </div>
         <div className="rounded-md border border-border p-4">

@@ -103,7 +103,7 @@ export function TurnDiffPanel({
 
   return (
     <div
-      className="mb-2 flex max-w-full flex-col overflow-hidden rounded-lg border border-border bg-foreground/[0.0475] text-base text-foreground [--turn-diff-row-padding-x:0.75rem] [--turn-diff-row-padding-y:0.25rem]"
+      className="mb-2 flex max-w-full flex-col overflow-hidden rounded-lg border border-border bg-diff-panel-surface text-chat text-foreground [--turn-diff-row-padding-x:0.75rem] [--turn-diff-row-padding-y:0.25rem]"
     >
       <ChatDiffLineWrapContextMenu trigger={header} />
       {!singleFile && (
@@ -134,7 +134,7 @@ export function TurnDiffPanel({
               size="sm"
               onClick={() => setShowAllFiles((value) => !value)}
               aria-expanded={showAllFiles}
-              className="group/show-files flex h-9 w-full justify-start gap-2 rounded-none bg-transparent px-[var(--turn-diff-row-padding-x)] py-[var(--turn-diff-row-padding-y)] text-left text-chat leading-[var(--text-chat--line-height)] text-foreground hover:bg-list-hover/30"
+              className="group/show-files flex h-9 w-full justify-start gap-2 rounded-none bg-transparent px-[var(--turn-diff-row-padding-x)] py-[var(--turn-diff-row-padding-y)] text-left text-chat text-foreground hover:bg-list-hover/30"
             >
               {showAllFiles ? "Collapse files" : `Show ${hiddenFileCount} more files`}
               <ChevronDown

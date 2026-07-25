@@ -16,7 +16,7 @@ export function CloudRepoPickerBlocker({
         </span>
         <span className="min-w-0 flex-1">
           <h3 className="text-ui font-medium leading-5 text-foreground">{blocker.title}</h3>
-          <p className="mt-0.5 text-ui-sm leading-[1.45] text-muted-foreground">
+          <p className="mt-0.5 text-ui-sm text-muted-foreground">
             {blocker.description}
           </p>
         </span>
@@ -44,7 +44,7 @@ export function CloudRepoPickerBlocker({
               </span>
               <span className="min-w-0">
                 <span className="block text-ui font-medium text-foreground">{step.label}</span>
-                <span className="mt-0.5 block text-ui-sm leading-[1.45] text-muted-foreground">
+                <span className="mt-0.5 block text-ui-sm text-muted-foreground">
                   {step.description}
                 </span>
               </span>

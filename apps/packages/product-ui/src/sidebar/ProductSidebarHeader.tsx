@@ -32,7 +32,7 @@ export function ProductSidebarHeader({
         </div>
       ) : null}
       {title ? (
-        <div className="min-w-0 flex-1 truncate text-base leading-5 text-sidebar-foreground">
+        <div className="min-w-0 flex-1 truncate text-sidebar-nav leading-5 text-sidebar-foreground">
           {title}
         </div>
       ) : <div className="min-w-0 flex-1" />}

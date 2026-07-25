@@ -104,10 +104,10 @@ export function SidebarAccountFooter() {
               variant="unstyled"
               size="unstyled"
               aria-label="Open account menu"
-              className="flex h-10 min-w-0 flex-1 items-center gap-3 rounded-lg px-2 text-left text-sidebar-foreground hover:bg-sidebar-accent data-[state=open]:bg-sidebar-accent"
+              className="flex h-10 min-w-0 flex-1 items-center gap-3 rounded-lg px-2 text-left text-sidebar-foreground hover:bg-hover active:bg-active data-[state=open]:bg-active"
               title={displayName}
             >
-              <span className="flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-sidebar-accent text-ui-sm font-medium text-sidebar-foreground">
+              <span className="flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-surface-control text-ui-sm font-medium text-sidebar-foreground">
                 {user?.avatarUrl ? (
                   <img
                     src={user.avatarUrl}

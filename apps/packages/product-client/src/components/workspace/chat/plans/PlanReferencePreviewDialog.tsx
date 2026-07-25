@@ -33,7 +33,7 @@ export function PlanReferencePreviewDialog({
             <div className="text-ui font-semibold leading-tight text-foreground">
               {plan.title}
             </div>
-            <div className="text-sm text-muted-foreground">
+            <div className="text-ui-sm text-muted-foreground">
               Plan attachment
             </div>
           </div>

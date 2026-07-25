@@ -22,8 +22,8 @@ export function EmptyState({
       )}
       {...props}
     >
-      <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-      {description && <p className="mt-1 max-w-sm text-xs leading-5 text-muted-foreground">{description}</p>}
+      <h3 className="text-heading font-semibold text-foreground">{title}</h3>
+      {description && <p className="mt-1 max-w-sm text-ui-sm text-muted-foreground">{description}</p>}
       {action && <div className="mt-4">{action}</div>}
     </div>
   );

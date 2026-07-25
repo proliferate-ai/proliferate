@@ -282,7 +282,7 @@ function resolveDecisionStatus(
     case "approved": {
       return {
         label: "Approved",
-        className: `${CHIP_BASE_CLASSNAME} bg-foreground/10 text-foreground`,
+        className: `${CHIP_BASE_CLASSNAME} bg-surface-control text-foreground`,
       };
     }
     case "rejected": {

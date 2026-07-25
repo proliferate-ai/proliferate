@@ -64,7 +64,7 @@ function DownloadProgressRing({ progress }: { progress: number | null }) {
         pathLength="100"
         strokeDasharray="100"
         strokeDashoffset={100 - clamped}
-        className="transition-[stroke-dashoffset] duration-300 ease-out"
+        className="transition-[stroke-dashoffset] duration-emphasized ease-out"
       />
     </svg>
   );
@@ -122,8 +122,8 @@ export function SidebarUpdatePill({
   const toneClass = isDownloading
     ? "cursor-default bg-foreground/5 text-muted-foreground"
     : variant === "armed"
-      ? "bg-foreground/5 text-muted-foreground hover:bg-foreground/10"
-      : "bg-foreground/5 text-foreground hover:bg-foreground/10";
+      ? "bg-foreground/5 text-muted-foreground hover:bg-hover active:bg-active"
+      : "bg-foreground/5 text-foreground hover:bg-hover active:bg-active";
 
   return (
     <Button
@@ -136,7 +136,7 @@ export function SidebarUpdatePill({
       // Morph recipe: per-variant max-width + .3s max-width transition,
       // contain:paint so mid-morph clipping never repaints the shell, and the
       // one-time chip-overshoot entrance on first appearance (mount).
-      className={`animate-update-pill-in flex h-6 items-center overflow-hidden rounded-full px-2.5 text-xs font-medium leading-none transition-[max-width] duration-300 ease-out [will-change:max-width] [contain:paint] disabled:opacity-100 ${VARIANT_MAX_WIDTH[variant]} ${toneClass}`}
+      className={`animate-update-pill-in flex h-6 items-center overflow-hidden rounded-full px-2.5 text-ui font-medium leading-none transition-[max-width] duration-emphasized ease-out [will-change:max-width] [contain:paint] disabled:opacity-100 ${VARIANT_MAX_WIDTH[variant]} ${toneClass}`}
     >
       {/* Keyed by variant so state changes cross-fade the content (one-shot
           opacity fade-in) while the pill width morphs underneath. */}

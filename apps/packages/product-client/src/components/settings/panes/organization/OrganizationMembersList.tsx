@@ -203,7 +203,10 @@ function InvitationRow({
   return (
     <div className={`${PEOPLE_GRID_CLASS} min-h-[5.25rem] border-b border-border py-5 last:border-b-0`}>
       <div className="flex min-w-0 items-center gap-3">
-        <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-foreground/10 text-muted-foreground">
+        {/* ui-foundation-escalation: bg-foreground/10 mapped to bg-muted (closest
+            semantic role for a muted icon-badge circle; no exact 10%-alpha
+            foreground role exists in the closed vocabulary) */}
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
           <Mail className="icon-paired" />
         </span>
         <div className="min-w-0">

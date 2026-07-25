@@ -30,8 +30,8 @@ export function ProductNotice({
       <div className="flex items-start gap-3">
         {icon ? <span className="mt-0.5 shrink-0 text-current">{icon}</span> : null}
         <div className="min-w-0">
-          {title ? <div className="text-sm font-medium">{title}</div> : null}
-          <p className={twMerge("text-sm leading-5 text-muted-foreground", title ? "mt-1" : "")}>
+          {title ? <div className="text-heading font-medium">{title}</div> : null}
+          <p className={twMerge("text-body text-muted-foreground", title ? "mt-1" : "")}>
             {description}
           </p>
         </div>

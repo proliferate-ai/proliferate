@@ -44,7 +44,7 @@ function HarnessProgressToastCard({
   onDismiss,
 }: HarnessProgressToastCardProps) {
   return (
-    <div className="w-full rounded-xl border border-border bg-popover p-3 text-foreground shadow-md">
+    <div className="w-full rounded-xl border border-border bg-popover p-3 text-foreground shadow-popover">
       <div className="flex items-start gap-3">
         <Spinner className="mt-0.5 icon-control shrink-0 text-muted-foreground" />
         <div className="min-w-0 flex-1">
@@ -69,8 +69,8 @@ function HarnessProgressToastCard({
               aria-label={`${targetLabel} agent tools download progress`}
               aria-valuetext={byteLabel}
               value={percent}
-              className="mt-2 h-1 w-full overflow-hidden rounded-full bg-accent"
-              indicatorClassName="h-full rounded-full bg-special transition-[width] duration-300"
+              className="mt-2 h-1 w-full overflow-hidden rounded-full bg-surface-control"
+              indicatorClassName="h-full rounded-full bg-special transition-[width] duration-emphasized"
             />
           ) : null}
         </div>

@@ -14,10 +14,10 @@ export const Toggle = forwardRef<HTMLButtonElement, ToggleProps>(
         aria-pressed={pressed}
         data-state={pressed ? "on" : "off"}
         className={twMerge(
-          "inline-flex h-8 items-center justify-center rounded-md border px-3 text-xs font-medium transition-colors disabled:pointer-events-none disabled:opacity-50",
+          "inline-flex h-8 items-center justify-center rounded-md border px-3 text-ui font-medium transition-colors disabled:pointer-events-none disabled:opacity-50",
           pressed
-            ? "border-border bg-accent text-foreground"
-            : "border-transparent text-muted-foreground hover:bg-accent hover:text-foreground",
+            ? "border-border bg-selected text-foreground"
+            : "border-transparent text-muted-foreground hover:bg-hover hover:text-foreground active:bg-active",
           className,
         )}
         {...props}

@@ -136,15 +136,15 @@ export function renderPlaygroundToolTranscript(
     case "tool-activity-ledger":
       return (
         <TranscriptPreviewShell>
-          <div className="rounded-xl border border-border/70 bg-foreground/[0.02] p-3">
-            <div className="mb-2 text-xs font-medium text-muted-foreground">Scrollable activity</div>
+          <div className="rounded-xl border border-border/70 bg-surface-elevated-secondary p-3">
+            <div className="mb-2 text-ui-sm font-medium text-muted-foreground">Scrollable activity</div>
             <CollapsedActions
               itemIds={PLAYGROUND_ACTIVITY_LEDGER_READ_ITEMS.map((item) => item.itemId)}
               transcript={PLAYGROUND_ACTIVITY_LEDGER_TRANSCRIPT}
             />
           </div>
-          <div className="rounded-xl border border-border/70 bg-foreground/[0.02] p-3">
-            <div className="mb-2 text-xs font-medium text-muted-foreground">Read and edit rows</div>
+          <div className="rounded-xl border border-border/70 bg-surface-elevated-secondary p-3">
+            <div className="mb-2 text-ui-sm font-medium text-muted-foreground">Read and edit rows</div>
             <CollapsedActions
               itemIds={PLAYGROUND_ACTIVITY_LEDGER_EDIT_ITEMS.map((item) => item.itemId)}
               transcript={PLAYGROUND_ACTIVITY_LEDGER_TRANSCRIPT}
@@ -168,7 +168,7 @@ export function renderPlaygroundToolTranscript(
       return (
         <TranscriptPreviewShell>
           <GenericToolResultRow
-            icon={<Settings className="size-3 text-faint" />}
+            icon={<Settings className="text-ui icon-compact text-faint" />}
             label={<span className="font-[460] text-foreground/90">MCP tool</span>}
             hint="github.search_pull_requests"
             status="completed"

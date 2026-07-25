@@ -23,7 +23,12 @@ export function CloudChatTranscriptRows({
   planActions,
 }: CloudChatTranscriptRowsProps) {
   return (
-    <div className="space-y-4">
+    // [CHAT-04] RULED block: top-level turn stack rhythm moves from the
+    // pre-existing 16px space-y-4 to the ruled 12px --spacing-transcript-turn
+    // token. Tailwind v4's spacing namespace doesn't project into
+    // space-y-*, so the stack becomes a flex column with gap-transcript-turn
+    // rather than a same-named space-y- variant.
+    <div className="flex flex-col gap-transcript-turn">
       {rows.map((row) => (
         <CloudChatTranscriptRow key={row.id} row={row} planActions={planActions} />
       ))}
@@ -53,7 +58,7 @@ export function CloudChatTranscriptRow({
       <article className="flex justify-start">
         <div className="flex min-w-0 max-w-full flex-col break-words" data-telemetry-mask>
           {row.title ? (
-            <div className="mb-1 text-chat font-medium leading-[var(--text-chat--line-height)] text-muted-foreground">{row.title}</div>
+            <div className="mb-1 text-chat font-medium text-muted-foreground">{row.title}</div>
           ) : null}
           <AssistantMessage
             content={row.body ?? ""}

@@ -2,6 +2,13 @@ import { SidebarActionButton } from "@proliferate/ui/layout/SidebarActionButton"
 
 import type { SidebarActionEvent, SidebarActionScope, SidebarActionView } from "./ProductSidebarModel";
 
+/**
+ * [ROW-ACTION-01]: `alwaysVisible` alone drives the reveal/hidden decision
+ * — `SidebarActionButton` (itself a thin adapter over the shared
+ * `RowActionIconButton` primitive) already owns the reveal-on-group-hover
+ * classes, so this adapter only supplies destructive-tone coloring and
+ * never re-declares opacity/visibility.
+ */
 export function SidebarActionIconButton({
   action,
   scope,
@@ -24,10 +31,9 @@ export function SidebarActionIconButton({
         event.stopPropagation();
         onAction({ scope, itemId, actionId: action.id });
       }}
-      className={`${action.destructive ? "text-destructive hover:text-destructive" : ""
-        } ${alwaysVisible ? "" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100"}`}
+      className={action.destructive ? "text-destructive hover:text-destructive" : ""}
     >
-      {action.icon ?? <span className="text-sm leading-none">...</span>}
+      {action.icon ?? <span className="text-ui leading-none">...</span>}
     </SidebarActionButton>
   );
 }

@@ -11,7 +11,7 @@ export function AccountFooter({
   return (
     <div className="shrink-0 border-t border-sidebar-border/75 px-3 py-2">
       <div className="flex items-center gap-2">
-        <div className="flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-sidebar-accent text-xs font-medium text-sidebar-foreground">
+        <div className="flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-surface-control text-ui-sm font-medium text-sidebar-foreground">
           {account.avatarUrl ? (
             <img src={account.avatarUrl} alt="" className="size-full object-cover" referrerPolicy="no-referrer" />
           ) : (
@@ -19,11 +19,11 @@ export function AccountFooter({
           )}
         </div>
         <div className="min-w-0 flex-1">
-          <div className="truncate text-sm leading-4 text-sidebar-foreground">
+          <div className="truncate text-sidebar-row leading-4 text-sidebar-foreground">
             {account.label}
           </div>
           {account.detail ? (
-            <div className="truncate text-xs leading-4 text-sidebar-muted-foreground">
+            <div className="truncate text-ui-sm leading-4 text-sidebar-muted-foreground">
               {account.detail}
             </div>
           ) : null}

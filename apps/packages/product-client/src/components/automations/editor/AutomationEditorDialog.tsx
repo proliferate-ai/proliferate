@@ -122,7 +122,7 @@ export function AutomationEditorDialog({
         description="Create a scheduled workflow."
         sizeClassName="max-h-[95vh] max-w-[800px]"
         bodyClassName="flex min-h-[24rem] flex-col px-5 pb-5 pt-0"
-        panelClassName="border-border bg-background/95 shadow-lg backdrop-blur-xl"
+        panelClassName="border-border bg-background/95 shadow-modal backdrop-blur-xl"
         headerContent={(
           <div className="flex min-w-0 items-center justify-between gap-4 pt-2">
             <Input
@@ -132,7 +132,7 @@ export function AutomationEditorDialog({
               onChange={(event) => onTitleChange(event.target.value)}
               aria-label="Workflow title"
               placeholder="Workflow title"
-              className="h-auto min-w-0 border-0 bg-transparent px-0 py-0 pr-2 text-lg leading-tight shadow-none outline-none placeholder:text-muted-foreground focus:ring-0"
+              className="h-auto min-w-0 border-0 bg-transparent px-0 py-0 pr-2 text-title shadow-none outline-none placeholder:text-muted-foreground focus:ring-0"
             />
             <AutomationTemplatePopover
               onSelectTemplate={(template) => {
@@ -151,7 +151,7 @@ export function AutomationEditorDialog({
           className="flex min-h-0 flex-1 flex-col"
         >
           {error && (
-            <div className="mb-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            <div className="mb-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-ui text-destructive">
               {error}
             </div>
           )}
@@ -175,7 +175,7 @@ export function AutomationEditorDialog({
               onChange={(event) => onPromptChange(event.target.value)}
               aria-label="Prompt"
               placeholder="Add prompt e.g. look for crashes in $sentry"
-              className="min-h-[12rem] px-0 text-base leading-relaxed placeholder:text-muted-foreground"
+              className="min-h-[12rem] px-0 text-body leading-relaxed placeholder:text-muted-foreground"
             />
           </div>
           <div className="shrink-0 pt-3">

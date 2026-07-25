@@ -89,7 +89,7 @@ export function VirtualizedCodeContent({
     >
       <pre
         tabIndex={0}
-        className={`m-0 min-h-full min-w-full p-0 font-[family:var(--diffs-font-family)] text-[length:var(--diffs-font-size)] leading-[var(--diffs-line-height)] outline-none ${preClassName}`}
+        className={`m-0 min-h-full min-w-full p-0 font-[family:var(--diffs-font-family)] text-readable-code outline-none ${preClassName}`}
       >
         <code
           className={`relative block min-h-full ${

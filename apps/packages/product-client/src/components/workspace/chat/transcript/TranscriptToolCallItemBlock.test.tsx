@@ -137,7 +137,7 @@ describe("TranscriptToolCallItemBlock", () => {
     expect(html).toContain("Checked subagent");
     expect(html).toContain("API Surface Check");
     expect(html).toContain("Working");
-    expect(html).toContain("text-[length:var(--text-chat)]");
+    expect(html).toContain("text-chat");
   });
 
   it("renders subagent event reads as delegated agent receipts", () => {

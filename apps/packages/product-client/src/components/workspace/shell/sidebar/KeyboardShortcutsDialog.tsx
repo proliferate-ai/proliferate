@@ -21,7 +21,7 @@ function ShortcutSection({ section }: { section: ShortcutSectionView }) {
       {section.entries.map((entry) => (
         <div
           key={entry.id}
-          className="flex h-8 items-center justify-between gap-4 rounded-lg px-2.5 hover:bg-accent"
+          className="flex h-8 items-center justify-between gap-4 rounded-lg px-2.5 hover:bg-hover active:bg-active"
         >
           <span className="min-w-0 truncate text-ui text-foreground">{entry.command}</span>
           <span className="flex shrink-0 items-center gap-1 text-muted-foreground">

@@ -28,7 +28,7 @@ export function Switch({
       data-state={checked ? "checked" : "unchecked"}
       id={id}
       disabled={disabled}
-      className={`peer inline-flex shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-primary data-[state=unchecked]:bg-input ${trackClass} ${className}`}
+      className={`peer inline-flex shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors duration-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-primary data-[state=unchecked]:bg-input ${trackClass} ${className}`}
       onClick={() => {
         if (disabled) return;
         onChange(!checked);
@@ -37,7 +37,7 @@ export function Switch({
     >
       <span
         data-state={checked ? "checked" : "unchecked"}
-        className={`pointer-events-none block rounded-full bg-background ring-0 shadow-lg transition-transform duration-150 ${thumbClass}`}
+        className={`pointer-events-none block rounded-full bg-background ring-0 transition-transform duration-hover ${thumbClass}`}
       />
     </button>
   );

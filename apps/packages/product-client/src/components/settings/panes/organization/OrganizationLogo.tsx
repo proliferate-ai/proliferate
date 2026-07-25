@@ -38,7 +38,7 @@ export function Avatar({ member }: { member: OrganizationAvatarMember }) {
     );
   }
   return (
-    <div className="flex size-8 shrink-0 items-center justify-center rounded-full border border-border-light bg-foreground/5 text-xs font-medium text-muted-foreground">
+    <div className="flex size-8 shrink-0 items-center justify-center rounded-full border border-border-light bg-foreground/5 text-ui-sm font-medium text-muted-foreground">
       {initials || "U"}
     </div>
   );

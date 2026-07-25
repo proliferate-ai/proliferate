@@ -9,7 +9,7 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
 
 const variantClasses: Record<InputVariant, string> = {
   default:
-    "w-full h-9 px-3 rounded-md border border-input bg-surface-control text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-60",
+    "h-9 w-full rounded-md border border-input bg-surface-control px-3 text-ui text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-60",
   unstyled: "",
 };
 

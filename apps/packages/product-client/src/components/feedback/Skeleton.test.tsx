@@ -40,6 +40,7 @@ describe("skeleton shimmer css contract", () => {
     expect(domCss).toContain(".skeleton-shimmer::before");
     expect(section).toContain("transform: translateX(-100%)");
     expect(section).toContain("transform: translateX(100%)");
+    /* activity-motion */
     expect(section).toContain("animation-delay: var(--shimmer-delay, 0s)");
     expect(section).not.toContain("background-position");
     expect(section).not.toContain("steps(");

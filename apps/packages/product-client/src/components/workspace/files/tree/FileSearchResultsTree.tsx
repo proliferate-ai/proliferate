@@ -44,8 +44,8 @@ export function FileSearchResultsTree({
       <p
         role="status"
         className={searchQuery.error
-          ? "px-3 py-3 text-[length:var(--text-message)] text-destructive"
-          : "px-3 py-3 text-[length:var(--text-message)] text-sidebar-muted-foreground"}
+          ? "px-3 py-3 text-ui-sm text-destructive"
+          : "px-3 py-3 text-ui-sm text-sidebar-muted-foreground"}
       >
         {message}
       </p>

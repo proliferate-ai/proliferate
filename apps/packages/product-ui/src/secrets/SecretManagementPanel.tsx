@@ -188,7 +188,7 @@ export function SecretManagementPanel({
 
       {materialization?.lastError || error ? (
         <SettingsRow label="Status">
-          <div className="max-w-xl text-sm text-destructive">
+          <div className="max-w-xl text-ui text-destructive">
             {error ?? materialization?.lastError}
           </div>
         </SettingsRow>

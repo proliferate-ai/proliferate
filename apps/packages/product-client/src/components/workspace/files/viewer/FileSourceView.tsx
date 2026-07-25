@@ -184,7 +184,7 @@ export function FileSourceView({
           data-file-source-virtualized
           data-overflow="scroll"
           tabIndex={0}
-          className="m-0 min-h-full min-w-full p-0 font-[family:var(--diffs-font-family)] text-[length:var(--diffs-font-size)] leading-[var(--diffs-line-height)] outline-none"
+          className="m-0 min-h-full min-w-full p-0 font-[family:var(--diffs-font-family)] text-readable-code outline-none"
         >
           <code
             ref={codeElementRef}

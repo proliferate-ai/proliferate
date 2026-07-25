@@ -23,8 +23,8 @@ export const SidebarNavItem = forwardRef<HTMLButtonElement, SidebarNavItemProps>
         className={twMerge(
           "flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-sidebar-nav font-medium transition-colors",
           active
-            ? "bg-sidebar-accent text-sidebar-accent-foreground"
-            : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+            ? "bg-selected text-sidebar-foreground"
+            : "text-sidebar-foreground hover:bg-hover hover:text-sidebar-foreground active:bg-active",
           className,
         )}
         {...props}

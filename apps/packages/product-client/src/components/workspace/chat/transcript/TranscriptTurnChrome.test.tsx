@@ -18,8 +18,10 @@ afterEach(() => {
 });
 
 describe("TurnShell", () => {
-  it("shares Codex's 16px item gap across pending and materialized turns", () => {
-    expect(TURN_ITEM_GAP_CLASS).toBe("gap-4");
+  it("shares the ruled 12px transcript-turn token across pending and materialized turns", () => {
+    // [CHAT-04] RULED: the live transcript's turn rhythm is the
+    // --spacing-transcript-turn token (12px), not a raw gap-4 (16px).
+    expect(TURN_ITEM_GAP_CLASS).toBe("gap-transcript-turn");
   });
 
   it("uses one vertical rhythm for every row", () => {
@@ -126,14 +128,14 @@ describe("resolveTurnTrailingStatus", () => {
     expect(container.innerHTML).not.toContain("motion-safe:animate-status-crossfade");
   });
 
-  it("renders a transient thought at text-chat, not the old 8px text-xs", () => {
+  it("renders a transient thought at the semantic chat role", () => {
     const { container } = render(
       <>{resolveTurnTrailingStatus(STARTED_AT, "working", "Reading workspace flow")}</>,
     );
 
     expect(container.querySelector("[data-trailing-status='transient']")).not.toBeNull();
     expect(container.textContent).toContain("Reading workspace flow");
-    expect(container.innerHTML).toContain("text-[length:var(--text-chat)]");
+    expect(container.innerHTML).toContain("text-chat");
     expect(container.innerHTML).toContain("icon-paired");
     expect(container.innerHTML).not.toContain("text-xs");
   });

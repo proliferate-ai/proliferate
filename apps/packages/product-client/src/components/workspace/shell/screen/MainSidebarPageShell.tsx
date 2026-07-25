@@ -59,7 +59,7 @@ export function MainSidebarPageShell({ children }: MainSidebarPageShellProps) {
         id="main-sidebar"
         // isolate: keeps sidebar-internal z-indexes below the resize
         // separator's overlapping hit strip (z-10 in the page context).
-        className={`isolate flex shrink-0 flex-col overflow-hidden bg-sidebar transition-[width] duration-150 ease-in-out ${resolveMainSidebarEdgeClassName({
+        className={`isolate flex shrink-0 flex-col overflow-hidden bg-sidebar transition-[width] duration-panel ease-in-out ${resolveMainSidebarEdgeClassName({
           desktop: desktopHost,
           transparent: transparentChromeEnabled,
         })}`}

@@ -85,7 +85,7 @@ export function GitReviewV2Playground() {
 
   return (
     <div className="flex h-screen flex-col items-center gap-3 overflow-hidden bg-background py-4 text-foreground">
-      <div className="flex shrink-0 items-center gap-2 text-[length:var(--text-ui)] text-muted-foreground">
+      <div className="flex shrink-0 items-center gap-2 text-ui text-muted-foreground">
         <span>git-review-v2 playground · pane width</span>
         {PANE_WIDTHS.map((width) => (
           <Button
@@ -94,7 +94,7 @@ export function GitReviewV2Playground() {
             variant="ghost"
             size="sm"
             onClick={() => setPaneWidth(width)}
-            className={`h-6 rounded-md px-2 text-[length:var(--text-ui)] ${
+            className={`h-6 rounded-md px-2 text-ui ${
               paneWidth === width
                 ? "bg-list-hover text-foreground"
                 : "text-muted-foreground"
@@ -105,7 +105,7 @@ export function GitReviewV2Playground() {
         ))}
       </div>
       <div
-        className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-sidebar-background text-sidebar-foreground shadow-md"
+        className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-sidebar-background text-sidebar-foreground shadow-popover"
         style={{ width: paneWidth }}
       >
         <GitReviewV2Pane />
@@ -220,10 +220,10 @@ function ReviewHeader({
               type="button"
               variant="ghost"
               size="sm"
-              className="h-6 shrink-0 gap-1 rounded-md px-1.5 text-[length:var(--text-ui)] font-medium text-sidebar-foreground hover:bg-sidebar-accent"
+              className="h-6 shrink-0 gap-1 rounded-md px-1.5 text-ui font-medium text-sidebar-foreground hover:bg-hover active:bg-active"
             >
               {targetLabel}
-              <ChevronDown className="size-3 text-sidebar-muted-foreground" />
+              <ChevronDown className="text-ui icon-compact text-sidebar-muted-foreground" />
             </Button>
           }
         >
@@ -233,7 +233,7 @@ function ReviewHeader({
                 <PopoverMenuItem
                   key={entry.id}
                   label={entry.label}
-                  trailing={entry.id === targetId ? <Check className="size-3.5" /> : null}
+                  trailing={entry.id === targetId ? <Check className="text-ui icon-compact" /> : null}
                   onClick={() => {
                     onTargetChange(entry.id);
                     close();
@@ -256,7 +256,7 @@ function ReviewHeader({
             className={`w-72 ${POPOVER_SURFACE_CLASS}`}
             trigger={
               <PaneIconButton label="Jump to file">
-                <FolderTree className="size-3.5" />
+                <FolderTree className="text-ui icon-control" />
               </PaneIconButton>
             }
           >
@@ -271,7 +271,7 @@ function ReviewHeader({
                         name={basename(file.path)}
                         path={file.path}
                         kind="file"
-                        className="size-3.5 shrink-0"
+                        className="text-ui icon-compact shrink-0"
                       />
                     }
                     label={
@@ -281,7 +281,7 @@ function ReviewHeader({
                       <FileChangeStats
                         additions={file.additions}
                         deletions={file.deletions}
-                        className="text-[length:var(--text-ui-sm)]"
+                        className="text-ui-sm"
                       />
                     }
                     onClick={() => {
@@ -298,13 +298,13 @@ function ReviewHeader({
             onClick={onToggleAll}
           >
             {allCollapsed ? (
-              <ExpandAll className="size-3.5" />
+              <ExpandAll className="text-ui icon-control" />
             ) : (
-              <CollapseAll className="size-3.5" />
+              <CollapseAll className="text-ui icon-control" />
             )}
           </PaneIconButton>
           <PaneIconButton label="Review options">
-            <MoreHorizontal className="size-3.5" />
+            <MoreHorizontal className="text-ui icon-control" />
           </PaneIconButton>
         </div>
       </div>
@@ -342,7 +342,7 @@ function ReviewFileSection({
         }}
         className={STICKY_HEADER_CLASS}
       >
-        <div className="group/diff-header @container/diff-header flex min-h-8 items-center gap-2 px-3 py-1 text-chat leading-[var(--text-chat--line-height)] hover:bg-[var(--color-diff-sidebar-file-header-hover-surface)]">
+        <div className="group/diff-header @container/diff-header flex min-h-8 items-center gap-2 px-3 py-1 text-chat hover:bg-[var(--color-diff-sidebar-file-header-hover-surface)]">
           {/* Codex path recipe (mirrors FileDiffCard): the GROWING flex item
               is this container; the name span inside is content-sized, so
               every row's name is left-anchored beside the icon. The name's
@@ -353,7 +353,7 @@ function ReviewFileSection({
               name={name}
               path={file.path}
               kind="file"
-              className="size-4 shrink-0"
+              className="text-chat icon-paired shrink-0"
             />
             <span
               className="min-w-0 truncate [direction:rtl]"
@@ -370,12 +370,12 @@ function ReviewFileSection({
           </div>
           <span className="flex shrink-0 items-center gap-1.5">
             {(file.status === "deleted" || file.status === "renamed") && (
-              <span className="rounded bg-sidebar-accent px-1 py-px text-[length:var(--text-ui-sm)] leading-[var(--text-ui-sm--line-height)] text-sidebar-muted-foreground">
+              <span className="rounded bg-surface-control px-1 py-px text-ui-sm text-sidebar-muted-foreground">
                 {file.status}
               </span>
             )}
             {file.status === "binary" ? (
-              <span className="text-[length:var(--text-ui-sm)] text-sidebar-muted-foreground">
+              <span className="text-ui-sm text-sidebar-muted-foreground">
                 binary
               </span>
             ) : (
@@ -385,7 +385,7 @@ function ReviewFileSection({
                 className="leading-none"
               />
             )}
-            <span className="flex items-center gap-0.5 opacity-0 transition-opacity duration-200 group-hover/diff-header:opacity-100 group-focus-within/diff-header:opacity-100">
+            <span className="flex items-center gap-0.5 opacity-0 transition-opacity duration-hover group-hover/diff-header:opacity-100 group-focus-within/diff-header:opacity-100">
               <Button
                 type="button"
                 variant="ghost"
@@ -393,9 +393,9 @@ function ReviewFileSection({
                 aria-label={`Open ${file.path}`}
                 title="Open file"
                 onClick={(event) => event.stopPropagation()}
-                className="size-6 rounded-md text-sidebar-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                className="size-6 rounded-md text-sidebar-muted-foreground hover:bg-hover active:bg-active hover:text-sidebar-foreground"
               >
-                <ArrowUpRight className="size-3.5" />
+                <ArrowUpRight className="text-ui icon-control" />
               </Button>
               <Button
                 type="button"
@@ -407,10 +407,10 @@ function ReviewFileSection({
                   event.stopPropagation();
                   onToggle();
                 }}
-                className="size-6 rounded-md text-sidebar-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                className="size-6 rounded-md text-sidebar-muted-foreground hover:bg-hover active:bg-active hover:text-sidebar-foreground"
               >
                 <ChevronDown
-                  className={`size-3.5 transition-transform duration-200 ${
+                  className={`text-ui icon-control transition-transform duration-disclosure ${
                     isCollapsed ? "rotate-0" : "rotate-180"
                   }`}
                 />
@@ -429,7 +429,7 @@ function ReviewFileSection({
               chainVerticalWheel
             />
           ) : (
-            <p className="px-3 py-2 text-[length:var(--text-ui)] text-sidebar-muted-foreground">
+            <p className="px-3 py-2 text-ui text-sidebar-muted-foreground">
               Binary file changed
             </p>
           )}

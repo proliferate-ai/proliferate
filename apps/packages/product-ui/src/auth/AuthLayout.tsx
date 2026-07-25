@@ -28,11 +28,11 @@ export function AuthLayout({
           {mark ? <div className="flex size-12 items-center justify-start">{mark}</div> : null}
           <div className="space-y-2.5">
             <h1 className="text-hero font-semibold leading-tight text-foreground">{title}</h1>
-            {subtitle ? <p className="text-sm leading-6 text-muted-foreground">{subtitle}</p> : null}
+            {subtitle ? <p className="text-body text-muted-foreground">{subtitle}</p> : null}
           </div>
         </div>
         <div className="space-y-4">{children}</div>
-        {footer ? <div className="text-xs leading-5 text-faint">{footer}</div> : null}
+        {footer ? <div className="text-ui-sm text-faint">{footer}</div> : null}
       </main>
     </div>
   );

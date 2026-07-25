@@ -72,11 +72,11 @@ export function CloudEnvironmentDetail({
       <Button
         type="button"
         variant="ghost"
-        className="h-auto px-0 py-0 text-sm hover:bg-transparent"
+        className="h-auto px-0 py-0 text-body hover:bg-transparent"
         onClick={onBack}
       >
         Environments
-        <ChevronRight className="size-4" />
+        <ChevronRight className="icon-compact" />
         <span className="text-foreground">{repoId}</span>
       </Button>
 

@@ -111,11 +111,11 @@ export function SessionContentSearchOverlay({
 
   return (
     <div
-      className={`pointer-events-none absolute ${offsetClassName} right-4 z-[55] flex justify-end`}
+      className={`pointer-events-none absolute ${offsetClassName} right-4 z-popover flex justify-end`}
       data-content-search-overlay
       data-content-search-surface={surface}
     >
-      <div className="pointer-events-auto grid max-w-[70vw] w-[340px] grid-cols-[minmax(0,1fr)_auto] overflow-hidden rounded-[20px] border-[0.5px] border-border bg-sidebar-background shadow-[0px_8px_16px_-4px_rgba(0,0,0,0.12)]">
+      <div className="pointer-events-auto grid max-w-[70vw] w-[340px] grid-cols-[minmax(0,1fr)_auto] overflow-hidden rounded-lg border-[0.5px] border-border bg-sidebar-background shadow-popover">
         <div className="col-[1/2] row-[1] flex h-[44px] min-w-0 items-center gap-2 pl-4">
           <Search className="icon-paired shrink-0 text-foreground" />
           <Input
@@ -123,7 +123,7 @@ export function SessionContentSearchOverlay({
             id="content-search-input"
             aria-label={inputLabel}
             placeholder={placeholder}
-            className="h-6 min-w-0 flex-1 rounded-none border-0 bg-transparent px-0 text-base leading-6 text-foreground outline-none placeholder:text-muted-foreground focus:ring-0"
+            className="h-6 min-w-0 flex-1 rounded-none border-0 bg-transparent px-0 text-ui leading-6 text-foreground outline-none placeholder:text-muted-foreground focus:ring-0"
             type="text"
             value={query}
             onChange={(event: ChangeEvent<HTMLInputElement>) =>
@@ -134,7 +134,7 @@ export function SessionContentSearchOverlay({
         </div>
         {hasQuery && (
           <>
-            <div className={`${resultRowColumnClass} row-[2] flex min-w-0 items-center border-t border-border px-4 py-2 text-base leading-6 transition-[border-width,max-height,opacity,padding,translate] duration-200 ease-out max-h-9 translate-y-0 opacity-100`}>
+            <div className={`${resultRowColumnClass} row-[2] flex min-w-0 items-center border-t border-border px-4 py-2 text-ui leading-6 transition-[border-width,max-height,opacity,padding,translate] duration-disclosure ease-out max-h-9 translate-y-0 opacity-100`}>
               <div className="flex items-center gap-3">
                 <SearchNavigationButton
                   label="Previous result"
@@ -149,7 +149,7 @@ export function SessionContentSearchOverlay({
                 />
               </div>
             </div>
-            <span className={`pointer-events-none ${resultRowColumnClass} row-[2] min-w-0 px-4 py-2 text-right text-base leading-6 text-muted-foreground transition-[max-height,opacity,padding,translate] duration-200 ease-out max-h-9 translate-y-0 opacity-100`}>
+            <span className={`pointer-events-none ${resultRowColumnClass} row-[2] min-w-0 px-4 py-2 text-right text-ui-sm leading-6 text-muted-foreground transition-[max-height,opacity,padding,translate] duration-disclosure ease-out max-h-9 translate-y-0 opacity-100`}>
               {resultLabel}
             </span>
           </>

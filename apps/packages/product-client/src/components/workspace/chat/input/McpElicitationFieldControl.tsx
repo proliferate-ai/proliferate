@@ -32,7 +32,7 @@ export function McpElicitationFieldControl({
             checked={Boolean(value)}
             onCheckedChange={(checked) => onChange(checked === true)}
           />
-          <Label className="mb-0 text-sm text-foreground">{label}</Label>
+          <Label className="mb-0 text-ui text-foreground">{label}</Label>
         </div>
         {description}
       </div>

@@ -4,6 +4,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { act, cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { motion } from "@proliferate/design/motion";
 import {
   AssistantMessage,
 } from "./AssistantMessage";
@@ -296,10 +297,21 @@ describe("AssistantMessage streaming reveal", () => {
 
     expect(section).toContain("@keyframes stream-word-in");
     expect(section).toContain(".stream-word");
-    expect(section).toContain("animation: stream-word-in 320ms linear both");
+    // The cadence moved into the token authority: the recipe names the
+    // generated variable and motion.ts owns the 320ms. Asserting the literal
+    // here again would re-introduce a second source of truth for it.
+    expect(section).toContain(
+      "animation: stream-word-in var(--activity-stream-reveal-fade) linear both",
+    );
     expect(section).toContain("from { opacity: 0.08; }");
     expect(section).not.toContain("mask-image");
-    expect(STREAM_REVEAL_FADE_MS).toBe(320);
+    // The JS reveal timer must schedule against the same number the CSS fade
+    // renders, so pin it to the authority rather than to a copied literal:
+    // retiming motion.ts alone would otherwise desync the two silently.
+    expect(STREAM_REVEAL_FADE_MS).toBe(motion.activity.streamRevealFadeMs);
+    expect(STREAM_REVEAL_HANDOFF_DELAY_MS).toBe(
+      motion.activity.streamRevealHandoffDelayMs,
+    );
     expect(STREAM_REVEAL_SETTLE_MS).toBe(
       STREAM_REVEAL_FADE_MS + STREAM_REVEAL_HANDOFF_DELAY_MS,
     );
@@ -312,7 +324,17 @@ describe("AssistantMessage streaming reveal", () => {
     );
     if (existsSync(generatedCssPath)) {
       expect(readFileSync(generatedCssPath, "utf8")).toContain(
-        "animation: stream-word-in 320ms linear both",
+        "animation: stream-word-in var(--activity-stream-reveal-fade) linear both",
+      );
+    }
+    // ...and the variable that recipe reads resolves to that same number.
+    const generatedThemePath = resolve(
+      dirname(fileURLToPath(import.meta.url)),
+      "../../../../design/dist/theme.css",
+    );
+    if (existsSync(generatedThemePath)) {
+      expect(readFileSync(generatedThemePath, "utf8")).toContain(
+        `--activity-stream-reveal-fade: ${motion.cssMs(motion.activity.streamRevealFadeMs)};`,
       );
     }
   });

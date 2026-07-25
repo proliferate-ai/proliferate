@@ -86,7 +86,7 @@ export function GoalTranscriptEventRow({ event }: { event: GoalTranscriptEvent }
         )}
       </Button>
       {expanded && presentation.fullDetail && (
-        <div className="mt-1 whitespace-pre-wrap rounded-md border border-border bg-card px-3.5 py-2.5 text-ui-sm leading-[1.65] tracking-[-0.01em] text-muted-foreground select-text">
+        <div className="mt-1 whitespace-pre-wrap rounded-md border border-border bg-card px-3.5 py-2.5 text-ui-sm leading-relaxed tracking-[-0.01em] text-muted-foreground select-text">
           {presentation.fullDetail}
         </div>
       )}

@@ -35,9 +35,9 @@ export function AutomationInventoryList({
     <div className="w-full min-w-0 overflow-visible pb-10" role="region" aria-label="Workflows">
       {groups.map((group) => (
         <section key={group.id} aria-label={group.label}>
-          <div className="mt-3 flex h-9 w-full items-center gap-2 rounded-[10px] bg-foreground/[0.042] px-3">
-            <span className="text-sm font-medium leading-5 text-foreground">{group.label}</span>
-            <span className="text-sm tabular-nums text-muted-foreground">{group.count}</span>
+          <div className="mt-3 flex h-9 w-full items-center gap-2 rounded-sm bg-surface-elevated-secondary px-3">
+            <span className="text-heading font-medium text-foreground">{group.label}</span>
+            <span className="text-ui-sm tabular-nums text-muted-foreground">{group.count}</span>
           </div>
           <div role="list">
             {group.items.map((item) => (
@@ -90,7 +90,7 @@ function AutomationInventoryRow({
         size="unstyled"
         type="button"
         onClick={() => onAutomationSelect(item.id)}
-        className="grid h-12 w-full cursor-pointer grid-cols-[18px_minmax(0,1fr)_4rem] items-center gap-x-3 rounded-[5px] px-3 py-1 text-left transition-colors hover:bg-foreground/[0.04] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-[-2px] sm:grid-cols-[18px_minmax(0,1fr)_8rem_4rem] md:grid-cols-[18px_minmax(0,1fr)_8rem_8rem_4rem] lg:grid-cols-[18px_minmax(0,1fr)_minmax(7rem,10rem)_minmax(7rem,10rem)_minmax(8rem,12rem)_4rem]"
+        className="grid h-12 w-full cursor-pointer grid-cols-[18px_minmax(0,1fr)_4rem] items-center gap-x-3 rounded-sm px-3 py-1 text-left transition-colors hover:bg-hover active:bg-active focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-[-2px] sm:grid-cols-[18px_minmax(0,1fr)_8rem_4rem] md:grid-cols-[18px_minmax(0,1fr)_8rem_8rem_4rem] lg:grid-cols-[18px_minmax(0,1fr)_minmax(7rem,10rem)_minmax(7rem,10rem)_minmax(8rem,12rem)_4rem]"
         aria-label={automationRowAriaLabel(item)}
       >
         <span className="inline-flex shrink-0 items-center justify-center">
@@ -98,10 +98,10 @@ function AutomationInventoryRow({
         </span>
 
         <span className="min-w-0" title={item.title}>
-          <span className="block min-w-0 truncate text-sm font-medium leading-5 text-foreground">
+          <span className="block min-w-0 truncate text-body-emphasis font-medium text-foreground">
             {item.title}
           </span>
-          <span className="block min-w-0 truncate text-xs leading-4 text-muted-foreground">
+          <span className="block min-w-0 truncate text-ui-sm leading-4 text-muted-foreground">
             {item.repoLabel}
           </span>
         </span>
@@ -116,7 +116,7 @@ function AutomationInventoryRow({
         <span className="relative flex min-w-0 items-center justify-end">
           <span
             className={twMerge(
-              "truncate text-right text-xs leading-4 text-muted-foreground",
+              "truncate text-right text-ui-sm leading-4 text-muted-foreground",
               hasRowActions ? "transition-opacity group-hover:opacity-0 group-focus-within:opacity-0" : null,
             )}
           >
@@ -210,7 +210,7 @@ function AutomationActionMenu({
         <MoreHorizontal className="icon-paired" aria-hidden />
       </RowIconButton>
       {open ? (
-        <span className="absolute right-0 top-full z-40 mt-2 w-44 rounded-[10px] border border-popover-ring bg-popover p-1 text-popover-foreground shadow-popover">
+        <span className="absolute right-0 top-full z-40 mt-2 w-44 rounded-lg border border-popover-ring bg-popover p-1 text-popover-foreground shadow-popover">
           {onRunNow ? (
             <MenuAction
               label="Run now"
@@ -285,7 +285,7 @@ function RowIconButton({
         if (softDisabled || disabled || busy) return;
         onClick();
       }}
-      className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground aria-disabled:cursor-default aria-disabled:text-muted-foreground disabled:opacity-45"
+      className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-hover hover:text-foreground active:bg-active aria-disabled:cursor-default aria-disabled:text-muted-foreground disabled:opacity-45"
     >
       {children}
     </Button>
@@ -318,7 +318,7 @@ function MenuAction({
         if (disabled || softDisabled) return;
         onClick();
       }}
-      className="flex h-8 w-full items-center gap-2 rounded-md px-2.5 text-left text-sm text-muted-foreground transition-colors hover:bg-popover-accent hover:text-foreground aria-disabled:cursor-default aria-disabled:hover:bg-transparent aria-disabled:hover:text-muted-foreground disabled:opacity-45"
+      className="flex h-8 w-full items-center gap-2 rounded-md px-2.5 text-left text-ui text-muted-foreground transition-colors hover:bg-hover hover:text-foreground active:bg-active aria-disabled:cursor-default aria-disabled:hover:bg-transparent aria-disabled:hover:text-muted-foreground disabled:opacity-45"
     >
       <span className="flex icon-paired shrink-0 items-center justify-center">{icon}</span>
       <span className="min-w-0 flex-1 truncate">
@@ -343,7 +343,7 @@ function MetadataCell({
 }) {
   return (
     <span
-      className={twMerge("min-w-0 items-center text-xs leading-4 text-muted-foreground", className)}
+      className={twMerge("min-w-0 items-center text-ui-sm leading-4 text-muted-foreground", className)}
       title={label}
     >
       <span className="min-w-0 truncate">{label}</span>

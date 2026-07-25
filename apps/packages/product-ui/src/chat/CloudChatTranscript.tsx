@@ -36,7 +36,7 @@ export function CloudChatTranscript({
 }: CloudChatTranscriptProps) {
   if (rows.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed border-border bg-card p-5 text-sm">
+      <div className="rounded-lg border border-dashed border-border bg-card p-5 text-chat">
         <div className="font-medium text-foreground">{emptyTitle}</div>
         {emptyDescription ? (
           <p className="mt-1 text-muted-foreground">{emptyDescription}</p>

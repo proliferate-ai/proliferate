@@ -19,7 +19,7 @@ export function NavigationClosePaneRow({
 }) {
   return (
     <div
-      className={`group/pane-row flex min-h-11 items-center rounded-lg hover:bg-sidebar-accent ${isFocused ? "bg-sidebar-accent" : ""}`}
+      className={`group/pane-row flex min-h-11 items-center rounded-lg hover:bg-hover ${isFocused ? "bg-selected" : ""}`}
     >
       <Button
         type="button"
@@ -32,7 +32,7 @@ export function NavigationClosePaneRow({
       >
         <SubagentIdentityGlyph
           seed={child.id}
-          size={18}
+          className="text-ui icon-large"
           dimmed={dimmed}
           label={`Identity mark for ${child.title}`}
         />
@@ -53,7 +53,7 @@ export function NavigationClosePaneRow({
           aria-label={`${action.label} ${child.title}`}
           title={action.title}
           onClick={action.onClick}
-          className="mr-1 h-7 shrink-0 px-2 text-sidebar-muted-foreground opacity-0 hover:bg-sidebar-accent hover:text-destructive group-hover/pane-row:opacity-100 focus-visible:opacity-100"
+          className="mr-1 h-7 shrink-0 px-2 text-sidebar-muted-foreground opacity-0 hover:bg-hover active:bg-active hover:text-destructive group-hover/pane-row:opacity-100 focus-visible:opacity-100"
         >
           {action.label}
         </Button>

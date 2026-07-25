@@ -170,7 +170,7 @@ function createSurface(
 }
 
 function expectSharedChatLayout(element: HTMLElement) {
-  const column = element.closest('[class~="max-w-[46rem]"]');
+  const column = element.closest('[class~="max-w-transcript-readable"]');
   expect(column?.className).toContain(CHAT_COLUMN_CLASSNAME);
   expect(column?.parentElement?.className).toContain(CHAT_SURFACE_GUTTER_CLASSNAME);
 }

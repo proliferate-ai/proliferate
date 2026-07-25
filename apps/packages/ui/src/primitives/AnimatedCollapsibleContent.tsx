@@ -25,7 +25,7 @@ export function AnimatedCollapsibleContent({
         gridTemplateRows: expanded ? "1fr" : "0fr",
         transitionProperty: "grid-template-rows, opacity",
       }}
-      className={`grid duration-200 ease-out motion-reduce:transition-none ${
+      className={`grid duration-disclosure ease-out motion-reduce:transition-none ${
         expanded
           ? "opacity-100"
           : "pointer-events-none opacity-0"

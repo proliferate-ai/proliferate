@@ -9,7 +9,7 @@ import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@proliferate/product-domain/cha
 import type { CoworkCodingAction } from "@proliferate/product-domain/chats/tools/cowork-coding-tool-presentation";
 
 const CHAT_ACTION_TEXT_CLASS =
-  "text-[length:var(--text-chat)] leading-[var(--text-chat--line-height)]";
+  "text-chat";
 
 export function shouldShowCoworkCodingLedger(action: CoworkCodingAction): boolean {
   return (
@@ -100,7 +100,7 @@ function CodingWorkspaceActionRow({
       onClick={onOpen}
     >
       <span className="min-w-0 truncate">Created coding workspace</span>
-      <ExternalLink className="icon-compact shrink-0 text-faint opacity-0 transition-opacity duration-200 group-hover/action-row:opacity-100 group-focus-visible/action-row:opacity-100" />
+      <ExternalLink className="icon-compact shrink-0 text-faint opacity-0 transition-opacity duration-hover group-hover/action-row:opacity-100 group-focus-visible/action-row:opacity-100" />
     </Button>
   );
 }
@@ -140,7 +140,7 @@ function PromptActionRow({
               className="w-full"
               viewportClassName={TOOL_CALL_BODY_MAX_HEIGHT_CLASS}
             >
-              <div className="px-3 py-2 text-sm leading-relaxed text-muted-foreground">
+              <div className="px-3 py-2 text-chat leading-relaxed text-muted-foreground">
                 <MarkdownBody
                   content={prompt}
                   className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
@@ -183,7 +183,7 @@ function CodingSessionActionRow({
       onClick={onOpen}
     >
       <span className="min-w-0 truncate">Created coding session</span>
-      <ExternalLink className="icon-compact shrink-0 text-faint opacity-0 transition-opacity duration-200 group-hover/action-row:opacity-100 group-focus-visible/action-row:opacity-100" />
+      <ExternalLink className="icon-compact shrink-0 text-faint opacity-0 transition-opacity duration-hover group-hover/action-row:opacity-100 group-focus-visible/action-row:opacity-100" />
     </Button>
   );
 }
@@ -214,7 +214,7 @@ export function CoworkCodingResultDetails({ content }: { content: string }) {
         className="w-full"
         viewportClassName={TOOL_CALL_BODY_MAX_HEIGHT_CLASS}
       >
-        <pre className="m-0 whitespace-pre-wrap px-3 py-2 font-mono text-[length:var(--readable-code-font-size)] leading-[var(--readable-code-line-height)] text-foreground">
+        <pre className="m-0 whitespace-pre-wrap px-3 py-2 font-mono text-readable-code text-foreground">
           {content}
         </pre>
       </AutoHideScrollArea>

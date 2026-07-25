@@ -81,10 +81,10 @@ export function CloudChatHeader({ header }: { header: CloudChatHeaderView }) {
       }`}
       >
         <div className="flex min-w-0 flex-1 items-center gap-1.5">
-          <h1 className="min-w-0 max-w-[16rem] truncate text-sm font-medium text-foreground">
+          <h1 className="min-w-0 max-w-[16rem] truncate text-chat font-medium text-foreground">
             {header.workspaceLabel}
           </h1>
-          <span className="shrink-0 text-xs text-muted-foreground/50" aria-hidden>
+          <span className="shrink-0 text-chat text-muted-foreground/50" aria-hidden>
             /
           </span>
           <CloudChatSessionSwitcher view={header.sessionSwitcher} />
@@ -138,7 +138,7 @@ function CloudChatSessionSwitcher({ view }: { view: CloudChatSessionSwitcherView
             aria-label={`Switch sessions in ${view.workspaceLabel}. Active session: ${activeLabel}`}
             aria-haspopup="menu"
             aria-expanded={open}
-            className="flex h-7 min-w-0 max-w-[20rem] items-center gap-1.5 rounded-md bg-foreground/[0.045] px-2 text-left text-sm text-foreground hover:bg-foreground/[0.07]"
+            className="flex h-7 min-w-0 max-w-[20rem] items-center gap-1.5 rounded-md bg-surface-control px-2 text-left text-chat text-foreground hover:bg-hover active:bg-active"
           >
             <span className="min-w-0 truncate">{activeLabel}</span>
             <ChevronDown
@@ -149,7 +149,7 @@ function CloudChatSessionSwitcher({ view }: { view: CloudChatSessionSwitcherView
       >
         {(close) => (
           <div role="menu" aria-label={`Sessions in ${view.workspaceLabel}`}>
-            <div className="px-2.5 py-1.5 text-xs font-medium text-muted-foreground">
+            <div className="px-2.5 py-1.5 text-chat font-medium text-muted-foreground">
               {view.sessions.length
                 ? `${view.sessions.length} ${view.sessions.length === 1 ? "session" : "sessions"}`
                 : "No saved sessions yet"}
@@ -191,7 +191,7 @@ function CloudChatSessionSwitcher({ view }: { view: CloudChatSessionSwitcherView
 function CloudChatStatusChip({ status }: { status: CloudChatStatusView }) {
   return (
     <span
-      className="inline-flex h-6 shrink-0 items-center gap-1.5 rounded-full bg-foreground/[0.045] px-2.5 text-xs text-foreground"
+      className="inline-flex h-6 shrink-0 items-center gap-1.5 rounded-full bg-surface-control px-2.5 text-chat text-foreground"
       aria-label={`Status: ${status.label}`}
     >
       <StatusDot tone={status.tone} live={status.live} />
@@ -213,7 +213,7 @@ function CloudChatHeaderNotice({ notice }: { notice: CloudChatHeaderNoticeView }
   }
 
   return (
-    <div className={`shrink-0 border-y px-4 py-2 text-sm ${noticeToneClass(notice.tone)}`}>
+    <div className={`shrink-0 border-y px-4 py-2 text-chat ${noticeToneClass(notice.tone)}`}>
       <div className="flex min-w-0 items-center gap-3">
         <StatusDot tone={notice.tone} live={notice.tone === "info"} />
         <div className="min-w-0 flex-1 leading-5">
@@ -252,7 +252,7 @@ function CloudChatHeaderNotice({ notice }: { notice: CloudChatHeaderNoticeView }
       {detailsOpen && notice.diagnostics ? (
         <div className="mt-2 flex items-start gap-2 pl-6">
           <code
-            className="min-w-0 flex-1 break-words rounded-md bg-background/35 px-2 py-1.5 text-base leading-5 text-muted-foreground"
+            className="min-w-0 flex-1 break-words rounded-md bg-background/35 px-2 py-1.5 text-chat text-muted-foreground"
             data-telemetry-mask
           >
             {notice.diagnostics.text}

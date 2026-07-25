@@ -24,7 +24,7 @@ export function CloudChatComposerControlRow({ composer }: { composer: CloudChatC
             iconOnly
             label="Add context"
             disabled={composer.disabled}
-            className="text-[color:var(--color-composer-control-foreground)]"
+            className="text-composer-control-foreground"
           />
           {leadingControls.map((control) => (
             <CloudChatSingleControl
@@ -65,14 +65,19 @@ export function CloudChatComposerControlStrip({
 }: CloudChatComposerControlStripProps) {
   const leadingControls = controls.filter((control) => control.placement === "leading");
   const modelConfigControls = controls.filter((control) => control.placement !== "leading");
+  // [CHAT-02] (D-V2-4): 8px between control clusters, same as
+  // ChatComposerControlRowFrame. [SPACE-01] originally routed this strip's
+  // gap-[5px] sites to 6px; the addendum's RULED block amended every
+  // composer-surface site to [CHAT-02]'s 8px so both composer control rows read
+  // identically.
   return (
     <div
       className={twMerge(
-        "grid min-w-0 flex-1 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-[5px]",
+        "grid min-w-0 flex-1 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2",
         className,
       )}
     >
-      <div className="flex min-w-0 items-center gap-[5px]">
+      <div className="flex min-w-0 items-center gap-2">
         {leadingControls.map((control) => (
           <CloudChatSingleControl
             key={control.id}
@@ -84,7 +89,7 @@ export function CloudChatComposerControlStrip({
 
       <div className="min-w-0" aria-hidden="true" />
 
-      <div className="flex min-w-0 items-center gap-[5px]">
+      <div className="flex min-w-0 items-center gap-2">
         {modelConfigControls.length > 0 ? (
           <CloudChatModelConfigControl
             controls={modelConfigControls}

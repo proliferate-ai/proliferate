@@ -143,7 +143,7 @@ export function SettingsScreen({
             variant="unstyled"
             size="unstyled"
             onClick={onNavigateHome}
-            className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-ui text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-ui text-muted-foreground transition-colors hover:bg-hover active:bg-active hover:text-foreground"
           >
             <ArrowLeft className="icon-paired" />
             {SETTINGS_COPY.back}

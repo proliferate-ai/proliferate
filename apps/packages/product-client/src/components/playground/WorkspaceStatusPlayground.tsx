@@ -399,7 +399,7 @@ function FullSidebarPane() {
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="space-y-2">
-      <h2 className="font-mono text-base font-medium uppercase tracking-[0.06em] text-muted-foreground">
+      <h2 className="font-mono text-heading font-medium uppercase tracking-[0.06em] text-muted-foreground">
         {title}
       </h2>
       {children}

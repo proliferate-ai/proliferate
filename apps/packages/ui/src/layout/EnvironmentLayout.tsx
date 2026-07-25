@@ -41,10 +41,16 @@ export function EnvironmentSection({
 }: EnvironmentSectionProps) {
   return (
     <section className={`flex flex-col gap-4 ${separated ? "border-t border-border/60 pt-6" : ""}`}>
+      {/* ui-foundation-escalation: bg-foreground/5 (a banned <=10% foreground
+          overlay) had no direct semantic replacement in this component's
+          existing vocabulary; mapped to bg-surface-elevated-secondary, the
+          codebase's dominant token for the same subtle-panel-fill role
+          (see WorkflowInputEditor.tsx, AutomationSurface.tsx). Flag if a
+          dedicated environment-panel surface token is preferred instead. */}
       <div className="flex min-w-0 items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-3">
           {Icon ? (
-            <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md bg-foreground/5 text-muted-foreground">
+            <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md bg-surface-elevated-secondary text-muted-foreground">
               <Icon className="icon-control" />
             </span>
           ) : null}
@@ -84,7 +90,7 @@ export function EnvironmentField({
 
 export function EnvironmentPanel({ children }: EnvironmentPanelProps) {
   return (
-    <div className="flex flex-col divide-y divide-border/40 rounded-lg border border-border bg-foreground/5">
+    <div className="flex flex-col divide-y divide-border/40 rounded-lg border border-border bg-surface-elevated-secondary">
       {children}
     </div>
   );
@@ -100,7 +106,7 @@ export function EnvironmentAdvancedDisclosure({
   children,
 }: EnvironmentAdvancedDisclosureProps) {
   return (
-    <details className="group rounded-lg border border-border bg-foreground/5">
+    <details className="group rounded-lg border border-border bg-surface-elevated-secondary">
       <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 text-left [&::-webkit-details-marker]:hidden">
         <span className="min-w-0 space-y-0.5">
           <span className="block text-ui font-medium text-foreground">{title}</span>

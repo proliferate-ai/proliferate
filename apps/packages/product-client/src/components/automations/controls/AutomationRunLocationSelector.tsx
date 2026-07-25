@@ -43,7 +43,7 @@ interface AutomationRunLocationSelectorProps {
 }
 
 const RUN_LOCATION_SURFACE_CLASS = `w-72 min-w-[175px] ${POPOVER_SURFACE_CLASS}`;
-const RUN_LOCATION_DIVIDER_CLASS = "mx-1 my-1.5 h-px scale-y-50 bg-foreground/10";
+const RUN_LOCATION_DIVIDER_CLASS = "mx-1 my-1.5 h-px scale-y-50 bg-border";
 
 export function AutomationRunLocationSelector({
   ownerScope,
@@ -100,7 +100,7 @@ export function AutomationRunLocationSelector({
   return (
     <div className="flex min-w-0 flex-col gap-1">
       <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <span className="shrink-0 text-sm text-muted-foreground">Run in</span>
+        <span className="shrink-0 text-ui-sm text-muted-foreground">Run in</span>
         <PopoverButton
           trigger={(
             <PillControlButton
@@ -185,11 +185,11 @@ export function AutomationRunLocationSelector({
           )}
         </PopoverButton>
         {!canChangeOwner ? (
-          <span className="shrink-0 text-xs text-muted-foreground">Scope locked</span>
+          <span className="shrink-0 text-ui-sm text-muted-foreground">Scope locked</span>
         ) : null}
       </div>
       {disabledReason ? (
-        <p className="text-xs leading-5 text-muted-foreground">
+        <p className="text-ui-sm text-muted-foreground">
           {disabledReason}
         </p>
       ) : null}

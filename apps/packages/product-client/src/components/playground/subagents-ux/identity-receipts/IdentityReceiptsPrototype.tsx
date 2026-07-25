@@ -81,7 +81,7 @@ export function IdentityReceiptsPrototype() {
   return (
     <div className="flex max-w-2xl flex-col gap-6">
       <section className="flex flex-col gap-3">
-        <h2 className="text-sm font-semibold text-muted-foreground">
+        <h2 className="text-heading font-semibold text-muted-foreground">
           Identity + creation receipts
         </h2>
         <div className="flex flex-wrap items-end gap-4">
@@ -145,13 +145,13 @@ export function IdentityReceiptsPrototype() {
             ))}
           </div>
         )}
-        <p aria-live="polite" className="min-h-4 text-xs text-faint">
+        <p aria-live="polite" className="min-h-4 text-ui-sm text-faint">
           {lastAction ?? "Receipt actions land here."}
         </p>
       </section>
 
       <section className="flex flex-col gap-2">
-        <h3 className="text-xs font-semibold text-muted-foreground">
+        <h3 className="text-heading font-semibold text-muted-foreground">
           Determinism check — glyphs for adjacent seeds
         </h3>
         <div className="flex flex-wrap items-center gap-2">
@@ -162,12 +162,12 @@ export function IdentityReceiptsPrototype() {
               singleLine
             >
               <span className="flex size-8 items-center justify-center rounded-md bg-foreground/5">
-                <SubagentIdentityGlyph seed={neighborSeed} size={20} />
+                <SubagentIdentityGlyph seed={neighborSeed} className="text-ui icon-large" />
               </span>
             </Tooltip>
           ))}
         </div>
-        <p className="text-xs text-faint">
+        <p className="text-ui-sm text-faint">
           Same seed always yields the same mark; the short ID stays hover-only.
           The agent-authored task label is the only human-readable name.
         </p>

@@ -18,7 +18,7 @@ export function CollapsibleSummaryRow({
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full items-center justify-between rounded-lg border border-border bg-transparent px-4 py-3 text-left transition-colors duration-150 hover:bg-foreground/[0.03]"
+      className="flex w-full items-center justify-between rounded-lg border border-border bg-transparent px-4 py-3 text-left transition-colors duration-hover hover:bg-hover active:bg-active"
     >
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="text-ui font-medium uppercase tracking-wider text-muted-foreground">

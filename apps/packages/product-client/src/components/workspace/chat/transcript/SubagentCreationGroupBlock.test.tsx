@@ -23,7 +23,7 @@ describe("SubagentCreationGroupBlock", () => {
     // Quiet collapsible line treatment (muted, chat-sized, transparent).
     expect(html).toContain("group/collapsed-actions");
     expect(html).toContain("rounded-none bg-transparent p-0");
-    expect(html).toContain("text-[length:var(--text-chat)]");
+    expect(html).toContain("text-chat");
     expect(html).toContain("text-muted-foreground/60");
     // Completion-time copy, not the old spawn-time "Created …" line.
     expect(html).toContain("2 subagents finished");

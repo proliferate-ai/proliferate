@@ -14,7 +14,7 @@ export function GridTile({ children, onClick, className = "" }: GridTileProps) {
     return (
       <button
         type="button"
-        className={twMerge(TILE_CLASS, "cursor-pointer transition-colors hover:bg-accent", className)}
+        className={twMerge(TILE_CLASS, "cursor-pointer transition-colors hover:bg-hover active:bg-active", className)}
         onClick={onClick}
       >
         {children}

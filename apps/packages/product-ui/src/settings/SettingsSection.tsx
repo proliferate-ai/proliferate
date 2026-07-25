@@ -32,7 +32,7 @@ export function SettingsSection({
           <div className="min-w-0">
             {title ? <SettingsEyebrow>{title}</SettingsEyebrow> : null}
             {description ? (
-              <p className="mt-1 max-w-2xl text-ui-sm leading-[1.45] text-muted-foreground">{description}</p>
+              <p className="mt-1 max-w-2xl text-ui-sm text-muted-foreground">{description}</p>
             ) : null}
           </div>
           {action ? <div className="flex shrink-0 items-center gap-2">{action}</div> : null}
