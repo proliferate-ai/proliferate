@@ -9,6 +9,7 @@ import {
   PopoverButton,
 } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
+import { UserAvatar } from "@proliferate/ui/primitives/UserAvatar";
 import { OrganizationAvatar } from "#product/components/organizations/OrganizationAvatar";
 import { SHORTCUTS } from "#product/config/shortcuts/registry";
 import { useAppCapabilities } from "#product/hooks/capabilities/derived/use-app-capabilities";
@@ -64,7 +65,6 @@ export function SidebarAccountFooter() {
   const [switchTarget, setSwitchTarget] = useState<OrganizationRecord | null>(null);
 
   const displayName = user?.displayName?.trim() || user?.email || "Account";
-  const initials = displayName.trim().slice(0, 2).toUpperCase() || "PR";
   const organizationName = activeOrganization?.name ?? null;
   // Vendor plan/credits only mean something where the server offers billing.
   const planLabel = capabilities.billingEnabled && billingPlan
@@ -107,18 +107,11 @@ export function SidebarAccountFooter() {
               className="flex h-10 min-w-0 flex-1 items-center gap-3 rounded-lg px-2 text-left text-sidebar-foreground hover:bg-hover active:bg-active data-[state=open]:bg-active"
               title={displayName}
             >
-              <span className="flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-surface-control text-ui-sm font-medium text-sidebar-foreground">
-                {user?.avatarUrl ? (
-                  <img
-                    src={user.avatarUrl}
-                    alt=""
-                    className="size-full object-cover"
-                    referrerPolicy="no-referrer"
-                  />
-                ) : (
-                  initials
-                )}
-              </span>
+              <UserAvatar
+                displayName={displayName}
+                avatarUrl={user?.avatarUrl}
+                className="size-7 rounded-full border-0 text-sidebar-foreground"
+              />
               <span className="flex min-w-0 flex-1 flex-col">
                 <span className="truncate text-ui">{displayName}</span>
                 {organizationName ? (

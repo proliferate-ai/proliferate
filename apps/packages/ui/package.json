@@ -207,6 +207,10 @@
       "types": "./dist/primitives/Tooltip.d.ts",
       "import": "./dist/primitives/Tooltip.js"
     },
+    "./primitives/UserAvatar": {
+      "types": "./dist/primitives/UserAvatar.d.ts",
+      "import": "./dist/primitives/UserAvatar.js"
+    },
     "./proliferate-icons": {
       "types": "./dist/proliferate-icons.d.ts",
       "import": "./dist/proliferate-icons.js"
