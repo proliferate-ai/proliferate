@@ -155,6 +155,7 @@ when the test is complete.
 | Understand profile ownership, ports, identity, SSO, or LiteLLM | [`dev-profiles.md`](dev-profiles.md) |
 | Choose a frontend-only, backend-session, or GitHub auth layer | [`feature-worktree-auth.md`](feature-worktree-auth.md) |
 | Exercise local billing and Stripe webhooks | [`stripe-local-testing.md`](stripe-local-testing.md) |
+| Manually smoke the GitHub App credential path | [`github-app-manual-qa.md`](github-app-manual-qa.md) |
 | Run Mobile Web, native Mobile, or Mobile OAuth | [`mobile.md`](mobile.md) |
 
 ## Verification
