@@ -40,11 +40,36 @@ def test_poll_page_parses_good_page() -> None:
 
 
 def test_poll_page_defaults_are_lenient() -> None:
-    """Empty page + missing cursor/has_more parse to empty/None/False."""
+    """An explicit empty page defaults cursor/has_more to None/False."""
     page = PollPage.model_validate({"items": []})
     assert page.items == []
     assert page.cursor is None
     assert page.has_more is False
+
+
+def test_poll_page_requires_items_field() -> None:
+    with pytest.raises(ValidationError):
+        PollPage.model_validate({"cursor": "next", "has_more": False})
+
+
+@pytest.mark.parametrize(
+    "occurred_at",
+    [
+        "2026-07-11 00:00:00Z",
+        "2026-07-11T00:00:00",
+        "2026-13-11T00:00:00Z",
+        "not-a-timestamp",
+    ],
+)
+def test_poll_page_rejects_non_rfc3339_occurred_at(occurred_at: str) -> None:
+    with pytest.raises(ValidationError):
+        PollPage.model_validate({"items": [{"id": "one", "occurred_at": occurred_at}]})
+
+
+def test_poll_page_preserves_valid_rfc3339_occurred_at() -> None:
+    value = "2026-07-11T00:00:00.123456-07:00"
+    page = PollPage.model_validate({"items": [{"id": "one", "occurred_at": value}]})
+    assert page.items[0].occurred_at == value
 
 
 def test_poll_page_item_without_id_is_rejected() -> None:

@@ -44,7 +44,7 @@ def _stub_dns(monkeypatch):  # type: ignore[no-untyped-def]
 async def test_fetch_poll_page_caps_response_size() -> None:
     from proliferate.constants.workflows import WORKFLOW_POLL_MAX_RESPONSE_BYTES
     from proliferate.integrations.workflow_poll import PollResponseTooLargeError
-    from proliferate.server.cloud.workflows.poller import fetch_poll_page
+    from proliferate.server.cloud.workflows.poll_fetch import fetch_poll_page
 
     chunk = b"x" * (1024 * 1024)
     total_chunks = WORKFLOW_POLL_MAX_RESPONSE_BYTES // len(chunk) + 2
@@ -71,7 +71,8 @@ async def test_fetch_poll_page_caps_response_size() -> None:
 
 
 async def test_fetch_poll_page_does_not_follow_redirects() -> None:
-    from proliferate.server.cloud.workflows.poller import fetch_poll_page
+    from proliferate.integrations.workflow_poll import PollUpstreamStatusError
+    from proliferate.server.cloud.workflows.poll_fetch import fetch_poll_page
 
     hits: list[tuple[str, str | None, object]] = []
 
@@ -91,11 +92,11 @@ async def test_fetch_poll_page_does_not_follow_redirects() -> None:
     endpoint = net_guard.VettedEndpoint(
         scheme="https", host="issues.example", port=None, pinned_ip="203.0.113.10"
     )
-    # follow_redirects=False: the 302 is surfaced (raise_for_status) rather than
-    # silently chased to the redirect target.
+    # follow_redirects=False: the 302 is surfaced as a safe typed error rather
+    # than silently chased to the redirect target.
     with (
         patch.object(httpx, "AsyncClient", _mock_client_factory(transport)),
-        pytest.raises(httpx.HTTPStatusError),
+        pytest.raises(PollUpstreamStatusError),
     ):
         await fetch_poll_page(
             url="https://issues.example/feed",
@@ -110,7 +111,7 @@ async def test_fetch_poll_page_does_not_follow_redirects() -> None:
 
 async def test_fetch_rejects_content_encoding_before_read() -> None:
     from proliferate.integrations.workflow_poll import PollContentEncodingError
-    from proliferate.server.cloud.workflows.poller import fetch_poll_page
+    from proliferate.server.cloud.workflows.poll_fetch import fetch_poll_page
 
     stream = _CountingAsyncByteStream(b"compressed", 3)
     transport = httpx.MockTransport(
@@ -128,7 +129,7 @@ async def test_fetch_rejects_content_encoding_before_read() -> None:
 
 
 async def test_fetch_transmits_explicit_empty_cursor() -> None:
-    from proliferate.server.cloud.workflows.poller import fetch_poll_page
+    from proliferate.server.cloud.workflows.poll_fetch import fetch_poll_page
 
     seen: list[str] = []
     body = b'{"items":[],"cursor":"","has_more":false}'
@@ -148,7 +149,8 @@ async def test_fetch_transmits_explicit_empty_cursor() -> None:
 
 
 async def test_fetch_rejects_page_over_requested_limit() -> None:
-    from proliferate.server.cloud.workflows.poller import PollPageLimitError, fetch_poll_page
+    from proliferate.integrations.workflow_poll import PollPageLimitError
+    from proliferate.server.cloud.workflows.poll_fetch import fetch_poll_page
 
     body = b'{"items":[{"id":"1"},{"id":"2"},{"id":"3"}]}'
     stream = _CountingAsyncByteStream(body, 1)
@@ -168,7 +170,8 @@ async def test_fetch_slow_drip_hits_total_deadline(monkeypatch) -> None:
     import time
 
     from proliferate.integrations import workflow_poll
-    from proliferate.server.cloud.workflows import poller
+    from proliferate.integrations.workflow_poll import PollTimeoutError
+    from proliferate.server.cloud.workflows import poll_fetch
 
     class SlowStream(httpx.AsyncByteStream):
         async def __aiter__(self):  # type: ignore[no-untyped-def]
@@ -180,15 +183,15 @@ async def test_fetch_slow_drip_hits_total_deadline(monkeypatch) -> None:
             pass
 
     monkeypatch.setattr(workflow_poll, "WORKFLOW_POLL_TOTAL_DEADLINE_SECONDS", 0.05)
-    monkeypatch.setattr(poller, "WORKFLOW_POLL_TOTAL_DEADLINE_SECONDS", 0.05)
+    monkeypatch.setattr(poll_fetch, "WORKFLOW_POLL_TOTAL_DEADLINE_SECONDS", 0.05)
     transport = httpx.MockTransport(lambda _request: httpx.Response(200, stream=SlowStream()))
     endpoint = net_guard.VettedEndpoint("https", "issues.example", None, "203.0.113.10")
     started = time.monotonic()
     with (
         patch.object(httpx, "AsyncClient", _mock_client_factory(transport)),
-        pytest.raises(TimeoutError),
+        pytest.raises(PollTimeoutError),
     ):
-        await poller.fetch_poll_page(
+        await poll_fetch.fetch_poll_page(
             url="https://issues.example/feed", endpoint=endpoint, auth=None, cursor=None
         )
     assert time.monotonic() - started < 0.5
@@ -287,6 +290,8 @@ async def test_disable_poll_trigger_skips_reprobe_when_endpoint_down(test_engine
         "http://10.0.0.1/poll",  # RFC1918 private
         "http://169.254.169.254/latest/meta-data",  # link-local cloud metadata
         "http://100.64.0.1/poll",  # RFC6598 CGNAT / Tailscale
+        "http://[fec0::1]/poll",  # deprecated IPv6 site-local
+        "http://[2001:20::1]/poll",  # ORCHIDv2 non-routable identifier
     ],
 )
 async def test_inspect_poll_endpoint_blocks_private_address(  # type: ignore[no-untyped-def]
@@ -449,9 +454,9 @@ def test_poll_error_taxonomy_is_typed() -> None:
         PollInvalidHeaderError,
         PollResponseTooLargeError,
     )
-    from proliferate.server.cloud.workflows.poller import (
+    from proliferate.integrations.workflow_poll import PollPageLimitError
+    from proliferate.server.cloud.workflows.poll_fetch import (
         PollErrorKind,
-        PollPageLimitError,
         classify_poll_error,
     )
 
@@ -482,7 +487,7 @@ async def test_fetch_poll_page_rejects_endpoint_url_mismatch() -> None:
     but dispatches a DIFFERENT one must be refused before any request bytes leave
     — a ``VettedEndpoint`` for a different host never authorizes THIS request."""
     from proliferate.integrations.workflow_poll import PollEndpointMismatchError
-    from proliferate.server.cloud.workflows.poller import fetch_poll_page
+    from proliferate.server.cloud.workflows.poll_fetch import fetch_poll_page
 
     def handler(request: httpx.Request) -> httpx.Response:  # pragma: no cover - must never run
         raise AssertionError("no outbound request may be issued on a coherence mismatch")

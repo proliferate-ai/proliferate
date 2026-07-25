@@ -969,7 +969,7 @@ async def test_signature_mismatch_surfaces_all_fields(test_engine) -> None:  # t
     mismatches = exc.value.extra_detail["mismatches"]
     assert isinstance(mismatches, list)
     assert len(mismatches) == 2
-    assert exc.value.extra_detail["item_id"] == "probe_bad"
+    assert exc.value.extra_detail["item_id"] == "[redacted]"
 
     # DENY-PATH (b, cont.): the trigger was NOT persisted.
     async with factory() as db:

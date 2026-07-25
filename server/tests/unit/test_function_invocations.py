@@ -211,6 +211,8 @@ async def test_invocation_granted_to_run_visible_and_dispatches(
         "http://127.0.0.1:8000/admin",
         "http://169.254.169.254/latest/meta-data",  # cloud metadata (link-local)
         "http://100.64.1.2/x",  # RFC 6598 CGNAT / Tailscale (not is_private)
+        "http://[fec0::1]/secret",  # deprecated IPv6 site-local
+        "http://[2001:20::1]/secret",  # ORCHIDv2 non-routable identifier
     ],
 )
 async def test_ssrf_guard_blocks_private_endpoint(db_session: AsyncSession, endpoint: str) -> None:

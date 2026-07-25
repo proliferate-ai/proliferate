@@ -14,17 +14,21 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
-import httpx
 import pytest
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 
-from proliferate.integrations.workflow_poll import PollForbiddenHeaderError, PollInvalidHeaderError
+from proliferate.integrations.workflow_poll import (
+    PollForbiddenHeaderError,
+    PollInvalidHeaderError,
+    PollTransportError,
+    PollUpstreamStatusError,
+)
 from proliferate.server.cloud import net_guard
 from proliferate.server.cloud.errors import CloudApiError
-from proliferate.server.cloud.workflows import poller, triggers
+from proliferate.server.cloud.workflows import poll_fetch, poll_probe, poller, triggers
 from proliferate.server.cloud.workflows.domain.poll_contract import PollPage
 from proliferate.server.cloud.workflows.models import TriggerPollRequest
 
@@ -200,7 +204,7 @@ async def test_real_tls_uses_pinned_ip_original_host_and_sni(
         endpoint = await net_guard.resolve_and_pin_endpoint_async(
             url, policy=net_guard.LOOPBACK_TEST
         )
-        page = await poller.fetch_poll_page(url=url, endpoint=endpoint, auth=None, cursor="")
+        page = await poll_fetch.fetch_poll_page(url=url, endpoint=endpoint, auth=None, cursor="")
 
     assert page.cursor == ""
     assert authored_dns_calls == 1
@@ -220,13 +224,16 @@ async def test_real_tls_rejects_wrong_name_certificate(
         endpoint = net_guard.VettedEndpoint(
             scheme="https", host="poll.test", port=server.port, pinned_ip="127.0.0.1"
         )
-        with pytest.raises(httpx.ConnectError):
-            await poller.fetch_poll_page(
+        with pytest.raises(PollTransportError) as raised:
+            await poll_fetch.fetch_poll_page(
                 url=f"https://poll.test:{server.port}/feed",
                 endpoint=endpoint,
                 auth=None,
                 cursor=None,
             )
+        assert raised.value.failure_class == "ConnectError"
+        assert raised.value.__cause__ is None
+        assert raised.value.__context__ is None
 
     assert server.server_names == ["poll.test"]
     assert server.requests == []
@@ -245,13 +252,16 @@ async def test_real_tls_redirect_is_not_followed(
         endpoint = net_guard.VettedEndpoint(
             scheme="https", host="poll.test", port=server.port, pinned_ip="127.0.0.1"
         )
-        with pytest.raises(httpx.HTTPStatusError):
-            await poller.fetch_poll_page(
+        with pytest.raises(PollUpstreamStatusError) as raised:
+            await poll_fetch.fetch_poll_page(
                 url=f"https://poll.test:{server.port}/feed",
                 endpoint=endpoint,
                 auth=None,
                 cursor=None,
             )
+        assert raised.value.status_code == 302
+        assert raised.value.__cause__ is None
+        assert raised.value.__context__ is None
 
     assert len(server.requests) == 1
 
@@ -261,7 +271,7 @@ def test_schema_error_message_cannot_reflect_secret() -> None:
     with pytest.raises(Exception) as caught:
         PollPage.model_validate({"items": [{"id": "one", "data": canary}]})
     assert canary in str(caught.value)  # prove the raw library error is unsafe
-    assert canary not in poller.describe_poll_error(caught.value)
+    assert canary not in poll_fetch.describe_poll_error(caught.value)
 
 
 async def test_inspect_suppresses_reflected_secret_exception_chain() -> None:
@@ -273,7 +283,7 @@ async def test_inspect_suppresses_reflected_secret_exception_chain() -> None:
     )
     endpoint = net_guard.VettedEndpoint("https", "poll.test", None, "203.0.113.10")
     with (
-        patch.object(triggers, "guard_poll_endpoint", new=AsyncMock(return_value=endpoint)),
+        patch.object(poll_probe, "guard_poll_endpoint", new=AsyncMock(return_value=endpoint)),
         patch.object(poller, "fetch_poll_page", new=AsyncMock(side_effect=caught.value)),
         pytest.raises(CloudApiError) as raised,
     ):
@@ -281,7 +291,7 @@ async def test_inspect_suppresses_reflected_secret_exception_chain() -> None:
 
     assert canary not in raised.value.message
     assert raised.value.__cause__ is None
-    assert raised.value.__suppress_context__ is True
+    assert raised.value.__context__ is None
 
 
 def test_decrypt_failure_is_a_secret_free_pre_send_error() -> None:
@@ -290,12 +300,14 @@ def test_decrypt_failure_is_a_secret_free_pre_send_error() -> None:
         poll_auth_header="Authorization", poll_auth_ciphertext="opaque-ciphertext"
     )
     with (
-        patch.object(poller, "decrypt_text", side_effect=ValueError(canary)),
+        patch.object(poll_fetch, "decrypt_text", side_effect=ValueError(canary)),
         pytest.raises(PollInvalidHeaderError) as raised,
     ):
-        poller.decrypt_poll_auth(trigger)  # type: ignore[arg-type]
+        poll_fetch.decrypt_poll_auth(trigger)  # type: ignore[arg-type]
     assert canary not in str(raised.value)
-    assert poller.classify_poll_error(raised.value) is poller.PollErrorKind.PRE_SEND
+    assert raised.value.__cause__ is None
+    assert raised.value.__context__ is None
+    assert poll_fetch.classify_poll_error(raised.value) is poll_fetch.PollErrorKind.PRE_SEND
 
 
 @pytest.mark.parametrize(
@@ -317,6 +329,13 @@ def test_decrypt_failure_is_a_secret_free_pre_send_error() -> None:
         "2001::1",
         "2001:db8::1",
         "2002:0808:0808::",
+        "3ffe::1",
+        "fec0::",
+        "fec0::1",
+        "feff:ffff:ffff:ffff:ffff:ffff:ffff:ffff",
+        "2001:10::1",
+        "2001:20::1",
+        "2001:2f:ffff:ffff:ffff:ffff:ffff:ffff",
         "fc00::1",
         "fe80::1",
         "ff02::1",
@@ -326,7 +345,17 @@ def test_public_policy_fails_closed_on_non_global_and_tunnel_addresses(raw: str)
     assert net_guard.is_blocked_ip(ipaddress.ip_address(raw)) is True
 
 
-@pytest.mark.parametrize("raw", ["1.1.1.1", "8.8.8.8", "2001:4860:4860::8888"])
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "1.1.1.1",
+        "8.8.8.8",
+        "2001:3::1",  # AMT relay discovery
+        "2001:4:112::1",  # AS112 service
+        "2001:4860:4860::8888",
+        "2606:4700:4700::1111",
+    ],
+)
 def test_public_policy_accepts_globally_routable_addresses(raw: str) -> None:
     assert net_guard.is_blocked_ip(ipaddress.ip_address(raw)) is False
 
@@ -354,6 +383,35 @@ async def test_guard_rejects_mixed_public_private_dns_answers(
     monkeypatch.setattr(net_guard.socket, "getaddrinfo", mixed_answers)
     with pytest.raises(net_guard.NetGuardError):
         await net_guard.resolve_and_pin_endpoint_async("https://mixed.test/feed")
+
+
+async def test_guard_rejects_mixed_public_site_local_dns_answers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def mixed_answers(host: str, port: int, *args: object, **kwargs: object):  # type: ignore[no-untyped-def]
+        return [
+            (socket.AF_INET6, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("2606:4700::1", port)),
+            (socket.AF_INET6, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("fec0::123", port)),
+        ]
+
+    monkeypatch.setattr(net_guard.socket, "getaddrinfo", mixed_answers)
+    with pytest.raises(net_guard.NetGuardError):
+        await net_guard.resolve_and_pin_endpoint_async("https://mixed-site.test/feed")
+
+
+def test_sync_guard_rejects_site_local_and_orchidv2_without_dispatch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    for raw in ("fec0::123", "2001:20::123"):
+        monkeypatch.setattr(
+            net_guard.socket,
+            "getaddrinfo",
+            lambda _host, port, raw=raw: [
+                (socket.AF_INET6, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", (raw, port))
+            ],
+        )
+        with pytest.raises(net_guard.NetGuardError):
+            net_guard.resolve_and_pin_endpoint("https://special.test/feed")
 
 
 @pytest.mark.parametrize(

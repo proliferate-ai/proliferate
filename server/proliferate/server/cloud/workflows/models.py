@@ -30,7 +30,7 @@ WorkflowTriggerTargetMode = Literal["local", "personal_cloud"]
 
 
 class WorkflowBaseModel(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(populate_by_name=True, hide_input_in_errors=True)
 
 
 # --- requests ------------------------------------------------------------------
@@ -395,7 +395,7 @@ class TriggerPollRequest(WorkflowBaseModel):
     # args_mapping — item data is matched to inputs by name.
     url: str
     auth_header: str | None = Field(default=None, alias="authHeader")
-    auth_value: str | None = Field(default=None, alias="authValue")
+    auth_value: str | None = Field(default=None, alias="authValue", repr=False)
     interval_secs: int = Field(alias="intervalSecs")
 
 
@@ -407,7 +407,7 @@ class PollInspectRequest(WorkflowBaseModel):
 
     url: str
     auth_header: str | None = Field(default=None, alias="authHeader")
-    auth_value: str | None = Field(default=None, alias="authValue")
+    auth_value: str | None = Field(default=None, alias="authValue", repr=False)
 
 
 class PollInputSpecResponse(WorkflowBaseModel):

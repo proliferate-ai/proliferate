@@ -123,12 +123,16 @@ def _validate_e2b_template_configuration() -> None:
 # field (e.g. a missing displayName) would otherwise reflect the whole body —
 # including a plaintext API-key secret — back to the caller.
 _SENSITIVE_INPUT_FRAGMENTS = ("secret", "password", "token", "payload", "ciphertext")
+_SENSITIVE_INPUT_EXACT_KEYS = frozenset({"authvalue", "auth_value"})
 _REDACTED_INPUT = "[redacted]"
 
 
 def _is_sensitive_field(key: object) -> bool:
-    return isinstance(key, str) and any(
-        fragment in key.lower() for fragment in _SENSITIVE_INPUT_FRAGMENTS
+    if not isinstance(key, str):
+        return False
+    lowered = key.lower()
+    return lowered in _SENSITIVE_INPUT_EXACT_KEYS or any(
+        fragment in lowered for fragment in _SENSITIVE_INPUT_FRAGMENTS
     )
 
 

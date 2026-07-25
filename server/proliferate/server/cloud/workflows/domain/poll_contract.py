@@ -30,10 +30,11 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable, Sequence
+from datetime import datetime
 from typing import TYPE_CHECKING, TypeGuard
 from urllib.parse import urlsplit, urlunsplit
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from proliferate.constants.workflows import (
     WORKFLOW_INPUT_TYPE_BOOLEAN,
@@ -48,6 +49,11 @@ if TYPE_CHECKING:
     from proliferate.server.cloud.workflows.domain.interpolation import ArgSpec
 
 
+_RFC3339_TIMESTAMP_RE = re.compile(
+    r"\d{4}-\d{2}-\d{2}[Tt]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[Zz]|[+-]\d{2}:\d{2})\Z"
+)
+
+
 class PollItem(BaseModel):
     """One poll item. ``id`` is the stable, unique idempotency key."""
 
@@ -58,13 +64,27 @@ class PollItem(BaseModel):
     occurred_at: str | None = None
     data: dict[str, object] = Field(default_factory=dict)
 
+    @field_validator("occurred_at")
+    @classmethod
+    def _require_rfc3339_timestamp(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        if _RFC3339_TIMESTAMP_RE.fullmatch(value) is None:
+            raise ValueError("occurred_at must be an RFC 3339 timestamp")
+        normalized = f"{value[:-1]}+00:00" if value[-1] in "Zz" else value
+        try:
+            datetime.fromisoformat(normalized)
+        except ValueError:
+            raise ValueError("occurred_at must be an RFC 3339 timestamp") from None
+        return value
+
 
 class PollPage(BaseModel):
     """One page of the poll response. ``cursor`` is opaque + echoed verbatim."""
 
     model_config = ConfigDict(extra="ignore")
 
-    items: list[PollItem] = Field(default_factory=list)
+    items: list[PollItem]
     cursor: str | None = None
     has_more: bool = False
 

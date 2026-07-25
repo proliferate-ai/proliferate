@@ -42,24 +42,90 @@ class PollVettedEndpoint(Protocol):
     def pinned_ip(self) -> str: ...
 
 
-class PollResponseTooLargeError(Exception):
+class PollRequestError(Exception):
+    """Base for secret-free poll failures safe to propagate across layers."""
+
+
+class PollResponseTooLargeError(PollRequestError):
     pass
 
 
-class PollContentEncodingError(Exception):
+class PollContentEncodingError(PollRequestError):
     pass
 
 
-class PollForbiddenHeaderError(Exception):
+class PollForbiddenHeaderError(PollRequestError):
     pass
 
 
-class PollInvalidHeaderError(Exception):
+class PollInvalidHeaderError(PollRequestError):
     pass
 
 
-class PollEndpointMismatchError(Exception):
+class PollEndpointMismatchError(PollRequestError):
     pass
+
+
+class PollUpstreamStatusError(PollRequestError):
+    def __init__(self, status_code: int) -> None:
+        self.status_code = status_code
+        super().__init__(f"HTTP {status_code} from poll endpoint.")
+
+
+class PollTimeoutError(PollRequestError):
+    def __init__(self, failure_class: str) -> None:
+        self.failure_class = failure_class
+        super().__init__(f"Poll request timed out: {failure_class}.")
+
+
+class PollTransportError(PollRequestError):
+    def __init__(self, failure_class: str) -> None:
+        self.failure_class = failure_class
+        super().__init__(f"Poll request failed: {failure_class}.")
+
+
+class PollPageSchemaError(PollRequestError):
+    def __init__(self, failure_class: str) -> None:
+        self.failure_class = failure_class
+        super().__init__(f"Poll response was not a valid page ({failure_class}).")
+
+
+class PollPageLimitError(PollRequestError):
+    pass
+
+
+class PollWorkerCapacityError(PollRequestError):
+    pass
+
+
+class PollCredentialReflectionError(PollRequestError):
+    pass
+
+
+def safe_poll_error(error: Exception) -> PollRequestError | None:
+    """Detach a poll/http failure from vendor objects and unsafe tracebacks.
+
+    Product code uses this integration-owned classifier instead of importing
+    ``httpx`` merely to recognize its exception hierarchy.
+    """
+
+    if isinstance(error, PollUpstreamStatusError):
+        return PollUpstreamStatusError(error.status_code)
+    if isinstance(error, PollTimeoutError):
+        return PollTimeoutError(error.failure_class)
+    if isinstance(error, PollTransportError):
+        return PollTransportError(error.failure_class)
+    if isinstance(error, PollPageSchemaError):
+        return PollPageSchemaError(error.failure_class)
+    if isinstance(error, PollRequestError):
+        return error.__class__(*error.args)
+    if isinstance(error, (httpx.TimeoutException, TimeoutError)):
+        return PollTimeoutError(error.__class__.__name__)
+    if isinstance(error, httpx.HTTPStatusError):
+        return PollUpstreamStatusError(error.response.status_code)
+    if isinstance(error, httpx.HTTPError):
+        return PollTransportError(error.__class__.__name__)
+    return None
 
 
 _HTTP_FIELD_NAME_RE = re.compile(r"[!#$%&'*+\-.^_`|~0-9A-Za-z]+\Z")
@@ -110,7 +176,7 @@ def has_reserved_poll_query(query: str) -> bool:
     return any(name.lower() in {"cursor", "limit"} for name, _value in fields)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, repr=False)
 class PollAuthBinding:
     """One validated write-only credential header for a poll request."""
 
@@ -135,6 +201,25 @@ class PollAuthBinding:
         if not header or not value:
             raise PollInvalidHeaderError("Poll auth binding is incomplete.")
         return cls(header=header, value=value)
+
+    def reflection_candidates(self) -> tuple[str, ...]:
+        """Exact response values that would disclose this credential.
+
+        A service may reflect the whole header value or, for the common Bearer
+        grammar, only the token payload. OWS-normalized values are included
+        because intermediaries frequently trim header whitespace.
+        """
+
+        candidates = [self.value]
+        stripped = self.value.strip(" \t")
+        if stripped and stripped != self.value:
+            candidates.append(stripped)
+        bearer = re.fullmatch(r"(?i:bearer)[ \t]+(.+)", stripped)
+        if bearer is not None:
+            payload = bearer.group(1).strip(" \t")
+            if payload:
+                candidates.append(payload)
+        return tuple(dict.fromkeys(candidates))
 
 
 def _authority(host: str, port: int | None) -> str:
@@ -191,15 +276,67 @@ async def fetch_poll_bytes(
     cursor: str | None,
     limit: int,
 ) -> bytes:
-    """Fetch one raw poll page through the exact freshly vetted endpoint."""
+    """Fetch one raw poll page through the exact freshly vetted endpoint.
 
-    parts = _require_matching_endpoint(url, endpoint)
+    The secret-bearing HTTP implementation returns only bytes or a newly-created
+    secret-free ``PollRequestError``. This outer frame is the sole raise point, so
+    no httpx Request, response body, credential header dictionary, or raw vendor
+    exception survives in the propagated traceback/exception chain.
+    """
+
+    result = await _fetch_poll_bytes_result(
+        url=url,
+        endpoint=endpoint,
+        auth=auth,
+        cursor=cursor,
+        limit=limit,
+    )
+    if isinstance(result, PollRequestError):
+        raise result
+    return result
+
+
+async def _fetch_poll_bytes_result(
+    *,
+    url: str,
+    endpoint: PollVettedEndpoint,
+    auth: PollAuthBinding | None,
+    cursor: str | None,
+    limit: int,
+) -> bytes | PollRequestError:
+    """Result-returning boundary around the credential-bearing HTTP frame."""
+
     try:
+        parts = _require_matching_endpoint(url, endpoint)
         pinned_ip = ipaddress.ip_address(endpoint.pinned_ip)
-    except ValueError as exc:
-        raise PollEndpointMismatchError("The vetted socket target is not an IP literal.") from exc
+    except PollEndpointMismatchError as caught:
+        return PollEndpointMismatchError(str(caught))
+    except ValueError:
+        return PollEndpointMismatchError("The vetted socket target is not an IP literal.")
     if not 1 <= limit <= WORKFLOW_POLL_DEFAULT_LIMIT:
-        raise PollEndpointMismatchError("The poll page limit is outside the frozen range.")
+        return PollEndpointMismatchError("The poll page limit is outside the frozen range.")
+
+    return await _fetch_poll_bytes_with_credential(
+        parts=parts,
+        pinned_ip=pinned_ip,
+        endpoint=endpoint,
+        auth=auth,
+        cursor=cursor,
+        limit=limit,
+    )
+
+
+async def _fetch_poll_bytes_with_credential(
+    *,
+    parts: SplitResult,
+    pinned_ip: ipaddress.IPv4Address | ipaddress.IPv6Address,
+    endpoint: PollVettedEndpoint,
+    auth: PollAuthBinding | None,
+    cursor: str | None,
+    limit: int,
+) -> bytes | PollRequestError:
+    """Credential-bearing frame. No ordinary exception or traceback escapes."""
+
     request_headers: dict[str, str] = {"Accept-Encoding": "identity"}
     if auth is not None:
         request_headers[auth.header] = auth.value
@@ -226,28 +363,43 @@ async def fetch_poll_bytes(
     )
 
     body = bytearray()
-    async with asyncio.timeout(WORKFLOW_POLL_TOTAL_DEADLINE_SECONDS):
-        async with (
-            httpx.AsyncClient(timeout=timeout, follow_redirects=False, trust_env=False) as client,
-            client.stream(
-                "GET",
-                pinned_url,
-                params=params,
-                headers=request_headers,
-                extensions=extensions,
-            ) as response,
-        ):
-            response.raise_for_status()
-            encoding = response.headers.get("content-encoding", "").strip().lower()
-            if encoding and encoding != "identity":
-                raise PollContentEncodingError(
-                    "Poll endpoint returned a non-identity Content-Encoding; "
-                    "only identity is accepted."
-                )
-            async for chunk in response.aiter_raw():
-                body.extend(chunk)
-                if len(body) > WORKFLOW_POLL_MAX_RESPONSE_BYTES:
-                    raise PollResponseTooLargeError(
-                        "Poll response exceeded the configured raw-byte cap."
+    try:
+        async with asyncio.timeout(WORKFLOW_POLL_TOTAL_DEADLINE_SECONDS):
+            async with (
+                httpx.AsyncClient(
+                    timeout=timeout,
+                    follow_redirects=False,
+                    trust_env=False,
+                ) as client,
+                client.stream(
+                    "GET",
+                    pinned_url,
+                    params=params,
+                    headers=request_headers,
+                    extensions=extensions,
+                ) as response,
+            ):
+                if not response.is_success:
+                    return PollUpstreamStatusError(response.status_code)
+                encoding = response.headers.get("content-encoding", "").strip().lower()
+                if encoding and encoding != "identity":
+                    return PollContentEncodingError(
+                        "Poll endpoint returned a non-identity Content-Encoding; "
+                        "only identity is accepted."
                     )
+                async for chunk in response.aiter_raw():
+                    # Check BEFORE extension. A transport is allowed to yield one
+                    # huge chunk; copying it first would transiently duplicate the
+                    # attacker-controlled overshoot in the bytearray.
+                    if len(chunk) > WORKFLOW_POLL_MAX_RESPONSE_BYTES - len(body):
+                        return PollResponseTooLargeError(
+                            "Poll response exceeded the configured raw-byte cap."
+                        )
+                    body.extend(chunk)
+    except (httpx.TimeoutException, TimeoutError) as caught:
+        return PollTimeoutError(caught.__class__.__name__)
+    except Exception as caught:
+        # Never serialize or retain the raw httpx exception: it may own a Request
+        # carrying the credential header or a response body controlled upstream.
+        return PollTransportError(caught.__class__.__name__)
     return bytes(body)

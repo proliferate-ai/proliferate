@@ -97,7 +97,7 @@ class DueScheduleTrigger:
     expected_run_at: datetime | None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, repr=False)
 class DuePollTrigger:
     """A row-locked, due poll trigger plus the owner context the poller needs.
 

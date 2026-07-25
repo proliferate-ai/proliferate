@@ -32,14 +32,17 @@ must never grant network authority.
 
 from __future__ import annotations
 
-import asyncio
 import ipaddress
 import socket
 from collections.abc import Sequence
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import cast
 from urllib.parse import urlsplit
+
+from proliferate.lib.infra.bounded_executor import (
+    BoundedExecutor,
+    BoundedExecutorCapacityError,
+)
 
 IpAddress = ipaddress.IPv4Address | ipaddress.IPv6Address
 
@@ -51,12 +54,22 @@ IpAddress = ipaddress.IPv4Address | ipaddress.IPv6Address
 # use). Teredo (2001::/32, RFC 4380) and 6to4 (2002::/16 plus the retired
 # 192.88.99.0/24 relay anycast) tunnel IPv4 through address families whose stdlib
 # classification has changed across Python releases; all are denied wholesale.
+#
+# The IPv6 registry also contains non-forwardable/deprecated prefixes which
+# Python has historically reported as ``is_global=True``: 6bone (3ffe::/16),
+# site-local (fec0::/10), and ORCHID/ORCHIDv2 identifiers (2001:10::/28 and
+# 2001:20::/28). Freeze them explicitly instead of treating one interpreter's
+# ``ipaddress`` table as network authority.
 EXTRA_DENIED_NETWORKS: tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...] = (
     ipaddress.ip_network("100.64.0.0/10"),  # RFC 6598 CGNAT / Tailscale
     ipaddress.ip_network("192.88.99.0/24"),  # retired 6to4 relay anycast (RFC 7526)
     ipaddress.ip_network("64:ff9b::/96"),  # NAT64 well-known prefix (RFC 6052)
     ipaddress.ip_network("2001::/32"),  # Teredo tunneling (RFC 4380)
+    ipaddress.ip_network("2001:10::/28"),  # deprecated ORCHID identifiers (RFC 4843)
+    ipaddress.ip_network("2001:20::/28"),  # ORCHIDv2 non-routable identifiers (RFC 7343)
     ipaddress.ip_network("2002::/16"),  # 6to4 tunneling (deprecated by RFC 7526)
+    ipaddress.ip_network("3ffe::/16"),  # returned 6bone space (RFC 3701)
+    ipaddress.ip_network("fec0::/10"),  # deprecated IPv6 site-local (RFC 3879)
 )
 
 
@@ -79,9 +92,10 @@ PUBLIC_ONLY = NetworkPolicy(name="public_only")
 LOOPBACK_TEST = NetworkPolicy(name="loopback_test", allow_loopback=True)
 
 # Isolate potentially blocking libc DNS from the event loop's shared executor.
-# Cancellation cannot stop an in-flight getaddrinfo call, so the worker count is
-# deliberately bounded; queued cancelled futures are discarded by the executor.
-_DNS_EXECUTOR = ThreadPoolExecutor(max_workers=8, thread_name_prefix="outbound-dns")
+# Cancellation cannot stop an in-flight getaddrinfo call. BoundedExecutor admits
+# at most eight total callables and retains admission until libc actually returns;
+# cancelled waiters therefore cannot fill an unbounded ThreadPoolExecutor queue.
+_DNS_EXECUTOR = BoundedExecutor(max_workers=8, thread_name_prefix="outbound-dns")
 
 
 @dataclass(frozen=True)
@@ -122,6 +136,10 @@ def unwrap_ip(ip: IpAddress) -> IpAddress:
     return ip
 
 
+def _is_site_local(ip: IpAddress) -> bool:
+    return isinstance(ip, ipaddress.IPv6Address) and ip.is_site_local
+
+
 def is_blocked_ip(ip: IpAddress, *, policy: NetworkPolicy = PUBLIC_ONLY) -> bool:
     """True if an address is non-public per the stdlib classifiers OR falls in one
     of our extra denied networks (checked on the unwrapped address).
@@ -145,6 +163,8 @@ def is_blocked_ip(ip: IpAddress, *, policy: NetworkPolicy = PUBLIC_ONLY) -> bool
         or ip.is_private
         or effective.is_link_local
         or ip.is_link_local
+        or _is_site_local(effective)
+        or _is_site_local(ip)
         or effective.is_reserved
         or ip.is_reserved
         or effective.is_multicast
@@ -226,8 +246,8 @@ def resolve_and_pin_endpoint(url: str, *, policy: NetworkPolicy = PUBLIC_ONLY) -
     # that resolves to a mix (DNS rebinding) is refused wholesale.
     try:
         infos = socket.getaddrinfo(host, port or (443 if scheme == "https" else 80))
-    except (OSError, UnicodeError) as exc:
-        raise NetGuardError(f"Endpoint host did not resolve: {exc}") from None
+    except (OSError, UnicodeError):
+        raise NetGuardError("Endpoint host did not resolve.") from None
     vetted = _vet_resolved_addresses(infos, policy=policy)
     return VettedEndpoint(scheme=scheme, host=host, port=port, pinned_ip=str(vetted[0]))
 
@@ -236,7 +256,7 @@ async def resolve_and_pin_endpoint_async(
     url: str, *, policy: NetworkPolicy = PUBLIC_ONLY
 ) -> VettedEndpoint:
     """Same contract as ``resolve_and_pin_endpoint``, but performs DNS resolution
-    OFF the event loop (``loop.run_in_executor``) instead of blocking it with a
+    OFF the event loop (a dedicated bounded executor) instead of blocking it with a
     synchronous ``socket.getaddrinfo`` call. A slow or hung resolver therefore
     can't stall every other coroutine on this worker, and — because it's awaited —
     the call is bounded by whatever ``asyncio.timeout`` the caller wraps it in
@@ -246,16 +266,16 @@ async def resolve_and_pin_endpoint_async(
     the stdlib's own binding) so tests can monkeypatch ``net_guard.socket.getaddrinfo``
     the same way the sync path is tested."""
     scheme, host, port = _parse_endpoint(url)
-    loop = asyncio.get_running_loop()
     try:
-        infos = await loop.run_in_executor(
-            _DNS_EXECUTOR,
+        infos = await _DNS_EXECUTOR.run(
             socket.getaddrinfo,
             host,
             port or (443 if scheme == "https" else 80),
         )
-    except (OSError, UnicodeError) as exc:
-        raise NetGuardError(f"Endpoint host did not resolve: {exc}") from None
+    except BoundedExecutorCapacityError:
+        raise NetGuardError("Endpoint DNS resolver is at capacity.") from None
+    except (OSError, UnicodeError):
+        raise NetGuardError("Endpoint host did not resolve.") from None
     vetted = _vet_resolved_addresses(infos, policy=policy)
     return VettedEndpoint(scheme=scheme, host=host, port=port, pinned_ip=str(vetted[0]))
 
