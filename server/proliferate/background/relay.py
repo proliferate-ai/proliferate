@@ -20,6 +20,10 @@ from proliferate.db.store.background_outbox import (
     mark_outbox_task_published,
 )
 
+# Only task names with a registered idempotent Celery handler may be claimed
+# and published. Anything else in the outbox (e.g. workflow tasks enqueued by
+# Packet 1b ahead of their handlers) stays pending and unclaimed so its
+# idempotency key is never burned by a permanent relay failure.
 SUPPORTED_OUTBOX_TASKS = frozenset(
     {
         HEALTH_NOOP_TASK,
@@ -83,19 +87,23 @@ async def relay_once(
             worker_id=worker_id,
             limit=batch_size,
             lease_seconds=lease_seconds,
+            task_names=SUPPORTED_OUTBOX_TASKS,
         )
 
     published = 0
     failed = 0
     for task in claimed:
         if task.task_name not in SUPPORTED_OUTBOX_TASKS:
+            # Unreachable while the claim filter and this set agree; if they
+            # ever diverge, back off retryably instead of permanently
+            # poisoning the item's idempotency key.
             if await _mark_failed(
                 session_factory,
                 task,
                 error_code="unsupported_task",
                 error_message=f"Outbox task {task.task_name} is not enabled for relay.",
-                retry_delay_seconds=0,
-                max_attempts=0,
+                retry_delay_seconds=retry_delay_seconds,
+                max_attempts=max_attempts,
             ):
                 failed += 1
             continue

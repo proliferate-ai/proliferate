@@ -324,6 +324,27 @@ async def create_gateway_token(
     await db.flush()
 
 
+async def get_active_desktop_worker(
+    db: AsyncSession,
+    *,
+    owner_user_id: UUID,
+    desktop_install_id: str,
+) -> RuntimeWorkerValue | None:
+    """The at-most-one non-revoked worker for an owner's desktop install."""
+
+    row = (
+        await db.execute(
+            select(CloudRuntimeWorker).where(
+                CloudRuntimeWorker.owner_user_id == owner_user_id,
+                CloudRuntimeWorker.desktop_install_id == desktop_install_id,
+                CloudRuntimeWorker.runtime_kind == "desktop",
+                CloudRuntimeWorker.status != "revoked",
+            )
+        )
+    ).scalar_one_or_none()
+    return _worker_value(row) if row is not None else None
+
+
 async def get_worker_by_token_hash(
     db: AsyncSession,
     *,

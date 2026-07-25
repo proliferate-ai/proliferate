@@ -26,6 +26,7 @@ __all__ = [
     "digest",
     "bundle_digest",
     "runtime_payload_digest",
+    "parse_canonical_json",
 ]
 
 # JSON integer literals beyond the IEEE-754 exact-integer range parse to
@@ -56,6 +57,30 @@ def sha256_hex(value: object) -> str:
     """SHA-256 hex digest over the canonical UTF-8 bytes of ``value``."""
 
     return hashlib.sha256(canonical_bytes(value)).hexdigest()
+
+
+def _parse_canonical_int(literal: str) -> int | float:
+    value = int(literal)
+    if abs(value) <= _MAX_SAFE_INTEGER:
+        return value
+    # An integer literal beyond the exact range in OUR OWN canonical text can
+    # only have come from a double (ingress rejects caller ints out there), so
+    # the ECMAScript-rounded double is the exact original value.
+    return float(literal)
+
+
+def parse_canonical_json(text: str) -> object:
+    """Load previously stored canonical text so it re-canonicalizes byte-equal.
+
+    This is the Python-side replay loader, not part of the cross-language
+    contract. Plain ``json.loads`` would reload an integral double such as
+    ``9007199254740994.0`` (canonical text ``9007199254740994``) as an ``int``
+    beyond the exact-integer guard, turning a legal stored payload into a
+    ``ValueError`` on digest recomputation. Exponent forms (``1e+21``) load as
+    floats; exact-range integers stay ints.
+    """
+
+    return json.loads(text, parse_int=_parse_canonical_int)
 
 
 # ``digest`` is the public name delivery/AnyHarness code reaches for; it is an
@@ -150,9 +175,7 @@ def _serialize_string(value: str) -> str:
     try:
         value.encode("utf-8")
     except UnicodeEncodeError as error:
-        raise ValueError(
-            "Cannot canonicalize a string containing lone surrogates."
-        ) from error
+        raise ValueError("Cannot canonicalize a string containing lone surrogates.") from error
     # Python's ``json.dumps`` with ``ensure_ascii=False`` applies exactly the
     # RFC 8785 / ``JSON.stringify`` minimal escaping: the two mandatory escapes
     # (``"`` and ``\``), the short control escapes (\b \t \n \f \r), and

@@ -220,6 +220,56 @@ async def get_repo_environment_by_id(
     return _environment_value(environment, repo)
 
 
+async def get_cloud_repo_environment_by_repo_config_id(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    repo_config_id: UUID,
+) -> RepoEnvironmentValue | None:
+    row = (
+        await db.execute(
+            select(RepoEnvironment, RepoConfig)
+            .join(RepoConfig, RepoEnvironment.repo_config_id == RepoConfig.id)
+            .where(
+                RepoConfig.id == repo_config_id,
+                RepoConfig.user_id == user_id,
+                RepoConfig.deleted_at.is_(None),
+                RepoEnvironment.environment_kind == RepoEnvironmentKind.cloud,
+                RepoEnvironment.deleted_at.is_(None),
+            )
+        )
+    ).one_or_none()
+    if row is None:
+        return None
+    environment, repo = row
+    return _environment_value(environment, repo)
+
+
+async def list_local_repo_environments_for_desktop_install(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    repo_config_id: UUID,
+    desktop_install_id: str,
+) -> tuple[RepoEnvironmentValue, ...]:
+    rows = (
+        await db.execute(
+            select(RepoEnvironment, RepoConfig)
+            .join(RepoConfig, RepoEnvironment.repo_config_id == RepoConfig.id)
+            .where(
+                RepoConfig.id == repo_config_id,
+                RepoConfig.user_id == user_id,
+                RepoConfig.deleted_at.is_(None),
+                RepoEnvironment.environment_kind == RepoEnvironmentKind.local,
+                RepoEnvironment.desktop_install_id == desktop_install_id,
+                RepoEnvironment.deleted_at.is_(None),
+            )
+            .order_by(RepoEnvironment.created_at, RepoEnvironment.id)
+        )
+    ).all()
+    return tuple(_environment_value(environment, repo) for environment, repo in rows)
+
+
 async def list_cloud_repo_environments(
     db: AsyncSession,
     *,

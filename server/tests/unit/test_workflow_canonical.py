@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from proliferate.server.workflows.domain.canonical import (
+from proliferate.utils.canonical_json import (
     bundle_digest,
     canonical_bytes,
     canonical_json,
@@ -140,15 +140,11 @@ def test_ecmascript_number_thresholds(value: float | int, expected: str) -> None
 
 def test_utf16_key_sort_orders_surrogates_before_high_bmp() -> None:
     value = {"דּ": 1, "\U0001f600": 2, "€": 3, "1": 4, "\r": 5}
-    assert canonical_json(value) == (
-        '{"\\r":5,"1":4,"€":3,"\U0001f600":2,"דּ":1}'
-    )
+    assert canonical_json(value) == ('{"\\r":5,"1":4,"€":3,"\U0001f600":2,"דּ":1}')
 
 
 def test_string_escaping_is_minimal() -> None:
-    assert canonical_json("€$\x0f\nA'B\"\\\"/") == (
-        '"€$\\u000f\\nA\'B\\"\\\\\\"/"'
-    )
+    assert canonical_json('€$\x0f\nA\'B"\\"/') == ('"€$\\u000f\\nA\'B\\"\\\\\\"/"')
 
 
 def test_rejects_non_finite_numbers() -> None:

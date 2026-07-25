@@ -21,6 +21,9 @@ HEALTH_NOOP_TASK = "background.health.noop"
 NOTIFICATIONS_SEND_SLACK_TASK = "notifications.send_slack"
 CUSTOMERIO_ENGAGEMENT_SYNC_TASK = "customerio.engagement_sync"
 
+# Feature-owned task names live with their owning service (e.g.
+# proliferate.server.workflows.tasks). Outbox-relayed tasks carry their queue
+# on the outbox row, so they need no static route entry here.
 TASK_ROUTES: dict[str, dict[str, str]] = {
     HEALTH_NOOP_TASK: {"queue": PERIODIC_DEFAULT_QUEUE},
     NOTIFICATIONS_SEND_SLACK_TASK: {"queue": NOTIFICATIONS_QUEUE},

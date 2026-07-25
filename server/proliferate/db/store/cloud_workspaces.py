@@ -112,6 +112,22 @@ async def get_cloud_workspace_by_id(
     return cloud_workspace_value(row) if row is not None else None
 
 
+async def get_cloud_workspace_by_anyharness_id(
+    db: AsyncSession,
+    anyharness_workspace_id: str,
+) -> CloudWorkspaceValue | None:
+    """Look up the Cloud projection of a target-local AnyHarness workspace."""
+
+    row = (
+        await db.execute(
+            select(CloudWorkspace).where(
+                CloudWorkspace.anyharness_workspace_id == anyharness_workspace_id
+            )
+        )
+    ).scalars().first()
+    return cloud_workspace_value(row) if row is not None else None
+
+
 async def create_cloud_workspace(
     db: AsyncSession,
     *,

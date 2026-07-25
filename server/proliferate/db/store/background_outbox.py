@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Collection
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import StrEnum
@@ -145,24 +146,34 @@ async def claim_due_outbox_tasks(
     worker_id: str,
     limit: int,
     lease_seconds: float,
+    task_names: Collection[str] | None = None,
 ) -> tuple[BackgroundOutboxTaskValue, ...]:
+    """Claim due work; ``task_names`` limits claims to a supported registry.
+
+    A task name outside the registry is left ``pending`` and unclaimed — not
+    failed — so work enqueued ahead of its handler (e.g. workflow delivery
+    tasks whose Celery handlers land in a later packet) keeps its idempotency
+    key and relays normally once the handler registers.
+    """
+
     now = utcnow()
+    due = or_(
+        and_(
+            BackgroundOutboxTask.status == OUTBOX_STATUS_PENDING,
+            BackgroundOutboxTask.available_at <= now,
+        ),
+        and_(
+            BackgroundOutboxTask.status == OUTBOX_STATUS_PUBLISHING,
+            BackgroundOutboxTask.lock_expires_at.is_not(None),
+            BackgroundOutboxTask.lock_expires_at <= now,
+        ),
+    )
+    statement = select(BackgroundOutboxTask).where(due)
+    if task_names is not None:
+        statement = statement.where(BackgroundOutboxTask.task_name.in_(tuple(task_names)))
     rows = (
         await db.execute(
-            select(BackgroundOutboxTask)
-            .where(
-                or_(
-                    and_(
-                        BackgroundOutboxTask.status == OUTBOX_STATUS_PENDING,
-                        BackgroundOutboxTask.available_at <= now,
-                    ),
-                    and_(
-                        BackgroundOutboxTask.status == OUTBOX_STATUS_PUBLISHING,
-                        BackgroundOutboxTask.lock_expires_at.is_not(None),
-                        BackgroundOutboxTask.lock_expires_at <= now,
-                    ),
-                )
-            )
+            statement
             .order_by(
                 BackgroundOutboxTask.available_at.asc(),
                 BackgroundOutboxTask.created_at.asc(),

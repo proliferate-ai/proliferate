@@ -285,15 +285,23 @@ async def test_relay_records_publish_failure_for_retry(
 
 
 @pytest.mark.asyncio
-@pytest.mark.asyncio
-async def test_relay_rejects_unknown_task_without_publishing(
+async def test_relay_leaves_unregistered_task_pending_and_unclaimed(
     db_session: AsyncSession,
     test_engine: AsyncEngine,
 ) -> None:
+    """A task without a registered handler is never claimed, never failed.
+
+    Workflow tasks are enqueued (Packet 1b) before their Celery handlers
+    exist (a later packet); permanently failing them would burn their fixed
+    idempotency keys and block the eventual delivery.
+    """
+
     task = await enqueue_outbox_task(
         db_session,
-        task_name="runtime.unknown",
+        task_name="workflows.deliver_managed_run",
         queue=DEFAULT_QUEUE,
+        kwargs_json={"invocation_id": "inv-1"},
+        idempotency_key="workflows.deliver_managed_run:inv-1",
     )
     await db_session.commit()
     publisher = RecordingPublisher()
@@ -303,10 +311,50 @@ async def test_relay_rejects_unknown_task_without_publishing(
         publisher=publisher,
     )
 
-    rejected = await _load_fresh_outbox_task(db_session, task.id)
-    assert result.claimed == 1
+    untouched = await _load_fresh_outbox_task(db_session, task.id)
+    assert result.claimed == 0
     assert result.published == 0
-    assert result.failed == 1
+    assert result.failed == 0
     assert publisher.messages == []
-    assert rejected is not None
-    assert rejected.status == OUTBOX_STATUS_FAILED
+    assert untouched is not None
+    assert untouched.status == OUTBOX_STATUS_PENDING
+    assert untouched.attempt_count == 0
+
+
+@pytest.mark.asyncio
+async def test_pending_task_relays_once_its_handler_registers(
+    db_session: AsyncSession,
+    test_engine: AsyncEngine,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from proliferate.background import relay as relay_module
+
+    task = await enqueue_outbox_task(
+        db_session,
+        task_name="workflows.deliver_managed_run",
+        queue=DEFAULT_QUEUE,
+        idempotency_key="workflows.deliver_managed_run:inv-2",
+    )
+    await db_session.commit()
+    publisher = RecordingPublisher()
+
+    before = await relay_once(
+        session_factory=_session_factory(test_engine),
+        publisher=publisher,
+    )
+    assert before.claimed == 0
+
+    monkeypatch.setattr(
+        relay_module,
+        "SUPPORTED_OUTBOX_TASKS",
+        relay_module.SUPPORTED_OUTBOX_TASKS | {"workflows.deliver_managed_run"},
+    )
+    after = await relay_once(
+        session_factory=_session_factory(test_engine),
+        publisher=publisher,
+    )
+    assert after.claimed == 1
+    assert after.published == 1
+    published = await _load_fresh_outbox_task(db_session, task.id)
+    assert published is not None
+    assert published.status == OUTBOX_STATUS_PUBLISHED

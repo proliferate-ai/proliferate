@@ -1963,6 +1963,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/workflows/invocations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Workflow Invocations Endpoint */
+        get: operations["list_workflow_invocations_endpoint_v1_workflows_invocations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workflows/invocations/{invocation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Workflow Invocation Endpoint */
+        get: operations["get_workflow_invocation_endpoint_v1_workflows_invocations__invocation_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workflows/invocations/{invocation_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Workflow Invocation Endpoint */
+        post: operations["cancel_workflow_invocation_endpoint_v1_workflows_invocations__invocation_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workflows/invocations/{invocation_id}/abandon-controlled-sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Abandon Workflow Invocation Endpoint */
+        post: operations["abandon_workflow_invocation_endpoint_v1_workflows_invocations__invocation_id__abandon_controlled_sessions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workflows/{workflow_definition_id}/invocations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Workflow Invocation Endpoint */
+        post: operations["create_workflow_invocation_endpoint_v1_workflows__workflow_definition_id__invocations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/workflows/{workflow_definition_id}": {
         parameters: {
             query?: never;
@@ -6083,6 +6168,67 @@ export interface components {
             /** Expectedrevision */
             expectedRevision: number;
         };
+        /** WorkflowDeliveryResponse */
+        WorkflowDeliveryResponse: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "delivering" | "accepted" | "failed" | "cancelled";
+            /** Attemptcount */
+            attemptCount: number;
+            /** Handoffstartedat */
+            handoffStartedAt: string | null;
+            /** Cancelrequestedat */
+            cancelRequestedAt: string | null;
+            /** Acceptedat */
+            acceptedAt: string | null;
+            /** Finishedat */
+            finishedAt: string | null;
+            /** Errorcode */
+            errorCode: string | null;
+            /** Errormessage */
+            errorMessage: string | null;
+            /** Anyharnessrunid */
+            anyharnessRunId: string | null;
+            /** Anyharnessworkspaceid */
+            anyharnessWorkspaceId: string | null;
+            /** Runtimerevision */
+            runtimeRevision: number | null;
+            /** Runtimeobservedat */
+            runtimeObservedAt: string | null;
+            /** Controlplaneruntimeoutcome */
+            controlPlaneRuntimeOutcome: "runtime_lost" | null;
+            /** Controlplaneruntimeoutcomeat */
+            controlPlaneRuntimeOutcomeAt: string | null;
+            /**
+             * Updatedat
+             * Format: date-time
+             */
+            updatedAt: string;
+        };
+        /** WorkflowDesktopTarget */
+        WorkflowDesktopTarget: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "desktop";
+            /** Desktopinstallid */
+            desktopInstallId: string;
+        };
+        /** WorkflowExistingWorkspacePlacement */
+        WorkflowExistingWorkspacePlacement: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "existingWorkspace";
+            /** Workspaceid */
+            workspaceId: string;
+            /** Sessionbindings */
+            sessionBindings?: components["schemas"]["WorkflowSessionBindingRequest"][];
+        };
         /** WorkflowGoalDefinition */
         WorkflowGoalDefinition: {
             /** Objective */
@@ -6109,6 +6255,150 @@ export interface components {
             /** Required */
             required: boolean;
         };
+        /** WorkflowInvocationCreateRequest */
+        WorkflowInvocationCreateRequest: {
+            /** Expectedrevision */
+            expectedRevision: number;
+            /** Inputs */
+            inputs?: {
+                [key: string]: boolean | number | string;
+            };
+            /** Target */
+            target: components["schemas"]["WorkflowManagedCloudTarget"] | components["schemas"]["WorkflowDesktopTarget"];
+            /** Placement */
+            placement: components["schemas"]["WorkflowNewWorkspacePlacement"] | components["schemas"]["WorkflowExistingWorkspacePlacement"];
+        };
+        /** WorkflowInvocationDetailResponse */
+        WorkflowInvocationDetailResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Workflowdefinitionid */
+            workflowDefinitionId: string | null;
+            /** Definitionrevision */
+            definitionRevision: number;
+            /** Definitionschemaversion */
+            definitionSchemaVersion: number;
+            /** Titlesnapshot */
+            titleSnapshot: string;
+            /** Validatedcatalogversion */
+            validatedCatalogVersion: string;
+            /** Idempotencykey */
+            idempotencyKey: string;
+            /** Requesthash */
+            requestHash: string;
+            /** Bundledigest */
+            bundleDigest: string;
+            /** Arguments */
+            arguments: {
+                [key: string]: unknown;
+            };
+            /**
+             * Targetkind
+             * @enum {string}
+             */
+            targetKind: "managedCloud" | "desktop";
+            /** Desktopinstallid */
+            desktopInstallId: string | null;
+            /** Logicalplacement */
+            logicalPlacement: {
+                [key: string]: unknown;
+            };
+            /** Resolvedplacement */
+            resolvedPlacement: {
+                [key: string]: unknown;
+            };
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            delivery: components["schemas"]["WorkflowDeliveryResponse"];
+            /** Resolvedbundle */
+            resolvedBundle: {
+                [key: string]: unknown;
+            };
+            /** Runtimeobservation */
+            runtimeObservation: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** WorkflowInvocationListResponse */
+        WorkflowInvocationListResponse: {
+            /** Invocations */
+            invocations: components["schemas"]["WorkflowInvocationResponse"][];
+        };
+        /** WorkflowInvocationResponse */
+        WorkflowInvocationResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Workflowdefinitionid */
+            workflowDefinitionId: string | null;
+            /** Definitionrevision */
+            definitionRevision: number;
+            /** Definitionschemaversion */
+            definitionSchemaVersion: number;
+            /** Titlesnapshot */
+            titleSnapshot: string;
+            /** Validatedcatalogversion */
+            validatedCatalogVersion: string;
+            /** Idempotencykey */
+            idempotencyKey: string;
+            /** Requesthash */
+            requestHash: string;
+            /** Bundledigest */
+            bundleDigest: string;
+            /** Arguments */
+            arguments: {
+                [key: string]: unknown;
+            };
+            /**
+             * Targetkind
+             * @enum {string}
+             */
+            targetKind: "managedCloud" | "desktop";
+            /** Desktopinstallid */
+            desktopInstallId: string | null;
+            /** Logicalplacement */
+            logicalPlacement: {
+                [key: string]: unknown;
+            };
+            /** Resolvedplacement */
+            resolvedPlacement: {
+                [key: string]: unknown;
+            };
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            delivery: components["schemas"]["WorkflowDeliveryResponse"];
+        };
+        /** WorkflowManagedCloudTarget */
+        WorkflowManagedCloudTarget: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "managedCloud";
+        };
+        /** WorkflowNewWorkspacePlacement */
+        WorkflowNewWorkspacePlacement: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "newWorkspace";
+            /** Repository */
+            repository: components["schemas"]["WorkflowRepositoryDefinitionDefaultChoice"] | components["schemas"]["WorkflowRepositoryNoneChoice"] | components["schemas"]["WorkflowRepositoryEnvironmentChoice"];
+            /** Baseref */
+            baseRef?: string | null;
+        };
         /** WorkflowPromptStep */
         WorkflowPromptStep: {
             /**
@@ -6119,6 +6409,42 @@ export interface components {
             /** Prompt */
             prompt: string;
             goal?: components["schemas"]["WorkflowGoalDefinition"] | null;
+        };
+        /** WorkflowRepositoryDefinitionDefaultChoice */
+        WorkflowRepositoryDefinitionDefaultChoice: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "definitionDefault";
+        };
+        /** WorkflowRepositoryEnvironmentChoice */
+        WorkflowRepositoryEnvironmentChoice: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "environment";
+            /**
+             * Repoenvironmentid
+             * Format: uuid
+             */
+            repoEnvironmentId: string;
+        };
+        /** WorkflowRepositoryNoneChoice */
+        WorkflowRepositoryNoneChoice: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "none";
+        };
+        /** WorkflowSessionBindingRequest */
+        WorkflowSessionBindingRequest: {
+            /** Stageindex */
+            stageIndex: number;
+            /** Sessionid */
+            sessionId: string;
         };
         /** WorkflowStageDefinition */
         WorkflowStageDefinition: {
@@ -10459,6 +10785,167 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkflowDefinitionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_workflow_invocations_endpoint_v1_workflows_invocations_get: {
+        parameters: {
+            query?: {
+                workflowDefinitionId?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowInvocationListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_workflow_invocation_endpoint_v1_workflows_invocations__invocation_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invocation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowInvocationDetailResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_workflow_invocation_endpoint_v1_workflows_invocations__invocation_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invocation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowInvocationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    abandon_workflow_invocation_endpoint_v1_workflows_invocations__invocation_id__abandon_controlled_sessions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invocation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowInvocationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_workflow_invocation_endpoint_v1_workflows__workflow_definition_id__invocations_post: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                workflow_definition_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowInvocationCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowInvocationResponse"];
                 };
             };
             /** @description Validation Error */

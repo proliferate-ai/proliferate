@@ -152,6 +152,19 @@ def _redacts_entire_body(request: Request) -> bool:
     return request.method == "POST" and request.url.path.endswith("/agent-gateway/keys")
 
 
+def _scrub_surrogates(value: object) -> object:
+    # ``json.loads`` admits lone surrogates inside request strings; echoing
+    # them back through the error body would crash the UTF-8 response render
+    # and turn a validation failure into a 500.
+    if isinstance(value, str):
+        return value.encode("utf-8", errors="replace").decode("utf-8")
+    if isinstance(value, dict):
+        return {_scrub_surrogates(key): _scrub_surrogates(child) for key, child in value.items()}
+    if isinstance(value, list):
+        return [_scrub_surrogates(child) for child in value]
+    return value
+
+
 async def _validation_error_handler(
     request: Request,
     error: RequestValidationError,
@@ -167,7 +180,10 @@ async def _validation_error_handler(
             else:
                 item["input"] = _redact_validation_input(item["input"])
         errors.append(item)
-    return JSONResponse(status_code=422, content=jsonable_encoder({"detail": errors}))
+    return JSONResponse(
+        status_code=422,
+        content=_scrub_surrogates(jsonable_encoder({"detail": errors})),
+    )
 
 
 async def _proliferate_error_handler(
@@ -181,9 +197,12 @@ async def _proliferate_error_handler(
     extra_detail = getattr(error, "extra_detail", None)
     if isinstance(extra_detail, dict):
         detail.update(extra_detail)
+    # Typed error messages/paths can echo caller text (e.g. an input name
+    # containing a lone surrogate); scrub so the typed status renders instead
+    # of collapsing into a 500.
     return JSONResponse(
         status_code=error.status_code,
-        content={"detail": detail},
+        content=_scrub_surrogates({"detail": detail}),
         headers=getattr(error, "headers", None),
     )
 

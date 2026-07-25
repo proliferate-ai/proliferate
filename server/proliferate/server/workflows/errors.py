@@ -37,3 +37,35 @@ class WorkflowDefinitionRevisionConflict(Conflict):
             "expectedRevision": expected_revision,
             "currentRevision": current_revision,
         }
+
+
+class WorkflowInvocationNotFound(NotFoundError):
+    code = "workflow_invocation_not_found"
+
+    def __init__(self) -> None:
+        super().__init__("Workflow invocation not found.")
+
+
+class InvalidWorkflowInvocation(InvalidRequest):
+    """Typed 400 carrying the exact domain issue code on the wire."""
+
+    code = "invalid_workflow_invocation"
+
+    def __init__(self, message: str, *, code: str, path: str | None = None) -> None:
+        super().__init__(message, code=code)
+        if path is not None:
+            self.extra_detail = {"path": path}
+
+
+class WorkflowInvocationIdempotencyConflict(Conflict):
+    code = "workflow_invocation_idempotency_conflict"
+
+    def __init__(self) -> None:
+        super().__init__("Idempotency key was already used for a different invocation request.")
+
+
+class WorkflowAbandonNotAvailable(Conflict):
+    code = "workflow_abandon_not_available"
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
