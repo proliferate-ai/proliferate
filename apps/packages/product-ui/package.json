@@ -346,10 +346,6 @@
     "./workspaces/WorkspacesCommandList": {
       "types": "./dist/workspaces/WorkspacesCommandList.d.ts",
       "import": "./dist/workspaces/WorkspacesCommandList.js"
-    },
-    "./support/SupportSurface": {
-      "types": "./dist/support/SupportSurface.d.ts",
-      "import": "./dist/support/SupportSurface.js"
     }
   },
   "scripts": {
