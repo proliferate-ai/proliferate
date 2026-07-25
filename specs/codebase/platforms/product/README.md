@@ -23,6 +23,7 @@ expectations, but it is not the owner of a full user workflow.
 | Billing | Credit authorization, Stripe subscription/refill behavior, budget reconciliation, billing state in product responses, and billing QA. | [billing.md](billing.md) |
 | Model catalog | Probe-first model truth: machine snapshots, cloud snapshots, shipped-catalog fallback, launch validation universe, visibility, and model identity. | [model-catalog.md](model-catalog.md) (Status: target) |
 | Agent distribution | Registry/catalog document contract, pinned auto-install and seed topology, binary-carried catalog convergence, supervisor-owned runtime binary convergence, the probe pipeline, and readiness projection. | [agent-distribution.md](agent-distribution.md) (Status: target) |
+| Agent systems overview | No contract — the narrative map of how agent distribution, agent auth, the model gateway, and the model catalog compose; read first when orienting. | [../../systems/product/agents/README.md](../../systems/product/agents/README.md) |
 
 ## Naming Notes
 

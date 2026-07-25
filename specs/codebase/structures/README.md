@@ -12,7 +12,7 @@ operator procedures; those belong under `systems/`, `platforms/`, and
 | Frontend apps and shared packages | Desktop/Web/Mobile app structure, React layers, shared frontend packages, styling, copy, telemetry, access boundaries, and product UI/package dependency direction. | [frontend/README.md](frontend/README.md), [frontend/packages/README.md](frontend/packages/README.md), focused guides under [frontend/guides/](frontend/guides/) |
 | Desktop native | Tauri shell, native commands, bundled resources, AnyHarness sidecar launch, profile app identity, and desktop release resources. | [desktop-native/README.md](desktop-native/README.md), specs under [desktop-native/specs/](desktop-native/specs/) |
 | AnyHarness runtime | HTTP/SSE APIs, session/workspace orchestration, live runtime, harness adapters, MCP runtime integration, persistence, observability, contract schemas, and runtime crate ownership. | [anyharness/README.md](anyharness/README.md), [anyharness/contract.md](anyharness/contract.md), guides under [anyharness/guides/](anyharness/guides/), specs under [anyharness/specs/](anyharness/specs/) |
-| Proliferate Worker | Optional cloud/desktop runtime sidecar for enrollment, heartbeat, catalog convergence, Worker/AnyHarness version convergence, integration-gateway credentials, local identity, and update state. | [proliferate-worker/README.md](proliferate-worker/README.md), guides under [proliferate-worker/guides/](proliferate-worker/guides/) |
+| Proliferate Worker | Optional cloud/desktop runtime sidecar for enrollment, heartbeat, version-divergence observation (mailbox update requests for Proliferate Supervisor), integration-gateway credentials, and local identity. | [proliferate-worker/README.md](proliferate-worker/README.md), guides under [proliferate-worker/guides/](proliferate-worker/guides/) |
 | Proliferate Supervisor | Target process supervisor, worker/runtime spawn loops, install layout, service generation, update staging, rollback, and target smoke behavior. | [proliferate-supervisor/README.md](proliferate-supervisor/README.md) |
 | Server | FastAPI/cloud control plane domains, API/service/store layering, auth/resource access boundaries, database access, workers, integrations, config, and error shape. | [server/README.md](server/README.md), guides under [server/guides/](server/guides/) |
 | SDKs | AnyHarness TypeScript SDK generation/build ownership, generated-code boundaries, React SDK ownership, and contract-consumer rules. | [sdk/README.md](sdk/README.md) |
@@ -27,13 +27,11 @@ split by boundary:
   [../systems/product/auth/README.md](../systems/product/auth/README.md).
 - Server authentication, resource access, authorization helpers, and product
   policy layering live in [server/guides/auth.md](server/guides/auth.md).
-- Agent LLM auth (key vault, selections, `state.json` materialization) and the
-  LiteLLM-backed managed model gateway have no current platform document. The
-  prior `agent-auth.md` / `agent-auth-bifrost-byok.md` docs described the
-  retired Bifrost-era architecture and were removed; rewrites are planned. The
-  owning code is `server/proliferate/server/cloud/agent_gateway/`,
-  `server/proliferate/integrations/litellm/`, and
-  `anyharness/crates/anyharness-lib/src/domains/agents/route_auth/`.
+- Agent LLM auth (key vault, selections, `state.json` delivery, per-harness
+  application) is owned by
+  [../platforms/product/agent-auth.md](../platforms/product/agent-auth.md);
+  the LiteLLM-backed managed model gateway is owned by
+  [../platforms/product/model-gateway.md](../platforms/product/model-gateway.md).
 
 Create a dedicated `structures/auth-gateway/` spec only if the gateway becomes
 a separately deployed or separately owned codebase boundary. Until then, keep

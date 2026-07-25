@@ -30,7 +30,8 @@ POST heartbeat
   -> on failure: log and retry next tick
   -> if this process freshly enrolled and the shared gateway file differs,
      restore its credential now that heartbeat authenticated it
-  -> catalog convergence (non-fatal)
+  -> catalog convergence (non-fatal; deletion-pending — the catalog ships
+     inside the runtime binary, see the Lifecycle guide)
   -> AnyHarness binary convergence (non-fatal; optional)
   -> Worker binary convergence (non-fatal; optional)
 ```
