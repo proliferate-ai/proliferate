@@ -186,7 +186,7 @@ OLD_SHADOW_RE = re.compile(
     r")(?![A-Za-z0-9_-])"
 )
 OLD_ACCENT_RE = re.compile(
-    r"(?<![A-Za-z0-9_-])(?:[^\s\"'`:]*:)*bg-(?:sidebar-)?accent"
+    r"(?<![A-Za-z0-9_-])(?:[^\s\"'`:]+:)*bg-(?:sidebar-)?accent"
     r"(?:/[^\s\"'`]+)?(?![A-Za-z0-9_-])"
 )
 # Catches every low-alpha foreground fill from commit one (LAW 4.2), in any
@@ -197,7 +197,7 @@ OLD_ACCENT_RE = re.compile(
 # restricting the ban to one spelling (or to interaction prefixes only) just
 # moves the defect — an ad-hoc overlay where a ruled state token belongs.
 FOREGROUND_ALPHA_RE = re.compile(
-    r"(?<![A-Za-z0-9_-])(?:[^\s\"'`:]*:)*bg-foreground/"
+    r"(?<![A-Za-z0-9_-])(?:[^\s\"'`:]+:)*bg-foreground/"
     r"(?P<alpha>\[[0-9]*\.?[0-9]+%?\]|[0-9]*\.?[0-9]+)"
     r"(?![A-Za-z0-9_.%-])"
 )
