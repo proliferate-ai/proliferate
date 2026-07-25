@@ -111,18 +111,6 @@
       "types": "./dist/chat/ChatColumn.d.ts",
       "import": "./dist/chat/ChatColumn.js"
     },
-    "./chat/CloudChatComposer": {
-      "types": "./dist/chat/CloudChatComposer.d.ts",
-      "import": "./dist/chat/CloudChatComposer.js"
-    },
-    "./chat/CloudChatSurface": {
-      "types": "./dist/chat/CloudChatSurface.d.ts",
-      "import": "./dist/chat/CloudChatSurface.js"
-    },
-    "./chat/CloudChatTranscript": {
-      "types": "./dist/chat/CloudChatTranscript.d.ts",
-      "import": "./dist/chat/CloudChatTranscript.js"
-    },
     "./chat/composer/ChatComposerSurface": {
       "types": "./dist/chat/composer/ChatComposerSurface.d.ts",
       "import": "./dist/chat/composer/ChatComposerSurface.js"
@@ -150,10 +138,6 @@
     "./chat/transcript/MarkdownContentSearchMarks": {
       "types": "./dist/chat/transcript/MarkdownContentSearchMarks.d.ts",
       "import": "./dist/chat/transcript/MarkdownContentSearchMarks.js"
-    },
-    "./chat/transcript/CloudChatTranscriptRowItems": {
-      "types": "./dist/chat/transcript/CloudChatTranscriptRowItems.d.ts",
-      "import": "./dist/chat/transcript/CloudChatTranscriptRowItems.js"
     },
     "./chat/transcript/MarkdownBody": {
       "types": "./dist/chat/transcript/MarkdownBody.d.ts",
@@ -270,10 +254,6 @@
     "./sidebar/ProductSidebarThreads": {
       "types": "./dist/sidebar/ProductSidebarThreads.d.ts",
       "import": "./dist/sidebar/ProductSidebarThreads.js"
-    },
-    "./new-chat/NewChatSurface": {
-      "types": "./dist/new-chat/NewChatSurface.d.ts",
-      "import": "./dist/new-chat/NewChatSurface.js"
     },
     "./repos/AddRepoFlow": {
       "types": "./dist/repos/AddRepoFlow.d.ts",
