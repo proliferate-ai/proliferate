@@ -41,10 +41,10 @@ export function RepoEnvironmentPane({
     );
   }
   return (
-    <section className="space-y-6">
+    <section className="space-y-5">
       <SettingsPageHeader
         title="Environment"
-        description="Variables and files synced into cloud workspaces for this repo."
+        description="Variables and files synced to this repo's cloud workspaces."
       />
       {context === "cloud" ? (
         <EnvironmentCloud
@@ -107,15 +107,15 @@ function EnvironmentLocal({
   return (
     <SettingsEmptyState
       icon={<KeyRound aria-hidden="true" />}
-      title="No local environment store"
-      description="Local workspaces read variables from your shell and checkout. Proliferate stores environment variables and files for cloud workspaces only."
+      title="Cloud only"
+      description="Local workspaces inherit variables from your shell and checkout; managed variables and files are available in Cloud."
       action={
         <Button
           type="button"
           variant="secondary"
           onClick={() => onSelectRepoContext("cloud")}
         >
-          View cloud variables
+          View Cloud environment
         </Button>
       }
     />

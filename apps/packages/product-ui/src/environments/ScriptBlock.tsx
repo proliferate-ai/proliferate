@@ -30,9 +30,14 @@ export function ScriptBlock({
   className,
 }: ScriptBlockProps) {
   return (
-    <div className={twMerge("overflow-hidden rounded-lg border border-border bg-surface-editor", className)}>
-      <div className="flex h-8 items-center justify-between border-b border-border-light px-2.5">
-        <span className="font-mono text-ui-sm text-muted-foreground">{fileLabel}</span>
+    <div
+      className={twMerge(
+        "overflow-clip rounded-lg border border-input bg-surface-editor focus-within:ring-1 focus-within:ring-ring",
+        className,
+      )}
+    >
+      <div className="flex h-7 items-center justify-between border-b border-border-light px-2.5">
+        <span className="text-ui-sm text-muted-foreground">{fileLabel}</span>
         {headerAction}
       </div>
       <Textarea
@@ -41,7 +46,7 @@ export function ScriptBlock({
         value={value}
         placeholder={placeholder}
         disabled={disabled}
-        className="min-h-[120px] w-full resize-y px-3 py-2 font-mono text-ui-sm leading-relaxed"
+        className="min-h-[120px] w-full resize-y px-2.5 py-2 font-mono text-ui-sm leading-[1.45]"
         onChange={(event: ChangeEvent<HTMLTextAreaElement>) => onChange(event.currentTarget.value)}
       />
     </div>

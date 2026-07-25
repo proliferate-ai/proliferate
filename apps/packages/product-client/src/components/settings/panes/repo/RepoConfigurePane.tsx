@@ -1,6 +1,9 @@
 import { useMemo } from "react";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
-import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
+import {
+  SETTINGS_CONTROL_WIDTH_CLASS,
+  SettingsRow,
+} from "@proliferate/product-ui/settings/SettingsRow";
 import { SettingsSaveFooter } from "@proliferate/product-ui/settings/SettingsSaveFooter";
 import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
 import {
@@ -49,10 +52,10 @@ export function RepoConfigurePane({
     );
   }
   return (
-    <section className="space-y-6">
+    <section className="space-y-5">
       <SettingsPageHeader
         title="Configure"
-        description="Defaults applied when agents create workspaces for this repo."
+        description="Workspace defaults for this repo."
       />
       {context === "cloud" ? (
         <ConfigureCloud
@@ -104,13 +107,13 @@ function ConfigureCloud({
     {
       id: "__github__",
       label: "GitHub default",
-      detail: branches.defaultBranch ? `Currently ${branches.defaultBranch}` : null,
+      detail: branches.defaultBranch ? `Current: ${branches.defaultBranch}` : null,
       selected: savedBranch === null,
       onSelect: () => draft.setDefaultBranch(null),
     },
     ...(hasStaleSavedBranch && savedBranch ? [{
       id: savedBranch,
-      label: `${savedBranch} (saved, missing on GitHub)`,
+      label: `${savedBranch} · unavailable`,
       selected: true,
       onSelect: () => draft.setDefaultBranch(savedBranch),
     }] : []),
@@ -144,9 +147,9 @@ function ConfigureCloud({
               ?? (branches.defaultBranch ? `GitHub default (${branches.defaultBranch})` : "GitHub default")}
             options={branchOptions}
             searchPlaceholder="Search branches"
-            emptyLabel="No branches found"
-            className="w-64"
-            menuClassName="w-80"
+            emptyLabel="No branches"
+            className={SETTINGS_CONTROL_WIDTH_CLASS}
+            menuClassName={SETTINGS_CONTROL_WIDTH_CLASS}
             disabled={branchesLoading}
           />
         </SettingsRow>
@@ -180,12 +183,12 @@ function cloudBranchHelperText({
     return branchError;
   }
   if (branchesLoading) {
-    return "Loading GitHub branches...";
+    return "Loading branches…";
   }
   if (githubDefaultBranch) {
-    return `Leaving this on GitHub default follows ${githubDefaultBranch}.`;
+    return `Uses GitHub's default branch (${githubDefaultBranch}).`;
   }
-  return "Leaving this on GitHub default follows the repo's current default branch.";
+  return "Uses the repository's current default branch.";
 }
 
 function ConfigureLocal({
@@ -225,7 +228,7 @@ function ConfigureLocalEditor({ repository }: { repository: SettingsRepositoryEn
     {
       id: "__auto__",
       label: "Auto-detect",
-      detail: effectiveAutoDetectedBranch ? `Currently ${effectiveAutoDetectedBranch}` : "No branches found",
+      detail: effectiveAutoDetectedBranch ? `Current: ${effectiveAutoDetectedBranch}` : "No branches",
     },
     ...branches.map((branch) => ({
       id: branch.name,
@@ -239,14 +242,14 @@ function ConfigureLocalEditor({ repository }: { repository: SettingsRepositoryEn
       <SettingsSection title="Branch">
         <SettingsRow
           label="Default branch"
-          description={`Base branch for new worktrees and pull requests · Effective: ${effectiveBranchLabel}`}
+          description={`Base for new worktrees and pull requests · Effective: ${effectiveBranchLabel}`}
         >
           <EnvironmentSearchSelect
             label={branchButtonLabel}
             searchPlaceholder="Search branches"
-            emptyLabel="No branches found"
-            className="w-64"
-            menuClassName="w-80"
+            emptyLabel="No branches"
+            className={SETTINGS_CONTROL_WIDTH_CLASS}
+            menuClassName={SETTINGS_CONTROL_WIDTH_CLASS}
             options={branchOptions.map((option) => ({
               id: option.id,
               label: option.label,
