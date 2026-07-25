@@ -157,6 +157,17 @@ const STATIC_MARKDOWN_COMPONENTS = {
   blockquote: mdComponent("blockquote", "my-3 border-l pl-4 text-foreground"),
   hr: () => <hr className="my-3 border-border" />,
   table: (props: MdElementProps) => (
+    // ui-foundation-escalation: [CHAT-04]'s RULED block adopts
+    // --container-transcript-wide (64rem) for wide blocks like this table,
+    // but the transcript column that hosts it is already capped at
+    // max-w-transcript-readable (40rem, see ChatColumn.ts) — an ordinary
+    // ancestor max-width, not a container query, so a wider max-width here
+    // can never take effect without a breakout (negative-margin /
+    // container-query) restructure applied at every MarkdownBody consumer
+    // (transcript rows, plan cards, tool-detail panels). That restructure is
+    // out of scope for this pass; this table stays at max-w-full
+    // (container-relative) as a conscious non-adoption rather than an
+    // unreachable cap.
     <div
       className="my-4 min-w-0 max-w-full overflow-hidden rounded-lg border"
       data-markdown-table-shell="true"
