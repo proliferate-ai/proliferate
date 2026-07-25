@@ -15,9 +15,16 @@ families still have thousands of legitimate pre-existing hits. Every such rule
 is declared in ``STAGED_RULE_IDS`` and censused per file in
 ``scripts/appearance_scaling_baseline.json``. The guard then fails on any hit
 BEYOND the frozen per-file count: no new violation can be introduced anywhere,
-while the migration burns the census down. Counts may only shrink
-(``--write-baseline`` refuses to grow one), and a rule whose census reaches zero
+while the migration burns the census down. A rule whose census reaches zero
 entries is, from that moment, an absolute ban with no further bookkeeping.
+
+Counts normally only shrink. ``--write-baseline`` refuses to grow any entry
+whose rule family is absent from ``censusGrowthSanctions`` in the baseline file
+(v2 §4.6: no exception without a written sanction trail). Growth is legitimate
+in exactly one situation — a regex widens and newly SEES pre-existing sites —
+and then the sanction explains which law widened it and who burns the sites
+down. It is never legitimate for a dead class from a removed token: that gets
+deleted at the call site.
 """
 
 from __future__ import annotations
@@ -149,27 +156,35 @@ ARBITRARY_Z_RE = re.compile(r"(?<![A-Za-z0-9_-])z-\[[^\]]+\]")
 STANDARD_Z_RE = re.compile(r"(?<![A-Za-z0-9_-])z-(?:0|10|20|30|40|50)(?![A-Za-z0-9_-])")
 ARBITRARY_GAP_RE = re.compile(r"(?<![A-Za-z0-9_-])gap-\[[^\]]+\]")
 ARBITRARY_SIZE_RE = re.compile(r"(?<![A-Za-z0-9_-])size-\[[^\]]+\]")
-# `shadow-keystone` is banned from commit one even though no consumer has been
-# migrated yet: the token is removed by the authority, so any surviving use is a
-# dead class, not a pending migration.
+# `shadow-keystone` (and its historical `-sm`/`-lg` spellings) is banned from
+# commit one even though no consumer has been migrated yet: the token is removed
+# by the authority, so any surviving use is a dead class, not a pending
+# migration. Stock Tailwind elevation (`shadow-sm/md/lg/xl/2xl/inner`) is equally
+# illegal: it emits a non-token shadow, and the only sanctioned elevations are
+# the three generated roles (subtle/popover/modal).
 OLD_SHADOW_RE = re.compile(
-    r"(?<![A-Za-z0-9_-])shadow-(?:floating(?:-dark)?|keystone|lg|\[[^\]]+\])"
-    r"(?![A-Za-z0-9_-])"
+    r"(?<![A-Za-z0-9_-])shadow-(?:"
+    r"floating(?:-dark)?"
+    r"|keystone(?:-(?:sm|md|lg|xl|2xl))?"
+    r"|(?:sm|md|lg|xl|2xl|inner)"
+    r"|\[[^\]]+\]"
+    r")(?![A-Za-z0-9_-])"
 )
 OLD_ACCENT_RE = re.compile(
     r"(?<![A-Za-z0-9_-])(?:[^\s\"'`]*:)*bg-(?:sidebar-)?accent"
     r"(?:/[^\s\"'`]+)?(?![A-Za-z0-9_-])"
 )
-# Catches BOTH static bracket-alpha fills and interaction-prefixed ones from day
-# one (LAW 4.2): `bg-foreground/[0.04]` and `hover:bg-foreground/5` are the same
-# defect — an ad-hoc overlay where a ruled state token belongs.
+# Catches every low-alpha foreground fill from commit one (LAW 4.2), in any
+# variant position and any Tailwind alpha spelling: `bg-foreground/5`,
+# `bg-foreground/[0.04]`, `bg-foreground/[8%]`, `hover:bg-foreground/10`,
+# `group-hover/item:bg-foreground/[0.045]`. Tailwind compiles the plain-numeric,
+# decimal-bracket, and percent-bracket forms to the same `color-mix()` output, so
+# restricting the ban to one spelling (or to interaction prefixes only) just
+# moves the defect — an ad-hoc overlay where a ruled state token belongs.
 FOREGROUND_ALPHA_RE = re.compile(
-    r"(?P<class>"
-    r"(?:[^\s\"'`]*(?:hover|active|focus|focus-visible|focus-within|group-hover|group-focus|"
-    r"data-\[state=(?:open|active|selected)\])[^\s\"'`]*:)+bg-foreground/"
-    r"(?P<interaction_alpha>\[(?:0?\.)?[0-9]+\]|[0-9]+)"
-    r"|(?:[^\s\"'`]*:)*bg-foreground/(?P<static_alpha>\[(?:0?\.)?[0-9]+\])"
-    r")"
+    r"(?<![A-Za-z0-9_-])(?:[^\s\"'`]*:)*bg-foreground/"
+    r"(?P<alpha>\[[0-9]*\.?[0-9]+%?\]|[0-9]*\.?[0-9]+)"
+    r"(?![A-Za-z0-9_.%-])"
 )
 NUMERIC_DURATION_UTILITY_RE = re.compile(
     r"(?<![A-Za-z0-9_-])duration-(?:\[[^\]]+\]|[0-9]+)(?![A-Za-z0-9_-])"
@@ -252,6 +267,10 @@ STAGED_RULE_IDS = frozenset({
     "raw-hex",
 })
 STAGED_CENSUS_KEY = "stagedViolations"
+# v2 §4.6: no exception without a sanction trail. Keyed by rule id, the value is
+# the written justification for the only direction the census is not free to
+# move. Read by --write-baseline; an unlisted family can never grow.
+SANCTION_KEY = "censusGrowthSanctions"
 
 
 @dataclass(frozen=True)
@@ -357,8 +376,17 @@ def raw_hex_is_allowed(path: Path, source: str, match: re.Match[str]) -> bool:
     return False
 
 
-def interaction_alpha_percent(raw_alpha: str) -> float:
+def foreground_alpha_percent(raw_alpha: str) -> float:
+    """Percent alpha for any Tailwind spelling: `/5`, `/[0.05]`, `/[8%]`.
+
+    A bare number is already a percentage (`/5` = 5%), a bracketed decimal is a
+    0..1 fraction (`/[0.05]` = 5%), and a bracketed percentage is taken as-is.
+    All three compile to the same `color-mix()` output, so they must score the
+    same here or the ban leaks through whichever spelling scores differently.
+    """
     value = raw_alpha.strip("[]")
+    if value.endswith("%"):
+        return float(value[:-1])
     if "." in value:
         return float(value) * 100
     return float(value)
@@ -424,8 +452,9 @@ def check_foundation_source(path: Path, source: str) -> list[Violation]:
             )
 
     for match in FOREGROUND_ALPHA_RE.finditer(source_without_comments):
-        raw_alpha = match.group("interaction_alpha") or match.group("static_alpha")
-        if interaction_alpha_percent(raw_alpha) <= 10:
+        if is_negative_assertion(match.start()):
+            continue
+        if foreground_alpha_percent(match.group("alpha")) <= 10:
             violations.append(
                 Violation(
                     "foreground-alpha-foundation",
@@ -842,18 +871,28 @@ def collect_violations(paths: Sequence[Path] | None = None) -> list[Violation]:
 
 
 def write_baseline(path: Path = BASELINE_FILE) -> int:
-    """Rewrite the staged census. Refuses to grow any count (shrink-only law)."""
+    """Rewrite the staged census. Growth needs a written sanction (v2 §4.6).
+
+    Shrinking is always free. A count may only grow for a rule family that
+    carries a sanction string in ``SANCTION_KEY`` — that string is the written
+    trail the law demands, and it lives next to the numbers it authorizes so a
+    reviewer sees why a family widened. Growth in any unsanctioned family is
+    still refused outright, which is what makes an absorbed violation
+    (a dead class quietly censused instead of deleted) impossible to land.
+    """
     existing = load_baselines()
     current = staged_census(collect_raw_violations())
     previous: Mapping[str, int] = existing.get(STAGED_CENSUS_KEY, {})
-    grown = sorted(
+    sanctions: Mapping[str, str] = existing.get(SANCTION_KEY, {})
+    unsanctioned = sorted(
         f"{key}: {previous.get(key, 0)} -> {count}"
         for key, count in current.items()
-        if count > previous.get(key, 0)
+        if count > previous.get(key, 0) and key.split("|", 1)[-1] not in sanctions
     )
-    if grown and previous:
-        print("Refusing to grow the staged census; migrate these sites instead:")
-        for line in grown:
+    if unsanctioned and previous:
+        print("Refusing to grow the staged census without a sanction; migrate these sites")
+        print(f"or record the rule family in {relative_path(path)} -> {SANCTION_KEY}:")
+        for line in unsanctioned:
             print(f"  {line}")
         return 1
     existing[STAGED_CENSUS_KEY] = current

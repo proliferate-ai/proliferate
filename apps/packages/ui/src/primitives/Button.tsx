@@ -21,8 +21,12 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const variantClasses: Record<ButtonVariant, string> = {
+  // [SHADOW-04] keystone removal: `--shadow-keystone` is removed by the token
+  // authority, so `shadow-keystone` resolved to nothing. The primary button is
+  // surface-led (retune-spec.md §8 [SHADOW-04]); the dead class is deleted
+  // rather than absorbed by the staged census.
   primary:
-    "bg-primary text-primary-foreground font-medium hover:bg-primary/90 shadow-keystone",
+    "bg-primary text-primary-foreground font-medium hover:bg-primary/90",
   secondary:
     "border border-border bg-card text-card-foreground hover:bg-accent transition-colors",
   outline:

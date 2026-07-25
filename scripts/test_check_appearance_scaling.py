@@ -2,6 +2,8 @@ from pathlib import Path
 import unittest
 
 from scripts.check_appearance_scaling import (
+    SANCTION_KEY,
+    STAGED_CENSUS_KEY,
     STAGED_RULE_IDS,
     Violation,
     apply_staged_baseline,
@@ -10,6 +12,7 @@ from scripts.check_appearance_scaling import (
     check_design_token_source,
     check_source,
     imported_icon_names,
+    load_baselines,
     raw_hex_scope_excluded,
     staged_census,
 )
@@ -203,6 +206,75 @@ export function Example() {
             {"retired-shadow", "foreground-alpha-foundation"},
         )
 
+    def test_rejects_every_retired_shadow_spelling(self) -> None:
+        """Historical keystone variants and stock Tailwind elevation both emit
+        non-token shadows, so every spelling is one rule, not a family of holes."""
+        for utility in (
+            "shadow-keystone",
+            "shadow-keystone-sm",
+            "shadow-keystone-lg",
+            "shadow-floating",
+            "shadow-floating-dark",
+            "shadow-sm",
+            "shadow-md",
+            "shadow-lg",
+            "shadow-xl",
+            "shadow-2xl",
+            "shadow-inner",
+            "shadow-[0_1px_2px_rgba(0,0,0,0.4)]",
+        ):
+            with self.subTest(utility=utility):
+                source = f'const cls = "rounded-lg {utility} border";\n'
+                self.assertEqual(
+                    [violation.rule_id for violation in check_source(Path("E.tsx"), source)],
+                    ["retired-shadow"],
+                )
+
+    def test_accepts_semantic_and_unrelated_shadow_names(self) -> None:
+        source = 'const cls = "shadow-popover shadow-modal shadow-subtle shadow-none";\n'
+        self.assertEqual(check_source(Path("E.tsx"), source), [])
+
+    def test_rejects_low_foreground_alpha_in_every_spelling_and_position(self) -> None:
+        """Tailwind compiles `/5`, `/[0.05]`, and `/[5%]` to the same color-mix,
+        and a static fill is the same defect as an interaction-prefixed one."""
+        for utility in (
+            "bg-foreground/5",
+            "bg-foreground/10",
+            "bg-foreground/[0.04]",
+            "bg-foreground/[.04]",
+            "bg-foreground/[8%]",
+            "bg-foreground/[10%]",
+            "hover:bg-foreground/5",
+            "hover:bg-foreground/[8%]",
+            "active:bg-foreground/[0.052]",
+            "group-hover/item:bg-foreground/[0.045]",
+            "data-[state=open]:bg-foreground/10",
+        ):
+            with self.subTest(utility=utility):
+                source = f'const cls = "{utility} rounded-lg";\n'
+                self.assertEqual(
+                    [violation.rule_id for violation in check_source(Path("E.tsx"), source)],
+                    ["foreground-alpha-foundation"],
+                )
+
+    def test_accepts_opaque_foreground_fills(self) -> None:
+        """Above 10% the fill is a deliberate surface, not a state overlay."""
+        for utility in (
+            "bg-foreground/20",
+            "bg-foreground/90",
+            "bg-foreground/[0.18]",
+            "bg-foreground/[40%]",
+            "hover:bg-foreground/80",
+        ):
+            with self.subTest(utility=utility):
+                self.assertEqual(
+                    check_source(Path("E.tsx"), f'const cls = "{utility}";\n'), []
+                )
+
+    def test_accepts_negative_assertions_for_foreground_alpha(self) -> None:
+        source = 'expect(cls).not.toContain("bg-foreground/5");\n'
+        self.assertEqual(check_source(Path("E.test.tsx"), source), [])
+
     def test_accepts_closed_semantic_foundation_vocabulary(self) -> None:
         source = '''
 export function Example() {
@@ -393,6 +465,26 @@ const ORBIT_DELAYS = [
             [reported.lineno for reported in apply_staged_baseline([violation], {}, Path("/repo"))],
             [3],
         )
+
+    def test_every_census_growth_sanction_names_a_real_staged_rule(self) -> None:
+        """v2 4.6: growth needs a written sanction, and it must be enforceable.
+
+        A sanction naming a rule that no longer exists is dead text that would
+        silently authorize nothing (or, worse, be assumed to authorize something).
+        """
+        sanctions = load_baselines().get(SANCTION_KEY, {})
+        self.assertTrue(sanctions, "the shipped baseline records its growth sanctions")
+        for rule_id, justification in sanctions.items():
+            with self.subTest(rule_id=rule_id):
+                self.assertIn(rule_id, STAGED_RULE_IDS)
+                self.assertGreater(len(justification), 80, "sanctions are written trails")
+
+    def test_shipped_census_has_no_entry_for_a_dead_class(self) -> None:
+        """The keystone regression: a removed token's utility must be deleted at
+        the call site, never absorbed by the census."""
+        census = load_baselines()[STAGED_CENSUS_KEY]
+        button = "apps/packages/ui/src/primitives/Button.tsx|retired-shadow"
+        self.assertNotIn(button, census)
 
 
 if __name__ == "__main__":
