@@ -28,8 +28,7 @@ Fences, one owner per concern:
   and when it all leaves.
 - GitHub *authority* — tokens, credential leases, the credential helper —
   belongs to [sandbox-github-auth.md](sandbox-github-auth.md). This document
-  owns *identity*: who the commit says it is by. (That document is scheduled
-  for its own refit pass in this spec program.)
+  owns *identity*: who the commit says it is by.
 - Workflow-run placement has its own contract
   ([workspace-placement.md](../../systems/product/workflows/workspace-placement.md));
   workflow worktrees are deliberately invisible to retention here.

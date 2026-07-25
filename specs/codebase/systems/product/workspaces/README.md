@@ -1,5 +1,7 @@
 # Workspace Systems
 
+- [Cloud Workspace](cloud-workspace.md) — the end-to-end cloud workspace
+  experience: create, status panel, wake, resources/disk, archive/delete.
 - [Files](files.md) — workspace file browsing, viewing, diffs, and changes.
 - [Migration](migration.md) — current absence of product migration
   orchestration plus the retained AnyHarness runtime substrate boundary.
