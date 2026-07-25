@@ -101,7 +101,7 @@ export function PlaygroundComposerSurface({
               placeholder="Playground composer (read-only)"
               spellCheck={false}
               readOnly
-              className="min-h-0 px-0 py-0 text-base leading-relaxed text-foreground placeholder:text-muted-foreground/70"
+              className="min-h-0 px-0 py-0 text-composer text-foreground placeholder:text-muted-foreground/70"
             />
           )}
         </div>
@@ -170,7 +170,7 @@ function PlaygroundSlashCommandComposerSurface({
         <form className="relative flex flex-col">
           <div
             data-telemetry-mask
-            className="mb-2 flex min-h-14 flex-grow select-text items-start px-5 text-base leading-relaxed text-foreground"
+            className="mb-2 flex min-h-14 flex-grow select-text items-start px-5 text-composer text-foreground"
           >
             <span>/rev</span>
           </div>
@@ -305,11 +305,11 @@ export function ReplayComposerSurface({ replay }: { replay: PlaygroundReplayStat
             placeholder={statusText}
             spellCheck={false}
             readOnly
-            className="min-h-0 px-0 py-0 text-base leading-relaxed text-foreground placeholder:text-muted-foreground/70"
+            className="min-h-0 px-0 py-0 text-composer text-foreground placeholder:text-muted-foreground/70"
           />
         </div>
         <div className="flex items-center justify-between gap-2 px-2 pb-2">
-          <span className="px-2 text-xs text-muted-foreground">{statusText}</span>
+          <span className="px-2 text-ui-sm text-muted-foreground">{statusText}</span>
           <Button
             type="button"
             variant="secondary"
@@ -320,7 +320,7 @@ export function ReplayComposerSurface({ replay }: { replay: PlaygroundReplayStat
               void replay.advance();
             }}
           >
-            <ArrowRight className="size-3.5" />
+            <ArrowRight className="text-ui icon-control" />
             Next turn
           </Button>
         </div>
