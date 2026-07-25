@@ -1,7 +1,7 @@
-import { readFileSync } from "node:fs";
 import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup as renderReactToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { themeTokens } from "@proliferate/design/tokens";
 import type { ProductHost } from "@proliferate/product-client/host/product-host";
 import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
 import { FileChangesCard } from "#product/components/content/ui/FileChangesCard";
@@ -59,19 +59,26 @@ describe("FileChangesCard and FileDiffCard", () => {
   });
 
   it("keeps diff header theme variables free of hard-coded dark surfaces", () => {
-    const desktopCss = readFileSync(
-      new URL("../../../../../../packages/design/src/css/product.css", import.meta.url),
-      "utf8",
-    );
-    const rootDiffVariables =
-      desktopCss.match(/\/\* -- Git diff backgrounds[\s\S]*?:root \{(?<body>[\s\S]*?)--diffs-min-number-column-width:/)
-        ?.groups?.body ?? "";
-
-    expect(rootDiffVariables).not.toContain("#232323");
-    expect(rootDiffVariables).not.toContain("#2b2b2b");
-    expect(rootDiffVariables).toContain(
-      "--color-diff-chat-file-header-surface: var(--color-diff-surface);",
-    );
+    // The diff surfaces used to be hand-authored in a product.css `:root`
+    // block; token VALUES now live only in the design authority, so this reads
+    // the authority directly instead of scraping CSS that no longer declares
+    // them (a regex over the old block would silently match nothing and pass).
+    expect(themeTokens["--color-diff-chat-file-header-surface"]).toMatchObject({
+      dark: "var(--color-diff-surface)",
+      light: "var(--color-diff-surface)",
+    });
+    for (const name of [
+      "--color-diff-chat-file-header-surface",
+      "--color-diff-chat-turn-header-surface",
+      "--color-diff-header-surface",
+      "--color-diff-panel-surface",
+      "--color-diff-surface",
+    ] as const) {
+      const token = themeTokens[name];
+      expect(token, `${name} must be owned by the token authority`).toBeDefined();
+      expect(token.light).not.toContain("#232323");
+      expect(token.light).not.toContain("#2b2b2b");
+    }
   });
 
   it("keeps absolute paths compact in diff headers", () => {

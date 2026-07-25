@@ -68,7 +68,11 @@ describe("TranscriptActivityBlock entry motion", () => {
 
     expect(section).toContain("opacity: 0");
     expect(section).toContain("transform: translateX(-4px)");
-    expect(section).toContain("150ms cubic-bezier(0.19, 1, 0.22, 1)");
+    // [MOTION-02]: transcript entrances move to the 160ms enter role on
+    // out-quint. The recipe now names the generated variables instead of
+    // re-authoring the literal, so this asserts the indirection, and the
+    // numbers themselves are pinned once in motion.ts.
+    expect(section).toContain("var(--duration-enter) var(--ease-out-quint)");
     expect(section).toContain("@media (prefers-reduced-motion: reduce)");
     expect(section).not.toContain("height:");
     expect(section).not.toContain("margin:");
