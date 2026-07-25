@@ -1328,6 +1328,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/integrations/catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Integration Catalog Endpoint */
+        get: operations["list_integration_catalog_endpoint_v1_cloud_integrations_catalog_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/integrations/health": {
         parameters: {
             query?: never;
@@ -3408,6 +3425,82 @@ export interface components {
             status: string;
             /** Enabled */
             enabled: boolean;
+        };
+        /** IntegrationCatalogItem */
+        IntegrationCatalogItem: {
+            /**
+             * Definitionid
+             * Format: uuid
+             */
+            definitionId: string;
+            /** Namespace */
+            namespace: string;
+            /** Displayname */
+            displayName: string;
+            /** Description */
+            description?: string | null;
+            /** Authkind */
+            authKind: string;
+            connectSchema: components["schemas"]["IntegrationConnectSchema"];
+        };
+        /** IntegrationCatalogResponse */
+        IntegrationCatalogResponse: {
+            /** Items */
+            items: components["schemas"]["IntegrationCatalogItem"][];
+        };
+        /** IntegrationCatalogSecretField */
+        IntegrationCatalogSecretField: {
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Placeholder */
+            placeholder?: string | null;
+            /** Helpertext */
+            helperText?: string | null;
+            /** Prefixhint */
+            prefixHint?: string | null;
+        };
+        /** IntegrationCatalogSettingField */
+        IntegrationCatalogSettingField: {
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Kind */
+            kind: string;
+            /**
+             * Required
+             * @default false
+             */
+            required: boolean;
+            /**
+             * Options
+             * @default []
+             */
+            options: components["schemas"]["IntegrationCatalogSettingOption"][];
+            /** Default */
+            default?: string | boolean | null;
+        };
+        /** IntegrationCatalogSettingOption */
+        IntegrationCatalogSettingOption: {
+            /** Value */
+            value: string;
+            /** Label */
+            label: string;
+        };
+        /** IntegrationConnectSchema */
+        IntegrationConnectSchema: {
+            /**
+             * Secretfields
+             * @default []
+             */
+            secretFields: components["schemas"]["IntegrationCatalogSecretField"][];
+            /**
+             * Settingsfields
+             * @default []
+             */
+            settingsFields: components["schemas"]["IntegrationCatalogSettingField"][];
         };
         /**
          * IntegrationGatewayConfig
@@ -7502,6 +7595,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+        };
+    };
+    list_integration_catalog_endpoint_v1_cloud_integrations_catalog_get: {
+        parameters: {
+            query?: {
+                organizationId?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationCatalogResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
