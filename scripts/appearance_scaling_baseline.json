@@ -54,10 +54,7 @@
     "apps/packages/product-client/src/components/workspace/chat/transcript/UserMessage.tsx|foreground-alpha-foundation": 1,
     "apps/packages/product-client/src/components/workspace/shell/sidebar/SidebarUpdatePill.tsx|foreground-alpha-foundation": 3,
     "apps/packages/product-client/src/components/workspace/shell/tabs/TabGroupPill.tsx|foreground-alpha-foundation": 1,
-    "apps/packages/product-ui/src/chat/CloudChatHeader.tsx|foreground-alpha-foundation": 2,
-    "apps/packages/product-ui/src/chat/transcript/CloudChatUserMessage.tsx|foreground-alpha-foundation": 1,
     "apps/packages/product-ui/src/settings/OrganizationSsoSettingsSurface.tsx|foreground-alpha-foundation": 3,
-    "apps/packages/product-ui/src/workspaces/CloudWorkspaceList.tsx|foreground-alpha-foundation": 1,
     "apps/packages/product-ui/src/workspaces/WorkspaceInventory.tsx|foreground-alpha-foundation": 5
   },
   "standardNumericZ": {
