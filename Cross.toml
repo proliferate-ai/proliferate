@@ -1,6 +1,0 @@
-# `cross` runs the build inside a container, so the release identity stamps
-# (set by the `build-binaries` job in .github/workflows/release-runtime.yml)
-# must be forwarded into it — otherwise the aarch64-linux binaries fall back
-# to incomplete identity and production builds fail closed.
-[build.env]
-passthrough = ["PROLIFERATE_BUILD_VERSION", "PROLIFERATE_BUILD_SHA"]
