@@ -17,8 +17,10 @@ The field is curation, not a universal default. It must not change ordinary
 interactive session creation, stored user preferences, or the mode chosen by an
 agent process when `mode_id` is omitted.
 
-The runtime may start from the bundled `catalogs/agents/catalog.json` document
-or activate a newer validated catalog through control-plane sync. The active
+The runtime starts from the bundled `catalogs/agents/catalog.json` document —
+the binary is the catalog's only transport
+([agent-distribution.md](../../../platforms/product/agent-distribution.md);
+the legacy control-plane sync path is deletion-pending). The active
 document is projected into the target's resolved launch options. ProductClient
 combines those target-local options with cloud display metadata, but the
 selected local, cloud, or SSH runtime owns the effective unattended default.

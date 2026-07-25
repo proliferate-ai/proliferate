@@ -5,10 +5,8 @@ integration MCP gateway, and the Worker identity that gives AnyHarness scoped
 access to that gateway. Provider credentials remain encrypted in Cloud;
 AnyHarness receives only a Proliferate gateway bearer.
 
-Harness model credentials and the LLM gateway are separate owners; see the
-Agent auth and Managed model gateway rows in [README.md](README.md) (their
-platform documents are being rewritten after the Bifrost-era versions were
-removed).
+Harness model credentials and the LLM gateway are separate owners:
+[agent-auth.md](agent-auth.md) and [model-gateway.md](model-gateway.md).
 
 ## Mental Model
 
@@ -141,8 +139,10 @@ publication does not have to race a matching server deployment.
 
 Heartbeat authenticates the opaque Worker bearer, updates `last_seen_at`, and
 persists any reported Worker and AnyHarness versions. Its response carries the
-desired Worker, AnyHarness, and agent-catalog versions. The Worker uses that
-response for heartbeat-driven convergence; see the
+desired Worker and AnyHarness versions (and, deletion-pending under the
+binary-only catalog ruling in
+[agent-distribution.md](agent-distribution.md), an agent-catalog version).
+The Worker uses that response for heartbeat-driven convergence; see the
 [Proliferate Worker structure](../../structures/proliferate-worker/README.md).
 
 The gateway token's `last_used_at` column is deliberately not updated on the
@@ -414,9 +414,10 @@ and [`runtime_workers/api.py`](../../../../server/proliferate/server/cloud/runti
 
 ## Boundaries
 
-- The Worker currently enrolls, heartbeats, converges catalog and binaries,
-  and materializes the integration-gateway credential. It is not the owner of
-  workspace creation or repository materialization.
+- The Worker currently enrolls, heartbeats, writes mailbox update requests
+  for binary divergence (catalog convergence is deletion-pending under the
+  binary-only ruling), and materializes the integration-gateway credential.
+  It is not the owner of workspace creation or repository materialization.
 - Cloud directly creates or reconnects AnyHarness for managed sandboxes; the
   Worker sidecar is optional.
 - Generic MCP session assembly belongs to [MCP runtime](mcp-runtime.md).

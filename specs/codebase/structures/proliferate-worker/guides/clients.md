@@ -15,7 +15,7 @@ cloud_client/
 - `POST /v1/cloud/worker/heartbeat`
 - `GET /v1/cloud/worker/download/{target}/{asset}`
 - `GET /v1/cloud/runtime/download/{target}/{asset}`
-- `GET /v1/catalogs/agents`
+- `GET /v1/catalogs/agents` (deletion-pending: heartbeat catalog transport)
 - a direct unauthenticated fetch from an already resolved CDN URL for the
   sibling checksum
 
@@ -32,8 +32,12 @@ update should happen, and it does not write the local store.
 There is no general `anyharness_client` module in the current Worker.
 
 - `catalog_sync.rs` directly owns its focused catalog version GET and catalog
-  PUT, including optional runtime bearer auth.
-- `anyharness_update.rs` directly owns the post-relaunch `/health` probe.
+  PUT, including optional runtime bearer auth — deletion-pending with the
+  rest of the heartbeat catalog transport
+  ([agent-distribution.md](../../../platforms/product/agent-distribution.md)
+  Current gaps).
+- `anyharness_update.rs` directly owns the post-relaunch `/health` probe
+  (legacy-target path only).
 
 These calls do not make the Worker the general execution client for
 AnyHarness. Cloud performs current workspace and session operations directly.
