@@ -21,8 +21,17 @@ import { twMerge } from "../utils/tw-merge";
  * generated-CSS source order instead of a reliable merge).
  */
 
+/**
+ * The transition list covers OPACITY as well as color: the reveal contract
+ * below is expressed entirely in opacity, so a colors-only transition made
+ * every revealed row action snap in instantly (and made the WKWebView
+ * `transform-gpu`/`will-change-[opacity]` hints its consumers carry
+ * meaningless). One explicit property list rather than `transition-colors` +
+ * `transition-opacity`, which are the same twMerge group and would drop each
+ * other. `duration-hover` is the ruled 120ms pointer-feedback role.
+ */
 const ROW_ACTION_BASE_CLASS =
-  "inline-flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md p-0 text-ui text-muted-foreground transition-colors [&_svg]:icon-control hover:bg-hover hover:text-foreground active:bg-active data-[state=open]:bg-active data-[state=open]:text-foreground focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50";
+  "inline-flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md p-0 text-ui text-muted-foreground transition-[color,background-color,border-color,opacity] duration-hover [&_svg]:icon-control hover:bg-hover hover:text-foreground active:bg-active data-[state=open]:bg-active data-[state=open]:text-foreground focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50";
 
 const ROW_ACTION_REVEAL_CLASS =
   "pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100 data-[state=open]:pointer-events-auto data-[state=open]:opacity-100 disabled:!pointer-events-none";
