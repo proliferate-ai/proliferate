@@ -121,6 +121,15 @@ impl SessionActor {
                 let _ = respond_to.send(result);
                 None
             }
+            SessionCommand::CallAgentExtMethod {
+                method,
+                params,
+                respond_to,
+            } => {
+                let result = self.call_agent_ext_method(&method, params).await;
+                let _ = respond_to.send(result);
+                None
+            }
             SessionCommand::InjectRuntimeEvent { event, respond_to } => {
                 let result = self.inject_runtime_event(event).await;
                 let _ = respond_to.send(result);
@@ -176,5 +185,38 @@ impl SessionActor {
                 None
             }
         }
+    }
+
+    /// Send an anyharness extension request on the agent connection
+    /// (GoalPort/LoopPort). Ext requests are connection-level; the params
+    /// object is stamped with this actor's native `sessionId` before send.
+    pub(in crate::live::sessions::actor) async fn call_agent_ext_method(
+        &self,
+        method: &str,
+        params: serde_json::Value,
+    ) -> anyhow::Result<serde_json::Value> {
+        let mut params = match params {
+            serde_json::Value::Object(map) => map,
+            serde_json::Value::Null => serde_json::Map::new(),
+            other => {
+                return Err(anyhow::anyhow!(
+                    "ext method params must be an object, got: {other}"
+                ))
+            }
+        };
+        params.insert(
+            "sessionId".to_string(),
+            serde_json::Value::String(self.native_session_id.clone()),
+        );
+        let raw: std::sync::Arc<serde_json::value::RawValue> =
+            serde_json::value::to_raw_value(&serde_json::Value::Object(params))?.into();
+        let ext = acp::schema::ExtRequest::new(method.to_string(), raw);
+        let response = self
+            .conn
+            .send_request(acp::AgentRequest::ExtMethodRequest(ext))
+            .block_task()
+            .await
+            .map_err(|error| anyhow::anyhow!("ext method {method}: {error}"))?;
+        Ok(serde_json::to_value(&response)?)
     }
 }

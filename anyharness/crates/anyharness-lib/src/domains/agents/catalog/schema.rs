@@ -212,6 +212,26 @@ pub struct AgentCatalogSession {
     /// auth context. Curation input only, never consumed by the runtime.
     #[serde(default)]
     pub observed_defaults: BTreeMap<String, String>,
+    /// Goals capability per harness (spec goals-and-workflows-v1 §2.5):
+    /// whether the pinned sidecar implements GoalPort. UI affordance
+    /// default; the per-session truth is the ACP init advertisement.
+    #[serde(default)]
+    pub supports_goals: bool,
+    /// Loops capability, tri-state (spec §2.7): `native` (sidecar LoopPort,
+    /// claude), `emulated` (runtime scheduler, codex), `none`.
+    #[serde(default)]
+    pub loops: AgentCatalogLoopsCapability,
+}
+
+/// Tri-state loops capability (spec §2.7) — emulated loops are still real
+/// loops, but the UI badges them "managed by Proliferate".
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentCatalogLoopsCapability {
+    Native,
+    Emulated,
+    #[default]
+    None,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

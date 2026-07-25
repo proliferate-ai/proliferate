@@ -108,6 +108,8 @@ impl SessionRecord {
                 self.action_capabilities_json.as_deref(),
             ),
             origin: self.origin.as_ref().map(OriginContext::to_contract),
+            active_goal: None,
+            loops: Vec::new(),
         }
     }
 }

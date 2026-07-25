@@ -305,6 +305,24 @@ impl LiveSessionHandle {
             .map_err(|_| LiveSessionCommandError::ResponseDropped)
     }
 
+    /// Call an anyharness extension method on the agent connection
+    /// (GoalPort/LoopPort: `_anyharness/goal/*`, `_anyharness/loop/*`).
+    /// `params` must be a JSON object (or null); the actor stamps its native
+    /// `sessionId` into it before sending.
+    pub async fn call_agent_ext_method(
+        &self,
+        method: impl Into<String>,
+        params: serde_json::Value,
+    ) -> Result<serde_json::Value, LiveSessionCommandError<anyhow::Error>> {
+        let method = method.into();
+        self.send_request(|respond_to| SessionCommand::CallAgentExtMethod {
+            method,
+            params,
+            respond_to,
+        })
+        .await
+    }
+
     pub async fn verify_fork_ready(
         &self,
     ) -> Result<(), LiveSessionCommandError<ForkSessionCommandError>> {

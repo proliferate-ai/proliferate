@@ -1,7 +1,9 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use super::goals::{GoalClearedEvent, GoalMetEvent, GoalUpdatedEvent};
 use super::interactions::{InteractionRequestedEvent, InteractionResolvedEvent};
+use super::loops::{LoopClearedEvent, LoopFiredEvent, LoopUpdatedEvent};
 use super::SessionLiveConfigSnapshot;
 
 // ---------------------------------------------------------------------------
@@ -56,6 +58,13 @@ pub enum SessionEvent {
     ReviewRunUpdated(ReviewRunUpdatedPayload),
     UsageUpdate(UsageUpdatePayload),
 
+    GoalUpdated(GoalUpdatedEvent),
+    GoalMet(GoalMetEvent),
+    GoalCleared(GoalClearedEvent),
+    LoopUpdated(LoopUpdatedEvent),
+    LoopFired(LoopFiredEvent),
+    LoopCleared(LoopClearedEvent),
+
     PendingPromptAdded(PendingPromptAddedPayload),
     PendingPromptUpdated(PendingPromptUpdatedPayload),
     PendingPromptRemoved(PendingPromptRemovedPayload),
@@ -86,6 +95,12 @@ impl SessionEvent {
             Self::SessionLinkTurnCompleted(_) => "session_link_turn_completed",
             Self::ReviewRunUpdated(_) => "review_run_updated",
             Self::UsageUpdate(_) => "usage_update",
+            Self::GoalUpdated(_) => "goal_updated",
+            Self::GoalMet(_) => "goal_met",
+            Self::GoalCleared(_) => "goal_cleared",
+            Self::LoopUpdated(_) => "loop_updated",
+            Self::LoopFired(_) => "loop_fired",
+            Self::LoopCleared(_) => "loop_cleared",
             Self::PendingPromptAdded(_) => "pending_prompt_added",
             Self::PendingPromptUpdated(_) => "pending_prompt_updated",
             Self::PendingPromptRemoved(_) => "pending_prompt_removed",

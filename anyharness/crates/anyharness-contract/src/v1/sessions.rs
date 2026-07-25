@@ -5,9 +5,9 @@ use utoipa::ToSchema;
 
 use super::OriginContext;
 use super::{
-    ContentPart, InteractionKind, McpElicitationInteractionPayload, PermissionInteractionContext,
-    PermissionInteractionOption, PromptProvenance, SessionLiveConfigSnapshot,
-    SessionMcpBindingSummary, UserInputQuestion,
+    ContentPart, Goal, InteractionKind, Loop, McpElicitationInteractionPayload,
+    PermissionInteractionContext, PermissionInteractionOption, PromptProvenance,
+    SessionLiveConfigSnapshot, SessionMcpBindingSummary, UserInputQuestion,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
@@ -125,6 +125,13 @@ pub struct Session {
     pub action_capabilities: SessionActionCapabilities,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub origin: Option<OriginContext>,
+    /// The session's non-terminal goal mirror, when one exists (spec §2.1:
+    /// at most one non-terminal goal per session).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub active_goal: Option<Goal>,
+    /// Active loop mirrors for the session (multiple allowed, spec §2.7).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub loops: Vec<Loop>,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
@@ -134,6 +141,14 @@ pub struct SessionActionCapabilities {
     pub fork: bool,
     #[serde(default)]
     pub targeted_fork: bool,
+    /// Sidecar advertises GoalPort (`_meta.anyharness.goals` on the ACP
+    /// InitializeResponse).
+    #[serde(default)]
+    pub supports_goals: bool,
+    /// Sidecar advertises LoopPort. Codex-emulated loops are runtime-owned
+    /// and do NOT set this — consult the catalog `loops` capability.
+    #[serde(default)]
+    pub supports_loops: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -714,6 +729,8 @@ mod tests {
             dismissed_at: None,
             pending_prompts: vec![],
             origin: None,
+            active_goal: None,
+            loops: vec![],
         };
 
         let json = serde_json::to_value(&session).expect("serialize session");

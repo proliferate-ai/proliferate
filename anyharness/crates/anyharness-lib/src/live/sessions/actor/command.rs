@@ -160,6 +160,15 @@ pub(in crate::live::sessions) enum SessionCommand {
         op: Box<dyn SessionDomainOp>,
         respond_to: oneshot::Sender<Box<dyn std::any::Any + Send>>,
     },
+    /// Call an anyharness extension method on the agent connection
+    /// (GoalPort/LoopPort wire contract: `_anyharness/goal/*`,
+    /// `_anyharness/loop/*`). Ext requests are connection-level; the actor
+    /// injects its native `sessionId` into the params object.
+    CallAgentExtMethod {
+        method: String,
+        params: serde_json::Value,
+        respond_to: oneshot::Sender<anyhow::Result<serde_json::Value>>,
+    },
     VerifyForkReady {
         respond_to: oneshot::Sender<Result<(), ForkSessionCommandError>>,
     },

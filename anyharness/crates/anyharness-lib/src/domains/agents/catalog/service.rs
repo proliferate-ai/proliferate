@@ -19,8 +19,9 @@ use std::sync::Arc;
 
 use super::schema::{
     AgentCatalogAgent, AgentCatalogArtifactPin, AgentCatalogArtifactSource,
-    AgentCatalogAuthContext, AgentCatalogDocument, AgentCatalogHarnessPins, AgentCatalogModel,
-    AgentCatalogModelControl, AgentCatalogPinTarget,
+    AgentCatalogAuthContext, AgentCatalogDocument, AgentCatalogHarnessPins,
+    AgentCatalogLoopsCapability, AgentCatalogModel, AgentCatalogModelControl,
+    AgentCatalogPinTarget,
 };
 use super::sync::CatalogSyncService;
 use crate::domains::agents::auth::context::ActiveAuthContexts;
@@ -176,6 +177,20 @@ impl ActiveCatalog {
     /// The agent's ordered auth-context signatures (classifier input).
     pub fn auth_contexts(&self, kind: &str) -> Option<&[AgentCatalogAuthContext]> {
         self.agent(kind).map(|agent| agent.auth_contexts.as_slice())
+    }
+
+    /// Goals capability for the harness (spec goals-and-workflows-v1 §2.5).
+    pub fn supports_goals(&self, kind: &str) -> bool {
+        self.agent(kind)
+            .map(|agent| agent.session.supports_goals)
+            .unwrap_or(false)
+    }
+
+    /// Tri-state loops capability for the harness (spec §2.7).
+    pub fn loops_capability(&self, kind: &str) -> AgentCatalogLoopsCapability {
+        self.agent(kind)
+            .map(|agent| agent.session.loops)
+            .unwrap_or(AgentCatalogLoopsCapability::None)
     }
 
     /// Models available under the active contexts: `availability.anyOf`

@@ -29,6 +29,17 @@ pub(in crate::live::sessions) fn build_client_capabilities(
         );
     }
 
+    // GoalPort / LoopPort wire contract: tell the sidecar we understand the
+    // `_meta.anyharness` tagged goal/loop notifications and the ext methods.
+    meta.insert(
+        "anyharness".to_string(),
+        serde_json::json!({
+            "schemaVersion": 1,
+            "goals": true,
+            "loops": true,
+        }),
+    );
+
     acp::schema::ClientCapabilities::new().meta(acp::schema::Meta::from_iter(meta))
 }
 
