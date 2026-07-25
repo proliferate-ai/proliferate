@@ -27,7 +27,16 @@ export function PageHeader({
       {...props}
     >
       <div className="min-w-0">
-        <h1 className="text-title font-semibold tracking-normal text-foreground">{title}</h1>
+        {/* ui-foundation-escalation: page-title role is a Workflow 2 decision.
+            This heading rendered 31px/34px off the deleted --text-xl ladder
+            (calc(--text-xl + 0.875rem) / calc(--text-xl--line-height + 0.5rem)).
+            No enumerated retune covers a 31px page title, so Workflow 1 only
+            re-anchors the same geometry on a surviving token — identical 31/34
+            at the default preset, and it now tracks the reading ramp instead of
+            the removed independent XL line-height ladder. Choosing the semantic
+            role (text-title vs text-heading vs a new page-title rung) belongs to
+            the consumer migration, against a cited reference capture. */}
+        <h1 className="text-[length:calc(var(--text-body)_+_1.125rem)] font-semibold leading-[calc(var(--text-body--line-height)_+_0.875rem)] tracking-normal text-foreground">{title}</h1>
         {description && (
           <p className="mt-1 max-w-3xl text-sm leading-5 text-muted-foreground">
             {description}
