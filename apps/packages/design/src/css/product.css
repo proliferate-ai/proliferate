@@ -1028,6 +1028,11 @@ body {
 .workspace-shell-tab__surface {
   background-color: var(--workspace-shell-tab-inactive-background);
   border-color: var(--workspace-shell-tab-inactive-border);
+  border-radius: var(--workspace-shell-tab-radius);
+}
+
+.workspace-shell-tab__content {
+  border-radius: var(--workspace-shell-tab-radius);
 }
 
 .workspace-shell-tab:hover .workspace-shell-tab__surface {

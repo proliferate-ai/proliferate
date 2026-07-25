@@ -76,10 +76,10 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
       >
         <span
           aria-hidden="true"
-          className="workspace-shell-tab__surface pointer-events-none absolute inset-0 rounded-md border transition-[background-color,border-color] duration-hover"
+          className="workspace-shell-tab__surface pointer-events-none absolute inset-0 border transition-[background-color,border-color] duration-hover"
         />
         <div
-          className={`absolute inset-0 flex items-center overflow-hidden rounded-md py-1 ${
+          className={`workspace-shell-tab__content absolute inset-0 flex items-center overflow-hidden py-1 ${
             isMini ? "gap-1 px-1" : isSmall ? "gap-1 px-2" : "gap-2 px-2"
           }`}
         >
@@ -100,7 +100,7 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
                   }}
                   title="Close tab"
                   aria-label="Close tab"
-                  className="workspace-shell-tab__close hidden size-4 shrink-0 rounded-md text-muted-foreground hover:bg-hover hover:text-foreground active:bg-active group-hover/tab:inline-flex group-focus-within/tab:inline-flex focus-visible:inline-flex"
+                  className="workspace-shell-tab__close hidden size-icon-button-sm shrink-0 rounded-md text-muted-foreground hover:bg-hover hover:text-foreground active:bg-active group-hover/tab:inline-flex group-focus-within/tab:inline-flex focus-visible:inline-flex"
                 >
                   <X className="icon-compact" />
                 </Button>
@@ -164,7 +164,7 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
               }}
               title="Close tab"
               aria-label="Close tab"
-              className="workspace-shell-tab__close absolute right-1.5 top-1/2 z-20 hidden size-4 shrink-0 -translate-y-1/2 rounded-md text-muted-foreground hover:bg-hover hover:text-foreground active:bg-active group-hover/tab:inline-flex group-focus-within/tab:inline-flex focus-visible:inline-flex"
+              className="workspace-shell-tab__close absolute right-1.5 top-1/2 z-20 hidden size-icon-button-sm shrink-0 -translate-y-1/2 rounded-md text-muted-foreground hover:bg-hover hover:text-foreground active:bg-active group-hover/tab:inline-flex group-focus-within/tab:inline-flex focus-visible:inline-flex"
             >
               <X className="icon-compact" />
             </Button>
