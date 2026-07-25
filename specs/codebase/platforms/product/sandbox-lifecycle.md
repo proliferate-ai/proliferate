@@ -90,18 +90,22 @@ commit SHA.
 CI publishes each build under an immutable `sha-<12-hex>` tag
 ([release-cloud-template.yml](../../../../.github/workflows/release-cloud-template.yml),
 [_deploy-e2b.yml](../../../../.github/workflows/_deploy-e2b.yml)) on one
-template family. Rolling tags (`:staging`, `:production`) are moved onto a
-verified immutable tag by
-[promote-cloud-template.mjs](../../../../scripts/promote-cloud-template.mjs)
-only after
+template family. Immutable tags are like commits; the rolling tags
+`:staging` and `:production` are movable pointers, like branch names.
+Promotion and rollback are the same operation, re-pointing a rolling tag
+at a different immutable build
+([promote-cloud-template.mjs](../../../../scripts/promote-cloud-template.mjs)),
+allowed only after
 [smoke-cloud-template.mjs](../../../../scripts/smoke-cloud-template.mjs)
 passes against the exact immutable ref.
 
-**A rolling tag move affects only new sandboxes.** Existing running or
-paused sandboxes keep the image they booted from forever; there is no
-atomic replacement flow. This is why every sandbox row records the exact
-template ref it was created from: rolling a bad template back requires
-enumerating which live sandboxes still carry it. Operating procedure:
+**A rolling tag move affects only new sandboxes.** The pointer is read
+once, at sandbox creation; a sandbox is an instantiated snapshot, so
+existing running or paused sandboxes keep the image they booted from
+forever, and there is no atomic replacement flow. This is why every
+sandbox row records the exact immutable tag it was created from: after a
+bad promotion, "which live sandboxes still carry the bad image" must be
+enumerable. Operating procedure:
 [e2b-template-operations.md](../../../developing/operating/e2b-template-operations.md).
 
 ### Instantiate
@@ -116,43 +120,85 @@ attributable.
 
 ### Initialize
 
-The template boots with binaries present but nothing running. The
-provisioning engine (below) turns a booted VM into a ready sandbox:
+The template boots with binaries present but nothing running: a booted VM
+is inert until the provisioning engine (below) initializes it. Every step
+runs as server-issued commands over the E2B SDK's exec channel, which is
+authenticated by our `E2B_API_KEY` and exists before any Proliferate
+process does; the sandbox needs no credentials of its own to be
+initialized. In order:
 
-1. Stop any stale runtime processes left by a previous attempt (a resumed
-   VM can carry an old AnyHarness still bound to the port under an old
-   token; launching a fresh one without the stop was a real incident,
-   self-healed since
-   [test_cloud_sandbox_reconnect_self_heal.py](../../../../server/tests/integration/test_cloud_sandbox_reconnect_self_heal.py)).
-2. Write the Worker config and the Supervisor config
-   (`~/.proliferate/{worker,supervisor}/config.toml`, mode 600), including
-   a freshly minted single-use Worker enrollment token
+1. Stop any stale runtime processes left by a previous attempt: a scoped
+   pgrep/kill against the known binary paths
    ([bootstrap.py](../../../../server/proliferate/server/cloud/runtime/bootstrap.py)).
-3. Launch the Supervisor detached. The Supervisor owns AnyHarness and the
-   Worker as children: it starts them in dependency order, restarts them
-   on crash (5 second delay), and applies binary updates with health gates
-   and rollback
+   This step exists because a resumed VM can carry an old AnyHarness still
+   bound to port 8457 under an old bearer token, which made freshly minted
+   tokens 401 in a real incident (self-healed since;
+   [test_cloud_sandbox_reconnect_self_heal.py](../../../../server/tests/integration/test_cloud_sandbox_reconnect_self_heal.py)).
+2. Mint a single-use Worker enrollment token, then write two config files
+   into the VM (mode 600): the Worker config
+   (`~/.proliferate/worker/config.toml`: Cloud base URL, enrollment
+   token, identity) and the Supervisor config
+   (`~/.proliferate/supervisor/config.toml`: both child binary paths,
+   AnyHarness args and health URL, restart delay, the update mailbox and
+   staging directories, and the env each child receives).
+3. Launch one process, detached: the Supervisor
+   (`proliferate-supervisor --config ... run`, nohup'd with logs
+   redirected). Everything else inside the sandbox is its child. It
+   starts AnyHarness first (with `ANYHARNESS_BEARER_TOKEN`, the data key,
+   and identity env: `PROLIFERATE_RUNTIME_ENV=e2b`, sandbox/org/user
+   ids), then the Worker; restarts either on crash after a 5 second
+   delay; and applies binary updates from the mailbox with health gates
+   and rollback to the previous binary
    ([proliferate-supervisor](../../structures/proliferate-supervisor/README.md)).
-   AnyHarness receives its bearer token and identity through supervised
-   env (`ANYHARNESS_BEARER_TOKEN`, `PROLIFERATE_SANDBOX_ID`, org and user
-   ids); the Worker enrolls against Cloud and starts heartbeating.
-4. Poll AnyHarness health (up to 30 attempts, 0.5 s apart) and verify auth
-   is enforced
+   The server never launches or updates AnyHarness or the Worker
+   directly.
+4. The Worker spends its enrollment token against Cloud, receiving its
+   durable identity and bearer, and starts heartbeating; heartbeats carry
+   back desired binary versions, which is how updates reach a running
+   sandbox (see [Health](#health)).
+5. Poll AnyHarness health over its public E2B host (up to 30 attempts,
+   0.5 s apart), then verify auth is actually enforced by asserting an
+   unauthenticated request is rejected
    ([liveness_health.py](../../../../server/proliferate/server/cloud/runtime/liveness_health.py)).
-5. Persist the runtime access triple (base URL, bearer ciphertext, data
-   key ciphertext) onto the row with a compare-and-swap fenced by the
-   attempt epoch, and mark the row `ready`.
+   A runtime that answers health but skips the auth check is treated as
+   failed, never exposed.
+6. Persist the runtime access triple onto the row: the public base URL,
+   the bearer token ciphertext, and the data-key ciphertext (encrypted
+   at rest, decrypted only by the runtime gateway). The write is a
+   compare-and-swap fenced by the attempt epoch and the exact provider
+   binding, so a superseded attempt can never clobber a newer one; then
+   the row is marked `ready`.
 
 ## Account model
 
 One sandbox per billing context. A user's personal work runs in their
 personal sandbox, billed to their personal subject; work inside an
 organization runs in a per-(user, organization) sandbox, billed to the org
-subject. The sandbox row carries its owner and its billing subject; compute
-usage segments (see [billing.md](billing.md)) open and close against that
-subject on the lifecycle events named below. Sandboxes are never shared
-between users; the VM boundary is the user boundary
-([sandboxes.py](../../../../server/proliferate/db/models/cloud/sandboxes.py)).
+subject. Sandboxes are never shared between users; the VM boundary is the
+user boundary.
+
+The row shape this implies
+([sandboxes.py](../../../../server/proliferate/db/models/cloud/sandboxes.py)):
+
+```text
+cloud_sandbox
+├── owner_user_id        the person; every sandbox has exactly one
+├── organization_id      null = personal context; set = that org's context
+├── billing_subject_id   resolved once, at row creation, from the context
+├── provider_sandbox_id  current E2B binding (nullable, detachable)
+├── template_ref         exact immutable sha- tag the VM booted from
+├── status               creating | ready | paused | error | destroyed
+└── unique (owner_user_id, organization_id) where destroyed_at is null
+```
+
+Which sandbox serves a request is decided by the workspace's context: a
+workspace under an org repo environment materializes into the (user, that
+org) sandbox, anything else into the personal one. Billing never resolves
+per request; the row's `billing_subject_id` is fixed at creation, so an org
+member's personal experiments cannot leak onto the org invoice and org
+work cannot land on a personal card. Compute usage segments (see
+[billing.md](billing.md)) open and close against that subject on the
+lifecycle events in the causes table below.
 
 ## States and causes
 
@@ -190,6 +236,42 @@ Every transition has exactly one cause:
 | E2B reports the sandbox killed or missing | No (it is already gone) | provider binding detached; row keeps status, next materialization creates a new VM under the same row | Provider truth is authoritative; the logical sandbox survives its VM |
 | `DELETE /cloud-sandbox` | Yes: kill, after commit | → `destroyed` (terminal); worker tokens revoked | The only destruction path a user can cause |
 | Orphan reaper (5 minute cron) | Yes: kill unattributed or superseded provider VMs past a 900 s grace | no row transition | Backstop for lost destroy callbacks; never touches a healthy attributed VM |
+
+### A sandbox's first day, worked
+
+The laws in sequence, for one user's first cloud workspace:
+
+1. The user connects the GitHub App. The callback ensures the sandbox row
+   (`creating`, no provider binding) and schedules a background bootstrap.
+   No E2B call has happened; if the user walks away now, nothing was
+   spent. This is the ensure-never-provisions law: rows are free,
+   provider VMs are not, so the row exists as soon as we know the user
+   and the VM waits for real work.
+2. The user creates a workspace. This is a materialization operation, so
+   the engine runs: no binding exists, so it creates the E2B sandbox from
+   the rolling template tag (metadata: sandbox id, owner), connects,
+   initializes the runtime, marks the row `ready`, and the `created`
+   webhook opens a usage segment. The HTTP response waits for all of it;
+   creation is the one deliberately slow, synchronous path.
+3. The user works for an hour, then stops. 45 idle minutes later E2B
+   pauses the VM mid-process; the `paused` webhook moves the row to
+   `paused` and closes the usage segment. Nothing was torn down; the
+   session is frozen in place, and the paused VM is retained indefinitely
+   at no compute cost.
+4. Next morning the user reopens the workspace. The client's first
+   request hits the runtime gateway, which checks policy only: the user
+   may reach this sandbox, so the request is forwarded. The paused VM
+   wakes under that forwarded traffic (E2B auto-resume, about a second),
+   the frozen AnyHarness answers it, and the `resumed` webhook flips the
+   row `ready` and reopens the usage segment. No Proliferate code issued
+   a wake; forwarding was the wake.
+5. Had the user's credit been exhausted overnight, step 4 stops at the
+   policy check: the gateway refuses, the traffic never leaves our
+   server, and the VM stays paused. If a stray `resumed` webhook arrives
+   anyway, the server re-pauses the provider sandbox and closes the
+   segment as quota enforcement. Access is the gate; liveness is E2B's
+   problem; repair (a VM that resumed broken) is the next
+   materialization's problem.
 
 ## The provisioning engine
 
