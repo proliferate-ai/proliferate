@@ -42,9 +42,14 @@ from typing import Iterable, Mapping, Sequence
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+# Every shipped frontend source root, which is exactly the set Tailwind scans
+# from `dom.css` (`@source`). A root that ships utilities but is not listed here
+# is a hole in the ban, not an omission of taste: the vocabulary would be closed
+# everywhere except the one package nobody was looking at.
 PRODUCTION_ROOTS = (
     REPO_ROOT / "apps" / "packages" / "ui" / "src",
     REPO_ROOT / "apps" / "packages" / "product-ui" / "src",
+    REPO_ROOT / "apps" / "packages" / "product-surfaces" / "src",
     REPO_ROOT / "apps" / "packages" / "product-client" / "src",
     REPO_ROOT / "apps" / "desktop" / "src",
 )

@@ -1,5 +1,19 @@
 {
   "censusGrowthSanctions": {
+    "fixed-glyph-utility": {
+      "files": {
+        "apps/packages/product-surfaces/src/settings/BillingManagementCards.tsx": 1,
+        "apps/packages/product-surfaces/src/settings/cloud-environments/CloudEnvironmentDetail.tsx": 1
+      },
+      "justification": "R-V2-1 census completion: PRODUCTION_ROOTS and the pre-commit hook regex omitted apps/packages/product-surfaces/src, a shipped workspace package that Tailwind already scans (dom.css @source) and that both product-client and desktop depend on, so no foundation rule had ever been in force there. Adding the root makes the guard newly SEE pre-existing sites in a previously unscanned tree \u2014 the same shape of legitimate growth as a widened regex, and not a new allowance on any already-scanned file. Every product-surfaces site listed here migrates in Workflow 2 next to the identical hits already censused in product-ui/product-client; the ban is at full strength for anything new."
+    },
+    "fixed-stock-text-utility": {
+      "files": {
+        "apps/packages/product-surfaces/src/settings/cloud-environments/CloudEnvironmentDetail.tsx": 1,
+        "apps/packages/product-surfaces/src/workflows/WorkflowResourceState.tsx": 1
+      },
+      "justification": "R-V2-1 census completion: PRODUCTION_ROOTS and the pre-commit hook regex omitted apps/packages/product-surfaces/src, a shipped workspace package that Tailwind already scans (dom.css @source) and that both product-client and desktop depend on, so no foundation rule had ever been in force there. Adding the root makes the guard newly SEE pre-existing sites in a previously unscanned tree \u2014 the same shape of legitimate growth as a widened regex, and not a new allowance on any already-scanned file. Every product-surfaces site listed here migrates in Workflow 2 next to the identical hits already censused in product-ui/product-client; the ban is at full strength for anything new."
+    },
     "fixed-text-utility": {
       "files": {
         "apps/packages/ui/src/layout/PageHeader.tsx": 2
@@ -41,6 +55,7 @@
         "apps/packages/product-client/src/components/workspace/shell/sidebar/SidebarUpdatePill.tsx": 5,
         "apps/packages/product-client/src/components/workspace/shell/tabs/TabGroupPill.tsx": 2,
         "apps/packages/product-client/src/pages/AgentsPlaygroundPage.tsx": 2,
+        "apps/packages/product-surfaces/src/settings/BillingUsageUnitsSection.tsx": 1,
         "apps/packages/product-ui/src/account/AccountSettingsPane.tsx": 3,
         "apps/packages/product-ui/src/auth/RedirectCallbackScreen.tsx": 1,
         "apps/packages/product-ui/src/billing/BillingCreditGrantBreakdown.tsx": 1,
@@ -60,7 +75,7 @@
         "apps/packages/ui/src/primitives/SegmentedControl.tsx": 1,
         "apps/packages/ui/src/primitives/SelectionRow.tsx": 2
       },
-      "justification": "v2 4.2 widened FOREGROUND_ALPHA_RE to every Tailwind alpha spelling in every variant position (bg-foreground/5, /[0.04], /[8%]). The 82 static plain-numeric sites the prior regex could not see are pre-existing and are censused here so Workflow 2 has a ratchet target for them; the ban is at full strength for anything new."
+      "justification": "v2 4.2 widened FOREGROUND_ALPHA_RE to every Tailwind alpha spelling in every variant position (bg-foreground/5, /[0.04], /[8%]). The 82 static plain-numeric sites the prior regex could not see are pre-existing and are censused here so Workflow 2 has a ratchet target for them; the ban is at full strength for anything new. The single apps/packages/product-surfaces/ site is newly visible for a different reason \u2014 see the R-V2-1 census-completion trail on fixed-stock-text-utility \u2014 and migrates with the rest."
     },
     "retired-shadow": {
       "files": {
@@ -531,6 +546,11 @@
     "apps/packages/product-client/src/pages/AgentsPlaygroundPage.tsx|retired-accent-state": 1,
     "apps/packages/product-client/src/pages/ChatPlaygroundPage.tsx|fixed-stock-text-utility": 1,
     "apps/packages/product-client/src/pages/CrashRecoveryPlaygroundPage.tsx|fixed-stock-text-utility": 1,
+    "apps/packages/product-surfaces/src/settings/BillingManagementCards.tsx|fixed-glyph-utility": 1,
+    "apps/packages/product-surfaces/src/settings/BillingUsageUnitsSection.tsx|foreground-alpha-foundation": 1,
+    "apps/packages/product-surfaces/src/settings/cloud-environments/CloudEnvironmentDetail.tsx|fixed-glyph-utility": 1,
+    "apps/packages/product-surfaces/src/settings/cloud-environments/CloudEnvironmentDetail.tsx|fixed-stock-text-utility": 1,
+    "apps/packages/product-surfaces/src/workflows/WorkflowResourceState.tsx|fixed-stock-text-utility": 1,
     "apps/packages/product-ui/src/account/AccountIdentityCard.tsx|fixed-stock-text-utility": 2,
     "apps/packages/product-ui/src/account/AccountIdentityCard.tsx|retired-accent-state": 1,
     "apps/packages/product-ui/src/account/AccountPasswordCredentialCard.tsx|fixed-stock-text-utility": 3,
