@@ -1,8 +1,79 @@
 {
   "censusGrowthSanctions": {
-    "fixed-text-utility": "apps/packages/ui/src/layout/PageHeader.tsx only: the page heading's 31/34 geometry is re-anchored on the surviving reading ramp because --text-xl was deleted. Picking its semantic role is a Workflow 2 decision against a reference capture, so the arbitrary-utility pair is censused, tagged with ui-foundation-escalation at the call site, and burns down there.",
-    "foreground-alpha-foundation": "v2 4.2 widened FOREGROUND_ALPHA_RE to every Tailwind alpha spelling in every variant position (bg-foreground/5, /[0.04], /[8%]). The 82 static plain-numeric sites the prior regex could not see are pre-existing and are censused here so Workflow 2 has a ratchet target for them; the ban is at full strength for anything new.",
-    "retired-shadow": "v2 4.2 extended OLD_SHADOW_RE to the historical keystone-* spellings and to stock Tailwind elevation (shadow-sm/md/xl/2xl/inner), which emit non-token shadows. The 7 newly visible stock-shadow sites are pre-existing consumer code and migrate in Workflow 2/3 under [SHADOW-01..03]."
+    "fixed-text-utility": {
+      "files": {
+        "apps/packages/ui/src/layout/PageHeader.tsx": 2
+      },
+      "justification": "apps/packages/ui/src/layout/PageHeader.tsx only: the page heading's 31/34 geometry is re-anchored on the surviving reading ramp because --text-xl was deleted. Picking its semantic role is a Workflow 2 decision against a reference capture, so the arbitrary-utility pair is censused, tagged with ui-foundation-escalation at the call site, and burns down there."
+    },
+    "foreground-alpha-foundation": {
+      "files": {
+        "apps/packages/product-client/src/components/automations/controls/AutomationRunLocationSelector.tsx": 1,
+        "apps/packages/product-client/src/components/billing/UpgradeGateDialog.tsx": 2,
+        "apps/packages/product-client/src/components/feedback/UpdateDialogContent.tsx": 1,
+        "apps/packages/product-client/src/components/feedback/UpdateRestartDialog.tsx": 2,
+        "apps/packages/product-client/src/components/feedback/UpdateToastPresenter.tsx": 2,
+        "apps/packages/product-client/src/components/home/screen/HomeTargetPickerParts.tsx": 1,
+        "apps/packages/product-client/src/components/organizations/OrganizationAvatar.tsx": 1,
+        "apps/packages/product-client/src/components/playground/loading/PlaygroundThinkingTimingControls.tsx": 2,
+        "apps/packages/product-client/src/components/playground/subagents-ux/full-flow/FullFlowChatViews.tsx": 1,
+        "apps/packages/product-client/src/components/playground/subagents-ux/identity-receipts/IdentityReceiptsPrototype.tsx": 1,
+        "apps/packages/product-client/src/components/playground/subagents-ux/identity-receipts/SubagentCreationReceipt.tsx": 2,
+        "apps/packages/product-client/src/components/settings/panes/AccountPane.tsx": 1,
+        "apps/packages/product-client/src/components/settings/panes/AppearancePane.tsx": 3,
+        "apps/packages/product-client/src/components/settings/panes/OrganizationBudgetsPane.tsx": 7,
+        "apps/packages/product-client/src/components/settings/panes/OrganizationModelPolicyPane.tsx": 3,
+        "apps/packages/product-client/src/components/settings/panes/OrganizationPane.tsx": 1,
+        "apps/packages/product-client/src/components/settings/panes/agents/harness/HarnessAuthSection.tsx": 3,
+        "apps/packages/product-client/src/components/settings/panes/agents/harness/HarnessPane.tsx": 3,
+        "apps/packages/product-client/src/components/settings/panes/environments/WorktreeStorageSection.tsx": 3,
+        "apps/packages/product-client/src/components/settings/panes/organization/GitHubAppInstallationSection.tsx": 1,
+        "apps/packages/product-client/src/components/settings/panes/organization/OrganizationBillingLinkSection.tsx": 1,
+        "apps/packages/product-client/src/components/settings/panes/organization/OrganizationLogo.tsx": 2,
+        "apps/packages/product-client/src/components/settings/panes/organization/OrganizationMembersList.tsx": 1,
+        "apps/packages/product-client/src/components/settings/panes/organization/OrganizationSettingsCard.tsx": 1,
+        "apps/packages/product-client/src/components/workspace/chat/input/TodoTrackerPanel.tsx": 1,
+        "apps/packages/product-client/src/components/workspace/chat/plans/PlanHandoffDialog.tsx": 7,
+        "apps/packages/product-client/src/components/workspace/chat/transcript/UserMessage.tsx": 1,
+        "apps/packages/product-client/src/components/workspace/repo-setup/RepoSetupModal.tsx": 1,
+        "apps/packages/product-client/src/components/workspace/shell/command-palette/WorkspaceCommandPalette.tsx": 1,
+        "apps/packages/product-client/src/components/workspace/shell/sidebar/ReleaseNoticeCard.tsx": 1,
+        "apps/packages/product-client/src/components/workspace/shell/sidebar/SidebarUpdatePill.tsx": 5,
+        "apps/packages/product-client/src/components/workspace/shell/tabs/TabGroupPill.tsx": 2,
+        "apps/packages/product-client/src/pages/AgentsPlaygroundPage.tsx": 2,
+        "apps/packages/product-ui/src/account/AccountSettingsPane.tsx": 3,
+        "apps/packages/product-ui/src/auth/RedirectCallbackScreen.tsx": 1,
+        "apps/packages/product-ui/src/billing/BillingCreditGrantBreakdown.tsx": 1,
+        "apps/packages/product-ui/src/billing/BillingOwnerCard.tsx": 2,
+        "apps/packages/product-ui/src/chat/CloudChatHeader.tsx": 5,
+        "apps/packages/product-ui/src/chat/transcript/CloudChatUserMessage.tsx": 1,
+        "apps/packages/product-ui/src/chat/transcript/ProposedPlanCard.tsx": 1,
+        "apps/packages/product-ui/src/new-chat/NewChatSurface.tsx": 7,
+        "apps/packages/product-ui/src/settings/OrganizationSsoSettingsSurface.tsx": 3,
+        "apps/packages/product-ui/src/workflows/WorkflowDefinitionList.tsx": 1,
+        "apps/packages/product-ui/src/workflows/WorkflowInputEditor.tsx": 2,
+        "apps/packages/product-ui/src/workflows/WorkflowStageEditor.tsx": 1,
+        "apps/packages/product-ui/src/workspaces/CloudWorkspaceList.tsx": 1,
+        "apps/packages/product-ui/src/workspaces/WorkspaceInventory.tsx": 5,
+        "apps/packages/ui/src/layout/EnvironmentLayout.tsx": 3,
+        "apps/packages/ui/src/primitives/RangeSlider.tsx": 1,
+        "apps/packages/ui/src/primitives/SegmentedControl.tsx": 1,
+        "apps/packages/ui/src/primitives/SelectionRow.tsx": 2
+      },
+      "justification": "v2 4.2 widened FOREGROUND_ALPHA_RE to every Tailwind alpha spelling in every variant position (bg-foreground/5, /[0.04], /[8%]). The 82 static plain-numeric sites the prior regex could not see are pre-existing and are censused here so Workflow 2 has a ratchet target for them; the ban is at full strength for anything new."
+    },
+    "retired-shadow": {
+      "files": {
+        "apps/packages/product-client/src/components/content/ui/diff/HunkActionPill.tsx": 1,
+        "apps/packages/product-client/src/components/feedback/HarnessUpdateToastPresenter.tsx": 1,
+        "apps/packages/product-client/src/components/playground/GitReviewV2Playground.tsx": 1,
+        "apps/packages/product-client/src/components/workspace/chat/content/PromptAttachmentCard.tsx": 1,
+        "apps/packages/product-client/src/components/workspace/files/PromptAttachmentViewer.tsx": 1,
+        "apps/packages/product-client/src/components/workspace/git/PublishDialog.tsx": 1,
+        "apps/packages/ui/src/kit/Sonner.tsx": 1
+      },
+      "justification": "v2 4.2 extended OLD_SHADOW_RE to the historical keystone-* spellings and to stock Tailwind elevation (shadow-sm/md/xl/2xl/inner), which emit non-token shadows. The 7 newly visible stock-shadow sites are pre-existing consumer code and migrate in Workflow 2/3 under [SHADOW-01..03]."
+    }
   },
   "stagedViolations": {
     "apps/packages/product-client/src/components/agents/AgentHarnessModelSelector.tsx|fixed-stock-text-utility": 2,
@@ -314,7 +385,6 @@
     "apps/packages/product-client/src/components/workspace/chat/transcript/SubagentWakeBadge.tsx|fixed-text-utility": 2,
     "apps/packages/product-client/src/components/workspace/chat/transcript/SystemMessage.tsx|fixed-stock-text-utility": 1,
     "apps/packages/product-client/src/components/workspace/chat/transcript/SystemMessage.tsx|fixed-text-utility": 2,
-    "apps/packages/product-client/src/components/workspace/chat/transcript/TranscriptActivityBlock.test.tsx|inline-easing": 1,
     "apps/packages/product-client/src/components/workspace/chat/transcript/TranscriptAgentGroupBlock.tsx|fixed-text-utility": 4,
     "apps/packages/product-client/src/components/workspace/chat/transcript/TranscriptPatchTurnDiffPanel.tsx|fixed-stock-text-utility": 2,
     "apps/packages/product-client/src/components/workspace/chat/transcript/TranscriptPatchTurnDiffPanel.tsx|fixed-text-utility": 1,
@@ -523,7 +593,6 @@
     "apps/packages/product-ui/src/chat/composer/CloudChatModelConfigControl.tsx|fixed-text-utility": 1,
     "apps/packages/product-ui/src/chat/composer/CloudChatSingleControl.tsx|fixed-stock-text-utility": 2,
     "apps/packages/product-ui/src/chat/composer/CloudChatSingleControl.tsx|fixed-text-utility": 1,
-    "apps/packages/product-ui/src/chat/transcript/AssistantMessage.test.tsx|inline-motion-literal": 2,
     "apps/packages/product-ui/src/chat/transcript/AssistantMessage.tsx|fixed-text-utility": 2,
     "apps/packages/product-ui/src/chat/transcript/CloudChatTranscriptRowItems.test.tsx|numeric-duration": 1,
     "apps/packages/product-ui/src/chat/transcript/CloudChatTranscriptRowItems.tsx|fixed-stock-text-utility": 3,

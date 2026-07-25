@@ -18,13 +18,16 @@ BEYOND the frozen per-file count: no new violation can be introduced anywhere,
 while the migration burns the census down. A rule whose census reaches zero
 entries is, from that moment, an absolute ban with no further bookkeeping.
 
-Counts normally only shrink. ``--write-baseline`` refuses to grow any entry
-whose rule family is absent from ``censusGrowthSanctions`` in the baseline file
-(v2 §4.6: no exception without a written sanction trail). Growth is legitimate
-in exactly one situation — a regex widens and newly SEES pre-existing sites —
-and then the sanction explains which law widened it and who burns the sites
-down. It is never legitimate for a dead class from a removed token: that gets
-deleted at the call site.
+Counts normally only shrink. ``--write-baseline`` refuses to grow any entry that
+is not covered by ``censusGrowthSanctions`` in the baseline file (v2 §4.6: no
+exception without a written sanction trail). A sanction names a rule family AND
+the exact files and counts it covers, so the written trail and the enforced trail
+are the same trail: growth at any other call site — or past a covered site's
+recorded count — is refused even inside a sanctioned family. Growth is legitimate
+in exactly one situation — a regex widens and newly SEES pre-existing sites — and
+then the sanction explains which law widened it, which files it newly saw, and
+who burns them down. It is never legitimate for a dead class from a removed
+token: that gets deleted at the call site.
 """
 
 from __future__ import annotations
@@ -203,7 +206,15 @@ JS_MOTION_LITERAL_RE = re.compile(
     r"CARD_EXIT_DURATION_MS|HIDE_DELAY_MS|CLICKABLE_CARD_HIDE_DELAY_MS)"
     r"\s*=\s*[0-9]+(?:\.[0-9]+)?\b"
 )
-BACKDROP_FILTER_RE = re.compile(r"(?<!-)backdrop-filter\s*:", re.IGNORECASE)
+# Both spellings are in scope. The design package's own composer rule authors the
+# pair (`-webkit-backdrop-filter` then `backdrop-filter`), so the prefixed form is
+# house style and the likely spelling of the next unowned blur — and WebKit is the
+# desktop shell's engine, so a prefixed-only declaration is the one that actually
+# renders. Matching either spelling means two paired declarations report two hits
+# on two different lines, which is the honest count; nothing is deduped away.
+BACKDROP_FILTER_RE = re.compile(
+    r"(?<![\w-])(?:-webkit-)?backdrop-filter\s*:", re.IGNORECASE
+)
 RAW_HEX_RE = re.compile(r"#[0-9a-fA-F]{3}(?:[0-9a-fA-F]{1}|[0-9a-fA-F]{3}(?:[0-9a-fA-F]{2})?)?\b")
 NEGATIVE_HEX_ASSERTION_RE = re.compile(r"\.not\.toContain\(\s*[\"']#[0-9a-fA-F]{3,8}[\"']\s*\)")
 LONG_LIST_RE = re.compile(
@@ -267,10 +278,16 @@ STAGED_RULE_IDS = frozenset({
     "raw-hex",
 })
 STAGED_CENSUS_KEY = "stagedViolations"
-# v2 §4.6: no exception without a sanction trail. Keyed by rule id, the value is
-# the written justification for the only direction the census is not free to
-# move. Read by --write-baseline; an unlisted family can never grow.
+# v2 §4.6: no exception without a sanction trail. Keyed by rule id, each value is
+# ``{"files": {<path>: <count>}, "justification": "..."}``: the written reason the
+# census is allowed to move in the one direction it is not free to move, plus the
+# exact call sites and counts that reason covers. Read by --write-baseline; growth
+# is refused for an unlisted family, for an unlisted file inside a listed family,
+# and beyond a listed file's count, so the written trail cannot be broader than
+# the enforced one.
 SANCTION_KEY = "censusGrowthSanctions"
+SANCTION_FILES_KEY = "files"
+SANCTION_JUSTIFICATION_KEY = "justification"
 
 
 @dataclass(frozen=True)
@@ -870,28 +887,68 @@ def collect_violations(paths: Sequence[Path] | None = None) -> list[Violation]:
     return apply_staged_baseline(raw, baseline)
 
 
+def sanctioned_growth_ceilings(
+    sanctions: Mapping[str, Mapping[str, object]],
+) -> dict[str, int]:
+    """Per ``file|rule`` census key, the highest count a sanction authorizes.
+
+    A sanction is scoped twice over, because naming a family is not enough: the
+    reason a family may grow is always a specific set of newly seen call sites,
+    and a specific number of them. ``files`` maps each covered path to the count
+    the widening exposed there, so the enforced scope is exactly the scope the
+    prose claims — a brand-new violation in an unrelated file cannot be absorbed
+    by another file's sanction, and a second new violation in a covered file
+    cannot ride in behind the first.
+    """
+    ceilings: dict[str, int] = {}
+    for rule_id, sanction in sanctions.items():
+        for relative, ceiling in sanction.get(SANCTION_FILES_KEY, {}).items():
+            ceilings[f"{relative}|{rule_id}"] = ceiling
+    return ceilings
+
+
+def unsanctioned_growth(
+    previous: Mapping[str, int],
+    current: Mapping[str, int],
+    sanctions: Mapping[str, Mapping[str, object]],
+) -> list[str]:
+    """Census keys whose count rose past everything the law allows.
+
+    This is the whole shrink-only decision, kept pure so it is provable without
+    touching the tree: a key may sit at its frozen count or below, or at the count
+    a scoped sanction records for that exact file — anything higher is reported.
+    """
+    ceilings = sanctioned_growth_ceilings(sanctions)
+    return sorted(
+        f"{key}: {previous.get(key, 0)} -> {count}"
+        for key, count in current.items()
+        if count > max(previous.get(key, 0), ceilings.get(key, 0))
+    )
+
+
 def write_baseline(path: Path = BASELINE_FILE) -> int:
     """Rewrite the staged census. Growth needs a written sanction (v2 §4.6).
 
-    Shrinking is always free. A count may only grow for a rule family that
-    carries a sanction string in ``SANCTION_KEY`` — that string is the written
-    trail the law demands, and it lives next to the numbers it authorizes so a
-    reviewer sees why a family widened. Growth in any unsanctioned family is
-    still refused outright, which is what makes an absorbed violation
-    (a dead class quietly censused instead of deleted) impossible to land.
+    Shrinking is always free. A count may only grow at a ``file|rule`` census key
+    that a sanction in ``SANCTION_KEY`` names explicitly, and only up to the count
+    that sanction records — the justification is the written trail the law demands
+    and the ``files`` map is that same trail made enforceable, both living next to
+    the numbers they authorize. Growth in an unsanctioned family, in an
+    unsanctioned file of a sanctioned family, or beyond a sanctioned file's
+    recorded count is refused outright, which is what makes an absorbed violation
+    (a dead class or a fresh overlay quietly censused instead of migrated)
+    impossible to land.
     """
     existing = load_baselines()
     current = staged_census(collect_raw_violations())
     previous: Mapping[str, int] = existing.get(STAGED_CENSUS_KEY, {})
-    sanctions: Mapping[str, str] = existing.get(SANCTION_KEY, {})
-    unsanctioned = sorted(
-        f"{key}: {previous.get(key, 0)} -> {count}"
-        for key, count in current.items()
-        if count > previous.get(key, 0) and key.split("|", 1)[-1] not in sanctions
-    )
+    unsanctioned = unsanctioned_growth(previous, current, existing.get(SANCTION_KEY, {}))
     if unsanctioned and previous:
         print("Refusing to grow the staged census without a sanction; migrate these sites")
-        print(f"or record the rule family in {relative_path(path)} -> {SANCTION_KEY}:")
+        print(
+            f"or record each file and its count in {relative_path(path)} -> "
+            f"{SANCTION_KEY}[<rule>].{SANCTION_FILES_KEY}:"
+        )
         for line in unsanctioned:
             print(f"  {line}")
         return 1

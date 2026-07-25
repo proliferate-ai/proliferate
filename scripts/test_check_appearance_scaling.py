@@ -2,6 +2,8 @@ from pathlib import Path
 import unittest
 
 from scripts.check_appearance_scaling import (
+    SANCTION_FILES_KEY,
+    SANCTION_JUSTIFICATION_KEY,
     SANCTION_KEY,
     STAGED_CENSUS_KEY,
     STAGED_RULE_IDS,
@@ -11,10 +13,12 @@ from scripts.check_appearance_scaling import (
     check_design_css_source,
     check_design_token_source,
     check_source,
+    collect_raw_violations,
     imported_icon_names,
     load_baselines,
     raw_hex_scope_excluded,
     staged_census,
+    unsanctioned_growth,
 )
 
 LEGACY_ALIAS_SOURCE = "\n".join(
@@ -364,10 +368,49 @@ const ORBIT_DELAYS = [
   animation: spin 1.5s linear infinite;
 }
 .chat-composer-surface {
+  -webkit-backdrop-filter: var(--composer-backdrop-filter);
   backdrop-filter: var(--composer-backdrop-filter);
 }
 '''
         self.assertEqual(check_design_css_source(Path("dom.css"), source), [])
+
+    def test_backdrop_filter_ownership_covers_the_vendor_prefixed_spelling(self) -> None:
+        """The house style authors the pair, and WebKit is the desktop shell's
+        engine — so a prefixed-only blur is the declaration that actually renders
+        and must not be the one spelling the ownership gate cannot see."""
+        for declaration in ("backdrop-filter", "-webkit-backdrop-filter"):
+            with self.subTest(declaration=declaration):
+                source = ".some-panel {\n  %s: blur(24px);\n}\n" % declaration
+                self.assertEqual(
+                    [
+                        violation.rule_id
+                        for violation in check_design_css_source(Path("dom.css"), source)
+                    ],
+                    ["unowned-backdrop-filter"],
+                )
+
+    def test_authored_backdrop_filter_in_product_source_covers_both_spellings(self) -> None:
+        for declaration in ("backdrop-filter", "-webkit-backdrop-filter"):
+            with self.subTest(declaration=declaration):
+                source = 'const style = { cssText: "%s: blur(8px)" };\n' % declaration
+                self.assertEqual(
+                    [
+                        violation.rule_id
+                        for violation in check_source(Path("Panel.tsx"), source)
+                    ],
+                    ["authored-backdrop-filter"],
+                )
+
+    def test_backdrop_filter_rule_ignores_unrelated_custom_properties(self) -> None:
+        """`--color-composer-backdrop-filter: ...` is a token name, not a
+        declaration of the property, so widening the prefix must not catch it."""
+        self.assertEqual(
+            check_source(
+                Path("Panel.tsx"),
+                'const cls = "supports-[backdrop-filter]:bg-background/80";\n',
+            ),
+            [],
+        )
 
     def test_design_css_allows_component_scoped_mode_variables(self) -> None:
         """Only genuinely global roots are generated; scoped blocks stay authored."""
@@ -474,10 +517,82 @@ const ORBIT_DELAYS = [
         """
         sanctions = load_baselines().get(SANCTION_KEY, {})
         self.assertTrue(sanctions, "the shipped baseline records its growth sanctions")
-        for rule_id, justification in sanctions.items():
+        for rule_id, sanction in sanctions.items():
             with self.subTest(rule_id=rule_id):
                 self.assertIn(rule_id, STAGED_RULE_IDS)
-                self.assertGreater(len(justification), 80, "sanctions are written trails")
+                self.assertGreater(
+                    len(sanction[SANCTION_JUSTIFICATION_KEY]),
+                    80,
+                    "sanctions are written trails",
+                )
+                files = sanction[SANCTION_FILES_KEY]
+                self.assertTrue(files, "a sanction covers named call sites, not a family")
+                for relative, ceiling in files.items():
+                    self.assertRegex(relative, r"^apps/.+\.(?:ts|tsx|css)$")
+                    self.assertGreater(ceiling, 0)
+
+    def test_census_growth_is_refused_outside_the_sanctioned_call_sites(self) -> None:
+        """The defect this replaces: a family-wide sanction let ANY file grow.
+
+        Growth is only ever allowed at the exact file a sanction names, and only
+        up to the count it records — so a brand-new keystone shadow in an
+        unrelated file cannot ride in on another file's justification.
+        """
+        sanctions = {
+            "retired-shadow": {
+                SANCTION_FILES_KEY: {"apps/packages/ui/src/kit/Sonner.tsx": 1},
+                SANCTION_JUSTIFICATION_KEY: "x" * 81,
+            }
+        }
+        previous = {"apps/packages/ui/src/kit/Sonner.tsx|retired-shadow": 0}
+
+        self.assertEqual(
+            unsanctioned_growth(
+                previous,
+                {"apps/packages/ui/src/kit/Sonner.tsx|retired-shadow": 1},
+                sanctions,
+            ),
+            [],
+        )
+        self.assertEqual(
+            unsanctioned_growth(
+                previous,
+                {"apps/packages/ui/src/kit/Sonner.tsx|retired-shadow": 2},
+                sanctions,
+            ),
+            ["apps/packages/ui/src/kit/Sonner.tsx|retired-shadow: 0 -> 2"],
+        )
+        self.assertEqual(
+            unsanctioned_growth(
+                previous,
+                {"apps/packages/product-ui/src/repos/AddRepoFlow.tsx|retired-shadow": 1},
+                sanctions,
+            ),
+            ["apps/packages/product-ui/src/repos/AddRepoFlow.tsx|retired-shadow: 0 -> 1"],
+        )
+
+    def test_census_growth_is_refused_for_an_unsanctioned_family(self) -> None:
+        self.assertEqual(
+            unsanctioned_growth({"a.tsx|arbitrary-z": 1}, {"a.tsx|arbitrary-z": 2}, {}),
+            ["a.tsx|arbitrary-z: 1 -> 2"],
+        )
+        self.assertEqual(
+            unsanctioned_growth({"a.tsx|arbitrary-z": 3}, {"a.tsx|arbitrary-z": 1}, {}),
+            [],
+            "shrinking is always free",
+        )
+
+    def test_shipped_census_allocates_no_more_than_the_tree_actually_uses(self) -> None:
+        """An over-allocated entry is an unearned allowance: it hands a clean file
+        room for a brand-new violation, which is the ban leaking, not shrinking."""
+        census = load_baselines()[STAGED_CENSUS_KEY]
+        actual = staged_census(collect_raw_violations())
+        over_allocated = {
+            key: (count, actual.get(key, 0))
+            for key, count in census.items()
+            if count > actual.get(key, 0)
+        }
+        self.assertEqual(over_allocated, {})
 
     def test_shipped_census_has_no_entry_for_a_dead_class(self) -> None:
         """The keystone regression: a removed token's utility must be deleted at
