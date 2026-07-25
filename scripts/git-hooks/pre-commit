@@ -1,0 +1,72 @@
+#!/bin/sh
+# Foundation vocabulary pre-commit guard (R-V2-2).
+#
+# Fast, local, and advisory-by-escape-hatch: it checks only the frontend files
+# in THIS commit, so it stays well under a couple of seconds even on a large
+# staged change. CI remains the backstop and runs the same script over the whole
+# repository, so bypassing this hook can never land a violation silently.
+#
+# Bypass:  git commit --no-verify
+# POSIX sh only; no dependency beyond python3 (already required to work here).
+
+set -eu
+
+repo_root=$(git rev-parse --show-toplevel)
+cd "$repo_root"
+
+if [ "${PROLIFERATE_SKIP_HOOKS:-}" = "1" ]; then
+  exit 0
+fi
+
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "pre-commit: python3 not found; skipping appearance-scaling check." >&2
+  exit 0
+fi
+
+staged=$(git diff --cached --name-only --diff-filter=ACMR)
+[ -n "$staged" ] || exit 0
+
+# Only the roots the guard owns, and only files that still exist in the worktree.
+frontend_files=$(printf '%s\n' "$staged" | grep -E \
+  '^(apps/packages/(ui|product-ui|product-client)/src/.*\.(ts|tsx)|apps/desktop/src/.*\.(ts|tsx)|apps/packages/design/src/css/(dom|product)\.css|apps/packages/design/src/tokens\.ts)$' \
+  || true)
+
+status=0
+
+if [ -n "$frontend_files" ]; then
+  existing=""
+  for file in $frontend_files; do
+    if [ -f "$file" ]; then
+      existing="$existing $file"
+    fi
+  done
+  if [ -n "$existing" ]; then
+    # shellcheck disable=SC2086
+    if ! python3 scripts/check_appearance_scaling.py $existing; then
+      status=1
+    fi
+  fi
+fi
+
+# The theme is generated from tokens.ts; whenever the design package changes,
+# re-project it and prove byte equality before the commit is recorded.
+if printf '%s\n' "$staged" | grep -q '^apps/packages/design/'; then
+  if [ -f apps/packages/design/dist/theme.css ]; then
+    if ! (cd apps/packages/design && node scripts/generate-theme.mjs >/dev/null && node scripts/check-theme.mjs >/dev/null); then
+      echo "pre-commit: generated theme does not match tokens.ts." >&2
+      echo "            run: pnpm --filter @proliferate/design build" >&2
+      status=1
+    fi
+  else
+    echo "pre-commit: apps/packages/design/dist is not built; skipping theme equality." >&2
+    echo "            run: pnpm --filter @proliferate/design build" >&2
+  fi
+fi
+
+if [ "$status" -ne 0 ]; then
+  echo "" >&2
+  echo "pre-commit: foundation checks failed. Fix the call sites, or commit with" >&2
+  echo "            --no-verify if you are deliberately deferring (CI still runs them)." >&2
+fi
+
+exit "$status"

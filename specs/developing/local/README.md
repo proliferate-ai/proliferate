@@ -30,6 +30,33 @@ make dev-list
 `make dev-init` and `make dev` remain compatibility aliases. Use the explicit
 `setup`, `build`, and `run` sequence in new instructions and automation.
 
+## Git Hooks
+
+`make setup` and `make install` point this clone at the repository's checked-in
+hooks with `git config core.hooksPath scripts/git-hooks`. Enable them on their
+own at any time:
+
+```bash
+make git-hooks
+```
+
+`scripts/git-hooks/pre-commit` runs the frontend foundation checks against the
+**staged** files only, so it costs a fraction of a second: the appearance-scaling
+and design-vocabulary guard for staged `apps/packages/{ui,product-ui,product-client}/src`
+and `apps/desktop/src` sources, plus the generated-theme byte-equality check when
+anything under `apps/packages/design/` is staged.
+
+To record a commit without it, bypass per-commit:
+
+```bash
+git commit --no-verify
+```
+
+Bypassing is safe for work in progress: CI runs the same
+`python3 scripts/check_appearance_scaling.py` over the whole repository and the
+design package's `build` re-runs the theme equality check, so a bypassed
+violation is caught before merge rather than silently landing.
+
 ## What Starts
 
 `make run PROFILE=<name>` launches the profile's:
