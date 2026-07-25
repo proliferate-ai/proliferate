@@ -445,13 +445,16 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       ([service.py](../../../../server/proliferate/server/cloud/cloud_sandboxes/service.py));
       collapse to `ensure` as a hard rename (pre-launch ruling, no alias
       window) and update SDK/client callers.
-- [ ] The runtime gateway is a liveness gate, not a policy gate: it
-      refuses with 409 `cloud_sandbox_runtime_not_ready` unless the row is
-      already `ready`
-      ([gateway/service.py](../../../../server/proliferate/server/cloud/gateway/service.py)),
-      so E2B's auto-resume never sees the traffic. Move to
-      policy-checks-then-forward; paused sandboxes wake under forwarded
-      traffic.
+- [ ] Cold access is a dead end at the gateway: the 409
+      `cloud_sandbox_runtime_not_ready` fires whenever the row's runtime
+      access was never stamped or was cleared by provider loss
+      ([cloud_sandboxes/service.py](../../../../server/proliferate/server/cloud/cloud_sandboxes/service.py)),
+      and nothing on the access path starts the materialization that
+      would repair it — the client can only retry into the same 409.
+      Paused sandboxes are already fine (their stored address stays
+      valid, so forwarded traffic wakes them); the fix waits on the
+      cold-start choreography ruling (wake-and-poll vs
+      provision-on-access), still open.
 - [ ] `supervisor_owned_runtime` defaults off
       ([config.py](../../../../server/proliferate/config.py)); today's
       default launch is the legacy path (direct detached AnyHarness plus a
