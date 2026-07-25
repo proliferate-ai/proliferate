@@ -1,15 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Navigate, useParams } from "react-router-dom";
 
-import { discoverSso } from "@proliferate/cloud-sdk";
-import { useCloudClient } from "@proliferate/cloud-sdk-react";
 import { RedirectCallbackScreen } from "@proliferate/product-ui/auth/RedirectCallbackScreen";
 import {
   canUseDevDesktopHandoff,
   getDevDesktopHandoff,
   queueDevDesktopHandoff,
 } from "../lib/access/cloud/dev-desktop-handoff";
-import { startWebSsoFlow } from "../lib/access/cloud/auth/web-auth-flow";
 
 const LOCALHOST_NAMES = new Set(["localhost", "127.0.0.1", "::1"]);
 const DEV_HANDOFF_STATUS_POLL_MS = 500;
@@ -27,12 +24,6 @@ function organizationJoinDeepLink(organizationId: string): string {
 
 export function OrganizationJoinPage() {
   const { organizationId } = useParams();
-  const cloudClient = useCloudClient();
-  // Try to sign the user in on the web first: if the org has SSO enabled, the
-  // start flow redirects to the identity provider (JIT membership / invite
-  // acceptance happen in the SSO callback). Only when SSO is not available do
-  // we fall back to handing the invite off to Desktop.
-  const [joinPhase, setJoinPhase] = useState<"resolving" | "desktop">("resolving");
   const [handoffTimedOut, setHandoffTimedOut] = useState(false);
   const [devHandoffQueued, setDevHandoffQueued] = useState(false);
   const [devHandoffId, setDevHandoffId] = useState<string | null>(null);
@@ -70,41 +61,11 @@ export function OrganizationJoinPage() {
   }, [deepLinkUrl]);
 
   useEffect(() => {
-    if (!organizationId) {
-      return;
-    }
-    let cancelled = false;
-    void (async () => {
-      try {
-        const discovery = await discoverSso({ organizationId }, cloudClient);
-        if (cancelled) {
-          return;
-        }
-        if (discovery.enabled && discovery.organizationId) {
-          await startWebSsoFlow({
-            organizationId: discovery.organizationId,
-            connectionId: discovery.connectionId,
-          });
-          return;
-        }
-      } catch {
-        // Fall through to the Desktop handoff when SSO cannot be resolved.
-      }
-      if (!cancelled) {
-        setJoinPhase("desktop");
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [organizationId, cloudClient]);
-
-  useEffect(() => {
-    if (!deepLinkUrl || joinPhase !== "desktop") {
+    if (!deepLinkUrl) {
       return;
     }
     void openInvite();
-  }, [deepLinkUrl, joinPhase, openInvite]);
+  }, [deepLinkUrl, openInvite]);
 
   useEffect(() => {
     if (!devHandoffId || devHandoffOpened) {
@@ -158,17 +119,6 @@ export function OrganizationJoinPage() {
 
   if (!deepLinkUrl) {
     return <Navigate to="/" replace />;
-  }
-
-  if (joinPhase === "resolving") {
-    return (
-      <RedirectCallbackScreen
-        title="Signing you in"
-        description="Checking your organization's sign-in options..."
-        statusLabel="Organization sign-in"
-        variant="handoff"
-      />
-    );
   }
 
   if (devHandoffOpened) {

@@ -7,7 +7,8 @@ import { HarnessPane } from "@/components/settings/panes/agents/harness/HarnessP
 import { AppearancePane } from "@/components/settings/panes/AppearancePane";
 import { CloudGuard, type CloudGateFlags } from "@/components/cloud/CloudGuard";
 import { GeneralPane } from "@/components/settings/panes/GeneralPane";
-import { OrganizationBudgetsPane } from "@/components/settings/panes/OrganizationBudgetsPane";
+// BUDGETS PARKED: pane implementation is preserved but not rendered while disabled.
+// import { OrganizationBudgetsPane } from "@/components/settings/panes/OrganizationBudgetsPane";
 import { OrganizationIntegrationsPane } from "@/components/settings/panes/OrganizationIntegrationsPane";
 import { OrganizationMembersPane } from "@/components/settings/panes/OrganizationMembersPane";
 import { OrganizationPane } from "@/components/settings/panes/OrganizationPane";
@@ -96,9 +97,10 @@ export function renderSettingsSection(
   if (activeSection === "organization-integrations") {
     return renderCloudGatedPane(cloudGate, () => <OrganizationIntegrationsPane />);
   }
-  if (activeSection === "organization-limits") {
-    return <OrganizationBudgetsPane />;
-  }
+  // BUDGETS PARKED: render branch is intentionally disabled with the settings entry point.
+  // if (activeSection === "organization-limits") {
+  //   return <OrganizationBudgetsPane />;
+  // }
   if (activeSection === "organization-sso") {
     return renderCloudGatedPane(cloudGate, () => <OrganizationSsoPane />);
   }

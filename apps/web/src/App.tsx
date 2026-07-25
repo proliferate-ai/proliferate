@@ -11,7 +11,6 @@ import { BillingReturnHandoffPage } from "./pages/BillingReturnHandoffPage";
 import { ChatPage } from "./pages/ChatPage";
 import { DesktopHandoffPage } from "./pages/DesktopHandoffPage";
 import { HomePage } from "./pages/HomePage";
-import { LoginSsoPage } from "./pages/LoginSsoPage";
 import { OrganizationJoinPage } from "./pages/OrganizationJoinPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SettingsModalPage } from "./pages/SettingsModalPage";
@@ -30,8 +29,6 @@ export function App() {
     <>
       <InstrumentedRoutes location={backgroundLocation ?? location}>
         <Route path="auth" element={<AuthScreen />} />
-        <Route path="login" element={<LoginSsoPage />} />
-        <Route path="login/:slug" element={<LoginSsoPage />} />
         <Route path="auth/callback" element={<AuthCallbackPage />} />
         <Route path="auth/desktop/handoff" element={<DesktopHandoffPage />} />
         <Route path="auth/error" element={<AuthErrorPage />} />

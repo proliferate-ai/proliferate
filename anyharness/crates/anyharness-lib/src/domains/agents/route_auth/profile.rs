@@ -148,7 +148,6 @@ mod tests {
             version: STATE_VERSION,
             revision,
             user_id: None,
-            issuing_server_origin: None,
             harnesses,
         }
     }

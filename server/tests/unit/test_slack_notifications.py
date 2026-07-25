@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 from datetime import UTC, datetime
 
 import pytest
@@ -130,32 +129,66 @@ async def test_signup_slack_notification_posts_expected_payload(
     )
 
 
-async def _drain_scheduled_signup_notifications() -> None:
-    pending = [
-        task
-        for task in asyncio.all_tasks()
-        if task is not asyncio.current_task() and task.get_name() == "signup-slack-notification"
+def test_schedule_signup_slack_notification_enqueues_celery_task(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[dict[str, object]] = []
+
+    def fake_send_slack_task_to_celery(
+        payload: dict[str, object],
+        *,
+        task_id: str | None,
+    ) -> None:
+        calls.append({"payload": payload, "task_id": task_id})
+
+    monkeypatch.setattr(
+        notifications,
+        "_send_slack_task_to_celery",
+        fake_send_slack_task_to_celery,
+    )
+    notifications.schedule_signup_slack_notification(
+        SignupSlackNotification(
+            name="Ada",
+            email="ada@example.com",
+            github="ada",
+            user_created_at=None,
+        ),
+        dedupe_key="github:ada",
+    )
+
+    assert calls == [
+        {
+            "payload": {
+                "kind": "signup",
+                "dedupe_key": "github:ada",
+                "notification": {
+                    "name": "Ada",
+                    "email": "ada@example.com",
+                    "github": "ada",
+                    "user_created_at": None,
+                },
+            },
+            "task_id": "signup-slack:github:ada",
+        }
     ]
-    if pending:
-        await asyncio.gather(*pending)
 
 
-@pytest.mark.asyncio
-async def test_schedule_signup_slack_notification_delivers_inline_when_webhook_configured(
+def test_schedule_signup_slack_notification_does_not_raise_when_celery_enqueue_fails(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    calls: list[dict[str, object]] = []
-
-    async def fake_post_incoming_webhook(
+    def broken_send_slack_task_to_celery(
+        _payload: dict[str, object],
         *,
-        webhook_url: str,
-        text: str,
-        blocks: list[dict[str, object]] | None = None,
+        task_id: str | None,
     ) -> None:
-        calls.append({"webhook_url": webhook_url, "text": text, "blocks": blocks})
+        del task_id
+        raise RuntimeError("broker unavailable")
 
-    monkeypatch.setattr(settings, "signups_slack_webhook_url", "https://signups")
-    monkeypatch.setattr(notifications, "post_incoming_webhook", fake_post_incoming_webhook)
+    monkeypatch.setattr(
+        notifications,
+        "_send_slack_task_to_celery",
+        broken_send_slack_task_to_celery,
+    )
 
     notifications.schedule_signup_slack_notification(
         SignupSlackNotification(
@@ -164,50 +197,8 @@ async def test_schedule_signup_slack_notification_delivers_inline_when_webhook_c
             github="ada",
             user_created_at=None,
         ),
+        dedupe_key="github:ada",
     )
-    await _drain_scheduled_signup_notifications()
-
-    assert len(calls) == 1
-    assert calls[0]["webhook_url"] == "https://signups"
-    assert calls[0]["text"] == "\n".join(
-        [
-            "signup",
-            "# Ada signed up",
-            "email: ada@example.com",
-            "github: ada",
-            "user created: unknown",
-        ]
-    )
-
-
-@pytest.mark.asyncio
-async def test_schedule_signup_slack_notification_noops_when_webhook_unset(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    calls: list[dict[str, object]] = []
-
-    async def fake_post_incoming_webhook(
-        *,
-        webhook_url: str,
-        text: str,
-        blocks: list[dict[str, object]] | None = None,
-    ) -> None:
-        calls.append({"webhook_url": webhook_url, "text": text, "blocks": blocks})
-
-    monkeypatch.setattr(settings, "signups_slack_webhook_url", "")
-    monkeypatch.setattr(notifications, "post_incoming_webhook", fake_post_incoming_webhook)
-
-    notifications.schedule_signup_slack_notification(
-        SignupSlackNotification(
-            name="Ada",
-            email="ada@example.com",
-            github="ada",
-            user_created_at=None,
-        ),
-    )
-    await _drain_scheduled_signup_notifications()
-
-    assert calls == []
 
 
 def test_send_slack_task_dispatches_signup_payload(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -124,7 +124,6 @@ impl SessionService {
             model_id,
             mode_id,
             &readiness_env,
-            &self.runtime_home,
         )?;
         tracing::info!(
             workspace_id = %workspace_id,
@@ -190,10 +189,9 @@ fn resolve_selection(
     model_id: Option<&str>,
     mode_id: Option<&str>,
     readiness_env: &BTreeMap<String, String>,
-    runtime_home: &Path,
 ) -> Result<(Option<String>, Option<String>, Option<String>), CreateSessionError> {
     let contexts = catalog.auth_contexts(agent_kind).unwrap_or(&[]);
-    let facts = collect_launch_env_facts(agent_kind, readiness_env, runtime_home);
+    let facts = collect_launch_env_facts(agent_kind, readiness_env);
     let active = classify(descriptor, contexts, &facts);
     let selection = catalog
         .validate_launch(agent_kind, &active, model_id, mode_id)
@@ -229,10 +227,9 @@ fn map_selection_unsupported(
                 required_contexts = ?required_contexts,
                 "session create rejected: model gated behind inactive auth contexts"
             );
-            CreateSessionError::ModelGated {
+            CreateSessionError::ModelUnsupported {
                 agent_kind: agent_kind.to_string(),
                 model_id,
-                required_contexts,
             }
         }
         SelectionUnsupported::UnsupportedMode { mode_id } => CreateSessionError::ModeUnsupported {

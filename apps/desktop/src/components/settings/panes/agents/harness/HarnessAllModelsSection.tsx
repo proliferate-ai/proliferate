@@ -265,16 +265,14 @@ export function HarnessAllModelsSection({
             {filterText ? (
               <span className="flex shrink-0 items-center gap-1.5 text-[10px] text-muted-foreground">
                 {filteredRows.length} of {rows.length}
-                <Button
-                  variant="unstyled"
-                  size="unstyled"
+                <button
                   type="button"
                   aria-label="Clear filter"
                   className="rounded p-0.5 hover:bg-accent"
                   onClick={() => setFilterText("")}
                 >
                   <X className="size-3" />
-                </Button>
+                </button>
               </span>
             ) : null}
           </div>

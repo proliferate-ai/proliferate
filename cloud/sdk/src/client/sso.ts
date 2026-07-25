@@ -23,7 +23,6 @@ export interface DiscoverSsoOptions extends SsoRequestOptions {
   email?: string | null;
   organizationId?: string | null;
   connectionId?: string | null;
-  slug?: string | null;
 }
 
 export async function discoverSso(
@@ -36,7 +35,6 @@ export async function discoverSso(
       email: options.email ?? undefined,
       organizationId: options.organizationId ?? undefined,
       connectionId: options.connectionId ?? undefined,
-      slug: options.slug ?? undefined,
     },
     credentials: "include",
     signal: options.signal,

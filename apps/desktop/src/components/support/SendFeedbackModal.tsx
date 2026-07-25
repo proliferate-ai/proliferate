@@ -10,7 +10,11 @@ import { SupportCheckboxRow } from "./SupportCheckboxRow";
 import { SupportCreditField } from "./SupportCreditField";
 import { SupportModalFooter } from "./SupportModalFooter";
 
-export function SendFeedbackModal({ onClose }: { onClose: () => void }) {
+interface SendFeedbackModalProps {
+  onClose: () => void;
+}
+
+export function SendFeedbackModal({ onClose }: SendFeedbackModalProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const {
     attachments,

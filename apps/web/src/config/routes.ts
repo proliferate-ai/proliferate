@@ -1,8 +1,6 @@
 export const routes = {
   home: "/",
   auth: "/auth",
-  ssoLogin: "/login",
-  ssoLoginForSlug: (slug: string) => `/login/${slug}`,
   workflows: "/workflows",
   workflow: (workflowId: string) => `/workflows/${workflowId}`,
   support: "/support",

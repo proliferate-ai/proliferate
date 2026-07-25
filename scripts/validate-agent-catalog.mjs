@@ -74,9 +74,6 @@ function validateCatalog(catalog) {
       continue;
     }
     const modelIds = new Set();
-    // Gateway-tagged rows: ids whose availability unlocks under the gateway
-    // route. The seedModels invariant (decisions ledger 14) checks against this.
-    const gatewayRowIds = new Set();
     for (const model of models) {
       const id = model.id;
       if (typeof id !== "string" || !id.trim()) {
@@ -85,9 +82,6 @@ function validateCatalog(catalog) {
       }
       if (modelIds.has(id)) fail(`${kind}: model '${id}' is duplicated`);
       modelIds.add(id);
-      if (Array.isArray(model.availability?.anyOf) && model.availability.anyOf.includes(GATEWAY_CONTEXT_ID)) {
-        gatewayRowIds.add(id);
-      }
       if (typeof model.displayName !== "string" || !model.displayName.trim()) {
         fail(`${kind}.${id}: displayName must be a non-empty string`);
       }
@@ -120,7 +114,7 @@ function validateCatalog(catalog) {
       }
     }
 
-    validateGatewayPolicy(kind, agent.session?.gatewayPolicy, gatewayRowIds);
+    validateGatewayPolicy(kind, agent.session?.gatewayPolicy);
     validateAgentSettings(kind, agent.settings);
   }
 }
@@ -129,7 +123,7 @@ function validateCatalog(catalog) {
 // compat group (empty/omitted = all providers), roles pins model-role ids
 // (e.g. small_fast) that used to live in Rust consts, seedModels is the
 // pre-probe fallback model list. All optional; validated structurally only.
-function validateGatewayPolicy(kind, gatewayPolicy, gatewayRowIds) {
+function validateGatewayPolicy(kind, gatewayPolicy) {
   if (gatewayPolicy === undefined) return;
   if (typeof gatewayPolicy !== "object" || gatewayPolicy === null || Array.isArray(gatewayPolicy)) {
     fail(`${kind}: gatewayPolicy must be an object`);
@@ -143,15 +137,6 @@ function validateGatewayPolicy(kind, gatewayPolicy, gatewayRowIds) {
   };
   stringArray(gatewayPolicy.providers, "providers");
   stringArray(gatewayPolicy.seedModels, "seedModels");
-  // Build invariant (decisions ledger 14): every seedModel must be a
-  // first-class session.models row tagged with gateway availability.
-  if (Array.isArray(gatewayPolicy.seedModels)) {
-    for (const seed of gatewayPolicy.seedModels) {
-      if (typeof seed === "string" && seed.trim() && !gatewayRowIds.has(seed)) {
-        fail(`${kind}: gatewayPolicy.seedModels entry '${seed}' has no session.models row tagged with gateway availability`);
-      }
-    }
-  }
   if (gatewayPolicy.roles !== undefined) {
     const roles = gatewayPolicy.roles;
     if (typeof roles !== "object" || roles === null || Array.isArray(roles)) {
