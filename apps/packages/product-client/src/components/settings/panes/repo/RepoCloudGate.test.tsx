@@ -114,7 +114,7 @@ describe("RepoCloudGate operator gate (PR2-GATING-01)", () => {
       </RepoCloudGate>,
     );
 
-    expect(screen.queryByText(/isn't fully configured on this deployment/)).not.toBeNull();
+    expect(screen.queryByText("An operator must finish configuring proliferate-app access.")).not.toBeNull();
     // The user must NEVER see a user-auth CTA when the operator must configure.
     expect(screen.queryByRole("button", { name: /Connect GitHub App/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /Reconnect GitHub App/i })).toBeNull();

@@ -15,9 +15,9 @@ export interface RepoPickerItem {
 }
 
 /**
- * Repo-scope header picker (design-system RepoPicker): bordered 200px trigger
- * with a `--special` folder chip, opening an elevated menu of repositories plus
- * an "Add repository…" footer. Defaults to the first repo when none is picked.
+ * Repo-scope header picker: compact outline trigger opening an elevated menu
+ * of repositories plus an "Add repository…" footer. Defaults to the first repo
+ * when none is picked.
  */
 export function RepoPicker({
   items,
@@ -38,10 +38,10 @@ export function RepoPicker({
       trigger={
         <Button
           type="button"
-          variant="unstyled"
-          size="unstyled"
+          variant="outline"
+          size="sm"
           aria-label="Select repository"
-          className="flex h-8 w-[200px] items-center gap-2 rounded-md border border-input bg-background px-2 text-ui-sm transition-colors hover:bg-accent data-[state=open]:bg-accent"
+          className="h-[30px] w-52 justify-start gap-2 px-2 text-ui font-normal text-foreground data-[state=open]:bg-accent"
         >
           <RepoChip kind={selected?.kind ?? "local"} />
           <span className="min-w-0 flex-1 truncate text-left">
@@ -85,11 +85,11 @@ export function RepoPicker({
 }
 
 function RepoChip({ kind }: { kind: RepoPickerItem["kind"] }) {
-  // GitHub-backed repos read as a GitHub mark; cloud environments stay a Cloud
-  // glyph. Neutral chip, not the old blue folder.
+  // GitHub-backed repos read as a GitHub mark; cloud environments stay a
+  // Cloud glyph.
   const Icon = kind === "cloud" ? Cloud : GitHub;
   return (
-    <span className="flex size-[15px] shrink-0 items-center justify-center rounded bg-surface-control text-ui-sm text-muted-foreground [&>svg]:icon-compact">
+    <span className="flex size-4 shrink-0 items-center justify-center text-muted-foreground [&>svg]:icon-compact">
       <Icon />
     </span>
   );

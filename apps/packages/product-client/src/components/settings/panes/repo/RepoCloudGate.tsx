@@ -2,8 +2,6 @@ import { type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { Cloud } from "lucide-react";
 import { SettingsEmptyState } from "@proliferate/product-ui/settings/SettingsEmptyState";
-import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
-import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { resolveRepositoryReadiness } from "@proliferate/product-domain/repos/repo-readiness";
 import { useActiveOrganization } from "#product/hooks/organizations/facade/use-active-organization";
@@ -22,17 +20,19 @@ interface RepoCloudGateProps {
   children: ReactNode;
 }
 
-function CloudEnvironmentNotice({
-  label,
+function CloudGateState({
+  title,
   description,
 }: {
-  label: string;
+  title: string;
   description: string;
 }) {
   return (
-    <SettingsSection title="Cloud environment">
-      <SettingsRow label={label} description={description} />
-    </SettingsSection>
+    <SettingsEmptyState
+      icon={<Cloud aria-hidden="true" />}
+      title={title}
+      description={description}
+    />
   );
 }
 
@@ -72,18 +72,18 @@ export function RepoCloudGate({
 
   if (!editor.cloudRepository) {
     return (
-      <CloudEnvironmentNotice
-        label="Not available"
-        description="Cloud environments are available for GitHub-backed repositories."
+      <CloudGateState
+        title="GitHub repository required"
+        description="Cloud environments require a GitHub-backed repository."
       />
     );
   }
 
   if (!cloudEnabled) {
     return (
-      <CloudEnvironmentNotice
-        label="Unavailable"
-        description="Cloud environments are unavailable in this build or deployment."
+      <CloudGateState
+        title="Cloud unavailable"
+        description="This build does not support cloud environments."
       />
     );
   }
@@ -91,12 +91,12 @@ export function RepoCloudGate({
   if (readiness.gate === 1) {
     const appName = capabilities.githubRepositoryAccessDisplayName;
     return (
-      <CloudEnvironmentNotice
-        label="Not configured"
+      <CloudGateState
+        title="Cloud needs deployment setup"
         description={
           appName
-            ? `Cloud repository access for ${appName} isn't fully configured on this deployment. An operator must finish configuring it.`
-            : "Managed Cloud isn't fully configured on this deployment. An operator must finish configuring it before repositories can be set up in Cloud."
+            ? `An operator must finish configuring ${appName} access.`
+            : "An operator must finish configuring Managed Cloud."
         }
       />
     );
@@ -105,25 +105,25 @@ export function RepoCloudGate({
   if (readiness.gate === 2) {
     if (cloudSignInChecking) {
       return (
-        <CloudEnvironmentNotice
-          label="Checking sign-in"
-          description="Checking product sign-in before loading this environment."
+        <CloudGateState
+          title="Checking sign-in"
+          description="Loading Cloud access."
         />
       );
     }
     if (!cloudSignInAvailable) {
       return (
-        <CloudEnvironmentNotice
-          label="Unavailable"
-          description="Product sign-in is unavailable, so cloud environment settings cannot load."
+        <CloudGateState
+          title="Sign-in unavailable"
+          description="This build cannot open cloud environment settings."
         />
       );
     }
     return (
       <SettingsEmptyState
         icon={<Cloud aria-hidden="true" />}
-        title="Sign in to configure Cloud"
-        description="Sign in to continue setting up this repository in Proliferate Cloud."
+        title="Sign in to use Cloud"
+        description="Sign in to configure this repository's cloud environment."
         action={(
           <Button type="button" variant="secondary" onClick={() => navigate("/login")}>
             Sign in
@@ -135,9 +135,9 @@ export function RepoCloudGate({
 
   if (editor.repoConfigsLoading || (readiness.gate === 4 && readiness.action === "none")) {
     return (
-      <CloudEnvironmentNotice
-        label="Loading"
-        description="Loading saved cloud environment…"
+      <CloudGateState
+        title="Loading cloud environment"
+        description="Loading saved settings."
       />
     );
   }
@@ -146,8 +146,8 @@ export function RepoCloudGate({
     return (
       <SettingsEmptyState
         icon={<Cloud aria-hidden="true" />}
-        title="Access check failed"
-        description="GitHub App access for this repository could not be checked."
+        title="Could not check access"
+        description="GitHub App access is unavailable for this repository."
         action={(
           <Button
             type="button"
@@ -181,13 +181,12 @@ export function RepoCloudGate({
     return (
       <SettingsEmptyState
         icon={<Cloud aria-hidden="true" />}
-        title="Not set up in Proliferate Cloud"
-        description="This repo isn't materialized in Proliferate Cloud yet. Set it up so agents can run it in cloud workspaces without this machine."
+        title="Set up a Cloud environment"
+        description="Create a remote environment for agents to run this repository."
         action={
           <div className="flex flex-col items-center gap-2">
             <Button
               type="button"
-              variant="secondary"
               loading={editor.saving}
               disabled={editor.saving}
               onClick={() => {

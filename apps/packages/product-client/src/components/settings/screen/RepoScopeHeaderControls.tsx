@@ -43,7 +43,7 @@ export function RepoScopeHeaderControls({
     focus,
   });
   return (
-    <>
+    <div className="flex items-center gap-2">
       <RepoPicker
         items={repositories.map((entry) => ({
           id: entry.sourceRoot,
@@ -70,13 +70,14 @@ export function RepoScopeHeaderControls({
       />
       <SegmentedControl
         ariaLabel="Repository settings context"
+        className="shrink-0"
         value={context}
         items={[
-          { id: "cloud", label: "Cloud", icon: <Cloud /> },
-          { id: "local", label: "Local", icon: <Laptop /> },
+          { id: "cloud", label: "Cloud", icon: <Cloud aria-hidden="true" /> },
+          { id: "local", label: "Local", icon: <Laptop aria-hidden="true" /> },
         ]}
         onChange={onSelectRepoContext}
       />
-    </>
+    </div>
   );
 }
