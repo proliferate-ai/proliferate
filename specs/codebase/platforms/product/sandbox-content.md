@@ -248,13 +248,30 @@ not repairable after push. So identity is materialized before the first
 commit is possible, and a user with no resolvable identity fails typed
 rather than committing as nobody.
 
-Resolution happens server-side, once per user per sandbox, written as
-global git config during repository materialization (the VM is single-user;
-global scope is correct, and it lands before the first workspace exists):
+Resolution happens server-side, once per user per sandbox:
 
 - email: GitHub account email, else the Proliferate account email, else a
   typed `git_identity_required` failure — never an anonymous fallback;
 - name: display name, else the email local-part.
+
+The write is deliberately boring: two keys, `user.name` and `user.email`,
+set by an idempotent `git config --global` script run over the sandbox exec
+channel during repository materialization — the same channel and shape as
+the credential-helper configuration step
+([github_credentials.py](../../../../server/proliferate/server/cloud/materialization/materialize/github_credentials.py)),
+which already writes global git config on every sandbox
+(`credential.https://github.com.helper`, the SSH→HTTPS `insteadOf`
+rewrites). Global scope is correct because the VM is single-user, and
+materialization runs before the first workspace exists, so identity is in
+place before the first commit is possible.
+
+The credential-helper script itself never touches identity. The helper
+(`~/.proliferate/bin/proliferate-git-credential-helper`, reading the lease
+files under `~/.proliferate/git/github.com/`) is a push-time *authority*
+mechanism: git invokes it when it needs a token. Identity is static
+*attribution* config, written once and read by every `git commit`. Authority
+says who may push; identity says who the commit is by; they share the global
+config file and nothing else.
 
 Commit signing is deliberately not configured: sandbox commits are
 attributed, not attested; the push authority chain
