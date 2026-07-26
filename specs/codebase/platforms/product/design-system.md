@@ -477,17 +477,19 @@ Five tokens define how a transcript reads:
 
 | Token | Value | Role |
 | --- | --- | --- |
-| `--container-transcript-readable` | `40rem` (640px) | The prose measure — applied per prose element (paragraphs, headings, lists, blockquotes) in `MarkdownBody.tsx`. |
+| `--container-transcript-readable` | `40rem` (640px) | A tighter optional reading measure. Conversation prose no longer applies it — `MarkdownBody.tsx` renders prose at `max-w-full` so a message fills the thread column at the same width the composer reads at. The token remains for consumers that want a narrower cap. |
 | `--container-transcript-thread` | `48rem` (768px) | The thread-column measure — the outer transcript column (avatars, action rows, and the `.chat-markdown` wrapper itself) widens to this. |
 | `--container-transcript-wide` | `56rem` (896px) | The spill measure — the width a wide block (table, image, code) is nominally entitled to; still bounded by the 48rem thread column until a breakout restructure lands (see `MarkdownBody.tsx`'s `table` override). |
 | `--spacing-transcript-turn` | `1rem` (16px) | Vertical rhythm between top-level turns. |
 | `--spacing-transcript-turn-tight` | `0.25rem` (4px) | Vertical rhythm within a turn, for closely related siblings (e.g. assistant prose and its action-row footer). |
 
-Three measures rather than one is the whole design: prose has an optimal line
-length, the thread column that hosts it does not, and wide blocks want more
-room than either — so a table can use the full thread column while
-paragraphs and headings keep their own tighter cap, all inside one outer
-column. Two spacing tiers make the same distinction vertically: turn-to-turn
+The width tokens name three *available* measures even though conversation
+prose currently uses one: prose and wide blocks (tables, code) both fill the
+48rem thread column, so an assistant message reads at the same width the
+user is typing into. The 40rem readable cap is kept as a named tier for any
+consumer that wants a tighter line length, and 56rem records what wide
+blocks are nominally entitled to once a breakout restructure lands. Two
+spacing tiers make a real distinction vertically: turn-to-turn
 rhythm and within-turn rhythm are two different rungs, not one shared gap.
 
 These names read oddly because they are authored *into Tailwind's own
