@@ -223,7 +223,7 @@ carries the hierarchy with borders instead.
 | --- | --- | --- | --- |
 | `--color-surface-under` | `#141414` | `#f9f9f9` | Recessed backdrop behind the app frame (sidebar rail well). |
 | `--color-surface` / `--color-background` | `#181818` | `#ffffff` | The root app surface. |
-| `--color-sidebar` | `#1d1d1d` | `var(--color-surface-under)` | Sidebar body, one step off root. |
+| `--color-sidebar` | `#141414` | `var(--color-surface-under)` | Sidebar body, matching the recessed backdrop rather than sitting one step off root — a deliberate retune so the sidebar reads as part of the frame, not a raised panel next to it. |
 | `--color-surface-elevated` / `--color-card` | `#212121` | `#ffffff` / `var(--color-surface-elevated)` | Raised cards and panels. |
 | `--color-surface-elevated-secondary` | 3% white | 2% foreground | A raise expressed as a wash, for surfaces that must sit on an unknown parent. |
 | `--color-popover` | `#2d2d2d` | `#ffffff` | Popover/menu/toast body — the highest opaque step. |
@@ -232,10 +232,12 @@ carries the hierarchy with borders instead.
 | `--color-surface-control` | `color-mix(in oklab, #2b2b2b 96%, transparent)` | `rgba(237, 237, 237, 0.4)` | Translucent control chrome (pickers, inline fields). |
 | `--color-composer-background` | `color-mix(in oklab, #2d2d2d 96%, transparent)` | `rgba(255, 255, 255, 0.864)` | The composer input surface. |
 
-The dark ladder steps `#141414 → #181818 → #1d1d1d → #212121 → #282828 →
-#2d2d2d`: roughly four to five levels of lightness per step, small enough that
-no step reads as a color change and large enough to separate two adjacent
-panels without a border.
+The dark ladder steps `#141414 → #181818 → #212121 → #282828 → #2d2d2d`:
+roughly four to five levels of lightness per step, small enough that no step
+reads as a color change and large enough to separate two adjacent panels
+without a border. The sidebar shares the `#141414` rung with
+`--color-surface-under` rather than owning its own step — it recesses to the
+same level as the backdrop instead of sitting slightly raised off it.
 
 **The composer is translucent, not a card.** Both modes let the transcript read
 through it. It is also the one surface with a per-mode backdrop treatment:
@@ -497,9 +499,9 @@ button respond identically to the pointer.
 
 | Token | Value | Where it applies |
 | --- | --- | --- |
-| `--radius-sm` | `0.375rem` (6px) | Shell tabs and sidebar rows — the densest, smallest elements. |
+| `--radius-sm` | `0.375rem` (6px) | Shell tabs — the densest, smallest elements. |
 | `--radius-md` | `0.5rem` (8px) | The workhorse: icon buttons, inputs, shell actions, close controls. |
-| `--radius-lg` | `0.625rem` (10px) | Menu items, popover rows, empty-state frames. |
+| `--radius-lg` | `0.625rem` (10px) | Sidebar rows, menu items, popover rows, empty-state frames. |
 | `--radius-xl` | `0.75rem` (12px) | Dialogs, popover/menu frames, toasts. |
 | `--radius-2xl` | `1rem` (16px) | Modal shells and the command palette — the largest panels. |
 | `--radius-full` | `9999px` | Pills, avatars, status dots, the composer send button, level bars. |
@@ -507,9 +509,12 @@ button respond identically to the pointer.
 | `--radius` | `0.5rem` (8px) | The unqualified base, equal to `md`. |
 
 **Radius grows with the element.** The named steps run 6 → 8 → 10 → 12 → 16px
-across elements that themselves grow from a 28px sidebar row to a 520px command
+across elements that themselves grow from a 30px sidebar row to a 520px command
 palette, so the ratio of corner to element stays in a narrow band and nothing
-reads either boxy or over-rounded at its own scale.
+reads either boxy or over-rounded at its own scale. The sidebar row moved from
+`--radius-sm` to `--radius-lg` (6px → 10px) in the sidebar retune — a softer
+corner reads better against the sidebar's own recessed surface than it did
+against the previous, slightly-raised one.
 
 `--radius-composer` is a named 12px rather than a reference to `xl` because the
 composer's corner is its own anatomy value, tunable without moving every dialog.
