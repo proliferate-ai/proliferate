@@ -128,6 +128,11 @@ export function ProductSidebarSectionHeader({
       <SidebarRowSurface
         onPress={onToggleCollapsed}
         aria-expanded={!collapsed}
+        // Explicit accessible name: without it the row's name is derived from
+        // its contents, which include the hover-action buttons' labels (e.g.
+        // "Repositories Add repository Filter") — that made role-based
+        // queries for the nested actions ambiguously match the header too.
+        aria-label={label}
         className="group/side-section h-auto min-h-7 justify-between gap-2 pl-2 pt-3 pb-1 text-sidebar-row text-sidebar-muted-foreground hover:bg-transparent hover:text-sidebar-foreground active:bg-transparent"
       >
         {labelRow}
