@@ -111,9 +111,9 @@
       "types": "./dist/patterns/ComposerControlButton.d.ts",
       "import": "./dist/patterns/ComposerControlButton.js"
     },
-    "./primitives/LevelBarsButton": {
-      "types": "./dist/primitives/LevelBarsButton.d.ts",
-      "import": "./dist/primitives/LevelBarsButton.js"
+    "./patterns/LevelBarsButton": {
+      "types": "./dist/patterns/LevelBarsButton.d.ts",
+      "import": "./dist/patterns/LevelBarsButton.js"
     },
     "./patterns/ComposerTextarea": {
       "types": "./dist/patterns/ComposerTextarea.d.ts",

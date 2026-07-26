@@ -142,7 +142,6 @@ sample of it.
 | `IconButton` | [IconButton.tsx](../../../../apps/packages/ui/src/primitives/IconButton.tsx) | Icon-only button, tone/size variants. |
 | `Input` | [Input.tsx](../../../../apps/packages/ui/src/primitives/Input.tsx) | Text input field. |
 | `Label` | [Label.tsx](../../../../apps/packages/ui/src/primitives/Label.tsx) | Form field label. |
-| `LevelBarsButton` | [LevelBarsButton.tsx](../../../../apps/packages/ui/src/primitives/LevelBarsButton.tsx) | Stepped-level control button (level-bars affordance), composes `ComposerControlButton`. |
 | `PaneIconButton` | [PaneIconButton.tsx](../../../../apps/packages/ui/src/primitives/PaneIconButton.tsx) | Pane-scoped icon button (size-6 box), composes `Button`. |
 | `Popover` | [Popover.tsx](../../../../apps/packages/ui/src/primitives/Popover.tsx) | Raw `@radix-ui/react-popover` wrapper; `PopoverButton` composes it. |
 | `PopoverButton` | [PopoverButton.tsx](../../../../apps/packages/ui/src/primitives/PopoverButton.tsx) | Popover-backed trigger/content wrapper with `triggerMode` (`click`/`doubleClick`/`contextMenu`); the sanctioned menu/popover trigger. |
@@ -204,6 +203,7 @@ grandfathered.
 | `ConfirmationDialog` | [ConfirmationDialog.tsx](../../../../apps/packages/ui/src/patterns/ConfirmationDialog.tsx) | Confirm/cancel dialog, built on `ModalShell` + `Button`. |
 | `EmptyState` | [EmptyState.tsx](../../../../apps/packages/ui/src/patterns/EmptyState.tsx) | Title/description/action empty-state block. |
 | `EnvironmentSearchSelect` | [EnvironmentSearchSelect.tsx](../../../../apps/packages/ui/src/patterns/EnvironmentSearchSelect.tsx) | Searchable environment picker, composes `PopoverButton`/`PopoverMenuItem`/`PickerPopoverContent`. |
+| `LevelBarsButton` | [LevelBarsButton.tsx](../../../../apps/packages/ui/src/patterns/LevelBarsButton.tsx) | Stepped-level control button (level-bars affordance), composes `ComposerControlButton`. |
 | `ListRow` | [ListRow.tsx](../../../../apps/packages/ui/src/patterns/ListRow.tsx) | Clickable list row with leading/trailing slots. |
 | `ModalShell` | [ModalShell.tsx](../../../../apps/packages/ui/src/patterns/ModalShell.tsx) | Modal composition built on `Dialog`. |
 | `PageContentFrame` | [PageContentFrame.tsx](../../../../apps/packages/ui/src/patterns/PageContentFrame.tsx) | Page content frame with header slot and sticky action/title. |
