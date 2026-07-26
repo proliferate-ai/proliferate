@@ -63,6 +63,7 @@ const EXPECTED_TEXT_SIZE_TOKEN_IDS = [
   "sidebar-brand",
   "message",
   "readable-code",
+  "markdown-inline-code",
 ] as const;
 
 function stripCssComments(css: string): string {
@@ -346,14 +347,15 @@ describe("chat retune tokens", () => {
 
   it("declares the adopted transcript measure and turn-rhythm tokens", () => {
     expect(themeDeclarations["--container-transcript-readable"]).toBe("40rem");
-    expect(themeDeclarations["--container-transcript-wide"]).toBe("64rem");
-    expect(themeDeclarations["--spacing-transcript-turn"]).toBe("0.75rem");
+    expect(themeDeclarations["--container-transcript-wide"]).toBe("56rem");
+    expect(themeDeclarations["--spacing-transcript-turn"]).toBe("1rem");
   });
 
   it("keeps the composer radius on its own 12px role", () => {
-    // [RAD-04] conscious deviation from Codex's authored 20px, ruled to stay
-    // 12px. rounded-xl resolves to the same length today, so the assertion that
-    // matters is that the composer keeps a SEPARATE name to retune.
+    // [RAD-04] conscious deviation from the reference ramp's authored 20px,
+    // ruled to stay 12px. rounded-xl resolves to the same length today, so the
+    // assertion that matters is that the composer keeps a SEPARATE name to
+    // retune.
     expect(themeDeclarations["--radius-composer"]).toBe("0.75rem");
   });
 });
