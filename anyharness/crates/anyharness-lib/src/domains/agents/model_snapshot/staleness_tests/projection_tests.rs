@@ -192,3 +192,70 @@ fn a_context_with_no_entry_projects_as_missing() {
     assert_eq!(status.model_count, 0);
     let _unused: BTreeMap<String, String> = BTreeMap::new();
 }
+
+/// Every `LiveState` variant serializes to exactly the string the GENERATED SCHEMA
+/// declares for it.
+///
+/// This is a two-sided agreement with no compiler check between the sides: the wire
+/// value comes from a hand-written `Serialize`, while the schema utoipa emits comes
+/// from serde's `rename_all`. They drifted once — the document declared
+/// `"Idle" | "Queued" | …` while the server sent `"idle"`, so a client generated from
+/// it would have coded against a union no response ever matched, and nothing failed.
+/// Asserting both sides here is what makes the next divergence a test failure instead
+/// of a silent client break.
+#[test]
+fn every_live_state_serializes_exactly_as_the_generated_schema_declares() {
+    let schema = serde_json::to_value(
+        utoipa::openapi::schema::Schema::from(
+            <LiveState as utoipa::PartialSchema>::schema(),
+        ),
+    )
+    .expect("serialize the generated schema");
+    let declared: Vec<String> = schema["enum"]
+        .as_array()
+        .expect("the schema must declare an enum")
+        .iter()
+        .map(|value| {
+            value
+                .as_str()
+                .expect("enum values are strings")
+                .to_string()
+        })
+        .collect();
+
+    let wire: Vec<String> = [
+        LiveState::Idle,
+        LiveState::Queued,
+        LiveState::Running,
+        LiveState::Backoff,
+    ]
+    .iter()
+    .map(|state| {
+        serde_json::to_value(state)
+            .expect("serialize")
+            .as_str()
+            .expect("serializes as a string")
+            .to_string()
+    })
+    .collect();
+
+    assert_eq!(
+        wire,
+        vec!["idle", "queued", "running", "backoff"],
+        "the wire strings are the client contract"
+    );
+    assert_eq!(
+        declared, wire,
+        "the generated schema must declare exactly what the server sends"
+    );
+    // And `as_str` — which the status projection and the logs use — agrees too, so
+    // there is one vocabulary rather than three.
+    for (state, expected) in [
+        (LiveState::Idle, "idle"),
+        (LiveState::Queued, "queued"),
+        (LiveState::Running, "running"),
+        (LiveState::Backoff, "backoff"),
+    ] {
+        assert_eq!(state.as_str(), expected);
+    }
+}

@@ -33,7 +33,18 @@ use super::ProbeEngineMode;
 /// still waiting on the per-harness gate or the machine-wide semaphore is neither
 /// "nothing is happening" (which is what `Idle` would tell a polling UI, wrongly)
 /// nor "a harness process exists".
+// The `rename_all` is what the GENERATED SCHEMA is built from, and it has to agree
+// with `as_str` below. `ToSchema` reads serde's attributes, never the hand-written
+// `Serialize`: without the rename the OpenAPI document — and the TypeScript generated
+// from it — declared `"Idle" | "Queued" | …` while the server sent `"idle"`, so a
+// client would have coded against a union no response ever matched. `snake_case` is
+// the sibling convention (`ReconcileJobStatus`, `AgentInstallProgressPhase`), and for
+// these single-word variants it is exactly the lowercase form `as_str` emits.
+//
+// A comment rather than a doc comment on purpose: utoipa copies doc comments into the
+// public schema description, and this is a note to whoever edits the enum next.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ToSchema)]
+#[serde(rename_all = "snake_case")]
 #[schema(as = ModelSnapshotLiveState, example = "idle")]
 pub enum LiveState {
     Idle,

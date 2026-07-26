@@ -13168,10 +13168,10 @@
         "type": "string",
         "description": "The engine's live view of one context. In-memory only, so a restart reports\n`Idle` — which is true: nothing is running.\n\n`Queued` is distinct from `Running` on purpose: a probe admitted to its slot but\nstill waiting on the per-harness gate or the machine-wide semaphore is neither\n\"nothing is happening\" (which is what `Idle` would tell a polling UI, wrongly)\nnor \"a harness process exists\".",
         "enum": [
-          "Idle",
-          "Queued",
-          "Running",
-          "Backoff"
+          "idle",
+          "queued",
+          "running",
+          "backoff"
         ],
         "example": "idle"
       },

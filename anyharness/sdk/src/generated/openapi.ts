@@ -3486,7 +3486,7 @@ export interface components {
          * @example idle
          * @enum {string}
          */
-        ModelSnapshotLiveState: "Idle" | "Queued" | "Running" | "Backoff";
+        ModelSnapshotLiveState: "idle" | "queued" | "running" | "backoff";
         ModelSnapshotStatus: {
             agent: string;
             contexts: components["schemas"]["ContextStatus"][];

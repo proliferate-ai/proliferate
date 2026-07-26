@@ -338,9 +338,11 @@ polled state, not push events. `GET /v1/agents/{kind}/model-snapshot`
 answers per (harness, context) with the document's
 `probedAt`/`lastAttempt`, a server-computed `snapshotAgeSeconds`, the
 `stale`/`staleReason` verdict, whether the identity comparison was
-determinate, and the engine's live `state` (`idle` | `running` |
-`backoff`); surfaces poll and render it exactly as they poll the reconcile
-job snapshot today. The credential-derived `authFingerprint` is never on
+determinate, and the engine's live `state` (`idle` | `queued` | `running` |
+`backoff` — `queued` is a probe admitted to its slot but still waiting on
+the per-harness gate or the machine-wide semaphore, which at a cap of one
+is the common case and must not read as `idle`); surfaces poll and render
+it exactly as they poll the reconcile job snapshot today. The credential-derived `authFingerprint` is never on
 the wire — the boolean `stale` plus its reason is the whole client
 contract.
 
@@ -656,9 +658,16 @@ replace the runtime's gateway-models-only endpoints:
   `stale`/`staleReason`, `identityComparable`, the engine's `state` and
   `nextAttemptAt`, the manifest-derived `installIdentity`, and the engine's
   ownership mode. Model and mode lists come off the same document read.
-- `POST /v1/agents/{kind}/model-snapshot/refresh`: force a re-probe (the
-  manual-refresh poke). `202` with the status body, `502` when the forced
-  probe fails, `409` when this runtime does not own the probe engine.
+- `POST /v1/agents/{kind}/model-snapshot/refresh?authContextId=`: force a
+  re-probe of ONE context (the manual-refresh poke), awaiting it. The
+  parameter is required: a forced refresh of every active context would hold
+  one request for as long as the probe timeout times the number of contexts,
+  and a surface that wants "refresh everything" issues one request per
+  context and polls the status route for progress. `202` with the status
+  body; `400` when `authContextId` is absent; `404` when the harness or the
+  context is not active here; `409` when this runtime does not own the probe
+  engine, or when this machine's local auth configuration cannot be probed
+  for that context; `502` only when a probe actually ran and failed.
 
 ## Code map
 
