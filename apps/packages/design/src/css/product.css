@@ -372,7 +372,7 @@ body {
   background: transparent;
   color: var(--color-foreground);
   font-family: var(--font-sans);
-  font-weight: 430;
+  font-weight: var(--font-weight-body);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }

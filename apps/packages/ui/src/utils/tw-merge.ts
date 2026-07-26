@@ -36,6 +36,7 @@ export const TEXT_SIZE_TOKEN_IDS = [
   "sidebar-brand",
   "message",
   "readable-code",
+  "markdown-inline-code",
 ] as const;
 
 export const ICON_SIZE_TOKEN_IDS = [
