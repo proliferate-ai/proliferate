@@ -96,8 +96,9 @@ describe("buildCloudWorkspaceStatusScreenModel", () => {
       title: "Cloud usage is paused",
       description: "Cloud usage is paused because billing needs attention.",
       footer: {
-        kind: "status",
-        message: "Cloud usage is paused because billing needs attention.",
+        kind: "action",
+        action: "retry",
+        label: "Try again",
       },
     });
   });

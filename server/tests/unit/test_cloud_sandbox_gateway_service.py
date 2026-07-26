@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from types import SimpleNamespace
 from typing import cast
 from uuid import uuid4
@@ -8,6 +9,7 @@ from uuid import uuid4
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.server.billing.authorization import CloudSandboxResumeBlockedError
 from proliferate.server.cloud.gateway import service
 
 
@@ -209,7 +211,11 @@ async def test_gateway_billing_denial_is_not_cached(
     async def deny_billing(*_args: object, **_kwargs: object) -> None:
         nonlocal billing_checks
         billing_checks += 1
-        raise RuntimeError("billing blocked")
+        raise CloudSandboxResumeBlockedError(
+            "billing blocked",
+            decision_type="deny_resume",
+            reason="credits_exhausted",
+        )
 
     monkeypatch.setattr(service, "require_cloud_provisioning_configured", lambda: None)
     monkeypatch.setattr(
@@ -219,7 +225,7 @@ async def test_gateway_billing_denial_is_not_cached(
     )
 
     for _ in range(2):
-        with pytest.raises(RuntimeError, match="billing blocked"):
+        with pytest.raises(CloudSandboxResumeBlockedError, match="billing blocked"):
             await service.ensure_cloud_sandbox_gateway_access(
                 cast(AsyncSession, object()),
                 cast(service._UserWithId, user),
@@ -254,3 +260,19 @@ async def test_gateway_access_forwards_paused_sandbox_with_stamped_access(
     assert access.upstream_base_url == "https://paused.example.test"
     assert access.upstream_token == "paused-token"
     assert access.runtime_generation == 10
+
+
+def test_invalidation_evicts_cached_access() -> None:
+    user_id = uuid4()
+    service._gateway_access_cache[user_id] = service._CachedCloudSandboxGatewayAccess(
+        access=service.CloudSandboxGatewayAccess(
+            upstream_base_url="https://old.invalid",
+            upstream_token="tok",
+            runtime_generation=0,
+        ),
+        expires_at_monotonic=time.monotonic() + 60.0,
+    )
+
+    service.invalidate_cloud_sandbox_gateway_access_for_user(user_id)
+
+    assert service._cached_gateway_access(user_id) is None

@@ -208,8 +208,10 @@ export function buildCloudWorkspaceStatusScreenModel(
       repoLabel,
       branchLabel,
       footer: {
-        kind: "status",
-        message: description,
+        kind: "action",
+        action: "retry",
+        label: "Try again",
+        helperText: "Re-checks your billing state and reconnects.",
       },
     };
   }

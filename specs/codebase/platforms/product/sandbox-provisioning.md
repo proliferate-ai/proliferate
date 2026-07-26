@@ -278,7 +278,7 @@ The narrow contract tests are:
 - `server/tests/integration/test_cloud_sandbox_reconciler_recovery.py`
 - `server/tests/integration/test_cloud_sandbox_last_error_migration.py`
 - `server/tests/integration/test_cloud_sandbox_reconnect_self_heal.py`
-- `server/tests/integration/test_cloud_sandbox_wake_billing_gate.py`
+- `server/tests/integration/test_cloud_sandbox_ensure_billing_gate.py`
 
 These deterministic tests establish the state-machine, concurrency, and error
 classification contracts. They are not a live E2B qualification receipt; any
