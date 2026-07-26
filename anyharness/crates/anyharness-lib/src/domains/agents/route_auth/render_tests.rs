@@ -594,3 +594,6 @@ fn state_file_path_snapshot() {
         std::path::PathBuf::from("/home/u/.proliferate/anyharness/agent-auth/state.json")
     );
 }
+
+#[path = "cursor_render_tests.rs"]
+mod cursor_render;
