@@ -529,14 +529,25 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       their personal Anthropic account. The body's
       "present-but-empty fails closed" law is not implemented; today
       only render-stage errors refuse the launch.
-- [ ] **Typed provider configurations cannot be applied at launch.** The
-      vault stores typed Bedrock/Azure payloads (`kind` column,
-      JSON-encrypted) and the registry declares which kinds each harness
-      supports, but nothing downstream of storage consumes either yet:
-      selections cannot reference a typed entry, `state.json` has no
-      `provider_config` wire source, and no render recipe turns a typed
-      entry into the harness's own env set. (The old Bifrost `provider_kind`
-      tables were dropped outright and are not a starting point.)
+- [ ] **Selections cannot yet reference a typed vault entry.** D3's python
+      arm built the render half of this gap: `state.json` now has a
+      `provider_config` wire source
+      ([agent_auth.py](../../../../server/proliferate/server/cloud/materialization/materialize/agent_auth.py)'s
+      `_render_provider_config_source`/`_translate_provider_config_env`),
+      and a resolved typed entry renders into the harness's own real env set
+      (claude/codex/opencode × aws_bedrock/azure_openai, per the harness's
+      registry declaration) rather than the vault's generic field names.
+      But the selection WRITE path still structurally rejects referencing a
+      typed entry: `selections.py`'s `_validate_source` requires
+      `env_var_name` on every `api_key` source, and `_assert_keys_usable`
+      only accepts bare-secret (`kind='api_key'`) rows — a typed entry can
+      never pass either check today
+      (`test_put_rejects_typed_provider_config_as_api_key_source`, D1,
+      confirmed still passing unmodified). The render path this PR added is
+      consequently unreachable by any real user selection until a follow-up
+      relaxes the write-path gate to admit a typed-entry reference with no
+      `env_var_name`. (The old Bifrost `provider_kind` tables were dropped
+      outright and are not a starting point.)
 - [ ] **Codex's `azure_openai` provider-config is declared but pending.**
       The registry names codex x `azure_openai`'s env-var vocabulary
       (`AZURE_OPENAI_API_KEY`) for Track D's full-scope intent, but the
