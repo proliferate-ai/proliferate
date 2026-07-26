@@ -1,8 +1,8 @@
 import type { FC } from "react";
-import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
-import { SETTINGS_CONTROL_WIDTH_CLASS, SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
-import { SettingsMenu } from "@proliferate/ui/primitives/SettingsMenu";
-import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
+import { SettingsSection } from "@proliferate/product-ui/patterns/SettingsSection";
+import { SETTINGS_CONTROL_WIDTH_CLASS, SettingsRow } from "@proliferate/product-ui/patterns/SettingsRow";
+import { SettingsMenu } from "@proliferate/ui/patterns/SettingsMenu";
+import { SettingsPageHeader } from "@proliferate/product-ui/patterns/SettingsPageHeader";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { HighlightedCodeBlock } from "#product/components/content/ui/HighlightedCodeBlock";
 import { Minus, Monitor, Moon, Plus, Sun } from "@proliferate/ui/icons";

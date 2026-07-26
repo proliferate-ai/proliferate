@@ -1,11 +1,11 @@
 import { useId, type KeyboardEvent, type ReactNode } from "react";
 import type { CurrentPullRequestResponse } from "@anyharness/sdk";
-import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
+import { AutoHideScrollArea } from "@proliferate/ui/patterns/AutoHideScrollArea";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Checkbox } from "@proliferate/ui/primitives/Checkbox";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@proliferate/ui/primitives/Label";
-import { ModalShell } from "@proliferate/ui/primitives/ModalShell";
+import { ModalShell } from "@proliferate/ui/patterns/ModalShell";
 import { Switch } from "@proliferate/ui/primitives/Switch";
 import { Textarea } from "@proliferate/ui/primitives/Textarea";
 import { ArrowUp, GitCommit, GitHub, GitPullRequest, Spinner } from "@proliferate/ui/icons";

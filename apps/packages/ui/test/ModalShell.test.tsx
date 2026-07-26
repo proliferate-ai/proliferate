@@ -2,7 +2,7 @@
 
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ModalShell } from "../src/primitives/ModalShell";
+import { ModalShell } from "../src/patterns/ModalShell";
 import { useNativeOverlayOpen } from "../src/overlays/overlay-presence";
 
 afterEach(() => {

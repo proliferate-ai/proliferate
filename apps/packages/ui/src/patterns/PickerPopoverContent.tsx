@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { PopoverSearchField } from "./PopoverSearchField";
+import { PopoverSearchField } from "../primitives/PopoverSearchField";
 
 interface PickerPopoverContentProps {
   searchValue?: string;

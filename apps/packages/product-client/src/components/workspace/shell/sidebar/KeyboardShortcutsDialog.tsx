@@ -3,8 +3,8 @@ import {
   Dialog,
   DialogContent,
   DialogTitle,
-} from "@proliferate/ui/kit/Dialog";
-import { ShortcutBadge } from "@proliferate/ui/layout/ShortcutBadge";
+} from "@proliferate/ui/primitives/Dialog";
+import { ShortcutBadge } from "@proliferate/ui/primitives/ShortcutBadge";
 import { PopoverSearchField } from "@proliferate/ui/primitives/PopoverSearchField";
 import {
   buildShortcutSections,

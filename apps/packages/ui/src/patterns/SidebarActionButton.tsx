@@ -1,5 +1,5 @@
 import { forwardRef, type MouseEventHandler, type ReactNode } from "react";
-import { RowActionIconButton } from "./RowActionIconButton";
+import { RowActionIconButton } from "../primitives/RowActionIconButton";
 
 export type SidebarActionButtonVariant = "default" | "section";
 

@@ -3,8 +3,8 @@ import { KeyRound, Plus } from "lucide-react";
 
 import { Badge } from "@proliferate/ui/primitives/Badge";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { SettingsSection } from "../settings/SettingsSection";
-import { SettingsRow } from "../settings/SettingsRow";
+import { SettingsSection } from "../SettingsSection";
+import { SettingsRow } from "../SettingsRow";
 import { SecretDeleteDialog, type SecretDeleteDialogState } from "./SecretDeleteDialog";
 import {
   SecretEditorDialog,

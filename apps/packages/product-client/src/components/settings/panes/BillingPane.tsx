@@ -4,8 +4,8 @@ import {
   type BillingCheckoutReturnState,
 } from "@proliferate/product-surfaces/settings/BillingSettingsSurface";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
-import { SettingsEmptyState } from "@proliferate/product-ui/settings/SettingsEmptyState";
-import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
+import { SettingsEmptyState } from "@proliferate/product-ui/patterns/SettingsEmptyState";
+import { SettingsPageHeader } from "@proliferate/product-ui/patterns/SettingsPageHeader";
 
 import { PROLIFERATE_PRICING_URL } from "#product/config/capabilities";
 import { useIsAdmin } from "#product/hooks/access/cloud/organizations/use-is-admin";

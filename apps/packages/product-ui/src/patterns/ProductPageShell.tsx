@@ -1,6 +1,6 @@
 import { type ReactNode } from "react";
-import { PageContentFrame } from "@proliferate/ui/layout/PageContentFrame";
-import { PageHeader } from "@proliferate/ui/layout/PageHeader";
+import { PageContentFrame } from "@proliferate/ui/patterns/PageContentFrame";
+import { PageHeader } from "@proliferate/ui/patterns/PageHeader";
 
 interface ProductPageShellProps {
   title: ReactNode;

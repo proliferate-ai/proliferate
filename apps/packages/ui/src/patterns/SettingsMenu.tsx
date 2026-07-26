@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 import { Check, ChevronDown } from "../icons/core";
-import { Button } from "./Button";
-import { POPOVER_SURFACE_CLASS, PopoverButton } from "./PopoverButton";
-import { PopoverMenuItem } from "./PopoverMenuItem";
+import { Button } from "../primitives/Button";
+import { POPOVER_SURFACE_CLASS, PopoverButton } from "../primitives/PopoverButton";
+import { PopoverMenuItem } from "../primitives/PopoverMenuItem";
 
 export interface SettingsMenuOption {
   id: string;

@@ -5,7 +5,7 @@ import {
   RefreshCw,
   WrapText,
 } from "@proliferate/ui/icons";
-import { PaneOptionsMenuItem } from "@proliferate/ui/layout/PaneOptionsMenuItem";
+import { PaneOptionsMenuItem } from "@proliferate/ui/patterns/PaneOptionsMenuItem";
 import { PaneOptionsMenu } from "#product/components/workspace/pane/PaneOptionsMenu";
 
 export function GitReviewOptionsMenu({

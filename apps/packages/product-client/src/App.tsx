@@ -4,7 +4,7 @@ import { BootstrappedRoute, PublicOnlyRoute } from "#product/components/auth/Aut
 import { UserPreferencesGate } from "#product/components/app/UserPreferencesGate"
 import { UpdateRestartDialog } from "#product/components/feedback/UpdateRestartDialog"
 import { UpdateToastPresenter } from "#product/components/feedback/UpdateToastPresenter"
-import { Toaster } from "@proliferate/ui/kit/Sonner"
+import { Toaster } from "@proliferate/ui/primitives/Sonner"
 import { MacWindowControlsSafeArea } from "#product/components/app/chrome/MacWindowControlsSafeArea"
 import { useLocalWorktreeSettingsTarget } from "#product/hooks/workspaces/facade/use-local-worktree-settings-target"
 import { useWorktreeCleanupPolicySync } from "#product/hooks/workspaces/lifecycle/use-worktree-cleanup-policy-sync"

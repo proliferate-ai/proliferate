@@ -6,9 +6,9 @@ import {
   CommandPaletteList,
   CommandPaletteRoot,
   useCommandPaletteClose,
-} from "@proliferate/ui/primitives/CommandPalette";
+} from "@proliferate/ui/patterns/CommandPalette";
 import { FileTreeEntryIcon } from "#product/components/workspace/files/file-icons";
-import { CommandPaletteGlyph } from "@proliferate/ui/command-palette-icons";
+import { CommandPaletteGlyph } from "@proliferate/ui/icons/command-palette-icons";
 import { useWorkspaceCommandPalette } from "#product/hooks/workspaces/facade/use-workspace-command-palette";
 import type {
   CommandPaletteEntry,

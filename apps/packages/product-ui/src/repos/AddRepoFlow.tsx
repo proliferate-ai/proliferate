@@ -10,7 +10,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-} from "@proliferate/ui/kit/Dialog";
+} from "@proliferate/ui/primitives/Dialog";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { CloudRepoPicker, type CloudRepoPickerProps } from "./CloudRepoPicker";
 

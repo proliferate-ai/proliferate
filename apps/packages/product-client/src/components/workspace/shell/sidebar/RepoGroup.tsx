@@ -3,8 +3,8 @@ import { ChevronRight, CloudIcon, FolderClosedFilled, FolderFilled, FolderRemote
 import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
-import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
-import { ShortcutBadge } from "@proliferate/ui/layout/ShortcutBadge";
+import { ConfirmationDialog } from "@proliferate/ui/patterns/ConfirmationDialog";
+import { ShortcutBadge } from "@proliferate/ui/primitives/ShortcutBadge";
 import { SidebarWorkspaceVariantIcon } from "#product/components/workspace/shell/sidebar/SidebarWorkspaceVariantIcon";
 import { SHORTCUTS } from "#product/config/shortcuts/registry";
 import { getShortcutDisplayLabel } from "#product/lib/domain/shortcuts/matching";
@@ -21,7 +21,7 @@ import {
   type RepoGroupMenuHandlers,
 } from "#product/hooks/workspaces/ui/use-repo-group-native-context-menu";
 import { useNewWorkspaceCommandScopeStore } from "#product/stores/workspaces/new-workspace-command-scope-store";
-import { SidebarActionButton } from "@proliferate/ui/layout/SidebarActionButton";
+import { SidebarActionButton } from "@proliferate/ui/patterns/SidebarActionButton";
 import { ProductSidebarRepoGroupHeader } from "@proliferate/product-ui/sidebar/ProductSidebarRepositories";
 
 interface RepoGroupProps {

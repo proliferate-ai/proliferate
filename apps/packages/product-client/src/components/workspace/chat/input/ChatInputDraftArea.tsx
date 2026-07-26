@@ -13,7 +13,7 @@ import {
 import { useChatDraftValue } from "#product/hooks/chat/ui/use-chat-draft-state";
 import { ComposerCommandEditor } from "#product/components/workspace/chat/input/ComposerCommandEditor";
 import { ComposerRichTextEditor } from "#product/components/workspace/chat/input/ComposerRichTextEditor";
-import { ComposerTextareaFrame } from "@proliferate/ui/primitives/ComposerTextareaFrame";
+import { ComposerTextareaFrame } from "@proliferate/ui/patterns/ComposerTextareaFrame";
 import { QueuedPromptEditBanner } from "#product/components/workspace/chat/input/QueuedPromptEditBanner";
 import type { ChatComposerKeyboardEvent } from "#product/hooks/chat/ui/use-chat-composer-keyboard";
 

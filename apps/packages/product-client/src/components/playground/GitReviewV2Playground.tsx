@@ -14,7 +14,7 @@ import {
   FolderTree,
   MoreHorizontal,
 } from "@proliferate/ui/icons";
-import { PaneIconButton } from "@proliferate/ui/layout/PaneIconButton";
+import { PaneIconButton } from "@proliferate/ui/primitives/PaneIconButton";
 import { DiffViewer } from "#product/components/content/ui/DiffViewer";
 import { FileChangeStats } from "#product/components/content/ui/FileChangeStats";
 import { FileTreeEntryIcon } from "#product/components/workspace/files/file-icons";

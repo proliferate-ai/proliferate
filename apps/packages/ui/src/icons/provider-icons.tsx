@@ -1,5 +1,5 @@
 import type { ComponentType } from "react";
-import type { IconProps } from "./icons/types";
+import type { IconProps } from "./types";
 import { ProliferateIcon } from "./proliferate-icons";
 
 // ---------------------------------------------------------------------------

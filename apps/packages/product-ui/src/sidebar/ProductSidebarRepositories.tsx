@@ -1,10 +1,10 @@
 import type { HTMLAttributes, ReactNode } from "react";
 
-import { ShortcutBadge } from "@proliferate/ui/layout/ShortcutBadge";
-import { SidebarRowSurface } from "@proliferate/ui/layout/SidebarRowSurface";
+import { ShortcutBadge } from "@proliferate/ui/primitives/ShortcutBadge";
+import { SidebarRowSurface } from "@proliferate/ui/patterns/SidebarRowSurface";
 import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
 
-import { PrStatusIconOverlay, type PrStatusView } from "../workspaces/PrStatusBadge";
+import { PrStatusIconOverlay, type PrStatusView } from "../patterns/PrStatusBadge";
 
 export interface ProductSidebarRepoGroupHeaderProps extends Omit<HTMLAttributes<HTMLElement>, "children" | "onClick"> {
   label: string;
