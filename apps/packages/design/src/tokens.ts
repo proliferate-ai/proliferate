@@ -863,9 +863,13 @@ export const themeTokens = {
     provenance: "[RETUNE:state/overlay]",
   },
   "--color-sidebar": {
-    dark: "#141414",
+    // Round-2 measurement against the reference app's dark capture: the
+    // sidebar rail reads rgb(34, 34, 34) — one step LIGHTER than the root
+    // surface, not recessed to --color-surface-under. Supersedes the
+    // surface-recess ruling from the prior retune.
+    dark: "#222222",
     light: "var(--color-surface-under)",
-    provenance: "[RETUNE:sidebar/surface-recess]",
+    provenance: "[RETUNE:sidebar/reference-surface]",
   },
   "--color-sidebar-accent": {
     dark: "var(--color-hover) /* legacy-alias */",

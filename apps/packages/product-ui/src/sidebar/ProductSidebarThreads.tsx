@@ -59,7 +59,11 @@ export function ProductSidebarThreadRow({
           {status}
         </div>
 
-        <div className="flex min-w-0 flex-1 items-center gap-2">
+        {/* pl-0.5 matches ProductSidebarWorkspaceRow's leading-well-to-label
+            gap exactly, so a thread row's title lands at the same left edge
+            as a workspace row's title (both sit under the same 16px-wide
+            leading well). */}
+        <div className="flex min-w-0 flex-1 items-center gap-2 pl-0.5">
           <div className={`flex min-w-0 flex-1 ${hasSubtitle ? "flex-col items-start justify-center gap-0.5" : "items-center gap-2"} truncate text-sidebar-foreground`}>
             <span className="max-w-full truncate">
               {label}

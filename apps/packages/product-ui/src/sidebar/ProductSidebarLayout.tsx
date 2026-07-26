@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 
+import { ChevronRight } from "@proliferate/ui/icons";
 import { AutoHideScrollArea } from "@proliferate/ui/patterns/AutoHideScrollArea";
+import { SidebarRowSurface } from "@proliferate/ui/patterns/SidebarRowSurface";
 
 export function ProductSidebarFrame({
   children,
@@ -31,7 +33,12 @@ export function ProductSidebarBrandRow({
   label: string;
 }) {
   return (
-    <div className="mb-1 flex h-8 shrink-0 items-center gap-2 px-2 text-sidebar-primary">
+    // px-4: the sidebar content grid's left edge is nav-row padding (px-2 on
+    // the nav) plus the row surface's own pl-2 — 16px total. The brand row
+    // has no nav/row wrapper of its own, so it carries that same 16px here
+    // directly, keeping the wordmark flush with the nav icons and section
+    // labels below it instead of sitting 8px further left.
+    <div className="mb-1 flex h-8 shrink-0 items-center gap-2 px-4 text-sidebar-primary">
       {icon}
       {/* Wordmark geometry: 17px/24 semibold. */}
       <span className="min-w-0 truncate text-sidebar-brand font-semibold">
@@ -66,21 +73,60 @@ export function ProductSidebarScrollableContent({ children }: { children: ReactN
 export function ProductSidebarSectionHeader({
   label,
   actions = null,
+  collapsed,
+  onToggleCollapsed,
 }: {
   label: string;
   actions?: ReactNode;
+  /**
+   * When both are supplied, the ENTIRE header row (label plus the empty
+   * space beside it) becomes the section's collapse/expand control — a
+   * click anywhere on the row toggles the whole section's body, not just
+   * the chevron. The disclosure chevron then sits immediately to the
+   * right of the label rather than at the row's far edge. Omit both to
+   * keep a purely static, non-interactive header (e.g. Cleanup, which has
+   * no collapsible body of its own).
+   */
+  collapsed?: boolean;
+  onToggleCollapsed?: () => void;
 }) {
+  const isToggleable = typeof onToggleCollapsed === "function";
+  const labelRow = (
+    <span className="flex min-w-0 items-center gap-1">
+      <span className="truncate">{label}</span>
+      {isToggleable ? (
+        <ChevronRight
+          className={`icon-compact shrink-0 text-sidebar-muted-foreground/70 transition-transform ${collapsed ? "" : "rotate-90"}`}
+        />
+      ) : null}
+    </span>
+  );
+  const actionsSlot = actions ? (
+    // Section actions stay hidden until the header is hovered (or an
+    // action's popover is open / focused via keyboard).
+    <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity duration-hover group-hover/side-section:opacity-100 group-focus-within/side-section:opacity-100 has-[[data-state=open]]:opacity-100">
+      {actions}
+    </div>
+  ) : null;
+
+  if (isToggleable) {
+    return (
+      <SidebarRowSurface
+        onPress={onToggleCollapsed}
+        aria-expanded={!collapsed}
+        className="group/side-section h-auto min-h-7 justify-between gap-2 pl-2 pt-3 pb-1 text-sidebar-row text-sidebar-muted-foreground"
+      >
+        {labelRow}
+        {actionsSlot}
+      </SidebarRowSurface>
+    );
+  }
+
   return (
     <div className="group/side-section pl-2 pt-3 pb-1 text-sidebar-row text-sidebar-muted-foreground">
       <div className="flex items-center justify-between gap-2">
-        <span>{label}</span>
-        {actions ? (
-          // Section actions stay hidden until the header is
-          // hovered (or an action's popover is open / focused via keyboard).
-          <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity duration-hover group-hover/side-section:opacity-100 group-focus-within/side-section:opacity-100 has-[[data-state=open]]:opacity-100">
-            {actions}
-          </div>
-        ) : null}
+        {labelRow}
+        {actionsSlot}
       </div>
     </div>
   );

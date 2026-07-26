@@ -41,7 +41,12 @@ export function ProductSidebarRepoGroupHeader({
       className={`group/folder-row h-[30px] justify-between overflow-x-hidden py-1 text-sidebar-nav focus-visible:outline-offset-[-2px] ${className}`}
       {...props}
     >
-      <div className="flex min-w-0 flex-1 items-center gap-1 pl-1">
+      {/* gap-0.5 + no leading pl: the icon well (h-7.5/w-7.5, kept large for
+          the hover-chevron swap) already accounts for 30px, so trimming the
+          wrapper's own inset is what lands the label at the same left edge
+          as workspace/thread row labels below it (both rows start at the
+          same left-anchored surface). */}
+      <div className="flex min-w-0 flex-1 items-center gap-0.5">
         <span className="relative flex h-7.5 w-7.5 items-center justify-center text-current">
           {visibleIcon ? (
             <span className="flex items-center justify-center group-hover/folder-row:opacity-0">

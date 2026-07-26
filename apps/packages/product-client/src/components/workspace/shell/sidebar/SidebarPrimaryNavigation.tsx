@@ -1,5 +1,5 @@
 import {
-  LayoutGrid,
+  Grid2x2,
   LifeBuoy,
   SquarePen,
   Zap,
@@ -35,24 +35,28 @@ export function SidebarPrimaryNavigation({
   onGoWorkflows,
   onOpenSupport,
 }: SidebarPrimaryNavigationProps) {
+  // Reference-style nav glyphs read rounder and lighter than the boxy
+  // 2px-stroke defaults: a shared 1.75 stroke weight across the row (matching
+  // LifeBuoy's existing weight in ui/icons/core.tsx) and a single-frame grid
+  // glyph for Workspaces instead of four discrete tiles.
   const navItems: SidebarNavItemView[] = [
     {
       id: "new-chat",
       active: homeActive,
-      icon: <SquarePen className="icon-paired" />,
+      icon: <SquarePen className="icon-paired" strokeWidth={1.75} />,
       label: "New chat",
       shortcutLabel: shortcutLabels.newChat,
     },
     {
       id: "workspaces",
       active: workspacesActive,
-      icon: <LayoutGrid className="icon-paired" />,
+      icon: <Grid2x2 className="icon-paired" strokeWidth={1.75} />,
       label: "Workspaces",
     },
     {
       id: "workflows",
       active: workflowsActive,
-      icon: <Zap className="icon-paired" />,
+      icon: <Zap className="icon-paired" strokeWidth={1.75} />,
       label: "Workflows",
       status: (
         <span className="font-mono text-ui-sm uppercase tracking-[0.06em] text-sidebar-muted-foreground">
@@ -63,7 +67,7 @@ export function SidebarPrimaryNavigation({
     {
       id: "support",
       active: supportActive,
-      icon: <LifeBuoy className="icon-paired" />,
+      icon: <LifeBuoy className="icon-paired" strokeWidth={1.75} />,
       label: "Support",
       shortcutLabel: shortcutLabels.support,
     },

@@ -222,8 +222,8 @@ carries the hierarchy with borders instead.
 | Token | Dark | Light | Role |
 | --- | --- | --- | --- |
 | `--color-surface-under` | `#141414` | `#f9f9f9` | Recessed backdrop behind the app frame (sidebar rail well). |
-| `--color-surface` / `--color-background` | `#181818` | `#ffffff` | The root app surface. |
-| `--color-sidebar` | `#141414` | `var(--color-surface-under)` | Sidebar body, matching the recessed backdrop rather than sitting one step off root — a deliberate retune so the sidebar reads as part of the frame, not a raised panel next to it. |
+| `--color-surface` / `--color-background` | `#181818` | `#ffffff` | The root app surface — also the chat/content pane background. |
+| `--color-sidebar` | `#222222` | `var(--color-surface-under)` | Sidebar body. Round-2 measurement against the reference app's dark capture: the sidebar rail sits one step ABOVE root (`#222222`), not recessed below it — supersedes the prior surface-recess ruling. |
 | `--color-surface-elevated` / `--color-card` | `#212121` | `#ffffff` / `var(--color-surface-elevated)` | Raised cards and panels. |
 | `--color-surface-elevated-secondary` | 3% white | 2% foreground | A raise expressed as a wash, for surfaces that must sit on an unknown parent. |
 | `--color-popover` | `#2d2d2d` | `#ffffff` | Popover/menu/toast body — the highest opaque step. |
@@ -232,12 +232,12 @@ carries the hierarchy with borders instead.
 | `--color-surface-control` | `color-mix(in oklab, #2b2b2b 96%, transparent)` | `rgba(237, 237, 237, 0.4)` | Translucent control chrome (pickers, inline fields). |
 | `--color-composer-background` | `color-mix(in oklab, #2d2d2d 96%, transparent)` | `rgba(255, 255, 255, 0.864)` | The composer input surface. |
 
-The dark ladder steps `#141414 → #181818 → #212121 → #282828 → #2d2d2d`:
+The dark ladder steps `#141414 → #181818 → #212121/#222222 → #282828 → #2d2d2d`:
 roughly four to five levels of lightness per step, small enough that no step
 reads as a color change and large enough to separate two adjacent panels
-without a border. The sidebar shares the `#141414` rung with
-`--color-surface-under` rather than owning its own step — it recesses to the
-same level as the backdrop instead of sitting slightly raised off it.
+without a border. The sidebar now sits at the `#222222` rung, essentially
+alongside `--color-surface-elevated` — one step lighter than the root app
+surface it borders, reading as a raised rail rather than a recessed well.
 
 **The composer is translucent, not a card.** Both modes let the transcript read
 through it. It is also the one surface with a per-mode backdrop treatment:
