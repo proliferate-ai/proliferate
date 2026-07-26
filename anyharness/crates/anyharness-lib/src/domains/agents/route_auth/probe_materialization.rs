@@ -203,8 +203,10 @@ impl std::fmt::Debug for ProbeAuthMaterial {
 
 impl ProbeAuthMaterial {
     /// True when this context resolves to the harness's own login (nothing to
-    /// inject). Exposed because the status surface distinguishes "we materialized
-    /// a route" from "we observed the user's own credentials".
+    /// inject). Exposed for tests only: `SnapshotEntry` and `ContextStatus` carry
+    /// no route-vs-native field today, so nothing on the wire consumes this. If a
+    /// consumer needs the distinction, give it a real field and drop this `cfg`.
+    #[cfg(test)]
     pub fn is_native(&self) -> bool {
         matches!(self.scoped_profile, AgentRuntimeAuthProfile::Native)
     }
