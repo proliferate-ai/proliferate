@@ -42,11 +42,14 @@ Config laws, enforced by review (the file's comments restate them):
   import; an unknown id can pass traffic while mispricing it.
 - Every entry carries `model_info: {access_groups: [...]}` naming the
   harness group(s) it belongs to. Group names are exactly the harness
-  `harness_kind` identifiers (`claude`, `codex`, `opencode`, `cursor`,
-  `grok`) — no translation table; see LiteLLM's
+  `harness_kind` identifiers of the gateway-capable harnesses (`claude`,
+  `codex`, `opencode`, `grok`) — no translation table; see LiteLLM's
   [model access groups](https://docs.litellm.ai/docs/proxy/model_access_groups).
   This one reviewed file is therefore also the harness-to-model map; no
-  client-side model filtering exists anywhere.
+  client-side model filtering exists anywhere. `cursor` is deliberately
+  absent from the vocabulary: it is native-only (no gateway recipe exists
+  for it), so no model belongs to a `cursor` group and no `cursor` virtual
+  key is ever minted.
 - No dev shims. Because dev and prod run this exact file, any local
   convenience placed in it ships to production verbatim. Two shims are
   banned by name:
