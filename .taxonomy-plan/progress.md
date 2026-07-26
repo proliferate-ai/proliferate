@@ -26,7 +26,7 @@ Steps:
 - [x] 3. ui-internal wiring: relative imports, exports map, tsup/tsconfig/vitest paths; ui builds green
 - [x] 4. external consumers: product-ui/product-surfaces/product-client/apps rewrites + tailwind @source globs; shared:typecheck green
 - [x] 5. specs/ links + appearance-baseline key renames; check_docs + appearance + boundaries green
-- [ ] 6. product-ui patterns/ grouping (M2)
+- [x] 6. product-ui patterns/ grouping (M2)
 
 ## Step 6 move list (product-ui library citizens -> src/patterns/)
 
@@ -158,6 +158,61 @@ namespace in an error message, not a specific broken import — left as-is
 (still true: `settings/` still exists with RepoPicker/OrganizationSsoSettingsSurface
 in it; the message is about the namespace convention, not a literal existing
 export).
+
+Step 6 JC (final, post-execution):
+- One file the move list didn't anticipate: `apps/packages/product-ui/test/SettingsSection.test.tsx`
+  (a legacy top-level `test/` dir, sibling to `src/`, pre-dating the co-located-test
+  convention) imported `SettingsRow`/`SettingsSection` via `../src/settings/...` —
+  the only test for either component (no co-located `.test.tsx` existed for them
+  in `src/settings/` before the move). Fixed its two import paths to
+  `../src/patterns/...`; this is the one file outside `src/` this step touched.
+- `apps/desktop/scripts/check-design-system.sh` line 99's error-message string
+  said "route settings markup through the shared primitives in
+  `@proliferate/product-ui/settings`" — factually stale after this move (the
+  primitives the comment/rule actually enforces — SettingsRow/SettingsSection/
+  SettingsPageHeader/SettingsEmptyState — all now live under `patterns/`, not
+  `settings/`). Updated the string to `@proliferate/product-ui/patterns`. This
+  is prose in an echo statement, not a real import specifier, so it wasn't
+  caught by the mechanical rewrite pass.
+- `SecretManagementPanel`'s five private internals (`SecretDeleteDialog`,
+  `SecretEditorDialog`(+test), `SecretList`, `SecretRow`, `SecretScopeNotice`)
+  moved with it into `patterns/secrets/` rather than staying split across two
+  directories — none are independently catalogued in §4/§4.2, none have
+  importers outside `SecretManagementPanel.tsx` (verified), so this is an
+  adjacency call, not a separate catalog decision. Only `SecretManagementPanel`
+  itself got a new package.json export subpath (`./patterns/secrets/SecretManagementPanel`);
+  the five internals stay unexported, matching their prior unexported status.
+  `src/secrets/` is now empty and was removed (git doesn't track empty dirs).
+- Left in place despite living in a moved-from directory (conservative
+  default, no §4.2 row, not in seed list): `settings/RepoPicker.tsx`,
+  `settings/OrganizationSsoSettingsSurface.tsx` (§6 dissolution-plan surface,
+  explicitly named as staying out of the library table),
+  `workspaces/{RecentWorkStatusDot,WorkspaceInventory*,WorkspaceReconciliationBody,WorkspacesCommandList}.tsx`,
+  `layout/ProductNotice.tsx`. See the move-list section above for full
+  per-file reasoning already logged before execution — none of that reasoning
+  changed during the move itself.
+- Gates (this step, run in the sequence specified): `pnpm run shared:typecheck`
+  exit 0 (product-domain/ui/product-ui/product-surfaces/product-client
+  typecheck all clean). `pnpm --filter @proliferate/product-ui test`: 31 files
+  / 193 tests passed (same counts as step 4's baseline — one failure surfaced
+  first run from the `test/SettingsSection.test.tsx` stale import above, fixed,
+  re-run green). `pnpm --filter @proliferate/product-client test`: 631 files /
+  3823 tests passed (identical counts to step 4's baseline — no regression).
+  `python3 scripts/check_appearance_scaling.py` exit 0, no baseline key renames
+  needed (grep confirmed zero baseline entries reference any moved file's old
+  path — `OrganizationSsoSettingsSurface.tsx`, the one settings-dir file with a
+  baseline entry, did not move). `python3 scripts/check_frontend_boundaries.py`
+  exit 0. `python3 scripts/check_docs.py` exit 0 (224 files) after updating
+  prose (not markdown links — none existed to any moved path) in
+  `specs/codebase/systems/product/settings/information-architecture.md` (§5.4
+  primitives block, §6 SettingsScopeTabs file line) and
+  `specs/codebase/systems/product/clients/cloud-local-parity.md` ("Web
+  Settings" section + Desktop-settings sharing-model bullet, both `product-ui/src/settings/**`
+  mentions that were about the moved primitives specifically). Also reran
+  `PYTHONPATH=. python3 -m scripts.test_check_docs` (17 OK) and
+  `PYTHONPATH=. python3 -m scripts.test_check_appearance_scaling` (49 OK) since
+  step 5 last ran them and this step didn't change either checker's logic —
+  both still green, confirming no checker regression.
 - [ ] 7. boundary gate rules (G)
 - [ ] 8. component-library.md spec (D)
 - [ ] 9. adversarial verify + fixes (V)
