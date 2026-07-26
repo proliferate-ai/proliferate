@@ -41,7 +41,7 @@ vi.mock("#product/hooks/access/tauri/app/use-app-version", () => ({
   useAppVersion: () => ({ data: appVersionMocks.version }),
 }));
 
-vi.mock("@proliferate/ui/kit/Sonner", () => ({
+vi.mock("@proliferate/ui/primitives/Sonner", () => ({
   toast: sonnerMocks.toast,
 }));
 

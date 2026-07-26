@@ -1,10 +1,10 @@
 import { useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
-import { SETTINGS_CONTROL_WIDTH_CLASS, SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
-import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
+import { SettingsSection } from "@proliferate/product-ui/patterns/SettingsSection";
+import { SETTINGS_CONTROL_WIDTH_CLASS, SettingsRow } from "@proliferate/product-ui/patterns/SettingsRow";
+import { SettingsPageHeader } from "@proliferate/product-ui/patterns/SettingsPageHeader";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { SettingsMenu } from "@proliferate/ui/primitives/SettingsMenu";
+import { SettingsMenu } from "@proliferate/ui/patterns/SettingsMenu";
 import { Switch } from "@proliferate/ui/primitives/Switch";
 import { OpenTargetIcon } from "#product/components/workspace/open-target/OpenTargetIcon";
 import { useAvailableEditors } from "#product/hooks/access/tauri/shell/use-available-editors";

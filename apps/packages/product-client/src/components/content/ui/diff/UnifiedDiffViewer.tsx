@@ -1,5 +1,5 @@
 import { useMemo, useState, type CSSProperties } from "react";
-import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
+import { AutoHideScrollArea } from "@proliferate/ui/patterns/AutoHideScrollArea";
 import { DiffLineContent } from "#product/components/content/ui/diff/DiffLineContent";
 import {
   DiffCollapsedContextCluster,
@@ -109,7 +109,7 @@ function CollapsedSection({
       }}
       aria-label={`Expand ${section.lineCount} unmodified lines`}
       title={`${section.lineCount} unmodified lines`}
-      className="flex min-h-[var(--diffs-line-height)] cursor-pointer items-center bg-[var(--codex-diffs-separator-surface)] text-muted-foreground/60 transition-colors hover:text-foreground"
+      className="flex min-h-[var(--diffs-line-height)] cursor-pointer items-center bg-[var(--diff-view-separator-surface)] text-muted-foreground/60 transition-colors hover:text-foreground"
     >
       <DiffCollapsedContextCluster lineCount={section.lineCount} />
     </div>
@@ -328,8 +328,8 @@ export function UnifiedDiffViewer({
   return (
     <AutoHideScrollArea
       className={className}
-      viewportClassName={`composer-diff-simple-line bg-[var(--codex-diffs-surface)] ${viewportClassName ?? ""}`}
-      contentClassName={`min-h-full bg-[var(--codex-diffs-surface)] font-[family:var(--diffs-font-family)] text-readable-code text-foreground ${
+      viewportClassName={`composer-diff-simple-line bg-[var(--diff-view-surface)] ${viewportClassName ?? ""}`}
+      contentClassName={`min-h-full bg-[var(--diff-view-surface)] font-[family:var(--diffs-font-family)] text-readable-code text-foreground ${
         wrapLongLines ? "" : "min-w-max"
       }`}
       allowHorizontal={!wrapLongLines}

@@ -4,8 +4,8 @@ import {
   RefreshCw,
 } from "@proliferate/ui/icons";
 import { workspaceDisplayName } from "#product/lib/domain/workspaces/display/workspace-display";
-import { SidebarActionButton } from "@proliferate/ui/layout/SidebarActionButton";
-import { SidebarRowSurface } from "@proliferate/ui/layout/SidebarRowSurface";
+import { SidebarActionButton } from "@proliferate/ui/patterns/SidebarActionButton";
+import { SidebarRowSurface } from "@proliferate/ui/patterns/SidebarRowSurface";
 import { ProductSidebarSectionHeader } from "@proliferate/product-ui/sidebar/ProductSidebarLayout";
 
 interface WorkspaceCleanupAttentionSectionProps {

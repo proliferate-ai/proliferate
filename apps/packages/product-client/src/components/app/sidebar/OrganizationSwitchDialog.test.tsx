@@ -23,7 +23,7 @@ vi.mock("#product/hooks/organizations/workflows/use-organization-switch-action",
 
 // Stub the modal primitive with a minimal confirm/cancel surface so the test
 // exercises the dialog's onConfirm wiring rather than Radix portal internals.
-vi.mock("@proliferate/ui/primitives/ConfirmationDialog", () => ({
+vi.mock("@proliferate/ui/patterns/ConfirmationDialog", () => ({
   ConfirmationDialog: ({
     open,
     confirmLabel,

@@ -5,9 +5,9 @@ import { CloudUpload } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@proliferate/ui/primitives/Label";
-import { ModalShell } from "@proliferate/ui/primitives/ModalShell";
+import { ModalShell } from "@proliferate/ui/patterns/ModalShell";
 import { SegmentedControl } from "@proliferate/ui/primitives/SegmentedControl";
-import { SettingsMenu } from "@proliferate/ui/primitives/SettingsMenu";
+import { SettingsMenu } from "@proliferate/ui/patterns/SettingsMenu";
 import { Textarea } from "@proliferate/ui/primitives/Textarea";
 
 export type SecretEditorKind = "env" | "file";

@@ -1,4 +1,4 @@
-import { Button } from "./Button";
+import { Button } from "../primitives/Button";
 import { ModalShell } from "./ModalShell";
 
 interface ConfirmationDialogProps {

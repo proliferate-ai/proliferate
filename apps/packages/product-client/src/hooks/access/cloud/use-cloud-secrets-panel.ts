@@ -7,7 +7,7 @@ import {
   usePutCloudSecretFile,
   type CloudSecretsScope,
 } from "@proliferate/cloud-sdk-react";
-import type { SecretManagementPanelProps } from "@proliferate/product-ui/secrets/SecretManagementPanel";
+import type { SecretManagementPanelProps } from "@proliferate/product-ui/patterns/secrets/SecretManagementPanel";
 
 export interface UseCloudSecretsPanelOptions {
   scope: CloudSecretsScope;

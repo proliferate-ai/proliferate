@@ -3,7 +3,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { SidebarNavRow } from "../src/layout/SidebarNavRow";
+import { SidebarNavRow } from "../src/patterns/SidebarNavRow";
 
 afterEach(cleanup);
 

@@ -1,6 +1,6 @@
 import { ExternalLink } from "@proliferate/ui/icons";
 import { useWorkspaceShellActions } from "#product/components/workspace/shell/providers/WorkspaceShellActionsContext";
-import { ComposerControlButton } from "@proliferate/ui/primitives/ComposerControlButton";
+import { ComposerControlButton } from "@proliferate/ui/patterns/ComposerControlButton";
 
 export function WorkspaceOpenInWebFooterControl() {
   const shellActions = useWorkspaceShellActions();

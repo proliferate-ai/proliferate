@@ -23,8 +23,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuShortcut,
   DropdownMenuTrigger,
-} from "@proliferate/ui/kit/DropdownMenu";
-import { RowActionIconButton } from "@proliferate/ui/layout/RowActionIconButton";
+} from "@proliferate/ui/primitives/DropdownMenu";
+import { RowActionIconButton } from "@proliferate/ui/primitives/RowActionIconButton";
 import { getShortcutDisplayLabel } from "#product/lib/domain/shortcuts/matching";
 
 interface WorkspaceItemMenuProps {

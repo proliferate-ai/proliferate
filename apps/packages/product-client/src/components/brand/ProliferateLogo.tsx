@@ -1,4 +1,4 @@
-import { ProliferateIcon } from "@proliferate/ui/proliferate-icons";
+import { ProliferateIcon } from "@proliferate/ui/icons/proliferate-icons";
 
 export function ProliferateLogo() {
   return (

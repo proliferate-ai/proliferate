@@ -5,7 +5,7 @@ import {
   DialogContent,
   DialogDescription,
   DialogTitle,
-} from "../kit/Dialog";
+} from "../primitives/Dialog";
 import { X } from "../icons/core";
 import { cn } from "../lib/utils";
 import { useNativeOverlayRegistration } from "../overlays/overlay-presence";

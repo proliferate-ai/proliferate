@@ -15,8 +15,8 @@ import {
   MoreHorizontal,
   Search,
 } from "@proliferate/ui/icons";
-import { PaneIconButton } from "@proliferate/ui/layout/PaneIconButton";
-import { PaneOptionsMenuItem } from "@proliferate/ui/layout/PaneOptionsMenuItem";
+import { PaneIconButton } from "@proliferate/ui/primitives/PaneIconButton";
+import { PaneOptionsMenuItem } from "@proliferate/ui/patterns/PaneOptionsMenuItem";
 import {
   POPOVER_FRAME_CLASS,
   POPOVER_SURFACE_CLASS,

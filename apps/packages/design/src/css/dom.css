@@ -141,7 +141,7 @@ body {
   );
 }
 
-/* Codex composer chrome (UX_SPEC §5): no border — a 0.5px stroke painted in
+/* Composer chrome: no border — a 0.5px stroke painted in
    the shadow stack plus the elevation shadow. */
 .chat-composer-surface {
   background-color: var(--color-composer-background);
@@ -152,7 +152,7 @@ body {
   backdrop-filter: var(--color-composer-backdrop-filter);
 }
 
-/* [CHAT-01] The cap variant of that same surface: composer chrome attached
+/* The cap variant of that same surface: composer chrome attached
    ABOVE the input box (the workspace-activity cap). It is the composer surface,
    so it takes the identical translucent fill and backdrop treatment — a cap
    that skipped the blur would be translucent over an unblurred transcript one
@@ -193,7 +193,7 @@ body {
   }
 }
 
-/* ---- Skeleton shimmer (codex block shimmer) ----
+/* ---- Skeleton shimmer ----
    Loading blocks share one motion family with the thinking-text sweep in
    product.css: a soft gradient band travelling left→right via transform
    (compositor-only — never background-position). Stagger sibling rows by
