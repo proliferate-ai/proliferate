@@ -393,8 +393,9 @@ server/proliferate/
     │   └── sandbox_io/
     │       ├── connect.py                   the provisioning engine
     │       ├── resume_acceptance.py         post-resume pause reconciliation
-    │       ├── runtime_launch.py            Supervisor-owned runtime launch
-    │       └── worker_sidecar.py            Worker enrollment token mint + config
+    │       └── runtime_launch.py            Supervisor-owned runtime launch (only
+    │                                        topology; also mints the Worker
+    │                                        enrollment token)
     ├── runtime/bootstrap.py                 env, launcher, and Supervisor config builders
     ├── runtime/liveness_health.py           health + auth-enforcement probes
     ├── webhooks/                            E2B lifecycle event ingestion (HMAC, dedupe, correlate)
@@ -440,8 +441,17 @@ server/proliferate/
   live sandbox) in the release suite.
 - Live E2B N-1 to N update proof (2026-07-26): real sandbox, supervisor-owned
   topology, pins 0.3.47->0.3.48, zero rollbacks, sha256 of active binaries
-  matched published CDN artifacts, ~75s convergence. This gates the
-  Supervisor-owned topology default (below), which is now on.
+  matched published CDN artifacts, ~75s convergence. This gated the
+  Supervisor-owned topology default, which is now on.
+- D5 BRIDGE proof (2026-07-26, sandbox `iwwvadhffzxoora56f437`): a running
+  legacy (pre-Supervisor) sandbox migrated onto the Supervisor-owned topology
+  in place, in ~2.5s, via the `desiredTopology` heartbeat signal — no
+  destroy/recreate. This, together with the update proof above, gated
+  deleting the legacy launch path entirely: every (re)launch is now
+  unconditionally Supervisor-owned. `supervisor_owned_runtime`
+  ([config.py](../../../../server/proliferate/config.py)) survives only to
+  gate that same `desiredTopology` heartbeat signal for any already-running
+  legacy worker still bridging — see its docstring for the asymmetry.
 
 ## Current gaps
 
@@ -462,15 +472,6 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       valid, so forwarded traffic wakes them); the fix waits on the
       cold-start choreography ruling (wake-and-poll vs
       provision-on-access), still open.
-- [ ] `supervisor_owned_runtime` now defaults on
-      ([config.py](../../../../server/proliferate/config.py)): the live E2B
-      N-1 to N proof passed (2026-07-26), so newly (re)launched cloud
-      sandboxes boot Proliferate Supervisor first by default. The legacy
-      launch path (direct detached AnyHarness plus a best-effort Worker
-      sidecar,
-      [runtime_launch.py](../../../../server/proliferate/server/cloud/materialization/sandbox_io/runtime_launch.py))
-      still exists behind the flag (env var opt-out) for rollback; its
-      deletion is the named follow-up.
 - [ ] Worker death is silent: sidecar launch failures are swallowed, the
       warm-reuse path never relaunches a dead Worker, runtime-status
       carries no worker liveness, and no alert fires. Surface degraded

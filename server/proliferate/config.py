@@ -455,16 +455,16 @@ class Settings(BaseSettings):
     )
     proliferate_target_artifact_base_url: str = ""
     # Make Managed Runtime Updates Supervisor-Owned (frozen 2026-07-15, decision
-    # 5): when true, newly (re)launched cloud sandboxes boot the Supervisor
-    # first (it spawns AnyHarness + Worker) instead of the legacy direct
-    # nohup'd AnyHarness + separate worker sidecar. Also gates the D5
-    # `desiredTopology` heartbeat signal (decision 6) so already-running
-    # legacy workers can bridge. The live E2B N-1->N proof passed 2026-07-26
-    # (real sandbox, supervisor-owned topology, pins 0.3.47->0.3.48, zero
-    # rollbacks; see the PR body that flipped this default for the full
-    # evidence), so the default is now ON. The env var still allows opting
-    # back out per-deploy if a regression surfaces. The legacy launch path
-    # (this flag off) remains for now; its deletion is the named follow-up.
+    # 5): the E2B N-1->N proof + D5 BRIDGE proof (in-place migration, sandbox
+    # iwwvadhffzxoora56f437) both passed 2026-07-26, so the legacy direct-nohup
+    # AnyHarness + Worker-sidecar launch path was deleted (S5-B). ASYMMETRY:
+    # this flag no longer gates which topology a launch takes -- every
+    # (re)launch is unconditionally Supervisor-owned regardless of this value.
+    # It now only gates the D5 `desiredTopology` heartbeat signal (decision 6,
+    # `record_heartbeat` in runtime_workers/service.py) telling an
+    # already-running LEGACY worker to bridge onto a Supervisor; not a
+    # launch-time rollback lever anymore. Kept while that signal still matters
+    # to pre-cutover legacy workers; removing it is a later call.
     supervisor_owned_runtime: bool = Field(
         default=True,
         validation_alias=AliasChoices(

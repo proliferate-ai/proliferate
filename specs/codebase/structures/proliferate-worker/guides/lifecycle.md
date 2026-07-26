@@ -89,10 +89,25 @@ write Supervisor config, start Supervisor detached, confirm it took ownership
 (adopted/started AnyHarness, spawned its own Worker child), then exit cleanly.
 This is idempotent and crash-safe: a `bridge.started`/`bridge.done` marker
 pair plus a Supervisor-liveness check prevent starting a second Supervisor
-after a crash mid-bridge. The live bridge proof against a real target is
-deferred with the rest of Tier 4; this crate's tests cover idempotency,
+after a crash mid-bridge. The live D5 BRIDGE proof against a real target
+PASSED 2026-07-26 (sandbox `iwwvadhffzxoora56f437`: a running legacy sandbox
+migrated onto the Supervisor-owned topology in place, ~2.5s, no
+destroy/recreate); this crate's tests separately cover idempotency,
 marker-file crash recovery, and the no-double-Supervisor invariant
 deterministically.
+
+**Expected log signature of a real bridge.** The Supervisor's first spawned
+Worker child cannot immediately acquire the exclusive, non-blocking `flock`
+on `worker.sqlite3` (`WorkerProcessLock::acquire` in `process_lock.rs`)
+because the bridging legacy Worker still holds it while it confirms
+Supervisor ownership and exits. That first child therefore exits once with a
+lock-contention error (`WorkerError::AlreadyRunning`); the Supervisor's
+restart loop (`restart_delay_seconds`, default 5s) relaunches it, and the
+second attempt acquires the now-released lock cleanly. One early exit
+followed by a clean restart ~5s later, exactly once per bridge, is the
+expected successful signature — not a crash loop. A signature that repeats
+past that single generation indicates the bridge itself failed to hand off
+ownership (the bridging Worker never exited).
 
 ## Worker Binary Convergence (legacy, non-supervisor-owned targets)
 

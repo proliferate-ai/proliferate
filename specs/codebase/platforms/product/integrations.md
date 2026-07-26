@@ -188,11 +188,15 @@ Worker SQLite or rotating tokens as routine recovery.
 
 ## Cloud And Desktop Worker Startup
 
-When Cloud materialization launches or relaunches AnyHarness, it then starts
-Worker as a best-effort detached sidecar through
-[`worker_sidecar.py`](../../../../server/proliferate/server/cloud/materialization/sandbox_io/worker_sidecar.py).
-Direct AnyHarness health is independent of Worker health. Reusing an
-already-healthy AnyHarness does not restart a missing Worker.
+Cloud materialization launches Proliferate Supervisor
+([`runtime_launch.py`](../../../../server/proliferate/server/cloud/materialization/sandbox_io/runtime_launch.py)),
+which spawns and supervises both AnyHarness and Worker as its children —
+there is no separately launched Worker sidecar (the legacy direct-nohup'd
+AnyHarness plus independent Worker sidecar, `worker_sidecar.py`, was deleted
+once the live E2B N-1->N update proof and the D5 BRIDGE proof both passed,
+2026-07-26). Direct AnyHarness health is independent of Worker health.
+Reusing an already-healthy Supervisor does not restart a missing Worker
+child on its own; the Supervisor's own restart loop covers that.
 
 Desktop obtains a short-lived user-authenticated enrollment for its install,
 then starts the local Worker through Tauri. Desktop revoke is an idempotent

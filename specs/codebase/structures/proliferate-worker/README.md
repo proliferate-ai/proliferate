@@ -36,13 +36,19 @@ already-provisioned legacy Worker migrates too), then branches on
 targets route to `converge_via_mailbox` (the mailbox write) instead
 of the legacy `converge_anyharness_runtime` + `self_update` swap, which stays
 byte-for-byte unchanged for non-supervisor targets. The "Current Process"
-outline below describes running behavior. Two distinct live proofs exist here:
-the UPDATE proof (a fresh supervisor-owned sandbox converging pins
-0.3.47→0.3.48 end to end) PASSED on a real E2B sandbox 2026-07-26. The D5
-BRIDGE proof (in-place migration of an already-running legacy Worker onto
-Proliferate Supervisor via `supervisor_bridge`, not a fresh provision) remains
-deferred with the rest of Tier 4. See
-[Lifecycle](guides/lifecycle.md#supervisor-owned-convergence-mailbox) for detail.
+outline below describes running behavior. Two distinct live proofs exist
+here, both PASSED on real E2B sandboxes 2026-07-26: the UPDATE proof (a fresh
+supervisor-owned sandbox converging pins 0.3.47→0.3.48 end to end, zero
+rollbacks) and the D5 BRIDGE proof (in-place migration of an already-running
+legacy Worker onto Proliferate Supervisor via `supervisor_bridge`, not a
+fresh provision — sandbox `iwwvadhffzxoora56f437`, ~2.5s, no
+destroy/recreate). Both proofs together cleared the gate for the server side
+to delete its legacy launch path (every new cloud-sandbox launch is now
+unconditionally supervisor-owned); the Rust-side legacy branches described
+below remain reachable only by an already-provisioned target that has not
+yet bridged. See
+[Lifecycle](guides/lifecycle.md#supervisor-owned-convergence-mailbox) for
+detail, including the expected bridge log signature.
 
 ## Current Process
 
