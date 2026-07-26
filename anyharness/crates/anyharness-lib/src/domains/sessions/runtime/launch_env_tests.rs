@@ -35,6 +35,7 @@ fn resolved_agent(kind: AgentKind, native_path: Option<&str>) -> ResolvedAgent {
             message: None,
         },
         spawn: None,
+        credentials_from_route: false,
     }
 }
 

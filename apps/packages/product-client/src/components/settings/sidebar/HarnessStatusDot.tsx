@@ -15,7 +15,15 @@ export function HarnessStatusDot({ agent }: HarnessStatusDotProps) {
   }
 
   // Don't show a dot for ready state (green dot = clutter for normal state)
-  // Only show amber/red dots that flag harnesses needing attention
+  // Only show amber/red dots that flag harnesses needing attention.
+  //
+  // This dot means "needs your attention", so route-upgraded readiness counts as
+  // ready DELIBERATELY: a gateway-routed harness with no vendor-CLI login will
+  // launch fine, and flagging it would ask the user to fix a non-problem —
+  // exactly the lie agent-distribution.md's route-aware law forbids ("the UI
+  // never shows CredentialsRequired for a harness that would launch fine"). Any
+  // "authenticated how?" detail belongs in the harness's auth pane, which shows
+  // the selected route, not in an attention dot.
   if (agent.credentialState === "ready" && agent.installState !== "failed") {
     return null;
   }

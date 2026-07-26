@@ -149,6 +149,9 @@ fn resolve_agent_in_scope(
         native,
         agent_process,
         spawn,
+        // Set only by `apply_launch_route_upgrade`; this layer knows nothing
+        // about routes.
+        credentials_from_route: false,
     }
 }
 
@@ -221,6 +224,11 @@ fn apply_launch_route_upgrade(
         // non-env, runtime-materialized credential rather than a workspace
         // env var.
         resolved.credential_state = CredentialState::ReadyViaLocalAuth;
+        // Record the PROVENANCE of that readiness. Route-upgraded-ready and
+        // natively-ready are the same `credential_state` on the wire, so a
+        // consumer that means "the vendor CLI is logged in" (first-run adoption,
+        // CLI status chrome) needs this flag to tell them apart.
+        resolved.credentials_from_route = true;
     }
     resolved.status = upgraded;
     resolved

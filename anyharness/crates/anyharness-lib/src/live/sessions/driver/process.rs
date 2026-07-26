@@ -212,6 +212,7 @@ mod tests {
                 message: None,
             },
             spawn: None,
+            credentials_from_route: false,
         }
     }
 

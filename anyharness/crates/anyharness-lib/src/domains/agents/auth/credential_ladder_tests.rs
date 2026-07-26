@@ -30,15 +30,9 @@ use std::collections::BTreeMap;
 
 /// Serializes the tests below. They set and clear process-global variables, and
 /// the host-scope cases read whatever the process env holds, so an interleaving
-/// with any other env-mutating suite is a false result. The crate-wide mutex is
-/// the same one readiness's `test_env_guards` takes. Poisoning is ignored: a
-/// panicking test has already failed.
-fn lock_env() -> std::sync::MutexGuard<'static, ()> {
-    crate::app::test_support::ENV_MUTEX
-        .get_or_init(|| std::sync::Mutex::new(()))
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-}
+/// with any other env-mutating suite is a false result. This is the crate-wide
+/// lock every such test takes.
+use crate::app::test_support::lock_env;
 
 /// Set or remove a var for the test's lifetime and restore it on drop, so the
 /// matrix below is deterministic on a developer machine that exports provider

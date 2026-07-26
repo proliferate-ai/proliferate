@@ -406,17 +406,37 @@ harness home, exactly as they would on a laptop.
 
 ### Readiness interplay
 
-Readiness projection (agent-distribution.md) is computed from native
-credentials; a routed harness would read `CredentialsRequired` even
-though launch will inject valid keys. `resolve_launch_agent`
-([readiness/service.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/readiness/service.rs))
-therefore asks route-auth one yes/no question —
+Readiness projection (agent-distribution.md) is computed from installed
+artifacts plus locally-detected credentials, which alone would read
+`CredentialsRequired` for a routed harness even though launch will inject
+valid keys. Every projection therefore absorbs the enrolled route through
+**one** seam, `apply_launch_route_upgrade` in
+[readiness/service.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/readiness/service.rs):
+it asks route-auth one yes/no question —
 `launch_route_provides_credentials`, the same state load and origin
 guard as launch — and upgrades `CredentialsRequired`/`LoginRequired` to
 `Ready`. The predicate is deliberately tolerant (a malformed state reads
 `false`, never an error) because hard fail-closed belongs to the launch
 path alone; and the upgrade can never clear `InstallRequired` or
 `Unsupported`, because a route cannot conjure a binary.
+
+Both the settings read (`resolve_agent`, behind `GET /v1/agents`) and the
+launch path (`resolve_launch_agent`) go through that one seam — that shared
+layer *is* the mechanism behind agent-distribution.md's law that the two
+surfaces resolve readiness the same way. They differ only in which
+environment counts: the launch path reads the workspace's composed env, the
+settings read the host's. `resolve_agent_unrouted` remains for the callers
+that genuinely mean "is the vendor CLI installed and logged in on this
+machine": the login flow (an enrolled route must never suppress a native
+login), the installed-only reconcile pass, and the catalog probe.
+
+Because route-upgraded readiness and native readiness collapse to the same
+`credentialState` on the wire, the projection also carries the provenance:
+`AgentSummary.credentialsFromRoute` is true exactly when the route is why
+the harness reads ready. Clients that mean native auth — first-run
+native-auth adoption, CLI login chrome — must exclude that case; the flag is
+absent on runtimes predating it, and those are the runtimes whose read
+surface was native-only, so absent correctly means "not from a route".
 
 Opencode's readiness is the special case: its registry policy is
 `provider_managed`, so the native projection is structurally `Ready`.

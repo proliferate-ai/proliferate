@@ -126,6 +126,87 @@ fn the_settings_read_and_the_launch_path_agree_before_and_after_enrollment() {
     );
 }
 
+/// Route-upgraded-ready and natively-ready collapse to the same
+/// `credential_state`, so the projection must carry the PROVENANCE separately or
+/// a client that means "the vendor CLI is logged in here" (first-run native-auth
+/// adoption, CLI login chrome) silently reads a gateway route as a native login.
+/// `credentials_from_route` is that provenance, and it must be set ONLY by the
+/// route upgrade.
+#[test]
+fn route_upgraded_readiness_is_distinguishable_from_native_readiness() {
+    let world = CredentialGapWorld::new("readiness-route-provenance");
+    let grok = grok_descriptor();
+
+    // Unrouted credential gap: not ready, and certainly not "from route".
+    let before = resolve_agent(&grok, &world.runtime_home);
+    assert!(!before.credentials_from_route);
+
+    world.enroll_gateway_route();
+
+    let routed = resolve_agent(&grok, &world.runtime_home);
+    assert_eq!(routed.status, ResolvedAgentStatus::Ready);
+    assert!(
+        routed.credentials_from_route,
+        "a route-upgraded Ready must be flagged as route-sourced"
+    );
+    // Launch resolution agrees (same upgrade path), and the unrouted projection
+    // never claims a route.
+    assert!(
+        resolve_launch_agent(&grok, &world.runtime_home, &BTreeMap::new())
+            .credentials_from_route
+    );
+    assert!(!resolve_agent_unrouted(&grok, &world.runtime_home).credentials_from_route);
+}
+
+/// The flag means "the ROUTE is why this is ready", so an agent that is ready on
+/// its own credential must not carry it even when a route is also enrolled — the
+/// upgrade is a no-op there, and a client would otherwise be told a real native
+/// login is a gateway one.
+#[test]
+fn a_natively_ready_agent_is_never_flagged_as_route_sourced() {
+    let world = CredentialGapWorld::new("readiness-route-provenance-native");
+    let grok = grok_descriptor();
+    world.enroll_gateway_route();
+    const CREDENTIAL_VAR: &str = "XAI_API_KEY";
+
+    let mut composed = BTreeMap::new();
+    composed.insert(CREDENTIAL_VAR.to_string(), "workspace-key".to_string());
+    let resolved = resolve_launch_agent(&grok, &world.runtime_home, &composed);
+
+    assert_eq!(resolved.status, ResolvedAgentStatus::Ready);
+    assert!(
+        !resolved.credentials_from_route,
+        "readiness earned by the agent's own credential is not route-sourced"
+    );
+}
+
+/// A route that cannot lift the verdict (a missing binary) must not claim credit
+/// for it either — the flag tracks an actual upgrade, not the mere presence of a
+/// route.
+#[test]
+fn a_route_that_cannot_upgrade_does_not_claim_provenance() {
+    let _env = lock_env();
+    let registry = built_in_registry();
+    let claude = registry
+        .into_iter()
+        .find(|descriptor| descriptor.kind == AgentKind::Claude)
+        .expect("missing Claude descriptor");
+    let runtime_home = make_temp_dir("readiness-route-provenance-install");
+    let state_dir = runtime_home.join("agent-auth");
+    std::fs::create_dir_all(&state_dir).expect("create agent-auth dir");
+    std::fs::write(
+        state_dir.join("state.json"),
+        r#"{"version":2,"revision":1,"harnesses":[{"harness_kind":"claude","sources":[{"kind":"gateway","base_url":"https://gw","key":"sk-vk"}]}]}"#,
+    )
+    .expect("write state");
+
+    let resolved = resolve_agent(&claude, &runtime_home);
+    assert_eq!(resolved.status, ResolvedAgentStatus::InstallRequired);
+    assert!(!resolved.credentials_from_route);
+
+    let _ = std::fs::remove_dir_all(runtime_home);
+}
+
 /// A route enrolled for a DIFFERENT harness must not upgrade this one: the
 /// settings read resolves the route per harness, exactly as launch does.
 #[test]

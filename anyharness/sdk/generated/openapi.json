@@ -7963,6 +7963,10 @@
           "credentialState": {
             "$ref": "#/components/schemas/AgentCredentialState"
           },
+          "credentialsFromRoute": {
+            "type": "boolean",
+            "description": "True when the enrolled agent-auth route — not a credential detected on\nthis machine — is what makes `credentialState` read `ready`.\n\nReadiness is route-aware on every surface (agent-distribution.md's\nroute-aware law: settings and launch must agree), so `ready` alone no\nlonger means \"the vendor CLI is logged in here\". A client that means the\nlatter — first-run native-auth adoption, CLI login chrome — must exclude\nthe route-upgraded case. Absent on older runtimes; treat absent as\n`false` (the pre-route-aware meaning, which is what those runtimes had)."
+          },
           "displayName": {
             "type": "string"
           },

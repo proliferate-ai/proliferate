@@ -29,6 +29,11 @@ pub enum CredentialEnvScope<'a> {
     /// and friends). The host process env is the honest answer here, because it
     /// IS what a spawn inherits and there is no workspace for it to
     /// over-authenticate.
+    ///
+    /// "What a spawn inherits" is checkable: `live/sessions/driver/process.rs`
+    /// builds the agent command with `.envs(&spawn_env)` and never calls
+    /// `env_clear`, so the child gets the runtime's process env plus the launch
+    /// delta. Route-auth's explicit removals are applied last, on top.
     HostAmbient,
     /// A workspace-scoped check. ONLY the workspace's composed env counts; the
     /// host process env is out of bounds even when the composed env is empty.

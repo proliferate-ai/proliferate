@@ -67,3 +67,4 @@ anyharness/crates/anyharness-lib/src/app/mod.rs 638 AnyHarness app wiring (+sess
 anyharness/crates/anyharness-lib/src/domains/loops/runtime.rs 867 loops runtime — native write path + emulated Codex scheduler (+2b derived-safe classification comment at the fire seam)
 anyharness/crates/anyharness-lib/src/live/sessions/actor/startup.rs 642 session startup (+goal/loop capability parsing, roster reconcile-on-attach)
 server/tests/integration/test_organizations_api.py 624 added admin-only coverage for GET .../invitations
+anyharness/crates/anyharness-lib/src/domains/agents/model.rs 605 agents domain type barrel, previously exactly at the cap (+ResolvedAgent.credentials_from_route, the route-vs-native readiness provenance flag); split into model/ on next growth per guides/domains.md

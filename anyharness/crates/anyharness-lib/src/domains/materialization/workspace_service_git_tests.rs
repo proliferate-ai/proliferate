@@ -64,7 +64,13 @@ fn make_source_repo(prefix: &str) -> Guard {
     source
 }
 
-fn make_app_state(prefix: &str) -> (Guard, AppState) {
+/// Building an `AppState` reads `ANYHARNESS_DATA_KEY` from the process env, and
+/// `app::tests::app_state_rejects_invalid_data_key` sets it to a deliberately
+/// invalid value for the length of its guard. Without this lock an unlucky
+/// interleaving fails here with `InvalidDataKey`, which has nothing to do with
+/// materialization. The guard is returned so it outlives the state.
+fn make_app_state(prefix: &str) -> (std::sync::MutexGuard<'static, ()>, Guard, AppState) {
+    let env = crate::app::test_support::lock_env();
     let home = Guard::new(prefix);
     let runtime_home = home.path().join("anyharness");
     std::fs::create_dir_all(&runtime_home).expect("create runtime home");
@@ -76,7 +82,7 @@ fn make_app_state(prefix: &str) -> (Guard, AppState) {
         AgentSeedStore::not_configured_dev(),
     )
     .expect("app state");
-    (home, state)
+    (env, home, state)
 }
 
 fn registered_source(state: &AppState, prefix: &str) -> (Guard, String, String) {
@@ -91,7 +97,7 @@ fn registered_source(state: &AppState, prefix: &str) -> (Guard, String, String) 
 
 #[tokio::test]
 async fn omitted_destination_crash_retry_adopts_the_recorded_checkout() {
-    let (_home, state) = make_app_state("crash-home");
+    let (_env, _home, state) = make_app_state("crash-home");
     let (_source, repo_root_id, head_sha) = registered_source(&state, "crash-source");
     let operation_id = "workspace-crash-op";
     let branch = "feature/crash-recovery";
@@ -149,7 +155,7 @@ async fn omitted_destination_crash_retry_adopts_the_recorded_checkout() {
 
 #[tokio::test]
 async fn explicit_busy_destination_returns_workspace_busy() {
-    let (_home, state) = make_app_state("busy-home");
+    let (_env, _home, state) = make_app_state("busy-home");
     let (_source, repo_root_id, head_sha) = registered_source(&state, "busy-source");
     let branch = "feature/busy";
     let first = state
@@ -195,7 +201,7 @@ async fn explicit_busy_destination_returns_workspace_busy() {
 
 #[tokio::test]
 async fn completed_replay_rejects_malformed_observed_head_sha() {
-    let (_home, state) = make_app_state("replay-home");
+    let (_env, _home, state) = make_app_state("replay-home");
     let (_source, repo_root_id, head_sha) = registered_source(&state, "replay-source");
     let operation_id = "workspace-replay-sha";
     let branch = "feature/replay-sha";

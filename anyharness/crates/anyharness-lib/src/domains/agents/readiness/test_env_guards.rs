@@ -17,7 +17,6 @@
 //! these through `use super::*`.
 
 use std::path::Path;
-use std::sync::Mutex;
 
 pub(super) struct PathEnvGuard {
     original: Option<std::ffi::OsString>,
@@ -43,16 +42,7 @@ impl Drop for PathEnvGuard {
     }
 }
 
-/// Hold the crate-wide env lock for the duration of a test body. Poisoning is
-/// ignored deliberately: a panicking test has already failed, and refusing the
-/// lock afterwards would convert one real failure into a cascade of unrelated
-/// ones.
-pub(super) fn lock_env() -> std::sync::MutexGuard<'static, ()> {
-    crate::app::test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-}
+pub(super) use crate::app::test_support::lock_env;
 
 pub(super) struct EnvVarGuard {
     name: &'static str,

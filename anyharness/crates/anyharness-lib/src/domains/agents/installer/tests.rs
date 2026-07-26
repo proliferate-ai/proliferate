@@ -13,14 +13,8 @@ use super::InstallError;
 /// through the process-global `PATH`, and other suites in this crate narrow
 /// `PATH` to a temp dir for the length of a guard (readiness's
 /// `test_env_guards::PathEnvGuard`), which makes an unlucky interleaving fail
-/// with a bogus "git not found". The crate-wide env mutex is the same lock those
-/// guards take. Poisoning is ignored: a panicking test has already failed.
-fn lock_env() -> std::sync::MutexGuard<'static, ()> {
-    crate::app::test_support::ENV_MUTEX
-        .get_or_init(|| std::sync::Mutex::new(()))
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-}
+/// with a bogus "git not found". This is the crate-wide lock those guards take.
+use crate::app::test_support::lock_env;
 
 #[test]
 fn npm_version_override_rewrites_scoped_and_unscoped_packages() {
