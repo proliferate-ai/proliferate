@@ -25,13 +25,14 @@
 use crate::domains::agents::model::AgentKind;
 use crate::domains::agents::runtime::RuntimeSurface;
 
-/// Whether an artifact the runtime can see is the USER's (on PATH) or OURS
-/// (managed, installed under the runtime home).
+/// The two facts about an agent's present artifacts that the decision needs:
+/// whether one is the USER's (on PATH) or OURS (managed, under the runtime home).
 ///
-/// `"path"` is the source string `readiness` stamps on a PATH-resolved artifact;
-/// `"managed"` is what the installer stamps. Anything else (an override, an
-/// unknown future source) is treated as not-ours-and-not-PATH: we neither claim
-/// it nor protect it, and the drift planner's own idempotent checks govern.
+/// Gathered by the caller so this module stays pure. `"path"` is the source
+/// string `readiness` stamps on a PATH-resolved artifact and `"managed"` is what
+/// the installer stamps; anything else (an override, an unknown future source) is
+/// neither, so we make no claim on it — the drift planner's own idempotent checks
+/// govern that case.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AgentInstallFacts {
     /// Any artifact for this agent resolves to a binary on the user's PATH.
@@ -40,8 +41,12 @@ pub struct AgentInstallFacts {
     pub has_managed_artifact: bool,
 }
 
-/// Why a pass is not installing an agent — carried so the reconcile result's
-/// `Skipped` message names the actual reason instead of one generic string.
+/// Why a pass is not installing an agent.
+///
+/// An enum rather than a bool-plus-string so the reconcile result's `Skipped`
+/// message names the ACTUAL reason: "you provide this on PATH" and "cursor cannot
+/// work in cloud" are different answers for the user, and the old
+/// `installed_only` boolean collapsed both into one generic skip.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AutoInstallSkip {
     /// The user provides this agent on PATH. A managed install would shadow

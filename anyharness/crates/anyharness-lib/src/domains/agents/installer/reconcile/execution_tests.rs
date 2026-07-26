@@ -487,3 +487,6 @@ async fn internal_poke_waits_for_compatible_job_then_runs_a_fresh_pass_on_active
 
     let _ = std::fs::remove_dir_all(home);
 }
+
+#[path = "surface_threading_tests.rs"]
+mod surface_threading;

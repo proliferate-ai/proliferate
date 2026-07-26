@@ -322,7 +322,7 @@ impl AgentRuntime {
     /// converging it.
     ///
     /// The two carve-outs the law names are NOT dropped with the flag; they move
-    /// into `auto_install_decision` (installer/install_policy.rs) where they are a
+    /// into `auto_install_decision` (installer/auto_install.rs) where they are a
     /// tested predicate rather than a side effect of a boolean.
     pub async fn reconcile_when_idle(&self) {
         loop {
@@ -376,10 +376,6 @@ impl AgentRuntime {
             }
             self.reconcile_when_idle().await;
         });
-    }
-
-    pub(crate) fn surface(&self) -> RuntimeSurface {
-        self.surface
     }
 }
 
