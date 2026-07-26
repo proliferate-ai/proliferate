@@ -14,7 +14,7 @@ import {
 } from "@proliferate/ui/icons";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
-import { ShortcutBadge } from "@proliferate/ui/layout/ShortcutBadge";
+import { ShortcutBadge } from "@proliferate/ui/patterns/ShortcutBadge";
 import { useWorkspaceSidebarNativeContextMenu } from "#product/hooks/workspaces/ui/use-workspace-sidebar-native-context-menu";
 import { getShortcutDisplayLabel } from "#product/lib/domain/shortcuts/matching";
 import type {

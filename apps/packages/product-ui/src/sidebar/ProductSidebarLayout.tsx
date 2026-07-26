@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
+import { AutoHideScrollArea } from "@proliferate/ui/patterns/AutoHideScrollArea";
 
 export function ProductSidebarFrame({
   children,

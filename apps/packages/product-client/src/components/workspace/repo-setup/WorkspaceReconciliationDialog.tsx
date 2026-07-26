@@ -8,7 +8,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@proliferate/ui/kit/AlertDialog";
+} from "@proliferate/ui/primitives/AlertDialog";
 import { WorkspaceReconciliationBody } from "@proliferate/product-ui/workspaces/WorkspaceReconciliationBody";
 import {
   resolveWorkspaceGitReconciliation,

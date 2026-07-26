@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
+import { AutoHideScrollArea } from "@proliferate/ui/patterns/AutoHideScrollArea";
 import { Button } from "@proliferate/ui/primitives/Button";
 import {
   SETTINGS_DEFAULT_SECTION,

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
+import { ConfirmationDialog } from "@proliferate/ui/patterns/ConfirmationDialog";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Check } from "@proliferate/ui/icons";
 import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";

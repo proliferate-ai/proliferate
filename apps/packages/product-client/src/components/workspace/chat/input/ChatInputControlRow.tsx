@@ -12,7 +12,7 @@ import {
 } from "#product/lib/domain/chat/session-controls/composer-control-groups";
 import { ChatComposerControlRowFrame } from "@proliferate/product-ui/chat/composer/ChatComposerControlRowFrame";
 import { Plus, Target } from "@proliferate/ui/icons";
-import { ComposerControlButton } from "@proliferate/ui/primitives/ComposerControlButton";
+import { ComposerControlButton } from "@proliferate/ui/patterns/ComposerControlButton";
 import { deriveGoalBarState } from "@proliferate/product-domain/activity/goal";
 import { useSessionGoal } from "#product/hooks/activity/derived/use-session-goal";
 import { useGoalBarStore } from "#product/stores/activity/goal-bar-store";

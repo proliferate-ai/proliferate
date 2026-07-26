@@ -1,4 +1,4 @@
-import { EmptyState } from "@proliferate/ui/layout/EmptyState";
+import { EmptyState } from "@proliferate/ui/patterns/EmptyState";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ProductPageShell } from "@proliferate/product-ui/layout/ProductPageShell";
 

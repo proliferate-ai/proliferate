@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
+import { AutoHideScrollArea } from "@proliferate/ui/patterns/AutoHideScrollArea";
 import { ExternalLink, MessageSquare } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { MarkdownBody } from "@proliferate/product-ui/chat/transcript/MarkdownBody";

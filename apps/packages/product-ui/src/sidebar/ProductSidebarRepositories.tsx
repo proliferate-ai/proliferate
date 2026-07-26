@@ -1,7 +1,7 @@
 import type { HTMLAttributes, ReactNode } from "react";
 
-import { ShortcutBadge } from "@proliferate/ui/layout/ShortcutBadge";
-import { SidebarRowSurface } from "@proliferate/ui/layout/SidebarRowSurface";
+import { ShortcutBadge } from "@proliferate/ui/patterns/ShortcutBadge";
+import { SidebarRowSurface } from "@proliferate/ui/patterns/SidebarRowSurface";
 import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
 
 import { PrStatusIconOverlay, type PrStatusView } from "../workspaces/PrStatusBadge";

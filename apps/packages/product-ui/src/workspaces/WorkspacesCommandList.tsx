@@ -30,7 +30,7 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-} from "@proliferate/ui/kit/Command";
+} from "@proliferate/ui/primitives/Command";
 
 import { PrStatusDot, type PrStatusView } from "./PrStatusBadge";
 

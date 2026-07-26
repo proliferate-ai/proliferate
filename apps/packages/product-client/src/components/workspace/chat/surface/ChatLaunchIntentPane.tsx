@@ -1,4 +1,4 @@
-import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
+import { AutoHideScrollArea } from "@proliferate/ui/patterns/AutoHideScrollArea";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ArrowLeft, RefreshCw } from "@proliferate/ui/icons";
 import { UserMessage } from "#product/components/workspace/chat/transcript/UserMessage";

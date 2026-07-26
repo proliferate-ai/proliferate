@@ -35,7 +35,7 @@ import {
   type ComposerEditorContext,
 } from "#product/components/workspace/chat/input/ComposerRichTextEditor";
 import type { ChatComposerKeyboardEvent } from "#product/hooks/chat/ui/use-chat-composer-keyboard";
-import { ComposerTextareaFrame, type ComposerTextareaFrameTopInset } from "@proliferate/ui/primitives/ComposerTextareaFrame";
+import { ComposerTextareaFrame, type ComposerTextareaFrameTopInset } from "@proliferate/ui/patterns/ComposerTextareaFrame";
 
 interface ComposerCommandEditorProps {
   draft: ChatComposerDraft;

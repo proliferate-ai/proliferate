@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { AgentApiKey } from "@proliferate/cloud-sdk";
 import { useCreateAgentApiKey } from "@proliferate/cloud-sdk-react";
-import { EnvironmentSearchSelect } from "@proliferate/ui/primitives/EnvironmentSearchSelect";
+import { EnvironmentSearchSelect } from "@proliferate/ui/patterns/EnvironmentSearchSelect";
 import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
 import { useToastStore } from "#product/stores/toast/toast-store";
 import { ApiKeyCreatorModal } from "#product/components/settings/panes/agent-auth/ApiKeyCreatorModal";

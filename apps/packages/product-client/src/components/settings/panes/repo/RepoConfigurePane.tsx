@@ -9,7 +9,7 @@ import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSectio
 import {
   EnvironmentSearchSelect,
   type EnvironmentSearchSelectOption,
-} from "@proliferate/ui/primitives/EnvironmentSearchSelect";
+} from "@proliferate/ui/patterns/EnvironmentSearchSelect";
 import { useCloudRepoEnvironmentEditor } from "#product/hooks/settings/workflows/use-cloud-repo-environment-editor";
 import { useRepositorySettings } from "#product/hooks/settings/workflows/use-repository-settings";
 import { type SettingsRepositoryEntry } from "#product/lib/domain/settings/repositories";

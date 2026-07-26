@@ -4,7 +4,7 @@ import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPag
 import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
 import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
 import { Badge } from "@proliferate/ui/primitives/Badge";
-import { ProviderIcon } from "@proliferate/ui/provider-icons";
+import { ProviderIcon } from "@proliferate/ui/icons/provider-icons";
 import { CloudGuard } from "#product/components/cloud/CloudGuard";
 import { useAgentCatalog } from "#product/hooks/agents/derived/use-agent-catalog";
 import { getProviderDisplayName } from "#product/lib/domain/agents/provider-display";

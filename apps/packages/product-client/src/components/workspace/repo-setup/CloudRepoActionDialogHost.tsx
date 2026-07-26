@@ -22,7 +22,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-} from "@proliferate/ui/kit/Dialog";
+} from "@proliferate/ui/primitives/Dialog";
 import { CloudRepoPickerBlocker } from "@proliferate/product-ui/repos/CloudRepoPickerBlocker";
 import type { CloudRepoPickerBlockerView } from "@proliferate/product-ui/repos/CloudRepoPicker";
 import { describeReadinessBlocker } from "#product/lib/domain/workspaces/cloud/describe-readiness-blocker";
