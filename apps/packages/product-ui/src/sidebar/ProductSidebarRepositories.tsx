@@ -205,9 +205,13 @@ export function ProductSidebarWorkspaceRow({
                 {trailingStatus}
               </div>
             ) : unreadDot ? (
+              // Same fixed 20px cell as the activity indicators (which sit
+              // justify-end + centered in their own min-w-5 box): the dot's
+              // center lands 10px from the right edge, exactly where the
+              // spinner/error badge centers land, instead of hugging the edge.
               <Tooltip
                 content="Unseen activity"
-                className={`col-start-1 row-start-1 flex h-5 items-center justify-end transition-opacity duration-hover ${shortcutLabel && shortcutRevealVisible
+                className={`col-start-1 row-start-1 flex h-5 w-5 items-center justify-center justify-self-end transition-opacity duration-hover ${shortcutLabel && shortcutRevealVisible
                     ? "opacity-0"
                     : "group-hover:opacity-0 group-focus-within:opacity-0"
                   }`}
