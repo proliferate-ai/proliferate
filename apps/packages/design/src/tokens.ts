@@ -863,9 +863,9 @@ export const themeTokens = {
     provenance: "[RETUNE:state/overlay]",
   },
   "--color-sidebar": {
-    dark: "#1d1d1d",
+    dark: "#141414",
     light: "var(--color-surface-under)",
-    provenance: "[SHIPPED]",
+    provenance: "[RETUNE:sidebar/surface-recess]",
   },
   "--color-sidebar-accent": {
     dark: "var(--color-hover) /* legacy-alias */",
