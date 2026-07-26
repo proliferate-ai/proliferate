@@ -111,6 +111,7 @@ agents::close_agent_login_terminal workspace-scoped agent auth flow
 agent_auth::put_agent_auth_state workspace-scoped agent auth state
 agent_auth::delete_agent_auth_state workspace-scoped agent auth state removal
 agent_gateway_catalog::refresh_gateway_models workspace-scoped catalog refresh
+agent_model_snapshot::refresh_model_snapshot workspace-scoped model-snapshot re-probe; spawns a throwaway harness in an isolated scratch and writes a derived document, never touching a session
 http_auth::push_revoked_jtis workspace-scoped auth revocation push
 
 # ── workflow-plane (the controller side itself, not a foreign mutation) ──

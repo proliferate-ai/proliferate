@@ -26,7 +26,10 @@
 //! 4. per-harness serialization plus a machine-wide semaphore of 1, because every
 //!    probe is a real harness process.
 
+pub mod config;
 pub mod document;
+mod entry;
+mod reads;
 pub mod fingerprint;
 pub mod lock;
 pub mod probe;
@@ -46,132 +49,17 @@ pub(crate) mod test_support;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 
 use crate::domains::agents::route_auth::{self, GatewayModelResolve, RouteAuthError};
 
-use document::{
-    install_identity_of, read_document, write_entry, AttemptOutcome, ModelSnapshotDocument,
-    SnapshotAttempt, SnapshotAttestation, SnapshotEntry, SnapshotMode, SnapshotModel,
-    SnapshotObservedDefaults,
-};
-use probe::{ProbeError, ProbeRequest, ProbeRunner};
+pub use config::{PokeReason, ProbeEngineConfig, ProbeEngineMode, RefreshError};
+use document::{install_identity_of, write_entry, AttemptOutcome, SnapshotAttempt, SnapshotEntry};
+use entry::entry_from_snapshot;
+use probe::{ProbeRequest, ProbeRunner};
 use staleness::Freshness;
 use targets::ProbeTargets;
-
-/// Why a poke fired. Diagnostics only — the gate, never the reason, decides
-/// whether a probe happens. That is precisely what makes invalidation "exactly as
-/// wide as the change" instead of as wide as the trigger.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PokeReason {
-    Startup,
-    InstallCompleted,
-    AuthApplied,
-    AuthCleared,
-    SessionLaunch,
-    Manual,
-}
-
-impl PokeReason {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Startup => "startup",
-            Self::InstallCompleted => "install_completed",
-            Self::AuthApplied => "auth_applied",
-            Self::AuthCleared => "auth_cleared",
-            Self::SessionLaunch => "session_launch",
-            Self::Manual => "manual",
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct ProbeEngineConfig {
-    /// Hard bound on one attempt. `probe_agent` carries none of its own.
-    pub per_probe_timeout: Duration,
-    /// Documents intent only: the field it feeds is never read by
-    /// `run_enumeration` today.
-    pub model_switch_timeout: Duration,
-    /// The anti-storm floor: an attempt that COMPLETED (either outcome) inside
-    /// this window is never retried by an automatic poke.
-    pub min_reprobe_interval: Duration,
-    pub ttl_base: Duration,
-    pub ttl_jitter_span: Duration,
-    /// First failure waits this long; each subsequent failure doubles it.
-    pub backoff_base: Duration,
-    pub backoff_max: Duration,
-    /// Machine-wide concurrent probes. 1 by default: each probe spawns a real
-    /// harness process, far heavier than the `gh` calls `pr_status_cache` caps
-    /// at 2.
-    pub max_concurrent_probes: usize,
-    /// How long an orphan scratch must be untouched before the sweep may remove
-    /// it, expressed as a multiple of `per_probe_timeout`.
-    pub sweep_age_multiplier: u32,
-}
-
-impl Default for ProbeEngineConfig {
-    fn default() -> Self {
-        Self {
-            per_probe_timeout: Duration::from_secs(240),
-            model_switch_timeout: Duration::from_secs(10),
-            min_reprobe_interval: Duration::from_secs(60),
-            ttl_base: staleness::DEFAULT_TTL_BASE,
-            ttl_jitter_span: staleness::DEFAULT_TTL_JITTER_SPAN,
-            backoff_base: Duration::from_secs(60),
-            backoff_max: Duration::from_secs(6 * 60 * 60),
-            max_concurrent_probes: 1,
-            sweep_age_multiplier: 3,
-        }
-    }
-}
-
-/// Whether this runtime owns the probe engine for its home.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ProbeEngineMode {
-    Owner,
-    ReadOnly,
-}
-
-impl ProbeEngineMode {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Owner => "owner",
-            Self::ReadOnly => "readonly",
-        }
-    }
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum RefreshError {
-    #[error("this runtime does not own the probe engine for its runtime home")]
-    NotOwner,
-    #[error("the probe could not be prepared: {0}")]
-    Material(#[from] RouteAuthError),
-    #[error("no active auth context '{auth_context_id}' for harness '{harness_kind}'")]
-    UnknownContext {
-        harness_kind: String,
-        auth_context_id: String,
-    },
-    #[error("harness '{0}' is not installed")]
-    NotInstalled(String),
-    #[error(transparent)]
-    Probe(#[from] ProbeError),
-}
-
-impl RefreshError {
-    /// The stable machine code the transport layer surfaces.
-    pub fn code(&self) -> &'static str {
-        match self {
-            Self::NotOwner => "PROBE_ENGINE_NOT_OWNER",
-            Self::Material(_) => "MODEL_SNAPSHOT_MATERIAL_FAILED",
-            Self::UnknownContext { .. } => "MODEL_SNAPSHOT_UNKNOWN_CONTEXT",
-            Self::NotInstalled(_) => "MODEL_SNAPSHOT_NOT_INSTALLED",
-            Self::Probe(_) => "MODEL_SNAPSHOT_PROBE_FAILED",
-        }
-    }
-}
 
 /// The engine's live, in-memory view of one (harness, context).
 ///
@@ -650,182 +538,4 @@ impl ModelSnapshotService {
             .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(())))
             .clone()
     }
-
-    // -----------------------------------------------------------------------
-    // Reads. Available in read-only mode too — serving is not probing.
-    // -----------------------------------------------------------------------
-
-    pub fn document(&self, harness_kind: &str) -> Option<ModelSnapshotDocument> {
-        read_document(&self.runtime_home, harness_kind)
-    }
-
-    pub fn entry(&self, harness_kind: &str, auth_context_id: &str) -> Option<SnapshotEntry> {
-        self.document(harness_kind)?
-            .entries
-            .get(auth_context_id)
-            .cloned()
-    }
-
-    /// The polled status surface for one harness (model-catalog.md, "Runtime
-    /// routes"). `state` and the engine mode are live in-memory facts; everything
-    /// else is read off the document, so a restart shows correct history with
-    /// `state: "idle"`.
-    pub fn status(&self, harness_kind: &str, now: DateTime<Utc>) -> status::ModelSnapshotStatus {
-        let document = self.document(harness_kind);
-        let identity = install_identity_of(&self.runtime_home, harness_kind);
-        let active = self.targets.active_contexts(harness_kind);
-        let catalog_contexts = self.targets.catalog_contexts(harness_kind);
-        // Every context the user could care about: the active ones plus any the
-        // document already carries (a context that just went inactive still has an
-        // observation worth showing, with `active: false`).
-        let mut context_ids: Vec<String> = active.clone();
-        if let Some(document) = document.as_ref() {
-            for id in document.entries.keys() {
-                if !context_ids.contains(id) {
-                    context_ids.push(id.clone());
-                }
-            }
-        }
-
-        let contexts = context_ids
-            .into_iter()
-            .map(|auth_context_id| {
-                let entry = document
-                    .as_ref()
-                    .and_then(|document| document.entries.get(&auth_context_id).cloned());
-                let live = self.live_state(harness_kind, &auth_context_id, now);
-                let fingerprint = route_auth::probe_auth_material(
-                    &self.runtime_home,
-                    harness_kind,
-                    &auth_context_id,
-                    &catalog_contexts,
-                )
-                .ok()
-                .map(|material| fingerprint::fingerprint(&material));
-                status::context_status(status::ContextStatusInputs {
-                    auth_context_id: auth_context_id.clone(),
-                    active: active.contains(&auth_context_id),
-                    entry,
-                    current_identity: identity.clone(),
-                    current_fingerprint: fingerprint,
-                    now,
-                    ttl: staleness::ttl_for_entry_with(
-                        harness_kind,
-                        &auth_context_id,
-                        self.config.ttl_base,
-                        self.config.ttl_jitter_span,
-                    ),
-                    live_state: live.0,
-                    next_attempt_at: live.1,
-                })
-            })
-            .collect();
-
-        status::ModelSnapshotStatus {
-            agent: harness_kind.to_string(),
-            schema_version: document::MODEL_SNAPSHOT_SCHEMA_VERSION,
-            probe_engine: self.mode(),
-            install_identity: identity,
-            contexts,
-        }
-    }
-
-    /// A slot the engine has never touched reports idle, which is honest: nothing
-    /// is running and nothing is scheduled.
-    fn live_state(
-        &self,
-        harness_kind: &str,
-        auth_context_id: &str,
-        now: DateTime<Utc>,
-    ) -> (status::LiveState, Option<DateTime<Utc>>) {
-        let slots = self.slots.lock().expect("model snapshot slots poisoned");
-        let Some(slot) = slots.get(&(harness_kind.to_string(), auth_context_id.to_string())) else {
-            return (status::LiveState::Idle, None);
-        };
-        let state = slot.state.lock().expect("model snapshot slot poisoned");
-        if state.running {
-            return (status::LiveState::Running, None);
-        }
-        match state.next_attempt_at {
-            Some(next) if next > now => (status::LiveState::Backoff, Some(next)),
-            _ => (status::LiveState::Idle, None),
-        }
-    }
 }
-
-/// Project a raw `ProbeSnapshot` into the document's entry shape.
-///
-/// `probedAt` is the engine's own `now` rather than the snapshot's string: one
-/// clock for the entry, the gate and the status age, so an age can never come out
-/// negative because two clocks disagreed.
-fn entry_from_snapshot(
-    snapshot: crate::live::sessions::probe::ProbeSnapshot,
-    fingerprint: String,
-    install_identity: Option<document::InstallIdentity>,
-    now: DateTime<Utc>,
-) -> SnapshotEntry {
-    let at = now.to_rfc3339();
-    SnapshotEntry {
-        probed_at: at.clone(),
-        mechanism: "acp".to_string(),
-        attestation: snapshot.attestation.map(|attestation| SnapshotAttestation {
-            name: attestation.name,
-            version: attestation.version,
-            title: attestation.title,
-        }),
-        install_identity,
-        auth_fingerprint: fingerprint,
-        models: snapshot
-            .models
-            .into_iter()
-            .map(|model| SnapshotModel {
-                // Preserved verbatim when the harness namespaces its ids
-                // (opencode's `provider/model`); absent otherwise rather than
-                // guessed — the frontend must never infer origin from a name.
-                provider: model
-                    .model_id
-                    .split_once('/')
-                    .map(|(provider, _)| provider.to_string()),
-                id: model.model_id,
-                name: model.name,
-                description: model.description,
-                config_options: model.config_options,
-            })
-            .collect(),
-        modes: modes_from_value(&snapshot.modes),
-        observed_defaults: Some(SnapshotObservedDefaults {
-            model_id: snapshot.current_model_id,
-            mode_id: snapshot.current_mode_id,
-        }),
-        warnings: snapshot.warnings,
-        last_attempt: SnapshotAttempt {
-            at,
-            outcome: AttemptOutcome::Ok,
-            detail: None,
-        },
-    }
-}
-
-/// `ProbeSnapshot.modes` is the raw ACP `modes` block. Pull the `(id, name)` pairs
-/// out tolerantly: a harness that reports an unexpected shape yields no modes
-/// rather than failing the whole observation.
-fn modes_from_value(modes: &serde_json::Value) -> Vec<SnapshotMode> {
-    let Some(available) = modes.get("availableModes").and_then(|value| value.as_array()) else {
-        return Vec::new();
-    };
-    available
-        .iter()
-        .filter_map(|mode| {
-            let id = mode.get("id").and_then(|value| value.as_str())?;
-            let name = mode
-                .get("name")
-                .and_then(|value| value.as_str())
-                .unwrap_or(id);
-            Some(SnapshotMode {
-                id: id.to_string(),
-                name: name.to_string(),
-            })
-        })
-        .collect()
-}
-
