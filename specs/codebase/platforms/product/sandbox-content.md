@@ -473,14 +473,6 @@ apps/packages/product-client/src/
 
 Deltas between this document and `main`, each struck by its follow-up PR:
 
-- [ ] Callers supply `target_path`: it is a required contract field (an
-      omitted path is a 400), the cloud server invents
-      `/home/user/workspace/worktrees/<owner>/<repo>/<branch>-<id8>`
-      ([provisioning.py](../../../../server/proliferate/server/cloud/workspaces/provisioning.py)),
-      and one unit test pins the literal string. Make the field optional
-      with a runtime default-placement branch (the workflow-placement
-      pattern); nothing downstream depends on the path — the server keeps
-      only workspace and repo-root ids after creation.
 - [ ] The managed-root fence excludes every cloud worktree:
       `ANYHARNESS_WORKTREES_ROOT` is never set in the cloud launch env
       ([bootstrap.py](../../../../server/proliferate/server/cloud/runtime/bootstrap.py)),

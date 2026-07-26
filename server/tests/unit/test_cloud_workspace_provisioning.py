@@ -81,7 +81,7 @@ async def test_resolve_repo_root_preserves_cloud_error_translation(
 
 
 @pytest.mark.asyncio
-async def test_create_worktree_preserves_target_and_origin_contract(
+async def test_create_worktree_omits_target_and_preserves_origin_contract(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     expected = ResolvedRemoteWorkspace(workspace_id="workspace", repo_root_id="root")
@@ -107,9 +107,7 @@ async def test_create_worktree_preserves_target_and_origin_contract(
     )
 
     assert actual is expected
-    assert received["target_path"] == (
-        "/home/user/workspace/worktrees/owner/repo/feature-test-branch-12345678"
-    )
+    assert "target_path" not in received
     assert received["new_branch_name"] == "feature/test branch"
     assert received["base_branch"] == "main"
     assert received["setup_script"] is None

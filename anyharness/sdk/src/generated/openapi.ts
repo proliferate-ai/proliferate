@@ -2620,7 +2620,7 @@ export interface components {
             origin?: null | components["schemas"]["OriginContext"];
             repoRootId: string;
             setupScript?: string | null;
-            targetPath: string;
+            targetPath?: string | null;
         };
         CreateWorktreeWorkspaceResponse: {
             baseFetch?: null | components["schemas"]["WorktreeBaseFetch"];

@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::time::Instant;
 
 use anyharness_contract::v1::{
@@ -43,8 +44,21 @@ pub async fn create_worktree(
     async move {
         let started = Instant::now();
         let repo_root_id = req.repo_root_id;
-        let target_path = req.target_path;
         let new_branch_name = req.new_branch_name;
+        let uses_managed_default = req.target_path.is_none();
+        let target_path = match req.target_path {
+            Some(target_path) => target_path,
+            None => state
+                .workspace_runtime
+                .default_worktree_destination_path(&repo_root_id, &new_branch_name)
+                .map_err(|error| {
+                    ApiError::internal(format!(
+                        "failed to resolve managed worktree destination: {error}"
+                    ))
+                })?
+                .to_string_lossy()
+                .to_string(),
+        };
         let checkout_mode = req
             .checkout_mode
             .map(worktree_checkout_mode_from_contract)
@@ -74,6 +88,17 @@ pub async fn create_worktree(
             .workspace_access_gate
             .assert_can_mutate_for_repo_root(&repo_root_id)
             .map_err(map_access_error)?;
+
+        if uses_managed_default {
+            let parent = Path::new(&target_path).parent().ok_or_else(|| {
+                ApiError::internal("managed worktree destination has no parent".to_string())
+            })?;
+            tokio::fs::create_dir_all(parent).await.map_err(|error| {
+                ApiError::internal(format!(
+                    "failed to create managed worktree destination parent: {error}"
+                ))
+            })?;
+        }
 
         let result = state
             .workspace_worktree_runtime
