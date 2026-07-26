@@ -538,43 +538,73 @@ async function litellmAdminGet(ssh: SshTransport, path: string): Promise<unknown
 export const PERSONAL_ENROLLMENT_KEY_ALIAS_PREFIX = "vk-user-";
 
 /**
- * Pure selection of the PERSONAL-enrollment virtual key token from a LiteLLM
- * user's keys. The self-host agent-auth state renders the gateway source from
- * the USER enrollment (`get_enrollment_for_user` filters `subject_kind=user`,
- * db/store/agent_gateway/enrollments.py), whose key alias is `vk-user-<uuid>-…`
- * (`enrollment.py` `_key_alias` with `subject_label="user-<uuid>"`). A member
- * who ALSO holds an org enrollment carries a second key under the SAME LiteLLM
- * user (`user-<uuid>`) aliased `vk-org-…`; that key is never the one the turn
- * rides, so returning it would break the spend correlation. Prefer the
- * personal-alias key; fall back to the first token only when no alias is present
- * (older mints), so a single-key actor still resolves.
+ * Pure selection of the PERSONAL-enrollment, PER-HARNESS virtual key token
+ * from a LiteLLM user's keys. The self-host agent-auth state renders the
+ * gateway source from the USER enrollment (`get_enrollment_for_user` filters
+ * `subject_kind=user`, db/store/agent_gateway/enrollments.py), whose
+ * per-harness key aliases are `vk-user-<uuid>-<harness_kind>-…` (R2,
+ * `enrollment.py` `_key_alias` with `subject_label="user-<uuid>"`). A member
+ * who ALSO holds an org enrollment carries a SECOND family of keys under the
+ * SAME LiteLLM user (`user-<uuid>`) aliased `vk-org-…-<harness_kind>-…`; those
+ * are never the ones a personal-route turn rides, so returning one would break
+ * spend correlation. A user also carries one personal key PER HARNESS (claude,
+ * codex, opencode, grok), so the exact harness segment must be matched too, not
+ * merely the `vk-user-` prefix — matching only the prefix would pick an
+ * arbitrary sibling harness's key. Prefer the exact personal+harness alias;
+ * fall back to the first token only when no alias is present at all (older
+ * pre-B2 single-key mints), so a single-key actor still resolves.
  */
 export function selectPersonalEnrollmentKeyToken(
   keys: ReadonlyArray<{ token?: string | null; key_alias?: string | null }>,
+  harnessKind: string,
 ): string | undefined {
+  const expectedPrefix = `${PERSONAL_ENROLLMENT_KEY_ALIAS_PREFIX}`;
+  const harnessSuffix = `-${harnessKind}-`;
   const personal = keys.find(
-    (key) => Boolean(key.token) && (key.key_alias ?? "").startsWith(PERSONAL_ENROLLMENT_KEY_ALIAS_PREFIX),
+    (key) =>
+      Boolean(key.token) &&
+      (key.key_alias ?? "").startsWith(expectedPrefix) &&
+      (key.key_alias ?? "").includes(harnessSuffix),
   );
   if (personal?.token) {
     return personal.token;
   }
-  return keys.map((key) => key.token).find((value): value is string => Boolean(value));
+  // No exact per-harness personal alias matched. Fall back to ANY personal
+  // (`vk-user-`) alias regardless of harness segment, then to the first token
+  // when no alias is present at all (pre-B2 single-key mints) — never fall
+  // back into a `vk-org-` key, which would break spend correlation.
+  const anyPersonal = keys.find(
+    (key) => Boolean(key.token) && (key.key_alias ?? "").startsWith(expectedPrefix),
+  );
+  if (anyPersonal?.token) {
+    return anyPersonal.token;
+  }
+  return keys
+    .filter((key) => !(key.key_alias ?? "").startsWith("vk-org-"))
+    .map((key) => key.token)
+    .find((value): value is string => Boolean(value));
 }
 
 /**
- * Resolves the enrolled actor's PERSONAL virtual-key token id on the instance
- * LiteLLM (`/user/info?user_id=user-<uuid>` — the enrollment mints keys under
- * litellm user id `user-<uuid>`, see `enrollment.py`). Returns the token id
- * (`api_key` in spend rows) of the personal enrollment's key (the one the
- * gateway agent-auth state actually rendered), preferring it over any
- * co-located org-enrollment key. Throws if the actor has no minted key.
+ * Resolves the enrolled actor's PERSONAL, PER-HARNESS virtual-key token id on
+ * the instance LiteLLM (`/user/info?user_id=user-<uuid>` — the enrollment
+ * mints keys under litellm user id `user-<uuid>`, see `enrollment.py`).
+ * Returns the token id (`api_key` in spend rows) of the personal
+ * enrollment's key for the exact harness the turn rides (the one the gateway
+ * agent-auth state actually rendered), preferring it over any co-located
+ * org-enrollment key or sibling-harness personal key. Throws if the actor has
+ * no minted key.
  */
-export async function litellmResolveActorKeyToken(ssh: SshTransport, productUserId: string): Promise<string> {
+export async function litellmResolveActorKeyToken(
+  ssh: SshTransport,
+  productUserId: string,
+  harnessKind: string,
+): Promise<string> {
   const info = (await litellmAdminGet(
     ssh,
     `/user/info?user_id=${encodeURIComponent(`user-${productUserId}`)}`,
   )) as { keys?: Array<{ token?: string | null; key_alias?: string | null }> };
-  const token = selectPersonalEnrollmentKeyToken(info.keys ?? []);
+  const token = selectPersonalEnrollmentKeyToken(info.keys ?? [], harnessKind);
   if (!token) {
     throw new Error(
       "SH-GATEWAY: the enrolled actor has no minted virtual key on the instance LiteLLM (lazy signup mint missing).",
