@@ -320,8 +320,12 @@ impl GatewayModelResolver {
         runtime_home: &Path,
     ) -> Option<(String, String)> {
         let state = load_state_file(runtime_home).ok().flatten()?;
+        // Absent harness and present-but-empty are the same answer here: no
+        // gateway credentials to plan with. Fail-closed refusal is the launch
+        // path's job, not the model planner's.
         let source = state
             .sources_for(harness_kind)
+            .unwrap_or_default()
             .iter()
             .find(|source| source.kind == SOURCE_KIND_GATEWAY)?;
         let base_url = source

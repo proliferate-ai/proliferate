@@ -52,13 +52,19 @@ pub enum RouteAuthError {
          the persisted revision {current}"
     )]
     StaleStateRevision { incoming: i64, current: i64 },
+    /// The harness has an entry in the document whose sources could not be
+    /// satisfied — a selection the machine cannot honor. Constructed by
+    /// [`resolve_profile`] and refused at both create and launch, per
+    /// agent-auth.md's "present-but-empty fails closed".
+    ///
+    /// `SelectionConflict` used to sit beside this, for "N entries where one is
+    /// allowed". It is deleted rather than wired: source cardinality is a
+    /// per-harness SERVER rule (`selection_rules.py`) enforced before a document
+    /// is ever written, and the document's shape — one entry per harness with a
+    /// flat source list — cannot represent the conflict it described. There was
+    /// no input a correct runtime could construct it from.
     #[error("no agent-auth route selection for harness '{harness_kind}' at revision {revision}")]
     SelectionMissing { harness_kind: String, revision: i64 },
-    #[error(
-        "conflicting agent-auth selections for harness '{harness_kind}': \
-         {count} entries where one is allowed"
-    )]
-    SelectionConflict { harness_kind: String, count: usize },
     #[error("agent-auth source for '{harness_kind}' is incomplete: {detail}")]
     SelectionIncomplete { harness_kind: String, detail: String },
     #[error("agent-auth route for '{harness_kind}' is unsupported: {detail}")]
@@ -80,7 +86,6 @@ impl RouteAuthError {
             Self::MalformedStateFile { .. } => "AGENT_ROUTE_STATE_MALFORMED",
             Self::StaleStateRevision { .. } => "AGENT_ROUTE_STATE_STALE",
             Self::SelectionMissing { .. } => "AGENT_ROUTE_SELECTION_MISSING",
-            Self::SelectionConflict { .. } => "AGENT_ROUTE_SELECTION_CONFLICT",
             Self::SelectionIncomplete { .. } => "AGENT_ROUTE_SELECTION_INCOMPLETE",
             Self::UnsupportedRoute { .. } => "AGENT_ROUTE_UNSUPPORTED",
             Self::UnknownHarness { .. } => "AGENT_ROUTE_UNKNOWN_HARNESS",
@@ -219,4 +224,45 @@ fn launch_route_provides_credentials_for_server(
         resolve_profile(state.as_ref(), harness_kind),
         Ok(AgentRuntimeAuthProfile::Sources(_))
     )
+}
+
+/// Is `harness_kind`'s enrolled selection unsatisfiable right now?
+///
+/// `Some(error)` exactly when [`resolve_profile`] fails closed — the harness has
+/// an entry in the document whose sources the renderer could not satisfy
+/// (agent-auth.md: "present-but-empty fails closed"). `None` for native, for a
+/// usable route, and for any state the launcher itself tolerates.
+///
+/// Session create calls this so the refusal is a **typed 409 naming the auth
+/// problem** rather than the generic "agent is not ready" the readiness gate
+/// would otherwise produce. Both refuse the launch; only this one tells the user
+/// their selected route is dead instead of implying their CLI needs installing.
+/// The launch path (`start_live_session`) reaches the same conclusion through
+/// `resolve_launch_route_auth`, so a session that slips past create is still
+/// refused — this is the earlier, better-labelled gate, never the only one.
+pub fn launch_route_selection_failure(
+    runtime_home: &Path,
+    harness_kind: &str,
+) -> Option<RouteAuthError> {
+    launch_route_selection_failure_for_server(
+        runtime_home,
+        harness_kind,
+        current_server_origin().as_deref(),
+    )
+}
+
+fn launch_route_selection_failure_for_server(
+    runtime_home: &Path,
+    harness_kind: &str,
+    current_server_origin: Option<&str>,
+) -> Option<RouteAuthError> {
+    // A state file the launcher tolerates must not be turned into a create-time
+    // rejection here: an unreadable/origin-mismatched document is "no route",
+    // and native readiness governs (identical policy to
+    // `launch_route_provides_credentials_for_server`).
+    let state = load_effective_state(runtime_home, current_server_origin).ok()?;
+    match resolve_profile(state.as_ref(), harness_kind) {
+        Ok(_) => None,
+        Err(error) => Some(error),
+    }
 }

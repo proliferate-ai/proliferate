@@ -105,6 +105,25 @@ impl SessionService {
             read_materialized_launch_env(&self.runtime_home, Path::new(&workspace.path))
                 .map_err(CreateSessionError::Internal)?;
         let agent_resolution_started = Instant::now();
+        // Fail closed BEFORE the readiness gate, so an unsatisfiable selection is
+        // reported as the auth problem it is. The readiness gate would also refuse
+        // this launch, but as "agent is not ready" — which reads to a user as "go
+        // install something" when the real answer is "your gateway budget is
+        // exhausted". agent-auth.md: a selection never silently degrades to the
+        // user's personal credentials.
+        if let Some(error) = crate::domains::agents::route_auth::launch_route_selection_failure(
+            &self.runtime_home,
+            agent_kind,
+        ) {
+            tracing::warn!(
+                workspace_id = %workspace_id,
+                agent_kind = %agent_kind,
+                code = error.code(),
+                error = %error,
+                "agent-auth selection is unsatisfiable; refusing session create"
+            );
+            return Err(CreateSessionError::RouteAuth(error));
+        }
         // Launch-time readiness: folds in the enrolled agent-auth route so a
         // gateway/api_key route makes the agent ready exactly as the launcher
         // will inject it (issue #1106) — no workspace-env credential workaround.

@@ -76,6 +76,13 @@ pub enum CreateSessionError {
         agent_kind: String,
         mode_id: String,
     },
+    /// The harness's enrolled agent-auth selection cannot be satisfied
+    /// (agent-auth.md: "present-but-empty fails closed"). Distinct from
+    /// `Invalid`: the agent may be perfectly installed and the user's own login
+    /// may even work — the point is that they SELECTED a route which is now dead,
+    /// and honoring it silently with their personal credentials is the failure
+    /// this refuses. Maps to a 409 carrying route-auth's own code.
+    RouteAuth(crate::domains::agents::route_auth::RouteAuthError),
     Invalid(String),
     Internal(anyhow::Error),
 }

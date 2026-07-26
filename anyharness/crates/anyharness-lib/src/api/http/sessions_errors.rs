@@ -153,7 +153,6 @@ pub(super) fn map_create_session_error(error: CreateAndStartSessionError) -> Api
 pub(super) fn map_route_auth_error(error: &RouteAuthError) -> ApiError {
     match error {
         RouteAuthError::SelectionMissing { .. }
-        | RouteAuthError::SelectionConflict { .. }
         | RouteAuthError::SelectionIncomplete { .. }
         | RouteAuthError::UnsupportedRoute { .. }
         | RouteAuthError::UnknownHarness { .. }
@@ -373,6 +372,28 @@ mod tests {
         })
         .into_response();
         assert_eq!(response.status(), StatusCode::CONFLICT);
+    }
+
+    /// An unsatisfiable agent-auth selection must reach the client as a typed
+    /// **409 naming the auth failure**, not the generic 400 "session create
+    /// failed" the readiness gate would produce. The distinction is the whole
+    /// point: 400 SESSION_CREATE_FAILED reads as "fix your request", while this
+    /// says "the route you selected is dead" — and only that lets the UI send the
+    /// user to the auth pane instead of to an install button.
+    #[test]
+    fn an_unsatisfiable_selection_maps_to_a_typed_conflict() {
+        use crate::domains::agents::route_auth::RouteAuthError;
+
+        let mapped = super::map_create_session_error(CreateAndStartSessionError::RouteAuth(
+            RouteAuthError::SelectionMissing {
+                harness_kind: "claude".to_string(),
+                revision: 42,
+            },
+        ));
+
+        assert_eq!(mapped.status(), StatusCode::CONFLICT);
+        assert_eq!(mapped.code(), Some("AGENT_ROUTE_SELECTION_MISSING"));
+        assert_eq!(mapped.into_response().status(), StatusCode::CONFLICT);
     }
 
     #[test]
