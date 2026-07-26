@@ -509,14 +509,12 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       store method). Add the paired after-commit reclaims and build the
       clone-delete primitive under the same fence discipline as retire.
 - [ ] Git identity is not materialized at all: the only implementation was
-      deleted with its parked domain (#823), the calling stage survives as
-      unimportable dead code
-      ([git_identity.py](../../../../server/proliferate/server/automations/worker/cloud_execution/stages/git_identity.py)),
-      and every user commit today carries git's auto-derived fallback
-      (`user <user@<sandbox-hostname>>`). Reintroduce materialization with
-      the resolution rules above; delete the dead stage and the orphaned
-      `configure_git_identity`/`ensure_repo_checkout` command kinds
-      ([constants/cloud.py](../../../../server/proliferate/constants/cloud.py)).
+      deleted with its parked domain (#823), and every user commit today
+      carries git's auto-derived fallback (`user <user@<sandbox-hostname>>`).
+      Reintroduce materialization with the resolution rules above. (The
+      unimportable calling stage and the orphaned `configure_git_identity`
+      command kind are already deleted; `ensure_repo_checkout` turned out
+      to be live — the automation pipeline enqueues it — and stays.)
 - [ ] No disk axis: the resource-pressure collector measures CPU and memory
       only (no statvfs anywhere in the runtime), the composer card shows
       CPU/memory rows without disk, no threshold notification exists
@@ -538,10 +536,6 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       ([cloud-provisioning-failure.md](../../../developing/operating/cloud-provisioning-failure.md)).
       On binding detach, mark the bound workspaces lost and surface that
       state in the product; the replacement VM starts empty by design.
-- [ ] The `prune_workspace_worktree` cloud command kind is dead — an enum
-      member and DB-constraint slot with no producer, payload, or consumer
-      ([constants/cloud.py](../../../../server/proliferate/constants/cloud.py)).
-      Delete it; the paired retire is the real mechanism.
 - [ ] The clone create/refresh script bypasses AnyHarness's own repo-root
       acquisition (`acquire_repo_root` /
       [clone.rs](../../../../anyharness/crates/anyharness-lib/src/adapters/git/operations/clone.rs)),

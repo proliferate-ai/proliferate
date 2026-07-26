@@ -491,9 +491,3 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       ([failures.py](../../../../server/proliferate/server/cloud/materialization/failures.py)).
       Add disk to the health payload and type the disk-full failure
       (consumer contract in [sandbox-content.md](sandbox-content.md)).
-- [ ] `_runtime_status` in
-      [workspaces/service.py](../../../../server/proliferate/server/cloud/workspaces/service.py)
-      maps sandbox statuses `provisioning` and `stopped` that the enum and
-      check constraint do not allow; the runtime-status shape belongs to
-      [sandbox-access.md](sandbox-access.md), which cross-lists this
-      dead-branch deletion on its fix PR.
