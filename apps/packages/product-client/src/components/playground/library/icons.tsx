@@ -34,7 +34,7 @@ function GlyphCell({ label, children }: { label: string; children: ReactNode }) 
       <span className="flex size-6 items-center justify-center text-foreground [&>svg]:icon-large">
         {children}
       </span>
-      <span className="text-ui-sm text-muted-foreground">{label}</span>
+      <span className="max-w-full truncate text-ui-sm text-muted-foreground">{label}</span>
     </div>
   );
 }
@@ -51,12 +51,19 @@ const ICON_BARREL_ENTRIES = Object.entries(icons).filter(
   ([, value]) => typeof value === "function",
 ) as Array<[string, ComponentType<IconProps>]>;
 
+// Barrel glyphs whose props go beyond IconProps — fixture values so the
+// generic no-props iteration can still render them (PixelAgentSprite hashes
+// its required `seed` string to pick sprite pixels).
+const ICON_FIXTURE_PROPS: Record<string, Record<string, unknown>> = {
+  PixelAgentSprite: { seed: "component-library" },
+};
+
 function IconsBarrelDemo() {
   return (
     <GlyphGrid>
       {ICON_BARREL_ENTRIES.map(([name, Icon]) => (
         <GlyphCell key={name} label={name}>
-          <Icon />
+          <Icon {...ICON_FIXTURE_PROPS[name]} />
         </GlyphCell>
       ))}
     </GlyphGrid>
