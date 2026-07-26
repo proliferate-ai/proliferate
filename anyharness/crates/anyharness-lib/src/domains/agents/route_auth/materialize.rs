@@ -39,6 +39,17 @@ pub(super) const OPENCODE_CONFIG_PREFIX: &str = "opencode-config";
 /// revision-specific content; the launch env vars are authoritative each launch.
 const CLAUDE_CONFIG_DIR_NAME: &str = "claude-config";
 
+/// Isolated CODEX_HOME for a NATIVE codex launch. Stable, not revision-keyed,
+/// for the same reason as `claude-config`: it carries no revision-specific
+/// content (a native launch has no selection to key on) and a revision-keyed dir
+/// would be a GC target for a later ROUTED launch of the same family — which
+/// would pull the config out from under a running native session. It is
+/// re-rendered on every native launch, so it is always current.
+///
+/// This replaces the old `agent-auth/codex-local/`, which was written on every
+/// codex launch regardless of route.
+const CODEX_NATIVE_HOME_DIR_NAME: &str = "codex-native";
+
 /// Config file names written inside the isolated home dirs.
 const CODEX_CONFIG_FILE_NAME: &str = "config.toml";
 pub(super) const OPENCODE_CONFIG_FILE_NAME: &str = "opencode.json";
@@ -56,8 +67,12 @@ pub(super) const OPENCODE_XDG_DATA_SUBDIR: &str = "xdg-data";
 pub enum PathFamily {
     /// Stable (not revision-keyed) CLAUDE_CONFIG_DIR; no content file.
     ClaudeConfig,
-    /// Revision-keyed CODEX_HOME with a `config.toml`.
+    /// Revision-keyed CODEX_HOME with a `config.toml` (a ROUTED codex launch).
     CodexHome,
+    /// Stable (not revision-keyed) CODEX_HOME with a `config.toml`, for a NATIVE
+    /// codex launch. Separate family so it can never be GC'd by a routed
+    /// launch's revision sweep, and so a native and a routed session can coexist.
+    CodexNativeHome,
     /// Revision-keyed OpenCode dir with `opencode.json` + XDG subdirs.
     OpencodeConfig,
     /// Revision-keyed grok HOME; no content file.
@@ -90,6 +105,11 @@ pub(super) fn claude_config_dir_path(runtime_home: &Path) -> PathBuf {
     route_auth_root(runtime_home).join(CLAUDE_CONFIG_DIR_NAME)
 }
 
+/// Pure: the stable native-codex CODEX_HOME path (no I/O).
+pub(super) fn codex_native_home_path(runtime_home: &Path) -> PathBuf {
+    route_auth_root(runtime_home).join(CODEX_NATIVE_HOME_DIR_NAME)
+}
+
 /// Apply one [`FileSpec`]: create the isolated dir (revision-keyed families GC
 /// stale siblings first) and write its config file 0600 where the family has
 /// one. Idempotent per revision.
@@ -104,6 +124,11 @@ pub(super) fn apply_file_spec(
         }
         PathFamily::CodexHome => {
             let dir = prepare_revision_dir(runtime_home, CODEX_HOME_PREFIX, spec.revision)?;
+            write_private_file(&dir.join(CODEX_CONFIG_FILE_NAME), spec_contents(spec)?)?;
+        }
+        PathFamily::CodexNativeHome => {
+            let dir = codex_native_home_path(runtime_home);
+            create_dir(&dir)?;
             write_private_file(&dir.join(CODEX_CONFIG_FILE_NAME), spec_contents(spec)?)?;
         }
         PathFamily::OpencodeConfig => {

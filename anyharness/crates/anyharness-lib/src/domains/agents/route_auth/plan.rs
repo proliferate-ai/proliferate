@@ -22,6 +22,16 @@ pub struct GatewayModelPlan {
     /// The gateway default model id (codex requires it in config.toml). From
     /// `session.defaults["gateway"]`.
     pub default_model: Option<String>,
+    /// The default model id for a NATIVE launch of this harness, i.e. the user's
+    /// own provider login rather than the gateway. Codex needs it in its
+    /// `config.toml` exactly as the gateway route does; the difference is only
+    /// which catalog default it comes from.
+    ///
+    /// Resolved from `session.defaults` in auth-context precedence order
+    /// (`openai-oauth` before `openai-api`), so the model is a catalog fact.
+    /// A Rust constant here would be the model-name-in-code violation this
+    /// field exists to remove.
+    pub native_default_model: Option<String>,
     /// The small/fast sidecar model id (claude only). From
     /// `gatewayPolicy.roles["small_fast"]`.
     pub small_fast_model: Option<String>,

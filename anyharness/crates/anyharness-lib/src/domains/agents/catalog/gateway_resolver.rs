@@ -21,6 +21,43 @@ use crate::domains::agents::route_auth::{load_state_file, GatewayModelPlan, Gate
 /// (matches the `gateway` auth-context id and `defaults["gateway"]`).
 const GATEWAY_CONTEXT_ID: &str = "gateway";
 
+/// Auth-context ids to consult for a NATIVE launch's default model, in
+/// precedence order: an interactive login is the one a native launch most likely
+/// uses, and a raw provider key second. Deliberately excludes `gateway` (that is
+/// `default_model`) and the flag-driven provider contexts (`bedrock`, `azure`),
+/// whose defaults belong to the typed provider-config route rather than to
+/// "the user's own login".
+const NATIVE_CONTEXT_PRECEDENCE: &[&str] = &[
+    "openai-oauth",
+    "openai-api",
+    "anthropic-oauth",
+    "anthropic-api",
+];
+
+/// The default model for a NATIVE launch: the first non-gateway auth context the
+/// catalog declares a default for, in [`NATIVE_CONTEXT_PRECEDENCE`] order.
+///
+/// Pure so the precedence is testable without a catalog service or a database.
+/// A native launch runs on the user's own provider login, so its model must come
+/// from that provider's context default — never from `defaults["gateway"]` (a
+/// gateway-only model id would 404 against the user's own account) and never from
+/// a Rust constant (the catalog owns model names).
+fn native_default_model(defaults: &std::collections::BTreeMap<String, String>) -> Option<String> {
+    NATIVE_CONTEXT_PRECEDENCE
+        .iter()
+        .find_map(|context| defaults.get(*context).cloned())
+        .or_else(|| {
+            // Unknown harness vocabulary: any non-gateway default beats none, so
+            // a newly-added harness's native launch is configured before its
+            // context ids are listed above. BTreeMap ordering makes the pick
+            // deterministic.
+            defaults
+                .iter()
+                .find(|(context, _)| context.as_str() != GATEWAY_CONTEXT_ID)
+                .map(|(_, model)| model.clone())
+        })
+}
+
 /// Where a resolved model list came from — surfaced by the desktop All-Models
 /// tab as the freshness line ("seed" vs "probed <time>").
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -257,7 +294,7 @@ impl GatewayModelResolver {
     fn policy_and_default(
         &self,
         harness_kind: &str,
-    ) -> (AgentCatalogGatewayPolicy, Option<String>) {
+    ) -> (AgentCatalogGatewayPolicy, Option<String>, Option<String>) {
         let active = self.catalog_sync.active();
         let Some(agent) = active
             .document
@@ -265,11 +302,12 @@ impl GatewayModelResolver {
             .iter()
             .find(|agent| agent.kind == harness_kind)
         else {
-            return (AgentCatalogGatewayPolicy::default(), None);
+            return (AgentCatalogGatewayPolicy::default(), None, None);
         };
         let policy = agent.session.gateway_policy.clone().unwrap_or_default();
         let default_model = agent.session.defaults.get(GATEWAY_CONTEXT_ID).cloned();
-        (policy, default_model)
+        let native_default_model = native_default_model(&agent.session.defaults);
+        (policy, default_model, native_default_model)
     }
 
     /// Resolve the plan AND its freshness source (for the desktop All-Models
@@ -279,7 +317,8 @@ impl GatewayModelResolver {
         harness_kind: &str,
         revision: i64,
     ) -> (GatewayModelPlan, GatewayModelSource) {
-        let (policy, default_model) = self.policy_and_default(harness_kind);
+        let (policy, default_model, native_default_model) =
+            self.policy_and_default(harness_kind);
         let small_fast_model = policy.roles.get("small_fast").cloned();
 
         let (raw_models, source) = match self.probe_store.latest(harness_kind, revision) {
@@ -305,6 +344,7 @@ impl GatewayModelResolver {
         (
             GatewayModelPlan {
                 default_model,
+                native_default_model,
                 small_fast_model,
                 models,
             },
@@ -416,6 +456,85 @@ impl GatewayModelResolve for GatewayModelResolver {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn defaults(pairs: &[(&str, &str)]) -> std::collections::BTreeMap<String, String> {
+        pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect()
+    }
+
+    /// The native default must never be the gateway's model: a gateway-only id
+    /// would 404 against the user's own provider account.
+    #[test]
+    fn native_default_never_falls_back_to_the_gateway_model() {
+        assert_eq!(
+            native_default_model(&defaults(&[("gateway", "gpt-5.2")])),
+            None,
+            "a gateway-only catalog must yield no native default at all"
+        );
+    }
+
+    /// codex's real catalog shape, and the precedence it exercises: the OAuth
+    /// context wins over the api-key one, and both win over `gateway`.
+    #[test]
+    fn native_default_follows_context_precedence() {
+        assert_eq!(
+            native_default_model(&defaults(&[
+                ("openai-api", "gpt-5.5"),
+                ("openai-oauth", "gpt-5.5-oauth"),
+                ("bedrock", "openai.gpt-5.5"),
+                ("gateway", "gpt-5.2"),
+            ]))
+            .as_deref(),
+            Some("gpt-5.5-oauth")
+        );
+        // Without the oauth context, the api-key context's default is next.
+        assert_eq!(
+            native_default_model(&defaults(&[
+                ("openai-api", "gpt-5.5"),
+                ("gateway", "gpt-5.2"),
+            ]))
+            .as_deref(),
+            Some("gpt-5.5")
+        );
+    }
+
+    /// A harness whose contexts are not yet in the precedence list still gets a
+    /// native default rather than none — configured-by-default beats
+    /// silently-unconfigured, and the pick is deterministic.
+    #[test]
+    fn native_default_falls_back_to_any_non_gateway_context() {
+        assert_eq!(
+            native_default_model(&defaults(&[
+                ("gateway", "gw-model"),
+                ("zzz-future-context", "future-model"),
+            ]))
+            .as_deref(),
+            Some("future-model")
+        );
+    }
+
+    /// The real bundled catalog must give codex a native default, or the native
+    /// codex recipe silently renders nothing on every machine.
+    #[test]
+    fn the_bundled_catalog_gives_codex_a_native_default() {
+        let document = crate::domains::agents::catalog::bundled::bundled_agent_catalog_document();
+        let codex = document
+            .agents
+            .iter()
+            .find(|agent| agent.kind == "codex")
+            .expect("codex in the bundled catalog");
+
+        let native = native_default_model(&codex.session.defaults)
+            .expect("codex must have a native default model");
+        let gateway = codex.session.defaults.get("gateway").cloned();
+        assert_ne!(
+            Some(native.as_str()),
+            gateway.as_deref(),
+            "the native default must be a distinct catalog value, not the gateway's"
+        );
+    }
 
     #[test]
     fn provider_matcher_covers_known_families() {

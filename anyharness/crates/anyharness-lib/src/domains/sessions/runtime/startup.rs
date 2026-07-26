@@ -362,20 +362,14 @@ impl SessionRuntime {
             );
             StartSessionError::RouteAuth(error)
         })?;
-        // Codex reads authentication from its isolated CODEX_HOME. Pass the
-        // selected direct-route key into that home instead of leaving the key
-        // only in the later route environment layer.
-        let session_launch_env = build_session_launch_env(
-            &resolved_agent,
-            &self.runtime_home,
-            record.requested_model_id.as_deref(),
-            route_auth
-                .set
-                .get("OPENAI_API_KEY")
-                .or_else(|| route_auth.set.get("CODEX_API_KEY"))
-                .map(String::as_str),
-        )
-        .map_err(StartSessionError::Internal)?;
+        // Non-auth launch wiring only. Codex's CODEX_HOME + config.toml now comes
+        // from `route_auth` above (its native recipe for a native launch, its
+        // gateway recipe for a routed one), so this no longer needs the selected
+        // key — the route layer already carries the credential to the harness the
+        // way that harness expects it.
+        let session_launch_env =
+            build_session_launch_env(&resolved_agent, record.requested_model_id.as_deref())
+                .map_err(StartSessionError::Internal)?;
         // Launch-time lazy trigger (spec §2c): if the current revision has no
         // probe row, kick a background probe so the next launch has fresh data.
         // Never blocks this launch — it already used seed data above.

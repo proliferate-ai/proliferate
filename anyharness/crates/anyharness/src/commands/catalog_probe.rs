@@ -307,13 +307,18 @@ fn auth_env_for_context(
                 .with_context(|| format!("failed to copy {source}"))?;
             Ok(env)
         }
-        // Codex against AWS Bedrock: codex has no native Bedrock support and
-        // only speaks the Responses API (wire_api "chat" was removed), so we
-        // point a custom model_provider at Bedrock's OpenAI-compatible
-        // "mantle" surface, which serves /v1/responses for OpenAI models.
-        // Mantle model ids are their own namespace (openai.gpt-oss-120b — no
-        // Bedrock -1:0 suffix); its Anthropic models do not support
-        // /v1/responses and are unreachable from codex.
+        // Codex against AWS Bedrock. NOTE, corrected: codex DOES ship a built-in
+        // `amazon-bedrock` upstream provider, so a Bedrock launch normally needs
+        // only `model_provider = "amazon-bedrock"` and no
+        // `[model_providers.*]` table at all — that is the shape Track D's typed
+        // provider-config route renders.
+        //
+        // The custom provider below is a probe-specific choice, not a statement
+        // about codex's capabilities: this probe enumerates what is reachable
+        // over /v1/responses, and Bedrock's OpenAI-compatible "mantle" surface is
+        // where the OpenAI models live. Mantle model ids are their own namespace
+        // (openai.gpt-oss-120b — no Bedrock -1:0 suffix); its Anthropic models do
+        // not support /v1/responses and are unreachable from codex.
         (AgentKind::Codex, "bedrock") => {
             let token = secrets.require("AWS_BEARER_TOKEN_BEDROCK")?;
             let mut env = isolation_env(auth_context, &[("CODEX_HOME", "codex-home")], isolation_dirs)?;
