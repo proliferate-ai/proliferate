@@ -121,7 +121,7 @@ mark.codex-thread-find-active {
  * NON-THEME STYLES
  * ======================================================================== */
 
-/* Codex composer chrome (UX_SPEC §5): no border — a 0.5px stroke painted in
+/* Composer chrome: no border — a 0.5px stroke painted in
    the shadow stack plus the prominent-elevation shadow pair. */
 .chat-composer-surface {
   background-color: var(--color-composer-background);
@@ -132,7 +132,7 @@ mark.codex-thread-find-active {
   backdrop-filter: var(--color-composer-backdrop-filter);
 }
 
-/* [CHAT-01] The cap variant of that same surface (the workspace-activity cap
+/* The cap variant of that same surface (the workspace-activity cap
    attached above the input box): identical translucent fill and backdrop
    treatment, no elevation shadow, plus a bottom-only clip for its outside
    stroke — see dom.css for the full note. */
@@ -143,7 +143,7 @@ mark.codex-thread-find-active {
   clip-path: inset(-2px -2px 0 -2px);
 }
 
-/* ---- Codex-style chat diffs ---- */
+/* ---- Chat diffs ---- */
 .thread-diff-virtualized {
   content-visibility: auto;
   contain-intrinsic-size: auto 36px;
@@ -206,7 +206,7 @@ mark.codex-thread-find-active {
 }
 
 /* -- Git review document (sidebar Changes pane) --
-   Flat Codex-style review: unchanged lines sit on the plain pane background
+   Flat review treatment: unchanged lines sit on the plain pane background
    (only +/- rows carry a tint), and hunk-gap separators render as a slim
    strip inset from the pane edges with rounded ends instead of a full-width
    band. Scoped to the review scroll container so chat-transcript diffs keep
@@ -236,7 +236,7 @@ mark.codex-thread-find-active {
 /* Gutter cells cap the left end of the strip; content cells (gap-expander,
    gap-info, collapsed-context rows) cap the right end. Between them the two
    ::before segments meet edge-to-edge, so the strip reads as one slim pill
-   inset from the pane edges — Codex's [data-separator='line-info'] look. */
+   inset from the pane edges — a [data-separator='line-info'] look. */
 [data-git-review-document] .diff-gutter-cell[data-separator]::before {
   left: 6px;
   border-radius: 6px 0 0 6px;
@@ -413,7 +413,7 @@ body {
   animation: panel-in var(--duration-panel) var(--ease-out-quint);
 }
 
-/* Shared menu-surface enter (codex parity): applied at Radix positioned
+/* Shared menu-surface enter: applied at Radix positioned
    wrappers (PopoverButton/DropdownMenu/ContextMenu content, Tooltip), never
    inside POPOVER_SURFACE_CLASS, so hand-positioned surfaces don't
    double-animate. No exit animation — Radix unmounts immediately. */
@@ -475,7 +475,7 @@ body {
 }
 
 /* ---- Composer dock card motion (interaction cards / todo tracker) ----
-   Owned by useComposerDockCardPresence (apps/desktop). Mount rides the codex
+   Owned by useComposerDockCardPresence (apps/desktop). Mount rides the
    chip-enter recipe — 280ms cubic-bezier(.23,1,.32,1) with a soft overshoot
    at 70% — adapted to a full-width bottom-docked card (rises out of the
    composer, transform-origin bottom). Resolve fades the card out for 150ms
@@ -634,7 +634,7 @@ body {
   }
 }
 
-/* ---- Status-chip entrance (codex _chip recipe) ----
+/* ---- Status-chip entrance ----
    Used by the plan-decision status chip (ProposedPlanCard): when the
    proposed_plan item arrives the chip springs in-place over the still-mounted
    plan card. 280ms cubic-bezier(.23,1,.32,1) with a soft overshoot at 70%.
@@ -795,7 +795,7 @@ body {
   animation: thinking-band-glyphs-sweep var(--activity-update-ready-sweep) ease-in-out 1 both;
 }
 
-/* First-appearance chip entrance (codex overshoot): slides in from the
+/* First-appearance chip entrance: slides in from the
    lower-left with a slight overshoot, then settles. Transform/opacity only. */
 /* Owner rev 2026-07-02: plain fade — no translate/scale on entrances. */
 @keyframes update-pill-in {
@@ -1155,15 +1155,14 @@ body {
 /* ---- Right panel tabs ---- */
 /*
  * --tab-system-height mirrors the left workspace header height so the two
- * panes line up: 46px (codex --height-toolbar, UX_SPEC §7) in both chrome
- * modes, matching the h-[46px] header classes in
- * apps/desktop/src/lib/domain/preferences/workspace-chrome.ts.
+ * panes line up: 46px in both chrome modes, matching the h-[46px] header
+ * classes in apps/desktop/src/lib/domain/preferences/workspace-chrome.ts.
  */
 .right-panel-tab-system {
   --tab-system-height: 46px;
   --tab-max-width: 156px;
   --tab-shell-max-width: 160px;
-  --tab-height: 28px; /* codex tab chrome (UX_SPEC §8) */
+  --tab-height: 28px; /* tab chrome */
   --tab-container-padding: calc((var(--tab-system-height) - var(--tab-height) - 2px) / 2);
   --tab-stable-end-margin: 0px;
   --tab-gap: 3px;

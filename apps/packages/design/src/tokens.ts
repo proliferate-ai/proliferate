@@ -4,17 +4,16 @@
  * Shiki/Monaco palettes are all projections of these records; no CSS source
  * file may introduce a second global token value.
  *
- * Provenance tags cite the frozen retune specification
- * (`origin/ui-foundation-pass:.foundation-scout/retune-spec.md`):
- *   [SHIPPED]                 §2 — current rendered winner survives verbatim
- *   [SHIPPED:raw-hex-move]    §5.5 — shipped literal relocated into authority
- *   [SHIPPED:motion/authority] §5.4 — shipped cadence, value now owned by motion.ts
- *   [RETUNE:<ruling>]         §8 — enumerated deliberate change
+ * Provenance tags record each value's disposition during the 2026-07
+ * foundation consolidation:
+ *   [SHIPPED]                 current rendered winner survives verbatim
+ *   [SHIPPED:raw-hex-move]    shipped literal relocated into authority
+ *   [SHIPPED:motion/authority] shipped cadence, value now owned by motion.ts
+ *   [RETUNE:<ruling>]         enumerated deliberate change
  * Removed names are recorded in `currentTokenDispositions` with a `null`
- * disposition (§1: 59 census-dead globals + 10 generic text properties +
- * `--shadow-keystone` = 70 removals).
- *
- * See also `ui-foundation-target.md` (v1) and `ui-foundation-target-v2.md`.
+ * disposition (59 census-dead globals + 10 generic text properties +
+ * `--shadow-keystone` = 70 removals). The dispositions map preserves the
+ * frozen pre-consolidation name census.
  */
 import { motion } from "./motion.js";
 
@@ -435,23 +434,20 @@ export const themeTokens = {
     provenance: "[SHIPPED]",
   },
   /**
-   * [CHAT-01] The composer is a translucent input surface floating over the app
-   * background, not an opaque card. The dark half is Codex's own input-surface
-   * role verbatim — `--color-token-input-background` → `rgba(45,45,45,.96)`
-   * (`reference/codex/tokens.md` "Input surface";
-   * `ui-foundation-chat-addendum.md` [CHAT-01] surface row, the gap that retune
-   * exists to close) — expressed in the house `color-mix()` form and landing on
-   * the same 96%-of-a-lifted-gray treatment `--color-surface-control` already
-   * uses in dark.
+   * The composer is a translucent input surface floating over the app
+   * background, not an opaque card, so the transcript reads through it. The
+   * dark half renders `rgba(45,45,45,.96)` expressed in the house
+   * `color-mix()` form, landing on the same 96%-of-a-lifted-gray treatment
+   * `--color-surface-control` already uses in dark.
    *
    * The light half keeps its shipped `rgba(255,255,255,0.864)`: light was
-   * already translucent, so the addendum found no light-mode gap, and light is
-   * the only mode that carries `--color-composer-backdrop-filter: blur(16px)`
+   * already translucent, tuned for its own blur treatment, and light is the
+   * only mode that carries `--color-composer-backdrop-filter: blur(16px)`
    * (dark stays `none` on purpose — WKWebView re-blurs the whole transcript on
-   * every keystroke; see ChatComposerDock's PERF note). Raising light's alpha to
-   * match dark's 96% would cancel that blur rather than derive from it, so the
-   * ruled translucency law applies per mode at the alpha each mode's backdrop
-   * treatment was tuned for.
+   * every keystroke; see ChatComposerDock's PERF note). Raising light's alpha
+   * to match dark's 96% would cancel that blur rather than derive from it, so
+   * the translucency treatment applies per mode at the alpha each mode's
+   * backdrop was tuned for.
    */
   "--color-composer-background": {
     dark: "color-mix(in oklab, #2d2d2d 96%, transparent)",
@@ -1085,14 +1081,13 @@ export const themeTokens = {
     provenance: "[SHIPPED:raw-hex-move]",
   },
   /**
-   * [CHAT-04] Transcript measure. Codex caps readable Markdown prose at
-   * `--thread-content-max-width: 40rem` and lets wide blocks (tables, images,
-   * code) spill to `--markdown-wide-block-max-width: 64rem`
-   * (`reference/codex/css/26.721.31836.css:284` / `:7374`, tabled in
-   * `ui-foundation-chat-addendum.md` [CHAT-04]; ADOPTED by that doc's RULED
-   * block). Named in Tailwind's `--container-*` namespace so consumers write
+   * Transcript measure. Readable Markdown prose is capped at
+   * `--thread-content-max-width: 40rem`, and wide blocks (tables, images,
+   * code) are allowed to spill to `--markdown-wide-block-max-width: 64rem`.
+   * Named in Tailwind's `--container-*` namespace so consumers write
    * `max-w-transcript-readable` / `max-w-transcript-wide` instead of an
-   * arbitrary bracket width — which the appearance gate bans.
+   * arbitrary bracket width — a consistency choice, not something the
+   * appearance gate forces (the gate has no max-w rule).
    */
   "--container-transcript-readable": {
     dark: "40rem",
@@ -1248,7 +1243,7 @@ export const themeTokens = {
   "--font-sans": {
     dark: "-apple-system, BlinkMacSystemFont, ui-sans-serif, system-ui, \"Segoe UI\", sans-serif",
     light: "-apple-system, BlinkMacSystemFont, ui-sans-serif, system-ui, \"Segoe UI\", sans-serif",
-    provenance: "[RETUNE:type/Geist] — trial: Codex native system stack per reference/codex (computed fontFamily: -apple-system, system-ui, Segoe UI); Geist variant preserved in git history, swap back = revert this value",
+    provenance: "[RETUNE:type/Geist] — trial: native system stack; Geist variant preserved in git history, swap back = revert this value",
   },
   "--font-weight-control": {
     dark: "450",
@@ -1293,12 +1288,12 @@ export const themeTokens = {
   "--radius-2xl": {
     dark: "1rem",
     light: "1rem",
-    provenance: "[RETUNE:radii/Codex-soft]",
+    provenance: "[RETUNE:radii/soft-scale]",
   },
   "--radius-composer": {
     dark: "0.75rem",
     light: "0.75rem",
-    provenance: "[RETUNE:radii/Codex-soft]",
+    provenance: "[RETUNE:radii/soft-scale]",
   },
   "--radius-full": {
     dark: "9999px",
@@ -1308,17 +1303,17 @@ export const themeTokens = {
   "--radius-lg": {
     dark: "0.625rem",
     light: "0.625rem",
-    provenance: "[RETUNE:radii/Codex-soft]",
+    provenance: "[RETUNE:radii/soft-scale]",
   },
   "--radius-md": {
     dark: "0.5rem",
     light: "0.5rem",
-    provenance: "[RETUNE:radii/Codex-soft]",
+    provenance: "[RETUNE:radii/soft-scale]",
   },
   "--radius-sm": {
     dark: "0.375rem",
     light: "0.375rem",
-    provenance: "[RETUNE:radii/Codex-soft]",
+    provenance: "[RETUNE:radii/soft-scale]",
   },
   "--radius-xl": {
     dark: "0.75rem",
@@ -1411,17 +1406,14 @@ export const themeTokens = {
     provenance: "[RETUNE:icons/control-boxes]",
   },
   /**
-   * [CHAT-04] Vertical rhythm between top-level transcript turns. Codex renders
-   * its virtualized turn stack at an inline `gap: 12px`
-   * (`reference/codex/pages/thread/dom.html:4307`), sitting between its own
-   * authored 16px/4px conversation-item roles; the addendum's RULED block adds
-   * it as a token rather than leaving inter-turn spacing to each consuming
-   * layout. Lives in Tailwind's `--spacing-*` namespace so
-   * `gap-transcript-turn` (and `mt-`/`p-`/`py-` on the same name) resolves
-   * without an arbitrary gap value, which the appearance gate bans. Note
-   * Tailwind v4 does NOT derive `space-y-*` from the spacing namespace, so a
-   * `space-y-4` turn stack converts to a flex column with
-   * `gap-transcript-turn`, not to a `space-y-` variant of this name.
+   * Vertical rhythm between top-level transcript turns: a 12px gap, tokenized
+   * rather than left to each consuming layout. Lives in Tailwind's
+   * `--spacing-*` namespace so `gap-transcript-turn` (and `mt-`/`p-`/`py-` on
+   * the same name) resolves without an arbitrary gap value, which the
+   * appearance gate bans. Note Tailwind v4 does NOT derive `space-y-*` from
+   * the spacing namespace, so a `space-y-4` turn stack converts to a flex
+   * column with `gap-transcript-turn`, not to a `space-y-` variant of this
+   * name.
    */
   "--spacing-transcript-turn": {
     dark: "0.75rem",
@@ -1761,7 +1753,7 @@ export const themeTokens = {
   "--workspace-shell-tab-radius": {
     dark: "0.375rem",
     light: "0.375rem",
-    provenance: "[RETUNE:radii/Codex-soft]",
+    provenance: "[RETUNE:radii/soft-scale]",
   },
   "--workspace-shell-tab-selected-background": {
     dark: "var(--color-selected) /* legacy-alias */",
