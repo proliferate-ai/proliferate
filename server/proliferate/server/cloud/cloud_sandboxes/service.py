@@ -23,7 +23,10 @@ from proliferate.integrations.sandbox import get_sandbox_provider
 from proliferate.server.billing.authorization import (
     assert_cloud_sandbox_resume_allowed_for_owner,
 )
-from proliferate.server.cloud.cloud_sandboxes.transactions import run_after_commit
+from proliferate.server.cloud.cloud_sandboxes.transactions import (
+    commit_cloud_sandbox_session,
+    run_after_commit,
+)
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.provisioning_observability import provisioning_phase
 from proliferate.utils.crypto import decrypt_text
@@ -74,7 +77,22 @@ async def ensure_cloud_sandbox_ready(
     # gets created.
     require_cloud_provisioning_configured()
     await assert_cloud_sandbox_resume_allowed_for_owner(db, owner_user_id=user.id)
-    return await ensure_personal_cloud_sandbox_exists(db, user_id=user.id)
+    sandbox = await ensure_personal_cloud_sandbox_exists(db, user_id=user.id)
+    # Commit the ensured row before the caller resolves access against it. Every
+    # caller of this function is a request entry point that commits at the end
+    # anyway (`POST /cloud-sandbox/ensure`, `POST /cloud-sandbox/wake`, and the
+    # gateway resolver — the direct `ensure_personal_cloud_sandbox_exists`
+    # callers inside materialization are deliberately not routed here), so this
+    # only moves the commit earlier. It has to be earlier on the gateway path:
+    # access resolution for a brand-new row raises the typed 409, which rolls
+    # the request session back. Without this commit the flushed-but-uncommitted
+    # row vanished, so every poll of a fresh signup minted a *new* sandbox id —
+    # a new repair claim key that could never collide, one background
+    # materialization per poll, each of which then could not find the row.
+    # Committing here makes the id stable (claims dedupe) and makes the row
+    # visible to the repair's own fresh session.
+    await commit_cloud_sandbox_session(db)
+    return sandbox
 
 
 async def ensure_personal_cloud_sandbox_exists(
@@ -223,11 +241,28 @@ async def _schedule_cold_access_repair(
         # Deployments without managed cloud have nothing to materialize with; a
         # scheduled repair could only fail in the background.
         return
-    # Billing is NOT re-checked here: every request-time access path runs the
-    # owner resume gate before reaching access resolution (the gateway through
-    # ``ensure_cloud_sandbox_ready``), and ``connect_ready_sandbox`` re-asserts it
-    # inside the materialization itself, so a held subject cannot be resumed by a
-    # repair. Scheduling is deliberately not a second gate.
+    if sandbox.owner_scope != "personal" or sandbox.organization_id is not None:
+        # Invariant this scheduler depends on: the claim is keyed by *sandbox id*
+        # while the repair materializes the owner's CURRENT personal sandbox
+        # (``materialize_sandbox`` resolves it by user id). Those coincide only
+        # because ``ux_cloud_sandbox_personal_active`` makes at most one active
+        # personal row per user. When org-owned sandboxes land, a cold org row
+        # would take a claim keyed on itself and then repair the owner's personal
+        # sandbox instead — wrong target, and a claim that never guards the row it
+        # names. Fail closed here until the repair is given an explicit target.
+        logger.info(
+            "cloud_sandbox_access_repair_skipped_non_personal",
+            extra={"cloud_sandbox_id": str(sandbox.id), "reason": reason},
+        )
+        return
+    # Billing is NOT re-checked here, and scheduling is deliberately un-gated:
+    # ``_read_managed_cloud_source`` reaches this with no billing gate at all, and
+    # ``_load_ready_runtime_access`` only inherits one transitively. The
+    # load-bearing safety is inside the materialization: ``connect_ready_sandbox``
+    # asserts ``assert_cloud_sandbox_resume_allowed`` before it touches a provider
+    # or creates a VM. So the worst a held subject can drive from here is one
+    # Redis claim plus a background task that stops at that gate — never an E2B
+    # create.
     try:
         await materialization_service.schedule_repair_materialize_sandbox(
             sandbox_id=sandbox.id,

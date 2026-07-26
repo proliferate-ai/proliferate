@@ -236,7 +236,14 @@ Row status is one of `creating`, `ready`, `paused`, `error`, `destroyed`
   materialization operation and so inherits every gate above it — the
   scheduler adds no gate of its own and bypasses none. Skipped for
   destroyed rows (gone, not cold) and for deployments without managed-cloud
-  provisioning, where a background run could only fail.
+  provisioning, where a background run could only fail. The claim is
+  in-process fire-and-forget, so a server restart during a provision strands
+  it: repair stays suppressed for that sandbox until the 900 s TTL lapses,
+  after which the next cold access schedules again — accepted, because the
+  TTL self-heals and the alternative (a durable queue) buys nothing at this
+  scale. This law is also the ruling on the previously-open cold-start
+  choreography question: cold access provisions on access, not by a separate
+  wake-and-poll handshake, and the client keeps polling the unchanged 409.
 
 Every transition has exactly one cause:
 

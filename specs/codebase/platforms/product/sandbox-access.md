@@ -130,6 +130,10 @@ The wire contract is unchanged — provisioning takes tens of seconds, far
 too long to hold a request — but the caller's retry is now waiting on work
 that is actually running. Materialization-internal callers keep using the
 bare loader: they are already inside the operation that does the repair.
+That law also settles what used to be lifecycle's open cold-start
+choreography question in favor of provision-on-access: there is no
+wake-and-poll handshake to add, because the poll the client already does
+against the unchanged 409 *is* the handshake.
 
 Adjacent `CloudApiError` codes (repository access, agent-gateway catalog,
 …) are their platforms' business and are not access-gating

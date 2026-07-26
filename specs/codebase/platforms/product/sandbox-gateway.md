@@ -143,7 +143,12 @@ Step 3's repair trigger lives on the cache-miss path by construction: a
 cached hit already resolved, and only a miss reaches the loader. Failures
 are never cached, so a polling client re-enters step 3 every time — which
 is why the scheduling guard is a cross-process claim rather than the
-per-user lock.
+per-user lock, and why step 2's ensured row is committed before step 3
+resolves: the 409 rolls the request back, and a row that vanished with it
+would hand every poll a fresh sandbox id, hence a fresh claim key that
+never dedupes. That claim is fire-and-forget in-process, so a restart
+mid-provision suppresses repair for the remainder of its 900 s TTL
+(lifecycle's cold-access law owns that tradeoff).
 
 The swap itself is mechanical: HTTP gets `Authorization: Bearer <runtime>`;
 WebSocket gets the runtime token as the upstream `access_token` query

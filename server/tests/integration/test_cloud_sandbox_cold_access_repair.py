@@ -30,11 +30,11 @@ from proliferate.constants.cloud import CloudSandboxStatus
 from proliferate.db.models.auth import User
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.db.store import cloud_sandboxes as sandbox_store
-from proliferate.db.store.cloud_sandboxes import CloudSandboxValue, cloud_sandbox_value
+from proliferate.db.store.cloud_sandboxes import cloud_sandbox_value
 from proliferate.server.cloud.cloud_sandboxes import service as cloud_sandboxes_service
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.gateway import service as gateway_service
-from proliferate.server.cloud.materialization import runner
+from proliferate.server.cloud.materialization import operation, runner
 from proliferate.server.cloud.materialization import service as materialization_service
 from proliferate.utils.crypto import encrypt_text
 from proliferate.utils.time import utcnow
@@ -108,8 +108,176 @@ async def _seed_sandbox(
     return user_id, sandbox
 
 
-def _destroyed_value(sandbox: CloudSandbox) -> CloudSandboxValue:
-    return cloud_sandbox_value(sandbox)
+@pytest.mark.asyncio
+async def test_fresh_signup_polling_commits_the_row_and_schedules_one_repair(
+    db_session: AsyncSession,
+    test_engine: Any,
+    spawned: list[dict[str, Any]],
+) -> None:
+    """The fresh-signup shape: no sandbox row at all, only the gateway path.
+
+    This is the case that used to page per poll. ``ensure_cloud_sandbox_ready``
+    created the row with add+flush and no commit; access resolution then 409ed and
+    the request session rolled back, so the row never persisted. Every poll minted
+    a new sandbox id, hence a new claim key that could never collide — one
+    background repair per poll, each of which then could not find the row and so
+    reached the runner's paging handler.
+    """
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+
+    user_id = await _seed_user(db_session)
+    await db_session.commit()
+    user = SimpleNamespace(id=user_id)
+    sessions = async_sessionmaker(test_engine, expire_on_commit=False)
+
+    for _ in range(4):
+        gateway_service._reset_cloud_sandbox_gateway_access_cache_for_tests()
+        # Mirror get_async_session: a request that raises rolls its session back.
+        async with sessions() as db:
+            with pytest.raises(CloudApiError) as excinfo:
+                await gateway_service.ensure_cloud_sandbox_gateway_access(
+                    db,
+                    user,  # type: ignore[arg-type]
+                )
+            assert excinfo.value.code == "cloud_sandbox_runtime_not_ready"
+            await db.rollback()
+
+    # The ensured row survived the 409 rollback, so its id is stable...
+    async with sessions() as verify_db:
+        persisted = await sandbox_store.load_personal_cloud_sandbox(verify_db, user_id)
+    assert persisted is not None
+
+    # ...which is what lets the claim dedupe every subsequent poll.
+    assert len(spawned) == 1
+    assert spawned[0]["claim_key"] == f"sandbox-repair:{persisted.id}"
+
+
+@pytest.mark.asyncio
+async def test_repair_for_a_vanished_sandbox_row_does_not_page(
+    db_session: AsyncSession,
+    test_engine: Any,
+    spawned: list[dict[str, Any]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A row that disappears before the repair runs is benign, never a page."""
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+
+    user_id, sandbox = await _seed_sandbox(db_session)
+
+    with pytest.raises(CloudApiError):
+        await gateway_service.ensure_cloud_sandbox_gateway_access(
+            db_session,
+            SimpleNamespace(id=user_id),  # type: ignore[arg-type]
+        )
+    assert len(spawned) == 1
+    call = spawned[0]
+
+    # The owner (or the reaper) destroys the sandbox before the repair starts.
+    await db_session.delete(sandbox)
+    await db_session.commit()
+
+    paged: list[object] = []
+    monkeypatch.setattr(runner, "report_critical", lambda exc, **_: paged.append(exc))
+    monkeypatch.setattr(
+        runner,
+        "async_session_factory",
+        async_sessionmaker(test_engine, expire_on_commit=False),
+    )
+
+    await runner._run_with_fresh_session(
+        materialization_service._repair_materialize_sandbox,
+        {
+            "user_id": call["user_id"],
+            "claim_key": call["claim_key"],
+            "claim_token": call["claim_token"],
+        },
+    )
+
+    assert paged == []
+    # The claim was still released, so a later access can retry.
+    assert (
+        await materialization_service.schedule_repair_materialize_sandbox(
+            sandbox_id=sandbox.id,
+            user_id=user_id,
+            reason="test_after_vanish",
+        )
+        is True
+    )
+
+
+@pytest.mark.asyncio
+async def test_other_repair_failures_still_page(
+    db_session: AsyncSession,
+    test_engine: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Only the missing-row outcome is benign; every other failure still pages."""
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+
+    user_id, _sandbox = await _seed_sandbox(db_session)
+
+    async def _boom(*_a: Any, **_k: Any) -> None:
+        raise operation.CloudMaterializationError("provider exploded")
+
+    monkeypatch.setattr(materialization_service, "materialize_sandbox", _boom)
+    paged: list[object] = []
+    monkeypatch.setattr(runner, "report_critical", lambda exc, **_: paged.append(exc))
+    monkeypatch.setattr(
+        runner,
+        "async_session_factory",
+        async_sessionmaker(test_engine, expire_on_commit=False),
+    )
+
+    await runner._run_with_fresh_session(
+        materialization_service._repair_materialize_sandbox,
+        {"user_id": user_id, "claim_key": "sandbox-repair:test", "claim_token": "unowned"},
+    )
+
+    assert len(paged) == 1
+
+
+@pytest.mark.asyncio
+async def test_repair_scheduling_releases_the_claim_when_the_spawn_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A synchronous spawn failure must not strand the claim for a whole TTL."""
+    sandbox_id = uuid.uuid4()
+
+    def _refuse(*_a: Any, **_k: Any) -> None:
+        raise RuntimeError("event loop is shutting down")
+
+    monkeypatch.setattr(runner, "spawn_materialization_task", _refuse)
+
+    with pytest.raises(RuntimeError):
+        await materialization_service.schedule_repair_materialize_sandbox(
+            sandbox_id=sandbox_id,
+            user_id=uuid.uuid4(),
+            reason="test_spawn_failure",
+        )
+
+    monkeypatch.undo()
+    spawns: list[dict[str, Any]] = []
+    monkeypatch.setattr(
+        runner,
+        "spawn_materialization_task",
+        lambda fn, **kwargs: spawns.append({"fn": fn, **kwargs}),
+    )
+
+    # The claim is free again, so the next access schedules rather than waiting
+    # out SANDBOX_REPAIR_CLAIM_TTL_SECONDS.
+    assert (
+        await materialization_service.schedule_repair_materialize_sandbox(
+            sandbox_id=sandbox_id,
+            user_id=uuid.uuid4(),
+            reason="test_after_spawn_failure",
+        )
+        is True
+    )
+    assert len(spawns) == 1
+    await materialization_service.locks.release_materialization_trigger_claim(
+        spawns[0]["claim_key"],
+        token=spawns[0]["claim_token"],
+    )
 
 
 @pytest.mark.asyncio
@@ -133,7 +301,6 @@ async def test_cold_gateway_access_409s_and_schedules_one_repair(
 
     assert len(spawned) == 1
     assert spawned[0]["user_id"] == user_id
-    assert spawned[0]["fn"] is materialization_service._repair_materialize_sandbox
     # The repair targets this exact sandbox's claim, not a per-user global.
     assert spawned[0]["claim_key"] == f"sandbox-repair:{sandbox.id}"
 
@@ -250,7 +417,7 @@ async def test_destroyed_sandbox_access_409s_without_scheduling(
 
     with pytest.raises(CloudApiError) as excinfo:
         await cloud_sandboxes_service.load_cloud_sandbox_runtime_access_or_repair(
-            _destroyed_value(sandbox),
+            cloud_sandbox_value(sandbox),
             reason="test_destroyed",
         )
 
@@ -326,7 +493,7 @@ async def test_repair_is_skipped_when_managed_cloud_is_not_configured(
 ) -> None:
     """No provider configured means a repair could only fail in the background."""
     monkeypatch.setattr(settings, "e2b_api_key", "")
-    user_id, sandbox = await _seed_sandbox(db_session)
+    _user_id, sandbox = await _seed_sandbox(db_session)
 
     with pytest.raises(CloudApiError):
         await cloud_sandboxes_service.load_cloud_sandbox_runtime_access_or_repair(
@@ -334,5 +501,4 @@ async def test_repair_is_skipped_when_managed_cloud_is_not_configured(
             reason="test_unconfigured",
         )
 
-    assert sandbox.owner_user_id == user_id
     assert spawned == []

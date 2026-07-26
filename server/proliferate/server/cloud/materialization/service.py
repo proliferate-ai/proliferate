@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import Awaitable, Callable
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.server.cloud.materialization import locks, runner
+from proliferate.server.cloud.materialization import locks, operation, runner
 from proliferate.server.cloud.materialization.materialize import (
     agent_auth as agent_auth_materializer,
 )
@@ -54,12 +55,16 @@ async def schedule_repair_materialize_sandbox(
 ) -> bool:
     """Schedule at most one background repair materialization for a cold sandbox.
 
+    Returns True when this call is the one that scheduled the repair and False
+    when another caller already owns it. The return value exists for tests and
+    callers that want the distinction; the request-time access seam ignores it,
+    because either outcome means "a repair is in flight, keep polling".
+
     The access path (gateway or any other runtime-access resolution) can observe
     a sandbox row whose runtime access was never stamped or was cleared by
     provider loss. That row cannot repair itself: nothing else on a read path
     provisions, so the caller would otherwise retry into the same typed 409
-    forever. This schedules the materialization that stamps it and returns
-    whether this call is the one that scheduled it.
+    forever. This schedules the materialization that stamps it.
 
     Two layers keep it stampede-safe:
 
@@ -97,12 +102,21 @@ async def schedule_repair_materialize_sandbox(
             "reason": reason,
         },
     )
-    runner.spawn_materialization_task(
-        _repair_materialize_sandbox,
-        user_id=user_id,
-        claim_key=claim_key,
-        claim_token=token,
-    )
+    try:
+        runner.spawn_materialization_task(
+            _repair_materialize_sandbox,
+            user_id=user_id,
+            claim_key=claim_key,
+            claim_token=token,
+        )
+    except BaseException:
+        # The spawn can fail synchronously (a shutting-down event loop rejects
+        # `create_task`). Nothing will run and therefore nothing will release, so
+        # the claim would suppress repair for the whole TTL. Hand it back before
+        # letting the failure out; the access seam logs it and still returns its
+        # typed 409, so the client's next poll can schedule afresh.
+        await locks.release_materialization_trigger_claim(claim_key, token=token)
+        raise
     return True
 
 
@@ -115,11 +129,29 @@ async def _repair_materialize_sandbox(
 ) -> None:
     try:
         await materialize_sandbox(db, user_id=user_id)
+    except operation.CloudMaterializationError as error:
+        if str(error) != sandbox_materializer.SANDBOX_MISSING_ERROR_CODE:
+            raise
+        # The row vanished between scheduling and running (destroyed by the
+        # owner or the reaper, or a never-committed row from an older caller).
+        # That is a benign race, not an incident: swallow it here so the runner's
+        # generic handler cannot turn a routine disappearance into a page. Every
+        # other materialization failure still propagates and still pages.
+        logger.info(
+            "cloud_sandbox_access_repair_sandbox_missing",
+            extra={"user_id": str(user_id), "claim_key": claim_key},
+        )
     finally:
         # Release inside the background task, not the request: holding the claim
         # for the whole attempt is exactly what suppresses duplicate scheduling
-        # while a provision is in flight.
-        await locks.release_materialization_trigger_claim(claim_key, token=claim_token)
+        # while a provision is in flight. Shielded because this task can be
+        # cancelled at shutdown mid-await: an unreleased claim would suppress
+        # repair for the full TTL, and the release is a single short Redis
+        # round-trip (the same shielding the session teardown in db/engine.py
+        # applies to its rollback/close).
+        await asyncio.shield(
+            locks.release_materialization_trigger_claim(claim_key, token=claim_token)
+        )
 
 
 async def schedule_materialize_repo_environment(
