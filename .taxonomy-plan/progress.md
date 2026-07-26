@@ -12,7 +12,7 @@ Judgment calls (JC):
 
 Steps:
 - [x] 1. Plan committed
-- [ ] 2. git mv per moves.tsv (pure renames, no content edits)
+- [x] 2. git mv per moves.tsv (pure renames, no content edits)
 - [ ] 3. ui-internal wiring: relative imports, exports map, tsup/tsconfig/vitest paths; ui builds green
 - [ ] 4. external consumers: product-ui/product-surfaces/product-client/apps rewrites + tailwind @source globs; shared:typecheck green
 - [ ] 5. specs/ links + appearance-baseline key renames; check_docs + appearance + boundaries green
