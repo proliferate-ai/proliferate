@@ -623,6 +623,75 @@
         }
       }
     },
+    "/v1/agents/{kind}/model-snapshot": {
+      "get": {
+        "tags": [
+          "catalogs"
+        ],
+        "operationId": "get_model_snapshot_status",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "description": "Agent kind identifier",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Per-auth-context model snapshot status"
+          },
+          "404": {
+            "description": "Unknown agent kind"
+          }
+        }
+      }
+    },
+    "/v1/agents/{kind}/model-snapshot/refresh": {
+      "post": {
+        "tags": [
+          "catalogs"
+        ],
+        "operationId": "refresh_model_snapshot",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "description": "Agent kind identifier",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "authContextId",
+            "in": "query",
+            "description": "Single auth context to re-probe",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Re-probe completed; the status body reflects it"
+          },
+          "404": {
+            "description": "Unknown agent kind or inactive auth context"
+          },
+          "409": {
+            "description": "This runtime does not own the probe engine"
+          },
+          "502": {
+            "description": "The forced probe failed"
+          }
+        }
+      }
+    },
     "/v1/auth/revoked-jtis": {
       "put": {
         "tags": [
