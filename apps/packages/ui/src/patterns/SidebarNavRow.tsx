@@ -32,7 +32,7 @@ export function SidebarNavRow({
       active={active}
       disabled={disabled}
       onPress={onPress}
-      className={`h-[28px] gap-2 px-2 py-1 text-ui leading-5 focus-visible:outline-offset-[-2px] ${className}`}
+      className={`h-[30px] gap-2 pl-2 pr-1 py-1 text-ui leading-5 focus-visible:outline-offset-[-2px] ${className}`}
       {...props}
     >
       {/* Codex parity: the icon carries the row ink, not a dimmer tier, and

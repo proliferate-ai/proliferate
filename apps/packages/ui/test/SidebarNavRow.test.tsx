@@ -19,9 +19,10 @@ describe("SidebarNavRow", () => {
     );
 
     const row = screen.getByRole("button", { name: "G General" });
-    expect(row.className).toContain("h-[28px]");
+    expect(row.className).toContain("h-[30px]");
     expect(row.className).toContain("gap-2");
-    expect(row.className).toContain("px-2");
+    expect(row.className).toContain("pl-2");
+    expect(row.className).toContain("pr-1");
     expect(row.className).toContain("!text-sidebar-foreground");
   });
 });

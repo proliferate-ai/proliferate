@@ -161,7 +161,7 @@ export function RepoGroup({
               alwaysVisible
               className="rounded-md opacity-0 group-hover/folder-row:opacity-100 focus-visible:opacity-100"
             >
-              <Plus className="icon-compact" />
+              <Plus className="icon-paired" />
             </SidebarActionButton>
           }
           side="right"
@@ -242,7 +242,7 @@ export function RepoGroup({
                 alwaysVisible
                 className="opacity-0 group-hover/folder-row:opacity-100 focus-visible:opacity-100"
               >
-                <MoreHorizontal className="icon-compact" />
+                <MoreHorizontal className="icon-paired" />
               </SidebarActionButton>
             }
             side="right"

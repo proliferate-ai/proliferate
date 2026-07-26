@@ -46,7 +46,7 @@ export function ProductSidebarThreadRow({
     <SidebarRowSurface
       active={active}
       onPress={onSelect}
-      className={`${hasSubtitle ? "h-[40px]" : "h-[28px]"} pl-2 pr-1 py-1 text-sidebar-row focus-visible:outline-offset-[-2px] ${className}`}
+      className={`${hasSubtitle ? "h-[40px]" : "h-[30px]"} pl-2 pr-1 py-1 text-sidebar-row focus-visible:outline-offset-[-2px] ${className}`}
       {...props}
     >
       {hoverAction ? (

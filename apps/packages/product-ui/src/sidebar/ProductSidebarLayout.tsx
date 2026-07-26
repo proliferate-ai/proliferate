@@ -31,7 +31,7 @@ export function ProductSidebarBrandRow({
   label: string;
 }) {
   return (
-    <div className="mb-1 flex h-8 shrink-0 items-center gap-2 px-4 text-sidebar-primary">
+    <div className="mb-1 flex h-8 shrink-0 items-center gap-2 px-2 text-sidebar-primary">
       {icon}
       {/* Codex wordmark geometry: 17px/24 semibold. */}
       <span className="min-w-0 truncate text-sidebar-brand font-semibold">

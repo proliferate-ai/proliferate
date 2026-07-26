@@ -1,7 +1,6 @@
 import {
   Check,
-  ChevronDownUp,
-  ChevronUpDown,
+  ChevronRight,
   FolderPlus,
   ListFilter,
 } from "@proliferate/ui/icons";
@@ -52,11 +51,9 @@ export function SidebarRepositoriesHeader({
               title={allRepoGroupsCollapsed ? "Expand all repositories" : "Collapse all repositories"}
               variant="section"
             >
-              {allRepoGroupsCollapsed ? (
-                <ChevronUpDown className="icon-compact" />
-              ) : (
-                <ChevronDownUp className="icon-compact" />
-              )}
+              <ChevronRight
+                className={`icon-compact transition-transform ${allRepoGroupsCollapsed ? "" : "rotate-90"}`}
+              />
             </SidebarActionButton>
           )}
           <PopoverButton

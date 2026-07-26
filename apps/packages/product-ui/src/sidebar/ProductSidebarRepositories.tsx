@@ -1,5 +1,6 @@
 import type { HTMLAttributes, ReactNode } from "react";
 
+import { ChevronRight } from "@proliferate/ui/icons";
 import { ShortcutBadge } from "@proliferate/ui/primitives/ShortcutBadge";
 import { SidebarRowSurface } from "@proliferate/ui/patterns/SidebarRowSurface";
 import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
@@ -37,11 +38,11 @@ export function ProductSidebarRepoGroupHeader({
     <SidebarRowSurface
       onPress={onToggleCollapsed}
       aria-expanded={!collapsed}
-      className={`group/folder-row h-[28px] justify-between overflow-x-hidden py-1 text-sidebar-nav focus-visible:outline-offset-[-2px] ${className}`}
+      className={`group/folder-row h-[30px] justify-between overflow-x-hidden py-1 text-sidebar-nav focus-visible:outline-offset-[-2px] ${className}`}
       {...props}
     >
       <div className="flex min-w-0 flex-1 items-center gap-1 pl-1">
-        <span className="relative flex h-6 w-6 items-center justify-center text-current">
+        <span className="relative flex h-7.5 w-7.5 items-center justify-center text-current">
           {visibleIcon ? (
             <span className="flex items-center justify-center group-hover/folder-row:opacity-0">
               {visibleIcon}
@@ -140,7 +141,7 @@ export function ProductSidebarWorkspaceRow({
     <SidebarRowSurface
       active={active}
       onPress={onSelect}
-      className={`${hasSubtitle ? "h-[40px]" : "h-[28px]"} px-2 py-1 text-sidebar-row focus-visible:outline-offset-[-2px] ${className}`}
+      className={`${hasSubtitle ? "h-[40px]" : "h-[30px]"} pl-2 pr-1 py-1 text-sidebar-row focus-visible:outline-offset-[-2px] ${className}`}
       {...props}
     >
       {hoverAction ? (
@@ -237,10 +238,8 @@ export function ProductSidebarWorkspaceRow({
 
 function ChevronGlyph({ collapsed }: { collapsed: boolean }) {
   return (
-    <span
-      className={`block size-1.5 border-b border-r border-current transition-transform ${collapsed ? "-rotate-45" : "rotate-45"
-        }`}
-      aria-hidden="true"
+    <ChevronRight
+      className={`icon-compact transition-transform ${collapsed ? "" : "rotate-90"}`}
     />
   );
 }

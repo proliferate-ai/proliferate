@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { SkeletonBlock } from "#product/components/feedback/Skeleton";
-import { ChevronDownUp, ChevronUpDown, Plus } from "@proliferate/ui/icons";
+import { ChevronRight, Plus } from "@proliferate/ui/icons";
 import { SidebarShowToggleRow } from "#product/components/workspace/shell/sidebar/SidebarShowToggleRow";
 import { useCoworkStatus } from "#product/hooks/access/anyharness/cowork/use-cowork-status";
 import { useCoworkThreadWorkflow } from "#product/hooks/cowork/workflows/use-cowork-thread-workflow";
@@ -110,11 +110,9 @@ export function CoworkThreadsSection() {
               title={threadsCollapsed ? "Expand threads" : "Collapse threads"}
               variant="section"
             >
-              {threadsCollapsed ? (
-                <ChevronUpDown className="icon-compact" />
-              ) : (
-                <ChevronDownUp className="icon-compact" />
-              )}
+              <ChevronRight
+                className={`icon-compact transition-transform ${threadsCollapsed ? "" : "rotate-90"}`}
+              />
             </SidebarActionButton>
           )}
           <SidebarActionButton
