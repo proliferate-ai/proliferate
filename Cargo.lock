@@ -391,6 +391,7 @@ dependencies = [
  "futures",
  "hmac",
  "jsonwebtoken",
+ "libc",
  "nucleo-matcher",
  "portable-pty",
  "reqwest 0.12.28",
