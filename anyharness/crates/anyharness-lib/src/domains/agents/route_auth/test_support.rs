@@ -1,9 +1,49 @@
-//! Test-only helpers for the route-auth module: a self-cleaning temp home and
-//! a state-file writer.
+//! Test-only helpers for the route-auth module: a self-cleaning temp home, a
+//! state-file writer, and a serialized process-`HOME` override for the one apply
+//! arm that reads the user's real credential home.
 
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, MutexGuard, OnceLock};
 
 use super::state::state_file_path;
+
+static ENV_MUTEX: OnceLock<Mutex<()>> = OnceLock::new();
+
+/// Serialize tests that mutate process-global env. This crate's tests run
+/// concurrently, so a `HOME` override has to hold this for its whole scope.
+pub(crate) fn env_lock() -> MutexGuard<'static, ()> {
+    ENV_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+/// Point the process `HOME` at a temp dir for the duration, restoring it on drop.
+///
+/// Needed because `credential-discovery` only honors a credential home that
+/// matches the process home (`home_matches_process_home`), so a test that wants
+/// the native codex login delivered has to actually BE that user for a moment.
+/// Hold [`env_lock`] across the guard's lifetime.
+pub(crate) struct HomeEnvGuard {
+    previous: Option<std::ffi::OsString>,
+}
+
+impl HomeEnvGuard {
+    pub(crate) fn set(home: &Path) -> Self {
+        let previous = std::env::var_os("HOME");
+        std::env::set_var("HOME", home);
+        Self { previous }
+    }
+}
+
+impl Drop for HomeEnvGuard {
+    fn drop(&mut self) {
+        match self.previous.take() {
+            Some(value) => std::env::set_var("HOME", value),
+            None => std::env::remove_var("HOME"),
+        }
+    }
+}
 
 pub(crate) struct TempHome {
     path: PathBuf,

@@ -360,12 +360,12 @@ has its own way of accepting auth" is paid for, in one place:
 | Harness | Native route | Gateway route | `api_key` route |
 | --- | --- | --- | --- |
 | claude | nothing — the CLI finds its own login and config | `ANTHROPIC_BASE_URL` + `ANTHROPIC_AUTH_TOKEN` (the scoped key); optional `ANTHROPIC_SMALL_FAST_MODEL` from the catalog plan; isolated `CLAUDE_CONFIG_DIR` (stable dir, no file) | the named env var |
-| codex | isolated `CODEX_HOME=codex-native/` (stable, not revision-keyed) whose `config.toml` pins ONLY the catalog's native default model — no provider table and no credential material, because codex resolves its own login | isolated `CODEX_HOME=codex-home-<rev>/` with generated `config.toml` (provider `proliferate`, `base_url`, `env_key = "PROLIFERATE_GATEWAY_KEY"`, `wire_api = "responses"`, catalog gateway default model); removes ambient `OPENAI_API_KEY`/`ANTHROPIC_API_KEY` | the named env var only |
+| codex | isolated `CODEX_HOME=codex-native/` (stable, not revision-keyed) holding TWO files: a `config.toml` pinning only the catalog's native default model (no provider table — the credential is the user's own), and a copy of the user's own `auth.json`, because codex resolves credentials at `$CODEX_HOME/auth.json` and relocating the home relocates that lookup | isolated `CODEX_HOME=codex-home-<rev>/` with generated `config.toml` (provider `proliferate`, `base_url`, `env_key = "PROLIFERATE_GATEWAY_KEY"`, `wire_api = "responses"`, catalog gateway default model); removes ambient `OPENAI_API_KEY`/`ANTHROPIC_API_KEY` | the named env var only |
 | opencode | nothing | isolated `XDG_CONFIG_HOME` + generated `opencode.json` adding only the `proliferate` provider (`apiKey: "{env:PROLIFERATE_GATEWAY_KEY}"`, catalog model list); **`XDG_DATA_HOME` deliberately left ambient** so natively-logged-in providers coexist | the named env var, additive beside gateway and native |
 | grok | nothing | isolated `HOME=grok-home-<rev>/`, `GROK_MODELS_BASE_URL`, `XAI_API_KEY` (the scoped key) | the named env var |
 | cursor | nothing | typed refusal (`UnsupportedRoute`) — no gateway route exists for cursor | the named env var (`CURSOR_API_KEY`, cursor's registry-declared slot) |
 
-Two properties of the table itself, both load-bearing:
+Three properties of the table itself, all load-bearing:
 
 - **Native is a route with a recipe, not the absence of one.** Four harnesses
   render nothing natively, but codex needs an isolated `CODEX_HOME` even on the
@@ -375,6 +375,20 @@ Two properties of the table itself, both load-bearing:
   the native and routed homes distinct directories that cannot shadow or GC each
   other, and what keeps every codex `config.toml` in the system emitted by one
   function.
+- **An isolated home must carry the credential it isolates away from.** Codex
+  resolves credentials at `$CODEX_HOME/auth.json`, so setting `CODEX_HOME` moves
+  the credential lookup along with the config — a config-only isolated home
+  launches a natively-logged-in user *unauthenticated*, and nothing later repairs
+  it (the login terminal adjusts only `PATH`, so `codex login` writes `~/.codex`
+  and never the isolated home). The native recipe therefore delivers the user's
+  own `auth.json` as its second file, read at apply time from the user's real
+  codex home so the render stays pure. On macOS, codex's keychain entry is keyed
+  on `sha256(canonical CODEX_HOME)` and so is unreachable from a relocated home;
+  this is covered because the credential reader consults the keychain first and
+  materializes its payload as `auth.json` bytes — the keychain login arrives as a
+  file the relocated home can read. The one accepted residual: a token refresh
+  the child performs lands in the isolated home rather than the user's keychain,
+  which cannot diverge because every launch re-copies from the source.
 - **Claude's ambient sanitization applies to every non-native route**, once over
   the fully composed delta rather than per recipe: the rerouting flags
   (`CLAUDE_CODE_USE_BEDROCK`/`_VERTEX`/`_FOUNDRY`, `AWS_BEARER_TOKEN_BEDROCK`)

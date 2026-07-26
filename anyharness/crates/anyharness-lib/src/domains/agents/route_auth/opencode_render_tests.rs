@@ -7,7 +7,6 @@
 
 use super::*;
 
-
 #[test]
 fn opencode_gateway_writes_config_with_static_models() {
     let home = TempHome::new("opencode-gw");
@@ -184,4 +183,3 @@ fn codex_gateway_errors_when_plan_has_no_default_model() {
         resolve_launch_route_auth(home.path(), "codex", &resolver).expect_err("no default model");
     assert_eq!(error.code(), "AGENT_ROUTE_SELECTION_INCOMPLETE");
 }
-

@@ -52,6 +52,10 @@ const CODEX_NATIVE_HOME_DIR_NAME: &str = "codex-native";
 
 /// Config file names written inside the isolated home dirs.
 const CODEX_CONFIG_FILE_NAME: &str = "config.toml";
+/// Where codex resolves its login inside whatever `CODEX_HOME` points at. Not
+/// `~/.codex/auth.json`: relocating the home relocates the credential lookup
+/// too, which is why the native recipe has to deliver this file.
+const CODEX_AUTH_FILE_NAME: &str = "auth.json";
 pub(super) const OPENCODE_CONFIG_FILE_NAME: &str = "opencode.json";
 
 /// Isolated XDG subdir names materialized beside the opencode config.
@@ -73,6 +77,13 @@ pub enum PathFamily {
     /// codex launch. Separate family so it can never be GC'd by a routed
     /// launch's revision sweep, and so a native and a routed session can coexist.
     CodexNativeHome,
+    /// The user's own `auth.json` inside the native CODEX_HOME. A separate family
+    /// from [`Self::CodexNativeHome`] because its bytes are not rendered: codex
+    /// resolves credentials at `$CODEX_HOME/auth.json`, so pointing the home
+    /// somewhere isolated means the login has to be carried in, and it is read
+    /// from the user's real codex home HERE (apply time) rather than in the pure
+    /// render. `contents` is always `None` for this family.
+    CodexNativeAuth,
     /// Revision-keyed OpenCode dir with `opencode.json` + XDG subdirs.
     OpencodeConfig,
     /// Revision-keyed grok HOME; no content file.
@@ -131,6 +142,11 @@ pub(super) fn apply_file_spec(
             create_dir(&dir)?;
             write_private_file(&dir.join(CODEX_CONFIG_FILE_NAME), spec_contents(spec)?)?;
         }
+        PathFamily::CodexNativeAuth => {
+            let dir = codex_native_home_path(runtime_home);
+            create_dir(&dir)?;
+            deliver_native_codex_auth(&dir)?;
+        }
         PathFamily::OpencodeConfig => {
             let dir = prepare_revision_dir(runtime_home, OPENCODE_CONFIG_PREFIX, spec.revision)?;
             write_private_file(
@@ -146,6 +162,92 @@ pub(super) fn apply_file_spec(
         }
     }
     Ok(())
+}
+
+/// Copy the user's own codex login into the isolated native home, so a relocated
+/// `CODEX_HOME` is still an AUTHENTICATED one.
+///
+/// This is the only apply arm that reads outside the runtime home, and it has to
+/// be: codex looks for credentials at `$CODEX_HOME/auth.json`, so the moment the
+/// native recipe points `CODEX_HOME` at an isolated dir, the user's login stops
+/// being reachable unless it is carried in. Sourced through
+/// `credential-discovery`'s portable export — the same reader the rest of the
+/// runtime uses to detect a codex login.
+///
+/// **macOS keychain logins are covered by this, and that is not incidental.**
+/// Codex's keychain entry is keyed on `sha256(canonical CODEX_HOME)`
+/// (`codex::codex_keychain_account`), so the relocated home can never find the
+/// entry the user's `codex login` created — the account hash does not match. What
+/// closes that hole is that `export_portable_auth` reads the KEYCHAIN FIRST and
+/// returns its payload as `.codex/auth.json` bytes, so a keychain-authenticated
+/// user's credential arrives here as a FILE the relocated home can read. The
+/// lookup resolves against the user's real `~/.codex` because the var we render
+/// goes into the CHILD's env, never this process's, so the account hash computed
+/// here is the one the user actually has.
+///
+/// One residual difference from a truly-native launch, accepted deliberately: a
+/// token refresh the child performs lands in this isolated home rather than back
+/// in the user's keychain. Because every launch re-copies from the source, that
+/// cannot accumulate or diverge — the user's own `codex login` stays the
+/// authority, exactly the relationship the previous implementation had.
+///
+/// Degradation matches the behavior this replaces: no resolvable HOME, or no
+/// codex login at all, removes any stale copy and proceeds. A native launch on an
+/// unauthenticated machine must still start (codex prompts the user itself); what
+/// must never happen is a launch reading a PREVIOUS user's credential out of this
+/// home after they logged out.
+fn deliver_native_codex_auth(codex_home: &Path) -> Result<(), RouteAuthError> {
+    let auth_path = codex_home.join(CODEX_AUTH_FILE_NAME);
+    let Some(home_dir) = dirs::home_dir() else {
+        tracing::warn!(
+            "could not resolve HOME while delivering the native codex login; \
+             the isolated home will be unauthenticated"
+        );
+        return remove_stale_file(&auth_path);
+    };
+    let export = match anyharness_credential_discovery::export_portable_auth(
+        anyharness_credential_discovery::ProviderId::Codex,
+        &home_dir,
+    ) {
+        Ok(Some(export)) => export,
+        Ok(None) => {
+            // No codex login on this machine. Clear any copy from a previous
+            // login so the isolated home never outlives the credential it held.
+            tracing::debug!("no native codex login to deliver into the isolated home");
+            return remove_stale_file(&auth_path);
+        }
+        Err(error) => {
+            // Never fail the launch on a credential read: the harness can still
+            // prompt for a login. But do not leave a stale copy behind either.
+            tracing::warn!(%error, "failed to read the native codex login");
+            return remove_stale_file(&auth_path);
+        }
+    };
+    let Some(file) = export
+        .files
+        .iter()
+        .find(|file| file.relative_path.as_str() == PORTABLE_CODEX_AUTH_PATH)
+    else {
+        tracing::warn!(
+            "the native codex export carried no {PORTABLE_CODEX_AUTH_PATH}; \
+             the isolated home will be unauthenticated"
+        );
+        return remove_stale_file(&auth_path);
+    };
+    write_private_file(&auth_path, &file.content)
+}
+
+/// The relative path `credential-discovery` labels codex's login export with.
+const PORTABLE_CODEX_AUTH_PATH: &str = ".codex/auth.json";
+
+fn remove_stale_file(path: &Path) -> Result<(), RouteAuthError> {
+    match fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(RouteAuthError::Materialize {
+            detail: format!("failed to remove {}: {error}", path.display()),
+        }),
+    }
 }
 
 fn spec_contents(spec: &FileSpec) -> Result<&[u8], RouteAuthError> {

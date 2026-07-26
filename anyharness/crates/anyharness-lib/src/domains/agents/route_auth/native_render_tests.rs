@@ -3,12 +3,14 @@
 //! Native used to mean "an empty delta, always", with codex's isolated home built
 //! by a separate `launch_env.rs` path from a Rust constant pinning
 //! `model = "gpt-5.5"`. That was written on EVERY codex launch, including
-//! gateway-routed ones where route-auth's own `CODEX_HOME` shadowed it — leaving
-//! a copy of the user's `auth.json` on disk for launches that never read it.
+//! gateway-routed ones where route-auth's own `CODEX_HOME` shadowed it.
 //!
 //! Folding the native codex home into this table is what makes the two cases
-//! comparable, so these tests assert both halves: codex renders its config from
-//! the CATALOG, and every other harness still renders nothing.
+//! comparable, so these tests assert three things: codex renders its config from
+//! the CATALOG, codex's isolated home is AUTHENTICATED (an isolated `CODEX_HOME`
+//! moves the credential lookup with it, so the recipe has to carry the user's own
+//! `auth.json` — codex reads `$CODEX_HOME/auth.json`, never `~/.codex`, once the
+//! var is set), and every other harness still renders nothing.
 //!
 //! Split from `render_tests.rs` for the line-count ceiling; nested inside it so
 //! its `TempHome` and resolver helpers are in scope.
@@ -46,8 +48,8 @@ fn native_resolver(native_default_model: &str) -> NativeOnlyResolver {
 fn native_codex_renders_a_catalog_pinned_config_in_an_isolated_home() {
     let home = TempHome::new("codex-native");
     // No state file at all: the most native case there is.
-    let rendered =
-        resolve_launch_route_auth(home.path(), "codex", &native_resolver("gpt-5.5")).expect("render");
+    let rendered = resolve_launch_route_auth(home.path(), "codex", &native_resolver("gpt-5.5"))
+        .expect("render");
 
     let codex_home = rendered.set.get("CODEX_HOME").expect("CODEX_HOME");
     assert!(
@@ -69,11 +71,90 @@ fn native_codex_renders_a_catalog_pinned_config_in_an_isolated_home() {
         "a native launch must not point codex at a provider we configured"
     );
     assert!(!config.contains("gateway-model-must-not-appear"));
-
-    // The old implementation copied the user's auth.json into its isolated home.
-    // Nothing writes credential material here now — codex resolves its own login.
-    assert!(!std::path::Path::new(codex_home).join("auth.json").exists());
     assert!(rendered.remove.is_empty(), "a native launch removes nothing");
+
+    // The recipe is TWO files, not one: relocating CODEX_HOME relocates where
+    // codex looks for its login (`$CODEX_HOME/auth.json`, not `~/.codex`), so a
+    // config-only home would launch a logged-in user unauthenticated. The
+    // credential family must be requested by the render even though its bytes
+    // are resolved at apply time.
+    assert!(
+        rendered
+            .files
+            .iter()
+            .any(|spec| spec.path_family == PathFamily::CodexNativeAuth),
+        "the native recipe must deliver the user's own auth.json, got {:?}",
+        rendered.files
+    );
+}
+
+/// H1: a natively-logged-in user launches into an AUTHENTICATED isolated home.
+///
+/// This is the regression the isolated native home can silently cause: codex
+/// resolves credentials at `$CODEX_HOME/auth.json`, so pointing `CODEX_HOME` at
+/// `codex-native/` moves the lookup away from the user's `~/.codex` — and the
+/// login terminal only adjusts `PATH`, so `codex login` writes `~/.codex` and
+/// never this home. Nothing else in the system would repair it, which is why the
+/// credential is part of the recipe.
+///
+/// The predecessor of this test is `launch_env_tests.rs`'s deleted
+/// `build_session_launch_env_sets_clean_codex_home_for_local_codex`, which
+/// asserted the same delivery at the layer that used to own it.
+#[test]
+fn a_user_with_a_codex_login_launches_native_codex_authenticated() {
+    let _home_lock = env_lock();
+    let home = TempHome::new("codex-native-authed");
+    // A user home carrying a real codex login, made the process HOME for the
+    // duration — that is the home `credential-discovery` reads.
+    let user_home = TempHome::new("codex-native-user-home");
+    std::fs::create_dir_all(user_home.path().join(".codex")).expect("create .codex");
+    std::fs::write(
+        user_home.path().join(".codex/auth.json"),
+        r#"{"OPENAI_API_KEY":"sk-the-users-own-login"}"#,
+    )
+    .expect("write user auth.json");
+    let _guard = HomeEnvGuard::set(user_home.path());
+
+    let rendered = resolve_launch_route_auth(home.path(), "codex", &native_resolver("gpt-5.5"))
+        .expect("render");
+
+    let codex_home = rendered.set.get("CODEX_HOME").expect("CODEX_HOME");
+    let delivered = std::fs::read_to_string(std::path::Path::new(codex_home).join("auth.json"))
+        .expect("the user's login must be reachable under the relocated CODEX_HOME");
+    let parsed: serde_json::Value = serde_json::from_str(&delivered).expect("parse auth.json");
+    assert_eq!(
+        parsed["OPENAI_API_KEY"], "sk-the-users-own-login",
+        "the delivered credential must be the user's own codex login"
+    );
+}
+
+/// The degradation the deleted `sync_local_codex_auth` had, preserved: a machine
+/// with NO codex login still launches (codex prompts for a login itself), and any
+/// copy left by a previous login is removed rather than outliving it.
+#[test]
+fn native_codex_without_a_user_login_delivers_nothing_and_clears_a_stale_copy() {
+    let _home_lock = env_lock();
+    let home = TempHome::new("codex-native-unauthed");
+    let user_home = TempHome::new("codex-native-empty-home");
+    std::fs::create_dir_all(user_home.path().join(".codex")).expect("create .codex");
+    let _guard = HomeEnvGuard::set(user_home.path());
+
+    // Seed a stale copy, as a previous (now logged-out) login would have left.
+    let native_home = home.path().join("agent-auth/codex-native");
+    std::fs::create_dir_all(&native_home).expect("create native home");
+    std::fs::write(native_home.join("auth.json"), r#"{"OPENAI_API_KEY":"sk-old"}"#)
+        .expect("seed stale auth");
+
+    let rendered = resolve_launch_route_auth(home.path(), "codex", &native_resolver("gpt-5.5"))
+        .expect("a launch on an unauthenticated machine must still start");
+
+    assert!(rendered.set.contains_key("CODEX_HOME"));
+    assert!(
+        !native_home.join("auth.json").exists(),
+        "a stale credential must not outlive the login that produced it"
+    );
+    // The config half is unaffected — the launch is configured, just not logged in.
+    assert!(native_home.join("config.toml").exists());
 }
 
 /// The native home is re-rendered per launch and is idempotent — it must not

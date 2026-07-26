@@ -536,6 +536,48 @@ mod tests {
         );
     }
 
+    /// The any-non-gateway fallback is not hypothetical — it fires TODAY for
+    /// opencode, whose only non-gateway default is `baseline`. Pin the value it
+    /// resolves to, so a change in either the fallback or the catalog is a visible
+    /// diff rather than a silent behavior change.
+    ///
+    /// This asserts the value rather than adding `baseline` to
+    /// [`NATIVE_CONTEXT_PRECEDENCE`] on purpose: `baseline` is a catalog-wide
+    /// notion of "the model to use absent any context", not an auth context, and
+    /// listing it would make it outrank a real provider context for any harness
+    /// that declares both. The generic fallback already picks it when it is the
+    /// only candidate, which is exactly the intended precedence.
+    ///
+    /// (opencode has no native recipe today — `render_native` renders nothing for
+    /// it — so this value is currently unused at launch. It is pinned because the
+    /// resolver computes it for every harness, and a future native recipe would
+    /// consume whatever this returns.)
+    #[test]
+    fn the_bundled_catalogs_opencode_native_default_is_its_baseline() {
+        let document = crate::domains::agents::catalog::bundled::bundled_agent_catalog_document();
+        let opencode = document
+            .agents
+            .iter()
+            .find(|agent| agent.kind == "opencode")
+            .expect("opencode in the bundled catalog");
+
+        assert_eq!(
+            opencode
+                .session
+                .defaults
+                .keys()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
+            vec!["baseline", "gateway"],
+            "if opencode gains a real auth-context default, the expectation below changes"
+        );
+        assert_eq!(
+            native_default_model(&opencode.session.defaults).as_deref(),
+            Some("opencode/big-pickle"),
+            "opencode's native default comes from the any-non-gateway fallback"
+        );
+    }
+
     #[test]
     fn provider_matcher_covers_known_families() {
         assert!(model_matches_provider("anthropic", "claude-sonnet-4-5"));

@@ -309,8 +309,9 @@ fn render_codex_gateway(
     Ok(())
 }
 
-/// The NATIVE codex recipe: an isolated `CODEX_HOME` whose `config.toml` pins
-/// the catalog's native default model and nothing else.
+/// The NATIVE codex recipe: an isolated `CODEX_HOME` holding TWO files — a
+/// `config.toml` pinning the catalog's native default model, and the user's own
+/// `auth.json`.
 ///
 /// Why isolate at all when the credential is the user's own? Because codex reads
 /// `~/.codex/config.toml`, and the runtime must not silently inherit whatever
@@ -319,12 +320,21 @@ fn render_codex_gateway(
 /// believes. Isolation also keeps the native and routed launch paths symmetric:
 /// one home per route, rendered from the catalog, never edited in place.
 ///
-/// The auth material is deliberately NOT rendered here. Codex resolves its own
-/// login from `CODEX_HOME/auth.json`, and the previous implementation copied the
-/// user's `auth.json` into its isolated home on every launch — including
-/// gateway-routed ones that never read it — leaving credential material on disk
-/// for no purpose. Instead the native home is populated by codex itself: see
-/// `render_codex_native`'s `CODEX_HOME` note below.
+/// **And why the credential must be delivered here.** Relocating `CODEX_HOME`
+/// relocates where codex looks for its login: it resolves credentials at
+/// `$CODEX_HOME/auth.json`, NOT at `~/.codex/auth.json`
+/// ([`anyharness_credential_discovery::codex`]). So an isolated home that carries
+/// only `config.toml` launches a natively-logged-in user UNAUTHENTICATED, and
+/// nothing later fixes it: the login terminal runs `codex login` with only `PATH`
+/// adjusted, so it writes `~/.codex` — never this home. The credential copy is
+/// therefore not a leftover of the old implementation, it is what makes an
+/// isolated native home usable at all.
+///
+/// Two files, one recipe: [`PathFamily::CodexNativeHome`] carries the rendered
+/// config bytes; [`PathFamily::CodexNativeAuth`] carries no bytes because the
+/// credential is read from the user's real codex home at APPLY time (render stays
+/// pure — see [`materialize::apply_file_spec`], which also handles the
+/// no-credential case by removing a stale copy).
 fn render_codex_native(
     plan: &GatewayModelPlan,
     runtime_home: &Path,
@@ -335,6 +345,11 @@ fn render_codex_native(
     // value must not become a hardcoded model id (the exact violation this
     // replaces), and unlike the gateway route a native launch CAN proceed
     // without our config file.
+    //
+    // Rendering nothing also leaves `CODEX_HOME` ambient, which is what keeps
+    // this branch safe: the CLI reads its own `~/.codex` — config AND credential
+    // together — so a missing catalog value degrades to "unmanaged" rather than
+    // to "authenticated against nothing".
     let Some(default_model) = plan.native_default_model.as_deref() else {
         tracing::debug!(
             "codex native launch has no catalog default model; leaving the CLI's own config"
@@ -346,9 +361,15 @@ fn render_codex_native(
     rendered.files.push(FileSpec {
         path_family: PathFamily::CodexNativeHome,
         revision: 0,
-        contents: Some(
-            codex_config_toml(CodexConfigRecipe::Native { default_model }).into_bytes(),
-        ),
+        contents: Some(codex_config_toml(CodexConfigRecipe::Native { default_model }).into_bytes()),
+    });
+    // The credential that makes the relocated home usable. Its bytes are the
+    // user's own codex login, resolved at apply time rather than here so this
+    // function stays pure (contract §4 two-phase render).
+    rendered.files.push(FileSpec {
+        path_family: PathFamily::CodexNativeAuth,
+        revision: 0,
+        contents: None,
     });
     Ok(())
 }
