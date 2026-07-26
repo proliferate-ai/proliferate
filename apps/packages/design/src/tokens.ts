@@ -430,30 +430,20 @@ export const themeTokens = {
   },
   "--color-composer-backdrop-filter": {
     dark: "none",
-    light: "blur(16px)",
-    provenance: "[SHIPPED]",
+    light: "none",
+    provenance: "[RETUNE:surface/composer-opaque]",
   },
   /**
-   * The composer is a translucent input surface floating over the app
-   * background, not an opaque card, so the transcript reads through it. The
-   * dark half renders `rgba(45,45,45,.96)` expressed in the house
-   * `color-mix()` form, landing on the same 96%-of-a-lifted-gray treatment
-   * `--color-surface-control` already uses in dark.
-   *
-   * The light half keeps its shipped `rgba(255,255,255,0.864)`: light was
-   * already translucent, tuned for its own blur treatment, and light is the
-   * only mode that carries `--color-composer-backdrop-filter: blur(16px)`
-   * (dark stays `none` on purpose — WKWebView re-blurs the whole transcript on
-   * every keystroke; see ChatComposerDock's PERF note). Raising light's alpha
-   * to match dark's 96% would cancel that blur rather than derive from it, so
-   * the translucency treatment applies per mode at the alpha each mode's
-   * backdrop was tuned for.
+   * The composer is a fully opaque input surface — no transcript bleed-
+   * through, in either mode. Dark keeps the lifted-gray `#2d2d2d` hue
+   * `--color-surface-control` already uses; light keeps its shipped white.
+   * Both render at 100% alpha now, so `--color-composer-backdrop-filter`
+   * (below) has nothing left to blur and is set to `none` in both modes.
    */
   "--color-composer-background": {
-    dark: "color-mix(in oklab, #2d2d2d 96%, transparent)",
-    light: "rgba(255, 255, 255, 0.864)",
-    themeFallback: "rgba(45, 45, 45, 0.96)",
-    provenance: "[RETUNE:surface/composer-translucent]",
+    dark: "#2d2d2d",
+    light: "#ffffff",
+    provenance: "[RETUNE:surface/composer-opaque]",
   },
   "--color-composer-border": {
     dark: "var(--color-border) /* legacy-alias */",
@@ -1311,8 +1301,8 @@ export const themeTokens = {
     provenance: "[RETUNE:radii/soft-scale]",
   },
   "--radius-composer": {
-    dark: "0.75rem",
-    light: "0.75rem",
+    dark: "1.25rem",
+    light: "1.25rem",
     provenance: "[RETUNE:radii/soft-scale]",
   },
   "--radius-full": {

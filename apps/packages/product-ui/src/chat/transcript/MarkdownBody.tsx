@@ -123,11 +123,15 @@ type MdCodeProps = MdElementProps & {
 // conversation bodies grow to match the composer. Authenticated CSS owns the
 // scoped font-size and line-height so chat rules stay out of the login bundle.
 const LI_CLASSNAME = "pl-0.5";
-// Applied to every prose element (paragraphs, headings, lists,
-// blockquotes) so the readable-width cap sits on the text itself rather
-// than the wrapper, letting wide blocks (tables, code) use the full thread
-// column. See the two-tier measure note on `markdownClassName` above.
-const PROSE_MEASURE_CLASSNAME = "max-w-transcript-readable";
+// Prose elements (paragraphs, headings, lists, blockquotes) fill the full
+// thread column — same width as wide blocks (tables, code) and the composer
+// column below them (both max-w-transcript-thread), so an assistant message
+// reads at the same measure the user is typing into. The narrower
+// --container-transcript-readable (40rem) token still exists for any
+// consumer that wants a tighter reading measure, but conversation prose no
+// longer applies it: see the two-tier measure note on `markdownClassName`
+// above.
+const PROSE_MEASURE_CLASSNAME = "max-w-full";
 
 // Markdown component overrides are the React element *types* for every
 // rendered node. They must be referentially stable across renders: a fresh

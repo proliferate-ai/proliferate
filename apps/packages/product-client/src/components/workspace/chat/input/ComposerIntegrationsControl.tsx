@@ -2,7 +2,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ComposerControlButton } from "@proliferate/ui/patterns/ComposerControlButton";
 import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
-import { ArrowUpRight, Blocks, Settings } from "@proliferate/ui/icons";
+import { ArrowUpRight, Plug, Settings } from "@proliferate/ui/icons";
 import { ComposerPopoverSurface } from "@proliferate/product-ui/chat/composer/ComposerPopoverSurface";
 import { IntegrationIcon } from "#product/components/settings/panes/integrations/IntegrationIcon";
 import { useComposerIntegrationsState } from "#product/hooks/cloud/derived/use-composer-integrations-state";
@@ -60,7 +60,7 @@ export function ComposerIntegrationsControl() {
                 className="block icon-status rounded-full bg-warning/70"
               />
             ) : (
-              <Blocks aria-hidden="true" className="icon-control" />
+              <Plug aria-hidden="true" className="icon-control" />
             )
           }
         />
@@ -80,7 +80,7 @@ export function ComposerIntegrationsControl() {
             >
               {providers.length === 0 && (
                 <StatusRow
-                  icon={<Blocks className="icon-paired" />}
+                  icon={<Plug className="icon-paired" />}
                   label="No integrations connected"
                   disabled
                 />

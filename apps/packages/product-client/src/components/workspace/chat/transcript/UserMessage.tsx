@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type { ContentPart } from "@anyharness/sdk";
 import { Button } from "@proliferate/ui/primitives/Button";
+import { ChevronDown } from "@proliferate/ui/icons";
 import { CarryOutPlanRow } from "#product/components/workspace/chat/transcript/CarryOutPlanRow";
 import { CopyMessageButton } from "#product/components/workspace/chat/transcript/CopyMessageButton";
 import { PromptContentRenderer } from "#product/components/workspace/chat/content/PromptContentRenderer";
@@ -86,7 +87,7 @@ export function UserMessage({
             <div
               ref={textRef}
               className={`[--prose-text-size:var(--text-message)] [--prose-text-line-height:var(--text-message--line-height)] break-words select-text${
-                !expanded ? " line-clamp-5" : ""
+                !expanded ? " line-clamp-[20]" : ""
               }`}
             >
               <PromptContentRenderer
@@ -97,16 +98,22 @@ export function UserMessage({
               />
             </div>
             {needsToggle && (
-              <div className="mt-1 flex justify-end">
+              <div className="group/show-more mt-1 flex justify-start">
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
                   data-chat-transcript-ignore
                   onClick={() => setExpanded((v) => !v)}
-                  className="h-auto px-1 py-0 text-chat text-muted-foreground hover:bg-transparent hover:text-foreground"
+                  className="h-auto gap-1 px-1 py-0 text-chat text-muted-foreground hover:bg-transparent hover:text-foreground"
                 >
                   {expanded ? "Show less" : "Show more"}
+                  <ChevronDown
+                    aria-hidden="true"
+                    className={`icon-paired opacity-0 transition-[opacity,transform] group-hover/show-more:opacity-100 ${
+                      expanded ? "rotate-180" : ""
+                    }`}
+                  />
                 </Button>
               </div>
             )}
