@@ -137,7 +137,7 @@ GITHUB_APP_PRIVATE_KEY or GITHUB_APP_PRIVATE_KEY_PATH
 ```
 
 Never print or copy those secret values. Follow the
-[GitHub App manual profile procedure](../../codebase/platforms/product/sandbox-github-auth.md#manual-profile-qa)
+[GitHub App manual profile procedure](github-app-manual-qa.md)
 to expose this profile's API with `CLOUD_WORKER_TUNNEL=ngrok`, set the callback
 base to the public API URL for the run, and register the test App's callback
 and setup URLs. Stop the tunnel after the test.

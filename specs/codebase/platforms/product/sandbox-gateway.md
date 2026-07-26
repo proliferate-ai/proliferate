@@ -18,9 +18,12 @@ someone else's contract.
 Fences, one owner per concern:
 
 - Whether a caller *may* reach a sandbox — capability, billing, and
-  readiness gating as the client experiences it — belongs to the sandbox
-  access platform (document planned, PR 4 of this program). This document
-  owns the wire those checks guard.
+  readiness gating as the client experiences it — belongs to
+  [sandbox-access.md](sandbox-access.md), including the client-side
+  choreography, retry policy, and token provider. This document owns the
+  wire those checks guard; where both docs touch the same seam (the 402,
+  the 409, the 60 s access cache), access owns the caller-facing
+  representation and this document owns the server-side mechanism.
 - The lifecycle consequence of traffic (a paused VM waking under a
   forwarded request) belongs to
   [sandbox-lifecycle.md](sandbox-lifecycle.md): the gateway gates on
@@ -67,11 +70,14 @@ mounted at `/v1/gateway` in
   Auth failure closes 1008 before any upstream connection exists.
 
 There is no sandbox id in the URL and no way to name one: the gateway
-always resolves *the caller's own personal sandbox*
+always resolves *the caller's own sandbox*
 ([gateway/service.py](../../../../server/proliferate/server/cloud/gateway/service.py)
 → [cloud_sandboxes/service.py](../../../../server/proliferate/server/cloud/cloud_sandboxes/service.py)),
 keyed by owner. Reaching someone else's sandbox is unrepresentable on this
-wire, not merely forbidden.
+wire, not merely forbidden. When lifecycle's per-(user, org) account model
+lands, resolution grows an org-context input from the request (which
+workspace's traffic this is) while keeping the same law: only the caller's
+own sandboxes are representable (gap below).
 
 ## The wire laws
 
@@ -179,27 +185,20 @@ Resolution from a cloud workspace to a live connection is one chain
    ([sandbox-content.md](sandbox-content.md), one workspace, two records).
 2. Guard: no stamped `anyharnessWorkspaceId` is a typed client-side 409
    `workspace_not_ready` — the retryable "still materializing" signal.
-3. Mint the gateway token: `getSandboxGatewayAccessToken()` is a pure
-   host-armed pointer
-   ([sandbox-gateway-access.ts](../../../../apps/packages/product-client/src/lib/access/cloud/sandbox-gateway-access.ts))
-   — it returns the host's current product session token. Desktop
-   refreshes via its session store (60 s expiry skew); web hands over the
-   in-memory session token; no token is ever minted specially for the
-   gateway and none is cached in product-client.
+3. Mint the gateway token — the product session token through the
+   host-armed provider pointer; the token model, its refresh semantics,
+   and the retry policy (what retries, how often, how long) are
+   [sandbox-access.md](sandbox-access.md)'s contract, not restated here.
 4. The connection object: gateway base URL, the token, workspace id,
    runtime generation, `runtimeAccessKind: "proliferate-gateway"`,
    `webSocketAuthTransport: "protocol"`. Every consumer renames
    `accessToken` → `authToken` and hands it to the same generic client.
 
-Retry is uniform and typed: `workspace_not_ready`, any 5xx, and network
-`TypeError` are retryable, 8 retries at 750 ms after the first attempt,
-wired identically into the direct wrapper and the React Query options
-(30 s staleTime). Long-open
-transports re-resolve on failure — a terminal socket dropping invalidates
-the cached connection and refetches; chat SSE reconnects with exponential
-backoff capped at 15 s from its last durable sequence. Before any fresh
-connect, `withFreshCloudSandboxGatewayAccessToken` re-mints just the
-token, so a cached-but-stale credential never opens a socket.
+Long-open transports re-resolve on failure — a terminal socket dropping
+invalidates the cached connection and refetches; chat SSE reconnects with
+exponential backoff capped at 15 s from its last durable sequence. Before
+any fresh connect, `withFreshCloudSandboxGatewayAccessToken` re-mints just
+the token, so a cached-but-stale credential never opens a socket.
 
 ## Proxied vs direct
 
@@ -295,11 +294,19 @@ Deltas between this document and `main`, each struck by its follow-up PR:
 - [ ] Cold access has no repair trigger: a sandbox whose runtime access
       was never materialized (or was cleared by provider loss) 409s
       forever at the gateway; nothing on the access path starts a
-      materialization. The choreography ruling (wake-and-poll vs
-      provision-on-access) is lifecycle's open question; this document
-      inherits its outcome. Note the precise boundary: *paused* sandboxes
-      already wake under forwarded traffic — the gap is only rows without
-      stamped access.
+      materialization — the caller's repair today is a
+      materialization-triggering action
+      ([sandbox-access.md](sandbox-access.md) failure modes). The
+      choreography ruling (wake-and-poll vs provision-on-access) is
+      lifecycle's open question; this document inherits its outcome. Note
+      the precise boundary: *paused* sandboxes already wake under
+      forwarded traffic — the gap is only rows without stamped access.
+- [ ] Gateway resolution has no org-context input: it resolves the
+      caller's personal sandbox only, which is consistent with today's
+      one-sandbox-per-user account model but not with lifecycle's ruled
+      per-(user, org) model; the resolution seam grows the context input
+      when that gap closes
+      ([sandbox-lifecycle.md](sandbox-lifecycle.md)).
 - [ ] The access cache outlives a runtime reset: the 60 s per-user cache
       ([gateway/service.py](../../../../server/proliferate/server/cloud/gateway/service.py))
       is not invalidated when reset-for-rematerialization or

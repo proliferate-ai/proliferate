@@ -24,8 +24,7 @@ Fences, one owner per concern:
   belongs to [sandbox-gateway.md](sandbox-gateway.md). This document owns
   only the lifecycle consequence: traffic wakes a paused sandbox.
 - Whether a caller may have a sandbox at all, and the choreography callers
-  use to reach one, belong to the sandbox access platform (document
-  planned).
+  use to reach one, belong to [sandbox-access.md](sandbox-access.md).
 - Compute billing math (usage segments, holds, credit) belongs to
   [billing.md](billing.md); this document only names the lifecycle events
   that open and close usage segments.
@@ -164,7 +163,7 @@ initialized. In order:
    failed, never exposed.
 6. Persist the runtime access triple onto the row: the public base URL,
    the bearer token ciphertext, and the data-key ciphertext (encrypted
-   at rest, decrypted only by the runtime gateway). The write is a
+   at rest, decrypted only by the sandbox gateway). The write is a
    compare-and-swap fenced by the attempt epoch and the exact provider
    binding, so a superseded attempt can never clobber a newer one; then
    the row is marked `ready`.
@@ -217,7 +216,7 @@ Row status is one of `creating`, `ready`, `paused`, `error`, `destroyed`
   happens only inside a materialization operation. This keeps row
   bookkeeping cheap and makes provider spend attributable to a real need.
 - **The gateway gates on policy, E2B wakes on traffic, materialization
-  repairs.** The runtime gateway forwards when the caller may reach the
+  repairs.** The sandbox gateway forwards when the caller may reach the
   sandbox (access and billing checks pass) regardless of VM liveness;
   E2B's auto-resume brings a paused VM back under the forwarded traffic;
   a VM that resumes broken (dead runtime, stale token) is repaired by the
@@ -250,8 +249,12 @@ The laws in sequence, for one user's first cloud workspace:
 2. The user creates a workspace. This is a materialization operation, so
    the engine runs: no binding exists, so it creates the E2B sandbox from
    the rolling template tag (metadata: sandbox id, owner), connects,
-   initializes the runtime, marks the row `ready`, and the `created`
-   webhook opens a usage segment. The HTTP response waits for all of it;
+   initializes the runtime, marks the row `ready`, and opens a usage
+   segment. (Usage opens are idempotent and dual-sourced: the
+   materialization engine opens at resume acceptance for the resumes it
+   performs, and the provider webhooks open for transitions the engine
+   never sees, like traffic wakes; whichever observes liveness first
+   wins, the other is a no-op.) The HTTP response waits for all of it;
    creation is the one deliberately slow, synchronous path.
 3. The user works for an hour, then stops. 45 idle minutes later E2B
    pauses the VM mid-process; the `paused` webhook moves the row to
@@ -259,12 +262,13 @@ The laws in sequence, for one user's first cloud workspace:
    session is frozen in place, and the paused VM is retained indefinitely
    at no compute cost.
 4. Next morning the user reopens the workspace. The client's first
-   request hits the runtime gateway, which checks policy only: the user
+   request hits the sandbox gateway, which checks policy only: the user
    may reach this sandbox, so the request is forwarded. The paused VM
    wakes under that forwarded traffic (E2B auto-resume, about a second),
    the frozen AnyHarness answers it, and the `resumed` webhook flips the
-   row `ready` and reopens the usage segment. No Proliferate code issued
-   a wake; forwarding was the wake.
+   row `ready` and reopens the usage segment (the webhook is the opener
+   here because no materialization ran — the idempotent dual-source rule
+   above). No Proliferate code issued a wake; forwarding was the wake.
 5. Had the user's credit been exhausted overnight, step 4 stops at the
    policy check: the gateway refuses, the traffic never leaves our
    server, and the VM stays paused. If a stray `resumed` webhook arrives
@@ -365,7 +369,7 @@ Pause is the steady state of an idle sandbox, not an exception:
 
 Workspace-scoped runtime status (`GET /workspaces/{id}/runtime-status`)
 projects the sandbox status plus Worker liveness for one workspace; its
-shape belongs to the sandbox access platform (document planned).
+shape belongs to [sandbox-access.md](sandbox-access.md).
 
 ## Code map
 
@@ -490,5 +494,6 @@ Deltas between this document and `main`, each struck by its follow-up PR:
 - [ ] `_runtime_status` in
       [workspaces/service.py](../../../../server/proliferate/server/cloud/workspaces/service.py)
       maps sandbox statuses `provisioning` and `stopped` that the enum and
-      check constraint do not allow; delete the dead branches when the
-      runtime-status shape moves to the access spec.
+      check constraint do not allow; the runtime-status shape belongs to
+      [sandbox-access.md](sandbox-access.md), which cross-lists this
+      dead-branch deletion on its fix PR.
