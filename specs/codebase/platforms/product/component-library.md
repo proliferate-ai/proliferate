@@ -38,7 +38,7 @@ apps/packages/product-ui/src/patterns/
 ```
 
 `apps/packages/ui/src` has no other top-level entries; the six above are the
-complete list enforced by `UI_SRC_TOP_LEVEL_ENTRY` in
+complete list enforced by `UI_SRC_ALLOWED_TOP_LEVEL_ENTRIES` in
 [check_frontend_boundaries.py](../../../../scripts/check_frontend_boundaries.py).
 
 ## The Library Model
