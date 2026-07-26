@@ -11,8 +11,9 @@ expectations, but it is not the owner of a full user workflow.
 | Platform | Owns | Read |
 | --- | --- | --- |
 | Sandbox lifecycle | E2B template arc, sandbox states and wake/pause/destroy causes, the provisioning engine, runtime topology, health telemetry. | [sandbox-lifecycle.md](sandbox-lifecycle.md) (Status: target) |
+| Sandbox content | Shared repo clones (create/refresh/reclaim), workspace worktrees (materialize/retire/retention), git identity, disk budget observability. | [sandbox-content.md](sandbox-content.md) (Status: target) |
 | Design system | The ruled look (type ramp, control weight, composer/transcript anatomy, tab strip, icon tiers), reference precedence, the token-authority and gate model, and change control for moving a value. | [design-system.md](design-system.md) |
-| Cloud sandbox provisioning | One active personal sandbox row, just-in-time E2B create/resume, direct AnyHarness launch and gateway access, and the optional Worker sidecar. | [sandbox-provisioning.md](sandbox-provisioning.md); being superseded by [sandbox-lifecycle.md](sandbox-lifecycle.md) and the planned content/gateway/access specs |
+| Cloud sandbox provisioning | One active personal sandbox row, just-in-time E2B create/resume, direct AnyHarness launch and gateway access, and the optional Worker sidecar. | [sandbox-provisioning.md](sandbox-provisioning.md); being superseded by [sandbox-lifecycle.md](sandbox-lifecycle.md), [sandbox-content.md](sandbox-content.md), and the planned gateway/access specs |
 | Cloud workspace provisioning | Repository-environment materialization, synchronous Cloud workspace creation, direct AnyHarness worktree creation, and Cloud/runtime truth boundaries. | [workspace-provisioning.md](workspace-provisioning.md), then [sandbox-provisioning.md](sandbox-provisioning.md) |
 | MCP runtime | AnyHarness MCP concepts, user bindings, session extensions, product MCP serving, and elicitation boundaries. | [mcp-runtime.md](mcp-runtime.md) |
 | MCP + skills + plugins flow | Cloud configured items for MCPs, skills, plugins, runtime manifests, worker materialization, and plugin-to-runtime expansion rules. | [mcp-skills.md](mcp-skills.md) |

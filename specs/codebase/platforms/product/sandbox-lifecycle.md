@@ -16,10 +16,10 @@ this sandbox wake, pause, or die" is answered here.
 Fences, one owner per concern:
 
 - What is *inside* the container on the user's behalf (repo clones,
-  worktrees, git identity, the disk they consume) belongs to the sandbox
-  content platform (document planned). The boundary law: lifecycle owns the
-  box, content owns what the user put in it. Runtime binaries and rendered
-  state files are machinery, not content, and stay here.
+  worktrees, git identity, the disk they consume) belongs to
+  [sandbox-content.md](sandbox-content.md). The boundary law: lifecycle owns
+  the box, content owns what the user put in it. Runtime binaries and
+  rendered state files are machinery, not content, and stay here.
 - How bytes reach a running sandbox (the AnyHarness proxy, streaming rules)
   belongs to the sandbox gateway platform (document planned). This document
   owns only the lifecycle consequence: traffic wakes a paused sandbox.
@@ -346,7 +346,8 @@ Pause is the steady state of an idle sandbox, not an exception:
   with no user-visible symptom.
 - Runtime pressure telemetry (CPU, memory, and disk) flows from AnyHarness
   health to the client pressure surfaces. Lifecycle transports the
-  measurement; the content platform owns what consumes the disk number.
+  measurement; [sandbox-content.md](sandbox-content.md) owns what consumes
+  the disk number.
 - The E2B webhook is the passive health channel; the orphan reaper
   ([orphan_sandboxes.py](../../../../server/proliferate/server/cloud/worker/orphan_sandboxes.py))
   is the active one, listing provider sandboxes every 5 minutes and
@@ -484,7 +485,8 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       metrics API is never called, and a disk-full failure flattens into
       the generic provider-unavailable receipt
       ([failures.py](../../../../server/proliferate/server/cloud/materialization/failures.py)).
-      Add disk to the health payload and type the disk-full failure.
+      Add disk to the health payload and type the disk-full failure
+      (consumer contract in [sandbox-content.md](sandbox-content.md)).
 - [ ] `_runtime_status` in
       [workspaces/service.py](../../../../server/proliferate/server/cloud/workspaces/service.py)
       maps sandbox statuses `provisioning` and `stopped` that the enum and
