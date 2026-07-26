@@ -91,20 +91,20 @@ function SegmentedControlDemo() {
 function AnimatedCollapsibleContentDemo() {
   const [expanded, setExpanded] = useState(true);
   return (
-    <button type="button" onClick={() => setExpanded((value) => !value)}>
+    <Button type="button" variant="ghost" size="sm" onClick={() => setExpanded((value) => !value)}>
       <AnimatedCollapsibleContent expanded={expanded}>
         <span className="text-ui-sm text-foreground">Collapsible content</span>
       </AnimatedCollapsibleContent>
-    </button>
+    </Button>
   );
 }
 
 function AnimatedSwapTextDemo() {
   const [key, setKey] = useState("a");
   return (
-    <button type="button" onClick={() => setKey((current) => (current === "a" ? "b" : "a"))}>
+    <Button type="button" variant="ghost" size="sm" onClick={() => setKey((current) => (current === "a" ? "b" : "a"))}>
       <AnimatedSwapText valueKey={key} value={key === "a" ? "Value A" : "Value B"} />
-    </button>
+    </Button>
   );
 }
 
