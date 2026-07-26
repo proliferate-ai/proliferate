@@ -115,10 +115,11 @@ which adds the runtime and sandbox status axes for one workspace. Neither
 performs a live runtime call; the 409 is what a caller gets for jumping
 the gun.
 
-Per the lifecycle ruling, this layer is a *policy* gate, not a liveness
-gate: a paused-but-permitted sandbox is forwarded to and wakes under the
-traffic; the 409 means the access material genuinely does not exist yet,
-not "try again once it wakes".
+This layer is a *policy* gate, not a liveness gate: a paused-but-permitted
+sandbox is forwarded to and wakes under the traffic (its stored access
+material stays valid across a pause); the 409 means the access material
+genuinely does not exist yet — never stamped, or cleared by provider loss
+— not "try again once it wakes".
 
 Adjacent `CloudApiError` codes (repository access, agent-gateway catalog,
 …) are their platforms' business and are not access-gating
@@ -186,8 +187,7 @@ worktrees:
    schedule.
 3. The AnyHarness client calls `GET /v1/worktrees/inventory` through the
    gateway with a freshly minted product token; if the VM was paused, it
-   wakes under this very request (the ruled policy-gate behavior — today's
-   liveness gate 409s instead; see Current gaps).
+   wakes under this very request — no wake verb, forwarding is the wake.
 
 No ensure, no wake verb, no bespoke polling — the same three shapes, the
 same one choreography.
@@ -314,11 +314,13 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       shape is this document's, so the dead-branch deletion rides its fix
       PR (cross-listed from
       [sandbox-lifecycle.md](sandbox-lifecycle.md)).
-- [ ] The sandbox layer is a liveness gate today, not a policy gate: the
-      runtime gateway refuses 409 unless the row is already `ready`, so
-      auto-resume never sees the traffic. Owned by
-      [sandbox-lifecycle.md](sandbox-lifecycle.md)'s gap list; this
-      document's choreography assumes the ruled behavior.
+- [ ] Cold access has no repair trigger: a sandbox whose access material
+      was never stamped (or was cleared by provider loss) 409s forever at
+      the gateway; nothing on the access path starts the materialization
+      that would repair it. The choreography ruling (wake-and-poll vs
+      provision-on-access) is [sandbox-lifecycle.md](sandbox-lifecycle.md)'s
+      open question; this document's failure modes assume today's
+      repair-by-materializing-action behavior.
 - [ ] `POST /cloud-sandbox/wake` is byte-identical to `ensure`; collapse
       to `ensure` as a hard rename. Owned by
       [sandbox-lifecycle.md](sandbox-lifecycle.md)'s gap list; listed here

@@ -1,12 +1,9 @@
-import {
-  CloudChatAssistantLoadingRow,
-  CloudChatThoughtRow,
-} from "@proliferate/product-ui/chat/transcript/CloudChatTranscriptRowItems";
-import { CloudChatSurface } from "@proliferate/product-ui/chat/CloudChatSurface";
 import { SessionCheckScreen } from "#product/components/auth/SessionCheckScreen";
 import { SkeletonBlock, shimmerDelay } from "#product/components/feedback/Skeleton";
 import { ThinkingText } from "#product/components/feedback/ThinkingText";
 import { LoadingState } from "#product/components/feedback/LoadingIllustration";
+import { ChatLoadingHero } from "#product/components/workspace/chat/surface/ChatLoadingHero";
+import { ChatPreMessageCanvas } from "#product/components/workspace/chat/surface/ChatPreMessageCanvas";
 import { PlaygroundThinkingTimingControls } from "#product/components/playground/loading/PlaygroundThinkingTimingControls";
 import { StreamingIndicator } from "#product/components/workspace/chat/transcript/StreamingIndicator";
 import { TranscriptSwitchingPlaceholder } from "#product/components/workspace/chat/surface/TranscriptSwitchingPlaceholder";
@@ -20,32 +17,11 @@ export function PlaygroundLoadingStates() {
           <TranscriptSwitchingPlaceholder label="Desktop switching alignment" />
         </div>
         <div className="flex flex-col overflow-hidden rounded-md border border-border" style={{ height: "22rem" }}>
-          <CloudChatSurface
-            header={{
-              workspaceLabel: "Typography",
-              status: { label: "Loading", tone: "info", live: true },
-              sessionSwitcher: {
-                workspaceLabel: "Typography",
-                activeSessionId: "session-1",
-                activeSessionLabel: "Layout alignment",
-                sessions: [{ id: "session-1", label: "Layout alignment" }],
-                newSessionLabel: "New session",
-                onSelectSession: () => {},
-                onNewSession: () => {},
-              },
-            }}
-            transcriptRows={[]}
-            transcriptLoading
-            emptyTitle="No transcript yet"
-            composer={{
-              value: "",
-              placeholder: "Describe a task",
-              canSubmit: false,
-              controls: [],
-              onChange: () => {},
-              onSubmit: () => {},
-            }}
-          />
+          {/* The REAL "session-loading" chat surface — ChatView routes here
+              while a session is loading/hydrating. No fixture-only clone. */}
+          <ChatPreMessageCanvas bottomInsetPx={0}>
+            <ChatLoadingHero />
+          </ChatPreMessageCanvas>
         </div>
       </section>
 
@@ -56,7 +32,7 @@ export function PlaygroundLoadingStates() {
       {/* One motion family, side by side: the thinking-text band sweep and
           the skeleton block sweep share direction, softness, and pacing. */}
       <section className="space-y-3">
-        <h2 className="text-sm font-medium text-foreground">
+        <h2 className="text-heading font-medium text-foreground">
           Shimmer + staggered skeletons
         </h2>
         <div className="grid gap-4 md:grid-cols-2">
@@ -76,40 +52,11 @@ export function PlaygroundLoadingStates() {
         </div>
       </section>
 
-      {/* The REAL shared cloud-transcript rows (product-ui): the assistant
-          loading row and a live thought row both ride the same ThinkingText
-          band sweep as the desktop transcript. */}
-      <section className="space-y-3">
-        <h2 className="text-sm font-medium text-foreground">
-          Cloud transcript thinking rows
-        </h2>
-        <div className="flex flex-col gap-1 rounded-md border border-border p-4">
-          <CloudChatAssistantLoadingRow
-            row={{ id: "playground-loading", kind: "assistant", streaming: true }}
-          />
-          <CloudChatThoughtRow
-            row={{
-              id: "playground-thought-live",
-              kind: "thought",
-              streaming: true,
-              body: "Weighing the trade-offs between the two dock-slot owners.",
-            }}
-          />
-          <CloudChatThoughtRow
-            row={{
-              id: "playground-thought-done",
-              kind: "thought",
-              body: "Chose the compact row migration.",
-            }}
-          />
-        </div>
-      </section>
-
       <PlaygroundThinkingTimingControls />
 
       <section className="space-y-3">
-        <h2 className="text-sm font-medium text-foreground">Session tabs</h2>
-        <div className="inline-flex h-9 min-w-48 items-center gap-2 rounded-md border border-border px-3 text-sm text-muted-foreground">
+        <h2 className="text-heading font-medium text-foreground">Session tabs</h2>
+        <div className="inline-flex h-9 min-w-48 items-center gap-2 rounded-md border border-border px-3 text-ui text-muted-foreground">
           {renderChatTabIcon({
             agentKind: "",
             viewState: "idle",
@@ -122,11 +69,11 @@ export function PlaygroundLoadingStates() {
 
       <section className="grid gap-4 md:grid-cols-2">
         <div className="space-y-3 rounded-md border border-border p-4">
-          <h2 className="text-sm font-medium text-foreground">Sidebar skeleton</h2>
+          <h2 className="text-heading font-medium text-foreground">Sidebar skeleton</h2>
           <div className="flex flex-col gap-1">
-            <SkeletonBlock className="h-7 w-full bg-sidebar-accent" />
-            <SkeletonBlock className="h-7 w-[86%] bg-sidebar-accent/80" />
-            <SkeletonBlock className="h-7 w-[70%] bg-sidebar-accent/70" />
+            <SkeletonBlock className="h-7 w-full bg-surface-control" />
+            <SkeletonBlock className="h-7 w-[86%] bg-surface-control/80" />
+            <SkeletonBlock className="h-7 w-[70%] bg-surface-control/70" />
           </div>
         </div>
         <div className="rounded-md border border-border p-4">

@@ -59,7 +59,7 @@ function DialogContent({
         className={cn(
           // Canonical modal surface (matches ModalShell / "Repository added"):
           // bg-background panel, not the lighter bg-popover tint.
-          "modal-panel-animated fixed left-1/2 top-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-background p-5 text-foreground shadow-lg",
+          "modal-panel-animated fixed left-1/2 top-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-background p-5 text-foreground shadow-modal",
           className,
         )}
         {...props}
@@ -122,7 +122,7 @@ function DialogDescription({
   return (
     <DialogPrimitive.Description
       data-slot="dialog-description"
-      className={cn("text-ui-sm leading-[1.45] text-muted-foreground", className)}
+      className={cn("text-ui-sm text-muted-foreground", className)}
       {...props}
     />
   );

@@ -12,7 +12,7 @@ const COMMAND_ENVIRONMENT_DOCS_URL =
 
 export function RunCommandHelp({
   scope,
-  className = "text-sm text-muted-foreground",
+  className = "text-ui-sm text-muted-foreground",
 }: RunCommandHelpProps) {
   const { openExternal } = useProductHost().links;
 
@@ -23,7 +23,7 @@ export function RunCommandHelp({
         type="button"
         variant="ghost"
         size="sm"
-        className="inline-flex h-auto gap-1 px-1 py-0 align-baseline text-sm text-muted-foreground underline underline-offset-2 hover:text-foreground"
+        className="inline-flex h-auto gap-1 px-1 py-0 align-baseline text-ui-sm text-muted-foreground underline underline-offset-2 hover:text-foreground"
         onClick={() => { void openExternal(COMMAND_ENVIRONMENT_DOCS_URL); }}
       >
         Command environment docs

@@ -11,6 +11,10 @@
       "types": "./dist/tokens.d.ts",
       "import": "./dist/tokens.js"
     },
+    "./motion": {
+      "types": "./dist/motion.d.ts",
+      "import": "./dist/motion.js"
+    },
     "./react-native": {
       "types": "./dist/react-native.d.ts",
       "import": "./dist/react-native.js"
@@ -21,13 +25,14 @@
     "./desktop.css": "./dist/css/desktop.css"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json && node scripts/generate-theme.mjs && node scripts/copy-dom-css.mjs",
+    "build": "tsc -p tsconfig.json && node scripts/generate-theme.mjs && node scripts/copy-dom-css.mjs && node scripts/check-theme.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.3.0",
     "@fontsource-variable/manrope": "^5.3.0",
     "@fontsource-variable/space-grotesk": "^5.3.0",
+    "geist": "^1.7.2",
     "tailwindcss": "^4"
   },
   "devDependencies": {

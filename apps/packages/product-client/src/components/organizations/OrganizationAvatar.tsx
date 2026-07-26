@@ -24,7 +24,7 @@ export function OrganizationAvatar({
   className?: string;
 }) {
   const baseClassName = twMerge(
-    "flex shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border-light bg-foreground/5 text-ui-sm font-medium leading-none text-muted-foreground",
+    "flex shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border-light bg-surface-control text-ui-sm font-medium leading-none text-muted-foreground",
     className,
   );
 

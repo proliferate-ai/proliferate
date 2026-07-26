@@ -42,8 +42,8 @@ export function SegmentedControl<Id extends string>({
             className={twMerge(
               "inline-flex h-[30px] items-center gap-1.5 border-l border-input px-3 text-ui font-medium transition-colors first:border-l-0 disabled:pointer-events-none disabled:opacity-50 [&_svg]:icon-paired",
               active
-                ? "bg-foreground/10 text-foreground"
-                : "bg-background text-muted-foreground hover:bg-accent hover:text-foreground",
+                ? "bg-selected text-foreground"
+                : "bg-background text-muted-foreground hover:bg-hover hover:text-foreground active:bg-active",
             )}
             onClick={() => onChange(item.id)}
           >

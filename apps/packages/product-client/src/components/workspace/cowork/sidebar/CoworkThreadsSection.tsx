@@ -150,14 +150,14 @@ export function CoworkThreadsSection() {
           {statusLoading || threadsLoading ? (
             showPendingCoworkThread ? null : (
               <div className="flex flex-col gap-1 px-2 py-2" aria-label="Loading threads" role="status">
-                <SkeletonBlock className="h-7 w-full bg-sidebar-accent" />
-                <SkeletonBlock className="h-7 w-[82%] bg-sidebar-accent/80" />
+                <SkeletonBlock className="h-7 w-full bg-surface-control" />
+                <SkeletonBlock className="h-7 w-[82%] bg-surface-control/80" />
                 <p className="sr-only">Loading threads</p>
               </div>
             )
           ) : listedThreads.length === 0 ? (
             showPendingCoworkThread ? null : (
-              <div className="px-2 py-2 text-xs text-sidebar-muted-foreground">
+              <div className="px-2 py-2 text-ui-sm text-sidebar-muted-foreground">
                 {isCreatingThread ? "Creating chat" : "No chats yet"}
               </div>
             )

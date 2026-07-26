@@ -7,8 +7,15 @@ Current gap: the managed-Target UI described here is not implemented.
 Date: 2026-05-20.
 
 Depends on: [`sandbox-provisioning.md`](../../../platforms/product/sandbox-provisioning.md),
-[`mcp-skills.md`](../../../platforms/product/mcp-skills.md), and the agent auth
-platform (its Bifrost-era document was removed; a rewrite is planned).
+[`mcp-skills.md`](../../../platforms/product/mcp-skills.md), and
+[`agent-auth.md`](../../../platforms/product/agent-auth.md).
+
+Staleness note (2026-07-25): this document predates the Bifrost removal.
+Its Agents-scope content (the `agent-authentication` pane, its panes,
+primitives, deep links, copy files, and smoke steps) describes removed UI;
+each such block below carries a correction to the shipped per-harness
+sections. The authoritative auth contract is
+[`agent-auth.md`](../../../platforms/product/agent-auth.md).
 
 This spec defines the settings shell, sidebar navigation, page ownership,
 shared UI primitives, and shared vocabulary used by every other spec
@@ -116,11 +123,15 @@ Hard:
 - [`mcp-skills.md`](../../../platforms/product/mcp-skills.md): Plugins page
   rows show `enabled`, `public_to_org`, `auth_status`,
   `runtime_apply_status`.
-- Agent auth platform (document removed; rewrite planned): this spec's Agent
-  Authentication pane (`CloudAgentAuthLibrary` + `ComputeTargetAgentAuthCard`,
-  `CredentialPicker`) described the removed Bifrost-era UI. The shipped UI is
-  per-harness settings sections (`agent-claude`, `agent-codex`,
-  `agent-opencode`, `agent-grok`, `agent-api-keys`).
+- [`agent-auth.md`](../../../platforms/product/agent-auth.md): this spec's
+  Agent Authentication pane (`CloudAgentAuthLibrary` +
+  `ComputeTargetAgentAuthCard`, `CredentialPicker`) described the removed
+  Bifrost-era UI. The shipped UI is per-harness settings sections
+  (`agent-claude`, `agent-codex`, `agent-opencode`, `agent-grok`,
+  `agent-api-keys`), rendered by
+  [HarnessPane.tsx](../../../../../apps/packages/product-client/src/components/settings/panes/agents/harness/HarnessPane.tsx)
+  with three method cards (gateway / API key / CLI login) per
+  agent-auth.md's selection model.
 
 Soft:
 
@@ -175,6 +186,14 @@ Repo      environments, compute ("Personal compute")
 Agents    agent-defaults, agent-authentication
 ```
 
+> Shipped correction: the Agents scope is per-harness pages plus the key
+> pool — `agent-claude`, `agent-codex`, `agent-opencode`, `agent-grok`,
+> `agent-api-keys`
+> ([navigation-presentation.ts](../../../../../apps/packages/product-client/src/lib/domain/settings/navigation-presentation.ts)).
+> `agent-defaults` and `agent-authentication` were removed; legacy links
+> redirect to `agent-claude` and `agent-api-keys` respectively
+> ([navigation.ts](../../../../../apps/packages/product-client/src/lib/domain/settings/navigation.ts)).
+
 **Routing**: URL search param `?section=<id>`. Active section is
 managed by `useSettingsNavigation()`; the active scope tab is derived
 from the section. Sections are defined in
@@ -191,6 +210,13 @@ SETTINGS_CONTENT_SECTIONS = [
   // parked (kept in code, unregistered): "slack-bot"
 ]
 ```
+
+> Shipped correction: the registered array
+> ([config/settings.ts](../../../../../apps/packages/product-client/src/config/settings.ts))
+> carries `agent-claude`/`agent-codex`/`agent-opencode`/`agent-grok`/
+> `agent-api-keys` instead of `agent-authentication`/`agent-defaults`,
+> plus `integrations`, `repo-actions`, and `repo-environment`; `keyboard`,
+> `archived-chats`, and `compute` were removed.
 
 **Shortcuts**: Cmd-digit section shortcuts are per-scope.
 `SETTINGS_SHORTCUT_SECTION_ORDER` is filtered to the sections visible in
@@ -228,6 +254,13 @@ subfolders:
   organization/                  Members/Invitations/Logo/budget rows
   repo/                          CloudRepoSection.tsx, LocalRepoSection.tsx
 ```
+
+> Shipped correction: `AgentAuthenticationPane.tsx` and the
+> `agent-authentication/` subfolder do not exist. The Agents scope ships
+> as `panes/agents/harness/` (per-harness pane, auth method cards, CLI
+> login details) and `panes/agents/api-keys/` (the key pool), with
+> selection/vault contracts owned by
+> [`agent-auth.md`](../../../platforms/product/agent-auth.md).
 
 **Existing shared primitives**: page chrome lives in
 `apps/packages/product-ui/src/settings/`:
@@ -487,6 +520,8 @@ Repo
 Agents
   agent-defaults           AgentDefaultsPane              per-person agent defaults
   agent-authentication     AgentAuthenticationPane        local + cloud auth by person
+  (shipped: agent-claude/-codex/-opencode/-grok HarnessPane + agent-api-keys;
+   the two rows above were removed — see the staleness note at the top)
 
 Slack bot                  SlackBotPane                   (parked/disabled;
                                                            spec 07 logic is
@@ -542,11 +577,14 @@ Preserved id:
 
 The `?section=<id>` URL scheme is preserved. Old urls that point at
 `?section=repo` or `?section=cloudRepo` redirect to
-`?section=environments`; `?section=cloud` redirects to
-`?section=agent-authentication`; removed `shared-environments` and
-parked `slack-bot` redirect to the default section
-(`normalizeSettingsSection` in
-`apps/desktop/src/lib/domain/settings/navigation.ts`).
+`?section=environments`; removed `shared-environments` and parked
+`slack-bot` redirect to the default section. Shipped redirects differ
+from this spec's originals: `?section=agent-authentication` goes to
+`agent-api-keys`, `agent-defaults` to `agent-claude`, and
+`?section=cloud` is focus-dependent (repo focus → `environments`,
+billing focus → `billing`) — see `normalizeSettingsSection` and
+`cloudRedirectSection` in
+[navigation.ts](../../../../../apps/packages/product-client/src/lib/domain/settings/navigation.ts).
 
 ### 5.2 Per-page ownership
 
@@ -601,6 +639,9 @@ Agents
                                        same pane is sandbox-aware:
                                        admins see selection for shared
                                        sandbox; everyone sees personal.
+  (shipped: the row above was removed. Per-harness pages own auth via
+   method cards; the key pool is agent-api-keys. Contract:
+   agent-auth.md — see the staleness note at the top.)
 
 Slack bot (parked)          spec 07   install/reconnect, repo routing,
                                        default agent_run_config, shared
@@ -767,6 +808,9 @@ CredentialPicker
   Used by:
     AgentAuthenticationPane (spec 02)
     ComputeTargetAgentAuthCard (spec 02)
+  (shipped: never built — both consumers were removed with the
+   Bifrost-era pane; the per-harness key picker lives in the harness
+   pane's API-key details instead)
 
 AgentRunConfigSelector
   apps/desktop/src/components/settings/shared/AgentRunConfigSelector.tsx
@@ -824,6 +868,8 @@ WhereUsedDrawer
   Used by:
     PluginsPage detail
     CloudAgentAuthLibrary credential detail
+  (shipped: the CloudAgentAuthLibrary consumer was removed with the
+   Bifrost-era pane)
 ```
 
 **Status badge convention** (existing `Badge` primitive, new shared
@@ -935,6 +981,11 @@ URL search param `?section=<id>` is preserved. Two clean-ups:
 ?section=shared-environments&repo=<normalized_repo_key>
 ```
 
+> Shipped correction: the two `agent-authentication` deep links do not
+> exist (the pane was removed); legacy hits redirect to
+> `agent-api-keys`. Per-harness pages are their own sections
+> (`?section=agent-claude` etc.), no `kind` param.
+
 `useSettingsNavigation()` exposes the focus param so panes can scroll
 to / open the right card.
 
@@ -953,6 +1004,13 @@ apps/desktop/src/copy/settings/shared-environments-copy.ts
 apps/desktop/src/copy/settings/agent-authentication-copy.ts
 apps/desktop/src/copy/settings/slack-bot-copy.ts
 ```
+
+> Shipped correction: agent auth copy lives in
+> [harness-pane.ts](../../../../../apps/packages/product-client/src/copy/settings/harness-pane.ts),
+> [agent-auth-copy.ts](../../../../../apps/packages/product-client/src/copy/settings/agent-auth-copy.ts),
+> and
+> [agent-api-keys-copy.ts](../../../../../apps/packages/product-client/src/copy/settings/agent-api-keys-copy.ts);
+> no `agent-authentication-copy.ts` exists.
 
 Existing `copy/settings/*` files are kept; rename inside copy follows
 the section-id renames.
@@ -1083,6 +1141,7 @@ apps/desktop/src/components/settings/sidebar/SettingsSidebar.test.tsx
 apps/desktop/src/components/settings/SettingsScreen.test.tsx
   - ?section=repo redirects to ?section=environments
   - ?section=cloud redirects to ?section=agent-authentication
+    (shipped: focus-dependent, see 5.7 correction)
   - ?section=worktrees resolves to Pruning (User scope)
 
 apps/desktop/src/hooks/access/cloud/organizations/use-is-admin.test.ts
@@ -1111,10 +1170,14 @@ Manual smoke:
 
 3. Open Settings with ?section=cloud.
      -> redirects to ?section=agent-authentication.
+     (shipped: focus-dependent redirect — repo focus to environments,
+      billing focus to billing)
 
 4. Open ?section=agent-authentication&kind=claude.
      -> AgentAuthenticationPane opens with the Claude agent kind
         preselected.
+     (shipped: redirects to ?section=agent-api-keys; the per-harness
+      page is ?section=agent-claude)
 
 5. Open Plugins (top-level page).
      -> Still works; not in Settings sidebar.

@@ -35,10 +35,10 @@ export function LiveTerminalsRosterPanel({ processes, nowMs }: LiveTerminalsRost
   return (
     <div className="flex flex-col gap-1.5" data-terminals-roster-panel>
       <div className="px-1 pt-0.5">
-        <span className="text-xs font-medium text-foreground">Terminals</span>
+        <span className="text-ui font-medium text-foreground">Terminals</span>
       </div>
       {sorted.length === 0 ? (
-        <p className="px-1 pb-1 text-xs text-muted-foreground">No background terminals.</p>
+        <p className="px-1 pb-1 text-ui-sm text-muted-foreground">No background terminals.</p>
       ) : (
         <ul className="flex flex-col gap-0.5">
           {sorted.map((process) => (
@@ -82,7 +82,7 @@ function LiveTerminalRow({ process, nowMs, workspaceId, expanded, onToggle }: Li
       />
       {expanded && feed && (
         <pre
-          className="mx-1.5 mb-1 max-h-40 overflow-auto whitespace-pre-wrap rounded-md bg-muted/40 px-2 py-1.5 font-mono text-sm leading-snug text-muted-foreground"
+          className="mx-1.5 mb-1 max-h-40 overflow-auto whitespace-pre-wrap rounded-md bg-muted/40 px-2 py-1.5 font-mono text-readable-code leading-snug text-muted-foreground"
           data-terminal-feed
           data-telemetry-mask
         >

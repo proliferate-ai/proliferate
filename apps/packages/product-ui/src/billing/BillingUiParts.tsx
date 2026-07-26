@@ -41,12 +41,12 @@ export function Metric({
 }) {
   return (
     <div className="min-w-0 space-y-2">
-      <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+      <div className="flex items-center gap-2 text-ui-sm font-medium uppercase tracking-wide text-muted-foreground">
         <span className="text-muted-foreground">{icon}</span>
         <span>{label}</span>
       </div>
-      <div className="truncate text-lg font-semibold text-foreground">{value}</div>
-      <div className="text-xs leading-5 text-muted-foreground">{detail}</div>
+      <div className="truncate text-title font-semibold text-foreground">{value}</div>
+      <div className="text-ui-sm text-muted-foreground">{detail}</div>
     </div>
   );
 }
@@ -64,7 +64,7 @@ export function Notice({
 }) {
   return (
     <div
-      className={`flex gap-3 rounded-lg border p-3 text-sm ${
+      className={`flex gap-3 rounded-lg border p-3 text-body ${
         tone === "destructive"
           ? "border-destructive/30 bg-destructive/10 text-destructive"
           : "border-warning/30 bg-warning/10 text-warning"

@@ -53,8 +53,8 @@ export function WorkflowRunForm({
     <section className="rounded-lg border border-border bg-card p-4" data-telemetry-block>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-sm font-medium text-foreground">Run in Cloud</h2>
-          <p className="mt-1 text-xs text-muted-foreground">
+          <h2 className="text-heading font-medium text-foreground">Run in Cloud</h2>
+          <p className="mt-1 text-ui-sm text-muted-foreground">
             Starts one managed session using this saved workflow revision.
           </p>
         </div>
@@ -64,14 +64,14 @@ export function WorkflowRunForm({
       </div>
 
       {!capabilityEnabled ? (
-        <p className="mt-3 rounded-md border border-border bg-surface-raised px-3 py-2 text-xs text-muted-foreground" role="status">
+        <p className="mt-3 rounded-md border border-border bg-surface-raised px-3 py-2 text-ui-sm text-muted-foreground" role="status">
           Managed Workflow runs are not enabled on this server. Saved workflows and existing run history remain available.
         </p>
       ) : null}
       {blockers.length > 0 ? (
         <div className="mt-3 rounded-md border border-warning/30 bg-warning/5 px-3 py-2" role="status">
-          <p className="text-xs font-medium text-warning">This workflow cannot run yet.</p>
-          <ul className="mt-1 space-y-1 text-xs text-warning">
+          <p className="text-ui font-medium text-warning">This workflow cannot run yet.</p>
+          <ul className="mt-1 space-y-1 text-ui text-warning">
             {[...blockers]
               .sort((a, b) => a.path.localeCompare(b.path) || a.code.localeCompare(b.code))
               .map((blocker) => (
@@ -84,7 +84,7 @@ export function WorkflowRunForm({
       ) : null}
 
       {inputs.length === 0 ? (
-        <p className="mt-4 text-xs text-muted-foreground">This workflow has no inputs.</p>
+        <p className="mt-4 text-ui-sm text-muted-foreground">This workflow has no inputs.</p>
       ) : (
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           {inputs.map((input) => {
@@ -121,7 +121,7 @@ export function WorkflowRunForm({
                   )}
                 </div>
                 {requiredByPrompt ? (
-                  <p className="mt-1 text-xs text-muted-foreground">
+                  <p className="mt-1 text-ui-sm text-muted-foreground">
                     This optional input is used by the prompt and must be supplied for this run.
                   </p>
                 ) : null}
@@ -161,16 +161,16 @@ export function WorkflowRunForm({
                     />
                   )}
                 </div>
-                {issue ? <p className="mt-1 text-xs text-destructive" role="alert">{issue.message}</p> : null}
+                {issue ? <p className="mt-1 text-ui text-destructive" role="alert">{issue.message}</p> : null}
               </div>
             );
           })}
         </div>
       )}
 
-      {serverError ? <p className="mt-3 text-xs text-destructive" role="alert">{serverError}</p> : null}
+      {serverError ? <p className="mt-3 text-ui text-destructive" role="alert">{serverError}</p> : null}
       {attemptMessage ? (
-        <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground" role="status">
+        <div className="mt-3 flex items-center gap-2 text-ui-sm text-muted-foreground" role="status">
           <span>{attemptMessage}</span>
           {onRetryAttempt ? (
             <Button type="button" variant="secondary" size="sm" disabled={submitting} onClick={onRetryAttempt}>

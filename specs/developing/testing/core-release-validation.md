@@ -677,10 +677,12 @@ The remaining enforcement exceptions are:
   metadata and accepted evidence;
 - hosted Web is not booted by the existing Tier 2 world;
 - the Tier 4 Desktop and cloud update journeys cannot qualify in CI today;
-- canonical agent-auth primitive docs still describe Bifrost as the managed
-  data plane even though the settled target is LiteLLM only. Those product
-  specs and owning code must be reconciled before their collectors can be
-  audited; the stale Bifrost contract does not override this target; and
+- the agent-auth and model-gateway platform contracts are now written
+  ([agent-auth.md](../../codebase/platforms/product/agent-auth.md),
+  [model-gateway.md](../../codebase/platforms/product/model-gateway.md),
+  both Status: target with pinned gaps); collectors for these areas audit
+  against those documents' bodies, treating their Current-gaps items as
+  known deltas rather than failures; and
 - server billing policy now encodes the settled `$2` lifetime free
   managed-LLM grant and Core `$5 LLM + $15 compute` allocation, but the upgrade
   surface still advertises the prior fixed twenty managed-cloud hours per seat

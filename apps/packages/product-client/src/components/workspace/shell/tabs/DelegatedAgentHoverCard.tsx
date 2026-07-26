@@ -13,6 +13,7 @@ import {
   type Ref,
 } from "react";
 import { createPortal } from "react-dom";
+import { motion } from "@proliferate/design/motion";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { POPOVER_FRAME_CLASS } from "@proliferate/ui/primitives/PopoverButton";
 import { DelegatedAgentIdenticon } from "#product/components/workspace/delegated-work/DelegatedAgentIdenticon";
@@ -21,7 +22,6 @@ import type { DelegatedWorkTabIdentity } from "#product/lib/domain/delegated-wor
 const VIEWPORT_MARGIN = 12;
 const HOVER_CARD_OFFSET = 6;
 const CARD_WIDTH = 224;
-const CLICKABLE_CARD_HIDE_DELAY_MS = 120;
 
 interface DelegatedAgentHoverCardProps extends HTMLAttributes<HTMLDivElement> {
   agent: DelegatedWorkTabIdentity;
@@ -98,7 +98,7 @@ export const DelegatedAgentHoverCard = forwardRef<HTMLDivElement, DelegatedAgent
       hideTimerRef.current = window.setTimeout(() => {
         hideTimerRef.current = null;
         hide();
-      }, CLICKABLE_CARD_HIDE_DELAY_MS);
+      }, motion.delay.hoverCardHideMs);
     }, [hide, onCardClick]);
 
     const isInsideCard = useCallback((target: EventTarget | null) =>
@@ -117,7 +117,7 @@ export const DelegatedAgentHoverCard = forwardRef<HTMLDivElement, DelegatedAgent
             className={`size-4 shrink-0 ${agent.identity.textColorClassName}`}
           />
           <div className="min-w-0">
-            <div className="truncate text-sm font-medium text-foreground">
+            <div className="truncate text-ui font-medium text-foreground">
               {agent.identity.displayName}
             </div>
             <div className="mt-0.5 text-muted-foreground">{agent.originLabel}</div>
@@ -205,7 +205,7 @@ export const DelegatedAgentHoverCard = forwardRef<HTMLDivElement, DelegatedAgent
               data-telemetry-mask
               data-chat-transcript-ignore
               style={{ top: position.top, left: position.left, width: CARD_WIDTH }}
-              className={`fixed z-[70] block whitespace-normal ${POPOVER_FRAME_CLASS} p-2.5 text-left text-xs hover:bg-popover focus-visible:ring-2 focus-visible:ring-ring ${
+              className={`fixed z-tooltip block whitespace-normal ${POPOVER_FRAME_CLASS} p-2.5 text-left text-ui hover:bg-popover focus-visible:ring-2 focus-visible:ring-ring ${
                 measured ? "opacity-100" : "opacity-0"
               }`}
               aria-label={cardAriaLabel ?? `Open ${agent.identity.displayName}`}
@@ -234,7 +234,7 @@ export const DelegatedAgentHoverCard = forwardRef<HTMLDivElement, DelegatedAgent
               role="tooltip"
               data-telemetry-mask
               style={{ top: position.top, left: position.left, width: CARD_WIDTH }}
-              className={`pointer-events-none fixed z-[70] ${POPOVER_FRAME_CLASS} p-2.5 text-xs ${
+              className={`pointer-events-none fixed z-tooltip ${POPOVER_FRAME_CLASS} p-2.5 text-ui ${
                 measured ? "opacity-100" : "opacity-0"
               }`}
             >

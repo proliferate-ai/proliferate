@@ -1,6 +1,7 @@
-import { CloudSecretsSettingsSurface } from "@proliferate/product-surfaces/settings/CloudSecretsSettingsSurface";
+import { SecretManagementPanel } from "@proliferate/product-ui/secrets/SecretManagementPanel";
 import { SettingsEmptyState } from "@proliferate/product-ui/settings/SettingsEmptyState";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
+import { useCloudSecretsPanel } from "#product/hooks/access/cloud/use-cloud-secrets-panel";
 import { useIsAdmin } from "#product/hooks/access/cloud/organizations/use-is-admin";
 import { useActiveOrganization } from "#product/hooks/organizations/facade/use-active-organization";
 
@@ -33,14 +34,25 @@ export function OrganizationSecretsPane() {
       ) : null}
 
       {activeOrganization ? (
-        <CloudSecretsSettingsSurface
-          scope={{
-            kind: "organization",
-            organizationId: activeOrganization.id,
-            canManage,
-          }}
+        <OrganizationSecretsPanel
+          organizationId={activeOrganization.id}
+          canManage={canManage}
         />
       ) : null}
     </section>
   );
+}
+
+function OrganizationSecretsPanel({
+  organizationId,
+  canManage,
+}: {
+  organizationId: string;
+  canManage: boolean;
+}) {
+  const panel = useCloudSecretsPanel({
+    scope: { kind: "organization", organizationId, canManage },
+  });
+
+  return <SecretManagementPanel {...panel} />;
 }

@@ -19,10 +19,10 @@ export function TerminalsRosterPanel({ processes, nowMs, onOpen }: TerminalsRost
   return (
     <div className="flex flex-col gap-1.5" data-terminals-roster-panel>
       <div className="px-1 pt-0.5">
-        <span className="text-xs font-medium text-foreground">Terminals</span>
+        <span className="text-ui font-medium text-foreground">Terminals</span>
       </div>
       {sorted.length === 0 ? (
-        <p className="px-1 pb-1 text-xs text-muted-foreground">No background terminals.</p>
+        <p className="px-1 pb-1 text-ui-sm text-muted-foreground">No background terminals.</p>
       ) : (
         <ul className="flex flex-col gap-0.5">
           {sorted.map((process) => (

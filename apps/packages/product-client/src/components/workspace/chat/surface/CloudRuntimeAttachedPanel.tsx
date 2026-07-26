@@ -80,7 +80,7 @@ export function CloudRuntimeAttachedPanelView({
     >
       <div className="max-h-[min(32vh,280px)] overflow-y-auto">
         <ComposerAttachedPanelRow label="Status">
-          <span className="text-base text-muted-foreground">
+          <span className="text-chat text-muted-foreground">
             {state.actionBlockReason}
           </span>
         </ComposerAttachedPanelRow>

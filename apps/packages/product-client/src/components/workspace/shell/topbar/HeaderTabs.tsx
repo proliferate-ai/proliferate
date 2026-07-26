@@ -298,7 +298,7 @@ const HeaderTabsInner = memo(function HeaderTabsInner({
               <span
                 key={`group-line-${range.groupId}`}
                 aria-hidden="true"
-                className="pointer-events-none absolute bottom-0 z-[6] h-0.5 rounded-full"
+                className="pointer-events-none absolute bottom-0 z-raised h-0.5 rounded-full"
                 style={{
                   left: range.left + shellDrag.getRowDragOffset(`pill:${range.groupId}`),
                   width: range.width,

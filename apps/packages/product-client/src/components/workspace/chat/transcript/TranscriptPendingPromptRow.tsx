@@ -181,7 +181,7 @@ function OutboxPromptPlainStatus({
   detail?: string | null;
 }) {
   return (
-    <div className="flex min-h-5 items-end py-1 text-chat font-normal leading-[var(--text-chat--line-height)] text-muted-foreground">
+    <div className="flex min-h-5 items-end py-1 text-chat font-normal text-muted-foreground">
       <span className="min-w-0 truncate" title={detail ?? undefined}>
         {label}
         {detail ? <span className="text-muted-foreground/70"> · {detail}</span> : null}
@@ -244,7 +244,7 @@ function OutboxTextActionButton({
       variant="ghost"
       size="sm"
       data-chat-transcript-ignore
-      className="h-auto rounded-none px-1 py-0 text-[length:var(--text-chat)] leading-[var(--text-chat--line-height)] font-normal text-muted-foreground hover:bg-transparent hover:text-foreground focus-visible:ring-0 focus-visible:underline"
+      className="h-auto rounded-none px-1 py-0 text-chat font-normal text-muted-foreground hover:bg-transparent hover:text-foreground focus-visible:ring-0 focus-visible:underline"
       onClick={onClick}
     >
       {label}

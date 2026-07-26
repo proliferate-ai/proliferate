@@ -122,7 +122,7 @@ export function AddCustomIntegrationDialog({
               onChange={(event) => setDisplayName(event.target.value)}
             />
             {fieldErrors.displayName ? (
-              <p className="mt-1 text-xs text-destructive">{fieldErrors.displayName}</p>
+              <p className="mt-1 text-ui-sm text-destructive">{fieldErrors.displayName}</p>
             ) : null}
           </div>
 
@@ -135,11 +135,11 @@ export function AddCustomIntegrationDialog({
               value={namespace}
               onChange={(event) => setNamespace(event.target.value)}
             />
-            <p className="mt-1 text-xs text-muted-foreground">
+            <p className="mt-1 text-ui-sm text-muted-foreground">
               Prefixes the integration&apos;s tool names for agents.
             </p>
             {fieldErrors.namespace ? (
-              <p className="mt-1 text-xs text-destructive">{fieldErrors.namespace}</p>
+              <p className="mt-1 text-ui-sm text-destructive">{fieldErrors.namespace}</p>
             ) : null}
           </div>
 
@@ -153,7 +153,7 @@ export function AddCustomIntegrationDialog({
               onChange={(event) => setMcpUrl(event.target.value)}
             />
             {fieldErrors.mcpUrl ? (
-              <p className="mt-1 text-xs text-destructive">{fieldErrors.mcpUrl}</p>
+              <p className="mt-1 text-ui-sm text-destructive">{fieldErrors.mcpUrl}</p>
             ) : null}
           </div>
 
@@ -172,7 +172,7 @@ export function AddCustomIntegrationDialog({
                 </option>
               ))}
             </Select>
-            <p className="mt-1 text-xs text-muted-foreground">
+            <p className="mt-1 text-ui-sm text-muted-foreground">
               Auto-detect probes the server when you add it. OAuth servers
               register a client automatically (Dynamic Client Registration);
               members then connect with their own accounts. API keys are not
@@ -181,7 +181,7 @@ export function AddCustomIntegrationDialog({
           </div>
 
           {submitError ? (
-            <p className="text-xs text-destructive" role="alert">{submitError}</p>
+            <p className="text-ui text-destructive" role="alert">{submitError}</p>
           ) : null}
 
           <DialogFooter>

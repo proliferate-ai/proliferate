@@ -45,16 +45,16 @@ export function OrganizationSettingsCard({
       <form onSubmit={(event) => { void onSubmit(event); }}>
         <div className="overflow-clip rounded-lg bg-foreground/5">
           {/* Identity header */}
-          <div className="flex min-h-[3.5rem] flex-col gap-3 border-b border-border-light px-3.5 py-3.5 text-sm sm:flex-row sm:items-center">
+          <div className="flex min-h-[3.5rem] flex-col gap-3 border-b border-border-light px-3.5 py-3.5 text-ui sm:flex-row sm:items-center">
             <OrganizationLogo organization={organization} logoImage={settingsLogoImage} />
             <div className="min-w-0 flex-1">
-              <div className="text-lg font-medium text-foreground">{organization.name}</div>
+              <div className="text-body-emphasis font-medium text-foreground">{organization.name}</div>
               <div className="text-muted-foreground">Organization</div>
             </div>
           </div>
 
           {/* Name row */}
-          <div className="flex min-h-[3.5rem] flex-col gap-2 border-b border-border-light px-3.5 py-3.5 text-sm last:border-b-0 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-h-[3.5rem] flex-col gap-2 border-b border-border-light px-3.5 py-3.5 text-ui last:border-b-0 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
               <div className="font-medium text-foreground">Name</div>
             </div>
@@ -75,7 +75,7 @@ export function OrganizationSettingsCard({
           </div>
 
           {/* Logo row */}
-          <div className="flex min-h-[3.5rem] flex-col gap-2 border-b border-border-light px-3.5 py-3.5 text-sm last:border-b-0 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-h-[3.5rem] flex-col gap-2 border-b border-border-light px-3.5 py-3.5 text-ui last:border-b-0 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
               <div className="font-medium text-foreground">Logo</div>
               <div className="text-muted-foreground">Square image for best results</div>
@@ -116,7 +116,7 @@ export function OrganizationSettingsCard({
               ) : null}
             </div>
             {logoImageError ? (
-              <div className="mt-1 w-full text-sm text-destructive">{logoImageError}</div>
+              <div className="mt-1 w-full text-ui text-destructive">{logoImageError}</div>
             ) : null}
           </div>
         </div>

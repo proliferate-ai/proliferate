@@ -111,7 +111,7 @@ export function HarnessAllModelsSection({
   if (surface === "cloud" && !cloudActive) {
     return (
       <SettingsSection title={HARNESS_PANE_COPY.tabAllModels}>
-        <p className="py-3 text-sm text-muted-foreground">
+        <p className="py-3 text-ui-sm text-muted-foreground">
           {HARNESS_PANE_COPY.signInDescription(displayName)}
         </p>
       </SettingsSection>
@@ -256,7 +256,7 @@ export function HarnessAllModelsSection({
     <SettingsSection title={HARNESS_PANE_COPY.tabAllModels}>
       <div className="space-y-3 py-3">
         <div className="flex items-center justify-between gap-3">
-          <p className="text-xs text-muted-foreground">{freshnessLine}</p>
+          <p className="text-ui-sm text-muted-foreground">{freshnessLine}</p>
           <Button
             type="button"
             variant="ghost"
@@ -288,14 +288,14 @@ export function HarnessAllModelsSection({
               onChange={(event) => setFilterText(event.target.value)}
             />
             {filterText ? (
-              <span className="flex shrink-0 items-center gap-1.5 text-[length:var(--text-ui-sm)] leading-[var(--text-ui-sm--line-height)] text-muted-foreground">
+              <span className="flex shrink-0 items-center gap-1.5 text-ui-sm text-muted-foreground">
                 {filteredRows.length} of {rows.length}
                 <Button
                   variant="unstyled"
                   size="unstyled"
                   type="button"
                   aria-label="Clear filter"
-                  className="rounded p-0.5 hover:bg-accent"
+                  className="rounded p-0.5 hover:bg-hover active:bg-active"
                   onClick={() => setFilterText("")}
                 >
                   <X className="icon-compact" />
@@ -306,16 +306,16 @@ export function HarnessAllModelsSection({
         ) : null}
 
         {isLoading ? (
-          <p className="text-sm text-muted-foreground">
+          <p className="text-ui-sm text-muted-foreground">
             {HARNESS_PANE_COPY.allModelsLoading}
           </p>
         ) : isProbingEmpty ? (
-          <p className="flex items-center gap-2 text-sm text-muted-foreground">
+          <p className="flex items-center gap-2 text-ui-sm text-muted-foreground">
             <RefreshCw className="icon-paired animate-spin" />
             {HARNESS_PANE_COPY.allModelsProbing}
           </p>
         ) : models.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
+          <p className="text-ui-sm text-muted-foreground">
             {HARNESS_PANE_COPY.allModelsEmpty}
           </p>
         ) : (

@@ -227,8 +227,8 @@ export function FullFlowPrototype() {
     <div className="flex h-full min-h-0 w-full flex-col bg-background text-foreground">
       <header className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-b border-border px-4 py-2">
         <div className="min-w-0 flex-1">
-          <h1 className="text-sm font-semibold">Full flow</h1>
-          <p className="truncate text-xs text-muted-foreground">
+          <h1 className="text-title font-semibold">Full flow</h1>
+          <p className="truncate text-ui-sm text-muted-foreground">
             Receipt → cap → global pane → parent drill → child tab → close vs delete → archive reopen
           </p>
         </div>
@@ -346,7 +346,7 @@ export function FullFlowPrototype() {
           ) : null}
           {!activeTab ? (
             <div className="flex flex-1 items-center justify-center">
-              <p className="text-sm text-muted-foreground">No open sessions.</p>
+              <p className="text-ui-sm text-muted-foreground">No open sessions.</p>
             </div>
           ) : null}
         </main>

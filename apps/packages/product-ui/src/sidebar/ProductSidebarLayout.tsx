@@ -77,7 +77,7 @@ export function ProductSidebarSectionHeader({
         {actions ? (
           // Codex parity: section actions stay hidden until the header is
           // hovered (or an action's popover is open / focused via keyboard).
-          <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity duration-150 group-hover/side-section:opacity-100 group-focus-within/side-section:opacity-100 has-[[data-state=open]]:opacity-100">
+          <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity duration-hover group-hover/side-section:opacity-100 group-focus-within/side-section:opacity-100 has-[[data-state=open]]:opacity-100">
             {actions}
           </div>
         ) : null}

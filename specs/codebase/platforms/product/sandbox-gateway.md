@@ -291,21 +291,16 @@ apps/mobile/src/lib/access/anyharness/cloud-sandbox-runtime.ts  mobile resolver
 
 Deltas between this document and `main`, each struck by its follow-up PR:
 
-- [ ] The policy-gate law above is not yet true on `main`: today the
-      gateway refuses 409 unless the row is already `ready`, so auto-resume
-      never sees the traffic. The gap and its fix are owned by
-      [sandbox-lifecycle.md](sandbox-lifecycle.md)'s list; this document's
-      wire law and [sandbox-access.md](sandbox-access.md)'s choreography
-      both assume the ruled behavior.
 - [ ] Cold access has no repair trigger: a sandbox whose runtime access
       was never materialized (or was cleared by provider loss) 409s
       forever at the gateway; nothing on the access path starts a
       materialization — the caller's repair today is a
       materialization-triggering action
-      ([sandbox-access.md](sandbox-access.md) failure modes). Note the
-      precise boundary: *paused* sandboxes wake under forwarded traffic
-      once the policy gate lands — the gap is only rows without stamped
-      access.
+      ([sandbox-access.md](sandbox-access.md) failure modes). The
+      choreography ruling (wake-and-poll vs provision-on-access) is
+      lifecycle's open question; this document inherits its outcome. Note
+      the precise boundary: *paused* sandboxes already wake under
+      forwarded traffic — the gap is only rows without stamped access.
 - [ ] Gateway resolution has no org-context input: it resolves the
       caller's personal sandbox only, which is consistent with today's
       one-sandbox-per-user account model but not with lifecycle's ruled

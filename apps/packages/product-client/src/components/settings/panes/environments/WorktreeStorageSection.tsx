@@ -148,7 +148,7 @@ export function WorktreePolicyRow({
             size="icon"
             aria-label="Fewer ideal worktrees"
             disabled={value <= WORKTREE_AUTO_DELETE_LIMIT_MIN}
-            className="h-8 w-8 rounded-none text-muted-foreground hover:bg-foreground/10 hover:text-foreground"
+            className="h-8 w-8 rounded-none text-muted-foreground hover:bg-hover active:bg-active hover:text-foreground"
             onClick={() => step(-1)}
           >
             <Minus className="icon-paired" />
@@ -168,14 +168,14 @@ export function WorktreePolicyRow({
             size="icon"
             aria-label="More ideal worktrees"
             disabled={value >= WORKTREE_AUTO_DELETE_LIMIT_MAX}
-            className="h-8 w-8 rounded-none text-muted-foreground hover:bg-foreground/10 hover:text-foreground"
+            className="h-8 w-8 rounded-none text-muted-foreground hover:bg-hover active:bg-active hover:text-foreground"
             onClick={() => step(1)}
           >
             <Plus className="icon-paired" />
           </Button>
         </div>
         {helperText ? (
-          <p className="max-w-72 text-right text-sm text-muted-foreground">
+          <p className="max-w-72 text-right text-ui-sm text-muted-foreground">
             {helperText}
           </p>
         ) : null}
@@ -265,7 +265,7 @@ function WorktreeRuntimeStatusRow({
           progressPercent={targetState.ringProgressPercent}
           loading={targetState.isLoading}
         />
-        <span className="min-w-24 text-right text-sm tabular-nums text-foreground">
+        <span className="min-w-24 text-right text-body-emphasis tabular-nums text-foreground">
           {targetState.isLoading ? "Loading" : targetState.pressureLabel}
         </span>
         <Button

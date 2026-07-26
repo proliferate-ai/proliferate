@@ -94,7 +94,7 @@ export function OrganizationSsoSettingsSurface({
       />
 
       {error ? (
-        <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-ui-sm leading-[1.45] text-destructive">
+        <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-ui-sm text-destructive">
           {error}
         </div>
       ) : null}
@@ -102,7 +102,7 @@ export function OrganizationSsoSettingsSurface({
       {/* Connection status */}
       <SettingsSection title="Connection">
         <div className="overflow-clip rounded-lg bg-foreground/5">
-          <div className="flex min-h-[3.5rem] flex-col gap-2 px-3.5 py-3.5 text-sm sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-h-[3.5rem] flex-col gap-2 px-3.5 py-3.5 text-body sm:flex-row sm:items-center sm:justify-between">
             <div className="flex min-w-0 items-center gap-3">
               <ShieldCheckFilled className="icon-paired shrink-0 text-muted-foreground" />
               <div className="min-w-0">
@@ -154,7 +154,7 @@ export function OrganizationSsoSettingsSurface({
           </div>
         </div>
         {connection?.lastError ? (
-          <div className="mt-2 rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-ui-sm leading-[1.45] text-warning">
+          <div className="mt-2 rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-ui-sm text-warning">
             {connection.lastError}
           </div>
         ) : null}

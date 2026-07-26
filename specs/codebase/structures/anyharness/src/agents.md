@@ -124,15 +124,15 @@ catalog path. Cloud product catalogs may be newer than these bundled runtime
 inputs; AnyHarness still validates creation against what the target runtime can
 actually launch.
 
-The two inputs converge on different tracks. The `catalog.json` document syncs live:
-the cloud worker watches the heartbeat `catalogVersion`, fetches the newer
-document, and `PUT`s it to the runtime, which validates and reconciles without
-a binary change. `registry.json` (install/launch/auth recipes) rides
-the binary only: it is `include_str!`'d, so a new registry ships iff a new
-runtime binary ships. In cloud sandboxes the binary itself can be swapped in
-place by the Worker (see
-`specs/codebase/structures/proliferate-worker/guides/lifecycle.md`); Desktop
-gets a new binary only via the app bundle.
+Both inputs ride the binary: `catalog.json` and `registry.json` are
+`include_str!`'d, so a new document ships iff a new runtime binary ships —
+the binary is the only catalog transport
+([agent-distribution.md](../../../platforms/product/agent-distribution.md)).
+In cloud sandboxes the binary is swapped by Proliferate Supervisor on a
+mailbox request; Desktop gets a new binary via the app bundle. (The legacy
+live catalog sync — cloud worker watching the heartbeat `catalogVersion`
+and `PUT`ing the newer document — is deletion-pending per
+agent-distribution.md's Current gaps.)
 
 The unattended mode is part of the active catalog rather than the trusted
 registry recipe. Catalog validation requires a non-blank value that exists in
@@ -233,9 +233,13 @@ Important install cases:
   bundled package spec; stale managed packages report `install_required` so
   normal setup/reconcile can update user-owned older ACP adapters
 - the update path for every installable agent process recipe is reconcile against
-  the catalog pins: the runtime startup pass does this automatically (installed-only),
-  and the desktop "update local installs" button / manual reinstall do it on demand. The
-  version + source come from the bundled catalog lockfile, resolved at probe time by
+  the catalog pins: the runtime startup pass does this automatically
+  (installed-only today; the settled target converges the full supported
+  set, installing absent agents too —
+  [agent-distribution.md](../../../platforms/product/agent-distribution.md)
+  Current gaps), and the desktop "update local installs" button / manual
+  reinstall do it on demand. The version + source come from the bundled
+  catalog lockfile, resolved at probe time by
   `scripts/agent-catalog/resolve-pins.mjs`
 - installer mutations are serialized by runtime-home file locks under
   `agents/<kind>/.install.lock` so desktop, CLI, and seed hydration do not
@@ -290,11 +294,15 @@ user's normal `HOME` and runs from the user home directory when available, so
 vendor CLIs write their usual local auth files.
 
 Cloud target enrollment, Git bootstrap, and workspace materialization do not
-install agents. A fresh cloud/SSH target may report worker and AnyHarness
-online while `start_session` still fails with an install/readiness error until
-the requested agent is installed through this API. The runtime startup pass keeps
-*already-installed* agents on a cloud worker current with the catalog pins, but it
-does not eagerly install missing agents — those still install on demand here.
+install agents. Today a fresh cloud/SSH target may report worker and
+AnyHarness online while `start_session` still fails with an
+install/readiness error until the requested agent is installed through this
+API, because the runtime startup pass reconciles *already-installed* agents
+only. That is a pinned gap, not the design: the settled target
+auto-installs the full supported set at startup reconcile
+([agent-distribution.md](../../../platforms/product/agent-distribution.md)
+Current gaps), after which the on-demand path here remains only as the
+explicit-reinstall hook.
 
 ### ACP Registry Flow (probe-time only)
 
@@ -332,8 +340,11 @@ Reconcile runs in two scopes, selected by the `installed_only` flag:
   managed install for every registry agent — installs missing ones too.
 - **installed-only** (`installed_only=true`): only agents already installed on disk
   (`resolve_agent(..).agent_process.installed`) are reconciled to the catalog pins; a
-  missing agent is `skipped` (it installs on demand at session start). This is the scope
-  used by the runtime startup pass and the desktop "update local installs" button.
+  missing agent is `skipped`. This is the scope used by the runtime startup
+  pass and the desktop "update local installs" button today; the settled
+  target flips the startup pass to the full-set scope (auto-install ruling,
+  [agent-distribution.md](../../../platforms/product/agent-distribution.md)
+  Current gaps).
 
 `POST /v1/agents/reconcile` also accepts an optional `agentKinds` list. Empty
 keeps the all-agent behavior; a single kind is the asynchronous manual
@@ -341,7 +352,8 @@ install/update path used by harness settings. Unknown kinds are rejected. An
 active job is reused only when its install mode and agent scope cover the new
 request; an incompatible request receives `409 AGENT_RECONCILE_BUSY` so the
 running download remains the single observable disk writer. Internal startup
-and catalog-applied installed-only pokes reject compatible reuse, wait for any
+pokes (and, until the binary-only catalog ruling deletes it, the
+catalog-applied poke) reject compatible reuse, wait for any
 active job to finish, and atomically admit a fresh pass against one latest-catalog
 snapshot, so a foreground update cannot drop or partially mix a pin refresh.
 
@@ -368,7 +380,11 @@ bundled seed if pending, then run an installed-only reconcile. It is non-blockin
 HTTP server boots and answers `/health` while it runs), best-effort (failures land in the
 reconcile snapshot, never fatal), and idempotent (an up-to-date agent short-circuits with
 no network — see `install_policy` version-drift detection). The catalog-applied poke (a
-newer cloud catalog synced at runtime) also kicks an installed-only reconcile.
+newer cloud catalog synced at runtime) also kicks an installed-only reconcile —
+deletion-pending with the heartbeat catalog transport
+([agent-distribution.md](../../../platforms/product/agent-distribution.md)
+Current gaps): under the binary-only ruling a new catalog always arrives with
+a fresh process start, so the startup pass is the only poke it needs.
 
 ### Bundled Agent Seed Flow
 
@@ -443,9 +459,12 @@ snapshot (`GET /v1/agents/reconcile`) to display per-agent status and refreshes 
 list once per terminal job. A bounded 30-second inactive poll discovers runtime-owned
 startup/catalog jobs that begin after the initial idle read; queued/running work polls at
 1.5 seconds and active byte transfer at 750 milliseconds. The UI renders the runtime target,
-aggregate bytes, and separate CLI/ACP rows. Missing non-seeded agents are not auto-installed
-at startup; they install on demand at session start or through a selected-agent reconcile
-from harness settings. The synchronous per-agent install endpoint remains available for
+aggregate bytes, and separate CLI/ACP rows. Today missing non-seeded agents are not
+auto-installed at startup — they install on demand at session start or through a
+selected-agent reconcile from harness settings — but that is a pinned gap: the settled
+target auto-installs the full supported set at the startup pass
+([agent-distribution.md](../../../platforms/product/agent-distribution.md)
+Current gaps). The synchronous per-agent install endpoint remains available for
 compatibility.
 
 Seed hydration verifies the archive `.sha256`, validates the manifest target and

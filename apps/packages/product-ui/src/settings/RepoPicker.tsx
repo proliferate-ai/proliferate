@@ -41,7 +41,7 @@ export function RepoPicker({
           variant="outline"
           size="sm"
           aria-label="Select repository"
-          className="h-[30px] w-52 justify-start gap-2 px-2 text-ui font-normal text-foreground data-[state=open]:bg-accent"
+          className="h-[30px] w-52 justify-start gap-2 px-2 text-ui font-normal text-foreground data-[state=open]:bg-active"
         >
           <RepoChip kind={selected?.kind ?? "local"} />
           <span className="min-w-0 flex-1 truncate text-left">

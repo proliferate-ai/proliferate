@@ -50,7 +50,9 @@ describe("CompletedHistorySequence", () => {
     );
 
     const sequence = container.querySelector("[data-completed-history-sequence]");
-    expect(sequence?.className).toContain("flex flex-col gap-4");
+    // [CHAT-04] RULED: the shared turn rhythm is the 12px
+    // --spacing-transcript-turn token (TURN_ITEM_GAP_CLASS), not a raw gap-4.
+    expect(sequence?.className).toContain("flex flex-col gap-transcript-turn");
     expect(sequence?.className).not.toContain("space-y-1");
   });
 

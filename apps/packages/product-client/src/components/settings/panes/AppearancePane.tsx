@@ -73,7 +73,7 @@ export function AppearancePane() {
                     type="button"
                     variant={mode === candidateMode ? "secondary" : "ghost"}
                     size="sm"
-                    className="px-2.5 text-xs"
+                    className="px-2.5 text-ui"
                     onClick={() => setMode(candidateMode)}
                   >
                     <Icon className="icon-paired" />
@@ -97,7 +97,7 @@ export function AppearancePane() {
                 size="icon"
                 aria-label="Zoom out"
                 disabled={!canDecreaseZoom}
-                className="h-8 w-8 rounded-none text-muted-foreground hover:bg-foreground/10 hover:text-foreground"
+                className="h-8 w-8 rounded-none text-muted-foreground hover:bg-hover active:bg-active hover:text-foreground"
                 onClick={() => setPreference("windowZoomId", stepWindowZoomId(windowZoomId, -1))}
               >
                 <Minus className="icon-paired" />
@@ -111,7 +111,7 @@ export function AppearancePane() {
                 size="icon"
                 aria-label="Zoom in"
                 disabled={!canIncreaseZoom}
-                className="h-8 w-8 rounded-none text-muted-foreground hover:bg-foreground/10 hover:text-foreground"
+                className="h-8 w-8 rounded-none text-muted-foreground hover:bg-hover active:bg-active hover:text-foreground"
                 onClick={() => setPreference("windowZoomId", stepWindowZoomId(windowZoomId, 1))}
               >
                 <Plus className="icon-paired" />

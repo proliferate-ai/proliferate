@@ -75,9 +75,9 @@ interface SidebarWorkspaceContentProps {
 function SidebarLoadingState() {
   return (
     <div className="flex flex-col gap-1 px-3 py-3" aria-label="Loading workspaces" role="status">
-      <SkeletonBlock className="h-7 w-full bg-sidebar-accent" />
-      <SkeletonBlock className="h-7 w-[88%] bg-sidebar-accent/80" />
-      <SkeletonBlock className="h-7 w-[72%] bg-sidebar-accent/70" />
+      <SkeletonBlock className="h-7 w-full bg-surface-control" />
+      <SkeletonBlock className="h-7 w-[88%] bg-surface-control/80" />
+      <SkeletonBlock className="h-7 w-[72%] bg-surface-control/70" />
       <p className="sr-only">Loading workspaces</p>
     </div>
   );
@@ -127,10 +127,10 @@ export function SidebarWorkspaceContent({
   if (emptyState === "noWorkspaces") {
     return (
       <div className="px-3 py-6 text-center">
-        <p className="text-xs text-sidebar-muted-foreground">
+        <p className="text-ui-sm text-sidebar-muted-foreground">
           No workspaces yet
         </p>
-        <p className="text-xs text-sidebar-muted-foreground mt-1">
+        <p className="text-ui-sm text-sidebar-muted-foreground mt-1">
           Add a repository to get started
         </p>
       </div>
@@ -140,10 +140,10 @@ export function SidebarWorkspaceContent({
   if (emptyState === "filteredOut") {
     return (
       <div className="px-3 py-6 text-center">
-        <p className="text-xs text-sidebar-muted-foreground">
+        <p className="text-ui-sm text-sidebar-muted-foreground">
           No workspaces match the current filters
         </p>
-        <p className="text-xs text-sidebar-muted-foreground mt-1">
+        <p className="text-ui-sm text-sidebar-muted-foreground mt-1">
           Adjust the sidebar filters to show more workspaces
         </p>
       </div>
@@ -224,7 +224,7 @@ export function SidebarWorkspaceContent({
           : undefined}
       >
         {group.items.length === 0 ? (
-          <p className="px-3 py-2 text-xs text-sidebar-muted-foreground">
+          <p className="px-3 py-2 text-ui-sm text-sidebar-muted-foreground">
             {hasArchivedHiddenItems
               ? "Archived chats are available in Settings."
               : "This repository has no workspaces yet."}

@@ -1,36 +1,15 @@
 @import "tailwindcss";
+/* Generated token authority (apps/packages/design/src/tokens.ts →
+   scripts/generate-theme.mjs). CSS requires every @import before any other
+   at-rule that produces output, so this sits directly under "tailwindcss" and
+   above the @source list. This file declares rules only; global token VALUES
+   are never hand-authored here. */
+@import "../theme.css";
+
 @source "../../../ui/src";
 @source "../../../product-ui/src";
 @source "../../../product-surfaces/src";
 @source "../../../product-client/src";
-@import "../theme.css";
-
-/* -- Semantic UI type-scale tokens (shared by web + desktop; product.css
-      imports this file). Values are the desktop "UI font size" default
-      preset: applyAppearancePreference() re-writes every --text-* token on
-      :root at boot from UI_FONT_SCALES (appearance.ts), so these build-time
-      defaults MUST match that table's default preset — drift-locked by
-      appearance-css-drift.test.ts in apps/desktop. -- */
-@theme {
-  --text-ui: 12px;                    /* rows, pills, controls, popover items, menus, card titles */
-  --text-ui--line-height: 17px;       /* font size + 5px */
-  --text-ui-sm: 11px;                 /* descriptions, secondary labels, notices, meta */
-  --text-ui-sm--line-height: 15px;    /* font size + 4px */
-  --text-composer: 13px;              /* composer input and message text */
-  --text-composer--line-height: 21px; /* font size + 8px */
-  --text-workspace-title: 14px;       /* workspace name in the global header */
-  --text-workspace-title--line-height: 22px;
-  --text-title: 19px;                 /* page/settings titles (SettingsPageHeader pairing) */
-  --text-title--line-height: 23px;    /* font size + 4px */
-  --text-hero: 26.5px;                /* home hero heading */
-  --text-hero--line-height: 34.5px;   /* font size + 8px */
-  --text-sidebar-nav: 13px;           /* sidebar primary nav + repo-group labels (codex --text-base tier) */
-  --text-sidebar-nav--line-height: 18px;   /* font size + 5px */
-  --text-sidebar-row: 13px;           /* sidebar workspace rows + section headers (codex --text-sm tier) */
-  --text-sidebar-row--line-height: 18px;   /* font size + 5px */
-  --text-sidebar-brand: 16px;         /* sidebar brand wordmark */
-  --text-sidebar-brand--line-height: 23px; /* font size + 7px */
-}
 
 @utility icon-status {
   width: var(--icon-status);
@@ -64,57 +43,9 @@
 
 :root {
   color-scheme: dark;
-  font-family:
-    Inter,
-    ui-sans-serif,
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    sans-serif;
+  font-family: var(--font-sans);
   background: var(--color-background);
   color: var(--color-foreground);
-  --color-composer-background: var(--color-card);
-  --color-composer-border: var(--color-border);
-  --color-composer-control-foreground: var(--color-muted-foreground);
-  --color-composer-control-active-foreground: var(--color-foreground);
-  --color-composer-control-muted-foreground: var(--color-faint);
-  /* Not var(--color-muted): on the dark theme that equals the composer
-     surface, making the hover chip invisible. Mix a visible step instead. */
-  --color-composer-control-hover: color-mix(in oklab, var(--color-foreground) 9%, transparent);
-  --color-composer-send-background: var(--color-foreground);
-  --color-composer-send-foreground: var(--color-background);
-  --color-composer-shadow: var(--shadow-subtle);
-  --color-composer-backdrop-filter: none;
-  /* One semantic caret/selection pair for native entry, composed editors,
-     and renderer APIs such as xterm. Product themes may specialize the
-     highlight role without changing any editor implementation. */
-  --color-text-caret: var(--color-foreground);
-  --color-text-selection: var(--color-highlight, var(--color-input));
-  /* Semantic vector-glyph tiers. These use em so the visible glyph follows
-     its owning UI text role while the surrounding row/button geometry and
-     pointer target stay fixed. Paired label icons use the approved 1.15em
-     optical ratio; larger tiers are reserved for icon-only controls and
-     display glyphs. */
-  --icon-status: 0.55em;
-  --icon-compact: 1em;
-  --icon-paired: 1.15em;
-  --icon-control: 1.333333em;
-  --icon-large: 1.666667em;
-  --icon-display: 2em;
-  /* Meta text (message timestamps, code-block language labels) tracks the
-     chat font size — including runtime text-scale changes — but always sits
-     one step below it. */
-  --text-chat-meta: calc(var(--text-chat, 11px) - 2px);
-  /* Message body prose (assistant + user transcript bodies) reads at the
-     composer size, so typed text and sent text match. Secondary chrome
-     (tool/action rows, plans, work history) stays on --text-chat. Declared as
-     an alias of --text-composer rather than a separate scale entry so it
-     tracks the composer across every appearance preset with no drift lock to
-     keep in sync. Message surfaces opt in via --prose-text-size (below);
-     everything else falls back to --text-chat. */
-  --text-message: var(--text-composer);
-  --text-message--line-height: var(--text-composer--line-height);
 }
 
 * {
@@ -221,6 +152,23 @@ body {
   backdrop-filter: var(--color-composer-backdrop-filter);
 }
 
+/* [CHAT-01] The cap variant of that same surface: composer chrome attached
+   ABOVE the input box (the workspace-activity cap). It is the composer surface,
+   so it takes the identical translucent fill and backdrop treatment — a cap
+   that skipped the blur would be translucent over an unblurred transcript one
+   pixel above a surface translucent over a blurred one, reading as two
+   different greys at the seam. It carries no elevation shadow (it is not the
+   floating edge); its 1px stroke is painted outside the border-box by the
+   consumer (ring-*) to line up with the surface's 0.5px shadow stroke, and the
+   bottom of that stroke is clipped here because the surface below is no longer
+   opaque enough to cover the bleed at 96% alpha. */
+.chat-composer-surface--cap {
+  background-color: var(--color-composer-background);
+  -webkit-backdrop-filter: var(--color-composer-backdrop-filter);
+  backdrop-filter: var(--color-composer-backdrop-filter);
+  clip-path: inset(-2px -2px 0 -2px);
+}
+
 /* The composer uses a fail-safe one-pixel visual caret because current macOS
    WebKit paints its redesigned native caret at two CSS pixels. Layout-critical
    styles are inline on the overlay; this rule is the native fallback whenever
@@ -234,6 +182,7 @@ body {
   55%, 100% { opacity: 0; }
 }
 
+/* activity-motion */
 [data-chat-composer-caret] {
   animation: chat-composer-caret-blink 1s steps(1, end) infinite;
 }
@@ -263,6 +212,7 @@ body {
   overflow: hidden;
 }
 
+/* activity-motion */
 .skeleton-shimmer::before {
   content: "";
   position: absolute;
@@ -296,6 +246,7 @@ body {
   .skeleton-shimmer::before {
     animation: none;
   }
+  /* activity-motion */
   .skeleton-shimmer {
     animation: skeleton-fade 2s ease-in-out infinite;
     animation-delay: var(--shimmer-delay, 0s);
@@ -317,7 +268,7 @@ body {
 }
 
 .animate-content-fade-in {
-  animation: content-fade-in 150ms ease-out;
+  animation: content-fade-in var(--duration-enter) var(--ease-out-quint);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -335,8 +286,9 @@ body {
   to { opacity: 1; }
 }
 
+/* activity-motion */
 .stream-word {
-  animation: stream-word-in 320ms linear both;
+  animation: stream-word-in var(--activity-stream-reveal-fade) linear both;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -381,6 +333,7 @@ body {
   color: color-mix(in srgb, var(--color-muted-foreground) 60%, transparent);
 }
 
+/* activity-motion */
 .thinking-text-band {
   position: absolute;
   inset: 0 auto 0 0;
@@ -409,6 +362,7 @@ body {
   animation-delay: var(--thinking-text-delay, 0ms);
 }
 
+/* activity-motion */
 .thinking-text-band-glyphs {
   display: block;
   /* Same width as the label so the copy lays out (and truncates) identically
@@ -451,6 +405,7 @@ body {
   }
 }
 
+/* activity-motion */
 .animate-brand-mark-breathe {
   animation: brand-mark-breathe 2.6s ease-in-out infinite;
 }
@@ -467,7 +422,7 @@ body {
 }
 
 .animate-brand-mark-settle {
-  animation: brand-mark-settle 300ms ease-out;
+  animation: brand-mark-settle var(--duration-emphasized) var(--ease-standard);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -490,7 +445,7 @@ body {
 }
 
 [data-proliferate-client="web"] .web-sidebar-panel-slide-in {
-  animation: web-sidebar-panel-slide-in 220ms cubic-bezier(0.16, 1, 0.3, 1);
+  animation: web-sidebar-panel-slide-in var(--duration-panel) var(--ease-spring);
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -54,19 +54,19 @@ export function WorkspaceReconciliationBody({ view }: { view: WorkspaceReconcili
               <Badge tone={column.stateTone} className="text-ui-sm">
                 {column.stateLabel}
               </Badge>
-              <p className="truncate font-mono text-ui-sm leading-[1.5] text-muted-foreground">
+              <p className="truncate font-mono text-ui-sm text-muted-foreground">
                 {column.branch ?? "—"}
                 {column.headShort ? ` @ ${column.headShort}` : ""}
               </p>
               {column.caveat ? (
-                <p className="text-ui-sm leading-[1.4] text-muted-foreground">{column.caveat}</p>
+                <p className="text-ui-sm text-muted-foreground">{column.caveat}</p>
               ) : null}
             </dd>
           </div>
         ))}
       </dl>
-      <p className="text-ui-sm leading-[1.5] text-foreground">{view.actionDetail}</p>
-      <p className="text-ui-sm leading-[1.45] text-muted-foreground">
+      <p className="text-ui-sm text-foreground">{view.actionDetail}</p>
+      <p className="text-ui-sm text-muted-foreground">
         If you cancel: {view.cancelPreserves}
       </p>
     </div>

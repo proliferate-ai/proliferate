@@ -36,7 +36,7 @@ export function GitHubAppInstallationSection({
   return (
     <SettingsSection title="GitHub App">
       <div className="overflow-clip rounded-lg bg-foreground/5">
-        <div className="flex min-h-[3.5rem] flex-col gap-2 border-b border-border-light px-3.5 py-3.5 text-sm last:border-b-0 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-h-[3.5rem] flex-col gap-2 border-b border-border-light px-3.5 py-3.5 text-ui last:border-b-0 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 items-center gap-3">
             <ProviderBrandIcon
               provider="github"

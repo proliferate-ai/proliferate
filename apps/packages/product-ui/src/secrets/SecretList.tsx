@@ -32,12 +32,12 @@ export function SecretList({
 }: SecretListProps) {
   if (items.length === 0) {
     return (
-      <div className="flex flex-col items-center gap-2 rounded-md border border-dashed border-border-light px-4 py-6 text-center text-sm">
+      <div className="flex flex-col items-center gap-2 rounded-md border border-dashed border-border-light px-4 py-6 text-center text-body">
         <KeyRound className="icon-large text-muted-foreground" />
         <div className="space-y-0.5">
-          <div className="text-sm text-foreground">{emptyLabel}</div>
+          <div className="text-body text-foreground">{emptyLabel}</div>
           {emptyDescription ? (
-            <div className="text-xs text-muted-foreground">{emptyDescription}</div>
+            <div className="text-ui-sm text-muted-foreground">{emptyDescription}</div>
           ) : null}
         </div>
         {canManage && onAdd ? (

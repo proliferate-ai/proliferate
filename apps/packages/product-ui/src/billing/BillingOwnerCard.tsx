@@ -59,17 +59,17 @@ export function BillingOwnerCard({ view }: { view: BillingOwnerCardView }) {
     <SettingsSection>
       <div className="space-y-5 p-4">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="flex min-w-0 gap-3 text-sm">
-            <div className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border-light bg-foreground/5 text-muted-foreground">
+          <div className="flex min-w-0 gap-3 text-body">
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border-light bg-surface-elevated-secondary text-muted-foreground">
               <Icon className="icon-large" />
             </div>
             <div className="min-w-0 space-y-2">
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-sm font-medium text-foreground">{view.title}</h2>
+                <h2 className="text-heading font-medium text-foreground">{view.title}</h2>
                 <Badge tone={status.tone}>{status.label}</Badge>
               </div>
               {view.description ? (
-                <p className="max-w-xl text-sm leading-6 text-muted-foreground">
+                <p className="max-w-xl text-body text-muted-foreground">
                   {view.description}
                 </p>
               ) : null}
@@ -137,17 +137,17 @@ export function BillingOwnerCard({ view }: { view: BillingOwnerCardView }) {
 
           {usage.percent !== null ? (
             <div className="space-y-1.5">
-              <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+              <div className="flex items-center justify-between gap-3 text-ui-sm text-muted-foreground">
                 <span>{usage.label}</span>
                 <span>{usage.detail}</span>
               </div>
-              <div className="h-1.5 overflow-hidden rounded-full bg-foreground/10">
+              <div className="h-1.5 overflow-hidden rounded-full bg-surface-control">
                 <div
                   className="h-full rounded-full bg-foreground"
                   style={{ width: `${usage.percent}%` }}
                 />
               </div>
-              <div className="text-xs text-muted-foreground">{usage.progressLabel}</div>
+              <div className="text-ui-sm text-muted-foreground">{usage.progressLabel}</div>
             </div>
           ) : null}
         </div>
@@ -157,13 +157,13 @@ export function BillingOwnerCard({ view }: { view: BillingOwnerCardView }) {
         {overage ? (
           <div className="flex flex-col gap-3 border-t border-border-light pt-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0 space-y-1">
-              <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+              <div className="flex items-center gap-2 text-body-emphasis font-medium text-foreground">
                 {overage.title}
                 <Badge tone={overage.enabled ? "success" : "neutral"}>
                   {overage.enabled ? "On" : "Off"}
                 </Badge>
               </div>
-              <p className="text-xs leading-5 text-muted-foreground">{overage.description}</p>
+              <p className="text-ui-sm text-muted-foreground">{overage.description}</p>
             </div>
             {view.overageAction ? (
               <BillingButton action={view.overageAction} variant="secondary" />

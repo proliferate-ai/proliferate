@@ -28,7 +28,12 @@ Fences, one owner per concern:
   and when it all leaves.
 - GitHub *authority* — tokens, credential leases, the credential helper —
   belongs to [sandbox-github-auth.md](sandbox-github-auth.md). This document
+<<<<<<< HEAD
   owns *identity*: who the commit says it is by.
+=======
+  owns *identity*: who the commit says it is by. (That document is scheduled
+  for its own refit pass in this spec program.)
+>>>>>>> origin/main
 - Workflow-run placement has its own contract
   ([workspace-placement.md](../../systems/product/workflows/workspace-placement.md));
   workflow worktrees are deliberately invisible to retention here.
@@ -321,8 +326,13 @@ CPU/memory/disk rows
 when disk crosses the pressure threshold the client surfaces "your cloud
 machine is running low — here are your worktrees" backed by the inventory
 and its delete actions. No server-side notification job exists or is
+<<<<<<< HEAD
 planned; the screens and copy belong to
 [cloud-workspace.md](../../systems/product/workspaces/cloud-workspace.md).
+=======
+planned; the screens and copy belong to the cloud workspace system document
+(planned, PR 5 of this program).
+>>>>>>> origin/main
 
 ## When the VM dies
 

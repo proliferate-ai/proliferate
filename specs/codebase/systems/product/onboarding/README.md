@@ -22,10 +22,10 @@ Out of scope:
   [Product Auth](../auth/README.md)
 - server auth/resource-access structure, owned by
   [../../../structures/server/guides/auth.md](../../../structures/server/guides/auth.md)
-- managed-credit and LiteLLM gateway contracts (platform document removed as
-  stale Bifrost-era content; rewrite planned — owning code is
-  `server/proliferate/server/cloud/agent_gateway/` and
-  `server/proliferate/integrations/litellm/`)
+- managed-credit and LiteLLM gateway contracts, owned by
+  [../../../platforms/product/model-gateway.md](../../../platforms/product/model-gateway.md)
+  (auth selections and key delivery:
+  [../../../platforms/product/agent-auth.md](../../../platforms/product/agent-auth.md))
 - billing authorization and Stripe subscription/refill behavior, owned by
   [../../../platforms/product/billing.md](../../../platforms/product/billing.md)
 - managed workspace creation, owned by

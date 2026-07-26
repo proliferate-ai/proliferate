@@ -41,8 +41,8 @@ export function HeaderGroupPillTab({
       {...(rowDragProps ?? {})}
       className={`absolute bottom-0 flex h-7 items-center app-region-no-drag ${
         isDragging
-          ? "z-[20] cursor-grabbing opacity-80"
-          : `z-[3] transition-transform duration-150 hover:z-[4] ${
+          ? "z-sticky cursor-grabbing opacity-80"
+          : `z-raised transition-transform duration-enter hover:z-sticky ${
             row.groupKind === "subagent" ? "cursor-grab" : ""
           }`
       }`}

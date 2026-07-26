@@ -39,7 +39,7 @@ export function WorkspaceShellRightRail({
         // the page context). Without a local stacking context, panel internals
         // with z-index ≥ 10 (viewer toolbar, sticky tab edges) paint over the
         // dragger.
-        className="isolate shrink-0 overflow-hidden transition-[width] duration-150 ease-in-out"
+        className="isolate shrink-0 overflow-hidden transition-[width] duration-panel ease-in-out"
         style={{ width: open ? width : 0 }}
       >
         <DebugProfiler id="workspace-right-panel">

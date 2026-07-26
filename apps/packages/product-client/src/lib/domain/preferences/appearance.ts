@@ -26,12 +26,11 @@ export type WindowZoomId = (typeof WINDOW_ZOOM_IDS)[number];
 export interface TextTokenScale {
   fontSize: string;
   lineHeight: string;
+  /** Ruled per-role tracking; every ramp role owns all three metrics. */
+  letterSpacing: string;
 }
 
 export interface UiFontScale {
-  xs: TextTokenScale;
-  sm: TextTokenScale;
-  base: TextTokenScale;
   /** Secondary UI text — descriptions, secondary labels, notices, meta. */
   uiSm: TextTokenScale;
   /** Primary UI text — rows, pills, controls, popover items, menus, card titles. */
@@ -39,53 +38,66 @@ export interface UiFontScale {
   chat: TextTokenScale;
   /** Composer input text only. */
   composer: TextTokenScale;
+  /** Ordinary body/prose outside transcript and composer surfaces. */
+  body: TextTokenScale;
+  /** Prominent body values and names outside title surfaces. */
+  bodyEmphasis: TextTokenScale;
   /** Workspace name in the global header. */
   workspaceTitle: TextTokenScale;
-  lg: TextTokenScale;
-  xl: TextTokenScale;
+  /** Compact card/dialog titles and level-three headings. */
+  heading: TextTokenScale;
   /** Page/settings titles (SettingsPageHeader pairing). */
   title: TextTokenScale;
   /** Home hero heading. */
   hero: TextTokenScale;
-  /** Sidebar primary nav + repo-group labels (codex --text-base tier). */
+  /** Sidebar primary nav + repo-group labels. */
   sidebarNav: TextTokenScale;
-  /** Sidebar workspace/thread rows + section headers (codex --text-sm tier). */
+  /** Sidebar workspace/thread rows + section headers. */
   sidebarRow: TextTokenScale;
-  /** Sidebar brand wordmark (codex 17px tier). */
+  /** Sidebar brand wordmark. */
   sidebarBrand: TextTokenScale;
 }
 
 export type UiTextScaleCssVariables = {
-  "--text-xs": string;
-  "--text-xs--line-height": string;
-  "--text-sm": string;
-  "--text-sm--line-height": string;
-  "--text-base": string;
-  "--text-base--line-height": string;
   "--text-ui-sm": string;
   "--text-ui-sm--line-height": string;
+  "--text-ui-sm--letter-spacing": string;
   "--text-ui": string;
   "--text-ui--line-height": string;
+  "--text-ui--letter-spacing": string;
   "--text-chat": string;
   "--text-chat--line-height": string;
+  "--text-chat--letter-spacing": string;
   "--text-composer": string;
   "--text-composer--line-height": string;
+  "--text-composer--letter-spacing": string;
+  "--text-body": string;
+  "--text-body--line-height": string;
+  "--text-body--letter-spacing": string;
+  "--text-body-emphasis": string;
+  "--text-body-emphasis--line-height": string;
+  "--text-body-emphasis--letter-spacing": string;
   "--text-workspace-title": string;
   "--text-workspace-title--line-height": string;
-  "--text-lg": string;
-  "--text-lg--line-height": string;
-  "--text-xl": string;
-  "--text-xl--line-height": string;
+  "--text-workspace-title--letter-spacing": string;
+  "--text-heading": string;
+  "--text-heading--line-height": string;
+  "--text-heading--letter-spacing": string;
   "--text-title": string;
   "--text-title--line-height": string;
+  "--text-title--letter-spacing": string;
   "--text-hero": string;
   "--text-hero--line-height": string;
+  "--text-hero--letter-spacing": string;
   "--text-sidebar-nav": string;
   "--text-sidebar-nav--line-height": string;
+  "--text-sidebar-nav--letter-spacing": string;
   "--text-sidebar-row": string;
   "--text-sidebar-row--line-height": string;
+  "--text-sidebar-row--letter-spacing": string;
   "--text-sidebar-brand": string;
   "--text-sidebar-brand--line-height": string;
+  "--text-sidebar-brand--letter-spacing": string;
 };
 
 export type UiGlyphScaleCssVariables = {
@@ -114,31 +126,18 @@ export interface WindowZoomScale {
 export const DEFAULT_APPEARANCE_SIZE_ID: AppearanceSizeId = "default";
 export const DEFAULT_WINDOW_ZOOM_ID: WindowZoomId = "default";
 /** Compact canonical numeric ladders; expanded once into the public API below. */
-const COMPOSER_FONT_SIZES = [11, 11.5, 12, 13, 14, 15, 16, 17] as const;
-const HERO_FONT_SIZES = [23, 24, 25, 26.5, 28, 29.5, 31, 32.5] as const;
-const XS_REM_SCALES = [6.5, 11, 7, 11, 7, 11, 7.5, 12, 8, 12, 9, 14, 10, 16, 11, 18] as const;
-const SM_REM_SCALES = [7.5, 13, 8, 13, 8, 13, 9, 15, 10, 16, 11, 17, 12, 18, 13, 19] as const;
-const BASE_REM_SCALES = [8, 13, 8.5, 13.5, 9, 14, 10, 15, 11, 16, 12, 18, 13, 20, 14, 22] as const;
-const LG_LINE_HEIGHTS = [17, 17.5, 18, 19, 20, 22, 24, 26] as const;
-const XL_LINE_HEIGHTS = [22, 23, 24, 26, 28, 30, 32, 34] as const;
+const READING_FONT_SIZES = [11, 11.5, 12, 13, 14, 15, 16, 17] as const;
+const HERO_FONT_SIZES = [23, 24, 25, 26, 28, 29.5, 31, 32.5] as const;
 
-function rem(value: number): string {
-  return `${value / 16}rem`;
-}
-
-function pixelScale(fontSize: number, lineHeight: number): TextTokenScale {
-  return { fontSize: `${fontSize}px`, lineHeight: `${lineHeight}px` };
-}
-
-function remTokenScale(fontSize: number, lineHeight: number): TextTokenScale {
-  return { fontSize: rem(fontSize), lineHeight: rem(lineHeight) };
-}
-
-function remScale(values: readonly number[], index: number): TextTokenScale {
-  const offset = index * 2;
+function pixelScale(
+  fontSize: number,
+  lineHeight: number,
+  letterSpacing: string,
+): TextTokenScale {
   return {
-    fontSize: rem(values[offset]!),
-    lineHeight: rem(values[offset + 1]!),
+    fontSize: `${fontSize}px`,
+    lineHeight: `${lineHeight}px`,
+    letterSpacing,
   };
 }
 
@@ -147,32 +146,30 @@ function scaleRecord<T>(build: (index: number) => T): Record<AppearanceSizeId, T
 }
 
 function buildUiFontScale(index: number): UiFontScale {
-  const composer = COMPOSER_FONT_SIZES[index]!;
+  const reading = READING_FONT_SIZES[index]!;
   const hero = HERO_FONT_SIZES[index]!;
   return {
-    xs: remScale(XS_REM_SCALES, index),
-    sm: remScale(SM_REM_SCALES, index),
-    base: remScale(BASE_REM_SCALES, index),
-    uiSm: pixelScale(composer - 2, composer + 2),
-    ui: pixelScale(composer - 1, composer + 4),
-    chat: pixelScale(composer - 2, composer + 6),
-    composer: pixelScale(composer, composer + 8),
-    /** Every workspace-title rung stays 1px above message/composer. */
-    workspaceTitle: pixelScale(composer + 1, composer + 9),
-    lg: remTokenScale(composer, LG_LINE_HEIGHTS[index]!),
-    xl: remTokenScale(composer + 4, XL_LINE_HEIGHTS[index]!),
-    title: pixelScale(16 + index, 20 + index),
-    hero: pixelScale(hero, hero + 8),
-    sidebarNav: pixelScale(composer, composer + 5),
-    sidebarRow: pixelScale(composer, composer + 5),
-    sidebarBrand: pixelScale(composer + 3, composer + 10),
+    uiSm: pixelScale(reading - 2, reading + 2, "0.01em"),
+    ui: pixelScale(reading - 1, reading + 4, "0.005em"),
+    chat: pixelScale(reading, reading + 7, "0"),
+    composer: pixelScale(reading, reading + 7, "0"),
+    body: pixelScale(reading, reading + 7, "0"),
+    bodyEmphasis: pixelScale(reading + 1, reading + 8, "-0.005em"),
+    /** Workspace titles stay exactly one step above reading prose. */
+    workspaceTitle: pixelScale(reading + 1, reading + 8, "-0.005em"),
+    heading: pixelScale(reading + 3, reading + 10, "-0.01em"),
+    title: pixelScale(16 + index, 21 + index, "-0.025em"),
+    hero: pixelScale(hero, hero + 8, "-0.025em"),
+    sidebarNav: pixelScale(reading - 1, reading + 4, "0.005em"),
+    sidebarRow: pixelScale(reading - 1, reading + 4, "0.005em"),
+    sidebarBrand: pixelScale(reading + 3, reading + 10, "-0.01em"),
   };
 }
 
 export const UI_FONT_SCALES = /* @__PURE__ */ scaleRecord(buildUiFontScale);
 
 function buildReadableCodeFontScale(index: number): ReadableCodeFontScale {
-  const fontSize = COMPOSER_FONT_SIZES[index]!;
+  const fontSize = READING_FONT_SIZES[index]!;
   const fontSizePx = `${fontSize}px`;
   return {
     monacoFontSize: fontSize,
@@ -221,6 +218,7 @@ export function buildUiTextScaleCssVariables(scale: UiFontScale): UiTextScaleCss
     return [
       [property, token.fontSize],
       [`${property}--line-height`, token.lineHeight],
+      [`${property}--letter-spacing`, token.letterSpacing],
     ];
   })) as UiTextScaleCssVariables;
 }
@@ -233,7 +231,7 @@ export const DEFAULT_UI_TEXT_SCALE_CSS_VARIABLES = /* @__PURE__ */ buildUiTextSc
 export const DEFAULT_UI_GLYPH_SCALE_CSS_VARIABLES: UiGlyphScaleCssVariables = {
   "--icon-status": "0.55em",
   "--icon-compact": "1em",
-  "--icon-paired": "1.15em",
+  "--icon-paired": "1.230769em",
   "--icon-control": "1.333333em",
   "--icon-large": "1.666667em",
   "--icon-display": "2em",

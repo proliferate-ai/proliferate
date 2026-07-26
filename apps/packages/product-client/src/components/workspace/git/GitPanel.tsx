@@ -60,21 +60,21 @@ function GitPanelLoadingSkeleton() {
         >
           <div className="flex min-h-9 items-center gap-2.5 bg-[var(--color-diff-sidebar-file-header-surface)] px-5 py-1.5">
             <SkeletonBlock
-              className="h-3 w-40 bg-sidebar-accent"
+              className="h-3 w-40 bg-surface-control"
               style={shimmerDelay(index)}
             />
             <SkeletonBlock
-              className="ms-auto h-3 w-12 bg-sidebar-accent"
+              className="ms-auto h-3 w-12 bg-surface-control"
               style={shimmerDelay(index + 1)}
             />
           </div>
           <div className="space-y-2 px-5 py-3">
             <SkeletonBlock
-              className="h-2.5 w-3/4 bg-sidebar-accent"
+              className="h-2.5 w-3/4 bg-surface-control"
               style={shimmerDelay(index + 1)}
             />
             <SkeletonBlock
-              className="h-2.5 w-1/2 bg-sidebar-accent"
+              className="h-2.5 w-1/2 bg-surface-control"
               style={shimmerDelay(index + 2)}
             />
           </div>

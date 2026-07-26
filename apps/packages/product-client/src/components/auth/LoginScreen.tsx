@@ -55,7 +55,7 @@ export function LoginScreen({
             </h1>
             {canContinueLocally
               ? (
-                <p className="text-sm text-muted-foreground">
+                <p className="text-body text-muted-foreground">
                   {AUTH_LOGIN_LABELS.detailWithLocalPrefix}{" "}
                   <Button
                     type="button"
@@ -70,7 +70,7 @@ export function LoginScreen({
                 </p>
               )
               : (
-                <p className="text-sm text-muted-foreground">
+                <p className="text-body text-muted-foreground">
                   {AUTH_LOGIN_LABELS.detail}
                 </p>
               )}
@@ -102,19 +102,19 @@ export function LoginScreen({
             )}
 
           {!showPasswordForm && !githubSignInChecking && !githubSignInAvailable && (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-body text-muted-foreground">
               {githubSignInUnavailableDescription}
             </p>
           )}
 
           {error && (
-            <p className="text-sm text-destructive">{error}</p>
+            <p className="text-ui text-destructive">{error}</p>
           )}
         </div>
       </div>
 
       {connectServer.available && (
-        <div className="fixed inset-x-0 bottom-6 flex items-center justify-center gap-2 text-xs text-muted-foreground">
+        <div className="fixed inset-x-0 bottom-6 flex items-center justify-center gap-2 text-ui-sm text-muted-foreground">
           {connectServer.connectedServerHost ? (
             <>
               <span>

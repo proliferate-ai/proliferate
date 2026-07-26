@@ -93,7 +93,7 @@ export function WorkflowDefinitionEditor({
       >
         <form id="workflow-definition-form" className="space-y-4" onSubmit={submit}>
           {serverError ? (
-            <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive" role="alert">
+            <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-ui text-destructive" role="alert">
               {serverError}
               {onReload ? (
                 <Button
@@ -110,7 +110,7 @@ export function WorkflowDefinitionEditor({
             </div>
           ) : null}
           {catalogWarning ? (
-            <div className="rounded-lg border border-warning/30 bg-warning/5 px-3 py-2 text-sm text-warning" role="status">
+            <div className="rounded-lg border border-warning/30 bg-warning/5 px-3 py-2 text-ui text-warning" role="status">
               {catalogWarning}
               {onReload && !serverError ? (
                 <Button
@@ -127,7 +127,7 @@ export function WorkflowDefinitionEditor({
             </div>
           ) : null}
           {issues.length > 0 ? (
-            <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive" role="alert">
+            <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-ui text-destructive" role="alert">
               Fix {issues.length} {issues.length === 1 ? "issue" : "issues"} before saving. {issues[0]?.message}
             </div>
           ) : null}
@@ -145,7 +145,7 @@ export function WorkflowDefinitionEditor({
                   onChange={(event) => onChange({ ...draft, title: event.currentTarget.value })}
                 />
                 {titleIssue ? (
-                  <p className="mt-1 text-xs text-destructive" role="alert">{titleIssue.message}</p>
+                  <p className="mt-1 text-ui text-destructive" role="alert">{titleIssue.message}</p>
                 ) : null}
               </div>
               <div>
@@ -169,7 +169,7 @@ export function WorkflowDefinitionEditor({
                     <option key={repository.id} value={repository.id}>{repository.label}</option>
                   ))}
                 </Select>
-                <p className="mt-1 text-xs text-muted-foreground">
+                <p className="mt-1 text-ui-sm text-muted-foreground">
                   Runs may override this default later.
                 </p>
               </div>

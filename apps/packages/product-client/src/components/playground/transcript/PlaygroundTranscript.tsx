@@ -65,8 +65,8 @@ export function PlaygroundTranscript({
   }
 
   return (
-    <div className="text-sm text-muted-foreground">
-      <p className="leading-relaxed">
+    <div className="text-chat text-muted-foreground">
+      <p>
         This is the simulated transcript pane. Swap scenarios above to see
         different composer states and the Claude plan approval card.
       </p>

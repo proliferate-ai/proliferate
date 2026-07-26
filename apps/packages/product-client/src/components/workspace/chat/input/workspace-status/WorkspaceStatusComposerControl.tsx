@@ -175,7 +175,7 @@ export function WorkspaceStatusCard({
       variant="summary"
       // overflow-hidden keeps the sticky section headers (which paint the
       // card background) clipped to the rounded corners.
-      className="w-[min(300px,calc(100vw-1rem))] overflow-hidden rounded-[1.25rem] p-0 pt-2.5 ring-0 shadow-[0_0_0_0.5px_var(--color-popover-ring),0_3px_7.5px_rgba(0,0,0,0.25),0_0_20px_rgba(0,0,0,0.28)]"
+      className="w-[min(300px,calc(100vw-1rem))] overflow-hidden rounded-lg p-0 pt-2.5 ring-0 shadow-popover"
       data-telemetry-mask
     >
       <div className="flex max-h-[min(34rem,calc(100vh-8rem))] flex-col gap-3 overflow-y-auto pb-3">

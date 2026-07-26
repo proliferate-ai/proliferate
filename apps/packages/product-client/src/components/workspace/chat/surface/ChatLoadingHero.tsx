@@ -21,12 +21,12 @@ export function ChatLoadingHero() {
           </div>
         )}
         {caption && (
-          <p className="mt-4 text-chat font-medium leading-[var(--text-chat--line-height)] text-muted-foreground">
+          <p className="mt-4 text-chat font-medium text-muted-foreground">
             {caption}
           </p>
         )}
         {workspaceName && (
-          <p className="mt-1 text-chat font-medium leading-[var(--text-chat--line-height)] text-muted-foreground/80">
+          <p className="mt-1 text-chat font-medium text-muted-foreground/80">
             {workspaceName}
           </p>
         )}

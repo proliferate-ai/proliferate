@@ -87,7 +87,7 @@ export function HarnessAuthSection({
   if (harnessKind === CURSOR_HARNESS) {
     return (
       <HarnessPanelBlock variant={variant} title={HARNESS_PANE_COPY.authenticationTitle}>
-        <p className="py-3 text-sm text-muted-foreground">
+        <p className="py-3 text-ui-sm text-muted-foreground">
           {HARNESS_PANE_COPY.cursorNativeDescription(displayName)}
         </p>
       </HarnessPanelBlock>
@@ -102,7 +102,7 @@ export function HarnessAuthSection({
   if (surface === "local" && !editor.authReady) {
     return (
       <HarnessPanelBlock variant={variant} title={HARNESS_PANE_COPY.signInTitle}>
-        <p className="py-3 text-sm text-muted-foreground">
+        <p className="py-3 text-ui-sm text-muted-foreground">
           {HARNESS_PANE_COPY.signInDescription(displayName)}
         </p>
       </HarnessPanelBlock>
@@ -135,7 +135,7 @@ function HarnessAuthMethods({
   if (editor.selectionsQuery.isLoading) {
     return (
       <HarnessPanelBlock variant={variant} title={HARNESS_PANE_COPY.authenticationTitle}>
-        <p className="py-3 text-sm text-muted-foreground">Loading authentication...</p>
+        <p className="py-3 text-ui-sm text-muted-foreground">Loading authentication...</p>
       </HarnessPanelBlock>
     );
   }
@@ -174,7 +174,7 @@ function HarnessAuthMethods({
       description={HARNESS_PANE_COPY.authenticationDescription(displayName)}
     >
       {editor.harnessDisallowed ? (
-        <p className="pb-2 text-sm text-muted-foreground">{POLICY_TOOLTIP}.</p>
+        <p className="pb-2 text-ui-sm text-muted-foreground">{POLICY_TOOLTIP}.</p>
       ) : null}
       <div
         className="grid grid-cols-1 gap-2 sm:grid-cols-3"
@@ -347,8 +347,8 @@ function MethodCard({
         className={[
           "relative flex min-h-28 min-w-0 flex-col items-start justify-end gap-1 overflow-hidden rounded-lg border px-4 py-3.5 text-left transition-colors sm:min-h-32",
           selected
-            ? "border-foreground/20 bg-foreground/5 text-foreground"
-            : "border-border bg-background text-muted-foreground hover:border-foreground/10 hover:bg-foreground/[0.02]",
+            ? "border-foreground/20 bg-selected text-foreground"
+            : "border-border bg-background text-muted-foreground hover:border-foreground/10 hover:bg-hover active:bg-active",
           disabled ? "pointer-events-none opacity-50" : "",
         ].join(" ")}
         onClick={onClick}
@@ -360,12 +360,12 @@ function MethodCard({
           {icon}
         </span>
         <span className="text-ui-sm font-medium text-current">{label}</span>
-        <span className="w-full whitespace-normal text-ui-sm font-normal leading-[1.35] text-muted-foreground">
+        <span className="w-full whitespace-normal text-ui-sm font-normal text-muted-foreground">
           {description}
         </span>
       </Button>
       {disabled && disabledReason ? (
-        <p className="px-1 text-[length:var(--text-ui-sm)] leading-[var(--text-ui-sm--line-height)] text-muted-foreground">
+        <p className="px-1 text-ui-sm text-muted-foreground">
           {disabledReason}
         </p>
       ) : null}

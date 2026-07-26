@@ -450,13 +450,16 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       ([service.py](../../../../server/proliferate/server/cloud/cloud_sandboxes/service.py));
       collapse to `ensure` as a hard rename (pre-launch ruling, no alias
       window) and update SDK/client callers.
-- [ ] The sandbox gateway is a liveness gate, not a policy gate: it
-      refuses with 409 `cloud_sandbox_runtime_not_ready` unless the row is
-      already `ready`
-      ([gateway/service.py](../../../../server/proliferate/server/cloud/gateway/service.py)),
-      so E2B's auto-resume never sees the traffic. Move to
-      policy-checks-then-forward; paused sandboxes wake under forwarded
-      traffic.
+- [ ] Cold access is a dead end at the gateway: the 409
+      `cloud_sandbox_runtime_not_ready` fires whenever the row's runtime
+      access was never stamped or was cleared by provider loss
+      ([cloud_sandboxes/service.py](../../../../server/proliferate/server/cloud/cloud_sandboxes/service.py)),
+      and nothing on the access path starts the materialization that
+      would repair it — the client can only retry into the same 409.
+      Paused sandboxes are already fine (their stored address stays
+      valid, so forwarded traffic wakes them); the fix waits on the
+      cold-start choreography ruling (wake-and-poll vs
+      provision-on-access), still open.
 - [ ] `supervisor_owned_runtime` defaults off
       ([config.py](../../../../server/proliferate/config.py)); today's
       default launch is the legacy path (direct detached AnyHarness plus a
@@ -482,14 +485,12 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       enumerable and rollback recovery of existing sandboxes stays manual.
       Persist the exact immutable tag at create time.
 - [ ] Pressure telemetry has no disk axis: AnyHarness collects CPU and
-      memory only, the E2B disk metrics API (`Sandbox.get_metrics()`, which
-      reports `disk_used`/`disk_total`) is never called, and a disk-full
-      failure flattens into the generic provider-unavailable receipt
+      memory only, the template build declares no disk size, the E2B disk
+      metrics API is never called, and a disk-full failure flattens into
+      the generic provider-unavailable receipt
       ([failures.py](../../../../server/proliferate/server/cloud/materialization/failures.py)).
-      E2B exposes no per-sandbox disk-size knob, so observation is the
-      whole fix: add disk to the health payload and type the disk-full
-      failure (consumer contract in
-      [sandbox-content.md](sandbox-content.md)).
+      Add disk to the health payload and type the disk-full failure
+      (consumer contract in [sandbox-content.md](sandbox-content.md)).
 - [ ] `_runtime_status` in
       [workspaces/service.py](../../../../server/proliferate/server/cloud/workspaces/service.py)
       maps sandbox statuses `provisioning` and `stopped` that the enum and
