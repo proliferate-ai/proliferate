@@ -101,6 +101,16 @@ async def _synced_enrollment(db_session: AsyncSession, user_id: str) -> None:
         enrollment_id=enrollment.id,
         litellm_team_id="team-1",
         litellm_user_id=f"user-{user_id}",
+        virtual_key_id=None,
+        virtual_key=None,
+        sync_fingerprint="fp",
+    )
+    # Post-B2: the caller's harness gets its own access-group-scoped key
+    # (model-gateway.md §Account model), not the parent enrollment row.
+    await store.upsert_enrollment_key(
+        db_session,
+        enrollment_id=enrollment.id,
+        harness_kind=HARNESS,
         virtual_key_id="token-1",
         virtual_key="sk-litellm-virtual-key",
         sync_fingerprint="fp",

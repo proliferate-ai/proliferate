@@ -71,6 +71,20 @@ class AgentGatewayEnrollmentRecord:
 
 
 @dataclass(frozen=True)
+class AgentGatewayEnrollmentKeyRecord:
+    """One per-(enrollment, harness) LiteLLM virtual key (model-gateway.md §Account model)."""
+
+    id: UUID
+    enrollment_id: UUID
+    harness_kind: str
+    virtual_key_id: str | None
+    sync_fingerprint: str | None
+    created_at: datetime
+    updated_at: datetime
+    revoked_at: datetime | None
+
+
+@dataclass(frozen=True)
 class AgentCatalogSnapshotRecord:
     id: UUID
     harness_kind: str

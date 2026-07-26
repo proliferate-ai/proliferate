@@ -267,7 +267,9 @@ async def refresh_catalog(
                 "Gateway-route refreshes are server-side; do not upload models_json.",
                 status_code=400,
             )
-        stored_models_json = await _probe_gateway_models(db, user_id=user_id)
+        stored_models_json = await _probe_gateway_models(
+            db, user_id=user_id, harness_kind=harness_kind
+        )
         if len(stored_models_json.encode()) > _MAX_MODELS_JSON_BYTES:
             raise CloudApiError(
                 "invalid_agent_catalog_models",
@@ -399,7 +401,7 @@ async def mirror_catalog(
     )
 
 
-async def _probe_gateway_models(db: AsyncSession, *, user_id: UUID) -> str:
+async def _probe_gateway_models(db: AsyncSession, *, user_id: UUID, harness_kind: str) -> str:
     # Budget gate (second wall after the LiteLLM key disable): an exhausted
     # subject gets a clean enumerated 402 instead of exercising the gateway.
     # Mirrors the state renderer, which withholds the virtual key for the
@@ -413,10 +415,18 @@ async def _probe_gateway_models(db: AsyncSession, *, user_id: UUID) -> str:
     enrollment = await agent_gateway_store.get_enrollment_for_user(db, user_id=user_id)
     virtual_key: str | None = None
     if enrollment is not None:
-        virtual_key = await agent_gateway_store.get_enrollment_virtual_key_decrypted(
+        # Post-B2: the caller's harness has its own access-group-scoped key
+        # (model-gateway.md §Account model), not the parent enrollment's key.
+        enrollment_key = await agent_gateway_store.get_active_enrollment_key(
             db,
             enrollment_id=enrollment.id,
+            harness_kind=harness_kind,
         )
+        if enrollment_key is not None:
+            virtual_key = await agent_gateway_store.get_enrollment_key_virtual_key_decrypted(
+                db,
+                enrollment_key_id=enrollment_key.id,
+            )
     if virtual_key is None:
         raise CloudApiError(
             "agent_gateway_enrollment_not_ready",

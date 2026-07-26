@@ -235,8 +235,16 @@ async def mint_virtual_key(
     alias: str | None = None,
     max_budget: float | None = None,
     metadata: dict[str, Any] | None = None,
+    models: list[str] | None = None,
 ) -> LiteLLMVirtualKey:
-    """Mint a virtual key. ``alias`` must be globally unique in LiteLLM."""
+    """Mint a virtual key. ``alias`` must be globally unique in LiteLLM.
+
+    ``models`` names the access group(s) (or bare model ids) the key may see —
+    ``{"models": ["claude"]}`` grants exactly the ``claude`` access group
+    (model-gateway.md "Account model"). Omitted (``None``) mints an unscoped
+    key that sees every model in the deployment; callers minting a scoped,
+    harness-attributed key MUST pass this.
+    """
     body: dict[str, Any] = {"user_id": user_id}
     if team_id is not None:
         body["team_id"] = team_id
@@ -246,6 +254,8 @@ async def mint_virtual_key(
         body["max_budget"] = max_budget
     if metadata is not None:
         body["metadata"] = metadata
+    if models is not None:
+        body["models"] = models
     payload = _require_dict(
         await _admin_request("POST", "/key/generate", json_body=body),
         context="/key/generate",
@@ -266,6 +276,7 @@ async def rotate_virtual_key(
     alias: str | None = None,
     max_budget: float | None = None,
     metadata: dict[str, Any] | None = None,
+    models: list[str] | None = None,
 ) -> LiteLLMVirtualKey:
     """Replace a virtual key with a freshly minted one.
 
@@ -277,7 +288,8 @@ async def rotate_virtual_key(
     A missing old key is tolerated: rotation exists to hand back a fresh
     working key, and the old id may already be gone (e.g. a prior rotate whose
     DB write later rolled back). Failing the delete would wedge recovery
-    forever, so we log and mint regardless.
+    forever, so we log and mint regardless. ``models`` is forwarded to the
+    fresh mint so a rotated key keeps its original access-group scope.
     """
     try:
         await _admin_request("POST", "/key/delete", json_body={"keys": [key_or_token_id]})
@@ -292,6 +304,7 @@ async def rotate_virtual_key(
         alias=alias,
         max_budget=max_budget,
         metadata=metadata,
+        models=models,
     )
 
 

@@ -65,9 +65,17 @@ async def test_reactivation_uncaps_overage_subject_capped_at_enrollment(
     await db_session.flush()
 
     enrollment = await ensure_org_enrollment(db_session, org_id, member_id)
-    # Enrolled while NOT overage-enabled: minted with a hard cap of 5.
-    assert stub_litellm.minted[-1]["max_budget"] == 5.0
-    assert enrollment.virtual_key_id is not None
+    # Enrolled while NOT overage-enabled: the TEAM minted with a hard cap of
+    # 5; keys never carry a budget copy at all (post-B2, R2).
+    assert stub_litellm.ensure_team_budgets[-1] == 5.0
+    assert all(record["max_budget"] is None for record in stub_litellm.minted)
+    assert enrollment.virtual_key_id is None
+    key_ids = {
+        key.virtual_key_id
+        for key in await store.list_active_enrollment_keys(
+            db_session, enrollment_id=enrollment.id
+        )
+    }
 
     # Spend past the cap and mark exhausted (as the importer would, non-overage).
     await _spend(db_session, billing_subject_id=subject.id, cost_usd=5.0)
@@ -90,10 +98,11 @@ async def test_reactivation_uncaps_overage_subject_capped_at_enrollment(
         source_ref=f"llm_topup:in_uncap_{uuid.uuid4().hex[:6]}",
     )
 
-    # Cap removed (None) on both team and key, VK re-enabled, status back to ok.
-    assert stub_litellm.enabled_keys == [enrollment.virtual_key_id]
+    # Cap removed (None) on the TEAM, every per-harness key re-enabled, status
+    # back to ok. Keys are never budgeted, so `key_budgets` stays empty.
+    assert set(stub_litellm.enabled_keys) == key_ids
     assert stub_litellm.team_budgets == [(enrollment.litellm_team_id, None)]
-    assert stub_litellm.key_budgets == [(enrollment.virtual_key_id, None)]
+    assert stub_litellm.key_budgets == []
     refreshed = await store.get_enrollment_for_organization(
         db_session,
         organization_id=org_id,
@@ -146,6 +155,12 @@ async def test_importer_enforces_overage_when_topup_amount_invalid(
     org_id, subject_id = await _overage_org_subject(db_session)
     member_id = await _create_user(db_session)
     enrollment = await ensure_org_enrollment(db_session, org_id, member_id)
+    key_ids = {
+        key.virtual_key_id
+        for key in await store.list_active_enrollment_keys(
+            db_session, enrollment_id=enrollment.id
+        )
+    }
     await store.create_llm_credit_grant(
         db_session,
         billing_subject_id=subject_id,
@@ -171,4 +186,4 @@ async def test_importer_enforces_overage_when_topup_amount_invalid(
     )
 
     assert enforced is True
-    assert disabled == [enrollment.virtual_key_id]
+    assert set(disabled) == key_ids

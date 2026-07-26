@@ -130,6 +130,34 @@ def _metadata_str(entry: LiteLLMSpendLogEntry, key: str) -> str | None:
     return raw if isinstance(raw, str) and raw else None
 
 
+async def _resolve_enrollment_for_spend_key(
+    db: AsyncSession,
+    *,
+    virtual_key_id: str,
+) -> AgentGatewayEnrollmentRecord | None:
+    """Resolve a spend-log ``api_key`` (token hash) to its parent enrollment.
+
+    Post-B2: spend rows carry a per-harness child key's token hash, not the
+    enrollment's own (the parent row no longer holds key material at all).
+    Falls back to the pre-B2 direct-on-enrollment lookup so usage rows
+    produced under stale key material (or in an unmigrated environment) still
+    resolve during any transition window.
+    """
+    enrollment_key = await agent_gateway_store.get_enrollment_key_by_virtual_key_id(
+        db,
+        virtual_key_id=virtual_key_id,
+    )
+    if enrollment_key is not None:
+        return await agent_gateway_store.get_enrollment_by_id(
+            db,
+            enrollment_id=enrollment_key.enrollment_id,
+        )
+    return await agent_gateway_store.get_enrollment_by_virtual_key_id(
+        db,
+        virtual_key_id=virtual_key_id,
+    )
+
+
 async def run_usage_import(
     db: AsyncSession,
     *,
@@ -195,10 +223,7 @@ async def run_usage_import(
 
         enrollment: AgentGatewayEnrollmentRecord | None = None
         if entry.api_key:
-            enrollment = await agent_gateway_store.get_enrollment_by_virtual_key_id(
-                db,
-                virtual_key_id=entry.api_key,
-            )
+            enrollment = await _resolve_enrollment_for_spend_key(db, virtual_key_id=entry.api_key)
 
         user_id: UUID | None = None
         organization_id: UUID | None = None
@@ -326,6 +351,44 @@ async def run_usage_import(
     )
 
 
+async def _disable_enrollment_keys(
+    db: AsyncSession,
+    enrollment: AgentGatewayEnrollmentRecord,
+    *,
+    log_context: str,
+) -> bool:
+    """Disable every active per-harness child key for an enrollment.
+
+    Post-B2 there is no single key on the enrollment row to disable — every
+    gateway-capable harness has its own key (model-gateway.md §Account
+    model), so exhaustion/limit enforcement must walk and disable all of
+    them. Returns ``False`` (do not flip budget_status) only when at least
+    one live key failed to disable, mirroring the pre-B2 fail-open-on-error
+    behavior (a lagging disable is logged, not fatal to the tick).
+    """
+    all_disabled = True
+    for enrollment_key in await agent_gateway_store.list_active_enrollment_keys(
+        db,
+        enrollment_id=enrollment.id,
+    ):
+        if enrollment_key.virtual_key_id is None:
+            continue
+        try:
+            await litellm.disable_virtual_key(key_or_token_id=enrollment_key.virtual_key_id)
+        except LiteLLMIntegrationError as error:
+            logger.warning(
+                "Failed to disable %s virtual key",
+                log_context,
+                extra={
+                    "enrollment_id": str(enrollment.id),
+                    "harness_kind": enrollment_key.harness_kind,
+                    "error_code": error.code,
+                },
+            )
+            all_disabled = False
+    return all_disabled
+
+
 async def _enforce_subject_exhaustion(
     db: AsyncSession,
     billing_subject_id: UUID,
@@ -359,18 +422,8 @@ async def _enforce_subject_exhaustion(
     for enrollment in enrollments:
         if enrollment.budget_status == AGENT_GATEWAY_BUDGET_STATUS_EXHAUSTED:
             continue
-        if enrollment.virtual_key_id:
-            try:
-                await litellm.disable_virtual_key(key_or_token_id=enrollment.virtual_key_id)
-            except LiteLLMIntegrationError as error:
-                logger.warning(
-                    "Failed to disable exhausted virtual key",
-                    extra={
-                        "enrollment_id": str(enrollment.id),
-                        "error_code": error.code,
-                    },
-                )
-                continue
+        if not await _disable_enrollment_keys(db, enrollment, log_context="exhausted"):
+            continue
         await agent_gateway_store.set_enrollment_budget_status(
             db,
             enrollment_id=enrollment.id,
@@ -451,7 +504,7 @@ async def _apply_llm_limit_reached(
     db: AsyncSession,
     enrollment: AgentGatewayEnrollmentRecord,
 ) -> None:
-    """Disable a member's key and flip it to ``limit_reached`` (idempotent).
+    """Disable a member's keys and flip it to ``limit_reached`` (idempotent).
 
     Skips enrollments already ``limit_reached`` or ``exhausted`` — credit
     exhaustion is the stronger signal and is cleared by top-up reactivation.
@@ -461,18 +514,8 @@ async def _apply_llm_limit_reached(
         AGENT_GATEWAY_BUDGET_STATUS_EXHAUSTED,
     ):
         return
-    if enrollment.virtual_key_id:
-        try:
-            await litellm.disable_virtual_key(key_or_token_id=enrollment.virtual_key_id)
-        except LiteLLMIntegrationError as error:
-            logger.warning(
-                "Failed to disable virtual key at budget limit",
-                extra={
-                    "enrollment_id": str(enrollment.id),
-                    "error_code": error.code,
-                },
-            )
-            return
+    if not await _disable_enrollment_keys(db, enrollment, log_context="budget-limit"):
+        return
     await agent_gateway_store.set_enrollment_budget_status(
         db,
         enrollment_id=enrollment.id,

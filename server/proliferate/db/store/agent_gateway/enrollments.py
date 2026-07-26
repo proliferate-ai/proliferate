@@ -21,6 +21,7 @@ from proliferate.constants.agent_gateway import (
 from proliferate.db.models.auth import User
 from proliferate.db.models.cloud.agent_gateway import AgentGatewayEnrollment
 from proliferate.db.models.organizations import OrganizationMembership
+from proliferate.db.store.agent_gateway.enrollment_keys import revoke_enrollment_keys
 from proliferate.db.store.agent_gateway.mappers import enrollment_record
 from proliferate.db.store.agent_gateway.records import AgentGatewayEnrollmentRecord
 from proliferate.utils.crypto import decrypt_text, encrypt_text
@@ -107,6 +108,23 @@ async def _load_active_row(
     return (await db.execute(query)).scalar_one_or_none()
 
 
+async def get_enrollment_by_id(
+    db: AsyncSession,
+    *,
+    enrollment_id: UUID,
+) -> AgentGatewayEnrollmentRecord | None:
+    """Fetch an enrollment row directly by primary key, active or not.
+
+    Used to resolve the parent enrollment from a per-harness child key row
+    (``AgentGatewayEnrollmentKeyRecord.enrollment_id``); unlike the
+    ``get_enrollment_for_*`` lookups this doesn't require the row to be
+    active, since a revoked enrollment's billing subject is still needed for
+    usage-import attribution of spend that happened before revocation.
+    """
+    row = await db.get(AgentGatewayEnrollment, enrollment_id)
+    return enrollment_record(row) if row is not None else None
+
+
 async def get_enrollment_for_user(
     db: AsyncSession,
     *,
@@ -156,6 +174,13 @@ async def mark_enrollment_synced(
     if virtual_key is not None:
         row.virtual_key_ciphertext = encrypt_text(virtual_key)
         row.virtual_key_ciphertext_key_id = AGENT_GATEWAY_CIPHERTEXT_KEY_ID
+    elif virtual_key_id is None:
+        # Post-B2: per-harness keys live on the child table, not here. An
+        # explicit (None, None) call means "this enrollment no longer carries
+        # its own key material" — clear the parent's stale ciphertext too, not
+        # just the id, so no decryptable-but-orphaned secret lingers.
+        row.virtual_key_ciphertext = None
+        row.virtual_key_ciphertext_key_id = None
     row.sync_status = AGENT_GATEWAY_SYNC_STATUS_SYNCED
     row.sync_fingerprint = sync_fingerprint
     row.last_error_code = None
@@ -417,5 +442,8 @@ async def revoke_enrollment(
     if row.revoked_at is None:
         row.revoked_at = utcnow()
         row.updated_at = row.revoked_at
+        # Cascade: an enrollment's per-harness child keys are meaningless once
+        # the parent (team/subject) is revoked.
+        await revoke_enrollment_keys(db, enrollment_id=enrollment_id)
         await db.flush()
     return enrollment_record(row)

@@ -1,10 +1,12 @@
 """Eager LiteLLM enrollment for users and organizations.
 
 Every enrollment ensures the durable row first (idempotent), then — when the
-gateway is enabled — provisions the LiteLLM team, user, and virtual key and
-marks the row synced. Failures mark the row failed; the backfill worker
-retries pending/failed rows and discovers users created before the hooks
-existed.
+gateway is enabled — provisions the LiteLLM team, user, and one
+access-group-scoped virtual key per gateway-capable harness_kind (child
+``agent_gateway_enrollment_key`` rows; model-gateway.md §Account model), and
+marks the enrollment row synced. Failures mark the row failed; the backfill
+worker retries pending/failed rows and discovers users created before the
+hooks existed.
 """
 
 from __future__ import annotations
@@ -18,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
 from proliferate.constants.agent_gateway import (
+    AGENT_AUTH_HARNESS_KINDS,
     AGENT_GATEWAY_SUBJECT_KIND_ORGANIZATION,
     AGENT_GATEWAY_SUBJECT_KIND_USER,
     AGENT_GATEWAY_SYNC_STATUS_SYNCED,
@@ -34,6 +37,12 @@ from proliferate.server.cloud.agent_gateway.free_credits import ensure_user_free
 from proliferate.server.cloud.materialization import service as materialization_service
 
 logger = logging.getLogger(__name__)
+
+# Every gateway-capable harness gets its own access-group-scoped key at
+# enrollment sync (R2, agents-impl-plan.md §4 B2). Exactly
+# AGENT_AUTH_HARNESS_KINDS — cursor is absent from that tuple already (no
+# gateway recipe; native-only).
+_GATEWAY_CAPABLE_HARNESS_KINDS = AGENT_AUTH_HARNESS_KINDS
 
 # When a subject with an active grant has exhausted it, LiteLLM's ``max_budget``
 # must mirror a *near-zero* cap rather than "0" — our ``_parse_budget`` reads
@@ -59,8 +68,16 @@ def _parse_budget(raw: str) -> float | None:
     return value if value > 0 else None
 
 
-def _key_alias(enrollment_id: UUID, subject_label: str) -> str:
-    return f"vk-{subject_label}-{str(enrollment_id)[:8]}"
+def _key_alias(enrollment_id: UUID, subject_label: str, harness_kind: str) -> str:
+    """Deterministic per-(enrollment, harness) LiteLLM key alias.
+
+    ``vk-{subject}-{harness}-{id[:8]}`` (R2, agents-impl-plan.md §4 B2). The
+    enrollment id (not the child key's own id) is the stable component, so the
+    alias for a given (enrollment, harness) pair never changes across resyncs
+    — required for the duplicate-alias orphan-recovery path in
+    :func:`_mint_virtual_key_idempotent` to keep finding the same alias.
+    """
+    return f"vk-{subject_label}-{harness_kind}-{str(enrollment_id)[:8]}"
 
 
 def _is_duplicate_alias_error(error: LiteLLMIntegrationError) -> bool:
@@ -73,23 +90,29 @@ async def _mint_virtual_key_idempotent(
     user_id: str,
     team_id: str,
     alias: str,
-    max_budget: float | None,
     metadata: dict[str, str],
+    models: list[str],
 ) -> LiteLLMVirtualKey:
-    """Mint a virtual key, tolerating an orphaned key under the same alias.
+    """Mint an access-group-scoped virtual key, tolerating an orphaned alias.
 
-    The alias is deterministic per enrollment, so a crash/rollback after a
-    prior mint (id never committed) leaves a live key we no longer track. On
-    the duplicate-alias 400 we purge that orphan and re-mint, guaranteeing the
-    enrollment ends up owning a key we also hold the raw secret for.
+    Per-harness keys never carry a budget (R2: the team is the only budget
+    layer; model-gateway.md §Account model) — ``max_budget`` is never passed
+    here, unlike the parent enrollment's team-level budget. ``models`` grants
+    exactly the caller's harness access group.
+
+    The alias is deterministic per (enrollment, harness), so a crash/rollback
+    after a prior mint (id never committed) leaves a live key we no longer
+    track. On the duplicate-alias 400 we purge that orphan and re-mint,
+    guaranteeing the enrollment ends up owning a key we also hold the raw
+    secret for.
     """
     try:
         return await litellm.mint_virtual_key(
             user_id=user_id,
             team_id=team_id,
             alias=alias,
-            max_budget=max_budget,
             metadata=metadata,
+            models=models,
         )
     except LiteLLMIntegrationError as error:
         if not _is_duplicate_alias_error(error):
@@ -99,8 +122,8 @@ async def _mint_virtual_key_idempotent(
             user_id=user_id,
             team_id=team_id,
             alias=alias,
-            max_budget=max_budget,
             metadata=metadata,
+            models=models,
         )
 
 
@@ -110,15 +133,18 @@ def enrollment_subject_label(enrollment: AgentGatewayEnrollmentRecord) -> str:
     return f"org-{enrollment.organization_id}"
 
 
-def enrollment_key_alias(enrollment: AgentGatewayEnrollmentRecord) -> str:
-    """The globally-unique LiteLLM key alias an enrollment's key was minted with."""
-    return _key_alias(enrollment.id, enrollment_subject_label(enrollment))
+def enrollment_key_alias(enrollment: AgentGatewayEnrollmentRecord, harness_kind: str) -> str:
+    """The globally-unique LiteLLM key alias an enrollment's per-harness key was minted with."""
+    return _key_alias(enrollment.id, enrollment_subject_label(enrollment), harness_kind)
 
 
-def enrollment_key_metadata(enrollment: AgentGatewayEnrollmentRecord) -> dict[str, str]:
-    """Attribution metadata stamped on every virtual key we mint."""
+def enrollment_key_metadata(
+    enrollment: AgentGatewayEnrollmentRecord, harness_kind: str
+) -> dict[str, str]:
+    """Attribution metadata stamped on every per-harness virtual key we mint."""
     metadata: dict[str, str] = {
         "proliferate_billing_subject_id": str(enrollment.billing_subject_id),
+        "proliferate_harness_kind": harness_kind,
     }
     if enrollment.user_id is not None:
         metadata["proliferate_user_id"] = str(enrollment.user_id)
@@ -245,6 +271,52 @@ async def ensure_org_enrollment(
     )
 
 
+async def _sync_one_harness_key(
+    db: AsyncSession,
+    *,
+    enrollment: AgentGatewayEnrollmentRecord,
+    harness_kind: str,
+    team_id: str,
+    team_alias: str,
+    litellm_user_id: str | None,
+    subject_label: str,
+) -> None:
+    """Mint (or leave alone) the (enrollment, harness) child key, idempotently.
+
+    Skips the mint entirely when an active child key already exists for this
+    harness — this is the retry-after-partial-failure path, mirroring the
+    pre-B2 single-key behavior of never re-minting a key we already hold.
+    """
+    existing = await agent_gateway_store.get_active_enrollment_key(
+        db,
+        enrollment_id=enrollment.id,
+        harness_kind=harness_kind,
+    )
+    if existing is not None and existing.virtual_key_id is not None:
+        return
+    key_alias = _key_alias(enrollment.id, subject_label, harness_kind)
+    metadata = enrollment_key_metadata(enrollment, harness_kind)
+    minted = await _mint_virtual_key_idempotent(
+        user_id=litellm_user_id or team_alias,
+        team_id=team_id,
+        alias=key_alias,
+        metadata=metadata,
+        models=[harness_kind],
+    )
+    await agent_gateway_store.upsert_enrollment_key(
+        db,
+        enrollment_id=enrollment.id,
+        harness_kind=harness_kind,
+        virtual_key_id=minted.token_id or None,
+        virtual_key=minted.key,
+        sync_fingerprint=build_sync_fingerprint(
+            team_id=team_id,
+            budget="",
+            key_alias=key_alias,
+        ),
+    )
+
+
 async def _sync_enrollment(
     db: AsyncSession,
     *,
@@ -255,8 +327,6 @@ async def _sync_enrollment(
     budget_raw: str,
 ) -> AgentGatewayEnrollmentRecord:
     budget = _parse_budget(budget_raw)
-    key_alias = _key_alias(enrollment.id, subject_label)
-    metadata = enrollment_key_metadata(enrollment)
     qualification_metadata = _qualification_run_metadata() or None
     try:
         team_id = await litellm.ensure_team(
@@ -269,43 +339,36 @@ async def _sync_enrollment(
                 user_id=litellm_user_id,
                 metadata=qualification_metadata,
             )
-        virtual_key = enrollment.virtual_key_id
-        if virtual_key is None:
-            minted = await _mint_virtual_key_idempotent(
-                user_id=litellm_user_id or team_alias,
+        # Mint (or confirm) exactly one access-group-scoped key per
+        # gateway-capable harness — R2: eager minting of all keys at
+        # enrollment, never lazy per-selection.
+        for harness_kind in _GATEWAY_CAPABLE_HARNESS_KINDS:
+            await _sync_one_harness_key(
+                db,
+                enrollment=enrollment,
+                harness_kind=harness_kind,
                 team_id=team_id,
-                alias=key_alias,
-                max_budget=budget,
-                metadata=metadata,
-            )
-            synced = await agent_gateway_store.mark_enrollment_synced(
-                db,
-                enrollment_id=enrollment.id,
-                litellm_team_id=team_id,
+                team_alias=team_alias,
                 litellm_user_id=litellm_user_id,
-                virtual_key_id=minted.token_id or None,
-                virtual_key=minted.key,
-                sync_fingerprint=build_sync_fingerprint(
-                    team_id=team_id,
-                    budget=budget_raw,
-                    key_alias=key_alias,
-                ),
+                subject_label=subject_label,
             )
-        else:
-            # A key already exists (retry after a partial failure); refresh metadata only.
-            synced = await agent_gateway_store.mark_enrollment_synced(
-                db,
-                enrollment_id=enrollment.id,
-                litellm_team_id=team_id,
-                litellm_user_id=litellm_user_id,
-                virtual_key_id=enrollment.virtual_key_id,
-                virtual_key=None,
-                sync_fingerprint=build_sync_fingerprint(
-                    team_id=team_id,
-                    budget=budget_raw,
-                    key_alias=key_alias,
-                ),
-            )
+        # The parent enrollment row no longer carries its own key material
+        # (post-B2, model-gateway.md §Account model): keys live exclusively on
+        # the child table. `virtual_key_id=None, virtual_key=None` clears any
+        # pre-B2 single unscoped key still on the row.
+        synced = await agent_gateway_store.mark_enrollment_synced(
+            db,
+            enrollment_id=enrollment.id,
+            litellm_team_id=team_id,
+            litellm_user_id=litellm_user_id,
+            virtual_key_id=None,
+            virtual_key=None,
+            sync_fingerprint=build_sync_fingerprint(
+                team_id=team_id,
+                budget=budget_raw,
+                key_alias=subject_label,
+            ),
+        )
         if synced.user_id is not None:
             # A gateway selection may have been waiting on this enrollment;
             # push fresh agent-auth state into the user's live sandbox.
