@@ -213,7 +213,62 @@ Step 6 JC (final, post-execution):
   `PYTHONPATH=. python3 -m scripts.test_check_appearance_scaling` (49 OK) since
   step 5 last ran them and this step didn't change either checker's logic —
   both still green, confirming no checker regression.
-- [ ] 7. boundary gate rules (G)
+- [x] 7. boundary gate rules (G)
+
+## Step 7 notes
+
+Two mechanically-checkable rules added to `scripts/check_frontend_boundaries.py`,
+same style as the file's existing per-line/per-tree checks (no fuzzy heuristics):
+
+- `RADIX_IMPORT_OUTSIDE_UI_COMPONENT_LIBRARY`: any `@radix-ui/*` import (substring
+  match on `"@radix-ui/"`, comment-stripped, same convention as the other
+  per-line rules in this file) outside `apps/packages/ui/src/primitives/**` or
+  `apps/packages/ui/src/patterns/**` fails. Scanned across all nine frontend
+  package/app src roots (desktop, web, mobile, design, ui, product-domain,
+  product-ui, product-surfaces, product-client) via a new
+  `find_radix_import_violations()` + `ALL_FRONTEND_SRC_ROOTS`/`iter_files_in_roots`
+  helper (the prior `iter_frontend_files()` only scanned desktop+product-client,
+  too narrow for a repo-wide dependency-containment rule). Verified zero
+  violations exist today (`@radix-ui/*` only appears in `ui/src/primitives/*`;
+  product-client/product-surfaces/product-ui have no radix deps in their
+  package.json) — zero allowlist entries added, none needed.
+- `UI_SRC_TOP_LEVEL_ENTRY`: `apps/packages/ui/src` may contain only
+  `primitives/`, `patterns/`, `icons/`, `lib/`, `utils/`, `overlays/` at its top
+  level (`UI_SRC_ALLOWED_TOP_LEVEL_ENTRIES`, enumerated from the actual tree
+  post step-6: `ls apps/packages/ui/src` showed exactly these six dirs, no
+  loose top-level files). New `find_ui_src_top_level_violations()` lists
+  `UI_SRC.iterdir()` and fails any entry not in the allowlist, pointing at
+  `specs/codebase/structures/frontend/packages/README.md` (the component-library
+  taxonomy doc) in the message. No `kit/DropdownMenu` ban added — out of scope
+  per task brief, that migration still has consumers.
+
+Test coverage: new `scripts/test_check_frontend_boundaries.py` (first test file
+for this checker), following the `test_check_docs.py`/`test_check_appearance_scaling.py`
+pattern of `tempfile.TemporaryDirectory()` + `patch.object(module, ...)` on the
+module's root constants. 6 tests: radix-allowed-under-primitives-and-patterns,
+radix-violation-with-two-distinct-paths, radix-ignored-in-line-comments,
+ui-src-top-level-all-allowed-passes, ui-src-top-level-unexpected-entry-fails,
+ui-src-missing-directory-is-a-no-op (mirrors the `should_skip`/generated-prefix
+no-op conventions elsewhere in this checker family). Wired into
+`.github/workflows/ci.yml`'s "Check frontend layer boundaries" step (ran before
+the checker itself, same order as the appearance-scaling step's
+test-then-check pattern).
+
+JC: `iter_frontend_files()` (desktop + product-client only) was too narrow for
+a package-dependency-containment rule that must also catch violations in `ui`,
+`product-ui`, `product-surfaces`, `web`, `mobile`, `design`, `product-domain` —
+added a general `iter_files_in_roots()`/`ALL_FRONTEND_SRC_ROOTS` alongside it
+rather than widening the existing desktop/product-client-scoped function (which
+backs the desktop-specific access/query-cache rules and must stay scoped to
+those two trees).
+
+Gates (this step): `python3 scripts/check_frontend_boundaries.py` exit 0 (zero
+violations, zero allowlist entries — confirms the radix rule finds nothing to
+grandfather). `python3 -m unittest scripts/test_check_frontend_boundaries.py`
+6/6 OK. `python3 scripts/check_docs.py` exit 0 (224 files, unaffected — no
+specs/ or markdown changes this step). `python3 scripts/check_appearance_scaling.py`
+exit 0 (unaffected — no design/appearance-scaling-relevant source touched).
+
 - [ ] 8. component-library.md spec (D)
 - [ ] 9. adversarial verify + fixes (V)
 - [ ] 10. delete .taxonomy-plan, final gates

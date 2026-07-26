@@ -10,10 +10,28 @@ import sys
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DESKTOP_SRC = REPO_ROOT / "apps" / "desktop" / "src"
+WEB_SRC = REPO_ROOT / "apps" / "web" / "src"
+MOBILE_SRC = REPO_ROOT / "apps" / "mobile" / "src"
+DESIGN_SRC = REPO_ROOT / "apps" / "packages" / "design" / "src"
+UI_SRC = REPO_ROOT / "apps" / "packages" / "ui" / "src"
+PRODUCT_DOMAIN_SRC = REPO_ROOT / "apps" / "packages" / "product-domain" / "src"
+PRODUCT_UI_SRC = REPO_ROOT / "apps" / "packages" / "product-ui" / "src"
+PRODUCT_SURFACES_SRC = REPO_ROOT / "apps" / "packages" / "product-surfaces" / "src"
 PRODUCT_CLIENT_SRC = REPO_ROOT / "apps" / "packages" / "product-client" / "src"
 ALLOWLIST_PATH = REPO_ROOT / "scripts" / "frontend_boundaries_allowlist.txt"
 EXTENSIONS = {".ts", ".tsx"}
 GENERATED_PREFIXES: set[str] = set()
+
+# Component-library taxonomy (specs/codebase/structures/frontend/packages/README.md):
+# apps/packages/ui/src is base primitives + one-level-up compositions only.
+UI_SRC_ALLOWED_TOP_LEVEL_ENTRIES = {
+    "primitives",
+    "patterns",
+    "icons",
+    "lib",
+    "utils",
+    "overlays",
+}
 
 QUERY_CACHE_METHODS = {
     "cancelQueries",
@@ -80,8 +98,20 @@ def should_skip(path: Path) -> bool:
     return any(part in {"__tests__", "__mocks__"} for part in path.parts)
 
 
-def iter_frontend_files() -> list[Path]:
-    roots = [DESKTOP_SRC, PRODUCT_CLIENT_SRC]
+ALL_FRONTEND_SRC_ROOTS = [
+    DESKTOP_SRC,
+    WEB_SRC,
+    MOBILE_SRC,
+    DESIGN_SRC,
+    UI_SRC,
+    PRODUCT_DOMAIN_SRC,
+    PRODUCT_UI_SRC,
+    PRODUCT_SURFACES_SRC,
+    PRODUCT_CLIENT_SRC,
+]
+
+
+def iter_files_in_roots(roots: list[Path]) -> list[Path]:
     files: list[Path] = []
     for root in roots:
         if not root.exists():
@@ -94,6 +124,10 @@ def iter_frontend_files() -> list[Path]:
             and not should_skip(path)
         )
     return files
+
+
+def iter_frontend_files() -> list[Path]:
+    return iter_files_in_roots([DESKTOP_SRC, PRODUCT_CLIENT_SRC])
 
 
 def relative(path: Path) -> str:
@@ -117,6 +151,12 @@ def is_anyharness_client_path(relative_path: str) -> bool:
 
 def is_cloud_access_path(relative_path: str) -> bool:
     return is_under(relative_path, "apps/desktop/src/lib/access/cloud/")
+
+
+def is_ui_component_library_path(relative_path: str) -> bool:
+    return is_under(relative_path, "apps/packages/ui/src/primitives/") or is_under(
+        relative_path, "apps/packages/ui/src/patterns/"
+    )
 
 
 def is_query_cache_owner_path(relative_path: str) -> bool:
@@ -303,6 +343,63 @@ def check_file(path: Path) -> list[Violation]:
     return violations
 
 
+def find_radix_import_violations() -> list[Violation]:
+    """Rule: `@radix-ui/*` imports are legal only under the ui component
+    library's base tiers (`primitives/`, `patterns/`) per the component-library
+    taxonomy in specs/codebase/structures/frontend/packages/README.md.
+    """
+    violations: list[Violation] = []
+    for path in iter_files_in_roots(ALL_FRONTEND_SRC_ROOTS):
+        rel = relative(path)
+        if is_ui_component_library_path(rel):
+            continue
+        for lineno, raw_line in enumerate(path.read_text().splitlines(), start=1):
+            line = strip_line_comment(raw_line)
+            if not line.strip():
+                continue
+            if "@radix-ui/" in line:
+                violations.append(
+                    Violation(
+                        "RADIX_IMPORT_OUTSIDE_UI_COMPONENT_LIBRARY",
+                        path,
+                        lineno,
+                        (
+                            "@radix-ui/* imports must stay under "
+                            "apps/packages/ui/src/primitives/** or "
+                            "apps/packages/ui/src/patterns/**"
+                        ),
+                    )
+                )
+    return violations
+
+
+def find_ui_src_top_level_violations() -> list[Violation]:
+    """Rule: apps/packages/ui/src may only contain the top-level entries named
+    in the component-library taxonomy (specs/codebase/structures/frontend/packages/README.md):
+    primitives/, patterns/, icons/, lib/, utils/, overlays/.
+    """
+    violations: list[Violation] = []
+    if not UI_SRC.exists():
+        return violations
+    for entry in sorted(UI_SRC.iterdir()):
+        if entry.name in UI_SRC_ALLOWED_TOP_LEVEL_ENTRIES:
+            continue
+        violations.append(
+            Violation(
+                "UI_SRC_TOP_LEVEL_ENTRY",
+                entry,
+                1,
+                (
+                    f"apps/packages/ui/src/{entry.name} is not an allowed top-level "
+                    "entry per the component-library taxonomy in "
+                    "specs/codebase/structures/frontend/packages/README.md "
+                    f"(allowed: {', '.join(sorted(UI_SRC_ALLOWED_TOP_LEVEL_ENTRIES))})"
+                ),
+            )
+        )
+    return violations
+
+
 def load_allowlist() -> dict[tuple[str, str], AllowlistEntry]:
     if not ALLOWLIST_PATH.exists():
         return {}
@@ -343,6 +440,8 @@ def collect_violations() -> list[Violation]:
     violations: list[Violation] = []
     for path in iter_frontend_files():
         violations.extend(check_file(path))
+    violations.extend(find_radix_import_violations())
+    violations.extend(find_ui_src_top_level_violations())
     return violations
 
 
