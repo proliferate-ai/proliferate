@@ -1398,6 +1398,70 @@ async fn model_snapshot_status_route_serves_per_context_state_without_the_finger
     assert_eq!(unknown.status(), StatusCode::NOT_FOUND);
 }
 
+/// The refresh route's query parameter is `authContextId`, exactly as the utoipa
+/// annotation and the generated SDK declare it.
+///
+/// This pins the contract at the wire, because the failure it guards against is
+/// silent: without `#[serde(rename_all = "camelCase")]` on `RefreshQuery`, a client
+/// sending the documented `?authContextId=` deserializes to the field's default and
+/// the handler behaves as if nothing was asked for. The old shape then fanned out to
+/// every active context — six real harness spawns on opencode — which is why the
+/// parameter is now required: a missing or misnamed value is a `400`, never a
+/// surprise fan-out.
+///
+/// Asserted by DISCRIMINATING the responses: `snake_case` must be rejected as a
+/// missing parameter, while `camelCase` must be accepted and reach the engine (which
+/// then answers `404` for a context this uninstalled harness has no active entry
+/// for). Same request, one character different, two different codes.
+#[tokio::test]
+async fn model_snapshot_refresh_reads_the_camel_case_auth_context_param() {
+    let _lock = test_support::ENV_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("expected env mutex");
+    let _guard = test_support::set_bearer_token_env(Some("secret-token"));
+    let app = build_router(test_state(false));
+
+    let snake_case = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/agents/opencode/model-snapshot/refresh?auth_context_id=gateway")
+                .header(header::AUTHORIZATION, "Bearer secret-token")
+                .body(Body::empty())
+                .expect("expected request"),
+        )
+        .await
+        .expect("expected response");
+    assert_eq!(
+        snake_case.status(),
+        StatusCode::BAD_REQUEST,
+        "a snake_case parameter must NOT satisfy the documented camelCase one"
+    );
+
+    let camel_case = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/agents/opencode/model-snapshot/refresh?authContextId=gateway")
+                .header(header::AUTHORIZATION, "Bearer secret-token")
+                .body(Body::empty())
+                .expect("expected request"),
+        )
+        .await
+        .expect("expected response");
+    assert_ne!(
+        camel_case.status(),
+        StatusCode::BAD_REQUEST,
+        "the documented camelCase parameter must be accepted"
+    );
+    // The engine was actually reached and answered about that context. On this test
+    // runtime no harness is installed, so the honest answer is 404 — the point is
+    // that it is NOT the 400 above and NOT a fan-out.
+    assert_eq!(camel_case.status(), StatusCode::NOT_FOUND);
+}
+
 /// Both model-snapshot routes sit behind the same bearer gate as every other `/v1`
 /// route: a harness's auth-staleness state is machine information, not public.
 #[tokio::test]

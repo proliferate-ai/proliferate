@@ -35,12 +35,19 @@ async fn a_corrupt_state_file_declines_to_probe_and_surfaces_a_typed_error() {
         0,
         "a corrupt state.json must not produce a probe"
     );
-    // A caller who explicitly asked DOES get told why.
+    // A caller who explicitly asked DOES get told why — as a typed code, and NOT as a
+    // 502: a malformed local `state.json` is this machine's configuration fault, not
+    // an upstream failure, and no upstream was reached. The transport maps it to 409
+    // and never echoes the state file's absolute path (see `refresh_error`).
     let error = service
         .refresh_now("opencode", "gateway")
         .await
         .expect_err("typed error");
     assert_eq!(error.code(), "MODEL_SNAPSHOT_MATERIAL_FAILED");
+    assert!(
+        matches!(error, RefreshError::Material(_)),
+        "a local-config fault must stay distinguishable from a probe failure"
+    );
     // And the status surface answers rather than panicking.
     assert_eq!(
         service.status("opencode", chrono::Utc::now()).agent,

@@ -172,6 +172,150 @@ async fn a_timed_out_probe_records_a_timeout_and_leaves_no_scratch() {
     );
 }
 
+/// A persisted failure detail must be safe to store and to render.
+///
+/// The text is HARNESS-CONTROLLED — a spawned CLI's own error string — and several
+/// providers quote the credential they were handed straight back ("invalid api key:
+/// sk-…"). That string becomes `lastAttempt.detail`, which the status route serves as
+/// `lastError` and a UI displays, so an unredacted one would put a live key on screen
+/// AND in a file. It is also unbounded, so a harness that dumps a stack trace per
+/// attempt would grow a document the engine re-reads and re-writes on every probe.
+///
+/// Redaction works by DIGEST — the token is hashed the same way phase A hashed the
+/// credential value — so this path never holds a plaintext credential either, which is
+/// the property the whole two-phase seam exists to preserve.
+#[tokio::test]
+async fn a_failure_detail_is_redacted_and_truncated_before_it_is_persisted() {
+    let home = TempRuntimeHome::new("redaction");
+    let secret = "sk-ant-super-secret-value";
+    home.write_state_json(&serde_json::json!({
+        "version": 2,
+        "revision": 3,
+        "harnesses": [{
+            "harness_kind": "opencode",
+            "sources": [
+                { "kind": "gateway", "base_url": "https://gw.example", "key": secret },
+            ],
+        }],
+    }));
+    home.write_manifest("opencode", Some("1.0.0"), Some("sha-1"), "pinned_archive");
+
+    let (service, runner, _plan) = engine(
+        &home,
+        "opencode",
+        vec![gateway_context()],
+        ProbeEngineConfig {
+            min_reprobe_interval: Duration::ZERO,
+            ..test_config()
+        },
+    );
+    // Seed a good entry, because a failure with no entry writes nothing at all.
+    service
+        .refresh_now("opencode", "gateway")
+        .await
+        .expect("seed a good entry");
+
+    // Exactly what a real provider does: echo the key back, at length.
+    let padding = "detail ".repeat(200);
+    runner.set_behavior(FakeBehavior::Fail(format!(
+        "authentication failed for key={secret}, and \"{secret}\" was rejected. {padding}"
+    )));
+    let _ = service
+        .refresh_now("opencode", "gateway")
+        .await
+        .expect_err("must fail");
+
+    let entry = read_document(home.path(), "opencode")
+        .expect("document")
+        .entries
+        .remove("gateway")
+        .expect("entry");
+    let detail = entry.last_attempt.detail.expect("detail");
+
+    assert!(
+        !detail.contains(secret),
+        "the credential must not be persisted in the failure detail: {detail}"
+    );
+    assert!(
+        detail.contains("[redacted]"),
+        "the redaction must be visible rather than silent: {detail}"
+    );
+    // Both occurrences go, including the quoted one — the trim is why.
+    assert_eq!(detail.matches("[redacted]").count(), 2);
+    // The non-secret part of the message survives, so the detail is still useful.
+    assert!(detail.contains("authentication failed"));
+    assert!(
+        detail.chars().count() <= 560,
+        "the detail must be bounded, got {} chars",
+        detail.chars().count()
+    );
+    assert!(detail.ends_with("… (truncated)"));
+
+    // And the whole document is 0600: every entry carries an authFingerprint, which is
+    // a stable per-credential identifier even though it is not a key.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+
+        let path = super::super::document::snapshot_path(home.path(), "opencode");
+        let mode = std::fs::metadata(&path)
+            .expect("metadata")
+            .permissions()
+            .mode()
+            & 0o777;
+        assert_eq!(mode, 0o600, "model-snapshot.json must be 0600, got {mode:o}");
+    }
+}
+
+/// Layer 3 of the cleanup story is live from the moment an engine exists, not only
+/// from a later startup pass.
+///
+/// This matters more than "a stray directory": a native-codex probe materializes a
+/// COPY OF THE USER'S OWN `~/.codex/auth.json` into its scratch, because relocating
+/// `CODEX_HOME` relocates where codex looks for its login. A SIGKILL runs no guard, so
+/// without a sweep at construction that plaintext credential copy would sit under the
+/// runtime home indefinitely.
+#[tokio::test]
+async fn constructing_an_engine_reclaims_abandoned_scratch_roots() {
+    let home = seeded_home("sweep-on-construction", "opencode");
+    let probe_dir = home.path().join("agent-auth-probe");
+    std::fs::create_dir_all(&probe_dir).expect("create probe dir");
+
+    // A root abandoned by a long-dead pid, old enough to be past the age bound, with
+    // a credential copy inside it — the shape a SIGKILLed native-codex probe leaves.
+    let ancient_nanos = 1_u128;
+    let abandoned = probe_dir.join(format!("codex-openai-oauth-{}-{ancient_nanos}", 999_999));
+    std::fs::create_dir_all(abandoned.join("agent-auth/codex-native")).expect("create root");
+    let credential = abandoned.join("agent-auth/codex-native/auth.json");
+    std::fs::write(&credential, b"{\"tokens\":{\"access_token\":\"leaked\"}}")
+        .expect("write credential copy");
+
+    // A root belonging to THIS process must survive: our own guards own it, and a
+    // live probe of ours may be mid-spawn.
+    let ours = probe_dir.join(format!(
+        "opencode-gateway-{}-{ancient_nanos}",
+        std::process::id()
+    ));
+    std::fs::create_dir_all(&ours).expect("create our root");
+
+    assert!(credential.exists(), "the fixture starts with the copy present");
+    let (_service, _runner, _plan) =
+        engine(&home, "opencode", vec![gateway_context()], test_config());
+
+    assert!(
+        !abandoned.exists(),
+        "constructing the engine must reclaim an abandoned scratch root"
+    );
+    assert!(
+        !credential.exists(),
+        "and with it the plaintext credential copy inside"
+    );
+    assert!(
+        ours.is_dir(),
+        "our own process's root must never be swept from under us"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // T-32: the single-runtime lock
 // ---------------------------------------------------------------------------

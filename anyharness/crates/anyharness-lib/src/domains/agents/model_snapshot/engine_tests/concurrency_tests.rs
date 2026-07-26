@@ -54,6 +54,96 @@ async fn eight_concurrent_pokes_for_one_key_produce_one_probe() {
     assert_eq!(entry.last_attempt.outcome, AttemptOutcome::Ok);
 }
 
+/// A probe waiting for a slot reports `queued`, never `idle`.
+///
+/// At `max_concurrent_probes = 1` that wait is the COMMON case, not an edge one: the
+/// second context of any harness spends its whole admitted life behind the per-harness
+/// gate. Reporting `idle` there would tell a polling UI "nothing is happening" about
+/// work the engine has already accepted — so the surface would hide its own spinner
+/// and a user would press Refresh again.
+#[tokio::test]
+async fn a_probe_waiting_for_a_slot_reports_queued_not_idle() {
+    let home = TempRuntimeHome::new("queued");
+    home.write_state_json(&serde_json::json!({
+        "version": 2,
+        "revision": 4,
+        "harnesses": [{
+            "harness_kind": "opencode",
+            "sources": [
+                { "kind": "gateway", "base_url": "https://gw.example", "key": "sk-vk" },
+                { "kind": "api_key", "env_var_name": "ANTHROPIC_API_KEY", "value": "sk-ant" },
+            ],
+        }],
+    }));
+    home.write_manifest("opencode", Some("1.0.0"), Some("sha-1"), "pinned_archive");
+
+    let (runner, release) = FakeRunner::gated();
+    let service = Arc::new(ModelSnapshotService::with_parts(
+        home.path().to_path_buf(),
+        Arc::new(CountingPlanProducer::new(vec!["m-1"], vec!["seed"])),
+        Arc::new(FixedTargets::single(
+            "opencode",
+            vec![
+                gateway_context(),
+                env_context("anthropic-api", "anthropic", &["ANTHROPIC_API_KEY"]),
+            ],
+        )),
+        runner.clone(),
+        test_config(),
+    ));
+
+    // Two contexts, one harness: the second cannot run until the first releases.
+    let first = {
+        let service = service.clone();
+        tokio::spawn(async move {
+            service.probe_if_stale("opencode", "gateway", PokeReason::Startup).await;
+        })
+    };
+    let second = {
+        let service = service.clone();
+        tokio::spawn(async move {
+            service
+                .probe_if_stale("opencode", "anthropic-api", PokeReason::Startup)
+                .await;
+        })
+    };
+    // Let both reach the engine while the runner is still gated.
+    for _ in 0..8 {
+        tokio::task::yield_now().await;
+    }
+
+    let status = service.status("opencode", chrono::Utc::now());
+    let states: Vec<super::super::status::LiveState> =
+        status.contexts.iter().map(|context| context.state).collect();
+    assert!(
+        states
+            .iter()
+            .any(|state| *state == super::super::status::LiveState::Running),
+        "one context must be running: {states:?}"
+    );
+    assert!(
+        states
+            .iter()
+            .any(|state| *state == super::super::status::LiveState::Queued),
+        "the context waiting for the harness gate must report queued, not idle: {states:?}"
+    );
+
+    release.send(true).expect("release");
+    first.await.expect("join");
+    second.await.expect("join");
+
+    // And both settle back to idle once the work is done.
+    let settled = service.status("opencode", chrono::Utc::now());
+    for context in &settled.contexts {
+        assert_eq!(
+            context.state,
+            super::super::status::LiveState::Idle,
+            "{} must settle to idle",
+            context.auth_context_id
+        );
+    }
+}
+
 /// T-21 — distinct keys do not coalesce, AND they are serialized for one harness:
 /// two contexts produce two invocations that never overlap.
 #[tokio::test]

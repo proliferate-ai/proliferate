@@ -196,6 +196,24 @@ pub fn ttl_for_entry_with(
     base + Duration::from_secs(offset)
 }
 
+/// The same stable hash, additionally mixed with an attempt number — the backoff
+/// jitter's seed. Lives here so ONE hash serves both schedules; a second hash
+/// elsewhere would be a second thing to keep stable across toolchains.
+pub(super) fn stable_backoff_hash(
+    harness_kind: &str,
+    auth_context_id: &str,
+    attempt: u32,
+) -> u64 {
+    const PRIME: u64 = 0x0000_0100_0000_01b3;
+
+    let mut hash = stable_hash(harness_kind, auth_context_id);
+    for byte in attempt.to_le_bytes() {
+        hash ^= u64::from(byte);
+        hash = hash.wrapping_mul(PRIME);
+    }
+    hash
+}
+
 /// FNV-1a over `harness:context`. Chosen over `DefaultHasher` deliberately:
 /// `std`'s hasher is explicitly not guaranteed stable across releases, and this
 /// value must be the same on every build or a toolchain bump silently re-schedules

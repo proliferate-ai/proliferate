@@ -232,9 +232,20 @@ pub fn write_entry(
     write_document(runtime_home, harness_kind, &document)
 }
 
-/// tmp + rename, mirroring `installer::manifest`. The tmp name carries a uuid so
-/// two writers cannot collide on it, and a truncated tmp left by a crash is never
-/// a candidate for [`read_document`] (which only ever opens the final name).
+/// tmp + rename + chmod 0600, mirroring `installer::manifest`'s atomicity and
+/// `state.json`'s privacy. The tmp name carries a uuid so two writers cannot
+/// collide on it, and a truncated tmp left by a crash is never a candidate for
+/// [`read_document`] (which only ever opens the final name).
+///
+/// **0600, not 0644.** The document is not purely public capability data: every
+/// entry carries an `authFingerprint`, which is derived from the credential material
+/// the context resolved to. It is preimage-resistant, so it is not a key — but it
+/// is a stable per-credential identifier that a co-tenant process could read to
+/// learn *which* credential a user is on and *when it rotated*. `state.json` next
+/// door is 0600 for weaker reasons than that; matching it costs one chmod.
+///
+/// The permission is set on the TMP file before the rename, so the document is
+/// never briefly world-readable at its final path.
 pub fn write_document(
     runtime_home: &Path,
     harness_kind: &str,
@@ -248,11 +259,29 @@ pub fn write_document(
         .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))?;
     let tmp = path.with_extension(format!("json.tmp-{}", uuid::Uuid::new_v4()));
     std::fs::write(&tmp, json)?;
+    if let Err(error) = set_private_permissions(&tmp) {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(error);
+    }
     match std::fs::rename(&tmp, &path) {
-        Ok(()) => Ok(()),
+        // Re-applied after the rename for the same reason the route-auth writer
+        // does: an existing target's mode survives a rename on some filesystems.
+        Ok(()) => set_private_permissions(&path),
         Err(error) => {
             let _ = std::fs::remove_file(&tmp);
             Err(error)
         }
     }
+}
+
+#[cfg(unix)]
+fn set_private_permissions(path: &Path) -> std::io::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))
+}
+
+#[cfg(not(unix))]
+fn set_private_permissions(_path: &Path) -> std::io::Result<()> {
+    Ok(())
 }

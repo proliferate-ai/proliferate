@@ -4,10 +4,19 @@
 //!   shaped after `GET /v1/agents/reconcile`: polled, never pushed. This is the
 //!   pull-status pattern; a client that already polls install progress needs no new
 //!   mechanism.
-//! - `POST /v1/agents/{kind}/model-snapshot/refresh` — force a re-probe. The one
-//!   call that AWAITS its probe and surfaces errors; every other trigger is
-//!   fire-and-forget and swallows them (the entry's `lastAttempt` carries them
-//!   instead).
+//! - `POST /v1/agents/{kind}/model-snapshot/refresh?authContextId=` — force a
+//!   re-probe of ONE context. It is the one call that awaits its probe and surfaces
+//!   errors; every other trigger is fire-and-forget and swallows them (the entry's
+//!   `lastAttempt` carries them instead).
+//!
+//! **`authContextId` is required, and that is a decision.** An earlier shape let it
+//! be absent and meant "every active context", awaiting each in turn — which on
+//! opencode is six contexts × a 240s probe timeout, serialized by a semaphore of 1:
+//! a single HTTP request could hold for ~24 minutes. The design only ever specified
+//! a single-context forced refresh awaiting its probe, so the fan-out shape was
+//! invented here and is withdrawn. A surface that wants "refresh everything" issues
+//! one request per context and polls the GET route for progress, which is exactly
+//! how it already drives the reconcile job this route is shaped after.
 //!
 //! The status body deliberately carries no `authFingerprint`: it is a
 //! credential-derived digest, and the client contract is the boolean `stale` plus
@@ -18,6 +27,7 @@ use axum::{
     http::StatusCode,
     Json,
 };
+use anyharness_contract::v1::ProblemDetails;
 use serde::Deserialize;
 
 use super::error::ApiError;
@@ -26,12 +36,16 @@ use crate::domains::agents::model_snapshot::status::ModelSnapshotStatus;
 use crate::domains::agents::model_snapshot::RefreshError;
 use crate::domains::agents::registry::descriptor;
 
+/// `camelCase` because that is what the utoipa parameter, the generated SDK and
+/// every other query type in this layer declare. Without the rename a client
+/// sending the documented `?authContextId=` would deserialize to `None` — the
+/// silent-wrong-default class of bug, which is why the field is now REQUIRED: a
+/// missing value is a 400, not a fan-out.
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RefreshQuery {
-    /// Which auth context to re-probe. Absent means "every active context for this
-    /// harness", which is what the settings Refresh button wants.
-    #[serde(default)]
-    pub auth_context_id: Option<String>,
+    /// Which auth context to re-probe. Required.
+    pub auth_context_id: String,
 }
 
 #[utoipa::path(
@@ -39,8 +53,8 @@ pub struct RefreshQuery {
     path = "/v1/agents/{kind}/model-snapshot",
     params(("kind" = String, Path, description = "Agent kind identifier")),
     responses(
-        (status = 200, description = "Per-auth-context model snapshot status"),
-        (status = 404, description = "Unknown agent kind"),
+        (status = 200, description = "Per-auth-context model snapshot status", body = ModelSnapshotStatus),
+        (status = 404, description = "Unknown agent kind", body = ProblemDetails),
     ),
     tag = "catalogs"
 )]
@@ -61,13 +75,14 @@ pub async fn get_model_snapshot_status(
     path = "/v1/agents/{kind}/model-snapshot/refresh",
     params(
         ("kind" = String, Path, description = "Agent kind identifier"),
-        ("authContextId" = Option<String>, Query, description = "Single auth context to re-probe"),
+        ("authContextId" = String, Query, description = "The auth context to re-probe (required)"),
     ),
     responses(
-        (status = 202, description = "Re-probe completed; the status body reflects it"),
-        (status = 404, description = "Unknown agent kind or inactive auth context"),
-        (status = 409, description = "This runtime does not own the probe engine"),
-        (status = 502, description = "The forced probe failed"),
+        (status = 202, description = "Re-probe completed; the status body reflects it", body = ModelSnapshotStatus),
+        (status = 400, description = "Missing authContextId", body = ProblemDetails),
+        (status = 404, description = "Unknown agent kind or inactive auth context", body = ProblemDetails),
+        (status = 409, description = "This runtime does not own the probe engine, or its local auth config is unusable", body = ProblemDetails),
+        (status = 502, description = "The forced probe ran and failed", body = ProblemDetails),
     ),
     tag = "catalogs"
 )]
@@ -79,28 +94,12 @@ pub async fn refresh_model_snapshot(
     ensure_known_kind(&kind)?;
     let service = state.model_snapshot_service.clone();
 
-    let contexts: Vec<String> = match query.auth_context_id {
-        Some(context) => vec![context],
-        None => service.status(&kind, chrono::Utc::now())
-            .contexts
-            .into_iter()
-            .filter(|context| context.active)
-            .map(|context| context.auth_context_id)
-            .collect(),
-    };
-
-    // Every requested context is refreshed, and the FIRST failure is surfaced —
-    // partial success is still visible in the returned body, because each
-    // successful context has already been persisted by the time we answer.
-    let mut first_error = None;
-    for context in &contexts {
-        if let Err(error) = service.refresh_now(&kind, context).await {
-            first_error.get_or_insert(error);
-        }
-    }
-    if let Some(error) = first_error {
-        return Err(refresh_error(error));
-    }
+    // Exactly one context, awaited. See the module docs for why the "refresh every
+    // active context" shape was withdrawn rather than made concurrent.
+    service
+        .refresh_now(&kind, &query.auth_context_id)
+        .await
+        .map_err(refresh_error)?;
 
     Ok((
         StatusCode::ACCEPTED,
@@ -118,24 +117,43 @@ fn ensure_known_kind(kind: &str) -> Result<(), ApiError> {
 }
 
 /// Status codes mirror the contract the manual gateway-refresh endpoint
-/// established: `502` for a probe that ran and failed, `409` for "not this
-/// runtime's job", `404` for a context that is not active here.
+/// established, with one correction: `502` means an UPSTREAM failure, so it is
+/// reserved for a probe that actually ran and failed. A malformed `state.json` or
+/// an unsatisfiable selection is a LOCAL configuration fault — the request was
+/// well-formed and no upstream was reached — so it answers `409`, the same code the
+/// route already uses for "this runtime cannot serve that right now".
+///
+/// The detail is a stable machine-readable reason, never the error's `Display`:
+/// `RouteAuthError::MalformedStateFile` embeds the absolute `state.json` path, and
+/// echoing a filesystem path from the user's home into an HTTP body is a gratuitous
+/// disclosure. The path is already in the runtime's own logs, where it belongs.
 fn refresh_error(error: RefreshError) -> ApiError {
     let code = error.code();
     match error {
         RefreshError::NotOwner => ApiError::new(
             StatusCode::CONFLICT,
             "another runtime owns the probe engine for this runtime home",
-            Some(error.to_string()),
+            Some("this runtime does not hold the probe-engine lock".to_string()),
             Some(code),
         ),
         RefreshError::UnknownContext { .. } | RefreshError::NotInstalled(_) => {
             ApiError::new(StatusCode::NOT_FOUND, error.to_string(), None, Some(code))
         }
-        RefreshError::Material(_) | RefreshError::Probe(_) => ApiError::new(
+        RefreshError::Material(material_error) => {
+            tracing::warn!(%material_error, "model snapshot refresh could not resolve its auth material");
+            ApiError::new(
+                StatusCode::CONFLICT,
+                "this machine's agent-auth configuration cannot be probed for that context",
+                // The typed route-auth code, not the message: the message carries
+                // the state file's absolute path.
+                Some(material_error.code().to_string()),
+                Some(code),
+            )
+        }
+        RefreshError::Probe(probe_error) => ApiError::new(
             StatusCode::BAD_GATEWAY,
             "model snapshot probe failed",
-            Some(error.to_string()),
+            Some(probe_error.detail()),
             Some(code),
         ),
     }

@@ -93,6 +93,10 @@ impl ModelSnapshotService {
 
     /// A slot the engine has never touched reports idle, which is honest: nothing
     /// is running and nothing is scheduled.
+    ///
+    /// An in-flight state (`Queued` or `Running`) outranks a backoff window: the
+    /// engine really is working on this key right now, and reporting "retry pending"
+    /// while a probe is mid-flight would make a polling UI hide its own spinner.
     fn live_state(
         &self,
         harness_kind: &str,
@@ -104,8 +108,11 @@ impl ModelSnapshotService {
             return (status::LiveState::Idle, None);
         };
         let state = slot.state.lock().expect("model snapshot slot poisoned");
-        if state.running {
-            return (status::LiveState::Running, None);
+        if matches!(
+            state.live,
+            status::LiveState::Queued | status::LiveState::Running
+        ) {
+            return (state.live, None);
         }
         match state.next_attempt_at {
             Some(next) if next > now => (status::LiveState::Backoff, Some(next)),

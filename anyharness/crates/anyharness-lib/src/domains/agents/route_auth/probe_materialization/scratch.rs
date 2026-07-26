@@ -144,7 +144,12 @@ pub fn sweep_probe_scratch(runtime_home: &Path, max_probe_age: std::time::Durati
             continue;
         }
         if let Some((pid, _)) = parsed {
-            if pid == own_pid || process_is_live(pid) {
+            // Our own roots are never swept regardless of platform: this process's
+            // guards own them, and a live probe of ours may be mid-spawn.
+            if pid == own_pid {
+                continue;
+            }
+            if let Some(true) = process_is_live(pid) {
                 continue;
             }
         }
@@ -174,26 +179,32 @@ fn dir_age_exceeds(path: &Path, max_age: std::time::Duration) -> bool {
         .unwrap_or(false)
 }
 
-/// Is `pid` a live process? `ESRCH` means dead; `EPERM` means alive but owned by
-/// another user (which a second runtime's probe legitimately is).
+/// Is `pid` a live process? `Some(true)` live, `Some(false)` dead, `None` when this
+/// platform cannot tell.
 ///
-/// There is no pid-liveness helper anywhere in the workspace today, so this is
-/// the narrowest possible one.
+/// `ESRCH` means dead; `EPERM` means alive but owned by another user, which a second
+/// runtime's probe legitimately is. There is no pid-liveness helper anywhere in the
+/// workspace today, so this is the narrowest possible one.
 #[cfg(unix)]
-fn process_is_live(pid: u32) -> bool {
+fn process_is_live(pid: u32) -> Option<bool> {
     // SAFETY: signal 0 performs error checking only — it delivers no signal and
     // cannot affect the target process.
     let result = unsafe { libc::kill(pid as libc::pid_t, 0) };
     if result == 0 {
-        return true;
+        return Some(true);
     }
-    std::io::Error::last_os_error().raw_os_error() != Some(libc::ESRCH)
+    Some(std::io::Error::last_os_error().raw_os_error() != Some(libc::ESRCH))
 }
 
-/// Without a liveness check, report every pid as live: the age gate alone then
-/// governs, which is the conservative direction (a stray root survives rather
-/// than a live probe being deleted).
+/// `None`: this platform has no liveness check wired, so the AGE gate alone governs.
+///
+/// The earlier shape returned "live" unconditionally, which read as conservative but
+/// was in fact a leak: a parseable root could then never be swept at all, no matter
+/// how old, so an abandoned scratch — which for a native-codex probe holds a copy of
+/// the user's own `auth.json` — would persist forever. Falling back to age-only keeps
+/// the reclamation alive; the age bound (three probe timeouts) is what makes it safe
+/// without the pid signal, and our own roots are already excluded above.
 #[cfg(not(unix))]
-fn process_is_live(_pid: u32) -> bool {
-    true
+fn process_is_live(_pid: u32) -> Option<bool> {
+    None
 }

@@ -19,6 +19,15 @@ use crate::domains::agents::route_auth::ProbeAuthMaterial;
 /// purpose: a change to what the digest covers must not read as "unchanged".
 const FINGERPRINT_VERSION: &str = "v1";
 
+/// The digest phase A recorded a credential VALUE under.
+///
+/// Re-exported here rather than re-implemented, so the failure-detail redactor and
+/// phase A can never drift into never matching — a silent failure that would leave
+/// a quoted-back key in a persisted document with no test noticing.
+pub fn digest_of(value: &str) -> String {
+    crate::domains::agents::route_auth::probe_materialization::credential_value_digest(value)
+}
+
 /// `sha256:` + hex over the canonical serialization of the material.
 ///
 /// Field order and separators are fixed here (never derived from a HashMap

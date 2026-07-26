@@ -15,7 +15,10 @@
 //! - [`targets`] answers which pairs may be probed (and holds cursor's carve-out),
 //! - [`lock`] enforces one engine per runtime home,
 //! - [`status`] projects the polled status surface (pure),
-//! - this file is the reconciler: gate, coalescing, serialization, backoff, floor.
+//! - [`detail`] makes a harness's own error text safe to persist (pure),
+//! - [`backoff`] spreads the retry ladder (pure),
+//! - [`attempt`] executes one admitted attempt and persists its outcome,
+//! - this file is the reconciler: the gate, the coalescing, and the pokes.
 //!
 //! **Four independent brakes**, because each stops a different runaway:
 //! 1. the staleness gate — nothing re-probes a fresh entry;
@@ -26,11 +29,14 @@
 //! 4. per-harness serialization plus a machine-wide semaphore of 1, because every
 //!    probe is a real harness process.
 
+mod attempt;
+mod backoff;
 pub mod config;
+mod detail;
 pub mod document;
 mod entry;
-mod reads;
 pub mod fingerprint;
+mod reads;
 pub mod lock;
 pub mod probe;
 pub mod staleness;
@@ -55,9 +61,8 @@ use chrono::{DateTime, Utc};
 use crate::domains::agents::route_auth::{self, GatewayModelResolve, RouteAuthError};
 
 pub use config::{PokeReason, ProbeEngineConfig, ProbeEngineMode, RefreshError};
-use document::{install_identity_of, write_entry, AttemptOutcome, SnapshotAttempt, SnapshotEntry};
-use entry::entry_from_snapshot;
-use probe::{ProbeRequest, ProbeRunner};
+use document::{install_identity_of, SnapshotEntry};
+use probe::ProbeRunner;
 use staleness::Freshness;
 use targets::ProbeTargets;
 
@@ -67,12 +72,28 @@ use targets::ProbeTargets;
 /// same tradeoff the spec already accepts for the Worker's upload state. Persisting
 /// backoff would mean a machine could boot already-throttled with no way for a user
 /// to tell why.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct ContextRuntimeState {
-    running: bool,
+    /// What a polling surface is told. `Queued` is set the moment an attempt is
+    /// admitted to this slot — BEFORE it waits on the per-harness gate and the
+    /// machine-wide semaphore — so a probe that is genuinely pending never reports
+    /// `idle`. At `max_concurrent_probes = 1` that wait is the common case, not an
+    /// edge one.
+    live: status::LiveState,
     consecutive_failures: u32,
     next_attempt_at: Option<DateTime<Utc>>,
     last_completed_at: Option<DateTime<Utc>>,
+}
+
+impl Default for ContextRuntimeState {
+    fn default() -> Self {
+        Self {
+            live: status::LiveState::Idle,
+            consecutive_failures: 0,
+            next_attempt_at: None,
+            last_completed_at: None,
+        }
+    }
 }
 
 struct ContextSlot {
@@ -120,7 +141,7 @@ impl ModelSnapshotService {
         config: ProbeEngineConfig,
     ) -> Self {
         let engine_lock = lock::ProbeEngineLock::try_acquire(&runtime_home);
-        Self {
+        let service = Self {
             runtime_home,
             engine_lock,
             slots: Mutex::new(HashMap::new()),
@@ -132,7 +153,24 @@ impl ModelSnapshotService {
             targets,
             runner,
             config,
-        }
+        };
+        // Layer 3 of the cleanup story, live from the moment ownership is decided.
+        //
+        // Layers 1 and 2 (the thread-owned guard, and cancellation through the
+        // token) cover every path where SOME code of ours runs. A SIGKILL or a power
+        // loss runs none of it — and an abandoned scratch is not merely wasted
+        // bytes: a native-codex probe materializes a COPY OF THE USER'S OWN
+        // `~/.codex/auth.json` inside it, because relocating `CODEX_HOME` relocates
+        // where codex looks for its login. That is real plaintext credential
+        // material sitting under the runtime home with nothing to reclaim it.
+        //
+        // Sweeping here rather than only from a later startup pass means the
+        // reclamation exists as soon as an engine exists. It is safe to do
+        // synchronously: it lists one directory and is gated on both a dead pid and
+        // an age older than three probe timeouts, and it is owner-only, so a
+        // read-only sidecar can never delete the owner's in-flight scratch.
+        service.sweep_orphan_scratch();
+        service
     }
 
     pub fn runtime_home(&self) -> &Path {
@@ -318,7 +356,12 @@ impl ModelSnapshotService {
     ) -> bool {
         {
             let state = slot.state.lock().expect("model snapshot slot poisoned");
-            if state.running {
+            // Queued counts as in-flight: a second poke must coalesce onto the
+            // attempt already waiting for a slot, not queue a duplicate behind it.
+            if matches!(
+                state.live,
+                status::LiveState::Queued | status::LiveState::Running
+            ) {
                 return false;
             }
             // The structural floor, applied BEFORE the staleness rules so it holds
@@ -370,151 +413,6 @@ impl ModelSnapshotService {
         )
     }
 
-    // -----------------------------------------------------------------------
-    // One attempt, start to persisted finish.
-    // -----------------------------------------------------------------------
-
-    async fn run_attempt(
-        &self,
-        harness_kind: &str,
-        auth_context_id: &str,
-        slot: &ContextSlot,
-        reason: PokeReason,
-    ) -> Result<SnapshotEntry, RefreshError> {
-        let material = self.material(harness_kind, auth_context_id)?;
-        let fingerprint = fingerprint::fingerprint(&material);
-        // One state read serves the gate, the plan lookup and the scratch's
-        // revision-keyed dirs, so they cannot land on different revisions.
-        let plan = self
-            .plan_producer
-            .resolve_gateway_models(harness_kind, material.state_revision);
-        // Captured BEFORE the spawn, from the manifest: what the entry records must
-        // be what the gate will later compare against.
-        let install_identity = install_identity_of(&self.runtime_home, harness_kind);
-
-        let harness_gate = self.harness_gate(harness_kind);
-        let _harness_permit = harness_gate.lock().await;
-        let _permit = self
-            .probe_semaphore
-            .acquire()
-            .await
-            .expect("probe semaphore closed");
-
-        self.mark_running(slot, true);
-        let outcome = self
-            .runner
-            .run(ProbeRequest {
-                harness_kind: harness_kind.to_string(),
-                auth_context_id: auth_context_id.to_string(),
-                material,
-                plan,
-                runtime_home: self.runtime_home.clone(),
-                per_probe_timeout: self.config.per_probe_timeout,
-                model_switch_timeout: self.config.model_switch_timeout,
-            })
-            .await;
-        self.mark_running(slot, false);
-
-        let now = Utc::now();
-        match outcome {
-            Ok(snapshot) => {
-                let entry = entry_from_snapshot(snapshot, fingerprint, install_identity, now);
-                if let Err(error) =
-                    write_entry(&self.runtime_home, harness_kind, auth_context_id, entry.clone())
-                {
-                    tracing::warn!(
-                        harness = harness_kind,
-                        context = auth_context_id,
-                        %error,
-                        "failed to persist the model snapshot entry"
-                    );
-                }
-                self.record_completion(slot, now, None);
-                tracing::info!(
-                    harness = harness_kind,
-                    context = auth_context_id,
-                    reason = reason.as_str(),
-                    model_count = entry.models.len(),
-                    mode_count = entry.modes.len(),
-                    "recorded a model snapshot entry"
-                );
-                Ok(entry)
-            }
-            Err(error) => {
-                let detail = error.detail();
-                // A failed refresh must never destroy truth: it updates
-                // `lastAttempt` and nothing else, so the last good lists keep
-                // serving with their original `probedAt`.
-                self.record_failure(&mut *slot.state.lock().expect("slot poisoned"), now);
-                if let Err(write_error) =
-                    self.record_failed_attempt(harness_kind, auth_context_id, &detail, now)
-                {
-                    tracing::warn!(
-                        harness = harness_kind,
-                        context = auth_context_id,
-                        %write_error,
-                        "failed to persist the failed model snapshot attempt"
-                    );
-                }
-                Err(RefreshError::Probe(error))
-            }
-        }
-    }
-
-    /// Update ONLY `lastAttempt` on the existing entry. When no entry exists there
-    /// is nothing to annotate — writing a models-less entry would make the picker
-    /// believe the harness advertises nothing, which is worse than absence (absence
-    /// falls back to the shipped catalog).
-    fn record_failed_attempt(
-        &self,
-        harness_kind: &str,
-        auth_context_id: &str,
-        detail: &str,
-        now: DateTime<Utc>,
-    ) -> std::io::Result<()> {
-        let Some(mut entry) = self.entry(harness_kind, auth_context_id) else {
-            return Ok(());
-        };
-        entry.last_attempt = SnapshotAttempt {
-            at: now.to_rfc3339(),
-            outcome: AttemptOutcome::Failed,
-            detail: Some(detail.to_string()),
-        };
-        write_entry(&self.runtime_home, harness_kind, auth_context_id, entry)
-    }
-
-    fn mark_running(&self, slot: &ContextSlot, running: bool) {
-        slot.state
-            .lock()
-            .expect("model snapshot slot poisoned")
-            .running = running;
-    }
-
-    fn record_completion(&self, slot: &ContextSlot, now: DateTime<Utc>, failure: Option<()>) {
-        let mut state = slot.state.lock().expect("model snapshot slot poisoned");
-        state.last_completed_at = Some(now);
-        if failure.is_none() {
-            state.consecutive_failures = 0;
-            state.next_attempt_at = None;
-        }
-    }
-
-    /// 1m → 2m → 4m … capped, with ±20% jitter so many failing contexts do not
-    /// retry in lockstep. Jitter is derived from the attempt count rather than a
-    /// clock, keeping the schedule reproducible in tests.
-    fn record_failure(&self, state: &mut ContextRuntimeState, now: DateTime<Utc>) {
-        state.last_completed_at = Some(now);
-        state.consecutive_failures = state.consecutive_failures.saturating_add(1);
-        let exponent = state.consecutive_failures.saturating_sub(1).min(16);
-        let raw = self
-            .config
-            .backoff_base
-            .saturating_mul(2u32.saturating_pow(exponent));
-        let capped = raw.min(self.config.backoff_max);
-        state.next_attempt_at =
-            Some(now + chrono::Duration::seconds(capped.as_secs().max(1) as i64));
-    }
-
     fn slot(&self, harness_kind: &str, auth_context_id: &str) -> Arc<ContextSlot> {
         let mut slots = self.slots.lock().expect("model snapshot slots poisoned");
         slots
@@ -526,6 +424,28 @@ impl ModelSnapshotService {
                 })
             })
             .clone()
+    }
+
+    /// Deterministic ±20% spread over a backoff delay, keyed on (harness, context,
+    /// attempt). Exposed on the impl only so tests can pin it; the arithmetic is a
+    /// free function below.
+    #[cfg(test)]
+    pub(crate) fn test_jittered_backoff(
+        harness_kind: &str,
+        auth_context_id: &str,
+        attempt: u32,
+        base_seconds: u64,
+    ) -> i64 {
+        backoff::jittered_backoff_seconds(harness_kind, auth_context_id, attempt, base_seconds)
+    }
+
+    /// Set the live state, so a polling surface can tell "waiting for a slot" from
+    /// "a harness process is running" from "nothing is happening".
+    fn set_live_state(&self, slot: &ContextSlot, live: status::LiveState) {
+        slot.state
+            .lock()
+            .expect("model snapshot slot poisoned")
+            .live = live;
     }
 
     fn harness_gate(&self, harness_kind: &str) -> Arc<tokio::sync::Mutex<()>> {

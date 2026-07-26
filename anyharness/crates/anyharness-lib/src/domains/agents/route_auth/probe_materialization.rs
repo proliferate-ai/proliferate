@@ -126,10 +126,10 @@ pub(crate) fn probe_auth_material_for_server(
         for source in &sources.sources {
             match source {
                 ResolvedSource::ApiKey(profile) => env_value_digests
-                    .push((profile.env_var_name.clone(), sha256_hex(&profile.value))),
+                    .push((profile.env_var_name.clone(), credential_value_digest(&profile.value))),
                 ResolvedSource::Gateway(profile) => {
                     env_value_digests
-                        .push((GATEWAY_KEY_DIGEST_NAME.to_string(), sha256_hex(&profile.key)));
+                        .push((GATEWAY_KEY_DIGEST_NAME.to_string(), credential_value_digest(&profile.key)));
                     gateway_base_url = Some(profile.base_url.clone());
                 }
             }
@@ -144,6 +144,7 @@ pub(crate) fn probe_auth_material_for_server(
         gateway_base_url,
         discovery_stats: discovery_stats_for_context(auth_context_id, catalog_contexts),
         state_revision,
+        catalog_contexts: catalog_contexts.to_vec(),
         scoped_profile: scoped,
     })
 }
@@ -172,6 +173,10 @@ pub struct ProbeAuthMaterial {
     /// read serves the gate, the plan lookup and the scratch's revision-keyed
     /// dirs — they cannot drift onto different revisions.
     pub state_revision: i64,
+    /// The harness's catalog contexts, carried so phase B can compute the
+    /// attribution scrub against the same declarations phase A scoped against —
+    /// rather than re-reading a catalog that may have swapped underneath.
+    catalog_contexts: Vec<AgentCatalogAuthContext>,
     /// The scoped profile, retained privately so phase B never re-reads
     /// `state.json` and so the observation cannot disagree with what the gate
     /// decided on.
@@ -190,6 +195,7 @@ impl std::fmt::Debug for ProbeAuthMaterial {
             .field("gateway_base_url", &self.gateway_base_url)
             .field("discovery_stats", &self.discovery_stats)
             .field("state_revision", &self.state_revision)
+            .field("catalog_context_count", &self.catalog_contexts.len())
             .field("scoped_profile", &"<redacted>")
             .finish()
     }
@@ -204,7 +210,12 @@ impl ProbeAuthMaterial {
     }
 }
 
-fn sha256_hex(value: &str) -> String {
+/// The digest a credential VALUE is recorded under.
+///
+/// `pub` because the failure-detail redactor downstream needs to ask "is this token
+/// the credential we handed the harness?" without being given the credential. One
+/// definition, so the producer and that consumer cannot drift into never matching.
+pub fn credential_value_digest(value: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(value.as_bytes());
     format!("{:x}", hasher.finalize())
@@ -238,7 +249,12 @@ pub fn materialize_for_probe(
         materialize::apply_file_spec(scratch.root(), spec)?;
     }
     let mut env_remove = rendered.remove;
-    for key in baseline_scrub(harness_kind, &material.auth_context_id) {
+    for key in attribution_scrub(
+        harness_kind,
+        &material.auth_context_id,
+        &material.catalog_contexts,
+        &rendered.set,
+    ) {
         if !env_remove.contains(&key) {
             env_remove.push(key);
         }
@@ -267,37 +283,117 @@ pub struct ProbeAuthMaterialization {
     pub scratch: ProbeScratch,
 }
 
-/// `baseline` means "no credentials at all", but the runtime process inherits a
-/// developer's shell. Remove every registry-declared credential var for this
-/// harness so the observation is what a credential-less user would see.
+/// Keep an observation ATTRIBUTABLE to the context it is recorded under, by
+/// removing ambient credential vars that belong to a DIFFERENT context of the same
+/// harness.
+///
+/// Two cases, one mechanism.
+///
+/// **`baseline` means "no credentials at all"** — so every registry-declared
+/// credential var for the harness goes. Without it a `baseline` entry on a developer
+/// machine records whatever the shell happened to export, which is the opposite of
+/// what `baseline` is for.
+///
+/// **A non-gateway context must not observe another provider's models.** This is the
+/// R14 attribution-true rule generalized past claude. Concretely: opencode declares
+/// `openai-api`, `anthropic-api` and `gemini-api` over three separate provider slots,
+/// and it composes every provider it can see. Probing `openai-api` on a machine that
+/// also exports `ANTHROPIC_API_KEY` therefore records **anthropic** models inside the
+/// `openai-api` entry — and because entries are keyed by context id, that dishonesty
+/// is what the picker then serves and what launch validation then trusts. Removing
+/// the other slots' vars makes the entry mean what its key says.
+///
+/// Two things it deliberately does NOT do:
+/// - it never removes a var this route itself SET (`rendered.set`), so the credential
+///   the context is about always survives;
+/// - it does not scrub the GATEWAY context, whose recipes already sanitize what they
+///   need to and whose whole job is to observe one proxy rather than one provider.
 ///
 /// Per-child removal only (`Command::env_remove`). The central CLI mutates its own
 /// process env for this; inside a long-lived server that would blind every later
 /// credential classification.
 ///
-/// Discovery *files* need no scrub: `baseline` is only ever active when no context
-/// matched any slot, i.e. when those files are absent by construction.
-fn baseline_scrub(harness_kind: &str, auth_context_id: &str) -> Vec<String> {
-    if auth_context_id != BASELINE_CONTEXT_ID {
+/// Discovery *files* are left alone. They are the user's real login, and a launch of
+/// this context reads them too — scrubbing them would make the observation a fiction
+/// rather than making it attributable. The residual case (a login file for provider B
+/// visible while probing provider A's context) is bounded by the harness itself:
+/// opencode reports one model list per configured provider, and the entry records
+/// what that spawn advertised.
+fn attribution_scrub(
+    harness_kind: &str,
+    auth_context_id: &str,
+    catalog_contexts: &[AgentCatalogAuthContext],
+    already_set: &BTreeMap<String, String>,
+) -> Vec<String> {
+    let declared = registry_env_vars_by_slot(harness_kind);
+    if declared.is_empty() {
         return Vec::new();
     }
+
+    let mut names: Vec<String> = if auth_context_id == BASELINE_CONTEXT_ID {
+        // Everything: baseline is the credential-less observation.
+        declared
+            .values()
+            .flat_map(|vars| vars.iter().cloned())
+            .collect()
+    } else {
+        let Some(context) = catalog_contexts
+            .iter()
+            .find(|context| context.id == auth_context_id)
+        else {
+            return Vec::new();
+        };
+        let Some(slot_id) = context.auth_slot_id.as_deref() else {
+            return Vec::new();
+        };
+        // The gateway context observes a proxy, not a provider; its recipes own their
+        // own sanitization.
+        if slot_id == GATEWAY_SLOT_ID {
+            return Vec::new();
+        }
+        // Every OTHER slot's credential vars — the ones that would let this spawn
+        // reach a provider this context is not about.
+        declared
+            .iter()
+            .filter(|(declared_slot, _)| declared_slot.as_str() != slot_id)
+            .flat_map(|(_, vars)| vars.iter().cloned())
+            .collect()
+    };
+
+    // Never strip what this route just set.
+    names.retain(|name| !already_set.contains_key(name));
+    names.sort();
+    names.dedup();
+    names
+}
+
+/// The gateway slot id, which every gateway-capable harness declares under this
+/// exact name in `registry.json`.
+const GATEWAY_SLOT_ID: &str = "gateway";
+
+/// `slot id -> its declared credential env vars`, from the bundled registry.
+fn registry_env_vars_by_slot(harness_kind: &str) -> BTreeMap<String, Vec<String>> {
     let Some(agent) = bundled_agent_registry_document()
         .agents
         .iter()
         .find(|agent| agent.kind == harness_kind)
     else {
-        return Vec::new();
+        return BTreeMap::new();
     };
-    let mut names: Vec<String> = agent
+    agent
         .auth
         .slots
         .iter()
-        .flat_map(|slot| slot.env_vars.iter())
-        .map(|env_var| env_var.name().to_string())
-        .collect();
-    names.sort();
-    names.dedup();
-    names
+        .map(|slot| {
+            (
+                slot.id.clone(),
+                slot.env_vars
+                    .iter()
+                    .map(|env_var| env_var.name().to_string())
+                    .collect(),
+            )
+        })
+        .collect()
 }
 
 #[cfg(test)]

@@ -20,6 +20,7 @@ use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 use serde::Serialize;
+use utoipa::ToSchema;
 
 use super::document::{InstallIdentity, SnapshotAttempt, SnapshotEntry};
 use super::staleness::{self, IdentityComparison};
@@ -27,9 +28,16 @@ use super::ProbeEngineMode;
 
 /// The engine's live view of one context. In-memory only, so a restart reports
 /// `Idle` — which is true: nothing is running.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+///
+/// `Queued` is distinct from `Running` on purpose: a probe admitted to its slot but
+/// still waiting on the per-harness gate or the machine-wide semaphore is neither
+/// "nothing is happening" (which is what `Idle` would tell a polling UI, wrongly)
+/// nor "a harness process exists".
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ToSchema)]
+#[schema(as = ModelSnapshotLiveState, example = "idle")]
 pub enum LiveState {
     Idle,
+    Queued,
     Running,
     Backoff,
 }
@@ -38,6 +46,7 @@ impl LiveState {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Idle => "idle",
+            Self::Queued => "queued",
             Self::Running => "running",
             Self::Backoff => "backoff",
         }
@@ -56,21 +65,23 @@ impl Serialize for ProbeEngineMode {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelSnapshotStatus {
     pub agent: String,
     pub schema_version: u32,
     /// `owner` | `readonly` — visible rather than mysterious when a second
     /// runtime shares this home.
+    #[schema(value_type = String, example = "owner")]
     pub probe_engine: ProbeEngineMode,
     /// The staleness baseline, manifest-derived. `null` when unobservable.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<Object>)]
     pub install_identity: Option<InstallIdentity>,
     pub contexts: Vec<ContextStatus>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ContextStatus {
     pub auth_context_id: String,
@@ -91,6 +102,7 @@ pub struct ContextStatus {
     /// claim.
     pub identity_comparable: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<Object>)]
     pub last_attempt: Option<SnapshotAttempt>,
     /// `lastAttempt.detail` when the last attempt failed. Lifted to its own field
     /// so a surface can render an error without knowing the attempt shape.
@@ -101,6 +113,7 @@ pub struct ContextStatus {
     pub next_attempt_at: Option<String>,
     /// Diagnostics about the binary that answered — NOT the staleness input.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<Object>)]
     pub attestation: Option<super::document::SnapshotAttestation>,
     pub model_count: usize,
     pub mode_count: usize,

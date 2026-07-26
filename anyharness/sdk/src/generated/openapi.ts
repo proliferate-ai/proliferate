@@ -2487,6 +2487,42 @@ export interface components {
             /** @enum {string} */
             type: "tool_result_text";
         };
+        ContextStatus: {
+            /**
+             * @description Whether the auth classifier currently counts this context as active. A
+             *     just-deactivated context keeps its observation with `active: false`.
+             */
+            active: boolean;
+            /** @description Diagnostics about the binary that answered — NOT the staleness input. */
+            attestation?: Record<string, never> | null;
+            authContextId: string;
+            /**
+             * @description `false` ⇒ the identity comparison was indeterminate; render no version
+             *     claim.
+             */
+            identityComparable: boolean;
+            lastAttempt?: Record<string, never> | null;
+            /**
+             * @description `lastAttempt.detail` when the last attempt failed. Lifted to its own field
+             *     so a surface can render an error without knowing the attempt shape.
+             */
+            lastError?: string | null;
+            modeCount: number;
+            modelCount: number;
+            /** @description Set iff `state == backoff`. */
+            nextAttemptAt?: string | null;
+            /** @description Last SUCCESSFUL observation. Never regresses on failure. */
+            probedAt?: string | null;
+            /**
+             * Format: int64
+             * @description Server-computed so every surface renders the same age from one clock.
+             */
+            snapshotAgeSeconds?: number | null;
+            stale: boolean;
+            staleReason?: string | null;
+            state: components["schemas"]["ModelSnapshotLiveState"];
+            warnings?: string[];
+        };
         CoworkArtifactDetailResponse: {
             artifact: components["schemas"]["CoworkArtifactSummary"];
             content: string;
@@ -3438,6 +3474,32 @@ export interface components {
         ModelEffort: {
             default?: string | null;
             values: string[];
+        };
+        /**
+         * @description The engine's live view of one context. In-memory only, so a restart reports
+         *     `Idle` — which is true: nothing is running.
+         *
+         *     `Queued` is distinct from `Running` on purpose: a probe admitted to its slot but
+         *     still waiting on the per-harness gate or the machine-wide semaphore is neither
+         *     "nothing is happening" (which is what `Idle` would tell a polling UI, wrongly)
+         *     nor "a harness process exists".
+         * @example idle
+         * @enum {string}
+         */
+        ModelSnapshotLiveState: "Idle" | "Queued" | "Running" | "Backoff";
+        ModelSnapshotStatus: {
+            agent: string;
+            contexts: components["schemas"]["ContextStatus"][];
+            /** @description The staleness baseline, manifest-derived. `null` when unobservable. */
+            installIdentity?: Record<string, never> | null;
+            /**
+             * @description `owner` | `readonly` — visible rather than mysterious when a second
+             *     runtime shares this home.
+             * @example owner
+             */
+            probeEngine: string;
+            /** Format: int32 */
+            schemaVersion: number;
         };
         /**
          * @description A product-normalized live session control derived from raw ACP config options.
@@ -5952,22 +6014,26 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ModelSnapshotStatus"];
+                };
             };
             /** @description Unknown agent kind */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
             };
         };
     };
     refresh_model_snapshot: {
         parameters: {
-            query?: {
-                /** @description Single auth context to re-probe */
-                authContextId?: string;
+            query: {
+                /** @description The auth context to re-probe (required) */
+                authContextId: string;
             };
             header?: never;
             path: {
@@ -5983,28 +6049,45 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ModelSnapshotStatus"];
+                };
+            };
+            /** @description Missing authContextId */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
             };
             /** @description Unknown agent kind or inactive auth context */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
             };
-            /** @description This runtime does not own the probe engine */
+            /** @description This runtime does not own the probe engine, or its local auth config is unusable */
             409: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
             };
-            /** @description The forced probe failed */
+            /** @description The forced probe ran and failed */
             502: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
             };
         };
     };

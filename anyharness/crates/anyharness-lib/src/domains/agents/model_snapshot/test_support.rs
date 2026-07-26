@@ -282,6 +282,24 @@ impl ProbeRunner for FakeRunner {
             .expect("plan models poisoned")
             .push(request.plan.models.clone());
 
+        // Materialize for real, exactly as the production runner does, and hold the
+        // guard for this frame's lifetime.
+        //
+        // Without this the fake writes no scratch at all, and every "no scratch
+        // outlived the attempt" assertion in the suite is vacuous — it would pass
+        // against a runner that leaked every root. Doing the real phase-B write makes
+        // those assertions able to fail, and it exercises the seam the fake is
+        // standing in front of rather than around it.
+        let materialized = crate::domains::agents::route_auth::materialize_for_probe(
+            &request.runtime_home,
+            &request.harness_kind,
+            &request.material,
+            &request.plan,
+        )
+        .map_err(|error| ProbeError::Failed {
+            detail: format!("fake runner could not materialize: {error}"),
+        })?;
+
         let behavior = self.behavior.lock().expect("behavior poisoned").clone();
         let release = self.release.lock().expect("release poisoned").clone();
         if let Some(mut release) = release {
@@ -312,6 +330,9 @@ impl ProbeRunner for FakeRunner {
             }
         };
         self.in_flight.fetch_sub(1, Ordering::SeqCst);
+        // Dropped here rather than earlier, so the scratch outlives the "probe" — the
+        // same ordering the production runner guarantees around its child.
+        drop(materialized);
         outcome
     }
 }

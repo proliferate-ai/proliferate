@@ -668,15 +668,36 @@ act):
 
 ```
 anyharness-lib/src/domains/agents/model_snapshot/
-├── mod.rs                # ModelSnapshotService: the domain's public face
-├── document.rs           # wire schema + atomic read/write (mirrors installer/manifest.rs)
-├── fingerprint.rs        # auth-context fingerprint from launch facts
-├── staleness.rs          # pure validity rules (mirrors installer/install_policy.rs)
-├── probe.rs              # per-context invocation of live/sessions/probe::probe_agent
-│                         #   (LocalSet, per-probe timeout, serial per harness)
-├── reconcile.rs          # the reconciler + its pokes (startup, install-completed,
+├── mod.rs                # ModelSnapshotService: the reconciler — gate, coalescing,
+│                         #   per-harness serialization, the completed-attempt floor,
+│                         #   backoff, and the pokes (startup, install-completed,
 │                         #   auth-applied, session-launch backstop, manual refresh)
-└── projection.rs         # universe construction + enrichment join inputs
+├── config.rs             # tunables, poke vocabulary, ownership mode, refresh error
+├── document.rs           # wire schema + atomic 0600 read/write (mirrors installer/manifest.rs)
+├── entry.rs              # ProbeSnapshot -> document entry (pure translation)
+├── fingerprint.rs        # auth-context fingerprint from the probe seam's material
+├── lock.rs               # the single-writer engine lock (one engine per runtime home)
+├── probe.rs              # per-context invocation of live/sessions/probe::probe_agent
+│                         #   on a thread that owns both the child and the scratch
+├── reads.rs              # document/entry/status reads (available in read-only mode)
+├── staleness.rs          # pure validity rules (mirrors installer/install_policy.rs)
+├── status.rs             # the polled status projection (pure)
+└── targets.rs            # which (harness, context) pairs may be probed
+```
+
+The picker-facing universe construction and enrichment join stay where they
+are today (`catalog/service.rs` and the frontend), so this module has no
+`projection.rs`: it owns the observation, not the merge.
+
+The route-auth side owns the probe's materialization seam, because it is the
+same render plane a launch uses:
+
+```
+anyharness-lib/src/domains/agents/route_auth/
+└── probe_materialization.rs   # the two-phase seam: probe_auth_material (read-only,
+    ├── scoping.rs             #   every gate evaluation) / materialize_for_probe
+    └── scratch.rs             #   (only when probing); per-context source scoping;
+                               #   the probe-owned scratch root + orphan sweep
 ```
 
 New server package, mirroring `agent_gateway/`'s shape:
@@ -729,10 +750,11 @@ polling hook.
 
 Deltas between this document and `main`, each struck by its follow-up PR:
 
-- [ ] None of the reconciler's pokes is wired: `ModelSnapshotService` and
-      its document exist and probe correctly when called, but nothing calls
-      them, so no user machine ever probes. The poke sites are already in
-      the code: the startup pass
+- [ ] None of the reconciler's AUTOMATIC pokes is wired. The engine and its
+      document exist and probe correctly, and the manual-refresh route calls
+      them — but nothing else does, so a machine only ever probes when a
+      user asks it to, and none of the convergence triggers below fires. The
+      poke sites are already in the code: the startup pass
       (`spawn_startup_pass` in
       [domains/agents/runtime.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/runtime.rs)),
       the two install-completion

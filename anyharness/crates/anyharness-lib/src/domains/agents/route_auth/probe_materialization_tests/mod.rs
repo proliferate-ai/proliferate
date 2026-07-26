@@ -217,6 +217,7 @@ fn scoped_sources(material: &ProbeAuthMaterial) -> Option<&[ResolvedSource]> {
     }
 }
 
+mod attribution_tests;
 mod materialization_tests;
 mod phase_a_tests;
 mod scoping_tests;

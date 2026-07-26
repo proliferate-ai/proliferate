@@ -642,10 +642,24 @@
         ],
         "responses": {
           "200": {
-            "description": "Per-auth-context model snapshot status"
+            "description": "Per-auth-context model snapshot status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelSnapshotStatus"
+                }
+              }
+            }
           },
           "404": {
-            "description": "Unknown agent kind"
+            "description": "Unknown agent kind",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -669,8 +683,8 @@
           {
             "name": "authContextId",
             "in": "query",
-            "description": "Single auth context to re-probe",
-            "required": false,
+            "description": "The auth context to re-probe (required)",
+            "required": true,
             "schema": {
               "type": "string"
             }
@@ -678,16 +692,54 @@
         ],
         "responses": {
           "202": {
-            "description": "Re-probe completed; the status body reflects it"
+            "description": "Re-probe completed; the status body reflects it",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelSnapshotStatus"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing authContextId",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           },
           "404": {
-            "description": "Unknown agent kind or inactive auth context"
+            "description": "Unknown agent kind or inactive auth context",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           },
           "409": {
-            "description": "This runtime does not own the probe engine"
+            "description": "This runtime does not own the probe engine, or its local auth config is unusable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           },
           "502": {
-            "description": "The forced probe failed"
+            "description": "The forced probe ran and failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -9135,6 +9187,99 @@
           }
         ]
       },
+      "ContextStatus": {
+        "type": "object",
+        "required": [
+          "authContextId",
+          "active",
+          "state",
+          "stale",
+          "identityComparable",
+          "modelCount",
+          "modeCount"
+        ],
+        "properties": {
+          "active": {
+            "type": "boolean",
+            "description": "Whether the auth classifier currently counts this context as active. A\njust-deactivated context keeps its observation with `active: false`."
+          },
+          "attestation": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Diagnostics about the binary that answered — NOT the staleness input."
+          },
+          "authContextId": {
+            "type": "string"
+          },
+          "identityComparable": {
+            "type": "boolean",
+            "description": "`false` ⇒ the identity comparison was indeterminate; render no version\nclaim."
+          },
+          "lastAttempt": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "lastError": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "`lastAttempt.detail` when the last attempt failed. Lifted to its own field\nso a surface can render an error without knowing the attempt shape."
+          },
+          "modeCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "modelCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "nextAttemptAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Set iff `state == backoff`."
+          },
+          "probedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Last SUCCESSFUL observation. Never regresses on failure."
+          },
+          "snapshotAgeSeconds": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Server-computed so every surface renders the same age from one clock."
+          },
+          "stale": {
+            "type": "boolean"
+          },
+          "staleReason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "state": {
+            "$ref": "#/components/schemas/ModelSnapshotLiveState"
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
       "CoworkArtifactDetailResponse": {
         "type": "object",
         "required": [
@@ -13016,6 +13161,54 @@
             "items": {
               "type": "string"
             }
+          }
+        }
+      },
+      "ModelSnapshotLiveState": {
+        "type": "string",
+        "description": "The engine's live view of one context. In-memory only, so a restart reports\n`Idle` — which is true: nothing is running.\n\n`Queued` is distinct from `Running` on purpose: a probe admitted to its slot but\nstill waiting on the per-harness gate or the machine-wide semaphore is neither\n\"nothing is happening\" (which is what `Idle` would tell a polling UI, wrongly)\nnor \"a harness process exists\".",
+        "enum": [
+          "Idle",
+          "Queued",
+          "Running",
+          "Backoff"
+        ],
+        "example": "idle"
+      },
+      "ModelSnapshotStatus": {
+        "type": "object",
+        "required": [
+          "agent",
+          "schemaVersion",
+          "probeEngine",
+          "contexts"
+        ],
+        "properties": {
+          "agent": {
+            "type": "string"
+          },
+          "contexts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContextStatus"
+            }
+          },
+          "installIdentity": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "The staleness baseline, manifest-derived. `null` when unobservable."
+          },
+          "probeEngine": {
+            "type": "string",
+            "description": "`owner` | `readonly` — visible rather than mysterious when a second\nruntime shares this home.",
+            "example": "owner"
+          },
+          "schemaVersion": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
           }
         }
       },
