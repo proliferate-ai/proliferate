@@ -3,9 +3,18 @@ import { useCreateAgentApiKey } from "@proliferate/cloud-sdk-react";
 import { Plus } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ApiKeyCreatorModal } from "#product/components/settings/panes/agent-auth/ApiKeyCreatorModal";
+import {
+  ProviderConfigCreatorModal,
+  type ProviderConfigCreatorSubmit,
+} from "#product/components/settings/panes/agent-auth/ProviderConfigCreatorModal";
 import { getHarnessEnvVarSuggestions } from "#product/config/harness-env-vars";
 import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
 import type { HarnessAuthEditorApi } from "#product/hooks/agents/workflows/use-harness-auth-editor";
+import {
+  getProviderConfigFieldSpec,
+  getSupportedProviderConfigKinds,
+  type ProviderConfigKind,
+} from "#product/lib/domain/settings/provider-config-fields";
 import { useToastStore } from "#product/stores/toast/toast-store";
 import { HarnessPanelBlock, type HarnessBlockVariant } from "#product/components/settings/panes/agents/harness/HarnessPanelBlock";
 import { HarnessAuthApiKeyRow } from "#product/components/settings/panes/agents/harness/HarnessAuthApiKeyRow";
@@ -33,6 +42,16 @@ export function ApiKeyDetails({
     (candidate) => !usedEnvVars.has(candidate.envVarName),
   );
 
+  // Typed provider-config kinds (Bedrock/Azure) this harness may offer. Empty
+  // for EVERY harness until D1 lands registry.json's `providerConfig`
+  // declarations (agents-impl-plan.md §4) — see
+  // provider-config-fields.ts's module comment. The buttons below simply
+  // don't render while this stays empty, so the UI never promises a create
+  // flow the server can't yet store or launch on.
+  const providerConfigKinds = getSupportedProviderConfigKinds(harnessKind);
+  const [openProviderConfigKind, setOpenProviderConfigKind] =
+    useState<ProviderConfigKind | null>(null);
+
   function handleAddKeyModalSubmit(input: { title: string; value: string; envVarName: string }) {
     createKey.mutate(
       { title: input.title, value: input.value },
@@ -59,6 +78,16 @@ export function ApiKeyDetails({
     if (!editor.editorState.rows.some((row) => row.apiKeyId !== null && row.enabled)) {
       editor.setPendingMethod(null);
     }
+  }
+
+  // Placeholder submit: there is no server endpoint yet for a typed vault
+  // entry (D1's `kind` column + create-request shape land later), so this
+  // wires the collected payload nowhere — the button that opens this modal
+  // never renders today (providerConfigKinds is always []), so this path is
+  // unreachable in the shipped product. D3 replaces this with the real
+  // mutation once D1's request shape exists.
+  function handleProviderConfigSubmit(_input: ProviderConfigCreatorSubmit) {
+    setOpenProviderConfigKind(null);
   }
 
   const hasRows = editor.editorState.rows.length > 0;
@@ -112,6 +141,20 @@ export function ApiKeyDetails({
                 {HARNESS_PANE_COPY.addProvider}
               </Button>
             ) : null}
+            {providerConfigKinds.map((kind) => (
+              <Button
+                key={kind}
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="gap-1.5"
+                disabled={editor.busy}
+                onClick={() => setOpenProviderConfigKind(kind)}
+              >
+                <Plus className="icon-paired" />
+                {getProviderConfigFieldSpec(kind).displayName}
+              </Button>
+            ))}
           </div>
         </div>
       ) : (
@@ -119,7 +162,7 @@ export function ApiKeyDetails({
           <p className="py-3 text-ui-sm text-muted-foreground">
             No API key configured.
           </p>
-          <div>
+          <div className="flex flex-wrap gap-2">
             <Button
               type="button"
               variant="primary"
@@ -131,6 +174,20 @@ export function ApiKeyDetails({
               <Plus className="icon-paired" />
               {HARNESS_PANE_COPY.addApiKey}
             </Button>
+            {providerConfigKinds.map((kind) => (
+              <Button
+                key={kind}
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="gap-1.5"
+                disabled={editor.busy}
+                onClick={() => setOpenProviderConfigKind(kind)}
+              >
+                <Plus className="icon-paired" />
+                {getProviderConfigFieldSpec(kind).displayName}
+              </Button>
+            ))}
           </div>
         </div>
       )}
@@ -160,6 +217,18 @@ export function ApiKeyDetails({
           onClose={() => setProviderModalOpen(false)}
           onSelect={(provider) =>
             editor.addRow(provider.envVarNames[0] ?? "", provider.id)}
+        />
+      ) : null}
+
+      {openProviderConfigKind ? (
+        <ProviderConfigCreatorModal
+          open
+          onClose={() => setOpenProviderConfigKind(null)}
+          kind={openProviderConfigKind}
+          submitLabel="Save"
+          submitting={false}
+          error={null}
+          onSubmit={handleProviderConfigSubmit}
         />
       ) : null}
     </HarnessPanelBlock>
