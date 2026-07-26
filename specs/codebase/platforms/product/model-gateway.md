@@ -260,6 +260,11 @@ change detection and the promote flow.
 - Scoped-key verification: mint a key granted one group, assert
   `GET /v1/models` returns exactly that group and an out-of-group invoke
   403s. Verified live against the pinned image (v1.93.0, 2026-07-24).
+- Team-budget aggregation: spend from every key in a team aggregates against
+  that team's budget (the mechanism the whole per-harness-key account model
+  depends on) — confirmed standard LiteLLM behavior, live-verified against
+  the pinned image (v1.93.0, 2026-07-25) ahead of B2's per-(subject,harness)
+  minting.
 
 ## Current gaps
 
@@ -276,9 +281,6 @@ Deltas between this document and `main`, each struck by its follow-up PR:
 - [ ] `/v1/cloud/agent-gateway/` still carries the BYOK vault, selections,
       state, org policy, and catalog routes; `api.py`/`service.py`/
       `models.py` split along the same three-domain line.
-- [ ] Team-budget aggregation across multiple keys is standard LiteLLM but
-      not yet live-proven on the pinned image (a short check before the
-      enrollment code PR freezes).
 - [ ] Enrollment copies `max_budget` onto the virtual key as well as the
       team; keys must stop carrying budgets (the team cap already
       aggregates, and N per-key copies of the mirror would drift).
