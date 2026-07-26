@@ -1,8 +1,7 @@
 import {
   Check,
-  ChevronRight,
-  FolderPlus,
-  ListFilter,
+  MoreHorizontal,
+  Plus,
 } from "@proliferate/ui/icons";
 import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
@@ -22,48 +21,40 @@ const SIDEBAR_WORKSPACE_TYPE_OPTIONS: Array<{
 ];
 
 interface SidebarRepositoriesHeaderProps {
-  hasRepoGroups: boolean;
-  allRepoGroupsCollapsed: boolean;
+  repositoriesCollapsed: boolean;
   filtersActive: boolean;
   workspaceTypes: SidebarWorkspaceVariant[];
-  onToggleAllRepoGroups: () => void;
+  onToggleRepositoriesCollapsed: () => void;
   onToggleWorkspaceType: (variant: SidebarWorkspaceVariant) => void;
   onAddRepo: () => void;
 }
 
 export function SidebarRepositoriesHeader({
-  hasRepoGroups,
-  allRepoGroupsCollapsed,
+  repositoriesCollapsed,
   filtersActive,
   workspaceTypes,
-  onToggleAllRepoGroups,
+  onToggleRepositoriesCollapsed,
   onToggleWorkspaceType,
   onAddRepo,
 }: SidebarRepositoriesHeaderProps) {
   return (
     <ProductSidebarSectionHeader
       label="Repositories"
+      collapsed={repositoriesCollapsed}
+      onToggleCollapsed={onToggleRepositoriesCollapsed}
       actions={(
         <>
-          {hasRepoGroups && (
-            <SidebarActionButton
-              onClick={onToggleAllRepoGroups}
-              title={allRepoGroupsCollapsed ? "Expand all repositories" : "Collapse all repositories"}
-              variant="section"
-            >
-              <ChevronRight
-                className={`icon-compact transition-transform ${allRepoGroupsCollapsed ? "" : "rotate-90"}`}
-              />
-            </SidebarActionButton>
-          )}
+          {/* Quiet three-dots filter, not a bordered/highlighted control — the
+              row stays low-attention even when a filter is active. */}
           <PopoverButton
+            stopPropagation
             trigger={
               <SidebarActionButton
                 title="Filter workspaces"
                 active={filtersActive}
                 variant="section"
               >
-                <ListFilter className="icon-compact" />
+                <MoreHorizontal className="icon-compact" />
               </SidebarActionButton>
             }
           >
@@ -98,7 +89,7 @@ export function SidebarRepositoriesHeader({
             title="Add repository"
             variant="section"
           >
-            <FolderPlus className="icon-compact" />
+            <Plus className="icon-compact" />
           </SidebarActionButton>
         </>
       )}
