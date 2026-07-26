@@ -187,6 +187,57 @@ async def test_ready_sandbox_with_no_worker_row_is_degraded(
 
 
 @pytest.mark.asyncio
+async def test_ready_sandbox_worker_never_seen_is_degraded(
+    db_session: AsyncSession,
+) -> None:
+    user_id = await _seed_user(db_session)
+    sandbox = await _seed_sandbox(db_session, user_id=user_id, status="ready")
+    await _seed_worker(
+        db_session,
+        user_id=user_id,
+        cloud_sandbox_id=sandbox.id,
+        last_seen_at=None,
+    )
+    workspace_id = await _seed_workspace_id(db_session, user_id=user_id)
+
+    response = await workspaces_service.get_cloud_workspace_runtime_status(
+        db_session, user_id, workspace_id
+    )
+
+    # `RuntimeWorkerValue.online` explicitly guards `last_seen_at is None`
+    # before computing an age; a worker row that has enrolled but never sent
+    # a heartbeat must be treated the same as a stale one.
+    assert response.runtime_status == "running"
+    assert response.worker_degraded is True
+
+
+@pytest.mark.asyncio
+async def test_ready_sandbox_offline_status_fresh_heartbeat_is_degraded(
+    db_session: AsyncSession,
+) -> None:
+    user_id = await _seed_user(db_session)
+    sandbox = await _seed_sandbox(db_session, user_id=user_id, status="ready")
+    await _seed_worker(
+        db_session,
+        user_id=user_id,
+        cloud_sandbox_id=sandbox.id,
+        last_seen_at=datetime.now(UTC),
+        status="offline",
+    )
+    workspace_id = await _seed_workspace_id(db_session, user_id=user_id)
+
+    response = await workspaces_service.get_cloud_workspace_runtime_status(
+        db_session, user_id, workspace_id
+    )
+
+    # `RuntimeWorkerValue.online` also guards `status != "online"`
+    # independent of heartbeat freshness. No production code writes
+    # status="offline" today, but this locks in the dormant branch.
+    assert response.runtime_status == "running"
+    assert response.worker_degraded is True
+
+
+@pytest.mark.asyncio
 async def test_no_sandbox_is_not_degraded(db_session: AsyncSession) -> None:
     user_id = await _seed_user(db_session)
     workspace_id = await _seed_workspace_id(db_session, user_id=user_id)
