@@ -55,7 +55,7 @@ interface MarkdownBodyProps {
  * "inline" keeps GFM task-list checkboxes in the text flow (default chat
  * prose). "grid" restructures each task item into a two-column grid —
  * checkbox column auto, content column minmax(0,1fr) — so wrapped lines and
- * nested blocks stay aligned under the label (codex plan treatment).
+ * nested blocks stay aligned under the label (plan-view treatment).
  */
 export type MarkdownTaskListItemPresentation = "inline" | "grid";
 
@@ -123,6 +123,11 @@ type MdCodeProps = MdElementProps & {
 // conversation bodies grow to match the composer. Authenticated CSS owns the
 // scoped font-size and line-height so chat rules stay out of the login bundle.
 const LI_CLASSNAME = "pl-0.5";
+// Applied to every prose element (paragraphs, headings, lists,
+// blockquotes) so the readable-width cap sits on the text itself rather
+// than the wrapper, letting wide blocks (tables, code) use the full thread
+// column. See the two-tier measure note on `markdownClassName` above.
+const PROSE_MEASURE_CLASSNAME = "max-w-transcript-readable";
 
 // Markdown component overrides are the React element *types* for every
 // rendered node. They must be referentially stable across renders: a fresh
@@ -141,33 +146,33 @@ function mdComponent(tag: MdTag, className: string) {
 }
 
 const STATIC_MARKDOWN_COMPONENTS = {
-  h1: mdComponent("h1", "mb-2.5 mt-5 text-title font-semibold text-foreground"),
-  h2: mdComponent("h2", "mb-2.5 mt-5 text-heading font-semibold text-foreground"),
-  h3: mdComponent("h3", "mb-2.5 mt-5 text-body-emphasis font-semibold text-foreground"),
-  h4: mdComponent("h4", "mb-2 mt-4 text-body-emphasis font-semibold text-foreground"),
-  h5: mdComponent("h5", "mb-1.5 mt-4 font-semibold uppercase tracking-wide text-muted-foreground"),
-  h6: mdComponent("h6", "mb-1.5 mt-4 font-semibold uppercase tracking-wide text-muted-foreground"),
+  h1: mdComponent("h1", `mb-2.5 mt-5 ${PROSE_MEASURE_CLASSNAME} text-title font-semibold text-foreground`),
+  h2: mdComponent("h2", `mb-2.5 mt-5 ${PROSE_MEASURE_CLASSNAME} text-heading font-semibold text-foreground`),
+  h3: mdComponent("h3", `mb-2.5 mt-5 ${PROSE_MEASURE_CLASSNAME} text-body-emphasis font-semibold text-foreground`),
+  h4: mdComponent("h4", `mb-2 mt-4 ${PROSE_MEASURE_CLASSNAME} text-body-emphasis font-semibold text-foreground`),
+  h5: mdComponent("h5", `mb-1.5 mt-4 ${PROSE_MEASURE_CLASSNAME} font-semibold uppercase tracking-wide text-muted-foreground`),
+  h6: mdComponent("h6", `mb-1.5 mt-4 ${PROSE_MEASURE_CLASSNAME} font-semibold uppercase tracking-wide text-muted-foreground`),
   strong: mdComponent("strong", "font-semibold"),
   em: mdComponent("em", "italic"),
   del: mdComponent("del", "line-through"),
-  p: mdComponent("p", "mb-[0.6875rem] mt-0 text-foreground"),
-  ul: mdComponent("ul", "mb-[0.6875rem] mt-0 list-disc pl-[1.3125rem] text-foreground [&>li+li]:mt-2"),
-  ol: mdComponent("ol", "mb-[0.6875rem] mt-0 list-decimal pl-[1.3125rem] text-foreground [&>li+li]:mt-2"),
+  p: mdComponent("p", `mb-[0.6875rem] mt-0 ${PROSE_MEASURE_CLASSNAME} text-foreground`),
+  ul: mdComponent("ul", `mb-[0.6875rem] mt-0 ${PROSE_MEASURE_CLASSNAME} list-disc pl-[1.3125rem] text-foreground [&>li+li]:mt-2`),
+  ol: mdComponent("ol", `mb-[0.6875rem] mt-0 ${PROSE_MEASURE_CLASSNAME} list-decimal pl-[1.3125rem] text-foreground [&>li+li]:mt-2`),
   li: mdComponent("li", LI_CLASSNAME),
-  blockquote: mdComponent("blockquote", "my-3 border-l pl-4 text-foreground"),
+  blockquote: mdComponent("blockquote", `my-3 ${PROSE_MEASURE_CLASSNAME} border-l-4 border-border pl-6 py-2 text-foreground`),
   hr: () => <hr className="my-3 border-border" />,
   table: (props: MdElementProps) => (
     // ui-foundation-escalation: [CHAT-04]'s RULED block adopts
-    // --container-transcript-wide (64rem) for wide blocks like this table,
-    // but the transcript column that hosts it is already capped at
-    // max-w-transcript-readable (40rem, see ChatColumn.ts) — an ordinary
-    // ancestor max-width, not a container query, so a wider max-width here
-    // can never take effect without a breakout (negative-margin /
-    // container-query) restructure applied at every MarkdownBody consumer
-    // (transcript rows, plan cards, tool-detail panels). That restructure is
-    // out of scope for this pass; this table stays at max-w-full
-    // (container-relative) as a conscious non-adoption rather than an
-    // unreachable cap.
+    // --container-transcript-wide (56rem) for wide blocks like this table.
+    // The two-tier measure (see markdownClassName above) now lets this
+    // table use the full 48rem --container-transcript-thread column instead
+    // of the 40rem readable cap, but 56rem still exceeds that thread column
+    // — reaching it would need a breakout (negative-margin / container-
+    // query) restructure applied at every MarkdownBody consumer (transcript
+    // rows, plan cards, tool-detail panels). That restructure is out of
+    // scope for this pass; this table stays at max-w-full
+    // (container-relative to the 48rem thread column) as a conscious
+    // partial adoption rather than an unreachable cap.
     <div
       className="my-4 min-w-0 max-w-full overflow-hidden rounded-lg border"
       data-markdown-table-shell="true"
@@ -245,7 +250,7 @@ function createMarkdownAnchor(renderLink: MarkdownLinkRenderer | undefined) {
   };
 }
 
-// Codex plan task-list grid: checkbox column sized auto, content column
+// Plan-view task-list grid: checkbox column sized auto, content column
 // minmax(0,1fr). react-markdown emits tight task items as
 // `li > input + <inline content>` (and loose ones with the input inside the
 // leading <p>), so a pure-CSS grid would scatter the inline runs across
@@ -268,7 +273,7 @@ function GridTaskListItem(props: MdElementProps & { children?: ReactNode }) {
   return (
     <li {...rest} className={mergedClassName}>
       {cloneElement(split.checkbox, {
-        // Codex nudge: drop the checkbox 0.25rem so it optically centers on
+        // Nudge: drop the checkbox 0.25rem so it optically centers on
         // the first text line.
         className: [split.checkbox.props.className, "mt-1"].filter(Boolean).join(" "),
       })}
@@ -345,6 +350,14 @@ export const MarkdownBody = memo(function MarkdownBody({
     [content, isStreaming],
   );
   const markdownClassName = [
+    // Two-tier measure: the thread column (ChatColumn.ts) widens to the
+    // 48rem --container-transcript-thread token so avatars/action rows and
+    // wide blocks (tables, code — see the `table` override below) get more
+    // room. This wrapper stays max-w-full so those wide blocks can use that
+    // width; the narrower 40rem --container-transcript-readable cap is
+    // applied per prose element instead (see PROSE_MEASURE_CLASSNAME) so
+    // paragraphs/headings/lists keep a readable line length without
+    // constraining their wide-block siblings.
     "chat-markdown min-w-0 max-w-full text-foreground break-words",
     "[&_li>p]:my-0",
     "[&_li>ol]:mt-2 [&_li>ol]:mb-0",

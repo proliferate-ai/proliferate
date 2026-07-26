@@ -235,8 +235,8 @@ export function TranscriptTurnRow({
 
   return (
     <TurnShell isFirst={rowIndex === 0}>
-      {/* Codex parity: every prose/activity sibling uses its exact 16px
-          conversation-item gap. Pending rows share the same class. */}
+      {/* Every prose/activity sibling uses the exact 16px conversation-item
+          gap. Pending rows share the same class. */}
       <div className={`flex flex-col ${TURN_ITEM_GAP_CLASS} ${tailAssistantCopyContent ? "group/turn" : ""}`}>
         <TurnItemSequence
           turn={turn}

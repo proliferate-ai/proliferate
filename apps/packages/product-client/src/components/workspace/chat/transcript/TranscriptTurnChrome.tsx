@@ -25,12 +25,11 @@ export type PendingInteractionMarkerKind = "permission" | "question";
 const TURN_HORIZONTAL_PADDING = "px-0";
 const ASSISTANT_ACTION_SLOT_HEIGHT = "h-6";
 /**
- * Exact Codex conversation-item rhythm shared by pending and materialized
- * turns. [CHAT-04] RULED block: that rhythm is the 12px
- * `--spacing-transcript-turn` token (Codex's virtualized turn stack sits at an
- * inline 12px gap), not the former 16px `gap-4`. This constant is the LIVE
- * transcript's turn stack — every real chat surface (MessageList →
- * TurnItemSequence, TranscriptTurnRow, TranscriptPendingPromptRow,
+ * Reference-ramp conversation-item rhythm shared by pending and materialized
+ * turns. [CHAT-04] RULED block, retuned: that rhythm is the 16px
+ * `--spacing-transcript-turn` token, not a raw `gap-4` utility. This constant
+ * is the LIVE transcript's turn stack — every real chat surface (MessageList
+ * → TurnItemSequence, TranscriptTurnRow, TranscriptPendingPromptRow,
  * ToolCallSummary, ChatLaunchIntentPane) reads it — so the token has to land
  * here and not only in the playground-only CloudChatTranscriptRows.
  */
@@ -83,10 +82,15 @@ export function TurnAssistantActionRow({
 
   const visibilityClassName = alwaysVisible
     ? "opacity-100"
-    : "opacity-0 group-hover/turn:opacity-100";
+    : "opacity-0 group-hover/turn:opacity-100 group-focus-within/turn:opacity-100";
 
   return (
-    <div className="relative -mt-2.5 flex justify-start" data-turn-assistant-footer>
+    // The footer sits in the same TURN_ITEM_GAP_CLASS flex column as the
+    // prose above it, so it inherits the full 16px --spacing-transcript-turn
+    // gap. Pulling it up by (16px - 4px) nets the tight 4px
+    // --spacing-transcript-turn-tight rhythm for this closely-related
+    // prose/action pair, instead of the turn-to-turn 16px.
+    <div className="relative -mt-3 flex justify-start" data-turn-assistant-footer>
       <div
         className={`flex items-center gap-2 pt-0.5 ${ASSISTANT_ACTION_SLOT_HEIGHT}`}
         data-turn-assistant-footer-slot
@@ -104,7 +108,7 @@ export function TurnAssistantActionRow({
             <span aria-hidden className="h-3 w-px bg-border/60" />
             {metMarker}
             {timestampLabel && (
-              <span className="text-ui-sm text-muted-foreground tabular-nums">
+              <span className="text-chat-meta text-foreground-tertiary tabular-nums">
                 {timestampLabel}
               </span>
             )}
