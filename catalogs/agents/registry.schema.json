@@ -117,9 +117,17 @@
           "type": "array",
           "minItems": 1,
           "items": {
-            "type": "string",
-            "minLength": 1
+            "$ref": "#/$defs/envVarEntry"
           }
+        },
+        "pending": {
+          "description": "True when this declaration names envVars the pinned harness binary cannot yet consume directly (e.g. codex's azure_openai support requires config.toml model_providers injection, not plain env vars) — the kind/envVars vocabulary is settled, but launch-time application awaits the dependency named in pendingReason.",
+          "type": "boolean"
+        },
+        "pendingReason": {
+          "description": "Required when pending is true: names the concrete mechanism/PR this declaration is waiting on (e.g. \"awaiting A5's config.toml injection mechanism\").",
+          "type": "string",
+          "minLength": 1
         }
       }
     },
@@ -505,8 +513,7 @@
         "envVars": {
           "type": "array",
           "items": {
-            "type": "string",
-            "minLength": 1
+            "$ref": "#/$defs/envVarEntry"
           }
         },
         "discovery": {
@@ -640,6 +647,33 @@
         "type": "string",
         "minLength": 1
       }
+    },
+    "envVarEntry": {
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "object",
+          "required": [
+            "name"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "kind": {
+              "enum": [
+                "secret",
+                "flag"
+              ]
+            }
+          }
+        }
+      ]
     },
     "nonEmptyStringArray": {
       "type": "array",

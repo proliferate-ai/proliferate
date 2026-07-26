@@ -1,8 +1,8 @@
 {
   "schemaVersion": 2,
-  "catalogVersion": "2026-07-17.6",
+  "catalogVersion": "2026-07-17.7",
   "probedAgainst": {
-    "registryVersion": "2026-07-17.2"
+    "registryVersion": "2026-07-17.3"
   },
   "generatedAt": "2026-07-17T20:49:47.861Z",
   "defaultAgentKind": "claude",

@@ -92,6 +92,20 @@ fn validate_provider_config(
                 entry.kind
             );
         }
+        if entry.pending
+            && entry
+                .pending_reason
+                .as_deref()
+                .unwrap_or("")
+                .trim()
+                .is_empty()
+        {
+            anyhow::bail!(
+                "agent registry agent '{}' providerConfig kind '{}' is pending but has no pendingReason",
+                agent_kind,
+                entry.kind
+            );
+        }
         let mut seen_env_vars = HashSet::new();
         for env_var in &entry.env_vars {
             if env_var.name().trim().is_empty() {
@@ -298,13 +312,17 @@ mod tests {
         use crate::domains::agents::registry::schema::AgentRegistryProviderConfig;
 
         let mut registry = bundled_agent_registry_document().clone();
-        registry.agents[0].provider_config.push(AgentRegistryProviderConfig {
-            kind: "google_vertex".to_string(),
-            label: "Google Vertex".to_string(),
-            env_vars: vec![AgentRegistryAuthSlotEnvVar::Name(
-                "ANTHROPIC_VERTEX_PROJECT_ID".to_string(),
-            )],
-        });
+        registry.agents[0]
+            .provider_config
+            .push(AgentRegistryProviderConfig {
+                kind: "google_vertex".to_string(),
+                label: "Google Vertex".to_string(),
+                env_vars: vec![AgentRegistryAuthSlotEnvVar::Name(
+                    "ANTHROPIC_VERTEX_PROJECT_ID".to_string(),
+                )],
+                pending: false,
+                pending_reason: None,
+            });
 
         let error = validate_agent_registry_document(&registry)
             .expect_err("unsupported providerConfig kind must fail");
@@ -323,11 +341,15 @@ mod tests {
 
         let mut registry = bundled_agent_registry_document().clone();
         let duplicate = registry.agents[0].provider_config[0].clone();
-        registry.agents[0].provider_config.push(AgentRegistryProviderConfig {
-            kind: duplicate.kind.clone(),
-            label: duplicate.label.clone(),
-            env_vars: duplicate.env_vars.clone(),
-        });
+        registry.agents[0]
+            .provider_config
+            .push(AgentRegistryProviderConfig {
+                kind: duplicate.kind.clone(),
+                label: duplicate.label.clone(),
+                env_vars: duplicate.env_vars.clone(),
+                pending: duplicate.pending,
+                pending_reason: duplicate.pending_reason.clone(),
+            });
 
         let error = validate_agent_registry_document(&registry)
             .expect_err("duplicate providerConfig kind must fail");
@@ -347,6 +369,8 @@ mod tests {
             kind: "aws_bedrock".to_string(),
             label: "AWS Bedrock".to_string(),
             env_vars: vec![],
+            pending: false,
+            pending_reason: None,
         }];
 
         let error = validate_agent_registry_document(&registry)
@@ -370,6 +394,8 @@ mod tests {
                 AgentRegistryAuthSlotEnvVar::Name("AWS_REGION".to_string()),
                 AgentRegistryAuthSlotEnvVar::Name("AWS_REGION".to_string()),
             ],
+            pending: false,
+            pending_reason: None,
         }];
 
         let error = validate_agent_registry_document(&registry)

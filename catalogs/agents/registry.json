@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "registryVersion": "2026-07-17.2",
+  "registryVersion": "2026-07-17.3",
   "generatedAt": "2026-07-17T03:08:00Z",
   "agents": [
     {
@@ -260,7 +260,9 @@
           "label": "Azure OpenAI",
           "envVars": [
             "AZURE_OPENAI_API_KEY"
-          ]
+          ],
+          "pending": true,
+          "pendingReason": "codex reaches Azure OpenAI only via config.toml model_providers, not plain env vars; awaiting A5's config.toml injection mechanism before this kind can be applied at launch."
         }
       ]
     },

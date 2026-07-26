@@ -90,13 +90,13 @@ def _read_catalog_version(path: Path) -> str | None:
 @dataclass(frozen=True)
 class _CachedRegistryDocument:
     mtime_ns: int
-    document: dict
+    document: dict[str, object]
 
 
 _registry_cache: dict[Path, _CachedRegistryDocument] = {}
 
 
-def _read_registry_document(path: Path = REGISTRY_PATH) -> dict:
+def _read_registry_document(path: Path = REGISTRY_PATH) -> dict[str, object]:
     try:
         mtime_ns = path.stat().st_mtime_ns
     except OSError:
@@ -105,9 +105,10 @@ def _read_registry_document(path: Path = REGISTRY_PATH) -> dict:
     if cached is not None and cached.mtime_ns == mtime_ns:
         return cached.document
     try:
-        document = json.loads(path.read_bytes())
+        parsed = json.loads(path.read_bytes())
     except (OSError, ValueError):
-        document = {}
+        parsed = {}
+    document: dict[str, object] = parsed if isinstance(parsed, dict) else {}
     _registry_cache[path] = _CachedRegistryDocument(mtime_ns=mtime_ns, document=document)
     return document
 
@@ -124,6 +125,12 @@ def supported_provider_config_kinds(
     kinds (agent-auth.md's vault table: ``aws_bedrock``, ``azure_openai``) a
     harness supports. Read the same way ``read_agent_catalog`` reads the
     catalog — cached against the file's mtime, no network round trip.
+
+    A declaration marked ``pending`` (agent-auth.md's Current-gaps: codex's
+    ``azure_openai`` entry names envVars the pinned binary cannot yet consume
+    without A5's config.toml injection mechanism) is excluded here — this
+    function answers "usable today", not "named in the registry". Sorted so
+    the API output is deterministic regardless of registry declaration order.
 
     Empty for a harness with no ``providerConfig`` block or an unknown
     harness — never raises, mirroring ``served_agent_catalog_version``'s
@@ -142,8 +149,12 @@ def supported_provider_config_kinds(
         if not isinstance(provider_config, list):
             return ()
         return tuple(
-            entry["kind"]
-            for entry in provider_config
-            if isinstance(entry, dict) and isinstance(entry.get("kind"), str)
+            sorted(
+                entry["kind"]
+                for entry in provider_config
+                if isinstance(entry, dict)
+                and isinstance(entry.get("kind"), str)
+                and not entry.get("pending", False)
+            )
         )
     return ()

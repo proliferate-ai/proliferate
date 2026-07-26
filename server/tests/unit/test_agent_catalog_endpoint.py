@@ -119,12 +119,42 @@ def test_served_agent_catalog_version_handles_missing_or_invalid_document(
 def test_supported_provider_config_kinds_matches_track_d_scope() -> None:
     # R9's full scope: claude/codex/opencode x {aws_bedrock, azure_openai};
     # cursor/grok excluded (structural — no gateway recipe / no BYOK-cloud path).
+    # codex's azure_openai entry is declared but `pending` (agent-auth.md's
+    # Current-gaps: codex only reaches Azure via config.toml model_providers,
+    # which needs A5's injection mechanism), so it is excluded from "usable
+    # today" — codex reports only aws_bedrock until that lands.
     assert supported_provider_config_kinds("claude") == ("aws_bedrock", "azure_openai")
-    assert supported_provider_config_kinds("codex") == ("aws_bedrock", "azure_openai")
+    assert supported_provider_config_kinds("codex") == ("aws_bedrock",)
     assert supported_provider_config_kinds("opencode") == ("aws_bedrock", "azure_openai")
     assert supported_provider_config_kinds("cursor") == ()
     assert supported_provider_config_kinds("grok") == ()
     assert supported_provider_config_kinds("not-a-real-harness") == ()
+
+
+def test_supported_provider_config_kinds_is_order_insensitive(tmp_path: Path) -> None:
+    reordered = tmp_path / "registry-reordered.json"
+    reordered.write_text(
+        '{"agents": [{"kind": "claude", "providerConfig": '
+        '[{"kind": "azure_openai", "label": "Azure OpenAI", "envVars": ["A"]}, '
+        '{"kind": "aws_bedrock", "label": "AWS Bedrock", "envVars": ["B"]}]}]}',
+        encoding="utf-8",
+    )
+    assert supported_provider_config_kinds("claude", path=reordered) == (
+        "aws_bedrock",
+        "azure_openai",
+    )
+
+
+def test_supported_provider_config_kinds_excludes_pending_entries(tmp_path: Path) -> None:
+    with_pending = tmp_path / "registry-with-pending.json"
+    with_pending.write_text(
+        '{"agents": [{"kind": "codex", "providerConfig": '
+        '[{"kind": "aws_bedrock", "label": "AWS Bedrock", "envVars": ["A"]}, '
+        '{"kind": "azure_openai", "label": "Azure OpenAI", "envVars": ["B"], '
+        '"pending": true, "pendingReason": "awaiting A5"}]}]}',
+        encoding="utf-8",
+    )
+    assert supported_provider_config_kinds("codex", path=with_pending) == ("aws_bedrock",)
 
 
 def test_supported_provider_config_kinds_handles_missing_or_invalid_document(
@@ -149,9 +179,7 @@ def test_supported_provider_config_kinds_handles_missing_or_invalid_document(
         '[{"kind": "aws_bedrock", "label": "AWS Bedrock", "envVars": []}]}]}',
         encoding="utf-8",
     )
-    assert supported_provider_config_kinds("claude", path=with_provider_config) == (
-        "aws_bedrock",
-    )
+    assert supported_provider_config_kinds("claude", path=with_provider_config) == ("aws_bedrock",)
 
 
 def test_server_dockerfile_packages_agent_catalog() -> None:

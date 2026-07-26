@@ -51,6 +51,15 @@ pub struct AgentRegistryProviderConfig {
     pub label: String,
     #[serde(default)]
     pub env_vars: Vec<AgentRegistryAuthSlotEnvVar>,
+    /// True when this declaration names envVars the pinned harness binary
+    /// cannot yet consume directly (e.g. codex's `azure_openai` support
+    /// requires config.toml `model_providers` injection, not plain env
+    /// vars) -- the kind/envVars vocabulary is settled, but launch-time
+    /// application awaits the dependency named in `pending_reason`.
+    #[serde(default)]
+    pub pending: bool,
+    #[serde(default)]
+    pub pending_reason: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -374,12 +383,58 @@ mod tests {
                 .iter()
                 .map(|env_var| env_var.name())
                 .collect::<Vec<_>>(),
-            vec!["CLAUDE_CODE_USE_BEDROCK", "AWS_BEARER_TOKEN_BEDROCK", "AWS_REGION"]
+            vec![
+                "CLAUDE_CODE_USE_BEDROCK",
+                "AWS_BEARER_TOKEN_BEDROCK",
+                "AWS_REGION"
+            ]
         );
         assert_eq!(
             bedrock.env_vars[0].kind(),
             AgentRegistryEnvVarKind::Flag,
             "the Bedrock mode switch must be tagged flag, not secret"
+        );
+    }
+
+    #[test]
+    fn bundled_codex_azure_openai_provider_config_is_pending() {
+        // The registry declares codex azure_openai's env-var vocabulary (Track
+        // D's full-scope intent), but the pinned codex binary has zero Azure
+        // env support -- codex only reaches Azure via config.toml
+        // model_providers, which needs A5's config.toml injection mechanism
+        // (not built). This pins that the declaration is marked `pending`
+        // with a reason naming that dependency, so it reads as honest scope
+        // rather than a working integration.
+        let registry = bundled_agent_registry_document();
+        let codex = registry
+            .agents
+            .iter()
+            .find(|agent| agent.kind == "codex")
+            .expect("codex agent");
+
+        let azure = codex
+            .provider_config
+            .iter()
+            .find(|entry| entry.kind == "azure_openai")
+            .expect("codex azure_openai providerConfig");
+        assert!(azure.pending, "codex azure_openai must be marked pending");
+        let reason = azure
+            .pending_reason
+            .as_deref()
+            .expect("pending entry must carry a pendingReason");
+        assert!(
+            reason.contains("A5"),
+            "pendingReason must name the A5 config.toml injection dependency: {reason}"
+        );
+
+        let bedrock = codex
+            .provider_config
+            .iter()
+            .find(|entry| entry.kind == "aws_bedrock")
+            .expect("codex aws_bedrock providerConfig");
+        assert!(
+            !bedrock.pending,
+            "codex aws_bedrock is env-var-driven and must not be pending"
         );
     }
 

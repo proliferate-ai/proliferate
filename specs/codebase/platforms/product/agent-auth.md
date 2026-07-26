@@ -537,6 +537,15 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       `provider_config` wire source, and no render recipe turns a typed
       entry into the harness's own env set. (The old Bifrost `provider_kind`
       tables were dropped outright and are not a starting point.)
+- [ ] **Codex's `azure_openai` provider-config is declared but pending.**
+      The registry names codex x `azure_openai`'s env-var vocabulary
+      (`AZURE_OPENAI_API_KEY`) for Track D's full-scope intent, but the
+      pinned codex binary has zero Azure env support — codex only reaches
+      Azure via `config.toml` `model_providers`, which needs A5's
+      config.toml injection mechanism (not built). The registry entry is
+      marked `pending` with a `pendingReason` naming that dependency, and
+      the server excludes it from `supported_provider_config_kinds` until
+      A5 lands (or the entry is dropped, pending a founder ruling).
 - [ ] **Cursor selections are rejected server-side.** `selection_rules.py`
       lists cursor as native-only and the store's harness allow-list
       excludes it, even though the registry declares `CURSOR_API_KEY` as
