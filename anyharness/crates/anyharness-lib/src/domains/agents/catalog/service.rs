@@ -7,9 +7,15 @@
 //! - `defaultVisible` is the menu, `availability` is the truth:
 //!   [`ActiveCatalog::validate_launch`] accepts launchable-but-unadvertised
 //!   models (available under the active contexts but not default-visible).
-//! - Availability is the observed set: a model is available iff
-//!   `availability.anyOf` intersects the active context ids — `"baseline"`
-//!   counts like any other context when it is active.
+//! - Availability is the observed set: a model is available iff this machine's
+//!   snapshot observed it under an active context, or `availability.anyOf`
+//!   intersects the active context ids — `"baseline"` counts like any other
+//!   context when it is active. The two are a union, never an override:
+//!   model-catalog.md's tier law says a lower tier fills absence, and the
+//!   shipped catalog's trial-verified rows are exactly the models a harness does
+//!   not advertise but can still launch (see `universe.rs` for the real-data
+//!   argument). A machine with no snapshot therefore validates exactly as it did
+//!   before probing existed.
 //! - Models are entities, never modes; variant launch ids (`variantSyntax`)
 //!   resolve to their base model for availability and control checks while
 //!   the composed variant id is preserved as the launch id.
@@ -22,7 +28,12 @@ use super::schema::{
     AgentCatalogAuthContext, AgentCatalogDocument, AgentCatalogHarnessPins, AgentCatalogModel,
     AgentCatalogModelControl, AgentCatalogPinTarget,
 };
+use super::selection::{
+    default_model, find_model, model_is_available, resolve_requested_model, validate_mode,
+    ResolvedModel,
+};
 use super::sync::CatalogSyncService;
+use super::universe::{contexts_serving_model, ObservedUniverse};
 use crate::domains::agents::auth::context::ActiveAuthContexts;
 use crate::domains::agents::installer::install_policy::{
     PinOverrides, ResolvedPinSource, ResolvedPinTarget,
@@ -244,15 +255,24 @@ impl ActiveCatalog {
 
     /// Models available under the active contexts: `availability.anyOf`
     /// intersected with the active ids (`"baseline"` counts when active).
+    ///
+    /// Catalog-only, deliberately: projecting the machine snapshot into the PICKER
+    /// is its own change (model-catalog.md, "Serving per surface", still an open
+    /// gap), and widening the menu here would ship half of it — a model in the menu
+    /// with no curated display name or control wiring. Launch validation reads the
+    /// union through [`ActiveCatalog::validate_launch_in_universe`]; a picker that
+    /// shows less than launch accepts is the pre-existing, safe direction of that
+    /// asymmetry (it is already true for trial-verified rows).
     pub fn models(&self, kind: &str, contexts: &ActiveAuthContexts) -> Vec<&AgentCatalogModel> {
         let Some(agent) = self.agent(kind) else {
             return Vec::new();
         };
+        let universe = ObservedUniverse::empty();
         agent
             .session
             .models
             .iter()
-            .filter(|model| model_is_available(model, contexts))
+            .filter(|model| model_is_available(model, contexts, &universe))
             .collect()
     }
 
@@ -303,6 +323,40 @@ impl ActiveCatalog {
         model_id: Option<&str>,
         mode_id: Option<&str>,
     ) -> Result<ResolvedSelection, SelectionUnsupported> {
+        self.validate_launch_in_universe(
+            kind,
+            contexts,
+            model_id,
+            mode_id,
+            &ObservedUniverse::empty(),
+        )
+    }
+
+    /// [`ActiveCatalog::validate_launch`] against the machine's observed universe
+    /// as well as the shipped catalog — the snapshot-first form the wired launch
+    /// paths use.
+    ///
+    /// The universe only ever WIDENS what validation accepts, in two ways:
+    ///
+    /// 1. a catalog model observed under an active context is available even when
+    ///    `availability.anyOf` predates that context;
+    /// 2. a model the catalog does not know at all, observed under an active
+    ///    context, resolves to itself — this is the case that makes a gateway-side
+    ///    model add launchable on the day it appears, without a catalog release.
+    ///
+    /// Both error shapes are unchanged. `UnknownModel` now means "absent from every
+    /// context's observation AND the catalog", exactly as model-catalog.md, "Launch
+    /// validation" states, and `ModelGated`'s `required_contexts` names the contexts
+    /// whose observation (or, absent one, whose catalog availability) carries the
+    /// model.
+    pub fn validate_launch_in_universe(
+        &self,
+        kind: &str,
+        contexts: &ActiveAuthContexts,
+        model_id: Option<&str>,
+        mode_id: Option<&str>,
+        universe: &ObservedUniverse,
+    ) -> Result<ResolvedSelection, SelectionUnsupported> {
         let agent = self
             .agent(kind)
             .ok_or_else(|| SelectionUnsupported::UnknownAgent {
@@ -312,23 +366,27 @@ impl ActiveCatalog {
         let requested = model_id.map(str::trim).filter(|id| !id.is_empty());
         let resolved = match requested {
             Some(requested) => {
-                let resolved = resolve_requested_model(agent, requested).ok_or_else(|| {
-                    SelectionUnsupported::UnknownModel {
-                        model_id: requested.to_string(),
-                    }
-                })?;
-                if !model_is_available(resolved.model, contexts) {
+                let Some(resolved) = resolve_requested_model(agent, requested) else {
+                    // Not in the catalog by any spelling. Before rejecting, ask the
+                    // observation: the shipped catalog is a snapshot of a nightly
+                    // probe, so a model the gateway or the provider added since is
+                    // genuinely launchable and genuinely absent here.
+                    return self.validate_observed_only_model(
+                        agent, contexts, requested, mode_id, universe,
+                    );
+                };
+                if !model_is_available(resolved.model, contexts, universe) {
                     return Err(SelectionUnsupported::ModelGated {
                         requested_model_id: requested.to_string(),
                         canonical_model_id: resolved.model.id.clone(),
                         active_contexts: contexts.ids().to_vec(),
-                        required_contexts: resolved.model.availability.any_of.clone(),
+                        required_contexts: contexts_serving_model(resolved.model, universe),
                         catalog_version: self.document.catalog_version.clone(),
                     });
                 }
                 Some(resolved)
             }
-            None => default_model(agent, contexts).map(|model| ResolvedModel {
+            None => default_model(agent, contexts, universe).map(|model| ResolvedModel {
                 model,
                 launch_id: model.id.clone(),
             }),
@@ -342,190 +400,48 @@ impl ActiveCatalog {
             mode_id,
         })
     }
-}
 
-struct ResolvedModel<'a> {
-    model: &'a AgentCatalogModel,
-    launch_id: String,
-}
-
-fn model_is_available(model: &AgentCatalogModel, contexts: &ActiveAuthContexts) -> bool {
-    model
-        .availability
-        .any_of
-        .iter()
-        .any(|context_id| contexts.is_active(context_id))
-}
-
-fn find_model<'a>(agent: &'a AgentCatalogAgent, model_id: &str) -> Option<&'a AgentCatalogModel> {
-    agent
-        .session
-        .models
-        .iter()
-        .find(|model| model.id == model_id)
-        .or_else(|| {
-            agent
-                .session
-                .models
-                .iter()
-                .find(|model| model.aliases.iter().any(|alias| alias == model_id))
+    /// A requested id the catalog does not carry, judged purely on observation.
+    ///
+    /// Its canonical id is the observed id itself: there is no catalog identity to
+    /// normalize to, and inventing one would be the guessy name matching the
+    /// enrichment join deliberately avoids. Mode validation falls through to the
+    /// agent-level vocabulary, since no model row exists to carry a `mode` control.
+    fn validate_observed_only_model(
+        &self,
+        agent: &AgentCatalogAgent,
+        contexts: &ActiveAuthContexts,
+        requested: &str,
+        mode_id: Option<&str>,
+        universe: &ObservedUniverse,
+    ) -> Result<ResolvedSelection, SelectionUnsupported> {
+        let observed_in = universe.contexts_observing_id(requested);
+        if observed_in.is_empty() {
+            return Err(SelectionUnsupported::UnknownModel {
+                model_id: requested.to_string(),
+            });
+        }
+        if !observed_in
+            .iter()
+            .any(|context_id| contexts.is_active(context_id))
+        {
+            return Err(SelectionUnsupported::ModelGated {
+                requested_model_id: requested.to_string(),
+                canonical_model_id: requested.to_string(),
+                active_contexts: contexts.ids().to_vec(),
+                required_contexts: observed_in,
+                catalog_version: self.document.catalog_version.clone(),
+            });
+        }
+        let mode_id = validate_mode(agent, None, mode_id)?;
+        Ok(ResolvedSelection {
+            model_id: Some(requested.to_string()),
+            launch_model_id: Some(requested.to_string()),
+            mode_id,
         })
-}
-
-/// Resolve a requested model id: exact id -> alias -> probe-observed variant
-/// id -> `variantSyntax` composition. The launch id preserves the variant
-/// form; availability and controls are judged on the base model.
-fn resolve_requested_model<'a>(
-    agent: &'a AgentCatalogAgent,
-    requested: &str,
-) -> Option<ResolvedModel<'a>> {
-    if let Some(model) = find_model(agent, requested) {
-        return Some(ResolvedModel {
-            model,
-            launch_id: model.id.clone(),
-        });
-    }
-
-    if let Some(model) = agent.session.models.iter().find(|model| {
-        model
-            .provenance
-            .as_ref()
-            .is_some_and(|provenance| provenance.variant_ids.iter().any(|id| id == requested))
-    }) {
-        return Some(ResolvedModel {
-            model,
-            launch_id: requested.to_string(),
-        });
-    }
-
-    compose_variant(agent, requested)
-}
-
-fn variant_syntax(agent: &AgentCatalogAgent) -> Option<&str> {
-    agent
-        .session
-        .controls
-        .iter()
-        .find(|control| control.key == "model")
-        .and_then(|control| control.mapping.as_ref())
-        .and_then(|mapping| mapping.variant_syntax.as_deref())
-}
-
-/// Compose a variant launch id per the agent's declared `variantSyntax`.
-/// Each composed value must be supported by the base model's controls.
-fn compose_variant<'a>(agent: &'a AgentCatalogAgent, requested: &str) -> Option<ResolvedModel<'a>> {
-    match variant_syntax(agent)? {
-        // `<base>/<effort>` (codex): effort validated against the model's
-        // reasoning-effort control (key "reasoning_effort", or "effort").
-        "slash-effort" => {
-            let (base, effort) = requested.rsplit_once('/')?;
-            let model = find_model(agent, base)?;
-            let control = model
-                .controls
-                .get("reasoning_effort")
-                .or_else(|| model.controls.get("effort"))?;
-            control
-                .values
-                .iter()
-                .any(|value| value == effort)
-                .then(|| ResolvedModel {
-                    model,
-                    launch_id: requested.to_string(),
-                })
-        }
-        // `<base>[k=v,...]` (cursor): every pair must be a control the model
-        // declares with that value; empty brackets compose trivially.
-        "bracket-params" => {
-            let inner = requested.strip_suffix(']')?;
-            let (base, params) = inner.split_once('[')?;
-            let model = find_model(agent, base)?;
-            let supported = params
-                .split(',')
-                .filter(|pair| !pair.is_empty())
-                .all(|pair| {
-                    pair.split_once('=').is_some_and(|(key, value)| {
-                        model
-                            .controls
-                            .get(key)
-                            .is_some_and(|control| control.values.iter().any(|v| v == value))
-                    })
-                });
-            supported.then(|| ResolvedModel {
-                model,
-                launch_id: requested.to_string(),
-            })
-        }
-        other => {
-            tracing::debug!(syntax = other, "unknown variantSyntax; no composition");
-            None
-        }
     }
 }
 
-/// Default model when none was requested: curation default for the first
-/// active context that has one (and is available), else the first visible
-/// available model in document order. `None` is a valid outcome.
-fn default_model<'a>(
-    agent: &'a AgentCatalogAgent,
-    contexts: &ActiveAuthContexts,
-) -> Option<&'a AgentCatalogModel> {
-    for context_id in contexts.ids() {
-        let Some(default_id) = agent.session.defaults.get(context_id) else {
-            continue;
-        };
-        if let Some(model) = find_model(agent, default_id) {
-            if model_is_available(model, contexts) {
-                return Some(model);
-            }
-        }
-    }
-    agent.session.models.iter().find(|model| {
-        model.default_visible
-            && model.status == ModelCatalogStatus::Active
-            && model_is_available(model, contexts)
-    })
-}
-
-/// Mode validation ladder: model `mode` control -> agent-level `mode`
-/// control. No vocabulary means no mode selection is accepted.
-fn validate_mode(
-    agent: &AgentCatalogAgent,
-    model: Option<&AgentCatalogModel>,
-    mode_id: Option<&str>,
-) -> Result<Option<String>, SelectionUnsupported> {
-    let Some(mode_id) = mode_id.map(str::trim).filter(|id| !id.is_empty()) else {
-        return Ok(None);
-    };
-    let unsupported = || SelectionUnsupported::UnsupportedMode {
-        mode_id: mode_id.to_string(),
-    };
-
-    if let Some(control) = model.and_then(|model| model.controls.get("mode")) {
-        if !control.values.is_empty() {
-            return control
-                .values
-                .iter()
-                .any(|value| value == mode_id)
-                .then(|| Some(mode_id.to_string()))
-                .ok_or_else(unsupported);
-        }
-    }
-
-    let Some(control) = agent
-        .session
-        .controls
-        .iter()
-        .find(|control| control.key == "mode" && !control.values.is_empty())
-    else {
-        return Err(unsupported());
-    };
-    control
-        .values
-        .iter()
-        .any(|value| value == mode_id)
-        .then(|| Some(mode_id.to_string()))
-        .ok_or_else(unsupported)
-}
 
 #[cfg(test)]
 mod pin_identity_tests {

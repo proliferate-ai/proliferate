@@ -45,9 +45,27 @@ impl ModelSnapshotService {
             .collect();
         // One state read serves the gate, the plan lookup and the scratch's
         // revision-keyed dirs, so they cannot land on different revisions.
-        let plan = self
-            .plan_producer
-            .resolve_gateway_models(harness_kind, material.state_revision);
+        //
+        // The BLOCKING resolve, on a blocking thread: a probe is about to spawn a
+        // whole harness, so waiting for the model list it will then observe is the
+        // right trade — and it is the only way an opencode gateway probe observes
+        // anything but the ids its own config was just written with. `used_seed_floor`
+        // rides along to the entry as a warning (see `entry_from_snapshot`).
+        let plan_producer = self.plan_producer.clone();
+        let plan_harness = harness_kind.to_string();
+        let plan_revision = material.state_revision;
+        let (plan, used_seed_floor) = tokio::task::spawn_blocking(move || {
+            plan_producer.resolve_gateway_models_blocking(&plan_harness, plan_revision)
+        })
+        .await
+        .unwrap_or_else(|error| {
+            tracing::warn!(
+                harness = harness_kind,
+                %error,
+                "gateway model plan task failed; probing with an empty plan"
+            );
+            (Default::default(), true)
+        });
         // Captured BEFORE the spawn, from the manifest: what the entry records must
         // be what the gate will later compare against.
         let install_identity = install_identity_of(&self.runtime_home, harness_kind);
@@ -81,7 +99,13 @@ impl ModelSnapshotService {
         let now = Utc::now();
         match outcome {
             Ok(snapshot) => {
-                let entry = entry_from_snapshot(snapshot, fingerprint, install_identity, now);
+                let entry = entry_from_snapshot(
+                    snapshot,
+                    fingerprint,
+                    install_identity,
+                    used_seed_floor,
+                    now,
+                );
                 if let Err(error) =
                     write_entry(&self.runtime_home, harness_kind, auth_context_id, entry.clone())
                 {

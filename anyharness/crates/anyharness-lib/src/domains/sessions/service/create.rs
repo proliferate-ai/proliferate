@@ -8,6 +8,7 @@ use super::{CreateSessionError, CreateSessionOutcome, ModelGatedContext, Session
 use crate::domains::agents::auth::context::classify;
 use crate::domains::agents::auth::launch_facts::collect_launch_env_facts;
 use crate::domains::agents::catalog::service::{ActiveCatalog, SelectionUnsupported};
+use crate::domains::agents::catalog::universe::ObservedUniverse;
 use crate::domains::agents::model::{AgentDescriptor, ResolvedAgentStatus};
 use crate::domains::agents::readiness::service::resolve_launch_agent;
 use crate::domains::agents::registry;
@@ -173,6 +174,10 @@ impl SessionService {
             mode_id,
             &readiness_env,
             &self.runtime_home,
+            // model-catalog.md, "Launch validation": the universe is the snapshot
+            // entries for the active contexts, with the shipped catalog where no
+            // fresh entry exists.
+            &self.observed_universe.observed_universe(agent_kind),
         )?;
         tracing::info!(
             workspace_id = %workspace_id,
@@ -303,12 +308,13 @@ fn resolve_selection(
     mode_id: Option<&str>,
     readiness_env: &BTreeMap<String, String>,
     runtime_home: &Path,
+    universe: &ObservedUniverse,
 ) -> Result<(Option<String>, Option<String>, Option<String>), CreateSessionError> {
     let contexts = catalog.auth_contexts(agent_kind).unwrap_or(&[]);
     let facts = collect_launch_env_facts(agent_kind, readiness_env, runtime_home);
     let active = classify(descriptor, contexts, &facts);
     let selection = catalog
-        .validate_launch(agent_kind, &active, model_id, mode_id)
+        .validate_launch_in_universe(agent_kind, &active, model_id, mode_id, universe)
         .map_err(|unsupported| {
             map_selection_unsupported(workspace_id, attempted_session_id, agent_kind, unsupported)
         })?;

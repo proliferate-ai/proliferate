@@ -47,6 +47,8 @@ async fn compatible_admission_reuses_active_job() {
             Vec::new(),
             None,
             None,
+            // No probe engine: these assert admission, not probing.
+            None,
             RuntimeSurface::Local,
             AgentReconcileAdmission::ReuseCompatible,
         )
@@ -88,6 +90,8 @@ async fn reinstall_request_is_rejected_while_non_reinstall_job_runs() {
             false,
             vec![AgentKind::Codex],
             None,
+            None,
+            // No probe engine: these assert admission, not probing.
             None,
             RuntimeSurface::Local,
             AgentReconcileAdmission::ReuseCompatible,
@@ -159,6 +163,8 @@ async fn empty_registry_job_completes() {
             Vec::new(),
             None,
             None,
+            // No probe engine: these assert admission, not probing.
+            None,
             RuntimeSurface::Local,
             AgentReconcileAdmission::ReuseCompatible,
         )
@@ -196,6 +202,8 @@ async fn reconcile_job_remains_queued_while_another_disk_writer_runs() {
             false,
             vec![AgentKind::Codex],
             None,
+            None,
+            // No probe engine: these assert admission, not probing.
             None,
             RuntimeSurface::Local,
             AgentReconcileAdmission::ReuseCompatible,
@@ -241,6 +249,8 @@ async fn installed_only_skips_uninstalled_agents() {
             true,
             Vec::new(),
             None,
+            None,
+            // No probe engine: these assert admission, not probing.
             None,
             RuntimeSurface::Local,
             AgentReconcileAdmission::ReuseCompatible,
@@ -305,6 +315,8 @@ async fn full_reconcile_is_rejected_while_installed_only_job_runs() {
             Vec::new(),
             None,
             None,
+            // No probe engine: these assert admission, not probing.
+            None,
             RuntimeSurface::Local,
             AgentReconcileAdmission::ReuseCompatible,
         )
@@ -352,6 +364,8 @@ async fn installed_only_reuses_in_flight_installed_only_job() {
             true, // installed-only scope
             Vec::new(),
             None,
+            None,
+            // No probe engine: these assert admission, not probing.
             None,
             RuntimeSurface::Local,
             AgentReconcileAdmission::ReuseCompatible,
@@ -429,6 +443,8 @@ async fn internal_poke_waits_for_compatible_job_then_runs_a_fresh_pass_on_active
             Vec::new(),
             None,
             Some(catalog.clone()),
+            // No probe engine: these assert admission, not probing.
+            None,
             RuntimeSurface::Local,
             AgentReconcileAdmission::RequireIdle,
         )

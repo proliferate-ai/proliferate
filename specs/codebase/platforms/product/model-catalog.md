@@ -691,12 +691,16 @@ anyharness-lib/src/domains/agents/model_snapshot/
 ├── reads.rs              # document/entry/status reads (available in read-only mode)
 ├── staleness.rs          # pure validity rules (mirrors installer/install_policy.rs)
 ├── status.rs             # the polled status projection (pure)
-└── targets.rs            # which (harness, context) pairs may be probed
+├── targets.rs            # which (harness, context) pairs may be probed
+└── universe.rs           # fresh entries -> the launch-validation universe, behind a
+                          #   seam so validation needs no probe engine
 ```
 
-The picker-facing universe construction and enrichment join stay where they
-are today (`catalog/service.rs` and the frontend), so this module has no
-`projection.rs`: it owns the observation, not the merge.
+The picker-facing enrichment join stays where it is today (`catalog/` and the
+frontend), so this module has no `projection.rs`: it owns the observation, not
+the merge. `universe.rs` is the one projection it does own, and only because the
+FRESHNESS rule is its own — a stale entry stops counting, and nothing outside
+this module knows that rule.
 
 The route-auth side owns the probe's materialization seam, because it is the
 same render plane a launch uses:
@@ -723,20 +727,33 @@ server/proliferate/server/cloud/agent_models/
 | Layer | Path | Owns |
 | --- | --- | --- |
 | Machine snapshot | `anyharness-lib/src/domains/agents/model_snapshot/` (new; beside [installer/](../../../../anyharness/crates/anyharness-lib/src/domains/agents/installer/manifest.rs) whose manifest/policy conventions it mirrors) | Document, probes, fingerprints, staleness, triggers, projection |
-| Launch validation | [catalog/service.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/service.rs), [sessions/service/launch_options.rs](../../../../anyharness/crates/anyharness-lib/src/domains/sessions/service/launch_options.rs) | Snapshot-first universe, `SelectionUnsupported`, picker projection |
+| Launch validation | [catalog/service.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/service.rs) + [catalog/selection.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/selection.rs) + [catalog/universe.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/universe.rs), [sessions/service/launch_options.rs](../../../../anyharness/crates/anyharness-lib/src/domains/sessions/service/launch_options.rs) | Snapshot-first universe, `SelectionUnsupported`, picker projection |
+| Gateway model plan | [catalog/gateway_plan.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/gateway_plan.rs) | The surviving `GET /v1/models` materialization fetch: memoized 5 min, seed models as a warned floor, never snapshot truth |
 | Cloud snapshot | `server/proliferate/server/cloud/agent_models/` (new; today's routes in [agent_gateway/api.py](../../../../server/proliferate/server/cloud/agent_gateway/api.py), tables in [db/models/cloud/agent_gateway.py](../../../../server/proliferate/db/models/cloud/agent_gateway.py)) | Layered reads, ingest, overrides, soft-versioned history |
 | Cloud sync | `proliferate-worker/src/model_snapshot_sync.rs` (new; on the tick in [proliferate-worker/src/runtime.rs](../../../../anyharness/crates/proliferate-worker/src/runtime.rs)) | Heartbeat-tick upload of changed entries |
 | Picker composition | [cloud-launch-catalog.ts](../../../../apps/packages/product-client/src/lib/domain/agents/cloud-launch-catalog.ts) and the chat/model domain | Merge precedence, identity normalization, visibility filtering, badges |
 
 Deleted by this design:
-[catalog/gateway_probe.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/gateway_probe.rs)
+[catalog/gateway_probe.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/gateway_probe.rs)'s
+persistence half
 and
 [catalog/gateway_resolver.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/gateway_resolver.rs)
 (with the `gateway_model_probe` sqlite
-table), the `gatewayPolicy` seed fallback (agent-distribution gap), and
-the frontend
+table), the `gatewayPolicy` seed fallback as a SERVING tier (agent-distribution
+gap), and the frontend
 [useGatewayCatalogMirrorSync](../../../../apps/packages/product-client/src/hooks/agents/lifecycle/use-gateway-catalog-mirror-sync.ts)
 polling hook.
+
+Two pieces of that chain deliberately survive, and both are materialization
+rather than observation. `probe_gateway_models`' tolerant `GET /v1/models` fetch
+moves into `gateway_plan.rs`, because a harness whose gateway config enumerates
+models needs the proxy's list to WRITE that config before any spawn. And
+`gatewayPolicy.seedModels` survives as a floor under that fetch, because
+`render_opencode_gateway` hard-fails on an empty models map — so a failed fetch
+must still yield a launchable list. An entry produced over that floor carries a
+`"gateway model plan fell back to seed models"` warning, because the probe then
+observes exactly the ids the floor just wrote into the harness's own config:
+a tautology, and not a discovery of what the gateway serves.
 
 ## Failure modes
 
@@ -759,29 +776,20 @@ polling hook.
 
 Deltas between this document and `main`, each struck by its follow-up PR:
 
-- [ ] None of the reconciler's AUTOMATIC pokes is wired. The engine and its
-      document exist and probe correctly, and the manual-refresh route calls
-      them — but nothing else does, so a machine only ever probes when a
-      user asks it to, and none of the convergence triggers below fires. The
-      poke sites are already in the code: the startup pass
-      (`spawn_startup_pass` in
-      [domains/agents/runtime.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/runtime.rs)),
-      the two install-completion
-      points (the reconcile job's per-agent completion in
-      [installer/reconcile/execution.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/installer/reconcile/execution.rs)
-      and the synchronous install endpoint), the auth-apply handler's
-      `schedule_gateway_probes` call
-      ([api/http/agent_auth.rs](../../../../anyharness/crates/anyharness-lib/src/api/http/agent_auth.rs)),
-      and the launch-time `schedule_launch_probe_if_stale`
-      ([catalog/gateway_resolver.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/gateway_resolver.rs))
-      — the last two probe gateway
-      model ids today and are replaced by pokes of the general
-      reconciler.
-- [ ] Launch validation (`validate_launch` in
-      [catalog/service.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/service.rs))
-      checks the
-      shipped catalog's model list only; probed capability never enters
-      the universe.
+- [ ] The picker does not project the machine snapshot yet. Launch validation
+      does (`validate_launch_in_universe` in
+      [catalog/service.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/service.rs),
+      reading
+      [catalog/universe.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/universe.rs)),
+      so an observed model launches; but `models`/`visible_models` — and
+      therefore the runtime's launch options — still read the shipped catalog
+      alone, so an observed-only model is launchable without appearing in any
+      menu. Closing this is the [enrichment join](#enrichment-join) plus the
+      explicit provider/serving-context fields two bullets down: a model shown
+      with no curated display name or control wiring would be worse than one
+      absent from the menu. Note the asymmetry is pre-existing and in the safe
+      direction — the shipped catalog already carries trial-verified models a
+      harness does not advertise.
 - [ ] The cloud snapshot exists (`agent_catalog_snapshot` in
       [db/models/cloud/agent_gateway.py](../../../../server/proliferate/db/models/cloud/agent_gateway.py))
       but is keyed by

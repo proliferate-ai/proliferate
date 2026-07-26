@@ -1,8 +1,11 @@
+use std::sync::Arc;
+
 use super::attachment_storage::PromptAttachmentStorage;
 use super::deletion::SessionDeleteWorkflow;
 use super::model::SessionRecord;
 use super::store::SessionStore;
 use crate::domains::agents::catalog::service::AgentCatalogService;
+use crate::domains::agents::model_snapshot::universe::{NoObservations, ObservedUniverseSource};
 use crate::domains::workspaces::store::WorkspaceStore;
 
 pub(crate) mod attachments;
@@ -21,6 +24,15 @@ pub struct SessionService {
     attachment_storage: PromptAttachmentStorage,
     workspace_store: WorkspaceStore,
     catalog_service: AgentCatalogService,
+    /// This machine's observed models per auth context, consulted by launch
+    /// validation so a probe's discoveries are launchable and the shipped catalog
+    /// fills in where nothing was observed.
+    ///
+    /// A seam rather than the probe engine itself: the engine takes a filesystem
+    /// lock on the runtime home at construction, and requiring one to answer a pure
+    /// validation question would put an flock in the middle of every session test.
+    /// [`NoObservations`] is the pre-probe universe, i.e. exactly the old behavior.
+    observed_universe: Arc<dyn ObservedUniverseSource>,
     runtime_home: std::path::PathBuf,
 }
 
@@ -102,11 +114,31 @@ pub enum UpdateSessionTitleError {
 }
 
 impl SessionService {
+    /// A service that validates against the shipped catalog only — the pre-probe
+    /// universe, and what every surface with no runtime attached gets.
     pub fn new(
         session_store: SessionStore,
         delete_workflow: SessionDeleteWorkflow,
         workspace_store: WorkspaceStore,
         catalog_service: AgentCatalogService,
+        runtime_home: std::path::PathBuf,
+    ) -> Self {
+        Self::with_observed_universe(
+            session_store,
+            delete_workflow,
+            workspace_store,
+            catalog_service,
+            Arc::new(NoObservations),
+            runtime_home,
+        )
+    }
+
+    pub fn with_observed_universe(
+        session_store: SessionStore,
+        delete_workflow: SessionDeleteWorkflow,
+        workspace_store: WorkspaceStore,
+        catalog_service: AgentCatalogService,
+        observed_universe: Arc<dyn ObservedUniverseSource>,
         runtime_home: std::path::PathBuf,
     ) -> Self {
         Self {
@@ -115,6 +147,7 @@ impl SessionService {
             attachment_storage: PromptAttachmentStorage::new(runtime_home.clone()),
             workspace_store,
             catalog_service,
+            observed_universe,
             runtime_home,
         }
     }

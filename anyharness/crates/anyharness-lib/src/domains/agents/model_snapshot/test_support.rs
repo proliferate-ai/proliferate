@@ -186,26 +186,39 @@ impl CountingPlanProducer {
     }
 }
 
-impl GatewayModelResolve for CountingPlanProducer {
-    fn resolve_gateway_models(&self, harness_kind: &str, _revision: i64) -> GatewayModelPlan {
+impl CountingPlanProducer {
+    /// The memoized resolve both trait methods share, plus whether the seed FLOOR was
+    /// used. Modelled on the real planner so the engine's warning path is exercised
+    /// through the same shape production takes.
+    fn resolve_with_floor(&self, harness_kind: &str) -> (GatewayModelPlan, bool) {
         let mut memo = self.memo.lock().expect("memo poisoned");
+        let fetch_fails = *self.fetch_fails.lock().expect("flag poisoned");
         let models = memo
             .entry(harness_kind.to_string())
             .or_insert_with(|| {
                 self.fetch_count.fetch_add(1, Ordering::SeqCst);
-                if *self.fetch_fails.lock().expect("flag poisoned") {
+                if fetch_fails {
                     self.seed_models.clone()
                 } else {
                     self.models.lock().expect("models poisoned").clone()
                 }
             })
             .clone();
-        GatewayModelPlan {
-            default_model: Some("model-default".to_string()),
-            native_default_model: Some("model-native".to_string()),
-            small_fast_model: Some("model-small".to_string()),
-            models,
-        }
+        (
+            GatewayModelPlan {
+                default_model: Some("model-default".to_string()),
+                native_default_model: Some("model-native".to_string()),
+                small_fast_model: Some("model-small".to_string()),
+                models,
+            },
+            fetch_fails,
+        )
+    }
+}
+
+impl GatewayModelResolve for CountingPlanProducer {
+    fn resolve_gateway_models(&self, harness_kind: &str, _revision: i64) -> GatewayModelPlan {
+        self.resolve_with_floor(harness_kind).0
     }
 
     fn invalidate_gateway_plan(&self, harness_kind: &str) {
@@ -213,6 +226,14 @@ impl GatewayModelResolve for CountingPlanProducer {
             .lock()
             .expect("memo poisoned")
             .remove(harness_kind);
+    }
+
+    fn resolve_gateway_models_blocking(
+        &self,
+        harness_kind: &str,
+        _revision: i64,
+    ) -> (GatewayModelPlan, bool) {
+        self.resolve_with_floor(harness_kind)
     }
 }
 

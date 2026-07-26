@@ -488,3 +488,66 @@ async fn pokes_fan_out_to_exactly_the_named_targets() {
         "grok was already fresh; only opencode's one active context probed"
     );
 }
+
+/// T-38's remaining leg: a plan that fell back to the SEED FLOOR marks its entry.
+///
+/// This is the honesty requirement behind the floor. When the gateway fetch fails,
+/// `render_opencode_gateway` still needs a non-empty models map or the launch dies —
+/// so the seed ids get written into `opencode.json`, and the probe then reports back
+/// exactly those ids. Without the warning that tautology is indistinguishable from a
+/// real discovery, and a reviewer looking at the document would conclude the gateway
+/// serves four models. The picker still gets a launchable list either way; the warning
+/// is what stops the observation being trusted as a discovery.
+#[tokio::test]
+async fn a_seed_floor_plan_marks_its_entry_as_not_a_discovery() {
+    use crate::domains::agents::catalog::gateway_plan::SEED_FALLBACK_WARNING;
+    use crate::domains::agents::route_auth::GatewayModelResolve;
+
+    let home = seeded_home("seed-floor-warning", "opencode");
+    let runner = Arc::new(FakeRunner::new());
+    let plan = Arc::new(CountingPlanProducer::new(
+        vec!["live-1", "live-2"],
+        vec!["seed-1", "seed-2", "seed-3", "seed-4"],
+    ));
+    let service = Arc::new(ModelSnapshotService::with_parts(
+        home.path().to_path_buf(),
+        plan.clone(),
+        Arc::new(FixedTargets::single("opencode", vec![gateway_context()])),
+        runner.clone(),
+        ProbeEngineConfig {
+            min_reprobe_interval: Duration::ZERO,
+            ..test_config()
+        },
+    ));
+
+    // A live plan carries no warning.
+    let healthy = service
+        .refresh_now("opencode", "gateway")
+        .await
+        .expect("probe with a live plan");
+    assert!(
+        !healthy.warnings.iter().any(|w| w == SEED_FALLBACK_WARNING),
+        "a live plan must not be labelled a fallback, got {:?}",
+        healthy.warnings
+    );
+
+    // Now the gateway is unreachable, so the plan degrades to the floor.
+    *plan.fetch_fails.lock().expect("flag") = true;
+    plan.invalidate_gateway_plan("opencode");
+    let degraded = service
+        .refresh_now("opencode", "gateway")
+        .await
+        .expect("probe with a floor plan");
+    assert!(
+        degraded.warnings.iter().any(|w| w == SEED_FALLBACK_WARNING),
+        "a floor plan must say so, got {:?}",
+        degraded.warnings
+    );
+    // And it is persisted, not merely returned — the document is what a UI reads.
+    let entry = read_document(home.path(), "opencode")
+        .expect("document")
+        .entries
+        .remove("gateway")
+        .expect("entry");
+    assert!(entry.warnings.iter().any(|w| w == SEED_FALLBACK_WARNING));
+}

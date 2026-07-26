@@ -18,6 +18,7 @@
 //! - [`detail`] makes a harness's own error text safe to persist (pure),
 //! - [`backoff`] spreads the retry ladder (pure),
 //! - [`attempt`] executes one admitted attempt and persists its outcome,
+//! - [`universe`] projects fresh entries into the launch-validation universe,
 //! - this file is the reconciler: the gate, the coalescing, and the pokes.
 //!
 //! **Four independent brakes**, because each stops a different runaway:
@@ -42,6 +43,7 @@ pub mod probe;
 pub mod staleness;
 pub mod status;
 pub mod targets;
+pub mod universe;
 
 #[cfg(test)]
 mod engine_tests;
@@ -49,6 +51,10 @@ mod engine_tests;
 mod runner_tests;
 #[cfg(test)]
 mod staleness_tests;
+#[cfg(test)]
+mod universe_tests;
+#[cfg(test)]
+mod wiring_tests;
 #[cfg(test)]
 pub(crate) mod test_support;
 

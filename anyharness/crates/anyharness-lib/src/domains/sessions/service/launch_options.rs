@@ -78,7 +78,15 @@ impl SessionService {
         let contexts = ActiveAuthContexts::from_ids(context_ids);
         self.catalog_service
             .active_catalog()
-            .validate_launch(&record.agent_kind, &contexts, Some(value), None)
+            .validate_launch_in_universe(
+                &record.agent_kind,
+                &contexts,
+                Some(value),
+                None,
+                // The same universe create validated against, so a model the machine
+                // observed is switchable mid-session rather than only launchable.
+                &self.observed_universe.observed_universe(&record.agent_kind),
+            )
             .is_ok()
     }
 
@@ -111,6 +119,7 @@ impl SessionService {
         let catalog = self.catalog_service.active_catalog();
         let mut agents = Vec::new();
         for agent in catalog.agents() {
+            let universe = self.observed_universe.observed_universe(&agent.kind);
             let Some(descriptor) = registry::descriptor(&agent.kind) else {
                 continue;
             };
@@ -128,8 +137,10 @@ impl SessionService {
 
             let facts = collect_launch_env_facts(&agent.kind, &readiness_env, &self.runtime_home);
             let active = classify(&descriptor, &agent.auth_contexts, &facts);
+            // The advertised default must be one create would accept, so the menu
+            // and validation read the same universe.
             let default_model_id = catalog
-                .validate_launch(&agent.kind, &active, None, None)
+                .validate_launch_in_universe(&agent.kind, &active, None, None, &universe)
                 .ok()
                 .and_then(|selection| selection.model_id);
 

@@ -1495,3 +1495,127 @@ async fn model_snapshot_routes_require_bearer_auth() {
         );
     }
 }
+
+/// The auth-state routes still answer exactly as before now that they poke the probe
+/// engine, and the DELETE route pokes too.
+///
+/// The contract half is what matters: every poke is fire-and-forget, so neither route's
+/// status, body, nor latency may depend on a probe. Asserted through the real router so
+/// the wiring is exercised rather than the handler in isolation — a poke that blocked,
+/// panicked, or errored would surface here as a changed status.
+#[tokio::test]
+async fn agent_auth_state_routes_keep_their_contract_while_poking_the_probe_engine() {
+    let _lock = test_support::ENV_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("expected env mutex");
+    let _guard = test_support::set_bearer_token_env(Some("secret-token"));
+    let app = build_router(test_state(false));
+
+    let document = json!({
+        "version": 2,
+        "revision": 4,
+        "harnesses": [
+            { "harness_kind": "opencode", "sources": [
+                { "kind": "gateway", "base_url": "https://gw.example", "key": "sk-vk" }] },
+            // An api_key-only harness: the gateway-only scheduler this replaces would
+            // have skipped it entirely.
+            { "harness_kind": "codex", "sources": [
+                { "kind": "api_key", "env_var_name": "OPENAI_API_KEY", "key": "sk-openai" }] },
+        ],
+    });
+
+    let applied = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("PUT")
+                .uri("/v1/agent-auth/state")
+                .header(header::AUTHORIZATION, "Bearer secret-token")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(document.to_string()))
+                .expect("expected request"),
+        )
+        .await
+        .expect("expected response");
+    assert_eq!(applied.status(), StatusCode::OK);
+    let body = to_bytes(applied.into_body(), usize::MAX)
+        .await
+        .expect("read response body");
+    let payload: Value = serde_json::from_slice(&body).expect("parse response json");
+    assert_eq!(payload["applied"], json!(true));
+    assert_eq!(
+        payload["revision"],
+        json!(4),
+        "the apply response must not wait on, or be altered by, a probe"
+    );
+
+    // A stale revision is still a typed 409, and pokes nothing new.
+    let stale = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("PUT")
+                .uri("/v1/agent-auth/state")
+                .header(header::AUTHORIZATION, "Bearer secret-token")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(json!({ "version": 2, "revision": 1, "harnesses": [] }).to_string()))
+                .expect("expected request"),
+        )
+        .await
+        .expect("expected response");
+    assert_eq!(stale.status(), StatusCode::CONFLICT);
+
+    // And the clear route keeps its 204 while poking every harness.
+    let cleared = app
+        .oneshot(
+            Request::builder()
+                .method("DELETE")
+                .uri("/v1/agent-auth/state")
+                .header(header::AUTHORIZATION, "Bearer secret-token")
+                .body(Body::empty())
+                .expect("expected request"),
+        )
+        .await
+        .expect("expected response");
+    assert_eq!(cleared.status(), StatusCode::NO_CONTENT);
+}
+
+/// The install endpoint keeps its error contract now that it pokes.
+///
+/// The poke sits AFTER the fallible install, so a failed install must still surface its
+/// own typed error rather than anything the poke did. An unknown harness kind is the
+/// cheapest way to prove that ordering without downloading a real harness into the
+/// test's temp home.
+///
+/// The complementary case — the handler poking for a harness that ended up not
+/// installed — is asserted in the engine suite
+/// (`model_snapshot::wiring_tests::poking_an_uninstalled_harness_records_nothing`),
+/// where the outcome is observable: nothing written, not even a failed attempt.
+#[tokio::test]
+async fn the_install_endpoint_keeps_its_error_contract_while_poking() {
+    let _lock = test_support::ENV_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("expected env mutex");
+    let _guard = test_support::set_bearer_token_env(Some("secret-token"));
+    let app = build_router(test_state(false));
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/agents/not-a-harness/install")
+                .header(header::AUTHORIZATION, "Bearer secret-token")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(json!({}).to_string()))
+                .expect("expected request"),
+        )
+        .await
+        .expect("expected response");
+    assert_eq!(
+        response.status(),
+        StatusCode::NOT_FOUND,
+        "an unknown harness is still a typed 404, not a poke-induced 500"
+    );
+}

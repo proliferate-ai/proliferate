@@ -58,9 +58,16 @@ pub struct SessionRuntime {
     access_gate: Arc<WorkspaceAccessGate>,
     plan_reference_resolver: Arc<dyn PlanReferenceResolver + Send + Sync>,
     plan_interaction_link_resolver: Arc<dyn PlanInteractionLinkResolver>,
-    /// Catalog-driven gateway model resolver (spec §3): supplies the render
-    /// plane's [`GatewayModelPlan`] and schedules launch-time lazy probes.
+    /// Catalog-driven gateway model planner: supplies the render plane's
+    /// [`GatewayModelPlan`]. Materialization input only — launch-time
+    /// re-observation is the `model_snapshot` poke below.
     gateway_model_resolver: Arc<dyn GatewayModelResolve>,
+    /// The probe engine, poked as a backstop at each launch. `Option` because a
+    /// session runtime without one is a legitimate configuration (the session
+    /// suites build runtimes without a probe engine, and standing one up would
+    /// take a filesystem lock per test); `None` means "no backstop poke", never
+    /// "probe anyway".
+    model_snapshot: Option<Arc<crate::domains::agents::model_snapshot::ModelSnapshotService>>,
     active_goal_resolver: Arc<dyn ActiveGoalResolver>,
     loops_resolver: Arc<dyn LoopsResolver>,
     activity_roster_resolver: Arc<dyn ActivityRosterResolver>,
@@ -346,6 +353,7 @@ impl SessionRuntime {
         plan_reference_resolver: Arc<dyn PlanReferenceResolver + Send + Sync>,
         plan_interaction_link_resolver: Arc<dyn PlanInteractionLinkResolver>,
         gateway_model_resolver: Arc<dyn GatewayModelResolve>,
+        model_snapshot: Option<Arc<crate::domains::agents::model_snapshot::ModelSnapshotService>>,
         active_goal_resolver: Arc<dyn ActiveGoalResolver>,
         loops_resolver: Arc<dyn LoopsResolver>,
         activity_roster_resolver: Arc<dyn ActivityRosterResolver>,
@@ -363,6 +371,7 @@ impl SessionRuntime {
             plan_reference_resolver,
             plan_interaction_link_resolver,
             gateway_model_resolver,
+            model_snapshot,
             active_goal_resolver,
             loops_resolver,
             activity_roster_resolver,
