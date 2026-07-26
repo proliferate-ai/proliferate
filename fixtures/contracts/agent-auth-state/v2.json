@@ -42,14 +42,14 @@
       "harness_kind": "opencode",
       "sources": [
         {
-          "kind": "gateway",
-          "base_url": "https://llm.proliferate.example",
-          "key": "sk-vk-opencode-0003"
-        },
-        {
           "kind": "api_key",
           "env_var_name": "ANTHROPIC_API_KEY",
           "value": "sk-ant-raw-0005"
+        },
+        {
+          "kind": "gateway",
+          "base_url": "https://llm.proliferate.example",
+          "key": "sk-vk-opencode-0003"
         }
       ],
       "settings": {

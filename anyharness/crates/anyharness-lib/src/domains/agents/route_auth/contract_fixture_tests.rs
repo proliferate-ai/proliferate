@@ -131,9 +131,13 @@ fn the_fixtures_satisfiable_entries_resolve_to_the_documented_profiles() {
 
     match resolve_profile(Some(&state), "opencode").expect("resolve") {
         AgentRuntimeAuthProfile::Sources(sources) => {
-            assert_eq!(sources.sources.len(), 2, "gateway + one direct api_key");
-            assert!(matches!(sources.sources[0], ResolvedSource::Gateway(_)));
-            assert!(matches!(sources.sources[1], ResolvedSource::ApiKey(_)));
+            assert_eq!(sources.sources.len(), 2, "one direct api_key + gateway");
+            // The producer sorts a harness's sources by (kind, env_var_name), and
+            // "api_key" < "gateway" — so the api_key row comes FIRST. The fixture
+            // has to carry the order the producer actually emits, or it is a
+            // document no reconcile could ever write.
+            assert!(matches!(sources.sources[0], ResolvedSource::ApiKey(_)));
+            assert!(matches!(sources.sources[1], ResolvedSource::Gateway(_)));
         }
         other => panic!("opencode should be routed, got {other:?}"),
     }

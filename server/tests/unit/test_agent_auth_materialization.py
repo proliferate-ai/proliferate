@@ -311,87 +311,6 @@ class TestRenderAgentAuthState:
         _ = key_id
 
 
-class TestAgentAuthStateContractFixture:
-    """Producer half of ``fixtures/contracts/agent-auth-state/v2.json``.
-
-    Python produces the document, Rust consumes it
-    (``route_auth/contract_fixture_tests.rs``). Per
-    ``specs/developing/testing/README.md``, the fixture is the shape's single
-    definition: change it and whichever side lags breaks mechanically.
-    """
-
-    def test_the_fixture_is_a_valid_v2_document_this_renderer_could_emit(self) -> None:
-        fixture = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
-
-        assert fixture["version"] == agent_auth.AGENT_AUTH_STATE_VERSION
-        assert isinstance(fixture["revision"], int)
-        # snake_case on the wire, and no UI-only fields leak into it.
-        serialized = json.dumps(fixture)
-        for forbidden in ("provider_hint", "harnessKind", "envVarName", "model_catalog"):
-            assert forbidden not in serialized, forbidden
-        for entry in fixture["harnesses"]:
-            assert set(entry) <= {"harness_kind", "sources", "settings"}
-            for source in entry["sources"]:
-                assert source["kind"] in ("gateway", "api_key")
-                if source["kind"] == "gateway":
-                    assert set(source) == {"kind", "base_url", "key"}
-                else:
-                    assert set(source) == {"kind", "env_var_name", "value"}
-
-    def test_this_renderer_produces_the_fixtures_empty_sources_semantics(self) -> None:
-        # The half of the contract this renderer owns TODAY: a selected harness
-        # whose sources are all unsatisfiable keeps its entry with an empty list
-        # (the fixture's `grok`), while a harness with no selection row is absent
-        # (the fixture has no `opencode-zen`).
-        fixture = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
-        fixture_kinds = {entry["harness_kind"] for entry in fixture["harnesses"]}
-        assert "grok" in fixture_kinds
-        assert "opencode-zen" not in fixture_kinds
-
-        state, _ = agent_auth.render_agent_auth_state(
-            _inputs(
-                (_selection(harness="grok", source_kind="gateway"),),
-                enrollment_sync_status="pending",
-                gateway_virtual_key=None,
-            )
-        )
-        rendered = {entry["harness_kind"]: entry["sources"] for entry in state["harnesses"]}
-        assert rendered == {"grok": []}, (
-            "a selected-but-unsatisfiable harness must keep an empty entry, exactly "
-            "as the fixture's grok does"
-        )
-
-    def test_per_harness_gateway_keys_are_not_produced_yet(self) -> None:
-        # KNOWN GAP, owned by Track B (B3). The fixture gives every gateway source
-        # its own virtual key because the gateway scopes keys per
-        # (subject, harness); this renderer still resolves ONE subject-wide
-        # `gateway_virtual_key` and fans it out. That is the "one shared gateway
-        # key" bullet in agent-auth.md's Current gaps, and it is NOT closed here.
-        #
-        # This test asserts the gap as it stands so B3 has to delete it when it
-        # lands the per-harness key map — a passing suite after B3 would otherwise
-        # hide that the fixture and the producer disagree.
-        state, _ = agent_auth.render_agent_auth_state(
-            _inputs(
-                (
-                    _selection(harness="claude", source_kind="gateway"),
-                    _selection(harness="codex", source_kind="gateway"),
-                )
-            )
-        )
-        keys = [
-            source["key"]
-            for entry in state["harnesses"]
-            for source in entry["sources"]
-            if source["kind"] == "gateway"
-        ]
-        assert len(keys) == 2
-        assert len(set(keys)) == 1, (
-            "expected today's shared-key behavior; if this now fails, B3 has landed "
-            "per-harness keys — delete this test and assert distinctness instead"
-        )
-
-
 class _SandboxIOSpy:
     def __init__(self, previous_manifest: dict[str, object] | None) -> None:
         self.previous_manifest = previous_manifest
@@ -615,3 +534,81 @@ class TestMaterializeAgentAuth:
         serialized = json.dumps(state)
         assert "sk-live" in serialized
         assert str(revoked_id) not in serialized
+
+    @pytest.mark.asyncio
+    async def test_unsatisfiable_selection_survives_renderer_merge_tripwire(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Guard both halves of the fail-closed fix against a careless B3 rebase.
+
+        ``agents/b3-renderer-key-map`` (Track B) touches THIS renderer for the
+        per-harness key map, and its branch point predates this PR: its copy still
+        carries the two lines this PR deleted —
+
+        1. ``by_harness.setdefault(selection.harness_kind, []).append(...)`` instead
+           of pre-seeding a key for every SELECTED harness, so a harness whose every
+           source is unsatisfiable disappears from ``harnesses`` entirely; and
+        2. a ``materialize_agent_auth`` delete branch whose comment reads "no
+           resolvable cloud sources", so the state file is removed for an exhausted
+           budget rather than only for "nothing selected".
+
+        Either one reverted turns a dead selection back into a silent native launch
+        on the user's personal credentials — and it reverts SILENTLY, because it is a
+        deletion of behavior rather than a conflicting edit. This test asserts the
+        two semantics together in one pass so a merge that resurrects either half
+        fails loudly here, naming the branch that would have done it.
+        """
+        # A harness whose EVERY source is unsatisfiable, and nothing else selected:
+        # the exact input where a `setdefault` renderer produces `harnesses: []` and
+        # a broad delete condition then removes the document.
+        inputs = _inputs(
+            (_selection(harness="claude", source_kind="gateway"),),
+            enrollment_sync_status="pending",
+            gateway_virtual_key=None,
+        )
+
+        # Half 1 — the renderer pre-seeds an entry per selected harness.
+        state, _ = agent_auth.render_agent_auth_state(inputs)
+        assert state["harnesses"] == [{"harness_kind": "claude", "sources": []}], (
+            "renderer regressed to dropping a fully-unsatisfiable harness "
+            "(by_harness.setdefault) — see agents/b3-renderer-key-map"
+        )
+
+        async def fake_load(db: object, *, user_id: uuid.UUID, surface: str = "cloud") -> Any:
+            return inputs
+
+        monkeypatch.setattr(agent_auth, "_load_state_inputs", fake_load)
+        spy = _install_spy(monkeypatch, previous_manifest=None)
+
+        # Half 2 — the delete branch is narrowed to "nothing selected at all", so
+        # this pass WRITES the empty entry instead of removing the document.
+        await agent_auth.materialize_agent_auth(object(), ctx=_ctx(), user_id=USER_ID)
+
+        assert spy.removed == set(), (
+            "materializer regressed to deleting the state file for an unsatisfiable "
+            "selection — see agents/b3-renderer-key-map"
+        )
+        assert [write["path"] for write in spy.writes] == [
+            paths.agent_auth_state_path(),
+            paths.agent_auth_manifest_path(),
+        ]
+        written = json.loads(str(spy.writes[0]["content"]))
+        assert written["harnesses"] == [{"harness_kind": "claude", "sources": []}]
+
+        # And the delete branch is still REACHABLE for its one legitimate case, so
+        # the narrowing did not simply disable it.
+        empty_inputs = _inputs(())
+
+        async def fake_load_empty(
+            db: object, *, user_id: uuid.UUID, surface: str = "cloud"
+        ) -> Any:
+            return empty_inputs
+
+        monkeypatch.setattr(agent_auth, "_load_state_inputs", fake_load_empty)
+        empty_spy = _install_spy(monkeypatch, previous_manifest=None)
+        await agent_auth.materialize_agent_auth(object(), ctx=_ctx(), user_id=USER_ID)
+        assert empty_spy.writes == []
+        assert empty_spy.removed == {
+            paths.agent_auth_state_path(),
+            paths.agent_auth_manifest_path(),
+        }

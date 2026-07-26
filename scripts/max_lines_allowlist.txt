@@ -69,4 +69,4 @@ anyharness/crates/anyharness-lib/src/live/sessions/actor/startup.rs 642 session 
 server/tests/integration/test_organizations_api.py 624 added admin-only coverage for GET .../invitations
 anyharness/crates/anyharness-lib/src/domains/agents/model.rs 605 agents domain type barrel, previously exactly at the cap (+ResolvedAgent.credentials_from_route, the route-vs-native readiness provenance flag); split into model/ on next growth per guides/domains.md
 anyharness/crates/anyharness-lib/src/domains/agents/route_auth/render_tests.rs 616 render-plane snapshot suite (+fail-closed rewrite, +the agent-auth-state contract-fixture submodule); split further on next growth
-server/tests/unit/test_agent_auth_materialization.py 617 renderer unit suite (+the agent-auth-state contract-fixture producer class, +fail-closed rewrites)
+server/tests/unit/test_agent_auth_materialization.py 614 renderer unit suite (+fail-closed rewrites, +the renderer-merge tripwire; the contract-fixture producer class split out to test_agent_auth_state_contract_fixture.py)

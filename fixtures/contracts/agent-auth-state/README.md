@@ -16,7 +16,7 @@ breaks the other side until it is updated.
 
 ## What `v2.json` pins
 
-Two things the two sides could otherwise drift on silently:
+Three things the two sides could otherwise drift on silently:
 
 **1. Per-harness gateway keys, not one shared key.** Every gateway source
 carries its OWN virtual key (`sk-vk-claude-0001`, `sk-vk-codex-0002`,
@@ -41,11 +41,20 @@ that resolves zero usable sources for a still-selected route is refused with a
 typed error. A selection never silently degrades to the user's personal
 credentials.
 
+**3. Source order within a harness.** The producer sorts a harness's sources by
+`(kind, env_var_name)`, and `"api_key"` sorts before `"gateway"` — so opencode's
+`api_key` row comes FIRST and its gateway row second. This is not cosmetic: a
+fixture in the other order is a document no reconcile could ever emit, so the
+consumer would be pinning a shape that never reaches a sandbox. Both sides assert
+the order (`test_the_fixtures_source_order_is_the_order_this_renderer_emits` on
+the producer, `the_fixtures_satisfiable_entries_resolve_to_the_documented_profiles`
+on the consumer).
+
 Also pinned incidentally, because they are easy to get wrong: the document is
 **snake_case** on the wire (`harness_kind`, `env_var_name`, `base_url`,
 `user_id`, `issuing_server_origin`) while `settings` values are the catalog's own
-camelCase keys; a harness may carry several sources at once (opencode: gateway +
-a direct `api_key`); and cursor's only route is `api_key` (it has no gateway
+camelCase keys; a harness may carry several sources at once (opencode: a direct
+`api_key` + gateway); and cursor's only route is `api_key` (it has no gateway
 story).
 
 ## Reconciliation status
