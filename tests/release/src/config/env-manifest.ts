@@ -352,7 +352,8 @@ export const ENV_MANIFEST: readonly EnvVarSpec[] = [
       "Confirmation switch (set to `1`) asserting that the candidate API under test runs with " +
       "PROLIFERATE_SUPERVISOR_OWNED_RUNTIME=1, so a Worker heartbeat returns desiredTopology=" +
       "supervisor_owned and the Worker writes the durable mailbox update request rather than swapping " +
-      "the binary itself (server default is OFF). T4-RUNTIME-1 requires the supervisor-owned topology to " +
+      "the binary itself (server default is ON since 2026-07-26; this switch still confirms the " +
+      "candidate under test actually has it enabled). T4-RUNTIME-1 requires the supervisor-owned topology to " +
       "observe the contract's Worker-mailbox -> Supervisor-activation flow; absent -> blocked (the " +
       "legacy direct-Worker path would contradict the contract).",
     whereItLives:

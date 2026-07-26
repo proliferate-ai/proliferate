@@ -199,12 +199,24 @@ async def _launch_supervisor_owned_runtime(
 
     cloud_base_url = worker_cloud_base_url()
     if not cloud_base_url:
-        # Matches the legacy sidecar's warning (worker_sidecar.py). The
-        # Supervisor still must come up -- AnyHarness has to run regardless --
-        # but the Worker it spawns will bake in an empty base URL and can
-        # never enroll (no heartbeat, no integration gateway). Warn loudly
-        # instead of silently shipping a worker that can't reach Cloud; do
-        # not fail the whole materialization over it.
+        # Matches the legacy sidecar's warning (worker_sidecar.py) -- but only
+        # the warning, not the behavior. The legacy sidecar warns and then
+        # SKIPS launching the worker entirely (see launch_worker_sidecar:
+        # `if not cloud_base_url: ... return`), so a misconfigured deploy just
+        # runs AnyHarness with no worker. There is no equivalent skip here:
+        # `SupervisorConfig.worker_binary`/`worker_config` in
+        # anyharness/crates/proliferate-supervisor/src/config.rs are plain
+        # (non-Option, no #[serde(default)]) fields, and `run()` in
+        # anyharness/crates/proliferate-supervisor/src/process/mod.rs
+        # unconditionally calls `spawn_worker` inside the AnyHarness
+        # generation loop -- there is no supervisor-config shape that omits
+        # the worker. So with an empty base URL the Supervisor still spawns a
+        # Worker child that bakes in that empty base URL, fails to enroll
+        # immediately, exits, and gets respawned by the Supervisor's restart
+        # loop (`restart_delay_seconds`, default 5s) FOREVER -- a permanent
+        # crash-loop, not a quiet no-worker runtime like the legacy path.
+        # Warn loudly instead of silently shipping a runtime that will
+        # crash-loop a child; do not fail the whole materialization over it.
         log_cloud_event(
             "cloud supervisor-owned launch proceeding with no cloud base URL "
             "configured (set CLOUD_WORKER_BASE_URL or API_BASE_URL); the "

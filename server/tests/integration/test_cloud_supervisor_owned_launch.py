@@ -255,10 +255,30 @@ async def test_default_takes_supervisor_path_without_monkeypatch(
 ) -> None:
     """The live E2B N-1->N proof passed 2026-07-26; the flag now defaults on.
 
-    No ``settings.supervisor_owned_runtime`` monkeypatch here at all -- this
-    pins that a fresh ``Settings()`` (i.e. what a real deploy gets without an
-    explicit env var override) takes the Supervisor-first launch path."""
-    assert settings.supervisor_owned_runtime is True
+    This pins the *default* the ``supervisor_owned_runtime`` field resolves
+    to, not the ambient module-level ``settings`` singleton -- a dev with
+    ``SUPERVISOR_OWNED_RUNTIME=0`` (or the ``PROLIFERATE_`` alias) exported in
+    their shell would make an assertion against the singleton fail
+    spuriously even though the field's own default is correct. Construct a
+    fresh ``Settings()`` with both env var spellings cleared instead, so the
+    assertion reflects only the field default, never ambient env."""
+    monkeypatch.delenv("PROLIFERATE_SUPERVISOR_OWNED_RUNTIME", raising=False)
+    monkeypatch.delenv("SUPERVISOR_OWNED_RUNTIME", raising=False)
+    from proliferate.config import Settings
+
+    fresh_settings = Settings()
+    assert fresh_settings.supervisor_owned_runtime is True
+
+    # The launch path itself reads the module-level ``settings`` singleton
+    # (see ``_launch_anyharness_runtime``'s ``settings.supervisor_owned_runtime``
+    # check), which is resolved once at import time and is NOT re-read from
+    # the cleared env above. Pin it to the freshly-resolved default so the
+    # launch-path assertion below is deterministic regardless of what env
+    # var state this process's `settings` singleton happened to import with.
+    monkeypatch.setattr(
+        settings, "supervisor_owned_runtime", fresh_settings.supervisor_owned_runtime
+    )
+
     provider = _FakeProvider(db_session)
     sidecar_calls, _runtime_env_calls = _install_stubs(monkeypatch, provider)
     sandbox = await _seed_sandbox(db_session)
@@ -300,13 +320,36 @@ class TestSupervisorLaunchCommandHardening:
         nohup_index = command.index("nohup")
         assert guard_index < nohup_index
 
-    def test_launch_command_still_exits_zero_shaped(self) -> None:
+    def test_guard_precedes_nohup_in_command_shape(self) -> None:
         # `test -x ... && nohup ... &` -- the backgrounded nohup means the
         # overall command does not block on (or propagate) the guard's
         # failure; `set -eu` only affects the script up to the background job.
+        #
+        # This is a string-shape assertion, not an executed-script assertion:
+        # the generated command also carries `pgrep -f <pattern> ... kill
+        # "$pid"` lines (build_supervised_runtime_stop_command's kill_lines)
+        # that pattern-match and kill against the real live process table --
+        # there is no way to scope `pgrep -f` to a tmp_path, so actually
+        # running this script (even with a tmp_path-rooted runtime_context)
+        # is unsafe. Assert the shape instead: the guard gates the nohup, the
+        # nohup is backgrounded with a trailing `&`, and there is no bare
+        # unguarded nohup anywhere in the command.
         runtime_context = _runtime_context()
         command = build_detached_supervisor_launch_command(runtime_context)
         assert "&& nohup" in command
+        guard_index = command.index("test -x")
+        nohup_index = command.index("nohup")
+        assert guard_index < nohup_index
+        # The whole script is shell-quoted (`bash -lc '...'`), so the nohup
+        # line's trailing character is the closing quote, not `&` itself;
+        # strip a trailing quote char before checking the backgrounding `&`.
+        nohup_line = next(line for line in command.splitlines() if "nohup" in line)
+        assert nohup_line.rstrip().rstrip("'\"").endswith("&")
+        # Every nohup invocation in the script must be guarded -- no bare
+        # `nohup ...` that isn't preceded by `&& ` on the same line.
+        for line in command.splitlines():
+            if "nohup" in line:
+                assert "&& nohup" in line, line
 
     @pytest.mark.asyncio
     async def test_health_probe_timeout_logs_missing_binary_hint(
@@ -355,8 +398,19 @@ class TestSupervisorLaunchCommandHardening:
 class TestSupervisorOwnedLaunchEmptyBaseUrl:
     """The supervisor path must warn (not silently proceed) when no cloud
     base URL is configured, matching the legacy sidecar's loud warning
-    (worker_sidecar.py:91-103), but must still launch the Supervisor --
-    AnyHarness has to come up regardless of whether the Worker can enroll."""
+    (worker_sidecar.py:91-103) -- warning parity only, NOT behavioral parity.
+    The legacy sidecar warns and then skips launching the worker entirely, so
+    a misconfigured deploy ends up with AnyHarness and no worker. The
+    supervisor-owned path cannot do that: `SupervisorConfig.worker_binary`/
+    `worker_config` (anyharness/crates/proliferate-supervisor/src/config.rs)
+    are required, non-Option fields with no supervisor-config shape that
+    omits the worker, so the Supervisor still launches AnyHarness AND a
+    Worker child that bakes in the empty base URL, fails to enroll, exits,
+    and gets endlessly respawned by the Supervisor's restart loop -- a
+    permanent crash-loop rather than the legacy path's quiet no-worker
+    runtime. This test only asserts the Supervisor still launches and that
+    the warning fires; it does not (and cannot) assert a worker-less
+    config, because none exists on the Rust side."""
 
     @pytest.mark.asyncio
     async def test_empty_base_url_warns_but_still_launches_supervisor(

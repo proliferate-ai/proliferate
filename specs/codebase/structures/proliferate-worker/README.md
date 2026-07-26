@@ -36,8 +36,12 @@ already-provisioned legacy Worker migrates too), then branches on
 targets route to `converge_via_mailbox` (the mailbox write) instead
 of the legacy `converge_anyharness_runtime` + `self_update` swap, which stays
 byte-for-byte unchanged for non-supervisor targets. The "Current Process"
-outline below describes running behavior. The live E2B N-1→N proof is deferred
-with the rest of Tier 4. See
+outline below describes running behavior. Two distinct live proofs exist here:
+the UPDATE proof (a fresh supervisor-owned sandbox converging pins
+0.3.47→0.3.48 end to end) PASSED on a real E2B sandbox 2026-07-26. The D5
+BRIDGE proof (in-place migration of an already-running legacy Worker onto
+Proliferate Supervisor via `supervisor_bridge`, not a fresh provision) remains
+deferred with the rest of Tier 4. See
 [Lifecycle](guides/lifecycle.md#supervisor-owned-convergence-mailbox) for detail.
 
 ## Current Process
