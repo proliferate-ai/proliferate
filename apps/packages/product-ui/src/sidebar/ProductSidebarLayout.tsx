@@ -20,7 +20,7 @@ export function ProductSidebarFrame({
 }
 
 /**
- * Codex-style brand row at the top of the sidebar: product mark + wordmark in
+ * Brand row at the top of the sidebar: product mark + wordmark in
  * the full sidebar ink, sitting above the primary navigation.
  */
 export function ProductSidebarBrandRow({
@@ -33,7 +33,7 @@ export function ProductSidebarBrandRow({
   return (
     <div className="mb-1 flex h-8 shrink-0 items-center gap-2 px-2 text-sidebar-primary">
       {icon}
-      {/* Codex wordmark geometry: 17px/24 semibold. */}
+      {/* Wordmark geometry: 17px/24 semibold. */}
       <span className="min-w-0 truncate text-sidebar-brand font-semibold">
         {label}
       </span>
@@ -75,7 +75,7 @@ export function ProductSidebarSectionHeader({
       <div className="flex items-center justify-between gap-2">
         <span>{label}</span>
         {actions ? (
-          // Codex parity: section actions stay hidden until the header is
+          // Section actions stay hidden until the header is
           // hovered (or an action's popover is open / focused via keyboard).
           <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity duration-hover group-hover/side-section:opacity-100 group-focus-within/side-section:opacity-100 has-[[data-state=open]]:opacity-100">
             {actions}

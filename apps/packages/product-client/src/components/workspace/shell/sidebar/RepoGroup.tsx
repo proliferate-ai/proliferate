@@ -310,7 +310,7 @@ function RepoGroupEnvironmentIcon({
   kind: RepoGroupEnvironmentKind;
   expanded: boolean;
 }) {
-  // Codex parity: remote-capable repos use the fused folder+globe glyph —
+  // Remote-capable repos use the fused folder+globe glyph —
   // one icon, never a badge overlay.
   if (kind === "cloud" || kind === "local_cloud") {
     return <FolderRemote className="icon-paired shrink-0" />;

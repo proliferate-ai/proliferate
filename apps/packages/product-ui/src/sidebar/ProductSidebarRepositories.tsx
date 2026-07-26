@@ -102,13 +102,13 @@ export interface ProductSidebarWorkspaceRowProps extends Omit<HTMLAttributes<HTM
   shortcutRevealVisible?: boolean;
   hoverAction?: ReactNode;
   /**
-   * PR status rendered codex-style as a dot anchored on the idle git glyph
-   * (§3.3). Rendered only when present — omit when PR data is not available
+   * PR status rendered as a dot anchored on the idle git glyph
+   * Rendered only when present — omit when PR data is not available
    * for the row.
    */
   prStatus?: PrStatusView | null;
   /**
-   * Unseen-activity dot in the trailing cell (codex pattern, §3.4). Yields
+   * Unseen-activity dot in the trailing cell. Yields
    * to `trailingStatus` (live activity wins) and to hover actions.
    */
   unreadDot?: boolean;
