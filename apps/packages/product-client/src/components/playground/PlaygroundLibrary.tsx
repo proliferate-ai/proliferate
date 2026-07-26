@@ -1,7 +1,10 @@
 import { Link } from "react-router-dom";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Moon, Sun } from "@proliferate/ui/icons";
-import { LIBRARY_TIERS } from "#product/components/playground/library";
+// Explicit /index: the `#product/*` imports map rewrites to `./dist/*.js`,
+// so a bare directory specifier would resolve to `dist/.../library.js`
+// (nonexistent) instead of the barrel's `dist/.../library/index.js`.
+import { LIBRARY_TIERS } from "#product/components/playground/library/index";
 import { useColorMode } from "#product/hooks/theme/workflows/use-theme-preferences";
 
 /**
