@@ -1,8 +1,8 @@
 import {
-  Grid2x2,
+  LayoutGrid,
   LifeBuoy,
-  SquarePen,
-  Zap,
+  Pen,
+  Workflow,
 } from "lucide-react";
 import type { SidebarNavItemView } from "@proliferate/product-ui/sidebar/ProductSidebarModel";
 import { ProductSidebarPrimaryNavigation } from "@proliferate/product-ui/sidebar/ProductSidebarNavigation";
@@ -35,28 +35,31 @@ export function SidebarPrimaryNavigation({
   onGoWorkflows,
   onOpenSupport,
 }: SidebarPrimaryNavigationProps) {
-  // Reference-style nav glyphs read rounder and lighter than the boxy
-  // 2px-stroke defaults: a shared 1.75 stroke weight across the row (matching
-  // LifeBuoy's existing weight in ui/icons/core.tsx) and a single-frame grid
-  // glyph for Workspaces instead of four discrete tiles.
+  // Round-3: the boxy framed glyphs (a pencil boxed in a square, a single
+  // gridded square, an angular bolt) read heavier and squarer than the
+  // reference nav column, whose glyphs are all open, rounded strokes with no
+  // enclosing frame. Swapped for unframed equivalents at the same shared
+  // 1.75 stroke weight — a bare pencil for New chat, four independently
+  // rounded tiles for Workspaces, and two rounded connected nodes for
+  // Workflows instead of a hard-angled bolt.
   const navItems: SidebarNavItemView[] = [
     {
       id: "new-chat",
       active: homeActive,
-      icon: <SquarePen className="icon-paired" strokeWidth={1.75} />,
+      icon: <Pen className="icon-paired" strokeWidth={1.75} />,
       label: "New chat",
       shortcutLabel: shortcutLabels.newChat,
     },
     {
       id: "workspaces",
       active: workspacesActive,
-      icon: <Grid2x2 className="icon-paired" strokeWidth={1.75} />,
+      icon: <LayoutGrid className="icon-paired" strokeWidth={1.75} />,
       label: "Workspaces",
     },
     {
       id: "workflows",
       active: workflowsActive,
-      icon: <Zap className="icon-paired" strokeWidth={1.75} />,
+      icon: <Workflow className="icon-paired" strokeWidth={1.75} />,
       label: "Workflows",
       status: (
         <span className="font-mono text-ui-sm uppercase tracking-[0.06em] text-sidebar-muted-foreground">
