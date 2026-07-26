@@ -12,7 +12,6 @@ import type { AgentAuthSurface } from "@proliferate/cloud-sdk";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useAgentResourcesCache } from "#product/hooks/access/anyharness/agents/use-agent-resources-cache";
-import { cloudSandboxGatewayRuntimeUrl } from "#product/lib/access/cloud/cloud-sandbox-gateway";
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 
 export interface AgentLoginTerminalSession {
@@ -46,30 +45,50 @@ export function useAgentLoginTerminalWorkflow(surface: AgentAuthSurface) {
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const connectionState = useHarnessConnectionStore((state) => state.connectionState);
   const host = useProductHost();
-  const cloudClient = host.cloud.client;
   const isCloudSurface = surface === "cloud";
   const { invalidateAgentLaunchReadinessResources } = useAgentResourcesCache();
   const startLoginTerminal = useStartAgentLoginTerminalMutation();
   const closeLoginTerminal = useCloseAgentLoginTerminalMutation();
   const [sessionsByKind, setSessionsByKind] = useState<Record<string, AgentLoginTerminalSession>>({});
-  // Minted lazily in openAuthTerminal (cloud only) — never falls back to a
-  // stale value across sandboxes/users, since each open re-mints it.
+  // Minted in openAuthTerminal (cloud only) on every explicit open/restart —
+  // never persisted from a prior scope, so switching sandboxes or users can
+  // never reuse a stale token. It IS reused across a WS reconnect/replay
+  // within the SAME open session (the viewport's own retry path never calls
+  // openAuthTerminal again) — that's fine because it is the 7-day product
+  // JWT, not a short-lived per-connection credential; a genuinely expired
+  // token surfaces as a 401 the user clears by clicking "Restart auth".
   const [cloudAuthToken, setCloudAuthToken] = useState<string | undefined>(undefined);
 
-  const cloudBaseUrl = isCloudSurface && cloudClient
-    ? cloudSandboxGatewayRuntimeUrl(cloudClient)
-    : "";
-
+  // On cloud, the AnyHarness runtime context is ALREADY the sandbox gateway
+  // (CloudAnyHarnessRuntimeProvider wraps HarnessPane's cloud branch and sets
+  // context runtimeUrl = cloudSandboxGatewayRuntimeUrl(cloudClient)) — re-
+  // deriving it here would just recompute the same value from the same
+  // client. Local keeps the harness-connection-store fallback for the boot
+  // window where the context hasn't caught up to the store yet.
   const runtimeConnection = useMemo(() => ({
     baseUrl: isCloudSurface
-      ? cloudBaseUrl
+      ? (runtime.runtimeUrl?.trim() ?? "")
       : (runtime.runtimeUrl?.trim() || runtimeUrl.trim()),
     authToken: isCloudSurface ? cloudAuthToken : (runtime.authToken ?? undefined),
-  }), [cloudAuthToken, cloudBaseUrl, isCloudSurface, runtime.authToken, runtime.runtimeUrl, runtimeUrl]);
-  // Cloud has no local "connecting/failed" boot sequence to gate on — the
-  // surface is already behind CloudGuard (cloudActive) by the time this runs,
-  // so a resolved sandbox base URL is itself the readiness signal. Local keeps
-  // gating on the desktop runtime's own connection lifecycle.
+    // Cloud carries the 7-day product JWT and MUST ride the WS subprotocol,
+    // never the query string (matches every other cloud WS path — see
+    // cloud-sandbox-gateway.ts, use-terminal-stream-controller.ts). Local's
+    // short-lived local-runtime token has no such requirement.
+    webSocketAuthTransport: (isCloudSurface ? "protocol" : undefined) as
+      | "protocol"
+      | undefined,
+  }), [cloudAuthToken, isCloudSurface, runtime.authToken, runtime.runtimeUrl, runtimeUrl]);
+  // On cloud this is a coarse "is a client even configured" check, not a live
+  // sandbox-health signal — CloudAnyHarnessRuntimeProvider always resolves a
+  // base URL once cloudClient exists, whether or not the sandbox is actually
+  // reachable. That is a deliberate choice, not an oversight: cloud has no
+  // local "connecting/failed" boot sequence to gate on the way the desktop
+  // runtime does (see the `else` branch), and the real reachability check is
+  // the openAuthTerminal mutation itself — a dead/cold sandbox surfaces there
+  // as a caught error (errorMessage), not as a false "ready" that then hangs.
+  // This value only gates a fast client-side rejection before ever calling
+  // the mutation; it deliberately does NOT drive the periodic poll (see the
+  // effect below, which is local-only for the same reason).
   const runtimeReady = isCloudSurface
     ? runtimeConnection.baseUrl.trim().length > 0
     : connectionState === "healthy" && runtimeConnection.baseUrl.trim().length > 0;
@@ -222,7 +241,17 @@ export function useAgentLoginTerminalWorkflow(surface: AgentAuthSurface) {
   }, [refreshAgentReadiness]);
 
   useEffect(() => {
-    if (activeSessionCount === 0 || !runtimeReady) {
+    // Deliberately local-only. The poll's job is to catch the local desktop
+    // CLI writing its own credential file mid-login (no push notification
+    // exists for that). On cloud, `runtimeReady` is tautologically true the
+    // instant a client resolves a base URL — it carries no live "is the
+    // sandbox actually up" signal — so a timer here would be an unconditional
+    // 2.5s GET against ensure_cloud_sandbox_gateway_access for as long as the
+    // terminal stays open, which can provision/wake a cold sandbox purely to
+    // poll. The start mutation's own catch already surfaces a dead sandbox as
+    // errorMessage; close/exit still force one refresh (closeAuthTerminal /
+    // handleTerminalExit below) so readiness catches up once the user is done.
+    if (isCloudSurface || activeSessionCount === 0 || !runtimeReady) {
       return;
     }
 
@@ -237,6 +266,7 @@ export function useAgentLoginTerminalWorkflow(surface: AgentAuthSurface) {
     };
   }, [
     activeSessionCount,
+    isCloudSurface,
     refreshAgentReadiness,
     runtimeReady,
   ]);

@@ -28,6 +28,7 @@ interface HarnessPaneProps {
 const SETTINGS_HARNESS_DISPLAY_NAMES: Record<string, string> = {
   claude: "Claude Code",
   codex: "Codex",
+  cursor: "Cursor",
   grok: "Grok",
   opencode: "OpenCode",
 };

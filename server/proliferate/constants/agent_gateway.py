@@ -11,9 +11,19 @@ AGENT_AUTH_SURFACES = (AGENT_AUTH_SURFACE_LOCAL, AGENT_AUTH_SURFACE_CLOUD)
 # agent kinds; validating against it keeps unbounded/junk path params out of the
 # VARCHAR(64) column (an over-length value would otherwise surface as a 500).
 # cursor takes selection rows too — it has no gateway recipe (excluded from
-# selection_rules.GATEWAY_CAPABLE_HARNESSES), but its single api_key slot
+# AGENT_AUTH_GATEWAY_CAPABLE_HARNESS_KINDS below), but its single api_key slot
 # (CURSOR_API_KEY) is a normal selection like any other single-source harness.
 AGENT_AUTH_HARNESS_KINDS = ("claude", "codex", "opencode", "grok", "cursor")
+
+# Harnesses whose launch supports the gateway (virtual-key) recipe. Lives here
+# (not in server/cloud/agent_gateway/selection_rules.py) so the db/store layer
+# can consult it too without violating the store→server import boundary
+# (check_server_boundaries.py) — the store uses it to skip the disabled
+# gateway revision-marker row for a harness that can never carry one; the
+# validator uses it to reject a gateway source outright. cursor is absent: it
+# has no gateway recipe (agent-auth.md's per-harness recipe table — "typed
+# refusal, no gateway route exists for cursor").
+AGENT_AUTH_GATEWAY_CAPABLE_HARNESS_KINDS = ("claude", "codex", "opencode", "grok")
 
 # A selection row is either the gateway (virtual key) or a single direct
 # api_key (a raw provider key bound to an env var). There is no native

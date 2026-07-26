@@ -12,18 +12,21 @@ import re
 from collections.abc import Sequence
 
 from proliferate.constants.agent_gateway import (
+    AGENT_AUTH_GATEWAY_CAPABLE_HARNESS_KINDS,
     AGENT_AUTH_SOURCE_API_KEY,
     AGENT_AUTH_SOURCE_GATEWAY,
 )
 from proliferate.db.store.agent_gateway.records import DesiredAuthSource
 
-# Harnesses whose launch supports the gateway (virtual-key) recipe. Exactly the
-# gateway-capable cloud harness kinds; cursor is absent — it has no gateway
-# recipe (agent-auth.md's per-harness recipe table: "typed refusal, no gateway
-# route exists for cursor") and stays native-for-the-gateway per R13, but it
-# DOES take an api_key source (its CURSOR_API_KEY slot) same as any other
-# single-source harness — see SINGLE_SOURCE_HARNESSES below.
-GATEWAY_CAPABLE_HARNESSES = ("claude", "codex", "opencode", "grok")
+# Re-exported for existing importers; the canonical tuple lives in
+# constants/agent_gateway.py so db/store can consult it too without violating
+# the store→server import boundary (check_server_boundaries.py). cursor is
+# absent — it has no gateway recipe (agent-auth.md's per-harness recipe
+# table: "typed refusal, no gateway route exists for cursor") and stays
+# native-for-the-gateway per R13, but it DOES take an api_key source (its
+# CURSOR_API_KEY slot) same as any other single-source harness — see
+# SINGLE_SOURCE_HARNESSES below.
+GATEWAY_CAPABLE_HARNESSES = AGENT_AUTH_GATEWAY_CAPABLE_HARNESS_KINDS
 # Radio harnesses: at most one enabled source (gateway XOR one api_key row).
 # cursor's radio can only ever land on api_key (no gateway row is legal for
 # it — enforced below via GATEWAY_CAPABLE_HARNESSES), never a true XOR with

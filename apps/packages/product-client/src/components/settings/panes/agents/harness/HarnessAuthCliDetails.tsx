@@ -124,6 +124,7 @@ export function CliDetails({
             session={loginSession}
             baseUrl={loginWorkflow.runtimeConnection.baseUrl}
             authToken={loginWorkflow.runtimeConnection.authToken}
+            webSocketAuthTransport={loginWorkflow.runtimeConnection.webSocketAuthTransport}
             onClose={(kind) => {
               void loginWorkflow.closeAuthTerminal(kind);
             }}

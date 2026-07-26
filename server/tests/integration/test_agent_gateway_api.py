@@ -378,13 +378,12 @@ class TestAgentAuthSelections:
         assert response.json()["detail"]["code"] == "invalid_agent_auth_selection"
 
     @pytest.mark.asyncio
-    async def test_cursor_accepts_api_key_source(
-        self,
-        client: AsyncClient,
-        db_session: AsyncSession,
-    ) -> None:
+    async def test_cursor_accepts_api_key_source(self, client: AsyncClient) -> None:
         # Cursor DOES take an api_key selection end to end (its CURSOR_API_KEY
-        # slot) — only the gateway route is closed to it.
+        # slot) — only the gateway route is closed to it. And since cursor is
+        # not gateway-capable, the store must NOT inject the disabled gateway
+        # revision-marker row other harnesses get (m7 fix) — the response is
+        # exactly the one api_key row, nothing else.
         _, headers = await _authed_user(client)
         created = await _create_key(client, headers)
         response = await _put_selections(
@@ -402,9 +401,38 @@ class TestAgentAuthSelections:
             ],
         )
         assert response.status_code == 200, response.text
-        selection = next(row for row in response.json() if row["sourceKind"] == "api_key")
+        [selection] = response.json()
         assert selection["harnessKind"] == "cursor"
+        assert selection["sourceKind"] == "api_key"
         assert selection["envVarName"] == "CURSOR_API_KEY"
+        assert selection["enabled"] is True
+
+    @pytest.mark.asyncio
+    async def test_cursor_accepts_api_key_source_on_cloud_surface(
+        self, client: AsyncClient
+    ) -> None:
+        # Same acceptance, cloud surface — C1's headline change (cloud native
+        # login) rides the same selection model regardless of surface.
+        _, headers = await _authed_user(client)
+        created = await _create_key(client, headers)
+        response = await _put_selections(
+            client,
+            headers,
+            harness="cursor",
+            surface="cloud",
+            sources=[
+                {
+                    "sourceKind": "api_key",
+                    "apiKeyId": created["id"],
+                    "envVarName": "CURSOR_API_KEY",
+                    "enabled": True,
+                }
+            ],
+        )
+        assert response.status_code == 200, response.text
+        [selection] = response.json()
+        assert selection["harnessKind"] == "cursor"
+        assert selection["sourceKind"] == "api_key"
         assert selection["enabled"] is True
 
     @pytest.mark.asyncio
