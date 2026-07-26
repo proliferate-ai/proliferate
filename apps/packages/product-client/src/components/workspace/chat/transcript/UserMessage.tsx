@@ -98,7 +98,7 @@ export function UserMessage({
               />
             </div>
             {needsToggle && (
-              <div className="group/show-more mt-1 flex justify-start">
+              <div className="mt-1 flex justify-start">
                 <Button
                   type="button"
                   variant="ghost"
@@ -108,11 +108,17 @@ export function UserMessage({
                   className="h-auto gap-1 px-1 py-0 text-chat text-muted-foreground hover:bg-transparent hover:text-foreground"
                 >
                   {expanded ? "Show less" : "Show more"}
+                  {/*
+                   * Always rendered (not opacity/hover-gated) so the chevron
+                   * occupies stable space at all times — an opacity-only fade
+                   * still reserves the slot, but a hover-mounted element does
+                   * not, which is what made the label visibly shift right on
+                   * hover before. Only the rotate on expand/collapse and the
+                   * inherited hover color change; position never moves.
+                   */}
                   <ChevronDown
                     aria-hidden="true"
-                    className={`icon-paired opacity-0 transition-[opacity,transform] group-hover/show-more:opacity-100 ${
-                      expanded ? "rotate-180" : ""
-                    }`}
+                    className={`icon-paired shrink-0 transition-transform ${expanded ? "rotate-180" : ""}`}
                   />
                 </Button>
               </div>

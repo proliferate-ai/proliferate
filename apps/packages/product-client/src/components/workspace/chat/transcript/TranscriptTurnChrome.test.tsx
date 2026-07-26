@@ -59,8 +59,26 @@ describe("TurnAssistantActionRow", () => {
     const { container } = render(
       <TurnAssistantActionRow content="reply" showCopyButton alwaysVisible timestampLabel="5:02pm" />,
     );
-    expect(container.innerHTML).toContain("opacity-100");
-    expect(container.innerHTML).not.toContain("opacity-0 group-hover/turn");
+    // The copy button's own wrapper span is opacity-100 (persistently
+    // visible)...
+    const copyWrapper = container.querySelector("[data-turn-assistant-footer-slot] > span");
+    expect(copyWrapper?.className).toContain("opacity-100");
+    expect(copyWrapper?.className).not.toContain("opacity-0 group-hover/turn");
+  });
+
+  it("hover-gates the date even on the final message (alwaysVisible only covers the copy button)", () => {
+    const { container } = render(
+      <TurnAssistantActionRow content="reply" showCopyButton alwaysVisible timestampLabel="5:02pm" />,
+    );
+    // ...but the date next to it stays hover-only, same as every earlier
+    // message — alwaysVisible must not leak into the timestamp's visibility.
+    // (The outer copy-button wrapper span also has "5:02pm" as its
+    // textContent since it contains the date span, so pick the innermost
+    // match — the one with no further descendant spans.)
+    const timestamp = Array.from(container.querySelectorAll("span")).find(
+      (span) => span.textContent === "5:02pm" && span.querySelector("span") === null,
+    );
+    expect(timestamp?.className).toContain("opacity-0 group-hover/turn:opacity-100");
   });
 
   it("renders the goal-met marker between the copy button and the timestamp", () => {

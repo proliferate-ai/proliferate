@@ -83,6 +83,14 @@ export function TurnAssistantActionRow({
   const visibilityClassName = alwaysVisible
     ? "opacity-100"
     : "opacity-0 group-hover/turn:opacity-100 group-focus-within/turn:opacity-100";
+  // The date is hover-only on EVERY message, including the final one — only
+  // the copy button (and, on the final message, the goal-met marker) gets
+  // the alwaysVisible carve-out. This is deliberately independent of
+  // visibilityClassName above: on the final message the copy button is
+  // opacity-100 while the date next to it still needs
+  // opacity-0/group-hover:opacity-100.
+  const timestampVisibilityClassName =
+    "opacity-0 group-hover/turn:opacity-100 group-focus-within/turn:opacity-100";
 
   return (
     // The footer sits in the same TURN_ITEM_GAP_CLASS flex column as the
@@ -101,6 +109,7 @@ export function TurnAssistantActionRow({
             timestampLabel={metMarker ? null : timestampLabel}
             timestampPosition="after"
             visibilityClassName={visibilityClassName}
+            timestampVisibilityClassName={timestampVisibilityClassName}
           />
         )}
         {copyContent && metMarker && (
@@ -113,11 +122,7 @@ export function TurnAssistantActionRow({
               // persistently visible (alwaysVisible), but the date itself
               // stays reveal-on-hover so it doesn't sit as permanent chrome.
               <span
-                className={`text-chat-meta text-foreground-tertiary tabular-nums transition-opacity duration-hover ${
-                  alwaysVisible
-                    ? "opacity-0 group-hover/turn:opacity-100 group-focus-within/turn:opacity-100"
-                    : ""
-                }`}
+                className={`text-chat-meta text-foreground-tertiary tabular-nums transition-opacity duration-hover ${timestampVisibilityClassName}`}
               >
                 {timestampLabel}
               </span>

@@ -7,11 +7,19 @@ export function CopyMessageButton({
   timestampLabel = null,
   timestampPosition = "before",
   visibilityClassName,
+  // The copy button and the date are two independently-visible pieces: the
+  // final completed message keeps its copy button permanently visible
+  // (visibilityClassName can be opacity-100), but the date next to it must
+  // stay hover-only on every message, including that one. Defaulting to
+  // visibilityClassName preserves the old single-visibility behavior for any
+  // caller that doesn't opt into the split.
+  timestampVisibilityClassName = visibilityClassName,
 }: {
   content: string;
   timestampLabel?: string | null;
   timestampPosition?: "before" | "after";
   visibilityClassName: string;
+  timestampVisibilityClassName?: string;
 }) {
   const [copied, setCopied] = useState(false);
 
@@ -23,7 +31,13 @@ export function CopyMessageButton({
   };
 
   const timestamp = timestampLabel
-    ? <span className="tabular-nums">{timestampLabel}</span>
+    ? (
+      <span
+        className={`tabular-nums transition-opacity duration-hover ${timestampVisibilityClassName}`}
+      >
+        {timestampLabel}
+      </span>
+    )
     : null;
   const copyButton = (
     <IconButton
@@ -31,19 +45,24 @@ export function CopyMessageButton({
       size="xs"
       onClick={handleCopy}
       title={copied ? "Copied" : "Copy message"}
-      className="!size-icon-button-sm !p-0 rounded-full text-muted-foreground hover:text-foreground"
+      // Reference: the "Copy message" button is text-token-text-tertiary at
+      // rest (our --color-foreground-tertiary, the same dim tone the
+      // adjacent date already uses) — not the brighter muted-foreground.
+      className="!size-icon-button-sm !p-0 rounded-full !text-foreground-tertiary hover:!text-foreground"
     >
       {/*
-       * icon-control is 1.333em, which otherwise resolves against this
-       * button's ambient font-size — the surrounding row is text-chat-meta
-       * (11px), so an unset font-size here would size the glyph off the
-       * meta text rather than the 13px message body it's attached to. Pin
-       * the em base to --text-chat explicitly, same pattern used for the
-       * pending-interaction and goal-met glyphs elsewhere in the transcript.
+       * Reference: pages/thread's "Copy message" button renders a 16px glyph
+       * (icon-xs) against --codex-chat-font-size: 13px — a 1.230769em ratio,
+       * which is exactly --icon-paired (already used for every other small
+       * inline glyph in the transcript), not --icon-control (1.333333em,
+       * ~17px at this base — visibly larger than the reference). Pin the em
+       * base to --text-chat explicitly since this button sits in the
+       * text-chat-meta (11px) row, same pattern as the pending-interaction
+       * and goal-met glyphs elsewhere in the transcript.
        */}
       {copied
-        ? <Check className="icon-control [font-size:var(--text-chat)]" />
-        : <Copy className="icon-control [font-size:var(--text-chat)]" />}
+        ? <Check className="icon-paired [font-size:var(--text-chat)]" />
+        : <Copy className="icon-paired [font-size:var(--text-chat)]" />}
     </IconButton>
   );
 
