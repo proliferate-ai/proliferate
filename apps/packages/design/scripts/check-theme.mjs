@@ -183,12 +183,15 @@ for (const [currentName, finalName] of Object.entries(currentTokenDispositions))
   if (provenance.startsWith("[RETUNE:")) retuned += 1;
 }
 // `--color-composer-background` moved from [SHIPPED] to
-// [RETUNE:surface/composer-translucent], so one disposition crosses from the
-// shipped tally into the retuned one. The 285-name disposition census itself is
-// unchanged: the three transcript-measure/turn-rhythm additions are net-new
-// tokens, and this map is frozen to the names that existed BEFORE the retune.
-assert(shipped === 175, `expected 175 shipped dispositions, got ${shipped}`);
-assert(retuned === 40, `expected 40 retuned dispositions, got ${retuned}`);
+// [RETUNE:surface/composer-translucent], and `--color-sidebar` moved from
+// [SHIPPED] to [RETUNE:sidebar/reference-surface] (round-2 sidebar retune,
+// previously [RETUNE:sidebar/surface-recess]), so two dispositions cross
+// from the shipped tally into the retuned one. The 285-name disposition
+// census itself is unchanged: the three transcript-measure/turn-rhythm
+// additions are net-new tokens, and this map is frozen to the names that
+// existed BEFORE the retune.
+assert(shipped === 174, `expected 174 shipped dispositions, got ${shipped}`);
+assert(retuned === 41, `expected 41 retuned dispositions, got ${retuned}`);
 
 for (const [name, value] of tokenEntries) {
   assert(value.provenance.length > 0, `${name} is missing provenance`);

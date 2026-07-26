@@ -17,6 +17,7 @@ export interface WorkspaceUiState {
   hiddenRepoRootIds: string[];
   collapsedRepoGroups: string[];
   showArchived: boolean;
+  repositoriesCollapsed: boolean;
   threadsCollapsed: boolean;
   sidebarOpen: boolean;
   sidebarWidth: number;
@@ -52,6 +53,7 @@ export interface WorkspaceUiState {
   ensureRepoGroupExpanded: (repoKey: string) => void;
   setCollapsedRepoGroups: (keys: string[]) => void;
   setShowArchived: (value: boolean) => void;
+  setRepositoriesCollapsed: (value: boolean) => void;
   setThreadsCollapsed: (value: boolean) => void;
   setSidebarOpen: (value: SetStateAction<boolean>) => void;
   setSidebarWidth: (value: SetStateAction<number>) => void;

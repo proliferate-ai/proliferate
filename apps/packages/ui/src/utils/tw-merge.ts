@@ -40,7 +40,9 @@ export const TEXT_SIZE_TOKEN_IDS = [
 
 export const ICON_SIZE_TOKEN_IDS = [
   "status",
+  "tight",
   "compact",
+  "indicator",
   "paired",
   "control",
   "large",
