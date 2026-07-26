@@ -502,34 +502,49 @@ async def test_usage_import_cursor_roundtrip(db_session: AsyncSession) -> None:
 
 
 @pytest.mark.asyncio
-async def test_catalog_snapshot_and_override(db_session: AsyncSession) -> None:
+async def test_model_snapshot_and_override(db_session: AsyncSession) -> None:
     user_id = await _create_user(db_session)
-    await store.create_catalog_snapshot(
+    first = await store.create_model_snapshot(
         db_session,
         harness_kind="claude",
-        surface="cloud",
-        route="gateway",
-        owner_user_id=None,
-        models_json='["claude-sonnet-4-5"]',
-        source="seed",
+        auth_context_id="gateway",
+        owner_user_id=user_id,
+        snapshot_json='{"models": ["claude-sonnet-4-5"]}',
     )
-    newer = await store.create_catalog_snapshot(
+    newer = await store.create_model_snapshot(
         db_session,
         harness_kind="claude",
-        surface="cloud",
-        route="gateway",
-        owner_user_id=None,
-        models_json='["claude-sonnet-4-5", "claude-haiku-4-5"]',
+        auth_context_id="gateway",
+        owner_user_id=user_id,
+        snapshot_json='{"models": ["claude-sonnet-4-5", "claude-haiku-4-5"]}',
     )
-    latest = await store.get_latest_catalog_snapshot(
+    latest = await store.get_active_model_snapshot(
         db_session,
         harness_kind="claude",
-        surface="cloud",
-        route="gateway",
-        owner_user_id=None,
+        auth_context_id="gateway",
+        owner_user_id=user_id,
     )
     assert latest is not None
     assert latest.id == newer.id
+    assert latest.id != first.id
+
+    # Another context for the same harness is a separate scope, not a rewrite.
+    other_context = await store.create_model_snapshot(
+        db_session,
+        harness_kind="claude",
+        auth_context_id="anthropic-api",
+        owner_user_id=user_id,
+        snapshot_json='{"models": ["claude-opus-4-6"]}',
+    )
+    still_gateway = await store.get_active_model_snapshot(
+        db_session,
+        harness_kind="claude",
+        auth_context_id="gateway",
+        owner_user_id=user_id,
+    )
+    assert still_gateway is not None
+    assert still_gateway.id == newer.id
+    assert other_context.id != newer.id
 
     override = await store.upsert_catalog_override(
         db_session,

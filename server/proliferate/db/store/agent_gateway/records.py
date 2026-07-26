@@ -85,15 +85,13 @@ class AgentGatewayEnrollmentKeyRecord:
 
 
 @dataclass(frozen=True)
-class AgentCatalogSnapshotRecord:
+class AgentModelSnapshotRecord:
     id: UUID
     harness_kind: str
-    surface: str
-    route: str
-    owner_user_id: UUID | None
-    models_json: str
+    auth_context_id: str
+    owner_user_id: UUID
+    snapshot_json: str
     probed_at: datetime
-    source: str
     status: str
 
 

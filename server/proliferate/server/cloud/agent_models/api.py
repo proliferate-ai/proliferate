@@ -1,0 +1,139 @@
+"""HTTP routes for cloud model snapshots: layered read, ingest, overrides.
+
+Named off both "gateway" (these serve every auth context, not one route) and
+"catalog" (that word belongs to the shipped-catalog document), per
+model-catalog.md §Cloud routes.
+
+Two routers because two identities call them: ``router`` is the signed-in user's
+read/override surface; ``worker_router`` is the single ingest path, authenticated
+by the Worker's own bearer with the owner derived from its sandbox row.
+"""
+
+from __future__ import annotations
+
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from proliferate.auth.dependencies import current_product_user
+from proliferate.db.engine import get_async_session
+from proliferate.db.models.auth import User
+from proliferate.server.cloud.agent_models import overrides as overrides_service
+from proliferate.server.cloud.agent_models import snapshots as snapshots_service
+from proliferate.server.cloud.agent_models.models import (
+    AgentModelOverrideResponse,
+    AgentModelOverrideUpsertRequest,
+    AgentModelSnapshotIngestRequest,
+    AgentModelsResponse,
+    models_payload,
+    override_payload,
+)
+from proliferate.server.cloud.errors import CloudApiError, raise_cloud_error
+from proliferate.server.cloud.runtime_workers.auth import (
+    WorkerAuthContext,
+    authenticate_worker,
+)
+
+router = APIRouter(prefix="/agent-models", tags=["cloud-agent-models"])
+worker_router = APIRouter(prefix="/agent-models", tags=["cloud-agent-models"])
+
+
+@router.get("/{harness_kind}", response_model=AgentModelsResponse)
+async def get_agent_models_endpoint(
+    harness_kind: str,
+    auth_context_id: str = Query(..., alias="authContextId"),
+    db: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_product_user),
+) -> AgentModelsResponse:
+    """The layered read: own snapshot, else the shipped catalog's models as the
+    read-time seed, with the override patch applied.
+
+    No ``surface`` param: the cloud store holds cloud-sandbox observations only.
+    """
+    try:
+        layered = await snapshots_service.get_models(
+            db,
+            user_id=user.id,
+            harness_kind=harness_kind,
+            auth_context_id=auth_context_id,
+        )
+    except CloudApiError as error:
+        raise_cloud_error(error)
+    return models_payload(
+        harness_kind=harness_kind,
+        auth_context_id=auth_context_id,
+        layered=layered,
+    )
+
+
+@worker_router.post("/{harness_kind}/refresh", response_model=AgentModelsResponse)
+async def ingest_agent_model_snapshot_endpoint(
+    harness_kind: str,
+    body: AgentModelSnapshotIngestRequest,
+    auth: WorkerAuthContext = Depends(authenticate_worker),
+    db: AsyncSession = Depends(get_async_session),
+) -> AgentModelsResponse:
+    """The single ingest route: a Worker-uploaded machine-snapshot entry.
+
+    Absorbs the former ``refresh``-with-payload and ``mirror`` endpoints, which
+    were two names for the same write, and the server-side gateway discovery
+    that used to live inside ``refresh`` — the server never generates snapshots.
+
+    The owner is resolved from the Worker's sandbox row, so the body carries no
+    user identity to spoof.
+    """
+    try:
+        owner_user_id = await snapshots_service.resolve_upload_owner(
+            db,
+            runtime_kind=auth.runtime_kind,
+            cloud_sandbox_id=auth.cloud_sandbox_id,
+        )
+        layered = await snapshots_service.ingest_snapshot(
+            db,
+            owner_user_id=owner_user_id,
+            harness_kind=harness_kind,
+            auth_context_id=body.auth_context_id,
+            snapshot_json=body.snapshot_json,
+            probed_at=body.probed_at,
+        )
+    except CloudApiError as error:
+        raise_cloud_error(error)
+    return models_payload(
+        harness_kind=harness_kind,
+        auth_context_id=body.auth_context_id,
+        layered=layered,
+    )
+
+
+@router.put("/{harness_kind}/override", response_model=AgentModelOverrideResponse)
+async def upsert_agent_model_override_endpoint(
+    harness_kind: str,
+    body: AgentModelOverrideUpsertRequest,
+    db: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_product_user),
+) -> AgentModelOverrideResponse:
+    try:
+        record = await overrides_service.upsert_override(
+            db,
+            user_id=user.id,
+            harness_kind=harness_kind,
+            patch_json=body.patch_json,
+        )
+    except CloudApiError as error:
+        raise_cloud_error(error)
+    return override_payload(record)
+
+
+@router.delete("/{harness_kind}/override", status_code=204)
+async def delete_agent_model_override_endpoint(
+    harness_kind: str,
+    db: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_product_user),
+) -> None:
+    try:
+        await overrides_service.delete_override(
+            db,
+            user_id=user.id,
+            harness_kind=harness_kind,
+        )
+    except CloudApiError as error:
+        raise_cloud_error(error)

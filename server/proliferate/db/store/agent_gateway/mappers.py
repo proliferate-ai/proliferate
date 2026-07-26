@@ -6,10 +6,10 @@ from proliferate.db.models.cloud.agent_gateway import (
     AgentApiKey,
     AgentAuthSelection,
     AgentCatalogOverride,
-    AgentCatalogSnapshot,
     AgentGatewayEnrollment,
     AgentGatewayEnrollmentKey,
     AgentLlmUsageImportCursor,
+    AgentModelSnapshot,
     LlmCreditGrant,
     OrgAgentPolicy,
 )
@@ -17,10 +17,10 @@ from proliferate.db.store.agent_gateway.records import (
     AgentApiKeyRecord,
     AgentAuthSelectionRecord,
     AgentCatalogOverrideRecord,
-    AgentCatalogSnapshotRecord,
     AgentGatewayEnrollmentKeyRecord,
     AgentGatewayEnrollmentRecord,
     AgentLlmUsageImportCursorRecord,
+    AgentModelSnapshotRecord,
     LlmCreditGrantRecord,
     OrgAgentPolicyRecord,
 )
@@ -88,16 +88,14 @@ def enrollment_key_record(row: AgentGatewayEnrollmentKey) -> AgentGatewayEnrollm
     )
 
 
-def catalog_snapshot_record(row: AgentCatalogSnapshot) -> AgentCatalogSnapshotRecord:
-    return AgentCatalogSnapshotRecord(
+def model_snapshot_record(row: AgentModelSnapshot) -> AgentModelSnapshotRecord:
+    return AgentModelSnapshotRecord(
         id=row.id,
         harness_kind=row.harness_kind,
-        surface=row.surface,
-        route=row.route,
+        auth_context_id=row.auth_context_id,
         owner_user_id=row.owner_user_id,
-        models_json=row.models_json,
+        snapshot_json=row.snapshot_json,
         probed_at=row.probed_at,
-        source=row.source,
         status=row.status,
     )
 

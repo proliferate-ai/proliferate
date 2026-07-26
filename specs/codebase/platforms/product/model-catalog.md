@@ -665,25 +665,11 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       checks the
       shipped catalog's model list only; probed capability never enters
       the universe.
-- [ ] The cloud snapshot exists (`agent_catalog_snapshot` in
-      [db/models/cloud/agent_gateway.py](../../../../server/proliferate/db/models/cloud/agent_gateway.py))
-      but is keyed by
-      coarse route (`native`/`api_key`/`gateway`) instead of auth context,
-      stores a models-only payload, carries ownerless seed rows and a
-      `source` column (both leave: seed becomes a read-time fallback to
-      the served shipped catalog), and is read only by the settings "All
-      Models" tab. Composer, web, mobile, automations, and workflows all
-      read the shipped catalog instead. The re-key (route →
-      `auth_context_id`, `models_json` → `snapshot_json`, table rename)
-      is one migration; the soft-versioning write pattern is kept.
-- [ ] The server has three catalog write paths (`refresh` with optional
-      payload, `mirror` with `source="runtime-mirror"`, and overrides —
-      all in
-      [agent_gateway/api.py](../../../../server/proliferate/server/cloud/agent_gateway/api.py));
-      the first two collapse into the single ingest route, and the
-      server-side gateway discovery inside `refresh` (enrollment lookup,
-      virtual-key decrypt, `GET /v1/models`) deletes — the server never
-      generates snapshots.
+- [ ] The cloud snapshot is read only by the settings "All Models" tab.
+      Composer, web, mobile, automations, and workflows all read the shipped
+      catalog instead. (The store itself is re-keyed: `agent_model_snapshot`
+      in
+      [db/models/cloud/agent_gateway.py](../../../../server/proliferate/db/models/cloud/agent_gateway.py).)
 - [ ] The gateway model plan chain —
       [gateway_resolver.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/gateway_resolver.rs),
       [gateway_probe.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/gateway_probe.rs)
