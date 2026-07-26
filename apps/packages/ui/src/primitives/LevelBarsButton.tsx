@@ -1,5 +1,5 @@
 import { forwardRef, type ButtonHTMLAttributes, type MouseEvent, type ReactNode } from "react";
-import { ComposerControlButton } from "./ComposerControlButton";
+import { ComposerControlButton } from "../patterns/ComposerControlButton";
 
 interface Level {
   value: string;

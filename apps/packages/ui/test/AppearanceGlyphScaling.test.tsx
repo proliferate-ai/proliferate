@@ -9,9 +9,9 @@ import {
   InlinePathMentionIcon,
 } from "../src/icons/workspace";
 import { SegmentedControl } from "../src/primitives/SegmentedControl";
-import { ProviderIcon } from "../src/provider-icons";
+import { ProviderIcon } from "../src/icons/provider-icons";
 import { twMerge } from "../src/utils/tw-merge";
-import { SidebarActionButton } from "../src/layout/SidebarActionButton";
+import { SidebarActionButton } from "../src/patterns/SidebarActionButton";
 
 afterEach(cleanup);
 

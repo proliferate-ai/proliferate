@@ -2,10 +2,10 @@ import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { Check, ChevronDown } from "../icons/core";
 import { matchesPickerSearch } from "../utils/search";
-import { Button } from "./Button";
+import { Button } from "../primitives/Button";
 import { PickerEmptyRow, PickerPopoverContent } from "./PickerPopoverContent";
-import { POPOVER_SURFACE_CLASS, PopoverButton } from "./PopoverButton";
-import { PopoverMenuItem } from "./PopoverMenuItem";
+import { POPOVER_SURFACE_CLASS, PopoverButton } from "../primitives/PopoverButton";
+import { PopoverMenuItem } from "../primitives/PopoverMenuItem";
 
 export interface EnvironmentSearchSelectOption {
   id: string;

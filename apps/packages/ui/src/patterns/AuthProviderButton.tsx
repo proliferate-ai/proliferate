@@ -1,6 +1,6 @@
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { twMerge } from "../utils/tw-merge";
-import { Spinner } from "./Spinner";
+import { Spinner } from "../primitives/Spinner";
 
 interface AuthProviderButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   icon?: ReactNode;

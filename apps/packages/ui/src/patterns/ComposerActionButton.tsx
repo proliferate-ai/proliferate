@@ -1,6 +1,6 @@
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { twMerge } from "../utils/tw-merge";
-import { Button } from "./Button";
+import { Button } from "../primitives/Button";
 
 interface ComposerActionButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   children?: ReactNode;
