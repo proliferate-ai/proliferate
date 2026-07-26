@@ -33,11 +33,7 @@ async def resolve_git_identity(db: AsyncSession, user_id: UUID) -> GitIdentity:
     # A separately persisted GitHub account email can slot ahead of User.email here.
     email_sources = (user.email,)
     email = next(
-        (
-            candidate.strip()
-            for candidate in email_sources
-            if candidate and candidate.strip()
-        ),
+        (candidate.strip() for candidate in email_sources if candidate and candidate.strip()),
         None,
     )
     if email is None:
