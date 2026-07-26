@@ -152,6 +152,17 @@ class TestBuildAgentAuthStateSyncedGateway:
             enrollment_id=enrollment.id,
             litellm_team_id="team-1",
             litellm_user_id=f"user-{user_id}",
+            virtual_key_id=None,
+            virtual_key=None,
+            sync_fingerprint="fp-1",
+        )
+        # Post-B2/B3: the renderer resolves the harness's own per-harness
+        # child key (model-gateway.md §Account model), not a key on the
+        # parent enrollment row.
+        await agent_gateway_store.upsert_enrollment_key(
+            db_session,
+            enrollment_id=enrollment.id,
+            harness_kind="claude",
             virtual_key_id="tok-1",
             virtual_key="sk-litellm-vk",
             sync_fingerprint="fp-1",

@@ -276,13 +276,6 @@ Deltas between this document and `main`, each struck by its follow-up PR:
 - [ ] Harness-to-model filtering is client-side (the Rust
       `provider_for_model` prefix-matcher and catalog
       `gatewayPolicy.providers`); both delete once proxy-side grants land.
-- [ ] `state.json`'s gateway payload carries one key, not a per-harness key
-      map (contract change owned by agent-auth).
 - [ ] `/v1/cloud/agent-gateway/` still carries the BYOK vault, selections,
       state, org policy, and catalog routes; `api.py`/`service.py`/
       `models.py` split along the same three-domain line.
-- [ ] Sessions for org members hand out the personal enrollment's key (the
-      state renderer and budget gate both resolve the personal
-      enrollment), so org members' gateway spend lands on their personal
-      subject today; org enrollment rows exist but are not what sessions
-      use.

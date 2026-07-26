@@ -50,15 +50,36 @@ def _inputs(
     api_key_values: dict[uuid.UUID, str] | None = None,
     enrollment_sync_status: str | None = "synced",
     gateway_virtual_key: str | None = "sk-litellm-vk",
+    gateway_virtual_keys: dict[str, str] | None = None,
     gateway_base_url: str | None = "https://llm.proliferate.ai",
 ) -> agent_auth.AgentAuthStateInputs:
+    """Build ``AgentAuthStateInputs``.
+
+    ``gateway_virtual_key`` (singular) is the convenience default: every
+    gateway-selection harness present in ``selections`` gets that same key
+    value (or none, when ``None``) — the per-harness key map
+    (model-gateway.md §Account model, R2) collapses to "one key" in tests
+    that don't care about per-harness distinctness. Pass
+    ``gateway_virtual_keys`` directly for tests that need distinct
+    per-harness values.
+    """
+    if gateway_virtual_keys is None:
+        gateway_virtual_keys = (
+            {
+                selection.harness_kind: gateway_virtual_key
+                for selection in selections
+                if selection.source_kind == "gateway"
+            }
+            if gateway_virtual_key is not None
+            else {}
+        )
     return agent_auth.AgentAuthStateInputs(
         user_id=USER_ID,
         revision=revision,
         selections=selections,
         api_key_values=api_key_values or {},
         enrollment_sync_status=enrollment_sync_status,
-        gateway_virtual_key=gateway_virtual_key,
+        gateway_virtual_keys=gateway_virtual_keys,
         gateway_base_url=gateway_base_url,
         harness_settings={},
     )

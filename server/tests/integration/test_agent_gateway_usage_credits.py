@@ -469,15 +469,13 @@ async def test_exhausted_budget_withholds_gateway_key_from_state_render(
         sources=[DesiredAuthSource(source_kind="gateway")],
     )
 
-    # KNOWN INTERIM GAP (closed by B3, next in this stack): the renderer
-    # still resolves the parent enrollment's own key
-    # (`get_enrollment_virtual_key_decrypted(enrollment_id=...)`), which B2
-    # intentionally clears to `None` now that keys live on the child table —
-    # so with credit remaining the gateway source is (incorrectly, until B3)
-    # dropped rather than rendered. B3's per-harness key-map renderer fixes
-    # this; asserted honestly here rather than papered over.
+    # With credit remaining, the render hands out the claude harness's own
+    # per-harness gateway key (model-gateway.md §Account model). `claude_key_id`
+    # is the token hash (spend-log `api_key`), not the rendered secret value —
+    # only presence is asserted here.
     state, _ = await build_agent_auth_state(db_session, user_id, surface="local")
-    assert state["harnesses"] == []
+    sources = [s for h in state["harnesses"] for s in h["sources"]]
+    assert any(s["kind"] == "gateway" and s.get("key") for s in sources)
 
     # Drain the grant; simulate the first wall failing by NOT relying on the
     # key-disable — the render alone must now withhold the key regardless.
@@ -572,10 +570,6 @@ async def test_available_budget_leaves_state_render_and_no_grant_unblocked(
         sources=[DesiredAuthSource(source_kind="gateway")],
     )
     assert await is_gateway_budget_available(db_session, user_id) is True
-    # KNOWN INTERIM GAP (closed by B3, next in this stack): see the sibling
-    # withhold test above — the renderer still resolves the parent
-    # enrollment's own (now-cleared) key until B3's per-harness key-map
-    # renderer lands, so the gateway source renders unsatisfiable here even
-    # though the budget gate itself correctly reports available.
     state, _ = await build_agent_auth_state(db_session, user_id, surface="local")
-    assert state["harnesses"] == []
+    sources = [s for h in state["harnesses"] for s in h["sources"]]
+    assert any(s["kind"] == "gateway" and s.get("key") for s in sources)

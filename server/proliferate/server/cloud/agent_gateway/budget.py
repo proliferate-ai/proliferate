@@ -23,6 +23,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
 from proliferate.db.store import agent_gateway as agent_gateway_store
+from proliferate.db.store.agent_gateway import AgentGatewayEnrollmentRecord
+from proliferate.db.store.billing_runtime_usage import resolve_organization_id_for_user
 
 _ZERO = Decimal("0")
 
@@ -33,6 +35,31 @@ _ZERO = Decimal("0")
 AGENT_GATEWAY_CREDITS_EXHAUSTED_CODE = "agent_gateway_credits_exhausted"
 
 
+async def get_gateway_enrollment_for_user(
+    db: AsyncSession,
+    user_id: UUID,
+) -> AgentGatewayEnrollmentRecord | None:
+    """The enrollment that governs a user's gateway sessions.
+
+    An org member (current membership, same resolution
+    ``resolve_billing_subject_id_for_user`` and ``ensure_org_enrollment`` use)
+    is governed by their **org** enrollment, not their personal one — closing
+    the model-gateway.md org-member gap where sessions previously always
+    resolved the personal enrollment regardless of org membership. An
+    org-less user keeps resolving their personal enrollment.
+    """
+    organization_id = await resolve_organization_id_for_user(db, user_id)
+    if organization_id is not None:
+        org_enrollment = await agent_gateway_store.get_enrollment_for_organization(
+            db,
+            organization_id=organization_id,
+            user_id=user_id,
+        )
+        if org_enrollment is not None:
+            return org_enrollment
+    return await agent_gateway_store.get_enrollment_for_user(db, user_id=user_id)
+
+
 async def is_gateway_budget_available(db: AsyncSession, user_id: UUID) -> bool:
     """Whether a user may launch a gateway-route session.
 
@@ -40,12 +67,13 @@ async def is_gateway_budget_available(db: AsyncSession, user_id: UUID) -> bool:
     or the user has no credit grant (default-budget subjects are never blocked
     on the ledger), or their remaining LLM credit is above zero. False only when
     a granted subject has spent its credit. Checks the same enrollment the state
-    renderer hands out key material for (the user's personal enrollment), so the
-    gate and the key it guards always agree on the paying subject.
+    renderer hands out key material for (the org enrollment for an org member,
+    else the personal one), so the gate and the keys it guards always agree on
+    the paying subject.
     """
     if not settings.agent_gateway_enabled:
         return True
-    enrollment = await agent_gateway_store.get_enrollment_for_user(db, user_id=user_id)
+    enrollment = await get_gateway_enrollment_for_user(db, user_id)
     if enrollment is None:
         return True
     balance = await agent_gateway_store.get_remaining_credit_usd(

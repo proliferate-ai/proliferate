@@ -522,14 +522,6 @@ anyharness/
 
 Deltas between this document and `main`, each struck by its follow-up PR:
 
-- [ ] **One shared gateway key, not per-harness scoped keys.** The state
-      renderer resolves a single enrollment virtual key and fans it out
-      to every gateway-selected harness
-      ([materialize/agent_auth.py](../../../../server/proliferate/server/cloud/materialization/materialize/agent_auth.py));
-      per-(subject, harness) access-group-scoped keys are the
-      model-gateway migration (its gaps list carries the enrollment and
-      `config.yaml` sides; this document owns the renderer's key lookup
-      and the harness-side deletion of client model filtering).
 - [ ] **Unsatisfiable sources silently degrade to native.** The renderer
       drops a dead source and omits an empty harness entry, and the
       runtime reads absence as native — so a desktop user with a native
@@ -583,9 +575,6 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       selections, but readiness still reports the structural
       `provider_managed` `Ready`; the selection set should be opencode's
       truth everywhere (composer launch options included).
-- [ ] **Org members launch on their personal key.** Cross-referenced from
-      model-gateway.md's gaps: the renderer and budget gate resolve the
-      personal enrollment even for org members.
 - [ ] **Stale IA references.** The settings information-architecture doc
       still describes the removed Bifrost-era `agent-authentication`
       pane (the shipped UI redirects it to `agent-api-keys`); its Agents

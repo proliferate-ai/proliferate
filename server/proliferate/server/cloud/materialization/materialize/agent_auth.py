@@ -80,7 +80,10 @@ from proliferate.constants.agent_gateway import (
 from proliferate.db.store import agent_gateway as agent_gateway_store
 from proliferate.db.store import cloud_sandboxes as cloud_sandboxes_store
 from proliferate.db.store.agent_gateway import AgentAuthSelectionRecord
-from proliferate.server.cloud.agent_gateway.budget import is_gateway_budget_available
+from proliferate.server.cloud.agent_gateway.budget import (
+    get_gateway_enrollment_for_user,
+    is_gateway_budget_available,
+)
 from proliferate.server.cloud.cloud_sandboxes import transactions as cloud_sandbox_transactions
 from proliferate.server.cloud.materialization import operation, paths, sandbox_io
 
@@ -96,6 +99,12 @@ class AgentAuthStateInputs:
     row still advances it. ``api_key_values`` maps an ``api_key_id`` to its
     decrypted secret; a revoked or vanished key is simply absent (its source is
     then dropped).
+
+    ``gateway_virtual_keys`` is a per-harness map (model-gateway.md §Account
+    model, R2): each gateway-capable harness gets its own access-group-scoped
+    key, so there is no longer one shared virtual key for a whole scope. A
+    harness absent from the map (or whose enrollment isn't synced) has an
+    unsatisfiable gateway source.
     """
 
     user_id: UUID
@@ -103,7 +112,7 @@ class AgentAuthStateInputs:
     selections: tuple[AgentAuthSelectionRecord, ...]
     api_key_values: Mapping[UUID, str]
     enrollment_sync_status: str | None
-    gateway_virtual_key: str | None
+    gateway_virtual_keys: Mapping[str, str]  # keyed by harness_kind
     gateway_base_url: str | None
     harness_settings: Mapping[str, dict[str, object]]  # keyed by harness_kind
 
@@ -172,9 +181,12 @@ def _render_gateway_source(
 ) -> dict[str, object] | None:
     """Render a gateway source, or ``None`` if it cannot be satisfied.
 
-    An unsatisfiable gateway source is dropped rather than raised so the rest of
-    the state — including the removal of any now-revoked ``api_key`` material —
-    is still written; enrollment reaching ``synced`` re-triggers materialization.
+    Resolves the harness's own access-group-scoped key from the per-harness
+    map (model-gateway.md §Account model, R2) — never a single shared key.
+    An unsatisfiable gateway source is dropped rather than raised so the rest
+    of the state — including the removal of any now-revoked ``api_key``
+    material — is still written; enrollment reaching ``synced`` re-triggers
+    materialization.
     """
     if not inputs.gateway_base_url:
         # L7 (contract): a configured gateway selection that cannot be delivered
@@ -187,19 +199,20 @@ def _render_gateway_source(
         )
         return None
     synced = inputs.enrollment_sync_status == AGENT_GATEWAY_SYNC_STATUS_SYNCED
-    if not synced or not inputs.gateway_virtual_key:
+    virtual_key = inputs.gateway_virtual_keys.get(selection.harness_kind)
+    if not synced or not virtual_key:
         logger.warning(
             "Skipping unsatisfiable gateway agent-auth source harness=%s "
             "(enrollment status=%s, virtual key present=%s)",
             selection.harness_kind,
             inputs.enrollment_sync_status or "none",
-            inputs.gateway_virtual_key is not None,
+            virtual_key is not None,
         )
         return None
     return {
         "kind": AGENT_AUTH_SOURCE_GATEWAY,
         "base_url": inputs.gateway_base_url,
-        "key": inputs.gateway_virtual_key,
+        "key": virtual_key,
     }
 
 
@@ -265,31 +278,47 @@ async def _load_state_inputs(
             api_key_values[selection.api_key_id] = value
 
     enrollment_sync_status: str | None = None
-    gateway_virtual_key: str | None = None
-    needs_gateway = any(
-        selection.source_kind == AGENT_AUTH_SOURCE_GATEWAY for selection in enabled
-    )
-    if needs_gateway:
-        enrollment = await agent_gateway_store.get_enrollment_for_user(db, user_id=user_id)
+    gateway_virtual_keys: dict[str, str] = {}
+    gateway_harness_kinds = {
+        selection.harness_kind
+        for selection in enabled
+        if selection.source_kind == AGENT_AUTH_SOURCE_GATEWAY
+    }
+    if gateway_harness_kinds:
+        # Org-member gap fix (model-gateway.md): an org member's gateway
+        # sessions are governed by their ORG enrollment, not their personal
+        # one — same resolution `is_gateway_budget_available` uses below, so
+        # the gate and the keys it guards always agree on the paying subject.
+        enrollment = await get_gateway_enrollment_for_user(db, user_id)
         if enrollment is not None:
             enrollment_sync_status = enrollment.sync_status
             if enrollment.sync_status == AGENT_GATEWAY_SYNC_STATUS_SYNCED:
                 # Second enforcement wall for LLM-credit exhaustion (the first
-                # is the importer disabling the LiteLLM virtual key): an
-                # exhausted subject stops being handed the key at all, so a
+                # is the importer disabling the LiteLLM virtual keys): an
+                # exhausted subject stops being handed any key at all, so a
                 # lagging or failed key-disable cannot leak gateway access.
                 # The gateway source then renders unsatisfiable and is dropped;
                 # the runtime fails closed at launch.
                 if await is_gateway_budget_available(db, user_id):
-                    gateway_virtual_key = (
-                        await agent_gateway_store.get_enrollment_virtual_key_decrypted(
+                    for harness_kind in gateway_harness_kinds:
+                        enrollment_key = await agent_gateway_store.get_active_enrollment_key(
                             db,
                             enrollment_id=enrollment.id,
+                            harness_kind=harness_kind,
                         )
-                    )
+                        if enrollment_key is None:
+                            continue
+                        decrypted_key = (
+                            await agent_gateway_store.get_enrollment_key_virtual_key_decrypted(
+                                db,
+                                enrollment_key_id=enrollment_key.id,
+                            )
+                        )
+                        if decrypted_key is not None:
+                            gateway_virtual_keys[harness_kind] = decrypted_key
                 else:
                     logger.warning(
-                        "Withholding gateway virtual key: LLM credit exhausted "
+                        "Withholding gateway virtual keys: LLM credit exhausted "
                         "(user=%s, surface=%s)",
                         user_id,
                         surface,
@@ -307,7 +336,7 @@ async def _load_state_inputs(
         selections=enabled,
         api_key_values=api_key_values,
         enrollment_sync_status=enrollment_sync_status,
-        gateway_virtual_key=gateway_virtual_key,
+        gateway_virtual_keys=gateway_virtual_keys,
         gateway_base_url=settings.agent_gateway_litellm_public_base_url or None,
         harness_settings=harness_settings,
     )
