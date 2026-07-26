@@ -518,7 +518,7 @@ Do **not** grow the scroll cap past `max-h-40` — the Codex reference is exactl
 Control-row tone rule — the pills are **monochrome**:
 
 - Every control pill is a `ComposerControlButton`
-  (`apps/packages/ui/src/primitives/ComposerControlButton.tsx`). It has no
+  (`apps/packages/ui/src/patterns/ComposerControlButton.tsx`). It has no
   `tone` prop; the tone system was deleted 2026-07-02 along with the plan-mode
   tint (`--color-plan-border` is gone). Do **not** reintroduce mode-based
   tinting on the mode pill or any other control.

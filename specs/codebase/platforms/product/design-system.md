@@ -42,7 +42,7 @@ apps/packages/design/
 ├── scripts/copy-dom-css.mjs      copies every src/css/*.css (dom/product/desktop) into dist/css
 └── scripts/check-theme.mjs       re-projects independently, asserts byte equality + Tailwind compile() + dom.css import order
 
-apps/packages/ui/src/layout/RowActionIconButton.tsx   sanctioned row-action primitive (size-7 box, icon-control glyph)
+apps/packages/ui/src/primitives/RowActionIconButton.tsx   sanctioned row-action primitive (size-7 box, icon-control glyph)
 
 scripts/check_appearance_scaling.py   the class-level gate (arbitrary radius/z/gap/size and text/leading brackets, stock+keystone shadow, foreground-alpha, raw hex, backdrop-filter, numeric-duration and long-list bans)
 scripts/git-hooks/pre-commit          staged-file gate; documents the load-bearing build order
@@ -244,7 +244,7 @@ catches only `size-[…]` brackets) and `IconButton.tsx`, `PaneIconButton.tsx`,
 `size-5`/`size-6`/`h-7 w-7`. See Current gaps.
 New sanctioned primitive: row-action icon-button (hover-revealed row controls —
 sidebar kebab, archive, tab close, file-row actions), shipped as
-[RowActionIconButton.tsx](../../../../apps/packages/ui/src/layout/RowActionIconButton.tsx):
+[RowActionIconButton.tsx](../../../../apps/packages/ui/src/primitives/RowActionIconButton.tsx):
 a `size-7` box with `[&_svg]:icon-control` glyph, translucent hover per Codex,
 group-hover reveal per Conductor.
 
@@ -320,9 +320,9 @@ claim in the code.
       catches only `size-[…]` brackets), and raw boxes remain legal and live in
       [IconButton.tsx](../../../../apps/packages/ui/src/primitives/IconButton.tsx)
       (lines 28-29, `size-5`/`size-6`),
-      [PaneIconButton.tsx](../../../../apps/packages/ui/src/layout/PaneIconButton.tsx)
+      [PaneIconButton.tsx](../../../../apps/packages/ui/src/primitives/PaneIconButton.tsx)
       (line 6, `size-6`),
-      [SidebarActionButton.tsx](../../../../apps/packages/ui/src/layout/SidebarActionButton.tsx)
+      [SidebarActionButton.tsx](../../../../apps/packages/ui/src/patterns/SidebarActionButton.tsx)
       (line 47, `size-6`) and
       [Button.tsx](../../../../apps/packages/ui/src/primitives/Button.tsx)
       (line 52, `icon-sm` = `h-7 w-7`). Closing it means either a gate rule or
