@@ -1,7 +1,7 @@
 import {
   LayoutGrid,
   LifeBuoy,
-  Pen,
+  SquarePen,
   Workflow,
 } from "lucide-react";
 import type { SidebarNavItemView } from "@proliferate/product-ui/sidebar/ProductSidebarModel";
@@ -39,14 +39,18 @@ export function SidebarPrimaryNavigation({
   // gridded square, an angular bolt) read heavier and squarer than the
   // reference nav column, whose glyphs are all open, rounded strokes with no
   // enclosing frame. Swapped for unframed equivalents at the same shared
-  // 1.75 stroke weight — a bare pencil for New chat, four independently
-  // rounded tiles for Workspaces, and two rounded connected nodes for
-  // Workflows instead of a hard-angled bolt.
+  // 1.75 stroke weight — four independently rounded tiles for Workspaces, and
+  // two rounded connected nodes for Workflows instead of a hard-angled bolt.
+  //
+  // Round-4: the reference's own New chat glyph is a rounded square outline
+  // with a pencil overlapping its top-right corner, not the bare pencil round
+  // 3 swapped in. `SquarePen` reproduces that exact composition at the same
+  // shared stroke weight.
   const navItems: SidebarNavItemView[] = [
     {
       id: "new-chat",
       active: homeActive,
-      icon: <Pen className="icon-paired" strokeWidth={1.75} />,
+      icon: <SquarePen className="icon-paired" strokeWidth={1.75} />,
       label: "New chat",
       shortcutLabel: shortcutLabels.newChat,
     },

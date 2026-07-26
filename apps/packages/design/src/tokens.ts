@@ -1284,6 +1284,21 @@ export const themeTokens = {
     light: "0.55em",
     provenance: "[SHIPPED]",
   },
+  /**
+   * [RETUNE:icons/sidebar-trailing-tight] — round-4 sidebar feedback: the
+   * trailing plus/three-dots row controls (`SidebarActionButton`, the
+   * sidebar's `RowActionIconButton` kebab) rendered their glyph at
+   * `--icon-control` (16px), which read 50-60% too big against the
+   * reference sidebar on screen even though the ratio math looked correct.
+   * `0.875em` lands at 10.5px against the sidebar row's 12px text — the
+   * smallest inline-glyph tier, reserved for these row-trailing controls
+   * whose 24px hit box is unusually large relative to their glyph.
+   */
+  "--icon-tight": {
+    dark: "0.875em",
+    light: "0.875em",
+    provenance: "[RETUNE:icons/sidebar-trailing-tight]",
+  },
   "--radius": {
     dark: "0.5rem",
     light: "0.5rem",

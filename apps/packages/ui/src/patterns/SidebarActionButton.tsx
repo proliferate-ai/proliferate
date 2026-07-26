@@ -34,6 +34,18 @@ export interface SidebarActionButtonProps {
  * background-color group as the base's `bg-hover`/`bg-active`, canceling
  * the chip while keeping the base's color transition and reveal-on-hover
  * opacity contract intact.
+ *
+ * Round-4: every consumer of this adapter was rendering its glyph at
+ * `--icon-control` (16px) regardless of which size utility it passed the
+ * child SVG (`icon-compact`, `icon-paired`, ...): the base primitive's own
+ * `[&_svg]:icon-control` is a descendant COMPOUND selector, which beats a
+ * plain class on the child in the cascade, so no consumer's own icon-size
+ * class was ever actually winning. That produced a glyph that read 50-60%
+ * too big on screen even though the token ratio looked correct in isolation.
+ * `[&_svg]:icon-tight` here is the same shape of selector, so it wins the
+ * same twMerge `icon-size` group as the base's `[&_svg]:icon-control` and
+ * actually reaches the child glyph — landing at 10.5px against the sidebar
+ * row's 12px text, the reference's tighter trailing-control proportion.
  */
 export const SidebarActionButton = forwardRef<HTMLButtonElement, SidebarActionButtonProps>(
   function SidebarActionButton({
@@ -55,7 +67,7 @@ export const SidebarActionButton = forwardRef<HTMLButtonElement, SidebarActionBu
         onClick={onClick}
         disabled={disabled}
         visibility={isAlwaysVisible ? "always" : "hover"}
-        className={`size-6 border border-transparent text-sidebar-muted-foreground [font-size:var(--text-sidebar-row)] hover:bg-transparent hover:text-sidebar-foreground active:bg-transparent data-[state=open]:bg-transparent focus-visible:outline focus-visible:outline-2 focus-visible:outline-sidebar-ring ${
+        className={`size-6 border border-transparent text-sidebar-muted-foreground [font-size:var(--text-sidebar-row)] [&_svg]:icon-tight hover:bg-transparent hover:text-sidebar-foreground active:bg-transparent data-[state=open]:bg-transparent focus-visible:outline focus-visible:outline-2 focus-visible:outline-sidebar-ring ${
           active ? "bg-selected text-sidebar-accent-foreground" : ""
         } ${
           variant === "section"

@@ -130,6 +130,7 @@ describe("appearance preferences", () => {
   it("exposes semantic glyph tiers with the approved paired-icon ratio", () => {
     expect(DEFAULT_UI_GLYPH_SCALE_CSS_VARIABLES).toEqual({
       "--icon-status": "0.55em",
+      "--icon-tight": "0.875em",
       "--icon-compact": "1em",
       "--icon-paired": "1.230769em",
       "--icon-control": "1.333333em",

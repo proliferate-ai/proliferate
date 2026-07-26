@@ -102,6 +102,7 @@ export type UiTextScaleCssVariables = {
 
 export type UiGlyphScaleCssVariables = {
   "--icon-status": string;
+  "--icon-tight": string;
   "--icon-compact": string;
   "--icon-paired": string;
   "--icon-control": string;
@@ -230,6 +231,7 @@ export const DEFAULT_UI_TEXT_SCALE_CSS_VARIABLES = /* @__PURE__ */ buildUiTextSc
 /** Visible glyphs are text-relative; fixed pointer targets remain on wrappers. */
 export const DEFAULT_UI_GLYPH_SCALE_CSS_VARIABLES: UiGlyphScaleCssVariables = {
   "--icon-status": "0.55em",
+  "--icon-tight": "0.875em",
   "--icon-compact": "1em",
   "--icon-paired": "1.230769em",
   "--icon-control": "1.333333em",
