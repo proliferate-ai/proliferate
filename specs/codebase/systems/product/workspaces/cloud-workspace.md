@@ -158,7 +158,3 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       ([sandbox-lifecycle.md](../../../platforms/product/sandbox-lifecycle.md)
       gap); today a paused sandbox's first call 409s and the client shows
       a connecting state until materialization repairs.
-- [ ] Archive and delete retire nothing on the sandbox today (row writes
-      only, [sandbox-content.md](../../../platforms/product/sandbox-content.md)
-      gap); the confirmation copy's promise is kept only because retention
-      does not run either.
