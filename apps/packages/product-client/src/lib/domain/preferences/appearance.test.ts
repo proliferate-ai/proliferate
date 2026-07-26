@@ -132,6 +132,7 @@ describe("appearance preferences", () => {
       "--icon-status": "0.55em",
       "--icon-tight": "0.875em",
       "--icon-compact": "1em",
+      "--icon-indicator": "1.166667em",
       "--icon-paired": "1.230769em",
       "--icon-control": "1.333333em",
       "--icon-large": "1.666667em",

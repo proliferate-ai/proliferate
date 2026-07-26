@@ -26,6 +26,11 @@
   height: var(--icon-compact);
 }
 
+@utility icon-indicator {
+  width: var(--icon-indicator);
+  height: var(--icon-indicator);
+}
+
 @utility icon-paired {
   width: var(--icon-paired);
   height: var(--icon-paired);

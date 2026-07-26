@@ -104,6 +104,7 @@ export type UiGlyphScaleCssVariables = {
   "--icon-status": string;
   "--icon-tight": string;
   "--icon-compact": string;
+  "--icon-indicator": string;
   "--icon-paired": string;
   "--icon-control": string;
   "--icon-large": string;
@@ -233,6 +234,7 @@ export const DEFAULT_UI_GLYPH_SCALE_CSS_VARIABLES: UiGlyphScaleCssVariables = {
   "--icon-status": "0.55em",
   "--icon-tight": "0.875em",
   "--icon-compact": "1em",
+  "--icon-indicator": "1.166667em",
   "--icon-paired": "1.230769em",
   "--icon-control": "1.333333em",
   "--icon-large": "1.666667em",
