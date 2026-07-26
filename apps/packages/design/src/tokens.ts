@@ -1269,6 +1269,19 @@ export const themeTokens = {
     light: "2em",
     provenance: "[SHIPPED]",
   },
+  /**
+   * [RETUNE:icons/sidebar-indicator] — the sidebar row's trailing activity
+   * glyphs (waiting clock, running spinner, error/warning badge) render at
+   * 14px inside a 20px centered cell in the reference, against the same 12px
+   * row text. 1.166667em is exactly 14px at that base — between
+   * `--icon-compact` (12px, too small) and `--icon-control` (16px, visibly
+   * too big), neither of which matches on screen.
+   */
+  "--icon-indicator": {
+    dark: "1.166667em",
+    light: "1.166667em",
+    provenance: "[RETUNE:icons/sidebar-indicator]",
+  },
   "--icon-large": {
     dark: "1.666667em",
     light: "1.666667em",
