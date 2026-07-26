@@ -190,8 +190,12 @@ for (const [currentName, finalName] of Object.entries(currentTokenDispositions))
 // 285-name disposition census itself is unchanged: the three
 // transcript-measure/turn-rhythm additions are net-new tokens, and this map
 // is frozen to the names that existed BEFORE the retune.
-assert(shipped === 174, `expected 174 shipped dispositions, got ${shipped}`);
-assert(retuned === 41, `expected 41 retuned dispositions, got ${retuned}`);
+// `--workspace-shell-tab-active-border` additionally moved from [SHIPPED] to
+// [RETUNE:header/quiet-active-tab] (session-header-alignment pass: the
+// active tab's border softens from --color-border-heavy to --color-border
+// so the active state reads as a quiet wash, not a heavy chip outline).
+assert(shipped === 173, `expected 173 shipped dispositions, got ${shipped}`);
+assert(retuned === 42, `expected 42 retuned dispositions, got ${retuned}`);
 
 for (const [name, value] of tokenEntries) {
   assert(value.provenance.length > 0, `${name} is missing provenance`);
