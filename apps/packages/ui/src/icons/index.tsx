@@ -1,5 +1,5 @@
 // Barrel entry for the @proliferate/ui/icons subpath.
-// New ui-internal code should import the owned modules under ./icons/* directly.
+// New ui-internal code should import the owned sibling modules in this directory (./*) directly.
 export type { IconProps } from "./types";
 export { ChevronRight, ChevronRightActivity, ChevronDown, ChevronUpDown, ChevronDownUp, Minus, Plus, MiniPlus, X, Copy, Search, SearchActivity, Hash, Keyboard, KeyRound, Pencil, Trash, Archive, Clock, Settings, SlidersHorizontal, Palette, CircleQuestion, MessageCircleQuestion, LifeBuoy, ArrowLeft, ArrowRight, LogOut, ArrowUp, ArrowDown, List, ListFilter, StopSquare, Play, Pause, ArrowUpRight, ExternalLink, Check, XLines, Fork, Undo, Link2, WrapText, MoreHorizontal, GripVertical, SendIcon, History, RotateCcw } from "./core";
 export { GitMerge, GitBranch, GitPullRequest, Terminal, SquareTerminal, CommandWindow, ReadBook, FileText, FileIcon, InlinePathMentionIcon, FileCode, StackedFiles, FilePen, FileDiff, FilePenActivity, FilePlus, FolderPlus, FolderList, FolderTree, SquarePlus, Columns2, Folder, FolderOpen, FolderClosedFilled, FolderPlusFilled, FolderFilled, FolderRemote, PrBranchGlyph, PrMergedGlyph, Filter, CollapseAll, ExpandAll, GitCommit, Tree, GitBranchIcon, ProjectNotebook } from "./workspace";
