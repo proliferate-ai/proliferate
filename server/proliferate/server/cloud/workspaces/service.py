@@ -733,12 +733,10 @@ async def _load_ready_runtime_access(
             "Cloud sandbox has not been created.",
             status_code=409,
         )
-    # Request-time access path, so it takes the repairing variant: a cold row
-    # here would otherwise 409 the workspace-create/exact-ref flows forever with
-    # nothing scheduling the materialization that fixes it.
+    # Request-time path, so it takes the repairing variant: a cold row would
+    # otherwise 409 here forever with nothing scheduling the materialization.
     return await cloud_sandboxes_service.load_cloud_sandbox_runtime_access_or_repair(
-        sandbox,
-        reason="workspace_runtime_access",
+        sandbox, reason="workspace_runtime_access"
     )
 
 
