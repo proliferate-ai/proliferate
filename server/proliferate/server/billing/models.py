@@ -53,20 +53,6 @@ class BillingSnapshot:
 
 
 @dataclass(frozen=True)
-class SandboxStartAuthorization:
-    allowed: bool
-    billing_subject_id: UUID
-    start_blocked: bool
-    start_block_reason: str | None
-    active_spend_hold: bool
-    hold_reason: str | None
-    message: str | None
-    active_sandbox_count: int
-    remaining_seconds: float | None
-    active_environment_limit: int | None = None
-
-
-@dataclass(frozen=True)
 class GrantAllocation:
     grant_type: str
     total_seconds: float

@@ -75,8 +75,7 @@ export function shouldShowCloudWorkspaceStatusScreen(
 ): boolean {
   const status = resolveCloudWorkspaceStatus(workspace);
   return (
-    workspace.actionBlockKind != null
-    || isCloudWorkspacePending(status)
+    isCloudWorkspacePending(status)
     || status === "error"
     || status === "archived"
     || isCloudWorkspacePostReadyPending(workspace)
