@@ -55,23 +55,19 @@ describe("TurnAssistantActionRow", () => {
     expect(container.innerHTML).toContain("opacity-0 group-hover/turn:opacity-100");
   });
 
-  it("keeps the copy button persistently visible when alwaysVisible (final message)", () => {
+  it("hover-gates the copy button on the final message too (never permanent chrome)", () => {
     const { container } = render(
-      <TurnAssistantActionRow content="reply" showCopyButton alwaysVisible timestampLabel="5:02pm" />,
+      <TurnAssistantActionRow content="reply" showCopyButton timestampLabel="5:02pm" />,
     );
-    // The copy button's own wrapper span is opacity-100 (persistently
-    // visible)...
     const copyWrapper = container.querySelector("[data-turn-assistant-footer-slot] > span");
-    expect(copyWrapper?.className).toContain("opacity-100");
-    expect(copyWrapper?.className).not.toContain("opacity-0 group-hover/turn");
+    expect(copyWrapper?.className).toContain("opacity-0 group-hover/turn:opacity-100");
+    expect(copyWrapper?.className).not.toMatch(/(?<!:)opacity-100/);
   });
 
-  it("hover-gates the date even on the final message (alwaysVisible only covers the copy button)", () => {
+  it("hover-gates the date like the copy button", () => {
     const { container } = render(
-      <TurnAssistantActionRow content="reply" showCopyButton alwaysVisible timestampLabel="5:02pm" />,
+      <TurnAssistantActionRow content="reply" showCopyButton timestampLabel="5:02pm" />,
     );
-    // ...but the date next to it stays hover-only, same as every earlier
-    // message — alwaysVisible must not leak into the timestamp's visibility.
     // (The outer copy-button wrapper span also has "5:02pm" as its
     // textContent since it contains the date span, so pick the innermost
     // match — the one with no further descendant spans.)
@@ -86,7 +82,6 @@ describe("TurnAssistantActionRow", () => {
       <TurnAssistantActionRow
         content="reply"
         showCopyButton
-        alwaysVisible
         timestampLabel="5:02pm"
         metMarker={<TurnGoalMetMarker label="Goal achieved in 40s" />}
       />,
