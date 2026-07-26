@@ -4,9 +4,18 @@ Named off both "gateway" (these serve every auth context, not one route) and
 "catalog" (that word belongs to the shipped-catalog document), per
 model-catalog.md §Cloud routes.
 
-Two routers because two identities call them: ``router`` is the signed-in user's
-read/override surface; ``worker_router`` is the single ingest path, authenticated
-by the Worker's own bearer with the owner derived from its sandbox row.
+**One** router, with the auth identity chosen per route rather than per router:
+the reads and overrides depend on ``current_product_user``, the single ingest
+route depends on ``authenticate_worker``.
+
+An earlier shape used two routers both prefixed ``/agent-models`` and was
+withdrawn. FastAPI resolves a duplicate method+path to whichever registered
+first and says nothing, so the two-router shape made "which auth guards this
+path" depend on include order in ``cloud/api.py`` — a property no reader of
+either file can see. Today's routes happen not to collide, which is exactly why
+this was worth fixing now: the ingest endpoint has no shipped consumer yet (S2
+builds the Worker caller), so the shape is free to change, and the next route
+added under either prefix would have inherited a silent-shadowing hazard.
 """
 
 from __future__ import annotations
@@ -34,7 +43,6 @@ from proliferate.server.cloud.runtime_workers.auth import (
 )
 
 router = APIRouter(prefix="/agent-models", tags=["cloud-agent-models"])
-worker_router = APIRouter(prefix="/agent-models", tags=["cloud-agent-models"])
 
 
 @router.get("/{harness_kind}", response_model=AgentModelsResponse)
@@ -65,7 +73,7 @@ async def get_agent_models_endpoint(
     )
 
 
-@worker_router.post("/{harness_kind}/refresh", response_model=AgentModelsResponse)
+@router.post("/{harness_kind}/refresh", response_model=AgentModelsResponse)
 async def ingest_agent_model_snapshot_endpoint(
     harness_kind: str,
     body: AgentModelSnapshotIngestRequest,

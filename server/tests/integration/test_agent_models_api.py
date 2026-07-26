@@ -413,16 +413,27 @@ class TestDeletedServerProber:
         with pytest.raises(ModuleNotFoundError):
             __import__("proliferate.server.cloud.agent_gateway.catalog")
 
-    def test_no_server_module_probes_the_gateway_for_models(self) -> None:
+    def test_no_server_module_or_test_names_the_deleted_prober(self) -> None:
+        """Scan the tests too, not just the package.
+
+        A stale reference in a test is not harmless: it is the only remaining
+        documentation a reader will find of a function that no longer exists, so
+        it teaches the wrong architecture. Scoping the scan to ``proliferate/``
+        let exactly that survive in
+        ``test_agent_auth_org_member_gateway.py`` through the first pass.
+        """
         import pathlib
 
         import proliferate
 
         package_root = pathlib.Path(proliferate.__file__ or "").parent
+        tests_root = pathlib.Path(__file__).resolve().parents[1]
         offenders = [
             path.as_posix()
-            for path in package_root.rglob("*.py")
-            if "_probe_gateway_models" in path.read_text()
+            for root in (package_root, tests_root)
+            for path in root.rglob("*.py")
+            if path != pathlib.Path(__file__).resolve()
+            and "_probe_gateway_models" in path.read_text()
         ]
         assert offenders == []
 
@@ -449,6 +460,33 @@ class TestDeletedServerProber:
         ):
             response = await getattr(client, method)(path, headers=headers)
             assert response.status_code == 404, f"{method} {path}"
+
+    def test_no_two_routes_share_a_method_and_path(self) -> None:
+        """A duplicate method+path would silently shadow, taking its auth with it.
+
+        FastAPI resolves the collision to whichever registered first and logs
+        nothing, so this is the only place the property is observable. It also
+        pins the single-router shape: two routers sharing the ``/agent-models``
+        prefix would make "which auth guards this path" a function of include
+        order in ``cloud/api.py``.
+        """
+        from proliferate.main import app
+
+        spec = app.openapi()
+        registered = [
+            (method.upper(), path)
+            for path, operations in spec["paths"].items()
+            for method in operations
+        ]
+        assert len(registered) == len(set(registered))
+
+        agent_models = sorted(pair for pair in registered if "/agent-models/" in pair[1])
+        assert agent_models == [
+            ("DELETE", "/v1/cloud/agent-models/{harness_kind}/override"),
+            ("GET", "/v1/cloud/agent-models/{harness_kind}"),
+            ("POST", "/v1/cloud/agent-models/{harness_kind}/refresh"),
+            ("PUT", "/v1/cloud/agent-models/{harness_kind}/override"),
+        ]
 
     def test_the_mirror_wire_model_is_gone(self) -> None:
         """No second write shape survives the collapse to one ingest route."""

@@ -331,17 +331,18 @@ class AgentModelSnapshot(Base):
     shipped catalog); and ``snapshot_json`` holding one machine-document entry
     verbatim (models, modes, attestation, warnings), not a models-only payload.
 
-    Soft-versioned: a write deactivates the prior active row for the scope and
+    Soft-versioned: a write deactivates prior active rows for the scope and
     inserts the new one, so retained inactive rows are the audit trail that makes
     "what changed between refreshes" answerable without storing diffs.
 
     Deliberately **no unique key on the scope** (model-catalog.md §Storage: "the
     soft-versioning discipline is kept as-is"). A partial unique index over
     ``status = 'active'`` was built here first and withdrawn: uploads are
-    fire-and-forget from the Worker's convergence tick, so two ticks racing the
-    same context would turn a benign duplicate into a 500 the Worker cannot act
-    on. The read takes the latest active row by ``probed_at``, which is correct
-    under a duplicate, and the next write collapses it.
+    fire-and-forget from the Worker's convergence tick, so two racing ticks would
+    turn a benign duplicate into a 500 the Worker cannot act on. Consequence the
+    reader must know: "the active row" is plural in principle, so reads order by
+    ``(probed_at DESC, id DESC)`` — the tie-break is required, not cosmetic,
+    since a re-sent entry repeats its ``probedAt``. The next write collapses it.
     """
 
     __tablename__ = "agent_model_snapshot"

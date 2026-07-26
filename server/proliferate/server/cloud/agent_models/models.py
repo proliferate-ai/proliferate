@@ -31,8 +31,13 @@ class AgentModelsResponse(AgentModelsBaseModel):
     auth_context_id: str = Field(alias="authContextId")
     models: list[dict[str, Any]]
     modes: list[dict[str, Any]]
-    #: ``snapshot`` when a machine observed this context; ``catalog`` when the
-    #: shipped list is filling the absence (unverified seed data).
+    #: Which tier supplied ``models``. ``snapshot`` means a machine observed this
+    #: context, so an EMPTY list is truth — the harness advertised nothing under
+    #: that credential, and a picker should say so rather than substitute.
+    #: ``catalog`` means no observation exists yet and the shipped list is filling
+    #: the absence, which a picker must mark as unverified seed data. The two are
+    #: not interchangeable, which is why the field exists instead of letting the
+    #: client infer the tier from whether ``snapshotId`` is null.
     origin: ModelOrigin
     snapshot_id: str | None = Field(alias="snapshotId")
     probed_at: str | None = Field(alias="probedAt")

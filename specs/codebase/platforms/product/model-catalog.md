@@ -670,6 +670,12 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       catalog instead. (The store itself is re-keyed: `agent_model_snapshot`
       in
       [db/models/cloud/agent_gateway.py](../../../../server/proliferate/db/models/cloud/agent_gateway.py).)
+- [ ] The retained `inactive` snapshot rows have no retention bound. They are
+      the audit trail this document relies on to answer "what changed between
+      refreshes", so they must not simply be deleted on write — but nothing
+      prunes them either, and every Worker upload for every (user, harness,
+      auth context) appends one forever. The document owes a retention rule
+      (keep N per scope, or an age bound) and the sweep that enforces it.
 - [ ] The gateway model plan chain —
       [gateway_resolver.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/gateway_resolver.rs),
       [gateway_probe.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/gateway_probe.rs)

@@ -10,10 +10,11 @@ from __future__ import annotations
 
 import json
 import uuid
+from datetime import UTC, datetime
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.models.cloud.agent_gateway import AgentModelSnapshot
@@ -356,6 +357,73 @@ class TestIngestSoftVersioning:
             )
         )
         assert int(active.scalar_one()) == 1
+
+    @pytest.mark.asyncio
+    async def test_read_under_a_probed_at_tie_is_deterministic(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        """Two active rows sharing probedAt must resolve by id, not row order.
+
+        The scope carries no unique key, so two racing upload ticks can leave two
+        active rows — and a re-sent entry carries the SAME probedAt, making the tie
+        the common case rather than the exotic one.
+
+        Both insertion orders are covered, and that is what makes the test mean
+        something. Which row an un-tie-broken ``ORDER BY probed_at DESC`` returns
+        under a tie is plan-dependent: a sequential scan follows heap order (first
+        inserted wins) while a backward scan of
+        ``ix_agent_model_snapshot_scope`` walks it in reverse (last inserted
+        wins). An earlier version of this test fixed ONE insertion order and
+        passed against the un-tie-broken query — it asserted nothing. Requiring
+        both orders to resolve to the same row cannot be satisfied by any plan
+        without a real tie-break.
+
+        It asserts the READ (served model list + snapshotId), not a row count,
+        because the flip is only ever observable to a caller.
+        """
+        user_id, headers = await authed_user(client)
+        owner = uuid.UUID(user_id)
+        shared_probed_at = datetime(2026, 7, 24, 9, 12, 3, tzinfo=UTC)
+
+        async def insert(row_id: uuid.UUID, marker: str, context: str) -> None:
+            await db_session.execute(
+                text(
+                    "INSERT INTO agent_model_snapshot "
+                    "(id, harness_kind, auth_context_id, owner_user_id, snapshot_json, "
+                    "probed_at, status) "
+                    "VALUES (:id, :harness, :context, :owner, :payload, :probed_at, 'active')"
+                ),
+                {
+                    "id": row_id,
+                    "harness": HARNESS,
+                    "context": context,
+                    "owner": owner,
+                    "payload": snapshot_entry([marker]),
+                    "probed_at": shared_probed_at,
+                },
+            )
+
+        # Two scopes, opposite insertion orders, same expected winner: the higher
+        # id. "gateway" inserts lower-first, "anthropic-api" higher-first.
+        ascending = sorted([uuid.uuid4(), uuid.uuid4()])
+        descending = sorted([uuid.uuid4(), uuid.uuid4()])
+        await insert(ascending[0], "lower-id", "gateway")
+        await insert(ascending[1], "higher-id", "gateway")
+        await insert(descending[1], "higher-id", "anthropic-api")
+        await insert(descending[0], "lower-id", "anthropic-api")
+        await db_session.commit()
+
+        for context, winner in (("gateway", ascending[1]), ("anthropic-api", descending[1])):
+            response = await client.get(
+                MODELS_PATH,
+                params={"authContextId": context},
+                headers=headers,
+            )
+            assert response.status_code == 200, response.text
+            assert model_ids(response.json()) == ["higher-id"], context
+            assert response.json()["snapshotId"] == str(winner), context
 
     @pytest.mark.asyncio
     async def test_two_contexts_upload_independently(

@@ -5,6 +5,14 @@ revision, that a pre-existing row is dropped rather than mis-mapped (see the
 migration's docstring for why mapping is impossible, not merely lossy), and that
 the scope carries no unique key — a racing duplicate upload must be a benign
 extra row the next write collapses, not a 500 the Worker tick cannot act on.
+
+The load-bearing assertion is ``_assert_matches_orm_metadata``: it compares the
+MIGRATED schema's constraint and index names against what
+``Base.metadata.create_all`` produces for the same table on a second, virgin
+database. Anything a table rename leaves behind — the pkey, the fkey, the pkey's
+backing index — makes migrated prod diverge from a fresh install permanently, and
+a shape-only test (columns + index names) cannot see it. That is the class of bug
+this file exists to catch, not just "did the columns change".
 """
 
 from __future__ import annotations
@@ -61,6 +69,54 @@ async def _indexes(database_url: str, table: str) -> set[str]:
             )
     finally:
         await engine.dispose()
+
+
+def _schema_names(sync_conn, table: str) -> dict[str, object]:  # type: ignore[no-untyped-def]
+    """Every named constraint/index on a table, as an order-insensitive shape."""
+    inspector = inspect(sync_conn)
+    return {
+        "pk": inspector.get_pk_constraint(table).get("name"),
+        "fks": {fk["name"] for fk in inspector.get_foreign_keys(table)},
+        "checks": {ck["name"] for ck in inspector.get_check_constraints(table)},
+        "uniques": {uq["name"] for uq in inspector.get_unique_constraints(table)},
+        "indexes": {ix["name"] for ix in inspector.get_indexes(table)},
+    }
+
+
+async def _constraint_shape(database_url: str, table: str) -> dict[str, object]:
+    engine = create_async_engine(database_url, echo=False)
+    try:
+        async with engine.begin() as conn:
+            return await conn.run_sync(_schema_names, table)
+    finally:
+        await engine.dispose()
+
+
+async def _assert_matches_orm_metadata(database_url: str, table: str) -> None:
+    """The migrated table must be name-for-name what create_all would build.
+
+    A table rename leaves the pkey, the fkey and the pkey's backing index on
+    their pre-rename names, so a migrated database and a fresh install disagree
+    forever: a later ``drop_constraint("agent_model_snapshot_pkey")`` passes here
+    and fails on prod. Comparing against a virgin ``create_all`` schema is the
+    only assertion that sees it.
+    """
+    from proliferate.db.models.base import Base
+
+    migrated = await _constraint_shape(database_url, table)
+
+    async with temporary_database("agent_model_snapshot_metadata") as (_name, fresh_url):
+        fresh_engine = create_async_engine(fresh_url, echo=False)
+        try:
+            async with fresh_engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+                expected = await conn.run_sync(_schema_names, table)
+        finally:
+            await fresh_engine.dispose()
+
+    assert migrated == expected, (
+        f"migrated {table} diverges from Base.metadata.create_all: {migrated} != {expected}"
+    )
 
 
 async def _seed_pre_rekey_rows(database_url: str) -> uuid.UUID:
@@ -156,6 +212,10 @@ async def test_model_snapshot_rekey_round_trips() -> None:
         # Stale rows are dropped, not mis-mapped onto a guessed auth context.
         assert await _row_count(database_url, _NEW_TABLE) == 0
 
+        # The load-bearing assertion: the migrated table is name-for-name what a
+        # fresh create_all builds, so the rename left no pkey/fkey/index behind.
+        await _assert_matches_orm_metadata(database_url, _NEW_TABLE)
+
         await _assert_duplicate_active_rows_are_tolerated(database_url, user_id)
 
         await asyncio.to_thread(command.downgrade, config, _DOWN_REVISION)
@@ -167,6 +227,10 @@ async def test_model_snapshot_rekey_round_trips() -> None:
         assert {"surface", "route", "source", "models_json"} <= set(restored)
         assert restored["owner_user_id"] is True
         assert await _row_count(database_url, _OLD_TABLE) == 0
+        # Symmetric: a rolled-back database carries the pre-B4 names back.
+        rolled_back_names = await _constraint_shape(database_url, _OLD_TABLE)
+        assert rolled_back_names["pk"] == f"{_OLD_TABLE}_pkey"
+        assert f"{_OLD_TABLE}_owner_user_id_fkey" in rolled_back_names["fks"]
 
         await asyncio.to_thread(command.upgrade, config, "head")
         assert _NEW_TABLE in await _tables(database_url)

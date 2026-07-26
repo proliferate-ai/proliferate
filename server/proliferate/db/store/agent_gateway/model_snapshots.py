@@ -80,6 +80,16 @@ async def get_active_model_snapshot(
 
     None is the read-time seed condition: the caller falls back to the shipped
     catalog's models rather than to a stored seed row.
+
+    ``id`` is a tie-break on ``probed_at``, and it is load-bearing rather than
+    decorative: because the scope carries no unique key, two racing upload ticks
+    can leave two active rows — and a Worker re-sending its last entry sends the
+    SAME ``probedAt``, so the tie is the common case, not the exotic one. Ordering
+    on the timestamp alone leaves the winner to physical row order, which
+    Postgres is free to change under a HOT update or a VACUUM, so the served
+    model list could flip without any write. The rows are equivalent when the
+    entry really is identical, but "equivalent" is not "deterministic", and a
+    picker that changes answers on its own is not debuggable.
     """
     query = (
         select(AgentModelSnapshot)
@@ -89,7 +99,7 @@ async def get_active_model_snapshot(
             AgentModelSnapshot.owner_user_id == owner_user_id,
             AgentModelSnapshot.status == AGENT_MODEL_SNAPSHOT_STATUS_ACTIVE,
         )
-        .order_by(AgentModelSnapshot.probed_at.desc())
+        .order_by(AgentModelSnapshot.probed_at.desc(), AgentModelSnapshot.id.desc())
         .limit(1)
     )
     row = (await db.execute(query)).scalar_one_or_none()

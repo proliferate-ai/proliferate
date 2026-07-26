@@ -42,8 +42,17 @@ Data disposition — every pre-existing row is DROPPED, deliberately:
   (harness, context) with no fresh entry, and the layered read serves shipped
   catalog models in the meantime, so no surface renders an empty picker.
 
+Both directions also rename the PRIMARY KEY and FOREIGN KEY constraints, which
+``op.rename_table`` does not touch. Skipping them would leave a migrated database
+carrying ``agent_catalog_snapshot_pkey`` on a table called
+``agent_model_snapshot`` forever — divergent from ``Base.metadata``, so a later
+``drop_constraint("agent_model_snapshot_pkey")`` would pass against a
+freshly-created test schema and fail against prod. Renaming the PK constraint
+also renames its backing index, since Postgres keeps the two names identical.
+
 Downgrade recreates the pre-B4 shape (all columns, nullable owner, the three
-check constraints, both indexes) and is likewise empty of data.
+check constraints, both indexes, the original constraint names) and is likewise
+empty of data.
 
 Revision ID: b7c1e4d9f082
 Revises: 28adf1a9e376
@@ -85,6 +94,48 @@ def _check_constraints(table_name: str) -> set[str]:
 
 def _indexes(table_name: str) -> set[str]:
     return {index["name"] for index in _inspector().get_indexes(table_name) if index["name"]}
+
+
+def _constraint_names(table_name: str) -> set[str]:
+    """Every constraint on the table, whatever its kind.
+
+    ``op.rename_table`` renames only the table: Postgres leaves the primary key,
+    the foreign key and the PK's backing index carrying their ORIGINAL
+    auto-generated names. Left alone, a migrated database diverges from
+    ``Base.metadata`` forever — a later
+    ``drop_constraint("agent_model_snapshot_pkey")`` would pass on a
+    freshly-created test schema and fail on prod. So both directions rename them
+    explicitly, following the precedent in
+    ``9a0b1c2d3e4f_stripe_cloud_billing_foundation.py``'s
+    ``sandbox_event_receipt`` -> ``webhook_event_receipt`` rename.
+    """
+    inspector = _inspector()
+    names: set[str] = set()
+    primary_key = inspector.get_pk_constraint(table_name)
+    if primary_key.get("name"):
+        names.add(str(primary_key["name"]))
+    for constraint in inspector.get_foreign_keys(table_name):
+        if constraint.get("name"):
+            names.add(str(constraint["name"]))
+    names |= _check_constraints(table_name)
+    for constraint in inspector.get_unique_constraints(table_name):
+        if constraint.get("name"):
+            names.add(str(constraint["name"]))
+    return names
+
+
+def _rename_constraint(table_name: str, old_name: str, new_name: str) -> None:
+    """Rename a constraint when it is present under its old name.
+
+    Postgres has no ``RENAME CONSTRAINT IF EXISTS``, hence the inspector check.
+    Renaming the PRIMARY KEY constraint also renames its backing index (the two
+    share a name by construction), which is why no separate ``ALTER INDEX`` is
+    issued for it — one would fail on a name that no longer exists.
+    """
+    present = _constraint_names(table_name)
+    if old_name not in present or new_name in present:
+        return
+    op.execute(sa.text(f'ALTER TABLE {table_name} RENAME CONSTRAINT "{old_name}" TO "{new_name}"'))
 
 
 def upgrade() -> None:
@@ -131,6 +182,15 @@ def upgrade() -> None:
     op.alter_column(_OLD_TABLE, "owner_user_id", nullable=False, existing_type=sa.Uuid())
 
     op.rename_table(_OLD_TABLE, _NEW_TABLE)
+
+    # The table rename leaves these on their pre-rename names; see
+    # _constraint_names for why that would diverge from Base.metadata forever.
+    _rename_constraint(_NEW_TABLE, f"{_OLD_TABLE}_pkey", f"{_NEW_TABLE}_pkey")
+    _rename_constraint(
+        _NEW_TABLE,
+        f"{_OLD_TABLE}_owner_user_id_fkey",
+        f"{_NEW_TABLE}_owner_user_id_fkey",
+    )
 
     op.create_check_constraint(
         f"ck_{_NEW_TABLE}_status",
@@ -191,6 +251,15 @@ def downgrade() -> None:
         op.drop_constraint(f"ck_{_NEW_TABLE}_status", _NEW_TABLE, type_="check")
 
     op.rename_table(_NEW_TABLE, _OLD_TABLE)
+
+    # Symmetric with the upgrade: a rolled-back database must match what the
+    # pre-B4 metadata would have created, pkey/fkey names included.
+    _rename_constraint(_OLD_TABLE, f"{_NEW_TABLE}_pkey", f"{_OLD_TABLE}_pkey")
+    _rename_constraint(
+        _OLD_TABLE,
+        f"{_NEW_TABLE}_owner_user_id_fkey",
+        f"{_OLD_TABLE}_owner_user_id_fkey",
+    )
 
     op.alter_column(_OLD_TABLE, "snapshot_json", new_column_name="models_json")
     op.alter_column(_OLD_TABLE, "owner_user_id", nullable=True, existing_type=sa.Uuid())
