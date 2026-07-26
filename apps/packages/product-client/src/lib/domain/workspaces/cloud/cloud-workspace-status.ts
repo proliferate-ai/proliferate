@@ -77,6 +77,7 @@ export function shouldShowCloudWorkspaceStatusScreen(
   return (
     isCloudWorkspacePending(status)
     || status === "error"
+    || status === "lost"
     || status === "archived"
     || isCloudWorkspacePostReadyPending(workspace)
   );

@@ -7,12 +7,14 @@ stores the returned workspace id.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import replace
 from typing import Literal, Protocol
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.db.engine import run_after_commit
 from proliferate.db.store import cloud_sandboxes as cloud_sandbox_store
 from proliferate.db.store import cloud_workspace_materializations as materialization_store
 from proliferate.db.store import cloud_workspaces as cloud_workspace_store
@@ -30,6 +32,7 @@ from proliferate.integrations.anyharness.models import (
 )
 from proliferate.integrations.anyharness.workspaces import (
     materialize_workspace_at_ref,
+    retire_runtime_workspace,
 )
 from proliferate.lib.product.workspace_naming import resolve_generated_branch_name
 from proliferate.server.cloud.cloud_sandboxes import service as cloud_sandboxes_service
@@ -70,6 +73,8 @@ from proliferate.server.cloud.workspaces.provisioning import (
     resolve_repo_root as _resolve_repo_root,
 )
 from proliferate.utils.time import utcnow
+
+logger = logging.getLogger("proliferate.cloud.workspaces")
 
 MAX_CLOUD_WORKSPACE_DISPLAY_NAME_CHARS = 160
 
@@ -654,6 +659,7 @@ async def archive_cloud_workspace_for_user(
 ) -> WorkspaceDetail:
     workspace = await _load_user_workspace(db, user_id=user_id, workspace_id=workspace_id)
     workspace = await cloud_workspace_store.archive_cloud_workspace(db, workspace)
+    await _retire_workspace_worktree_after_commit(db, workspace)
     return await _workspace_payload(db, workspace, detail=True)
 
 
@@ -703,6 +709,53 @@ async def delete_cloud_workspace_for_user(
 ) -> None:
     workspace = await _load_user_workspace(db, user_id=user_id, workspace_id=workspace_id)
     await cloud_workspace_store.delete_cloud_workspace(db, workspace)
+    await _retire_workspace_worktree_after_commit(db, workspace)
+
+
+async def _retire_workspace_worktree_after_commit(
+    db: AsyncSession,
+    workspace: CloudWorkspaceValue,
+) -> None:
+    if (
+        workspace.workspace_kind != "repository_worktree"
+        or workspace.anyharness_workspace_id is None
+    ):
+        return
+    sandbox = await cloud_sandbox_store.load_personal_cloud_sandbox(
+        db,
+        workspace.owner_user_id,
+    )
+    if sandbox is None:
+        return
+
+    anyharness_workspace_id = workspace.anyharness_workspace_id
+    cloud_workspace_id = str(workspace.id)
+
+    async def _retire_runtime_worktree() -> None:
+        try:
+            (
+                runtime_url,
+                runtime_token,
+                _data_key,
+            ) = await cloud_sandboxes_service.load_cloud_sandbox_runtime_access(
+                sandbox,
+            )
+            await retire_runtime_workspace(
+                runtime_url,
+                runtime_token,
+                anyharness_workspace_id=anyharness_workspace_id,
+            )
+        except Exception:
+            logger.exception(
+                "failed to retire runtime worktree after cloud workspace row lifecycle change",
+                extra={
+                    "cloud_workspace_id": cloud_workspace_id,
+                    "anyharness_workspace_id": anyharness_workspace_id,
+                    "cloud_sandbox_id": str(sandbox.id),
+                },
+            )
+
+    await run_after_commit(db, _retire_runtime_worktree)
 
 
 async def get_cloud_workspace_runtime_status(
@@ -1008,7 +1061,11 @@ def _materialization_is_stalled(workspace: CloudWorkspaceValue) -> bool:
     insert and the worktree write are not atomic), so it can never become
     ``ready`` on its own.
     """
-    if workspace.anyharness_workspace_id or workspace.archived_at is not None:
+    if (
+        workspace.anyharness_workspace_id
+        or workspace.archived_at is not None
+        or workspace.lost_at is not None
+    ):
         return False
     created_at = workspace.created_at
     if created_at is None:
@@ -1019,6 +1076,8 @@ def _materialization_is_stalled(workspace: CloudWorkspaceValue) -> bool:
 def _workspace_status(workspace: CloudWorkspaceValue) -> CloudWorkspaceStatus:
     if workspace.archived_at is not None:
         return "archived"
+    if workspace.lost_at is not None:
+        return "lost"
     if workspace.anyharness_workspace_id:
         return "ready"
     if _materialization_is_stalled(workspace):

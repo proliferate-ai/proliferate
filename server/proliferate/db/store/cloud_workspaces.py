@@ -4,13 +4,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Literal
+from typing import Literal, Protocol
 from uuid import UUID
 
-from sqlalchemy import Select, exists, select
+from sqlalchemy import Select, exists, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.db.models.cloud.workspace_materializations import (
+    CloudWorkspaceMaterialization,
+)
 from proliferate.db.models.cloud.workspaces import (
     CLOUD_WORKSPACE_REPOSITORY_WORKTREE,
     CLOUD_WORKSPACE_SCRATCH,
@@ -41,6 +44,12 @@ class CloudWorkspaceValue:
     created_at: datetime
     updated_at: datetime
     archived_at: datetime | None
+    lost_at: datetime | None = None
+
+
+class CloudWorkspaceSandboxIdentity(Protocol):
+    id: UUID
+    owner_user_id: UUID | None
 
 
 def cloud_workspace_value(row: CloudWorkspace) -> CloudWorkspaceValue:
@@ -56,6 +65,7 @@ def cloud_workspace_value(row: CloudWorkspace) -> CloudWorkspaceValue:
         created_at=row.created_at,
         updated_at=row.updated_at,
         archived_at=row.archived_at,
+        lost_at=row.lost_at,
     )
 
 
@@ -325,6 +335,47 @@ async def delete_cloud_workspace(
     row = await _load_workspace_row(db, workspace.id)
     await db.delete(row)
     await db.flush()
+
+
+async def mark_cloud_workspaces_lost_for_sandbox(
+    db: AsyncSession,
+    sandbox: CloudWorkspaceSandboxIdentity,
+) -> int:
+    """Mark active runtime-backed rows lost for the sandbox owner's dead VM."""
+
+    if sandbox.owner_user_id is None:
+        return 0
+    now = utcnow()
+    linked_managed_materialization = select(CloudWorkspaceMaterialization.id).where(
+        CloudWorkspaceMaterialization.cloud_workspace_id == CloudWorkspace.id,
+        CloudWorkspaceMaterialization.target_kind == "managed_cloud",
+        CloudWorkspaceMaterialization.cloud_sandbox_id.is_not(None),
+        CloudWorkspaceMaterialization.unlinked_at.is_(None),
+    )
+    materialization_on_sandbox = linked_managed_materialization.where(
+        CloudWorkspaceMaterialization.cloud_sandbox_id == sandbox.id,
+    )
+    lost_ids = (
+        await db.execute(
+            update(CloudWorkspace)
+            .where(
+                CloudWorkspace.owner_user_id == sandbox.owner_user_id,
+                CloudWorkspace.anyharness_workspace_id.is_not(None),
+                CloudWorkspace.archived_at.is_(None),
+                CloudWorkspace.lost_at.is_(None),
+                or_(
+                    materialization_on_sandbox.exists(),
+                    ~linked_managed_materialization.exists(),
+                ),
+            )
+            .values(
+                lost_at=now,
+                updated_at=now,
+            )
+            .returning(CloudWorkspace.id)
+        )
+    ).scalars()
+    return len(lost_ids.all())
 
 
 async def _load_workspace_row(db: AsyncSession, workspace_id: UUID) -> CloudWorkspace:
