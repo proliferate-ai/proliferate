@@ -85,6 +85,41 @@
             "string",
             "null"
           ]
+        },
+        "providerConfig": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/providerConfig"
+          }
+        }
+      }
+    },
+    "providerConfig": {
+      "type": "object",
+      "required": [
+        "kind",
+        "label",
+        "envVars"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "aws_bedrock",
+            "azure_openai"
+          ]
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "envVars": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
         }
       }
     },

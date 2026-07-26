@@ -17,6 +17,11 @@ class AgentApiKeyRecord:
     status: str
     created_at: datetime
     updated_at: datetime
+    # 'api_key' (default) or a typed provider-config kind ('aws_bedrock',
+    # 'azure_openai') — agent-auth.md's vault table. Never carries the
+    # decrypted payload; that stays server-internal (materialization + the
+    # authenticated GET /state read only).
+    kind: str = "api_key"
 
 
 @dataclass(frozen=True)

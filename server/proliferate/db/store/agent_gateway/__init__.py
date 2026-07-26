@@ -3,7 +3,9 @@
 from proliferate.db.store.agent_gateway.api_keys import (
     build_redacted_hint,
     create_agent_api_key,
+    create_agent_provider_config,
     get_agent_api_key_decrypted,
+    get_agent_provider_config_decrypted,
     list_agent_api_keys,
     revoke_agent_api_key,
 )
@@ -111,6 +113,7 @@ __all__ = [
     "clear_auth_selections",
     "count_topup_grants",
     "create_agent_api_key",
+    "create_agent_provider_config",
     "create_llm_credit_grant",
     "create_model_snapshot",
     "delete_catalog_override",
@@ -118,6 +121,7 @@ __all__ = [
     "get_active_enrollment_key",
     "get_active_model_snapshot",
     "get_agent_api_key_decrypted",
+    "get_agent_provider_config_decrypted",
     "get_catalog_override",
     "get_enrollment_by_id",
     "get_enrollment_by_virtual_key_id",

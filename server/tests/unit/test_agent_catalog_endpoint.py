@@ -12,6 +12,7 @@ from proliferate.server.catalogs.service import (
     CATALOG_PATH,
     read_agent_catalog,
     served_agent_catalog_version,
+    supported_provider_config_kinds,
 )
 
 
@@ -113,6 +114,44 @@ def test_served_agent_catalog_version_handles_missing_or_invalid_document(
     versionless = tmp_path / "versionless.json"
     versionless.write_text('{"schemaVersion": 2}', encoding="utf-8")
     assert served_agent_catalog_version(versionless) is None
+
+
+def test_supported_provider_config_kinds_matches_track_d_scope() -> None:
+    # R9's full scope: claude/codex/opencode x {aws_bedrock, azure_openai};
+    # cursor/grok excluded (structural — no gateway recipe / no BYOK-cloud path).
+    assert supported_provider_config_kinds("claude") == ("aws_bedrock", "azure_openai")
+    assert supported_provider_config_kinds("codex") == ("aws_bedrock", "azure_openai")
+    assert supported_provider_config_kinds("opencode") == ("aws_bedrock", "azure_openai")
+    assert supported_provider_config_kinds("cursor") == ()
+    assert supported_provider_config_kinds("grok") == ()
+    assert supported_provider_config_kinds("not-a-real-harness") == ()
+
+
+def test_supported_provider_config_kinds_handles_missing_or_invalid_document(
+    tmp_path: Path,
+) -> None:
+    assert supported_provider_config_kinds("claude", path=tmp_path / "absent.json") == ()
+
+    broken = tmp_path / "broken.json"
+    broken.write_text("not json", encoding="utf-8")
+    assert supported_provider_config_kinds("claude", path=broken) == ()
+
+    no_provider_config = tmp_path / "registry.json"
+    no_provider_config.write_text(
+        '{"agents": [{"kind": "claude"}]}',
+        encoding="utf-8",
+    )
+    assert supported_provider_config_kinds("claude", path=no_provider_config) == ()
+
+    with_provider_config = tmp_path / "registry-with-provider-config.json"
+    with_provider_config.write_text(
+        '{"agents": [{"kind": "claude", "providerConfig": '
+        '[{"kind": "aws_bedrock", "label": "AWS Bedrock", "envVars": []}]}]}',
+        encoding="utf-8",
+    )
+    assert supported_provider_config_kinds("claude", path=with_provider_config) == (
+        "aws_bedrock",
+    )
 
 
 def test_server_dockerfile_packages_agent_catalog() -> None:

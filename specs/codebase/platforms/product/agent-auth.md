@@ -529,12 +529,14 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       their personal Anthropic account. The body's
       "present-but-empty fails closed" law is not implemented; today
       only render-stage errors refuse the launch.
-- [ ] **Typed provider configurations do not exist.** The vault has no
-      `kind` column and stores exactly one opaque string per entry; no
-      Bedrock/Azure payloads, no `provider_config` wire source, no
-      registry declaration of supported provider-config kinds. (The old
-      Bifrost `provider_kind` tables were dropped outright and are not a
-      starting point.)
+- [ ] **Typed provider configurations cannot be applied at launch.** The
+      vault stores typed Bedrock/Azure payloads (`kind` column,
+      JSON-encrypted) and the registry declares which kinds each harness
+      supports, but nothing downstream of storage consumes either yet:
+      selections cannot reference a typed entry, `state.json` has no
+      `provider_config` wire source, and no render recipe turns a typed
+      entry into the harness's own env set. (The old Bifrost `provider_kind`
+      tables were dropped outright and are not a starting point.)
 - [ ] **Cursor selections are rejected server-side.** `selection_rules.py`
       lists cursor as native-only and the store's harness allow-list
       excludes it, even though the registry declares `CURSOR_API_KEY` as

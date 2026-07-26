@@ -62,6 +62,7 @@ async def test_api_key_create_list_revoke(db_session: AsyncSession) -> None:
     assert created.title == "Work key"
     assert created.redacted_hint == "sk-...abc4"
     assert created.status == "active"
+    assert created.kind == "api_key"
 
     listed = await store.list_agent_api_keys(db_session, user_id=user_id)
     assert [record.id for record in listed] == [created.id]
@@ -91,6 +92,124 @@ async def test_api_key_create_list_revoke(db_session: AsyncSession) -> None:
     assert len(with_revoked) == 1
     assert (
         await store.get_agent_api_key_decrypted(
+            db_session,
+            user_id=user_id,
+            api_key_id=created.id,
+        )
+        is None
+    )
+
+
+@pytest.mark.asyncio
+async def test_create_provider_config_stores_typed_kind_and_decrypts(
+    db_session: AsyncSession,
+) -> None:
+    user_id = await _create_user(db_session)
+
+    created = await store.create_agent_provider_config(
+        db_session,
+        user_id=user_id,
+        title="Personal Bedrock",
+        kind="aws_bedrock",
+        value={"region": "us-east-1", "bearerToken": "bedrock-token-abcd"},
+    )
+    assert created.kind == "aws_bedrock"
+    assert created.title == "Personal Bedrock"
+    # No single-secret tail to show for a multi-field payload.
+    assert created.redacted_hint == "aws_bedrock:2 field(s)"
+
+    listed = await store.list_agent_api_keys(db_session, user_id=user_id)
+    assert [record.id for record in listed] == [created.id]
+    assert listed[0].kind == "aws_bedrock"
+
+    decrypted = await store.get_agent_provider_config_decrypted(
+        db_session,
+        user_id=user_id,
+        api_key_id=created.id,
+    )
+    assert decrypted is not None
+    assert decrypted[1] == {"region": "us-east-1", "bearerToken": "bedrock-token-abcd"}
+
+
+@pytest.mark.asyncio
+async def test_create_provider_config_rejects_unknown_kind(db_session: AsyncSession) -> None:
+    user_id = await _create_user(db_session)
+    with pytest.raises(ValueError, match="Unsupported provider-config kind"):
+        await store.create_agent_provider_config(
+            db_session,
+            user_id=user_id,
+            title="Bad kind",
+            kind="api_key",
+            value={"anything": "value"},
+        )
+    with pytest.raises(ValueError, match="Unsupported provider-config kind"):
+        await store.create_agent_provider_config(
+            db_session,
+            user_id=user_id,
+            title="Bad kind",
+            kind="not_a_real_kind",
+            value={"anything": "value"},
+        )
+
+
+@pytest.mark.asyncio
+async def test_create_provider_config_rejects_empty_values(db_session: AsyncSession) -> None:
+    user_id = await _create_user(db_session)
+    with pytest.raises(ValueError, match="non-empty"):
+        await store.create_agent_provider_config(
+            db_session,
+            user_id=user_id,
+            title="Empty field",
+            kind="azure_openai",
+            value={"endpoint": "https://foo.openai.azure.com", "apiKey": "  "},
+        )
+    with pytest.raises(ValueError, match="non-empty"):
+        await store.create_agent_provider_config(
+            db_session,
+            user_id=user_id,
+            title="No fields",
+            kind="azure_openai",
+            value={},
+        )
+
+
+@pytest.mark.asyncio
+async def test_get_agent_api_key_decrypted_does_not_resolve_typed_row(
+    db_session: AsyncSession,
+) -> None:
+    """A typed row is invisible to the bare-secret fetch (kind-scoped query)."""
+    user_id = await _create_user(db_session)
+    created = await store.create_agent_provider_config(
+        db_session,
+        user_id=user_id,
+        title="Personal Bedrock",
+        kind="aws_bedrock",
+        value={"region": "us-east-1", "bearerToken": "bedrock-token-abcd"},
+    )
+    assert (
+        await store.get_agent_api_key_decrypted(
+            db_session,
+            user_id=user_id,
+            api_key_id=created.id,
+        )
+        is None
+    )
+
+
+@pytest.mark.asyncio
+async def test_get_agent_provider_config_decrypted_does_not_resolve_bare_key(
+    db_session: AsyncSession,
+) -> None:
+    """A bare-secret row is invisible to the typed-config fetch (kind-scoped query)."""
+    user_id = await _create_user(db_session)
+    created = await store.create_agent_api_key(
+        db_session,
+        user_id=user_id,
+        title="Bare key",
+        value="sk-ant-api03-secretsecretabc4",
+    )
+    assert (
+        await store.get_agent_provider_config_decrypted(
             db_session,
             user_id=user_id,
             api_key_id=created.id,

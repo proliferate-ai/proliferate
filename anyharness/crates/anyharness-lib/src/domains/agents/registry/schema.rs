@@ -27,6 +27,30 @@ pub struct AgentRegistryAgent {
     pub auth: AgentRegistryAuth,
     #[serde(default)]
     pub docs_url: Option<String>,
+    /// Typed provider-config kinds this harness supports (agent-auth.md's
+    /// vault table: `aws_bedrock`, `azure_openai`). Empty/omitted means the
+    /// harness offers none — the settings UI's typed-secret create flow
+    /// (`getSupportedProviderConfigKinds`) is driven by this list, and a
+    /// vault entry of an undeclared kind is rejected at selection-write time
+    /// like any other invalid selection (agent-auth.md's "Two rules keep
+    /// typed kinds from sprawling").
+    #[serde(default)]
+    pub provider_config: Vec<AgentRegistryProviderConfig>,
+}
+
+/// One typed provider-config declaration: which vault `kind` this harness
+/// accepts, and the field-spec vocabulary its render recipe consumes to turn
+/// a decrypted vault JSON document into the harness's own env set. `envVars`
+/// reuses [`AgentRegistryAuthSlotEnvVar`]'s plain/tagged form so a Bedrock
+/// mode-switch flag (`CLAUDE_CODE_USE_BEDROCK`) and its credential vars share
+/// one vocabulary with auth slots instead of inventing a second one.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentRegistryProviderConfig {
+    pub kind: String,
+    pub label: String,
+    #[serde(default)]
+    pub env_vars: Vec<AgentRegistryAuthSlotEnvVar>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -321,5 +345,65 @@ mod tests {
             serde_json::to_value(&env_vars[0]).expect("serialize"),
             serde_json::json!("ANTHROPIC_API_KEY")
         );
+    }
+
+    #[test]
+    fn bundled_claude_declares_bedrock_and_azure_provider_config() {
+        let registry = bundled_agent_registry_document();
+        let claude = registry
+            .agents
+            .iter()
+            .find(|agent| agent.kind == "claude")
+            .expect("claude agent");
+
+        let kinds: Vec<&str> = claude
+            .provider_config
+            .iter()
+            .map(|entry| entry.kind.as_str())
+            .collect();
+        assert_eq!(kinds, vec!["aws_bedrock", "azure_openai"]);
+
+        let bedrock = claude
+            .provider_config
+            .iter()
+            .find(|entry| entry.kind == "aws_bedrock")
+            .expect("claude aws_bedrock providerConfig");
+        assert_eq!(
+            bedrock
+                .env_vars
+                .iter()
+                .map(|env_var| env_var.name())
+                .collect::<Vec<_>>(),
+            vec!["CLAUDE_CODE_USE_BEDROCK", "AWS_BEARER_TOKEN_BEDROCK", "AWS_REGION"]
+        );
+        assert_eq!(
+            bedrock.env_vars[0].kind(),
+            AgentRegistryEnvVarKind::Flag,
+            "the Bedrock mode switch must be tagged flag, not secret"
+        );
+    }
+
+    #[test]
+    fn provider_config_defaults_to_empty_when_absent() {
+        let agent: AgentRegistryAgent = serde_json::from_value(serde_json::json!({
+            "kind": "grok",
+            "displayName": "Grok",
+            "agentProcess": {
+                "install": {
+                    "kind": "manual",
+                    "docsUrl": "https://example.com"
+                }
+            },
+            "launch": {
+                "executableName": "grok",
+                "defaultArgs": []
+            },
+            "auth": {
+                "readinessPolicy": "none",
+                "slots": []
+            }
+        }))
+        .expect("agent without providerConfig must parse");
+        assert!(agent.provider_config.is_empty());
     }
 }

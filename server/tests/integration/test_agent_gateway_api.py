@@ -129,6 +129,7 @@ class TestAgentApiKeys:
         assert created["title"] == "Work key"
         assert created["redactedHint"] == "sk-...abc4"
         assert created["status"] == "active"
+        assert created["kind"] == "api_key"
 
         listed = await client.get("/v1/cloud/agent-gateway/keys", headers=headers)
         assert listed.status_code == 200
@@ -155,6 +156,80 @@ class TestAgentApiKeys:
         ).scalar_one()
         assert row.value_ciphertext != SECRET
         assert SECRET not in row.value_ciphertext
+
+    @pytest.mark.asyncio
+    async def test_create_provider_config_happy_path(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        _, headers = await _authed_user(client)
+
+        response = await client.post(
+            "/v1/cloud/agent-gateway/keys/provider-config",
+            headers=headers,
+            json={
+                "title": "Personal Bedrock",
+                "kind": "aws_bedrock",
+                "value": {"region": "us-east-1", "bearerToken": "bedrock-token-abcd"},
+            },
+        )
+        assert response.status_code == 200, response.text
+        _assert_no_secret(response)
+        created = response.json()
+        assert created["title"] == "Personal Bedrock"
+        assert created["kind"] == "aws_bedrock"
+        assert "bedrock-token-abcd" not in response.text
+
+        listed = await client.get("/v1/cloud/agent-gateway/keys", headers=headers)
+        assert listed.status_code == 200
+        _assert_no_secret(listed)
+        keys = listed.json()
+        assert [key["id"] for key in keys] == [created["id"]]
+        assert keys[0]["kind"] == "aws_bedrock"
+
+        # Ciphertext lives in the DB; the raw JSON payload never does.
+        row = (
+            await db_session.execute(
+                select(AgentApiKey).where(AgentApiKey.id == uuid.UUID(str(created["id"])))
+            )
+        ).scalar_one()
+        assert row.kind == "aws_bedrock"
+        assert "bedrock-token-abcd" not in row.value_ciphertext
+
+    @pytest.mark.asyncio
+    async def test_create_provider_config_rejects_unsupported_kind(
+        self,
+        client: AsyncClient,
+    ) -> None:
+        _, headers = await _authed_user(client)
+
+        response = await client.post(
+            "/v1/cloud/agent-gateway/keys/provider-config",
+            headers=headers,
+            json={
+                "title": "Bad kind",
+                "kind": "not_a_real_kind",
+                "value": {"anything": "value"},
+            },
+        )
+        # Rejected by pydantic's Literal validation before reaching the service.
+        assert response.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_create_provider_config_rejects_empty_value(
+        self,
+        client: AsyncClient,
+    ) -> None:
+        _, headers = await _authed_user(client)
+
+        response = await client.post(
+            "/v1/cloud/agent-gateway/keys/provider-config",
+            headers=headers,
+            json={"title": "Empty", "kind": "azure_openai", "value": {}},
+        )
+        assert response.status_code == 400
+        assert response.json()["detail"]["code"] == "invalid_agent_provider_config_value"
 
     @pytest.mark.asyncio
     async def test_create_rejects_empty_title_and_value(self, client: AsyncClient) -> None:
