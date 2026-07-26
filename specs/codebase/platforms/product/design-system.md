@@ -350,11 +350,13 @@ token is already a tint rather than a hue, with the hue held in
 Git and review state carry a parallel set of roles rather than reusing these:
 `--color-git-green`/`-red`/`-yellow`, `--color-diff-added`,
 `--color-diff-deleted`, `--color-pr-merged` (`#ad7bf9`/`#8250df`),
-`--color-status-in-progress`. Two are visibly derived from the semantic pair
-(`git-green` is `success`, dark for dark and light for light) and two are not
-(`--color-diff-added` is `#00a240` in *both* modes, because it must hold against
-the diff's own surfaces rather than the app background). Keeping them separate is
-what lets a diff retune its greens without moving every success badge.
+`--color-status-in-progress`. `--color-diff-added`/`--color-diff-deleted` alias
+`--color-git-green`/`--color-git-red` directly (same hue per mode, matching the
+reference diff surface's addition/deletion colors) rather than duplicating the
+literal — the diff pane's gutter, hunk stripes, and line tints all key off
+these two names, so retuning the alias target retunes the whole pane at once.
+Keeping the name separate from `--color-success` is what lets a diff retune its
+greens without moving every success badge.
 
 ### Accents
 
