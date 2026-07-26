@@ -41,6 +41,12 @@ apps/packages/product-ui/src/patterns/
 complete list enforced by `UI_SRC_ALLOWED_TOP_LEVEL_ENTRIES` in
 [check_frontend_boundaries.py](../../../../scripts/check_frontend_boundaries.py).
 
+One non-component module lives inside a tier directory:
+[popover-surface.ts](../../../../apps/packages/ui/src/primitives/popover-surface.ts)
+holds the shared popover frame/surface class constants composed by `Popover`,
+`DropdownMenu`, and `PopoverButton`. Like the infrastructure directories, it is
+not a component: no catalog row below, no export subpath.
+
 ## The Library Model
 
 Three tiers inside `ui/src`, organized by **component role, never by feature

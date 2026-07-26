@@ -106,9 +106,10 @@ apps/packages/
 
   ui/
     src/
-      kit/
-      layout/
       primitives/
+      patterns/
+      icons/
+      lib/, utils/, overlays/
 
   product-domain/
     src/
@@ -116,6 +117,7 @@ apps/packages/
 
   product-ui/
     src/
+      patterns/
       <domain>/
         <surface>/
 

@@ -44,9 +44,9 @@ implementation such as Tauri, browser auth transport, and vendor bootstrap.
 ```text
 apps/packages/
   design/src/        tokens.ts · css/{dom.css,product.css,desktop.css} · react-native.ts
-  ui/src/            primitives/ · patterns/ · icons/ · lib/
+  ui/src/            primitives/ · patterns/ · icons/ · lib/ · utils/ · overlays/
   product-domain/src/<domain>/
-  product-ui/src/<domain>/<surface>/
+  product-ui/src/    patterns/ · <domain>/<surface>/
   product-surfaces/src/<domain>/<surface>/
   product-client/src/
     ProductClient.tsx
@@ -84,7 +84,7 @@ The **single DOM primitive system** for Desktop, Web, `product-client`,
 *only* place primitives exist.
 
 ```text
-ui/src/primitives/** · ui/src/patterns/** · ui/src/icons/** · ui/src/lib/utils.ts
+ui/src/primitives/** · ui/src/patterns/** · ui/src/icons/** · ui/src/{lib,utils,overlays}/
 ```
 
 **Hard invariant: no DOM primitive component may be defined outside `apps/packages/ui/**`.** A primitive is any generic reusable control/shell/low-level building block — *including a differently-named wrapper* around a raw DOM control.
