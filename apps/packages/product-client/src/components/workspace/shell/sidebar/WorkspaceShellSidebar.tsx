@@ -32,7 +32,7 @@ export function WorkspaceShellSidebar({
       // isolate: the resize separator's hit strip overlaps this edge (z-10 in
       // the page context); a local stacking context keeps sidebar-internal
       // z-indexes from painting over the dragger.
-      className={`isolate flex shrink-0 flex-col overflow-hidden bg-sidebar transition-[width] duration-150 ease-in-out ${edgeClassName}`}
+      className={`isolate flex shrink-0 flex-col overflow-hidden bg-sidebar transition-[width] duration-panel ease-in-out ${edgeClassName}`}
       style={{ width: open ? width : 0 }}
     >
       <DebugProfiler id="workspace-sidebar-frame">

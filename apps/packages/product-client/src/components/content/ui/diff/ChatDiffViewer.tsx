@@ -155,7 +155,7 @@ function ChatCollapsedRow({
       onClick={onExpand}
       aria-label={`Expand ${section.lineCount} unmodified lines`}
       title={`${section.lineCount} unmodified lines`}
-      className="diff-content-cell flex min-h-[var(--diffs-line-height)] cursor-pointer items-center justify-start border-0 bg-[var(--codex-diffs-separator-surface)] p-0 text-left font-[inherit] text-[inherit] leading-[inherit] text-muted-foreground/60 transition-colors hover:text-foreground"
+      className="diff-content-cell flex min-h-[var(--diffs-line-height)] cursor-pointer items-center justify-start border-0 bg-[var(--codex-diffs-separator-surface)] p-0 text-left font-[inherit] text-muted-foreground/60 transition-colors hover:text-foreground"
     >
       <DiffCollapsedContentLabel
         lineCount={section.lineCount}
@@ -507,7 +507,7 @@ export function ChatDiffViewer({
         data-interactive-line-numbers=""
         tabIndex={0}
         style={CHAT_DIFF_PRE_STYLE}
-        className={`m-0 w-full bg-[var(--codex-diffs-surface)] p-0 font-[family:var(--diffs-font-family)] text-[length:var(--diffs-font-size)] leading-[var(--diffs-line-height)] text-[color:var(--diffs-fg)] ${
+        className={`m-0 w-full bg-[var(--codex-diffs-surface)] p-0 font-[family:var(--diffs-font-family)] text-readable-code text-foreground ${
           wrapLongLines ? "min-w-0" : "min-w-max"
         }`}
       >

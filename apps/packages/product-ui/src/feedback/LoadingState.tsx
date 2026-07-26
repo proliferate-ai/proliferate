@@ -25,9 +25,9 @@ export function LoadingState({
     >
       <div className="flex flex-col items-center text-center">
         <ProliferateLivingMark />
-        <p className="mt-5 text-sm font-medium text-foreground">{label}</p>
+        <p className="mt-5 text-heading font-medium text-foreground">{label}</p>
         {description ? (
-          <p className="mt-1 max-w-xs text-xs leading-5 text-muted-foreground/80">
+          <p className="mt-1 max-w-xs text-ui-sm text-muted-foreground/80">
             {description}
           </p>
         ) : null}

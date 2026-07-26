@@ -180,7 +180,7 @@ function DiffDisplayPolicyPlaceholder({
   description: string;
 }) {
   return (
-    <div className="px-3 py-4 text-xs text-muted-foreground">
+    <div className="px-3 py-4 text-chat text-muted-foreground">
       <p className="font-medium text-foreground">{title}</p>
       <p className="mt-0.5 leading-5">{description}</p>
     </div>

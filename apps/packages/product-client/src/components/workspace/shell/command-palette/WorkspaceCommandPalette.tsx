@@ -124,7 +124,7 @@ function WorkspaceCommandPaletteContent({
         ))}
         {!state.hasEntries && (
           <div
-            className="px-3 py-8 text-center text-xs text-muted-foreground"
+            className="px-3 py-8 text-center text-ui-sm text-muted-foreground"
             data-telemetry-mask
           >
             No results
@@ -132,7 +132,7 @@ function WorkspaceCommandPaletteContent({
         )}
         {state.fileSearchError && (
           <div
-            className="px-3 py-2 text-xs text-muted-foreground"
+            className="px-3 py-2 text-ui-sm text-muted-foreground"
             data-telemetry-mask
           >
             Failed to search files.
@@ -188,7 +188,7 @@ function WorkspaceCommandPaletteRow({ entry }: { entry: CommandPaletteEntry }) {
           {entry.disabledReason}
         </span>
       ) : entry.shortcut ? (
-        <kbd className="ml-auto flex h-4 shrink-0 items-center rounded-md bg-foreground/10 px-1.5 text-ui-sm leading-none text-muted-foreground">
+        <kbd className="ml-auto flex h-4 shrink-0 items-center rounded-md bg-current/10 px-1.5 text-ui-sm leading-none text-muted-foreground">
           {entry.shortcut}
         </kbd>
       ) : null}

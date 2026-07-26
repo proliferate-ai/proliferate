@@ -17,9 +17,9 @@ export function LoadingState({
         <SkeletonBlock className="h-2 w-28 bg-muted/45" />
       </div>
       <div className="text-center mt-1">
-        <p className="text-sm font-medium text-foreground">{message}</p>
+        <p className="text-body-emphasis font-medium text-foreground">{message}</p>
         {subtext && (
-          <p className="text-xs text-muted-foreground mt-1">{subtext}</p>
+          <p className="mt-1 text-ui-sm text-muted-foreground">{subtext}</p>
         )}
       </div>
     </div>

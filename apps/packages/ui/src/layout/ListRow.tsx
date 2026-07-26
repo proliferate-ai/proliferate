@@ -23,15 +23,15 @@ export const ListRow = forwardRef<HTMLButtonElement, ListRowProps>(
         ref={ref}
         type={type}
         className={twMerge(
-          "flex w-full items-center gap-3 border-b border-border-light px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-accent disabled:pointer-events-none disabled:opacity-60",
+          "flex w-full items-center gap-3 border-b border-border-light px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-hover active:bg-active disabled:pointer-events-none disabled:opacity-60",
           className,
         )}
         {...props}
       >
         {leading && <span className="flex size-8 shrink-0 items-center justify-center">{leading}</span>}
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium text-foreground">{title}</span>
-          {description && <span className="mt-0.5 block truncate text-xs text-muted-foreground">{description}</span>}
+          <span className="block truncate text-heading font-medium text-foreground">{title}</span>
+          {description && <span className="mt-0.5 block truncate text-ui-sm text-muted-foreground">{description}</span>}
         </span>
         {trailing && <span className="shrink-0">{trailing}</span>}
       </button>

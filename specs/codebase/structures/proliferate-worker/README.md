@@ -1,9 +1,12 @@
 # Proliferate Worker
 
 Proliferate Worker is an optional process beside AnyHarness. It enrolls with
-Cloud once, sends heartbeats, and converges the local catalog and, depending
-on target topology, either the AnyHarness/Worker binaries directly or a
-durable update request into a Proliferate Supervisor mailbox.
+Cloud once, sends heartbeats, and — when a heartbeat ack reports version
+divergence — writes a durable update request into a Proliferate Supervisor
+mailbox. The agent catalog is not converged here: it ships only inside the
+runtime binary
+([agent-distribution.md](../../platforms/product/agent-distribution.md)),
+so binary convergence is catalog convergence.
 
 It is not a Cloud command runner. It does not lease commands, materialize
 workspaces, upload session events, or maintain Cloud projections. Cloud
@@ -47,7 +50,10 @@ config + single-process lock + local SQLite
   -> after each successful heartbeat, repair that fresh gateway credential if
      a revoked predecessor overwrote the shared file
   -> use desiredVersions to converge, in order:
-       agent catalog
+       agent catalog (DELETION PENDING: binary-only transport ruling —
+         the catalog ships inside the runtime binary; catalog_sync.rs and
+         the heartbeat catalog version are scheduled for removal, see
+         agent-distribution.md Current gaps)
        AnyHarness binary:
          supervisor-owned target -> write a mailbox update request
          legacy target (when enabled) -> in-place swap (deprecated)
@@ -110,7 +116,7 @@ inventory, or materialization subsystems.
 | `main.rs`, `runtime.rs` | CLI entry, dependency construction, one heartbeat-and-convergence loop | Product workflows or background task supervision | [Runtime](guides/runtime.md) |
 | `identity/**` | Enrollment request, durable Worker credential, fingerprint | Sandbox identity, command identity, re-enrollment policy | [Identity](guides/identity.md) |
 | `lifecycle/heartbeat.rs` | Heartbeat cadence, request, and acknowledgement | Update execution or server-side liveness policy | [Lifecycle](guides/lifecycle.md) |
-| `catalog_sync.rs` | Compare catalog versions, fetch from Cloud, push to AnyHarness | General AnyHarness access | [Lifecycle](guides/lifecycle.md), [Clients](guides/clients.md) |
+| `catalog_sync.rs` | Compare catalog versions, fetch from Cloud, push to AnyHarness — **deletion pending**: the catalog is binary-only ([agent-distribution.md](../../platforms/product/agent-distribution.md) Current gaps); do not extend | General AnyHarness access | [Lifecycle](guides/lifecycle.md), [Clients](guides/clients.md) |
 | `self_update.rs` | Verify, preflight, swap, and exec the Worker binary on a **legacy** (non-supervisor-owned) target; deprecated, scheduled for deletion after the bridge window | AnyHarness or Supervisor updates, any behavior on a supervisor-owned target | [Lifecycle](guides/lifecycle.md) |
 | `anyharness_update.rs` | Verify, stop, swap, relaunch, health-gate, and roll back AnyHarness on a **legacy** target; deprecated, scheduled for deletion after the bridge window | General runtime lifecycle, any behavior on a supervisor-owned target | [Lifecycle](guides/lifecycle.md) |
 | `supervisor_bridge.rs` | Write one durable mailbox update request per diverging heartbeat on a supervisor-owned target; the one-time D5 bridge that hands an already-provisioned legacy target to Proliferate Supervisor | Update download, verification, activation, health-gating, or rollback (Supervisor owns all of that) | [Lifecycle](guides/lifecycle.md) |

@@ -45,8 +45,8 @@ export function FileTreeRow({
       className={twMerge(
         // Codex tree rows read at chat-body size; ours follows --text-message
         // so the tree tracks transcript prose across appearance presets.
-        "flex h-7 w-full items-center gap-2.5 rounded-md px-1.5 text-left text-[length:var(--text-message)] leading-none text-sidebar-foreground transition-colors duration-150 hover:bg-sidebar-accent",
-        selected && "bg-sidebar-accent",
+        "flex h-7 w-full items-center gap-2.5 rounded-md px-1.5 text-left text-sidebar-row leading-none text-sidebar-foreground transition-colors duration-hover hover:bg-hover active:bg-active",
+        selected && "bg-selected",
       )}
       style={{ paddingLeft }}
       onClick={onClick}
@@ -54,7 +54,7 @@ export function FileTreeRow({
       {isDirectory && (
         <ChevronRight
           className={twMerge(
-            "icon-compact shrink-0 text-sidebar-muted-foreground transition-transform duration-150",
+            "icon-compact shrink-0 text-sidebar-muted-foreground transition-transform duration-disclosure",
             expanded && "rotate-90",
           )}
         />
@@ -72,7 +72,7 @@ export function FileTreeRow({
       </span>
       {changed && (
         <span
-          className="shrink-0 pr-1 text-[length:var(--text-ui-sm)] font-medium leading-none text-git-yellow"
+          className="shrink-0 pr-1 text-ui-sm font-medium leading-none text-git-yellow"
           aria-label="Modified"
         >
           M

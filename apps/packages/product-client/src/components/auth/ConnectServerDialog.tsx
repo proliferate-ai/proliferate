@@ -88,9 +88,9 @@ export function ConnectServerDialog({ controller, context }: ConnectServerDialog
           }}
         >
           {context ? (
-            <p className="text-sm text-foreground">{context}</p>
+            <p className="text-body text-foreground">{context}</p>
           ) : null}
-          <p className="text-sm text-muted-foreground">
+          <p className="text-body text-muted-foreground">
             {CONNECT_SERVER_LABELS.entryDescription}
           </p>
           <Input
@@ -103,25 +103,25 @@ export function ConnectServerDialog({ controller, context }: ConnectServerDialog
             onChange={(event) => setUrl(event.target.value)}
             disabled={busy}
           />
-          {error && <p className="text-sm text-destructive">{error}</p>}
+          {error && <p className="text-ui text-destructive">{error}</p>}
         </form>
       ) : (
         <div className="grid gap-2">
           {context ? (
-            <p className="text-sm text-muted-foreground">{context}</p>
+            <p className="text-body text-muted-foreground">{context}</p>
           ) : null}
-          <p className="text-sm text-foreground">
+          <p className="text-body text-foreground">
             {pendingHost ? CONNECT_SERVER_LABELS.trustDescription(pendingHost) : null}
           </p>
           {pendingMeta && (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-ui-sm text-muted-foreground">
               {CONNECT_SERVER_LABELS.serverVersionLabel(pendingMeta.serverVersion)}
             </p>
           )}
           {versionWarning ? (
-            <p className="text-xs text-warning">{versionWarning}</p>
+            <p className="text-ui-sm text-warning">{versionWarning}</p>
           ) : null}
-          {error && <p className="text-sm text-destructive">{error}</p>}
+          {error && <p className="text-ui text-destructive">{error}</p>}
         </div>
       )}
     </ModalShell>

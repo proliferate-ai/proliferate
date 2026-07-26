@@ -9,6 +9,7 @@ import {
   type ReactNode,
   type WheelEvent as ReactWheelEvent,
 } from "react";
+import { motion } from "@proliferate/design/motion";
 import { chainVerticalWheelScroll } from "../utils/scroll-chain";
 
 interface AutoHideScrollAreaProps {
@@ -30,7 +31,6 @@ interface ScrollThumbState {
   visible: boolean;
 }
 
-const HIDE_DELAY_MS = 700;
 const MIN_THUMB_SIZE = 28;
 const THUMB_MEASUREMENT_EPSILON = 0.5;
 const HIDDEN_THUMB_STATE: ScrollThumbState = {
@@ -114,7 +114,7 @@ export const AutoHideScrollArea = forwardRef<HTMLDivElement, AutoHideScrollAreaP
         if (current.visible) {
           commitThumbState({ ...current, visible: false });
         }
-      }, HIDE_DELAY_MS);
+      }, motion.delay.autoHideScrollbarMs);
     };
 
     useEffect(() => {
@@ -243,12 +243,12 @@ export const AutoHideScrollArea = forwardRef<HTMLDivElement, AutoHideScrollAreaP
         {!allowHorizontal && thumb.size > 0 && (
           <div
             aria-hidden="true"
-            className={`pointer-events-none absolute right-[3px] top-[3px] bottom-[3px] w-1.5 transition-opacity duration-200 ${
+            className={`pointer-events-none absolute right-[3px] top-[3px] bottom-[3px] w-1.5 transition-opacity duration-hover ${
               thumb.visible ? "opacity-100" : "opacity-0"
             }`}
           >
             <div
-              className="pointer-events-auto absolute right-0 w-1.5 rounded-full bg-[var(--color-scrollbar-thumb)] transition-colors duration-150 hover:bg-[var(--color-scrollbar-thumb-active)]"
+              className="pointer-events-auto absolute right-0 w-1.5 rounded-full bg-scrollbar-thumb transition-colors duration-hover hover:bg-scrollbar-thumb-active"
               style={{
                 height: `${thumb.size}px`,
                 transform: `translateY(${thumb.offset}px)`,

@@ -45,13 +45,13 @@ export function WorkspaceArrivalAttachedPanelView({
     <ComposerAttachedPanel
       header={(
         <>
-          <Badge className="shrink-0 rounded-full px-2 py-0.5 text-base">
+          <Badge className="shrink-0 rounded-full px-2 py-0.5 text-chat">
             {viewModel.badgeLabel}
           </Badge>
-          <span className="min-w-0 truncate text-sm font-medium text-foreground">
+          <span className="min-w-0 truncate text-chat font-medium text-foreground">
             {viewModel.title}
           </span>
-          <span className="truncate text-sm text-muted-foreground">
+          <span className="truncate text-chat text-muted-foreground">
             {viewModel.subtitle}
           </span>
           {onDismiss && (
@@ -68,7 +68,7 @@ export function WorkspaceArrivalAttachedPanelView({
     >
       <div className="max-h-[min(32vh,280px)] overflow-y-auto">
         <ComposerAttachedPanelRow label="Setup">
-          <div className="flex items-center gap-2 text-base">
+          <div className="flex items-center gap-2 text-chat">
             {isSetupRunning && (
               <Spinner className="icon-compact text-muted-foreground" />
             )}
@@ -77,7 +77,7 @@ export function WorkspaceArrivalAttachedPanelView({
             <span className="group/setup-error relative min-w-0 truncate text-muted-foreground">
               {viewModel.setupSummary}
               {viewModel.setupDetail && (
-                <span className="pointer-events-none absolute bottom-full left-0 z-50 mb-1.5 hidden max-w-md whitespace-pre-wrap rounded-lg border border-border/60 bg-popover px-3 py-2 text-xs text-popover-foreground shadow-floating group-hover/setup-error:block">
+                <span className="pointer-events-none absolute bottom-full left-0 z-50 mb-1.5 hidden max-w-md whitespace-pre-wrap rounded-lg border border-border/60 bg-popover px-3 py-2 text-chat text-popover-foreground shadow-popover group-hover/setup-error:block">
                   {viewModel.setupDetail}
                 </span>
               )}
@@ -181,13 +181,13 @@ export function WorkspaceArrivalAttachedPanel() {
       <ComposerAttachedPanel
         header={(
           <>
-            <Badge className="shrink-0 rounded-full bg-destructive/10 text-destructive border-destructive/20 px-2 py-0.5 text-base">
+            <Badge className="shrink-0 rounded-full bg-destructive/10 text-destructive border-destructive/20 px-2 py-0.5 text-chat">
               Setup failed
             </Badge>
-            <span className="group/setup-error relative min-w-0 truncate text-sm text-muted-foreground">
+            <span className="group/setup-error relative min-w-0 truncate text-chat text-muted-foreground">
               {panelState.summary}
               {panelState.detail && (
-                <span className="pointer-events-none absolute bottom-full left-0 z-50 mb-1.5 hidden max-w-md whitespace-pre-wrap rounded-lg border border-border/60 bg-popover px-3 py-2 text-xs text-popover-foreground shadow-floating group-hover/setup-error:block">
+                <span className="pointer-events-none absolute bottom-full left-0 z-50 mb-1.5 hidden max-w-md whitespace-pre-wrap rounded-lg border border-border/60 bg-popover px-3 py-2 text-chat text-popover-foreground shadow-popover group-hover/setup-error:block">
                   {panelState.detail}
                 </span>
               )}
@@ -254,16 +254,16 @@ export function WorkspaceArrivalAttachedPanel() {
       <ComposerAttachedPanel
         header={(
           <>
-            <Badge className="shrink-0 rounded-full px-2 py-0.5 text-base">
+            <Badge className="shrink-0 rounded-full px-2 py-0.5 text-chat">
               <span className="inline-flex items-center gap-1">
                 {isBusy && <Spinner className="icon-compact" />}
                 <span>{panelState.badgeLabel}</span>
               </span>
             </Badge>
-            <span className="min-w-0 truncate text-sm font-medium text-foreground">
+            <span className="min-w-0 truncate text-chat font-medium text-foreground">
               {panelState.title}
             </span>
-            <span className="truncate text-sm text-muted-foreground">
+            <span className="truncate text-chat text-muted-foreground">
               {panelState.subtitle}
             </span>
           </>
@@ -274,7 +274,7 @@ export function WorkspaceArrivalAttachedPanel() {
         <div className="max-h-[min(32vh,280px)] overflow-y-auto">
           {panelState.detail && (
             <ComposerAttachedPanelRow label="Details">
-              <span className="truncate text-base text-muted-foreground">
+              <span className="truncate text-chat text-muted-foreground">
                 {panelState.detail}
               </span>
             </ComposerAttachedPanelRow>
@@ -282,7 +282,7 @@ export function WorkspaceArrivalAttachedPanel() {
 
           {deferredPromptCount > 0 ? (
             <ComposerAttachedPanelRow label="Prompt">
-              <span className="truncate text-base text-muted-foreground">
+              <span className="truncate text-chat text-muted-foreground">
                 Queued prompt will send when this cloud workspace is ready.
               </span>
             </ComposerAttachedPanelRow>

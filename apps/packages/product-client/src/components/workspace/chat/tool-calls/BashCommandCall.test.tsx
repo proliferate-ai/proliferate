@@ -21,7 +21,7 @@ describe("BashCommandCall", () => {
 
     const row = screen.getByRole("button", { name: /Running command pnpm test/i });
     expect(row).toBeTruthy();
-    expect(row.className).toContain("leading-[1.5]");
+    expect(row.className).toContain("leading-normal");
     expect(row.firstElementChild?.className).toContain("icon-paired");
     expect(row.firstElementChild?.innerHTML).toContain("[&amp;_svg]:size-full");
     expect(row.firstElementChild?.innerHTML).not.toContain("text-xs");

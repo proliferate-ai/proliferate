@@ -80,7 +80,7 @@ export function ComposerSlashHighlight({
       className="pointer-events-none absolute inset-0 overflow-hidden"
     >
       <div
-        className="whitespace-pre-wrap break-words text-composer leading-[var(--text-composer--line-height)] text-foreground"
+        className="whitespace-pre-wrap break-words text-composer text-foreground"
         style={{
           padding: 0,
           transform: `translateY(-${scrollTop}px)`,

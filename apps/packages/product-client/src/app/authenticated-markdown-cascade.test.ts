@@ -142,8 +142,8 @@ describe("authenticated Markdown stylesheet cascade", () => {
       });
 
       expect(result.stylesheets).toEqual(["eager", "authenticated"]);
-      expect(result.defaultTranscript.headings).toEqual([18, 15, 14.0004]);
-      expect(result.largeTranscript.headings).toEqual([19, 16, 15.1671]);
+      expect(result.defaultTranscript.headings).toEqual([18, 16, 14]);
+      expect(result.largeTranscript.headings).toEqual([19, 17, 15]);
       expect(result.proposalHeadings).toEqual([11, 11, 10]);
 
       expect(result.defaultTranscript.prose).toBe(12);
@@ -198,6 +198,8 @@ function renderFixtureHtml(): string {
             --text-ui-sm: 10px;
             --text-chat: 10px;
             --text-chat--line-height: 18px;
+            --text-body-emphasis: 14px;
+            --text-heading: 16px;
             --text-title: 18px;
             --prose-text-size: 12px;
             --prose-text-line-height: 20px;
@@ -207,6 +209,8 @@ function renderFixtureHtml(): string {
             --text-ui-sm: 11px;
             --text-chat: 11px;
             --text-chat--line-height: 19px;
+            --text-body-emphasis: 15px;
+            --text-heading: 17px;
             --text-title: 19px;
             --prose-text-size: 13px;
             --prose-text-line-height: 21px;

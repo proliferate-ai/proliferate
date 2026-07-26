@@ -65,9 +65,9 @@ export function GlobalAgentsPanePrototype({
             aria-label="Back to all parent sessions"
             title="Back to Agents overview"
             onClick={onBack}
-            className="shrink-0 text-sidebar-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
+            className="shrink-0 text-sidebar-muted-foreground hover:bg-hover active:bg-active hover:text-sidebar-foreground"
           >
-            <ArrowLeft className="size-4" aria-hidden="true" />
+            <ArrowLeft className="text-ui icon-control" aria-hidden="true" />
           </Button>
           <div className="min-w-0 flex-1">
             <p className="truncate text-ui font-medium text-sidebar-foreground">
@@ -113,7 +113,7 @@ export function GlobalAgentsPanePrototype({
                   variant="unstyled"
                   size="unstyled"
                   onClick={() => onSelectParent(parent.id)}
-                  className="flex min-h-12 w-full min-w-0 items-center justify-start gap-2 rounded-lg px-2 py-1.5 text-left text-sidebar-foreground hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-sidebar-border"
+                  className="flex min-h-12 w-full min-w-0 items-center justify-start gap-2 rounded-lg px-2 py-1.5 text-left text-sidebar-foreground hover:bg-hover active:bg-active focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-sidebar-border"
                 >
                   <AgentGlyphStack ids={parent.agents.map((agent) => agent.id)} max={3} />
                   <span className="min-w-0 flex-1">
@@ -122,7 +122,7 @@ export function GlobalAgentsPanePrototype({
                       {subagentCountsLine(aggregate) ?? `${aggregate.total} subagents`}
                     </span>
                   </span>
-                  <ChevronRight className="size-3.5 shrink-0 text-sidebar-muted-foreground" aria-hidden="true" />
+                  <ChevronRight className="text-ui icon-compact shrink-0 text-sidebar-muted-foreground" aria-hidden="true" />
                 </Button>
               </div>
             );
@@ -144,8 +144,8 @@ export function GlobalAgentsPanePrototype({
               className="mb-1 flex w-full items-center gap-1 px-2 text-left text-ui-sm text-sidebar-muted-foreground hover:text-sidebar-foreground focus-visible:outline-none focus-visible:text-sidebar-foreground"
             >
               {archiveOpen
-                ? <ChevronDown className="size-3.5 shrink-0" aria-hidden="true" />
-                : <ChevronRight className="size-3.5 shrink-0" aria-hidden="true" />}
+                ? <ChevronDown className="text-ui icon-compact shrink-0" aria-hidden="true" />
+                : <ChevronRight className="text-ui icon-compact shrink-0" aria-hidden="true" />}
               Archive ({archived.length})
             </Button>
             {archiveOpen ? (
@@ -158,7 +158,7 @@ export function GlobalAgentsPanePrototype({
                       size="unstyled"
                       title={`${session.label} · ${session.parentTitle}`}
                       onClick={() => onOpenArchived(session.id)}
-                      className="flex min-h-11 w-full min-w-0 items-center justify-start gap-2 rounded-lg px-2 py-1.5 text-left text-sidebar-foreground hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-sidebar-border"
+                      className="flex min-h-11 w-full min-w-0 items-center justify-start gap-2 rounded-lg px-2 py-1.5 text-left text-sidebar-foreground hover:bg-hover active:bg-active focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-sidebar-border"
                     >
                       <AgentGlyph id={session.id} dimmed />
                       <span className="min-w-0 flex-1">

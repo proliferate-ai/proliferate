@@ -195,7 +195,7 @@ export function UserIntegrationsPane({ focus = {} }: UserIntegrationsPaneProps) 
       />
 
       {isLoading ? (
-        <div className="text-xs text-muted-foreground">Loading integrations...</div>
+        <div className="text-ui-sm text-muted-foreground">Loading integrations...</div>
       ) : isError ? (
         <SettingsEmptyState
           size="compact"

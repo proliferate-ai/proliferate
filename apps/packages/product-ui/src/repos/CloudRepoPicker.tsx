@@ -119,7 +119,7 @@ export function CloudRepoPicker({
       {error ? (
         <div
           role="alert"
-          className="mt-2 flex items-start gap-2 rounded-lg bg-destructive-subtle px-2.5 py-2 text-ui-sm leading-[1.45] text-destructive"
+          className="mt-2 flex items-start gap-2 rounded-lg bg-destructive-subtle px-2.5 py-2 text-ui-sm text-destructive"
         >
           <ShieldAlert className="mt-px icon-paired shrink-0" aria-hidden />
           <span className="min-w-0 flex-1">{error}</span>
@@ -217,7 +217,7 @@ function EmptyRepositoryState({ query }: { query: string }) {
       <div className="text-ui-sm font-medium text-foreground">
         {trimmedQuery ? "No matching repositories" : "No repositories found"}
       </div>
-      <p className="mx-auto mt-1 max-w-xs text-ui-sm leading-[1.45] text-muted-foreground">
+      <p className="mx-auto mt-1 max-w-xs text-ui-sm text-muted-foreground">
         {trimmedQuery
           ? "Try another owner or repository name, or paste an owner/repo value below."
           : "Paste an owner/repo value below, or connect a GitHub account with repository access."}
@@ -248,8 +248,8 @@ function RepositoryRow({
   ].filter(Boolean).join(" · ");
 
   return (
-    <div className="flex min-w-0 items-center gap-2.5 rounded-lg px-2 py-2 transition-colors hover:bg-accent">
-      <span className="flex size-6 shrink-0 items-center justify-center overflow-hidden rounded-[5px] bg-surface-control text-muted-foreground">
+    <div className="flex min-w-0 items-center gap-2.5 rounded-lg px-2 py-2 transition-colors hover:bg-hover active:bg-active">
+      <span className="flex size-6 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-surface-control text-muted-foreground">
         {repo.ownerAvatarUrl ? (
           <img src={repo.ownerAvatarUrl} alt="" className="size-full object-cover" />
         ) : (
@@ -267,7 +267,7 @@ function RepositoryRow({
             <Check className="icon-paired shrink-0 text-success" aria-hidden />
           ) : null}
         </span>
-        <span className="block truncate text-ui-sm leading-[1.45] text-muted-foreground">
+        <span className="block truncate text-ui-sm text-muted-foreground">
           {repo.disabledReason ? (
             <span className="text-warning">{repo.disabledReason}</span>
           ) : (

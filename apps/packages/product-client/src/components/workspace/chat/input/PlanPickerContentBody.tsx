@@ -32,18 +32,18 @@ export function PlanPickerContentBody({
       </div>
       <div className="max-h-80 overflow-y-auto p-1">
         {picker.isLoading && (
-          <div className="flex items-center gap-2 px-3 py-4 text-sm text-muted-foreground">
+          <div className="flex items-center gap-2 px-3 py-4 text-ui-sm text-muted-foreground">
             <Spinner className="icon-paired" />
             Loading plans...
           </div>
         )}
         {!picker.isLoading && picker.isError && (
-          <div className="px-3 py-4 text-sm text-destructive">
+          <div className="px-3 py-4 text-ui text-destructive">
             Failed to load plans.
           </div>
         )}
         {!picker.isLoading && !picker.isError && picker.plans.length === 0 && (
-          <div className="px-3 py-4 text-sm text-muted-foreground">
+          <div className="px-3 py-4 text-ui-sm text-muted-foreground">
             No plans found.
           </div>
         )}
@@ -61,10 +61,10 @@ export function PlanPickerContentBody({
               <ClipboardList className="icon-paired" />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm font-medium text-foreground">
+              <span className="block truncate text-ui font-medium text-foreground">
                 {plan.title}
               </span>
-              <span className="block truncate text-xs text-muted-foreground">
+              <span className="block truncate text-ui-sm text-muted-foreground">
                 {formatPlanAgentKindLabel(plan.sourceAgentKind)}
                 {" - "}
                 {formatPlanDecisionStateLabel(plan.decisionState)}

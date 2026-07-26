@@ -132,7 +132,7 @@ function FileActionRow({
   return (
     <div
       title={`${verb} ${pathLabel}`}
-      className={`inline-flex min-w-0 max-w-full items-center gap-1.5 text-chat leading-[var(--text-chat--line-height)] ${
+      className={`inline-flex min-w-0 max-w-full items-center gap-1.5 text-chat ${
         failed ? "text-destructive/80" : "text-foreground/60"
       }`}
     >

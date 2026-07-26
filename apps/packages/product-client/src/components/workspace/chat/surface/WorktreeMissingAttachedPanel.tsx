@@ -52,13 +52,13 @@ export function WorktreeMissingAttachedPanel({
       icon={<CircleAlert className="text-warning-foreground" />}
       title={copy.title}
     >
-      <div className="px-3 pb-1 text-base text-muted-foreground">
+      <div className="px-3 pb-1 text-chat text-muted-foreground">
         {confirmingDelete ? copy.deleteConfirmBody : copy.body}
       </div>
       {!confirmingDelete && restoreError && (
         <div
           role="alert"
-          className="mx-3 mb-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-base text-destructive"
+          className="mx-3 mb-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-chat text-destructive"
         >
           {restoreError}
         </div>
@@ -67,7 +67,7 @@ export function WorktreeMissingAttachedPanel({
         <div className="pt-1">
           <ComposerAttachedPanelRow label="Path">
             <span
-              className="block truncate font-mono text-sm text-muted-foreground"
+              className="block truncate font-mono text-chat text-muted-foreground"
               title={workspacePath}
             >
               {workspacePath}
@@ -76,7 +76,7 @@ export function WorktreeMissingAttachedPanel({
           {currentBranch && (
             <ComposerAttachedPanelRow label="Branch">
               <span
-                className="block truncate font-mono text-sm text-muted-foreground"
+                className="block truncate font-mono text-chat text-muted-foreground"
                 title={currentBranch}
               >
                 {currentBranch}

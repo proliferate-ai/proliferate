@@ -2,14 +2,14 @@ import { SubagentIdentityGlyph } from "#product/components/playground/subagents-
 
 export function AgentGlyph({
   id,
-  size = 16,
   dimmed = false,
+  className = "text-ui icon-control",
 }: {
   id: string;
-  size?: number;
   dimmed?: boolean;
+  className?: string;
 }) {
-  return <SubagentIdentityGlyph seed={id} size={size} dimmed={dimmed} />;
+  return <SubagentIdentityGlyph seed={id} dimmed={dimmed} className={className} />;
 }
 
 /**
@@ -32,14 +32,14 @@ export function AgentGlyphStack({
         {shown.map((id) => (
           <span
             key={id}
-            className="flex size-[18px] items-center justify-center rounded-full bg-popover ring-1 ring-popover-ring"
+            className="flex size-5 items-center justify-center rounded-full bg-popover ring-1 ring-popover-ring"
           >
-            <AgentGlyph id={id} size={11} />
+            <AgentGlyph id={id} className="text-ui-sm icon-compact" />
           </span>
         ))}
       </span>
       {overflow > 0 ? (
-        <span className="ml-1 font-mono text-xs text-muted-foreground">+{overflow}</span>
+        <span className="ml-1 font-mono text-ui-sm text-muted-foreground">+{overflow}</span>
       ) : null}
     </span>
   );

@@ -237,7 +237,7 @@ export const SidebarUsageTrigger = forwardRef<
       size="unstyled"
       aria-label={`Usage. Compute, ${meterStatusLabel(state, "compute")}. LLM, ${meterStatusLabel(state, "llm")}. Open usage details`}
       title="Usage"
-      className={`relative flex size-10 shrink-0 items-center justify-center rounded-lg text-sidebar-muted-foreground outline-none hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-sidebar-ring data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-foreground ${className}`}
+      className={`relative flex size-10 shrink-0 items-center justify-center rounded-lg text-sidebar-muted-foreground outline-none hover:bg-hover active:bg-active hover:text-sidebar-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-sidebar-ring data-[state=open]:bg-active data-[state=open]:text-sidebar-foreground ${className}`}
     >
       {/* 20/28 of the control tier matches the CircleHelp glyph's 20/24 of
           the paired tier, while both surrounding hit targets remain 40px. */}
@@ -254,7 +254,7 @@ export const SidebarUsageTrigger = forwardRef<
         />
       </svg>
       {state.kind === "unavailable" ? (
-        <span className="pointer-events-none absolute text-[length:var(--text-ui-sm)] font-semibold leading-none text-destructive" aria-hidden="true">
+        <span className="pointer-events-none absolute text-ui-sm font-semibold leading-none text-destructive" aria-hidden="true">
           !
         </span>
       ) : null}

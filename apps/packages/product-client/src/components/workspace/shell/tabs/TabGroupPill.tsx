@@ -26,8 +26,8 @@ export function TabGroupPill({
       : {}),
   } as CSSProperties;
   const className = groupKind === "manual"
-    ? "h-5 min-w-0 justify-center rounded-full border-0 px-1 py-0 text-sm font-semibold hover:opacity-90"
-    : "h-5 min-w-0 justify-center rounded-full border border-border/70 bg-foreground/5 px-1 py-0 text-sm font-medium text-muted-foreground hover:bg-foreground/8 hover:text-foreground";
+    ? "h-5 min-w-0 justify-center rounded-full border-0 px-1 py-0 text-ui font-semibold hover:opacity-90"
+    : "h-5 min-w-0 justify-center rounded-full border border-border/70 bg-foreground/5 px-1 py-0 text-ui font-medium text-muted-foreground hover:bg-hover hover:text-foreground active:bg-active";
 
   return (
     <Button

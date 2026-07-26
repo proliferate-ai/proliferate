@@ -26,7 +26,7 @@ export function PlaygroundRecordingTranscript({
 
   if (replay.error) {
     return (
-      <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+      <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-chat text-destructive">
         {replay.error}
       </div>
     );
@@ -34,7 +34,7 @@ export function PlaygroundRecordingTranscript({
 
   if (!replay.enabled) {
     return (
-      <div className="text-sm text-muted-foreground">
+      <div className="text-chat text-muted-foreground">
         Replay is disabled for this runtime.
       </div>
     );
@@ -42,7 +42,7 @@ export function PlaygroundRecordingTranscript({
 
   if (!replay.sessionId || !replaySlot) {
     return (
-      <div className="text-sm text-muted-foreground">
+      <div className="text-chat text-muted-foreground">
         Loading replay session...
       </div>
     );

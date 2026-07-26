@@ -38,7 +38,7 @@ describe("ToolCallSummary", () => {
     expect(ledgerShell?.className).not.toMatch(/(?:^|\s)border(?:\s|$)/);
     expect(ledgerShell?.className).not.toMatch(/(?:^|\s)rounded(?:\s|$)/);
     expect(ledger.parentElement?.className).toContain("mt-4");
-    expect(ledger.parentElement?.className).toContain("gap-4");
+    expect(ledger.parentElement?.className).toContain("gap-transcript-turn");
     expect(container.querySelector("[data-completed-work-divider]")).toBeNull();
 
     fireEvent.click(disclosure);

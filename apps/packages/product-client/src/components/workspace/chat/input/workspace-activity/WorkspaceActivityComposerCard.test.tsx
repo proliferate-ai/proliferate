@@ -57,6 +57,27 @@ describe("WorkspaceActivityComposerCard", () => {
     expect(sourceControlSection).toBeTruthy();
     expect(sourceControlSection?.className).not.toContain("after:");
   });
+
+  it("takes the composer's translucent cap treatment ([CHAT-01])", () => {
+    render(
+      <WorkspaceActivityComposerCard
+        model={activityModel()}
+        pullRequestActionLabel="Create pull request"
+      />,
+    );
+
+    const trigger = screen.getByRole("button", {
+      name: "Workspace activity: 47 changes, PR #381 passing",
+    });
+    // The cap's ring bleeds one pixel into the composer surface's box below.
+    // That used to be hidden by an opaque surface; the [CHAT-01] retune made
+    // the surface translucent, so fill, backdrop treatment and a bottom-only
+    // clip all come from the composer's own design CSS class — no authored
+    // background/backdrop utilities at this call site.
+    expect(trigger.className).toContain("ring-1");
+    expect(trigger.className).toContain("chat-composer-surface--cap");
+    expect(trigger.className).not.toContain("bg-[var(--color-composer-background)]");
+  });
 });
 
 function activityModel(): ComposerWorkspaceActivityModel {

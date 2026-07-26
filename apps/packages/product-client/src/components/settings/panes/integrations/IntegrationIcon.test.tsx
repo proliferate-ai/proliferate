@@ -74,12 +74,12 @@ describe("IntegrationIcon", () => {
     expect(svg?.classList.contains("lucide")).toBe(true);
   });
 
-  it("applies caller sizing via className on the tile", () => {
+  it("applies caller classes on the tile", () => {
     const { container } = render(
-      <IntegrationIcon namespace="linear" className="size-10" />,
+      <IntegrationIcon namespace="linear" className="rounded-2xl" />,
     );
     const tile = container.firstElementChild;
-    expect(tile?.className).toContain("size-10");
-    expect(tile?.className).not.toContain("size-8");
+    expect(tile?.className).toContain("rounded-2xl");
+    expect(tile?.className).not.toContain("rounded-md");
   });
 });
