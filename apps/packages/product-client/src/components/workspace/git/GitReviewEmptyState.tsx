@@ -43,7 +43,7 @@ export function GitReviewEmptyState({
           {title}
         </p>
         {description && (
-          <p className="mt-0.5 text-pretty text-ui-sm leading-[var(--text-ui-sm--line-height)] text-sidebar-muted-foreground">
+          <p className="mt-0.5 text-pretty text-ui-sm text-sidebar-muted-foreground">
             {description}
           </p>
         )}
@@ -70,7 +70,7 @@ export function GitReviewEmptyStateAction({
       variant="ghost"
       size="sm"
       onClick={onClick}
-      className="h-6 gap-1 rounded-md px-2 text-ui text-sidebar-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
+      className="h-6 gap-1 rounded-md px-2 text-ui text-sidebar-muted-foreground hover:bg-hover hover:text-sidebar-foreground active:bg-active"
     >
       {children}
     </Button>

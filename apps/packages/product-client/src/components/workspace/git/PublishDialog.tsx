@@ -172,7 +172,7 @@ export function PublishDialog({
       headerClassName="shrink-0 px-3"
       bodyClassName="flex min-h-0 flex-col p-0"
       footerClassName="shrink-0 border-t border-border/60 p-1"
-      panelClassName="border-border bg-background shadow-xl"
+      panelClassName="border-border bg-background shadow-modal"
       showCloseButton={false}
       footer={(
         <div className="flex w-full flex-col gap-1" onKeyDown={handleKeyDown}>
@@ -356,7 +356,7 @@ function PublishActionRow({
         loading
           ? <Spinner className="icon-paired shrink-0 text-muted-foreground" />
           : (
-            <kbd className="inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-md bg-current/10 px-1.5 font-sans text-xs leading-4 text-current opacity-80">
+            <kbd className="inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-md bg-current/10 px-1.5 font-sans text-ui leading-4 text-current opacity-80">
               ⌘⏎
             </kbd>
           )

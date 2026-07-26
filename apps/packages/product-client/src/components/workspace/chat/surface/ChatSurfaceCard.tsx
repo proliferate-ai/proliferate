@@ -26,7 +26,7 @@ export function ChatSurfaceCard({
       style={{ paddingBottom: bottomInsetPx }}
     >
       <div className={`${CHAT_COLUMN_CLASSNAME} flex min-h-full items-center py-10`}>
-        <div className="w-full rounded-[26px] border border-border/70 bg-card/95 px-8 py-10 text-center shadow-lg">
+        <div className="w-full rounded-lg border border-border/70 bg-card/95 px-8 py-10 text-center">
           {badge && (
             <Badge className="rounded-full px-2.5 py-0.5">
               {badge}
@@ -37,10 +37,10 @@ export function ChatSurfaceCard({
               {icon}
             </div>
           )}
-          <h2 className="mt-4 text-[length:var(--text-title)] font-semibold leading-[var(--text-title--line-height)] tracking-[-0.02em] text-foreground">
+          <h2 className="mt-4 text-title font-semibold tracking-[-0.02em] text-foreground">
             {title}
           </h2>
-          <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-muted-foreground">
+          <p className="mx-auto mt-3 max-w-xl text-chat leading-6 text-muted-foreground">
             {description}
           </p>
         </div>

@@ -36,7 +36,7 @@ export function CliDetails({
   if (surface === "cloud") {
     return (
       <HarnessPanelBlock variant={variant} title={HARNESS_PANE_COPY.detailsCli}>
-        <p className="py-3 text-sm text-muted-foreground">
+        <p className="py-3 text-ui-sm text-muted-foreground">
           {HARNESS_PANE_COPY.nativeStateCloud}
         </p>
       </HarnessPanelBlock>
@@ -78,19 +78,19 @@ export function CliDetails({
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           {cliIsExpired ? (
-            <p className="text-sm font-medium text-destructive">
+            <p className="text-ui font-medium text-destructive">
               CLI credentials expired
             </p>
           ) : cliIsAbsent || (canRunLogin && !cliAuthState) ? (
-            <p className="text-sm font-medium text-destructive">
+            <p className="text-ui font-medium text-destructive">
               {HARNESS_PANE_COPY.cliNotAuthenticated}
             </p>
           ) : isAuthenticated ? (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-ui-sm text-muted-foreground">
               {HARNESS_PANE_COPY.cliAuthenticated}
             </p>
           ) : (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-ui-sm text-muted-foreground">
               {HARNESS_PANE_COPY.nativeStateLocal}
             </p>
           )}

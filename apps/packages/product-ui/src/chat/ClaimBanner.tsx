@@ -29,8 +29,8 @@ export function ClaimBanner({ view }: ClaimBannerProps) {
     return (
       <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card p-3">
         <div className="min-w-0">
-          <div className="text-sm font-medium">Claimed by {view.claimantName}</div>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">{view.description}</p>
+          <div className="text-chat font-medium">Claimed by {view.claimantName}</div>
+          <p className="mt-1 text-chat text-muted-foreground">{view.description}</p>
         </div>
       </div>
     );
@@ -39,11 +39,11 @@ export function ClaimBanner({ view }: ClaimBannerProps) {
   return (
     <div className="flex items-center justify-between gap-3 rounded-lg border border-info/40 bg-info/10 p-3">
       <div className="min-w-0">
-        <div className="flex items-center gap-2 text-sm font-medium">
+        <div className="flex items-center gap-2 text-chat font-medium">
           <Hand className="icon-paired" />
           {view.title}
         </div>
-        <p className="mt-1 text-xs leading-5 text-muted-foreground">{view.description}</p>
+        <p className="mt-1 text-chat text-muted-foreground">{view.description}</p>
       </div>
       <Button variant="secondary" size="sm" onClick={view.onClaim}>
         {view.actionLabel}

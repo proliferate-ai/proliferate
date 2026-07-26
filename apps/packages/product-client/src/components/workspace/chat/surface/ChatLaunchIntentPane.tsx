@@ -52,10 +52,10 @@ export function ChatLaunchIntentPane({
     ? null
     : (
       <div className="flex flex-col items-end gap-2 text-right">
-        <div className="flex items-center justify-end gap-2 text-xs text-muted-foreground">
+        <div className="flex items-center justify-end gap-2 text-chat text-muted-foreground">
           <span>{view.title}</span>
         </div>
-        <p className="text-xs leading-5 text-muted-foreground">
+        <p className="text-chat leading-5 text-muted-foreground">
           {view.detail}
         </p>
         {(view.canReturnHome || view.canRetry || view.canDismiss) && (

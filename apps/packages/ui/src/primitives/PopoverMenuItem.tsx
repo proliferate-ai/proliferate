@@ -34,12 +34,12 @@ export function PopoverMenuItem({
   ...props
 }: PopoverMenuItemProps) {
   const hoverClassName = variant === "sidebar"
-    ? "hover:bg-sidebar-accent focus:bg-sidebar-accent"
+    ? "hover:bg-hover focus:bg-hover"
     : "hover:bg-list-hover focus:bg-list-hover";
   const hasDescription = children !== undefined && children !== null && children !== false;
   // Codex menu-row recipe (reference/codex main_chat_view + popover dumps):
   // 12px rows (text-ui-sm) in full row foreground, 11px muted hints
-  // (text-base), 16px icons promoting muted → prominent on hover; spacing
+  // (text-ui-sm), 16px icons promoting muted → prominent on hover; spacing
   // stays fixed (px 10 / py 5 at default density).
   //
   // Hover promotion is expressed as a COLOR change (`text-current/75` →
@@ -102,7 +102,7 @@ export function PopoverMenuItem({
       </span>
       {hasDescription && (
         <span className={`mt-0.5 flex w-full items-center gap-2 ${icon ? "pl-6" : ""}`}>
-          <span className="min-w-0 flex-1 text-left text-base text-muted-foreground [&>*]:!mt-0 [&_*]:text-base">
+          <span className="min-w-0 flex-1 text-left text-ui-sm text-muted-foreground [&>*]:!mt-0 [&_*]:text-ui-sm">
             {children}
           </span>
         </span>

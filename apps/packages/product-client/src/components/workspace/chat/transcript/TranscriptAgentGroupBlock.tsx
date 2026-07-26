@@ -131,7 +131,7 @@ export function TranscriptAgentGroupBlock({
       <div
         {...(headerExpandable ? { "data-chat-transcript-ignore": true } : {})}
         onClick={() => headerExpandable && setExpanded(!expanded)}
-        className={`group/tool-action-row inline-flex items-center gap-1 rounded-md pl-0.5 pr-1.5 py-1 text-chat leading-[var(--text-chat--line-height)] transition-colors ${
+        className={`group/tool-action-row inline-flex items-center gap-1 rounded-md pl-0.5 pr-1.5 py-1 text-chat transition-colors ${
           headerExpandable
             ? "cursor-pointer text-muted-foreground hover:bg-muted/40 hover:text-foreground"
             : "cursor-default text-muted-foreground"
@@ -152,7 +152,7 @@ export function TranscriptAgentGroupBlock({
           <span className="min-w-0 truncate text-inherit">{description}</span>
         )}
         {!expanded && collapsedSummary && (
-          <span className="ml-1 text-[length:var(--text-chat)] leading-[var(--text-chat--line-height)] text-muted-foreground">
+          <span className="ml-1 text-chat text-muted-foreground">
             · {collapsedSummary}
           </span>
         )}
@@ -220,7 +220,7 @@ function AgentResultBlock({ content }: { content: string }) {
           ? { maxHeight: AGENT_RESULT_COLLAPSED_HEIGHT }
           : undefined}
       >
-        <div ref={contentRef} className="text-chat leading-[var(--text-chat--line-height)] select-text text-foreground">
+        <div ref={contentRef} className="text-chat select-text text-foreground">
           <MarkdownBody
             content={content}
             className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0"

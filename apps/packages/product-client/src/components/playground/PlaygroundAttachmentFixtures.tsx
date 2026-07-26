@@ -20,6 +20,10 @@ import "./PlaygroundAttachmentFixtures.css";
 const PLAYGROUND_ATTACHMENT_SESSION_ID = "playground-attachment-session";
 const PLAYGROUND_IMAGE_ID = "playground-attachment-image";
 const PLAYGROUND_TEXT_ID = "playground-attachment-text";
+// ui-foundation-escalation: this SVG markup is literal data-URL asset content
+// (a generated placeholder image, not rendered JSX icon chrome), so its
+// width/height attributes describe the fixture image's own pixel canvas and
+// have no semantic icon-* tier to map onto.
 const IMAGE_DATA_URL = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(`
   <svg xmlns="http://www.w3.org/2000/svg" width="640" height="420" viewBox="0 0 640 420">
     <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fb7185"/><stop offset="1" stop-color="#7c3aed"/></linearGradient></defs>
@@ -156,7 +160,7 @@ export function PlaygroundAttachmentTranscript() {
   }
   return (
     <div className="space-y-3">
-      <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+      <div className="text-ui-sm font-medium tracking-wide text-muted-foreground uppercase">
         Submitted attachments
       </div>
       <UserMessage
@@ -211,7 +215,7 @@ export function PlaygroundAttachmentPreviewAside() {
           </div>
         </>
       ) : (
-        <div className="flex flex-1 items-center justify-center p-8 text-center text-sm text-muted-foreground">
+        <div className="flex flex-1 items-center justify-center p-8 text-center text-body text-muted-foreground">
           Select a draft or submitted attachment to preview it here.
         </div>
       )}

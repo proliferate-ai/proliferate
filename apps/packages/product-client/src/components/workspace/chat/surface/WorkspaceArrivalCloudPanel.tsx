@@ -18,7 +18,7 @@ function SectionRow({
 }) {
   return (
     <div className="flex items-center gap-3 border-t border-border/40 px-4 py-2">
-      <span className="w-20 shrink-0 text-base font-medium uppercase tracking-[0.06em] text-muted-foreground/50">
+      <span className="w-20 shrink-0 text-chat font-medium uppercase tracking-[0.06em] text-muted-foreground/50">
         {label}
       </span>
       <div className="min-w-0 flex-1">{children}</div>
@@ -87,7 +87,7 @@ export function WorkspaceArrivalCloudPanel({
     >
       <div className="max-h-[min(32vh,280px)] overflow-y-auto">
         <SectionRow label="Repository">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-base text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-chat text-muted-foreground">
             <span className="text-foreground">{model.repoLabel}</span>
             <span>{model.branchLabel}</span>
           </div>
@@ -103,18 +103,18 @@ export function WorkspaceArrivalCloudPanel({
               >
                 {model.footer.label}
               </Button>
-              <span className="text-sm text-muted-foreground">{model.footer.helperText}</span>
+              <span className="text-chat text-muted-foreground">{model.footer.helperText}</span>
             </div>
           </SectionRow>
         ) : (
           <SectionRow label="Status">
-            <span className="text-sm text-muted-foreground">{model.footer.message}</span>
+            <span className="text-chat text-muted-foreground">{model.footer.message}</span>
           </SectionRow>
         )}
 
         {pendingPromptCount > 0 ? (
           <SectionRow label="Prompt">
-            <span className="text-sm text-muted-foreground">
+            <span className="text-chat text-muted-foreground">
               Queued prompt will send when this cloud workspace is ready.
             </span>
           </SectionRow>

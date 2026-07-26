@@ -151,7 +151,8 @@ describe("TranscriptPendingPromptRow", () => {
     expect(statusLine?.className).toContain("text-chat");
     expect(statusLine?.className).toContain("font-normal");
     expect(statusLine?.className).toContain("text-muted-foreground");
-    expect(container.querySelector("[class~='gap-4']")).not.toBeNull();
+    // [CHAT-04] RULED turn rhythm: the 12px --spacing-transcript-turn token.
+    expect(container.querySelector("[class~='gap-transcript-turn']")).not.toBeNull();
     expect(container.innerHTML).not.toContain("gap-3.5");
     expect(container.innerHTML).not.toContain("thinking-text");
   });

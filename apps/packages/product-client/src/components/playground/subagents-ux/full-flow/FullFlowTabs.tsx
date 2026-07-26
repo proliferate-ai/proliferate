@@ -28,8 +28,8 @@ const TAB_SHELL_CLASS = "group/tab flex max-w-[240px] shrink-0 items-center roun
 
 function tabToneClass(selected: boolean): string {
   return selected
-    ? "border-border bg-accent text-foreground"
-    : "border-transparent text-muted-foreground hover:bg-accent/60";
+    ? "border-border bg-selected text-foreground"
+    : "border-transparent text-muted-foreground hover:bg-hover active:bg-active";
 }
 
 function TabCloseButton({ label, onClose }: { label: string; onClose: () => void }) {
@@ -41,9 +41,9 @@ function TabCloseButton({ label, onClose }: { label: string; onClose: () => void
       aria-label={`Close tab for ${label} (keeps the session)`}
       title="Close tab — hides the tab only"
       onClick={onClose}
-      className="ml-1 rounded p-0.5 text-muted-foreground opacity-0 hover:bg-accent hover:text-foreground group-hover/tab:opacity-100 focus-visible:opacity-100"
+      className="ml-1 rounded p-0.5 text-muted-foreground opacity-0 hover:bg-hover active:bg-active hover:text-foreground group-hover/tab:opacity-100 focus-visible:opacity-100"
     >
-      <X className="size-3" aria-hidden="true" />
+      <X className="text-ui icon-compact" aria-hidden="true" />
     </Button>
   );
 }
@@ -92,14 +92,14 @@ export function ParentTab({
             {bubbleChildren.map((child) => (
               <span
                 key={child.id}
-                className="flex size-[16px] items-center justify-center rounded-full bg-background ring-1 ring-border"
+                className="flex size-5 items-center justify-center rounded-full bg-background ring-1 ring-border"
               >
-                <AgentGlyph id={child.id} size={10} />
+                <AgentGlyph id={child.id} className="text-ui-sm icon-compact" />
               </span>
             ))}
           </span>
           {overflow > 0 ? (
-            <span className="ml-0.5 font-mono text-xs text-muted-foreground">
+            <span className="ml-0.5 font-mono text-ui-sm text-muted-foreground">
               +{overflow}
             </span>
           ) : null}
@@ -138,7 +138,7 @@ export function ChildTab({
       >
         <SubagentIdentityGlyph
           seed={child.id}
-          size={13}
+          className="text-ui icon-compact"
           label={`Identity mark for ${child.label}`}
         />
         <span className="truncate text-ui font-medium">{child.label}</span>
@@ -176,7 +176,7 @@ export function ArchivedTab({
       >
         <SubagentIdentityGlyph
           seed={session.id}
-          size={13}
+          className="text-ui icon-compact"
           dimmed
           label={`Identity mark for ${session.label}`}
         />

@@ -45,7 +45,7 @@ export function PageContentFrame({
         <div className="sticky top-0 z-30 h-0">
           <div
             className={twMerge(
-              "border-b border-border bg-background/95 backdrop-blur transition-[opacity,transform] duration-150 supports-[backdrop-filter]:bg-background/80",
+              "border-b border-border bg-background/95 backdrop-blur transition-[opacity,transform] duration-enter supports-[backdrop-filter]:bg-background/80",
               stickyTitleVisible
                 ? "translate-y-0 opacity-100"
                 : "pointer-events-none -translate-y-1 opacity-0",
@@ -57,7 +57,7 @@ export function PageContentFrame({
                 maxWidthClassName,
               )}
             >
-              <h2 className="min-w-0 truncate text-sm font-medium text-foreground">
+              <h2 className="min-w-0 truncate text-heading font-medium text-foreground">
                 {stickyTitle}
               </h2>
               {stickyAction && <div className="shrink-0">{stickyAction}</div>}

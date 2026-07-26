@@ -38,7 +38,7 @@ export function DelegatedAgentReceiptName({
         data-chat-transcript-ignore
         aria-label={`Open ${fullLabel}`}
         title={fullLabel}
-        className={`inline h-auto p-0 align-baseline leading-[inherit] hover:underline focus-visible:underline ${textClassName}`}
+        className={`inline h-auto p-0 align-baseline hover:underline focus-visible:underline ${textClassName}`}
         onClick={() => onOpenSession(targetSessionId)}
       >
         {visibleLabel}

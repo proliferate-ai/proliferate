@@ -122,8 +122,8 @@ function SlashCommandRow({
           className={twMerge(
             // Color-token hover promotion, not row opacity — opacity flips
             // re-rasterize the glyphs and read as shimmer (styling.md).
-            "flex w-full shrink-0 cursor-pointer items-baseline gap-2 overflow-hidden whitespace-normal rounded-lg px-2.5 py-1 text-left text-ui outline-none hover:bg-accent focus:bg-accent",
-            selected && "bg-accent",
+            "flex w-full shrink-0 cursor-pointer items-baseline gap-2 overflow-hidden whitespace-normal rounded-lg px-2.5 py-1 text-left text-ui outline-none hover:bg-hover focus:bg-hover",
+            selected && "bg-selected",
           )}
         >
           <span className="flex-none truncate text-popover-foreground">

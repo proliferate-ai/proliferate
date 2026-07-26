@@ -44,7 +44,7 @@ export function CopyMessageButton({
   // snapping its fractional layout origin to device pixels and visibly
   // nudging the button sideways at the start/end of each fade.
   return (
-    <span className={`inline-flex transform-gpu items-center gap-1 text-[length:var(--text-chat-meta,11px)] text-muted-foreground transition-opacity duration-200 ${visibilityClassName}`}>
+    <span className={`inline-flex transform-gpu items-center gap-1 text-chat text-muted-foreground transition-opacity duration-hover ${visibilityClassName}`}>
       {timestampPosition === "before" && timestamp}
       {copyButton}
       {timestampPosition === "after" && timestamp}

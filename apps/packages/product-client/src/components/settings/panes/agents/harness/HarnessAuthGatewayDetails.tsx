@@ -14,7 +14,7 @@ export function GatewayDetails({
   const enrollment = editor.enrollmentQuery.data;
   return (
     <HarnessPanelBlock variant={variant} title={HARNESS_PANE_COPY.detailsGateway}>
-      <p className="py-3 text-sm text-muted-foreground">
+      <p className="py-3 text-ui-sm text-muted-foreground">
         {gatewaySubtitle(capabilities, enrollment)}
       </p>
     </HarnessPanelBlock>

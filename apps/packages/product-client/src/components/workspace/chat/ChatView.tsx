@@ -268,7 +268,7 @@ export const ChatView = memo(function ChatView({
       </DebugProfiler>
       {fileDragOver && (
         <div
-          className="pointer-events-none absolute inset-2 z-40 rounded-[var(--radius-composer)] border border-dashed border-primary/70 bg-primary/5"
+          className="pointer-events-none absolute inset-2 z-40 rounded-xl border border-dashed border-primary/70 bg-primary/5"
           aria-hidden="true"
         />
       )}

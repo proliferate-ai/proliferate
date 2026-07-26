@@ -399,7 +399,7 @@ describe("HomeNextScreen composer control-row parity", () => {
     render(<HomeNextScreen />);
     expect(screen.getByTestId("composer-leading-controls")).toBeTruthy();
     expect(screen.getByTestId("composer-trailing-controls")).toBeTruthy();
-    const column = screen.getByLabelText("Prompt").closest('[class~="max-w-[46rem]"]');
+    const column = screen.getByLabelText("Prompt").closest('[class~="max-w-transcript-readable"]');
     expect(column?.className).toContain(CHAT_COLUMN_CLASSNAME);
     expect(column?.parentElement?.className).toContain(CHAT_SURFACE_GUTTER_CLASSNAME);
   });

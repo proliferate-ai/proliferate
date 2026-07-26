@@ -65,7 +65,7 @@ export function WorkspaceSessionRecoveryInlinePanelView({
         className="px-3 pb-3"
         data-workspace-session-recovery="inline"
       >
-        <p id={RECOVERY_BODY_ID} className="text-base leading-5 text-muted-foreground">
+        <p id={RECOVERY_BODY_ID} className="text-chat leading-5 text-muted-foreground">
           {WORKSPACE_SESSION_INLINE_RECOVERY_BODY[reason]}
         </p>
         <div className="mt-2 flex justify-end">

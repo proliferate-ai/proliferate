@@ -28,7 +28,7 @@ export function WorkspaceCleanupAttentionSection({
         {workspaces.map((workspace) => (
           <SidebarRowSurface
             key={workspace.id}
-            className="min-h-[34px] px-2 py-1 gap-1.5 text-sm leading-4 focus-visible:outline-offset-[-2px]"
+            className="min-h-[34px] px-2 py-1 gap-1.5 text-sidebar-row leading-4 focus-visible:outline-offset-[-2px]"
           >
             <div className="flex w-4 shrink-0 items-center justify-center">
               <CircleAlert className="icon-compact text-destructive" />
@@ -37,7 +37,7 @@ export function WorkspaceCleanupAttentionSection({
               <span className="truncate text-ui leading-5 text-current">
                 {workspaceDisplayName(workspace)}
               </span>
-              <span className="truncate text-xs leading-4 text-sidebar-muted-foreground">
+              <span className="truncate text-ui-sm leading-4 text-sidebar-muted-foreground">
                 {workspace.cleanupErrorMessage?.trim() || "Cleanup did not finish."}
               </span>
             </div>

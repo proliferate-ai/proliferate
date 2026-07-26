@@ -148,7 +148,7 @@ function HunkView({
         />
       )}
       {hunk.contextLabel && (
-        <div className="px-3 py-0.5 text-[length:var(--readable-code-font-size)] italic text-muted-foreground/50">
+        <div className="px-3 py-0.5 text-readable-code italic text-muted-foreground/50">
           {hunk.contextLabel}
         </div>
       )}
@@ -329,7 +329,7 @@ export function UnifiedDiffViewer({
     <AutoHideScrollArea
       className={className}
       viewportClassName={`composer-diff-simple-line bg-[var(--codex-diffs-surface)] ${viewportClassName ?? ""}`}
-      contentClassName={`min-h-full bg-[var(--codex-diffs-surface)] font-[family:var(--diffs-font-family)] text-[length:var(--diffs-font-size)] leading-[var(--diffs-line-height)] text-[color:var(--diffs-fg)] ${
+      contentClassName={`min-h-full bg-[var(--codex-diffs-surface)] font-[family:var(--diffs-font-family)] text-readable-code text-foreground ${
         wrapLongLines ? "" : "min-w-max"
       }`}
       allowHorizontal={!wrapLongLines}

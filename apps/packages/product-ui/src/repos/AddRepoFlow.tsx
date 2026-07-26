@@ -125,7 +125,7 @@ export function AddRepoFlow({
           />
         )}
         {error ? (
-          <p className="mt-3 text-xs leading-[1.45] text-destructive" role="alert">
+          <p className="mt-3 text-ui text-destructive" role="alert">
             {error}
           </p>
         ) : null}
@@ -170,7 +170,7 @@ function AddRepoEntryStep({
             size="unstyled"
             disabled={disabled}
             onClick={() => onPickOption(entry.option)}
-            className={`flex w-full items-center justify-start gap-3 rounded-lg px-2 py-2.5 text-left transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none ${
+            className={`flex w-full items-center justify-start gap-3 rounded-lg px-2 py-2.5 text-left transition-colors hover:bg-hover active:bg-active focus-visible:bg-hover focus-visible:outline-none ${
               index > 0 ? "border-t border-border/60" : ""
             }`}
           >
@@ -181,13 +181,13 @@ function AddRepoEntryStep({
               <span className="block truncate text-ui font-medium leading-5 text-foreground">
                 {entry.label}
               </span>
-              <span className="block truncate text-xs leading-[1.45] text-muted-foreground">
+              <span className="block truncate text-ui-sm text-muted-foreground">
                 {entry.description}
               </span>
             </span>
             <kbd
               aria-hidden
-              className="flex size-6 shrink-0 items-center justify-center rounded-[3px] bg-surface-control font-mono text-xs text-muted-foreground/70"
+              className="flex size-6 shrink-0 items-center justify-center rounded-sm bg-surface-control font-mono text-ui-sm text-muted-foreground/70"
             >
               {index + 1}
             </kbd>

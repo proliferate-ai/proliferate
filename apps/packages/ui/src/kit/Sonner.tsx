@@ -4,7 +4,7 @@ import { Toaster as SonnerToaster, toast } from "sonner";
 
 const kitClassNames = {
   toast:
-    "!bg-popover !text-foreground !border !border-border !rounded-xl !shadow-md !text-ui",
+    "!bg-popover !text-foreground !border !border-border !rounded-xl !shadow-popover !text-ui",
   description: "!text-ui-sm !text-muted-foreground",
   actionButton: "!bg-primary !text-primary-foreground !rounded-md !text-ui-sm",
   cancelButton:

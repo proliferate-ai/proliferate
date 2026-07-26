@@ -33,7 +33,7 @@ export const CLOUD_SIDEBAR_STATUS_DEFINITIONS = {
     label: "cloud",
     tone: "ready",
     className:
-      "border-sidebar-border bg-sidebar-accent text-sidebar-muted-foreground",
+      "border-sidebar-border bg-surface-control text-sidebar-muted-foreground",
   },
   archived: {
     label: "archived",

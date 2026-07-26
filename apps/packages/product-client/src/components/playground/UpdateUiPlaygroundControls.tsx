@@ -136,8 +136,8 @@ function buildProductionSurfaceMock(preview: ProductionSurfacePreview): DevUpdat
 
 function LiveStateDatum({ label, value }: { label: string; value: string }) {
   return (
-    <div className="text-xs">
-      <div className="text-muted-foreground">{label}</div>
+    <div className="text-ui">
+      <div className="text-ui-sm text-muted-foreground">{label}</div>
       <div className="mt-0.5 font-medium text-foreground">{value}</div>
     </div>
   );
@@ -209,7 +209,7 @@ export function UpdateUiPlaygroundControls() {
           + error toast
         </Button>
         <span className="mx-1 h-5 w-px bg-border" />
-        <span className="text-xs text-muted-foreground">Sessions running (mock):</span>
+        <span className="text-ui-sm text-muted-foreground">Sessions running (mock):</span>
         {[0, 1, 3].map((count) => (
           <Button
             key={count}
@@ -255,7 +255,7 @@ export function UpdateUiPlaygroundControls() {
           {liveRestartWhenIdle ? "Disarm restart" : "Arm restart when idle"}
         </Button>
         <span className="mx-1 h-5 w-px bg-border" />
-        <span className="text-xs text-muted-foreground">Error source:</span>
+        <span className="text-ui-sm text-muted-foreground">Error source:</span>
         {(["check", "download"] as const).map((source) => (
           <Button
             key={source}
@@ -310,7 +310,7 @@ export function UpdateUiPlaygroundControls() {
             onOpenRestartPrompt={openRestartPrompt}
           />
           {livePhase !== "available" && livePhase !== "downloading" && livePhase !== "ready" && (
-            <span className="text-xs text-muted-foreground">
+            <span className="text-ui-sm text-muted-foreground">
               No pill for this phase
             </span>
           )}

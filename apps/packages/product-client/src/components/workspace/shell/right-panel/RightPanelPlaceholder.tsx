@@ -20,8 +20,8 @@ export function RightPanelPlaceholder({ activeEntryKey }: { activeEntryKey: Righ
   return (
     <div className="flex h-full items-center justify-center px-6 text-center">
       <div className="max-w-xs space-y-2">
-        <p className="text-base font-[450] text-sidebar-foreground">{title}</p>
-        <p className="text-sm leading-5 text-sidebar-muted-foreground">{description}</p>
+        <p className="text-heading font-[450] text-sidebar-foreground">{title}</p>
+        <p className="text-ui-sm leading-5 text-sidebar-muted-foreground">{description}</p>
       </div>
     </div>
   );

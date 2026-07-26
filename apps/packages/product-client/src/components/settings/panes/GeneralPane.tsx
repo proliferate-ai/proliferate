@@ -163,7 +163,7 @@ export function GeneralPane() {
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="px-2.5 text-xs"
+                  className="px-2.5 text-ui"
                   onClick={() => emitTurnEnd()}
                 >
                   Test

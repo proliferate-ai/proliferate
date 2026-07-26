@@ -350,7 +350,7 @@ export function GitReviewFileRow({
                 hunkActions={hunkActions}
               />
               {diffQuery.data?.truncated ? (
-                <p className="px-3 py-2 text-center text-xs text-sidebar-muted-foreground">
+                <p className="px-3 py-2 text-center text-ui-sm text-sidebar-muted-foreground">
                   Diff truncated because it is too large
                 </p>
               ) : null}

@@ -299,7 +299,10 @@ versions are no longer a single global pin: `record_heartbeat` overlays
 nullable per-target `desired_anyharness_version`/`desired_worker_version`
 columns on the target's `cloud_sandbox` row over the global pin (null
 inherits the pin). Catalog convergence reads/writes the AnyHarness catalog
-directly. On a legacy target, Worker self-update verifies and preflights a
+directly — deletion-pending: the catalog is binary-only
+([agent-distribution.md](../../platforms/product/agent-distribution.md)
+Current gaps), so the heartbeat's catalog version and this convergence go
+away together. On a legacy target, Worker self-update verifies and preflights a
 public artifact, atomically swaps the binary, then `exec`s it, and AnyHarness
 convergence stops, swaps, relaunches, health-checks, and can roll back the
 runtime binary — both deprecated paths. On a supervisor-owned target, that
@@ -418,5 +421,7 @@ projection ledger.
 backward; transactions are short and owned at the edge, with the outbox for
 external side effects.** Managed Cloud uses one personal `cloud_sandbox`,
 just-in-time E2B/AnyHarness materialization, and direct gateway access. The
-optional Worker enrolls, heartbeats, and converges catalog/binary versions; it
+optional Worker enrolls, heartbeats, and observes binary-version divergence
+(mailbox requests for Proliferate Supervisor; catalog convergence is
+deletion-pending under the binary-only ruling); it
 does not carry product commands or replicate runtime events.

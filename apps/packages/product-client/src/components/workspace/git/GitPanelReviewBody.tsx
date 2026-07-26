@@ -82,16 +82,16 @@ export function GitPanelReviewBody({
         />
         {isLoading && (
           <div className="space-y-2 px-4 py-4" role="status" aria-label="Loading changes">
-            <SkeletonBlock className="h-3 w-32 bg-sidebar-accent" style={shimmerDelay(0)} />
-            <SkeletonBlock className="h-3 w-48 bg-sidebar-accent" style={shimmerDelay(1)} />
-            <SkeletonBlock className="h-3 w-40 bg-sidebar-accent" style={shimmerDelay(2)} />
+            <SkeletonBlock className="h-3 w-32 bg-surface-control" style={shimmerDelay(0)} />
+            <SkeletonBlock className="h-3 w-48 bg-surface-control" style={shimmerDelay(1)} />
+            <SkeletonBlock className="h-3 w-40 bg-surface-control" style={shimmerDelay(2)} />
           </div>
         )}
         {errorMessage && (
-          <p className="px-4 py-4 text-xs text-destructive">{errorMessage}</p>
+          <p className="px-4 py-4 text-ui text-destructive">{errorMessage}</p>
         )}
         {!errorMessage && runtimeBlockedReason && (
-          <p className="px-4 py-4 text-xs text-sidebar-muted-foreground">
+          <p className="px-4 py-4 text-ui-sm text-sidebar-muted-foreground">
             {runtimeBlockedReason}
           </p>
         )}

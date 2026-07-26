@@ -34,9 +34,9 @@ export function CoworkWorkspaceHeader({
           </IconButton>
         )}
         <div className="min-w-0">
-          <div className="truncate text-sm font-medium text-foreground">{title}</div>
+          <div className="truncate text-workspace-title font-medium text-foreground">{title}</div>
           {subtitle && (
-            <div className="truncate text-xs text-muted-foreground">{subtitle}</div>
+            <div className="truncate text-ui-sm text-muted-foreground">{subtitle}</div>
           )}
         </div>
       </div>
@@ -47,7 +47,7 @@ export function CoworkWorkspaceHeader({
             size="sm"
             onClick={onToggleRightPanel}
             title={rightPanelOpen ? "Hide artifacts" : "Show artifacts"}
-            className={rightPanelOpen ? "bg-accent text-foreground" : "rounded-md"}
+            className={rightPanelOpen ? "bg-active text-foreground" : "rounded-md"}
           >
             <FileText className="icon-control" />
           </IconButton>

@@ -20,7 +20,7 @@ restating folder rules or low-level reusable contracts.
 | Workflows | User-owned workflow definitions, ordered stages and prompt steps, catalog-backed harness validation, revisioning, optional default repository configuration, and definition-authoring UX. | [workflows/definitions.md](workflows/definitions.md) |
 | Automations | Scheduled/manual automations and the parked Slack bot contract. | [automations/README.md](automations/README.md) |
 | Engagement | Customer.io transport, code-owned profile attributes and lifecycle events, and current enable/no-op gates. | [engagement/README.md](engagement/README.md) |
-| Delegated work and artifacts | Delegated-work UX and cowork artifact lifecycle. | [agents/README.md](agents/README.md) |
+| Agents | The agent-systems overview map (distribution, auth, gateway, model catalog), plus delegated-work UX and cowork artifact lifecycle. | [agents/README.md](agents/README.md) |
 | Settings and appearance | Settings/admin information architecture, Appearance scaling, billing/account/team/config surfaces, filtering, origins, and admin-facing state. | [settings/README.md](settings/README.md) |
 | Support reporting | Currently shipped private support capture. | [support/README.md](support/README.md) |
 | Web/Desktop client unification | Shared client ownership, thin Desktop/Web hosts, capability policy, and migration governance. | [clients/web-desktop-unification/README.md](clients/web-desktop-unification/README.md) |
@@ -32,7 +32,7 @@ Use this map before creating a new spec:
 
 | Planning topic | Current owner |
 | --- | --- |
-| Onboarding | [onboarding/README.md](onboarding/README.md), with lower-level slices in [auth/README.md](auth/README.md), [../../platforms/product/billing.md](../../platforms/product/billing.md), [../../platforms/product/workspace-provisioning.md](../../platforms/product/workspace-provisioning.md), and [settings/information-architecture.md](settings/information-architecture.md). The managed model gateway platform document was removed as stale (Bifrost-era); a rewrite is planned. |
+| Onboarding | [onboarding/README.md](onboarding/README.md), with lower-level slices in [auth/README.md](auth/README.md), [../../platforms/product/billing.md](../../platforms/product/billing.md), [../../platforms/product/workspace-provisioning.md](../../platforms/product/workspace-provisioning.md), and [settings/information-architecture.md](settings/information-architecture.md). The managed model gateway is owned by [../../platforms/product/model-gateway.md](../../platforms/product/model-gateway.md). |
 | Browsers | No dedicated browser system spec yet. Product MCP ownership is in [Product Agent Features](../../platforms/product/agent-features/README.md); runtime/domain ownership remains under [AnyHarness](../../structures/anyharness/README.md). Create a browser system spec before adding user-visible browser workflows. |
 | Terminals | [workspaces/terminals.md](workspaces/terminals.md) owns terminal pane UX and the creation grid contract. Runtime ownership remains under [AnyHarness](../../structures/anyharness/README.md). |
 | Computer Use | No dedicated computer-use system spec yet. Product MCP ownership is in [Product Agent Features](../../platforms/product/agent-features/README.md); create a system spec before adding user-visible Computer Use workflow, permissions, or QA behavior. |

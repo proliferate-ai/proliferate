@@ -26,10 +26,10 @@ function CoworkManagedWorkspaceBlock({
         onPress={() => onOpenWorkspace(workspace.workspaceId)}
         className="h-[30px] pl-2 pr-1 py-1 focus-visible:outline-offset-[-2px]"
       >
-        <div className="flex w-full items-center gap-1.5 text-sm leading-4">
+        <div className="flex w-full items-center gap-1.5 text-sidebar-row leading-4">
           <div className="flex w-4 shrink-0 items-center justify-center" aria-hidden="true" />
           <div className="flex min-w-0 flex-1 items-center gap-2 pl-4">
-            <span className="min-w-0 flex-1 truncate text-base leading-5 text-sidebar-foreground">
+            <span className="min-w-0 flex-1 truncate text-sidebar-row leading-5 text-sidebar-foreground">
               {workspaceLabel(workspace, index)}
             </span>
           </div>
@@ -55,7 +55,7 @@ export function CoworkManagedWorkspaceList({
   if (isLoading) {
     return (
       <div className="flex h-[30px] items-center gap-2 pl-6 pr-2" aria-label="Loading coding workspaces" role="status">
-        <SkeletonBlock className="h-3 w-36 bg-sidebar-accent" />
+        <SkeletonBlock className="h-3 w-36 bg-surface-control" />
         <span className="sr-only">Loading coding workspaces</span>
       </div>
     );

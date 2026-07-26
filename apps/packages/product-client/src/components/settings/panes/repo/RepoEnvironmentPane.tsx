@@ -1,8 +1,9 @@
 import { KeyRound } from "lucide-react";
-import { CloudSecretsSettingsSurface } from "@proliferate/product-surfaces/settings/CloudSecretsSettingsSurface";
+import { SecretManagementPanel } from "@proliferate/product-ui/secrets/SecretManagementPanel";
 import { SettingsEmptyState } from "@proliferate/product-ui/settings/SettingsEmptyState";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 import { Button } from "@proliferate/ui/primitives/Button";
+import { useCloudSecretsPanel } from "#product/hooks/access/cloud/use-cloud-secrets-panel";
 import { useCloudRepoEnvironmentEditor } from "#product/hooks/settings/workflows/use-cloud-repo-environment-editor";
 import { type RepoSettingsContext } from "#product/lib/domain/settings/repo-scope-selection";
 import { type SettingsRepositoryEntry } from "#product/lib/domain/settings/repositories";
@@ -86,17 +87,31 @@ function EnvironmentCloud({
       cloudSignInAvailable={cloudSignInAvailable}
     >
       {cloudRepository ? (
-        <CloudSecretsSettingsSurface
-          scope={{
-            kind: "workspace",
-            gitOwner: cloudRepository.gitOwner,
-            gitRepoName: cloudRepository.gitRepoName,
-          }}
+        <RepoEnvironmentSecretsPanel
+          gitOwner={cloudRepository.gitOwner}
+          gitRepoName={cloudRepository.gitRepoName}
           enabled={cloudActive}
         />
       ) : null}
     </RepoCloudGate>
   );
+}
+
+function RepoEnvironmentSecretsPanel({
+  gitOwner,
+  gitRepoName,
+  enabled,
+}: {
+  gitOwner: string;
+  gitRepoName: string;
+  enabled: boolean;
+}) {
+  const panel = useCloudSecretsPanel({
+    scope: { kind: "workspace", gitOwner, gitRepoName },
+    enabled,
+  });
+
+  return <SecretManagementPanel {...panel} />;
 }
 
 function EnvironmentLocal({

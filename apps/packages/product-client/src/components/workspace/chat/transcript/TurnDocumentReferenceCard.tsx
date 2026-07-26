@@ -27,14 +27,14 @@ export function TurnDocumentReferenceCard({
           <FileText className="icon-display" />
         </span>
         <span className="flex min-w-0 flex-1 flex-col">
-          <span className="truncate text-chat font-medium leading-[var(--text-chat--line-height)] text-foreground">
+          <span className="truncate text-chat font-medium text-foreground">
             {resource.displayName}
           </span>
-          <span className="relative block min-h-4 min-w-0 text-xs leading-4 text-muted-foreground">
-            <span className="turn-document-type-label block truncate transition-opacity duration-150">
+          <span className="relative block min-h-4 min-w-0 text-chat leading-4 text-muted-foreground">
+            <span className="turn-document-type-label block truncate transition-opacity duration-hover">
               {resource.typeLabel}
             </span>
-            <span className="turn-document-open-label pointer-events-none absolute inset-0 flex items-center opacity-0 transition-opacity duration-150">
+            <span className="turn-document-open-label pointer-events-none absolute inset-0 flex items-center opacity-0 transition-opacity duration-hover">
               Open preview
             </span>
           </span>

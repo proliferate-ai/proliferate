@@ -80,7 +80,7 @@ export function GoalBarObjectiveEditor({
         aria-label="Goal objective"
         data-ui-thin-caret
         data-telemetry-mask
-        className="min-h-0 resize-none overflow-y-auto whitespace-pre-wrap break-words bg-transparent pr-14 text-ui leading-[1.5] text-foreground placeholder:text-muted-foreground focus:outline-none"
+        className="min-h-0 resize-none overflow-y-auto whitespace-pre-wrap break-words bg-transparent pr-14 text-ui text-foreground placeholder:text-muted-foreground focus:outline-none"
         style={{ maxHeight: MAX_HEIGHT_PX }}
         onChange={(event) => setValue(event.target.value)}
         onKeyDown={handleKeyDown}

@@ -27,8 +27,8 @@ export function PlanComparisonCard({
     <section className="space-y-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-1">
-          <h2 className="text-lg font-semibold text-foreground">Plans</h2>
-          <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
+          <h2 className="text-title font-semibold text-foreground">Plans</h2>
+          <p className="max-w-2xl text-body text-muted-foreground">
             Start free with 5 PCUs. Move to Core for organization cloud billing,
             top up, shared workflows, and role-based controls.
           </p>
@@ -90,7 +90,7 @@ function PlanSummaryCard({
         current
           ? "border-info/50 bg-info/10"
           : plan.featured
-            ? "border-border-heavy bg-foreground/[0.04]"
+            ? "border-border-heavy bg-surface-elevated-secondary"
             : "",
       )}
     >
@@ -98,25 +98,25 @@ function PlanSummaryCard({
         <div className="space-y-3">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <div className="text-sm font-medium text-foreground">{plan.name}</div>
-              <div className="mt-1 text-xs leading-5 text-muted-foreground">{plan.tagline}</div>
+              <div className="text-body-emphasis font-medium text-foreground">{plan.name}</div>
+              <div className="mt-1 text-ui-sm text-muted-foreground">{plan.tagline}</div>
             </div>
             {current ? <Badge tone="success">Current</Badge> : plan.featured ? <Badge tone="info">Popular</Badge> : null}
           </div>
           <div>
             <div className="text-hero font-semibold text-foreground">{plan.price}</div>
-            <div className="mt-1 text-xs text-muted-foreground">{plan.suffix}</div>
-            <div className="mt-1 text-xs text-muted-foreground">{plan.billing}</div>
+            <div className="mt-1 text-ui-sm text-muted-foreground">{plan.suffix}</div>
+            <div className="mt-1 text-ui-sm text-muted-foreground">{plan.billing}</div>
           </div>
         </div>
 
         <div className="space-y-3 border-t border-border-light pt-4">
-          <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          <div className="text-ui-sm font-medium uppercase tracking-wide text-muted-foreground">
             {plan.highlightsLabel}
           </div>
           <ul className="space-y-2">
             {plan.highlights.map((highlight) => (
-              <li key={highlight} className="flex gap-2 text-xs leading-5 text-muted-foreground">
+              <li key={highlight} className="flex gap-2 text-ui-sm text-muted-foreground">
                 <Check className="mt-0.5 icon-paired shrink-0 text-foreground" />
                 <span>{highlight}</span>
               </li>
@@ -141,12 +141,12 @@ function PlanSummaryCard({
 export function CheckoutReturnNotice({ state }: { state: "success" | "cancel" }) {
   if (state === "success") {
     return (
-      <div className="rounded-lg border border-success/40 bg-success/10 p-4 text-sm text-foreground">
+      <div className="rounded-lg border border-success/40 bg-success/10 p-4 text-body text-foreground">
         <div className="flex items-start gap-3">
           <CheckCircle2 className="mt-0.5 icon-paired shrink-0 text-success" />
           <div className="min-w-0">
-            <div className="text-sm font-medium">Stripe checkout completed</div>
-            <p className="mt-1 text-sm leading-5 text-muted-foreground">
+            <div className="text-body-emphasis font-medium">Stripe checkout completed</div>
+            <p className="mt-1 text-body text-muted-foreground">
               Billing is refreshing from Stripe. The relevant card will update automatically
               as soon as the webhook lands.
             </p>
@@ -173,14 +173,14 @@ function PlanHeader({
   return (
     <div
       className={`flex flex-col border-b border-border-light p-4 ${
-        plan.featured ? "bg-foreground/[0.03]" : ""
+        plan.featured ? "bg-surface-elevated-secondary" : ""
       }`}
     >
-      <div className="text-sm font-medium text-foreground">{plan.name}</div>
-      <div className="mt-1 text-xs leading-5 text-muted-foreground">{plan.tagline}</div>
+      <div className="text-body-emphasis font-medium text-foreground">{plan.name}</div>
+      <div className="mt-1 text-ui-sm text-muted-foreground">{plan.tagline}</div>
       <div className="mt-4 text-title font-semibold text-foreground">{plan.price}</div>
-      <div className="mt-1 text-xs text-muted-foreground">{plan.suffix}</div>
-      <div className="mt-4 border-t border-border-light pt-3 text-xs text-muted-foreground">
+      <div className="mt-1 text-ui-sm text-muted-foreground">{plan.suffix}</div>
+      <div className="mt-4 border-t border-border-light pt-3 text-ui-sm text-muted-foreground">
         {plan.billing}
       </div>
     </div>
@@ -190,12 +190,12 @@ function PlanHeader({
 function PlanSectionRows({ section }: { section: BillingPlanSection }) {
   return (
     <>
-      <div className="col-span-4 border-b border-border-light px-4 pt-5 pb-2 text-sm font-medium text-foreground">
+      <div className="col-span-4 border-b border-border-light px-4 pt-5 pb-2 text-heading font-medium text-foreground">
         {section.title}
       </div>
       {section.rows.map((row) => (
         <div key={row.label} className="contents">
-          <div className="flex min-h-10 items-center gap-2 border-b border-border-light px-4 py-2.5 text-xs text-muted-foreground">
+          <div className="flex min-h-10 items-center gap-2 border-b border-border-light px-4 py-2.5 text-ui-sm text-muted-foreground">
             <span>{row.label}</span>
             {row.pill ? <Badge tone="neutral">{row.pill}</Badge> : null}
           </div>
@@ -203,7 +203,7 @@ function PlanSectionRows({ section }: { section: BillingPlanSection }) {
             <div
               key={`${row.label}-${plan.key}`}
               className={`flex min-h-10 items-center justify-center border-b border-border-light px-3 py-2.5 text-center ${
-                plan.featured ? "bg-foreground/[0.03]" : ""
+                plan.featured ? "bg-surface-elevated-secondary" : ""
               }`}
             >
               <PlanValue value={row.values[plan.key]} featured={Boolean(plan.featured)} />
@@ -226,10 +226,10 @@ function PlanValue({
     return <Check className="icon-paired text-foreground" aria-label="Included" />;
   }
   if (value === false) {
-    return <span className="text-sm text-muted-foreground" aria-label="Not included">-</span>;
+    return <span className="text-body text-muted-foreground" aria-label="Not included">-</span>;
   }
   return (
-    <span className={`text-xs leading-5 ${featured ? "font-medium text-foreground" : "text-muted-foreground"}`}>
+    <span className={`text-ui-sm ${featured ? "font-medium text-foreground" : "text-muted-foreground"}`}>
       {value}
     </span>
   );

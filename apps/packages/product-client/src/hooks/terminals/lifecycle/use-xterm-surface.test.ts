@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { APPEARANCE_SIZE_IDS } from "#product/lib/domain/preferences/appearance";
+import { APPEARANCE_SIZE_IDS, READABLE_CODE_FONT_SCALES } from "#product/lib/domain/preferences/appearance";
 import { TERMINAL_LINE_HEIGHT } from "#product/lib/domain/terminals/terminal-grid";
 import {
   resolveXtermSurfaceTypography,
@@ -24,15 +24,16 @@ describe("resolveXtermSurfaceTypography", () => {
     expect(typography.fontSize * typography.lineHeight).toBeGreaterThan(typography.fontSize);
   });
 
-  it("renders the Small readable-code preset at an unscaled 12px with terminal row cadence", () => {
+  it("renders the Small readable-code preset at an unscaled size with terminal row cadence", () => {
     expect(resolveXtermSurfaceTypography("small")).toEqual({
-      fontSize: 12,
-      lineHeight: 1.2,
+      fontSize: READABLE_CODE_FONT_SCALES.small.monacoFontSize,
+      lineHeight: TERMINAL_LINE_HEIGHT,
     });
   });
 
   it("preserves explicit caller overrides", () => {
-    expect(resolveXtermSurfaceTypography("default", { fontSize: 20, lineHeight: 1.25 }))
-      .toEqual({ fontSize: 20, lineHeight: 1.25 });
+    const overrideFontSize = READABLE_CODE_FONT_SCALES.xxxlarge.monacoFontSize;
+    expect(resolveXtermSurfaceTypography("default", { fontSize: overrideFontSize, lineHeight: 1.25 }))
+      .toEqual({ fontSize: overrideFontSize, lineHeight: 1.25 });
   });
 });

@@ -32,6 +32,11 @@ anyharness_update (single row, id = 1)
 enrollment. `anyharness_update` records the runtime version last swapped and
 health-verified plus a pin explicitly marked after a relaunch or health-gate
 failure, preventing that recorded pin from being retried every heartbeat.
+The `anyharness_update` table serves only the legacy (non-supervisor-owned)
+swap path; on supervisor-owned targets the swap journal and failed-pin
+record live with Proliferate Supervisor
+([proliferate-supervisor/README.md](../../proliferate-supervisor/README.md)),
+and this table goes away with the legacy path.
 
 ## Source Ownership
 

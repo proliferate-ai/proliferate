@@ -62,7 +62,7 @@ export function CollapsedActions({
   }
 
   return (
-    <div className="flex min-w-0 flex-col text-chat leading-[1.5]">
+    <div className="flex min-w-0 flex-col text-chat leading-normal">
       <div className="group/collapsed-actions flex max-w-full self-start items-center gap-1">
         <Button
           type="button"
@@ -72,7 +72,7 @@ export function CollapsedActions({
           data-active={isLiveAction ? "true" : undefined}
           aria-expanded={summaryOpensChanges ? undefined : expanded}
           title={summaryOpensChanges ? "Open changes" : undefined}
-          className="h-auto max-w-full justify-start gap-1 rounded-none bg-transparent p-0 text-left text-chat leading-[1.5] font-normal text-foreground/60 hover:bg-transparent hover:text-foreground focus-visible:text-foreground"
+          className="h-auto max-w-full justify-start gap-1 rounded-none bg-transparent p-0 text-left text-chat leading-normal font-normal text-foreground/60 hover:bg-transparent hover:text-foreground focus-visible:text-foreground"
           onClick={summaryOpensChanges
             ? onOpenChanges
             : toggleExpanded}
@@ -89,7 +89,7 @@ export function CollapsedActions({
                 ? (
                   <ThinkingText
                     text={summary}
-                    className="block max-w-full truncate font-normal leading-[inherit] !text-current"
+                    className="block max-w-full truncate font-normal !text-current"
                   />
                 )
                 : summary}
@@ -98,7 +98,7 @@ export function CollapsedActions({
           {!summaryOpensChanges && (
             <ChevronRightActivity
               aria-hidden="true"
-              className={`icon-compact shrink-0 text-current transition-transform duration-300 ${
+              className={`icon-compact shrink-0 text-current transition-transform duration-disclosure ${
                 expanded
                   ? "rotate-90 opacity-100"
                   : "opacity-0 group-hover/collapsed-actions:opacity-100 group-focus-visible/collapsed-actions:opacity-100"
@@ -115,11 +115,11 @@ export function CollapsedActions({
             aria-label={expanded ? "Collapse edited files" : "Expand edited files"}
             aria-expanded={expanded}
             onClick={toggleExpanded}
-            className="size-[1em] shrink-0 rounded-none bg-transparent p-0 text-current hover:bg-transparent focus-visible:text-foreground"
+            className="size-5 shrink-0 rounded-none bg-transparent p-0 text-ui text-current hover:bg-transparent focus-visible:text-foreground"
           >
             <ChevronRightActivity
               aria-hidden="true"
-              className={`icon-compact text-current transition-transform duration-300 ${
+              className={`text-ui icon-compact text-current transition-transform duration-disclosure ${
                 expanded
                   ? "rotate-90 opacity-100"
                   : "opacity-0 group-hover/collapsed-actions:opacity-100 group-focus-visible/collapsed-actions:opacity-100"

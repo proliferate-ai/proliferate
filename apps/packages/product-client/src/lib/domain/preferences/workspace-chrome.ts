@@ -87,7 +87,7 @@ export function resolveStandardWorkspaceChromeClasses({
     // rendering them as off-shade stripes on every theme.
     contentShell: [
       "bg-background",
-      sidebarOpen && !transparent ? "rounded-tl-[22px] border-l border-sidebar-border" : "",
+      sidebarOpen && !transparent ? "rounded-tl-2xl border-l border-sidebar-border" : "",
       sidebarOpen && !transparent && showContentTopBorder ? "border-t" : "",
     ].filter(Boolean).join(" "),
     header,
@@ -105,7 +105,7 @@ export function resolveCoworkWorkspaceChromeClasses({
     root: transparent ? "bg-transparent" : "bg-sidebar",
     contentShell: [
       "bg-background",
-      sidebarOpen && !transparent ? "rounded-tl-[22px] border-l border-t border-sidebar-border" : "",
+      sidebarOpen && !transparent ? "rounded-tl-2xl border-l border-t border-sidebar-border" : "",
     ].filter(Boolean).join(" "),
     header: transparent ? WORKSPACE_GLASS_HEADER_CLASS : WORKSPACE_SOLID_HEADER_CLASS,
   };
@@ -131,6 +131,6 @@ export function resolveTerminalTabChromeClasses(
     active: transparent
       ? "bg-background/85 text-foreground backdrop-blur-xl"
       : "bg-background text-foreground",
-    inactive: "bg-transparent text-muted-foreground hover:bg-foreground/[0.04] hover:text-foreground",
+    inactive: "bg-transparent text-muted-foreground hover:bg-hover hover:text-foreground active:bg-active",
   };
 }

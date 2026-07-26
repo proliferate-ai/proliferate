@@ -165,11 +165,11 @@ export function IntegrationIcon({ namespace, className }: IntegrationIconProps) 
   return (
     <div
       className={twMerge(
-        "flex size-8 shrink-0 items-center justify-center rounded-lg border border-border/70 bg-transparent text-muted-foreground",
+        "flex size-8 shrink-0 items-center justify-center rounded-lg border border-border/70 bg-transparent text-ui text-muted-foreground [&_svg]:icon-large",
         className,
       )}
     >
-      <Glyph aria-hidden="true" className="size-[62%] shrink-0" />
+      <Glyph aria-hidden="true" className="shrink-0" />
     </div>
   );
 }

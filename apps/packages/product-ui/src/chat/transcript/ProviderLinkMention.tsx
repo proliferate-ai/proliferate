@@ -19,7 +19,7 @@ import { CHAT_TRANSCRIPT_LINK_CLASS } from "./TranscriptLinkStyles";
  */
 
 const INLINE_MENTION_CLASS =
-  `group/inline-mention inline whitespace-normal break-words align-baseline font-medium leading-[inherit] ${CHAT_TRANSCRIPT_LINK_CLASS}`;
+  `group/inline-mention inline whitespace-normal break-words align-baseline font-medium ${CHAT_TRANSCRIPT_LINK_CLASS}`;
 
 const ICON_SHELL_CLASS =
   "relative mr-[3px] inline-block h-[1lh] w-[var(--icon-paired)] shrink-0 align-bottom";
@@ -88,7 +88,7 @@ function FaviconIcon({ host }: { host: string }): ReactNode {
         draggable={false}
         referrerPolicy="no-referrer"
         onError={() => setStage((current) => current + 1)}
-        className={`${ICON_CLASS} rounded-[2px] object-contain`}
+        className={`${ICON_CLASS} rounded-sm object-contain`}
       />
     </span>
   );

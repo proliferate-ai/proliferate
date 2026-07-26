@@ -57,6 +57,10 @@ indexes rather than guessing a leaf path.
 
 ## Writing Rules
 
+Style and structure expectations for every document live in
+[authoring.md](authoring.md); the rules below govern placement and
+authority.
+
 - Describe ownership, behavior, failure handling, and proof directly.
 - Put source organization in `codebase/structures/**`.
 - Put reusable capability contracts in `codebase/platforms/**`.

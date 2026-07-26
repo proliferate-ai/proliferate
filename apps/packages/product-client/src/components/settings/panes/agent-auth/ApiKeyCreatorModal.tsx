@@ -139,7 +139,7 @@ export function ApiKeyCreatorModal({
       <form id="api-key-creator-form" className="space-y-4" onSubmit={submit}>
         {showTitleField ? (
           <div className="space-y-1.5">
-            <Label htmlFor="api-key-title" className="text-sm font-medium text-foreground">
+            <Label htmlFor="api-key-title" className="text-ui font-medium text-foreground">
               {titleLabel}
             </Label>
             <Input
@@ -155,7 +155,7 @@ export function ApiKeyCreatorModal({
 
         {envVarField ? (
           <div className="space-y-1.5">
-            <Label htmlFor="api-key-env-var" className="text-sm font-medium text-foreground">
+            <Label htmlFor="api-key-env-var" className="text-ui font-medium text-foreground">
               {envVarField.label}
             </Label>
             <Input
@@ -171,7 +171,7 @@ export function ApiKeyCreatorModal({
               onChange={(event) => setEnvVarName(event.currentTarget.value)}
             />
             <p
-              className={`text-xs ${invalidEnvVar ? "text-destructive" : "text-muted-foreground"}`}
+              className={`text-ui-sm ${invalidEnvVar ? "text-destructive" : "text-muted-foreground"}`}
             >
               {invalidEnvVar
                 ? "Use SCREAMING_SNAKE_CASE (A–Z, 0–9, _)."
@@ -181,7 +181,7 @@ export function ApiKeyCreatorModal({
         ) : null}
 
         <div className="space-y-1.5">
-          <Label htmlFor="api-key-value" className="text-sm font-medium text-foreground">
+          <Label htmlFor="api-key-value" className="text-ui font-medium text-foreground">
             {valueLabel}
           </Label>
           <Input
@@ -196,13 +196,13 @@ export function ApiKeyCreatorModal({
             placeholder={valuePlaceholder}
             onChange={(event) => setValue(event.currentTarget.value)}
           />
-          <p className="text-xs text-muted-foreground">
+          <p className="text-ui-sm text-muted-foreground">
             Stored encrypted. The value is never displayed again after saving.
           </p>
         </div>
 
         {error ? (
-          <div className="rounded-md border border-destructive/25 bg-destructive-subtle px-3 py-2 text-sm text-destructive">
+          <div className="rounded-md border border-destructive/25 bg-destructive-subtle px-3 py-2 text-ui text-destructive">
             {error}
           </div>
         ) : null}

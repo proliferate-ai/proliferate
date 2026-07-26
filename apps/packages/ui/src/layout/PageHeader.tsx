@@ -27,9 +27,17 @@ export function PageHeader({
       {...props}
     >
       <div className="min-w-0">
-        <h1 className="text-[length:calc(var(--text-xl)_+_0.875rem)] font-semibold leading-[calc(var(--text-xl--line-height)_+_0.5rem)] tracking-normal text-foreground">{title}</h1>
+        {/* ui-foundation-escalation: page-title role resolved to text-title
+            (19px/24px), the closed ramp's largest heading rung, matching
+            origin/ui-foundation-pass's prior-art choice for this component.
+            This is a visible ~12px shrink from the pre-migration 31px/34px
+            calc() literal (itself anchored on the now-deleted --text-xl
+            ladder) — flagged for founder review at the checkpoint rather
+            than silently absorbed, since no enumerated retune specifically
+            authorizes a page-title rung. */}
+        <h1 className="text-title font-semibold tracking-normal text-foreground">{title}</h1>
         {description && (
-          <p className="mt-1 max-w-3xl text-sm leading-5 text-muted-foreground">
+          <p className="mt-1 max-w-3xl text-body text-muted-foreground">
             {description}
           </p>
         )}

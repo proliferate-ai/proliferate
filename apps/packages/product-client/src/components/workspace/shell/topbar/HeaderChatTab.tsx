@@ -151,10 +151,10 @@ export function HeaderChatTab({
       onPointerEnter={onPointerEnter}
       className={`absolute bottom-0 h-7 app-region-no-drag ${
         isDragging
-          ? "z-[20] cursor-grabbing opacity-80"
-          : `${tab.isActive ? "z-[5]" : "z-[1] hover:z-[2]"} ${
+          ? "z-sticky cursor-grabbing opacity-80"
+          : `${tab.isActive ? "z-sticky" : "z-base hover:z-raised"} ${
             canDragTab ? "cursor-grab" : "cursor-default"
-          } transition-transform duration-150`
+          } transition-transform duration-enter`
       }`}
       style={{
         width,

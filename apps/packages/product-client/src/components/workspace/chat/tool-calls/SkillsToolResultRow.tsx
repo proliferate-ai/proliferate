@@ -44,7 +44,7 @@ function SkillsToolResultDetails({
   switch (presentation.kind) {
     case "list":
       return (
-        <div className="space-y-2 px-3 py-2 text-chat leading-[var(--text-chat--line-height)]">
+        <div className="space-y-2 px-3 py-2 text-chat">
           {presentation.skills.length > 0 ? (
             presentation.skills.map((skill) => (
               <div key={skill.skillId} className="space-y-1">
@@ -70,7 +70,7 @@ function SkillsToolResultDetails({
       );
     case "activate":
       return (
-        <div className="space-y-3 px-3 py-2 text-chat leading-[var(--text-chat--line-height)]">
+        <div className="space-y-3 px-3 py-2 text-chat">
           <div className="space-y-1">
             <div className="flex min-w-0 items-center gap-2">
               <span className="min-w-0 truncate font-[520] text-foreground">
@@ -105,7 +105,7 @@ function SkillsToolResultDetails({
       );
     case "resource":
       return (
-        <div className="space-y-2 px-3 py-2 text-chat leading-[var(--text-chat--line-height)]">
+        <div className="space-y-2 px-3 py-2 text-chat">
           <div className="flex min-w-0 items-center gap-2">
             <span className="min-w-0 truncate font-[520] text-foreground">
               {presentation.displayName ?? presentation.resourceId}
@@ -119,7 +119,7 @@ function SkillsToolResultDetails({
               renderCodeBlock={renderDesktopCodeBlock}
             />
           ) : (
-            <pre className="m-0 whitespace-pre-wrap font-mono text-[length:var(--readable-code-font-size)] leading-[var(--readable-code-line-height)] text-foreground">
+            <pre className="m-0 whitespace-pre-wrap font-mono text-readable-code text-foreground">
               {presentation.content}
             </pre>
           )}
@@ -160,7 +160,7 @@ function MetadataPill({ children }: { children: string }) {
   return (
     <span
       title={children}
-      className="max-w-[260px] truncate rounded-sm border border-border/60 bg-muted/45 px-1.5 py-0.5 text-sm leading-none text-muted-foreground"
+      className="max-w-[260px] truncate rounded-sm border border-border/60 bg-muted/45 px-1.5 py-0.5 text-chat leading-none text-muted-foreground"
     >
       {children}
     </span>

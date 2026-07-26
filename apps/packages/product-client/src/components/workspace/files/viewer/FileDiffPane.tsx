@@ -23,7 +23,7 @@ export function FileDiffPane({
 
   if (diffQuery.isLoading) {
     return (
-      <p className="px-4 py-8 text-center text-sm text-muted-foreground">Loading diff</p>
+      <p className="px-4 py-8 text-center text-ui-sm text-muted-foreground">Loading diff</p>
     );
   }
 
