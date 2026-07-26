@@ -23,8 +23,8 @@ replace them.
 transcript anatomy, tab strip, icon tiers), the clean-redo laws, and the
 change-control model.
 
-**Does not own:** per-component anatomy (the owning component lives in
-[apps/packages/ui](../../../../apps/packages/ui)), the source-layout and
+**Does not own:** per-component anatomy and the library's tier model/index
+([component-library.md](component-library.md)), the source-layout and
 class-authoring rules for styling
 ([structures/frontend/guides/styling.md](../../structures/frontend/guides/styling.md)),
 the gate script's own contract

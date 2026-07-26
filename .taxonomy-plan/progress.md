@@ -269,6 +269,79 @@ grandfather). `python3 -m unittest scripts/test_check_frontend_boundaries.py`
 specs/ or markdown changes this step). `python3 scripts/check_appearance_scaling.py`
 exit 0 (unaffected — no design/appearance-scaling-relevant source touched).
 
-- [ ] 8. component-library.md spec (D)
+## Step 8 notes
+
+Authored `specs/codebase/platforms/product/component-library.md` as the
+canonical current-state doc for the component library: tier model
+(`ui/src/{primitives,patterns,icons}` + `product-ui/src/patterns` for
+domain-aware compositions), the governance rule (no raw Radix outside the
+library, no hardcoded style values, no re-implemented library behavior,
+graduation-into-library trigger), the sanctioned index (71 rows: 34
+primitives, 22 patterns, 4 icon sets, 11 product-ui domain-aware patterns —
+paths verified against `git ls-files` of the real tree, not the catalog's
+stale pre-move paths), "How to add a component," failure modes, and current
+gaps. Cross-links to `design-system.md` and `packages/README.md`; added a
+one-line pointer back from `design-system.md`'s "Does not own" list
+(`per-component anatomy` line) — the only edit outside this file + this
+progress file.
+
+JC: the catalog source (`catalog-v2-snapshot.md`) is a decision/ruling sheet
+full of D-numbers, RULED/BLOCKED verdicts, importer-count tables, and a kill
+list — none of that framing survives. The new doc states only what the
+codebase looks like today: which tier a component is in, its real path, and
+a one-line purpose (reusing the catalog's purpose prose where accurate,
+discarding its movability/ruling apparatus entirely).
+
+JC: `checkbox-primitive`/`Checkbox` and `tooltip-primitive`/`Tooltip` are
+documented as "Collision pairs (transitional)" with both files getting their
+own index row (not merged into one row) — each is independently exported and
+independently importable today, so collapsing them into a single row would
+misstate the sanctioned index as a closed set of *exports*, which it is.
+
+JC: `DropdownMenu` gets a normal primitives-table row (raw Radix wrapper,
+same as `Dialog`/`Popover`/etc.) plus a separate "DropdownMenu status"
+paragraph naming its exact 4 grandfathered consumers (re-verified by grep:
+`WorkspaceItemMenu.tsx`, `RightPanelNewTabMenu.tsx`,
+`WorkspaceActionsMenu.tsx`, `ProposedPlanCard.tsx` — same 4 files the catalog
+named, unchanged since). Phrased factually ("legacy menu system alongside
+PopoverButton/PopoverMenuItem; migration pending," Radix parity gap named as
+the reason) with no ban language — `check_frontend_boundaries.py` has no
+`DropdownMenu`-specific gate (step 7 explicitly left it out of scope), so a
+ban claim would be false.
+
+JC: `popover-surface.ts` (the dependency-free `POPOVER_FRAME_CLASS`/
+`POPOVER_SURFACE_CLASS` leaf `PopoverButton`/`Popover`/`DropdownMenu` all
+import) is infrastructure a primitive composes, not itself a component with
+a public export subpath — no `package.json` `exports` entry exists for it,
+so it gets no index row, consistent with the "every row has an export
+subpath" closed-set rule stated at the top of the index. Same reasoning for
+`lib/utils.ts` and the `utils/*`/`overlays/*` files: infra, not components,
+called out by name in the "Where The Library Lives" tree instead of getting
+table rows.
+
+JC: `product-ui/src/patterns/secrets/`'s five internal files
+(`SecretDeleteDialog`, `SecretEditorDialog`(+test), `SecretList`,
+`SecretRow`, `SecretScopeNotice`) get no index rows — confirmed via step 6's
+own notes and a fresh `package.json` exports check that only
+`secrets/SecretManagementPanel` has an export subpath; the five are unexported
+private implementation detail of that one pattern, so by the same
+export-subpath-gates-a-row rule they're correctly absent, not an oversight.
+
+JC: did not add a "Component library" row to `platforms/product/README.md`'s
+Platform Map table. The task brief's list of allowed edits ("your new file +
+progress.md" plus the one design-system.md pointer) doesn't name the
+platform-map index; adding an unlisted edit there would exceed the brief's
+edit-scope contract even though `check_docs.py` has no rule requiring every
+platform doc to appear in that table (verified — no such check exists). Left
+as a gap for whoever reviews/lands this: the doc exists and is linked from
+`design-system.md`, but is not yet listed in the Platform Map table.
+
+Gates (this step): `python3 scripts/check_docs.py` exit 0 (225 files, +1 from
+this step's new doc). `PYTHONPATH=. python3 -m scripts.test_check_docs` 17/17
+OK. `python3 scripts/check_frontend_boundaries.py` exit 0 (docs-only step,
+unaffected). No source files touched, so no typecheck/vitest run needed this
+step.
+
+- [x] 8. component-library.md spec (D)
 - [ ] 9. adversarial verify + fixes (V)
 - [ ] 10. delete .taxonomy-plan, final gates
