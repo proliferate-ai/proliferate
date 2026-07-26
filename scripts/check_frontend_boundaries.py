@@ -22,7 +22,7 @@ ALLOWLIST_PATH = REPO_ROOT / "scripts" / "frontend_boundaries_allowlist.txt"
 EXTENSIONS = {".ts", ".tsx"}
 GENERATED_PREFIXES: set[str] = set()
 
-# Component-library taxonomy (specs/codebase/structures/frontend/packages/README.md):
+# Component-library taxonomy (specs/codebase/platforms/product/component-library.md):
 # apps/packages/ui/src is base primitives + one-level-up compositions only.
 UI_SRC_ALLOWED_TOP_LEVEL_ENTRIES = {
     "primitives",
@@ -86,6 +86,17 @@ class AllowlistEntry:
 
 def strip_line_comment(line: str) -> str:
     return line.split("//", 1)[0]
+
+
+def is_block_comment_line(line: str) -> bool:
+    """True for a JSDoc/block-comment body line (`* ...`) or opener (`/* ...`
+    / `/** ...`). Only meaningful for rules that scan comment-tolerant prose
+    (like the radix-import rule) — general import/boundary rules must not use
+    this, since a `**bold**` markdown line inside a template-literal fixture
+    also starts with `*` and is not a comment.
+    """
+    stripped = line.lstrip()
+    return stripped.startswith("/*") or stripped.startswith("*")
 
 
 def should_skip(path: Path) -> bool:
@@ -346,7 +357,7 @@ def check_file(path: Path) -> list[Violation]:
 def find_radix_import_violations() -> list[Violation]:
     """Rule: `@radix-ui/*` imports are legal only under the ui component
     library's base tiers (`primitives/`, `patterns/`) per the component-library
-    taxonomy in specs/codebase/structures/frontend/packages/README.md.
+    taxonomy in specs/codebase/platforms/product/component-library.md.
     """
     violations: list[Violation] = []
     for path in iter_files_in_roots(ALL_FRONTEND_SRC_ROOTS):
@@ -354,6 +365,8 @@ def find_radix_import_violations() -> list[Violation]:
         if is_ui_component_library_path(rel):
             continue
         for lineno, raw_line in enumerate(path.read_text().splitlines(), start=1):
+            if is_block_comment_line(raw_line):
+                continue
             line = strip_line_comment(raw_line)
             if not line.strip():
                 continue
@@ -375,7 +388,7 @@ def find_radix_import_violations() -> list[Violation]:
 
 def find_ui_src_top_level_violations() -> list[Violation]:
     """Rule: apps/packages/ui/src may only contain the top-level entries named
-    in the component-library taxonomy (specs/codebase/structures/frontend/packages/README.md):
+    in the component-library taxonomy (specs/codebase/platforms/product/component-library.md):
     primitives/, patterns/, icons/, lib/, utils/, overlays/.
     """
     violations: list[Violation] = []
@@ -383,6 +396,10 @@ def find_ui_src_top_level_violations() -> list[Violation]:
         return violations
     for entry in sorted(UI_SRC.iterdir()):
         if entry.name in UI_SRC_ALLOWED_TOP_LEVEL_ENTRIES:
+            continue
+        if entry.name.startswith("."):
+            # Dotfiles (.DS_Store and similar OS/editor artifacts) are not
+            # library taxonomy entries at all — nothing to flag.
             continue
         violations.append(
             Violation(
@@ -392,7 +409,7 @@ def find_ui_src_top_level_violations() -> list[Violation]:
                 (
                     f"apps/packages/ui/src/{entry.name} is not an allowed top-level "
                     "entry per the component-library taxonomy in "
-                    "specs/codebase/structures/frontend/packages/README.md "
+                    "specs/codebase/platforms/product/component-library.md "
                     f"(allowed: {', '.join(sorted(UI_SRC_ALLOWED_TOP_LEVEL_ENTRIES))})"
                 ),
             )

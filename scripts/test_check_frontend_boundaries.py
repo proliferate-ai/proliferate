@@ -93,6 +93,29 @@ class RadixImportBoundaryTest(unittest.TestCase):
 
         self.assertEqual(violations, [])
 
+    def test_radix_import_ignored_in_block_comment(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            self.write_files(
+                root,
+                {
+                    "apps/desktop/src/components/Fancy.tsx": (
+                        "/**\n"
+                        " * Mirrors @radix-ui/react-popover's positioning contract\n"
+                        " * so callers don't need to import it directly.\n"
+                        " */\n"
+                        "export const Fancy = () => null;\n"
+                    ),
+                },
+            )
+            roots = [root / "apps" / "desktop" / "src"]
+            with patch.object(check_module, "REPO_ROOT", root), patch.object(
+                check_module, "ALL_FRONTEND_SRC_ROOTS", roots
+            ):
+                violations = check_module.find_radix_import_violations()
+
+        self.assertEqual(violations, [])
+
 
 class UiSrcTopLevelShapeTest(unittest.TestCase):
     def test_only_allowed_top_level_entries_pass(self) -> None:
@@ -128,6 +151,19 @@ class UiSrcTopLevelShapeTest(unittest.TestCase):
             root = Path(directory).resolve()
             missing_ui_src = root / "apps" / "packages" / "ui" / "src"
             with patch.object(check_module, "UI_SRC", missing_ui_src):
+                violations = check_module.find_ui_src_top_level_violations()
+
+        self.assertEqual(violations, [])
+
+    def test_dotfile_entries_are_ignored(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            ui_src = root / "apps" / "packages" / "ui" / "src"
+            (ui_src / "primitives").mkdir(parents=True)
+            (ui_src / ".DS_Store").write_text("", encoding="utf-8")
+            with patch.object(check_module, "REPO_ROOT", root), patch.object(
+                check_module, "UI_SRC", ui_src
+            ):
                 violations = check_module.find_ui_src_top_level_violations()
 
         self.assertEqual(violations, [])
