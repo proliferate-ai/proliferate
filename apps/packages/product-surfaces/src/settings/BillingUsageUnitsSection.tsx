@@ -1,5 +1,5 @@
-import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
-import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
+import { SettingsSection } from "@proliferate/product-ui/patterns/SettingsSection";
+import { SettingsRow } from "@proliferate/product-ui/patterns/SettingsRow";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { SkeletonBlock, shimmerDelay } from "@proliferate/ui/primitives/Skeleton";
 

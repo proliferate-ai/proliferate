@@ -1,6 +1,6 @@
 import { Button } from "@proliferate/ui/primitives/Button";
-import { SettingsEmptyState } from "@proliferate/product-ui/settings/SettingsEmptyState";
-import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
+import { SettingsEmptyState } from "@proliferate/product-ui/patterns/SettingsEmptyState";
+import { SettingsPageHeader } from "@proliferate/product-ui/patterns/SettingsPageHeader";
 import { AUTH_ACCOUNT_LABELS } from "#product/copy/auth/auth-copy";
 import { CAPABILITY_COPY } from "#product/copy/capabilities/capability-copy";
 import { useGitHubSignIn } from "#product/hooks/auth/workflows/use-github-sign-in";

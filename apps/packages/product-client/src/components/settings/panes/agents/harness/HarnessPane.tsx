@@ -1,8 +1,8 @@
 import type { AgentSummary } from "@anyharness/sdk";
 import type { AgentAuthSurface } from "@proliferate/cloud-sdk";
-import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
-import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
-import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
+import { SettingsPageHeader } from "@proliferate/product-ui/patterns/SettingsPageHeader";
+import { SettingsSection } from "@proliferate/product-ui/patterns/SettingsSection";
+import { SettingsRow } from "@proliferate/product-ui/patterns/SettingsRow";
 import { Badge } from "@proliferate/ui/primitives/Badge";
 import { ProviderIcon } from "@proliferate/ui/icons/provider-icons";
 import { CloudGuard } from "#product/components/cloud/CloudGuard";

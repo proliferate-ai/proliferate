@@ -32,7 +32,7 @@ import {
   CommandList,
 } from "@proliferate/ui/primitives/Command";
 
-import { PrStatusDot, type PrStatusView } from "./PrStatusBadge";
+import { PrStatusDot, type PrStatusView } from "../patterns/PrStatusBadge";
 
 export interface WorkspacesCommandItemView {
   id: string;

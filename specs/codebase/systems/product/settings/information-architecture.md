@@ -780,9 +780,9 @@ in copy/settings/vocabulary-copy.ts keys.
 Existing (kept; no changes):
 
 ```text
-SettingsPageHeader          apps/packages/product-ui/src/settings/SettingsPageHeader.tsx
-SettingsSection             apps/packages/product-ui/src/settings/SettingsSection.tsx
-SettingsRow                 apps/packages/product-ui/src/settings/SettingsRow.tsx
+SettingsPageHeader          apps/packages/product-ui/src/patterns/SettingsPageHeader.tsx
+SettingsSection             apps/packages/product-ui/src/patterns/SettingsSection.tsx
+SettingsRow                 apps/packages/product-ui/src/patterns/SettingsRow.tsx
 SettingsEyebrow / SettingsScopeTabs / SettingsEmptyState / SettingsShell
                             same directory
 ```
@@ -1047,7 +1047,7 @@ apps/desktop/src/lib/domain/settings/navigation-presentation.ts
     scope<->section mapping, PARKED_SECTION_SCOPES
   - adminOnly metadata on Org-scope rows
 
-apps/packages/product-ui/src/settings/SettingsScopeTabs.tsx
+apps/packages/product-ui/src/patterns/SettingsScopeTabs.tsx
   - horizontal underline scope switcher consumed by SettingsScreen
 
 apps/desktop/src/components/settings/sidebar/SettingsSidebar.tsx

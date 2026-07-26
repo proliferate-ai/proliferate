@@ -7,8 +7,8 @@ import {
   type EnvironmentSearchSelectOption,
 } from "@proliferate/ui/patterns/EnvironmentSearchSelect";
 import { Input } from "@proliferate/ui/primitives/Input";
-import { SettingsRow } from "../settings/SettingsRow";
-import { SettingsSection } from "../settings/SettingsSection";
+import { SettingsRow } from "../patterns/SettingsRow";
+import { SettingsSection } from "../patterns/SettingsSection";
 import { ScriptBlock } from "./ScriptBlock";
 
 export interface CloudEnvironmentConfigSectionProps {

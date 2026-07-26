@@ -6,8 +6,8 @@ import { ConfirmationDialog } from "@proliferate/ui/patterns/ConfirmationDialog"
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@proliferate/ui/primitives/Label";
 import { Select } from "@proliferate/ui/primitives/Select";
-import { SettingsSection } from "./SettingsSection";
-import { SettingsPageHeader } from "./SettingsPageHeader";
+import { SettingsSection } from "../patterns/SettingsSection";
+import { SettingsPageHeader } from "../patterns/SettingsPageHeader";
 
 export interface OrganizationSsoConnectionView {
   id: string;
