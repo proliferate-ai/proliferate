@@ -33,7 +33,7 @@ export function SourceGlyph({
   source: WorkspaceInventorySourceKind;
   label: string;
 }) {
-  const iconClass = "icon-paired text-sm";
+  const iconClass = "icon-paired text-ui";
   const icon = (() => {
     switch (source) {
       case "desktop_exposed":
@@ -60,7 +60,7 @@ export function SourceGlyph({
     <span
       title={label}
       aria-label={label}
-      className="flex size-[18px] items-center justify-center text-muted-foreground"
+      className="flex size-5 items-center justify-center text-ui text-muted-foreground [&_svg]:icon-paired"
     >
       {icon}
     </span>
@@ -95,7 +95,7 @@ export function StatusGlyph({
       <svg
         viewBox="0 0 14 14"
         className={twMerge(
-          "icon-paired shrink-0 text-sm",
+          "icon-paired shrink-0 text-ui",
           STATUS_GLYPH_CLASSES[status],
           className,
         )}
@@ -120,7 +120,7 @@ export function StatusGlyph({
       <svg
         viewBox="0 0 14 14"
         className={twMerge(
-          "icon-paired shrink-0 text-sm",
+          "icon-paired shrink-0 text-ui",
           STATUS_GLYPH_CLASSES[status],
           className,
         )}
@@ -136,7 +136,7 @@ export function StatusGlyph({
     <svg
       viewBox="0 0 14 14"
       className={twMerge(
-        "icon-paired shrink-0 text-sm",
+        "icon-paired shrink-0 text-ui",
         STATUS_GLYPH_CLASSES[status],
         className,
       )}

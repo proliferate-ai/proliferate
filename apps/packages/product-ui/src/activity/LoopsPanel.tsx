@@ -57,7 +57,7 @@ export function LoopsPanel({
   return (
     <div className="flex flex-col gap-1.5" data-loops-panel>
       <div className="flex items-center justify-between px-1 pt-0.5">
-        <span className="text-xs font-medium text-foreground">Loops</span>
+        <span className="text-ui font-medium text-foreground">Loops</span>
         {!composing && (
           <IconButton
             size="xs"
@@ -72,7 +72,7 @@ export function LoopsPanel({
       </div>
 
       {sorted.length === 0 && !composing && (
-        <p className="px-1 pb-1 text-xs text-muted-foreground">No loops armed.</p>
+        <p className="px-1 pb-1 text-ui-sm text-muted-foreground">No loops armed.</p>
       )}
 
       {sorted.length > 0 && (
@@ -124,7 +124,7 @@ function LoopRow({
   return (
     <li
       className={twMerge(
-        "flex items-start gap-2 rounded-md px-1.5 py-1.5 text-xs hover:bg-muted/40",
+        "flex items-start gap-2 rounded-md px-1.5 py-1.5 text-ui hover:bg-hover active:bg-active",
         cleared && "opacity-60",
       )}
     >
@@ -133,10 +133,10 @@ function LoopRow({
         aria-hidden
       />
       <div className="min-w-0 flex-1">
-        <p className="line-clamp-2 text-xs text-foreground" data-telemetry-mask>
+        <p className="line-clamp-2 text-ui text-foreground" data-telemetry-mask>
           {loop.prompt}
         </p>
-        <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground">
+        <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-ui-sm text-muted-foreground">
           <span>{humanizeLoopCadence(loop.schedule)}</span>
           <span aria-hidden>·</span>
           <span>
@@ -162,7 +162,7 @@ function LoopRow({
           )}
           <span
             className={twMerge(
-              "rounded px-1 py-0.5 text-sm font-medium uppercase tracking-wide",
+              "rounded px-1 py-0.5 text-ui font-medium uppercase tracking-wide",
               loop.native ? "bg-muted text-muted-foreground" : "bg-warning/15 text-warning",
             )}
           >
@@ -228,7 +228,7 @@ function LoopComposer({
         value={prompt}
         aria-label="Loop prompt"
         data-telemetry-mask
-        className="text-xs"
+        className="text-ui"
         onChange={(event) => setPrompt(event.target.value)}
       />
       <div className="flex items-center gap-1.5">
@@ -240,7 +240,7 @@ function LoopComposer({
               size="unstyled"
               type="button"
               className={twMerge(
-                "rounded px-1.5 py-0.5 text-xs",
+                "rounded px-1.5 py-0.5 text-ui",
                 option.value === kind
                   ? "bg-muted text-foreground"
                   : "text-muted-foreground hover:text-foreground",
@@ -258,7 +258,7 @@ function LoopComposer({
           value={expr}
           aria-label="Loop cadence"
           placeholder={activeOption.placeholder}
-          className="h-7 min-w-0 flex-1 text-xs"
+          className="h-7 min-w-0 flex-1 text-ui"
           onChange={(event) => setExpr(event.target.value)}
         />
       </div>

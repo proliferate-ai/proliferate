@@ -35,8 +35,8 @@ export function CloudStatusCompactHeader({
         {statusIcon}
       </span>
       <span className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate text-sm font-medium text-foreground">{title}</span>
-        <span className="truncate text-xs text-muted-foreground">{phaseLabel}</span>
+        <span className="truncate text-chat font-medium text-foreground">{title}</span>
+        <span className="truncate text-chat text-muted-foreground">{phaseLabel}</span>
       </span>
       {primaryAction && (
         <Button

@@ -93,7 +93,7 @@ export function AccountPasswordCredentialRow({
       : "Add a password to sign in with email";
 
   return (
-    <div className="border-b border-border-light px-3.5 py-3.5 text-sm last:border-b-0">
+    <div className="border-b border-border-light px-3.5 py-3.5 text-body last:border-b-0">
       <div className="flex min-h-[2.75rem] flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-center gap-3">
           <ProviderBrandIcon provider="password" className="icon-control shrink-0 text-muted-foreground" />
@@ -171,7 +171,7 @@ export function AccountPasswordCredentialRow({
             />
           </div>
           {passwordMismatch ? (
-            <p className="text-sm text-destructive" role="alert">
+            <p className="text-ui text-destructive" role="alert">
               New passwords do not match.
             </p>
           ) : null}
@@ -200,7 +200,7 @@ export function AccountPasswordCredentialRow({
             </Button>
           </div>
           {error ? (
-            <p className="text-sm text-destructive" role="alert">
+            <p className="text-ui text-destructive" role="alert">
               {error}
             </p>
           ) : null}

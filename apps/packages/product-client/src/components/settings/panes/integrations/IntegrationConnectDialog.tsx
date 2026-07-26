@@ -129,7 +129,7 @@ export function IntegrationConnectDialog({
                 }}
               />
               {field.helperText ? (
-                <p className="mt-1 text-xs text-muted-foreground">
+                <p className="mt-1 text-ui-sm text-muted-foreground">
                   {field.helperText}
                 </p>
               ) : null}
@@ -178,7 +178,7 @@ function IntegrationSettingFieldInput({
   const inputId = `integration-setting-${field.id}`;
   if (field.kind === "boolean") {
     return (
-      <Label className="flex items-center gap-2 text-sm text-foreground" htmlFor={inputId}>
+      <Label className="flex items-center gap-2 text-ui text-foreground" htmlFor={inputId}>
         <Checkbox
           id={inputId}
           checked={value === true}

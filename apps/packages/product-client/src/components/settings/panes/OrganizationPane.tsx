@@ -261,7 +261,7 @@ export function OrganizationPane() {
                     </Button>
                   </div>
                   {teamCheckoutActions.createTeamCheckoutError && !teamUpgradeGateOpen ? (
-                    <div className="mt-2 text-sm text-destructive">
+                    <div className="mt-2 text-ui text-destructive">
                       {teamCheckoutActions.createTeamCheckoutError instanceof Error
                         ? teamCheckoutActions.createTeamCheckoutError.message
                         : "Could not start Team checkout."}

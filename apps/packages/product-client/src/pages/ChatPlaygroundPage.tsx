@@ -110,7 +110,7 @@ export function ChatPlaygroundPage() {
         {showAttachmentPreview && <PlaygroundAttachmentPreviewAside />}
       </main>
       {!focusMarkdownPresentation && (
-        <footer className="border-t border-border px-4 py-2 text-xs text-muted-foreground">
+        <footer className="border-t border-border px-4 py-2 text-ui-sm text-muted-foreground">
           <code className="font-mono">?s={selection.raw}</code>
           <span className="mx-2">·</span>
           Dev only · import.meta.env.DEV

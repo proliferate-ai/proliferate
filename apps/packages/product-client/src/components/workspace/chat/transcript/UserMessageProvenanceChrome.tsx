@@ -27,7 +27,7 @@ export function UserMessageProvenanceChrome({
         variant="ghost"
         size="sm"
         data-chat-transcript-ignore
-        className="h-auto max-w-full justify-end gap-1.5 rounded-none bg-transparent px-0 py-0 text-xs font-normal text-muted-foreground hover:bg-transparent hover:text-foreground focus-visible:ring-0"
+        className="h-auto max-w-full justify-end gap-1.5 rounded-none bg-transparent px-0 py-0 text-chat font-normal text-muted-foreground hover:bg-transparent hover:text-foreground focus-visible:ring-0"
         title={`Open ${title}`}
         aria-label={`Open ${title}`}
         data-telemetry-mask
@@ -40,7 +40,7 @@ export function UserMessageProvenanceChrome({
 
   return (
     <div
-      className="flex max-w-full items-center justify-end gap-1.5 text-xs text-muted-foreground"
+      className="flex max-w-full items-center justify-end gap-1.5 text-chat text-muted-foreground"
       data-telemetry-mask
     >
       {content}

@@ -37,7 +37,7 @@ export function TabContextMenu({
             icon={renderTabContextMenuIcon(item.command)}
             label={item.label}
             trailing={item.shortcutKey ? (
-              <span className="text-xs text-muted-foreground/70">
+              <span className="text-ui-sm text-muted-foreground/70">
                 {getShortcutDisplayLabel(SHORTCUTS[item.shortcutKey])}
               </span>
             ) : undefined}

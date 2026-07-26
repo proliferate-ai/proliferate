@@ -49,7 +49,7 @@ export function AgentHarnessModelSelector({
           disabled={disabled || groups.length === 0}
           icon={icon}
           label={label}
-          trailing={<ChevronDown className="icon-compact shrink-0 text-[color:var(--color-composer-control-muted-foreground)]" />}
+          trailing={<ChevronDown className="icon-compact shrink-0 text-composer-control-muted-foreground" />}
           aria-label="Agent model"
           className={className}
         />
@@ -62,7 +62,7 @@ export function AgentHarnessModelSelector({
           {groups.map((group, groupIndex) => (
             <div key={group.agentKind}>
               {groupIndex > 0 ? <div className="my-1 border-t border-border-light" /> : null}
-              <div className="min-h-6 truncate px-2 py-1 text-sm leading-4 text-foreground-tertiary">
+              <div className="min-h-6 truncate px-2 py-1 text-ui leading-4 text-foreground-tertiary">
                 {group.agentDisplayName}
               </div>
               {group.models.map((model) => (
@@ -79,7 +79,7 @@ export function AgentHarnessModelSelector({
                   }}
                 >
                   {model.detail ? (
-                    <span className="block truncate text-sm leading-4 text-foreground-tertiary">
+                    <span className="block truncate text-ui leading-4 text-foreground-tertiary">
                       {model.detail}
                     </span>
                   ) : null}

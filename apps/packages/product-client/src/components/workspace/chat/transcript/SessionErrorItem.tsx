@@ -89,7 +89,7 @@ export function SessionErrorItem({
   };
 
   return (
-    <div className="rounded-lg border border-destructive/20 bg-destructive/[0.04] px-3 py-2 text-sm">
+    <div className="rounded-lg border border-destructive/20 bg-destructive/[0.04] px-3 py-2 text-chat">
       <div className="flex min-w-0 items-start gap-2">
         <CircleAlert className="mt-0.5 icon-paired shrink-0 text-destructive/80" />
         <div className="min-w-0 flex-1">
@@ -107,7 +107,7 @@ export function SessionErrorItem({
               disabled={!isOnline}
               title={!isOnline ? "You are offline" : undefined}
               onClick={handleRetryNetworkError}
-              className="px-2.5 text-sm"
+              className="px-2.5 text-chat"
             >
               <RefreshCw className="icon-paired" />
               Retry
@@ -120,7 +120,7 @@ export function SessionErrorItem({
               size="sm"
               loading={isApplyingFallback}
               onClick={handleFallback}
-              className="px-2.5 text-sm"
+              className="px-2.5 text-chat"
             >
               <RefreshCw className="icon-paired" />
               Switch to {presentation.fallbackModelLabel ?? "fallback model"}
@@ -132,7 +132,7 @@ export function SessionErrorItem({
               variant="ghost"
               size="sm"
               onClick={() => setDetailsExpanded((value) => !value)}
-              className="gap-1 px-1.5 text-xs text-muted-foreground hover:text-foreground"
+              className="gap-1 px-1.5 text-chat text-muted-foreground hover:text-foreground"
               aria-expanded={detailsExpanded}
             >
               <CircleQuestion
@@ -145,7 +145,7 @@ export function SessionErrorItem({
         </div>
       ) : null}
       {detailsExpanded && presentation.technicalDetail && (
-        <div className="mt-2 whitespace-pre-wrap rounded-md border border-border/70 bg-background/70 px-2.5 py-2 font-mono text-xs leading-5 text-muted-foreground select-text">
+        <div className="mt-2 whitespace-pre-wrap rounded-md border border-border/70 bg-background/70 px-2.5 py-2 font-mono text-chat leading-5 text-muted-foreground select-text">
           {presentation.technicalDetail}
         </div>
       )}

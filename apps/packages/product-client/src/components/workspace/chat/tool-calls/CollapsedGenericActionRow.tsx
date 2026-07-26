@@ -38,8 +38,8 @@ export function GenericActionRow({ item }: { item: ToolCallItem }) {
           onToggle={() => setExpanded((value) => !value)}
         />
         {expanded && (
-          <div className="mt-1.5 overflow-hidden rounded-lg border border-border/60 bg-foreground/[0.04]">
-            <div className="flex items-center justify-between gap-2 px-2 py-1 text-sm text-muted-foreground">
+          <div className="mt-1.5 overflow-hidden rounded-lg border border-border/60 bg-surface-elevated-secondary">
+            <div className="flex items-center justify-between gap-2 px-2 py-1 text-chat text-muted-foreground">
               <span>Result</span>
             </div>
             <AutoHideScrollArea
@@ -47,7 +47,7 @@ export function GenericActionRow({ item }: { item: ToolCallItem }) {
               viewportClassName={TOOL_CALL_BODY_MAX_HEIGHT_CLASS}
               allowHorizontal
             >
-              <pre className="m-0 whitespace-pre-wrap p-2 font-mono text-[length:var(--readable-code-font-size)] leading-[var(--readable-code-line-height)] text-muted-foreground">
+              <pre className="m-0 whitespace-pre-wrap p-2 font-mono text-readable-code text-muted-foreground">
                 <code>{output}</code>
               </pre>
             </AutoHideScrollArea>

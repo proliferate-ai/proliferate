@@ -26,7 +26,7 @@ export function TurnMetadata({
   return (
     <div className="flex items-center gap-1.5 group/meta">
       {duration && (
-        <span className="text-xs text-muted-foreground">{duration}</span>
+        <span className="text-ui-sm text-muted-foreground">{duration}</span>
       )}
 
       {onCopy && (
@@ -66,7 +66,7 @@ export function TurnMetadata({
             type="button"
             variant="unstyled"
             size="unstyled"
-            className="inline-flex items-center gap-1.5 rounded-md border border-border/50 bg-muted/50 px-2 py-0.5 text-base font-medium text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+            className="inline-flex items-center gap-1.5 rounded-md border border-border/50 bg-muted/50 px-2 py-0.5 text-chat font-medium text-muted-foreground hover:bg-hover hover:text-foreground active:bg-active transition-colors"
           >
             <FileIcon className="icon-compact [font-size:var(--text-chat)]" />
             <span>{badge.filename}</span>

@@ -1,4 +1,5 @@
 import { useMemo, type CSSProperties, type HTMLAttributes } from "react";
+import { motion } from "@proliferate/design/motion";
 import { twMerge } from "../utils/tw-merge";
 
 export interface ThinkingTextProps extends Omit<HTMLAttributes<HTMLSpanElement>, "children"> {
@@ -7,7 +8,6 @@ export interface ThinkingTextProps extends Omit<HTMLAttributes<HTMLSpanElement>,
   motionOriginMs?: number | null;
 }
 
-const THINKING_TEXT_DURATION_MS = 1_800;
 type ThinkingTextStyle = CSSProperties & { "--thinking-text-delay"?: string };
 
 /**
@@ -32,7 +32,7 @@ export function ThinkingText({
     }
     const elapsedMs = Math.max(0, Date.now() - motionOriginMs);
     return {
-      "--thinking-text-delay": `${-(elapsedMs % THINKING_TEXT_DURATION_MS)}ms`,
+      "--thinking-text-delay": motion.cssMs(-(elapsedMs % motion.activity.thinkingCycleMs)),
     };
   }, [motionOriginMs]);
 
@@ -41,7 +41,7 @@ export function ThinkingText({
       {...props}
       style={phaseStyle ? { ...style, ...phaseStyle } : style}
       className={twMerge(
-        "thinking-text inline-block text-chat font-medium leading-[var(--text-chat--line-height)]",
+        "thinking-text inline-block text-chat font-medium",
         className,
       )}
       data-text={text}

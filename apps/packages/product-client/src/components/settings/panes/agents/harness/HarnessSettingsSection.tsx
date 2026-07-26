@@ -67,7 +67,7 @@ export function HarnessSettingsSection({
   if (variant === "section") {
     return (
       <SettingsSection title={HARNESS_PANE_COPY.harnessSettingsTitle}>
-        <div className="overflow-hidden rounded-lg border border-border bg-foreground/[0.02] px-4 py-1">
+        <div className="overflow-hidden rounded-lg border border-border bg-surface-elevated-secondary px-4 py-1">
           {settings.map((setting) => (
             <HarnessSettingRow
               key={setting.key}

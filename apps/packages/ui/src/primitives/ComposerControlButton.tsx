@@ -34,9 +34,15 @@ export const ComposerControlButton = forwardRef<HTMLButtonElement, ComposerContr
     ...props
   }, ref) {
     const classes = active
-      ? "text-[color:var(--color-composer-control-active-foreground)]"
-      : "text-[color:var(--color-composer-control-foreground)]";
-    const baseClassName = `cursor-pointer disabled:cursor-default gap-1 rounded-full border border-transparent bg-transparent transition-colors hover:bg-[var(--color-composer-control-hover)] hover:text-current focus:outline-none data-[state=open]:bg-[var(--color-composer-control-hover)] ${classes}`;
+      ? "text-composer-control-active-foreground"
+      : "text-composer-control-foreground";
+    // [CHAT-02]: hover is 7.8% (--color-composer-control-hover aliases
+    // --color-hover) and the press is 5.2% (--color-active). Codex's literal
+    // control press is bg-token-foreground/15, but D-V2-4 ruled the ledger
+    // vocabulary wins over that one value — see ui-foundation-chat-addendum.md
+    // [CHAT-02], flagged item 4. Press was previously absent entirely, so the
+    // control had no down-state at all.
+    const baseClassName = `cursor-pointer disabled:cursor-default gap-1 rounded-full border border-transparent bg-transparent transition-colors hover:bg-[var(--color-composer-control-hover)] hover:text-current active:bg-active focus:outline-none data-[state=open]:bg-[var(--color-composer-control-hover)] ${classes}`;
     const buttonClassName = iconOnly
       ? `h-7 w-7 shrink-0 !justify-center px-0 ${baseClassName} ${className}`
       : `h-7 min-w-0 max-w-full !justify-start px-1.5 py-0 text-left text-ui ${baseClassName} ${className}`;
@@ -65,13 +71,13 @@ export const ComposerControlButton = forwardRef<HTMLButtonElement, ComposerContr
           <span className="flex min-w-0 items-center gap-1">
             <span
               className={`min-w-0 truncate text-left ${
-                emphasizeLabel ? "text-[color:var(--color-composer-control-active-foreground)]" : ""
+                emphasizeLabel ? "text-composer-control-active-foreground" : ""
               } ${labelClassName}`}
             >
               {label}
             </span>
             {detail && (
-              <span className={`flex min-w-0 items-center gap-1 truncate text-left text-[color:var(--color-composer-control-muted-foreground)] ${detailClassName}`}>
+              <span className={`flex min-w-0 items-center gap-1 truncate text-left text-composer-control-muted-foreground ${detailClassName}`}>
                 <span aria-hidden="true" className="shrink-0">·</span>
                 <span className="min-w-0 truncate">{detail}</span>
               </span>

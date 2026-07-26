@@ -90,7 +90,7 @@ function BillingUnitPoolRow({
         <span className="flex flex-col gap-1.5">
           <span>{balance.available} of {balance.purchased} available</span>
           <span
-            className="block h-1 w-24 overflow-hidden rounded-full bg-foreground/10"
+            className="block h-1 w-24 overflow-hidden rounded-full bg-surface-control"
             role="progressbar"
             aria-valuenow={percent}
             aria-valuemin={0}

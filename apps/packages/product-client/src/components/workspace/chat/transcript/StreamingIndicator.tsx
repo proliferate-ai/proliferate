@@ -31,10 +31,10 @@ export function StreamingIndicator({
         <ThinkingText
           text={label}
           motionOriginMs={startedMs}
-          className="text-[length:var(--text-message)] leading-[var(--text-message--line-height)]"
+          className="text-message"
         />
         {elapsedSeconds !== null && (
-          <span className="text-ui-sm leading-[var(--text-ui-sm--line-height)] tabular-nums text-faint">
+          <span className="text-ui-sm tabular-nums text-faint">
             {"· "}
             {elapsedSeconds}s
           </span>

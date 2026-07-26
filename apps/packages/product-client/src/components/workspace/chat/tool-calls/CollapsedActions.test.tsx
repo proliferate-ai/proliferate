@@ -88,7 +88,7 @@ describe("CollapsedActions", () => {
     expect(screen.getAllByText("Reading read.ts").length).toBeGreaterThan(0);
     const motionShell = document.querySelector("[data-animated-collapsible-content]");
     expect(motionShell?.getAttribute("data-expanded")).toBe("true");
-    expect(motionShell?.className).toContain("duration-200");
+    expect(motionShell?.className).toContain("duration-disclosure");
 
     fireEvent.click(screen.getByRole("button", { name: /Reading read\.ts/i }));
     expect(motionShell?.getAttribute("data-expanded")).toBe("false");
@@ -117,21 +117,20 @@ describe("CollapsedActions", () => {
     const activeLabel = activeButton.querySelector("[data-thinking-text]");
     const activeLabelClasses = activeLabel?.className.split(/\s+/) ?? [];
     expect(activeLabelClasses).toContain("block");
-    expect(activeLabelClasses).toContain("leading-[inherit]");
     expect(activeLabelClasses).toContain("!text-current");
     const iconShell = activeButton.querySelector("span[aria-hidden='true']");
     const summaryContent = iconShell?.parentElement;
     const activeSvgs = activeButton.querySelectorAll("svg");
     const disclosureChevron = activeSvgs[activeSvgs.length - 1];
     expect(activeButton.className).toContain("gap-1");
-    expect(activeButton.className).toContain("leading-[1.5]");
+    expect(activeButton.className).toContain("leading-normal");
     expect(activeButton.className).toContain("text-foreground/60");
     expect(summaryContent?.className).toContain("gap-1.5");
     expect(iconShell?.className).toContain("icon-paired");
     expect(iconShell?.className).toContain("[&_svg]:text-current");
     expect(disclosureChevron?.getAttribute("class")).toContain("icon-compact");
     expect(disclosureChevron?.getAttribute("class")).toContain("transition-transform");
-    expect(disclosureChevron?.getAttribute("class")).toContain("duration-300");
+    expect(disclosureChevron?.getAttribute("class")).toContain("duration-disclosure");
     expect(disclosureChevron?.getAttribute("viewBox")).toBe("0 0 20 20");
     expect(disclosureChevron?.querySelector("path")?.getAttribute("d")).toContain("7.52925 3.7793");
     expect(disclosureChevron?.getAttribute("class")).toContain("opacity-0");

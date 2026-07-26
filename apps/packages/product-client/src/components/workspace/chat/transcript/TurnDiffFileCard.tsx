@@ -143,7 +143,7 @@ export function TurnDiffFileCard({
               onRequestFileLines={requestFileLines}
             />
             {diffQuery.data?.truncated ? (
-              <p className="px-3 py-2 text-center text-xs text-muted-foreground">
+              <p className="px-3 py-2 text-center text-chat text-muted-foreground">
                 Diff truncated because it is too large
               </p>
             ) : null}
@@ -173,7 +173,7 @@ function TurnDiffInlineState({
   onOpenFile?: () => void;
 }) {
   return (
-    <div className="flex items-start gap-2 px-3 py-4 text-xs text-muted-foreground">
+    <div className="flex items-start gap-2 px-3 py-4 text-chat text-muted-foreground">
       <span className="mt-0.5 shrink-0 text-muted-foreground">{icon}</span>
       <span className="min-w-0 flex-1">
         <p className="font-medium text-foreground">{title}</p>
@@ -184,7 +184,7 @@ function TurnDiffInlineState({
             variant="ghost"
             size="sm"
             onClick={onOpenFile}
-            className="mt-2 h-7 rounded-md px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+            className="mt-2 h-7 rounded-md px-2 text-chat text-muted-foreground hover:bg-muted hover:text-foreground"
           >
             Open file
           </Button>
@@ -202,7 +202,7 @@ function DiffDisplayPolicyPlaceholder({
   description: string;
 }) {
   return (
-    <div className="px-3 py-4 text-xs text-muted-foreground">
+    <div className="px-3 py-4 text-chat text-muted-foreground">
       <p className="font-medium text-foreground">{title}</p>
       <p className="mt-0.5 leading-5">{description}</p>
     </div>

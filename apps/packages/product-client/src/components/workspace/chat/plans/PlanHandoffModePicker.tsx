@@ -65,11 +65,11 @@ export function PlanHandoffModePicker({
                 >
                   <SessionControlIcon icon={option.icon} className="icon-paired shrink-0 text-muted-foreground [font-size:var(--text-chat)]" />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm text-foreground">
+                    <span className="block truncate text-ui text-foreground">
                       {option.shortLabel ?? option.label}
                     </span>
                     {option.description && (
-                      <span className="block truncate text-xs text-muted-foreground">
+                      <span className="block truncate text-ui-sm text-muted-foreground">
                         {option.description}
                       </span>
                     )}
@@ -82,7 +82,7 @@ export function PlanHandoffModePicker({
         )}
       </PopoverButton>
       {showHelperText && (
-        <span className="text-xs text-muted-foreground">
+        <span className="text-ui-sm text-muted-foreground">
           Applies to this handoff only.
         </span>
       )}

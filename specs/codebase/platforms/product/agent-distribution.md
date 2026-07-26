@@ -444,8 +444,11 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       with its catalog-applied reconcile poke, and the server-side
       [`server/proliferate/server/catalogs/`](../../../../server/proliferate/server/catalogs/)
       ETag serving that feeds it). All of it deletes under the
-      binary-only transport law above; the runtime keeps only the read
-      routes (`GET /v1/catalogs/agents{,/version}`).
+      binary-only transport law above; the deletion removes the `PUT`
+      handler — the runtime keeps only `GET /v1/catalogs/agents/version`
+      (there is no bare GET full-document route on the runtime; the
+      full-document GET is the cloud server's `read_agent_catalog`, a
+      separate component that stays).
 - [ ] Installs are not yet automatic: the startup pass runs an
       `installed_only` reconcile (`reconcile_installed_when_idle` in
       [`runtime.rs`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/runtime.rs)
@@ -463,4 +466,8 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       resolves native-only while launch resolves route-aware, so
       settings and launch can disagree for routed harnesses. Also
       known: claude's Node gate shells out uncached on every read, and
-      claude/codex lack cursor/grok's launcher-integrity guard.
+      the journal-protected atomic activation guard
+      ([`installer/downloads/activation.rs`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/installer/downloads/activation.rs))
+      covers only `Archive`-sourced agent-process installs (cursor,
+      opencode) — claude's git install and codex/grok's npm installs
+      have no equivalent guard.

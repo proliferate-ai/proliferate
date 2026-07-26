@@ -78,7 +78,7 @@ function EditActionRow({
     <div
       data-edit-action-row
       onContextMenuCapture={nativeContextMenu.onContextMenuCapture}
-      className={`relative flex min-w-0 max-w-full items-center text-left text-chat leading-[var(--text-chat--line-height)] transition-colors ${
+      className={`relative flex min-w-0 max-w-full items-center text-left text-chat transition-colors ${
         failed
           ? "text-destructive/80 hover:text-destructive"
           : "text-foreground/60 hover:text-foreground"
@@ -152,10 +152,10 @@ function EditActionRow({
       {expanded && patch && (
         <div
           data-diff-surface="chat"
-          className="thread-diff-virtualized mt-1.5 overflow-hidden rounded-lg border border-border/60 bg-foreground/[0.04]"
+          className="thread-diff-virtualized mt-1.5 overflow-hidden rounded-lg border border-border/60 bg-surface-elevated-secondary"
         >
           {displayPolicy && !displayPolicy.canRenderInline ? (
-            <div className="px-3 py-4 text-xs text-muted-foreground">
+            <div className="px-3 py-4 text-chat text-muted-foreground">
               <p className="font-medium text-foreground">{displayPolicy.placeholderTitle}</p>
               <p className="mt-0.5 leading-5">{displayPolicy.placeholderDescription}</p>
             </div>

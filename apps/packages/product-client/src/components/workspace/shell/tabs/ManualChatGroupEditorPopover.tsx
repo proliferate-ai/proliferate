@@ -82,19 +82,19 @@ export function ManualChatGroupEditorPopover({
 
   return createPortal(
     <>
-      <div className="fixed inset-0 z-[60]" onClick={onClose} />
+      <div className="fixed inset-0 z-overlay" onClick={onClose} />
       <FixedPositionLayer
         position={position}
-        className={`fixed z-[61] w-[304px] ${POPOVER_FRAME_CLASS} p-3`}
+        className={`fixed z-popover w-[304px] ${POPOVER_FRAME_CLASS} p-3`}
         data-telemetry-mask="true"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="mb-3 text-sm font-medium text-foreground">
+        <div className="mb-3 text-ui font-medium text-foreground">
           {title}
         </div>
         <div className="space-y-4">
           <div className="space-y-1.5">
-            <div className="text-xs font-medium text-muted-foreground">
+            <div className="text-ui-sm font-medium text-muted-foreground">
               Name
             </div>
             <Input
@@ -114,7 +114,7 @@ export function ManualChatGroupEditorPopover({
           </div>
 
           <div className="space-y-2">
-            <div className="text-xs font-medium text-muted-foreground">
+            <div className="text-ui-sm font-medium text-muted-foreground">
               Color
             </div>
             <div className="grid grid-cols-6 gap-2">

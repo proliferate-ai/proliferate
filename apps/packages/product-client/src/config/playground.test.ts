@@ -129,7 +129,23 @@ describe("playground scenarios", () => {
   it("includes a loading-states scenario with auth, thinking, and skeleton fixtures", () => {
     expect(Object.keys(SCENARIOS)).toContain("loading-states");
 
-    const html = renderToStaticMarkup(createElement(PlaygroundLoadingStates));
+    // PlaygroundLoadingStates renders the real ChatLoadingHero, which reads
+    // auth/workspace state through useProductHost() and react-query — mount
+    // the same minimal provider stack the app boots with, same as the
+    // composer surface fixtures below.
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const html = renderToStaticMarkup(
+      createElement(
+        QueryClientProvider,
+        { client: queryClient },
+        createElement(ProductHostProvider, {
+          host: makeTestProductHost(),
+          children: createElement(PlaygroundLoadingStates),
+        }),
+      ),
+    );
     expect(html).toContain("Checking your session");
     expect(html).toContain("Thinking");
     expect(html).toContain("Thinking timing lab");

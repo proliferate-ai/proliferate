@@ -125,7 +125,7 @@ export function CommandPaletteRoot({
   return createPortal(
     <CommandPaletteContext.Provider value={contextValue}>
       <div
-        className="fixed inset-0 z-[999] bg-overlay/50"
+        className="fixed inset-0 z-overlay bg-overlay/50"
         data-telemetry-block
         onMouseDown={(event) => {
           if (event.target === event.currentTarget) {
@@ -140,7 +140,7 @@ export function CommandPaletteRoot({
           aria-label={label}
           // Canonical modal surface (matches ModalShell / Dialog): bg-background
           // with a border-token hairline, not the lighter popover tint.
-          className="fixed left-1/2 top-[20vh] flex max-h-[calc(100vh-1rem)] w-[min(520px,92vw)] -translate-x-1/2 flex-col overflow-hidden rounded-2xl bg-background p-1 text-foreground shadow-floating-dark ring-[0.5px] ring-border"
+          className="fixed left-1/2 top-[20vh] flex max-h-[calc(100vh-1rem)] w-[min(520px,92vw)] -translate-x-1/2 flex-col overflow-hidden rounded-2xl bg-background p-1 text-foreground shadow-modal ring-[0.5px] ring-border"
           onKeyDown={onKeyDown}
         >
           <Command

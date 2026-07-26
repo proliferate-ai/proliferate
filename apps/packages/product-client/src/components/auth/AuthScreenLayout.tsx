@@ -134,7 +134,7 @@ export function AuthScreenLayout({
               On exit it slides up so nothing drifts downward. */}
           <div
             className={twMerge(
-              "absolute inset-0 transition-all duration-300 ease-out",
+              "absolute inset-0 transition-all duration-enter ease-out-quint",
               "motion-reduce:translate-y-0 motion-reduce:transition-none",
               showAuth
                 ? "pointer-events-none -translate-y-1 opacity-0"
@@ -143,14 +143,14 @@ export function AuthScreenLayout({
             aria-hidden={showAuth}
           >
             <div className="flex h-11 w-full items-center justify-center rounded-md border border-border/50 bg-card/30">
-              <ThinkingText text={loadingHint} className="text-sm font-normal" />
+              <ThinkingText text={loadingHint} className="text-ui font-normal" />
             </div>
           </div>
 
           {/* Auth layer: the real GitHub button rises up into place. */}
           <div
             className={twMerge(
-              "absolute inset-0 transition-all duration-300 ease-out",
+              "absolute inset-0 transition-all duration-enter ease-out-quint",
               "motion-reduce:translate-y-0 motion-reduce:transition-none",
               showAuth
                 ? "translate-y-0 opacity-100"
@@ -231,16 +231,16 @@ export function AuthScreenLayout({
                 </Button>
               )
               : showAuth && error
-              ? <p className="text-sm text-destructive">{error}</p>
+              ? <p className="text-ui text-destructive">{error}</p>
               : showUnavailableMessage
                 ? (
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-body text-muted-foreground">
                     {githubSignInUnavailableDescription || ssoSignInUnavailableDescription}
                   </p>
                 )
                 : showAuth && canContinueLocally
                   ? (
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-body text-muted-foreground">
                       {AUTH_LOGIN_LABELS.detailWithLocalPrefix}{" "}
                       <Button
                         type="button"
@@ -260,7 +260,7 @@ export function AuthScreenLayout({
       </div>
 
       {showConnectServer && (
-        <div className="fixed inset-x-0 bottom-6 flex items-center justify-center gap-2 text-xs text-muted-foreground">
+        <div className="fixed inset-x-0 bottom-6 flex items-center justify-center gap-2 text-ui-sm text-muted-foreground">
           {connectServer.connectedServerHost ? (
             <>
               <span>

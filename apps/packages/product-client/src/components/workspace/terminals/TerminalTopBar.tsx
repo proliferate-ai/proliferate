@@ -71,19 +71,19 @@ export function TerminalTopBar({
             type="button"
             variant="ghost"
             size="sm"
-            className="min-w-0 flex-1 justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
+            className="min-w-0 flex-1 justify-start text-sidebar-foreground hover:bg-hover hover:text-sidebar-foreground active:bg-active"
           >
             <TerminalIcon className="icon-paired shrink-0 [font-size:var(--text-sidebar-row)]" />
             <span className="min-w-0 truncate text-left">{activeTitle}</span>
             <ChevronDown className="icon-paired shrink-0 text-sidebar-muted-foreground" />
           </Button>
         }
-        className="w-72 rounded-md border border-sidebar-border bg-sidebar-background p-1 shadow-floating"
+        className="w-72 rounded-md border border-sidebar-border bg-sidebar-background p-1 shadow-popover"
       >
         {(close) => (
           <div className="max-h-80 overflow-y-auto py-0.5">
             {terminals.length === 0 ? (
-              <div className="px-2.5 py-2 text-xs text-sidebar-muted-foreground">
+              <div className="px-2.5 py-2 text-ui-sm text-sidebar-muted-foreground">
                 No terminals
               </div>
             ) : (
@@ -95,7 +95,7 @@ export function TerminalTopBar({
                 return (
                   <div
                     key={terminal.id}
-                    className="group/terminal-row flex min-w-0 items-center gap-1 rounded-md px-1.5 py-1 text-sidebar-foreground hover:bg-sidebar-accent"
+                    className="group/terminal-row flex min-w-0 items-center gap-1 rounded-md px-1.5 py-1 text-sidebar-foreground hover:bg-hover active:bg-active"
                   >
                     {isEditing ? (
                       <form
@@ -110,7 +110,7 @@ export function TerminalTopBar({
                           maxLength={160}
                           autoFocus
                           onChange={(event) => setRenameDraft(event.target.value)}
-                          className="h-7 min-w-0 flex-1 border-sidebar-border bg-sidebar-background text-xs text-sidebar-foreground"
+                          className="h-7 min-w-0 flex-1 border-sidebar-border bg-sidebar-background text-ui text-sidebar-foreground"
                         />
                         <IconButton
                           size="xs"
@@ -136,7 +136,7 @@ export function TerminalTopBar({
                           type="button"
                           variant="ghost"
                           size="unstyled"
-                          className="min-w-0 flex-1 justify-start gap-2 rounded-md px-1.5 py-1 text-xs text-sidebar-foreground hover:bg-transparent hover:text-sidebar-foreground"
+                          className="min-w-0 flex-1 justify-start gap-2 rounded-md px-1.5 py-1 text-ui text-sidebar-foreground hover:bg-transparent hover:text-sidebar-foreground"
                           onClick={() => {
                             onSelectTerminal(terminal.id);
                             close();
@@ -153,7 +153,7 @@ export function TerminalTopBar({
                             />
                           )}
                           {isActive && (
-                            <span className="text-sm text-sidebar-muted-foreground">
+                            <span className="text-ui-sm text-sidebar-muted-foreground">
                               Active
                             </span>
                           )}

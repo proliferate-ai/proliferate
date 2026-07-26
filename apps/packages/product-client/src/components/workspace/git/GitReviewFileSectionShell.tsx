@@ -6,7 +6,7 @@ import { FileTreeEntryIcon } from "#product/components/workspace/files/file-icon
 import type { GitPanelReviewFile } from "#product/lib/domain/workspaces/changes/git-panel-diff";
 
 const REVIEW_HEADER_ACTION_CLASS =
-  "size-6 shrink-0 rounded-md border-0 bg-transparent p-0 text-sidebar-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:ring-1 focus-visible:ring-sidebar-ring";
+  "size-6 shrink-0 rounded-md border-0 bg-transparent p-0 text-sidebar-muted-foreground transition-colors hover:bg-hover hover:text-sidebar-foreground active:bg-active focus-visible:ring-1 focus-visible:ring-sidebar-ring";
 
 /**
  * Flat review-document section: sticky Codex-style header (file icon,
@@ -65,7 +65,7 @@ export function GitReviewFileSectionShell({
         // many sticky headers starves the WKWebView compositor.
         className="sticky top-0 z-10 cursor-pointer select-none bg-[color-mix(in_srgb,var(--color-diff-sidebar-file-header-surface)_97%,transparent)]"
       >
-        <div className="group/diff-header @container/diff-header flex min-h-8 items-center gap-2 px-3 py-1 text-chat leading-[var(--text-chat--line-height)] text-sidebar-foreground hover:bg-[var(--color-diff-sidebar-file-header-hover-surface)]">
+        <div className="group/diff-header @container/diff-header flex min-h-8 items-center gap-2 px-3 py-1 text-chat text-sidebar-foreground hover:bg-[var(--color-diff-sidebar-file-header-hover-surface)]">
           {/* The growing flex item is this container; the name span inside is
               content-sized so every row's name is left-anchored beside the
               icon. [direction:rtl] front-truncates overflow so the basename
@@ -92,7 +92,7 @@ export function GitReviewFileSectionShell({
               {showStagedChip && <GitReviewHeaderChip label="staged" />}
               {statusChip && <GitReviewHeaderChip label={statusChip} />}
               {binary && additions === 0 && deletions === 0 ? (
-                <span className="text-[length:var(--text-ui-sm)] text-sidebar-muted-foreground">
+                <span className="text-ui-sm text-sidebar-muted-foreground">
                   binary
                 </span>
               ) : (
@@ -104,7 +104,7 @@ export function GitReviewFileSectionShell({
               )}
             </span>
           </div>
-          <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity duration-200 group-hover/diff-header:opacity-100 group-focus-within/diff-header:opacity-100">
+          <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity duration-hover group-hover/diff-header:opacity-100 group-focus-within/diff-header:opacity-100">
               <Button
                 type="button"
                 variant="ghost"
@@ -134,7 +134,7 @@ export function GitReviewFileSectionShell({
                 className={REVIEW_HEADER_ACTION_CLASS}
               >
                 <ChevronDown
-                  className={`icon-paired transition-transform duration-200 ${
+                  className={`icon-paired transition-transform duration-disclosure ${
                     collapsed ? "rotate-0" : "rotate-180"
                   }`}
                 />
@@ -154,7 +154,7 @@ export function GitReviewFileSectionShell({
 /** Quiet status word (staged / deleted / renamed…) — plain muted text, no pill. */
 function GitReviewHeaderChip({ label }: { label: string }) {
   return (
-    <span className="text-[length:var(--text-ui-sm)] leading-[var(--text-ui-sm--line-height)] text-sidebar-muted-foreground">
+    <span className="text-ui-sm text-sidebar-muted-foreground">
       {label}
     </span>
   );

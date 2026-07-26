@@ -4,7 +4,7 @@ export interface SecretScopeNoticeProps {
 
 export function SecretScopeNotice({ description }: SecretScopeNoticeProps) {
   return (
-    <p className="text-sm leading-5 text-muted-foreground">
+    <p className="text-body text-muted-foreground">
       {description}
     </p>
   );

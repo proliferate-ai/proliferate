@@ -61,8 +61,8 @@ export function NavigationCloseTabs({
             key={tabId}
             className={`group/tab flex max-w-[220px] shrink-0 items-center rounded-md border ${
               selected
-                ? "border-border bg-accent text-foreground"
-                : "border-transparent text-muted-foreground hover:bg-accent/60"
+                ? "border-border bg-selected text-foreground"
+                : "border-transparent text-muted-foreground hover:bg-hover active:bg-active"
             }`}
           >
             {!isParent ? (
@@ -73,9 +73,9 @@ export function NavigationCloseTabs({
                 aria-label={`Close tab for ${title} (keeps the agent running)`}
                 title="Close tab — the agent keeps running"
                 onClick={() => onCloseTab(tabId)}
-                className="ml-1 rounded p-0.5 text-muted-foreground opacity-0 hover:bg-accent hover:text-foreground group-hover/tab:opacity-100 focus-visible:opacity-100"
+                className="ml-1 rounded p-0.5 text-muted-foreground opacity-0 hover:bg-hover active:bg-active hover:text-foreground group-hover/tab:opacity-100 focus-visible:opacity-100"
               >
-                <X className="size-3" aria-hidden="true" />
+                <X className="text-ui icon-compact" aria-hidden="true" />
               </Button>
             ) : null}
             <Button
@@ -94,7 +94,7 @@ export function NavigationCloseTabs({
               {child ? (
                 <SubagentIdentityGlyph
                   seed={child.id}
-                  size={14}
+                  className="text-chat icon-paired"
                   dimmed={child.status === "closed"}
                   label={`Identity mark for ${child.title}`}
                 />

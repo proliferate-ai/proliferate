@@ -35,8 +35,8 @@ export function PopoverPanePrototype() {
     <div className="flex h-full min-h-0 w-full flex-col bg-background text-foreground">
       <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border px-4 py-2.5">
         <div className="flex flex-col">
-          <h1 className="text-sm font-semibold">Aggregate popover + Subagents pane</h1>
-          <p className="text-xs text-muted-foreground">
+          <h1 className="text-title font-semibold">Aggregate popover + Subagents pane</h1>
+          <p className="text-ui-sm text-muted-foreground">
             Click the cap above the composer for the aggregate popover; rows in the pane select.
           </p>
         </div>
@@ -139,14 +139,14 @@ export function PrototypeComposerSurface() {
             placeholder="Ask for a follow-up"
             spellCheck={false}
             readOnly
-            className="min-h-0 px-0 py-0 text-base leading-relaxed text-foreground placeholder:text-muted-foreground/70"
+            className="min-h-0 px-0 py-0 text-composer text-foreground placeholder:text-muted-foreground/70"
           />
         </div>
         <div className="flex items-center gap-1 px-3 pb-2">
           <ComposerControlButton
             label="Claude"
             detail="Sonnet"
-            trailing={<ChevronDown className="size-3" />}
+            trailing={<ChevronDown className="text-ui icon-compact" />}
             aria-label="Model (prototype, inert)"
           />
           <ComposerControlButton label="Default" aria-label="Mode (prototype, inert)" />
@@ -157,7 +157,7 @@ export function PrototypeComposerSurface() {
             aria-label="Send (prototype, inert)"
             className="ml-auto"
           >
-            <ArrowUp className="size-3.5" />
+            <ArrowUp className="text-ui icon-control" />
           </Button>
         </div>
       </div>

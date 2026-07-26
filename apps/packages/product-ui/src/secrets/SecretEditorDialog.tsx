@@ -53,9 +53,9 @@ const FILE_CONTENT_SOURCE_LABELS: Record<SecretFileContentSource, string> = {
 };
 const FILE_CONTENT_SOURCE_OPTIONS: readonly SecretFileContentSource[] = ["text", "upload"];
 
-const fieldLabelClass = "text-sm font-medium text-foreground";
+const fieldLabelClass = "text-body-emphasis font-medium text-foreground";
 const toggleClass =
-  "inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-ring";
+  "inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-ui text-muted-foreground transition-colors hover:bg-hover hover:text-foreground active:bg-active focus:outline-none focus-visible:ring-1 focus-visible:ring-ring";
 
 export function SecretEditorDialog({
   open,
@@ -248,7 +248,7 @@ export function SecretEditorDialog({
             onBlur={() => setNameTouched(true)}
           />
           {editing ? null : (
-            <p className={`text-xs ${nameError ? "text-destructive" : "text-muted-foreground"}`}>
+            <p className={`text-ui-sm ${nameError ? "text-destructive" : "text-muted-foreground"}`}>
               {nameError ?? nameHint}
             </p>
           )}
@@ -292,7 +292,7 @@ export function SecretEditorDialog({
                 data-telemetry-mask
                 autoComplete="off"
                 spellCheck={false}
-                className="h-36 font-mono text-sm"
+                className="h-36 font-mono text-readable-code"
                 placeholder={editing ? "Replacement secret" : "Secret value"}
                 onChange={(event) => setSecret(event.currentTarget.value)}
               />
@@ -326,22 +326,22 @@ export function SecretEditorDialog({
               />
             </div>
             {fileContentSource === "text" ? (
-              <Label className="block space-y-1.5 text-sm font-medium text-foreground">
+              <Label className="block space-y-1.5 text-body-emphasis font-medium text-foreground">
                 <span className="block">File content</span>
                 <Textarea
                   value={secret}
                   data-telemetry-mask
                   spellCheck={false}
-                  className="h-52 font-mono text-sm"
+                  className="h-52 font-mono text-readable-code"
                   placeholder={editing ? "Replacement file content" : "Secret file content"}
                   onChange={(event) => setSecret(event.currentTarget.value)}
                 />
               </Label>
             ) : (
-              <Label className="block space-y-1.5 text-sm font-medium text-foreground">
+              <Label className="block space-y-1.5 text-body-emphasis font-medium text-foreground">
                 <span className="block">Upload file</span>
                 <div className="flex flex-col gap-2 rounded-md border border-input bg-surface-control p-3">
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <div className="flex items-center gap-2 text-body text-muted-foreground">
                     <CloudUpload className="icon-paired shrink-0" />
                     <span className="min-w-0 truncate">
                       {selectedFile
@@ -363,10 +363,10 @@ export function SecretEditorDialog({
           </>
         )}
 
-        <p className="text-xs text-muted-foreground">{handlingNote}</p>
+        <p className="text-ui-sm text-muted-foreground">{handlingNote}</p>
 
         {error ? (
-          <div className="rounded-md border border-destructive/25 bg-destructive-subtle px-3 py-2 text-sm text-destructive">
+          <div className="rounded-md border border-destructive/25 bg-destructive-subtle px-3 py-2 text-ui text-destructive">
             {error}
           </div>
         ) : null}

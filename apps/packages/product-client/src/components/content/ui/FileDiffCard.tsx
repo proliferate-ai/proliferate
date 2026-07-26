@@ -64,7 +64,7 @@ export function FileDiffCard({
     : "text-muted-foreground hover:text-foreground focus-visible:ring-border";
   const surfaceTextClass = isSidebar ? "text-sidebar-foreground" : chatTextClass;
   const surfaceActionClass = isSidebar
-    ? "text-sidebar-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:ring-sidebar-ring"
+    ? "text-sidebar-muted-foreground hover:bg-hover active:bg-active hover:text-sidebar-foreground focus-visible:ring-sidebar-ring"
     : "text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-border";
   const cardClass = isSidebar
     ? "codex-review-diff-card rounded-md"
@@ -96,18 +96,18 @@ export function FileDiffCard({
     ? "hover:bg-[var(--color-diff-chat-inline-tool-header-hover-surface)]"
     : "hover:bg-[var(--color-diff-chat-file-header-hover-surface)]";
   const headerInnerClass = isSidebar
-    ? "group/diff-header @container/diff-header relative flex min-h-9 items-center gap-2.5 px-[calc(var(--codex-diffs-header-padding-x,0.75rem)+0.5rem)] py-1.5 text-chat leading-[var(--text-chat--line-height)] hover:bg-[var(--codex-diffs-separator-surface)]"
-    : `group/diff-header @container/diff-header relative flex min-h-7 items-center gap-2 px-[var(--codex-diffs-header-padding-x,1rem)] py-[var(--codex-diffs-header-padding-y,0.25rem)] text-chat leading-[var(--text-chat--line-height)] transition-colors ${chatHeaderHoverClass}`;
-  const actionRevealClass = "opacity-0 transition-opacity duration-200 group-hover/file-diff:opacity-100 group-focus-within/file-diff:opacity-100 group-hover/diff-header:opacity-100 group-focus-within/diff-header:opacity-100";
+    ? "group/diff-header @container/diff-header relative flex min-h-9 items-center gap-2.5 px-[calc(var(--codex-diffs-header-padding-x,0.75rem)+0.5rem)] py-1.5 text-chat hover:bg-[var(--codex-diffs-separator-surface)]"
+    : `group/diff-header @container/diff-header relative flex min-h-7 items-center gap-2 px-[var(--codex-diffs-header-padding-x,1rem)] py-[var(--codex-diffs-header-padding-y,0.25rem)] text-chat transition-colors ${chatHeaderHoverClass}`;
+  const actionRevealClass = "opacity-0 transition-opacity duration-hover group-hover/file-diff:opacity-100 group-focus-within/file-diff:opacity-100 group-hover/diff-header:opacity-100 group-focus-within/diff-header:opacity-100";
   const statsClass = isSidebar
     ? "leading-none"
     : "text-chat leading-none text-muted-foreground";
   const pathContent = (
     <>
-      <span className="min-w-0 truncate text-chat leading-[var(--text-chat--line-height)] [direction:ltr] [unicode-bidi:plaintext] @xs/diff-header:hidden">
+      <span className="min-w-0 truncate text-chat [direction:ltr] [unicode-bidi:plaintext] @xs/diff-header:hidden">
         {compactLabel}
       </span>
-      <span className="hidden min-w-0 truncate text-chat leading-[var(--text-chat--line-height)] [direction:ltr] [unicode-bidi:plaintext] @xs/diff-header:inline">
+      <span className="hidden min-w-0 truncate text-chat [direction:ltr] [unicode-bidi:plaintext] @xs/diff-header:inline">
         {fullLabel}
       </span>
     </>
@@ -148,7 +148,7 @@ export function FileDiffCard({
                   event.stopPropagation();
                   onOpenFile();
                 }}
-                className={`h-auto min-w-0 truncate rounded-none border-0 bg-transparent p-0 text-start text-chat font-normal leading-[var(--text-chat--line-height)] shadow-none select-text [direction:rtl] hover:bg-transparent focus-visible:ring-1 ${
+                className={`h-auto min-w-0 truncate rounded-none border-0 bg-transparent p-0 text-start text-chat font-normal shadow-none select-text [direction:rtl] hover:bg-transparent focus-visible:ring-1 ${
                   isSidebar ? "text-sidebar-foreground hover:text-sidebar-foreground focus-visible:ring-sidebar-ring" : chatPathButtonClass
                 }`}
               >
@@ -156,7 +156,7 @@ export function FileDiffCard({
               </Button>
             ) : (
               <span
-                className="min-w-0 truncate text-start text-chat leading-[var(--text-chat--line-height)] [direction:rtl]"
+                className="min-w-0 truncate text-start text-chat [direction:rtl]"
                 title={filePath}
               >
                 {pathContent}
@@ -212,7 +212,7 @@ export function FileDiffCard({
                 data-app-action-review-file-toggle=""
               >
                 <ChevronDown
-                  className={`icon-paired transition-transform duration-200 ${
+                  className={`icon-paired transition-transform duration-disclosure ${
                     isExpanded ? "rotate-180" : "rotate-0"
                   }`}
                 />

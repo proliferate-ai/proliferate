@@ -65,7 +65,7 @@ export function ProviderPickerModal({
         </div>
         <div className="max-h-80 overflow-y-auto rounded-md border border-border">
           {providers.length === 0 ? (
-            <p className="px-3 py-6 text-center text-sm text-muted-foreground">
+            <p className="px-3 py-6 text-center text-ui-sm text-muted-foreground">
               No providers match your search.
             </p>
           ) : (

@@ -4,9 +4,16 @@ Status: authoritative for first-response triage of Proliferate Worker
 enrollment, heartbeat, and version convergence failures.
 
 Use this runbook after an E2B sandbox and AnyHarness are reachable but the
-optional Worker sidecar does not enroll, heartbeat, synchronize catalogs, or
-converge Worker/AnyHarness versions. Worker ownership is documented in
-[`proliferate-worker/README.md`](../../codebase/structures/proliferate-worker/README.md).
+optional Worker sidecar does not enroll, heartbeat, or converge
+Worker/AnyHarness versions. Worker ownership is documented in
+[`proliferate-worker/README.md`](../../codebase/structures/proliferate-worker/README.md);
+on a supervisor-owned target the swap itself belongs to
+[`proliferate-supervisor/README.md`](../../codebase/structures/proliferate-supervisor/README.md).
+The agent catalog is not a separate convergence axis: it ships inside the
+runtime binary ([agent-distribution.md](../../codebase/platforms/product/agent-distribution.md)),
+so a catalog complaint is a binary-version complaint. (The legacy heartbeat
+catalog sync still runs until its deletion lands; its evidence path is kept
+below, marked legacy.)
 Use [`cloud-provisioning-failure.md`](cloud-provisioning-failure.md) when the
 provider sandbox or AnyHarness is not independently healthy.
 
@@ -28,9 +35,20 @@ enrollment, Worker, request, release, and sanitized evidence identifiers.
 
 The Worker enrolls once through `/v1/cloud/worker/enroll`, stores its durable
 identity locally, and heartbeats through `/v1/cloud/worker/heartbeat`. Heartbeat
-returns desired Worker, AnyHarness, and catalog versions. Liveness is derived
+returns desired Worker and AnyHarness versions (plus, until the binary-only
+catalog deletion lands, a legacy catalog version). Liveness is derived
 at read time from `status = 'online'` and `last_seen_at` within 90 seconds; the
 application does not eagerly write `offline`.
+
+Two convergence topologies exist. On a **supervisor-owned target**
+(`supervisor_update_request_dir` set; the server's
+`supervisor_owned_runtime` provisioning), the Worker only *writes* a durable
+update request into `.proliferate/supervisor/updates`; Proliferate
+Supervisor consumes it (verify → download → re-verify → stage → atomic
+activate → dependency-ordered restart → health-gate → rollback) and writes a
+result file beside it. On a **legacy target**, the Worker still performs the
+in-place swap itself (deprecated, deletion-pending). Triage must first
+establish which topology the target runs, from the Worker config key names.
 
 Fresh enrollment also writes the integration-gateway credential file. Restart
 from durable identity does not recreate a missing gateway file, and an invalid
@@ -133,6 +151,9 @@ sqlite3 -readonly "$HOME/.proliferate/worker/worker.sqlite3" \
   'select worker_id, updated_at from identity where id = 1;'
 sqlite3 -readonly "$HOME/.proliferate/worker/worker.sqlite3" \
   'select converged_version, failed_pin, updated_at from anyharness_update where id = 1;'
+# (anyharness_update is legacy-topology state only; on a supervisor-owned
+#  target inspect the mailbox instead:)
+ls -la "$HOME/.proliferate/supervisor/updates" 2>/dev/null
 tail -n 200 "$HOME/proliferate-worker.log"
 test -e "$HOME/.proliferate/anyharness/integration-gateway.json" && \
   stat -c '%U %G %a %n' \
@@ -149,7 +170,9 @@ missing.
 the request path, so a null or old value is not evidence that the token is
 unused.
 
-Catalog convergence has separate evidence from binary convergence:
+Legacy catalog convergence (deletion-pending — under the binary-only ruling
+the catalog rides the runtime binary and this whole path goes away) has
+separate evidence from binary convergence while it still runs:
 
 ```text
 heartbeat desiredVersions.catalogVersion
@@ -161,7 +184,9 @@ heartbeat desiredVersions.catalogVersion
 The Worker row does not persist the desired or active catalog version. Capture
 the advertised `catalogVersion` from the heartbeat/catalog response and the
 active version from AnyHarness using approved authenticated access; compare
-them with the Worker's bounded catalog-sync log lines.
+them with the Worker's bounded catalog-sync log lines. Once the deletion
+lands, the only catalog question is "which runtime version is this sandbox
+running" — `GET /v1/catalogs/agents/version` stays as the read-only answer.
 
 ## First response
 
@@ -173,24 +198,29 @@ them with the Worker's bounded catalog-sync log lines.
 | Worker exists but heartbeat is stale | Inspect Worker logs, Cloud URL/network reachability, and durable identity loading. Do not infer liveness from the stored `online` value alone. |
 | Worker token is revoked or invalid | Escalate. The Worker does not automatically re-enroll, and deleting local SQLite is destructive. |
 | Gateway credential file is missing after a restart | Check only the local file's existence, owner, and mode. A durable-identity restart does not recreate it, even when the Cloud gateway-token row remains active. Escalate credential repair. |
-| Catalog version does not converge | Compare advertised and active catalog versions, then inspect the AnyHarness version GET, Cloud catalog fetch, authenticated AnyHarness PUT, and catalog-sync logs. Binary update gates and artifact downloads do not govern catalog sync. |
-| Worker or AnyHarness binary version does not converge | Compare the heartbeat response, configured update gates, artifact download availability, and update logs. |
-| Worker update fails | Inspect checksum/preflight/swap evidence; Worker self-update has no post-exec `.prev` health rollback. |
-| AnyHarness update fails | Inspect stop/swap/relaunch/health evidence; this updater can restore the `.prev` binary. |
+| Catalog version does not converge (legacy path) | Compare advertised and active catalog versions, then inspect the AnyHarness version GET, Cloud catalog fetch, authenticated AnyHarness PUT, and catalog-sync logs. Binary update gates and artifact downloads do not govern catalog sync. On a target where the deletion has landed, treat this as a binary-version complaint instead. |
+| Binary version does not converge (supervisor-owned target) | Inspect the mailbox: a missing request file means the Worker never observed divergence (heartbeat/logs); a pending request with no result means the Supervisor did not drain it (Supervisor logs, one drain per supervise cycle); a result file records the verify/download/stage/activate/health outcome, including rollback to `.prev`. A recorded failed pin is not retried until a newer pin arrives. |
+| Binary version does not converge (legacy target) | Compare the heartbeat response, configured update gates, artifact download availability, and update logs. |
+| Worker update fails (legacy target) | Inspect checksum/preflight/swap evidence; legacy Worker self-update has no post-exec `.prev` health rollback. |
+| AnyHarness update fails (legacy target) | Inspect stop/swap/relaunch/health evidence; the legacy updater can restore the `.prev` binary. |
 
 Do not manually mutate database rows, rotate tokens, delete Worker-local
-SQLite, destroy the provider sandbox, or replace a sandbox as routine recovery.
-There is no current command lease, control long-poll, event tail, or Supervisor
-update mailbox to inspect.
+SQLite, delete or hand-write mailbox request/result files, destroy the
+provider sandbox, or replace a sandbox as routine recovery. There is no
+command lease, control long-poll, or event tail to inspect; the Supervisor
+update mailbox (`.proliferate/supervisor/updates`) is the one durable
+update-coordination surface, and it is read-only for operators.
 
 ## Verification
 
 Recovery is complete when AnyHarness remains healthy independently, the active
 Worker is live by the 90-second rule, heartbeats persist the observed Worker
-and AnyHarness versions, the active AnyHarness catalog version matches the
-version advertised by Cloud, and the enabled binary convergence operations
-succeed. Verify the integration gateway separately when it was part of the
-symptom.
+and AnyHarness versions, and the running versions match the desired versions
+(on a supervisor-owned target: the mailbox is drained with a success result
+and `/health` reports the desired version; the catalog follows the binary).
+While the legacy catalog sync still exists, also confirm the active catalog
+version matches the advertised one. Verify the integration gateway separately
+when it was part of the symptom.
 
 ## Final report
 

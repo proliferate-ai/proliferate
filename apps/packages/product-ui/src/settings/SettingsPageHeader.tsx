@@ -16,7 +16,7 @@ export function SettingsPageHeader({ title, description, action }: SettingsPageH
       <div className="min-w-0 space-y-1">
         <h1 className="text-title font-semibold tracking-[-0.012em] text-foreground">{title}</h1>
         {description ? (
-          <p className="max-w-2xl text-ui-sm leading-[1.45] text-muted-foreground">{description}</p>
+          <p className="max-w-2xl text-ui-sm text-muted-foreground">{description}</p>
         ) : null}
       </div>
       {action ? <div className="flex shrink-0 items-center">{action}</div> : null}

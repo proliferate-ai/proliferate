@@ -50,7 +50,7 @@ export function ProductSidebarThreadRow({
       {...props}
     >
       {hoverAction ? (
-        <div className="absolute right-0 top-0 z-10 mr-0.5 flex h-full items-center justify-center pr-0.5 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
+        <div className="absolute right-0 top-0 z-10 mr-0.5 flex h-full items-center justify-center pr-0.5 opacity-0 transition-opacity duration-hover group-hover:opacity-100 group-focus-within:opacity-100">
           {hoverAction}
         </div>
       ) : null}
@@ -65,7 +65,7 @@ export function ProductSidebarThreadRow({
               {label}
             </span>
             {hasSubtitle ? (
-              <span className="max-w-full truncate text-xs leading-3 text-sidebar-muted-foreground">
+              <span className="max-w-full truncate text-ui-sm leading-3 text-sidebar-muted-foreground">
                 {subtitle}
               </span>
             ) : null}
@@ -79,7 +79,7 @@ export function ProductSidebarThreadRow({
 
         <div className="flex shrink-0 items-center gap-1">
           {trailingStatus ? (
-            <div className="flex h-5 items-center justify-end transition-opacity duration-150 group-focus-within:opacity-0 group-hover:opacity-0">
+            <div className="flex h-5 items-center justify-end transition-opacity duration-hover group-focus-within:opacity-0 group-hover:opacity-0">
               {trailingStatus}
             </div>
           ) : trailingLabel && !active && !expandControl ? (

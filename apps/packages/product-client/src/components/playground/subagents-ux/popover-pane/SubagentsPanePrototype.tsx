@@ -46,7 +46,7 @@ export function SubagentsPanePrototype({
       ) : null}
       {agents.length === 0 ? (
         <div className="flex flex-1 items-center justify-center px-6 text-center">
-          <p className="max-w-xs text-sm leading-5 text-sidebar-muted-foreground">
+          <p className="max-w-xs text-ui-sm text-sidebar-muted-foreground">
             No subagents for this chat.
           </p>
         </div>
@@ -142,7 +142,7 @@ function PaneRow({
   return (
     <div
       role="listitem"
-      className={`group/pane-row flex min-h-11 min-w-0 items-center rounded-lg hover:bg-sidebar-accent ${selected ? "bg-sidebar-accent" : ""}`}
+      className={`group/pane-row flex min-h-11 min-w-0 items-center rounded-lg hover:bg-hover ${selected ? "bg-selected" : ""}`}
     >
       <Button
         type="button"
@@ -162,7 +162,7 @@ function PaneRow({
             {agent.detail}
           </span>
         </span>
-        <span className="shrink-0 font-mono text-xs text-sidebar-muted-foreground">
+        <span className="shrink-0 font-mono text-ui-sm text-sidebar-muted-foreground">
           {agent.harness}
         </span>
       </Button>
@@ -176,7 +176,7 @@ function PaneRow({
             ? "Delete agent — active work will be ended"
             : "Delete agent"}
           onClick={onDelete}
-          className="mr-1 h-7 shrink-0 px-2 text-sidebar-muted-foreground opacity-0 hover:bg-sidebar-accent hover:text-destructive group-hover/pane-row:opacity-100 focus-visible:opacity-100"
+          className="mr-1 h-7 shrink-0 px-2 text-sidebar-muted-foreground opacity-0 hover:bg-hover active:bg-active hover:text-destructive group-hover/pane-row:opacity-100 focus-visible:opacity-100"
         >
           Delete
         </Button>

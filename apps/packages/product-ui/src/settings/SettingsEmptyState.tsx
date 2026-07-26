@@ -39,7 +39,7 @@ export function SettingsEmptyState({
       ) : null}
       <div className="text-ui font-medium leading-5 text-foreground">{title}</div>
       {description ? (
-        <div className="max-w-[48ch] text-ui-sm leading-[1.45] text-muted-foreground">
+        <div className="max-w-[48ch] text-ui-sm text-muted-foreground">
           {description}
         </div>
       ) : null}

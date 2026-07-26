@@ -149,8 +149,8 @@ function WorkspaceRenamePanel({
   return (
     <div className="space-y-3">
       <div>
-        <div className="text-sm font-medium text-foreground">Rename workspace</div>
-        <div className="mt-1 text-xs text-muted-foreground">
+        <div className="text-ui font-medium text-foreground">Rename workspace</div>
+        <div className="mt-1 text-ui-sm text-muted-foreground">
           Override the default workspace label. Clear the field to restore the default.
         </div>
       </div>
@@ -180,7 +180,7 @@ function WorkspaceRenamePanel({
         className="h-9"
       />
       {error && (
-        <div className="text-xs text-destructive">
+        <div className="text-ui-sm text-destructive">
           {error}
         </div>
       )}

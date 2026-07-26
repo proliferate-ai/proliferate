@@ -2,9 +2,10 @@ import { useState } from "react";
 import { usePutCloudSecretEnvVar } from "@proliferate/cloud-sdk-react";
 import { Plus } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { CloudSecretsSettingsSurface } from "@proliferate/product-surfaces/settings/CloudSecretsSettingsSurface";
+import { SecretManagementPanel } from "@proliferate/product-ui/secrets/SecretManagementPanel";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 import { ApiKeyCreatorModal } from "#product/components/settings/panes/agent-auth/ApiKeyCreatorModal";
+import { useCloudSecretsPanel } from "#product/hooks/access/cloud/use-cloud-secrets-panel";
 import { useToastStore } from "#product/stores/toast/toast-store";
 
 const PERSONAL_SCOPE = { kind: "personal" } as const;
@@ -13,6 +14,7 @@ export function PersonalSecretsPane() {
   const [addKeyOpen, setAddKeyOpen] = useState(false);
   const putEnvVar = usePutCloudSecretEnvVar();
   const showToast = useToastStore((state) => state.show);
+  const panel = useCloudSecretsPanel({ scope: PERSONAL_SCOPE });
 
   function handleCreate(input: { value: string; envVarName: string }) {
     // Secrets context: the env-var field maps to the secret NAME and we call the
@@ -51,7 +53,7 @@ export function PersonalSecretsPane() {
         }
       />
 
-      <CloudSecretsSettingsSurface scope={PERSONAL_SCOPE} />
+      <SecretManagementPanel {...panel} />
 
       <ApiKeyCreatorModal
         open={addKeyOpen}

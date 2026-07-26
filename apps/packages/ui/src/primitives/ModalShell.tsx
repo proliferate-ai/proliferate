@@ -47,7 +47,7 @@ export function ModalShell({
   bodyClassName = "px-5 pb-5 pt-4",
   footerClassName = "flex shrink-0 items-center justify-end gap-2 border-t border-border/60 px-5 py-3",
   overlayClassName = "bg-black/70 backdrop-blur-sm",
-  panelClassName = "border-border bg-background shadow-lg",
+  panelClassName = "border-border bg-background shadow-modal",
   showCloseButton = true,
   telemetryBlocked = false,
 }: ModalShellProps) {
@@ -109,7 +109,7 @@ export function ModalShell({
           </>
         ) : (
           <div className={headerClassName ?? `shrink-0 px-5 pb-3 pt-5 ${showCloseButton ? "pr-10" : ""}`}>
-            <DialogTitle className="text-xl font-medium tracking-tight text-foreground">
+            <DialogTitle className="text-title font-medium tracking-tight text-foreground">
               {title}
             </DialogTitle>
             {description && (

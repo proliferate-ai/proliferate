@@ -58,7 +58,7 @@ export function PlanHandoffDialog({
         description="Create a new session with this plan attached."
         sizeClassName="max-w-[32.5rem]"
         bodyClassName="px-5 pb-[18px] pt-0"
-        footerClassName="flex shrink-0 items-center justify-end gap-1.5 border-t border-border/60 bg-foreground/[0.025] px-4 py-3"
+        footerClassName="flex shrink-0 items-center justify-end gap-1.5 border-t border-border/60 bg-surface-elevated-secondary px-4 py-3"
         footer={(
           <>
             <Button
@@ -86,21 +86,21 @@ export function PlanHandoffDialog({
         <div className="flex flex-col gap-3.5" data-telemetry-mask>
           {plan && (
             <div>
-              <div className="mb-1.5 text-base font-medium text-muted-foreground">
+              <div className="mb-1.5 text-ui-sm font-medium text-muted-foreground">
                 Attached plan
               </div>
               <Button
                 type="button"
                 variant="unstyled"
                 size="unstyled"
-                className="flex w-full min-w-0 items-center gap-2.5 rounded-lg border border-border/70 bg-foreground/5 px-3 py-2.5 text-left text-foreground transition-colors hover:border-border hover:bg-foreground/10"
+                className="flex w-full min-w-0 items-center gap-2.5 rounded-lg border border-border/70 bg-foreground/5 px-3 py-2.5 text-left text-foreground transition-colors hover:border-border hover:bg-hover active:bg-active"
                 onClick={() => setPreviewOpen(true)}
                 aria-label={`Preview attached plan: ${plan.title}`}
               >
-                <span className="grid size-[26px] shrink-0 place-items-center rounded-md bg-foreground/10 text-muted-foreground">
+                <span className="grid size-7 shrink-0 place-items-center rounded-md bg-surface-control text-muted-foreground">
                   <FileText className="icon-paired" />
                 </span>
-                <span className="min-w-0 flex-1 truncate text-sm font-medium leading-5">
+                <span className="min-w-0 flex-1 truncate text-ui font-medium leading-5">
                   {plan.title}
                 </span>
                 <ExternalLink className="icon-paired shrink-0 text-muted-foreground/70" />
@@ -112,7 +112,7 @@ export function PlanHandoffDialog({
             value={promptText}
             onChange={(event) => onPromptTextChange(event.target.value)}
             rows={4}
-            className="min-h-24 resize-y rounded-lg border-border/70 bg-foreground/5 px-3.5 py-3 leading-relaxed transition-colors hover:bg-foreground/[0.075] focus:bg-foreground/[0.075]"
+            className="min-h-24 resize-y rounded-lg border-border/70 bg-foreground/5 px-3.5 py-3 leading-relaxed transition-colors hover:bg-hover focus:bg-active"
             placeholder="Add instructions for the new session (optional)"
           />
 
@@ -127,7 +127,7 @@ export function PlanHandoffDialog({
                 onChange={modePickerProps.onChange}
               />
             </div>
-            <div className="text-xs text-muted-foreground">
+            <div className="text-ui-sm text-muted-foreground">
               Model and handoff mode apply to this session only.
             </div>
           </div>

@@ -167,7 +167,7 @@ export function WorkspaceItem({
         onAction={onIndicatorAction}
       />
       {cloudStatusDefinition && (
-        <span className={`shrink-0 rounded-full border px-1.5 py-0 text-xs uppercase tracking-[0.12em] ${cloudStatusDefinition.className}`}>
+        <span className={`shrink-0 rounded-full border px-1.5 py-0 text-ui-sm uppercase tracking-[0.12em] ${cloudStatusDefinition.className}`}>
           {cloudStatusDefinition.label}
         </span>
       )}
@@ -282,13 +282,13 @@ export function WorkspaceItem({
         <>
           {doneConfirmOpen ? (
             <>
-              <div className="px-2.5 py-2 text-sm text-foreground">
+              <div className="px-2.5 py-2 text-ui text-foreground">
                 <div className="font-medium">Delete workspace?</div>
-                <div className="mt-1 text-xs leading-4 text-muted-foreground">
+                <div className="mt-1 text-ui-sm leading-4 text-muted-foreground">
                   This removes the local worktree, workspace record, chat history, and local agent
                   artifacts for this workspace. Commits, branches, and pull requests are not deleted.
                 </div>
-                <div className="mt-1 text-xs leading-4 text-muted-foreground">
+                <div className="mt-1 text-ui-sm leading-4 text-muted-foreground">
                   This cannot be undone from Proliferate.
                 </div>
               </div>

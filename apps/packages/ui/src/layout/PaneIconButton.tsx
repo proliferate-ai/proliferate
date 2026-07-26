@@ -3,7 +3,7 @@ import { twMerge } from "../utils/tw-merge";
 import { Button } from "../primitives/Button";
 
 export const PANE_ICON_BUTTON_CLASS =
-  "size-6 rounded-md text-sidebar-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-foreground";
+  "size-6 rounded-md text-sidebar-muted-foreground hover:bg-hover hover:text-sidebar-foreground active:bg-active data-[state=open]:bg-active data-[state=open]:text-sidebar-foreground";
 
 interface PaneIconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   label: string;
@@ -27,7 +27,7 @@ export function PaneIconButton({
       aria-label={label}
       className={twMerge(
         PANE_ICON_BUTTON_CLASS,
-        active && "bg-sidebar-accent text-sidebar-foreground",
+        active && "bg-active text-sidebar-foreground",
         className,
       )}
       {...props}

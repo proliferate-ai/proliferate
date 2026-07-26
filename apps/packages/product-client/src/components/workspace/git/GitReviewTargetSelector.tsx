@@ -12,7 +12,7 @@ import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives
 import type { GitPanelMode } from "#product/lib/domain/workspaces/changes/git-panel-diff";
 
 const GIT_REVIEW_TARGET_TRIGGER_CLASS =
-  "h-6 min-w-0 w-fit max-w-[9rem] shrink-0 gap-1 rounded-lg border border-transparent bg-transparent px-1.5 py-0 text-ui leading-[var(--text-ui--line-height)] text-sidebar-foreground hover:bg-surface-elevated-secondary hover:text-sidebar-foreground data-[state=open]:bg-surface-elevated-secondary data-[state=open]:text-sidebar-foreground";
+  "h-6 min-w-0 w-fit max-w-[9rem] shrink-0 gap-1 rounded-lg border border-transparent bg-transparent px-1.5 py-0 text-ui text-sidebar-foreground hover:bg-surface-elevated-secondary hover:text-sidebar-foreground data-[state=open]:bg-surface-elevated-secondary data-[state=open]:text-sidebar-foreground";
 
 export function GitReviewTargetSelector({
   mode,
@@ -103,7 +103,7 @@ export function GitReviewTargetSelector({
                     onSelect(branch.name);
                     close();
                   }}
-                  className={`h-7 w-full justify-between rounded-lg px-2 py-0 text-ui hover:bg-accent ${
+                  className={`h-7 w-full justify-between rounded-lg px-2 py-0 text-ui hover:bg-hover active:bg-active ${
                     branch.name === activeRef ? "text-foreground" : "text-muted-foreground"
                   }`}
                 >

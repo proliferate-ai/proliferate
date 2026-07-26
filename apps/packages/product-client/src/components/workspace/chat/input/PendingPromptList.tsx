@@ -43,7 +43,7 @@ export function PendingPromptList({
 
   return (
     <div
-      className="relative flex flex-col overflow-clip rounded-t-[13px] border-x-[0.5px] border-t-[0.5px] border-border bg-[color:color-mix(in_oklab,var(--color-foreground)_2%,var(--color-background))]"
+      className="relative flex flex-col overflow-clip rounded-t-xl border-x-[0.5px] border-t-[0.5px] border-border bg-[color:color-mix(in_oklab,var(--color-foreground)_2%,var(--color-background))]"
       data-telemetry-mask
       aria-label="Queued messages"
     >
@@ -186,12 +186,12 @@ function PendingPromptRow({
         text={isSteering
           ? CHAT_STREAMING_STATUS_LABELS.steering
           : CHAT_STREAMING_STATUS_LABELS.sending}
-        className="shrink-0 text-ui-sm font-normal leading-[var(--text-ui-sm--line-height)]"
+        className="shrink-0 text-ui-sm font-normal"
       />
     )
     : entry.isBeingEdited
       ? (
-        <span className="shrink-0 text-ui-sm leading-[var(--text-ui-sm--line-height)] text-faint">
+        <span className="shrink-0 text-ui-sm text-faint">
           Editing…
         </span>
       )
@@ -220,7 +220,7 @@ function PendingPromptRow({
       )}
 
       <div
-        className={`min-w-0 flex-1 whitespace-pre-wrap text-ui leading-[var(--text-ui--line-height)] transition-colors line-clamp-2 ${
+        className={`min-w-0 flex-1 whitespace-pre-wrap text-ui transition-colors line-clamp-2 ${
           entry.isBeingEdited ? "text-muted-foreground/60" : "text-muted-foreground"
         }`}
         title={entry.label}

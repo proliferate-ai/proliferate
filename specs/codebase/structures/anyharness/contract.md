@@ -177,9 +177,9 @@ AnyHarness HTTP contract:
 
 | Worker purpose | AnyHarness route | Notes |
 | --- | --- | --- |
-| read active catalog version | `GET /v1/catalogs/agents/version` | Compares the running runtime with the version advertised by Cloud heartbeat. |
-| apply catalog document | `PUT /v1/catalogs/agents` | Pushes the Cloud catalog when versions differ. |
-| verify a relaunched runtime | `GET /health` | Requires the desired AnyHarness version before accepting an in-place runtime update. |
+| read active catalog version | `GET /v1/catalogs/agents/version` | Read-only observability; stays. |
+| apply catalog document | `PUT /v1/catalogs/agents` | Deletion-pending: the catalog is binary-only ([agent-distribution.md](../../platforms/product/agent-distribution.md) Current gaps), so the push route and the heartbeat catalog version go away together. |
+| verify a relaunched runtime | `GET /health` | Requires the desired AnyHarness version before accepting an in-place runtime update (legacy path; Proliferate Supervisor runs the same gate on supervisor-owned targets). |
 
 The Worker's download, checksum, preflight, swap, and relaunch orchestration
 lives outside the AnyHarness API. Only the final health/version gate uses the

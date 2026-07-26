@@ -105,7 +105,7 @@ export function TurnItemSequence({
     && tailAssistantProseRootId !== null;
   const standaloneFrontierPrelude = frontierPrelude && !completedHistoryOwnsPrelude
     ? (
-      <div className="flex flex-col gap-4" data-turn-frontier-prelude-group>
+      <div className={`flex flex-col ${TURN_ITEM_GAP_CLASS}`} data-turn-frontier-prelude-group>
         {frontierPrelude}
         {tailAssistantProseRootId !== null && <ToolCallWorkDivider />}
       </div>

@@ -23,7 +23,7 @@ export function WorkflowResourceState({
       telemetryBlocked
     >
       {loading ? (
-        <p className="py-6 text-sm text-muted-foreground" role="status">{title}</p>
+        <p className="py-6 text-body text-muted-foreground" role="status">{title}</p>
       ) : (
         <EmptyState
           title={title}

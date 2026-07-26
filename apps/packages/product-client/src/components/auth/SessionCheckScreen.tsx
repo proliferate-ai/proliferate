@@ -29,7 +29,7 @@ export function SessionCheckScreen({
             <h1 className="text-hero font-semibold text-foreground">
               {AUTH_GATE_LABELS.loadingMessage}
             </h1>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-body text-muted-foreground">
               {AUTH_GATE_LABELS.loadingSubtext}
             </p>
           </div>
