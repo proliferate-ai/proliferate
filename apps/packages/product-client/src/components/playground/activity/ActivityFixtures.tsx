@@ -9,6 +9,7 @@ import type { LoopCapabilities, LoopWire } from "@proliferate/product-domain/act
 import type { ActivityProcessWire } from "@proliferate/product-domain/activity/process";
 import type { ActivitySubagentWire } from "@proliferate/product-domain/activity/subagent";
 import type { ScenarioKey } from "#product/config/playground";
+import { noop } from "#product/components/playground/PlaygroundComposerActions";
 import {
   AGENTS_MIXED,
   LOOP_CAPABILITIES_EMULATED,
@@ -22,8 +23,6 @@ import {
   ACTIVITY_FIXTURE_NOW_MS,
 } from "#product/lib/domain/chat/__fixtures__/playground/activity-fixtures";
 import { GOAL_ACTIVE_SHORT, GOAL_CAPABILITIES_PAUSABLE } from "#product/lib/domain/chat/__fixtures__/playground/goal-fixtures";
-
-const NOOP = () => {};
 
 const NO_GOAL_CAPABILITIES = {
   supported: false,
@@ -55,8 +54,8 @@ function activityChips({
             loops={loops}
             capabilities={loopCapabilities}
             nowMs={ACTIVITY_FIXTURE_NOW_MS}
-            onArm={NOOP}
-            onDelete={NOOP}
+            onArm={noop}
+            onDelete={noop}
           />
         ),
         terminals: (
@@ -81,11 +80,11 @@ function activityChipsFixture(input: ActivityChipsFixtureInput): ReactNode {
     <GoalBar
       goal={null}
       capabilities={NO_GOAL_CAPABILITIES}
-      onEdit={NOOP}
-      onPause={NOOP}
-      onResume={NOOP}
-      onClear={NOOP}
-      onDismiss={NOOP}
+      onEdit={noop}
+      onPause={noop}
+      onResume={noop}
+      onClear={noop}
+      onDismiss={noop}
       chips={activityChips(input)}
     />
   );
@@ -144,11 +143,11 @@ export function renderActivityWithGoalSlot(scenario: ScenarioKey): ReactNode | n
     <GoalBar
       goal={GOAL_ACTIVE_SHORT}
       capabilities={GOAL_CAPABILITIES_PAUSABLE}
-      onEdit={NOOP}
-      onPause={NOOP}
-      onResume={NOOP}
-      onClear={NOOP}
-      onDismiss={NOOP}
+      onEdit={noop}
+      onPause={noop}
+      onResume={noop}
+      onClear={noop}
+      onDismiss={noop}
       chips={activityChips({
         loops: LOOPS_MANY,
         processes: PROCESSES_MIXED,
