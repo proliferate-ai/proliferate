@@ -14,7 +14,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.db.engine import run_after_commit
+from proliferate.server.cloud.cloud_sandboxes.transactions import run_after_commit
 from proliferate.db.store import cloud_sandboxes as cloud_sandbox_store
 from proliferate.db.store import cloud_workspace_materializations as materialization_store
 from proliferate.db.store import cloud_workspaces as cloud_workspace_store
