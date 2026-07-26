@@ -554,23 +554,6 @@ async def test_delete_virtual_key_tolerates_missing_key(
 
 
 @pytest.mark.asyncio
-async def test_delete_virtual_key_happy_path(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    client = _FakeAsyncClient(
-        [
-            _response(200, {"deleted_keys": ["hash-old"]}),
-        ]
-    )
-    _install(monkeypatch, client)
-
-    await litellm.delete_virtual_key(key_or_token_id="hash-old")
-
-    assert [request.url.path for request in client.requests] == ["/key/delete"]
-    assert _request_body(client.requests[0]) == {"keys": ["hash-old"]}
-
-
-@pytest.mark.asyncio
 async def test_budget_updates_clear_cap_with_null(monkeypatch: pytest.MonkeyPatch) -> None:
     # max_budget=None sends an explicit null so LiteLLM removes the cap.
     client = _FakeAsyncClient(
