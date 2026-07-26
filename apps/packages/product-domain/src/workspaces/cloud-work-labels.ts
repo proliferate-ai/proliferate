@@ -104,6 +104,8 @@ export function workspaceState(workspace: CloudWorkspaceSummary): RecentWorkStat
   if (
     workspace.workspaceStatus === "error" ||
     workspace.status === "error" ||
+    workspace.workspaceStatus === "lost" ||
+    workspace.status === "lost" ||
     workspace.actionBlockKind ||
     workspace.actionBlockReason ||
     workspace.exposureState === "stale" ||

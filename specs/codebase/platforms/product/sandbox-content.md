@@ -464,10 +464,11 @@ apps/packages/product-client/src/
   [retention_tests.rs](../../../../anyharness/crates/anyharness-lib/src/domains/workspaces/retention_tests.rs),
   [retire_preflight_tests.rs](../../../../anyharness/crates/anyharness-lib/src/domains/workspaces/retire_preflight_tests.rs),
   [deletion_tests.rs](../../../../anyharness/crates/anyharness-lib/src/domains/workspaces/deletion_tests.rs).
-- Pending, landing with the gap PRs: fetch-on-create classification tests;
-  paired-reclaim integration proof (workspace delete retires, repo-env
-  delete reclaims); a live disk axis reading end to end; workspaces marked
-  lost after provider loss.
+- Paired workspace-retire proof:
+  [test_cloud_workspace_retire_after_commit.py](../../../../server/tests/unit/test_cloud_workspace_retire_after_commit.py).
+- Pending, landing with the remaining gap PRs: fetch-on-create
+  classification tests; repository-environment delete reclaim; a live disk
+  axis reading end to end.
 
 ## Current gaps
 
@@ -502,12 +503,11 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       the defer flag is), and the server-side trigger clients
       ([worktrees.py](../../../../server/proliferate/integrations/anyharness/worktrees.py))
       have zero callers. Enable the pass in the cloud launch env.
-- [ ] Workspace delete and archive reclaim nothing
-      ([cloud_workspaces.py](../../../../server/proliferate/db/store/cloud_workspaces.py)
-      writes rows only); repository-environment delete reclaims nothing and
-      no clone-delete primitive exists anywhere in AnyHarness (no route, no
-      store method). Add the paired after-commit reclaims and build the
-      clone-delete primitive under the same fence discipline as retire.
+- [ ] Repository-environment delete reclaims nothing and no clone-delete
+      primitive exists anywhere in AnyHarness (no route, no store method).
+      Build the clone-delete primitive under the same fence discipline as
+      retire, then pair repository-environment deletion with an after-commit
+      reclaim.
 - [ ] Git identity is not materialized at all: the only implementation was
       deleted with its parked domain (#823), the calling stage survives as
       unimportable dead code
@@ -531,13 +531,6 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       generic runtime-not-ready receipt
       ([failures.py](../../../../server/proliferate/server/cloud/materialization/failures.py)).
       Detect and type it.
-- [ ] After provider loss, workspaces dangle instead of being marked lost:
-      `cloud_workspace` rows still reference dead AnyHarness workspace ids
-      on the replacement VM, surfacing as opaque runtime errors, and
-      today's recovery is manual delete-and-recreate
-      ([cloud-provisioning-failure.md](../../../developing/operating/cloud-provisioning-failure.md)).
-      On binding detach, mark the bound workspaces lost and surface that
-      state in the product; the replacement VM starts empty by design.
 - [ ] The `prune_workspace_worktree` cloud command kind is dead — an enum
       member and DB-constraint slot with no producer, payload, or consumer
       ([constants/cloud.py](../../../../server/proliferate/constants/cloud.py)).

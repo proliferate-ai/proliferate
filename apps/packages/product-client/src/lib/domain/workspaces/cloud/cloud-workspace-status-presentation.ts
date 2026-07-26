@@ -41,6 +41,8 @@ export const CLOUD_WORKSPACE_PROVISIONING_STEPS: CloudWorkspaceStepDefinition[] 
 const GENERIC_PREPARING_DESCRIPTION = "Preparing the cloud workspace.";
 const GENERIC_FAILURE_DESCRIPTION = "Provisioning hit an error before the workspace became ready.";
 const GENERIC_ARCHIVED_DESCRIPTION = "This cloud workspace has been archived.";
+const LOST_DESCRIPTION = "The sandbox was killed, so this workspace's contents are gone. Anything pushed to GitHub is still available.";
+const LOST_HELPER_TEXT = "Delete this workspace to remove its record.";
 const GENERIC_BLOCKED_DESCRIPTION = "Cloud usage is unavailable for this workspace right now.";
 const CONCURRENCY_BLOCK_DESCRIPTION = "Archive or delete another cloud workspace before starting this one.";
 const CREDITS_EXHAUSTED_DESCRIPTION = "Cloud usage is paused because your included sandbox hours are exhausted.";
@@ -53,7 +55,12 @@ const READY_MESSAGE = "The workspace is ready.";
 const REPO_CONFIG_MESSAGE = "The runtime is ready. Applying repo files and cloud setup now.";
 const RETRY_HELPER_TEXT = "The workspace record is kept and we will retry setup from there.";
 
-export type CloudWorkspaceStatusScreenMode = "pending" | "error" | "archived" | "blocked";
+export type CloudWorkspaceStatusScreenMode =
+  | "pending"
+  | "error"
+  | "lost"
+  | "archived"
+  | "blocked";
 
 export interface CloudWorkspaceStatusScreenModel {
   mode: CloudWorkspaceStatusScreenMode;
@@ -65,7 +72,12 @@ export interface CloudWorkspaceStatusScreenModel {
   branchLabel: string;
   footer:
     | { kind: "auto-refresh"; message: string }
-    | { kind: "action"; action: "retry"; label: string; helperText: string }
+    | {
+      kind: "action";
+      action: "retry" | "delete";
+      label: string;
+      helperText: string;
+    }
     | { kind: "status"; message: string };
 }
 
@@ -75,7 +87,7 @@ export interface CloudWorkspaceCompactStatusView {
   title: string;
   phaseLabel: string;
   tone: CloudWorkspaceCompactStatusTone;
-  primaryAction: { action: "retry" | "start"; label: string } | null;
+  primaryAction: { action: "retry" | "start" | "delete"; label: string } | null;
 }
 
 function normalizeStartBlockReason(
@@ -124,6 +136,24 @@ export function buildCloudWorkspaceStatusScreenModel(
     ? `${workspace.repo.baseBranch} -> ${workspace.repo.branch}`
     : "";
   const status = resolveCloudWorkspaceStatus(workspace) ?? "error";
+
+  if (status === "lost") {
+    return {
+      mode: "lost",
+      pendingStage: null,
+      eyebrowTone: "error",
+      title: "Workspace lost",
+      description: LOST_DESCRIPTION,
+      repoLabel,
+      branchLabel,
+      footer: {
+        kind: "action",
+        action: "delete",
+        label: "Delete workspace",
+        helperText: LOST_HELPER_TEXT,
+      },
+    };
+  }
 
   if (workspace.actionBlockKind) {
     const description = workspace.actionBlockReason
@@ -245,6 +275,7 @@ export function buildCloudWorkspaceCompactStatusView(
 
   switch (model.mode) {
     case "error":
+    case "lost":
       return {
         title: CLOUD_STATUS_COMPACT_COPY.attentionTitle,
         phaseLabel: model.title,

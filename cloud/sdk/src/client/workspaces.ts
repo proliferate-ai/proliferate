@@ -59,6 +59,8 @@ function normalizeCloudWorkspaceStatus(value: string | undefined): CloudWorkspac
       return "needs_rematerialization";
     case "ready":
       return "ready";
+    case "lost":
+      return "lost";
     case "archived":
     case "stopped":
       return "archived";

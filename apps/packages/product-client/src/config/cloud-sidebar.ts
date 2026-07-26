@@ -35,6 +35,11 @@ export const CLOUD_SIDEBAR_STATUS_DEFINITIONS = {
     className:
       "border-sidebar-border bg-surface-control text-sidebar-muted-foreground",
   },
+  lost: {
+    label: "lost",
+    tone: "error",
+    className: "border-destructive/20 bg-destructive/10 text-destructive",
+  },
   archived: {
     label: "archived",
     tone: "pending",

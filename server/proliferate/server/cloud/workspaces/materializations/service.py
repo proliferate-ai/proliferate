@@ -285,6 +285,12 @@ async def create_local_materialization_intent(
     body: CreateMaterializationIntentRequest,
 ) -> MaterializationIntentResponse:
     workspace = await _load_user_workspace(db, user_id=user_id, workspace_id=workspace_id)
+    if workspace.lost_at is not None:
+        raise CloudApiError(
+            "workspace_lost",
+            "This workspace was lost with its sandbox. Delete it instead of rematerializing it.",
+            status_code=409,
+        )
     desktop_install_id = body.desktop_install_id.strip()
     if not desktop_install_id:
         raise CloudApiError(

@@ -24,6 +24,7 @@ def _workspace(*, anyharness_id: str | None, archived: bool, age_seconds: float 
         id=uuid.uuid4(),
         anyharness_workspace_id=anyharness_id,
         archived_at=datetime.now(UTC) if archived else None,
+        lost_at=None,
         created_at=created_at,
     )
 
@@ -38,6 +39,21 @@ def test_archived_wins_over_stall() -> None:
     ws = _workspace(anyharness_id=None, archived=True, age_seconds=10_000)
     assert service._workspace_status(ws) == "archived"
     assert service._materialization_is_stalled(ws) is False
+
+
+def test_lost_wins_over_ready_runtime_id() -> None:
+    ws = _workspace(anyharness_id="ah-lost", archived=False, age_seconds=10_000)
+    ws.lost_at = datetime.now(UTC)
+
+    assert service._workspace_status(ws) == "lost"
+    assert service._materialization_is_stalled(ws) is False
+
+
+def test_archived_wins_over_lost() -> None:
+    ws = _workspace(anyharness_id="ah-lost", archived=True, age_seconds=10_000)
+    ws.lost_at = datetime.now(UTC)
+
+    assert service._workspace_status(ws) == "archived"
 
 
 def test_recent_no_id_is_materializing() -> None:

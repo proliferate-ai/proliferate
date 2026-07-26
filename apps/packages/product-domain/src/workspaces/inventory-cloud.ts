@@ -144,6 +144,7 @@ function workspaceStatusKind(
   }
   if (
     workspace.status === "error" ||
+    workspace.status === "lost" ||
     workspace.exposureState === "stale" ||
     workspace.actionBlockKind
   ) {
@@ -164,6 +165,9 @@ function workspaceStatusLabel(workspace: CloudWorkspaceSummary): string {
   }
   if (workspace.status === "error") {
     return "Error";
+  }
+  if (workspace.status === "lost") {
+    return "Lost";
   }
   if (workspace.actionBlockKind) {
     return "Blocked";

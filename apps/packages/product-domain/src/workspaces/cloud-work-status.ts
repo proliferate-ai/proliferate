@@ -96,7 +96,12 @@ export function cloudWorkStatusForWorkspace(
   if (workspace.visibility === "archived" || workspace.workspaceStatus === "archived") {
     return "archived";
   }
-  if (workspace.lastError || workspace.workspaceStatus === "error" || workspace.runtime?.status === "error") {
+  if (
+    workspace.lastError
+    || workspace.workspaceStatus === "error"
+    || workspace.workspaceStatus === "lost"
+    || workspace.runtime?.status === "error"
+  ) {
     return "error";
   }
   if (workspaceHasPendingSessionInput(workspace)) {
@@ -175,6 +180,8 @@ function workspaceHasErrorStatus(
   return Boolean(workspace.lastError)
     || workspace.workspaceStatus === "error"
     || workspace.status === "error"
+    || workspace.workspaceStatus === "lost"
+    || workspace.status === "lost"
     || workspace.runtime?.status === "error"
     || workspace.runtime?.status === "disabled";
 }
