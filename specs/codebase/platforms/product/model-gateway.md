@@ -279,3 +279,18 @@ Deltas between this document and `main`, each struck by its follow-up PR:
 - [ ] `/v1/cloud/agent-gateway/` still carries the BYOK vault, selections,
       state, org policy, and catalog routes; `api.py`/`service.py`/
       `models.py` split along the same three-domain line.
+- [ ] Which subject pays for an org member is decided by an interim
+      funding-follows-attribution guard, not a ruled policy. A member's org
+      enrollment governs their gateway sessions only when the org billing
+      subject is funded (a positive credit grant, or an explicitly configured
+      non-default org team budget); otherwise resolution falls back to the
+      member's personal enrollment
+      ([budget.py](../../../../server/proliferate/server/cloud/agent_gateway/budget.py)
+      `get_gateway_enrollment_for_user`). The guard exists because hosted
+      gives every user a default personal org: routing to an unfunded org
+      subject would make both enforcement walls open at once (no grant means
+      the ledger gate never blocks, and an org team budget of "0" means
+      *uncapped* in LiteLLM), so the member's personal credit would never be
+      consulted. The end state — whether an unfunded org may spend at all,
+      and how a member's personal credit relates to their org's — is a
+      founder ruling still pending.

@@ -275,6 +275,50 @@ class TestRenderAgentAuthState:
             )
             assert state["harnesses"] == []
 
+    def test_each_gateway_harness_carries_its_own_key(self) -> None:
+        """Two gateway harnesses render two DISTINCT keys (R2's whole point).
+
+        The key map is per (subject, harness) so each harness is granted only
+        its own access group. If the renderer collapsed the map to one value,
+        every harness would ship a key scoped to some other harness's group —
+        the pre-B2 one-shared-key behavior with none of the scoping.
+        """
+        state, _ = agent_auth.render_agent_auth_state(
+            _inputs(
+                (
+                    _selection(harness="claude", source_kind="gateway"),
+                    _selection(harness="codex", source_kind="gateway"),
+                ),
+                gateway_virtual_keys={
+                    "claude": "sk-litellm-claude",
+                    "codex": "sk-litellm-codex",
+                },
+            )
+        )
+        rendered = {
+            harness["harness_kind"]: [
+                source["key"] for source in harness["sources"] if source["kind"] == "gateway"
+            ]
+            for harness in state["harnesses"]
+        }
+        assert rendered == {
+            "claude": ["sk-litellm-claude"],
+            "codex": ["sk-litellm-codex"],
+        }
+
+    def test_harness_missing_from_the_key_map_is_dropped_alone(self) -> None:
+        """A harness with no key of its own never borrows a sibling's key."""
+        state, _ = agent_auth.render_agent_auth_state(
+            _inputs(
+                (
+                    _selection(harness="claude", source_kind="gateway"),
+                    _selection(harness="codex", source_kind="gateway"),
+                ),
+                gateway_virtual_keys={"claude": "sk-litellm-claude"},
+            )
+        )
+        assert [harness["harness_kind"] for harness in state["harnesses"]] == ["claude"]
+
     def test_fingerprint_is_stable_across_renders(self) -> None:
         selections = (_selection(harness="claude", source_kind="gateway"),)
         first = agent_auth.render_agent_auth_state(_inputs(selections))
