@@ -418,7 +418,7 @@ shaped like the other per-tick convergence steps:
 machine: the desktop picker always has its runtime attached and reads the
 document live, and no machineless surface consumes a local observation —
 they all pick models for cloud execution. Today's 60-second
-[useGatewayCatalogMirrorSync](../../../../apps/packages/product-client/src/hooks/agents/lifecycle/use-gateway-catalog-mirror-sync.ts)
+`useGatewayCatalogMirrorSync` (deleted)
 polling loop deletes with no replacement.
 
 ## Serving and merge
@@ -618,7 +618,7 @@ and
 (with the `gateway_model_probe` sqlite
 table), the `gatewayPolicy` seed fallback (agent-distribution gap), and
 the frontend
-[useGatewayCatalogMirrorSync](../../../../apps/packages/product-client/src/hooks/agents/lifecycle/use-gateway-catalog-mirror-sync.ts)
+`useGatewayCatalogMirrorSync` (deleted)
 polling hook.
 
 ## Failure modes
@@ -685,7 +685,7 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       (keyed on the global `state.json` revision, so any harness's auth
       change invalidates every harness's probe), the `gatewayPolicy` seed
       fallback, and the 60-second
-      [useGatewayCatalogMirrorSync](../../../../apps/packages/product-client/src/hooks/agents/lifecycle/use-gateway-catalog-mirror-sync.ts)
+      `useGatewayCatalogMirrorSync` (deleted)
       poll — is
       the gateway-context special case of the machine snapshot and is
       replaced by it (jointly ruled with the agent-distribution and
