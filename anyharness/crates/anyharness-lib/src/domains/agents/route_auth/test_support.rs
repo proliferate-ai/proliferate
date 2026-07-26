@@ -3,27 +3,25 @@
 //! arm that reads the user's real credential home.
 
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, MutexGuard, OnceLock};
 
 use super::state::state_file_path;
 
-static ENV_MUTEX: OnceLock<Mutex<()>> = OnceLock::new();
-
 /// Serialize tests that mutate process-global env. This crate's tests run
 /// concurrently, so a `HOME` override has to hold this for its whole scope.
-pub(crate) fn env_lock() -> MutexGuard<'static, ()> {
-    ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-}
+///
+/// This is the crate-wide `app::test_support::lock_env`, not a module-local
+/// lock: this crate has three other HOME mutators (readiness, sessions,
+/// route-aware-read), and a module-local mutex here would not exclude them —
+/// narrowing the lock's scope to this module makes it a no-op against the
+/// other three.
+pub(crate) use crate::app::test_support::lock_env;
 
 /// Point the process `HOME` at a temp dir for the duration, restoring it on drop.
 ///
 /// Needed because `credential-discovery` only honors a credential home that
 /// matches the process home (`home_matches_process_home`), so a test that wants
 /// the native codex login delivered has to actually BE that user for a moment.
-/// Hold [`env_lock`] across the guard's lifetime.
+/// Hold [`lock_env`] across the guard's lifetime.
 pub(crate) struct HomeEnvGuard {
     previous: Option<std::ffi::OsString>,
 }

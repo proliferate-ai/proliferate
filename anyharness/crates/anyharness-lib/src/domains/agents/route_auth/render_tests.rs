@@ -8,7 +8,7 @@ use super::materialize::PathFamily;
 use super::plan::{GatewayModelPlan, GatewayModelResolve};
 use super::render::render_profile;
 use super::state::state_file_path;
-use super::test_support::{env_lock, HomeEnvGuard, TempHome};
+use super::test_support::{lock_env, HomeEnvGuard, TempHome};
 use super::{load_state_file, resolve_launch_route_auth, resolve_profile, RouteAuthError};
 
 const GATEWAY_BASE_URL: &str = "https://llm.proliferate.ai";

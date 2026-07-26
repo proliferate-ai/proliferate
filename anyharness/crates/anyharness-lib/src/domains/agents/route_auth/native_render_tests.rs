@@ -102,7 +102,7 @@ fn native_codex_renders_a_catalog_pinned_config_in_an_isolated_home() {
 /// asserted the same delivery at the layer that used to own it.
 #[test]
 fn a_user_with_a_codex_login_launches_native_codex_authenticated() {
-    let _home_lock = env_lock();
+    let _home_lock = lock_env();
     let home = TempHome::new("codex-native-authed");
     // A user home carrying a real codex login, made the process HOME for the
     // duration — that is the home `credential-discovery` reads.
@@ -133,7 +133,7 @@ fn a_user_with_a_codex_login_launches_native_codex_authenticated() {
 /// copy left by a previous login is removed rather than outliving it.
 #[test]
 fn native_codex_without_a_user_login_delivers_nothing_and_clears_a_stale_copy() {
-    let _home_lock = env_lock();
+    let _home_lock = lock_env();
     let home = TempHome::new("codex-native-unauthed");
     let user_home = TempHome::new("codex-native-empty-home");
     std::fs::create_dir_all(user_home.path().join(".codex")).expect("create .codex");
