@@ -20,6 +20,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
 from proliferate.constants.agent_gateway import (
+    AGENT_API_KEY_KIND_AWS_BEDROCK,
+    AGENT_API_KEY_KIND_AZURE_OPENAI,
     AGENT_API_KEY_TYPED_KINDS,
     AGENT_AUTH_POLICY_ROUTES,
     AGENT_AUTH_ROUTE_NATIVE,
@@ -134,6 +136,15 @@ async def create_api_key(
 _MAX_PROVIDER_CONFIG_FIELD_LENGTH = 4096
 _MAX_PROVIDER_CONFIG_FIELDS = 16
 
+# Required field keys per typed kind, matching D2's UI field spec exactly
+# (apps/packages/product-client/src/lib/domain/settings/provider-config-fields.ts
+# PROVIDER_CONFIG_SPECS) so a value the UI can submit is never rejected here,
+# and a value shaped for the wrong kind (or carrying unknown keys) always is.
+_PROVIDER_CONFIG_REQUIRED_FIELDS: dict[str, frozenset[str]] = {
+    AGENT_API_KEY_KIND_AWS_BEDROCK: frozenset({"region", "bearerToken"}),
+    AGENT_API_KEY_KIND_AZURE_OPENAI: frozenset({"endpoint", "deployment", "apiKey"}),
+}
+
 
 async def create_provider_config(
     db: AsyncSession,
@@ -166,9 +177,24 @@ async def create_provider_config(
     if not value or len(value) > _MAX_PROVIDER_CONFIG_FIELDS:
         raise CloudApiError(
             "invalid_agent_provider_config_value",
-            "Provider-config value must have 1-"
-            f"{_MAX_PROVIDER_CONFIG_FIELDS} field(s).",
+            f"Provider-config value must have 1-{_MAX_PROVIDER_CONFIG_FIELDS} field(s).",
             status_code=400,
+        )
+    required_fields = _PROVIDER_CONFIG_REQUIRED_FIELDS[kind]
+    submitted_fields = frozenset(value.keys())
+    unknown_fields = submitted_fields - required_fields
+    if unknown_fields:
+        raise CloudApiError(
+            "invalid_agent_provider_config_fields",
+            f"Unknown field(s) for kind '{kind}': {', '.join(sorted(unknown_fields))}.",
+            status_code=422,
+        )
+    missing_fields = required_fields - submitted_fields
+    if missing_fields:
+        raise CloudApiError(
+            "invalid_agent_provider_config_fields",
+            f"Missing required field(s) for kind '{kind}': {', '.join(sorted(missing_fields))}.",
+            status_code=422,
         )
     trimmed_value: dict[str, str] = {}
     for field_key, field_value in value.items():

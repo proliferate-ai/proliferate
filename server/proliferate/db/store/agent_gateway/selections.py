@@ -17,6 +17,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.agent_gateway import (
+    AGENT_API_KEY_KIND_API_KEY,
     AGENT_API_KEY_STATUS_ACTIVE,
     AGENT_AUTH_HARNESS_KINDS,
     AGENT_AUTH_SOURCE_API_KEY,
@@ -67,6 +68,12 @@ async def _assert_keys_usable(
 ) -> None:
     if not api_key_ids:
         return
+    # An api_key source may only reference a bare-secret vault entry
+    # (kind='api_key'). A typed provider-config entry (aws_bedrock,
+    # azure_openai) carries its own env mapping and is never a legal
+    # api_key source target (agent-auth.md: "a selection referencing a
+    # typed entry names no env_var_name") -- rejecting it here, not just
+    # at read time, makes that law true at selection write.
     usable = set(
         (
             await db.execute(
@@ -74,6 +81,7 @@ async def _assert_keys_usable(
                     AgentApiKey.id.in_(api_key_ids),
                     AgentApiKey.user_id == user_id,
                     AgentApiKey.status == AGENT_API_KEY_STATUS_ACTIVE,
+                    AgentApiKey.kind == AGENT_API_KEY_KIND_API_KEY,
                 )
             )
         )

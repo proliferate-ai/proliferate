@@ -232,6 +232,50 @@ class TestAgentApiKeys:
         assert response.json()["detail"]["code"] == "invalid_agent_provider_config_value"
 
     @pytest.mark.asyncio
+    async def test_create_provider_config_rejects_wrong_kind_fields(
+        self,
+        client: AsyncClient,
+    ) -> None:
+        """Bedrock's field keys (region/bearerToken) submitted under the
+        azure_openai kind must be rejected -- the required-field vocabulary
+        is per-kind (matching D2's provider-config-fields.ts), not
+        interchangeable.
+        """
+        _, headers = await _authed_user(client)
+
+        response = await client.post(
+            "/v1/cloud/agent-gateway/keys/provider-config",
+            headers=headers,
+            json={
+                "title": "Wrong kind fields",
+                "kind": "azure_openai",
+                "value": {"region": "us-east-1", "bearerToken": "bedrock-token-abcd"},
+            },
+        )
+        assert response.status_code == 422
+        assert response.json()["detail"]["code"] == "invalid_agent_provider_config_fields"
+
+    @pytest.mark.asyncio
+    async def test_create_provider_config_rejects_arbitrary_keys(
+        self,
+        client: AsyncClient,
+    ) -> None:
+        """Unknown field keys for a kind must be rejected, not silently stored."""
+        _, headers = await _authed_user(client)
+
+        response = await client.post(
+            "/v1/cloud/agent-gateway/keys/provider-config",
+            headers=headers,
+            json={
+                "title": "Arbitrary keys",
+                "kind": "aws_bedrock",
+                "value": {"region": "us-east-1", "somethingElse": "value"},
+            },
+        )
+        assert response.status_code == 422
+        assert response.json()["detail"]["code"] == "invalid_agent_provider_config_fields"
+
+    @pytest.mark.asyncio
     async def test_create_rejects_empty_title_and_value(self, client: AsyncClient) -> None:
         _, headers = await _authed_user(client)
 
