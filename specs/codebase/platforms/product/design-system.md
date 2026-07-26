@@ -607,6 +607,7 @@ stay in lockstep with CSS import them and format through `motion.cssMs()`.
 | Token | Value | At 12px text | At 13px text | Role |
 | --- | --- | --- | --- | --- |
 | `--icon-status` | `0.55em` | 6.6px | 7.2px | Status dots. |
+| `--icon-tight` | `0.875em` | 10.5px | 11.4px | Trailing row controls that sit quieter than their text. |
 | `--icon-compact` | `1em` | 12px | 13px | Inline glyphs that match their text exactly. |
 | `--icon-paired` | `1.230769em` | 14.8px | 16px | The default glyph beside prose. |
 | `--icon-control` | `1.333333em` | 16px | 17.3px | The glyph inside an icon-only control. |
