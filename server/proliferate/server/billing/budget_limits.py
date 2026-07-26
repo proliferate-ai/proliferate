@@ -5,8 +5,7 @@ reconciler pass (``reconciler._resolve_compute_limit_pause``) pauses open
 segments, and the live start/resume gate
 (``authorization.assert_cloud_sandbox_resume_allowed``, wired into
 ``connect_ready_sandbox``) denies waking a paused-for-billing sandbox. The
-orphaned ``authorize_sandbox_start`` (dead since #823) is kept only as the
-semantic reference; the resume gate is the real seam.
+resume-blocked gate is the live authorization seam.
 """
 
 from __future__ import annotations
