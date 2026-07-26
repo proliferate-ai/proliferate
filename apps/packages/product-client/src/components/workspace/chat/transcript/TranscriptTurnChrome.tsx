@@ -108,7 +108,17 @@ export function TurnAssistantActionRow({
             <span aria-hidden className="h-3 w-px bg-border/60" />
             {metMarker}
             {timestampLabel && (
-              <span className="text-chat-meta text-foreground-tertiary tabular-nums">
+              // Hover-gated like every earlier message's timestamp — the
+              // final completed message's copy/check-mark row is
+              // persistently visible (alwaysVisible), but the date itself
+              // stays reveal-on-hover so it doesn't sit as permanent chrome.
+              <span
+                className={`text-chat-meta text-foreground-tertiary tabular-nums transition-opacity duration-hover ${
+                  alwaysVisible
+                    ? "opacity-0 group-hover/turn:opacity-100 group-focus-within/turn:opacity-100"
+                    : ""
+                }`}
+              >
                 {timestampLabel}
               </span>
             )}

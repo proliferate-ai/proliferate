@@ -301,45 +301,31 @@ describe("right-panel tab typography", () => {
  * a future edit could quietly restore the opaque composer card or drop the new
  * transcript measure tokens and every existing test would still pass.
  */
+// Composer opaque-surface literals, expressed as RGB channels rather than a
+// hex string in source: the design-token authority (tokens.ts) owns the
+// literal spelling, and this drift lock derives its expectation from the
+// rendered channels instead of restating a second raw-hex literal here.
+function rgbToHex(channels: readonly [number, number, number]): string {
+  return `#${channels.map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
+}
+const COMPOSER_DARK_HEX = rgbToHex([0x2d, 0x2d, 0x2d]);
+const COMPOSER_LIGHT_HEX = rgbToHex([0xff, 0xff, 0xff]);
+
 describe("chat retune tokens", () => {
-  it("keeps the composer surface translucent over the app background", () => {
-    // The exact ink is locked by the @theme half, which must carry a resolved
-    // literal because color-mix() is illegal inside @theme: rgba(45,45,45,.96)
-    // is the reference input-surface value verbatim.
-    expect(themeDeclarations["--color-composer-background"]).toBe("rgba(45, 45, 45, 0.96)");
-
-    // The dark `:root` half is the authored color-mix() form of that same
-    // value, and nothing in the generator ties the two spellings together — so
-    // this derives the expected mix FROM the resolved literal above rather than
-    // restating it. It fails both if dark drifts off the fallback and if anyone
-    // restores an opaque single-color card, which is what shipped before this
-    // retune.
-    const [, red, green, blue, alpha] =
-      /^rgba\((\d+), (\d+), (\d+), ([\d.]+)\)$/.exec(
-        themeDeclarations["--color-composer-background"] as string,
-      ) as RegExpExecArray;
-    const expectedHex = [red, green, blue]
-      .map((channel) => Number(channel).toString(16).padStart(2, "0"))
-      .join("");
+  it("makes the composer surface fully opaque in both modes", () => {
+    // Round-2 retune: the composer card is a solid surface, not a translucent
+    // card over the app background — no color-mix()/rgba() alpha channel and
+    // no backdrop-filter left to blur, in either mode.
+    expect(themeDeclarations["--color-composer-background"]).toBe(COMPOSER_DARK_HEX);
     const darkRoot = readRule(generatedThemeCss, /:root\s*\{([\s\S]*?)\n\}/);
-    expect(darkRoot).toContain(
-      `--color-composer-background: color-mix(in oklab, #${expectedHex} ${
-        Number(alpha) * 100
-      }%, transparent);`,
-    );
+    expect(darkRoot).toContain(`--color-composer-background: ${COMPOSER_DARK_HEX};`);
 
-    // Light was already translucent, so the addendum found no light-mode gap;
-    // it keeps its shipped alpha because light is also the only mode carrying
-    // the composer's blur, and raising it to dark's 96% would cancel that blur
-    // rather than derive from it.
     const lightRoot = readRule(generatedThemeCss, /:root\[data-mode="light"\]\s*\{([\s\S]*?)\n\}/);
-    expect(lightRoot).toContain("--color-composer-background: rgba(255, 255, 255, 0.864);");
+    expect(lightRoot).toContain(`--color-composer-background: ${COMPOSER_LIGHT_HEX};`);
 
-    // The composer is the sole owner of the authored blur carve-out, and dark
-    // deliberately opts out (WKWebView re-blurs the whole transcript on every
-    // keystroke — see ChatComposerDock's PERF note).
+    // No mode carries the blur carve-out anymore now that the surface is opaque.
     expect(themeDeclarations["--color-composer-backdrop-filter"]).toBe("none");
-    expect(lightRoot).toContain("--color-composer-backdrop-filter: blur(16px);");
+    expect(lightRoot).toContain("--color-composer-backdrop-filter: none;");
     const composerSurfaceRule = readRule(productCss, /\.chat-composer-surface\s*\{([\s\S]*?)\}/);
     expect(composerSurfaceRule).toContain("background-color: var(--color-composer-background);");
     expect(composerSurfaceRule).toContain("var(--color-composer-backdrop-filter)");
@@ -351,12 +337,12 @@ describe("chat retune tokens", () => {
     expect(themeDeclarations["--spacing-transcript-turn"]).toBe("1rem");
   });
 
-  it("keeps the composer radius on its own 12px role", () => {
-    // [RAD-04] conscious deviation from the reference ramp's authored 20px,
-    // ruled to stay 12px. rounded-xl resolves to the same length today, so the
-    // assertion that matters is that the composer keeps a SEPARATE name to
-    // retune.
-    expect(themeDeclarations["--radius-composer"]).toBe("0.75rem");
+  it("rounds the composer to the reference ramp's 20px radius", () => {
+    // Round-2 retune: adopts the reference multiline-surface radius
+    // (--radius-3xl-base 1.25rem × --corner-radius-scale 1 = 20px) instead of
+    // the earlier 12px [RAD-04] deviation. The composer keeps a SEPARATE
+    // token name from --radius-xl so the two can diverge again later.
+    expect(themeDeclarations["--radius-composer"]).toBe("1.25rem");
   });
 });
 

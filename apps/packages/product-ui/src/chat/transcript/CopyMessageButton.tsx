@@ -33,9 +33,17 @@ export function CopyMessageButton({
       title={copied ? "Copied" : "Copy message"}
       className="!size-icon-button-sm !p-0 rounded-full text-muted-foreground hover:text-foreground"
     >
+      {/*
+       * icon-control is 1.333em, which otherwise resolves against this
+       * button's ambient font-size — the surrounding row is text-chat-meta
+       * (11px), so an unset font-size here would size the glyph off the
+       * meta text rather than the 13px message body it's attached to. Pin
+       * the em base to --text-chat explicitly, same pattern used for the
+       * pending-interaction and goal-met glyphs elsewhere in the transcript.
+       */}
       {copied
-        ? <Check className="icon-control" />
-        : <Copy className="icon-control" />}
+        ? <Check className="icon-control [font-size:var(--text-chat)]" />
+        : <Copy className="icon-control [font-size:var(--text-chat)]" />}
     </IconButton>
   );
 
