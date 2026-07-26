@@ -95,8 +95,14 @@ export function ProductSidebarSectionHeader({
     <span className="flex min-w-0 items-center gap-1">
       <span className="truncate">{label}</span>
       {isToggleable ? (
+        // The disclosure chevron is quiet chrome while the section is open:
+        // it only surfaces when the section is collapsed (the one state the
+        // user must be able to read at rest) or on hover/keyboard focus.
         <ChevronRight
-          className={`icon-compact shrink-0 text-sidebar-muted-foreground/70 transition-[transform,color] group-hover/side-section:text-sidebar-foreground ${collapsed ? "" : "rotate-90"}`}
+          className={`icon-compact shrink-0 text-sidebar-muted-foreground/70 transition-[transform,color,opacity] group-hover/side-section:text-sidebar-foreground ${collapsed
+            ? ""
+            : "rotate-90 opacity-0 group-hover/side-section:opacity-100 group-focus-within/side-section:opacity-100"
+            }`}
         />
       ) : null}
     </span>

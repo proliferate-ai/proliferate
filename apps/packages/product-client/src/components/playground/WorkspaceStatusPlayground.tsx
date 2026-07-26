@@ -348,7 +348,6 @@ function FullSidebarPane() {
             <RepoGroup
               key={group.name}
               name={group.name}
-              count={group.rows.length}
               collapsed={!!collapsedGroups[group.name]}
               environmentKind={group.kind}
               onToggleCollapsed={() => toggleGroup(group.name)}

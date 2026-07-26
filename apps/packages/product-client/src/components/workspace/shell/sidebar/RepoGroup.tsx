@@ -26,7 +26,6 @@ import { ProductSidebarRepoGroupHeader } from "@proliferate/product-ui/sidebar/P
 
 interface RepoGroupProps {
   name: string;
-  count: number;
   collapsed: boolean;
   environmentKind?: RepoGroupEnvironmentKind;
   children: ReactNode;
@@ -58,7 +57,6 @@ const CREATE_WORKSPACE_SHORTCUT_CLASS = "shrink-0 text-muted-foreground/70";
 
 export function RepoGroup({
   name,
-  count,
   collapsed,
   environmentKind = "local",
   children,
@@ -141,7 +139,6 @@ export function RepoGroup({
   const headerRow = (
     <ProductSidebarRepoGroupHeader
       label={name}
-      count={count}
       collapsed={collapsed}
       icon={<RepoGroupEnvironmentIcon kind={environmentKind} expanded={false} />}
       expandedIcon={<RepoGroupEnvironmentIcon kind={environmentKind} expanded />}

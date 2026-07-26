@@ -87,7 +87,9 @@ export function ProductSidebarThreadRow({
               {trailingStatus}
             </div>
           ) : trailingLabel && !active && !expandControl ? (
-            <div className="truncate text-right text-ui tabular-nums text-sidebar-muted-foreground group-focus-within:opacity-0 group-hover:opacity-0">
+            // Same end-anchored 20px cell as the activity glyphs, so thread
+            // times sit on the workspace rows' indicator axis.
+            <div className="flex h-5 min-w-5 items-center justify-center truncate text-ui tabular-nums text-sidebar-muted-foreground group-focus-within:opacity-0 group-hover:opacity-0">
               {trailingLabel}
             </div>
           ) : null}

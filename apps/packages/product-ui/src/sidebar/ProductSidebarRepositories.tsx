@@ -9,7 +9,6 @@ import { PrStatusIconOverlay, type PrStatusView } from "../patterns/PrStatusBadg
 
 export interface ProductSidebarRepoGroupHeaderProps extends Omit<HTMLAttributes<HTMLElement>, "children" | "onClick"> {
   label: string;
-  count: number;
   collapsed: boolean;
   icon?: ReactNode;
   expandedIcon?: ReactNode;
@@ -20,7 +19,6 @@ export interface ProductSidebarRepoGroupHeaderProps extends Omit<HTMLAttributes<
 
 export function ProductSidebarRepoGroupHeader({
   label,
-  count,
   collapsed,
   icon,
   expandedIcon,
@@ -61,17 +59,13 @@ export function ProductSidebarRepoGroupHeader({
           {label}
         </span>
 
-        <div className="relative ml-auto flex h-6 min-w-6 shrink-0 items-center justify-end">
-          <span className={`flex size-6 items-center justify-center font-mono text-ui-sm text-sidebar-muted-foreground transition-opacity ${hasAction ? "group-hover/folder-row:opacity-0 group-focus-within/folder-row:opacity-0" : ""
-            }`}>
-            {count}
-          </span>
-          {hasAction ? (
-            <div className="absolute inset-y-0 right-0 flex items-center justify-end gap-0.5 opacity-0 transition-opacity group-hover/folder-row:opacity-100 group-focus-within/folder-row:opacity-100">
-              {action}
-            </div>
-          ) : null}
-        </div>
+        {hasAction ? (
+          // No workspace count at rest — the trailing area is hover-revealed
+          // actions only, so the header stays quiet until pointed at.
+          <div className="ml-auto flex h-6 min-w-6 shrink-0 items-center justify-end gap-0.5 opacity-0 transition-opacity group-hover/folder-row:opacity-100 group-focus-within/folder-row:opacity-100">
+            {action}
+          </div>
+        ) : null}
       </div>
     </SidebarRowSurface>
   );
@@ -223,7 +217,10 @@ export function ProductSidebarWorkspaceRow({
                 />
               </Tooltip>
             ) : trailingLabel ? (
-              <div className={`col-start-1 row-start-1 flex items-center justify-end overflow-visible truncate whitespace-nowrap text-right text-ui tabular-nums text-faint transition-opacity duration-hover ${shortcutLabel && shortcutRevealVisible
+              // Centered in the same end-anchored 20px cell as the activity
+              // glyphs and unread dot, so the time column shares their axis
+              // instead of hugging the right edge.
+              <div className={`col-start-1 row-start-1 flex h-5 min-w-5 items-center justify-center justify-self-end overflow-visible truncate whitespace-nowrap text-ui tabular-nums text-faint transition-opacity duration-hover ${shortcutLabel && shortcutRevealVisible
                   ? "opacity-0"
                   : "group-hover:opacity-0 group-focus-within:opacity-0"
                 }`}>
