@@ -41,7 +41,13 @@ export function resolveModelSnapshotFreshness(
   return { kind: "unknown" };
 }
 
-/** Short duration label for a snapshot age ("5m", "2h", "3d") — no trailing "ago", callers append it. */
+/**
+ * Short duration label for a snapshot age ("5m", "2h", "3d") — no trailing
+ * "ago", callers append it. `"just now"` is the one exception: it already
+ * reads complete on its own, so `HARNESS_PANE_COPY.allModelsFreshRefreshedAgo`
+ * must NOT glue its own "ago" onto this value (that produced "refreshed just
+ * now ago" — see its call site).
+ */
 export function formatSnapshotAge(ageSeconds: number): string {
   const seconds = Math.max(0, Math.floor(ageSeconds));
   if (seconds < 60) return "just now";

@@ -11,6 +11,7 @@ import {
   useAgentLaunchOptionsQuery,
   useModelSnapshotStatusQuery,
   useRefreshAgentGatewayModelsMutation,
+  useRefreshModelSnapshotMutation,
 } from "@anyharness/sdk-react";
 import { RefreshCw, Search, X } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
@@ -79,6 +80,13 @@ export function HarnessAllModelsSection({
     enabled: cloudActive && isRuntimeGateway,
   });
   const refreshGatewayModels = useRefreshAgentGatewayModelsMutation();
+  // Drives the model-snapshot probe engine itself (A7's route): the legacy
+  // gateway-refresh mutation above only re-populates the models TABLE (its
+  // own sqlite probe store) — it never touches model-snapshot.json, so
+  // without this the staleness badge below would poll a document nothing
+  // ever writes and sit on "needs refresh" forever. Both fire from one
+  // click: the legacy one for the row data, this one for the badge.
+  const refreshModelSnapshot = useRefreshModelSnapshotMutation();
   const runtimeLaunchOptionsQuery = useAgentLaunchOptionsQuery({
     enabled: isRuntimeProbedRoute || isSignedOutLocal,
   });
@@ -147,6 +155,14 @@ export function HarnessAllModelsSection({
           showToast(error.message || HARNESS_PANE_COPY.catalogRefreshError(displayName));
         },
       });
+      refreshModelSnapshot.mutate(
+        { kind: harnessKind, authContextId: GATEWAY_AUTH_CONTEXT_ID },
+        {
+          onError: (error) => {
+            showToast(error.message || HARNESS_PANE_COPY.catalogRefreshError(displayName));
+          },
+        },
+      );
       return;
     }
     if (isRuntimeProbedRoute) {
@@ -203,7 +219,7 @@ export function HarnessAllModelsSection({
   const isRefreshing = isSignedOutLocal
     ? runtimeLaunchOptionsQuery.isFetching
     : isRuntimeGateway
-      ? refreshGatewayModels.isPending
+      ? refreshGatewayModels.isPending || refreshModelSnapshot.isPending
       : refreshCatalog.isPending;
 
   // Auto-probe an empty catalog: landing on a resolved-but-empty catalog kicks

@@ -88,7 +88,11 @@ export const HARNESS_PANE_COPY = {
   // never blocks a launch, but the picker/settings surface must render it).
   allModelsStaleNeedsRefresh: "needs refresh",
   allModelsStaleRefreshing: "refreshing…",
-  allModelsFreshRefreshedAgo: (ago: string) => `refreshed ${ago} ago`,
+  // `ago` is the raw duration from formatSnapshotAge ("5m", "2h", "3d", or the
+  // literal "just now" — which must NOT get its own "ago" appended, hence the
+  // special case rather than a blind template).
+  allModelsFreshRefreshedAgo: (ago: string) =>
+    ago === "just now" ? "refreshed just now" : `refreshed ${ago} ago`,
   getApiKey: "Get an API key",
   recommendedBadge: "Recommended",
   // Method card labels.

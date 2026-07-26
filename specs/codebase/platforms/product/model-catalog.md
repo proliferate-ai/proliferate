@@ -577,7 +577,11 @@ because both read the same universe.
   staleness visible when the snapshot is old.
 - **Provider badges**: every served model entry carries its origin — the
   auth context that served it, and the `provider` namespace — as explicit
-  fields, so the UI never infers origin from a model name.
+  fields, so the UI never infers origin from a model name. The desktop
+  launch-catalog merge now plumbs `provider` through instead of dropping it
+  (C3); no consuming surface renders it yet — the composer's badge still
+  calls `getProviderDisplayName(harnessKind)` rather than reading the
+  field, so today's badge is still name-inferred in practice.
 
 ## Model identity
 
@@ -829,6 +833,14 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       matters once a harness materializes several auth contexts at once
       (opencode's multi-provider case); the gateway route's single fixed
       context needed no tagging to render correctly (C3).
+- [ ] `provider` is now plumbed through the desktop launch-catalog merge
+      instead of being silently dropped
+      ([cloud-launch-catalog.ts](../../../../apps/packages/product-client/src/lib/domain/agents/cloud-launch-catalog.ts),
+      C3), but no surface reads it yet: the composer's provider badge still
+      calls `getProviderDisplayName(harnessKind)`
+      ([provider-display.ts](../../../../apps/packages/product-client/src/lib/domain/agents/provider-display.ts))
+      rather than the field on the model itself. Removing that inference is
+      the remaining step.
 - [ ] Route rename `/v1/cloud/agent-gateway/catalog/*` →
       `/v1/cloud/agent-models/*` (hard cutover; first-party consumers:
       the catalog functions in

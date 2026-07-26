@@ -137,6 +137,10 @@ vi.mock("@anyharness/sdk-react", () => ({ useAnyHarnessRuntimeContext: () => ({ 
   // Probe-status polling has no assertions in this suite; a static idle
   // result keeps HarnessAllModelsSection's staleness badge inert here.
   useModelSnapshotStatusQuery: () => ({ data: undefined, isLoading: false }),
+  // Refresh-mutation stub — this suite asserts on the legacy gateway
+  // mutation only; the model-snapshot refresh mutation has no assertions
+  // here but must exist or the component throws on render (C3-R1 fix).
+  useRefreshModelSnapshotMutation: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
 vi.mock("#product/stores/toast/toast-store", () => ({

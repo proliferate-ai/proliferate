@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ModelSnapshotStatus } from "@anyharness/sdk";
+import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
 import {
   findContextStatus,
   formatSnapshotAge,
@@ -94,5 +95,25 @@ describe("formatSnapshotAge", () => {
 
   it("clamps negative ages to zero", () => {
     expect(formatSnapshotAge(-5)).toBe("just now");
+  });
+});
+
+describe("HARNESS_PANE_COPY.allModelsFreshRefreshedAgo (composed string)", () => {
+  it("reads \"refreshed just now\" for sub-minute ages, never \"refreshed just now ago\"", () => {
+    const composed = HARNESS_PANE_COPY.allModelsFreshRefreshedAgo(formatSnapshotAge(0));
+    expect(composed).toBe("refreshed just now");
+    expect(composed).not.toContain("just now ago");
+  });
+
+  it("reads \"refreshed Nm/h/d ago\" for a minute-or-larger age", () => {
+    expect(HARNESS_PANE_COPY.allModelsFreshRefreshedAgo(formatSnapshotAge(90))).toBe(
+      "refreshed 1m ago",
+    );
+    expect(HARNESS_PANE_COPY.allModelsFreshRefreshedAgo(formatSnapshotAge(3600))).toBe(
+      "refreshed 1h ago",
+    );
+    expect(HARNESS_PANE_COPY.allModelsFreshRefreshedAgo(formatSnapshotAge(90000))).toBe(
+      "refreshed 1d ago",
+    );
   });
 });

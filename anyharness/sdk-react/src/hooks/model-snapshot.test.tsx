@@ -85,6 +85,71 @@ describe("model snapshot status polling", () => {
       { refetchWhileActive: false },
     )).toBe(false);
   });
+
+  it("keeps polling when ANY context is active, even if others are idle (multi-context harnesses like opencode)", () => {
+    const options = { refetchWhileActive: true };
+    const mixed: ModelSnapshotStatus = {
+      agent: "opencode",
+      probeEngine: "owner",
+      schemaVersion: 1,
+      installIdentity: null,
+      contexts: [
+        {
+          authContextId: "anthropic",
+          active: true,
+          state: "running",
+          identityComparable: true,
+          modelCount: 3,
+          modeCount: 1,
+          stale: false,
+        },
+        {
+          authContextId: "openai",
+          active: true,
+          state: "idle",
+          identityComparable: true,
+          modelCount: 2,
+          modeCount: 1,
+          stale: false,
+        },
+      ],
+    };
+
+    expect(resolveModelSnapshotRefetchInterval({ data: mixed }, options))
+      .toBe(MODEL_SNAPSHOT_ACTIVE_INTERVAL_MS);
+  });
+
+  it("stops polling only once EVERY context is idle", () => {
+    const options = { refetchWhileActive: true };
+    const allIdle: ModelSnapshotStatus = {
+      agent: "opencode",
+      probeEngine: "owner",
+      schemaVersion: 1,
+      installIdentity: null,
+      contexts: [
+        {
+          authContextId: "anthropic",
+          active: true,
+          state: "idle",
+          identityComparable: true,
+          modelCount: 3,
+          modeCount: 1,
+          stale: false,
+        },
+        {
+          authContextId: "openai",
+          active: true,
+          state: "idle",
+          identityComparable: true,
+          modelCount: 2,
+          modeCount: 1,
+          stale: false,
+        },
+      ],
+    };
+
+    expect(resolveModelSnapshotRefetchInterval({ data: allIdle }, options)).toBe(false);
+  });
 });
 
 function status(

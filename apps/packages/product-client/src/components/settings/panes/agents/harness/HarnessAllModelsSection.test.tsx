@@ -2,6 +2,7 @@
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { ModelSnapshotStatus } from "@anyharness/sdk";
 import { HarnessAllModelsSection } from "#product/components/settings/panes/agents/harness/HarnessAllModelsSection";
 
 const state = vi.hoisted(() => ({
@@ -41,7 +42,7 @@ const state = vi.hoisted(() => ({
     isLoading: false,
   },
   modelSnapshotStatus: {
-    data: undefined,
+    data: undefined as ModelSnapshotStatus | undefined,
     isLoading: false,
   },
 }));
@@ -49,6 +50,7 @@ const state = vi.hoisted(() => ({
 const refreshCatalog = vi.hoisted(() => vi.fn());
 const upsertOverride = vi.hoisted(() => vi.fn());
 const refreshGatewayModels = vi.hoisted(() => vi.fn());
+const refreshModelSnapshot = vi.hoisted(() => vi.fn());
 const refetchLaunchOptions = vi.hoisted(() => vi.fn());
 const showToast = vi.hoisted(() => vi.fn());
 const authSelectionsQuery = vi.hoisted(() => vi.fn());
@@ -90,6 +92,10 @@ vi.mock("@anyharness/sdk-react", () => ({
     modelSnapshotStatusQuery(...args);
     return state.modelSnapshotStatus;
   },
+  useRefreshModelSnapshotMutation: () => ({
+    mutate: refreshModelSnapshot,
+    isPending: false,
+  }),
 }));
 
 vi.mock("#product/hooks/cloud/derived/use-cloud-availability-state", () => ({
@@ -105,6 +111,7 @@ afterEach(() => {
   cleanup();
   vi.clearAllMocks();
   state.cloudActive = false;
+  state.modelSnapshotStatus = { data: undefined, isLoading: false };
 });
 
 describe("HarnessAllModelsSection signed-out behavior", () => {
@@ -134,6 +141,7 @@ describe("HarnessAllModelsSection signed-out behavior", () => {
     expect(refreshCatalog).not.toHaveBeenCalled();
     expect(upsertOverride).not.toHaveBeenCalled();
     expect(refreshGatewayModels).not.toHaveBeenCalled();
+    expect(refreshModelSnapshot).not.toHaveBeenCalled();
   });
 
   it("keeps the signed-out Cloud surface gated", () => {
@@ -157,5 +165,159 @@ describe("HarnessAllModelsSection signed-out behavior", () => {
     );
     expect(gatewayModelsQuery).toHaveBeenCalledWith("codex", { enabled: false });
     expect(launchOptionsQuery).toHaveBeenCalledWith({ enabled: false });
+  });
+});
+
+describe("HarnessAllModelsSection staleness badge (runtime-gateway path)", () => {
+  it("drives BOTH the legacy gateway-models refresh and the model-snapshot refresh on click, so the badge is not permanently stuck (C3-R1)", () => {
+    state.cloudActive = true;
+    render(
+      <HarnessAllModelsSection
+        harnessKind="codex"
+        displayName="Codex"
+        surface="local"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /^Refresh$/ }));
+
+    expect(refreshGatewayModels).toHaveBeenCalledWith("codex", expect.anything());
+    expect(refreshModelSnapshot).toHaveBeenCalledWith(
+      { kind: "codex", authContextId: "gateway" },
+      expect.anything(),
+    );
+  });
+
+  it("polls the model-snapshot status route only for the signed-in local+gateway path", () => {
+    state.cloudActive = true;
+    render(
+      <HarnessAllModelsSection
+        harnessKind="codex"
+        displayName="Codex"
+        surface="local"
+      />,
+    );
+
+    expect(modelSnapshotStatusQuery).toHaveBeenCalledWith("codex", { enabled: true });
+  });
+
+  it("renders the refreshing badge while the gateway context is queued or running", () => {
+    state.cloudActive = true;
+    state.modelSnapshotStatus = {
+      data: {
+        agent: "codex",
+        schemaVersion: 1,
+        probeEngine: "owner",
+        installIdentity: null,
+        contexts: [{
+          authContextId: "gateway",
+          active: true,
+          state: "running",
+          identityComparable: true,
+          modelCount: 3,
+          modeCount: 1,
+          stale: false,
+        }],
+      },
+      isLoading: false,
+    };
+
+    render(
+      <HarnessAllModelsSection
+        harnessKind="codex"
+        displayName="Codex"
+        surface="local"
+      />,
+    );
+
+    expect(screen.queryByText("refreshing…")).not.toBeNull();
+    expect(screen.queryByText("needs refresh")).toBeNull();
+    expect(screen.queryByText(/^refreshed /)).toBeNull();
+  });
+
+  it("renders the needs-refresh badge when the gateway context is stale", () => {
+    state.cloudActive = true;
+    state.modelSnapshotStatus = {
+      data: {
+        agent: "codex",
+        schemaVersion: 1,
+        probeEngine: "owner",
+        installIdentity: null,
+        contexts: [{
+          authContextId: "gateway",
+          active: true,
+          state: "idle",
+          identityComparable: true,
+          modelCount: 3,
+          modeCount: 1,
+          stale: true,
+        }],
+      },
+      isLoading: false,
+    };
+
+    render(
+      <HarnessAllModelsSection
+        harnessKind="codex"
+        displayName="Codex"
+        surface="local"
+      />,
+    );
+
+    expect(screen.queryByText("needs refresh")).not.toBeNull();
+    expect(screen.queryByText("refreshing…")).toBeNull();
+    expect(screen.queryByText(/^refreshed /)).toBeNull();
+  });
+
+  it("renders the refreshed-ago badge when the gateway context is idle, fresh, and has an age", () => {
+    state.cloudActive = true;
+    state.modelSnapshotStatus = {
+      data: {
+        agent: "codex",
+        schemaVersion: 1,
+        probeEngine: "owner",
+        installIdentity: null,
+        contexts: [{
+          authContextId: "gateway",
+          active: true,
+          state: "idle",
+          identityComparable: true,
+          modelCount: 3,
+          modeCount: 1,
+          stale: false,
+          snapshotAgeSeconds: 90,
+        }],
+      },
+      isLoading: false,
+    };
+
+    render(
+      <HarnessAllModelsSection
+        harnessKind="codex"
+        displayName="Codex"
+        surface="local"
+      />,
+    );
+
+    expect(screen.queryByText("refreshed 1m ago")).not.toBeNull();
+    expect(screen.queryByText("needs refresh")).toBeNull();
+    expect(screen.queryByText("refreshing…")).toBeNull();
+  });
+
+  it("renders no badge when the status document has no matching context yet", () => {
+    state.cloudActive = true;
+    state.modelSnapshotStatus = { data: undefined, isLoading: false };
+
+    render(
+      <HarnessAllModelsSection
+        harnessKind="codex"
+        displayName="Codex"
+        surface="local"
+      />,
+    );
+
+    expect(screen.queryByText("needs refresh")).toBeNull();
+    expect(screen.queryByText("refreshing…")).toBeNull();
+    expect(screen.queryByText(/^refreshed /)).toBeNull();
   });
 });
