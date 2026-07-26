@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
 from proliferate.constants.agent_gateway import (
-    AGENT_AUTH_HARNESS_KINDS,
+    AGENT_AUTH_GATEWAY_CAPABLE_HARNESS_KINDS,
     AGENT_GATEWAY_SUBJECT_KIND_ORGANIZATION,
     AGENT_GATEWAY_SUBJECT_KIND_USER,
     AGENT_GATEWAY_SYNC_STATUS_SYNCED,
@@ -41,9 +41,10 @@ logger = logging.getLogger(__name__)
 
 # Every gateway-capable harness gets its own access-group-scoped key at
 # enrollment sync (R2, agents-impl-plan.md §4 B2). Exactly
-# AGENT_AUTH_HARNESS_KINDS — cursor is absent from that tuple already (no
-# gateway recipe; native-only).
-_GATEWAY_CAPABLE_HARNESS_KINDS = AGENT_AUTH_HARNESS_KINDS
+# AGENT_AUTH_GATEWAY_CAPABLE_HARNESS_KINDS — cursor is excluded from that
+# tuple (no gateway recipe; native-only), unlike the broader
+# AGENT_AUTH_HARNESS_KINDS which cursor does belong to.
+_GATEWAY_CAPABLE_HARNESS_KINDS = AGENT_AUTH_GATEWAY_CAPABLE_HARNESS_KINDS
 
 # When a subject with an active grant has exhausted it, LiteLLM's ``max_budget``
 # must mirror a *near-zero* cap rather than "0" — our ``_parse_budget`` reads
