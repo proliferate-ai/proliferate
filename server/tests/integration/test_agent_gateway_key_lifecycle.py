@@ -46,6 +46,7 @@ class _StubLiteLLM:
         self.deleted_keys: list[str] = []
         self.token_counter = 0
         self.fail_delete = False
+        self.missing_keys: set[str] = set()
 
     def install(self, monkeypatch: pytest.MonkeyPatch) -> None:
         for target in (enrollment_service.litellm, usage_import_service.litellm):
@@ -95,6 +96,13 @@ class _StubLiteLLM:
     async def delete_virtual_key(self, *, key_or_token_id: str) -> None:
         if self.fail_delete:
             raise LiteLLMIntegrationError("litellm_request_failed", "key delete unavailable")
+        if key_or_token_id in self.missing_keys:
+            # Mirrors the real client's tolerance: LiteLLM reports the key
+            # missing (e.g. a prior delete that landed on the proxy but whose
+            # DB write then rolled back, so this same id is retried against a
+            # key that is already gone). The key being gone IS the desired
+            # end state, so this is swallowed rather than raised.
+            return
         self.deleted_keys.append(key_or_token_id)
 
     async def disable_virtual_key(self, *, key_or_token_id: str) -> None:
@@ -293,6 +301,40 @@ async def test_revocation_failure_marks_sync_failed_for_retry(
     assert recovered.virtual_key_id is None
     assert gateway_litellm.deleted_keys == ["token-legacy-unscoped"]
     assert enrollment_id == recovered.id
+
+
+@pytest.mark.asyncio
+async def test_revocation_retry_of_already_deleted_key_still_completes_sync(
+    db_session: AsyncSession,
+    gateway_litellm: _StubLiteLLM,
+) -> None:
+    """A retry against a key LiteLLM no longer has must not wedge the row.
+
+    Simulates the exact B5-R scenario: a prior ``/key/delete`` landed on the
+    proxy but the enrollment's DB transaction rolled back before recording
+    that, so the row still points at ``virtual_key_id`` on the next tick and
+    retries the delete. LiteLLM reports the key missing (non-2xx). Before the
+    fix that non-2xx propagated as ``LiteLLMIntegrationError`` and pinned the
+    row ``failed`` forever, since the key can never be found again. The fix
+    tolerates it (the key being gone IS the desired end state), so the sync
+    completes and the row reaches ``synced``.
+    """
+    user_id, enrollment_id = await _pre_b2_enrollment(db_session)
+    gateway_litellm.missing_keys.add("token-legacy-unscoped")
+
+    synced = await ensure_user_enrollment(db_session, user_id)
+
+    assert synced.sync_status == "synced"
+    assert synced.virtual_key_id is None
+    # The stub never records a "delete" for a key it reports missing, but the
+    # sync must still have gone through: no `failed` wedge, and the
+    # per-harness child keys were minted as normal.
+    assert gateway_litellm.deleted_keys == []
+    child_kinds = {
+        key.harness_kind
+        for key in await store.list_active_enrollment_keys(db_session, enrollment_id=enrollment_id)
+    }
+    assert child_kinds == set(AGENT_AUTH_HARNESS_KINDS)
 
 
 # --- 3. the fingerprint is compared, so the bump mechanism is real ----------

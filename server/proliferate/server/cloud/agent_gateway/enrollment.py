@@ -419,11 +419,13 @@ async def _revoke_parent_key(enrollment: AgentGatewayEnrollmentRecord) -> None:
     and its spend can no longer be attributed to a tracked key (the importer
     files it ``needs_review``, so it is never debited).
 
-    Best-effort in the sense that a LiteLLM outage must not wedge the sync
-    permanently — but never silent: the ``LiteLLMIntegrationError`` propagates
-    to ``_sync_enrollment``'s handler, which marks the row ``failed`` so the
-    backfill worker retries the sync (and this revocation) on a later tick.
-    Enrollments minted post-B2 carry no parent key and no-op here.
+    Best-effort: ``delete_virtual_key`` itself tolerates a missing key (the
+    key being gone IS the desired end state — e.g. a prior revoke that landed
+    on the proxy but whose DB write then rolled back, leaving this same
+    ``virtual_key_id`` to retry against a key LiteLLM no longer has), logging
+    and returning rather than raising. That tolerance is what keeps the sync
+    from wedging the row ``failed`` forever on a retry of an already-completed
+    delete. Enrollments minted post-B2 carry no parent key and no-op here.
     """
     if enrollment.virtual_key_id is None:
         return
@@ -477,9 +479,9 @@ async def _sync_enrollment(
         # only handle we have on it. Left alive it would be an all-model key
         # any client that already holds it keeps using, and its spend would
         # land `needs_review` (unresolvable to a tracked key) instead of being
-        # debited. A delete failure raises, so the row goes `failed` and the
-        # backfill worker retries the whole sync — never silently dropping the
-        # revocation.
+        # debited. `delete_virtual_key` tolerates the delete failing (missing
+        # key or transport error alike) rather than raising, so a retry of an
+        # already-completed revoke can never wedge the row `failed` forever.
         await _revoke_parent_key(enrollment)
         # The parent enrollment row no longer carries its own key material
         # (post-B2, model-gateway.md §Account model): keys live exclusively on

@@ -318,8 +318,21 @@ async def delete_virtual_key(*, key_or_token_id: str) -> None:
     that already holds it keep all-model access, and its spend would land
     ``needs_review`` (unattributable to any tracked key) instead of being
     debited.
+
+    A missing key is tolerated: the key being gone IS the desired end state,
+    and callers (e.g. sync retry after a delete that succeeded on the proxy
+    but whose DB write then rolled back) may call this again for a key
+    LiteLLM no longer has. Failing that retry would wedge recovery forever, so
+    we log and return regardless — mirroring ``rotate_virtual_key``'s
+    identical ``/key/delete`` call above.
     """
-    await _admin_request("POST", "/key/delete", json_body={"keys": [key_or_token_id]})
+    try:
+        await _admin_request("POST", "/key/delete", json_body={"keys": [key_or_token_id]})
+    except LiteLLMIntegrationError as error:
+        logger.warning(
+            "LiteLLM key delete failed; treating missing key as already deleted",
+            extra={"error_code": error.code, "status_code": error.status_code},
+        )
 
 
 async def delete_virtual_keys_by_alias(*, alias: str) -> int:

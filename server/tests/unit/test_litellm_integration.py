@@ -534,6 +534,43 @@ async def test_rotate_virtual_key_tolerates_missing_old_key(
 
 
 @pytest.mark.asyncio
+async def test_delete_virtual_key_tolerates_missing_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Mirrors rotate_virtual_key's tolerance: the key being gone IS the
+    # desired end state, so a delete retry against an already-deleted key
+    # (e.g. a prior delete that landed on the proxy but whose DB write then
+    # rolled back) must not raise, or the caller wedges forever.
+    client = _FakeAsyncClient(
+        [
+            _response(400, {"error": {"message": "key not found"}}),
+        ]
+    )
+    _install(monkeypatch, client)
+
+    await litellm.delete_virtual_key(key_or_token_id="hash-gone")
+
+    assert [request.url.path for request in client.requests] == ["/key/delete"]
+
+
+@pytest.mark.asyncio
+async def test_delete_virtual_key_happy_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = _FakeAsyncClient(
+        [
+            _response(200, {"deleted_keys": ["hash-old"]}),
+        ]
+    )
+    _install(monkeypatch, client)
+
+    await litellm.delete_virtual_key(key_or_token_id="hash-old")
+
+    assert [request.url.path for request in client.requests] == ["/key/delete"]
+    assert _request_body(client.requests[0]) == {"keys": ["hash-old"]}
+
+
+@pytest.mark.asyncio
 async def test_budget_updates_clear_cap_with_null(monkeypatch: pytest.MonkeyPatch) -> None:
     # max_budget=None sends an explicit null so LiteLLM removes the cap.
     client = _FakeAsyncClient(
