@@ -27,10 +27,11 @@ file lives at ``<anyharness home>/agent-auth/state.json`` (mode 0600):
       ]
     }
 
-``sources`` are the ENABLED rows only (disabled rows never leave the DB); a
-harness with no resolvable enabled source is omitted entirely. There is NO
-``model_catalog``, NO ``slot``, and NO ``provider`` on the wire — ``provider_hint``
-is a UI-only display field the renderer never emits.
+``sources`` are the ENABLED rows only (disabled rows never leave the DB). A
+harness whose every enabled row is unsatisfiable keeps its entry with
+``sources: []`` — absent means native, present-but-empty fails closed. There is
+NO ``model_catalog``, NO ``slot``, and NO ``provider`` on the wire —
+``provider_hint`` is a UI-only display field the renderer never emits.
 
 Two delivery surfaces share this one renderer: the cloud materialization worker
 writes the ``cloud`` surface into sandboxes, and ``GET /agent-gateway/state``
@@ -47,14 +48,15 @@ file without any row mutation, so change detection uses a sha256 fingerprint of
 the canonical JSON tracked in a server-owned manifest beside the home:
 unchanged fingerprint → no write.
 
-Empty state (contract §3): a harness absent from ``harnesses`` (or with empty
-``sources``) renders to the native delta at the read plane. When the whole
-surface resolves to zero harnesses, the state file and manifest are deleted so
-the reader finds no file (cloud launch fail-closes on its own — that is the Rust
-launcher's job, not this file's). A gateway source whose enrollment is not yet
-synced, or whose public base URL is unconfigured, is dropped (and logged) rather
-than raised, and a revoked ``api_key`` source's value simply vanishes at the next
-pass — one unsatisfiable source never aborts the whole reconcile.
+Empty state (contract §3): a harness ABSENT from ``harnesses`` renders to the
+native delta at the read plane; a harness PRESENT with ``sources: []`` fails the
+launch closed with a typed error. When the whole surface has no selection rows at
+all, the state file and manifest are deleted so the reader finds no file. A
+gateway source whose enrollment is not yet synced, or whose public base URL is
+unconfigured, is dropped (and logged) rather than raised, and a revoked
+``api_key`` source's value simply vanishes at the next pass — one unsatisfiable
+source never aborts the whole reconcile, but it does leave its harness entry
+empty rather than removing it.
 """
 
 from __future__ import annotations
@@ -120,23 +122,35 @@ class AgentAuthStateInputs:
 def render_agent_auth_state(inputs: AgentAuthStateInputs) -> tuple[dict[str, object], str]:
     """Render (state, fingerprint) as a v2 document from pre-scoped inputs.
 
-    The returned document is always a valid v2 shape. ``harnesses`` lists only
-    the harnesses that have at least one resolvable enabled source; a harness
-    whose every source is unsatisfiable (revoked key, unsynced gateway) is
-    omitted, which the read plane treats as native. The caller (cloud
-    materializer) deletes the file when ``harnesses`` is empty.
+    The returned document is always a valid v2 shape. ``harnesses`` lists every
+    harness the user has an enabled selection row for, INCLUDING one whose every
+    source turned out unsatisfiable (revoked key, unsynced gateway) — that entry
+    is kept with ``sources: []``, which the runtime reads as "a selection this
+    machine cannot honor" and refuses the launch. Only a harness with no
+    selection row at all is absent, which the read plane treats as native. The
+    caller deletes the file when ``harnesses`` is empty, i.e. when nothing is
+    selected on this surface at all.
 
     Never raises for an unsatisfiable source: it is dropped (and logged) so a
     single bad source can never abort the reconcile and leave stale key material
-    behind.
+    behind. Dropping a source is not the same as dropping its harness.
     """
-    by_harness: dict[str, list[tuple[str, dict[str, object]]]] = {}
+    # Every harness the user has SELECTED something for gets a key here, even
+    # when its value ends up empty. That distinction is the fail-closed law:
+    # `sources: []` says "you selected a route and we could not satisfy it", and
+    # the runtime refuses the launch; an ABSENT harness says "you never
+    # configured this one" and the runtime uses the native login. Dropping the
+    # harness entirely collapsed those two into one, so an exhausted gateway
+    # budget silently billed the user's personal provider account.
+    by_harness: dict[str, list[tuple[str, dict[str, object]]]] = {
+        selection.harness_kind: [] for selection in inputs.selections
+    }
     for selection in inputs.selections:
         source = _render_source(inputs, selection)
         if source is None:
             continue
         sort_key = (str(source["kind"]), selection.env_var_name or "")
-        by_harness.setdefault(selection.harness_kind, []).append((sort_key, source))
+        by_harness[selection.harness_kind].append((sort_key, source))
 
     harnesses: list[dict[str, object]] = []
     for harness_kind in sorted(by_harness):
@@ -357,9 +371,12 @@ async def materialize_agent_auth(
     manifest_path = paths.agent_auth_manifest_path()
 
     if not state["harnesses"]:
-        # No resolvable cloud sources: delete the file so the reader finds none
-        # (contract §3 — empty renders to native; cloud launch fail-closes in the
-        # runtime launcher, not here).
+        # NO SELECTIONS AT ALL for this surface — not "selections we could not
+        # satisfy". Since the renderer now keeps a `sources: []` entry for every
+        # selected harness, an empty `harnesses` list can only mean the user has
+        # selected nothing, and deleting the file is exactly right: absent means
+        # native. A surface with an unsatisfiable selection reaches the write
+        # below with `sources: []`, which the runtime fails closed on.
         await sandbox_io.remove_owned_files(
             ctx.target,
             operation_id=ctx.sandbox.id,
