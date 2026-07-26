@@ -6,7 +6,6 @@ import { useAgentLoginTerminalWorkflow } from "#product/hooks/agents/workflows/u
 
 const mocks = vi.hoisted(() => ({
   closeLoginTerminalMutate: vi.fn(),
-  cloudSandboxGatewayRuntimeUrl: vi.fn(),
   getSandboxGatewayAccessToken: vi.fn(),
   invalidateAgentLaunchReadinessResources: vi.fn(),
   startLoginTerminalMutate: vi.fn(),
@@ -87,7 +86,7 @@ describe("useAgentLoginTerminalWorkflow", () => {
     expect(result.current.sessionsByKind.claude?.terminal?.id).toBe("term-1");
   });
 
-  it("cloud surface: resolves baseUrl via cloudSandboxGatewayRuntimeUrl and mints a fresh token per open", async () => {
+  it("cloud surface: resolves baseUrl from the runtime context and mints a fresh token per open", async () => {
     mocks.useAnyHarnessRuntimeContext.mockReturnValue({
       runtimeUrl: "https://api.test/v1/gateway/cloud-sandbox/anyharness",
       authToken: undefined,

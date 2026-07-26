@@ -153,7 +153,6 @@ Two carve-outs:
   because it lacks *any* credential path — the api_key path exists and is
   legal, it just does not make the installed binary itself authenticate.
 
-
 Install topology per surface is then only about who pays the first
 download:
 

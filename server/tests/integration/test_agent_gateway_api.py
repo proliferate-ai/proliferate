@@ -380,10 +380,13 @@ class TestAgentAuthSelections:
     @pytest.mark.asyncio
     async def test_cursor_accepts_api_key_source(self, client: AsyncClient) -> None:
         # Cursor DOES take an api_key selection end to end (its CURSOR_API_KEY
-        # slot) — only the gateway route is closed to it. And since cursor is
-        # not gateway-capable, the store must NOT inject the disabled gateway
-        # revision-marker row other harnesses get (m7 fix) — the response is
-        # exactly the one api_key row, nothing else.
+        # slot) — only the gateway route is closed to it. The store still
+        # injects the disabled gateway revision-marker row for cursor too:
+        # the marker's job is keeping the scope's rendered revision
+        # (max(updated_at) across all rows) monotonic, which is harness-
+        # agnostic — cursor can't select the gateway source, but it still
+        # needs the marker so deleting/replacing its api_key row can't move
+        # the revision backwards.
         _, headers = await _authed_user(client)
         created = await _create_key(client, headers)
         response = await _put_selections(
@@ -401,11 +404,14 @@ class TestAgentAuthSelections:
             ],
         )
         assert response.status_code == 200, response.text
-        [selection] = response.json()
-        assert selection["harnessKind"] == "cursor"
-        assert selection["sourceKind"] == "api_key"
-        assert selection["envVarName"] == "CURSOR_API_KEY"
-        assert selection["enabled"] is True
+        rows = response.json()
+        api_row = next(r for r in rows if r["sourceKind"] == "api_key")
+        assert api_row["harnessKind"] == "cursor"
+        assert api_row["envVarName"] == "CURSOR_API_KEY"
+        assert api_row["enabled"] is True
+        marker_row = next(r for r in rows if r["sourceKind"] == "gateway")
+        assert marker_row["harnessKind"] == "cursor"
+        assert marker_row["enabled"] is False
 
     @pytest.mark.asyncio
     async def test_cursor_accepts_api_key_source_on_cloud_surface(
@@ -430,10 +436,13 @@ class TestAgentAuthSelections:
             ],
         )
         assert response.status_code == 200, response.text
-        [selection] = response.json()
-        assert selection["harnessKind"] == "cursor"
-        assert selection["sourceKind"] == "api_key"
-        assert selection["enabled"] is True
+        rows = response.json()
+        api_row = next(r for r in rows if r["sourceKind"] == "api_key")
+        assert api_row["harnessKind"] == "cursor"
+        assert api_row["enabled"] is True
+        marker_row = next(r for r in rows if r["sourceKind"] == "gateway")
+        assert marker_row["harnessKind"] == "cursor"
+        assert marker_row["enabled"] is False
 
     @pytest.mark.asyncio
     async def test_unknown_harness_is_400(self, client: AsyncClient) -> None:

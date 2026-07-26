@@ -18,7 +18,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.agent_gateway import (
     AGENT_API_KEY_STATUS_ACTIVE,
-    AGENT_AUTH_GATEWAY_CAPABLE_HARNESS_KINDS,
     AGENT_AUTH_HARNESS_KINDS,
     AGENT_AUTH_SOURCE_API_KEY,
     AGENT_AUTH_SOURCE_GATEWAY,
@@ -120,18 +119,17 @@ async def put_auth_selections(
         if source.api_key_id is not None:
             referenced_key_ids.add(source.api_key_id)
 
-    # For a gateway-capable harness, keep a disabled gateway row even when an
-    # older/direct client sends the native state as ``sources=[]``. Besides
-    # representing no effective source, this row is the scope's durable
-    # revision marker: deleting the final row would reset the rendered
-    # revision to zero (or an older sibling scope), causing an AnyHarness
-    # runtime to reject the clear as stale and retain its prior gateway route.
-    # A harness with no gateway recipe (cursor) can never carry this row —
-    # the validator rejects a gateway source for it outright — so inserting
-    # one here would just create dead state; the marker's revision-keeping
-    # job is unnecessary for a harness whose route can never be "gateway".
+    # Keep a disabled gateway row even when an older/direct client sends the
+    # native state as ``sources=[]``, regardless of whether this harness kind
+    # is gateway-capable. Besides representing no effective source, this row
+    # is the scope's durable revision marker: deleting the final row would
+    # reset the rendered revision to zero (or an older sibling scope), causing
+    # an AnyHarness runtime to reject the clear as stale and retain its prior
+    # route. Surface-revision monotonicity is harness-agnostic — it must hold
+    # even for a harness (e.g. cursor) that can never select the gateway
+    # source itself.
     gateway_key = _source_key(AGENT_AUTH_SOURCE_GATEWAY, None)
-    if gateway_key not in desired and harness_kind in AGENT_AUTH_GATEWAY_CAPABLE_HARNESS_KINDS:
+    if gateway_key not in desired:
         desired[gateway_key] = DesiredAuthSource(
             source_kind=AGENT_AUTH_SOURCE_GATEWAY,
             enabled=False,
