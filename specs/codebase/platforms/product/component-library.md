@@ -58,10 +58,11 @@ area** — a component's name describes what it does, not where it is used:
   them.
 - **`patterns/`** — opinionated reusable compositions one level up from
   primitives: `ModalShell` (built on `Dialog`), `ConfirmationDialog` (built on
-  `ModalShell` + `Button`), `CommandPalette` (built on `Command`),
-  `EmptyState`, `SidebarNavRow`, composer controls, and similar. A pattern is
-  named for the job it does (`ListRow`, `PageHeader`), never for the feature
-  that first needed it.
+  `ModalShell` + `Button`), `CommandPalette` (built directly on `cmdk`, not on
+  the `Command` primitive — see the `Command` row below), `EmptyState`,
+  `SidebarNavRow`, composer controls, and similar. A pattern is named for the
+  job it does (`ListRow`, `PageHeader`), never for the feature that first
+  needed it.
 - **`icons/`** — icon sets: a general glyph barrel plus named sets scoped to a
   specific surface (command palette) or brand (Proliferate mark, auth/model
   provider glyphs). Icon sets are barrels of glyphs, not components in the
@@ -134,7 +135,7 @@ sample of it.
 | `Button` | [Button.tsx](../../../../apps/packages/ui/src/primitives/Button.tsx) | The button primitive — variant/size/loading/destructive API every other button-shaped component composes. |
 | `Checkbox` | [Checkbox.tsx](../../../../apps/packages/ui/src/primitives/Checkbox.tsx) | One-line re-export of `checkbox-primitive` — see Collision pairs below. |
 | `checkbox-primitive` | [checkbox-primitive.tsx](../../../../apps/packages/ui/src/primitives/checkbox-primitive.tsx) | Raw `@radix-ui/react-checkbox` wrapper — see Collision pairs below. |
-| `Command` | [Command.tsx](../../../../apps/packages/ui/src/primitives/Command.tsx) | Raw `cmdk` wrapper; the fuzzy-list primitive `CommandPalette` composes. |
+| `Command` | [Command.tsx](../../../../apps/packages/ui/src/primitives/Command.tsx) | Raw `cmdk` wrapper. `CommandPalette` (below) imports `cmdk` directly rather than this wrapper; today's only consumer is [WorkspacesCommandList.tsx](../../../../apps/packages/product-ui/src/workspaces/WorkspacesCommandList.tsx) — two parallel `cmdk` consumers, a transitional gap, not a migration in progress. |
 | `Dialog` | [Dialog.tsx](../../../../apps/packages/ui/src/primitives/Dialog.tsx) | Raw `@radix-ui/react-dialog` wrapper; `ModalShell` composes it. |
 | `DropdownMenu` | [DropdownMenu.tsx](../../../../apps/packages/ui/src/primitives/DropdownMenu.tsx) | Raw `@radix-ui/react-dropdown-menu` wrapper — see DropdownMenu status below. |
 | `FixedPositionLayer` | [FixedPositionLayer.tsx](../../../../apps/packages/ui/src/primitives/FixedPositionLayer.tsx) | Fixed-position wrapper for viewport-anchored overlay content. |
@@ -195,7 +196,7 @@ grandfathered.
 | --- | --- | --- |
 | `AuthProviderButton` | [AuthProviderButton.tsx](../../../../apps/packages/ui/src/patterns/AuthProviderButton.tsx) | Auth-provider sign-in button with a loading state, composes `Spinner`. |
 | `AutoHideScrollArea` | [AutoHideScrollArea.tsx](../../../../apps/packages/ui/src/patterns/AutoHideScrollArea.tsx) | Scroll area whose scrollbar affordance auto-hides. |
-| `CommandPalette` | [CommandPalette.tsx](../../../../apps/packages/ui/src/patterns/CommandPalette.tsx) | Command-palette shell/context, built on `Command`. |
+| `CommandPalette` | [CommandPalette.tsx](../../../../apps/packages/ui/src/patterns/CommandPalette.tsx) | Command-palette shell/context, built directly on `cmdk` (not on the `Command` primitive — see `Command` row above). |
 | `ComposerActionButton` | [ComposerActionButton.tsx](../../../../apps/packages/ui/src/patterns/ComposerActionButton.tsx) | Composer primary-action button, composes `Button`. |
 | `ComposerControlButton` | [ComposerControlButton.tsx](../../../../apps/packages/ui/src/patterns/ComposerControlButton.tsx) | Composer control pill (icon/label/detail/trailing/active), composes `Button`. |
 | `ComposerTextarea` | [ComposerTextarea.tsx](../../../../apps/packages/ui/src/patterns/ComposerTextarea.tsx) | Composer-sized text input, composes `Textarea`. |
