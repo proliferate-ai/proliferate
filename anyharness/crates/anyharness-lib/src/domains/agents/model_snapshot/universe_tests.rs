@@ -8,7 +8,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use super::test_support::{
-    gateway_context, gateway_state, CountingPlanProducer, FakeRunner, FixedTargets, TempRuntimeHome,
+    gateway_context, gateway_state, wait_until, CountingPlanProducer, FakeRunner, FixedTargets,
+    TempRuntimeHome,
 };
 use super::{ModelSnapshotService, ProbeEngineConfig};
 
@@ -198,10 +199,10 @@ async fn the_universe_read_never_waits_on_an_in_flight_probe() {
         let service = service.clone();
         async move { service.refresh_now("opencode", "gateway").await }
     });
-    // Let the attempt reach the blocked runner.
-    for _ in 0..16 {
-        tokio::task::yield_now().await;
-    }
+    // Wait for the attempt to actually reach the blocked runner. A fixed yield count
+    // cannot establish that: the spawn above may be on another worker, so the window
+    // this test needs (a probe genuinely in flight) would not be open.
+    wait_until("a probe in flight", || runner.count() >= 1).await;
 
     // The read returns immediately with the pre-probe answer rather than waiting.
     let during = tokio::time::timeout(

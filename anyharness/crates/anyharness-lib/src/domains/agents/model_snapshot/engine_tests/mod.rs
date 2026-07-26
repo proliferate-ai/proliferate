@@ -22,8 +22,8 @@ use super::document::{read_document, AttemptOutcome};
 use super::probe::ProbeError;
 #[allow(unused_imports)]
 use super::test_support::{
-    env_context, gateway_context, gateway_state, CountingPlanProducer, FakeBehavior, FakeRunner,
-    FixedTargets, TempRuntimeHome,
+    env_context, gateway_context, gateway_state, wait_until, CountingPlanProducer, FakeBehavior,
+    FakeRunner, FixedTargets, TempRuntimeHome,
 };
 #[allow(unused_imports)]
 use super::{ModelSnapshotService, PokeReason, ProbeEngineConfig, ProbeEngineMode, RefreshError};

@@ -13,7 +13,8 @@ use std::time::Duration;
 
 use super::document::read_document;
 use super::test_support::{
-    gateway_context, gateway_state, CountingPlanProducer, FakeRunner, FixedTargets, TempRuntimeHome,
+    gateway_context, gateway_state, wait_until, CountingPlanProducer, FakeRunner, FixedTargets,
+    TempRuntimeHome,
 };
 use super::{ModelSnapshotService, PokeReason, ProbeEngineConfig};
 use crate::domains::agents::installer::progress::InstallProgressPhase;
@@ -54,11 +55,27 @@ fn two_harness_engine(
     (home, service, runner)
 }
 
-/// Pokes are fire-and-forget `tokio::spawn`s; give them room to land.
-async fn drain() {
-    for _ in 0..32 {
-        tokio::task::yield_now().await;
-    }
+/// Wait for the pokes' effect: `runner.count()` reaches `expected`.
+///
+/// Not a fixed yield count — the pokes are `tokio::spawn`s, so on a multi-thread
+/// runtime yielding proves nothing about another worker's progress.
+async fn expect_probes(runner: &FakeRunner, expected: usize) {
+    wait_until(&format!("{expected} probes"), || {
+        runner.count() >= expected
+    })
+    .await;
+    assert_eq!(runner.count(), expected, "more probes fired than expected");
+}
+
+/// Prove a poke caused NO probe. There is no effect to wait for, so this waits out a
+/// window long enough for one to have landed and then asserts the count is unchanged.
+async fn expect_no_further_probes(runner: &FakeRunner, expected: usize) {
+    tokio::time::sleep(Duration::from_millis(150)).await;
+    assert_eq!(
+        runner.count(),
+        expected,
+        "a gated poke must not have probed"
+    );
 }
 
 /// **The startup poke** (site a): every eligible harness, one pass, and a machine
@@ -71,21 +88,15 @@ async fn the_startup_poke_covers_every_eligible_harness_and_no_ops_when_fresh() 
     let (home, service, runner) = two_harness_engine("poke-startup");
 
     service.clone().poke_all(PokeReason::Startup);
-    drain().await;
+    expect_probes(&runner, 2).await;
 
-    assert_eq!(runner.count(), 2, "both installed harnesses were probed");
     assert!(read_document(home.path(), "opencode").is_some());
     assert!(read_document(home.path(), "grok").is_some());
 
     // A second startup pass on the same machine: every entry is fresh, so the gate
     // admits nothing. "Running it twice does nothing twice."
     service.clone().poke_all(PokeReason::Startup);
-    drain().await;
-    assert_eq!(
-        runner.count(),
-        2,
-        "a fresh machine must do no work on the next startup pass"
-    );
+    expect_no_further_probes(&runner, 2).await;
 }
 
 /// The startup poke is a no-op on a runtime with no engine attached, which is the
@@ -110,7 +121,7 @@ async fn an_agent_runtime_without_an_engine_pokes_nothing() {
     // The assertion is that this neither panics nor writes: no engine, no probe, no
     // document, and specifically no filesystem lock taken on the home.
     runtime.poke_model_snapshots(PokeReason::Startup);
-    drain().await;
+    tokio::time::sleep(Duration::from_millis(150)).await;
     assert!(read_document(home.path(), "opencode").is_none());
     assert!(!home.path().join(".probe-engine.lock").exists());
 }
@@ -155,9 +166,8 @@ async fn an_install_poke_probes_only_the_harness_that_finished() {
     service
         .clone()
         .poke_harness("grok", PokeReason::InstallCompleted);
-    drain().await;
+    expect_probes(&runner, 1).await;
 
-    assert_eq!(runner.count(), 1);
     assert!(read_document(home.path(), "grok").is_some());
     assert!(
         read_document(home.path(), "opencode").is_none(),
@@ -190,9 +200,7 @@ async fn poking_an_uninstalled_harness_records_nothing() {
     service
         .clone()
         .poke_harness("opencode", PokeReason::InstallCompleted);
-    drain().await;
-
-    assert_eq!(runner.count(), 0);
+    expect_no_further_probes(&runner, 0).await;
     assert!(read_document(home.path(), "opencode").is_none());
 }
 
@@ -213,8 +221,7 @@ async fn an_auth_apply_reprobes_only_the_harness_whose_credential_moved() {
     service
         .clone()
         .poke_harnesses(&both, PokeReason::AuthApplied);
-    drain().await;
-    assert_eq!(runner.count(), 2, "first apply observes both");
+    expect_probes(&runner, 2).await;
 
     // Rotate ONLY opencode's key, at a higher revision, and apply again naming both.
     home.write_state_json(&gateway_state(
@@ -224,13 +231,8 @@ async fn an_auth_apply_reprobes_only_the_harness_whose_credential_moved() {
     service
         .clone()
         .poke_harnesses(&both, PokeReason::AuthApplied);
-    drain().await;
-
-    assert_eq!(
-        runner.count(),
-        3,
-        "exactly one re-probe: grok's fingerprint did not move, though the revision did"
-    );
+    expect_probes(&runner, 3).await;
+    expect_no_further_probes(&runner, 3).await;
 }
 
 /// **The auth-cleared poke** (the extra site): clearing the state file changes every
@@ -244,20 +246,14 @@ async fn clearing_auth_reprobes_every_harness() {
     let (home, service, runner) = two_harness_engine("poke-auth-cleared");
 
     service.clone().poke_all(PokeReason::Startup);
-    drain().await;
-    assert_eq!(runner.count(), 2);
+    expect_probes(&runner, 2).await;
 
     // What `clear_state_file` leaves behind: no state at all.
     let state_path = crate::domains::agents::route_auth::state::state_file_path(home.path());
     std::fs::remove_file(&state_path).expect("clear the state file");
 
     service.clone().poke_all(PokeReason::AuthCleared);
-    drain().await;
-    assert_eq!(
-        runner.count(),
-        4,
-        "every harness's fingerprint moved when its credentials vanished"
-    );
+    expect_probes(&runner, 4).await;
 }
 
 /// **The session-launch backstop** (site e): a launch on a machine with a fresh
@@ -275,8 +271,7 @@ async fn the_launch_backstop_self_heals_a_gap_and_is_free_when_fresh() {
     service
         .clone()
         .poke_harness("opencode", PokeReason::SessionLaunch);
-    drain().await;
-    assert_eq!(runner.count(), 1);
+    expect_probes(&runner, 1).await;
     assert!(read_document(home.path(), "opencode").is_some());
 
     // Every subsequent launch of the same harness is free.
@@ -285,10 +280,5 @@ async fn the_launch_backstop_self_heals_a_gap_and_is_free_when_fresh() {
             .clone()
             .poke_harness("opencode", PokeReason::SessionLaunch);
     }
-    drain().await;
-    assert_eq!(
-        runner.count(),
-        1,
-        "launching against a fresh entry must never spawn a probe"
-    );
+    expect_no_further_probes(&runner, 1).await;
 }

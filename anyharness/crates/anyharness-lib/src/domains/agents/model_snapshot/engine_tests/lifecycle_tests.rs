@@ -460,10 +460,9 @@ async fn pokes_fan_out_to_exactly_the_named_targets() {
     service
         .clone()
         .poke_harnesses(&["grok".to_string()], PokeReason::AuthApplied);
-    // Pokes are fire-and-forget spawns; drain them.
-    for _ in 0..8 {
-        tokio::task::yield_now().await;
-    }
+    // Pokes are fire-and-forget spawns, so wait for the effect rather than yielding a
+    // fixed number of times (which proves nothing on a multi-thread runtime).
+    wait_until("grok probed", || runner.count() >= 1).await;
     assert_eq!(runner.count(), 1, "only the named harness was poked");
     assert!(read_document(home.path(), "grok").is_some());
     assert!(
@@ -472,9 +471,10 @@ async fn pokes_fan_out_to_exactly_the_named_targets() {
     );
 
     service.clone().poke_all(PokeReason::AuthCleared);
-    for _ in 0..16 {
-        tokio::task::yield_now().await;
-    }
+    wait_until("opencode probed", || {
+        read_document(home.path(), "opencode").is_some()
+    })
+    .await;
     let opencode = read_document(home.path(), "opencode").expect("opencode document");
     assert_eq!(
         opencode.entries.len(),

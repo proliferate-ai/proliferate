@@ -107,10 +107,18 @@ async fn a_probe_waiting_for_a_slot_reports_queued_not_idle() {
                 .await;
         })
     };
-    // Let both reach the engine while the runner is still gated.
-    for _ in 0..8 {
-        tokio::task::yield_now().await;
-    }
+    // Wait for both to reach the engine while the runner is still gated. A fixed
+    // yield count cannot do this: the spawns above may be on other workers.
+    wait_until("both contexts admitted", || {
+        let status = service.status("opencode", chrono::Utc::now());
+        status
+            .contexts
+            .iter()
+            .filter(|context| context.state != super::super::status::LiveState::Idle)
+            .count()
+            == 2
+    })
+    .await;
 
     let status = service.status("opencode", chrono::Utc::now());
     let states: Vec<super::super::status::LiveState> =

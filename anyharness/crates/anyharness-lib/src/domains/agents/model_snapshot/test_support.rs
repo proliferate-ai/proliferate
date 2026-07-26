@@ -394,3 +394,26 @@ pub(crate) fn snapshot(harness_kind: &str, auth_context: &str, models: &[String]
         warnings: Vec::new(),
     }
 }
+
+/// Wait until `condition` holds, or fail after a generous bound.
+///
+/// Every poke is a fire-and-forget `tokio::spawn`, so a test that wants to observe its
+/// effect has to wait for another task. A fixed `yield_now` loop does NOT do that: on
+/// a multi-thread runtime the spawned task may be on another worker, so yielding N
+/// times guarantees nothing about its progress — the count only ever happens to be
+/// enough on a fast, idle machine. That is precisely how two of these tests passed
+/// locally and failed on CI once neighbouring tests added contention.
+///
+/// The bound is deliberately far larger than the work (which is microseconds against a
+/// fake runner): a real failure fails the assertion inside `condition` at the call
+/// site, and only a genuinely stuck engine reaches the timeout.
+pub(crate) async fn wait_until(label: &str, mut condition: impl FnMut() -> bool) {
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    while !condition() {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "timed out waiting for: {label}"
+        );
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+}
