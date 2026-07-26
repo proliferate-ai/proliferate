@@ -34,13 +34,13 @@ export const currentTokenDispositions = {
   "--animate-blink-cursor": null,
   "--animate-popover-in": "--animate-popover-in",
   "--codex-diffs-addition-number": null,
-  "--codex-diffs-context-number": "--codex-diffs-context-number",
-  "--codex-diffs-context-surface": "--codex-diffs-context-surface",
+  "--codex-diffs-context-number": "--diff-view-context-number",
+  "--codex-diffs-context-surface": "--diff-view-context-surface",
   "--codex-diffs-deletion-number": null,
-  "--codex-diffs-header-surface": "--codex-diffs-header-surface",
-  "--codex-diffs-hover-surface": "--codex-diffs-hover-surface",
-  "--codex-diffs-separator-surface": "--codex-diffs-separator-surface",
-  "--codex-diffs-surface": "--codex-diffs-surface",
+  "--codex-diffs-header-surface": "--diff-view-header-surface",
+  "--codex-diffs-hover-surface": "--diff-view-hover-surface",
+  "--codex-diffs-separator-surface": "--diff-view-separator-surface",
+  "--codex-diffs-surface": "--diff-view-surface",
   "--color-accent": "--color-accent",
   "--color-accent-foreground": "--color-accent-foreground",
   "--color-app-switcher-bg": null,
@@ -335,36 +335,36 @@ export const themeTokens = {
     light: "popover-in var(--duration-enter) var(--ease-out-quint)",
     provenance: "[RETUNE:motion/roles]",
   },
-  "--codex-diffs-context-number": {
-    dark: "color-mix(in lab, var(--codex-diffs-surface) 98.5%, var(--diffs-mixer))",
-    light: "color-mix(in lab, var(--codex-diffs-surface) 98.5%, var(--diffs-mixer))",
+  "--diff-view-context-number": {
+    dark: "color-mix(in lab, var(--diff-view-surface) 98.5%, var(--diffs-mixer))",
+    light: "color-mix(in lab, var(--diff-view-surface) 98.5%, var(--diffs-mixer))",
     themeFallback: "#292929",
     provenance: "[SHIPPED]",
   },
-  "--codex-diffs-context-surface": {
-    dark: "color-mix(in srgb, var(--codex-diffs-surface) 94%, var(--color-diff-main-surface))",
-    light: "color-mix(in srgb, var(--codex-diffs-surface) 94%, var(--color-diff-main-surface))",
+  "--diff-view-context-surface": {
+    dark: "color-mix(in srgb, var(--diff-view-surface) 94%, var(--color-diff-main-surface))",
+    light: "color-mix(in srgb, var(--diff-view-surface) 94%, var(--color-diff-main-surface))",
     themeFallback: "#252525",
     provenance: "[SHIPPED]",
   },
-  "--codex-diffs-header-surface": {
+  "--diff-view-header-surface": {
     dark: "var(--color-diff-header-surface)",
     light: "var(--color-diff-header-surface)",
     provenance: "[SHIPPED]",
   },
-  "--codex-diffs-hover-surface": {
-    dark: "color-mix(in srgb, var(--codex-diffs-surface) 92%, var(--color-diff-main-surface))",
-    light: "color-mix(in srgb, var(--codex-diffs-surface) 92%, var(--color-diff-main-surface))",
+  "--diff-view-hover-surface": {
+    dark: "color-mix(in srgb, var(--diff-view-surface) 92%, var(--color-diff-main-surface))",
+    light: "color-mix(in srgb, var(--diff-view-surface) 92%, var(--color-diff-main-surface))",
     themeFallback: "#252525",
     provenance: "[SHIPPED]",
   },
-  "--codex-diffs-separator-surface": {
-    dark: "color-mix(in srgb, var(--codex-diffs-surface) 94%, var(--color-foreground))",
-    light: "color-mix(in srgb, var(--codex-diffs-surface) 94%, var(--color-foreground))",
+  "--diff-view-separator-surface": {
+    dark: "color-mix(in srgb, var(--diff-view-surface) 94%, var(--color-foreground))",
+    light: "color-mix(in srgb, var(--diff-view-surface) 94%, var(--color-foreground))",
     themeFallback: "#333333",
     provenance: "[SHIPPED]",
   },
-  "--codex-diffs-surface": {
+  "--diff-view-surface": {
     dark: "var(--color-diff-surface)",
     light: "var(--color-diff-surface)",
     provenance: "[SHIPPED]",
@@ -1106,7 +1106,7 @@ export const themeTokens = {
   },
   "--diffs-bg-addition-hover-override": {
     dark: "color-mix(in srgb, var(--color-diff-main-surface) 82%, #00a240)",
-    light: "color-mix(in srgb, var(--codex-diffs-surface) 78%, var(--diffs-addition-color-override))",
+    light: "color-mix(in srgb, var(--diff-view-surface) 78%, var(--diffs-addition-color-override))",
     themeFallback: "#14311f",
     provenance: "[SHIPPED]",
   },
@@ -1118,18 +1118,18 @@ export const themeTokens = {
   },
   "--diffs-bg-addition-override": {
     dark: "color-mix(in srgb, var(--color-diff-main-surface) 88%, #00a240)",
-    light: "color-mix(in srgb, var(--codex-diffs-surface) 84%, var(--diffs-addition-color-override))",
+    light: "color-mix(in srgb, var(--diff-view-surface) 84%, var(--diffs-addition-color-override))",
     themeFallback: "#15291d",
     provenance: "[SHIPPED]",
   },
   "--diffs-bg-context-override": {
-    dark: "var(--codex-diffs-context-surface)",
-    light: "var(--codex-diffs-context-surface)",
+    dark: "var(--diff-view-context-surface)",
+    light: "var(--diff-view-context-surface)",
     provenance: "[SHIPPED]",
   },
   "--diffs-bg-deletion-hover-override": {
     dark: "color-mix(in srgb, var(--color-diff-main-surface) 82%, #e02e2a)",
-    light: "color-mix(in srgb, var(--codex-diffs-surface) 78%, var(--diffs-deletion-color-override))",
+    light: "color-mix(in srgb, var(--diff-view-surface) 78%, var(--diffs-deletion-color-override))",
     themeFallback: "#3c1c1b",
     provenance: "[SHIPPED]",
   },
@@ -1141,13 +1141,13 @@ export const themeTokens = {
   },
   "--diffs-bg-deletion-override": {
     dark: "color-mix(in srgb, var(--color-diff-main-surface) 88%, #e02e2a)",
-    light: "color-mix(in srgb, var(--codex-diffs-surface) 84%, var(--diffs-deletion-color-override))",
+    light: "color-mix(in srgb, var(--diff-view-surface) 84%, var(--diffs-deletion-color-override))",
     themeFallback: "#301b1a",
     provenance: "[SHIPPED]",
   },
   "--diffs-bg-separator-override": {
-    dark: "var(--codex-diffs-separator-surface)",
-    light: "var(--codex-diffs-separator-surface)",
+    dark: "var(--diff-view-separator-surface)",
+    light: "var(--diff-view-separator-surface)",
     provenance: "[SHIPPED]",
   },
   "--diffs-deletion-color-override": {

@@ -44,7 +44,7 @@ const SECTION_STYLE = {
   // everything else uses is --color-background.
   backgroundColor: "var(--color-background)",
   "--diffs-bg-context-override": "var(--color-background)",
-  "--codex-diffs-context-number": "var(--color-background)",
+  "--diff-view-context-number": "var(--color-background)",
 } as CSSProperties;
 const STICKY_HEADER_CLASS =
   "sticky top-0 z-10 cursor-pointer select-none bg-[color-mix(in_srgb,var(--color-diff-sidebar-file-header-surface)_97%,transparent)]";
@@ -64,7 +64,7 @@ const GAP_SEPARATOR_CSS = `
   content: "";
   position: absolute;
   inset: 3px 0;
-  background: var(--codex-diffs-separator-surface);
+  background: var(--diff-view-separator-surface);
   pointer-events: none;
 }
 [data-git-review-v2] .diff-gutter-cell[data-separator]::before {

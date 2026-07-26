@@ -41,14 +41,14 @@
 }
 
 .file-source-view {
-  --codex-diffs-surface: var(--color-background);
-  --diffs-bg: var(--codex-diffs-surface);
+  --diff-view-surface: var(--color-background);
+  --diffs-bg: var(--diff-view-surface);
   --file-source-row-hover: color-mix(in srgb, var(--color-foreground) 4.5%, transparent);
   --file-source-line-number: color-mix(in srgb, var(--color-foreground) 36%, transparent);
   --file-source-line-number-hover: color-mix(in srgb, var(--color-foreground) 60%, transparent);
   --file-source-content-gap: 0.625rem;
   --file-source-content-padding-inline: 0.125rem;
-  background: var(--codex-diffs-surface);
+  background: var(--diff-view-surface);
 }
 
 .file-source-scroll {
@@ -70,7 +70,7 @@
 }
 
 .file-source-view [data-file] {
-  background: var(--codex-diffs-surface);
+  background: var(--diff-view-surface);
   color: var(--diffs-fg);
 }
 
@@ -168,10 +168,10 @@ mark.codex-thread-find-active {
 }
 
 .composer-diff-simple-line {
-  --codex-diffs-surface: var(--color-diff-main-surface);
-  --codex-diffs-header-surface: var(--codex-diffs-surface);
-  --codex-diffs-empty-surface: color-mix(in srgb, var(--codex-diffs-surface) 96%, var(--color-foreground));
-  --diffs-bg: var(--codex-diffs-surface);
+  --diff-view-surface: var(--color-diff-main-surface);
+  --diff-view-header-surface: var(--diff-view-surface);
+  --diff-view-empty-surface: color-mix(in srgb, var(--diff-view-surface) 96%, var(--color-foreground));
+  --diffs-bg: var(--diff-view-surface);
   background-color: var(--color-diff-code-surface);
   scrollbar-color: var(--color-scrollbar-thumb) transparent;
 }
@@ -182,11 +182,11 @@ mark.codex-thread-find-active {
 
 [data-diff-surface="chat"] .composer-diff-simple-line,
 [data-diff-surface="sidebar"] .composer-diff-simple-line {
-  --codex-diffs-surface: var(--color-diff-main-surface);
-  --codex-diffs-context-surface: transparent;
-  --codex-diffs-context-number: transparent;
-  --codex-diffs-empty-surface: transparent;
-  --codex-diffs-separator-surface: transparent;
+  --diff-view-surface: var(--color-diff-main-surface);
+  --diff-view-context-surface: transparent;
+  --diff-view-context-number: transparent;
+  --diff-view-empty-surface: transparent;
+  --diff-view-separator-surface: transparent;
   --diffs-bg-context-override: transparent;
   --diffs-bg-separator-override: transparent;
   background-color: var(--color-diff-code-surface);
@@ -213,7 +213,7 @@ mark.codex-thread-find-active {
    their own treatment. */
 [data-git-review-document] {
   --diffs-bg-context-override: var(--color-background);
-  --codex-diffs-context-number: var(--color-background);
+  --diff-view-context-number: var(--color-background);
   /* Separator cells draw their strip via ::before below; the cell itself must
      stay transparent or the strip reads as a full-width band. This var feeds
      the later .composer-diff-simple-line [data-separator] background rule. */
@@ -229,7 +229,7 @@ mark.codex-thread-find-active {
   content: "";
   position: absolute;
   inset: 3px 0;
-  background: var(--codex-diffs-separator-surface);
+  background: var(--diff-view-separator-surface);
   pointer-events: none;
 }
 
@@ -290,11 +290,11 @@ mark.codex-thread-find-active {
 }
 
 .composer-diff-simple-line .diff-content-cell[data-empty-side] {
-  background-color: var(--codex-diffs-empty-surface);
+  background-color: var(--diff-view-empty-surface);
 }
 
 .composer-diff-simple-line .diff-gutter-cell[data-empty-side] {
-  background-color: var(--codex-diffs-context-number);
+  background-color: var(--diff-view-context-number);
 }
 
 .composer-diff-simple-line .diff-gutter-cell {
@@ -302,7 +302,7 @@ mark.codex-thread-find-active {
 }
 
 .composer-diff-simple-line .diff-gutter-cell[data-line-type="context"] {
-  background-color: var(--codex-diffs-context-number);
+  background-color: var(--diff-view-context-number);
   color: color-mix(in srgb, var(--diffs-fg) 35%, transparent);
 }
 

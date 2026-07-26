@@ -200,7 +200,7 @@ export function DiffContextExpander({
   return (
     <div
       data-separator="gap-expander"
-      className="diff-gap-expander flex min-h-[var(--diffs-line-height)] items-center bg-[var(--codex-diffs-separator-surface)]"
+      className="diff-gap-expander flex min-h-[var(--diffs-line-height)] items-center bg-[var(--diff-view-separator-surface)]"
     >
       {/* Gutter-width area for expand controls */}
       <div className="flex w-[var(--diffs-column-number-width,1.5rem)] shrink-0 items-center justify-center">
@@ -317,7 +317,7 @@ export function DiffGapInfoRow({
   return (
     <div
       data-separator="gap-info"
-      className="flex min-h-[var(--diffs-line-height)] items-center bg-[var(--codex-diffs-separator-surface)]"
+      className="flex min-h-[var(--diffs-line-height)] items-center bg-[var(--diff-view-separator-surface)]"
     >
       <span
         style={{ position: "sticky", left: stickyLeft }}
