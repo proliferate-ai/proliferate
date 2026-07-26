@@ -96,7 +96,7 @@ export function ProductSidebarSectionHeader({
       <span className="truncate">{label}</span>
       {isToggleable ? (
         <ChevronRight
-          className={`icon-compact shrink-0 text-sidebar-muted-foreground/70 transition-transform ${collapsed ? "" : "rotate-90"}`}
+          className={`icon-compact shrink-0 text-sidebar-muted-foreground/70 transition-[transform,color] group-hover/side-section:text-sidebar-foreground ${collapsed ? "" : "rotate-90"}`}
         />
       ) : null}
     </span>
@@ -111,10 +111,18 @@ export function ProductSidebarSectionHeader({
 
   if (isToggleable) {
     return (
+      // Round-3: the base row surface brings a hover/active background
+      // meant for selectable rows — this toggle isn't a selectable row, it's
+      // a quiet disclosure control, so the background is neutralized at
+      // both rest and hover (bg-transparent wins the same twMerge group as
+      // the base's hover:bg-hover/active:bg-active). Hover feedback comes
+      // entirely from color: the label lightens toward the full sidebar
+      // foreground, and the chevron (above) follows via the shared
+      // group-hover/side-section state.
       <SidebarRowSurface
         onPress={onToggleCollapsed}
         aria-expanded={!collapsed}
-        className="group/side-section h-auto min-h-7 justify-between gap-2 pl-2 pt-3 pb-1 text-sidebar-row text-sidebar-muted-foreground"
+        className="group/side-section h-auto min-h-7 justify-between gap-2 pl-2 pt-3 pb-1 text-sidebar-row text-sidebar-muted-foreground hover:bg-transparent hover:text-sidebar-foreground active:bg-transparent"
       >
         {labelRow}
         {actionsSlot}
