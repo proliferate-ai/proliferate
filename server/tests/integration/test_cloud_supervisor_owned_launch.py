@@ -199,6 +199,31 @@ async def test_launches_supervisor_first_no_sidecar(
     assert not any(provider.runtime_io_transactions)
 
 
+def test_supervisor_owned_runtime_default_is_true(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Pin ``supervisor_owned_runtime``'s field default now that the launch
+    path itself no longer branches on it (S5-B deleted the legacy branch, so
+    no launch-behavior test would catch a flipped default anymore).
+
+    This flag still gates the D5 ``desiredTopology`` heartbeat signal
+    (``record_heartbeat`` in ``runtime_workers/service.py``) that tells an
+    already-running legacy Worker to bridge onto a Supervisor. A silent flip
+    of the default to ``False`` would quietly stop advertising that bridge
+    signal to legacy workers still out there -- with no test failure to
+    surface it, since it no longer touches fresh-launch behavior at all.
+
+    Construct a fresh ``Settings()`` with both env var spellings cleared
+    (rather than asserting against the ambient module-level ``settings``
+    singleton) so this reflects only the field's own default, never
+    whatever env a dev's shell happens to export.
+    """
+    monkeypatch.delenv("PROLIFERATE_SUPERVISOR_OWNED_RUNTIME", raising=False)
+    monkeypatch.delenv("SUPERVISOR_OWNED_RUNTIME", raising=False)
+    from proliferate.config import Settings
+
+    fresh_settings = Settings()
+    assert fresh_settings.supervisor_owned_runtime is True
+
+
 class TestSupervisorLaunchCommandHardening:
     """A paused VM resumed from a template baked before the supervisor binary
     existed must not half-start. The launch command guards with ``test -x``

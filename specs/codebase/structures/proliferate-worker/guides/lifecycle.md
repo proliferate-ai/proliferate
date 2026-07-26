@@ -160,14 +160,23 @@ window and logs a deprecation warning when it runs.
 
 Both legacy update gates (`self_update_enabled`, `anyharness_update_enabled`)
 default to disabled. Desktop owns its bundled binaries and leaves them
-disabled. On a supervisor-owned cloud-sandbox target the server writer stops
-emitting `anyharness_update_enabled=true` and instead emits
-`supervisor_update_request_dir`, so the mailbox path in the previous section
-runs and the legacy gates stay off. A non-supervisor-owned (legacy) target
-still gets the same `anyharness_update_enabled=true` sidecar configuration as
-before. `supervisor_owned_runtime` is a server-side flag, on by default since
-the live E2B N-1→N proof passed (2026-07-26); it does not change local Worker
-behavior directly, only which config the server writes.
+disabled. Every managed-cloud (E2B) target is now always supervisor-owned:
+the server's `build_worker_config` (`server/proliferate/server/cloud/runtime/bootstrap.py`)
+only ever emits `supervisor_update_request_dir`, never
+`anyharness_update_enabled=true` — calling it with `supervisor_owned=False`
+raises `ValueError` because the legacy independent-launch config shape was
+deleted. So the mailbox path in the previous section is the only convergence
+path a cloud-sandbox target's Worker config can express.
+
+SSH-installed targets are a separate story: `install/proliferate-target-install.sh`
+does not set `self_update_enabled`, `anyharness_update_enabled`, or
+`supervisor_update_request_dir` in the Worker config it writes, so all three
+stay at their Rust-side defaults (both update gates false, mailbox dir
+absent). An SSH target therefore gets neither the legacy in-place binary
+swap nor the mailbox path — Worker binary convergence is off there today.
+Proliferate Supervisor still owns process supervision for SSH targets (the
+installer's systemd unit runs `proliferate-supervisor`, not the Worker
+directly); only the Worker's own binary-convergence gates are unset.
 
 ## Hard Rules
 

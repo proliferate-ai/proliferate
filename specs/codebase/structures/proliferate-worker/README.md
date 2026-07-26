@@ -13,8 +13,10 @@ workspaces, upload session events, or maintain Cloud projections. Cloud
 reaches AnyHarness directly for the current workspace and session flows.
 
 On a **supervisor-owned target** (`supervisor_update_request_dir` set in
-config — server-controlled, gated behind `supervisor_owned_runtime`), the
-Worker never downloads, replaces, kills, or rolls back AnyHarness or itself.
+config — every managed-cloud target, unconditionally; no longer gated behind
+`supervisor_owned_runtime`, which only gates the D5 bridge heartbeat signal
+for already-running legacy workers), the Worker never downloads, replaces,
+kills, or rolls back AnyHarness or itself.
 It only observes heartbeat divergence and writes one durable request into
 `.proliferate/supervisor/updates` for Proliferate Supervisor to act on; see
 [Lifecycle](guides/lifecycle.md) and

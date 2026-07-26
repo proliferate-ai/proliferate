@@ -342,12 +342,15 @@ Pause is the steady state of an idle sandbox, not an exception:
   heartbeat response carries desired binary versions and the desired
   topology, which is how a long-lived sandbox converges to the current
   release without redeploying the template.
-- **A dead Worker is noticed, not silent.** The Supervisor restarts a
-  crashed Worker; a Worker that still misses its heartbeat window surfaces
-  as degraded in the workspace runtime-status payload and emits an alert
-  through the production alert path into the issue tracker, because a
-  silently dead Worker means stale binaries and expiring git credentials
-  with no user-visible symptom.
+- **A dead Worker on a running sandbox surfaces, but does not yet alert.**
+  A Worker that misses its heartbeat window (or never enrolled at all) on
+  a `running` sandbox surfaces as `workerDegraded: true` in the workspace
+  runtime-status payload and logs a structured warning on each read
+  (PR #1526), because a silently dead Worker means stale binaries and
+  expiring git credentials with no user-visible symptom. A
+  paused/creating/error/destroyed sandbox's Worker is not expected to be
+  heartbeating and is never reported degraded. Routing that condition into
+  the production alert path (issue tracker) is still open — see gap list.
 - Runtime pressure telemetry (CPU, memory, and disk) flows from AnyHarness
   health to the client pressure surfaces. Lifecycle transports the
   measurement; [sandbox-content.md](sandbox-content.md) owns what consumes
@@ -472,11 +475,16 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       valid, so forwarded traffic wakes them); the fix waits on the
       cold-start choreography ruling (wake-and-poll vs
       provision-on-access), still open.
-- [ ] Worker death is silent: sidecar launch failures are swallowed, the
-      warm-reuse path never relaunches a dead Worker, runtime-status
-      carries no worker liveness, and no alert fires. Surface degraded
-      worker state in the runtime-status payload and route the failure
-      into the production alert path.
+- [ ] Worker death still has no alert path: the Worker is now a
+      Supervisor-owned child with automatic restart-with-backoff
+      (`restart_delay_seconds`), so the old "sidecar launch failures are
+      swallowed" framing is gone along with the deleted sidecar launcher.
+      What remains open is alerting — a `running` sandbox's stale or
+      missing Worker surfaces as `workerDegraded: true` on the workspace
+      runtime-status payload and logs a structured warning on each read
+      (PR #1526), but nothing routes that condition into the production
+      alert path (issue tracker), and the warm-reuse path still never
+      relaunches a dead Worker.
 - [ ] The account model is one sandbox per user globally (partial unique
       index on `owner_user_id`; org variants are stubs that raise,
       [cloud_sandboxes.py](../../../../server/proliferate/db/store/cloud_sandboxes.py)).
