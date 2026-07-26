@@ -37,4 +37,4 @@ apps/packages/product-client/src/host/product-host.ts 420 WDU slice 04 (G2/G4): 
 apps/packages/product-client/src/components/playground/WorkspaceStatusPlayground.tsx 450 status-card playground fixtures pending scenario-module split (#1202 debt repair)
 apps/packages/product-client/src/components/playground/GitReviewV2Playground.tsx 445 git review playground fixtures pending scenario-module split
 apps/packages/product-client/src/hooks/plans/workflows/use-proposed-plan-actions.ts 405 plan decision + carry-out workflow growth (#1250); split deferred
-apps/packages/design/src/tokens.ts 2092 single token authority: one entry per token with provenance by design; shape is a flat manifest, not logic
+apps/packages/design/src/tokens.ts 2143 single token authority: one entry per token with provenance by design; shape is a flat manifest, not logic

@@ -142,11 +142,11 @@ rows. It sits a half-step above regular: controls read denser than the prose
 around them without stepping up to medium, which at 11–12px turns into a visible
 bold and makes a toolbar shout.
 
-Product prose is authored one notch below it — `font-weight: 430` on
-`html, body` in
+Product prose is authored one notch below it — the `--font-weight-body: 445`
+token, applied to `html, body` in
 [product.css](../../../../apps/packages/design/src/css/product.css) — so the
 whole product renders on a variable-font axis between regular and medium, with
-controls always the heavier of the two. Two weights, 20 units apart, carry the
+controls always the heavier of the two. Two weights, 5 units apart, carry the
 entire hierarchy; size and color do the rest.
 
 The token name is what makes `font-control` a real utility: `--font-weight-*` is
@@ -164,6 +164,26 @@ Only two tracking values are named, and only because more than one role uses
 each: `--tracking-heading: -0.01em` (heading, sidebar-brand) and
 `--tracking-tight: -0.025em` (title, hero). Every other role authors its
 letter-spacing inline, because it is used once.
+
+### Markdown heading ramp and inline code
+
+Transcript Markdown (`.chat-markdown` in `authenticated.css`) derives its
+whole heading hierarchy and inline-code size from the semantic ramp above
+plus a small set of unitless scale tokens, rather than pinning literal px
+values inside the CSS file — the appearance gate's `fixed-font-size-css` rule
+would otherwise flag a raw px `font-size` there.
+
+| Token | Value | Role |
+| --- | --- | --- |
+| `--markdown-heading-h3-scale` | `1.1667` | h3 size = `--markdown-font-size` (the message's own reading size) × this scale. |
+| `--markdown-heading-h4-scale` | `1.0833` | h4 size = `--markdown-font-size` × this scale. |
+| `--text-markdown-inline-code` | `0.92em` | Inline `code` size, relative to the surrounding message text (fenced code blocks are unaffected). |
+
+h1 stays anchored on the semantic `--text-title` role and h2 stays the
+midpoint of `--text-title` and `--markdown-font-size` — both already
+expressed through named roles, so neither needed a new token. h5 and h6 stay
+at 1× (no additional scale-up), matching a compact, uppercase
+micro-heading treatment rather than growing further.
 
 ### Font slots
 
@@ -455,26 +475,34 @@ same numbers from the same authority.
 
 ### Transcript measure
 
-Three tokens define how a transcript reads:
+Five tokens define how a transcript reads:
 
 | Token | Value | Role |
 | --- | --- | --- |
-| `--container-transcript-readable` | `40rem` (640px) | The prose measure — markdown text is capped here. |
-| `--container-transcript-wide` | `64rem` (1024px) | The spill measure — tables, images and code blocks may exceed prose width. |
-| `--spacing-transcript-turn` | `0.75rem` (12px) | Vertical rhythm between top-level turns. |
+| `--container-transcript-readable` | `40rem` (640px) | A tighter optional reading measure. Conversation prose no longer applies it — `MarkdownBody.tsx` renders prose at `max-w-full` so a message fills the thread column at the same width the composer reads at. The token remains for consumers that want a narrower cap. |
+| `--container-transcript-thread` | `48rem` (768px) | The thread-column measure — the outer transcript column (avatars, action rows, and the `.chat-markdown` wrapper itself) widens to this. |
+| `--container-transcript-wide` | `56rem` (896px) | The spill measure — the width a wide block (table, image, code) is nominally entitled to; still bounded by the 48rem thread column until a breakout restructure lands (see `MarkdownBody.tsx`'s `table` override). |
+| `--spacing-transcript-turn` | `1rem` (16px) | Vertical rhythm between top-level turns. |
+| `--spacing-transcript-turn-tight` | `0.25rem` (4px) | Vertical rhythm within a turn, for closely related siblings (e.g. assistant prose and its action-row footer). |
 
-Two measures rather than one is the whole design: prose has an optimal line
-length and wide blocks do not, so a table is allowed to break the text column
-instead of wrapping inside it.
+The width tokens name three *available* measures even though conversation
+prose currently uses one: prose and wide blocks (tables, code) both fill the
+48rem thread column, so an assistant message reads at the same width the
+user is typing into. The 40rem readable cap is kept as a named tier for any
+consumer that wants a tighter line length, and 56rem records what wide
+blocks are nominally entitled to once a breakout restructure lands. Two
+spacing tiers make a real distinction vertically: turn-to-turn
+rhythm and within-turn rhythm are two different rungs, not one shared gap.
 
 These names read oddly because they are authored *into Tailwind's own
 namespaces* — `--container-*` and `--spacing-*` — which makes
-`max-w-transcript-readable`, `max-w-transcript-wide` and `gap-transcript-turn`
-real generated utilities rather than bracket values. For the turn gap that is
-gate-forced: `gap-[12px]` fails `ARBITRARY_GAP_RE`. For the two widths it is a
-consistency choice — the gate has no `max-w` rule. Note that Tailwind v4 does
-not derive `space-y-*` from the spacing namespace, so a turn stack is a flex
-column with `gap-transcript-turn`, not a `space-y-` variant.
+`max-w-transcript-readable`, `max-w-transcript-thread`, `max-w-transcript-wide`,
+`gap-transcript-turn` and `gap-transcript-turn-tight` real generated utilities
+rather than bracket values. For the turn gaps that is gate-forced: a raw
+`gap-[16px]` fails `ARBITRARY_GAP_RE`. For the widths it is a consistency
+choice — the gate has no `max-w` rule. Note that Tailwind v4 does not derive
+`space-y-*` from the spacing namespace, so a turn stack is a flex column with
+`gap-transcript-turn`, not a `space-y-` variant.
 
 ### The 28px compact-control system
 
@@ -505,7 +533,7 @@ button respond identically to the pointer.
 | `--radius-xl` | `0.75rem` (12px) | Dialogs, popover/menu frames, toasts. |
 | `--radius-2xl` | `1rem` (16px) | Modal shells and the command palette — the largest panels. |
 | `--radius-full` | `9999px` | Pills, avatars, status dots, the composer send button, level bars. |
-| `--radius-composer` | `0.75rem` (12px) | The composer frame, as its own name. |
+| `--radius-composer` | `1.25rem` (20px) | The composer frame, as its own name — deliberately softer than the panel scale. |
 | `--radius` | `0.5rem` (8px) | The unqualified base, equal to `md`. |
 
 **Radius grows with the element.** The named steps run 6 → 8 → 10 → 12 → 16px
@@ -516,8 +544,10 @@ reads either boxy or over-rounded at its own scale. The sidebar row moved from
 corner reads better against the sidebar's own recessed surface than it did
 against the previous, slightly-raised one.
 
-`--radius-composer` is a named 12px rather than a reference to `xl` because the
-composer's corner is its own anatomy value, tunable without moving every dialog.
+`--radius-composer` is a named 20px rather than a reference to any shared step
+because the composer's corner is its own anatomy value — softer than the
+dialogs' `xl` — tunable without moving every dialog
+(`AgentHarnessConfigComposer` already overrides it locally).
 `--radius` duplicates `md` as the unqualified base for consumers that ask for
 "the" radius.
 
@@ -957,7 +987,7 @@ independent code path and then asserts, in order:
   `compile()`, so a malformed `@theme`/`@utility` block fails the design build
   instead of 500-ing a consumer app's JIT stylesheet at runtime.
 - **The frozen census:** 285 dispositions, 70 removals, 15 compatibility aliases
-  (by exact name), 283 live tokens; every token has a provenance tag; every
+  (by exact name), 289 live tokens; every token has a provenance tag; every
   `color-mix()` token has a resolved `@theme` fallback.
 - **Motion authority:** each duration/ease/cadence/delay number and each
   `--duration-*`/`--ease-*`/`--activity-*` token matches `motion.ts` in both
