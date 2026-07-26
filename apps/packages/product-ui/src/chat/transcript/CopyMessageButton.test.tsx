@@ -9,6 +9,6 @@ describe("CopyMessageButton", () => {
     );
 
     expect(html).toContain("icon-control");
-    expect(html).toContain("!size-6 !p-0");
+    expect(html).toContain("!size-icon-button-sm !p-0");
   });
 });
