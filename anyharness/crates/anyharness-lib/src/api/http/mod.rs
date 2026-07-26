@@ -1,6 +1,7 @@
 pub mod access;
 pub mod agent_auth;
 pub mod agent_gateway_catalog;
+pub mod agent_model_snapshot;
 pub mod agents;
 mod agents_contract;
 mod agents_errors;

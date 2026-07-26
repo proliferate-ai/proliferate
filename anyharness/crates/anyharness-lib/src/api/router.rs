@@ -12,7 +12,8 @@ use url::form_urlencoded;
 
 use super::http::{
     agent_auth::{delete_agent_auth_state, put_agent_auth_state},
-    agent_gateway_catalog, agents, auth as http_auth, catalogs, cowork, files, git, goals, health,
+    agent_gateway_catalog, agent_model_snapshot, agents, auth as http_auth, catalogs, cowork,
+    files, git, goals, health,
     hosting, loops, mobility, plans, processes, product_mcp, replay, repo_roots, reviews, sessions,
     sessions_config, sessions_events, sessions_fork, sessions_interactions, sessions_lifecycle,
     sessions_prompt, sessions_resume, subagents, terminals, workflow_runs, workflow_workspaces,
@@ -58,6 +59,14 @@ pub fn build_router(state: AppState) -> Router {
         .route(
             "/agents/{kind}/catalog/refresh-gateway",
             post(agent_gateway_catalog::refresh_gateway_models),
+        )
+        .route(
+            "/agents/{kind}/model-snapshot",
+            get(agent_model_snapshot::get_model_snapshot_status),
+        )
+        .route(
+            "/agents/{kind}/model-snapshot/refresh",
+            post(agent_model_snapshot::refresh_model_snapshot),
         )
         .route("/agents/{kind}/install", post(agents::install_agent))
         .route(

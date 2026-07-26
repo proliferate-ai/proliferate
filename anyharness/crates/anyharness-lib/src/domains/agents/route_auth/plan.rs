@@ -48,6 +48,22 @@ pub struct GatewayModelPlan {
 pub trait GatewayModelResolve: Send + Sync {
     fn resolve_gateway_models(&self, harness_kind: &str, revision: i64) -> GatewayModelPlan;
 
+    /// Drop any memoized gateway model list for `harness_kind`, so the next
+    /// resolve genuinely re-asks the gateway.
+    ///
+    /// A user pressing Refresh usually did so BECAUSE the gateway's model set
+    /// changed, and a memo would serve them the pre-change list labelled
+    /// "refreshed just now".
+    ///
+    /// Default no-op, which is the CORRECT behavior for today's producer: it reads
+    /// the `gateway_model_probe` sqlite rows, so there is no in-process memo to
+    /// invalidate. The memoizing producer that makes this call load-bearing lands
+    /// with the poke wiring; the seam exists now so the probe engine's forced-
+    /// refresh path is already correct when it does.
+    fn invalidate_gateway_plan(&self, harness_kind: &str) {
+        let _ = harness_kind;
+    }
+
     /// Launch-time lazy trigger (spec §2c): if no probe row exists yet for the
     /// current revision, schedule a background probe. MUST NOT block the launch
     /// (default: no-op, for stubs). The real resolver reads the gateway

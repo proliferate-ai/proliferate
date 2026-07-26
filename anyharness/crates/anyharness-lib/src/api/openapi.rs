@@ -142,6 +142,8 @@ use utoipa::OpenApi;
         super::http::catalogs::get_agent_catalog_version,
         super::http::agent_gateway_catalog::get_gateway_models,
         super::http::agent_gateway_catalog::refresh_gateway_models,
+        super::http::agent_model_snapshot::get_model_snapshot_status,
+        super::http::agent_model_snapshot::refresh_model_snapshot,
         super::http::git::get_git_status,
         super::http::git::get_git_diff,
         super::http::git::list_git_branch_diff_files,

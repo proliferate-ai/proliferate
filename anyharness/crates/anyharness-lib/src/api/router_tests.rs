@@ -1329,3 +1329,105 @@ async fn get_agent_catalog_version_succeeds_with_valid_bearer_auth() {
     let payload: Value = serde_json::from_slice(&body).expect("parse response json");
     assert_eq!(payload["catalogVersion"], json!(expected_version));
 }
+
+/// The model-snapshot status route is the reusable PULL-status pattern: shaped
+/// after `GET /v1/agents/reconcile`, polled rather than pushed. Asserted through
+/// the real router so the wiring, the auth gate and the wire shape are pinned in
+/// one pass.
+///
+/// The credential-derived `authFingerprint` must never appear in the body — the
+/// client contract is the boolean `stale` plus its reason — and that is asserted
+/// against the SERIALIZED bytes, not against the projection type, because the leak
+/// this guards against would be a serde-attribute change.
+#[tokio::test]
+async fn model_snapshot_status_route_serves_per_context_state_without_the_fingerprint() {
+    let _lock = test_support::ENV_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("expected env mutex");
+    let _guard = test_support::set_bearer_token_env(Some("secret-token"));
+    let app = build_router(test_state(false));
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/v1/agents/opencode/model-snapshot")
+                .header(header::AUTHORIZATION, "Bearer secret-token")
+                .body(Body::empty())
+                .expect("expected request"),
+        )
+        .await
+        .expect("expected response");
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("read response body");
+    let raw = String::from_utf8(body.to_vec()).expect("utf8 body");
+    let payload: Value = serde_json::from_slice(&body).expect("parse response json");
+
+    assert_eq!(payload["agent"], json!("opencode"));
+    assert_eq!(payload["schemaVersion"], json!(1));
+    assert!(payload["contexts"].is_array(), "contexts must be an array");
+    assert!(
+        matches!(
+            payload["probeEngine"].as_str(),
+            Some("owner") | Some("readonly")
+        ),
+        "probeEngine must report the engine's ownership mode"
+    );
+    assert!(
+        !raw.contains("authFingerprint"),
+        "the credential-derived fingerprint must never reach the wire"
+    );
+
+    // An unknown harness kind is a typed 404, not an empty success.
+    let unknown = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/v1/agents/not-a-harness/model-snapshot")
+                .header(header::AUTHORIZATION, "Bearer secret-token")
+                .body(Body::empty())
+                .expect("expected request"),
+        )
+        .await
+        .expect("expected response");
+    assert_eq!(unknown.status(), StatusCode::NOT_FOUND);
+}
+
+/// Both model-snapshot routes sit behind the same bearer gate as every other `/v1`
+/// route: a harness's auth-staleness state is machine information, not public.
+#[tokio::test]
+async fn model_snapshot_routes_require_bearer_auth() {
+    let _lock = test_support::ENV_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("expected env mutex");
+    let _guard = test_support::set_bearer_token_env(Some("secret-token"));
+    let app = build_router(test_state(false));
+
+    for (method, uri) in [
+        ("GET", "/v1/agents/opencode/model-snapshot"),
+        ("POST", "/v1/agents/opencode/model-snapshot/refresh"),
+    ] {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method(method)
+                    .uri(uri)
+                    .body(Body::empty())
+                    .expect("expected request"),
+            )
+            .await
+            .expect("expected response");
+        assert_eq!(
+            response.status(),
+            StatusCode::UNAUTHORIZED,
+            "{method} {uri} must require bearer auth"
+        );
+    }
+}

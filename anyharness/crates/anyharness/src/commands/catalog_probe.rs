@@ -64,9 +64,19 @@ pub async fn run(args: CatalogProbeArgs) -> Result<()> {
         agent_kind: agent_kind.clone(),
         auth_context: args.auth_context.clone(),
         auth_env,
+        // The central pipeline scrubs its own process env and builds isolated
+        // credential dirs (`auth_env_for_context`), so it needs no per-child
+        // removals; the runtime engine, which must not mutate its own env, does.
+        auth_env_remove: Vec::new(),
         runtime_home: runtime_home.clone(),
+        // Keep the historical temp_dir() workspace: this process is short-lived
+        // and owns nothing a scratch guard would clean up.
+        workspace_root: None,
         model_switch_timeout: Duration::from_secs(args.model_switch_timeout_secs),
         max_models: args.max_models,
+        // The per-model option matrix is exactly what this command exists to
+        // capture (it feeds the shipped catalog's control wiring).
+        switch_models: true,
         send_test_prompt: false,
     };
 
@@ -91,9 +101,14 @@ pub async fn run(args: CatalogProbeArgs) -> Result<()> {
             agent_kind: agent_kind.clone(),
             auth_context: format!("{}+trial:{trial_id}", args.auth_context),
             auth_env: trial_env,
+            auth_env_remove: Vec::new(),
             runtime_home: runtime_home.clone(),
+            workspace_root: None,
             model_switch_timeout: Duration::from_secs(args.model_switch_timeout_secs),
             max_models: Some(0),
+            // Inert here: `max_models: Some(0)` leaves the loop nothing to
+            // iterate. Set anyway so this command has ONE policy, not two.
+            switch_models: true,
             // Menu listing is NOT acceptance — the harness lists whatever the
             // config names. Only a successful inference turn counts.
             send_test_prompt: true,
