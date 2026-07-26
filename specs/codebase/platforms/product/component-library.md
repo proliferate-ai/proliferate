@@ -229,7 +229,7 @@ grandfathered.
 | Component | Path | Purpose |
 | --- | --- | --- |
 | `ModelTable` | [ModelTable.tsx](../../../../apps/packages/product-ui/src/patterns/ModelTable.tsx) | Model-config table rows, composes `Badge`/`Switch`. |
-| `PrStatusBadge` | [PrStatusBadge.tsx](../../../../apps/packages/product-ui/src/patterns/PrStatusBadge.tsx) | PR status dot/badge with tooltip (PR number + state), composes `Badge`. |
+| `PrStatusBadge` | [PrStatusBadge.tsx](../../../../apps/packages/product-ui/src/patterns/PrStatusBadge.tsx) | PR status dot (`PrStatusDot`), icon-overlay wrapper (`PrStatusIconOverlay`), and tooltip-text helper (`prStatusTooltip`); hand-rolls its own tone map, composes nothing. |
 | `ProductPageShell` | [ProductPageShell.tsx](../../../../apps/packages/product-ui/src/patterns/ProductPageShell.tsx) | General product page shell, composes `PageContentFrame` + `PageHeader`. |
 | `SettingsEmptyState` | [SettingsEmptyState.tsx](../../../../apps/packages/product-ui/src/patterns/SettingsEmptyState.tsx) | Settings-scoped empty state (compact/full sizes). |
 | `SettingsEyebrow` | [SettingsEyebrow.tsx](../../../../apps/packages/product-ui/src/patterns/SettingsEyebrow.tsx) | Settings section eyebrow label. |
