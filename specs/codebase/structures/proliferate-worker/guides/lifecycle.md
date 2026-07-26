@@ -150,9 +150,9 @@ emitting `anyharness_update_enabled=true` and instead emits
 `supervisor_update_request_dir`, so the mailbox path in the previous section
 runs and the legacy gates stay off. A non-supervisor-owned (legacy) target
 still gets the same `anyharness_update_enabled=true` sidecar configuration as
-before. `supervisor_owned_runtime` is a server-side flag, default off at
-merge; it does not change local Worker behavior directly, only which config
-the server writes.
+before. `supervisor_owned_runtime` is a server-side flag, on by default since
+the live E2B N-1→N proof passed (2026-07-26); it does not change local Worker
+behavior directly, only which config the server writes.
 
 ## Hard Rules
 

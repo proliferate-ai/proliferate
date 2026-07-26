@@ -414,13 +414,21 @@ def build_detached_supervisor_launch_command(
     target_env_lines = [
         f"export {key}={shlex.quote(value)}" for key, value in sorted(combined_env.items())
     ]
+    quoted_supervisor_binary = shlex.quote(supervisor_binary)
+    # A paused VM instantiated from a template that predates the baked
+    # supervisor binary would otherwise fail this launch with only a generic
+    # health-timeout downstream. The guard keeps the command exiting 0
+    # (matching the legacy worker sidecar's `test -x` guard) without
+    # half-starting anything; the health probe then fails with a clean
+    # missing-binary signal instead of a silent timeout.
     script = "\n".join(
         [
             "set -eu",
             *kill_lines,
             *target_env_lines,
             (
-                f"nohup {shlex.quote(supervisor_binary)} --config {shlex.quote(config_path)} run "
+                f"test -x {quoted_supervisor_binary} && "
+                f"nohup {quoted_supervisor_binary} --config {shlex.quote(config_path)} run "
                 f"> {shlex.quote(log_path)} 2>&1 < /dev/null &"
             ),
         ]

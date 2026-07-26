@@ -154,6 +154,9 @@ async def test_stale_runtime_is_killed_before_relaunch(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The legacy NULL-token row relaunches, and the stale runtime is killed first."""
+    # This test asserts the legacy direct-AnyHarness launch path specifically;
+    # pin the flag explicitly now that supervisor-owned is the default.
+    monkeypatch.setattr(runtime_launch_module.settings, "supervisor_owned_runtime", False)
     provider = _FakeProvider(db_session)
     _install_stubs(monkeypatch, provider)
     sandbox = await _seed_sandbox(
@@ -188,6 +191,9 @@ async def test_fresh_token_persisted_when_url_unchanged(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A NULL-token row whose URL already matches still persists the minted token."""
+    # This test asserts token persistence on the legacy relaunch path;
+    # pin the flag explicitly now that supervisor-owned is the default.
+    monkeypatch.setattr(runtime_launch_module.settings, "supervisor_owned_runtime", False)
     provider = _FakeProvider(db_session)
     _install_stubs(monkeypatch, provider)
     # The row already carries the URL the provider resolves to, but no token.

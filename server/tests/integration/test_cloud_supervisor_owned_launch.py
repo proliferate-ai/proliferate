@@ -1,9 +1,10 @@
 """New-provision topology branch (Make Managed Runtime Updates Supervisor-Owned, decision 5).
 
 ``settings.supervisor_owned_runtime`` gates ``_launch_anyharness_runtime``:
-off (default at merge) keeps today's direct-nohup AnyHarness + separate
-worker-sidecar launch byte-for-byte (regression pin); on launches the
-Supervisor first (via the previously-dead ``build_supervisor_config`` +
+off keeps today's direct-nohup AnyHarness + separate worker-sidecar launch
+byte-for-byte (regression pin, explicitly monkeypatched by the flag-off
+test); on (the default since the live E2B N-1->N proof passed 2026-07-26)
+launches the Supervisor first (via ``build_supervisor_config`` +
 ``build_detached_supervisor_launch_command``) and never launches a separate
 worker sidecar. Providers and runtime probes are stubbed per the repo testing
 standard -- no real sandboxes.
@@ -245,6 +246,155 @@ async def test_flag_on_launches_supervisor_first_no_sidecar(
     assert stop_command in provider.commands
     assert provider.runtime_io_transactions
     assert not any(provider.runtime_io_transactions)
+
+
+@pytest.mark.asyncio
+async def test_default_takes_supervisor_path_without_monkeypatch(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The live E2B N-1->N proof passed 2026-07-26; the flag now defaults on.
+
+    No ``settings.supervisor_owned_runtime`` monkeypatch here at all -- this
+    pins that a fresh ``Settings()`` (i.e. what a real deploy gets without an
+    explicit env var override) takes the Supervisor-first launch path."""
+    assert settings.supervisor_owned_runtime is True
+    provider = _FakeProvider(db_session)
+    sidecar_calls, _runtime_env_calls = _install_stubs(monkeypatch, provider)
+    sandbox = await _seed_sandbox(db_session)
+    value = await sandbox_store.load_personal_cloud_sandbox(db_session, sandbox.owner_user_id)
+    assert value is not None
+
+    await connect_module.connect_ready_sandbox(db_session, sandbox=value)
+
+    runtime_context = _runtime_context()
+    launch_command = build_detached_runtime_launch_command(runtime_context)
+    supervisor_binary = supervisor_binary_path(runtime_context)
+    supervisor_commands = [
+        cmd
+        for cmd in provider.commands
+        if supervisor_binary in cmd and supervisor_config_path(runtime_context) in cmd
+    ]
+    assert supervisor_commands, provider.commands
+    assert launch_command not in provider.commands
+    assert sidecar_calls == []
+
+
+class TestSupervisorLaunchCommandHardening:
+    """Flip-hazard parity with the legacy worker sidecar (worker_sidecar.py):
+    a paused VM resumed from a template baked before the supervisor binary
+    existed must not half-start. The launch command guards with ``test -x``
+    so it still exits 0 without launching anything; the health probe then
+    fails with a clean signal instead of a silent timeout."""
+
+    def test_launch_command_guards_missing_binary_with_test_dash_x(self) -> None:
+        runtime_context = _runtime_context()
+        command = build_detached_supervisor_launch_command(runtime_context)
+        supervisor_binary = supervisor_binary_path(runtime_context)
+        assert f"test -x {supervisor_binary}" in command or (
+            f"test -x '{supervisor_binary}'" in command
+        )
+        # The guard must gate the nohup, not merely appear somewhere in the script.
+        assert "test -x" in command
+        guard_index = command.index("test -x")
+        nohup_index = command.index("nohup")
+        assert guard_index < nohup_index
+
+    def test_launch_command_still_exits_zero_shaped(self) -> None:
+        # `test -x ... && nohup ... &` -- the backgrounded nohup means the
+        # overall command does not block on (or propagate) the guard's
+        # failure; `set -eu` only affects the script up to the background job.
+        runtime_context = _runtime_context()
+        command = build_detached_supervisor_launch_command(runtime_context)
+        assert "&& nohup" in command
+
+    @pytest.mark.asyncio
+    async def test_health_probe_timeout_logs_missing_binary_hint(
+        self,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """When the health probe never succeeds after a supervisor launch (the
+        only externally visible symptom of the `test -x` guard silently
+        no-op'ing on a stale template), log a distinct hint pointing at the
+        possible missing-binary cause instead of a generic timeout only."""
+        from proliferate.integrations.anyharness.errors import CloudRuntimeReconnectError
+
+        monkeypatch.setattr(settings, "supervisor_owned_runtime", True)
+        provider = _FakeProvider(db_session)
+        _install_stubs(monkeypatch, provider)
+
+        async def _failing_health(*_a: Any, **_k: Any) -> None:
+            raise CloudRuntimeReconnectError(
+                "AnyHarness did not become healthy in the cloud sandbox."
+            )
+
+        monkeypatch.setattr(runtime_launch_module, "wait_for_runtime_health", _failing_health)
+
+        logged: list[str] = []
+        original_log_cloud_event = runtime_launch_module.log_cloud_event
+
+        def _capture_log(message: str, *args: object, **kwargs: object) -> None:
+            logged.append(message)
+            original_log_cloud_event(message, *args, **kwargs)
+
+        monkeypatch.setattr(runtime_launch_module, "log_cloud_event", _capture_log)
+
+        sandbox = await _seed_sandbox(db_session)
+        value = await sandbox_store.load_personal_cloud_sandbox(db_session, sandbox.owner_user_id)
+        assert value is not None
+
+        with pytest.raises(CloudRuntimeReconnectError):
+            await connect_module.connect_ready_sandbox(db_session, sandbox=value)
+
+        assert any(
+            "missing" in message.lower() and "supervisor" in message.lower() for message in logged
+        ), logged
+
+
+class TestSupervisorOwnedLaunchEmptyBaseUrl:
+    """The supervisor path must warn (not silently proceed) when no cloud
+    base URL is configured, matching the legacy sidecar's loud warning
+    (worker_sidecar.py:91-103), but must still launch the Supervisor --
+    AnyHarness has to come up regardless of whether the Worker can enroll."""
+
+    @pytest.mark.asyncio
+    async def test_empty_base_url_warns_but_still_launches_supervisor(
+        self,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(settings, "supervisor_owned_runtime", True)
+        provider = _FakeProvider(db_session)
+        _install_stubs(monkeypatch, provider)
+        # Override the stubbed base URL back to empty to hit the warning path.
+        monkeypatch.setattr(runtime_launch_module, "worker_cloud_base_url", lambda: "")
+        sandbox = await _seed_sandbox(db_session)
+        value = await sandbox_store.load_personal_cloud_sandbox(db_session, sandbox.owner_user_id)
+        assert value is not None
+
+        logged_warnings: list[str] = []
+        original_log_cloud_event = runtime_launch_module.log_cloud_event
+
+        def _capture_log(message: str, *args: object, **kwargs: object) -> None:
+            logged_warnings.append(message)
+            original_log_cloud_event(message, *args, **kwargs)
+
+        monkeypatch.setattr(runtime_launch_module, "log_cloud_event", _capture_log)
+
+        await connect_module.connect_ready_sandbox(db_session, sandbox=value)
+
+        runtime_context = _runtime_context()
+        supervisor_binary = supervisor_binary_path(runtime_context)
+        supervisor_commands = [
+            cmd
+            for cmd in provider.commands
+            if supervisor_binary in cmd and supervisor_config_path(runtime_context) in cmd
+        ]
+        assert supervisor_commands, provider.commands
+        assert any("no cloud base URL configured" in message for message in logged_warnings), (
+            logged_warnings
+        )
 
 
 class TestBuildWorkerConfigFence:
