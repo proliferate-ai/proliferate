@@ -262,7 +262,10 @@ async def _read_managed_cloud_source(
         runtime_url,
         runtime_token,
         _data_key,
-    ) = await cloud_sandboxes_service.load_cloud_sandbox_runtime_access(sandbox)
+    ) = await cloud_sandboxes_service.load_cloud_sandbox_runtime_access_or_repair(
+        sandbox,
+        reason="managed_materialization_source",
+    )
     try:
         return await get_runtime_git_status(
             runtime_url,

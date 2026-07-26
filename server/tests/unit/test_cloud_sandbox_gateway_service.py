@@ -38,7 +38,7 @@ async def test_gateway_access_reuses_recent_runtime_resolution(
         return ("https://sandbox.example.test", "sandbox-token", "data-key")
 
     monkeypatch.setattr(service, "ensure_cloud_sandbox_ready", ensure_ready)
-    monkeypatch.setattr(service, "load_cloud_sandbox_runtime_access", load_access)
+    monkeypatch.setattr(service, "load_cloud_sandbox_runtime_access_or_repair", load_access)
 
     first = await service.ensure_cloud_sandbox_gateway_access(
         cast(AsyncSession, object()),
@@ -78,7 +78,7 @@ async def test_gateway_access_singleflights_concurrent_runtime_resolution(
         return ("https://sandbox.example.test", "sandbox-token", "data-key")
 
     monkeypatch.setattr(service, "ensure_cloud_sandbox_ready", ensure_ready)
-    monkeypatch.setattr(service, "load_cloud_sandbox_runtime_access", load_access)
+    monkeypatch.setattr(service, "load_cloud_sandbox_runtime_access_or_repair", load_access)
 
     results = await asyncio.gather(
         *(
@@ -118,7 +118,7 @@ async def test_gateway_access_refreshes_after_cache_expiry(
     monkeypatch.setattr(service, "_GATEWAY_ACCESS_CACHE_TTL_SECONDS", 1.0)
     monkeypatch.setattr(service.time, "monotonic", monotonic)
     monkeypatch.setattr(service, "ensure_cloud_sandbox_ready", ensure_ready)
-    monkeypatch.setattr(service, "load_cloud_sandbox_runtime_access", load_access)
+    monkeypatch.setattr(service, "load_cloud_sandbox_runtime_access_or_repair", load_access)
 
     first = await service.ensure_cloud_sandbox_gateway_access(
         cast(AsyncSession, object()),

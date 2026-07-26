@@ -169,3 +169,75 @@ async def load_cloud_sandbox_runtime_access(
         decrypt_text(sandbox.anyharness_bearer_token_ciphertext),
         decrypt_text(sandbox.anyharness_data_key_ciphertext),
     )
+
+
+async def load_cloud_sandbox_runtime_access_or_repair(
+    sandbox: CloudSandboxValue,
+    *,
+    reason: str,
+) -> tuple[str, str, str]:
+    """Request-time access resolution that repairs a cold row instead of dead-ending.
+
+    ``load_cloud_sandbox_runtime_access`` is a pure read: it 409s when the row
+    carries no runtime access, which is the truth for a row that was never
+    materialized or whose access was cleared by provider loss
+    (``mark_cloud_sandbox_provider_missing``). Nothing else on a read path
+    provisions, so a client would retry into the identical 409 forever — the
+    sandbox has no way back to ready.
+
+    This wrapper keeps the typed 409 exactly as it was (clients already treat it
+    as "connecting", and provisioning takes far too long to hold a request open
+    for) and additionally kicks off the materialization that stamps the row, so
+    the retry the client is already doing eventually succeeds. It is the seam for
+    *request-time* access paths only; materialization-internal callers keep using
+    the bare loader, because they are already inside the operation that repairs.
+    """
+
+    try:
+        return await load_cloud_sandbox_runtime_access(sandbox)
+    except CloudApiError as error:
+        if error.code != "cloud_sandbox_runtime_not_ready":
+            raise
+        await _schedule_cold_access_repair(sandbox=sandbox, reason=reason)
+        raise
+
+
+async def _schedule_cold_access_repair(
+    *,
+    sandbox: CloudSandboxValue,
+    reason: str,
+) -> None:
+    # Imported here, not at module scope: the materialization package imports this
+    # module (materializers resolve runtime access through it), so a top-level
+    # import would close a cycle.
+    from proliferate.server.cloud.materialization import service as materialization_service
+
+    if sandbox.destroyed_at is not None or sandbox.status == "destroyed":
+        # A destroyed row is not cold, it is gone. Re-provisioning it would
+        # resurrect a sandbox the user (or the reaper) deliberately killed.
+        return
+    owner_user_id = sandbox.owner_user_id
+    if owner_user_id is None:
+        return
+    if not settings.cloud_provisioning_configured:
+        # Deployments without managed cloud have nothing to materialize with; a
+        # scheduled repair could only fail in the background.
+        return
+    # Billing is NOT re-checked here: every request-time access path runs the
+    # owner resume gate before reaching access resolution (the gateway through
+    # ``ensure_cloud_sandbox_ready``), and ``connect_ready_sandbox`` re-asserts it
+    # inside the materialization itself, so a held subject cannot be resumed by a
+    # repair. Scheduling is deliberately not a second gate.
+    try:
+        await materialization_service.schedule_repair_materialize_sandbox(
+            sandbox_id=sandbox.id,
+            user_id=owner_user_id,
+            reason=reason,
+        )
+    except Exception:
+        # The caller is already failing with the typed 409; a scheduling problem
+        # (e.g. the claim backend misbehaving) must not turn that into a 500.
+        logger.exception(
+            "failed to schedule cold cloud sandbox access repair",
+            extra={"cloud_sandbox_id": str(sandbox.id), "reason": reason},
+        )
