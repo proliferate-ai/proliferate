@@ -9907,6 +9907,16 @@
           "workspace"
         ],
         "properties": {
+          "baseFetch": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WorktreeBaseFetch"
+              }
+            ]
+          },
           "setupScript": {
             "oneOf": [
               {
@@ -20663,6 +20673,47 @@
         "enum": [
           "standard",
           "cowork"
+        ]
+      },
+      "WorktreeBaseFetch": {
+        "oneOf": [
+          {
+            "type": "string",
+            "enum": [
+              "fetched"
+            ]
+          },
+          {
+            "type": "string",
+            "enum": [
+              "noRemote"
+            ]
+          },
+          {
+            "type": "object",
+            "required": [
+              "failed"
+            ],
+            "properties": {
+              "failed": {
+                "type": "object",
+                "required": [
+                  "message"
+                ],
+                "properties": {
+                  "message": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "type": "string",
+            "enum": [
+              "timedOut"
+            ]
+          }
         ]
       },
       "WorktreeCheckoutMode": {

@@ -367,12 +367,23 @@ pub struct SetupScriptExecution {
     pub duration_ms: u64,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub enum WorktreeBaseFetch {
+    Fetched,
+    NoRemote,
+    Failed { message: String },
+    TimedOut,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateWorktreeWorkspaceResponse {
     pub workspace: Workspace,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub setup_script: Option<SetupScriptExecution>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub base_fetch: Option<WorktreeBaseFetch>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
@@ -437,4 +448,32 @@ pub struct StartWorkspaceSetupRequest {
     pub command: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub base_ref: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::WorktreeBaseFetch;
+
+    #[test]
+    fn worktree_base_fetch_serializes_camel_case_variants() {
+        assert_eq!(
+            serde_json::to_value(WorktreeBaseFetch::Fetched).expect("serialize fetched"),
+            serde_json::json!("fetched")
+        );
+        assert_eq!(
+            serde_json::to_value(WorktreeBaseFetch::NoRemote).expect("serialize no remote"),
+            serde_json::json!("noRemote")
+        );
+        assert_eq!(
+            serde_json::to_value(WorktreeBaseFetch::Failed {
+                message: "offline".to_string(),
+            })
+            .expect("serialize failed"),
+            serde_json::json!({ "failed": { "message": "offline" } })
+        );
+        assert_eq!(
+            serde_json::to_value(WorktreeBaseFetch::TimedOut).expect("serialize timed out"),
+            serde_json::json!("timedOut")
+        );
+    }
 }

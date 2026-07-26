@@ -109,11 +109,11 @@ use anyharness_contract::v1::{
     WorkspaceMobilitySessionCandidate, WorkspacePurgeOutcome, WorkspacePurgePreflightResponse,
     WorkspacePurgeResponse, WorkspaceRetireBlocker, WorkspaceRetireBlockerCode,
     WorkspaceRetireBlockerSeverity, WorkspaceRetireOutcome, WorkspaceRetirePreflightResponse,
-    WorkspaceRetireResponse, WorkspaceSurface, WorktreeCheckoutMode, WorktreeGitStatusState,
-    WorktreeGitStatusSummary, WorktreeInventoryAction, WorktreeInventoryResponse,
-    WorktreeInventoryRow, WorktreeInventoryState, WorktreeInventoryWorkspaceSummary,
-    WorktreeNameConflictPolicy, WorktreeStorageEstimate, WriteWorkspaceFileRequest,
-    WriteWorkspaceFileResponse,
+    WorkspaceRetireResponse, WorkspaceSurface, WorktreeBaseFetch, WorktreeCheckoutMode,
+    WorktreeGitStatusState, WorktreeGitStatusSummary, WorktreeInventoryAction,
+    WorktreeInventoryResponse, WorktreeInventoryRow, WorktreeInventoryState,
+    WorktreeInventoryWorkspaceSummary, WorktreeNameConflictPolicy, WorktreeStorageEstimate,
+    WriteWorkspaceFileRequest, WriteWorkspaceFileResponse,
 };
 use utoipa::OpenApi;
 
@@ -389,6 +389,7 @@ use utoipa::OpenApi;
         CreateWorktreeWorkspaceRequest,
         SetupScriptStatus,
         SetupScriptExecution,
+        WorktreeBaseFetch,
         CreateWorktreeWorkspaceResponse,
         RestoreWorktreeWorkspaceOutcome,
         RestoreWorktreeWorkspaceResponse,

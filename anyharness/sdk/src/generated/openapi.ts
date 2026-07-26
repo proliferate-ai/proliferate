@@ -2623,6 +2623,7 @@ export interface components {
             targetPath: string;
         };
         CreateWorktreeWorkspaceResponse: {
+            baseFetch?: null | components["schemas"]["WorktreeBaseFetch"];
             setupScript?: null | components["schemas"]["SetupScriptExecution"];
             workspace: components["schemas"]["Workspace"];
         };
@@ -5283,6 +5284,11 @@ export interface components {
         };
         /** @enum {string} */
         WorkspaceSurface: "standard" | "cowork";
+        WorktreeBaseFetch: "fetched" | "noRemote" | {
+            failed: {
+                message: string;
+            };
+        } | "timedOut";
         /** @enum {string} */
         WorktreeCheckoutMode: "new_branch" | "detached_ref";
         /** @enum {string} */

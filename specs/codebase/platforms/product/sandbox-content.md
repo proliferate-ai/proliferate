@@ -473,15 +473,6 @@ apps/packages/product-client/src/
 
 Deltas between this document and `main`, each struck by its follow-up PR:
 
-- [ ] Worktree creation does not fetch: the plain create path
-      ([runtime/worktrees.rs](../../../../anyharness/crates/anyharness-lib/src/domains/workspaces/runtime/worktrees.rs))
-      never fetches and bases on the clone's local state; cloud freshness
-      holds only because the server's clone-refresh script runs in the same
-      request, and local/Desktop creates get whatever the clone has. The
-      exact-ref path's fetch is unbounded and silently swallowed
-      (`fetch_branch_if_possible`, no timeout, no `GIT_TERMINAL_PROMPT=0`,
-      result discarded). Implement the bounded, classified, surfaced fetch
-      in both paths.
 - [ ] Callers supply `target_path`: it is a required contract field (an
       omitted path is a 400), the cloud server invents
       `/home/user/workspace/worktrees/<owner>/<repo>/<branch>-<id8>`
