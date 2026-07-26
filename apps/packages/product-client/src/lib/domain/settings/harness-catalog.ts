@@ -140,39 +140,6 @@ export function normalizeRuntimeLaunchModels(
   }));
 }
 
-// native/api_key routes probe on the CLIENT (catalog.py's refresh_catalog
-// contract): rich live probing is deferred, so v1 sources the payload from the
-// local AnyHarness runtime's already-resolved launch catalog (the same
-// bundled catalog-v2 model list `useAgentLaunchOptionsQuery` feeds the session
-// model picker) instead of spawning a harness process. Returns null when the
-// runtime has no ready models for this harness — the caller should show a
-// "runtime unavailable" toast and skip the server call rather than upload an
-// empty snapshot.
-export function buildRuntimeCatalogModelsJson(
-  harnessKind: string,
-  launchOptions: AgentLaunchOptionsResponse | undefined,
-): string | null {
-  const agent = launchOptions?.agents.find((entry) => entry.kind === harnessKind);
-  if (!agent || agent.models.length === 0) {
-    return null;
-  }
-  const entries = agent.models.map((model) => ({
-    id: model.id,
-    displayName: model.displayName,
-    ...(model.aliases && model.aliases.length > 0 ? { aliases: model.aliases } : {}),
-    // Forward the runtime-enriched catalog fields so cloud snapshots stored from
-    // this upload carry the same richness as the gateway-models endpoint (the
-    // server's parse_models_json preserves arbitrary keys beside `id`).
-    ...(model.description != null ? { description: model.description } : {}),
-    ...(model.provider != null ? { provider: model.provider } : {}),
-    ...(model.status != null ? { status: model.status } : {}),
-    ...(model.effort != null ? { effort: model.effort } : {}),
-    ...(model.fastMode != null ? { fastMode: model.fastMode } : {}),
-    ...(model.modes != null ? { modes: model.modes } : {}),
-  }));
-  return JSON.stringify(entries);
-}
-
 // Overrides have no GET endpoint, so the enabled-set is reconstructed from the
 // layered catalog (this pane is the only override writer) and re-upserted as a
 // whole `update` patch on every toggle.
