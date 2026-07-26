@@ -101,6 +101,12 @@ auth-context id** — the exact strings the catalog already declares and
       "probedAt": "2026-07-24T09:12:03Z",
       "mechanism": "acp",
       "attestation": { "name": "opencode", "version": "0.3.112" },
+      "installIdentity": {
+        "role": "agent_process",
+        "version": "1.18.3",
+        "sha256": "9b4f9f1b1c00…",
+        "source": "pinned_archive"
+      },
       "authFingerprint": "sha256:9f2c…",
       "models": [
         {
@@ -136,7 +142,8 @@ Field contract per entry:
 | --- | --- |
 | `probedAt` | Timestamp of the last **successful** observation; the lists below are from this run |
 | `mechanism` | `acp`; present so a future cheaper mechanism can coexist, but every context today probes over ACP |
-| `attestation` | The ACP `initialize` `agent_info` (`name`, `version`) — ties the entry to an exact install |
+| `attestation` | The ACP `initialize` `agent_info` (`name`, `version`) — diagnostics about the binary that answered, never a staleness input (see [Staleness](#staleness)) |
+| `installIdentity` | The install manifest's `agent_process` artifact (`version`, `sha256`, `source`) read at probe time — the staleness baseline. Absent when the manifest carried none |
 | `authFingerprint` | Digest of the credential material the context resolved to at probe time (env values, discovery-file digests, or the gateway key), computed from the same launch facts the auth classifier reads |
 | `models` | Observed models; `provider` preserved verbatim when the harness namespaces (`provider/model`), derived from the serving context otherwise |
 | `modes` | Observed modes |
@@ -207,25 +214,64 @@ the worst-covered harness to the best-covered one.
 
 ### Staleness
 
-An entry is stale exactly when its recorded identity no longer matches the
-machine — never merely because time passed:
+Three reasons invalidate an entry, and nothing else does. Two are identity
+reasons — the machine moved out from under the observation — and the third
+is a bounded time budget for the changes no identity can see:
 
-1. **Harness moved**: `attestation.version` differs from the install
-   manifest's `agent_process` version for this harness. Every entry is
-   version-bound, the gateway context included — the same spawn observed
-   it.
+1. **Harness moved**: the entry's recorded `installIdentity` differs from
+   the install manifest's `agent_process` artifact read now. The
+   comparison is **manifest against manifest**, in one namespace by
+   construction: equal iff `sha256` matches when both sides carry one,
+   else iff `version` matches when both sides carry one. `sha256` is the
+   stronger signal and is preferred because it moves even when a version
+   string is reused (a `latest` republish, a re-pinned git sha).
 2. **Auth moved**: `authFingerprint` differs from the current fingerprint
    of that context's credential material (for the gateway context: the
    virtual key and base URL).
+3. **TTL expired**: `probedAt` is older than this entry's TTL — 24h plus a
+   deterministic per-entry offset derived from `(harness, context)`,
+   spreading a machine's entries across a 6h window so they never
+   co-expire into one thundering herd at boot.
 
-Nothing else invalidates. In particular, staleness is deliberately scoped
-per (harness, context) via the fingerprint rather than keyed on
-`state.json`'s global `revision` — the revision bumps on *any* harness's
-auth mutation, so keying on it (as today's `gateway_model_probe` table
-does,
+**Why the ACP attestation is not the identity.** The attestation
+(`agent_info.version`) and the install manifest are different namespaces:
+claude's manifest records the registry's pinned git sha while its
+attestation reports its own semantic version, and cursor and grok report
+no `agent_info` at all. Comparing across them makes every such entry
+permanently stale — a probe storm on every startup, every launch and every
+auth apply that backoff cannot damp, because those probes *succeed*. The
+attestation is kept as diagnostics about the binary that answered; the
+staleness baseline is the manifest-derived `installIdentity`.
+
+**An unobservable identity is never a staleness reason.** When either side
+of the comparison is absent — no manifest, no `agent_process` version (a
+`source: "path"` dev install records none), or an entry written before the
+field existed — the identity comparison is **indeterminate**, which is not
+stale. Only reasons 2 and 3, or a missing entry, can then invalidate it. A
+surface must not claim a version binding for an indeterminate entry.
+
+**Why a TTL at all, given the identity rules.** Two changes are invisible
+to every identity: the gateway adding or removing a model (the virtual key
+and base URL are unchanged, so `authFingerprint` does not move) and a
+keychain-backed context rotating its credential (no file and no env value
+to fingerprint, so its fingerprint is constant by construction). Without a
+time bound those entries are pinned for the life of the credential. Age
+still never blocks a launch and never deletes truth: a TTL-expired entry
+keeps serving its last good lists while the reconciler re-probes.
+
+Staleness is deliberately scoped per (harness, context) via the
+fingerprint rather than keyed on `state.json`'s global `revision` — the
+revision bumps on *any* harness's auth mutation, so keying on it (as
+today's `gateway_model_probe` table does,
 [persistence/sql/0051_gateway_model_probe.sql](../../../../anyharness/crates/anyharness-lib/src/persistence/sql/0051_gateway_model_probe.sql))
 invalidates every harness's observation whenever one harness's key
 changes. The fingerprint makes invalidation exactly as wide as the change.
+
+Precedence is identity before time, so the surface names the real cause.
+And independently of every rule above, an attempt that completed inside
+the last minute is never retried: the reconciler holds a 60-second
+completed-attempt floor per (harness, context) so a mis-stated rule can
+cost at most one probe per minute rather than one per poke.
 
 A stale entry is not deleted: it renders as "needs refresh" until the
 reconciler re-probes it, and launch validation stops trusting it (falling
@@ -288,18 +334,55 @@ blocks the operation that raised it:
 Pickers never poke; opening a menu reads the document as it is.
 
 Probe status reaches clients the way install status already does: as
-polled state, not push events. The runtime exposes the document's
-`probedAt`/`lastAttempt` per (harness, context); surfaces poll and render
-"last probed at X" exactly as they poll the reconcile job snapshot today.
+polled state, not push events. `GET /v1/agents/{kind}/model-snapshot`
+answers per (harness, context) with the document's
+`probedAt`/`lastAttempt`, a server-computed `snapshotAgeSeconds`, the
+`stale`/`staleReason` verdict, whether the identity comparison was
+determinate, and the engine's live `state` (`idle` | `running` |
+`backoff`); surfaces poll and render it exactly as they poll the reconcile
+job snapshot today. The credential-derived `authFingerprint` is never on
+the wire — the boolean `stale` plus its reason is the whole client
+contract.
 
 Runner constraints, enforced by the probe code itself and stated here so
 the wiring does not rediscover them: `probe_agent` requires the install
 to exist (install-before-probe is checked, not conventional), must run
 inside a tokio `LocalSet` (the ACP connection uses `spawn_local`; a bare
 `tokio::spawn` will not do), and carries no overall timeout of its own —
-the reconciler bounds each probe. Probes for one harness run serially;
-the reconciler stays off the install reconcile's single job slot so a
-slow probe never delays an install.
+the reconciler bounds each probe, on the probe's own thread so a
+cancelled or timed-out attempt kills its child rather than leaking it.
+Probes for one harness run serially; the reconciler stays off the install
+reconcile's single job slot so a slow probe never delays an install.
+Concurrent pokes for one (harness, context) coalesce onto a single spawn:
+losers re-check the staleness gate after queueing and observe the
+winner's entry.
+
+**Probing materializes into a probe-owned scratch root**, a sibling of
+`agent-auth/` under the runtime home, never into the live auth homes: the
+recipes are byte-identical to a launch with exactly one substitution, the
+materialization root. That keeps a probe out of the launch GC's blast
+radius, keeps it from writing into the config dir a running session is
+reading, and makes "time on disk" equal one probe attempt — the scratch
+is owned by the probe's thread and removed on every exit path. Deciding
+whether to probe writes nothing at all: the staleness gate reads state and
+stats discovery files, and only an actual probe materializes credentials.
+
+**One probe engine per runtime home.** The engine holds an advisory
+exclusive lock on the runtime home; a second runtime sharing that home
+(a dev sidecar beside the desktop) degrades to read-only — it serves the
+document and the status surface, and it neither probes nor sweeps
+abandoned scratch roots. Probing is convergence, not correctness: the
+read-only runtime loses nothing a later poke on the owner cannot restore,
+whereas two probe engines against one home is the unsound configuration.
+The status surface reports which mode it is in, and a forced refresh on a
+non-owner is refused rather than silently ignored.
+
+**Cursor is manual-refresh only.** Its credential lives in the macOS
+keychain, so an unattended spawn can surface an OS keychain prompt with no
+user-visible cause. Every other harness's active contexts are probed
+under the pokes below; cursor's entry is written only when a user asks for
+it. (Cursor is also an attestation-less harness, so its entry is never
+identity-stale — auth changes and the TTL are its refresh paths.)
 
 The same reconciler runs everywhere. A cloud sandbox's runtime probes
 under the same pokes and writes the same document; the Worker syncs that
@@ -565,10 +648,17 @@ hook, and the settings All Models surface.
 
 ### Runtime routes
 
-The runtime exposes the machine document to its local clients: read the
-snapshot per harness — including `probedAt` and `lastAttempt`, the polled
-status surfaces render — and force a re-probe (the manual-refresh poke).
-These replace the runtime's gateway-models-only endpoints.
+The runtime exposes the machine document to its local clients. These
+replace the runtime's gateway-models-only endpoints:
+
+- `GET /v1/agents/{kind}/model-snapshot`: the polled status surface above —
+  per-context `probedAt`, `snapshotAgeSeconds`, `lastAttempt`, `lastError`,
+  `stale`/`staleReason`, `identityComparable`, the engine's `state` and
+  `nextAttemptAt`, the manifest-derived `installIdentity`, and the engine's
+  ownership mode. Model and mode lists come off the same document read.
+- `POST /v1/agents/{kind}/model-snapshot/refresh`: force a re-probe (the
+  manual-refresh poke). `202` with the status body, `502` when the forced
+  probe fails, `409` when this runtime does not own the probe engine.
 
 ## Code map
 
@@ -639,13 +729,10 @@ polling hook.
 
 Deltas between this document and `main`, each struck by its follow-up PR:
 
-- [ ] No runtime-triggered probe exists. `probe_agent()`
-      ([live/sessions/probe.rs](../../../../anyharness/crates/anyharness-lib/src/live/sessions/probe.rs))
-      is invoked only by the
-      `catalog-probe` CLI inside the central pipeline; none of the
-      reconciler's pokes runs it on user machines, and the
-      `model_snapshot/` module and its document do not exist. The poke
-      sites themselves are already in the code: the startup pass
+- [ ] None of the reconciler's pokes is wired: `ModelSnapshotService` and
+      its document exist and probe correctly when called, but nothing calls
+      them, so no user machine ever probes. The poke sites are already in
+      the code: the startup pass
       (`spawn_startup_pass` in
       [domains/agents/runtime.rs](../../../../anyharness/crates/anyharness-lib/src/domains/agents/runtime.rs)),
       the two install-completion
@@ -710,6 +797,3 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       [HarnessAllModelsSection](../../../../apps/packages/product-client/src/components/settings/panes/agents/harness/HarnessAllModelsSection.tsx)).
 - [ ] Onboarding contains no "checking for latest models" step (the
       surface rendering the install-completed and auth-applied pokes).
-- [ ] Probe status is not pollable: no runtime endpoint exposes
-      `probedAt`/`lastAttempt` per (harness, context) the way
-      `GET /v1/agents/reconcile` exposes install progress.
