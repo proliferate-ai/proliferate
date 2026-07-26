@@ -13,7 +13,7 @@ use crate::domains::agents::installer::progress::{
 use crate::domains::agents::installer::seed::AgentSeedStore;
 use crate::domains::agents::installer::InstallOptions;
 use crate::domains::agents::model::{AgentDescriptor, AgentKind, ArtifactRole, ResolvedArtifact};
-use crate::domains::agents::readiness::service::resolve_agent;
+use crate::domains::agents::readiness::service::resolve_agent_unrouted;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AgentReconcileJobStatus {
@@ -299,12 +299,16 @@ async fn run_reconcile_job(
             // in runtime_home — update those to the catalog pins. Skip agents that
             // are absent or only present via PATH (source != "managed"); a managed
             // install over a PATH-provided agent would fail, and missing agents
-            // install on demand at session start. resolve_agent is side-effect-free.
+            // install on demand at session start. Resolution is side-effect-free,
+            // and unrouted because this reads ARTIFACTS only — an enrolled
+            // agent-auth route cannot change whether a binary is managed-installed,
+            // so consulting it would be a state-file read per agent per pass for no
+            // effect on the decision.
             if installed_only {
                 let is_managed = |artifact: &ResolvedArtifact| {
                     artifact.installed && artifact.source.as_deref() == Some("managed")
                 };
-                let resolved = resolve_agent(&descriptor, &agent_runtime_home);
+                let resolved = resolve_agent_unrouted(&descriptor, &agent_runtime_home);
                 let managed_installed = is_managed(&resolved.agent_process)
                     || resolved.native.as_ref().map(is_managed).unwrap_or(false);
                 if !managed_installed {

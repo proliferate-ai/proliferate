@@ -441,16 +441,15 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       non-`Ready` harness rather than converging it. The auto-install
       law above (full supported set, PATH and cloud-cursor carve-outs)
       is not yet implemented.
-- [ ] The readiness projection laws are not yet enforced: an empty env
-      var counts as present, the credential ladder falls back to the
-      host's ambient env unbounded
-      ([`auth/credentials.rs`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/auth/credentials.rs)),
-      the `Ready` gate runs only in `create_session` (resume/fork
-      live-starts spawn without re-checking), and `GET /v1/agents`
-      resolves native-only while launch resolves route-aware, so
-      settings and launch can disagree for routed harnesses. Also
-      known: claude's Node gate shells out uncached on every read, and
-      the journal-protected atomic activation guard
+- [ ] The `Ready` gate still runs only in `create_session`: resume and
+      fork live-starts spawn without re-checking, so credentials revoked
+      after a session exists fail downstream at spawn instead of with
+      the typed readiness error. The other three projection laws (the
+      non-empty env rule, the workspace-scoped credential ladder, and
+      route-aware resolution on the settings read) are enforced.
+- [ ] Two known readiness inefficiencies, neither a correctness law:
+      claude's Node gate shells out uncached on every read, and the
+      journal-protected atomic activation guard
       ([`installer/downloads/activation.rs`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/installer/downloads/activation.rs))
       covers only `Archive`-sourced agent-process installs (cursor,
       opencode) — claude's git install and codex/grok's npm installs

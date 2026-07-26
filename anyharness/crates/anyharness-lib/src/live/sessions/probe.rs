@@ -16,7 +16,7 @@ use tokio::sync::{mpsc, oneshot};
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 
 use crate::domains::agents::model::AgentKind;
-use crate::domains::agents::readiness::service::resolve_agent;
+use crate::domains::agents::readiness::service::resolve_agent_unrouted;
 use crate::domains::agents::registry::built_in_registry;
 
 use super::driver::process::spawn_agent_process;
@@ -139,7 +139,8 @@ pub async fn probe_agent(options: ProbeOptions) -> anyhow::Result<ProbeSnapshot>
         .ok_or_else(|| {
             anyhow::anyhow!("agent kind {} not in registry", options.agent_kind.as_str())
         })?;
-    let resolved = resolve_agent(descriptor, &options.runtime_home);
+    // Unrouted: artifact paths only; a route supplies credentials, not binaries.
+    let resolved = resolve_agent_unrouted(descriptor, &options.runtime_home);
     if resolved.agent_process.path.is_none() {
         anyhow::bail!(
             "agent process for {} is not installed; run `anyharness install-agents --agent {}` first",
